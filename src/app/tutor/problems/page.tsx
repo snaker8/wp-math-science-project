@@ -1,0 +1,656 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import {
+  Search,
+  Filter,
+  Plus,
+  ChevronDown,
+  Eye,
+  Edit,
+  Trash2,
+  BookOpen,
+  Tag,
+  Clock,
+  BarChart3,
+  Upload,
+} from 'lucide-react';
+import { supabaseBrowser } from '@/lib/supabase/client';
+
+interface Problem {
+  id: string;
+  content: string;
+  content_latex: string | null;
+  answer: string | null;
+  solution: string | null;
+  difficulty: number;
+  type_code: string | null;
+  type_name: string | null;
+  subject: string | null;
+  chapter: string | null;
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  created_at: string;
+}
+
+const DIFFICULTY_LABELS: Record<number, { label: string; color: string }> = {
+  1: { label: '매우 쉬움', color: '#22c55e' },
+  2: { label: '쉬움', color: '#84cc16' },
+  3: { label: '보통', color: '#eab308' },
+  4: { label: '어려움', color: '#f97316' },
+  5: { label: '매우 어려움', color: '#ef4444' },
+};
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  DRAFT: { label: '임시저장', color: '#6b7280' },
+  ACTIVE: { label: '활성', color: '#22c55e' },
+  ARCHIVED: { label: '보관됨', color: '#9ca3af' },
+};
+
+export default function TutorProblemsPage() {
+  const [problems, setProblems] = useState<Problem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterSubject, setFilterSubject] = useState('전체');
+  const [filterDifficulty, setFilterDifficulty] = useState('전체');
+  const [filterStatus, setFilterStatus] = useState('전체');
+
+  const subjects = ['전체', '수학I', '수학II', '미적분', '확률과 통계', '기하'];
+  const difficulties = ['전체', '1', '2', '3', '4', '5'];
+  const statuses = ['전체', 'DRAFT', 'ACTIVE', 'ARCHIVED'];
+
+  useEffect(() => {
+    loadProblems();
+  }, []);
+
+  const loadProblems = async () => {
+    if (!supabaseBrowser) {
+      // Mock data when Supabase is not configured
+      setProblems([
+        {
+          id: '1',
+          content: '다음 이차방정식의 두 근을 구하시오.',
+          content_latex: 'x^2 - 5x + 6 = 0',
+          answer: 'x = 2 또는 x = 3',
+          solution: '(x-2)(x-3) = 0을 이용',
+          difficulty: 2,
+          type_code: 'MA-HS1-ALG-02-015',
+          type_name: '이차방정식의 풀이 - 인수분해',
+          subject: '수학I',
+          chapter: '방정식과 부등식',
+          status: 'ACTIVE',
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          content: '다음 극한값을 구하시오.',
+          content_latex: '\\lim_{x \\to 0} \\frac{\\sin x}{x}',
+          answer: '1',
+          solution: '삼각함수의 극한 기본 정리',
+          difficulty: 3,
+          type_code: 'MA-CAL-LIM-01-005',
+          type_name: '삼각함수의 극한',
+          subject: '미적분',
+          chapter: '함수의 극한',
+          status: 'ACTIVE',
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabaseBrowser.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabaseBrowser
+        .from('problems')
+        .select('*')
+        .eq('created_by', user.id)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProblems(data || []);
+    } catch (error) {
+      console.error('Failed to load problems:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProblems = problems.filter((problem) => {
+    const matchesSearch =
+      problem.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (problem.content_latex?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+      (problem.type_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+    const matchesSubject = filterSubject === '전체' || problem.subject === filterSubject;
+    const matchesDifficulty =
+      filterDifficulty === '전체' || problem.difficulty === parseInt(filterDifficulty);
+    const matchesStatus = filterStatus === '전체' || problem.status === filterStatus;
+
+    return matchesSearch && matchesSubject && matchesDifficulty && matchesStatus;
+  });
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('이 문제를 삭제하시겠습니까?')) return;
+
+    if (supabaseBrowser) {
+      const { error } = await supabaseBrowser
+        .from('problems')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (!error) {
+        setProblems((prev) => prev.filter((p) => p.id !== id));
+      }
+    } else {
+      setProblems((prev) => prev.filter((p) => p.id !== id));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="loading">
+        <div className="spinner" />
+        <p>문제 목록 로딩 중...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="problems-page">
+      <header className="page-header">
+        <div>
+          <h1>문제 관리</h1>
+          <p>업로드된 문제를 관리하고 시험지에 활용하세요</p>
+        </div>
+        <Link href="/tutor/workflow" className="btn-primary">
+          <Upload size={18} />
+          문제 업로드
+        </Link>
+      </header>
+
+      {/* Stats */}
+      <div className="stats-row">
+        <div className="stat-item">
+          <BookOpen size={20} />
+          <span className="stat-value">{problems.length}</span>
+          <span className="stat-label">전체 문제</span>
+        </div>
+        <div className="stat-item">
+          <Tag size={20} />
+          <span className="stat-value">
+            {new Set(problems.map((p) => p.type_code).filter(Boolean)).size}
+          </span>
+          <span className="stat-label">유형</span>
+        </div>
+        <div className="stat-item">
+          <BarChart3 size={20} />
+          <span className="stat-value">
+            {problems.filter((p) => p.status === 'ACTIVE').length}
+          </span>
+          <span className="stat-label">활성 문제</span>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="filters">
+        <div className="search-box">
+          <Search size={18} />
+          <input
+            type="text"
+            placeholder="문제, 수식, 유형으로 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="filter-group">
+          <Filter size={16} />
+          <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
+            {subjects.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterDifficulty}
+            onChange={(e) => setFilterDifficulty(e.target.value)}
+          >
+            <option value="전체">난이도</option>
+            {difficulties.slice(1).map((d) => (
+              <option key={d} value={d}>
+                {DIFFICULTY_LABELS[parseInt(d)].label}
+              </option>
+            ))}
+          </select>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="전체">상태</option>
+            {statuses.slice(1).map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABELS[s].label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Problem List */}
+      {filteredProblems.length === 0 ? (
+        <div className="empty-state">
+          <BookOpen size={48} />
+          <h3>등록된 문제가 없습니다</h3>
+          <p>문제를 업로드하여 시작하세요</p>
+          <Link href="/tutor/workflow" className="btn-secondary">
+            <Plus size={18} />
+            첫 문제 업로드
+          </Link>
+        </div>
+      ) : (
+        <div className="problem-list">
+          {filteredProblems.map((problem) => (
+            <div key={problem.id} className="problem-card">
+              <div className="problem-header">
+                <div className="problem-meta">
+                  {problem.type_code && (
+                    <span className="type-code">{problem.type_code}</span>
+                  )}
+                  <span
+                    className="status-badge"
+                    style={{ background: STATUS_LABELS[problem.status].color }}
+                  >
+                    {STATUS_LABELS[problem.status].label}
+                  </span>
+                  <span
+                    className="difficulty-badge"
+                    style={{ color: DIFFICULTY_LABELS[problem.difficulty]?.color }}
+                  >
+                    난이도 {problem.difficulty}
+                  </span>
+                </div>
+                <div className="problem-actions">
+                  <button className="action-btn" title="미리보기">
+                    <Eye size={16} />
+                  </button>
+                  <button className="action-btn" title="수정">
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    className="action-btn delete"
+                    title="삭제"
+                    onClick={() => handleDelete(problem.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="problem-content">
+                <p className="problem-text">{problem.content}</p>
+                {problem.content_latex && (
+                  <div className="problem-latex">
+                    <code>${problem.content_latex}$</code>
+                  </div>
+                )}
+              </div>
+
+              <div className="problem-footer">
+                <div className="problem-info">
+                  {problem.subject && <span>{problem.subject}</span>}
+                  {problem.chapter && <span>{problem.chapter}</span>}
+                  {problem.type_name && <span>{problem.type_name}</span>}
+                </div>
+                <div className="problem-date">
+                  <Clock size={14} />
+                  {new Date(problem.created_at).toLocaleDateString('ko-KR')}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style jsx>{`
+        .problems-page {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+
+        .loading {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 60vh;
+          gap: 16px;
+          color: #6b7280;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid #e5e7eb;
+          border-top-color: #4f46e5;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .page-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+        }
+
+        .page-header h1 {
+          font-size: 28px;
+          font-weight: 700;
+          color: #1f2937;
+          margin-bottom: 4px;
+        }
+
+        .page-header p {
+          color: #6b7280;
+          font-size: 14px;
+        }
+
+        .btn-primary {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 20px;
+          background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+          color: white;
+          font-size: 14px;
+          font-weight: 600;
+          border-radius: 10px;
+          text-decoration: none;
+          transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+
+        .stats-row {
+          display: flex;
+          gap: 24px;
+          margin-bottom: 24px;
+        }
+
+        .stat-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px 24px;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+        }
+
+        .stat-item svg {
+          color: #4f46e5;
+        }
+
+        .stat-value {
+          font-size: 24px;
+          font-weight: 700;
+          color: #1f2937;
+        }
+
+        .stat-label {
+          font-size: 13px;
+          color: #6b7280;
+        }
+
+        .filters {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+        }
+
+        .search-box {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          flex: 1;
+          min-width: 250px;
+        }
+
+        .search-box svg {
+          color: #9ca3af;
+        }
+
+        .search-box input {
+          flex: 1;
+          border: none;
+          outline: none;
+          font-size: 14px;
+        }
+
+        .filter-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .filter-group svg {
+          color: #6b7280;
+        }
+
+        .filter-group select {
+          padding: 10px 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          font-size: 14px;
+          color: #374151;
+          background: white;
+          cursor: pointer;
+        }
+
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 64px 24px;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          color: #9ca3af;
+        }
+
+        .empty-state h3 {
+          margin: 16px 0 8px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .empty-state p {
+          margin-bottom: 24px;
+          font-size: 14px;
+        }
+
+        .btn-secondary {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 20px;
+          background: #f3f4f6;
+          color: #374151;
+          font-size: 14px;
+          font-weight: 500;
+          border-radius: 10px;
+          text-decoration: none;
+        }
+
+        .btn-secondary:hover {
+          background: #e5e7eb;
+        }
+
+        .problem-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .problem-card {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 20px;
+        }
+
+        .problem-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 12px;
+        }
+
+        .problem-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .type-code {
+          padding: 4px 10px;
+          background: #eef2ff;
+          color: #4f46e5;
+          font-size: 12px;
+          font-weight: 600;
+          border-radius: 6px;
+        }
+
+        .status-badge {
+          padding: 4px 10px;
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+          border-radius: 9999px;
+        }
+
+        .difficulty-badge {
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .problem-actions {
+          display: flex;
+          gap: 4px;
+        }
+
+        .action-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border: none;
+          background: none;
+          color: #6b7280;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+          background: #f3f4f6;
+          color: #374151;
+        }
+
+        .action-btn.delete:hover {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+
+        .problem-content {
+          margin-bottom: 16px;
+        }
+
+        .problem-text {
+          font-size: 15px;
+          color: #1f2937;
+          line-height: 1.6;
+        }
+
+        .problem-latex {
+          margin-top: 8px;
+          padding: 12px 16px;
+          background: #f9fafb;
+          border-radius: 8px;
+        }
+
+        .problem-latex code {
+          font-size: 14px;
+          color: #4f46e5;
+        }
+
+        .problem-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 12px;
+          border-top: 1px solid #f3f4f6;
+        }
+
+        .problem-info {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .problem-info span {
+          font-size: 12px;
+          color: #6b7280;
+        }
+
+        .problem-date {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 12px;
+          color: #9ca3af;
+        }
+
+        @media (max-width: 768px) {
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+          }
+
+          .stats-row {
+            flex-direction: column;
+          }
+
+          .filters {
+            flex-direction: column;
+          }
+
+          .filter-group {
+            flex-wrap: wrap;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
