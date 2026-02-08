@@ -256,6 +256,7 @@ const MathEditorToolbar: React.FC<MathEditorToolbarProps> = ({
           className="toolbar-btn"
           title="이미지 삽입"
         >
+{/* eslint-disable-next-line jsx-a11y/alt-text */}
           <Image size={16} />
         </button>
         <button

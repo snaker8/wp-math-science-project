@@ -90,6 +90,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
   const calculatorRef = useRef<DesmosCalculator | null>(null);
 
   // Desmos API 로드
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isOpen) return;
 
@@ -114,6 +115,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
         calculatorRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // 계산기 초기화

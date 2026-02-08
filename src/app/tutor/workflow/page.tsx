@@ -21,8 +21,12 @@ import { generateMockHeatmapData } from '@/lib/analytics/heatmap';
 import { subscribeToGradingEvents, type GradingEvent } from '@/lib/workflow/deep-grading';
 import type { HeatmapData, HeatmapCell } from '@/types/analytics';
 import type { LLMAnalysisResult, GradingStatus } from '@/types/workflow';
+import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 
 type WorkflowPhase = 'upload' | 'grading' | 'analytics';
+
+// Anonymous/fallback user ID (valid UUID format)
+const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 // Mock 학생 데이터
 const mockStudents = [
@@ -81,6 +85,34 @@ export default function TutorWorkflowPage() {
     typeName: string;
     contentLatex: string;
   }>>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>(ANONYMOUS_USER_ID);
+
+  // 인증된 사용자 ID 가져오기
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      if (!isSupabaseConfigured || !supabaseBrowser) {
+        console.log('[Workflow] Supabase not configured, using anonymous user');
+        return;
+      }
+
+      try {
+        const { data: { user }, error } = await supabaseBrowser.auth.getUser();
+        if (error) {
+          console.error('[Workflow] Auth error:', error);
+          return;
+        }
+        if (user) {
+          console.log('[Workflow] Authenticated user:', user.id);
+          setCurrentUserId(user.id);
+        }
+      } catch (err) {
+        console.error('[Workflow] Failed to get user:', err);
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
 
   // 학생 선택 시 히트맵 데이터 로드
   useEffect(() => {
@@ -251,7 +283,7 @@ export default function TutorWorkflowPage() {
             </div>
             <CloudFlowUploader
               instituteId="default"
-              userId="tutor-1"
+              userId={currentUserId}
               onComplete={handleUploadComplete}
             />
             {uploadedProblems.length > 0 && (
@@ -343,7 +375,8 @@ export default function TutorWorkflowPage() {
       <style jsx>{`
         .workflow-page {
           min-height: 100vh;
-          background: #f3f4f6;
+          background: #000000;
+          color: #ffffff;
         }
 
         .page-header {
@@ -351,8 +384,9 @@ export default function TutorWorkflowPage() {
           justify-content: space-between;
           align-items: center;
           padding: 24px 32px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.8);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(8px);
         }
 
         .header-content h1 {
@@ -362,13 +396,13 @@ export default function TutorWorkflowPage() {
           margin: 0 0 8px;
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .header-content p {
           margin: 0;
           font-size: 14px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .student-selector {
@@ -376,10 +410,10 @@ export default function TutorWorkflowPage() {
           align-items: center;
           gap: 10px;
           padding: 10px 16px;
-          background: #f9fafb;
-          border: 1px solid #d1d5db;
+          background: rgba(39, 39, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .student-selector select {
@@ -387,10 +421,15 @@ export default function TutorWorkflowPage() {
           background: transparent;
           font-size: 14px;
           font-weight: 500;
-          color: #1f2937;
+          color: #ffffff;
           cursor: pointer;
           appearance: none;
           padding-right: 20px;
+        }
+
+        .student-selector select option {
+          background: #27272a;
+          color: #ffffff;
         }
 
         .phase-nav {
@@ -399,8 +438,8 @@ export default function TutorWorkflowPage() {
           align-items: center;
           gap: 16px;
           padding: 20px 32px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.5);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .phase-button {
@@ -410,8 +449,8 @@ export default function TutorWorkflowPage() {
           padding: 12px 24px;
           font-size: 14px;
           font-weight: 600;
-          color: #6b7280;
-          background: #f9fafb;
+          color: #a1a1aa;
+          background: rgba(39, 39, 42, 0.5);
           border: 2px solid transparent;
           border-radius: 10px;
           cursor: pointer;
@@ -419,17 +458,18 @@ export default function TutorWorkflowPage() {
         }
 
         .phase-button:hover {
-          background: #f3f4f6;
+          background: rgba(63, 63, 70, 0.5);
+          color: #e4e4e7;
         }
 
         .phase-button.active {
-          color: #4f46e5;
-          background: #eef2ff;
-          border-color: #4f46e5;
+          color: #a5b4fc;
+          background: rgba(79, 70, 229, 0.15);
+          border-color: rgba(99, 102, 241, 0.5);
         }
 
         .phase-arrow {
-          color: #d1d5db;
+          color: #52525b;
         }
 
         .main-content {
@@ -439,45 +479,46 @@ export default function TutorWorkflowPage() {
         }
 
         .phase-content {
-          background: white;
+          background: rgba(24, 24, 27, 0.6);
           border-radius: 16px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           overflow: hidden;
+          backdrop-filter: blur(8px);
         }
 
         .phase-header {
           padding: 24px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .phase-header h2 {
           margin: 0 0 8px;
           font-size: 18px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .phase-header p {
           margin: 0;
           font-size: 14px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .upload-summary {
           padding: 24px;
-          background: #dcfce7;
-          border-top: 1px solid #bbf7d0;
+          background: rgba(22, 163, 74, 0.15);
+          border-top: 1px solid rgba(34, 197, 94, 0.2);
           text-align: center;
         }
 
         .upload-summary h4 {
           margin: 0 0 8px;
-          color: #16a34a;
+          color: #4ade80;
         }
 
         .upload-summary p {
           margin: 0 0 16px;
-          color: #15803d;
+          color: #86efac;
         }
 
         .next-phase-btn {
@@ -492,6 +533,11 @@ export default function TutorWorkflowPage() {
           border: none;
           border-radius: 8px;
           cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .next-phase-btn:hover {
+          background: #15803d;
         }
 
         .grading-layout {
@@ -506,16 +552,17 @@ export default function TutorWorkflowPage() {
         }
 
         .heatmap-preview {
-          background: #f9fafb;
+          background: rgba(39, 39, 42, 0.5);
           border-radius: 12px;
           padding: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .heatmap-preview h4 {
           margin: 0 0 12px;
           font-size: 14px;
           font-weight: 600;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .mini-heatmap {
@@ -544,7 +591,7 @@ export default function TutorWorkflowPage() {
           align-items: center;
           justify-content: center;
           padding: 80px 20px;
-          color: #6b7280;
+          color: #71717a;
           text-align: center;
         }
 
@@ -552,7 +599,7 @@ export default function TutorWorkflowPage() {
           margin: 20px 0 8px;
           font-size: 18px;
           font-weight: 600;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .empty-state p {

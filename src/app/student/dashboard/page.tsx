@@ -73,7 +73,7 @@ export default function StudentDashboardPage() {
         .eq('student_id', user.id)
         .eq('status', 'ACCEPTED');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       const enrolledClasses = (enrollments || [])
         .filter((e: any) => e.class)
         .map((e: any) => ({
@@ -99,7 +99,7 @@ export default function StudentDashboardPage() {
         .eq('student_id', user.id)
         .eq('status', 'PENDING');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       const invitationsList = (pendingInvites || [])
         .filter((i: any) => i.class)
         .map((i: any) => ({

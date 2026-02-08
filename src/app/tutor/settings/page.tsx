@@ -130,6 +130,7 @@ export default function TutorSettingsPage() {
           <div className="avatar-section">
             <div className="avatar">
               {profile.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatar} alt="프로필" />
               ) : (
                 <span>{profile.name.charAt(0) || 'T'}</span>

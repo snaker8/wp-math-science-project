@@ -159,6 +159,7 @@ export default function PDFOptionsModal({
                   </label>
                   {config.instituteLogo && (
                     <div className="preview">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={config.instituteLogo} alt="Logo preview" />
                       <button onClick={() => updateConfig('instituteLogo', undefined)}>
                         <X size={14} />
@@ -346,6 +347,7 @@ export default function PDFOptionsModal({
                           </label>
                           {config.watermark.image && (
                             <div className="preview">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={config.watermark.image} alt="Watermark preview" />
                               <button
                                 onClick={() =>

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Users, Search, MoreVertical, Edit2, Trash2, UserPlus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Users, Search, MoreVertical, Edit2, Trash2, UserPlus, ArrowLeft } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 interface ClassItem {
@@ -19,6 +20,7 @@ interface ClassItem {
 }
 
 export default function ClassesPage() {
+  const router = useRouter();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -125,9 +127,14 @@ export default function ClassesPage() {
   return (
     <div className="classes-page">
       <header className="page-header">
-        <div>
-          <h1>반 관리</h1>
-          <p>반을 만들고 학생들을 초대하세요</p>
+        <div className="header-left">
+          <button onClick={() => router.back()} className="back-btn" title="뒤로가기">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1>반 관리</h1>
+            <p>반을 만들고 학생들을 초대하세요</p>
+          </div>
         </div>
         <Link href="/tutor/classes/new" className="btn-primary">
           <Plus size={18} />
@@ -234,6 +241,9 @@ export default function ClassesPage() {
         .classes-page {
           max-width: 1200px;
           margin: 0 auto;
+          min-height: 100vh;
+          background: #000000;
+          color: #ffffff;
         }
 
         .loading {
@@ -243,14 +253,14 @@ export default function ClassesPage() {
           justify-content: center;
           height: 60vh;
           gap: 16px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .spinner {
           width: 40px;
           height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #4f46e5;
+          border: 3px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #6366f1;
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -266,18 +276,42 @@ export default function ClassesPage() {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 24px;
+          padding: 24px;
+          background: rgba(24, 24, 27, 0.8);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
           margin-bottom: 4px;
         }
 
-        .page-header p {
-          color: #6b7280;
-          font-size: 14px;
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .back-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(39, 39, 42, 0.5);
+          color: #a1a1aa;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+          background: rgba(63, 63, 70, 0.8);
+          color: #ffffff;
         }
 
         .btn-primary {
@@ -306,14 +340,14 @@ export default function ClassesPage() {
           align-items: center;
           gap: 12px;
           padding: 12px 16px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
           margin-bottom: 24px;
         }
 
         .search-bar :global(svg) {
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .search-bar input {
@@ -321,6 +355,12 @@ export default function ClassesPage() {
           border: none;
           font-size: 14px;
           outline: none;
+          background: transparent;
+          color: #ffffff;
+        }
+
+        .search-bar input::placeholder {
+          color: #71717a;
         }
 
         .empty-state {
@@ -329,16 +369,16 @@ export default function ClassesPage() {
           align-items: center;
           justify-content: center;
           padding: 80px 24px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .empty-state h3 {
           margin: 24px 0 8px;
           font-size: 18px;
-          color: #374151;
+          color: #ffffff;
         }
 
         .empty-state p {
@@ -353,16 +393,16 @@ export default function ClassesPage() {
         }
 
         .class-card {
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           overflow: hidden;
           transition: all 0.2s;
         }
 
         .class-card:hover {
-          border-color: #c7d2fe;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+          border-color: rgba(99, 102, 241, 0.5);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .class-card.inactive {
@@ -390,19 +430,19 @@ export default function ClassesPage() {
         }
 
         .subject-badge {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(79, 70, 229, 0.2);
+          color: #a5b4fc;
         }
 
         .grade-badge {
-          background: #ecfdf5;
-          color: #059669;
+          background: rgba(5, 150, 105, 0.2);
+          color: #34d399;
         }
 
         .inactive-badge {
           padding: 4px 10px;
-          background: #f3f4f6;
-          color: #6b7280;
+          background: rgba(63, 63, 70, 0.5);
+          color: #a1a1aa;
           font-size: 12px;
           font-weight: 500;
           border-radius: 6px;
@@ -420,14 +460,14 @@ export default function ClassesPage() {
           height: 32px;
           border: none;
           background: none;
-          color: #9ca3af;
+          color: #71717a;
           cursor: pointer;
           border-radius: 6px;
         }
 
         .menu-btn:hover {
-          background: #f3f4f6;
-          color: #6b7280;
+          background: rgba(63, 63, 70, 0.5);
+          color: #a1a1aa;
         }
 
         .menu-dropdown {
@@ -435,10 +475,10 @@ export default function ClassesPage() {
           top: 100%;
           right: 0;
           min-width: 140px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.95);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
           z-index: 10;
           overflow: hidden;
         }
@@ -452,21 +492,21 @@ export default function ClassesPage() {
           border: none;
           background: none;
           font-size: 13px;
-          color: #374151;
+          color: #d4d4d8;
           text-decoration: none;
           cursor: pointer;
         }
 
         .menu-item:hover {
-          background: #f9fafb;
+          background: rgba(63, 63, 70, 0.5);
         }
 
         .menu-item.danger {
-          color: #dc2626;
+          color: #f87171;
         }
 
         .menu-item.danger:hover {
-          background: #fef2f2;
+          background: rgba(220, 38, 38, 0.15);
         }
 
         .card-body {
@@ -478,13 +518,13 @@ export default function ClassesPage() {
         .card-body h3 {
           font-size: 18px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
           margin-bottom: 8px;
         }
 
         .description {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
           line-height: 1.5;
           margin-bottom: 16px;
           display: -webkit-box;
@@ -498,13 +538,13 @@ export default function ClassesPage() {
           align-items: center;
           gap: 8px;
           font-size: 14px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .pending-badge {
           padding: 2px 8px;
-          background: #fef3c7;
-          color: #d97706;
+          background: rgba(217, 119, 6, 0.2);
+          color: #fbbf24;
           font-size: 11px;
           font-weight: 600;
           border-radius: 9999px;
@@ -512,7 +552,7 @@ export default function ClassesPage() {
 
         .card-footer {
           padding: 12px 16px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .invite-btn {
@@ -522,10 +562,10 @@ export default function ClassesPage() {
           gap: 6px;
           width: 100%;
           padding: 10px;
-          background: #f8fafc;
-          border: 1px solid #e5e7eb;
+          background: rgba(79, 70, 229, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.3);
           border-radius: 8px;
-          color: #4f46e5;
+          color: #a5b4fc;
           font-size: 13px;
           font-weight: 500;
           text-decoration: none;
@@ -533,8 +573,8 @@ export default function ClassesPage() {
         }
 
         .invite-btn:hover {
-          background: #eef2ff;
-          border-color: #c7d2fe;
+          background: rgba(79, 70, 229, 0.2);
+          border-color: rgba(99, 102, 241, 0.5);
         }
 
         @media (max-width: 640px) {

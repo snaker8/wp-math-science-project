@@ -52,12 +52,61 @@ export interface AnalyticsSummary {
  */
 export async function getStudentAnalytics(studentId: string): Promise<StudentAnalytics | null> {
   if (!supabaseBrowser) {
-    return getMockStudentAnalytics(studentId);
+    throw new Error('[API] Supabase not configured');
   }
 
-  // TODO: 실제 Supabase 쿼리 구현
-  // 현재는 Mock 데이터 반환
-  return getMockStudentAnalytics(studentId);
+  // 학생 정보 조회
+  const { data: student, error: studentError } = await supabaseBrowser
+    .from('users')
+    .select('id, full_name')
+    .eq('id', studentId)
+    .single();
+
+  if (studentError || !student) {
+    console.error('[API] getStudentAnalytics - student not found:', studentError);
+    return null;
+  }
+
+  // 성적 데이터 집계 (시험 기록)
+  const { data: examRecords, error: recordsError } = await supabaseBrowser
+    .from('exam_records')
+    .select(`
+      id,
+      status,
+      exam_problems (
+        problem_id,
+        classifications (type_code)
+      )
+    `)
+    .eq('student_id', studentId);
+
+  if (recordsError) {
+    console.error('[API] getStudentAnalytics - records error:', recordsError);
+  }
+
+  // 기본 통계 계산
+  const records = examRecords || [];
+  const totalProblems = records.length;
+  const correctCount = records.filter(r => r.status === 'CORRECT').length;
+  const wrongCount = records.filter(r => r.status === 'WRONG').length;
+  const overallMastery = totalProblems > 0 ? Math.round((correctCount / totalProblems) * 100) : 0;
+
+  // 취약/강점 유형 분석 (현재는 빈 배열)
+  const weakTypes: string[] = [];
+  const strongTypes: string[] = [];
+
+  return {
+    studentId: student.id,
+    studentName: student.full_name,
+    overallMastery,
+    totalProblems,
+    correctCount,
+    wrongCount,
+    weakTypes,
+    strongTypes,
+    recentTrend: 'stable',
+    lastUpdated: new Date().toISOString(),
+  };
 }
 
 /**
@@ -69,11 +118,35 @@ export async function getStudentsAnalytics(options?: {
   limit?: number;
 }): Promise<StudentAnalytics[]> {
   if (!supabaseBrowser) {
-    return getMockStudentsAnalytics();
+    throw new Error('[API] Supabase not configured');
   }
 
-  // TODO: 실제 Supabase 쿼리 구현
-  return getMockStudentsAnalytics();
+  // 학생 목록 조회
+  let query = supabaseBrowser
+    .from('users')
+    .select('id')
+    .eq('role', 'STUDENT')
+    .is('deleted_at', null);
+
+  if (options?.instituteId) {
+    query = query.eq('institute_id', options.instituteId);
+  }
+  if (options?.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data: students, error } = await query;
+
+  if (error || !students) {
+    console.error('[API] getStudentsAnalytics error:', error);
+    return [];
+  }
+
+  // 각 학생의 분석 데이터 조회
+  const analyticsPromises = students.map(s => getStudentAnalytics(s.id));
+  const results = await Promise.all(analyticsPromises);
+
+  return results.filter((r): r is StudentAnalytics => r !== null);
 }
 
 /**
@@ -118,11 +191,36 @@ export async function getAnalyticsSummary(options?: {
   dateRange?: { start: string; end: string };
 }): Promise<AnalyticsSummary> {
   if (!supabaseBrowser) {
-    return getMockAnalyticsSummary();
+    throw new Error('[API] Supabase not configured');
   }
 
-  // TODO: 실제 Supabase 쿼리 구현
-  return getMockAnalyticsSummary();
+  // 학생 수 조회
+  let studentQuery = supabaseBrowser
+    .from('users')
+    .select('id', { count: 'exact' })
+    .eq('role', 'STUDENT')
+    .is('deleted_at', null);
+
+  if (options?.instituteId) {
+    studentQuery = studentQuery.eq('institute_id', options.instituteId);
+  }
+
+  const { count: totalStudents } = await studentQuery;
+
+  // 채점된 문제 수
+  const { count: totalProblemsGraded } = await supabaseBrowser
+    .from('exam_records')
+    .select('id', { count: 'exact' })
+    .in('status', ['CORRECT', 'WRONG', 'PARTIAL_CORRECT', 'PARTIAL_WRONG']);
+
+  return {
+    totalStudents: totalStudents || 0,
+    avgMastery: 75, // 향후 실제 계산 필요
+    totalProblemsGraded: totalProblemsGraded || 0,
+    weakestTypes: [],
+    strongestTypes: [],
+    gradingTrend: [],
+  };
 }
 
 /**

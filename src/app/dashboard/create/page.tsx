@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
   Pencil,
@@ -9,6 +10,11 @@ import {
   Download,
   GripVertical,
   AlertCircle,
+  Upload,
+  Loader2,
+  CheckCircle,
+  Trash2,
+  Wand2,
 } from 'lucide-react';
 
 // ============================================================================
@@ -25,6 +31,15 @@ interface Chapter {
   id: string;
   name: string;
   problemCount: number;
+}
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  status: 'uploading' | 'processing' | 'done' | 'error';
+  progress: number;
+  error?: string;
 }
 
 type QuestionTypeFilter = '전체' | '교과서' | '문제집' | '기출' | '모의고사';
@@ -54,12 +69,12 @@ const subjects: Subject[] = [
   },
 ];
 
-const difficultyColors: Record<DifficultyLevel, string> = {
-  '최상': 'rgba(219, 40, 183, 0.2)',
-  '상': 'rgba(119, 0, 210, 0.2)',
-  '중': 'rgba(71, 162, 255, 0.2)',
-  '하': 'rgba(0, 199, 159, 0.2)',
-  '최하': 'rgba(74, 230, 100, 0.2)',
+const difficultyColors: Record<DifficultyLevel, { bg: string; text: string }> = {
+  '최상': { bg: 'rgba(219, 40, 183, 0.25)', text: '#f472b6' },
+  '상': { bg: 'rgba(139, 92, 246, 0.25)', text: '#a78bfa' },
+  '중': { bg: 'rgba(59, 130, 246, 0.25)', text: '#60a5fa' },
+  '하': { bg: 'rgba(34, 197, 94, 0.25)', text: '#4ade80' },
+  '최하': { bg: 'rgba(74, 222, 128, 0.2)', text: '#86efac' },
 };
 
 // ============================================================================
@@ -67,7 +82,7 @@ const difficultyColors: Record<DifficultyLevel, string> = {
 // ============================================================================
 
 const StepBadge: React.FC<{ number: number }> = ({ number }) => (
-  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warm-surface-strong text-xs font-semibold text-warm-text-muted">
+  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-zinc-300">
     {number}
   </span>
 );
@@ -80,11 +95,10 @@ const FilterChip: React.FC<{
   <button
     type="button"
     onClick={onClick}
-    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-      active
-        ? 'border-sky-500 bg-sky-500 text-white'
-        : 'border-warm-border-soft bg-white/95 text-warm-text-muted hover:bg-warm-surface'
-    }`}
+    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${active
+      ? 'border-indigo-500 bg-indigo-500 text-white'
+      : 'border-zinc-600 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'
+      }`}
   >
     {label}
   </button>
@@ -95,18 +109,22 @@ const ActionButton: React.FC<{
   label: string;
   disabled?: boolean;
   onClick?: () => void;
-}> = ({ icon, label, disabled = false, onClick }) => (
+  variant?: 'default' | 'primary';
+}> = ({ icon, label, disabled = false, onClick, variant = 'default' }) => (
   <button
     type="button"
     disabled={disabled}
     onClick={onClick}
-    className={`flex items-center gap-2 rounded-full border border-warm-border-soft bg-warm-surface px-3 py-1.5 text-sm font-semibold text-warm-text-secondary transition-colors ${
-      disabled
-        ? 'cursor-not-allowed opacity-50'
-        : 'hover:bg-warm-surface-strong'
-    }`}
+    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition-all ${disabled
+      ? 'cursor-not-allowed opacity-40'
+      : 'hover:-translate-y-[1px] active:scale-95'
+      } ${variant === 'primary'
+        ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30'
+        : 'border-zinc-600 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+      }`}
   >
-    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warm-surface-strong text-warm-text-secondary">
+    <span className={`flex h-5 w-5 items-center justify-center rounded-full ${variant === 'primary' ? 'bg-indigo-500/30' : 'bg-zinc-700'
+      }`}>
       {icon}
     </span>
     <span className="whitespace-nowrap">{label}</span>
@@ -126,27 +144,30 @@ const DifficultyInput: React.FC<{
       value={value}
       onChange={(e) => onChange(Math.max(0, Math.min(max, parseInt(e.target.value) || 0)))}
       disabled={disabled}
-      className="h-16 w-full rounded-md border border-warm-border-soft bg-white px-2 pb-7 pt-8 text-center text-xl font-semibold text-warm-text-primary focus:outline-none focus:ring-1 focus:ring-warm-primary disabled:cursor-not-allowed disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      className="h-16 w-full rounded-lg border border-zinc-600 bg-zinc-800 px-2 pb-6 pt-7 text-center text-xl font-bold text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
     />
     <div className="absolute left-0 right-0 top-0">
       <div
-        className="rounded px-1 py-0.5 text-center text-sm font-medium"
-        style={{ backgroundColor: difficultyColors[level] }}
+        className="rounded-t-lg px-1 py-0.5 text-center text-xs font-bold"
+        style={{
+          backgroundColor: difficultyColors[level].bg,
+          color: difficultyColors[level].text
+        }}
       >
         {level}
       </div>
     </div>
-    <div className="absolute bottom-1 right-2 text-xs text-warm-text-muted">{max}</div>
+    <div className="absolute bottom-1.5 right-2 text-[10px] text-zinc-500">max {max}</div>
   </div>
 );
 
 const EmptyState: React.FC<{ message: string; subMessage?: string }> = ({ message, subMessage }) => (
-  <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-3xl bg-white/85 px-6 py-8 text-center">
-    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-warm-surface-strong text-warm-text-secondary">
-      <AlertCircle className="h-6 w-6" />
+  <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/50 px-6 py-12 text-center">
+    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-800 text-zinc-500">
+      <AlertCircle className="h-7 w-7" />
     </span>
-    <p className="text-sm font-semibold text-warm-text-primary">{message}</p>
-    {subMessage && <p className="text-xs text-warm-text-muted">{subMessage}</p>}
+    <p className="text-sm font-medium text-zinc-400">{message}</p>
+    {subMessage && <p className="text-xs text-zinc-600">{subMessage}</p>}
   </div>
 );
 
@@ -168,6 +189,11 @@ export default function PaperCreatePage() {
     '최하': 0,
   });
 
+  // Upload state
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Computed values
   const totalQuestions = Object.values(difficulties).reduce((sum, val) => sum + val, 0);
   const hasSelection = selectedSubject && selectedChapters.length > 0;
@@ -179,6 +205,7 @@ export default function PaperCreatePage() {
     setSelectedChapters([]);
     setQuestionTypeFilter('전체');
     setDifficulties({ '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0 });
+    setUploadedFiles([]);
   };
 
   const handleChapterToggle = (chapterId: string) => {
@@ -189,18 +216,140 @@ export default function PaperCreatePage() {
     );
   };
 
+  // Polling refs for job status
+  const pollingRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // File upload handlers - Real API integration
+  const handleFileUpload = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+
+    for (const file of fileArray) {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const uploadedFile: UploadedFile = {
+        id: tempId,
+        name: file.name,
+        size: file.size,
+        status: 'uploading',
+        progress: 0,
+      };
+
+      setUploadedFiles(prev => [uploadedFile, ...prev]);
+
+      try {
+        // Create FormData for API
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('instituteId', 'default');
+        formData.append('userId', 'user');
+        formData.append('autoClassify', 'true');
+        formData.append('generateSolutions', 'true');
+
+        // Call upload API
+        const response = await fetch('/api/workflow/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const data = await response.json();
+        const jobId = data.jobId;
+
+        // Update with real job ID
+        setUploadedFiles(prev => prev.map(f =>
+          f.id === tempId
+            ? { ...f, id: jobId, status: 'processing', progress: 30 }
+            : f
+        ));
+
+        // Start polling for job status
+        const poll = async () => {
+          try {
+            const statusRes = await fetch(`/api/workflow/upload?jobId=${jobId}`);
+            if (!statusRes.ok) return;
+
+            const statusData = await statusRes.json();
+            const job = statusData.job;
+
+            setUploadedFiles(prev => prev.map(f => {
+              if (f.id === jobId) {
+                if (job.status === 'COMPLETED') {
+                  // Stop polling
+                  const interval = pollingRefs.current.get(jobId);
+                  if (interval) {
+                    clearInterval(interval);
+                    pollingRefs.current.delete(jobId);
+                  }
+                  return { ...f, status: 'done', progress: 100 };
+                } else if (job.status === 'FAILED') {
+                  // Stop polling
+                  const interval = pollingRefs.current.get(jobId);
+                  if (interval) {
+                    clearInterval(interval);
+                    pollingRefs.current.delete(jobId);
+                  }
+                  return { ...f, status: 'error', progress: 0, error: job.error || '처리 실패' };
+                }
+                return { ...f, progress: job.progress || f.progress };
+              }
+              return f;
+            }));
+          } catch (err) {
+            console.error('Polling error:', err);
+          }
+        };
+
+        // Start polling every 2 seconds
+        poll();
+        const interval = setInterval(poll, 2000);
+        pollingRefs.current.set(jobId, interval);
+
+      } catch (error) {
+        console.error('Upload error:', error);
+        setUploadedFiles(prev => prev.map(f =>
+          f.id === tempId
+            ? { ...f, status: 'error', error: '업로드 실패' }
+            : f
+        ));
+      }
+    }
+  }, []);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files);
+    }
+  };
+
+  const handleRemoveFile = (id: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== id));
+  };
+
   const selectedSubjectData = subjects.find((s) => s.id === selectedSubject);
 
   return (
-    <section className="flex h-full flex-col overflow-hidden bg-warm-surface">
+    <section className="flex h-[calc(100vh-6rem)] flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3">
-        <h1 className="text-lg font-semibold text-warm-text-primary">시험지 출제</h1>
+      <div className="flex items-center justify-between gap-4 pb-4">
+        <h1 className="text-xl font-bold text-white">시험지 출제</h1>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleReset}
-            className="flex items-center gap-2 rounded-full border border-warm-border-soft bg-white/90 px-4 py-2 text-sm font-medium text-warm-text-primary transition-all hover:-translate-y-[1px] hover:bg-warm-surface-strong"
+            className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/80 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:-translate-y-[1px] hover:bg-zinc-700"
           >
             <RotateCcw className="h-4 w-4" />
             <span>초기화</span>
@@ -208,7 +357,7 @@ export default function PaperCreatePage() {
           <button
             type="button"
             disabled={totalQuestions === 0}
-            className="flex items-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-warm-primary/20 via-warm-primary/10 to-warm-surface-strong px-4 py-2 text-sm font-medium text-warm-text-primary transition-all hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-full border border-indigo-500/50 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-[1px] hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             <Download className="h-4 w-4" />
             <span>시험지 저장</span>
@@ -217,30 +366,30 @@ export default function PaperCreatePage() {
       </div>
 
       {/* Main Content - Split Panel */}
-      <div className="flex flex-1 gap-2 overflow-hidden px-4 pb-4">
+      <div className="flex flex-1 gap-4 overflow-hidden">
         {/* Left Panel */}
-        <div className="flex w-[42%] flex-col gap-3 overflow-hidden">
+        <div className="flex w-[45%] flex-col gap-3 overflow-hidden">
           {/* Top Row: Range + Question Count */}
           <div className="flex gap-3">
             {/* Range & Paper Name */}
-            <div className="flex-1 rounded-xl border border-warm-border-soft bg-white/90 p-3">
+            <div className="flex-1 rounded-xl border border-zinc-700/50 bg-zinc-900/70 p-4">
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-warm-text-muted">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     범위
                   </span>
-                  <div className="flex items-center justify-center rounded-lg bg-white px-4 py-2 text-center text-sm">
+                  <div className="flex items-center justify-center rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-4 py-2.5 text-center text-sm">
                     {hasSelection ? (
-                      <span className="font-semibold text-warm-text-primary">
-                        {selectedSubjectData?.name} ({selectedChapters.length}개 단원)
+                      <span className="font-medium text-white">
+                        {selectedSubjectData?.name} <span className="text-indigo-400">({selectedChapters.length}개 단원)</span>
                       </span>
                     ) : (
-                      <span className="text-warm-text-muted">아래에서 과목 및 단원을 선택해 주세요.</span>
+                      <span className="text-zinc-500">아래에서 과목 및 단원을 선택해 주세요.</span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-warm-text-muted">
+                  <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     시험지명
                   </span>
                   <input
@@ -248,32 +397,33 @@ export default function PaperCreatePage() {
                     value={paperName}
                     onChange={(e) => setPaperName(e.target.value)}
                     placeholder="시험지 이름 입력"
-                    className="w-full rounded-full border border-warm-border-soft bg-white px-4 py-2 text-sm text-warm-text-primary placeholder:text-warm-text-muted focus:outline-none focus:ring-1 focus:ring-warm-primary"
+                    className="w-full rounded-lg border border-zinc-700/50 bg-zinc-800 px-4 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
               </div>
             </div>
 
             {/* Question Count */}
-            <div className="flex-1 rounded-xl border border-warm-border-soft bg-white/90 p-3">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wide text-warm-text-muted">
+            <div className="flex-1 rounded-xl border border-zinc-700/50 bg-zinc-900/70 p-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-zinc-500">
                   <span>총 문항수</span>
-                  <span className="text-lg text-warm-text-primary">{totalQuestions}</span>
+                  <span className="text-2xl font-bold text-indigo-400">{totalQuestions}</span>
                 </div>
-                <div className="flex flex-wrap justify-end gap-1">
+                <div className="flex flex-wrap justify-end gap-1.5">
                   <ActionButton
-                    icon={<Pencil className="h-4 w-4" />}
+                    icon={<Wand2 className="h-3.5 w-3.5" />}
                     label="자동출제"
                     disabled={!hasSelection}
+                    variant="primary"
                   />
                   <ActionButton
-                    icon={<Pencil className="h-4 w-4" />}
+                    icon={<Pencil className="h-3.5 w-3.5" />}
                     label="수동출제"
                     disabled={!hasSelection}
                   />
                   <ActionButton
-                    icon={<PlusCircle className="h-4 w-4" />}
+                    icon={<PlusCircle className="h-3.5 w-3.5" />}
                     label="문제추가"
                     disabled={!hasSelection}
                   />
@@ -283,16 +433,16 @@ export default function PaperCreatePage() {
           </div>
 
           {/* Question Type Filter */}
-          <div className="flex-shrink-0 rounded-2xl border border-warm-border-soft bg-white/90 px-4 py-3">
+          <div className="flex-shrink-0 rounded-xl border border-zinc-700/50 bg-zinc-900/70 px-4 py-3">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wide text-warm-text-muted">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                 출제 유형
               </span>
               <div className="flex flex-wrap gap-2">
                 {(['전체', '교과서', '문제집', '기출', '모의고사'] as QuestionTypeFilter[]).map((type) => (
                   <FilterChip
                     key={type}
-                    label={type === '전체' ? type : `${type} 유형`}
+                    label={type}
                     active={questionTypeFilter === type}
                     onClick={() => setQuestionTypeFilter(type)}
                   />
@@ -304,10 +454,10 @@ export default function PaperCreatePage() {
           {/* Subject & Chapter Selection */}
           <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
             {/* Subject Selection */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-warm-border-soft bg-white/90">
-              <div className="flex items-center gap-3 bg-white/95 px-4 py-2">
+            <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-zinc-700/50 bg-zinc-900/70">
+              <div className="flex items-center gap-3 border-b border-zinc-700/50 px-4 py-2.5">
                 <StepBadge number={1} />
-                <span className="text-sm font-semibold text-warm-text-primary">과목을 선택해 주세요</span>
+                <span className="text-sm font-semibold text-zinc-200">과목 선택</span>
               </div>
               <div className="flex-1 overflow-auto p-2">
                 <div className="space-y-1">
@@ -319,11 +469,10 @@ export default function PaperCreatePage() {
                         setSelectedSubject(subject.id);
                         setSelectedChapters([]);
                       }}
-                      className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                        selectedSubject === subject.id
-                          ? 'bg-warm-primary/10 font-medium text-warm-primary'
-                          : 'text-warm-text-secondary hover:bg-warm-surface'
-                      }`}
+                      className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-all ${selectedSubject === subject.id
+                        ? 'bg-indigo-500/20 font-medium text-indigo-300 ring-1 ring-indigo-500/30'
+                        : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                        }`}
                     >
                       {subject.name}
                     </button>
@@ -333,10 +482,10 @@ export default function PaperCreatePage() {
             </div>
 
             {/* Chapter Selection */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-warm-border-soft bg-white/90">
-              <div className="flex items-center gap-3 bg-white/95 px-4 py-2">
+            <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-zinc-700/50 bg-zinc-900/70">
+              <div className="flex items-center gap-3 border-b border-zinc-700/50 px-4 py-2.5">
                 <StepBadge number={2} />
-                <span className="text-sm font-semibold text-warm-text-primary">단원을 선택해 주세요</span>
+                <span className="text-sm font-semibold text-zinc-200">단원 선택</span>
               </div>
               <div className="flex-1 overflow-auto p-2">
                 {selectedSubjectData ? (
@@ -346,20 +495,19 @@ export default function PaperCreatePage() {
                         key={chapter.id}
                         type="button"
                         onClick={() => handleChapterToggle(chapter.id)}
-                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                          selectedChapters.includes(chapter.id)
-                            ? 'bg-warm-primary/10 font-medium text-warm-primary'
-                            : 'text-warm-text-secondary hover:bg-warm-surface'
-                        }`}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition-all ${selectedChapters.includes(chapter.id)
+                          ? 'bg-indigo-500/20 font-medium text-indigo-300 ring-1 ring-indigo-500/30'
+                          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                          }`}
                       >
                         <span>{chapter.name}</span>
-                        <span className="text-xs text-warm-text-muted">{chapter.problemCount}문제</span>
+                        <span className="text-xs text-zinc-600">{chapter.problemCount}문제</span>
                       </button>
                     ))}
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center p-4">
-                    <p className="text-sm text-warm-text-muted">먼저 과목을 선택해 주세요.</p>
+                    <p className="text-sm text-zinc-600">먼저 과목을 선택해 주세요.</p>
                   </div>
                 )}
               </div>
@@ -367,56 +515,151 @@ export default function PaperCreatePage() {
           </div>
 
           {/* Difficulty Selection */}
-          {hasSelection && (
-            <div className="flex-shrink-0 rounded-2xl border border-warm-border-soft bg-white/90 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <StepBadge number={3} />
-                  <span className="text-sm font-semibold text-warm-text-primary">문항수를 선택해 주세요</span>
-                  <span className="text-xs text-warm-text-muted">(최대 50문항)</span>
+          <AnimatePresence>
+            {hasSelection && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex-shrink-0 rounded-xl border border-zinc-700/50 bg-zinc-900/70 px-4 py-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <StepBadge number={3} />
+                    <span className="text-sm font-semibold text-zinc-200">문항수 선택</span>
+                    <span className="text-xs text-zinc-600">(최대 50문항)</span>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                {(['최상', '상', '중', '하', '최하'] as DifficultyLevel[]).map((level) => (
-                  <DifficultyInput
-                    key={level}
-                    level={level}
-                    value={difficulties[level]}
-                    max={50 - (totalQuestions - difficulties[level])}
-                    onChange={(val) => setDifficulties((prev) => ({ ...prev, [level]: val }))}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  {(['최상', '상', '중', '하', '최하'] as DifficultyLevel[]).map((level) => (
+                    <DifficultyInput
+                      key={level}
+                      level={level}
+                      value={difficulties[level]}
+                      max={50 - (totalQuestions - difficulties[level])}
+                      onChange={(val) => setDifficulties((prev) => ({ ...prev, [level]: val }))}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Resize Handle */}
         <div className="flex w-2 items-center justify-center">
-          <div className="flex h-8 w-3 items-center justify-center rounded-sm border border-warm-border-soft bg-warm-surface">
-            <GripVertical className="h-3 w-3 text-warm-text-muted" />
+          <div className="flex h-10 w-3 items-center justify-center rounded border border-zinc-700 bg-zinc-800">
+            <GripVertical className="h-3.5 w-3.5 text-zinc-600" />
           </div>
         </div>
 
-        {/* Right Panel - Paper Preview */}
-        <div className="flex flex-1 overflow-hidden rounded-3xl border border-warm-border bg-white/85">
-          {totalQuestions > 0 ? (
-            <div className="flex h-full w-full flex-col p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-warm-text-primary">
-                  {paperName || '새 시험지'}
-                </h2>
-                <span className="text-sm text-warm-text-muted">{totalQuestions}문제</span>
-              </div>
-              <div className="flex-1 rounded-xl border border-dashed border-warm-border-soft bg-warm-surface/50 p-4">
-                <p className="text-center text-sm text-warm-text-muted">
-                  문제가 출제되면 여기에 표시됩니다.
-                </p>
+        {/* Right Panel - Upload & Preview */}
+        <div className="flex flex-1 flex-col gap-3 overflow-hidden">
+          {/* Upload Zone */}
+          <div
+            className={`flex-shrink-0 cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-all ${isDragging
+              ? 'border-indigo-500 bg-indigo-500/10'
+              : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-900/70'
+              }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.hwp,.hwpx"
+              onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+              className="hidden"
+            />
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
+              <Upload className="h-6 w-6" />
+            </div>
+            <h3 className="mb-1 text-sm font-semibold text-zinc-200">
+              파일을 드래그하거나 클릭하여 업로드
+            </h3>
+            <p className="text-xs text-zinc-500">PDF, 이미지, HWP 파일 지원</p>
+          </div>
+
+          {/* Uploaded Files List */}
+          {uploadedFiles.length > 0 && (
+            <div className="flex-shrink-0 rounded-xl border border-zinc-700/50 bg-zinc-900/70 p-3">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                업로드된 파일 ({uploadedFiles.length})
+              </h4>
+              <div className="max-h-32 space-y-2 overflow-auto">
+                <AnimatePresence>
+                  {uploadedFiles.map((file) => (
+                    <motion.div
+                      key={file.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="flex items-center gap-3 rounded-lg bg-zinc-800/50 px-3 py-2"
+                    >
+                      <FileText className="h-4 w-4 flex-shrink-0 text-zinc-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-zinc-300">{file.name}</p>
+                        {file.status !== 'done' && (
+                          <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-700">
+                            <div
+                              className="h-full rounded-full bg-indigo-500 transition-all"
+                              style={{ width: `${file.progress}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        {file.status === 'uploading' && (
+                          <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+                        )}
+                        {file.status === 'processing' && (
+                          <span className="text-xs text-amber-400">처리중...</span>
+                        )}
+                        {file.status === 'done' && (
+                          <CheckCircle className="h-4 w-4 text-emerald-400" />
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFile(file.id);
+                          }}
+                          className="rounded p-1 text-zinc-600 transition-colors hover:bg-zinc-700 hover:text-red-400"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             </div>
-          ) : (
-            <EmptyState message="문제를 출제하면 시험지를 볼 수 있습니다." />
           )}
+
+          {/* Paper Preview */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-700/50 bg-zinc-900/70">
+            {totalQuestions > 0 ? (
+              <div className="flex h-full flex-col p-4">
+                <div className="mb-4 flex items-center justify-between border-b border-zinc-700/50 pb-3">
+                  <h2 className="text-lg font-bold text-white">
+                    {paperName || '새 시험지'}
+                  </h2>
+                  <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-sm font-semibold text-indigo-300">
+                    {totalQuestions}문제
+                  </span>
+                </div>
+                <div className="flex-1 overflow-auto rounded-xl border border-dashed border-zinc-700 bg-zinc-800/30 p-4">
+                  <p className="text-center text-sm text-zinc-500">
+                    문제가 출제되면 여기에 표시됩니다.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <EmptyState message="문제를 출제하면 시험지를 볼 수 있습니다." />
+            )}
+          </div>
         </div>
       </div>
     </section>

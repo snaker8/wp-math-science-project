@@ -207,8 +207,8 @@ export default function MonitoringPage() {
                     <div className="mt-auto rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 p-5 text-white shadow-lg">
                         <h3 className="font-bold">AI 수업 조교</h3>
                         <p className="mt-2 text-xs text-indigo-100 opacity-90">
-                            "현재 7번 문항에서 5명의 학생이 정체 중입니다. <br />
-                            관련 개념 힌트를 전송할까요?"
+                            &quot;현재 7번 문항에서 5명의 학생이 정체 중입니다. <br />
+                            관련 개념 힌트를 전송할까요?&quot;
                         </p>
                         <button className="mt-4 w-full rounded-lg bg-white/20 py-2 text-xs font-semibold hover:bg-white/30 backdrop-blur-sm">
                             힌트 자동 전송

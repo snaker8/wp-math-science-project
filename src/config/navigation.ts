@@ -9,16 +9,21 @@ import {
   SquarePen,
   BookOpen,
   Layers,
-  Stethoscope,
-  Cloud,
   Puzzle,
-  Settings,
-  GraduationCap,
+  Cloud,
+  Upload,
+  Users,
   ClipboardCheck,
+  Stethoscope,
   FileText,
   BarChart3,
-  Users,
-  Upload,
+  Settings,
+  Home,
+  Bot,
+  User,
+  CreditCard,
+  Sparkles,
+  HelpCircle,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,7 +33,7 @@ export interface NavItem {
   label: string;
   description?: string;
   activeColor?: string;
-  group?: 'main' | 'tutor' | 'system';
+  group?: 'main' | 'tutor' | 'system' | 'student' | 'parent';
 }
 
 // 메인 대시보드 메뉴 (선생님/학원 관리)
@@ -91,6 +96,18 @@ export const dashboardNavItems: NavItem[] = [
   },
 ];
 
+// 교직원 관리 메뉴
+export const adminNavItems: NavItem[] = [
+  {
+    href: '/admin/staff',
+    icon: Users,
+    label: '교직원 관리',
+    description: '강사/직원 권한 관리',
+    activeColor: 'bg-indigo-500/10 text-indigo-500',
+    group: 'main',
+  },
+];
+
 // 튜터/수업 관련 메뉴
 export const tutorNavItems: NavItem[] = [
   {
@@ -126,6 +143,14 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
+    href: '/dashboard/curation',
+    icon: Sparkles,
+    label: 'AI 오토큐레이션',
+    description: '자동 맞춤 문제 선정',
+    activeColor: 'bg-purple-500/10 text-purple-500',
+    group: 'tutor',
+  },
+  {
     href: '/tutor/clinic',
     icon: FileText,
     label: '클리닉시험지',
@@ -155,11 +180,42 @@ export const systemNavItems: NavItem[] = [
   },
 ];
 
+// 고객지원 메뉴
+export const supportNavItems: NavItem[] = [
+  {
+    href: '/support',
+    icon: HelpCircle,
+    label: '고객센터',
+    description: '이용 가이드 및 문의',
+    activeColor: 'bg-zinc-500/10 text-zinc-500',
+    group: 'system',
+  },
+];
+
+// 학생용 메뉴
+export const studentNavItems: NavItem[] = [
+  { href: '/student', icon: Home, label: '홈', group: 'student' },
+  { href: '/student/study', icon: BookOpen, label: '학습', group: 'student' },
+  { href: '/student/ai-tutor', icon: Bot, label: 'AI 튜터', group: 'student' },
+  { href: '/student/profile', icon: User, label: '내 정보', group: 'student' },
+];
+
+// 학부모용 메뉴
+export const parentNavItems: NavItem[] = [
+  { href: '/parent', icon: Home, label: '홈', group: 'parent' },
+  { href: '/parent/report', icon: BarChart3, label: '리포트', group: 'parent' },
+  { href: '/parent/payment', icon: CreditCard, label: '결제 관리', group: 'parent' },
+];
+
 // 전체 네비게이션 (Sidebar용)
 export const allNavItems: NavItem[] = [
   ...dashboardNavItems,
   ...tutorNavItems,
+  ...adminNavItems,
   ...systemNavItems,
+  ...supportNavItems,
+  ...studentNavItems,
+  ...parentNavItems,
 ];
 
 // Header 퀵 액션용 (상위 5개)
@@ -167,8 +223,8 @@ export const quickNavItems: NavItem[] = [
   dashboardNavItems[0], // 대시보드
   dashboardNavItems[1], // 시험지저장소
   dashboardNavItems[2], // 시험지출제
-  tutorNavItems[1],     // 채점하기
-  tutorNavItems[2],     // AI처방
+  tutorNavItems[2],     // 채점하기
+  tutorNavItems[3],     // AI처방
 ];
 
 // 현재 경로에서 활성 메뉴 찾기

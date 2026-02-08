@@ -77,12 +77,14 @@ export default function TutorAnalyticsPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedStudent) {
       loadAnalyticsData();
     } else {
       setHeatmapData(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStudent, dateRange]);
 
   // 유사 문제 생성 핸들러

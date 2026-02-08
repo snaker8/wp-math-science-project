@@ -85,29 +85,64 @@ export class QuestionParser {
   private splitIntoQuestions(text: string): { number: number; content: string }[] {
     const blocks: { number: number; content: string }[] = [];
 
-    // 문제 번호로 분할하는 정규식
-    // "1." 또는 "1)" 또는 "[1]" 등의 패턴 앞에서 분할
-    const splitPattern = /(?=(?:^|\n)\s*\d{1,2}\s*[.)번\]]\s*)/;
-    const parts = text.split(splitPattern).filter(p => p.trim());
+    console.log('[QuestionParser] Input text length:', text.length);
+    console.log('[QuestionParser] First 500 chars:', text.substring(0, 500));
 
-    for (const part of parts) {
-      const numberMatch = part.match(/^\s*(\d{1,2})\s*[.)번\]]/);
-      if (numberMatch) {
-        const questionNumber = parseInt(numberMatch[1], 10);
-        const content = part.substring(numberMatch[0].length).trim();
+    // 문제 번호로 분할하는 정규식 (한국 수학 문제지 형식)
+    // "1.", "1)", "[1]", "1번", "01.", "01)", "01 " (공백) 등을 인식
+    // "01 다음 중 옳은 것은?" 형식도 인식 (2자리 숫자 + 공백 + 한글)
+    const testPattern = /(?:^|\n)\s*(?:\[)?(\d{1,2})\s*(?:[.)번\]]|\s+(?=[가-힣]))/gm;
 
-        blocks.push({
-          number: questionNumber,
-          content,
-        });
+    // 먼저 모든 매치 찾기
+    const matches: { index: number; number: number; matchText: string }[] = [];
+    let match;
+
+    while ((match = testPattern.exec(text)) !== null) {
+      const questionNumber = parseInt(match[1], 10);
+      // 선택지 (1), (2) 등과 문제 번호를 구분하기 위해 괄호로 시작하는지 확인
+      const isChoice = match[0].includes('(');
+      if (!isChoice && questionNumber > 0) {
+        matches.push({ index: match.index, number: questionNumber, matchText: match[0] });
       }
     }
+
+    console.log('[QuestionParser] Found', matches.length, 'question number matches:', matches.map(m => `${m.number}: "${m.matchText.trim()}"`));
+
+
+    if (matches.length === 0) {
+      // 번호를 찾지 못하면 전체 텍스트를 하나의 문제로 처리
+      console.log('[QuestionParser] No question numbers found, treating as single problem');
+      return [{ number: 1, content: text.trim() }];
+    }
+
+    // 각 매치 사이의 텍스트를 문제로 분할
+    for (let i = 0; i < matches.length; i++) {
+      const startIdx = matches[i].index;
+      const endIdx = i < matches.length - 1 ? matches[i + 1].index : text.length;
+      const part = text.substring(startIdx, endIdx).trim();
+
+      // 문제 번호 패턴과 뒤의 내용 추출 (01 다음 중 / 1. 다음 중 형식)
+      const numberMatch = part.match(/^\s*(?:\[)?(\d{1,2})\s*(?:[.)번\]]|\s+)/);
+      if (numberMatch) {
+        const content = part.substring(numberMatch[0].length).trim();
+        if (content.length > 0) {  // 내용이 있는 경우만 추가
+          blocks.push({
+            number: matches[i].number,
+            content,
+          });
+        }
+      }
+    }
+
+
+    console.log('[QuestionParser] Extracted', blocks.length, 'question blocks');
 
     // 번호 순으로 정렬
     blocks.sort((a, b) => a.number - b.number);
 
     return blocks;
   }
+
 
   /**
    * 개별 문제 블록 파싱

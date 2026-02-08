@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       if (error) {
         console.error('Error fetching problems:', error);
       } else if (problemsData) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        
         problems = problemsData.map((p: any) => ({
           id: p.id,
           contentLatex: p.content_latex,

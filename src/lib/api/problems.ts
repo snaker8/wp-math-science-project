@@ -68,8 +68,7 @@ export async function getProblems(options?: {
   offset?: number;
 }): Promise<{ data: Problem[]; count: number }> {
   if (!supabaseBrowser) {
-    console.warn('[API] Supabase not configured, returning mock data');
-    return { data: getMockProblems(), count: 20 };
+    throw new Error('[API] Supabase not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
 
   let query = supabaseBrowser
@@ -100,7 +99,7 @@ export async function getProblems(options?: {
 
   if (error) {
     console.error('[API] getProblems error:', error);
-    return { data: getMockProblems(), count: 20 };
+    throw error;
   }
 
   return {
@@ -117,7 +116,7 @@ export async function getProblems(options?: {
  */
 export async function getProblem(id: string): Promise<Problem | null> {
   if (!supabaseBrowser) {
-    return getMockProblems().find(p => p.id === id) || null;
+    throw new Error('[API] Supabase not configured');
   }
 
   const { data, error } = await supabaseBrowser
@@ -243,7 +242,7 @@ export async function updateProblem(
  */
 export async function getProblemsByType(typeCode: string, limit = 10): Promise<Problem[]> {
   if (!supabaseBrowser) {
-    return getMockProblems().filter(p => p.classification?.typeCode === typeCode).slice(0, limit);
+    throw new Error('[API] Supabase not configured');
   }
 
   const { data, error } = await supabaseBrowser

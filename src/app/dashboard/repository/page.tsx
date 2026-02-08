@@ -1,179 +1,208 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { ChevronDown, LayoutGrid, List, FileText, FilePlus } from 'lucide-react';
+import React from 'react';
+import { useExams, ExamPaper } from '@/hooks';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ChevronDown,
+  LayoutGrid,
+  List,
+  FileText,
+  FilePlus,
+  Search,
+  Filter,
+  Calendar,
+  MoreVertical,
+  Download,
+  Eye,
+  Tag,
+  Clock,
+  Zap,
+  BookOpen
+} from 'lucide-react';
+import { GlowCard } from '@/components/shared/GlowCard';
+import { MathRenderer } from '@/components/shared/MathRenderer';
+
+// ExamPaper type imported from useExams hook
 
 // ============================================================================
-// Types
+// Components
 // ============================================================================
 
-interface ExamPaper {
-  id: string;
-  title: string;
-  grade: string;
-  course: string;
-  status: 'draft' | 'completed' | 'published';
-  problemCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// ============================================================================
-// Filter Dropdown Component
-// ============================================================================
-
-interface FilterDropdownProps {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}
-
-const FilterDropdown: React.FC<FilterDropdownProps> = ({ label, value, options, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex h-10 min-w-[140px] items-center justify-between gap-2 rounded-xl border border-warm-border-soft bg-white px-4 text-sm text-warm-text-primary transition-colors hover:border-warm-border"
-      >
-        <span>{value || label}</span>
-        <ChevronDown className={`h-4 w-4 text-warm-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-full min-w-[160px] rounded-xl border border-warm-border-soft bg-white py-1 shadow-medium">
-            {options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  onChange(option);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-4 py-2 text-left text-sm transition-colors hover:bg-warm-surface ${value === option ? 'bg-warm-surface text-warm-primary font-medium' : 'text-warm-text-primary'
-                  }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// Empty State Component
-// ============================================================================
-
-const EmptyState: React.FC = () => (
-  <div className="flex flex-1 items-center justify-center p-8">
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-warm-border-soft bg-white/80 px-12 py-16 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-warm-surface">
-        <FileText className="h-8 w-8 text-warm-text-muted" />
-      </div>
-      <h3 className="text-lg font-semibold text-warm-text-primary">시험지가 없습니다</h3>
-      <p className="mt-2 text-sm text-warm-text-muted">
-        Litecore에 등록된 시험지가 아직 없습니다.
-      </p>
-      <button className="mt-6 flex items-center gap-2 rounded-xl bg-warm-primary px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-warm-primary/90">
-        새 시험지 만들기
-      </button>
-    </div>
-  </div>
+const FilterBadge = ({ label, active }: { label: string; active?: boolean }) => (
+  <button className={`
+        px-3 py-1.5 rounded-full text-[10px] font-bold tracking-tighter transition-all border
+        ${active
+      ? 'bg-white text-black border-white'
+      : 'bg-zinc-900 text-zinc-500 border-white/5 hover:border-white/10 hover:text-zinc-300'}
+    `}>
+    {label}
+  </button>
 );
 
-// ============================================================================
-// Repository Page
-// ============================================================================
-
 export default function RepositoryPage() {
-  const [gradeFilter, setGradeFilter] = useState('');
-  const [courseFilter, setCourseFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-
-  // Mock data - empty for now to show empty state
-  const examPapers: ExamPaper[] = [];
-
-  const gradeOptions = ['전체', '초등 1학년', '초등 2학년', '초등 3학년', '초등 4학년', '초등 5학년', '초등 6학년', '중등 1학년', '중등 2학년', '중등 3학년', '고등 1학년', '고등 2학년', '고등 3학년'];
-  const courseOptions = ['전체', '기초수학', '대수학', '기하학', '미적분', '확률과 통계'];
-  const statusOptions = ['전체', '작성중', '완료', '발행됨'];
+  const { exams, isLoading } = useExams();
+  const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   return (
-    <section className="flex flex-1 flex-col overflow-hidden bg-warm-surface">
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-6 py-6">
-        {/* Filter Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <FilterDropdown
-              label="학년"
-              value={gradeFilter}
-              options={gradeOptions}
-              onChange={setGradeFilter}
-            />
-            <FilterDropdown
-              label="강좌명"
-              value={courseFilter}
-              options={courseOptions}
-              onChange={setCourseFilter}
-            />
-            <FilterDropdown
-              label="상태"
-              value={statusFilter}
-              options={statusOptions}
-              onChange={setStatusFilter}
+    <div className="min-h-screen bg-black text-white p-6 space-y-8">
+      {/* 1. Header & Primary Action */}
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-1 px-2 rounded bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-400 tracking-tighter uppercase">
+              Digital Asset
+            </div>
+            <span className="text-zinc-500 text-xs font-medium uppercase tracking-widest">Library</span>
+          </div>
+          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+            학습 자산 저장소
+          </h1>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all"
+        >
+          <FilePlus size={18} />
+          <span>새 시험지 제작</span>
+        </motion.button>
+      </div>
+
+      {/* 2. Advanced Search & Filter Bar */}
+      <GlowCard className="p-4 bg-zinc-950/50 border-white/5">
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative flex-1 group w-full">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-white transition-colors" size={18} />
+            <input
+              type="text"
+              placeholder="시험지 제목, 단원, 키워드로 검색..."
+              className="w-full bg-black border border-white/5 rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:border-white/20 transition-all placeholder:text-zinc-700"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/repository/editor"
-              className="flex items-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-warm-primary/20 via-warm-primary/10 to-warm-surface-strong px-4 py-2 text-sm font-medium text-warm-text-primary transition-all hover:-translate-y-[1px] hover:bg-warm-surface-strong"
+          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+            <FilterBadge label="전체" active />
+            <FilterBadge label="고등부" />
+            <FilterBadge label="중등부" />
+            <FilterBadge label="심화문항" />
+            <FilterBadge label="최근수정" />
+            <div className="h-6 w-[1px] bg-white/10 mx-2 flex-shrink-0" />
+            <button
+              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+              className="p-2.5 rounded-xl bg-zinc-900 border border-white/5 text-zinc-500 hover:text-white transition-all"
             >
-              <FilePlus className="h-4 w-4" />
-              <span>새 시험지 만들기</span>
-            </Link>
-            <div className="flex items-center rounded-xl border border-warm-border-soft bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${viewMode === 'grid'
-                  ? 'bg-warm-primary text-white'
-                  : 'text-warm-text-muted hover:bg-warm-surface hover:text-warm-text-primary'
-                  }`}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${viewMode === 'list'
-                  ? 'bg-warm-primary text-white'
-                  : 'text-warm-text-muted hover:bg-warm-surface hover:text-warm-text-primary'
-                  }`}
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
+              {viewMode === 'grid' ? <List size={18} /> : <LayoutGrid size={18} />}
+            </button>
           </div>
         </div>
+      </GlowCard>
 
-        {/* Content Area */}
-        {examPapers.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
-            {/* Exam paper cards would go here */}
-          </div>
-        )}
+      {/* 3. Asset Grid */}
+      <div className={`
+                grid gap-6
+                ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}
+            `}>
+        <AnimatePresence mode="popLayout">
+          {exams.map((paper, idx) => (
+            <motion.div
+              key={paper.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+            >
+              <GlowCard className="group h-full flex flex-col p-0 overflow-hidden border-white/5 hover:border-white/20 transition-all">
+                {/* Thumbnail Section */}
+                <div className="relative h-40 bg-zinc-900 flex items-center justify-center p-6 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/80 z-10" />
+                  <div className="relative z-20 opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
+                    <MathRenderer content={paper.thumbnail} className="text-zinc-500 text-lg font-serif" />
+                  </div>
+
+                  {/* Badges */}
+                  <div className="absolute top-4 left-4 z-30 flex gap-2">
+                    <div className="px-2 py-0.5 rounded bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-bold text-zinc-300">
+                      {paper.grade}
+                    </div>
+                    <div className={`px-2 py-0.5 rounded bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-bold ${paper.difficulty === 'Lv.5' ? 'text-rose-400' : 'text-emerald-400'
+                      }`}>
+                      {paper.difficulty}
+                    </div>
+                  </div>
+
+                  {/* Action Overlay */}
+                  <div className="absolute inset-0 z-40 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                    <button className="p-2 rounded-full bg-white text-black hover:bg-zinc-200 transition-colors">
+                      <Eye size={18} />
+                    </button>
+                    <button className="p-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/30">
+                      <Zap size={18} />
+                    </button>
+                    <button className="p-2 rounded-full bg-zinc-800 text-white hover:bg-zinc-700 transition-colors">
+                      <Download size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content Section */}
+                <div className="p-5 space-y-4 flex-1 flex flex-col">
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] font-bold text-zinc-600 flex items-center gap-1 uppercase tracking-tighter">
+                        <Tag size={10} /> {paper.unit}
+                      </span>
+                      <button className="p-1 text-zinc-600 hover:text-white">
+                        <MoreVertical size={14} />
+                      </button>
+                    </div>
+                    <h4 className="font-bold text-sm text-zinc-100 leading-snug group-hover:text-white transition-colors">
+                      {paper.title}
+                    </h4>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-tighter">Problems</span>
+                        <span className="text-xs font-bold text-zinc-300">{paper.problemCount}</span>
+                      </div>
+                      <div className="w-[1px] h-6 bg-white/5" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-tighter">Updated</span>
+                        <span className="text-xs font-bold text-zinc-300">2d ago</span>
+                      </div>
+                    </div>
+                    <div className={`
+                                            flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border
+                                            ${paper.status === 'published'
+                        ? 'text-indigo-400 border-indigo-500/20 bg-indigo-500/5'
+                        : 'text-zinc-500 border-zinc-800 bg-zinc-900'}
+                                        `}>
+                      <div className={`w-1 h-1 rounded-full ${paper.status === 'published' ? 'bg-indigo-400' : 'bg-zinc-600'}`} />
+                      {paper.status.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+              </GlowCard>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
-    </section>
+
+      {/* 4. Empty State Example (Hidden if data exists) */}
+      {exams.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 bg-zinc-950/30 rounded-3xl border border-dashed border-white/5">
+          <div className="p-6 rounded-full bg-zinc-900 border border-white/5 mb-6 opacity-20">
+            <BookOpen size={48} className="text-white" />
+          </div>
+          <h3 className="text-xl font-bold text-zinc-400 mb-2">저장된 자산이 없습니다</h3>
+          <p className="text-sm text-zinc-600 max-w-xs text-center">
+            새로운 시험지를 제작하거나 외부 파일을 임포트하여 나만의 학습 저장소를 꾸려보세요.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

@@ -62,6 +62,7 @@ const ExamTemplate = forwardRef<HTMLDivElement, ExamTemplateProps>(
             }}
           >
             {config.watermark.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={config.watermark.image}
                 alt="Watermark"
@@ -100,6 +101,7 @@ const ExamTemplate = forwardRef<HTMLDivElement, ExamTemplateProps>(
           {/* 좌측: 학원 로고 및 정보 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {config.instituteLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={config.instituteLogo}
                 alt="Institute Logo"

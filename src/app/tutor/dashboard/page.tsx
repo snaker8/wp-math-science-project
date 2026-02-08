@@ -299,6 +299,9 @@ export default function TutorDashboardPage() {
         .dashboard {
           max-width: 1200px;
           margin: 0 auto;
+          min-height: 100vh;
+          background: #000000;
+          color: #ffffff;
         }
 
         .loading {
@@ -308,14 +311,14 @@ export default function TutorDashboardPage() {
           justify-content: center;
           height: 60vh;
           gap: 16px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .spinner {
           width: 40px;
           height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #4f46e5;
+          border: 3px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #6366f1;
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -331,17 +334,21 @@ export default function TutorDashboardPage() {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 32px;
+          padding: 24px;
+          background: rgba(24, 24, 27, 0.8);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
           margin-bottom: 4px;
         }
 
         .page-header p {
-          color: #6b7280;
+          color: #a1a1aa;
           font-size: 14px;
         }
 
@@ -373,13 +380,13 @@ export default function TutorDashboardPage() {
 
         .stat-card {
           position: relative;
-          background: white;
+          background: rgba(24, 24, 27, 0.6);
           border-radius: 12px;
           padding: 20px;
           display: flex;
           align-items: center;
           gap: 16px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .stat-icon {
@@ -392,23 +399,23 @@ export default function TutorDashboardPage() {
         }
 
         .stat-icon.blue {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(79, 70, 229, 0.15);
+          color: #a5b4fc;
         }
 
         .stat-icon.green {
-          background: #ecfdf5;
-          color: #059669;
+          background: rgba(5, 150, 105, 0.15);
+          color: #34d399;
         }
 
         .stat-icon.purple {
-          background: #f5f3ff;
-          color: #7c3aed;
+          background: rgba(124, 58, 237, 0.15);
+          color: #c4b5fd;
         }
 
         .stat-icon.orange {
-          background: #fff7ed;
-          color: #ea580c;
+          background: rgba(234, 88, 12, 0.15);
+          color: #fb923c;
         }
 
         .stat-info {
@@ -419,12 +426,12 @@ export default function TutorDashboardPage() {
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .stat-badge {
@@ -432,8 +439,8 @@ export default function TutorDashboardPage() {
           top: 12px;
           right: 12px;
           padding: 4px 8px;
-          background: #fef3c7;
-          color: #d97706;
+          background: rgba(217, 119, 6, 0.2);
+          color: #fbbf24;
           font-size: 11px;
           font-weight: 600;
           border-radius: 9999px;
@@ -446,9 +453,9 @@ export default function TutorDashboardPage() {
         }
 
         .card {
-          background: white;
+          background: rgba(24, 24, 27, 0.6);
           border-radius: 12px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           overflow: hidden;
         }
 
@@ -457,20 +464,20 @@ export default function TutorDashboardPage() {
           justify-content: space-between;
           align-items: center;
           padding: 20px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .card-header h2 {
           font-size: 16px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .view-all {
           display: flex;
           align-items: center;
           gap: 4px;
-          color: #4f46e5;
+          color: #a5b4fc;
           font-size: 13px;
           font-weight: 500;
           text-decoration: none;
@@ -486,7 +493,7 @@ export default function TutorDashboardPage() {
           align-items: center;
           justify-content: center;
           padding: 48px 24px;
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .empty-state p {
@@ -496,8 +503,8 @@ export default function TutorDashboardPage() {
 
         .btn-secondary {
           padding: 10px 16px;
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #d4d4d8;
           font-size: 14px;
           font-weight: 500;
           border-radius: 8px;
@@ -506,7 +513,7 @@ export default function TutorDashboardPage() {
         }
 
         .btn-secondary:hover {
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.8);
         }
 
         .class-list {
@@ -524,7 +531,7 @@ export default function TutorDashboardPage() {
         }
 
         .class-item:hover {
-          background: #f9fafb;
+          background: rgba(63, 63, 70, 0.3);
         }
 
         .class-info {
@@ -535,12 +542,12 @@ export default function TutorDashboardPage() {
         .class-name {
           font-size: 15px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .class-subject {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
           margin-top: 2px;
         }
 
@@ -554,7 +561,7 @@ export default function TutorDashboardPage() {
           align-items: center;
           gap: 4px;
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .quick-actions {
@@ -571,14 +578,14 @@ export default function TutorDashboardPage() {
           padding: 14px 16px;
           border-radius: 8px;
           text-decoration: none;
-          color: #374151;
+          color: #d4d4d8;
           font-size: 14px;
           font-weight: 500;
           transition: background 0.2s;
         }
 
         .action-item:hover {
-          background: #f9fafb;
+          background: rgba(63, 63, 70, 0.3);
         }
 
         .action-icon {
@@ -591,23 +598,23 @@ export default function TutorDashboardPage() {
         }
 
         .action-icon.blue {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(79, 70, 229, 0.15);
+          color: #a5b4fc;
         }
 
         .action-icon.green {
-          background: #ecfdf5;
-          color: #059669;
+          background: rgba(5, 150, 105, 0.15);
+          color: #34d399;
         }
 
         .action-icon.purple {
-          background: #f5f3ff;
-          color: #7c3aed;
+          background: rgba(124, 58, 237, 0.15);
+          color: #c4b5fd;
         }
 
         .action-icon.orange {
-          background: #fff7ed;
-          color: #ea580c;
+          background: rgba(234, 88, 12, 0.15);
+          color: #fb923c;
         }
 
         @media (max-width: 1024px) {

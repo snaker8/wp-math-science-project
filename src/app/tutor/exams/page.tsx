@@ -361,6 +361,9 @@ export default function TutorExamsPage() {
         .exams-page {
           max-width: 1200px;
           margin: 0 auto;
+          min-height: 100vh;
+          background: #000000;
+          color: #ffffff;
         }
 
         .loading {
@@ -370,14 +373,14 @@ export default function TutorExamsPage() {
           justify-content: center;
           height: 60vh;
           gap: 16px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .spinner {
           width: 40px;
           height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #4f46e5;
+          border: 3px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #6366f1;
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -391,17 +394,21 @@ export default function TutorExamsPage() {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 24px;
+          padding: 24px;
+          background: rgba(24, 24, 27, 0.8);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
           margin-bottom: 4px;
         }
 
         .page-header p {
-          color: #6b7280;
+          color: #a1a1aa;
           font-size: 14px;
         }
 
@@ -435,32 +442,32 @@ export default function TutorExamsPage() {
           align-items: center;
           gap: 12px;
           padding: 16px 24px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
         }
 
         .stat-item svg {
-          color: #4f46e5;
+          color: #a5b4fc;
         }
 
         .stat-item.active svg {
-          color: #22c55e;
+          color: #34d399;
         }
 
         .stat-item.scheduled svg {
-          color: #3b82f6;
+          color: #60a5fa;
         }
 
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .filters {
@@ -475,15 +482,15 @@ export default function TutorExamsPage() {
           align-items: center;
           gap: 8px;
           padding: 10px 16px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
           flex: 1;
           min-width: 250px;
         }
 
         .search-box svg {
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .search-box input {
@@ -491,6 +498,12 @@ export default function TutorExamsPage() {
           border: none;
           outline: none;
           font-size: 14px;
+          background: transparent;
+          color: #ffffff;
+        }
+
+        .search-box input::placeholder {
+          color: #71717a;
         }
 
         .filter-group {
@@ -500,17 +513,21 @@ export default function TutorExamsPage() {
         }
 
         .filter-group svg {
-          color: #6b7280;
+          color: #71717a;
         }
 
         .filter-group select {
           padding: 10px 16px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
           font-size: 14px;
-          color: #374151;
-          background: white;
+          color: #ffffff;
+          background: rgba(39, 39, 42, 0.8);
           cursor: pointer;
+        }
+
+        .filter-group select option {
+          background: #27272a;
         }
 
         .empty-state {
@@ -519,17 +536,17 @@ export default function TutorExamsPage() {
           align-items: center;
           justify-content: center;
           padding: 64px 24px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 16px;
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .empty-state h3 {
           margin: 16px 0 8px;
           font-size: 18px;
           font-weight: 600;
-          color: #374151;
+          color: #ffffff;
         }
 
         .empty-state p {
@@ -542,8 +559,8 @@ export default function TutorExamsPage() {
           align-items: center;
           gap: 8px;
           padding: 12px 20px;
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #d4d4d8;
           font-size: 14px;
           font-weight: 500;
           border-radius: 10px;
@@ -551,7 +568,7 @@ export default function TutorExamsPage() {
         }
 
         .btn-secondary:hover {
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.8);
         }
 
         .exam-list {
@@ -561,8 +578,8 @@ export default function TutorExamsPage() {
         }
 
         .exam-card {
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           padding: 20px;
         }
@@ -581,7 +598,7 @@ export default function TutorExamsPage() {
         .exam-title-row h3 {
           font-size: 18px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .status-badge {
@@ -596,7 +613,7 @@ export default function TutorExamsPage() {
 
         .exam-desc {
           font-size: 14px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .exam-meta {
@@ -611,17 +628,17 @@ export default function TutorExamsPage() {
           align-items: center;
           gap: 6px;
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .meta-item svg {
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .exam-progress {
           margin-bottom: 16px;
           padding: 12px 16px;
-          background: #f9fafb;
+          background: rgba(39, 39, 42, 0.5);
           border-radius: 8px;
         }
 
@@ -630,12 +647,12 @@ export default function TutorExamsPage() {
           justify-content: space-between;
           margin-bottom: 8px;
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .progress-bar {
           height: 6px;
-          background: #e5e7eb;
+          background: rgba(255, 255, 255, 0.1);
           border-radius: 3px;
           overflow: hidden;
         }
@@ -658,8 +675,8 @@ export default function TutorExamsPage() {
           align-items: center;
           gap: 6px;
           padding: 8px 14px;
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #d4d4d8;
           font-size: 13px;
           font-weight: 500;
           border: none;
@@ -670,16 +687,16 @@ export default function TutorExamsPage() {
         }
 
         .action-btn:hover {
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.8);
         }
 
         .action-btn.primary {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(79, 70, 229, 0.15);
+          color: #a5b4fc;
         }
 
         .action-btn.primary:hover {
-          background: #e0e7ff;
+          background: rgba(79, 70, 229, 0.25);
         }
 
         @media (max-width: 768px) {

@@ -123,7 +123,7 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                                     </div>
                                     <div className="mt-4 p-3 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
                                         <p className="text-xs text-indigo-300 leading-relaxed text-center">
-                                            "평균 대비 <strong>이해력</strong>이 우수하나, <br /><strong>응용력</strong> 보완이 필요합니다."
+                                            &quot;평균 대비 <strong>이해력</strong>이 우수하나, <br /><strong>응용력</strong> 보완이 필요합니다.&quot;
                                         </p>
                                     </div>
                                 </div>

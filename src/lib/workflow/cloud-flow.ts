@@ -19,7 +19,8 @@ import {
   type HWPParseResult,
 } from './hwp-processor';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
-import { parseQuestions } from '@/lib/ocr/question-parser';
+import { parseQuestions, getQuestionParser } from '@/lib/ocr/question-parser';
+import type { MathpixResponse, ParsedQuestion } from '@/types/ocr';
 
 // ============================================================================
 // Configuration
@@ -178,13 +179,10 @@ async function processPDFDocument(
     };
   } catch (error) {
     console.error('[Cloud Flow] PDF OCR error:', error);
-
-    // Mathpix 미설정 시 Mock 데이터 반환
-    if (error instanceof MathpixError || (error instanceof Error && error.message.includes('not configured'))) {
-      console.log('[Cloud Flow] Mathpix not configured, using mock data');
-      return createMockPDFResult(jobId);
+    // API 설정 오류는 상세히 로깅
+    if (error instanceof MathpixError) {
+      console.error('[Cloud Flow] Mathpix API Error:', error.code, error.details);
     }
-
     throw error;
   }
 }
@@ -261,13 +259,10 @@ async function processImageDocument(
     };
   } catch (error) {
     console.error('[Cloud Flow] Image OCR error:', error);
-
-    // Mathpix 미설정 시 Mock 데이터 반환
-    if (error instanceof MathpixError || (error instanceof Error && error.message.includes('not configured'))) {
-      console.log('[Cloud Flow] Mathpix not configured, using mock data');
-      return createMockImageResult(jobId);
+    // API 설정 오류는 상세히 로깅
+    if (error instanceof MathpixError) {
+      console.error('[Cloud Flow] Mathpix API Error:', error.code, error.details);
     }
-
     throw error;
   }
 }
@@ -402,11 +397,11 @@ export async function analyzeProblemWithLLM(
 async function callOpenAI(prompt: string): Promise<string> {
   // 실제 OpenAI API 호출
   if (!OPENAI_API_KEY) {
-    console.log('[Cloud Flow] OpenAI API key not configured, using mock response');
-    return getMockLLMResponse();
+    throw new Error('[Cloud Flow] OpenAI API key not configured. Set OPENAI_API_KEY in .env');
   }
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
+
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -583,7 +578,7 @@ export async function processUploadJob(
   try {
     // Step 1: 파일 타입에 따른 텍스트/수식 추출
     const fileTypeLabel = job.fileType === 'HWP' ? 'HWP 파싱' :
-                          job.fileType === 'PDF' ? 'PDF OCR' : '이미지 OCR';
+      job.fileType === 'PDF' ? 'PDF OCR' : '이미지 OCR';
     callbacks.onStatusChange('OCR_PROCESSING', `${fileTypeLabel} 처리 중...`);
 
     let ocrResult: OCRResult;
@@ -598,29 +593,74 @@ export async function processUploadJob(
 
     console.log(`[Cloud Flow] Extracted ${ocrResult.pages.length} pages from ${job.fileName}`);
 
-    // Step 2: 각 페이지/문제에 대해 LLM 분석
-    callbacks.onStatusChange('LLM_ANALYZING', 'AI 분석 중 (GPT-4o)...');
+    // Step 2: 모든 페이지에서 개별 문제 추출
+    callbacks.onStatusChange('LLM_ANALYZING', '문제 분리 중...');
 
-    for (let i = 0; i < ocrResult.pages.length; i++) {
-      const page = ocrResult.pages[i];
+    // 모든 페이지의 텍스트를 합침
+    const fullText = ocrResult.pages.map(p => p.text).join('\n\n');
+    console.log(`[Cloud Flow] Full OCR text length: ${fullText.length} characters`);
+    console.log(`[Cloud Flow] First 500 chars of OCR text:`, fullText.substring(0, 500));
 
-      // Step 3: 3,569개 유형 중 하나로 분류
-      callbacks.onStatusChange('CLASSIFYING', `문제 ${i + 1}/${ocrResult.pages.length} - 유형 분류 중...`);
+    // QuestionParser로 개별 문제 분리
+    const parser = getQuestionParser();
+    const parsedQuestions = parser.parse({
+      text: fullText,
+      latex_styled: fullText,
+      confidence: ocrResult.confidence,
+      request_id: ocrResult.jobId,
+    } as MathpixResponse);
 
-      const mathExpressions = page.mathExpressions.map((m) => m.latex);
+    console.log(`[Cloud Flow] QuestionParser found ${parsedQuestions.length} questions`);
+    if (parsedQuestions.length > 0) {
+      console.log(`[Cloud Flow] First parsed question:`, parsedQuestions[0]?.raw_text?.substring(0, 200));
+    }
+
+    // 파싱된 문제가 없으면 페이지 단위로 폴백
+    type QuestionToAnalyze = { index: number; text: string; mathExpressions: string[] };
+    const questionsToAnalyze: QuestionToAnalyze[] = parsedQuestions.length > 0
+      ? parsedQuestions.map((q: ParsedQuestion, idx: number) => ({
+        index: idx,
+        text: q.raw_text || q.content_latex,
+        mathExpressions: q.content_latex ? [q.content_latex] : [],
+      }))
+      : ocrResult.pages.map((page, idx: number) => ({
+        index: idx,
+        text: page.text,
+        mathExpressions: page.mathExpressions.map(m => m.latex),
+      }));
+
+    console.log(`[Cloud Flow] Final questions to analyze: ${questionsToAnalyze.length}`);
+
+
+    // Step 3: 각 문제에 대해 LLM 분석
+    callbacks.onStatusChange('LLM_ANALYZING', `AI 분석 중 (${questionsToAnalyze.length}개 문제)...`);
+
+    for (let i = 0; i < questionsToAnalyze.length; i++) {
+      const question = questionsToAnalyze[i];
+
+      // Rate limit 방지: 첫 번째 문제 제외하고 1.5초 대기
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
+      // Step 4: 3,569개 유형 중 하나로 분류
+      callbacks.onStatusChange('CLASSIFYING', `문제 ${i + 1}/${questionsToAnalyze.length} - 유형 분류 중...`);
+
       const analysis = await analyzeProblemWithLLM(
-        page.text,
-        mathExpressions,
+        question.text,
+        question.mathExpressions,
         (p) => {
-          const baseProgress = 50 + (i / ocrResult.pages.length) * 40;
+          const baseProgress = 50 + (i / questionsToAnalyze.length) * 40;
           callbacks.onProgress(baseProgress + (p - 50) * 0.4);
         }
       );
 
-      // Step 4: 해설이 없으면 생성
+      // Step 5: 해설이 없으면 생성
       if (!analysis.solution.steps || analysis.solution.steps.length === 0) {
         callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - 해설 생성 중...`);
-        const solutionResult = await generateStepByStepSolution(page.text, mathExpressions);
+        // 해설 생성 전에도 딜레이 추가
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const solutionResult = await generateStepByStepSolution(question.text, question.mathExpressions);
         analysis.solution = solutionResult;
       }
 
@@ -628,7 +668,8 @@ export async function processUploadJob(
       console.log(`[Cloud Flow] Problem ${i + 1}: ${analysis.classification.typeCode} (${analysis.classification.typeName})`);
     }
 
-    // Step 5: 완료
+
+    // Step 6: 완료
     callbacks.onStatusChange('COMPLETED', `${results.length}개 문제 처리 완료`);
     callbacks.onProgress(100);
     callbacks.onComplete(results);

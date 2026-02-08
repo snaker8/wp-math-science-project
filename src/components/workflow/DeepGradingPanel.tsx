@@ -20,10 +20,14 @@ interface GradingCheckItem {
 }
 
 interface DeepGradingPanelProps {
-  checks: GradingCheckItem[];
+  checks?: GradingCheckItem[];
+  answers?: any[];
+  examTitle?: string;
+  onGrade?: (answerId: string, status: any, feedback?: string) => Promise<void>;
+  onComplete?: () => void;
 }
 
-export function DeepGradingPanel({ checks }: DeepGradingPanelProps) {
+export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onComplete }: DeepGradingPanelProps) {
   // Mock Data for "Detected" formulas
   const detectedFormulas = [
     { id: 1, raw: 'log_2(x-1) + log_2(x+2) < 4', parsed: '\\log_2(x-1) + \\log_2(x+2) < 4', stage: 'analysis' },
@@ -147,7 +151,7 @@ export function DeepGradingPanel({ checks }: DeepGradingPanelProps) {
                 key={formula.id}
                 initial={{ opacity: 0, x: -10, filter: 'blur(8px)' }}
                 animate={{
-                  opacity: checks[1].status === 'processing' || checks[1].status === 'completed' ? 1 : 0,
+                  opacity: checks[1]?.status === 'processing' || checks[1]?.status === 'completed' ? 1 : 0,
                   x: 0,
                   filter: 'blur(0px)'
                 }}
@@ -194,3 +198,5 @@ export function DeepGradingPanel({ checks }: DeepGradingPanelProps) {
     </div>
   );
 }
+
+export default DeepGradingPanel;

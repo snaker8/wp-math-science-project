@@ -90,7 +90,7 @@ const MathEditor: React.FC<MathEditorProps> = ({
 
     // LaTeX 추출 (mathInline, mathBlock 노드에서)
     const latexParts: string[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    
     const extractLatex = (node: any) => {
       if (node?.type === 'mathInline' || node?.type === 'mathBlock') {
         if (node?.attrs?.latex) {

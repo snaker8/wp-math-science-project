@@ -390,7 +390,8 @@ export default function GradingPage() {
       <style jsx>{`
         .grading-page {
           min-height: 100vh;
-          background: #f3f4f6;
+          background: #000000;
+          color: #ffffff;
         }
 
         .page-header {
@@ -398,8 +399,9 @@ export default function GradingPage() {
           justify-content: space-between;
           align-items: center;
           padding: 20px 32px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.8);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(8px);
         }
 
         .header-content h1 {
@@ -409,13 +411,13 @@ export default function GradingPage() {
           margin: 0 0 8px;
           font-size: 22px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .header-content p {
           margin: 0;
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .header-controls {
@@ -429,10 +431,10 @@ export default function GradingPage() {
           align-items: center;
           gap: 8px;
           padding: 8px 12px;
-          background: #f9fafb;
-          border: 1px solid #d1d5db;
+          background: rgba(39, 39, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .select-wrapper select {
@@ -440,10 +442,15 @@ export default function GradingPage() {
           background: transparent;
           font-size: 13px;
           font-weight: 500;
-          color: #1f2937;
+          color: #ffffff;
           cursor: pointer;
           appearance: none;
           padding-right: 4px;
+        }
+
+        .select-wrapper select option {
+          background: #27272a;
+          color: #ffffff;
         }
 
         .toggle-heatmap-btn {
@@ -453,22 +460,23 @@ export default function GradingPage() {
           padding: 8px 14px;
           font-size: 13px;
           font-weight: 500;
-          color: #6b7280;
-          background: #f9fafb;
-          border: 1px solid #d1d5db;
+          color: #a1a1aa;
+          background: rgba(39, 39, 42, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
           cursor: pointer;
           transition: all 0.2s;
         }
 
         .toggle-heatmap-btn:hover {
-          background: #f3f4f6;
+          background: rgba(63, 63, 70, 0.5);
+          color: #e4e4e7;
         }
 
         .toggle-heatmap-btn.active {
-          color: #4f46e5;
-          background: #eef2ff;
-          border-color: #c7d2fe;
+          color: #a5b4fc;
+          background: rgba(79, 70, 229, 0.15);
+          border-color: rgba(99, 102, 241, 0.5);
         }
 
         .stats-bar {
@@ -476,8 +484,8 @@ export default function GradingPage() {
           align-items: center;
           gap: 24px;
           padding: 16px 32px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.5);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .stat-item {
@@ -493,33 +501,33 @@ export default function GradingPage() {
 
         .stat-label {
           font-size: 12px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .stat-value {
           font-size: 16px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .stat-bar {
           flex: 1;
           height: 6px;
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.5);
           border-radius: 3px;
           overflow: hidden;
         }
 
         .stat-fill {
           height: 100%;
-          background: #4f46e5;
+          background: #6366f1;
           transition: width 0.3s;
         }
 
-        .stat-item.correct .stat-value { color: #16a34a; }
-        .stat-item.partial-correct .stat-value { color: #d97706; }
-        .stat-item.partial-wrong .stat-value { color: #ea580c; }
-        .stat-item.wrong .stat-value { color: #dc2626; }
+        .stat-item.correct .stat-value { color: #4ade80; }
+        .stat-item.partial-correct .stat-value { color: #fbbf24; }
+        .stat-item.partial-wrong .stat-value { color: #fb923c; }
+        .stat-item.wrong .stat-value { color: #f87171; }
 
         .main-content {
           display: flex;
@@ -539,9 +547,9 @@ export default function GradingPage() {
         }
 
         .heatmap-sidebar {
-          background: white;
+          background: rgba(24, 24, 27, 0.6);
           border-radius: 16px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           overflow: hidden;
         }
 
@@ -550,8 +558,8 @@ export default function GradingPage() {
           justify-content: space-between;
           align-items: center;
           padding: 16px 20px;
-          background: #f9fafb;
-          border-bottom: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.5);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .sidebar-header h3 {
@@ -561,22 +569,22 @@ export default function GradingPage() {
           margin: 0;
           font-size: 14px;
           font-weight: 600;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .refresh-btn {
           padding: 6px;
           background: none;
           border: none;
-          color: #6b7280;
+          color: #71717a;
           cursor: pointer;
           border-radius: 6px;
           transition: all 0.2s;
         }
 
         .refresh-btn:hover {
-          background: #e5e7eb;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #e4e4e7;
         }
 
         .heatmap-container {
@@ -589,9 +597,9 @@ export default function GradingPage() {
           align-items: center;
           gap: 8px;
           padding: 16px 20px;
-          background: #fef2f2;
-          border-top: 1px solid #fee2e2;
-          color: #dc2626;
+          background: rgba(220, 38, 38, 0.15);
+          border-top: 1px solid rgba(248, 113, 113, 0.2);
+          color: #f87171;
           font-size: 13px;
         }
 

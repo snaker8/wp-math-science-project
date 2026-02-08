@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   Filter,
@@ -15,6 +16,7 @@ import {
   Clock,
   BarChart3,
   Upload,
+  ArrowLeft,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -48,6 +50,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function TutorProblemsPage() {
+  const router = useRouter();
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -162,9 +165,14 @@ export default function TutorProblemsPage() {
   return (
     <div className="problems-page">
       <header className="page-header">
-        <div>
-          <h1>문제 관리</h1>
-          <p>업로드된 문제를 관리하고 시험지에 활용하세요</p>
+        <div className="header-left">
+          <button onClick={() => router.back()} className="back-btn" title="뒤로가기">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1>문제 관리</h1>
+            <p>업로드된 문제를 관리하고 시험지에 활용하세요</p>
+          </div>
         </div>
         <Link href="/tutor/workflow" className="btn-primary">
           <Upload size={18} />
@@ -317,6 +325,9 @@ export default function TutorProblemsPage() {
         .problems-page {
           max-width: 1200px;
           margin: 0 auto;
+          min-height: 100vh;
+          background: #000000;
+          color: #ffffff;
         }
 
         .loading {
@@ -326,14 +337,14 @@ export default function TutorProblemsPage() {
           justify-content: center;
           height: 60vh;
           gap: 16px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .spinner {
           width: 40px;
           height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #4f46e5;
+          border: 3px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #6366f1;
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -349,17 +360,46 @@ export default function TutorProblemsPage() {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 24px;
+          padding: 24px;
+          background: rgba(24, 24, 27, 0.8);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
           margin-bottom: 4px;
         }
 
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .back-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(39, 39, 42, 0.5);
+          color: #a1a1aa;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+          background: rgba(63, 63, 70, 0.8);
+          color: #ffffff;
+        }
+
         .page-header p {
-          color: #6b7280;
+          color: #a1a1aa;
           font-size: 14px;
         }
 
@@ -393,24 +433,24 @@ export default function TutorProblemsPage() {
           align-items: center;
           gap: 12px;
           padding: 16px 24px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
         }
 
         .stat-item svg {
-          color: #4f46e5;
+          color: #a5b4fc;
         }
 
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .filters {
@@ -425,15 +465,15 @@ export default function TutorProblemsPage() {
           align-items: center;
           gap: 8px;
           padding: 10px 16px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
           flex: 1;
           min-width: 250px;
         }
 
         .search-box svg {
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .search-box input {
@@ -441,6 +481,12 @@ export default function TutorProblemsPage() {
           border: none;
           outline: none;
           font-size: 14px;
+          background: transparent;
+          color: #ffffff;
+        }
+
+        .search-box input::placeholder {
+          color: #71717a;
         }
 
         .filter-group {
@@ -450,17 +496,21 @@ export default function TutorProblemsPage() {
         }
 
         .filter-group svg {
-          color: #6b7280;
+          color: #71717a;
         }
 
         .filter-group select {
           padding: 10px 16px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
           font-size: 14px;
-          color: #374151;
-          background: white;
+          color: #ffffff;
+          background: rgba(39, 39, 42, 0.8);
           cursor: pointer;
+        }
+
+        .filter-group select option {
+          background: #27272a;
         }
 
         .empty-state {
@@ -469,17 +519,17 @@ export default function TutorProblemsPage() {
           align-items: center;
           justify-content: center;
           padding: 64px 24px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 16px;
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .empty-state h3 {
           margin: 16px 0 8px;
           font-size: 18px;
           font-weight: 600;
-          color: #374151;
+          color: #ffffff;
         }
 
         .empty-state p {
@@ -492,8 +542,8 @@ export default function TutorProblemsPage() {
           align-items: center;
           gap: 8px;
           padding: 12px 20px;
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #d4d4d8;
           font-size: 14px;
           font-weight: 500;
           border-radius: 10px;
@@ -501,7 +551,7 @@ export default function TutorProblemsPage() {
         }
 
         .btn-secondary:hover {
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.8);
         }
 
         .problem-list {
@@ -511,8 +561,8 @@ export default function TutorProblemsPage() {
         }
 
         .problem-card {
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           padding: 20px;
         }
@@ -533,8 +583,8 @@ export default function TutorProblemsPage() {
 
         .type-code {
           padding: 4px 10px;
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(79, 70, 229, 0.2);
+          color: #a5b4fc;
           font-size: 12px;
           font-weight: 600;
           border-radius: 6px;
@@ -566,20 +616,20 @@ export default function TutorProblemsPage() {
           height: 32px;
           border: none;
           background: none;
-          color: #6b7280;
+          color: #71717a;
           border-radius: 6px;
           cursor: pointer;
           transition: all 0.2s;
         }
 
         .action-btn:hover {
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #a1a1aa;
         }
 
         .action-btn.delete:hover {
-          background: #fef2f2;
-          color: #dc2626;
+          background: rgba(220, 38, 38, 0.15);
+          color: #f87171;
         }
 
         .problem-content {
@@ -588,20 +638,20 @@ export default function TutorProblemsPage() {
 
         .problem-text {
           font-size: 15px;
-          color: #1f2937;
+          color: #ffffff;
           line-height: 1.6;
         }
 
         .problem-latex {
           margin-top: 8px;
           padding: 12px 16px;
-          background: #f9fafb;
+          background: rgba(39, 39, 42, 0.5);
           border-radius: 8px;
         }
 
         .problem-latex code {
           font-size: 14px;
-          color: #4f46e5;
+          color: #a5b4fc;
         }
 
         .problem-footer {
@@ -609,7 +659,7 @@ export default function TutorProblemsPage() {
           justify-content: space-between;
           align-items: center;
           padding-top: 12px;
-          border-top: 1px solid #f3f4f6;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .problem-info {
@@ -620,7 +670,7 @@ export default function TutorProblemsPage() {
 
         .problem-info span {
           font-size: 12px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .problem-date {
@@ -628,7 +678,7 @@ export default function TutorProblemsPage() {
           align-items: center;
           gap: 4px;
           font-size: 12px;
-          color: #9ca3af;
+          color: #71717a;
         }
 
         @media (max-width: 768px) {

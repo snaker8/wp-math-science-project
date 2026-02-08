@@ -220,16 +220,16 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
 
       <style jsx>{`
         .heatmap-container {
-          background: white;
+          background: rgba(24, 24, 27, 0.6);
           border-radius: 12px;
           padding: 24px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .section-title {
           font-size: 16px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
           margin-bottom: 16px;
         }
 
@@ -249,44 +249,44 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
           gap: 12px;
           padding: 16px;
           border-radius: 10px;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .summary-card.overall {
-          background: #eef2ff;
-          border-color: #c7d2fe;
+          background: rgba(79, 70, 229, 0.15);
+          border-color: rgba(99, 102, 241, 0.3);
         }
 
         .summary-card.overall .card-icon {
-          color: #4f46e5;
+          color: #a5b4fc;
         }
 
         .summary-card.danger {
-          background: #fef2f2;
-          border-color: #fecaca;
+          background: rgba(220, 38, 38, 0.15);
+          border-color: rgba(248, 113, 113, 0.3);
         }
 
         .summary-card.danger .card-icon {
-          color: #dc2626;
+          color: #f87171;
         }
 
         .summary-card.warning {
-          background: #fffbeb;
-          border-color: #fde68a;
+          background: rgba(217, 119, 6, 0.15);
+          border-color: rgba(251, 191, 36, 0.3);
         }
 
         .summary-card.warning .card-icon {
-          color: #d97706;
+          color: #fbbf24;
         }
 
         .summary-card.good {
-          background: #ecfdf5;
-          border-color: #a7f3d0;
+          background: rgba(5, 150, 105, 0.15);
+          border-color: rgba(52, 211, 153, 0.3);
         }
 
         .summary-card.good .card-icon {
-          color: #059669;
+          color: #34d399;
         }
 
         .card-content {
@@ -297,12 +297,12 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
         .card-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .card-label {
           font-size: 12px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .controls-section {
@@ -320,14 +320,20 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
 
         .filter-group label {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .filter-group select {
           padding: 6px 12px;
-          border: 1px solid #d1d5db;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 6px;
           font-size: 13px;
+          background: rgba(39, 39, 42, 0.8);
+          color: #ffffff;
+        }
+
+        .filter-group select option {
+          background: #27272a;
         }
 
         .expand-controls {
@@ -338,15 +344,17 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
         .expand-controls button {
           padding: 6px 12px;
           font-size: 12px;
-          color: #6b7280;
-          background: #f3f4f6;
-          border: 1px solid #d1d5db;
+          color: #a1a1aa;
+          background: rgba(39, 39, 42, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 6px;
           cursor: pointer;
+          transition: all 0.2s;
         }
 
         .expand-controls button:hover {
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.5);
+          color: #e4e4e7;
         }
 
         .legend {
@@ -354,14 +362,14 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
           align-items: center;
           gap: 16px;
           padding: 12px 16px;
-          background: #f9fafb;
+          background: rgba(39, 39, 42, 0.5);
           border-radius: 8px;
           margin-bottom: 20px;
           font-size: 13px;
         }
 
         .legend-label {
-          color: #6b7280;
+          color: #a1a1aa;
           font-weight: 500;
         }
 
@@ -369,7 +377,7 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
           display: flex;
           align-items: center;
           gap: 6px;
-          color: #4b5563;
+          color: #d4d4d8;
         }
 
         .legend-color {
@@ -379,18 +387,18 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
         }
 
         .legend-color.danger {
-          background: #fee2e2;
-          border: 1px solid #fecaca;
+          background: rgba(220, 38, 38, 0.3);
+          border: 1px solid rgba(248, 113, 113, 0.5);
         }
 
         .legend-color.warning {
-          background: #fef3c7;
-          border: 1px solid #fde68a;
+          background: rgba(217, 119, 6, 0.3);
+          border: 1px solid rgba(251, 191, 36, 0.5);
         }
 
         .legend-color.good {
-          background: #d1fae5;
-          border: 1px solid #a7f3d0;
+          background: rgba(5, 150, 105, 0.3);
+          border: 1px solid rgba(52, 211, 153, 0.5);
         }
 
         .heatmap-grid {
@@ -400,7 +408,7 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
         }
 
         .chapter-section {
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
           overflow: hidden;
         }
@@ -410,17 +418,17 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
           align-items: center;
           gap: 12px;
           padding: 14px 16px;
-          background: #f9fafb;
+          background: rgba(39, 39, 42, 0.5);
           cursor: pointer;
           transition: background 0.2s;
         }
 
         .chapter-header:hover {
-          background: #f3f4f6;
+          background: rgba(63, 63, 70, 0.5);
         }
 
         .chapter-toggle {
-          color: #6b7280;
+          color: #71717a;
         }
 
         .chapter-info {
@@ -432,8 +440,8 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
 
         .chapter-subject {
           font-size: 12px;
-          color: #6b7280;
-          background: #e5e7eb;
+          color: #a1a1aa;
+          background: rgba(63, 63, 70, 0.5);
           padding: 2px 8px;
           border-radius: 4px;
         }
@@ -441,7 +449,7 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
         .chapter-name {
           font-size: 14px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .chapter-stats {
@@ -452,12 +460,12 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
         }
 
         .chapter-mastery {
-          color: #4f46e5;
+          color: #a5b4fc;
           font-weight: 500;
         }
 
         .chapter-count {
-          color: #9ca3af;
+          color: #71717a;
         }
 
         .cells-grid {
@@ -465,7 +473,7 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
           grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
           gap: 10px;
           padding: 16px;
-          background: white;
+          background: rgba(24, 24, 27, 0.4);
         }
 
         .heatmap-cell {
@@ -484,11 +492,11 @@ export default function Heatmap({ data, onGenerateTwin }: HeatmapProps) {
 
         .heatmap-cell:hover {
           transform: scale(1.03);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .heatmap-cell.danger:hover {
-          box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+          box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
         }
 
         .cell-name {

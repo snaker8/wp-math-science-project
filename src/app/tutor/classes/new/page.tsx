@@ -315,6 +315,9 @@ export default function NewClassPage() {
         .new-class-page {
           max-width: 700px;
           margin: 0 auto;
+          min-height: 100vh;
+          background: #000000;
+          color: #ffffff;
         }
 
         .page-header {
@@ -325,35 +328,35 @@ export default function NewClassPage() {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          color: #6b7280;
+          color: #a1a1aa;
           font-size: 14px;
           text-decoration: none;
           margin-bottom: 12px;
         }
 
         .back-btn:hover {
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .form-card {
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(24, 24, 27, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           padding: 32px;
         }
 
         .error-message {
           padding: 12px 16px;
-          background: #fef2f2;
-          border: 1px solid #fecaca;
+          background: rgba(220, 38, 38, 0.15);
+          border: 1px solid rgba(248, 113, 113, 0.3);
           border-radius: 8px;
-          color: #dc2626;
+          color: #f87171;
           font-size: 14px;
           margin-bottom: 24px;
         }
@@ -369,10 +372,10 @@ export default function NewClassPage() {
         .form-section h2 {
           font-size: 16px;
           font-weight: 600;
-          color: #374151;
+          color: #ffffff;
           margin-bottom: 16px;
           padding-bottom: 8px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .form-group {
@@ -385,7 +388,7 @@ export default function NewClassPage() {
           gap: 6px;
           font-size: 14px;
           font-weight: 500;
-          color: #374151;
+          color: #d4d4d8;
           margin-bottom: 6px;
         }
 
@@ -394,18 +397,30 @@ export default function NewClassPage() {
         .form-group select {
           width: 100%;
           padding: 12px 14px;
-          border: 1px solid #d1d5db;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
           font-size: 14px;
           transition: border-color 0.2s;
+          background: rgba(39, 39, 42, 0.8);
+          color: #ffffff;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+          color: #71717a;
         }
 
         .form-group input:focus,
         .form-group textarea:focus,
         .form-group select:focus {
           outline: none;
-          border-color: #4f46e5;
+          border-color: rgba(99, 102, 241, 0.5);
           box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .form-group select option {
+          background: #27272a;
+          color: #ffffff;
         }
 
         .form-group textarea {
@@ -430,24 +445,24 @@ export default function NewClassPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 2px solid #e5e7eb;
+          border: 2px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
-          background: white;
+          background: rgba(39, 39, 42, 0.5);
           font-size: 14px;
           font-weight: 500;
-          color: #6b7280;
+          color: #a1a1aa;
           cursor: pointer;
           transition: all 0.2s;
         }
 
         .day-btn:hover {
-          border-color: #c7d2fe;
+          border-color: rgba(99, 102, 241, 0.3);
         }
 
         .day-btn.selected {
-          border-color: #4f46e5;
-          background: #eef2ff;
-          color: #4f46e5;
+          border-color: rgba(99, 102, 241, 0.5);
+          background: rgba(79, 70, 229, 0.15);
+          color: #a5b4fc;
         }
 
         .form-actions {
@@ -456,13 +471,13 @@ export default function NewClassPage() {
           gap: 12px;
           margin-top: 32px;
           padding-top: 24px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .btn-cancel {
           padding: 12px 24px;
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(63, 63, 70, 0.5);
+          color: #d4d4d8;
           font-size: 14px;
           font-weight: 500;
           border-radius: 8px;
@@ -471,7 +486,7 @@ export default function NewClassPage() {
         }
 
         .btn-cancel:hover {
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.8);
         }
 
         .btn-submit {

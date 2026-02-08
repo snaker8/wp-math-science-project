@@ -8,14 +8,22 @@ import {
   TrendingUp,
   Activity,
   Calendar,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  Wand2,
+  MessageCircle,
+  BookX,
+  Loader2
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { statsData, heatmapData, activityLogs, classStatus, heatmapConfig, SparklineData } from '@/lib/mock-data';
+import { heatmapData, classStatus, heatmapConfig, SparklineData } from '@/lib/mock-data';
+import { useDashboardStats, useActivityLogs } from '@/hooks';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { StudentAnalysisModal } from '@/components/dashboard/StudentAnalysisModal';
+
 
 // Sparkline Component
 function Sparkline({ data, color }: { data: SparklineData[]; color: string }) {
@@ -43,7 +51,37 @@ function Sparkline({ data, color }: { data: SparklineData[]; color: string }) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [selectedCell, setSelectedCell] = useState<{ student: string, unit: string, score: number } | null>(null);
+
+  // 실데이터 훅 사용
+  const { stats, isLoading: statsLoading } = useDashboardStats();
+  const { logs: activityLogs, isLoading: logsLoading } = useActivityLogs(5);
+
+  // statsData 생성 (훅 결과 기반)
+  const statsData = [
+    {
+      title: '총 수강생',
+      value: stats.totalStudents.toLocaleString(),
+      trend: stats.studentsThisWeek > 0 ? `+${stats.studentsThisWeek}` : '0',
+      trendUp: stats.studentsThisWeek > 0,
+      data: Array.from({ length: 20 }, () => ({ value: 40 + Math.random() * 60 })),
+    },
+    {
+      title: '활성 학습지',
+      value: stats.totalProblems.toLocaleString(),
+      trend: stats.problemsThisWeek > 0 ? `+${stats.problemsThisWeek}` : '0',
+      trendUp: stats.problemsThisWeek > 0,
+      data: Array.from({ length: 20 }, () => ({ value: 30 + Math.random() * 70 })),
+    },
+    {
+      title: '평균 성취도',
+      value: `${stats.averageAccuracy.toFixed(1)}점`,
+      trend: stats.averageAccuracy >= 75 ? '+' : '-',
+      trendUp: stats.averageAccuracy >= 75,
+      data: Array.from({ length: 20 }, () => ({ value: 60 + Math.random() * 40 })),
+    },
+  ];
 
   const currentDate = new Date().toLocaleDateString('ko-KR', {
     weekday: 'long',
@@ -51,6 +89,7 @@ export default function DashboardPage() {
     month: 'long',
     day: 'numeric',
   });
+
 
   return (
     <div className="space-y-8 p-2">
@@ -63,10 +102,16 @@ export default function DashboardPage() {
           </h1>
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-sm font-medium rounded-lg border border-white/10 transition-colors">
+          <button
+            onClick={() => router.push('/dashboard/prescription/analytics')}
+            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-sm font-medium rounded-lg border border-white/10 transition-colors"
+          >
             기간 설정
           </button>
-          <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all">
+          <button
+            onClick={() => router.push('/tutor/classes/new')}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
+          >
             + 수업 개설
           </button>
         </div>
@@ -274,20 +319,25 @@ export default function DashboardPage() {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: '문제 업로드', color: 'hover:border-indigo-500/50' },
-                { label: '시험지 마법사', color: 'hover:border-rose-500/50' },
-                { label: '학생 상담', color: 'hover:border-amber-500/50' },
-                { label: '오답 노트', color: 'hover:border-emerald-500/50' },
-              ].map((action, i) => (
-                <button
-                  key={i}
-                  className={`flex flex-col items-center justify-center p-4 bg-zinc-900/50 border border-white/5 rounded-xl transition-all hover:bg-zinc-800 ${action.color} group`}
-                >
-                  <span className="text-sm text-zinc-400 group-hover:text-white font-medium transition-colors">
-                    {action.label}
-                  </span>
-                </button>
-              ))}
+                { label: '문제 업로드', color: 'hover:border-indigo-500/50', icon: Upload, href: '/tutor/workflow' },
+                { label: '시험지 마법사', color: 'hover:border-rose-500/50', icon: Wand2, href: '/dashboard/create' },
+                { label: '학생 상담', color: 'hover:border-amber-500/50', icon: MessageCircle, href: '/tutor/classes' },
+                { label: '오답 노트', color: 'hover:border-emerald-500/50', icon: BookX, href: '/dashboard/prescription' },
+              ].map((action, i) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => router.push(action.href)}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 bg-zinc-900/50 border border-white/5 rounded-xl transition-all hover:bg-zinc-800 ${action.color} group`}
+                  >
+                    <Icon size={20} className="text-zinc-500 group-hover:text-white transition-colors" />
+                    <span className="text-sm text-zinc-400 group-hover:text-white font-medium transition-colors">
+                      {action.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </GlowCard>
 

@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 데이터 변환
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    
     const rawData: RawAnswerData[] = recordsData.map((record: any) => {
       const classification = record.problems?.classifications?.[0];
       const problemType = classification?.problem_types;

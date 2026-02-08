@@ -50,8 +50,7 @@ export async function getStudents(options?: {
   offset?: number;
 }): Promise<{ data: Student[]; count: number }> {
   if (!supabaseBrowser) {
-    console.warn('[API] Supabase not configured, returning mock data');
-    return { data: getMockStudents(), count: 10 };
+    throw new Error('[API] Supabase not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
 
   let query = supabaseBrowser
@@ -80,7 +79,7 @@ export async function getStudents(options?: {
 
   if (error) {
     console.error('[API] getStudents error:', error);
-    return { data: getMockStudents(), count: 10 };
+    throw error;
   }
 
   return {
@@ -94,7 +93,7 @@ export async function getStudents(options?: {
  */
 export async function getStudent(id: string): Promise<Student | null> {
   if (!supabaseBrowser) {
-    return getMockStudents().find(s => s.id === id) || null;
+    throw new Error('[API] Supabase not configured');
   }
 
   const { data, error } = await supabaseBrowser

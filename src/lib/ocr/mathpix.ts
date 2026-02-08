@@ -80,16 +80,26 @@ export class MathpixClient {
    * PDF 파일 처리 (멀티 페이지)
    */
   async processPDF(pdfBuffer: Buffer): Promise<MathpixResponse[]> {
-    // PDF를 페이지별로 분리하여 처리
-    // 실제 구현에서는 pdf-lib 또는 pdfjs-dist 사용
-    const responses: MathpixResponse[] = [];
+    console.log('[Mathpix] Processing PDF, buffer size:', pdfBuffer.length, 'bytes');
 
     // PDF 전체를 하나의 요청으로 처리 (Mathpix v3/pdf 엔드포인트)
     const response = await this.processPDFBatch(pdfBuffer);
-    responses.push(response);
 
-    return responses;
+    console.log('[Mathpix] PDF response received:', {
+      hasText: !!response.text,
+      textLength: response.text?.length || 0,
+      hasLatexStyled: !!response.latex_styled,
+      latexStyledLength: response.latex_styled?.length || 0,
+      confidence: response.confidence,
+    });
+
+    if (response.text) {
+      console.log('[Mathpix] First 500 chars of response text:', response.text.substring(0, 500));
+    }
+
+    return [response];
   }
+
 
   /**
    * PDF 배치 처리 (Mathpix PDF 엔드포인트)
@@ -99,13 +109,17 @@ export class MathpixClient {
     const blob = new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' });
     formData.append('file', blob, 'document.pdf');
 
+    // Mathpix PDF API 옵션 (.mmd 결과는 처리 후 자동으로 제공됨)
     const optionsPayload = {
-      conversion_formats: { 'latex_styled': true },
       math_inline_delimiters: ['$', '$'],
       math_display_delimiters: ['$$', '$$'],
-      include_line_data: true,
+      rm_spaces: true,
     };
+
+
     formData.append('options_json', JSON.stringify(optionsPayload));
+
+    console.log('[Mathpix] Sending PDF to API...');
 
     const response = await fetch('https://api.mathpix.com/v3/pdf', {
       method: 'POST',
@@ -116,8 +130,11 @@ export class MathpixClient {
       body: formData,
     });
 
+    console.log('[Mathpix] API response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[Mathpix] API error response:', errorText);
       throw new MathpixError(
         `Mathpix PDF API error: ${response.status}`,
         'MATHPIX_PDF_ERROR',
@@ -127,14 +144,18 @@ export class MathpixClient {
 
     // PDF 처리는 비동기 작업일 수 있음 - 폴링 필요
     const result = await response.json();
+    console.log('[Mathpix] Initial response:', JSON.stringify(result).substring(0, 500));
 
     // pdf_id가 반환되면 결과 폴링
     if (result.pdf_id) {
+      console.log('[Mathpix] Got pdf_id:', result.pdf_id, '- starting polling...');
       return await this.pollPDFResult(result.pdf_id);
     }
 
+    console.log('[Mathpix] No pdf_id in response, returning result directly');
     return result;
   }
+
 
   /**
    * PDF 처리 결과 폴링
@@ -143,6 +164,8 @@ export class MathpixClient {
     const pollUrl = `https://api.mathpix.com/v3/pdf/${pdfId}`;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      console.log(`[Mathpix] Polling attempt ${attempt + 1}/${maxAttempts}...`);
+
       const response = await fetch(pollUrl, {
         headers: {
           'app_id': this.appId,
@@ -151,24 +174,28 @@ export class MathpixClient {
       });
 
       const result = await response.json();
+      console.log(`[Mathpix] Poll status: ${result.status}`);
 
       if (result.status === 'completed') {
-        // LaTeX 결과 가져오기
-        const latexResponse = await fetch(`${pollUrl}.tex`, {
+        // Mathpix Markdown 결과 가져오기 (.mmd 형식)
+        console.log('[Mathpix] Fetching .mmd result...');
+        const mmdResponse = await fetch(`${pollUrl}.mmd`, {
           headers: {
             'app_id': this.appId,
             'app_key': this.appKey,
           },
         });
-        const latexText = await latexResponse.text();
+        const mmdText = await mmdResponse.text();
+        console.log(`[Mathpix] Got MMD text, length: ${mmdText.length} chars`);
 
         return {
           request_id: pdfId,
-          text: latexText,
-          latex_styled: latexText,
-          confidence: result.confidence,
+          text: mmdText,
+          latex_styled: mmdText,
+          confidence: result.confidence || 0.9,
         };
       }
+
 
       if (result.status === 'error') {
         throw new MathpixError(

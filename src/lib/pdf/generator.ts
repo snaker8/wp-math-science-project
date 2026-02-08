@@ -27,7 +27,7 @@ export async function generatePDF({
   onProgress?.(20);
 
   // 2. html2canvas 설정 (고해상도)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   const canvas = await html2canvas(element, {
     scale: 2, // 고해상도 (2x)
     useCORS: true, // 외부 이미지 허용

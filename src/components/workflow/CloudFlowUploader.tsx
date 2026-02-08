@@ -122,6 +122,7 @@ export default function CloudFlowUploader({
         );
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, instituteId, autoClassify, generateSolutions]);
 
   // Job 상태 폴링
@@ -385,19 +386,19 @@ export default function CloudFlowUploader({
         }
 
         .upload-zone {
-          border: 2px dashed #d1d5db;
+          border: 2px dashed rgba(99, 102, 241, 0.3);
           border-radius: 16px;
           padding: 40px 24px;
           text-align: center;
           cursor: pointer;
           transition: all 0.3s ease;
-          background: #fafafa;
+          background: rgba(24, 24, 27, 0.6);
         }
 
         .upload-zone:hover,
         .upload-zone.dragging {
-          border-color: #4f46e5;
-          background: #eef2ff;
+          border-color: rgba(99, 102, 241, 0.6);
+          background: rgba(79, 70, 229, 0.1);
         }
 
         .hidden-input {
@@ -420,13 +421,13 @@ export default function CloudFlowUploader({
           margin: 0 0 8px;
           font-size: 16px;
           font-weight: 600;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .upload-zone p {
           margin: 0 0 20px;
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .upload-features {
@@ -440,7 +441,7 @@ export default function CloudFlowUploader({
           align-items: center;
           gap: 6px;
           font-size: 12px;
-          color: #4f46e5;
+          color: #a5b4fc;
         }
 
         .upload-options {
@@ -455,14 +456,14 @@ export default function CloudFlowUploader({
           align-items: center;
           gap: 8px;
           font-size: 13px;
-          color: #374151;
+          color: #d4d4d8;
           cursor: pointer;
         }
 
         .option input {
           width: 16px;
           height: 16px;
-          accent-color: #4f46e5;
+          accent-color: #6366f1;
         }
 
         .job-list {
@@ -473,12 +474,12 @@ export default function CloudFlowUploader({
           margin: 0 0 12px;
           font-size: 14px;
           font-weight: 600;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .job-card {
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: rgba(39, 39, 42, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           padding: 16px;
           margin-bottom: 12px;
@@ -494,12 +495,13 @@ export default function CloudFlowUploader({
           display: flex;
           align-items: center;
           gap: 10px;
+          color: #a1a1aa;
         }
 
         .job-name {
           font-size: 14px;
           font-weight: 500;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .job-status {
@@ -517,20 +519,20 @@ export default function CloudFlowUploader({
           padding: 6px;
           background: none;
           border: none;
-          color: #6b7280;
+          color: #71717a;
           cursor: pointer;
           border-radius: 6px;
           transition: all 0.2s;
         }
 
         .expand-button:hover {
-          background: #f3f4f6;
-          color: #4f46e5;
+          background: rgba(99, 102, 241, 0.1);
+          color: #a5b4fc;
         }
 
         .remove-button:hover {
-          background: #fee2e2;
-          color: #dc2626;
+          background: rgba(220, 38, 38, 0.1);
+          color: #f87171;
         }
 
         .progress-section {
@@ -539,7 +541,7 @@ export default function CloudFlowUploader({
 
         .progress-bar {
           height: 6px;
-          background: #e5e7eb;
+          background: rgba(63, 63, 70, 0.5);
           border-radius: 3px;
           overflow: hidden;
         }
@@ -561,13 +563,13 @@ export default function CloudFlowUploader({
           align-items: center;
           gap: 6px;
           font-size: 12px;
-          color: #6b7280;
+          color: #a1a1aa;
         }
 
         .progress-percent {
           font-size: 12px;
           font-weight: 600;
-          color: #374151;
+          color: #e4e4e7;
         }
 
         .completed-info {
@@ -576,10 +578,11 @@ export default function CloudFlowUploader({
           gap: 8px;
           margin-top: 12px;
           padding: 8px 12px;
-          background: #dcfce7;
+          background: rgba(22, 163, 74, 0.15);
+          border: 1px solid rgba(34, 197, 94, 0.2);
           border-radius: 8px;
           font-size: 13px;
-          color: #16a34a;
+          color: #4ade80;
         }
 
         .failed-info {
@@ -588,23 +591,25 @@ export default function CloudFlowUploader({
           gap: 8px;
           margin-top: 12px;
           padding: 8px 12px;
-          background: #fee2e2;
+          background: rgba(220, 38, 38, 0.15);
+          border: 1px solid rgba(248, 113, 113, 0.2);
           border-radius: 8px;
           font-size: 13px;
-          color: #dc2626;
+          color: #f87171;
         }
 
         .results-detail {
           margin-top: 16px;
           padding-top: 16px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .result-item {
           padding: 12px;
-          background: #f9fafb;
+          background: rgba(24, 24, 27, 0.6);
           border-radius: 8px;
           margin-bottom: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .result-header {
@@ -617,8 +622,8 @@ export default function CloudFlowUploader({
         .type-code {
           font-size: 11px;
           font-weight: 600;
-          color: #4f46e5;
-          background: #eef2ff;
+          color: #a5b4fc;
+          background: rgba(99, 102, 241, 0.15);
           padding: 2px 8px;
           border-radius: 4px;
         }
@@ -626,7 +631,7 @@ export default function CloudFlowUploader({
         .type-name {
           font-size: 14px;
           font-weight: 500;
-          color: #1f2937;
+          color: #ffffff;
         }
 
         .result-meta {
@@ -634,7 +639,7 @@ export default function CloudFlowUploader({
           flex-wrap: wrap;
           gap: 12px;
           font-size: 12px;
-          color: #6b7280;
+          color: #a1a1aa;
           margin-bottom: 8px;
         }
 
@@ -652,8 +657,8 @@ export default function CloudFlowUploader({
 
         .tag {
           font-size: 11px;
-          color: #4b5563;
-          background: #e5e7eb;
+          color: #d4d4d8;
+          background: rgba(63, 63, 70, 0.5);
           padding: 2px 8px;
           border-radius: 4px;
         }
