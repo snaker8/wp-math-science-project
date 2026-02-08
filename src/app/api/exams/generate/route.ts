@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         // 'problems' table has 'unit' (from my route.ts insert, I used 'unit' in 'exams', but 'problems' has 'ai_analysis' jsonb).
         // It's hard to filter by JSONB efficiently without indexes.
 
-        query = query.eq('is_active', true);
+        // query = query.eq('is_active', true); // Removed: column does not exist
         // query = query.in('unit', criteria.chapters); // If 'unit' column exists on problems
 
         const { data: candidates, error: fetchError } = await query;
@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
                 title: title || '자동 생성된 시험지',
                 created_by: user.id,
                 status: 'DRAFT',
-                problem_count: selectedProblemIds.length,
-                grade: '고1', // Dummy
+                // problem_count: selectedProblemIds.length, // Removed
+                // grade: '고1', // Removed
                 subject: criteria.subject || '수학',
             })
             .select()

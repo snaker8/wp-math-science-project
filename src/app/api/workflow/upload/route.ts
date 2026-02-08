@@ -342,12 +342,12 @@ async function saveProblemsToDB(
       .insert({
         title: job.fileName.replace(/\.[^/.]+$/, ""), // 확장자 제거
         description: `업로드된 파일: ${job.fileName}`,
-        grade: '미분류', // classification에 grade 정보 없음
+        // grade: '미분류', // Removed: column does not exist
         subject: classification?.subject || '수학',
         unit: classification?.chapter || '미분류',
-        // difficulty: 'Lv.3', // Removed as per schema error
-        problem_count: results.length,
-        total_points: results.length * 4,
+        // difficulty: 'Lv.3', // Removed: column does not exist
+        // problem_count: results.length, // Removed: column does not exist
+        // total_points: results.length * 4, // Removed: column does not exist
         time_limit_minutes: 50,
         status: 'COMPLETED', // 업로드 완료됨
         created_by: createdBy, // user_id

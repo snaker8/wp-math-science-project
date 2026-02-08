@@ -441,39 +441,54 @@ export async function analyzeProblemWithLLM(
   }
 }
 
-async function callOpenAI(prompt: string): Promise<string> {
+async function callOpenAI(prompt: string, retries = 3, backoff = 1000): Promise<string> {
   // 실제 OpenAI API 호출
   if (!OPENAI_API_KEY) {
     throw new Error('[Cloud Flow] OpenAI API key not configured. Set OPENAI_API_KEY in .env');
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: '당신은 한국 고등학교 수학 교육 전문가입니다. 정확한 분류와 상세한 풀이를 제공합니다.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+      }),
+    });
 
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: '당신은 한국 고등학교 수학 교육 전문가입니다. 정확한 분류와 상세한 풀이를 제공합니다.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 2000,
-    }),
-  });
+    if (!response.ok) {
+      // 429 Rate Limit 처리
+      if (response.status === 429 && retries > 0) {
+        console.warn(`[Cloud Flow] OpenAI 429 Rate Limit. Retrying in ${backoff}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return callOpenAI(prompt, retries - 1, backoff * 2);
+      }
+      throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
+    }
 
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.status}`);
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    // 네트워크 에러 등도 재시도 고려 가능하나, 우선 429 위주로 처리
+    if (retries > 0 && error instanceof Error && error.message.includes('429')) {
+      console.warn(`[Cloud Flow] OpenAI 429 Rate Limit (Exception). Retrying in ${backoff}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return callOpenAI(prompt, retries - 1, backoff * 2);
+    }
+    throw error;
   }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
 }
 
 function getMockLLMResponse(): string {

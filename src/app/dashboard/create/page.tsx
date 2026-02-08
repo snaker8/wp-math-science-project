@@ -213,8 +213,8 @@ export default function PaperCreatePage() {
 
       const { data, error } = await supabaseBrowser
         .from('problems')
-        .select('unit')
-        .eq('is_active', true);
+        .select('unit');
+      // .eq('is_active', true); // Removed: column does not exist
 
       if (data) {
         const counts: Record<string, number> = {};
