@@ -23,6 +23,7 @@ export interface UploadJob {
   fileName: string;
   fileSize: number;
   fileType: 'PDF' | 'IMG' | 'HWP';
+  documentType: 'PROBLEM' | 'ANSWER' | 'QUICK_ANSWER';
   storagePath: string;
   status: ProcessingStatus;
   progress: number; // 0-100

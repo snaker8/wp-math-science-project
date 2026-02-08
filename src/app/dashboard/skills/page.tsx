@@ -121,7 +121,7 @@ const SubjectSelect: React.FC<{
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-10 w-full items-center justify-between rounded-md border border-warm-border-soft bg-white px-3 py-2 text-sm"
+        className="flex h-10 w-full items-center justify-between rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
       >
         <span>{value}</span>
         <ChevronDown className="h-4 w-4 opacity-50" />
@@ -129,7 +129,7 @@ const SubjectSelect: React.FC<{
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-full min-w-[120px] rounded-lg border border-warm-border-soft bg-white py-1 shadow-md">
+          <div className="absolute left-0 top-full z-20 mt-1 w-full min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-md">
             {options.map((option) => (
               <button
                 key={option}
@@ -138,9 +138,8 @@ const SubjectSelect: React.FC<{
                   onChange(option);
                   setIsOpen(false);
                 }}
-                className={`w-full px-4 py-2 text-left text-sm hover:bg-warm-surface ${
-                  value === option ? 'bg-warm-surface font-medium text-warm-primary' : 'text-warm-text-secondary'
-                }`}
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-zinc-800 ${value === option ? 'bg-zinc-800 font-medium text-white' : 'text-zinc-400'
+                  }`}
               >
                 {option}
               </button>
@@ -172,11 +171,10 @@ const ChapterTreeNode: React.FC<{
           }
           onSelect(node.id);
         }}
-        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-          isSelected
-            ? 'bg-purple-50 text-purple-700 font-medium'
-            : 'text-warm-text-secondary hover:bg-warm-surface'
-        }`}
+        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${isSelected
+            ? 'bg-purple-900/20 text-purple-400 font-medium'
+            : 'text-zinc-400 hover:bg-zinc-800'
+          }`}
         style={{ paddingLeft: `${12 + level * 16}px` }}
       >
         {hasChildren ? (
@@ -253,7 +251,7 @@ export default function SkillsPage() {
 
   const selectedChapter = selectedChapterId
     ? chapters.find((c) => c.id === selectedChapterId) ||
-      chapters.flatMap((c) => c.children || []).find((c) => c.id === selectedChapterId)
+    chapters.flatMap((c) => c.children || []).find((c) => c.id === selectedChapterId)
     : null;
 
   const selectedSkill = selectedSkillId
@@ -261,12 +259,12 @@ export default function SkillsPage() {
     : null;
 
   return (
-    <section className="flex h-full w-full overflow-hidden bg-warm-surface">
+    <section className="flex h-full w-full overflow-hidden bg-black text-white">
       <div className="flex h-full w-full min-w-0 flex-col gap-2 p-4 px-4 py-1 font-pretendard text-sm">
         {/* Header */}
         <header className="flex w-full flex-shrink-0 items-center justify-between gap-x-4 pb-1">
           <div className="flex items-center gap-3 flex-shrink-0">
-            <h1 className="text-lg font-semibold text-warm-text-primary pl-2">유형/문제 관리</h1>
+            <h1 className="text-lg font-semibold text-white pl-2">유형/문제 관리</h1>
             <div className="ml-4 flex w-[160px] items-center space-x-2 text-sm">
               <span className="whitespace-nowrap">과목</span>
               <SubjectSelect
@@ -279,7 +277,7 @@ export default function SkillsPage() {
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50"
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-700 bg-transparent text-zinc-400 hover:bg-zinc-800"
             >
               <PanelLeftClose className="h-5 w-5" />
             </button>
@@ -291,7 +289,7 @@ export default function SkillsPage() {
           {/* Left Panel - 24% */}
           <div className="flex w-[24%] flex-shrink-0 flex-col gap-2">
             {/* Chapter Tree */}
-            <div className="flex h-1/2 flex-col rounded-xl border border-warm-border-soft bg-white/95">
+            <div className="flex h-1/2 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50">
               <div className="flex-1 overflow-auto p-3">
                 {chapters.length > 0 ? (
                   <div className="space-y-0.5">
@@ -307,7 +305,7 @@ export default function SkillsPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-warm-text-muted">
+                  <div className="flex h-full items-center justify-center text-sm text-zinc-500">
                     챕터가 없습니다.
                   </div>
                 )}
@@ -317,14 +315,14 @@ export default function SkillsPage() {
             {/* Skill List */}
             <div className="flex flex-1 flex-col gap-3">
               {/* Selected Chapter Info */}
-              <div className="flex items-center justify-between rounded-xl border border-warm-border-soft bg-warm-surface px-4 py-3 shadow-sm">
+              <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-purple-500">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-purple-400">
                     <FolderPlus className="h-4 w-4" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-warm-text-muted">선택된 챕터</span>
-                    <span className="text-sm font-semibold text-warm-text-primary">
+                    <span className="text-xs font-semibold text-zinc-500">선택된 챕터</span>
+                    <span className="text-sm font-semibold text-white">
                       {selectedChapter?.name || '챕터를 선택해 주세요'}
                     </span>
                   </div>
@@ -332,7 +330,7 @@ export default function SkillsPage() {
               </div>
 
               {/* Skills */}
-              <div className="flex-1 overflow-auto rounded-xl border border-warm-border-soft bg-white/90 px-3 py-1">
+              <div className="flex-1 overflow-auto rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-1">
                 {selectedChapterId && mockSkills.length > 0 ? (
                   <div className="flex flex-col">
                     {mockSkills.map((skill) => (
@@ -340,21 +338,20 @@ export default function SkillsPage() {
                         key={skill.id}
                         type="button"
                         onClick={() => setSelectedSkillId(skill.id)}
-                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                          selectedSkillId === skill.id
-                            ? 'bg-purple-50 text-purple-700 font-medium'
-                            : 'text-warm-text-secondary hover:bg-warm-surface'
-                        }`}
+                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${selectedSkillId === skill.id
+                            ? 'bg-purple-900/20 text-purple-400 font-medium'
+                            : 'text-zinc-400 hover:bg-zinc-800'
+                          }`}
                       >
                         <span className="truncate">{skill.name}</span>
-                        <span className="ml-2 rounded-full bg-warm-surface px-2 py-0.5 text-xs text-warm-text-muted">
+                        <span className="ml-2 rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-500">
                           {skill.problemCount}
                         </span>
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="px-2 py-3 text-sm text-warm-text-muted">
+                  <div className="px-2 py-3 text-sm text-zinc-500">
                     선택된 챕터에 등록된 유형이 없습니다.
                   </div>
                 )}
@@ -364,7 +361,7 @@ export default function SkillsPage() {
 
           {/* Resize Handle */}
           <div className="flex w-px items-center justify-center mx-2">
-            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-warm-border-soft">
+            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-zinc-800 border-zinc-700">
               <GripVertical className="h-2.5 w-2.5" />
             </div>
           </div>
@@ -372,15 +369,15 @@ export default function SkillsPage() {
           {/* Right Panel - 68% */}
           <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden pl-1">
             {/* Current Skill Header */}
-            <div className="flex-shrink-0 rounded-2xl border border-warm-border-soft bg-white/95">
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-white px-5 py-3">
+            <div className="flex-shrink-0 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-zinc-900 px-5 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-purple-500 shadow-sm">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-purple-400 shadow-sm">
                     <LayoutGrid className="h-5 w-5" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-warm-text-muted">현재 유형</span>
-                    <span className="text-base font-semibold text-warm-text-primary">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">현재 유형</span>
+                    <span className="text-base font-semibold text-white">
                       {selectedSkill?.name || '유형을 선택해 주세요'}
                     </span>
                   </div>
@@ -389,7 +386,7 @@ export default function SkillsPage() {
                   <button
                     type="button"
                     disabled={!selectedSkill}
-                    className="flex h-9 items-center gap-1 rounded-md border border-warm-border-soft bg-white px-3 text-sm font-medium hover:bg-warm-surface disabled:opacity-50 disabled:pointer-events-none"
+                    className="flex h-9 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                   >
                     <LayoutGrid className="h-4 w-4" />
                     <span>펼쳐보기</span>
@@ -398,32 +395,32 @@ export default function SkillsPage() {
                     <button
                       type="button"
                       disabled={!selectedSkill}
-                      className="flex h-9 items-center justify-center gap-1 rounded-md border border-warm-border-soft bg-white px-3 text-sm font-medium hover:bg-warm-surface disabled:opacity-50 disabled:pointer-events-none"
+                      className="flex h-9 items-center justify-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                     >
-                      <ScrollText className="h-4 w-4 text-slate-500" />
+                      <ScrollText className="h-4 w-4 text-zinc-400" />
                       <span>시험지</span>
                     </button>
                     <button
                       type="button"
                       disabled={!selectedSkill}
-                      className="flex h-9 items-center justify-center gap-1 rounded-md border border-warm-border-soft bg-white px-3 text-sm font-medium hover:bg-warm-surface disabled:opacity-50 disabled:pointer-events-none"
+                      className="flex h-9 items-center justify-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                     >
-                      <CheckSquare className="h-4 w-4 text-slate-500" />
+                      <CheckSquare className="h-4 w-4 text-zinc-400" />
                       <span>빠른정답</span>
                     </button>
                     <button
                       type="button"
                       disabled={!selectedSkill}
-                      className="flex h-9 items-center justify-center gap-1 rounded-md border border-warm-border-soft bg-white px-3 text-sm font-medium hover:bg-warm-surface disabled:opacity-50 disabled:pointer-events-none"
+                      className="flex h-9 items-center justify-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                     >
-                      <BookOpenCheck className="h-4 w-4 text-slate-500" />
+                      <BookOpenCheck className="h-4 w-4 text-zinc-400" />
                       <span>해설지</span>
                     </button>
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent text-warm-text-muted transition hover:border-warm-border-soft hover:bg-white/70 hover:text-warm-text-primary"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent text-zinc-500 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -431,7 +428,7 @@ export default function SkillsPage() {
             </div>
 
             {/* Problem List Area */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-warm-border-soft bg-white/95">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
               <div className="h-full overflow-auto">
                 <div className="relative h-full">
                   <div className="flex w-full flex-col px-3">
@@ -439,15 +436,15 @@ export default function SkillsPage() {
                     <div className="sticky top-0 z-20 mt-3 mb-0">
                       <div className="flex items-center justify-between px-4 py-3 backdrop-blur-md">
                         <div className="flex flex-1 items-center">
-                          <div className="flex items-center space-x-2 text-sm text-slate-600">
+                          <div className="flex items-center space-x-2 text-sm text-zinc-400">
                             <div className="flex flex-wrap items-center gap-3">
-                              <span className="mx-1 flex cursor-pointer items-center rounded-md border border-slate-500 bg-slate-600 px-2 py-0 font-bold text-gray-100 hover:bg-slate-700">
+                              <span className="mx-1 flex cursor-pointer items-center rounded-md border border-zinc-600 bg-zinc-700 px-2 py-0 font-bold text-gray-100 hover:bg-zinc-600">
                                 0<span className="pl-1 text-sm"> 문제 </span>
                               </span>
                               <div className="flex flex-wrap items-center gap-3">
                                 {/* Difficulty Badges */}
                                 <div className="flex items-center gap-1">
-                                  <span className="text-xs uppercase text-slate-500">난이도</span>
+                                  <span className="text-xs uppercase text-zinc-500">난이도</span>
                                   <div className="flex items-center">
                                     {difficultyLevels.map((d) => (
                                       <StatsBadge
@@ -461,7 +458,7 @@ export default function SkillsPage() {
                                 </div>
                                 {/* Cognitive Type Badges */}
                                 <div className="flex items-center gap-1">
-                                  <span className="text-xs uppercase text-slate-500">인지</span>
+                                  <span className="text-xs uppercase text-zinc-500">인지</span>
                                   <div className="flex items-center">
                                     {cognitiveTypes.map((c) => (
                                       <StatsBadge
@@ -473,7 +470,7 @@ export default function SkillsPage() {
                                     ))}
                                   </div>
                                 </div>
-                                <span className="mx-1 inline-flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 text-slate-400 transition-colors">
+                                <span className="mx-1 inline-flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border border-zinc-700 bg-zinc-800 px-2 text-zinc-400 transition-colors">
                                   <AlertCircle className="h-4 w-4" />
                                 </span>
                               </div>
@@ -487,13 +484,13 @@ export default function SkillsPage() {
                     <div className="m-auto w-full flex-1 p-1">
                       {selectedSkill ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
-                          <p className="text-sm text-warm-text-muted">
+                          <p className="text-sm text-zinc-500">
                             선택된 유형의 문제가 여기에 표시됩니다.
                           </p>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
-                          <p className="text-sm text-warm-text-muted">
+                          <p className="text-sm text-zinc-500">
                             유형을 선택하면 문제 목록이 표시됩니다.
                           </p>
                         </div>

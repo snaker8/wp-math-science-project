@@ -122,8 +122,10 @@ export function useExams() {
 
             if (fetchError) throw fetchError;
 
-            if (data && data.length > 0) {
+            if (data) {
                 setExams(data.map(transformExamToExamPaper));
+            } else {
+                setExams([]);
             }
 
             console.log('[Exams] Loaded', data?.length || 0, 'exams');

@@ -1,5 +1,6 @@
 'use client';
 
+// ... imports
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -17,6 +18,8 @@ import {
 import { GlowCard } from '@/components/shared/GlowCard';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { DeepGradingPanel } from '@/components/workflow/DeepGradingPanel';
+import CloudFlowUploader from '@/components/workflow/CloudFlowUploader';
+import { supabaseBrowser } from '@/lib/supabase/client';
 
 // Type Definitions
 type WorkflowStep = 'upload' | 'grading' | 'clinic';
@@ -29,8 +32,20 @@ interface GradingCheckItem {
 
 export default function WorkflowPage() {
     const [currentStep, setCurrentStep] = useState<WorkflowStep>('upload');
-    const [isDragging, setIsDragging] = useState(false);
-    const [isScanning, setIsScanning] = useState(false);
+    const [userId, setUserId] = useState<string>('');
+
+    // Fetch User ID
+    useEffect(() => {
+        const fetchUser = async () => {
+            if (supabaseBrowser) {
+                const { data: { user } } = await supabaseBrowser.auth.getUser();
+                if (user) {
+                    setUserId(user.id);
+                }
+            }
+        };
+        fetchUser();
+    }, []);
 
     // Grading State
     const [gradingChecks, setGradingChecks] = useState<GradingCheckItem[]>([
@@ -40,24 +55,9 @@ export default function WorkflowPage() {
         { id: 'score', label: '최종 점수 산출', status: 'pending' },
     ]);
 
-    // Handle File Drop
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        startScanning();
-    };
+    // Handle File Drop (Legacy Mock - Removed)
 
-    const startScanning = () => {
-        setIsScanning(true);
-        // Simulate OCR Scan
-        setTimeout(() => {
-            setIsScanning(false);
-            setCurrentStep('grading');
-            startGradingProcess();
-        }, 2500);
-    };
-
-    // Simulate Grading Process
+    // Simulate Grading Process (Legacy Mock - Kept for visualization if needed)
     const startGradingProcess = () => {
         const sequence = ['ocr', 'analysis', 'error', 'score'];
         let currentIndex = 0;
@@ -131,70 +131,18 @@ export default function WorkflowPage() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ duration: 0.4 }}
-                            className="w-full h-full flex flex-col items-center justify-center pt-20"
+                            className="w-full h-full flex flex-col items-center justify-start pt-10"
                         >
-                            <div
-                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                                onDragLeave={() => setIsDragging(false)}
-                                onDrop={handleDrop}
-                                onClick={startScanning} // For easy testing
-                                className={`
-                  relative w-full max-w-2xl aspect-[1.6/1] rounded-3xl border-2 border-dashed transition-all duration-300 cursor-pointer group
-                  flex flex-col items-center justify-center overflow-hidden
-                  ${isScanning
-                                        ? 'border-indigo-500/30 bg-zinc-900/40 backdrop-blur-md'
-                                        : isDragging
-                                            ? 'border-indigo-500 bg-indigo-500/5 scale-[1.02]'
-                                            : 'border-zinc-700 hover:border-indigo-500/50 hover:bg-zinc-900/60 bg-zinc-900/30'
-                                    }
-                `}
-                            >
-                                {/* Background Grid Pattern */}
-                                <div className="absolute inset-0 opacity-[0.03]"
-                                    style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+                            <div className="w-full max-w-3xl">
+                                <CloudFlowUploader
+                                    userId={userId}
+                                    onComplete={(results) => {
+                                        // Optional: Automatically move to next step or show specific results
+                                        // For now, we stay here to see the results in the uploader list
+                                        // or user can manually click a button to proceed if we add one.
+                                        console.log("Upload & Analysis Complete", results);
+                                    }}
                                 />
-
-                                {isScanning ? (
-                                    <div className="flex flex-col items-center z-10">
-                                        <div className="relative w-24 h-24 mb-8">
-                                            {/* Scanner Effect */}
-                                            <motion.div
-                                                initial={{ top: '0%' }}
-                                                animate={{ top: '100%' }}
-                                                transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                                                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent shadow-[0_0_15px_rgba(99,102,241,0.8)] z-20"
-                                            />
-                                            <FileText className="w-full h-full text-zinc-600" strokeWidth={1} />
-                                        </div>
-                                        <motion.div
-                                            animate={{ opacity: [0.5, 1, 0.5] }}
-                                            transition={{ repeat: Infinity, duration: 1.5 }}
-                                            className="text-lg font-medium text-indigo-400"
-                                        >
-                                            OCR Scanning...
-                                        </motion.div>
-                                        <p className="text-zinc-500 text-sm mt-2">필적을 디지털 데이터로 변환하고 있습니다</p>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center z-10 space-y-4">
-                                        <div className="p-6 rounded-full bg-zinc-800/50 border border-white/5 group-hover:scale-110 transition-transform duration-300">
-                                            <UploadCloud className="w-10 h-10 text-zinc-400 group-hover:text-indigo-400 transition-colors" />
-                                        </div>
-                                        <div className="text-center">
-                                            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-300 transition-colors">
-                                                시험지 또는 풀이 노트 업로드
-                                            </h3>
-                                            <p className="text-zinc-500 text-sm">
-                                                드래그 앤 드롭하거나 영역을 클릭하여 파일을 선택하세요.
-                                            </p>
-                                        </div>
-                                        <div className="flex gap-2 mt-4">
-                                            <span className="px-2 py-1 rounded bg-zinc-800 text-[10px] text-zinc-500 border border-white/5">JPG</span>
-                                            <span className="px-2 py-1 rounded bg-zinc-800 text-[10px] text-zinc-500 border border-white/5">PDF</span>
-                                            <span className="px-2 py-1 rounded bg-zinc-800 text-[10px] text-zinc-500 border border-white/5">PNG</span>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </motion.div>
                     )}

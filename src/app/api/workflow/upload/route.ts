@@ -10,7 +10,7 @@ import { processUploadJob, getStatusLabel } from '@/lib/workflow/cloud-flow';
 // In-memory job storage (실제 구현에서는 Redis 또는 DB 사용)
 const jobStore = new Map<string, UploadJob>();
 const jobResults = new Map<string, LLMAnalysisResult[]>();
-const fileBufferStore = new Map<string, ArrayBuffer>(); // 임시 파일 버퍼 저장
+const fileBufferStore = new Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>(); // 버퍼 저장 구조 변경
 
 /**
  * POST /api/workflow/upload
@@ -39,8 +39,12 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const answerFile = formData.get('answerFile') as File | null;
+    const quickAnswerFile = formData.get('quickAnswerFile') as File | null;
+
     const instituteId = formData.get('instituteId') as string;
     const formUserId = formData.get('userId') as string;
+    const documentType = (formData.get('documentType') as 'PROBLEM' | 'ANSWER' | 'QUICK_ANSWER') || 'PROBLEM';
     const autoClassify = formData.get('autoClassify') === 'true';
     const generateSolutions = formData.get('generateSolutions') === 'true';
 
@@ -68,6 +72,7 @@ export async function POST(request: NextRequest) {
       fileName: file.name,
       fileSize: file.size,
       fileType,
+      documentType,
       storagePath: '', // Storage에 업로드 후 설정
       status: 'PENDING',
       progress: 0,
@@ -82,17 +87,35 @@ export async function POST(request: NextRequest) {
     // Storage 업로드 (Supabase Storage 또는 로컬)
     const storagePath = await uploadToStorage(file, job.id, supabase);
     job.storagePath = storagePath;
+
+    // 보조 파일 업로드 (선택사항)
+    if (answerFile) {
+      await uploadToStorage(answerFile, job.id, supabase, 'answer');
+    }
+    if (quickAnswerFile) {
+      await uploadToStorage(quickAnswerFile, job.id, supabase, 'quick');
+    }
+
     job.status = 'UPLOADING';
     job.progress = 10;
     jobStore.set(job.id, job);
 
-    // 파일 버퍼 읽기 (백그라운드 처리용)
+    // 파일 버퍼 읽기
     const fileBuffer = await file.arrayBuffer();
-    fileBufferStore.set(job.id, fileBuffer);
+    const answerBuffer = answerFile ? await answerFile.arrayBuffer() : undefined;
+    const quickAnswerBuffer = quickAnswerFile ? await quickAnswerFile.arrayBuffer() : undefined;
+
+    const buffers = {
+      problem: fileBuffer,
+      answer: answerBuffer,
+      quickAnswer: quickAnswerBuffer
+    };
+
+    fileBufferStore.set(job.id, buffers);
 
     // 백그라운드 처리 시작 (non-blocking)
     if (autoClassify) {
-      processJobInBackground(job.id, fileBuffer).catch(console.error);
+      processJobInBackground(job.id, buffers).catch(console.error);
     }
 
     return NextResponse.json({
@@ -186,9 +209,11 @@ function getFileType(fileName: string): 'PDF' | 'IMG' | 'HWP' | null {
 async function uploadToStorage(
   file: File,
   jobId: string,
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  suffix: string = '' // suffix for auxiliary files
 ): Promise<string> {
-  const fileName = `${jobId}_${file.name}`;
+  const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
   const storagePath = `uploads/${fileName}`;
 
   if (supabase) {
@@ -210,12 +235,20 @@ async function uploadToStorage(
   return storagePath;
 }
 
-async function processJobInBackground(jobId: string, fileBuffer?: ArrayBuffer): Promise<void> {
+async function processJobInBackground(
+  jobId: string,
+  buffers?: { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }
+): Promise<void> {
   const job = jobStore.get(jobId);
   if (!job) return;
 
   // 파일 버퍼가 없으면 저장된 것에서 가져오기
-  const buffer = fileBuffer || fileBufferStore.get(jobId);
+  const currentBuffers = buffers || fileBufferStore.get(jobId);
+
+  if (!currentBuffers || !currentBuffers.problem) {
+    console.error(`[Job ${jobId}] No file buffers found.`);
+    return;
+  }
 
   try {
     const results = await processUploadJob(job, {
@@ -258,7 +291,7 @@ async function processJobInBackground(jobId: string, fileBuffer?: ArrayBuffer): 
         // 버퍼 정리
         fileBufferStore.delete(jobId);
       },
-    }, buffer); // fileBuffer 전달!
+    }, currentBuffers); // Pass the buffers object!
 
     console.log(`[Job ${jobId}] Completed with ${results.length} problems`);
   } catch (error) {
@@ -293,6 +326,43 @@ async function saveProblemsToDB(
 
   console.log(`[DB] Saving ${results.length} problems for job ${jobId}`);
   console.log(`[DB] instituteId: ${instituteId}, createdBy: ${createdBy}`);
+
+  // 1. Exam 레코드 생성 (Repository 노출용)
+  let examId: string | null = null;
+  try {
+    // 첫 번째 문제의 분류 정보를 사용하여 시험지 메타데이터 설정
+    const firstResult = results[0];
+    const classification = firstResult?.classification;
+
+    const { data: exam, error: examError } = await supabase
+      .from('exams')
+      .insert({
+        title: job.fileName.replace(/\.[^/.]+$/, ""), // 확장자 제거
+        description: `업로드된 파일: ${job.fileName}`,
+        grade: '미분류', // classification에 grade 정보 없음
+        subject: classification?.subject || '수학',
+        unit: classification?.chapter || '미분류',
+        difficulty: 'Lv.3', // 기본값
+        problem_count: results.length,
+        total_points: results.length * 4,
+        time_limit_minutes: 50,
+        status: 'COMPLETED', // 업로드 완료됨
+        created_by: createdBy, // user_id
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (examError) {
+      console.error('[DB] Failed to create exam record:', examError.message);
+    } else {
+      examId = exam.id;
+      console.log(`[DB] Created exam record: ${examId}`);
+    }
+  } catch (err) {
+    console.error('[DB] Error creating exam:', err);
+  }
 
   let savedCount = 0;
 
@@ -337,7 +407,7 @@ async function saveProblemsToDB(
       if (problem) {
         const difficultyStr = String(result.classification.difficulty) as '1' | '2' | '3' | '4' | '5';
 
-        const { error: classError } = await supabase.from('classifications').insert({
+        await supabase.from('classifications').insert({
           problem_id: problem.id,
           type_code: result.classification.typeCode || 'UNKNOWN',
           difficulty: difficultyStr,
@@ -349,14 +419,24 @@ async function saveProblemsToDB(
           prerequisite_types: result.classification.prerequisites || [],
         });
 
-        if (classError) {
-          console.error('[DB] Classification insert error:', classError.message);
-        } else {
-          savedCount++;
+        savedCount++;
+
+        // Exam-Problem 연결
+        if (examId) {
+          try {
+            await supabase.from('exam_problems').insert({
+              exam_id: examId,
+              problem_id: problem.id,
+              order_index: savedCount,
+              points: 4
+            });
+          } catch (e) {
+            console.log('[DB] exam_problems link failed (might not exist)', e);
+          }
         }
       }
     } catch (err) {
-      console.error('[DB] Unexpected error saving problem:', err);
+      console.error(`[DB] Error processing result ${result.problemId}:`, err);
     }
   }
 

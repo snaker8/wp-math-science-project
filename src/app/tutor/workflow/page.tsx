@@ -14,13 +14,16 @@ import {
   BarChart3,
   Users,
   ChevronDown,
+  ArrowLeft,
+  FileText,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { CloudFlowUploader, DeepGradingPanel, ZeroWrongLoop } from '@/components/workflow';
 import { Heatmap } from '@/components/analytics';
-import { generateMockHeatmapData } from '@/lib/analytics/heatmap';
+
 import { subscribeToGradingEvents, type GradingEvent } from '@/lib/workflow/deep-grading';
 import type { HeatmapData, HeatmapCell } from '@/types/analytics';
-import type { LLMAnalysisResult, GradingStatus } from '@/types/workflow';
+import type { LLMAnalysisResult, GradingStatus, StudentAnswer } from '@/types/workflow';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 
 type WorkflowPhase = 'upload' | 'grading' | 'analytics';
@@ -28,57 +31,16 @@ type WorkflowPhase = 'upload' | 'grading' | 'analytics';
 // Anonymous/fallback user ID (valid UUID format)
 const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-// Mock 학생 데이터
-const mockStudents = [
-  { id: 'student-1', name: '김철수' },
-  { id: 'student-2', name: '이영희' },
-  { id: 'student-3', name: '박민수' },
-];
 
-// Mock 답안 데이터
-const mockAnswers = [
-  {
-    id: 'answer-1',
-    examId: 'exam-1',
-    studentId: 'student-1',
-    studentName: '김철수',
-    problemId: 'problem-1',
-    problemNumber: 1,
-    problemContent: '<p>이차방정식 $x^2 - 5x + 6 = 0$의 두 근을 구하시오.</p>',
-    answerText: 'x = 2, x = 3',
-    timeSpent: 180,
-  },
-  {
-    id: 'answer-2',
-    examId: 'exam-1',
-    studentId: 'student-1',
-    studentName: '김철수',
-    problemId: 'problem-2',
-    problemNumber: 2,
-    problemContent: '<p>$\\lim_{x \\to 0} \\frac{\\sin x}{x}$의 값을 구하시오.</p>',
-    answerText: '1',
-    timeSpent: 120,
-  },
-  {
-    id: 'answer-3',
-    examId: 'exam-1',
-    studentId: 'student-1',
-    studentName: '김철수',
-    problemId: 'problem-3',
-    problemNumber: 3,
-    problemContent: '<p>$\\int_0^1 2x dx$의 값을 구하시오.</p>',
-    answerText: '2',
-    currentStatus: 'WRONG' as GradingStatus,
-    timeSpent: 90,
-  },
-];
 
 export default function TutorWorkflowPage() {
+  const router = useRouter();
   const [activePhase, setActivePhase] = useState<WorkflowPhase>('upload');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
   const [uploadedProblems, setUploadedProblems] = useState<LLMAnalysisResult[]>([]);
-  const [gradedAnswers, setGradedAnswers] = useState(mockAnswers);
+  const [gradedAnswers, setGradedAnswers] = useState<StudentAnswer[]>([]);
+  const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
   const [wrongProblems, setWrongProblems] = useState<Array<{
     id: string;
     typeCode: string;
@@ -113,26 +75,66 @@ export default function TutorWorkflowPage() {
     fetchCurrentUser();
   }, []);
 
+  // 실제 학생 데이터 가져오기
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!supabaseBrowser || currentUserId === ANONYMOUS_USER_ID) return;
+
+      try {
+        // 1. 튜터의 반 클래스 ID 가져오기
+        const { data: classes } = await supabaseBrowser
+          .from('classes')
+          .select('id')
+          .eq('tutor_id', currentUserId)
+          .is('deleted_at', null);
+
+        if (!classes || classes.length === 0) return;
+
+        const classIds = classes.map((c) => c.id);
+
+        // 2. 해당 반에 등록된 학생 가져오기
+        const { data: enrollments } = await supabaseBrowser
+          .from('class_enrollments')
+          .select(`
+            student:users!class_enrollments_student_id_fkey (
+              id,
+              name
+            )
+          `)
+          .in('class_id', classIds)
+          .eq('status', 'ACCEPTED');
+
+        if (enrollments && enrollments.length > 0) {
+          const studentList = enrollments
+            .map((e: any) => ({
+              id: e.student?.id,
+              name: e.student?.name || 'Unknown',
+            }))
+            .filter((s) => s.id); // 유효한 ID만 필터링
+
+          // 중복 제거
+          const uniqueStudents = Array.from(
+            new Map(studentList.map((item) => [item['id'], item])).values()
+          );
+
+          setStudents(uniqueStudents);
+        }
+      } catch (err) {
+        console.error('[Workflow] Failed to fetch students:', err);
+      }
+    };
+
+    fetchStudents();
+  }, [currentUserId]);
+
 
   // 학생 선택 시 히트맵 데이터 로드
   useEffect(() => {
     if (selectedStudentId) {
-      const student = mockStudents.find((s) => s.id === selectedStudentId);
-      const data = generateMockHeatmapData(selectedStudentId, student?.name || '');
-      setHeatmapData(data);
-
-      // 오답 문제 추출
-      const wrongs = data.rows.flatMap((row) =>
-        row.cells
-          .filter((cell) => cell.masteryLevel === 'danger')
-          .map((cell) => ({
-            id: `problem-${cell.typeCode}`,
-            typeCode: cell.typeCode,
-            typeName: cell.typeName,
-            contentLatex: `${cell.typeName} 관련 문제`,
-          }))
-      );
-      setWrongProblems(wrongs.slice(0, 5)); // 최대 5개
+      const student = students.find((s) => s.id === selectedStudentId);
+      // TODO: 실제 데이터 페칭 (Mock 제거)
+      setHeatmapData(null);
+      setWrongProblems([]);
     }
   }, [selectedStudentId]);
 
@@ -226,29 +228,32 @@ export default function TutorWorkflowPage() {
     <div className="workflow-page">
       {/* 헤더 */}
       <header className="page-header">
-        <div className="header-content">
-          <h1>
-            <RefreshCw size={28} />
-            완전학습 워크플로우
-          </h1>
-          <p>업로드 → 자동분류 → 4단계 채점 → 유사문제 처방</p>
+        <div className="header-left">
+          <button onClick={() => router.back()} className="back-btn" title="뒤로가기">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1>완전학습 워크플로우</h1>
+            <p>업로드 → 자동분류 → 4단계 채점 → 유사문제 처방</p>
+          </div>
         </div>
-
-        {/* 학생 선택 */}
-        <div className="student-selector">
-          <Users size={18} />
-          <select
-            value={selectedStudentId || ''}
-            onChange={(e) => setSelectedStudentId(e.target.value || null)}
-          >
-            <option value="">학생 선택</option>
-            {mockStudents.map((student) => (
-              <option key={student.id} value={student.id}>
-                {student.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={16} />
+        <div className="header-actions">
+          {/* 학생 선택 */}
+          <div className="student-selector">
+            <Users size={18} />
+            <select
+              value={selectedStudentId || ''}
+              onChange={(e) => setSelectedStudentId(e.target.value || null)}
+            >
+              <option value="">학생 선택</option>
+              {students.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} />
+          </div>
         </div>
       </header>
 
@@ -310,12 +315,20 @@ export default function TutorWorkflowPage() {
             </div>
             <div className="grading-layout">
               <div className="grading-panel-wrapper">
-                <DeepGradingPanel
-                  answers={gradedAnswers}
-                  examTitle="테스트 시험"
-                  onGrade={handleGrade}
-                  onComplete={() => setActivePhase('analytics')}
-                />
+                {gradedAnswers.length === 0 ? (
+                  <div className="empty-state">
+                    <FileText size={48} className="empty-icon" />
+                    <p>채점할 답안이 없습니다.</p>
+                    <p className="sub-text">학생들이 답안을 제출하면 여기에 표시됩니다.</p>
+                  </div>
+                ) : (
+                  <DeepGradingPanel
+                    answers={gradedAnswers}
+                    examTitle="테스트 시험"
+                    onGrade={handleGrade}
+                    onComplete={() => setActivePhase('analytics')}
+                  />
+                )}
               </div>
               {selectedStudentId && heatmapData && (
                 <div className="heatmap-preview">
@@ -353,7 +366,7 @@ export default function TutorWorkflowPage() {
                       <ZeroWrongLoop
                         studentId={selectedStudentId}
                         studentName={
-                          mockStudents.find((s) => s.id === selectedStudentId)?.name || ''
+                          students.find((s) => s.id === selectedStudentId)?.name || ''
                         }
                         wrongProblems={wrongProblems}
                       />
@@ -389,13 +402,35 @@ export default function TutorWorkflowPage() {
           backdrop-filter: blur(8px);
         }
 
-        .header-content h1 {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin: 0 0 8px;
+        .page-header h1 {
           font-size: 24px;
           font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 4px;
+        }
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .back-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(39, 39, 42, 0.5);
+          color: #a1a1aa;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+          background: rgba(63, 63, 70, 0.8);
           color: #ffffff;
         }
 

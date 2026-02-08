@@ -40,90 +40,132 @@ export default function CloudFlowUploader({
 }: CloudFlowUploaderProps) {
   const [jobs, setJobs] = useState<JobWithResults[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Staged Upload State
+  const [activeTab, setActiveTab] = useState<'PROBLEM' | 'ANSWER' | 'QUICK_ANSWER'>('PROBLEM');
+  const [pendingFiles, setPendingFiles] = useState<{
+    PROBLEM: File | null;
+    ANSWER: File | null;
+    QUICK_ANSWER: File | null;
+  }>({
+    PROBLEM: null,
+    ANSWER: null,
+    QUICK_ANSWER: null,
+  });
+
   const [autoClassify, setAutoClassify] = useState(true);
   const [generateSolutions, setGenerateSolutions] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-  // 파일 업로드 처리
-  const handleUpload = useCallback(async (files: FileList | File[]) => {
+  // 파일 선택 처리 (Staging)
+  const handleFileSelect = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
 
-    for (const file of fileArray) {
-      // 임시 Job 생성
-      const tempJob: JobWithResults = {
-        id: `temp-${Date.now()}`,
-        userId,
-        instituteId,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: getFileType(file.name),
-        storagePath: '',
-        status: 'UPLOADING',
-        progress: 0,
-        currentStep: '업로드 준비 중...',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    // 현재 활성화된 탭에 파일 할당 (첫 번째 파일만)
+    const file = fileArray[0];
+    setPendingFiles(prev => ({
+      ...prev,
+      [activeTab]: file
+    }));
+  }, [activeTab]);
 
-      setJobs((prev) => [tempJob, ...prev]);
-
-      try {
-        // 파일 업로드 API 호출
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('instituteId', instituteId);
-        formData.append('userId', userId);
-        formData.append('autoClassify', String(autoClassify));
-        formData.append('generateSolutions', String(generateSolutions));
-
-        const response = await fetch('/api/workflow/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error('Upload failed');
-        }
-
-        const data = await response.json();
-
-        // 실제 Job ID로 업데이트
-        setJobs((prev) =>
-          prev.map((j) =>
-            j.id === tempJob.id
-              ? {
-                  ...j,
-                  id: data.jobId,
-                  status: data.job.status,
-                  progress: data.job.progress,
-                }
-              : j
-          )
-        );
-
-        // 폴링 시작 (autoClassify가 true인 경우)
-        if (autoClassify) {
-          startPolling(data.jobId);
-        }
-      } catch (error) {
-        console.error('Upload error:', error);
-        setJobs((prev) =>
-          prev.map((j) =>
-            j.id === tempJob.id
-              ? {
-                  ...j,
-                  status: 'FAILED',
-                  error: '업로드 실패',
-                }
-              : j
-          )
-        );
-      }
+  // 업로드 시작 (Processing)
+  const startProcessing = useCallback(async () => {
+    const problemFile = pendingFiles.PROBLEM;
+    if (!problemFile) {
+      alert('문제지 파일은 필수입니다.');
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, instituteId, autoClassify, generateSolutions]);
+
+    // 임시 Job 생성
+    const tempJob: JobWithResults = {
+      id: `temp-${Date.now()}`,
+      userId,
+      instituteId,
+      fileName: problemFile.name,
+      fileSize: problemFile.size,
+      fileType: getFileType(problemFile.name),
+      documentType: 'PROBLEM',
+      storagePath: '',
+      status: 'UPLOADING',
+      progress: 0,
+      currentStep: '업로드 준비 중...',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setJobs((prev) => [tempJob, ...prev]);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', problemFile); // Main Problem File
+
+      if (pendingFiles.ANSWER) {
+        formData.append('answerFile', pendingFiles.ANSWER);
+      }
+      if (pendingFiles.QUICK_ANSWER) {
+        formData.append('quickAnswerFile', pendingFiles.QUICK_ANSWER);
+      }
+
+      formData.append('instituteId', instituteId);
+      formData.append('userId', userId);
+      formData.append('documentType', 'PROBLEM'); // 메인 타입은 항상 PROBLEM
+      formData.append('autoClassify', String(autoClassify));
+      formData.append('generateSolutions', String(generateSolutions));
+
+      const response = await fetch('/api/workflow/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const data = await response.json();
+
+      // 실제 Job ID로 업데이트 및 파일 목록 초기화
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === tempJob.id
+            ? {
+              ...j,
+              id: data.jobId,
+              status: data.job.status,
+              progress: data.job.progress,
+            }
+            : j
+        )
+      );
+
+      setPendingFiles({
+        PROBLEM: null,
+        ANSWER: null,
+        QUICK_ANSWER: null,
+      });
+
+      // 폴링 시작
+      if (autoClassify) {
+        startPolling(data.jobId);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === tempJob.id
+            ? {
+              ...j,
+              status: 'FAILED',
+              error: '업로드 실패',
+            }
+            : j
+        )
+      );
+    }
+  }, [pendingFiles, userId, instituteId, autoClassify, generateSolutions]);
 
   // Job 상태 폴링
   const startPolling = useCallback((jobId: string) => {
@@ -139,10 +181,10 @@ export default function CloudFlowUploader({
           prev.map((j) =>
             j.id === jobId
               ? {
-                  ...j,
-                  ...job,
-                  results: results || j.results,
-                }
+                ...j,
+                ...job,
+                results: results || j.results,
+              }
               : j
           )
         );
@@ -186,7 +228,7 @@ export default function CloudFlowUploader({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files);
+      handleFileSelect(e.dataTransfer.files);
     }
   };
 
@@ -200,8 +242,61 @@ export default function CloudFlowUploader({
     setJobs((prev) => prev.filter((j) => j.id !== jobId));
   };
 
+  // 파일 삭제 (Staging)
+  const clearPendingFile = (type: 'PROBLEM' | 'ANSWER' | 'QUICK_ANSWER') => {
+    setPendingFiles(prev => ({ ...prev, [type]: null }));
+  };
+
   return (
     <div className="cloud-flow-uploader">
+      <div className="upload-controls">
+        <div className="document-type-selector">
+          <button
+            className={`type-btn ${activeTab === 'PROBLEM' ? 'active' : ''}`}
+            onClick={() => setActiveTab('PROBLEM')}
+          >
+            <FileText size={16} />
+            문제지
+            {pendingFiles.PROBLEM && <span className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full"></span>}
+          </button>
+          <button
+            className={`type-btn ${activeTab === 'ANSWER' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ANSWER')}
+          >
+            <CheckCircle size={16} />
+            해설지
+            {pendingFiles.ANSWER && <span className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full"></span>}
+          </button>
+          <button
+            className={`type-btn ${activeTab === 'QUICK_ANSWER' ? 'active' : ''}`}
+            onClick={() => setActiveTab('QUICK_ANSWER')}
+          >
+            <Sparkles size={16} />
+            빠른 답지
+            {pendingFiles.QUICK_ANSWER && <span className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full"></span>}
+          </button>
+        </div>
+
+        <div className="options">
+          <label>
+            <input
+              type="checkbox"
+              checked={autoClassify}
+              onChange={(e) => setAutoClassify(e.target.checked)}
+            />
+            자동 분류
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={generateSolutions}
+              onChange={(e) => setGenerateSolutions(e.target.checked)}
+            />
+            AI 해설 생성
+          </label>
+        </div>
+      </div>
+
       {/* 업로드 영역 */}
       <div
         className={`upload-zone ${isDragging ? 'dragging' : ''}`}
@@ -213,9 +308,8 @@ export default function CloudFlowUploader({
         <input
           ref={fileInputRef}
           type="file"
-          multiple
           accept=".pdf,.jpg,.jpeg,.png,.hwp,.hwpx"
-          onChange={(e) => e.target.files && handleUpload(e.target.files)}
+          onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
           className="hidden-input"
         />
 
@@ -223,162 +317,200 @@ export default function CloudFlowUploader({
           <Upload size={32} />
         </div>
 
-        <h3>파일을 드래그하거나 클릭하여 업로드</h3>
-        <p>PDF, 이미지, HWP 파일 지원</p>
+        <h3>
+          {activeTab === 'PROBLEM' ? '문제지' : activeTab === 'ANSWER' ? '해설지' : '빠른 답지'}
+          파일을 드래그하거나 클릭하여 업로드
+        </h3>
 
-        <div className="upload-features">
-          <div className="feature">
-            <FileSearch size={16} />
-            <span>OCR 자동 변환</span>
+        {pendingFiles[activeTab] ? (
+          <div className="mt-4 p-3 bg-zinc-800 rounded-lg flex items-center gap-3 border border-indigo-500/30">
+            <CheckCircle className="text-indigo-400" size={20} />
+            <span className="text-indigo-100 font-medium">{pendingFiles[activeTab]?.name}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); clearPendingFile(activeTab); }}
+              className="ml-auto text-zinc-500 hover:text-red-400"
+            >
+              <XCircle size={18} />
+            </button>
           </div>
-          <div className="feature">
-            <Brain size={16} />
-            <span>GPT-4o 분석</span>
+        ) : (
+          <div className="mt-2 text-zinc-500 text-sm">
+            PDF, 이미지, HWP 파일 지원
           </div>
-          <div className="feature">
-            <Sparkles size={16} />
-            <span>3,569 유형 분류</span>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* 옵션 */}
-      <div className="upload-options">
-        <label className="option">
-          <input
-            type="checkbox"
-            checked={autoClassify}
-            onChange={(e) => setAutoClassify(e.target.checked)}
-          />
-          <span>자동 유형 분류</span>
-        </label>
-        <label className="option">
-          <input
-            type="checkbox"
-            checked={generateSolutions}
-            onChange={(e) => setGenerateSolutions(e.target.checked)}
-          />
-          <span>단계별 해설 생성</span>
-        </label>
-      </div>
-
-      {/* Job 목록 */}
-      {jobs.length > 0 && (
-        <div className="job-list">
-          <h4>처리 현황</h4>
-          {jobs.map((job) => (
-            <div key={job.id} className="job-card">
-              <div className="job-header">
-                <div className="job-info">
-                  <FileText size={18} />
-                  <span className="job-name">{job.fileName}</span>
-                  <span
-                    className="job-status"
-                    style={{ color: getStatusColor(job.status) }}
-                  >
-                    {getStatusLabel(job.status)}
-                  </span>
-                </div>
-
-                <div className="job-actions">
-                  {job.results && job.results.length > 0 && (
-                    <button
-                      className="expand-button"
-                      onClick={() =>
-                        setExpandedJobId(expandedJobId === job.id ? null : job.id)
-                      }
-                    >
-                      {expandedJobId === job.id ? (
-                        <ChevronUp size={16} />
-                      ) : (
-                        <ChevronDown size={16} />
-                      )}
-                    </button>
-                  )}
-                  <button
-                    className="remove-button"
-                    onClick={() => handleRemoveJob(job.id)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+      {/* 대기 중인 파일 목록 및 시작 버튼 */}
+      {(pendingFiles.PROBLEM || pendingFiles.ANSWER || pendingFiles.QUICK_ANSWER) && (
+        <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 mb-6">
+          <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+            <Upload size={14} /> 업로드 대기 목록
+          </h4>
+          <div className="space-y-2 mb-4">
+            {pendingFiles.PROBLEM && (
+              <div className="flex items-center justify-between text-sm p-2 bg-zinc-800 rounded border border-indigo-500/20">
+                <span className="flex items-center gap-2 text-indigo-300">
+                  <FileText size={14} /> 문제지: {pendingFiles.PROBLEM.name}
+                </span>
               </div>
+            )}
+            {pendingFiles.ANSWER && (
+              <div className="flex items-center justify-between text-sm p-2 bg-zinc-800 rounded border border-emerald-500/20">
+                <span className="flex items-center gap-2 text-emerald-300">
+                  <CheckCircle size={14} /> 해설지: {pendingFiles.ANSWER.name}
+                </span>
+              </div>
+            )}
+            {pendingFiles.QUICK_ANSWER && (
+              <div className="flex items-center justify-between text-sm p-2 bg-zinc-800 rounded border border-amber-500/20">
+                <span className="flex items-center gap-2 text-amber-300">
+                  <Sparkles size={14} /> 빠른 답지: {pendingFiles.QUICK_ANSWER.name}
+                </span>
+              </div>
+            )}
+            {!pendingFiles.PROBLEM && (
+              <div className="text-sm text-rose-400 flex items-center gap-2 p-2">
+                <XCircle size={14} /> 문제지 파일이 필요합니다.
+              </div>
+            )}
+          </div>
 
-              {/* 진행률 바 */}
-              {job.status !== 'COMPLETED' && job.status !== 'FAILED' && (
-                <div className="progress-section">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: `${job.progress}%`,
-                        backgroundColor: getStatusColor(job.status),
-                      }}
-                    />
-                  </div>
-                  <div className="progress-info">
-                    <span className="current-step">
-                      <Loader2 size={12} className="spinning" />
-                      {job.currentStep}
-                    </span>
-                    <span className="progress-percent">{job.progress}%</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 완료 상태 */}
-              {job.status === 'COMPLETED' && job.results && (
-                <div className="completed-info">
-                  <CheckCircle size={16} />
-                  <span>{job.results.length}개 문제 분석 완료</span>
-                </div>
-              )}
-
-              {/* 실패 상태 */}
-              {job.status === 'FAILED' && (
-                <div className="failed-info">
-                  <XCircle size={16} />
-                  <span>{job.error || '처리 실패'}</span>
-                </div>
-              )}
-
-              {/* 분석 결과 상세 */}
-              {expandedJobId === job.id && job.results && (
-                <div className="results-detail">
-                  {job.results.map((result, idx) => (
-                    <div key={idx} className="result-item">
-                      <div className="result-header">
-                        <span className="type-code">
-                          {result.classification.typeCode}
-                        </span>
-                        <span className="type-name">
-                          {result.classification.typeName}
-                        </span>
-                      </div>
-                      <div className="result-meta">
-                        <span>{result.classification.subject}</span>
-                        <span>{result.classification.chapter}</span>
-                        <span>난이도 {result.classification.difficulty}</span>
-                        <span>
-                          <Clock size={12} />
-                          {result.estimatedTimeMinutes}분
-                        </span>
-                      </div>
-                      <div className="result-tags">
-                        {result.keywordsTags.map((tag, i) => (
-                          <span key={i} className="tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+          <button
+            onClick={startProcessing}
+            disabled={!pendingFiles.PROBLEM}
+            className={`
+                      w-full py-3 rounded-lg font-bold text-white transition-all
+                      ${pendingFiles.PROBLEM
+                ? 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
+                : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'}
+                  `}
+          >
+            분석 시작하기
+          </button>
         </div>
       )}
+// Redundant options removed
+
+
+      {/* Job 목록 */}
+      {
+        jobs.length > 0 && (
+          <div className="job-list">
+            <h4>처리 현황</h4>
+            {jobs.map((job) => (
+              <div key={job.id} className="job-card">
+                <div className="job-header">
+                  <div className="job-info">
+                    <FileText size={18} />
+                    <span className="job-name">{job.fileName}</span>
+                    <span
+                      className="job-status"
+                      style={{ color: getStatusColor(job.status) }}
+                    >
+                      {getStatusLabel(job.status)}
+                    </span>
+                  </div>
+
+                  <div className="job-actions">
+                    {job.results && job.results.length > 0 && (
+                      <button
+                        className="expand-button"
+                        onClick={() =>
+                          setExpandedJobId(expandedJobId === job.id ? null : job.id)
+                        }
+                      >
+                        {expandedJobId === job.id ? (
+                          <ChevronUp size={16} />
+                        ) : (
+                          <ChevronDown size={16} />
+                        )}
+                      </button>
+                    )}
+                    <button
+                      className="remove-button"
+                      onClick={() => handleRemoveJob(job.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 진행률 바 */}
+                {job.status !== 'COMPLETED' && job.status !== 'FAILED' && (
+                  <div className="progress-section">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${job.progress}%`,
+                          backgroundColor: getStatusColor(job.status),
+                        }}
+                      />
+                    </div>
+                    <div className="progress-info">
+                      <span className="current-step">
+                        <Loader2 size={12} className="spinning" />
+                        {job.currentStep}
+                      </span>
+                      <span className="progress-percent">{job.progress}%</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 완료 상태 */}
+                {job.status === 'COMPLETED' && job.results && (
+                  <div className="completed-info">
+                    <CheckCircle size={16} />
+                    <span>{job.results.length}개 문제 분석 완료</span>
+                  </div>
+                )}
+
+                {/* 실패 상태 */}
+                {job.status === 'FAILED' && (
+                  <div className="failed-info">
+                    <XCircle size={16} />
+                    <span>{job.error || '처리 실패'}</span>
+                  </div>
+                )}
+
+                {/* 분석 결과 상세 */}
+                {expandedJobId === job.id && job.results && (
+                  <div className="results-detail">
+                    {job.results.map((result, idx) => (
+                      <div key={idx} className="result-item">
+                        <div className="result-header">
+                          <span className="type-code">
+                            {result.classification.typeCode}
+                          </span>
+                          <span className="type-name">
+                            {result.classification.typeName}
+                          </span>
+                        </div>
+                        <div className="result-meta">
+                          <span>{result.classification.subject}</span>
+                          <span>{result.classification.chapter}</span>
+                          <span>난이도 {result.classification.difficulty}</span>
+                          <span>
+                            <Clock size={12} />
+                            {result.estimatedTimeMinutes}분
+                          </span>
+                        </div>
+                        <div className="result-tags">
+                          {result.keywordsTags.map((tag, i) => (
+                            <span key={i} className="tag">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      }
 
       <style jsx>{`
         .cloud-flow-uploader {
@@ -667,12 +799,78 @@ export default function CloudFlowUploader({
           animation: spin 1s linear infinite;
         }
 
+        .upload-controls {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
+
+        .document-type-selector {
+          display: flex;
+          background: rgba(39, 39, 42, 0.5);
+          padding: 4px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .type-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: transparent;
+          border: none;
+          color: #a1a1aa;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          border-radius: 6px;
+          transition: all 0.2s;
+        }
+
+        .type-btn:hover {
+          color: #ffffff;
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        .type-btn.active {
+          background: #3f3f46;
+          color: #ffffff;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .type-btn svg {
+          opacity: 0.7;
+        }
+
+        .type-btn.active svg {
+          opacity: 1;
+          color: #818cf8;
+        }
+
+        .options {
+          display: flex;
+          gap: 16px;
+        }
+
+        .options label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          color: #d4d4d8;
+          cursor: pointer;
+        }
+
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
       `}</style>
-    </div>
+    </div >
   );
 }
 

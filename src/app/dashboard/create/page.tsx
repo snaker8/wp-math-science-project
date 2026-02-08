@@ -16,6 +16,8 @@ import {
   Trash2,
   Wand2,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { supabaseBrowser } from '@/lib/supabase/client';
 
 // ============================================================================
 // Types
@@ -176,6 +178,8 @@ const EmptyState: React.FC<{ message: string; subMessage?: string }> = ({ messag
 // ============================================================================
 
 export default function PaperCreatePage() {
+  const router = useRouter();
+
   // State
   const [paperName, setPaperName] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
@@ -189,14 +193,51 @@ export default function PaperCreatePage() {
     '최하': 0,
   });
 
+  // Real data state
+  const [realProblemCounts, setRealProblemCounts] = useState<Record<string, number>>({});
+
   // Upload state
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollingRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // Computed values
   const totalQuestions = Object.values(difficulties).reduce((sum, val) => sum + val, 0);
   const hasSelection = selectedSubject && selectedChapters.length > 0;
+
+  // Fetch real counts
+  React.useEffect(() => {
+    const fetchCounts = async () => {
+      if (!supabaseBrowser) return;
+
+      const { data, error } = await supabaseBrowser
+        .from('problems')
+        .select('unit')
+        .eq('is_active', true);
+
+      if (data) {
+        const counts: Record<string, number> = {};
+        data.forEach(p => {
+          const unit = p.unit || '미분류';
+          counts[unit] = (counts[unit] || 0) + 1;
+        });
+        setRealProblemCounts(counts);
+      }
+    };
+    fetchCounts();
+  }, []);
+
+  // Update subjects with real counts
+  const subjectsWithRealCounts = subjects.map(s => ({
+    ...s,
+    chapters: s.chapters.map(c => ({
+      ...c,
+      problemCount: realProblemCounts[c.name] || 0
+    }))
+  }));
+
+  const selectedSubjectData = subjectsWithRealCounts.find((s) => s.id === selectedSubject);
 
   // Handlers
   const handleReset = () => {
@@ -216,10 +257,45 @@ export default function PaperCreatePage() {
     );
   };
 
-  // Polling refs for job status
-  const pollingRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const handleSaveExam = async () => {
+    if (!paperName) {
+      alert('시험지 이름을 입력해주세요.');
+      return;
+    }
 
-  // File upload handlers - Real API integration
+    if (totalQuestions === 0) return;
+
+    try {
+      const response = await fetch('/api/exams/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: paperName,
+          criteria: {
+            subject: selectedSubjectData?.name,
+            chapters: selectedChapters.map(id => {
+              const ch = selectedSubjectData?.chapters.find(c => c.id === id);
+              return ch?.name || '';
+            }).filter(Boolean),
+            difficulty_distribution: difficulties
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate');
+      }
+
+      alert('시험지가 생성되었습니다.');
+      router.push('/dashboard/repository');
+    } catch (e) {
+      console.error(e);
+      alert('시험지 생성 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
+    }
+  };
+
+  // File upload handlers
   const handleFileUpload = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
 
@@ -236,7 +312,6 @@ export default function PaperCreatePage() {
       setUploadedFiles(prev => [uploadedFile, ...prev]);
 
       try {
-        // Create FormData for API
         const formData = new FormData();
         formData.append('file', file);
         formData.append('instituteId', 'default');
@@ -244,7 +319,6 @@ export default function PaperCreatePage() {
         formData.append('autoClassify', 'true');
         formData.append('generateSolutions', 'true');
 
-        // Call upload API
         const response = await fetch('/api/workflow/upload', {
           method: 'POST',
           body: formData,
@@ -257,14 +331,12 @@ export default function PaperCreatePage() {
         const data = await response.json();
         const jobId = data.jobId;
 
-        // Update with real job ID
         setUploadedFiles(prev => prev.map(f =>
           f.id === tempId
             ? { ...f, id: jobId, status: 'processing', progress: 30 }
             : f
         ));
 
-        // Start polling for job status
         const poll = async () => {
           try {
             const statusRes = await fetch(`/api/workflow/upload?jobId=${jobId}`);
@@ -276,7 +348,6 @@ export default function PaperCreatePage() {
             setUploadedFiles(prev => prev.map(f => {
               if (f.id === jobId) {
                 if (job.status === 'COMPLETED') {
-                  // Stop polling
                   const interval = pollingRefs.current.get(jobId);
                   if (interval) {
                     clearInterval(interval);
@@ -284,7 +355,6 @@ export default function PaperCreatePage() {
                   }
                   return { ...f, status: 'done', progress: 100 };
                 } else if (job.status === 'FAILED') {
-                  // Stop polling
                   const interval = pollingRefs.current.get(jobId);
                   if (interval) {
                     clearInterval(interval);
@@ -301,7 +371,6 @@ export default function PaperCreatePage() {
           }
         };
 
-        // Start polling every 2 seconds
         poll();
         const interval = setInterval(poll, 2000);
         pollingRefs.current.set(jobId, interval);
@@ -338,7 +407,6 @@ export default function PaperCreatePage() {
     setUploadedFiles(prev => prev.filter(f => f.id !== id));
   };
 
-  const selectedSubjectData = subjects.find((s) => s.id === selectedSubject);
 
   return (
     <section className="flex h-[calc(100vh-6rem)] flex-col overflow-hidden">
@@ -356,6 +424,7 @@ export default function PaperCreatePage() {
           </button>
           <button
             type="button"
+            onClick={handleSaveExam}
             disabled={totalQuestions === 0}
             className="flex items-center gap-2 rounded-full border border-indigo-500/50 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-[1px] hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
@@ -461,7 +530,7 @@ export default function PaperCreatePage() {
               </div>
               <div className="flex-1 overflow-auto p-2">
                 <div className="space-y-1">
-                  {subjects.map((subject) => (
+                  {subjectsWithRealCounts.map((subject) => (
                     <button
                       key={subject.id}
                       type="button"

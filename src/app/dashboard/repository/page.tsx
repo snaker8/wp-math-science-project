@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useExams, ExamPaper } from '@/hooks';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -41,6 +42,7 @@ const FilterBadge = ({ label, active }: { label: string; active?: boolean }) => 
 );
 
 export default function RepositoryPage() {
+  const router = useRouter();
   const { exams, isLoading } = useExams();
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -63,6 +65,7 @@ export default function RepositoryPage() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
+          onClick={() => router.push('/dashboard/create')}
           className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all"
         >
           <FilePlus size={18} />

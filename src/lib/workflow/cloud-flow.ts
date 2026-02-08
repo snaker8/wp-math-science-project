@@ -299,38 +299,8 @@ export async function processOCR(
   storagePath: string,
   onProgress?: (progress: number) => void
 ): Promise<OCRResult> {
-  // Simulate OCR processing
-  if (onProgress) onProgress(10);
-
-  // TODO: 실제 OCR API 연동 (Mathpix, Google Vision 등)
-  await simulateProcessing(2000);
-  if (onProgress) onProgress(30);
-
-  // Mock OCR result
-  const mockOCRResult: OCRResult = {
-    jobId: crypto.randomUUID(),
-    pages: [
-      {
-        pageNumber: 1,
-        text: '다음 이차방정식을 풀이하시오.\n\\( x^2 - 5x + 6 = 0 \\)',
-        mathExpressions: [
-          {
-            latex: 'x^2 - 5x + 6 = 0',
-            boundingBox: { x: 100, y: 200, width: 300, height: 50 },
-            confidence: 0.95,
-          },
-        ],
-        images: [],
-        confidence: 0.92,
-      },
-    ],
-    rawText: '다음 이차방정식을 풀이하시오. x² - 5x + 6 = 0',
-    confidence: 0.92,
-    processedAt: new Date().toISOString(),
-  };
-
-  if (onProgress) onProgress(50);
-  return mockOCRResult;
+  // Mock fallback removed for production
+  throw new Error('OCR process for this file type is not implemented or supported in this environment.');
 }
 
 // ============================================================================
@@ -362,22 +332,99 @@ const CLASSIFICATION_PROMPT = `당신은 수학 문제 분류 전문가입니다
 문제:
 {PROBLEM_TEXT}
 
+참고 자료 (해설지/정답지 내용):
+{REFERENCE_TEXT}
+
+JSON 형식으로 응답해주세요.`;
+
+const ANSWER_PROMPT = `당신은 수학 해설 데이터 추출 전문가입니다. 주어진 텍스트는 수학 문제의 해설지입니다.
+다음 정보를 JSON 형태로 반환해주세요:
+
+1. 유형 분류:
+   - typeCode: "ANSWER-SHEET"
+   - typeName: "해설지 데이터"
+   - subject: "해설"
+   - chapter: "해설"
+   - section: "해설"
+   - difficulty: 1
+   - cognitiveDomain: "UNDERSTANDING"
+
+2. 단계별 풀이:
+   - approach: 풀이의 핵심 접근법 요약
+   - steps: 해설의 각 단계를 잘게 나누어 설명 (LaTeX 수식 포함)
+   - finalAnswer: 최종 정답 추출
+   - commonMistakes: (텍스트에 있다면) 실수 포인트, 없다면 빈 배열
+
+3. 메타데이터:
+   - prerequisites: []
+   - estimatedTimeMinutes: 0
+   - keywordsTags: ["해설"]
+
+텍스트:
+{PROBLEM_TEXT}
+
+JSON 형식으로 응답해주세요.`;
+
+const QUICK_ANSWER_PROMPT = `당신은 수학 정답 추출 전문가입니다. 주어진 텍스트는 빠른 정답표(Answer Key)입니다.
+다음 정보를 JSON 형태로 반환해주세요:
+
+1. 유형 분류:
+   - typeCode: "QUICK-ANSWER"
+   - typeName: "빠른 정답"
+   - subject: "정답"
+   - chapter: "정답"
+   - section: "정답"
+   - difficulty: 1
+   - cognitiveDomain: "CALCULATION"
+
+2. 단계별 풀이:
+   - approach: "빠른 정답"
+   - steps: []
+   - finalAnswer: 정답 텍스트 추출 (예: "3", "5", "12")
+   - commonMistakes: []
+
+3. 메타데이터:
+   - prerequisites: []
+   - estimatedTimeMinutes: 0
+   - keywordsTags: ["정답"]
+
+텍스트:
+{PROBLEM_TEXT}
+
 JSON 형식으로 응답해주세요.`;
 
 export async function analyzeProblemWithLLM(
   problemText: string,
   mathExpressions: string[],
-  onProgress?: (progress: number) => void
+  documentType: 'PROBLEM' | 'ANSWER' | 'QUICK_ANSWER' = 'PROBLEM',
+  onProgress?: (progress: number) => void,
+  referenceTexts: { answer?: string; quickAnswer?: string } = {}
 ): Promise<LLMAnalysisResult> {
   if (onProgress) onProgress(55);
 
   const fullProblemText = `${problemText}\n\n수식: ${mathExpressions.join(', ')}`;
 
+  // Construct Reference Text
+  let referenceText = "없음";
+  if (referenceTexts.answer || referenceTexts.quickAnswer) {
+    referenceText = `[해설지]\n${referenceTexts.answer || '없음'}\n\n[빠른 정답]\n${referenceTexts.quickAnswer || '없음'}`;
+    // Limit reference text length to avoid token limits (approx 10000 chars)
+    if (referenceText.length > 10000) {
+      referenceText = referenceText.substring(0, 10000) + "... (truncated)";
+    }
+  }
+
   try {
     // GPT-4o API 호출
-    const response = await callOpenAI(
-      CLASSIFICATION_PROMPT.replace('{PROBLEM_TEXT}', fullProblemText)
-    );
+    let prompt = CLASSIFICATION_PROMPT;
+    if (documentType === 'ANSWER') prompt = ANSWER_PROMPT;
+    if (documentType === 'QUICK_ANSWER') prompt = QUICK_ANSWER_PROMPT;
+
+    const finalPrompt = prompt
+      .replace('{PROBLEM_TEXT}', fullProblemText)
+      .replace('{REFERENCE_TEXT}', referenceText);
+
+    const response = await callOpenAI(finalPrompt);
 
     if (onProgress) onProgress(75);
 
@@ -571,35 +618,51 @@ export interface JobUpdateCallback {
 export async function processUploadJob(
   job: UploadJob,
   callbacks: JobUpdateCallback,
-  fileBuffer?: ArrayBuffer
+  buffers: {
+    problem?: ArrayBuffer;
+    answer?: ArrayBuffer;
+    quickAnswer?: ArrayBuffer;
+  }
 ): Promise<LLMAnalysisResult[]> {
   const results: LLMAnalysisResult[] = [];
 
   try {
-    // Step 1: 파일 타입에 따른 텍스트/수식 추출
+    // Step 1: Main Problem File Processing
     const fileTypeLabel = job.fileType === 'HWP' ? 'HWP 파싱' :
       job.fileType === 'PDF' ? 'PDF OCR' : '이미지 OCR';
     callbacks.onStatusChange('OCR_PROCESSING', `${fileTypeLabel} 처리 중...`);
 
     let ocrResult: OCRResult;
-
-    if (fileBuffer) {
-      // 파일 버퍼가 있으면 통합 처리 함수 사용
-      ocrResult = await processDocument(fileBuffer, job.fileName, callbacks.onProgress);
+    if (buffers.problem) {
+      ocrResult = await processDocument(buffers.problem, job.fileName, callbacks.onProgress);
     } else {
-      // 레거시: storagePath 기반 처리
       ocrResult = await processOCR(job.storagePath, callbacks.onProgress);
     }
+    console.log(`[Cloud Flow] Extracted ${ocrResult.pages.length} pages from Problem file`);
 
-    console.log(`[Cloud Flow] Extracted ${ocrResult.pages.length} pages from ${job.fileName}`);
+    // Step 1.1: Process Auxiliary Files (if present)
+    let answerText = '';
+    let quickAnswerText = '';
+
+    if (buffers.answer) {
+      callbacks.onStatusChange('OCR_PROCESSING', `해설지 OCR 처리 중...`);
+      const answerResult = await processDocument(buffers.answer, 'answer_sheet.pdf');
+      answerText = answerResult.pages.map(p => p.text).join('\n\n');
+      console.log(`[Cloud Flow] Extracted Answer Sheet text: ${answerText.length} chars`);
+    }
+
+    if (buffers.quickAnswer) {
+      callbacks.onStatusChange('OCR_PROCESSING', `빠른 정답지 OCR 처리 중...`);
+      const quickResult = await processDocument(buffers.quickAnswer, 'quick_answer.pdf');
+      quickAnswerText = quickResult.pages.map(p => p.text).join('\n\n');
+      console.log(`[Cloud Flow] Extracted Quick Answer text: ${quickAnswerText.length} chars`);
+    }
 
     // Step 2: 모든 페이지에서 개별 문제 추출
     callbacks.onStatusChange('LLM_ANALYZING', '문제 분리 중...');
 
-    // 모든 페이지의 텍스트를 합침
+    // 모든 페이지의 텍스트를 합침 (Problem File)
     const fullText = ocrResult.pages.map(p => p.text).join('\n\n');
-    console.log(`[Cloud Flow] Full OCR text length: ${fullText.length} characters`);
-    console.log(`[Cloud Flow] First 500 chars of OCR text:`, fullText.substring(0, 500));
 
     // QuestionParser로 개별 문제 분리
     const parser = getQuestionParser();
@@ -611,9 +674,6 @@ export async function processUploadJob(
     } as MathpixResponse);
 
     console.log(`[Cloud Flow] QuestionParser found ${parsedQuestions.length} questions`);
-    if (parsedQuestions.length > 0) {
-      console.log(`[Cloud Flow] First parsed question:`, parsedQuestions[0]?.raw_text?.substring(0, 200));
-    }
 
     // 파싱된 문제가 없으면 페이지 단위로 폴백
     type QuestionToAnalyze = { index: number; text: string; mathExpressions: string[] };
@@ -629,9 +689,6 @@ export async function processUploadJob(
         mathExpressions: page.mathExpressions.map(m => m.latex),
       }));
 
-    console.log(`[Cloud Flow] Final questions to analyze: ${questionsToAnalyze.length}`);
-
-
     // Step 3: 각 문제에 대해 LLM 분석
     callbacks.onStatusChange('LLM_ANALYZING', `AI 분석 중 (${questionsToAnalyze.length}개 문제)...`);
 
@@ -643,22 +700,23 @@ export async function processUploadJob(
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
-      // Step 4: 3,569개 유형 중 하나로 분류
-      callbacks.onStatusChange('CLASSIFYING', `문제 ${i + 1}/${questionsToAnalyze.length} - 유형 분류 중...`);
+      // Step 4: 3,569개 유형 중 하나로 분류 + 해설 매칭
+      callbacks.onStatusChange('CLASSIFYING', `문제 ${i + 1}/${questionsToAnalyze.length} - 유형 분류 및 해설 매칭...`);
 
       const analysis = await analyzeProblemWithLLM(
         question.text,
         question.mathExpressions,
+        job.documentType || 'PROBLEM',
         (p) => {
           const baseProgress = 50 + (i / questionsToAnalyze.length) * 40;
           callbacks.onProgress(baseProgress + (p - 50) * 0.4);
-        }
+        },
+        { answer: answerText, quickAnswer: quickAnswerText }
       );
 
       // Step 5: 해설이 없으면 생성
       if (!analysis.solution.steps || analysis.solution.steps.length === 0) {
-        callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - 해설 생성 중...`);
-        // 해설 생성 전에도 딜레이 추가
+        callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - AI 해설 생성 중...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         const solutionResult = await generateStepByStepSolution(question.text, question.mathExpressions);
         analysis.solution = solutionResult;
@@ -667,7 +725,6 @@ export async function processUploadJob(
       results.push(analysis);
       console.log(`[Cloud Flow] Problem ${i + 1}: ${analysis.classification.typeCode} (${analysis.classification.typeName})`);
     }
-
 
     // Step 6: 완료
     callbacks.onStatusChange('COMPLETED', `${results.length}개 문제 처리 완료`);
