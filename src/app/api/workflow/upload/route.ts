@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { processUploadJob, getStatusLabel } from '@/lib/workflow/cloud-flow';
 
@@ -305,9 +305,12 @@ async function saveProblemsToDB(
   jobId: string,
   results: LLMAnalysisResult[]
 ): Promise<void> {
-  const supabase = await createSupabaseServerClient();
+  // Use Admin Client to bypass RLS for background processing
+  // (createSupabaseServerClient is tied to the request context, which might not be valid here or lack permissions)
+  const supabase = supabaseAdmin;
+
   if (!supabase) {
-    console.log('[DB] Supabase not configured, skipping DB save');
+    console.log('[DB] Supabase Admin not configured, skipping DB save');
     return;
   }
 
@@ -342,7 +345,7 @@ async function saveProblemsToDB(
         grade: '미분류', // classification에 grade 정보 없음
         subject: classification?.subject || '수학',
         unit: classification?.chapter || '미분류',
-        difficulty: 'Lv.3', // 기본값
+        // difficulty: 'Lv.3', // Removed as per schema error
         problem_count: results.length,
         total_points: results.length * 4,
         time_limit_minutes: 50,
