@@ -165,14 +165,50 @@ export default function CloudFlowUploader({
         )
       );
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingFiles, userId, instituteId, autoClassify, generateSolutions]);
 
   // Job 상태 폴링
   const startPolling = useCallback((jobId: string) => {
+    let errorCount = 0;
+    const MAX_ERRORS = 15; // 최대 15회 (30초) 연속 실패 시 폴링 중지
+
+    const stopPolling = (id: string) => {
+      const interval = pollingRef.current.get(id);
+      if (interval) {
+        clearInterval(interval);
+        pollingRef.current.delete(id);
+      }
+    };
+
     const poll = async () => {
       try {
         const response = await fetch(`/api/workflow/upload?jobId=${jobId}`);
-        if (!response.ok) return;
+
+        if (!response.ok) {
+          errorCount++;
+          console.warn(`[Polling] Job ${jobId}: HTTP ${response.status} (${errorCount}/${MAX_ERRORS})`);
+
+          // 연속 실패 횟수 초과 시 폴링 중지 + FAILED 상태 설정
+          if (errorCount >= MAX_ERRORS) {
+            stopPolling(jobId);
+            setJobs((prev) =>
+              prev.map((j) =>
+                j.id === jobId
+                  ? {
+                    ...j,
+                    status: 'FAILED' as ProcessingStatus,
+                    error: '서버와 연결이 끊어졌습니다. 페이지를 새로고침 후 다시 시도해주세요.',
+                  }
+                  : j
+              )
+            );
+          }
+          return;
+        }
+
+        // 성공 시 에러 카운터 리셋
+        errorCount = 0;
 
         const data = await response.json();
         const { job, results } = data;
@@ -191,18 +227,30 @@ export default function CloudFlowUploader({
 
         // 완료 또는 실패 시 폴링 중지
         if (job.status === 'COMPLETED' || job.status === 'FAILED') {
-          const interval = pollingRef.current.get(jobId);
-          if (interval) {
-            clearInterval(interval);
-            pollingRef.current.delete(jobId);
-          }
+          stopPolling(jobId);
 
           if (job.status === 'COMPLETED' && results && onComplete) {
             onComplete(results);
           }
         }
       } catch (error) {
+        errorCount++;
         console.error('Polling error:', error);
+
+        if (errorCount >= MAX_ERRORS) {
+          stopPolling(jobId);
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === jobId
+                ? {
+                  ...j,
+                  status: 'FAILED' as ProcessingStatus,
+                  error: '네트워크 오류로 상태 확인에 실패했습니다.',
+                }
+                : j
+            )
+          );
+        }
       }
     };
 
@@ -389,8 +437,6 @@ export default function CloudFlowUploader({
           </button>
         </div>
       )}
-// Redundant options removed
-
 
       {/* Job 목록 */}
       {

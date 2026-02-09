@@ -86,6 +86,8 @@ export interface TypeClassification {
 
 export interface LLMAnalysisResult {
   problemId: string;
+  originalText?: string;      // OCR 추출 원본 텍스트
+  originalMathExpressions?: string[]; // OCR 추출 수식
   classification: TypeClassification;
   solution: StepByStepSolution;
   similarTypes: string[]; // 유사 유형 코드들

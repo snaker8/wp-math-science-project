@@ -27,7 +27,7 @@ import type { MathpixResponse, ParsedQuestion } from '@/types/ocr';
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = 'gpt-4o';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const HWP_PYTHON_API = process.env.HWP_PYTHON_API || '/api/hwp/parse';
 
 // 3,569개 유형 분류 체계 (요약)
@@ -307,27 +307,36 @@ export async function processOCR(
 // LLM Analysis (GPT-4o)
 // ============================================================================
 
-const CLASSIFICATION_PROMPT = `당신은 수학 문제 분류 전문가입니다. 주어진 수학 문제를 분석하여 다음 정보를 JSON 형태로 반환해주세요:
+const CLASSIFICATION_PROMPT = `당신은 수학 문제 분류 전문가입니다. 주어진 수학 문제를 분석하여 **반드시 아래의 정확한 JSON 구조**로만 응답해주세요. 키 이름을 변경하지 마세요.
 
-1. 유형 분류 (3,569개 유형 체계 기준):
-   - typeCode: 유형 코드 (예: MA-HS1-ALG-01-003)
-   - typeName: 유형 이름
-   - subject: 과목 (수학I, 수학II, 미적분, 확률과 통계, 기하)
-   - chapter: 대단원
-   - section: 중단원
-   - difficulty: 난이도 (1-5)
-   - cognitiveDomain: 인지 영역 (CALCULATION, UNDERSTANDING, INFERENCE, PROBLEM_SOLVING)
+{
+  "classification": {
+    "typeCode": "MA-HS1-ALG-01-003",
+    "typeName": "유형 이름",
+    "subject": "수학I 또는 수학II 또는 미적분 또는 확률과 통계 또는 기하",
+    "chapter": "대단원명",
+    "section": "중단원명",
+    "difficulty": 3,
+    "cognitiveDomain": "CALCULATION 또는 UNDERSTANDING 또는 INFERENCE 또는 PROBLEM_SOLVING",
+    "confidence": 0.85,
+    "prerequisites": []
+  },
+  "solution": {
+    "approach": "풀이 접근법",
+    "steps": [
+      {"stepNumber": 1, "description": "설명", "latex": "수식", "explanation": "상세설명"}
+    ],
+    "finalAnswer": "최종 답",
+    "commonMistakes": ["흔한 실수"]
+  },
+  "metadata": {
+    "estimatedTimeMinutes": 5,
+    "keywordsTags": ["키워드"],
+    "similarTypes": []
+  }
+}
 
-2. 단계별 풀이:
-   - approach: 풀이 접근법
-   - steps: 각 단계별 설명과 LaTeX 수식
-   - finalAnswer: 최종 답
-   - commonMistakes: 자주 하는 실수들
-
-3. 메타데이터:
-   - prerequisites: 선수 지식 유형 코드들
-   - estimatedTimeMinutes: 예상 풀이 시간
-   - keywordsTags: 키워드 태그들
+중요: 위 JSON 키 이름(classification, solution, metadata, typeCode, typeName 등)을 정확히 사용하세요. 한글 키 이름을 사용하지 마세요.
 
 문제:
 {PROBLEM_TEXT}
@@ -335,7 +344,7 @@ const CLASSIFICATION_PROMPT = `당신은 수학 문제 분류 전문가입니다
 참고 자료 (해설지/정답지 내용):
 {REFERENCE_TEXT}
 
-JSON 형식으로 응답해주세요.`;
+JSON만 응답하세요. 설명 텍스트를 추가하지 마세요.`;
 
 const ANSWER_PROMPT = `당신은 수학 해설 데이터 추출 전문가입니다. 주어진 텍스트는 수학 문제의 해설지입니다.
 다음 정보를 JSON 형태로 반환해주세요:
@@ -441,13 +450,16 @@ export async function analyzeProblemWithLLM(
   }
 }
 
-async function callOpenAI(prompt: string, retries = 3, backoff = 1000): Promise<string> {
+async function callOpenAI(prompt: string, retries = 6, backoff = 5000, model?: string): Promise<string> {
   // 실제 OpenAI API 호출
   if (!OPENAI_API_KEY) {
     throw new Error('[Cloud Flow] OpenAI API key not configured. Set OPENAI_API_KEY in .env');
   }
 
+  const currentModel = model || OPENAI_MODEL;
+
   try {
+    console.log(`[Cloud Flow] Calling OpenAI with model: ${currentModel}`);
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -455,25 +467,39 @@ async function callOpenAI(prompt: string, retries = 3, backoff = 1000): Promise<
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: currentModel,
         messages: [
           {
             role: 'system',
-            content: '당신은 한국 고등학교 수학 교육 전문가입니다. 정확한 분류와 상세한 풀이를 제공합니다.',
+            content: '당신은 한국 고등학교 수학 교육 전문가입니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요.',
           },
           { role: 'user', content: prompt },
         ],
         temperature: 0.3,
         max_tokens: 2000,
+        response_format: { type: 'json_object' },
       }),
     });
 
     if (!response.ok) {
       // 429 Rate Limit 처리
       if (response.status === 429 && retries > 0) {
-        console.warn(`[Cloud Flow] OpenAI 429 Rate Limit. Retrying in ${backoff}ms...`);
-        await new Promise(resolve => setTimeout(resolve, backoff));
-        return callOpenAI(prompt, retries - 1, backoff * 2);
+        // Retry-After 헤더가 있으면 그 값을 사용, 없으면 backoff 사용
+        const retryAfterHeader = response.headers.get('Retry-After');
+        const waitTime = retryAfterHeader
+          ? Math.max(parseInt(retryAfterHeader, 10) * 1000, backoff)
+          : backoff;
+
+        // 재시도 3회 이하 남으면 gpt-4o-mini로 폴백
+        let nextModel = currentModel;
+        if (retries <= 3 && currentModel !== 'gpt-4o-mini') {
+          nextModel = 'gpt-4o-mini';
+          console.warn(`[Cloud Flow] Falling back to ${nextModel} due to rate limits`);
+        }
+
+        console.warn(`[Cloud Flow] OpenAI 429 Rate Limit. Retrying in ${waitTime}ms with ${nextModel}... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return callOpenAI(prompt, retries - 1, backoff * 2, nextModel);
       }
       throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
     }
@@ -481,11 +507,16 @@ async function callOpenAI(prompt: string, retries = 3, backoff = 1000): Promise<
     const data = await response.json();
     return data.choices[0].message.content;
   } catch (error) {
-    // 네트워크 에러 등도 재시도 고려 가능하나, 우선 429 위주로 처리
+    // 네트워크 에러 등도 재시도
     if (retries > 0 && error instanceof Error && error.message.includes('429')) {
-      console.warn(`[Cloud Flow] OpenAI 429 Rate Limit (Exception). Retrying in ${backoff}ms...`);
+      let nextModel = currentModel;
+      if (retries <= 3 && currentModel !== 'gpt-4o-mini') {
+        nextModel = 'gpt-4o-mini';
+        console.warn(`[Cloud Flow] Falling back to ${nextModel} due to rate limits`);
+      }
+      console.warn(`[Cloud Flow] OpenAI 429 Rate Limit (Exception). Retrying in ${backoff}ms with ${nextModel}... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, backoff));
-      return callOpenAI(prompt, retries - 1, backoff * 2);
+      return callOpenAI(prompt, retries - 1, backoff * 2, nextModel);
     }
     throw error;
   }
@@ -541,6 +572,66 @@ function getMockLLMResponse(): string {
   });
 }
 
+/**
+ * GPT 응답의 JSON 문자열에서 잘못된 이스케이프 시퀀스를 정리
+ * LaTeX 수식에 \sin, \frac 등이 포함되면 JSON 파서가 \s, \f 를 제어 문자로 해석하여 실패함
+ */
+function sanitizeJsonString(raw: string): string {
+  // JSON 유효 이스케이프: \" \\ \/ \b \f \n \r \t \uXXXX
+  // 그 외 \로 시작하는 것들을 \\로 변환 (LaTeX 수식 보존)
+  return raw.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+}
+
+/**
+ * GPT 응답에서 classification 객체를 찾는다.
+ * GPT-4o-mini는 키 이름을 다양하게 반환할 수 있음:
+ *   classification, 유형_분류, type_classification, 또는 루트에 typeCode를 직접 넣기도 함
+ */
+function extractClassification(parsed: Record<string, any>): Record<string, any> {
+  // 1. 정확한 키
+  if (parsed.classification && typeof parsed.classification === 'object') return parsed.classification;
+  // 2. 한글 변형
+  if (parsed['유형_분류'] && typeof parsed['유형_분류'] === 'object') return parsed['유형_분류'];
+  if (parsed['유형 분류'] && typeof parsed['유형 분류'] === 'object') return parsed['유형 분류'];
+  if (parsed['유형분류'] && typeof parsed['유형분류'] === 'object') return parsed['유형분류'];
+  // 3. 영문 변형
+  if (parsed.type_classification && typeof parsed.type_classification === 'object') return parsed.type_classification;
+  if (parsed.type && typeof parsed.type === 'object') return parsed.type;
+  // 4. 루트 레벨에 typeCode가 있는 경우 (GPT가 flat하게 반환)
+  if (parsed.typeCode) return parsed;
+  // 5. 첫 번째로 발견되는 객체 중 typeCode를 가진 것
+  for (const key of Object.keys(parsed)) {
+    const val = parsed[key];
+    if (val && typeof val === 'object' && !Array.isArray(val) && (val.typeCode || val.type_code)) {
+      return val;
+    }
+  }
+  return {};
+}
+
+/**
+ * GPT 응답에서 solution 객체를 찾는다.
+ */
+function extractSolution(parsed: Record<string, any>): Record<string, any> {
+  if (parsed.solution && typeof parsed.solution === 'object') return parsed.solution;
+  if (parsed['단계별_풀이'] && typeof parsed['단계별_풀이'] === 'object') return parsed['단계별_풀이'];
+  if (parsed['단계별 풀이'] && typeof parsed['단계별 풀이'] === 'object') return parsed['단계별 풀이'];
+  if (parsed['풀이'] && typeof parsed['풀이'] === 'object') return parsed['풀이'];
+  if (parsed.steps && Array.isArray(parsed.steps)) return { steps: parsed.steps, approach: '', finalAnswer: '' };
+  // fallback: approach/steps가 루트에 있는 경우
+  if (parsed.approach || parsed.finalAnswer) return parsed;
+  return {};
+}
+
+/**
+ * GPT 응답에서 metadata 객체를 찾는다.
+ */
+function extractMetadata(parsed: Record<string, any>): Record<string, any> {
+  if (parsed.metadata && typeof parsed.metadata === 'object') return parsed.metadata;
+  if (parsed['메타데이터'] && typeof parsed['메타데이터'] === 'object') return parsed['메타데이터'];
+  return {};
+}
+
 function parseAnalysisResponse(response: string): LLMAnalysisResult {
   try {
     // JSON 추출 (마크다운 코드 블록 처리)
@@ -551,36 +642,48 @@ function parseAnalysisResponse(response: string): LLMAnalysisResult {
       jsonStr = response.split('```')[1].split('```')[0].trim();
     }
 
+    // GPT 응답에서 잘못된 이스케이프 문자 정리 (LaTeX \sin, \frac 등)
+    jsonStr = sanitizeJsonString(jsonStr);
+
     const parsed = JSON.parse(jsonStr);
+
+    // GPT 응답 구조를 유연하게 추출
+    const cls = extractClassification(parsed);
+    const sol = extractSolution(parsed);
+    const meta = extractMetadata(parsed);
+
+    console.log(`[Cloud Flow] Parsed classification keys: ${Object.keys(cls).join(', ')}`);
+    console.log(`[Cloud Flow] Parsed solution keys: ${Object.keys(sol).join(', ')}`);
 
     return {
       problemId: crypto.randomUUID(),
       classification: {
-        typeCode: parsed.classification.typeCode,
-        typeName: parsed.classification.typeName,
-        subject: parsed.classification.subject,
-        chapter: parsed.classification.chapter,
-        section: parsed.classification.section,
-        subSection: parsed.classification.subSection,
-        difficulty: parsed.classification.difficulty,
-        cognitiveDomain: parsed.classification.cognitiveDomain,
-        confidence: parsed.classification.confidence || 0.8,
-        prerequisites: parsed.classification.prerequisites || [],
+        typeCode: cls.typeCode || cls.type_code || 'MA-UNKNOWN-001',
+        typeName: cls.typeName || cls.type_name || cls['유형이름'] || '미분류',
+        subject: cls.subject || cls['과목'] || '수학',
+        chapter: cls.chapter || cls['대단원'] || '미분류',
+        section: cls.section || cls['중단원'] || '미분류',
+        subSection: cls.subSection || cls.sub_section || cls['소단원'],
+        difficulty: cls.difficulty || cls['난이도'] || 3,
+        cognitiveDomain: cls.cognitiveDomain || cls.cognitive_domain || cls['인지영역'] || 'PROBLEM_SOLVING',
+        confidence: cls.confidence || cls['신뢰도'] || 0.7,
+        prerequisites: cls.prerequisites || cls['선수지식'] || [],
       },
       solution: {
-        approach: parsed.solution.approach,
-        steps: parsed.solution.steps,
-        finalAnswer: parsed.solution.finalAnswer,
-        alternativeMethods: parsed.solution.alternativeMethods,
-        commonMistakes: parsed.solution.commonMistakes,
+        approach: sol.approach || sol['접근법'] || sol['풀이접근법'] || '',
+        steps: sol.steps || sol['단계'] || [],
+        finalAnswer: sol.finalAnswer || sol.final_answer || sol['최종답'] || sol['정답'] || '',
+        alternativeMethods: sol.alternativeMethods || sol['다른풀이법'] || [],
+        commonMistakes: sol.commonMistakes || sol.common_mistakes || sol['흔한실수'] || [],
       },
-      similarTypes: parsed.metadata?.similarTypes || [],
-      keywordsTags: parsed.metadata?.keywordsTags || [],
-      estimatedTimeMinutes: parsed.metadata?.estimatedTimeMinutes || 5,
+      similarTypes: meta.similarTypes || meta['유사유형'] || [],
+      keywordsTags: meta.keywordsTags || meta.keywords || meta['키워드'] || [],
+      estimatedTimeMinutes: meta.estimatedTimeMinutes || meta['예상시간'] || 5,
       analyzedAt: new Date().toISOString(),
     };
   } catch (error) {
     console.error('Failed to parse LLM response:', error);
+    console.error('Raw response (first 500 chars):', response.substring(0, 500));
     throw error;
   }
 }
@@ -710,9 +813,11 @@ export async function processUploadJob(
     for (let i = 0; i < questionsToAnalyze.length; i++) {
       const question = questionsToAnalyze[i];
 
-      // Rate limit 방지: 첫 번째 문제 제외하고 1.5초 대기
+      // Rate limit 방지: 첫 번째 문제 제외하고 대기 (문제 수에 따라 동적 조절)
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        const delayMs = questionsToAnalyze.length > 5 ? 8000 : 5000; // 문제 6개 이상이면 8초, 아니면 5초
+        callbacks.onStatusChange('LLM_ANALYZING', `문제 ${i + 1}/${questionsToAnalyze.length} 대기 중... (Rate Limit 방지)`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
 
       // Step 4: 3,569개 유형 중 하나로 분류 + 해설 매칭
@@ -729,10 +834,14 @@ export async function processUploadJob(
         { answer: answerText, quickAnswer: quickAnswerText }
       );
 
+      // 원본 텍스트를 분석 결과에 포함 (DB 저장 시 content_latex로 사용)
+      analysis.originalText = question.text;
+      analysis.originalMathExpressions = question.mathExpressions;
+
       // Step 5: 해설이 없으면 생성
       if (!analysis.solution.steps || analysis.solution.steps.length === 0) {
         callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - AI 해설 생성 중...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Rate limit 방지 대기
         const solutionResult = await generateStepByStepSolution(question.text, question.mathExpressions);
         analysis.solution = solutionResult;
       }
@@ -785,6 +894,7 @@ async function generateStepByStepSolution(
     } else if (response.includes('```')) {
       jsonStr = response.split('```')[1].split('```')[0].trim();
     }
+    jsonStr = sanitizeJsonString(jsonStr);
     return JSON.parse(jsonStr);
   } catch {
     return {

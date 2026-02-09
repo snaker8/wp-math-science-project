@@ -7,10 +7,17 @@ import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { processUploadJob, getStatusLabel } from '@/lib/workflow/cloud-flow';
 
-// In-memory job storage (실제 구현에서는 Redis 또는 DB 사용)
-const jobStore = new Map<string, UploadJob>();
-const jobResults = new Map<string, LLMAnalysisResult[]>();
-const fileBufferStore = new Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>(); // 버퍼 저장 구조 변경
+// In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
+// 실제 프로덕션에서는 Redis 또는 DB 사용 권장
+const globalForJobs = globalThis as unknown as {
+  __jobStore?: Map<string, UploadJob>;
+  __jobResults?: Map<string, LLMAnalysisResult[]>;
+  __fileBufferStore?: Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>;
+};
+
+const jobStore = globalForJobs.__jobStore ?? (globalForJobs.__jobStore = new Map<string, UploadJob>());
+const jobResults = globalForJobs.__jobResults ?? (globalForJobs.__jobResults = new Map<string, LLMAnalysisResult[]>());
+const fileBufferStore = globalForJobs.__fileBufferStore ?? (globalForJobs.__fileBufferStore = new Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>());
 
 /**
  * POST /api/workflow/upload
@@ -165,6 +172,7 @@ export async function GET(request: NextRequest) {
 
   const job = jobStore.get(jobId);
   if (!job) {
+    console.warn(`[Upload API] Job not found: ${jobId}. Store has ${jobStore.size} jobs: [${Array.from(jobStore.keys()).join(', ')}]`);
     return NextResponse.json(
       { error: 'Job not found' },
       { status: 404 }
@@ -371,8 +379,16 @@ async function saveProblemsToDB(
 
   for (const result of results) {
     try {
-      // 문제 내용 추출
-      const problemContent = result.solution.steps.map((s) => s.description).join('\n');
+      // 문제 내용: 원본 OCR 텍스트 사용 (없으면 해설 steps에서 추출)
+      const problemContent = result.originalText
+        || result.solution.steps.map((s) => s.description).join('\n')
+        || '(자동 추출된 문제)';
+
+      // 수식 포함 콘텐츠 구성
+      const mathExprs = result.originalMathExpressions || [];
+      const contentWithMath = mathExprs.length > 0
+        ? `${problemContent}\n\n수식:\n${mathExprs.map(m => `$${m}$`).join('\n')}`
+        : problemContent;
 
       // problems 테이블에 저장
       const { data: problem, error: problemError } = await supabase
@@ -381,13 +397,19 @@ async function saveProblemsToDB(
           institute_id: instituteId,
           created_by: createdBy,
           source_file_id: null,
-          content_latex: problemContent,
+          content_latex: contentWithMath,
           content_html: null,
-          solution_latex: result.solution.steps
-            .map((s) => `${s.stepNumber}. ${s.description}\n${s.latex}`)
-            .join('\n\n'),
+          solution_latex: result.solution.steps && result.solution.steps.length > 0
+            ? result.solution.steps
+                .map((s) => `${s.stepNumber}. ${s.description}\n${s.latex || ''}`)
+                .join('\n\n')
+            : result.solution.approach || '해설 자동 생성 실패',
           solution_html: null,
-          answer_json: { finalAnswer: result.solution.finalAnswer },
+          answer_json: {
+            finalAnswer: result.solution.finalAnswer || '',
+            type: 'short_answer',
+            correct_answer: result.solution.finalAnswer || '',
+          },
           images: [],
           status: 'PENDING_REVIEW',
           ai_analysis: {
@@ -417,7 +439,7 @@ async function saveProblemsToDB(
           cognitive_domain: result.classification.cognitiveDomain || 'CALCULATION',
           ai_confidence: result.classification.confidence || 0.5,
           is_verified: false,
-          classification_source: 'GPT-4o',
+          classification_source: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           estimated_time_minutes: result.estimatedTimeMinutes || 5,
           prerequisite_types: result.classification.prerequisites || [],
         });
