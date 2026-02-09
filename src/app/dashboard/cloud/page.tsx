@@ -206,6 +206,12 @@ export default function CloudPage() {
               <h2 className="text-sm font-semibold text-white">북그룹</h2>
               <button
                 type="button"
+                onClick={() => {
+                  const name = prompt('새 북그룹 이름을 입력하세요:');
+                  if (name) {
+                    setBookGroups(prev => [...prev, { id: `new-${Date.now()}`, name, isExpanded: false }]);
+                  }
+                }}
                 className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -249,12 +255,30 @@ export default function CloudPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => {
+                        const newName = prompt('북그룹 이름을 수정하세요:', selectedGroup?.name);
+                        if (newName && selectedGroup) {
+                          setBookGroups(prev => prev.map(g => g.id === selectedGroup.id ? { ...g, name: newName } : {
+                            ...g,
+                            children: g.children?.map(c => c.id === selectedGroup.id ? { ...c, name: newName } : c)
+                          }));
+                        }
+                      }}
                       className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700"
                     >
                       수정
                     </button>
                     <button
                       type="button"
+                      onClick={() => {
+                        if (selectedGroup && confirm(`'${selectedGroup.name}' 북그룹을 삭제하시겠습니까?`)) {
+                          setBookGroups(prev => prev.filter(g => g.id !== selectedGroup.id).map(g => ({
+                            ...g,
+                            children: g.children?.filter(c => c.id !== selectedGroup.id)
+                          })));
+                          setSelectedGroupId(null);
+                        }
+                      }}
                       className="rounded-lg border border-red-900/50 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-900/30"
                     >
                       삭제
@@ -264,13 +288,30 @@ export default function CloudPage() {
 
                 {/* Content Body */}
                 <div className="flex-1 overflow-auto p-6">
-                  <div className="rounded-xl bg-zinc-900 px-6 py-8 text-center border border-zinc-800">
-                    <p className="text-sm text-zinc-400">
-                      <strong>{selectedGroup.name}</strong> 북그룹이 선택되었습니다.
-                    </p>
-                    <p className="mt-2 text-xs text-zinc-500">
-                      이 북그룹에 포함된 시험지와 문제들을 관리할 수 있습니다.
-                    </p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-zinc-300">포함된 시험지</h3>
+                      <button
+                        onClick={() => alert('새 시험지를 추가합니다. (데모)')}
+                        className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400 hover:bg-cyan-500/20"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        시험지 추가
+                      </button>
+                    </div>
+                    {[
+                      { id: 'cp1', name: `${selectedGroup.name} - 기본문제`, count: 25, date: '2025-01-15' },
+                      { id: 'cp2', name: `${selectedGroup.name} - 심화문제`, count: 30, date: '2025-01-20' },
+                      { id: 'cp3', name: `${selectedGroup.name} - 모의고사`, count: 20, date: '2025-02-01' },
+                    ].map((paper) => (
+                      <div key={paper.id} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 p-4 hover:border-cyan-500/30 transition-colors cursor-pointer">
+                        <div>
+                          <p className="text-sm font-medium text-white">{paper.name}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{paper.date} · {paper.count}문항</p>
+                        </div>
+                        <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-400">{paper.count}문항</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </>

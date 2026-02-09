@@ -136,7 +136,7 @@ export default function TutorSettingsPage() {
                 <span>{profile.name.charAt(0) || 'T'}</span>
               )}
             </div>
-            <button className="avatar-edit">
+            <button className="avatar-edit" onClick={() => alert('프로필 사진 변경 기능입니다. (데모)')}>
               <Camera size={16} />
               사진 변경
             </button>
@@ -300,7 +300,7 @@ export default function TutorSettingsPage() {
             보안
           </h2>
 
-          <button className="security-btn">
+          <button className="security-btn" onClick={() => alert('비밀번호 변경 기능입니다. (데모)\n현재 비밀번호 → 새 비밀번호를 입력해주세요.')}>
             <Lock size={18} />
             비밀번호 변경
           </button>

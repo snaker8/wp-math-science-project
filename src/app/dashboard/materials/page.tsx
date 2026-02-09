@@ -40,7 +40,12 @@ interface ExamPaper {
 // Mock Data
 // ============================================================================
 
-const mockFolderGroups: FolderGroup[] = [];
+const mockFolderGroups: FolderGroup[] = [
+  { id: 'f1', name: '수학(상) 기본개념', grade: 'high1' },
+  { id: 'f2', name: '수학(하) 심화문제', grade: 'high1' },
+  { id: 'f3', name: '수학I 핵심유형', grade: 'high2' },
+  { id: 'f4', name: '수학II 기출변형', grade: 'high3' },
+];
 
 const mockAcademyMaterials: AcademyMaterial[] = [
   { id: '1', name: '중간고사 대비 세트', paperCount: 5, createdAt: '2025-02-01', type: 'academy' },
@@ -113,12 +118,19 @@ export default function MaterialsPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<AcademyMaterial | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Filter folder groups by grade
+  const filteredFolderGroups = mockFolderGroups.filter((f) =>
+    grade ? f.grade === grade : true
+  );
+
   // Filter materials by search query
   const filteredMaterials = mockAcademyMaterials.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const hasSelectedItems = selectedMaterial !== null;
+  const itemsPerPage = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredMaterials.length / itemsPerPage));
 
   return (
     <div className="px-6 py-2">
@@ -131,6 +143,11 @@ export default function MaterialsPage() {
           <div className="flex items-center gap-2">
             <button
               disabled={!hasSelectedItems}
+              onClick={() => {
+                if (selectedMaterial) {
+                  alert(`'${selectedMaterial.name}' 자료가 강좌에 추가되었습니다. (데모)`);
+                }
+              }}
               className={`
                 inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all
                 ${hasSelectedItems
@@ -178,9 +195,9 @@ export default function MaterialsPage() {
                   </div>
                 </div>
                 <div className="px-4 py-3">
-                  {mockFolderGroups.length > 0 ? (
+                  {filteredFolderGroups.length > 0 ? (
                     <div className="space-y-2">
-                      {mockFolderGroups.map((folder) => (
+                      {filteredFolderGroups.map((folder) => (
                         <div
                           key={folder.id}
                           onClick={() => setSelectedFolder(folder)}
@@ -277,8 +294,9 @@ export default function MaterialsPage() {
                         </li>
                         <li>
                           <button
-                            onClick={() => setCurrentPage((p) => p + 1)}
-                            className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-md text-zinc-400 hover:bg-zinc-800"
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={currentPage >= totalPages}
+                            className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-md text-zinc-400 hover:bg-zinc-800 disabled:opacity-50 disabled:pointer-events-none"
                           >
                             <span>Next</span>
                             <ChevronRight className="h-4 w-4" />

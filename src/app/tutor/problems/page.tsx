@@ -22,17 +22,21 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 interface Problem {
   id: string;
-  content: string;
+  content: string;           // 표시용 (content_latex에서 파생)
   content_latex: string | null;
   answer: string | null;
   solution: string | null;
+  solution_latex: string | null;
   difficulty: number;
   type_code: string | null;
   type_name: string | null;
   subject: string | null;
   chapter: string | null;
-  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED' | 'PENDING_REVIEW' | 'APPROVED';
   created_at: string;
+  ai_analysis: Record<string, unknown> | null;
+  source_name: string | null;
+  tags: string[] | null;
 }
 
 const DIFFICULTY_LABELS: Record<number, { label: string; color: string }> = {
@@ -45,6 +49,8 @@ const DIFFICULTY_LABELS: Record<number, { label: string; color: string }> = {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   DRAFT: { label: '임시저장', color: '#6b7280' },
+  PENDING_REVIEW: { label: '검토 대기', color: '#f59e0b' },
+  APPROVED: { label: '승인됨', color: '#3b82f6' },
   ACTIVE: { label: '활성', color: '#22c55e' },
   ARCHIVED: { label: '보관됨', color: '#9ca3af' },
 };
@@ -60,7 +66,7 @@ export default function TutorProblemsPage() {
 
   const subjects = ['전체', '수학I', '수학II', '미적분', '확률과 통계', '기하'];
   const difficulties = ['전체', '1', '2', '3', '4', '5'];
-  const statuses = ['전체', 'DRAFT', 'ACTIVE', 'ARCHIVED'];
+  const statuses = ['전체', 'DRAFT', 'PENDING_REVIEW', 'APPROVED', 'ACTIVE', 'ARCHIVED'];
 
   useEffect(() => {
     loadProblems();
@@ -76,6 +82,7 @@ export default function TutorProblemsPage() {
           content_latex: 'x^2 - 5x + 6 = 0',
           answer: 'x = 2 또는 x = 3',
           solution: '(x-2)(x-3) = 0을 이용',
+          solution_latex: null,
           difficulty: 2,
           type_code: 'MA-HS1-ALG-02-015',
           type_name: '이차방정식의 풀이 - 인수분해',
@@ -83,20 +90,9 @@ export default function TutorProblemsPage() {
           chapter: '방정식과 부등식',
           status: 'ACTIVE',
           created_at: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          content: '다음 극한값을 구하시오.',
-          content_latex: '\\lim_{x \\to 0} \\frac{\\sin x}{x}',
-          answer: '1',
-          solution: '삼각함수의 극한 기본 정리',
-          difficulty: 3,
-          type_code: 'MA-CAL-LIM-01-005',
-          type_name: '삼각함수의 극한',
-          subject: '미적분',
-          chapter: '함수의 극한',
-          status: 'ACTIVE',
-          created_at: new Date().toISOString(),
+          ai_analysis: null,
+          source_name: null,
+          tags: null,
         },
       ]);
       setLoading(false);
@@ -105,17 +101,77 @@ export default function TutorProblemsPage() {
 
     try {
       const { data: { user } } = await supabaseBrowser.auth.getUser();
-      if (!user) return;
 
-      const { data, error } = await supabaseBrowser
+      // problems 테이블과 classifications 테이블을 조인
+      let query = supabaseBrowser
         .from('problems')
-        .select('*')
-        .eq('created_by', user.id)
+        .select(`
+          id,
+          content_latex,
+          solution_latex,
+          answer_json,
+          status,
+          source_name,
+          ai_analysis,
+          tags,
+          created_at,
+          created_by,
+          classifications (
+            type_code,
+            difficulty,
+            cognitive_domain,
+            ai_confidence
+          )
+        `)
         .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      // 로그인한 사용자가 있으면 본인 문제 + created_by가 null인 문제 (업로드 시 익명으로 저장된 것)
+      // 로그인하지 않은 경우에도 모든 문제를 보여줌
+      if (user) {
+        query = query.or(`created_by.eq.${user.id},created_by.is.null`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
-      setProblems(data || []);
+
+      // DB 결과를 Problem 인터페이스에 맞게 변환
+      const mapped: Problem[] = (data || []).map((row: any) => {
+        const classification = row.classifications?.[0]; // 첫 번째 분류 사용
+        const aiAnalysis = row.ai_analysis as Record<string, any> | null;
+        const answerJson = row.answer_json as Record<string, any> | null;
+
+        // content_latex에서 표시용 content 추출
+        const contentLatex = row.content_latex || '';
+        const displayContent = contentLatex
+          .replace(/\$[^$]+\$/g, '[수식]')  // 인라인 수식 → [수식]
+          .replace(/\\[a-zA-Z]+/g, '')       // LaTeX 명령어 제거
+          .replace(/[{}]/g, '')              // 중괄호 제거
+          .trim() || contentLatex.substring(0, 200);
+
+        return {
+          id: row.id,
+          content: displayContent,
+          content_latex: contentLatex,
+          answer: answerJson?.finalAnswer || answerJson?.correct_answer || null,
+          solution: row.solution_latex?.substring(0, 200) || null,
+          solution_latex: row.solution_latex,
+          difficulty: classification?.difficulty ? parseInt(classification.difficulty) : (aiAnalysis?.classification?.difficulty || 3),
+          type_code: classification?.type_code || aiAnalysis?.classification?.typeCode || null,
+          type_name: aiAnalysis?.classification?.typeName || null,
+          subject: aiAnalysis?.classification?.subject || null,
+          chapter: aiAnalysis?.classification?.chapter || null,
+          status: row.status || 'PENDING_REVIEW',
+          created_at: row.created_at,
+          ai_analysis: aiAnalysis,
+          source_name: row.source_name,
+          tags: row.tags,
+        };
+      });
+
+      setProblems(mapped);
     } catch (error) {
       console.error('Failed to load problems:', error);
     } finally {
@@ -268,9 +324,9 @@ export default function TutorProblemsPage() {
                   )}
                   <span
                     className="status-badge"
-                    style={{ background: STATUS_LABELS[problem.status].color }}
+                    style={{ background: STATUS_LABELS[problem.status]?.color || '#6b7280' }}
                   >
-                    {STATUS_LABELS[problem.status].label}
+                    {STATUS_LABELS[problem.status]?.label || problem.status}
                   </span>
                   <span
                     className="difficulty-badge"
@@ -280,10 +336,10 @@ export default function TutorProblemsPage() {
                   </span>
                 </div>
                 <div className="problem-actions">
-                  <button className="action-btn" title="미리보기">
+                  <button className="action-btn" title="미리보기" onClick={() => alert(`문제 미리보기:\n\n${problem.content}\n\n${problem.content_latex ? `LaTeX: ${problem.content_latex}` : ''}`)}>
                     <Eye size={16} />
                   </button>
-                  <button className="action-btn" title="수정">
+                  <button className="action-btn" title="수정" onClick={() => alert(`문제 수정 화면으로 이동합니다. (데모)\n문제 ID: ${problem.id}`)}>
                     <Edit size={16} />
                   </button>
                   <button

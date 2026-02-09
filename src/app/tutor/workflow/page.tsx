@@ -136,6 +136,7 @@ export default function TutorWorkflowPage() {
       setHeatmapData(null);
       setWrongProblems([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStudentId]);
 
   // 채점 이벤트 구독 (히트맵 실시간 업데이트)

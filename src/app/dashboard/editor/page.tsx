@@ -207,10 +207,10 @@ export default function ProblemEditorPage() {
                         Last saved 2 mins ago
                     </div>
                     <div className="flex items-center gap-3">
-                        <button className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-colors">
+                        <button onClick={() => setShowPreview(true)} className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-colors">
                             Preview
                         </button>
-                        <button className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all flex items-center gap-2">
+                        <button onClick={() => alert('문제가 저장소에 저장되었습니다.')} className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all flex items-center gap-2">
                             <Save className="w-3.5 h-3.5" />
                             Save to Repository
                         </button>
@@ -279,7 +279,7 @@ export default function ProblemEditorPage() {
                                         <Sparkles className="w-4 h-4 text-emerald-400" />
                                         AI Twin Generator
                                     </h3>
-                                    <button className="p-1.5 rounded-md hover:bg-white/5 text-zinc-500 hover:text-emerald-400">
+                                    <button onClick={() => alert('AI 유사문제를 재생성합니다.')} className="p-1.5 rounded-md hover:bg-white/5 text-zinc-500 hover:text-emerald-400">
                                         <RefreshCw className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
@@ -308,7 +308,7 @@ export default function ProblemEditorPage() {
                                     ))}
                                 </div>
 
-                                <button className="w-full py-2.5 rounded-lg border border-dashed border-zinc-700 text-zinc-500 text-xs font-medium hover:border-indigo-500/30 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all">
+                                <button onClick={() => alert('추가 유사문제가 생성되었습니다.')} className="w-full py-2.5 rounded-lg border border-dashed border-zinc-700 text-zinc-500 text-xs font-medium hover:border-indigo-500/30 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all">
                                     + Generate More
                                 </button>
                             </div>

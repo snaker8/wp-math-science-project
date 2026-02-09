@@ -317,15 +317,24 @@ export default function TutorStudentsPage() {
             <h2>학생 초대</h2>
             <p>학생의 이메일 주소를 입력하여 반에 초대하세요</p>
 
-            <form onSubmit={(e) => { e.preventDefault(); setShowInviteModal(false); }}>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const email = (form.elements.namedItem('inviteEmail') as HTMLInputElement)?.value;
+              const className = (form.elements.namedItem('inviteClass') as HTMLSelectElement)?.value;
+              if (email && className) {
+                alert(`${email}으로 '${className}' 반 초대가 전송되었습니다. (데모)`);
+              }
+              setShowInviteModal(false);
+            }}>
               <div className="form-group">
                 <label>이메일 주소</label>
-                <input type="email" placeholder="student@example.com" required />
+                <input name="inviteEmail" type="email" placeholder="student@example.com" required />
               </div>
 
               <div className="form-group">
                 <label>반 선택</label>
-                <select defaultValue="">
+                <select name="inviteClass" defaultValue="">
                   <option value="" disabled>반을 선택하세요</option>
                   {classNames.filter(c => c !== '전체').map((c) => (
                     <option key={c} value={c as string}>{c}</option>

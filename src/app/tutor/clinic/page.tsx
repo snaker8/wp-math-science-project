@@ -53,7 +53,16 @@ export default function ClinicCreationPage() {
 
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-400">선택된 문제: <strong className="text-indigo-400">{selectedProblems.length}</strong>개</span>
-          <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all">
+          <button
+            onClick={() => {
+              if (selectedProblems.length === 0) {
+                alert('문제를 하나 이상 선택해주세요.');
+              } else {
+                alert(`${selectedProblems.length}개의 문제로 클리닉 시험지가 생성되었습니다. (데모)`);
+              }
+            }}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all"
+          >
             <Printer size={18} />
             클리닉 시험지 생성
           </button>
@@ -76,7 +85,10 @@ export default function ClinicCreationPage() {
             </div>
             <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center text-sm">
               <span className="text-gray-500">정답률: 45%</span>
-              <button className="text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
+              <button
+                onClick={() => alert('해설: 이차방정식 ax²+bx+c=0이 중근을 가지려면 판별식 D=b²-4ac=0이어야 합니다.\n(-4)²-4(1)(k)=0 → 16-4k=0 → k=4')}
+                className="text-gray-400 hover:text-white flex items-center gap-1 transition-colors"
+              >
                 <RefreshCw size={14} /> 해설 보기
               </button>
             </div>
@@ -120,7 +132,10 @@ export default function ClinicCreationPage() {
               </motion.div>
             ))}
 
-            <button className="w-full py-4 rounded-2xl border border-dashed border-white/20 text-gray-500 hover:text-white hover:border-white/40 transition-colors flex items-center justify-center gap-2">
+            <button
+              onClick={() => alert('추가 유사 문제를 불러옵니다. (데모)')}
+              className="w-full py-4 rounded-2xl border border-dashed border-white/20 text-gray-500 hover:text-white hover:border-white/40 transition-colors flex items-center justify-center gap-2"
+            >
               <Plus size={20} />
               더 많은 유사 문제 불러오기
             </button>

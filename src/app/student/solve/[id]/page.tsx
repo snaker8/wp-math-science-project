@@ -89,7 +89,22 @@ export default function SolvePage() {
                             <Lightbulb size={20} className={showHint ? "text-amber-500 fill-amber-500" : ""} />
                             {showHint ? "힌트 닫기" : "힌트 보기"}
                         </button>
-                        <button className="flex-[2] bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30">
+                        <button
+                            onClick={() => {
+                                if (!answer.trim()) {
+                                    alert('정답을 입력해주세요.');
+                                    return;
+                                }
+                                const correctAnswer = '2√21';
+                                const isCorrect = answer.trim() === correctAnswer || answer.trim() === '2루트21' || answer.trim() === '2root21';
+                                if (isCorrect) {
+                                    alert('🎉 정답입니다! 잘했어요!\n\n코사인 법칙을 정확히 적용했습니다.');
+                                } else {
+                                    alert(`❌ 오답입니다.\n\n입력한 답: ${answer}\n정답: ${correctAnswer}\n\n코사인 법칙: c² = a² + b² - 2ab·cosC\n= 64 + 100 - 2(8)(10)(1/2)\n= 164 - 80 = 84\nc = √84 = 2√21`);
+                                }
+                            }}
+                            className="flex-[2] bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30"
+                        >
                             제출하기
                         </button>
                     </div>

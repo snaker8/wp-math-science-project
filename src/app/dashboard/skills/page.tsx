@@ -90,19 +90,36 @@ const mockSkills: Skill[] = [
 const subjects = ['선택', '수학', '영어', '국어', '과학'];
 
 const difficultyLevels: DifficultyCount[] = [
-  { level: '최상', color: '#bb0808', count: 0 },
-  { level: '상', color: '#fc1f1f', count: 0 },
-  { level: '중', color: '#f58c3d', count: 0 },
-  { level: '하', color: '#198cf8', count: 0 },
-  { level: '최하', color: '#2e2d2d', count: 0 },
+  { level: '최상', color: '#bb0808', count: 3 },
+  { level: '상', color: '#fc1f1f', count: 5 },
+  { level: '중', color: '#f58c3d', count: 8 },
+  { level: '하', color: '#198cf8', count: 7 },
+  { level: '최하', color: '#2e2d2d', count: 2 },
 ];
 
 const cognitiveTypes: CognitiveCount[] = [
-  { type: '계산', color: '#bb0808', count: 0 },
-  { type: '이해', color: '#fc1f1f', count: 0 },
-  { type: '추론', color: '#f58c3d', count: 0 },
-  { type: '해결', color: '#198cf8', count: 0 },
-  { type: '미지정', color: '#2e2d2d', count: 0 },
+  { type: '계산', color: '#bb0808', count: 6 },
+  { type: '이해', color: '#fc1f1f', count: 5 },
+  { type: '추론', color: '#f58c3d', count: 7 },
+  { type: '해결', color: '#198cf8', count: 4 },
+  { type: '미지정', color: '#2e2d2d', count: 3 },
+];
+
+interface MockProblem {
+  id: string;
+  number: number;
+  content: string;
+  difficulty: string;
+  difficultyColor: string;
+  cognitive: string;
+}
+
+const mockProblems: MockProblem[] = [
+  { id: 'p1', number: 1, content: '24와 36의 최대공약수를 구하시오.', difficulty: '하', difficultyColor: '#198cf8', cognitive: '계산' },
+  { id: 'p2', number: 2, content: '세 수 12, 18, 30의 최소공배수를 구하시오.', difficulty: '중', difficultyColor: '#f58c3d', cognitive: '이해' },
+  { id: 'p3', number: 3, content: '두 자연수의 곱이 360이고 최대공약수가 6일 때, 최소공배수를 구하시오.', difficulty: '상', difficultyColor: '#fc1f1f', cognitive: '추론' },
+  { id: 'p4', number: 4, content: '어떤 자연수로 52를 나누면 4가 남고, 78을 나누면 6이 남는다. 이러한 자연수 중 가장 큰 수를 구하시오.', difficulty: '최상', difficultyColor: '#bb0808', cognitive: '해결' },
+  { id: 'p5', number: 5, content: '1부터 100까지의 자연수 중 6의 배수의 개수를 구하시오.', difficulty: '하', difficultyColor: '#198cf8', cognitive: '계산' },
 ];
 
 // ============================================================================
@@ -386,6 +403,7 @@ export default function SkillsPage() {
                   <button
                     type="button"
                     disabled={!selectedSkill}
+                    onClick={() => alert('펼쳐보기 모드로 전환합니다. (데모)')}
                     className="flex h-9 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                   >
                     <LayoutGrid className="h-4 w-4" />
@@ -395,6 +413,7 @@ export default function SkillsPage() {
                     <button
                       type="button"
                       disabled={!selectedSkill}
+                      onClick={() => alert('시험지를 출력합니다. (데모)')}
                       className="flex h-9 items-center justify-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                     >
                       <ScrollText className="h-4 w-4 text-zinc-400" />
@@ -403,6 +422,7 @@ export default function SkillsPage() {
                     <button
                       type="button"
                       disabled={!selectedSkill}
+                      onClick={() => alert('빠른정답을 출력합니다. (데모)')}
                       className="flex h-9 items-center justify-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                     >
                       <CheckSquare className="h-4 w-4 text-zinc-400" />
@@ -411,6 +431,7 @@ export default function SkillsPage() {
                     <button
                       type="button"
                       disabled={!selectedSkill}
+                      onClick={() => alert('해설지를 출력합니다. (데모)')}
                       className="flex h-9 items-center justify-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
                     >
                       <BookOpenCheck className="h-4 w-4 text-zinc-400" />
@@ -439,7 +460,7 @@ export default function SkillsPage() {
                           <div className="flex items-center space-x-2 text-sm text-zinc-400">
                             <div className="flex flex-wrap items-center gap-3">
                               <span className="mx-1 flex cursor-pointer items-center rounded-md border border-zinc-600 bg-zinc-700 px-2 py-0 font-bold text-gray-100 hover:bg-zinc-600">
-                                0<span className="pl-1 text-sm"> 문제 </span>
+                                {selectedSkill ? mockProblems.length : 0}<span className="pl-1 text-sm"> 문제 </span>
                               </span>
                               <div className="flex flex-wrap items-center gap-3">
                                 {/* Difficulty Badges */}
@@ -483,10 +504,23 @@ export default function SkillsPage() {
                     {/* Problem List */}
                     <div className="m-auto w-full flex-1 p-1">
                       {selectedSkill ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-center">
-                          <p className="text-sm text-zinc-500">
-                            선택된 유형의 문제가 여기에 표시됩니다.
-                          </p>
+                        <div className="space-y-2 py-2">
+                          {mockProblems.map((problem) => (
+                            <div key={problem.id} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 hover:border-purple-500/30 transition-colors">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-300">
+                                {problem.number}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-zinc-300">{problem.content}</p>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <span className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: problem.difficultyColor, color: problem.difficultyColor }}>
+                                    {problem.difficulty}
+                                  </span>
+                                  <span className="text-xs text-zinc-500">{problem.cognitive}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
