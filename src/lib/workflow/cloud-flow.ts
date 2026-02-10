@@ -575,11 +575,37 @@ function getMockLLMResponse(): string {
 /**
  * GPT 응답의 JSON 문자열에서 잘못된 이스케이프 시퀀스를 정리
  * LaTeX 수식에 \sin, \frac 등이 포함되면 JSON 파서가 \s, \f 를 제어 문자로 해석하여 실패함
+ *
+ * 전략: JSON 문자열 값 내부만 처리하여 구조적 이스케이프(\", \\)를 보존
  */
 function sanitizeJsonString(raw: string): string {
-  // JSON 유효 이스케이프: \" \\ \/ \b \f \n \r \t \uXXXX
-  // 그 외 \로 시작하는 것들을 \\로 변환 (LaTeX 수식 보존)
-  return raw.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+  // 1단계: 먼저 그냥 파싱 시도 — 이미 올바른 JSON이면 건드리지 않음
+  try {
+    JSON.parse(raw);
+    return raw;
+  } catch {
+    // 파싱 실패 시 아래 정리 로직 수행
+  }
+
+  // 2단계: JSON 문자열 리터럴 내부에서만 잘못된 이스케이프 수정
+  // JSON 문자열: "..." 내부를 찾아서, 그 안의 백슬래시 처리
+  // 정규식: 따옴표로 감싼 문자열 매칭 (이스케이프된 따옴표 포함)
+  const result = raw.replace(/"(?:[^"\\]|\\.)*"/g, (match) => {
+    // 문자열 리터럴 내부에서 잘못된 이스케이프만 수정
+    // 이미 이스케이프된 \\ 는 건드리지 않음
+    // \" \/ \b \f \n \r \t \uXXXX 도 건드리지 않음
+    // 그 외 \X → \\X 로 변환
+    return match.replace(/\\(\\)|\\(["\\/bfnrtu])|\\([^"\\/bfnrtu\\])/g,
+      (m, escaped, valid, invalid) => {
+        if (escaped) return '\\\\';  // 이미 \\인 것 보존
+        if (valid) return m;          // 유효 이스케이프 보존
+        if (invalid) return '\\\\' + invalid; // 잘못된 이스케이프 수정
+        return m;
+      }
+    );
+  });
+
+  return result;
 }
 
 /**
@@ -645,7 +671,27 @@ function parseAnalysisResponse(response: string): LLMAnalysisResult {
     // GPT 응답에서 잘못된 이스케이프 문자 정리 (LaTeX \sin, \frac 등)
     jsonStr = sanitizeJsonString(jsonStr);
 
-    const parsed = JSON.parse(jsonStr);
+    let parsed: Record<string, any>;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (firstError) {
+      // 2차 시도: 모든 단일 백슬래시를 이중 백슬래시로 변환 (aggressive)
+      console.warn('[Cloud Flow] First JSON parse failed, trying aggressive sanitization');
+      const aggressiveSanitized = jsonStr.replace(/\\/g, '\\\\');
+      try {
+        parsed = JSON.parse(aggressiveSanitized);
+      } catch {
+        // 3차 시도: 백슬래시를 모두 제거하고 파싱
+        console.warn('[Cloud Flow] Aggressive sanitization failed, trying backslash removal');
+        const noBackslash = jsonStr.replace(/\\/g, '');
+        try {
+          parsed = JSON.parse(noBackslash);
+        } catch {
+          // 최종 실패 — 원래 에러를 throw
+          throw firstError;
+        }
+      }
+    }
 
     // GPT 응답 구조를 유연하게 추출
     const cls = extractClassification(parsed);
@@ -838,12 +884,15 @@ export async function processUploadJob(
       analysis.originalText = question.text;
       analysis.originalMathExpressions = question.mathExpressions;
 
-      // Step 5: 해설이 없으면 생성
-      if (!analysis.solution.steps || analysis.solution.steps.length === 0) {
+      // Step 5: 해설이 없으면 생성 (generateSolutions 옵션이 true인 경우에만)
+      const shouldGenerateSolutions = job.generateSolutions !== false; // 기본값 true
+      if (shouldGenerateSolutions && (!analysis.solution.steps || analysis.solution.steps.length === 0)) {
         callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - AI 해설 생성 중...`);
         await new Promise(resolve => setTimeout(resolve, 5000)); // Rate limit 방지 대기
         const solutionResult = await generateStepByStepSolution(question.text, question.mathExpressions);
         analysis.solution = solutionResult;
+      } else if (!shouldGenerateSolutions) {
+        console.log(`[Cloud Flow] Skipping solution generation for problem ${i + 1} (generateSolutions=false)`);
       }
 
       results.push(analysis);
@@ -895,7 +944,17 @@ async function generateStepByStepSolution(
       jsonStr = response.split('```')[1].split('```')[0].trim();
     }
     jsonStr = sanitizeJsonString(jsonStr);
-    return JSON.parse(jsonStr);
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      // 폴백: aggressive 백슬래시 처리
+      const aggressiveSanitized = jsonStr.replace(/\\/g, '\\\\');
+      try {
+        return JSON.parse(aggressiveSanitized);
+      } catch {
+        return JSON.parse(jsonStr.replace(/\\/g, ''));
+      }
+    }
   } catch {
     return {
       approach: '자동 생성 실패',

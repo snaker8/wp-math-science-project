@@ -391,7 +391,7 @@ export function generateClinicPdfHtml(examData: ClinicExamData): string {
         ${problemsHtml}
 
         <footer class="footer">
-          수작(Suzag) 완전학습 시스템 | 클리닉 시험지
+          과사람 완전학습 시스템 | 클리닉 시험지
         </footer>
       </div>
     </body>

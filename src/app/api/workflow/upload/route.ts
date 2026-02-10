@@ -71,10 +71,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Job 생성
+    // Job 생성 (userId는 인증된 사용자 ID 우선 사용)
+    const effectiveUserId = userId !== 'anonymous' ? userId : (formUserId || 'anonymous');
+
     const job: UploadJob = {
       id: crypto.randomUUID(),
-      userId: formUserId || userId || 'anonymous',
+      userId: effectiveUserId,
       instituteId: instituteId || 'default',
       fileName: file.name,
       fileSize: file.size,
@@ -84,6 +86,8 @@ export async function POST(request: NextRequest) {
       status: 'PENDING',
       progress: 0,
       currentStep: '대기 중',
+      autoClassify,
+      generateSolutions,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -314,7 +318,6 @@ async function saveProblemsToDB(
   results: LLMAnalysisResult[]
 ): Promise<void> {
   // Use Admin Client to bypass RLS for background processing
-  // (createSupabaseServerClient is tied to the request context, which might not be valid here or lack permissions)
   const supabase = supabaseAdmin;
 
   if (!supabase) {
@@ -331,42 +334,148 @@ async function saveProblemsToDB(
     return uuidRegex.test(str);
   };
 
-  // institute_id와 created_by 검증 (null 허용)
-  const instituteId = isValidUUID(job.instituteId) ? job.instituteId : null;
   const createdBy = isValidUUID(job.userId) ? job.userId : null;
+
+  // 사용자의 institute_id 조회 (users 테이블에서)
+  let instituteId: string | null = isValidUUID(job.instituteId) ? job.instituteId : null;
+
+  if (!instituteId && createdBy) {
+    try {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('institute_id')
+        .eq('id', createdBy)
+        .single();
+
+      if (userData?.institute_id) {
+        instituteId = userData.institute_id;
+        console.log(`[DB] Found user's institute_id: ${instituteId}`);
+      }
+    } catch (e) {
+      console.log('[DB] Could not fetch user institute_id:', e);
+    }
+  }
+
+  // institute_id가 없으면 기본 학원 생성 또는 조회
+  if (!instituteId) {
+    try {
+      // 기존 기본 학원 찾기
+      const { data: defaultInst } = await supabase
+        .from('institutes')
+        .select('id')
+        .eq('name', '개인 사용자')
+        .limit(1)
+        .single();
+
+      if (defaultInst) {
+        instituteId = defaultInst.id;
+        console.log(`[DB] Using existing default institute: ${instituteId}`);
+      } else {
+        // 기본 학원 생성
+        const { data: newInst, error: instError } = await supabase
+          .from('institutes')
+          .insert({
+            name: '개인 사용자',
+          })
+          .select('id')
+          .single();
+
+        if (newInst) {
+          instituteId = newInst.id;
+          console.log(`[DB] Created default institute: ${instituteId}`);
+
+          // 사용자와 학원 연결
+          if (createdBy) {
+            await supabase
+              .from('users')
+              .update({ institute_id: instituteId })
+              .eq('id', createdBy);
+            console.log(`[DB] Linked user ${createdBy} to institute ${instituteId}`);
+          }
+        } else {
+          console.error('[DB] Failed to create default institute:', instError?.message);
+        }
+      }
+    } catch (e) {
+      console.log('[DB] Institute lookup/create error:', e);
+    }
+  }
 
   console.log(`[DB] Saving ${results.length} problems for job ${jobId}`);
   console.log(`[DB] instituteId: ${instituteId}, createdBy: ${createdBy}`);
 
   // 1. Exam 레코드 생성 (Repository 노출용)
+  // 003_exams.sql 마이그레이션 스키마 기준 컬럼만 사용
   let examId: string | null = null;
   try {
-    // 첫 번째 문제의 분류 정보를 사용하여 시험지 메타데이터 설정
     const firstResult = results[0];
     const classification = firstResult?.classification;
 
-    const { data: exam, error: examError } = await supabase
+    const examInsertData: Record<string, any> = {
+      title: job.fileName.replace(/\.[^/.]+$/, ""),
+      description: `업로드된 파일: ${job.fileName} (${results.length}문항)`,
+      status: 'COMPLETED',
+      created_by: createdBy,
+      institute_id: instituteId,
+      grade: '미분류',
+      subject: classification?.subject || '수학',
+      unit: classification?.chapter || '미분류',
+      difficulty: 'Lv.3',
+      problem_count: results.length,
+      total_points: results.length * 4,
+      time_limit_minutes: 50,
+    };
+
+    console.log(`[DB] Inserting exam with data:`, JSON.stringify(examInsertData, null, 2));
+
+    let examResult = await supabase
       .from('exams')
-      .insert({
-        title: job.fileName.replace(/\.[^/.]+$/, ""), // 확장자 제거
-        description: `업로드된 파일: ${job.fileName}`,
-        // grade: '미분류', // Removed: column does not exist
-        subject: classification?.subject || '수학',
-        unit: classification?.chapter || '미분류',
-        // difficulty: 'Lv.3', // Removed: column does not exist
-        // problem_count: results.length, // Removed: column does not exist
-        // total_points: results.length * 4, // Removed: column does not exist
-        time_limit_minutes: 50,
-        status: 'COMPLETED', // 업로드 완료됨
-        created_by: createdBy, // user_id
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(examInsertData)
       .select('id')
       .single();
 
+    // 컬럼 에러 시 (PostgREST 스키마 캐시 문제) 최소 컬럼만으로 재시도
+    if (examResult.error && examResult.error.message.includes('column')) {
+      console.warn(`[DB] Retrying exam insert with minimal columns: ${examResult.error.message}`);
+      examResult = await supabase
+        .from('exams')
+        .insert({
+          title: examInsertData.title,
+          description: examInsertData.description,
+          status: examInsertData.status,
+          created_by: createdBy,
+          institute_id: instituteId,
+        })
+        .select('id')
+        .single();
+    }
+
+    const { data: exam, error: examError } = examResult;
+
     if (examError) {
       console.error('[DB] Failed to create exam record:', examError.message);
+      // institute_id NOT NULL 에러 시 institute_id 없이 한번 더 시도 (003_exams.sql은 nullable)
+      if (examError.message.includes('institute_id') || examError.message.includes('not-null')) {
+        console.warn('[DB] Retrying without institute_id (nullable in migration)...');
+        const retryResult = await supabase
+          .from('exams')
+          .insert({
+            title: examInsertData.title,
+            description: examInsertData.description,
+            status: examInsertData.status,
+            created_by: createdBy,
+            problem_count: results.length,
+          })
+          .select('id')
+          .single();
+
+        if (retryResult.data) {
+          examId = retryResult.data.id;
+          console.log(`[DB] Created exam record (no institute): ${examId}`);
+        } else {
+          console.error('[DB] Final retry also failed:', retryResult.error?.message);
+        }
+      }
     } else {
       examId = exam.id;
       console.log(`[DB] Created exam record: ${examId}`);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, User, Lock, Loader2, AlertCircle } from 'lucide-react';
@@ -197,10 +198,18 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center space-y-2">
+        <div className="mt-6 text-center space-y-3">
           <a href="#" className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors block">
             계정을 잊으셨나요?
           </a>
+          <div className="pt-4 border-t border-white/10">
+            <p className="text-sm text-zinc-500">
+              아직 계정이 없으신가요?{' '}
+              <Link href="/auth/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+                회원가입
+              </Link>
+            </p>
+          </div>
           {!isSupabaseConfigured && (
             <p className="text-xs text-amber-500/70">
               ⚠️ Demo 모드 - Supabase 미연결

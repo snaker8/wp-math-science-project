@@ -88,9 +88,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, onToggle }) => {
         {!isCollapsed && (
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-lg shadow-primary-500/30">
-              <span className="text-white text-sm font-bold">수</span>
+              <span className="text-white text-sm font-bold">과</span>
             </div>
-            <span className="font-bold text-lg text-white tracking-tight">수작</span>
+            <span className="font-bold text-lg text-white tracking-tight">과사람</span>
           </Link>
         )}
         <button
@@ -125,7 +125,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, onToggle }) => {
               <span className="text-xs font-medium text-gray-400">현재 플랜</span>
               <span className="text-xs font-bold text-primary-400">Pro</span>
             </div>
-            <p className="font-semibold text-sm text-white mb-3">수작 완전학습</p>
+            <p className="font-semibold text-sm text-white mb-3">과사람 완전학습</p>
             <div className="text-xs text-gray-500">
               3,569개 유형 · 무제한 문제
             </div>

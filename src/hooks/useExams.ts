@@ -95,40 +95,61 @@ function transformExamToExamPaper(exam: Exam): ExamPaper {
 }
 
 export function useExams() {
-    const [exams, setExams] = useState<ExamPaper[]>(mockExamPapers);
+    const [exams, setExams] = useState<ExamPaper[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const fetchExams = useCallback(async () => {
         if (!isSupabaseConfigured || !supabaseBrowser) {
             console.log('[Exams] Supabase not configured, using mock data');
+            setExams(mockExamPapers);
             setIsLoading(false);
             return;
         }
 
         try {
             const { data: { user } } = await supabaseBrowser.auth.getUser();
+
             if (!user) {
+                console.log('[Exams] No authenticated user, showing empty');
+                setExams([]);
                 setIsLoading(false);
                 return;
             }
 
+            // RLS가 자동으로 필터링하므로, 모든 접근 가능한 시험지를 조회
+            // 003_exams.sql RLS: created_by = auth.uid()
+            // schema.sql RLS: institute_id = user's institute_id
             const { data, error: fetchError } = await supabaseBrowser
                 .from('exams')
-                .select('*')
-                .eq('created_by', user.id)
+                .select('*, exam_problems(count)')
                 .is('deleted_at', null)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(100);
 
-            if (fetchError) throw fetchError;
+            if (fetchError) {
+                console.error('[Exams] Fetch error:', fetchError.message);
+                // RLS 에러 등으로 실패 시 빈 배열
+                setExams([]);
+                setError(fetchError.message);
+                setIsLoading(false);
+                return;
+            }
 
-            if (data) {
-                setExams(data.map(transformExamToExamPaper));
+            if (data && data.length > 0) {
+                setExams(data.map((exam: any) => {
+                    // exam_problems의 실제 카운트를 사용 (DB problem_count보다 정확)
+                    const actualCount = exam.exam_problems?.[0]?.count ?? exam.problem_count;
+                    return transformExamToExamPaper({
+                        ...exam,
+                        problem_count: actualCount,
+                    });
+                }));
             } else {
                 setExams([]);
             }
 
-            console.log('[Exams] Loaded', data?.length || 0, 'exams');
+            console.log('[Exams] Loaded', data?.length || 0, 'exams from DB');
 
         } catch (err) {
             console.error('[Exams] Failed to fetch:', err);
@@ -227,6 +248,87 @@ export function useExams() {
         }
     };
 
+    const duplicateExam = async (examId: string, newTitle: string): Promise<string | null> => {
+        if (!isSupabaseConfigured || !supabaseBrowser) {
+            console.log('[Exams] Mock mode - exam not duplicated');
+            // Mock: 간단히 복제
+            const source = exams.find((e) => e.id === examId);
+            if (source) {
+                const newExam: ExamPaper = {
+                    ...source,
+                    id: `mock-${Date.now()}`,
+                    title: newTitle,
+                    status: 'draft',
+                    createdAt: new Date().toLocaleDateString('ko-KR', {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                    }).replace(/\. /g, '.').replace('.', ''),
+                };
+                setExams((prev) => [newExam, ...prev]);
+            }
+            return null;
+        }
+
+        try {
+            const { data: { user } } = await supabaseBrowser.auth.getUser();
+            if (!user) return null;
+
+            // 1. 원본 시험지 정보 가져오기
+            const { data: sourceExam, error: sourceError } = await supabaseBrowser
+                .from('exams')
+                .select('*')
+                .eq('id', examId)
+                .single();
+
+            if (sourceError || !sourceExam) throw sourceError || new Error('Source exam not found');
+
+            // 2. 새 시험지 생성
+            const { data: newExam, error: createError } = await supabaseBrowser
+                .from('exams')
+                .insert({
+                    title: newTitle,
+                    description: sourceExam.description,
+                    grade: sourceExam.grade,
+                    subject: sourceExam.subject,
+                    unit: sourceExam.unit,
+                    status: 'DRAFT',
+                    difficulty: sourceExam.difficulty,
+                    problem_count: sourceExam.problem_count,
+                    total_points: sourceExam.total_points,
+                    time_limit_minutes: sourceExam.time_limit_minutes,
+                    created_by: user.id,
+                })
+                .select('id')
+                .single();
+
+            if (createError || !newExam) throw createError || new Error('Failed to create exam copy');
+
+            // 3. 원본 시험지의 문제 연결 복사
+            const { data: sourceProblems } = await supabaseBrowser
+                .from('exam_problems')
+                .select('problem_id, order_index, points')
+                .eq('exam_id', examId)
+                .order('order_index', { ascending: true });
+
+            if (sourceProblems && sourceProblems.length > 0) {
+                const newProblems = sourceProblems.map((p: any) => ({
+                    exam_id: newExam.id,
+                    problem_id: p.problem_id,
+                    order_index: p.order_index,
+                    points: p.points,
+                }));
+
+                await supabaseBrowser.from('exam_problems').insert(newProblems);
+            }
+
+            await fetchExams();
+            return newExam.id;
+
+        } catch (err) {
+            console.error('[Exams] Failed to duplicate:', err);
+            return null;
+        }
+    };
+
     return {
         exams,
         isLoading,
@@ -235,5 +337,6 @@ export function useExams() {
         createExam,
         deleteExam,
         updateExamStatus,
+        duplicateExam,
     };
 }

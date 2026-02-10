@@ -1,5 +1,5 @@
 // ============================================================================
-// Workflow Types - 수작(Suzag) 완전학습 사이클 타입 정의
+// Workflow Types - 과사람 완전학습 사이클 타입 정의
 // ============================================================================
 
 // ============================================================================
@@ -28,6 +28,8 @@ export interface UploadJob {
   status: ProcessingStatus;
   progress: number; // 0-100
   currentStep: string;
+  autoClassify?: boolean;
+  generateSolutions?: boolean;
   error?: string;
   createdAt: string;
   updatedAt: string;

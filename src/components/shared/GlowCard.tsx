@@ -12,9 +12,10 @@ function cn(...inputs: ClassValue[]) {
 interface GlowCardProps {
     children: ReactNode;
     className?: string;
+    onClick?: () => void;
 }
 
-export function GlowCard({ children, className }: GlowCardProps) {
+export function GlowCard({ children, className, onClick }: GlowCardProps) {
     const mouseX = useMotionValue(0);
     const mouseY = useMotionValue(0);
 
@@ -31,6 +32,7 @@ export function GlowCard({ children, className }: GlowCardProps) {
                 className
             )}
             onMouseMove={handleMouseMove}
+            onClick={onClick}
         >
             <motion.div
                 className="pointer-events-none absolute -inset-px rounded-xl opacity-0 transition duration-300 group-hover:opacity-100"

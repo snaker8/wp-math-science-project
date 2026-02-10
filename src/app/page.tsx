@@ -49,15 +49,15 @@ function Hero() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/auth/login" className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-full bg-indigo-600 px-8 font-medium text-white transition-all duration-300 hover:bg-indigo-500 hover:scale-105 active:scale-95">
+            <Link href="/auth/signup" className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-full bg-indigo-600 px-8 font-medium text-white transition-all duration-300 hover:bg-indigo-500 hover:scale-105 active:scale-95">
               <div className="absolute inset-0 flex items-center justify-center [transform:skew(-12deg)_translateX(-100%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(100%)]">
                 <div className="relative h-full w-8 bg-white/20" />
               </div>
-              <span>Join Beta Waitlist</span>
+              <span>무료로 시작하기</span>
               <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-            <Link href="/dashboard" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
-              View Dashboard Demo
+            <Link href="/auth/login" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
+              이미 계정이 있으신가요?
             </Link>
           </div>
         </motion.div>
@@ -229,8 +229,8 @@ export default function Home() {
         <div className="max-w-6xl w-full mx-auto flex justify-between items-center">
           <div className="font-bold text-lg tracking-tight">With-People</div>
           <div className="flex gap-6 text-sm font-medium text-gray-300">
-            <Link href="/auth/login" className="hover:text-white transition-colors">Login</Link>
-            <Link href="/auth/signup" className="text-indigo-400 hover:text-indigo-300 transition-colors">Sign up</Link>
+            <Link href="/auth/login" className="hover:text-white transition-colors">로그인</Link>
+            <Link href="/auth/signup" className="px-4 py-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 transition-colors">회원가입</Link>
           </div>
         </div>
       </nav>
