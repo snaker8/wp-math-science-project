@@ -89,22 +89,42 @@ export class QuestionParser {
     console.log('[QuestionParser] First 500 chars:', text.substring(0, 500));
 
     // 문제 번호로 분할하는 정규식 (한국 수학 문제지 형식)
-    // "1.", "1)", "[1]", "1번", "01.", "01)", "01 " (공백) 등을 인식
-    // "01 다음 중 옳은 것은?" 형식도 인식 (2자리 숫자 + 공백 + 한글)
-    const testPattern = /(?:^|\n)\s*(?:\[)?(\d{1,2})\s*(?:[.)번\]]|\s+(?=[가-힣]))/gm;
+    // 패턴 1: "<서답형 4번>", "<객관식 1번>", "< 4 >" 등 부등호 괄호 형식
+    // 패턴 2: "1.", "1)", "[1]", "1번", "01.", "01)", "01 " (공백) 등을 인식
+    // 패턴 3: Mathpix MMD 볼드: "**01**", "*01*" 형식
+    const anglePattern = /(?:^|\n)\s*<\s*(?:서답형|객관식|단답형)?\s*(\d{1,2})\s*번?\s*>/gm;
+    const basicPattern = /(?:^|\n)\s*(?:\*{1,2})?(?:\[)?(\d{1,2})(?:\*{1,2})?\s*(?:[.)번\]]|\s+(?=[가-힣]))/gm;
 
     // 먼저 모든 매치 찾기
     const matches: { index: number; number: number; matchText: string }[] = [];
-    let match;
+    let match: RegExpExecArray | null;
 
-    while ((match = testPattern.exec(text)) !== null) {
+    // 1) 부등호 패턴 검색
+    while ((match = anglePattern.exec(text)) !== null) {
       const questionNumber = parseInt(match[1], 10);
-      // 선택지 (1), (2) 등과 문제 번호를 구분하기 위해 괄호로 시작하는지 확인
-      const isChoice = match[0].includes('(');
-      if (!isChoice && questionNumber > 0) {
+      if (questionNumber > 0) {
         matches.push({ index: match.index, number: questionNumber, matchText: match[0] });
       }
     }
+
+    // 2) 기본 패턴 검색
+    while ((match = basicPattern.exec(text)) !== null) {
+      const questionNumber = parseInt(match[1], 10);
+      const matchIndex = match.index;
+      const matchText = match[0];
+      // 선택지 (1), (2) 등과 문제 번호를 구분하기 위해 괄호로 시작하는지 확인
+      const isChoice = matchText.includes('(');
+      if (!isChoice && questionNumber > 0) {
+        // 중복 방지: 같은 index에 이미 매치가 있으면 스킵
+        const isDuplicate = matches.some(m => Math.abs(m.index - matchIndex) < 10);
+        if (!isDuplicate) {
+          matches.push({ index: matchIndex, number: questionNumber, matchText });
+        }
+      }
+    }
+
+    // index 순으로 정렬
+    matches.sort((a, b) => a.index - b.index);
 
     console.log('[QuestionParser] Found', matches.length, 'question number matches:', matches.map(m => `${m.number}: "${m.matchText.trim()}"`));
 
@@ -121,8 +141,14 @@ export class QuestionParser {
       const endIdx = i < matches.length - 1 ? matches[i + 1].index : text.length;
       const part = text.substring(startIdx, endIdx).trim();
 
-      // 문제 번호 패턴과 뒤의 내용 추출 (01 다음 중 / 1. 다음 중 형식)
-      const numberMatch = part.match(/^\s*(?:\[)?(\d{1,2})\s*(?:[.)번\]]|\s+)/);
+      // 문제 번호 패턴과 뒤의 내용 추출
+      // 패턴 1: "<서답형 4번>" 형식
+      // 패턴 2: "01 다음 중" / "1. 다음 중" 형식
+      let numberMatch = part.match(/^\s*<\s*(?:서답형|객관식|단답형)?\s*\d{1,2}\s*번?\s*>\s*/);
+      if (!numberMatch) {
+        numberMatch = part.match(/^\s*(?:\*{1,2})?(?:\[)?(\d{1,2})(?:\*{1,2})?\s*(?:[.)번\]]|\s+)/);
+      }
+
       if (numberMatch) {
         const content = part.substring(numberMatch[0].length).trim();
         if (content.length > 0) {  // 내용이 있는 경우만 추가
@@ -154,14 +180,17 @@ export class QuestionParser {
       return null;
     }
 
+    // 출처 정보 추출
+    const { sourceInfo, cleanedText } = extractSourceInfo(content);
+
     // 보기와 문제 본문 분리
-    const { questionText, choices } = this.extractChoices(content);
+    const { questionText, choices } = this.extractChoices(cleanedText);
 
     // LaTeX 검증 및 정규화
     const validation = validateLatex(questionText);
 
     // 이미지 URL 추출
-    const imageUrls = this.extractImageUrls(content);
+    const imageUrls = this.extractImageUrls(cleanedText);
 
     return {
       question_number: number,
@@ -169,8 +198,9 @@ export class QuestionParser {
       choices,
       has_image: imageUrls.length > 0,
       image_urls: imageUrls,
-      raw_text: content,
+      raw_text: cleanedText,
       confidence: this.calculateConfidence(validation, choices),
+      source_info: sourceInfo,
     };
   }
 
@@ -353,6 +383,69 @@ export class QuestionParser {
 
     return Math.max(0, Math.min(1, confidence));
   }
+}
+
+/**
+ * 출처 정보 추출
+ * 예: "[2018년 9월 고1 14년 변형]", "[2024 수능]", "[고1 19년 6월 ~ 고1 15년 3월]"
+ */
+export function extractSourceInfo(text: string): {
+  sourceInfo?: {
+    name?: string;
+    year?: number;
+    month?: number;
+    grade?: string;
+  };
+  cleanedText: string;
+} {
+  // 패턴 1: [YYYY년 M월 고N] 형식
+  const yearMonthGradePattern = /\[?\s*(\d{4})\s*년\s*(\d{1,2})\s*월\s*(고\s*[1-3])\s*(?:\d{1,2}\s*년)?\s*(?:변형)?\s*\]?/;
+  const match1 = text.match(yearMonthGradePattern);
+
+  if (match1) {
+    return {
+      sourceInfo: {
+        name: match1[0].replace(/^\[|\]$/g, '').trim(),
+        year: parseInt(match1[1], 10),
+        month: parseInt(match1[2], 10),
+        grade: match1[3].replace(/\s/g, ''),
+      },
+      cleanedText: text.replace(match1[0], '').trim(),
+    };
+  }
+
+  // 패턴 2: [YYYY 수능] 형식
+  const suneungPattern = /\[?\s*(\d{4})\s*수능\s*\]?/;
+  const match2 = text.match(suneungPattern);
+
+  if (match2) {
+    return {
+      sourceInfo: {
+        name: match2[0].replace(/^\[|\]$/g, '').trim(),
+        year: parseInt(match2[1], 10),
+      },
+      cleanedText: text.replace(match2[0], '').trim(),
+    };
+  }
+
+  // 패턴 3: [고N YY년 M월] 범위 형식
+  const gradeYearMonthPattern = /\[?\s*(고\s*[1-3])\s*(\d{2,4})\s*년\s*(\d{1,2})\s*월(?:\s*~\s*고\s*[1-3]\s*\d{2,4}\s*년\s*\d{1,2}\s*월)?\s*\]?/;
+  const match3 = text.match(gradeYearMonthPattern);
+
+  if (match3) {
+    const year = match3[2].length === 2 ? 2000 + parseInt(match3[2], 10) : parseInt(match3[2], 10);
+    return {
+      sourceInfo: {
+        name: match3[0].replace(/^\[|\]$/g, '').trim(),
+        year,
+        month: parseInt(match3[3], 10),
+        grade: match3[1].replace(/\s/g, ''),
+      },
+      cleanedText: text.replace(match3[0], '').trim(),
+    };
+  }
+
+  return { cleanedText: text };
 }
 
 /**

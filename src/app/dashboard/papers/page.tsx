@@ -182,9 +182,9 @@ function PapersContent() {
       // exam_problems 테이블을 통해 연결된 문제 조회
       const { data: examProblems, error: epError } = await supabaseBrowser
         .from('exam_problems')
-        .select('problem_id, order_index, points')
+        .select('problem_id, sequence_number, points')
         .eq('exam_id', examId)
-        .order('order_index', { ascending: true });
+        .order('sequence_number', { ascending: true });
 
       if (epError) {
         console.error('Failed to load exam_problems:', epError);
@@ -200,7 +200,7 @@ function PapersContent() {
       // exam_problems 메타데이터 보존
       const meta: ExamProblemMeta[] = examProblems.map((ep: any) => ({
         problem_id: ep.problem_id,
-        order_index: ep.order_index,
+        order_index: ep.sequence_number,
         points: ep.points,
       }));
       setExamProblemsMeta(meta);

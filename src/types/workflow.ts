@@ -50,6 +50,10 @@ export interface OCRPage {
   mathExpressions: MathExpression[];
   images: ExtractedImage[];
   confidence: number;
+  // Mathpix lines.json 원본 데이터 (bbox 추출용)
+  lineData?: import('@/types/ocr').MathpixLine[];
+  pageWidth?: number;
+  pageHeight?: number;
 }
 
 export interface MathExpression {
@@ -90,6 +94,10 @@ export interface LLMAnalysisResult {
   problemId: string;
   originalText?: string;      // OCR 추출 원본 텍스트
   originalMathExpressions?: string[]; // OCR 추출 수식
+  contentWithMath?: string;   // Mathpix Markdown (수식 $...$ 인라인 포함)
+  choices?: string[];         // 선택지 배열 (수식 포함)
+  pageIndex?: number;         // PDF 페이지 인덱스 (0-based)
+  bbox?: { x: number; y: number; w: number; h: number }; // 문제 영역 bbox (비율 0~1)
   classification: TypeClassification;
   solution: StepByStepSolution;
   similarTypes: string[]; // 유사 유형 코드들

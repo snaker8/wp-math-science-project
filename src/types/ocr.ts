@@ -45,6 +45,46 @@ export interface MathpixResponse {
     id: string;
     message: string;
   };
+  // PDF lines.json 데이터 (페이지별 라인 + bbox)
+  lines_data?: MathpixLinesData;
+}
+
+/**
+ * Mathpix PDF lines.json 전체 구조
+ */
+export interface MathpixLinesData {
+  pages: MathpixPageLines[];
+}
+
+/**
+ * Mathpix PDF 페이지별 라인 데이터
+ */
+export interface MathpixPageLines {
+  page: number;
+  page_width: number;
+  page_height: number;
+  lines: MathpixLine[];
+}
+
+/**
+ * Mathpix 개별 라인 데이터 (bbox 포함)
+ */
+export interface MathpixLine {
+  id: string;
+  type: string; // 'text' | 'math' | 'table' | 'diagram' | 'figure_label'
+  text: string;
+  text_display: string; // Mathpix Markdown (수식 $...$ 포함)
+  region: {
+    top_left_x: number;
+    top_left_y: number;
+    width: number;
+    height: number;
+  };
+  cnt?: number[][]; // polygon coordinates [[x1,y1],[x2,y2],...]
+  confidence: number;
+  confidence_rate?: number;
+  is_printed?: boolean;
+  is_handwritten?: boolean;
 }
 
 /**
@@ -66,6 +106,12 @@ export interface ParsedQuestion {
   image_urls: string[];
   raw_text: string;
   confidence: number;
+  source_info?: {
+    name?: string;      // 예: "2018년 9월 고1 14년 변형"
+    year?: number;      // 2018
+    month?: number;     // 9
+    grade?: string;     // "고1"
+  };
 }
 
 /**

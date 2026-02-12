@@ -24,7 +24,7 @@ export interface ExamProblem {
     id: string;
     exam_id: string;
     problem_id: string;
-    order_index: number;
+    sequence_number: number;
     points: number;
 }
 
@@ -138,8 +138,8 @@ export function useExams() {
 
             if (data && data.length > 0) {
                 setExams(data.map((exam: any) => {
-                    // exam_problems의 실제 카운트를 사용 (DB problem_count보다 정확)
-                    const actualCount = exam.exam_problems?.[0]?.count ?? exam.problem_count;
+                    // exam_problems의 실제 카운트를 사용
+                    const actualCount = exam.exam_problems?.[0]?.count ?? 0;
                     return transformExamToExamPaper({
                         ...exam,
                         problem_count: actualCount,
@@ -287,15 +287,11 @@ export function useExams() {
                 .insert({
                     title: newTitle,
                     description: sourceExam.description,
-                    grade: sourceExam.grade,
-                    subject: sourceExam.subject,
-                    unit: sourceExam.unit,
                     status: 'DRAFT',
-                    difficulty: sourceExam.difficulty,
-                    problem_count: sourceExam.problem_count,
                     total_points: sourceExam.total_points,
                     time_limit_minutes: sourceExam.time_limit_minutes,
                     created_by: user.id,
+                    institute_id: sourceExam.institute_id,
                 })
                 .select('id')
                 .single();
@@ -305,15 +301,15 @@ export function useExams() {
             // 3. 원본 시험지의 문제 연결 복사
             const { data: sourceProblems } = await supabaseBrowser
                 .from('exam_problems')
-                .select('problem_id, order_index, points')
+                .select('problem_id, sequence_number, points')
                 .eq('exam_id', examId)
-                .order('order_index', { ascending: true });
+                .order('sequence_number', { ascending: true });
 
             if (sourceProblems && sourceProblems.length > 0) {
                 const newProblems = sourceProblems.map((p: any) => ({
                     exam_id: newExam.id,
                     problem_id: p.problem_id,
-                    order_index: p.order_index,
+                    sequence_number: p.sequence_number,
                     points: p.points,
                 }));
 

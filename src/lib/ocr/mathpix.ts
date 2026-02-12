@@ -179,20 +179,38 @@ export class MathpixClient {
       if (result.status === 'completed') {
         // Mathpix Markdown 결과 가져오기 (.mmd 형식)
         console.log('[Mathpix] Fetching .mmd result...');
-        const mmdResponse = await fetch(`${pollUrl}.mmd`, {
-          headers: {
-            'app_id': this.appId,
-            'app_key': this.appKey,
-          },
-        });
+        const authHeaders = {
+          'app_id': this.appId,
+          'app_key': this.appKey,
+        };
+
+        const mmdResponse = await fetch(`${pollUrl}.mmd`, { headers: authHeaders });
         const mmdText = await mmdResponse.text();
         console.log(`[Mathpix] Got MMD text, length: ${mmdText.length} chars`);
+
+        // lines.json 가져오기 (페이지별 라인 데이터 + bbox)
+        let linesData = undefined;
+        try {
+          console.log('[Mathpix] Fetching .lines.json for bbox data...');
+          const linesResponse = await fetch(`${pollUrl}.lines.json`, { headers: authHeaders });
+          if (linesResponse.ok) {
+            linesData = await linesResponse.json();
+            const pageCount = linesData?.pages?.length || 0;
+            const totalLines = linesData?.pages?.reduce((sum: number, p: any) => sum + (p.lines?.length || 0), 0) || 0;
+            console.log(`[Mathpix] Got lines.json: ${pageCount} pages, ${totalLines} lines`);
+          } else {
+            console.warn('[Mathpix] lines.json fetch failed:', linesResponse.status);
+          }
+        } catch (linesErr) {
+          console.warn('[Mathpix] lines.json fetch error (non-fatal):', linesErr);
+        }
 
         return {
           request_id: pdfId,
           text: mmdText,
           latex_styled: mmdText,
           confidence: result.confidence || 0.9,
+          lines_data: linesData,
         };
       }
 

@@ -148,33 +148,63 @@ export function ProblemCard({ index, problem, points }: ProblemCardProps) {
 }
 
 /**
- * content_latex에서 선택지 (①②③④⑤) 분리
+ * content_latex에서 선택지 (①②③④⑤ 또는 (1)(2)(3)(4)(5)) 분리
  */
 function extractChoices(text: string): { body: string; choices: string[] } {
   const circledNumbers = ['①', '②', '③', '④', '⑤'];
-  const firstIdx = circledNumbers
+
+  // 1차: ①~⑤ 패턴 시도
+  const firstCircledIdx = circledNumbers
     .map((c) => text.indexOf(c))
     .filter((i) => i >= 0)
     .sort((a, b) => a - b)[0];
 
-  if (firstIdx === undefined) return { body: text, choices: [] };
+  if (firstCircledIdx !== undefined) {
+    const body = text.substring(0, firstCircledIdx).trim();
+    const choiceSection = text.substring(firstCircledIdx);
 
-  const body = text.substring(0, firstIdx).trim();
-  const choiceSection = text.substring(firstIdx);
+    const choices: string[] = [];
+    for (let i = 0; i < circledNumbers.length; i++) {
+      const start = choiceSection.indexOf(circledNumbers[i]);
+      if (start < 0) continue;
+      const nextStarts = circledNumbers
+        .slice(i + 1)
+        .map((c) => choiceSection.indexOf(c))
+        .filter((idx) => idx > start);
+      const end = nextStarts.length > 0 ? Math.min(...nextStarts) : choiceSection.length;
+      choices.push(choiceSection.substring(start, end).trim());
+    }
 
-  const choices: string[] = [];
-  for (let i = 0; i < circledNumbers.length; i++) {
-    const start = choiceSection.indexOf(circledNumbers[i]);
-    if (start < 0) continue;
-    const nextStarts = circledNumbers
-      .slice(i + 1)
-      .map((c) => choiceSection.indexOf(c))
-      .filter((idx) => idx > start);
-    const end = nextStarts.length > 0 ? Math.min(...nextStarts) : choiceSection.length;
-    choices.push(choiceSection.substring(start, end).trim());
+    return { body, choices };
   }
 
-  return { body, choices };
+  // 2차: (1)~(5) 패턴 시도 → ①~⑤로 변환
+  const numberedMarkers = ['(1)', '(2)', '(3)', '(4)', '(5)'];
+  const firstNumberedIdx = text.indexOf('(1)');
+  if (firstNumberedIdx !== -1) {
+    const body = text.substring(0, firstNumberedIdx).trim();
+    const remaining = text.substring(firstNumberedIdx);
+
+    const choices: string[] = [];
+    for (let i = 0; i < numberedMarkers.length; i++) {
+      const marker = numberedMarkers[i];
+      const nextMarker = numberedMarkers[i + 1];
+      const startIdx = remaining.indexOf(marker);
+      if (startIdx === -1) continue;
+
+      let endIdx = nextMarker ? remaining.indexOf(nextMarker) : remaining.length;
+      if (endIdx === -1) endIdx = remaining.length;
+
+      let choiceText = remaining.substring(startIdx, endIdx).trim();
+      // (1) → ① 변환
+      choiceText = choiceText.replace(/^\((\d)\)/, (_, num: string) => circledNumbers[parseInt(num) - 1] || `(${num})`);
+      if (choiceText) choices.push(choiceText);
+    }
+
+    return { body, choices };
+  }
+
+  return { body: text, choices: [] };
 }
 
 /**

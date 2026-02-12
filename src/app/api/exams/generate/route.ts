@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         const payload = selectedProblemIds.map((pid, idx) => ({
             exam_id: exam.id,
             problem_id: pid,
-            order_index: idx + 1,
+            sequence_number: idx + 1,
             points: 4
         }));
 

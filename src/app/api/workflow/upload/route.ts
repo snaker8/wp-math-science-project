@@ -95,26 +95,26 @@ export async function POST(request: NextRequest) {
     // Job 저장
     jobStore.set(job.id, job);
 
-    // Storage 업로드 (Supabase Storage 또는 로컬)
-    const storagePath = await uploadToStorage(file, job.id, supabase);
+    // 파일 버퍼 먼저 읽기 (한 번만 읽어서 재사용)
+    const fileBuffer = await file.arrayBuffer();
+    const answerBuffer = answerFile ? await answerFile.arrayBuffer() : undefined;
+    const quickAnswerBuffer = quickAnswerFile ? await quickAnswerFile.arrayBuffer() : undefined;
+
+    // Storage 업로드 (Supabase Storage 또는 로컬) - 버퍼 직접 전달
+    const storagePath = await uploadToStorage(fileBuffer, file.name, file.type, job.id, supabase);
     job.storagePath = storagePath;
 
     // 보조 파일 업로드 (선택사항)
-    if (answerFile) {
-      await uploadToStorage(answerFile, job.id, supabase, 'answer');
+    if (answerFile && answerBuffer) {
+      await uploadToStorage(answerBuffer, answerFile.name, answerFile.type, job.id, supabase, 'answer');
     }
-    if (quickAnswerFile) {
-      await uploadToStorage(quickAnswerFile, job.id, supabase, 'quick');
+    if (quickAnswerFile && quickAnswerBuffer) {
+      await uploadToStorage(quickAnswerBuffer, quickAnswerFile.name, quickAnswerFile.type, job.id, supabase, 'quick');
     }
 
     job.status = 'UPLOADING';
     job.progress = 10;
     jobStore.set(job.id, job);
-
-    // 파일 버퍼 읽기
-    const fileBuffer = await file.arrayBuffer();
-    const answerBuffer = answerFile ? await answerFile.arrayBuffer() : undefined;
-    const quickAnswerBuffer = quickAnswerFile ? await quickAnswerFile.arrayBuffer() : undefined;
 
     const buffers = {
       problem: fileBuffer,
@@ -185,14 +185,66 @@ export async function GET(request: NextRequest) {
 
   const results = jobResults.get(jobId);
 
+  // PDF 파일 URL 생성 (서버 사이드 프록시를 통해 CORS 문제 회피)
+  let pdfUrl: string | null = null;
+  if (job.storagePath) {
+    // 프록시 URL 사용 (CORS 문제 없음)
+    pdfUrl = `/api/workflow/pdf-proxy?path=${encodeURIComponent(job.storagePath)}`;
+  }
+
   return NextResponse.json({
     job: {
       ...job,
       statusLabel: getStatusLabel(job.status),
     },
+    pdfUrl,
     results: results || null,
     hasResults: !!results && results.length > 0,
   });
+}
+
+/**
+ * PUT /api/workflow/upload
+ * 자산화: 분석 완료된 Job의 결과를 DB에 저장 (검수 후 수동 호출)
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { jobId } = body;
+
+    if (!jobId) {
+      return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
+    }
+
+    const job = jobStore.get(jobId);
+    if (!job) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+
+    if (job.status !== 'COMPLETED') {
+      return NextResponse.json({ error: 'Job is not completed yet' }, { status: 400 });
+    }
+
+    const results = jobResults.get(jobId);
+    if (!results || results.length === 0) {
+      return NextResponse.json({ error: 'No analysis results found' }, { status: 400 });
+    }
+
+    // DB에 저장
+    await saveProblemsToDB(jobId, results);
+
+    return NextResponse.json({
+      success: true,
+      message: `${results.length}개 문제가 자산화되었습니다.`,
+      problemCount: results.length,
+    });
+  } catch (error) {
+    console.error('[Upload API] PUT Error:', error);
+    return NextResponse.json(
+      { error: 'Save failed', message: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
 }
 
 // ============================================================================
@@ -219,27 +271,37 @@ function getFileType(fileName: string): 'PDF' | 'IMG' | 'HWP' | null {
 }
 
 async function uploadToStorage(
-  file: File,
+  fileBuffer: ArrayBuffer,
+  fileName: string,
+  fileType: string,
   jobId: string,
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   suffix: string = '' // suffix for auxiliary files
 ): Promise<string> {
-  const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-  const fileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
-  const storagePath = `uploads/${fileName}`;
+  const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const storageFileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
+  const storagePath = `uploads/${storageFileName}`;
 
-  if (supabase) {
-    // Supabase Storage에 업로드
-    const { data, error } = await supabase.storage
+  // Admin 클라이언트 우선 사용 (RLS 우회, 안정적 업로드)
+  const storageClient = supabaseAdmin || supabase;
+
+  if (storageClient) {
+    const buffer = Buffer.from(fileBuffer);
+
+    const { data, error } = await storageClient.storage
       .from('source-files')
-      .upload(storagePath, file);
+      .upload(storagePath, buffer, {
+        contentType: fileType || 'application/pdf',
+        upsert: true, // 같은 이름 파일 덮어쓰기 허용
+      });
 
     if (error) {
-      console.error('Storage upload error:', error);
+      console.error('Storage upload error:', error.message);
       // 실패해도 로컬 경로 반환
       return storagePath;
     }
 
+    console.log(`[Upload] File uploaded to storage: ${data.path}`);
     return data.path;
   }
 
@@ -284,13 +346,17 @@ async function processJobInBackground(
           jobStore.set(jobId, currentJob);
         }
       },
+      onPartialResult: (partialResults: LLMAnalysisResult[]) => {
+        // 문제 하나 분석 완료될 때마다 중간 결과 저장 (실시간 UI 업데이트)
+        jobResults.set(jobId, partialResults);
+      },
       onComplete: (analysisResults: LLMAnalysisResult[]) => {
         jobResults.set(jobId, analysisResults);
         // 버퍼 정리
         fileBufferStore.delete(jobId);
 
-        // DB에 문제 저장 (실제 구현)
-        saveProblemsToDB(jobId, analysisResults).catch(console.error);
+        // DB 저장은 분석 페이지에서 검수 완료 후 수동으로 트리거
+        // saveProblemsToDB는 PUT /api/workflow/upload 에서 호출됨
       },
       onError: (error: string) => {
         const currentJob = jobStore.get(jobId);
@@ -411,17 +477,13 @@ async function saveProblemsToDB(
     const firstResult = results[0];
     const classification = firstResult?.classification;
 
+    // schema.sql 기준 컬럼만 사용 (grade, subject, unit, difficulty, problem_count는 schema.sql에 없음)
     const examInsertData: Record<string, any> = {
       title: job.fileName.replace(/\.[^/.]+$/, ""),
-      description: `업로드된 파일: ${job.fileName} (${results.length}문항)`,
+      description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
       status: 'COMPLETED',
       created_by: createdBy,
       institute_id: instituteId,
-      grade: '미분류',
-      subject: classification?.subject || '수학',
-      unit: classification?.chapter || '미분류',
-      difficulty: 'Lv.3',
-      problem_count: results.length,
       total_points: results.length * 4,
       time_limit_minutes: 50,
     };
@@ -464,7 +526,7 @@ async function saveProblemsToDB(
             description: examInsertData.description,
             status: examInsertData.status,
             created_by: createdBy,
-            problem_count: results.length,
+            // problem_count not in schema.sql, use total_points instead
           })
           .select('id')
           .single();
@@ -561,7 +623,7 @@ async function saveProblemsToDB(
             await supabase.from('exam_problems').insert({
               exam_id: examId,
               problem_id: problem.id,
-              order_index: savedCount,
+              sequence_number: savedCount,
               points: 4
             });
           } catch (e) {

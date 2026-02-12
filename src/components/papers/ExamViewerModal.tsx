@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, BarChart3, Printer, Download, ZoomIn, ZoomOut } from 'lucide-react';
-import { supabaseBrowser } from '@/lib/supabase/client';
+import { X, Loader2, BarChart3, Printer } from 'lucide-react';
 import { ProblemCard } from './ProblemCard';
 import { ExamAnalyticsSidebar } from './ExamAnalyticsSidebar';
 
@@ -72,60 +71,40 @@ export function ExamViewerModal({ examId, examTitle, onClose }: ExamViewerModalP
   const loadExamData = async () => {
     setLoading(true);
 
-    if (!supabaseBrowser) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      // 시험 정보 로드
-      const { data: examData } = await supabaseBrowser
-        .from('exams')
-        .select('subject, unit, grade, description')
-        .eq('id', examId)
-        .single();
+      // API route로 조회 (supabaseAdmin으로 RLS 바이패스)
+      const res = await fetch(`/api/exams/${examId}`);
 
-      if (examData) {
-        setExamInfo(examData);
-      }
-
-      // exam_problems 통해 문제 로드
-      const { data: examProblems, error: epError } = await supabaseBrowser
-        .from('exam_problems')
-        .select('problem_id, order_index, points')
-        .eq('exam_id', examId)
-        .order('order_index', { ascending: true });
-
-      if (epError || !examProblems || examProblems.length === 0) {
+      if (!res.ok) {
+        console.error('[ExamViewer] API error:', res.status);
         setLoading(false);
         return;
       }
 
-      const meta: ExamProblemMeta[] = examProblems.map((ep: any) => ({
-        problem_id: ep.problem_id,
-        order_index: ep.order_index,
-        points: ep.points,
-      }));
-      setExamProblemsMeta(meta);
+      const data = await res.json();
 
-      const problemIds = meta.map((ep) => ep.problem_id);
+      if (data.exam) {
+        setExamInfo({
+          subject: data.exam.subject,
+          unit: data.exam.unit,
+          grade: data.exam.grade,
+          description: data.exam.description,
+        });
+      }
 
-      const { data, error } = await supabaseBrowser
-        .from('problems')
-        .select(`
-          id, content_latex, solution_latex, answer_json, status,
-          source_name, ai_analysis, tags, created_at,
-          classifications (type_code, difficulty, cognitive_domain, ai_confidence)
-        `)
-        .in('id', problemIds)
-        .is('deleted_at', null);
+      if (data.problems && data.problems.length > 0) {
+        const meta: ExamProblemMeta[] = data.problems.map((ep: any) => ({
+          problem_id: ep.problem_id,
+          order_index: ep.sequence_number ?? ep.order_index,
+          points: ep.points,
+        }));
+        setExamProblemsMeta(meta);
 
-      if (!error && data) {
-        const orderMap = new Map(meta.map((ep) => [ep.problem_id, ep.order_index]));
-        const sorted = data.sort(
-          (a: any, b: any) => (orderMap.get(a.id) ?? 999) - (orderMap.get(b.id) ?? 999)
-        );
-        setProblems(sorted);
+        // problems 데이터 추출 및 정렬
+        const problemsList: Problem[] = data.problems
+          .filter((ep: any) => ep.problems)
+          .map((ep: any) => ep.problems);
+        setProblems(problemsList);
       }
     } catch (err) {
       console.error('Error loading exam data:', err);

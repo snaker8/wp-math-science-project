@@ -94,6 +94,14 @@ export const dashboardNavItems: NavItem[] = [
     activeColor: 'bg-cyan-500/10 text-cyan-500',
     group: 'main',
   },
+  {
+    href: '/dashboard/exam-management',
+    icon: ClipboardCheck,
+    label: '시험지관리',
+    description: '시험지 그룹 관리',
+    activeColor: 'bg-amber-500/10 text-amber-500',
+    group: 'main',
+  },
 ];
 
 // 교직원 관리 메뉴

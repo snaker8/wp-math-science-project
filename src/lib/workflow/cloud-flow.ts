@@ -20,7 +20,7 @@ import {
 } from './hwp-processor';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { parseQuestions, getQuestionParser } from '@/lib/ocr/question-parser';
-import type { MathpixResponse, ParsedQuestion } from '@/types/ocr';
+import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } from '@/types/ocr';
 
 // ============================================================================
 // Configuration
@@ -129,6 +129,7 @@ async function processHWPDocument(
 
 /**
  * PDF 파일 처리 (OCR 포함)
+ * lines.json이 있으면 실제 bbox 사용, 없으면 기존 방식 fallback
  */
 async function processPDFDocument(
   fileBuffer: ArrayBuffer,
@@ -148,25 +149,77 @@ async function processPDFDocument(
 
     if (onProgress) onProgress(40);
 
-    // 응답을 OCRResult 형식으로 변환
-    const pages: OCRPage[] = responses.map((response, idx) => {
-      const parsedQuestions = parseQuestions(response);
-      const mathExpressions = parsedQuestions.flatMap(q =>
-        q.content_latex ? [{
-          latex: q.content_latex,
-          boundingBox: { x: 0, y: 0, width: 0, height: 0 },
-          confidence: q.confidence,
-        }] : []
-      );
+    const response = responses[0];
+    const linesData = response?.lines_data;
 
-      return {
-        pageNumber: idx + 1,
-        text: response.text || response.latex_styled || '',
-        mathExpressions,
-        images: [],
-        confidence: response.confidence || 0.9,
-      };
-    });
+    let pages: OCRPage[];
+
+    if (linesData && linesData.pages && linesData.pages.length > 0) {
+      // ✅ lines.json 데이터 있음 → 실제 bbox 사용
+      console.log(`[Cloud Flow] Using lines.json data: ${linesData.pages.length} pages`);
+
+      pages = linesData.pages.map((pageData: MathpixPageLines) => {
+        const pageW = pageData.page_width || 1;
+        const pageH = pageData.page_height || 1;
+
+        // 수식 라인에서 실제 bbox 추출 (비율 기반 0~1)
+        const mathExpressions = pageData.lines
+          .filter((l: MathpixLine) => l.type === 'math' || (l.text_display && /\$[^$]+\$/.test(l.text_display)))
+          .map((l: MathpixLine) => ({
+            latex: l.text_display || l.text,
+            boundingBox: {
+              x: l.region.top_left_x / pageW,
+              y: l.region.top_left_y / pageH,
+              width: l.region.width / pageW,
+              height: l.region.height / pageH,
+            },
+            confidence: l.confidence,
+          }));
+
+        // 페이지 전체 텍스트: text_display 사용 (수식 $...$ 인라인 포함)
+        const pageText = pageData.lines
+          .map((l: MathpixLine) => l.text_display || l.text)
+          .join('\n');
+
+        const minConfidence = pageData.lines.length > 0
+          ? Math.min(...pageData.lines.map((l: MathpixLine) => l.confidence))
+          : 0.9;
+
+        return {
+          pageNumber: pageData.page,
+          text: pageText,
+          mathExpressions,
+          images: [],
+          confidence: Math.max(minConfidence, 0.5),
+          // 원본 라인 데이터 보존 (문제별 bbox 그룹화에 사용)
+          lineData: pageData.lines,
+          pageWidth: pageW,
+          pageHeight: pageH,
+        };
+      });
+    } else {
+      // ⚠️ lines.json 없음 → 기존 방식 fallback (mmd 텍스트만)
+      console.log('[Cloud Flow] No lines.json data, using fallback text parsing');
+
+      pages = responses.map((resp, idx) => {
+        const parsedQuestions = parseQuestions(resp);
+        const mathExpressions = parsedQuestions.flatMap(q =>
+          q.content_latex ? [{
+            latex: q.content_latex,
+            boundingBox: { x: 0, y: 0, width: 0, height: 0 },
+            confidence: q.confidence,
+          }] : []
+        );
+
+        return {
+          pageNumber: idx + 1,
+          text: resp.text || resp.latex_styled || '',
+          mathExpressions,
+          images: [],
+          confidence: resp.confidence || 0.9,
+        };
+      });
+    }
 
     if (onProgress) onProgress(50);
 
@@ -179,12 +232,188 @@ async function processPDFDocument(
     };
   } catch (error) {
     console.error('[Cloud Flow] PDF OCR error:', error);
-    // API 설정 오류는 상세히 로깅
     if (error instanceof MathpixError) {
       console.error('[Cloud Flow] Mathpix API Error:', error.code, error.details);
     }
     throw error;
   }
+}
+
+/**
+ * lines.json 라인들을 문제 번호 기준으로 그룹화하여 문제별 bbox 계산
+ * @returns 문제별 { questionNumber, bbox (비율 0~1), contentMmd, choices }
+ */
+function groupLinesIntoQuestions(
+  allPages: OCRPage[]
+): Array<{
+  questionNumber: number;
+  pageIndex: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  contentMmd: string;
+  choices: string[];
+}> {
+  const results: Array<{
+    questionNumber: number;
+    pageIndex: number;
+    bbox: { x: number; y: number; w: number; h: number };
+    contentMmd: string;
+    choices: string[];
+  }> = [];
+
+  // 문제 번호 패턴 (한국 수능/모의고사 형식)
+  // "01 다음", "1.", "1)", "1번", "[1]", "01.", "02 " 등 다양한 형식 지원
+  // Mathpix MMD 형식: "**01**", "\\textbf{01}" 등 볼드 마커도 처리
+  const questionStartPattern = /^[\s]*(?:\*{1,2})?(\d{1,2})(?:\*{1,2})?[\s]*(?:[.)번\]]|[\s]+(?=[가-힣]))/;
+  // 선택지 패턴
+  const choicePattern = /[①②③④⑤]/;
+
+  for (let pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
+    const page = allPages[pageIdx];
+    const lines = page.lineData;
+    const pageW = page.pageWidth || 1;
+    const pageH = page.pageHeight || 1;
+
+    if (!lines || lines.length === 0) {
+      console.log(`[Cloud Flow] Page ${pageIdx}: no line data`);
+      continue;
+    }
+
+    console.log(`[Cloud Flow] Page ${pageIdx}: ${lines.length} lines, first 5 lines:`);
+    lines.slice(0, 5).forEach((l, i) => {
+      const txt = (l.text_display || l.text || '').trim();
+      console.log(`  [${i}] "${txt.substring(0, 80)}" (match: ${questionStartPattern.test(txt)})`);
+    });
+
+    // 라인을 문제 단위로 그룹화
+    let currentQuestion: {
+      number: number;
+      lines: MathpixLine[];
+      choiceTexts: string[];
+    } | null = null;
+
+    let matchedNumbers: number[] = [];
+
+    for (const line of lines) {
+      const lineText = (line.text_display || line.text || '').trim();
+      const numberMatch = lineText.match(questionStartPattern);
+
+      if (numberMatch) {
+        const qNum = parseInt(numberMatch[1], 10);
+        matchedNumbers.push(qNum);
+
+        // 이전 문제 저장
+        if (currentQuestion && currentQuestion.lines.length > 0) {
+          results.push(buildQuestionResult(currentQuestion, pageIdx, pageW, pageH));
+        }
+        // 새 문제 시작
+        currentQuestion = {
+          number: qNum,
+          lines: [line],
+          choiceTexts: [],
+        };
+      } else if (currentQuestion) {
+        currentQuestion.lines.push(line);
+        // 선택지 감지
+        if (choicePattern.test(lineText)) {
+          currentQuestion.choiceTexts.push(lineText);
+        }
+      }
+    }
+
+    // 마지막 문제 저장
+    if (currentQuestion && currentQuestion.lines.length > 0) {
+      results.push(buildQuestionResult(currentQuestion, pageIdx, pageW, pageH));
+    }
+
+    console.log(`[Cloud Flow] Page ${pageIdx}: matched question numbers: [${matchedNumbers.join(', ')}]`);
+  }
+
+  console.log(`[Cloud Flow] groupLinesIntoQuestions: found ${results.length} questions across ${allPages.length} pages`);
+  return results;
+}
+
+/**
+ * 문제 그룹에서 bbox와 콘텐츠 생성
+ */
+function buildQuestionResult(
+  group: { number: number; lines: MathpixLine[]; choiceTexts: string[] },
+  pageIndex: number,
+  pageW: number,
+  pageH: number
+): {
+  questionNumber: number;
+  pageIndex: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  contentMmd: string;
+  choices: string[];
+} {
+  // 모든 라인의 region을 합쳐 문제 전체 bbox 계산
+  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+
+  for (const line of group.lines) {
+    const r = line.region;
+    if (r) {
+      minX = Math.min(minX, r.top_left_x);
+      minY = Math.min(minY, r.top_left_y);
+      maxX = Math.max(maxX, r.top_left_x + r.width);
+      maxY = Math.max(maxY, r.top_left_y + r.height);
+    }
+  }
+
+  // 비율 기반 bbox (0~1)
+  const bbox = {
+    x: minX / pageW,
+    y: minY / pageH,
+    w: (maxX - minX) / pageW,
+    h: (maxY - minY) / pageH,
+  };
+
+  // Mathpix Markdown 텍스트 (수식 $...$ 인라인 포함)
+  const contentMmd = group.lines
+    .map(l => l.text_display || l.text)
+    .join('\n');
+
+  // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
+  const choices = parseChoicesFromText(group.choiceTexts.join('\n'));
+
+  return {
+    questionNumber: group.number,
+    pageIndex,
+    bbox,
+    contentMmd,
+    choices,
+  };
+}
+
+/**
+ * 텍스트에서 선택지 분리 (①②③④⑤ 형식)
+ */
+function parseChoicesFromText(text: string): string[] {
+  if (!text.trim()) return [];
+
+  const circledNumbers = ['①', '②', '③', '④', '⑤'];
+  const parts: string[] = [];
+
+  // ①②③④⑤로 분할
+  let remaining = text;
+  for (let i = circledNumbers.length - 1; i >= 0; i--) {
+    const idx = remaining.lastIndexOf(circledNumbers[i]);
+    if (idx >= 0) {
+      const after = remaining.substring(idx + circledNumbers[i].length).trim();
+      if (after) parts.unshift(after);
+      remaining = remaining.substring(0, idx);
+    }
+  }
+
+  // 원형 숫자 분할이 안 된 경우 번호 기반 시도
+  if (parts.length === 0) {
+    const numbered = text.match(/[1-5]\s*\)\s*([^1-5)]+)/g);
+    if (numbered) {
+      return numbered.map(m => m.replace(/^\d\s*\)\s*/, '').trim());
+    }
+  }
+
+  return parts;
 }
 
 function createMockPDFResult(jobId: string): OCRResult {
@@ -471,12 +700,12 @@ async function callOpenAI(prompt: string, retries = 6, backoff = 5000, model?: s
         messages: [
           {
             role: 'system',
-            content: '당신은 한국 고등학교 수학 교육 전문가입니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요.',
+            content: '당신은 한국 고등학교 수학 교육과정 전문가이자 수능/모의고사 출제위원급 전문가입니다. 문제의 유형, 난이도, 단원을 정확히 분류하고 상세한 풀이를 제공합니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.',
           },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.3,
-        max_tokens: 2000,
+        temperature: 0.2,
+        max_tokens: 4000,
         response_format: { type: 'json_object' },
       }),
     });
@@ -769,6 +998,7 @@ export interface JobUpdateCallback {
   onProgress: (progress: number) => void;
   onComplete: (result: LLMAnalysisResult[]) => void;
   onError: (error: string) => void;
+  onPartialResult?: (results: LLMAnalysisResult[]) => void; // 문제별 중간 결과
 }
 
 /**
@@ -825,6 +1055,11 @@ export async function processUploadJob(
     // Step 2: 모든 페이지에서 개별 문제 추출
     callbacks.onStatusChange('LLM_ANALYZING', '문제 분리 중...');
 
+    // lines.json 라인 데이터가 있으면 문제별 bbox 그룹화 시도
+    const hasLineData = ocrResult.pages.some(p => p.lineData && p.lineData.length > 0);
+    const lineBasedQuestions = hasLineData ? groupLinesIntoQuestions(ocrResult.pages) : [];
+    console.log(`[Cloud Flow] Line-based question grouping: ${lineBasedQuestions.length} questions found`);
+
     // 모든 페이지의 텍스트를 합침 (Problem File)
     const fullText = ocrResult.pages.map(p => p.text).join('\n\n');
 
@@ -839,19 +1074,69 @@ export async function processUploadJob(
 
     console.log(`[Cloud Flow] QuestionParser found ${parsedQuestions.length} questions`);
 
-    // 파싱된 문제가 없으면 페이지 단위로 폴백
-    type QuestionToAnalyze = { index: number; text: string; mathExpressions: string[] };
-    const questionsToAnalyze: QuestionToAnalyze[] = parsedQuestions.length > 0
-      ? parsedQuestions.map((q: ParsedQuestion, idx: number) => ({
-        index: idx,
-        text: q.raw_text || q.content_latex,
-        mathExpressions: q.content_latex ? [q.content_latex] : [],
-      }))
-      : ocrResult.pages.map((page, idx: number) => ({
+    // 문제 분리 우선순위:
+    // 1) lineBasedQuestions (lines.json bbox 기반) — 가장 정확, 개별 bbox 포함
+    // 2) parsedQuestions (QuestionParser, 전체 텍스트 기반) — bbox 없지만 수식 파싱 정확
+    // 3) 페이지 단위 폴백
+    // ※ lineBasedQuestions가 더 많은 문제를 찾았으면 그것을 우선 사용
+    type QuestionToAnalyze = {
+      index: number;
+      text: string;
+      mathExpressions: string[];
+      // bbox 관련 데이터 (lines.json 기반)
+      pageIndex?: number;
+      bbox?: { x: number; y: number; w: number; h: number };
+      contentMmd?: string;  // Mathpix Markdown (수식 인라인)
+      choicesFromOCR?: string[];
+    };
+
+    let questionsToAnalyze: QuestionToAnalyze[];
+
+    // lineBasedQuestions가 있고 parsedQuestions보다 많거나 같으면 우선 사용
+    // (lines.json 기반이 bbox도 있고 페이지 정보도 정확함)
+    if (lineBasedQuestions.length > 0 && lineBasedQuestions.length >= parsedQuestions.length) {
+      console.log(`[Cloud Flow] Using lineBasedQuestions (${lineBasedQuestions.length}) over parsedQuestions (${parsedQuestions.length})`);
+      questionsToAnalyze = lineBasedQuestions.map((lq, idx) => {
+        // parsedQuestions에서 같은 문제 번호의 수식 파싱 보완
+        const parsedMatch = parsedQuestions.find(pq => pq.question_number === lq.questionNumber);
+
+        return {
+          index: idx,
+          text: lq.contentMmd,
+          mathExpressions: parsedMatch?.content_latex ? [parsedMatch.content_latex] : [],
+          pageIndex: lq.pageIndex,
+          bbox: lq.bbox,
+          contentMmd: lq.contentMmd,
+          choicesFromOCR: lq.choices.length > 0 ? lq.choices
+            : parsedMatch?.choices?.map(c => `${c.label}) ${c.content_latex}`) || [],
+        };
+      });
+    } else if (parsedQuestions.length > 0) {
+      console.log(`[Cloud Flow] Using parsedQuestions (${parsedQuestions.length}) over lineBasedQuestions (${lineBasedQuestions.length})`);
+      questionsToAnalyze = parsedQuestions.map((q: ParsedQuestion, idx: number) => {
+        // lineBasedQuestions에서 같은 문제 번호 매칭하여 bbox 가져오기
+        const lineMatch = lineBasedQuestions.find(lq => lq.questionNumber === q.question_number);
+
+        return {
+          index: idx,
+          text: q.raw_text || q.content_latex,
+          mathExpressions: q.content_latex ? [q.content_latex] : [],
+          pageIndex: lineMatch?.pageIndex,
+          bbox: lineMatch?.bbox,
+          contentMmd: lineMatch?.contentMmd || q.raw_text,
+          choicesFromOCR: lineMatch?.choices.length ? lineMatch.choices
+            : q.choices?.map(c => `${c.label}) ${c.content_latex}`) || [],
+        };
+      });
+    } else {
+      // 둘 다 없으면 페이지 단위 폴백
+      console.log('[Cloud Flow] No question parsing succeeded, falling back to page-level analysis');
+      questionsToAnalyze = ocrResult.pages.map((page, idx: number) => ({
         index: idx,
         text: page.text,
         mathExpressions: page.mathExpressions.map(m => m.latex),
       }));
+    }
 
     // Step 3: 각 문제에 대해 LLM 분석
     callbacks.onStatusChange('LLM_ANALYZING', `AI 분석 중 (${questionsToAnalyze.length}개 문제)...`);
@@ -884,6 +1169,20 @@ export async function processUploadJob(
       analysis.originalText = question.text;
       analysis.originalMathExpressions = question.mathExpressions;
 
+      // bbox + 페이지 인덱스 + Mathpix Markdown 콘텐츠 + 선택지 추가
+      if (question.pageIndex !== undefined) {
+        analysis.pageIndex = question.pageIndex;
+      }
+      if (question.bbox) {
+        analysis.bbox = question.bbox;
+      }
+      if (question.contentMmd) {
+        analysis.contentWithMath = question.contentMmd;
+      }
+      if (question.choicesFromOCR && question.choicesFromOCR.length > 0) {
+        analysis.choices = question.choicesFromOCR;
+      }
+
       // Step 5: 해설이 없으면 생성 (generateSolutions 옵션이 true인 경우에만)
       const shouldGenerateSolutions = job.generateSolutions !== false; // 기본값 true
       if (shouldGenerateSolutions && (!analysis.solution.steps || analysis.solution.steps.length === 0)) {
@@ -897,6 +1196,11 @@ export async function processUploadJob(
 
       results.push(analysis);
       console.log(`[Cloud Flow] Problem ${i + 1}: ${analysis.classification.typeCode} (${analysis.classification.typeName})`);
+
+      // 중간 결과 전달 (실시간 UI 업데이트용)
+      if (callbacks.onPartialResult) {
+        callbacks.onPartialResult([...results]);
+      }
     }
 
     // Step 6: 완료

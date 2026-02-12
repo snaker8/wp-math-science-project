@@ -6,6 +6,7 @@
 // ============================================================================
 
 import React, { useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   FileText,
@@ -27,6 +28,8 @@ interface CloudFlowUploaderProps {
   instituteId?: string;
   userId?: string;
   onComplete?: (results: LLMAnalysisResult[]) => void;
+  /** true이면 업로드 시작 후 바로 분석 페이지로 이동 */
+  autoNavigateToAnalyze?: boolean;
 }
 
 interface JobWithResults extends UploadJob {
@@ -37,7 +40,9 @@ export default function CloudFlowUploader({
   instituteId = 'default',
   userId = 'user',
   onComplete,
+  autoNavigateToAnalyze = false,
 }: CloudFlowUploaderProps) {
+  const router = useRouter();
   const [jobs, setJobs] = useState<JobWithResults[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -146,6 +151,12 @@ export default function CloudFlowUploader({
         ANSWER: null,
         QUICK_ANSWER: null,
       });
+
+      // 자동 네비게이션: 업로드 시작 후 바로 분석 페이지로 이동
+      if (autoNavigateToAnalyze) {
+        router.push(`/dashboard/workflow/analyze/${data.jobId}`);
+        return;
+      }
 
       // 폴링 시작
       if (autoClassify) {
@@ -505,9 +516,18 @@ export default function CloudFlowUploader({
 
                 {/* 완료 상태 */}
                 {job.status === 'COMPLETED' && job.results && (
-                  <div className="completed-info">
-                    <CheckCircle size={16} />
-                    <span>{job.results.length}개 문제 분석 완료</span>
+                  <div className="completed-info" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CheckCircle size={16} />
+                      <span>{job.results.length}개 문제 분석 완료</span>
+                    </div>
+                    <a
+                      href={`/dashboard/workflow/analyze/${job.id}`}
+                      className="analyze-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      문제 확인하기 →
+                    </a>
                   </div>
                 )}
 
@@ -843,6 +863,23 @@ export default function CloudFlowUploader({
 
         .spinning {
           animation: spin 1s linear infinite;
+        }
+
+        .analyze-link {
+          font-size: 13px;
+          font-weight: 600;
+          color: #22d3ee;
+          text-decoration: none;
+          padding: 4px 12px;
+          border-radius: 6px;
+          background: rgba(34, 211, 238, 0.1);
+          border: 1px solid rgba(34, 211, 238, 0.2);
+          transition: all 0.2s;
+        }
+
+        .analyze-link:hover {
+          background: rgba(34, 211, 238, 0.2);
+          border-color: rgba(34, 211, 238, 0.4);
         }
 
         .upload-controls {
