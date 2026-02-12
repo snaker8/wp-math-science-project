@@ -96,8 +96,9 @@ export class QuestionParser {
     // 패턴 1: "<서답형 4번>", "<객관식 1번>", "< 4 >" 등 부등호 괄호 형식
     // 패턴 2: "1.", "1)", "[1]", "1번", "01.", "01)", "01 " (공백) 등을 인식
     // 패턴 3: Mathpix MMD 볼드: "**01**", "*01*" 형식
+    // 패턴 4: "03\n\n[출처]" 형식 - 번호 뒤에 빈 줄이 오는 경우
     const anglePattern = /(?:^|\n)\s*<\s*(?:서답형|객관식|단답형)?\s*(\d{1,2})\s*번?\s*>/gm;
-    const basicPattern = /(?:^|\n)\s*(?:\*{1,2})?(?:\[)?(\d{1,2})(?:\*{1,2})?\s*(?:[.)번\]]|\s+(?=[가-힣]))/gm;
+    const basicPattern = /(?:^|\n)\s*(?:\*{1,2})?(?:\[)?(\d{1,2})(?:\*{1,2})?\s*(?:[.)번\]]|\s+(?=[가-힣])|(?=\s*\n))/gm;
 
     // 먼저 모든 매치 찾기
     const matches: { index: number; number: number; matchText: string }[] = [];
@@ -132,15 +133,16 @@ export class QuestionParser {
 
     console.log('[QuestionParser] Found', matches.length, 'question number matches:', matches.map(m => `${m.number}: "${m.matchText.trim()}" at index ${m.index}`));
 
-    // 디버깅: 03이 포함된 부분 찾기
-    const idx03 = text.indexOf('03');
-    if (idx03 >= 0) {
-      console.log('[QuestionParser] Found "03" at index', idx03, 'context:', text.substring(Math.max(0, idx03 - 20), idx03 + 50));
-    }
-    const idx04 = text.indexOf('04');
-    if (idx04 >= 0) {
-      console.log('[QuestionParser] Found "04" at index', idx04, 'context:', text.substring(Math.max(0, idx04 - 20), idx04 + 50));
-    }
+    // 디버깅: 03, 04, 05, 06이 포함된 모든 위치 찾기
+    ['03', '04', '05', '06'].forEach(num => {
+      let idx = -1;
+      let count = 0;
+      while ((idx = text.indexOf(num, idx + 1)) >= 0) {
+        count++;
+        const context = text.substring(Math.max(0, idx - 20), idx + 50);
+        console.log(`[QuestionParser] Found "${num}" occurrence ${count} at index ${idx}, context:`, context);
+      }
+    });
 
 
     if (matches.length === 0) {
