@@ -86,7 +86,11 @@ export class QuestionParser {
     const blocks: { number: number; content: string }[] = [];
 
     console.log('[QuestionParser] Input text length:', text.length);
-    console.log('[QuestionParser] First 500 chars:', text.substring(0, 500));
+    console.log('[QuestionParser] First 1000 chars:', text.substring(0, 1000));
+    console.log('[QuestionParser] Text contains "03"?', text.includes('03'));
+    console.log('[QuestionParser] Text contains "04"?', text.includes('04'));
+    console.log('[QuestionParser] Text contains "05"?', text.includes('05'));
+    console.log('[QuestionParser] Text contains "06"?', text.includes('06'));
 
     // 문제 번호로 분할하는 정규식 (한국 수학 문제지 형식)
     // 패턴 1: "<서답형 4번>", "<객관식 1번>", "< 4 >" 등 부등호 괄호 형식
@@ -126,7 +130,17 @@ export class QuestionParser {
     // index 순으로 정렬
     matches.sort((a, b) => a.index - b.index);
 
-    console.log('[QuestionParser] Found', matches.length, 'question number matches:', matches.map(m => `${m.number}: "${m.matchText.trim()}"`));
+    console.log('[QuestionParser] Found', matches.length, 'question number matches:', matches.map(m => `${m.number}: "${m.matchText.trim()}" at index ${m.index}`));
+
+    // 디버깅: 03이 포함된 부분 찾기
+    const idx03 = text.indexOf('03');
+    if (idx03 >= 0) {
+      console.log('[QuestionParser] Found "03" at index', idx03, 'context:', text.substring(Math.max(0, idx03 - 20), idx03 + 50));
+    }
+    const idx04 = text.indexOf('04');
+    if (idx04 >= 0) {
+      console.log('[QuestionParser] Found "04" at index', idx04, 'context:', text.substring(Math.max(0, idx04 - 20), idx04 + 50));
+    }
 
 
     if (matches.length === 0) {

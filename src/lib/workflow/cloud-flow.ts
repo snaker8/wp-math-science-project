@@ -1063,6 +1063,12 @@ export async function processUploadJob(
     // 모든 페이지의 텍스트를 합침 (Problem File)
     const fullText = ocrResult.pages.map(p => p.text).join('\n\n');
 
+    // 디버깅: 각 페이지의 텍스트 길이와 처음 200자 확인
+    console.log(`[Cloud Flow] OCR Result - ${ocrResult.pages.length} pages`);
+    ocrResult.pages.forEach((page, idx) => {
+      console.log(`[Cloud Flow] Page ${idx + 1} text length: ${page.text.length}, first 200 chars:`, page.text.substring(0, 200));
+    });
+
     // QuestionParser로 개별 문제 분리
     const parser = getQuestionParser();
     const parsedQuestions = parser.parse({
