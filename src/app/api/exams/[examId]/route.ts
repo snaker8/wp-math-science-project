@@ -1,6 +1,7 @@
 // ============================================================================
 // GET /api/exams/[examId] - 시험지 정보 + 연결된 문제 조회
-// DELETE /api/exams/[examId] - 시험지 소프트 삭제 (deleted_at 업데이트)
+// PATCH /api/exams/[examId] - 시험지 수정 (제목, 북그룹 이동)
+// DELETE /api/exams/[examId] - 시험지 완전 삭제 (hard delete)
 // supabaseAdmin으로 RLS 바이패스
 // ============================================================================
 
@@ -24,7 +25,7 @@ export async function GET(
     // 1. 시험지 정보 조회 (schema.sql 기준 컬럼)
     const { data: exam, error: examError } = await supabaseAdmin
       .from('exams')
-      .select('id, title, description, status, total_points, created_at')
+      .select('id, title, description, status, total_points, book_group_id, created_at')
       .eq('id', examId)
       .single();
 
@@ -84,7 +85,66 @@ export async function GET(
 }
 
 // ============================================================================
-// DELETE /api/exams/[examId] - 시험지 소프트 삭제
+// PATCH /api/exams/[examId] - 시험지 수정 (제목 변경, 북그룹 이동)
+// ============================================================================
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> }
+) {
+  const { examId } = await params;
+
+  if (!supabaseAdmin) {
+    return NextResponse.json(
+      { error: 'Supabase not configured' },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const { title, bookGroupId } = body;
+
+    const updateData: Record<string, any> = {};
+
+    if (title !== undefined) updateData.title = title.trim();
+    if (bookGroupId !== undefined) updateData.book_group_id = bookGroupId; // null allowed (move to unclassified)
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    const { data: exam, error } = await supabaseAdmin
+      .from('exams')
+      .update(updateData)
+      .eq('id', examId)
+      .select('id, title, book_group_id')
+      .single();
+
+    if (error) {
+      console.error('[API/exams] Patch error:', error.message);
+      return NextResponse.json(
+        { error: 'Failed to update exam', detail: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ exam });
+  } catch (err) {
+    console.error('[API/exams] Patch unexpected error:', err);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// ============================================================================
+// DELETE /api/exams/[examId] - 시험지 완전 삭제 (hard delete)
+// exam_problems, exam_records, exam_answers는 CASCADE로 자동 삭제
 // ============================================================================
 
 export async function DELETE(
@@ -101,10 +161,10 @@ export async function DELETE(
   }
 
   try {
-    // soft delete: deleted_at 설정
+    // Hard delete: DB에서 완전 삭제 (CASCADE로 연관 테이블 자동 정리)
     const { error } = await supabaseAdmin
       .from('exams')
-      .update({ deleted_at: new Date().toISOString() })
+      .delete()
       .eq('id', examId);
 
     if (error) {

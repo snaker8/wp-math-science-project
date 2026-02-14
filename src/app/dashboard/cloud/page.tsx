@@ -28,6 +28,14 @@ import {
   Database,
   Upload,
   X,
+  Eye,
+  FolderInput,
+  Check,
+  Download,
+  BookOpen,
+  BookMarked,
+  ClipboardList,
+  GraduationCap,
 } from 'lucide-react';
 import CloudFlowUploader from '@/components/workflow/CloudFlowUploader';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -36,13 +44,26 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 // Types
 // ============================================================================
 
-interface BookGroup {
+interface DBBookGroup {
   id: string;
   name: string;
-  children?: BookGroup[];
-  isExpanded?: boolean;
-  examCount?: number;
-  examIds?: string[]; // 이 그룹에 속한 시험지 ID 목록
+  parent_id: string | null;
+  subject: string | null;
+  sort_order: number;
+  institute_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface TreeNode {
+  id: string;
+  name: string;
+  parentId: string | null;
+  subject: string | null;
+  children: TreeNode[];
+  isExpanded: boolean;
+  examCount: number;
+  isVirtual?: boolean; // "전체 시험지", "미분류" 등 가상 노드
 }
 
 interface ExamFile {
@@ -51,6 +72,7 @@ interface ExamFile {
   fileName: string;
   hasImage: boolean;
   problemCount: number;
+  bookGroupId: string | null;
   createdAt?: string;
 }
 
@@ -63,6 +85,7 @@ interface DBExam {
   hasImage: boolean;
   school: string;
   year: string;
+  bookGroupId: string | null;
   createdAt: string;
 }
 
@@ -70,87 +93,83 @@ type SortField = 'order' | 'name' | 'problems';
 type SortDir = 'asc' | 'desc';
 
 // ============================================================================
-// DB 시험지 데이터에서 북그룹 트리 자동 생성
+// Build tree from flat DB groups + exams
 // ============================================================================
 
-function buildBookGroupsFromExams(exams: DBExam[]): BookGroup[] {
-  if (exams.length === 0) return [];
-
-  // 전체 시험지 그룹
-  const allGroup: BookGroup = {
-    id: 'all',
-    name: '전체 시험지',
-    isExpanded: true,
-    examCount: exams.length,
-    examIds: exams.map(e => e.id),
-  };
-
-  // source_name (title)에서 과목/학교 기준으로 그룹 생성
-  const schoolGroups = new Map<string, { ids: string[]; count: number }>();
-  const yearGroups = new Map<string, { ids: string[]; count: number }>();
+function buildTreeFromDB(groups: DBBookGroup[], exams: DBExam[]): TreeNode[] {
+  // 그룹별 시험지 수 계산
+  const examCountMap = new Map<string, number>();
+  let unclassifiedCount = 0;
 
   for (const exam of exams) {
-    // 학교별 그룹
-    const school = exam.school || '기타';
-    if (!schoolGroups.has(school)) {
-      schoolGroups.set(school, { ids: [], count: 0 });
+    if (exam.bookGroupId) {
+      examCountMap.set(exam.bookGroupId, (examCountMap.get(exam.bookGroupId) || 0) + 1);
+    } else {
+      unclassifiedCount++;
     }
-    schoolGroups.get(school)!.ids.push(exam.id);
-    schoolGroups.get(school)!.count++;
-
-    // 연도별 그룹
-    const year = exam.year || '기타';
-    if (!yearGroups.has(year)) {
-      yearGroups.set(year, { ids: [], count: 0 });
-    }
-    yearGroups.get(year)!.ids.push(exam.id);
-    yearGroups.get(year)!.count++;
   }
 
-  // 학교별 하위 그룹 생성
-  const schoolChildren: BookGroup[] = Array.from(schoolGroups.entries())
-    .filter(([name]) => name !== '기타')
-    .map(([name, data], i) => ({
-      id: `school-${i}`,
-      name,
-      examCount: data.count,
-      examIds: data.ids,
-    }));
-
-  // 연도별 하위 그룹 생성
-  const yearChildren: BookGroup[] = Array.from(yearGroups.entries())
-    .filter(([name]) => name !== '기타')
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([name, data], i) => ({
-      id: `year-${i}`,
-      name: `${name}학년도`,
-      examCount: data.count,
-      examIds: data.ids,
-    }));
-
-  const groups: BookGroup[] = [allGroup];
-
-  if (schoolChildren.length > 0) {
-    groups.push({
-      id: 'by-school',
-      name: '학교별',
+  // flat → tree 변환
+  const nodeMap = new Map<string, TreeNode>();
+  for (const g of groups) {
+    nodeMap.set(g.id, {
+      id: g.id,
+      name: g.name,
+      parentId: g.parent_id,
+      subject: g.subject,
+      children: [],
       isExpanded: false,
-      examCount: schoolChildren.reduce((s, c) => s + (c.examCount || 0), 0),
-      children: schoolChildren,
+      examCount: examCountMap.get(g.id) || 0,
     });
   }
 
-  if (yearChildren.length > 0) {
-    groups.push({
-      id: 'by-year',
-      name: '연도별',
-      isExpanded: false,
-      examCount: yearChildren.reduce((s, c) => s + (c.examCount || 0), 0),
-      children: yearChildren,
-    });
+  const roots: TreeNode[] = [];
+  for (const node of nodeMap.values()) {
+    if (node.parentId && nodeMap.has(node.parentId)) {
+      nodeMap.get(node.parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
   }
 
-  return groups;
+  // 가상 노드: 전체 시험지
+  const allNode: TreeNode = {
+    id: 'all',
+    name: '전체 시험지',
+    parentId: null,
+    subject: null,
+    children: [],
+    isExpanded: true,
+    examCount: exams.length,
+    isVirtual: true,
+  };
+
+  // 가상 노드: 미분류 (book_group_id가 null인 시험지)
+  const unclassifiedNode: TreeNode = {
+    id: 'unclassified',
+    name: '미분류',
+    parentId: null,
+    subject: null,
+    children: [],
+    isExpanded: false,
+    examCount: unclassifiedCount,
+    isVirtual: true,
+  };
+
+  const tree: TreeNode[] = [allNode];
+  if (roots.length > 0) tree.push(...roots);
+  if (unclassifiedCount > 0) tree.push(unclassifiedNode);
+
+  return tree;
+}
+
+// 트리에서 특정 그룹 + 모든 자손 그룹의 ID를 수집
+function collectGroupIds(node: TreeNode): string[] {
+  const ids = [node.id];
+  for (const child of node.children) {
+    ids.push(...collectGroupIds(child));
+  }
+  return ids;
 }
 
 // ============================================================================
@@ -205,8 +224,8 @@ const SubjectDropdown: React.FC<{
   );
 };
 
-// 3점 메뉴
-const ContextMenu: React.FC<{
+// 그룹 3점 메뉴
+const GroupContextMenu: React.FC<{
   onRename?: () => void;
   onAddChild?: () => void;
   onDelete?: () => void;
@@ -259,17 +278,91 @@ const ContextMenu: React.FC<{
   );
 };
 
+// 파일 3점 메뉴 (참조사이트 스타일)
+const FileContextMenu: React.FC<{
+  onRename: () => void;
+  onView: () => void;
+  onMove: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+}> = ({ onRename, onView, onMove, onDownload, onDelete }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-40 mt-1 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRename(); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <Pencil className="h-3.5 w-3.5" /> 파일명 수정
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onView(); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <Eye className="h-3.5 w-3.5" /> 문제 보기
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMove(); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <FolderInput className="h-3.5 w-3.5" /> 그룹 이동
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDownload(); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <Download className="h-3.5 w-3.5" /> 원본 다운로드
+            </button>
+            <div className="my-1 border-t border-zinc-800" />
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-zinc-800 hover:text-red-300"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> 파일 삭제
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // 트리 노드 (재귀)
-const TreeNode: React.FC<{
-  node: BookGroup;
+const TreeNodeComponent: React.FC<{
+  node: TreeNode;
   level: number;
   selectedId: string | null;
+  renamingId: string | null;
+  renameValue: string;
   onSelect: (id: string, name: string) => void;
   onToggle: (id: string) => void;
-}> = ({ node, level, selectedId, onSelect, onToggle }) => {
+  onRename: (id: string) => void;
+  onRenameChange: (v: string) => void;
+  onRenameConfirm: () => void;
+  onRenameCancel: () => void;
+  onAddChild: (parentId: string) => void;
+  onDelete: (id: string, name: string) => void;
+}> = ({ node, level, selectedId, renamingId, renameValue, onSelect, onToggle, onRename, onRenameChange, onRenameConfirm, onRenameCancel, onAddChild, onDelete }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isSelected = selectedId === node.id;
   const isExpanded = node.isExpanded;
+  const isRenaming = renamingId === node.id;
 
   return (
     <div>
@@ -299,33 +392,264 @@ const TreeNode: React.FC<{
         ) : (
           <Folder className="h-4 w-4 flex-shrink-0 text-zinc-500" />
         )}
-        <span className={`flex-1 truncate text-[13px] ${isSelected ? 'font-semibold' : 'font-medium'}`}>
-          {node.name}
-        </span>
-        {node.examCount !== undefined && node.examCount > 0 && (
+        {isRenaming ? (
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onRenameConfirm();
+              if (e.key === 'Escape') onRenameCancel();
+            }}
+            onBlur={onRenameConfirm}
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+            className="flex-1 bg-zinc-800 border border-cyan-500/50 rounded px-1.5 py-0.5 text-[13px] text-white outline-none"
+          />
+        ) : (
+          <span className={`flex-1 truncate text-[13px] ${isSelected ? 'font-semibold' : 'font-medium'}`}>
+            {node.name}
+          </span>
+        )}
+        {node.examCount > 0 && !isRenaming && (
           <span className="text-[10px] text-zinc-600 mr-1">{node.examCount}</span>
         )}
-        <ContextMenu
-          onRename={() => {}}
-          onAddChild={hasChildren || level < 2 ? () => {} : undefined}
-          onDelete={() => {}}
-        />
+        {!node.isVirtual && !isRenaming && (
+          <GroupContextMenu
+            onRename={() => onRename(node.id)}
+            onAddChild={level < 3 ? () => onAddChild(node.id) : undefined}
+            onDelete={() => onDelete(node.id, node.name)}
+          />
+        )}
       </div>
       {hasChildren && isExpanded && (
         <div>
-          {node.children!.map((child) => (
-            <TreeNode
+          {node.children.map((child) => (
+            <TreeNodeComponent
               key={child.id}
               node={child}
               level={level + 1}
               selectedId={selectedId}
+              renamingId={renamingId}
+              renameValue={renameValue}
               onSelect={onSelect}
               onToggle={onToggle}
+              onRename={onRename}
+              onRenameChange={onRenameChange}
+              onRenameConfirm={onRenameConfirm}
+              onRenameCancel={onRenameCancel}
+              onAddChild={onAddChild}
+              onDelete={onDelete}
             />
           ))}
         </div>
       )}
     </div>
+  );
+};
+
+// 그룹 이동 모달
+const MoveToGroupModal: React.FC<{
+  groups: DBBookGroup[];
+  currentGroupId: string | null;
+  onMove: (groupId: string | null) => void;
+  onClose: () => void;
+}> = ({ groups, currentGroupId, onMove, onClose }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm mx-4 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+          <h3 className="text-sm font-bold text-white">그룹 이동</h3>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-64 overflow-y-auto p-3 space-y-1">
+          <button
+            type="button"
+            onClick={() => onMove(null)}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
+              currentGroupId === null ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-400 hover:bg-zinc-800'
+            }`}
+          >
+            <Folder className="h-3.5 w-3.5" />
+            미분류
+            {currentGroupId === null && <Check className="h-3 w-3 ml-auto" />}
+          </button>
+          {groups.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => onMove(g.id)}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
+                currentGroupId === g.id ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-400 hover:bg-zinc-800'
+              }`}
+            >
+              <Folder className="h-3.5 w-3.5" />
+              {g.name}
+              {currentGroupId === g.id && <Check className="h-3 w-3 ml-auto" />}
+            </button>
+          ))}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// 북그룹 생성 모달 (참조사이트 스타일)
+const GROUP_TYPES = [
+  { id: 'textbook', label: '교과서', desc: '정규 수업을 위한 기본 학습 자료', icon: BookOpen },
+  { id: 'workbook', label: '문제집', desc: '심화/복습용 연습 문제 모음', icon: BookMarked },
+  { id: 'exam', label: '시험지', desc: '실전 대비 모의 시험지와 평가 자료', icon: ClipboardList },
+  { id: 'mock', label: '모의고사', desc: '실제 시험과 동일한 구성의 모의고사', icon: GraduationCap },
+] as const;
+
+const CreateGroupModal: React.FC<{
+  parentId: string | null; // null이면 최상위 그룹
+  onSave: (data: { name: string; groupType: string; parentId: string | null }) => Promise<void>;
+  onClose: () => void;
+}> = ({ parentId, onSave, onClose }) => {
+  const [groupType, setGroupType] = useState<string>('exam');
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({ name: name.trim(), groupType, parentId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '저장에 실패했습니다.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg mx-4 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden"
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-cyan-600 to-indigo-600 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+              <FolderPlus className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                {parentId ? '하위 그룹 생성' : '북그룹 생성'}
+              </h3>
+              <p className="text-xs text-white/70">교재와 자료를 카테고리별로 정리해 학습 흐름을 완성하세요.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* 그룹 타입 */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-3">그룹타입</label>
+            <div className="grid grid-cols-2 gap-3">
+              {GROUP_TYPES.map((type) => {
+                const Icon = type.icon;
+                const isSelected = groupType === type.id;
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => setGroupType(type.id)}
+                    className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all ${
+                      isSelected
+                        ? 'border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30'
+                        : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                      isSelected ? 'bg-cyan-500/20 text-cyan-400' : 'bg-zinc-700/50 text-zinc-500'
+                    }`}>
+                      <Icon className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className={`text-sm font-semibold ${isSelected ? 'text-cyan-400' : 'text-zinc-300'}`}>
+                        {type.label}
+                      </div>
+                      <div className="text-[11px] text-zinc-500 leading-tight mt-0.5">{type.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 이름 입력 */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">북그룹 이름</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+              placeholder="예) 2학년 1학기 교과서"
+              autoFocus
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-800/50 px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500"
+            />
+          </div>
+
+          {/* 에러 메시지 */}
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+
+          {/* 버튼 */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors disabled:opacity-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!name.trim() || saving}
+              className="flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-700 disabled:text-zinc-500 px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-cyan-500/20 disabled:shadow-none"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -338,12 +662,19 @@ export default function CloudPage() {
 
   // --- DB Data ---
   const [dbExams, setDbExams] = useState<DBExam[]>([]);
+  const [dbGroups, setDbGroups] = useState<DBBookGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // --- Upload Modal ---
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [userId, setUserId] = useState<string>('');
+
+  // --- Move Modal ---
+  const [movingExam, setMovingExam] = useState<{ id: string; bookGroupId: string | null } | null>(null);
+
+  // --- Create Group Modal ---
+  const [showCreateGroup, setShowCreateGroup] = useState<{ parentId: string | null } | null>(null);
 
   // Fetch User ID for uploader
   useEffect(() => {
@@ -358,63 +689,90 @@ export default function CloudPage() {
 
   // --- State ---
   const [subject, setSubject] = useState(subjectOptions[0]);
-  const [bookGroups, setBookGroups] = useState<BookGroup[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedName, setSelectedName] = useState<string>('');
+  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>('all');
+  const [selectedName, setSelectedName] = useState<string>('전체 시험지');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('order');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  // --- Rename state ---
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renamingExamId, setRenamingExamId] = useState<string | null>(null);
+  const [renameExamValue, setRenameExamValue] = useState('');
+
   // Resizable panels
-  const [leftWidth, setLeftWidth] = useState(28); // percentage
+  const [leftWidth, setLeftWidth] = useState(28);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // --- DB에서 시험지 목록 가져오기 ---
-  const fetchExams = useCallback(async () => {
+  // --- 확장 상태 보존 ---
+  const expandedIdsRef = useRef<Set<string>>(new Set(['all']));
+
+  // --- DB에서 데이터 가져오기 ---
+  const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/exams');
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const exams: DBExam[] = data.exams || [];
+      setLoadError(null);
+
+      const subjectParam = subject !== '전체' ? `?subject=${encodeURIComponent(subject)}` : '';
+
+      // 북그룹 + 시험지 병렬 fetch
+      const [groupsRes, examsRes] = await Promise.all([
+        fetch(`/api/book-groups${subjectParam}`),
+        fetch('/api/exams'),
+      ]);
+
+      if (!groupsRes.ok) throw new Error(`BookGroups HTTP ${groupsRes.status}`);
+      if (!examsRes.ok) throw new Error(`Exams HTTP ${examsRes.status}`);
+
+      const groupsData = await groupsRes.json();
+      const examsData = await examsRes.json();
+
+      const groups: DBBookGroup[] = groupsData.groups || [];
+      const exams: DBExam[] = examsData.exams || [];
+
+      setDbGroups(groups);
       setDbExams(exams);
 
-      // 시험지 데이터에서 북그룹 트리 생성
-      const groups = buildBookGroupsFromExams(exams);
-      setBookGroups(groups);
+      // 트리 생성
+      const tree = buildTreeFromDB(groups, exams);
 
-      // 전체 시험지 그룹 자동 선택
-      if (groups.length > 0) {
-        setSelectedId(groups[0].id);
-        setSelectedName(groups[0].name);
-      }
+      // 확장 상태 복원
+      const restoreExpanded = (nodes: TreeNode[]): TreeNode[] =>
+        nodes.map((n) => ({
+          ...n,
+          isExpanded: expandedIdsRef.current.has(n.id),
+          children: restoreExpanded(n.children),
+        }));
+
+      setTreeNodes(restoreExpanded(tree));
     } catch (err) {
-      console.error('[Cloud] Failed to load exams:', err);
+      console.error('[Cloud] Failed to load data:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [subject]);
 
-  // 초기 로드
+  // 초기 로드 + 과목 변경 시 재로드
   useEffect(() => {
-    fetchExams();
-  }, [fetchExams]);
+    fetchData();
+  }, [fetchData]);
 
-  // 페이지 복귀 시 데이터 재로드 (다른 페이지 갔다 돌아올 때)
+  // 페이지 복귀 시 데이터 재로드
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        fetchExams();
+        fetchData();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [fetchExams]);
+  }, [fetchData]);
 
+  // --- Panel Resize ---
   const handleMouseDown = useCallback(() => {
     isDragging.current = true;
     document.body.style.cursor = 'col-resize';
@@ -439,15 +797,22 @@ export default function CloudPage() {
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
 
-  // Toggle tree expand
+  // --- Tree Toggle ---
   const toggleNode = useCallback((id: string) => {
-    const toggle = (groups: BookGroup[]): BookGroup[] =>
-      groups.map((g) => {
-        if (g.id === id) return { ...g, isExpanded: !g.isExpanded };
-        if (g.children) return { ...g, children: toggle(g.children) };
-        return g;
-      });
-    setBookGroups((prev) => toggle(prev));
+    setTreeNodes((prev) => {
+      const toggle = (nodes: TreeNode[]): TreeNode[] =>
+        nodes.map((n) => {
+          if (n.id === id) {
+            const newExpanded = !n.isExpanded;
+            if (newExpanded) expandedIdsRef.current.add(id);
+            else expandedIdsRef.current.delete(id);
+            return { ...n, isExpanded: newExpanded };
+          }
+          if (n.children.length > 0) return { ...n, children: toggle(n.children) };
+          return n;
+        });
+      return toggle(prev);
+    });
   }, []);
 
   const handleSelect = useCallback((id: string, name: string) => {
@@ -456,19 +821,115 @@ export default function CloudPage() {
     setSearchQuery('');
   }, []);
 
-  // Count total book groups
-  const countGroups = (groups: BookGroup[]): number =>
-    groups.reduce((sum, g) => sum + 1 + (g.children ? countGroups(g.children) : 0), 0);
-  const totalGroups = countGroups(bookGroups);
+  // --- Count total book groups ---
+  const countGroups = (nodes: TreeNode[]): number =>
+    nodes.reduce((sum, n) => sum + (n.isVirtual ? 0 : 1) + countGroups(n.children), 0);
+  const totalGroups = countGroups(treeNodes);
 
-  // 선택된 그룹에 해당하는 시험지 목록 가져오기
-  const findGroupById = useCallback((groups: BookGroup[], id: string): BookGroup | null => {
-    for (const g of groups) {
-      if (g.id === id) return g;
-      if (g.children) {
-        const found = findGroupById(g.children, id);
+  // --- 그룹 CRUD handlers (DB API 호출) ---
+
+  // 최상위 그룹 추가 (모달 열기)
+  const handleAddRootGroup = useCallback(() => {
+    setShowCreateGroup({ parentId: null });
+  }, []);
+
+  // 하위 그룹 추가 (모달 열기)
+  const handleAddChild = useCallback((parentId: string) => {
+    setShowCreateGroup({ parentId });
+  }, []);
+
+  // 모달에서 저장 시 API 호출
+  const handleCreateGroupSave = useCallback(async (data: { name: string; groupType: string; parentId: string | null }) => {
+    const res = await fetch('/api/book-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        parentId: data.parentId,
+        groupType: data.groupType,
+        subject: subject !== '전체' ? subject : undefined,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      throw new Error(err.error || err.detail || '그룹 생성에 실패했습니다.');
+    }
+    // 부모 그룹 확장
+    if (data.parentId) {
+      expandedIdsRef.current.add(data.parentId);
+    }
+    setShowCreateGroup(null);
+    await fetchData();
+  }, [fetchData, subject]);
+
+  // 그룹 이름 변경 시작
+  const handleStartRenameGroup = useCallback((id: string) => {
+    const findName = (nodes: TreeNode[]): string => {
+      for (const n of nodes) {
+        if (n.id === id) return n.name;
+        const found = findName(n.children);
         if (found) return found;
       }
+      return '';
+    };
+    setRenamingGroupId(id);
+    setRenameValue(findName(treeNodes));
+  }, [treeNodes]);
+
+  // 그룹 이름 변경 확인
+  const handleConfirmRenameGroup = useCallback(async () => {
+    if (!renamingGroupId || !renameValue.trim()) {
+      setRenamingGroupId(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/book-groups/${renamingGroupId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameValue.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`이름 변경 실패: ${err.error || '알 수 없는 오류'}`);
+      }
+    } catch (err) {
+      console.error('[Cloud] Rename group error:', err);
+    }
+
+    setRenamingGroupId(null);
+    await fetchData();
+  }, [renamingGroupId, renameValue, fetchData]);
+
+  // 그룹 삭제
+  const handleDeleteGroup = useCallback(async (id: string, name: string) => {
+    if (!confirm(`"${name}" 그룹을 삭제하시겠습니까? 하위 그룹도 함께 삭제됩니다.`)) return;
+
+    try {
+      const res = await fetch(`/api/book-groups/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`삭제 실패: ${err.error || '알 수 없는 오류'}`);
+        return;
+      }
+      // 선택된 그룹이 삭제된 경우 "전체"로 이동
+      if (selectedId === id) {
+        setSelectedId('all');
+        setSelectedName('전체 시험지');
+      }
+      await fetchData();
+    } catch (err) {
+      console.error('[Cloud] Delete group error:', err);
+      alert('삭제 중 오류가 발생했습니다.');
+    }
+  }, [selectedId, fetchData]);
+
+  // --- 선택된 그룹의 시험지 목록 ---
+  const findNodeById = useCallback((nodes: TreeNode[], id: string): TreeNode | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNodeById(n.children, id);
+      if (found) return found;
     }
     return null;
   }, []);
@@ -476,13 +937,22 @@ export default function CloudPage() {
   const exams: ExamFile[] = useMemo(() => {
     if (!selectedId || dbExams.length === 0) return [];
 
-    const selectedGroup = findGroupById(bookGroups, selectedId);
-    const allowedIds = selectedGroup?.examIds;
+    let filtered: DBExam[];
 
-    // 해당 그룹의 시험지만 필터
-    const filtered = allowedIds
-      ? dbExams.filter((e) => allowedIds.includes(e.id))
-      : dbExams;
+    if (selectedId === 'all') {
+      filtered = dbExams;
+    } else if (selectedId === 'unclassified') {
+      filtered = dbExams.filter((e) => !e.bookGroupId);
+    } else {
+      // 선택된 그룹 + 자손 그룹의 시험지
+      const node = findNodeById(treeNodes, selectedId);
+      if (node) {
+        const groupIds = new Set(collectGroupIds(node));
+        filtered = dbExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
+      } else {
+        filtered = [];
+      }
+    }
 
     return filtered.map((exam, idx) => ({
       id: exam.id,
@@ -490,9 +960,10 @@ export default function CloudPage() {
       fileName: exam.fileName || exam.title,
       hasImage: exam.hasImage,
       problemCount: exam.problemCount,
+      bookGroupId: exam.bookGroupId,
       createdAt: exam.createdAt,
     }));
-  }, [selectedId, dbExams, bookGroups, findGroupById]);
+  }, [selectedId, dbExams, treeNodes, findNodeById]);
 
   const filteredExams = useMemo(() => {
     let result = exams;
@@ -529,52 +1000,93 @@ export default function CloudPage() {
         alert(`삭제 실패: ${err.error || '알 수 없는 오류'}`);
         return;
       }
-
-      // 로컬 상태에서 즉시 제거
-      setDbExams(prev => {
-        const updated = prev.filter(e => e.id !== examId);
-        // 북그룹 트리도 갱신
-        const groups = buildBookGroupsFromExams(updated);
-        setBookGroups(groups);
-        return updated;
-      });
+      // 로컬 상태에서 즉시 제거 + 트리 재구성
+      setDbExams((prev) => prev.filter((e) => e.id !== examId));
+      await fetchData();
     } catch (err) {
       console.error('[Cloud] Delete error:', err);
       alert('삭제 중 오류가 발생했습니다.');
     }
+  }, [fetchData]);
+
+  // --- 시험지 이름 변경 ---
+  const handleStartRenameExam = useCallback((examId: string, currentName: string) => {
+    setRenamingExamId(examId);
+    setRenameExamValue(currentName);
   }, []);
 
-  // --- 헤더 삭제 버튼: 현재 보이는 시험지 전체 삭제 ---
+  const handleConfirmRenameExam = useCallback(async () => {
+    if (!renamingExamId || !renameExamValue.trim()) {
+      setRenamingExamId(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/exams/${renamingExamId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: renameExamValue.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`이름 변경 실패: ${err.error || '알 수 없는 오류'}`);
+      }
+    } catch (err) {
+      console.error('[Cloud] Rename exam error:', err);
+    }
+
+    setRenamingExamId(null);
+    await fetchData();
+  }, [renamingExamId, renameExamValue, fetchData]);
+
+  // --- 시험지 그룹 이동 ---
+  const handleMoveExam = useCallback(async (newGroupId: string | null) => {
+    if (!movingExam) return;
+
+    try {
+      const res = await fetch(`/api/exams/${movingExam.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookGroupId: newGroupId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`이동 실패: ${err.error || '알 수 없는 오류'}`);
+      }
+    } catch (err) {
+      console.error('[Cloud] Move exam error:', err);
+    }
+
+    setMovingExam(null);
+    await fetchData();
+  }, [movingExam, fetchData]);
+
+  // --- 헤더 삭제 버튼 ---
   const handleDeleteAllVisible = useCallback(async () => {
     if (filteredExams.length === 0) return;
     if (!confirm(`현재 표시된 ${filteredExams.length}개 시험지를 모두 삭제하시겠습니까?`)) return;
 
     try {
       const results = await Promise.allSettled(
-        filteredExams.map(exam =>
+        filteredExams.map((exam) =>
           fetch(`/api/exams/${exam.id}`, { method: 'DELETE' })
         )
       );
 
-      const successCount = results.filter(r => r.status === 'fulfilled' && (r.value as Response).ok).length;
-
-      // 로컬 상태에서 삭제된 항목 제거
-      const deletedIds = new Set(filteredExams.map(e => e.id));
-      setDbExams(prev => {
-        const updated = prev.filter(e => !deletedIds.has(e.id));
-        const groups = buildBookGroupsFromExams(updated);
-        setBookGroups(groups);
-        return updated;
-      });
+      const successCount = results.filter(
+        (r) => r.status === 'fulfilled' && (r.value as Response).ok
+      ).length;
 
       if (successCount < filteredExams.length) {
         alert(`${successCount}/${filteredExams.length}개 삭제 완료 (일부 실패)`);
       }
+
+      await fetchData();
     } catch (err) {
       console.error('[Cloud] Bulk delete error:', err);
       alert('삭제 중 오류가 발생했습니다.');
     }
-  }, [filteredExams]);
+  }, [filteredExams, fetchData]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
@@ -617,7 +1129,7 @@ export default function CloudPage() {
           <div className="text-center">
             <p className="text-red-400 text-sm mb-2">데이터 로딩 실패: {loadError}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => fetchData()}
               className="text-xs text-cyan-400 hover:underline"
             >
               새로고침
@@ -662,15 +1174,40 @@ export default function CloudPage() {
               <div className="p-6">
                 <CloudFlowUploader
                   userId={userId}
+                  bookGroupId={selectedId && selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : undefined}
                   autoNavigateToAnalyze={true}
                   onComplete={(results) => {
                     console.log('Upload complete', results);
                     setShowUploadModal(false);
+                    fetchData();
                   }}
                 />
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ======== Move Modal ======== */}
+      <AnimatePresence>
+        {movingExam && (
+          <MoveToGroupModal
+            groups={dbGroups}
+            currentGroupId={movingExam.bookGroupId}
+            onMove={handleMoveExam}
+            onClose={() => setMovingExam(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ======== Create Group Modal ======== */}
+      <AnimatePresence>
+        {showCreateGroup && (
+          <CreateGroupModal
+            parentId={showCreateGroup.parentId}
+            onSave={handleCreateGroupSave}
+            onClose={() => setShowCreateGroup(null)}
+          />
         )}
       </AnimatePresence>
 
@@ -689,6 +1226,7 @@ export default function CloudPage() {
               </span>
               <button
                 type="button"
+                onClick={handleAddRootGroup}
                 className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-400 transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-zinc-400">
@@ -701,16 +1239,24 @@ export default function CloudPage() {
             {/* Tree Panel */}
             <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/90">
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 p-2">
-                {bookGroups.length > 0 ? (
+                {treeNodes.length > 0 ? (
                   <div className="space-y-0.5">
-                    {bookGroups.map((group) => (
-                      <TreeNode
-                        key={group.id}
-                        node={group}
+                    {treeNodes.map((node) => (
+                      <TreeNodeComponent
+                        key={node.id}
+                        node={node}
                         level={0}
                         selectedId={selectedId}
+                        renamingId={renamingGroupId}
+                        renameValue={renameValue}
                         onSelect={handleSelect}
                         onToggle={toggleNode}
+                        onRename={handleStartRenameGroup}
+                        onRenameChange={setRenameValue}
+                        onRenameConfirm={handleConfirmRenameGroup}
+                        onRenameCancel={() => setRenamingGroupId(null)}
+                        onAddChild={handleAddChild}
+                        onDelete={handleDeleteGroup}
                       />
                     ))}
                   </div>
@@ -847,10 +1393,26 @@ export default function CloudPage() {
                             </span>
                           </span>
                           <div className="flex-1 flex items-center gap-2 pl-3 min-w-0">
-                            <span className="truncate text-[13px] text-zinc-300 font-medium">
-                              {exam.fileName}
-                            </span>
-                            {exam.hasImage && (
+                            {renamingExamId === exam.id ? (
+                              <input
+                                type="text"
+                                value={renameExamValue}
+                                onChange={(e) => setRenameExamValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleConfirmRenameExam();
+                                  if (e.key === 'Escape') setRenamingExamId(null);
+                                }}
+                                onBlur={handleConfirmRenameExam}
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                                className="flex-1 bg-zinc-800 border border-cyan-500/50 rounded px-2 py-1 text-[13px] text-white outline-none"
+                              />
+                            ) : (
+                              <span className="truncate text-[13px] text-zinc-300 font-medium">
+                                {exam.fileName}
+                              </span>
+                            )}
+                            {exam.hasImage && renamingExamId !== exam.id && (
                               <span className="flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-1.5 py-0.5 text-[10px] font-medium text-cyan-400 flex-shrink-0">
                                 <ImageIcon className="h-3 w-3" />
                                 이미지 포함
@@ -878,17 +1440,16 @@ export default function CloudPage() {
                             )}
                           </span>
                           <span className="w-14 flex justify-center">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteExam(exam.id, exam.fileName);
+                            <FileContextMenu
+                              onRename={() => handleStartRenameExam(exam.id, exam.fileName)}
+                              onView={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                              onMove={() => setMovingExam({ id: exam.id, bookGroupId: exam.bookGroupId })}
+                              onDownload={() => {
+                                // TODO: Storage 연동 후 실제 파일 다운로드
+                                alert('원본 파일 다운로드 기능은 Storage 연동 후 사용 가능합니다.');
                               }}
-                              className="rounded-lg p-1.5 text-zinc-500 hover:bg-red-900/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                              title="삭제"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                              onDelete={() => handleDeleteExam(exam.id, exam.fileName)}
+                            />
                           </span>
                         </div>
                       ))}

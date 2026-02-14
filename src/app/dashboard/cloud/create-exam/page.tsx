@@ -105,7 +105,7 @@ export default function CreateExamPage() {
             createdAt: new Date().toISOString(),
           })
         );
-        router.push('/dashboard/exam-management');
+        router.push('/dashboard/cloud');
       }, 1500);
     }
   };

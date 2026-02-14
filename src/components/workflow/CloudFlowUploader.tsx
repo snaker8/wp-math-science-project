@@ -27,6 +27,8 @@ import { getStatusLabel, getStatusColor } from '@/lib/workflow/cloud-flow';
 interface CloudFlowUploaderProps {
   instituteId?: string;
   userId?: string;
+  /** 업로드 시 연결할 북그룹 ID */
+  bookGroupId?: string;
   onComplete?: (results: LLMAnalysisResult[]) => void;
   /** true이면 업로드 시작 후 바로 분석 페이지로 이동 */
   autoNavigateToAnalyze?: boolean;
@@ -39,6 +41,7 @@ interface JobWithResults extends UploadJob {
 export default function CloudFlowUploader({
   instituteId = 'default',
   userId = 'user',
+  bookGroupId,
   onComplete,
   autoNavigateToAnalyze = false,
 }: CloudFlowUploaderProps) {
@@ -120,6 +123,9 @@ export default function CloudFlowUploader({
       formData.append('documentType', 'PROBLEM'); // 메인 타입은 항상 PROBLEM
       formData.append('autoClassify', String(autoClassify));
       formData.append('generateSolutions', String(generateSolutions));
+      if (bookGroupId) {
+        formData.append('bookGroupId', bookGroupId);
+      }
 
       const response = await fetch('/api/workflow/upload', {
         method: 'POST',

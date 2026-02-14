@@ -263,7 +263,8 @@ function groupLinesIntoQuestions(
   // 문제 번호 패턴 (한국 수능/모의고사 형식)
   // "01 다음", "1.", "1)", "1번", "[1]", "01.", "02 " 등 다양한 형식 지원
   // Mathpix MMD 형식: "**01**", "\\textbf{01}" 등 볼드 마커도 처리
-  const questionStartPattern = /^[\s]*(?:\*{1,2})?(\d{1,2})(?:\*{1,2})?[\s]*(?:[.)번\]]|[\s]+(?=[가-힣]))/;
+  // "03" 단독 라인 (번호만 있고 뒤에 아무것도 없는 경우)도 매칭
+  const questionStartPattern = /^[\s]*(?:\*{1,2})?(\d{1,2})(?:\*{1,2})?[\s]*(?:[.)번\]]|[\s]+(?=[가-힣])|$)/;
   // 선택지 패턴
   const choicePattern = /[①②③④⑤]/;
 
@@ -360,12 +361,20 @@ function buildQuestionResult(
     }
   }
 
+  // padding 추가: 라인 region이 텍스트에 딱 맞아 수식/선택지가 잘리는 문제 방지
+  const padX = pageW * 0.015;  // 좌우 1.5%
+  const padY = pageH * 0.01;   // 상하 1%
+  const paddedMinX = Math.max(0, minX - padX);
+  const paddedMinY = Math.max(0, minY - padY);
+  const paddedMaxX = Math.min(pageW, maxX + padX);
+  const paddedMaxY = Math.min(pageH, maxY + padY);
+
   // 비율 기반 bbox (0~1)
   const bbox = {
-    x: minX / pageW,
-    y: minY / pageH,
-    w: (maxX - minX) / pageW,
-    h: (maxY - minY) / pageH,
+    x: paddedMinX / pageW,
+    y: paddedMinY / pageH,
+    w: (paddedMaxX - paddedMinX) / pageW,
+    h: (paddedMaxY - paddedMinY) / pageH,
   };
 
   // Mathpix Markdown 텍스트 (수식 $...$ 인라인 포함)

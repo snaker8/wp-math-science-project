@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
         status,
         total_points,
         created_at,
+        book_group_id,
         exam_problems(count)
       `)
-      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(200);
 
@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
         hasImage,
         school: schoolMatch?.[1] || '',
         year: yearMatch?.[1] || '',
+        bookGroupId: exam.book_group_id || null,
         createdAt: exam.created_at,
       };
     });

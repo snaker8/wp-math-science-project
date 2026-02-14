@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     const documentType = (formData.get('documentType') as 'PROBLEM' | 'ANSWER' | 'QUICK_ANSWER') || 'PROBLEM';
     const autoClassify = formData.get('autoClassify') === 'true';
     const generateSolutions = formData.get('generateSolutions') === 'true';
+    const bookGroupId = formData.get('bookGroupId') as string | null;
 
     if (!file) {
       return NextResponse.json(
@@ -210,7 +211,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobId } = body;
+    const { jobId, bookGroupId } = body;
 
     if (!jobId) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
@@ -230,8 +231,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No analysis results found' }, { status: 400 });
     }
 
-    // DB에 저장
-    await saveProblemsToDB(jobId, results);
+    // DB에 저장 (bookGroupId 전달)
+    await saveProblemsToDB(jobId, results, bookGroupId || null);
 
     return NextResponse.json({
       success: true,
@@ -381,7 +382,8 @@ async function processJobInBackground(
 
 async function saveProblemsToDB(
   jobId: string,
-  results: LLMAnalysisResult[]
+  results: LLMAnalysisResult[],
+  bookGroupId: string | null = null
 ): Promise<void> {
   // Use Admin Client to bypass RLS for background processing
   const supabase = supabaseAdmin;
@@ -488,6 +490,11 @@ async function saveProblemsToDB(
       time_limit_minutes: 50,
     };
 
+    // 북그룹 ID가 있으면 설정
+    if (bookGroupId) {
+      examInsertData.book_group_id = bookGroupId;
+    }
+
     console.log(`[DB] Inserting exam with data:`, JSON.stringify(examInsertData, null, 2));
 
     let examResult = await supabase
@@ -578,8 +585,9 @@ async function saveProblemsToDB(
           solution_html: null,
           answer_json: {
             finalAnswer: result.solution.finalAnswer || '',
-            type: 'short_answer',
+            type: (result.choices && result.choices.length > 0) ? 'multiple_choice' : 'short_answer',
             correct_answer: result.solution.finalAnswer || '',
+            choices: result.choices || [],
           },
           images: [],
           status: 'PENDING_REVIEW',

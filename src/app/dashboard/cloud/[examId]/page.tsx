@@ -236,13 +236,19 @@ function ProblemCardView({
         </div>
 
         {/* 선택지 */}
+        {/* 선택지 */}
         {problem.choices.length > 0 && (
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 pl-4">
-            {problem.choices.map((choice, i) => (
-              <div key={i} className="text-[13px] text-zinc-400">
-                <MixedContentRenderer content={choice} />
-              </div>
-            ))}
+            {problem.choices.map((choice, i) => {
+              const circled = ['①', '②', '③', '④', '⑤'][i] || '';
+              const stripped = choice.replace(/^[①②③④⑤]\s*/, '');
+              return (
+                <div key={i} className="flex items-start gap-1 text-[13px] text-zinc-400">
+                  <span className="flex-shrink-0 text-zinc-500">{circled}</span>
+                  <MixedContentRenderer content={stripped} className="text-zinc-400" />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -250,15 +256,21 @@ function ProblemCardView({
       {/* 카드 하단: 연도 + 유형코드 + 유형명 + 출처 */}
       <div className="flex items-center justify-between border-t border-zinc-800/50 px-4 py-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            {problem.year}
-          </span>
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            {problem.typeCode}. {problem.typeName}
-          </span>
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700">
-            {problem.source}
-          </span>
+          {problem.year && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              {problem.year}
+            </span>
+          )}
+          {problem.typeCode && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {problem.typeCode}. {problem.typeName}
+            </span>
+          )}
+          {problem.source && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700">
+              {problem.source}
+            </span>
+          )}
         </div>
         <button type="button" className="p-1 text-zinc-600 hover:text-zinc-400" title="유형 상세">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -266,6 +278,13 @@ function ProblemCardView({
           </svg>
         </button>
       </div>
+
+      {/* 유형 footer (참조사이트 스타일) */}
+      {problem.typeCode && (
+        <div className="px-4 py-1.5 border-t border-zinc-800/30 bg-zinc-900/60">
+          <span className="text-[11px] text-zinc-500">유형: {problem.typeCode}. {problem.typeName}</span>
+        </div>
+      )}
     </div>
   );
 }

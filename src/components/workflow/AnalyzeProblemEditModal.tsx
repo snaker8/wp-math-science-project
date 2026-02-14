@@ -9,7 +9,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import {
   X, Save, Loader2, Sigma, Trash2, AlertCircle,
   Bold, Italic, ImageIcon, Table2, List, Minus, Eye, EyeOff, Link2,
-  LineChart, Underline as UnderlineIcon, FileText, Type,
+  LineChart, Underline as UnderlineIcon, FileText, Type, Upload,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
@@ -175,7 +175,7 @@ function EditorPanel({
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   onOpenLatex: () => void;
 }) {
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
 
   const handleBold = () => wrapSelection(textareaRef.current, '**', '**', value, onChange);
   const handleItalic = () => wrapSelection(textareaRef.current, '*', '*', value, onChange);
@@ -327,10 +327,12 @@ function ChoicesEditor({
                   value={choice.replace(/^[①②③④⑤]\s*/, '')}
                   onChange={(e) => handleChoiceChange(i, e.target.value)}
                   className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
-                  placeholder={`선택지 ${i + 1}`} />
+                  placeholder={`선택지 ${i + 1}`}
+                  title="수식은 $...$ 로 감싸세요 (예: $x^2+1$)" />
               </div>
             ))}
           </div>
+          <p className="text-[10px] text-zinc-600">수식은 <code className="bg-zinc-800 px-1 rounded">$...$</code> 로 감싸세요 (예: <code className="bg-zinc-800 px-1 rounded">$x^2+1$</code>)</p>
 
           {/* 정답 선택 */}
           <div className="flex items-center gap-3 pt-1 border-t border-zinc-800">
@@ -555,6 +557,18 @@ export default function AnalyzeProblemEditModal({
   const [showLatexModal, setShowLatexModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // === OCR 텍스트 읽어내기 ===
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [ocrText, setOcrText] = useState(problem.content);
+
+  // === 이미지 추가 ===
+  const imageFileRef = useRef<HTMLInputElement>(null);
+  // === 해설 이미지 드래그&드롭 ===
+  const [solutionImage, setSolutionImage] = useState<string | null>(null);
+  const [isDraggingSolution, setIsDraggingSolution] = useState(false);
+  const solutionImageFileRef = useRef<HTMLInputElement>(null);
+  const [isSolutionOcrLoading, setIsSolutionOcrLoading] = useState(false);
+
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const solutionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -595,6 +609,118 @@ export default function AnalyzeProblemEditModal({
     insertAtCursor(ref, wrapped, val, set);
     setShowLatexModal(false);
   }, [activeRef, activeValue, activeSetter]);
+
+  // === 텍스트 읽어내기 (OCR) ===
+  const handleReadText = useCallback(async () => {
+    if (!pdfUrl || !problem.bbox) return;
+    setIsOcrLoading(true);
+    try {
+      // PDF → canvas → base64
+      const { loadPdfDocument } = await import('@/lib/pdf-viewer');
+      const pdf = await loadPdfDocument(pdfUrl);
+      const page = await pdf.getPage(problem.pageIndex + 1);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context failed');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      // bbox 영역만 크롭
+      const bbox = problem.bbox;
+      const sx = bbox.x * canvas.width;
+      const sy = bbox.y * canvas.height;
+      const sw = bbox.w * canvas.width;
+      const sh = bbox.h * canvas.height;
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = sw;
+      cropCanvas.height = sh;
+      const cropCtx = cropCanvas.getContext('2d');
+      if (!cropCtx) throw new Error('Crop canvas context failed');
+      cropCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      const imageBase64 = cropCanvas.toDataURL('image/jpeg', 0.9);
+
+      // OCR API 호출
+      const res = await fetch('/api/workflow/reanalyze-crop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64 }),
+      });
+
+      if (!res.ok) throw new Error(`OCR API error: ${res.status}`);
+      const data = await res.json();
+      const ocrContent = data.ocrText || data.rawOcrText || '';
+      setOcrText(ocrContent);
+    } catch (err) {
+      console.error('텍스트 읽어내기 실패:', err);
+      alert('텍스트 읽어내기에 실패했습니다.');
+    } finally {
+      setIsOcrLoading(false);
+    }
+  }, [pdfUrl, problem.pageIndex, problem.bbox]);
+
+  // === 이미지 파일 추가 ===
+  const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      const markdown = `\n![이미지](${base64})\n`;
+      activeSetter(prev => prev + markdown);
+    };
+    reader.readAsDataURL(file);
+    // reset input
+    e.target.value = '';
+  }, [activeSetter]);
+
+  // === 해설 이미지 드래그&드롭 ===
+  const handleSolutionImageDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingSolution(false);
+    const file = e.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSolutionImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleSolutionImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSolutionImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
+  // === 해설 이미지 OCR ===
+  const handleSolutionOcr = useCallback(async () => {
+    if (!solutionImage) return;
+    setIsSolutionOcrLoading(true);
+    try {
+      const res = await fetch('/api/workflow/reanalyze-crop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: solutionImage }),
+      });
+      if (!res.ok) throw new Error(`OCR API error: ${res.status}`);
+      const data = await res.json();
+      const ocrContent = data.ocrText || data.rawOcrText || '';
+      setSolution(prev => prev + (prev ? '\n' : '') + ocrContent);
+    } catch (err) {
+      console.error('해설 OCR 실패:', err);
+      alert('해설 텍스트 읽어내기에 실패했습니다.');
+    } finally {
+      setIsSolutionOcrLoading(false);
+    }
+  }, [solutionImage]);
 
   // === 저장 ===
   const handleSave = useCallback(() => {
@@ -662,57 +788,113 @@ export default function AnalyzeProblemEditModal({
 
             {/* === 좌측 패널 === */}
             <div className="w-[420px] flex-shrink-0 border-r border-zinc-800/50 overflow-y-auto p-4 space-y-4">
+              {/* 숨겨진 파일 인풋 */}
+              <input ref={imageFileRef} type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} />
+              <input ref={solutionImageFileRef} type="file" accept="image/*" className="hidden" onChange={handleSolutionImageFileChange} />
 
-              {/* PDF 크롭 이미지 */}
-              <div>
-                <div className="text-xs font-bold text-zinc-400 mb-2">원본 이미지</div>
-                <PdfCropPanel
-                  pdfUrl={pdfUrl}
-                  pageIndex={problem.pageIndex}
-                  bbox={problem.bbox}
-                />
-                <p className="text-[10px] text-zinc-600 text-center mt-1.5">이미지 영역을 선택하세요.</p>
-              </div>
+              {activeTab === 'content' ? (
+                <>
+                  {/* PDF 크롭 이미지 */}
+                  <div>
+                    <div className="text-xs font-bold text-zinc-400 mb-2">원본 이미지</div>
+                    <PdfCropPanel
+                      pdfUrl={pdfUrl}
+                      pageIndex={problem.pageIndex}
+                      bbox={problem.bbox}
+                    />
+                    <p className="text-[10px] text-zinc-600 text-center mt-1.5">이미지 영역을 선택하세요.</p>
+                  </div>
 
-              {/* 텍스트 읽어내기 버튼 */}
-              <div className="flex items-center gap-2">
-                <button type="button"
-                  className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors">
-                  <Type className="h-3.5 w-3.5" />
-                  텍스트 읽어내기
-                </button>
-                <button type="button"
-                  className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors">
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  이미지 추가
-                </button>
-              </div>
+                  {/* 텍스트 읽어내기 + 이미지 추가 버튼 */}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={handleReadText} disabled={isOcrLoading}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                      {isOcrLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
+                      텍스트 읽어내기
+                    </button>
+                    <button type="button" onClick={() => imageFileRef.current?.click()}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors">
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      이미지 추가
+                    </button>
+                  </div>
 
-              {/* OCR 텍스트 영역 */}
-              <div>
-                <div className="text-xs font-bold text-zinc-400 mb-1.5">OCR 추출 텍스트</div>
-                <textarea
-                  readOnly
-                  value={problem.content}
-                  className="w-full h-24 resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-400 font-mono focus:outline-none"
-                  placeholder="OCR 추출 텍스트가 여기에 표시됩니다"
-                />
-                <div className="flex items-center justify-between mt-1">
-                  <button type="button" className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
-                    <Trash2 className="h-3 w-3" />
-                    비우기
-                  </button>
-                  <button type="button"
-                    onClick={() => {
-                      activeSetter(prev => prev + '\n' + problem.content);
-                    }}
-                    className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors">
-                    넣기
-                  </button>
-                </div>
-              </div>
+                  {/* OCR 텍스트 영역 */}
+                  <div>
+                    <div className="text-xs font-bold text-zinc-400 mb-1.5">OCR 추출 텍스트</div>
+                    <textarea
+                      value={ocrText}
+                      onChange={(e) => setOcrText(e.target.value)}
+                      className="w-full h-24 resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                      placeholder="OCR 추출 텍스트가 여기에 표시됩니다"
+                    />
+                    <div className="flex items-center justify-between mt-1">
+                      <button type="button" onClick={() => setOcrText('')}
+                        className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
+                        <Trash2 className="h-3 w-3" />
+                        비우기
+                      </button>
+                      <button type="button"
+                        onClick={() => {
+                          if (ocrText.trim()) {
+                            setContent(prev => prev + (prev ? '\n' : '') + ocrText);
+                          }
+                        }}
+                        className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors">
+                        넣기
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* 해설 탭 — 이미지 드래그&드롭 업로드 */}
+                  <div>
+                    <div className="text-xs font-bold text-zinc-400 mb-2">해설 이미지</div>
+                    {solutionImage ? (
+                      <div className="relative rounded-lg border border-zinc-700 bg-white overflow-hidden">
+                        <img src={solutionImage} alt="해설 이미지" className="w-full max-h-[300px] object-contain" />
+                        <button type="button" onClick={() => setSolutionImage(null)}
+                          className="absolute top-2 right-2 p-1 rounded-full bg-zinc-900/70 text-white hover:bg-red-500 transition-colors">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setIsDraggingSolution(true); }}
+                        onDragLeave={() => setIsDraggingSolution(false)}
+                        onDrop={handleSolutionImageDrop}
+                        className={`flex flex-col items-center justify-center h-48 rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
+                          isDraggingSolution
+                            ? 'border-cyan-400 bg-cyan-500/5'
+                            : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-500'
+                        }`}
+                        onClick={() => solutionImageFileRef.current?.click()}
+                      >
+                        <Upload className="h-8 w-8 text-zinc-600 mb-2" />
+                        <p className="text-xs text-zinc-400 font-medium">이미지를 드래그하거나 클릭해서 추가하세요</p>
+                        <p className="text-[10px] text-zinc-600 mt-1">붙여넣기(Ctrl+V/Cmd+V)도 지원합니다.</p>
+                      </div>
+                    )}
+                  </div>
 
-              {/* 메타 정보 */}
+                  {/* 해설 이미지 OCR 버튼 */}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={handleSolutionOcr} disabled={!solutionImage || isSolutionOcrLoading}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                      {isSolutionOcrLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
+                      텍스트 읽어내기
+                    </button>
+                    <button type="button" onClick={() => solutionImageFileRef.current?.click()}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors">
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      이미지 추가
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* 메타 정보 (양쪽 탭 공통) */}
               <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/80 p-4 space-y-3">
                 {/* 문제 번호 */}
                 <div className="flex items-center justify-between">
