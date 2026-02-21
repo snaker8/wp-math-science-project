@@ -1,0 +1,1457 @@
+{
+  "curriculum": "2022 개정",
+  "subject": "수학",
+  "schoolLevel": "초등학교",
+  "gradeGroup": "5~6학년군",
+  "level": "ES56",
+  "areas": [
+    {
+      "area": "수와 연산",
+      "domain": "NUM",
+      "standards": [
+        {
+          "code": "[6수01-01]",
+          "content": "혼합 계산 순서를 알고 혼합 계산을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-01-001",
+              "typeName": "사칙 혼합 계산 순서",
+              "description": "덧셈, 뺄셈, 곱셈, 나눗셈이 섞인 계산에서 순서 적용",
+              "solutionMethod": "계산 순서 규칙",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["혼합 계산", "계산 순서", "사칙연산"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-01-002",
+              "typeName": "괄호가 있는 혼합 계산",
+              "description": "소괄호, 중괄호, 대괄호가 포함된 혼합 계산",
+              "solutionMethod": "괄호 안부터 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["괄호", "혼합 계산", "계산 순서"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-01-003",
+              "typeName": "혼합 계산 활용 문장제",
+              "description": "실생활 상황에서 혼합 계산식을 세우고 계산하기",
+              "solutionMethod": "식 세우기 + 혼합 계산",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["혼합 계산", "문장제", "식 세우기"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-02]",
+          "content": "이상, 이하, 초과, 미만의 의미를 알고 수의 범위를 나타낼 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-02-001",
+              "typeName": "이상/이하/초과/미만 개념",
+              "description": "이상, 이하, 초과, 미만의 의미를 구분하여 수의 범위 표현",
+              "solutionMethod": "용어 정의 적용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["이상", "이하", "초과", "미만", "수의 범위"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-02-002",
+              "typeName": "수의 범위에 포함되는 수 찾기",
+              "description": "주어진 범위 조건에 맞는 자연수 또는 수를 찾기",
+              "solutionMethod": "범위 조건 판별",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["수의 범위", "조건", "자연수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-02-003",
+              "typeName": "수의 범위 실생활 활용",
+              "description": "키, 몸무게, 나이 등 실생활에서 수의 범위 활용",
+              "solutionMethod": "상황 해석 + 범위 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["수의 범위", "실생활", "활용"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-03]",
+          "content": "올림, 버림, 반올림의 의미를 알고 실생활에서 활용할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-03-001",
+              "typeName": "올림/버림/반올림 개념",
+              "description": "올림, 버림, 반올림의 의미 이해 및 적용",
+              "solutionMethod": "어림 규칙 적용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["올림", "버림", "반올림", "어림"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-03-002",
+              "typeName": "자릿수별 올림/버림/반올림",
+              "description": "일의 자리, 십의 자리 등 특정 자릿수에서 어림하기",
+              "solutionMethod": "자릿수 확인 + 어림",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["자릿수", "올림", "버림", "반올림"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-03-003",
+              "typeName": "어림 실생활 활용",
+              "description": "물건 값, 인원 수 등에서 올림/버림/반올림 상황 판단",
+              "solutionMethod": "상황에 맞는 어림 방법 선택",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["어림", "실생활", "상황 판단"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-04]",
+          "content": "약수와 공약수, 최대공약수를 이해하고 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-04-001",
+              "typeName": "약수 구하기",
+              "description": "자연수의 약수를 모두 찾기",
+              "solutionMethod": "나누어떨어지는 수 찾기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["약수", "나누기", "자연수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-04-002",
+              "typeName": "공약수와 최대공약수 구하기",
+              "description": "두 수 이상의 공약수와 최대공약수 구하기",
+              "solutionMethod": "약수 비교 / 나눗셈 방법",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["공약수", "최대공약수", "GCD"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-04-003",
+              "typeName": "최대공약수 활용 문제",
+              "description": "똑같이 나누기, 정사각형 타일 등 최대공약수 활용",
+              "solutionMethod": "최대공약수 구하기 + 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["최대공약수", "활용", "나누기", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-05]",
+          "content": "배수와 공배수, 최소공배수를 이해하고 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-05-001",
+              "typeName": "배수 구하기",
+              "description": "자연수의 배수를 구하고 배수 판별하기",
+              "solutionMethod": "곱하기 / 배수 판별",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["배수", "곱하기", "판별"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-05-002",
+              "typeName": "공배수와 최소공배수 구하기",
+              "description": "두 수 이상의 공배수와 최소공배수 구하기",
+              "solutionMethod": "배수 비교 / 나눗셈 방법",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["공배수", "최소공배수", "LCM"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-05-003",
+              "typeName": "최소공배수 활용 문제",
+              "description": "버스 간격, 동시에 만나는 시간 등 최소공배수 활용",
+              "solutionMethod": "최소공배수 구하기 + 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["최소공배수", "활용", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-06]",
+          "content": "크기가 같은 분수를 만들고 약분과 통분을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-06-001",
+              "typeName": "크기가 같은 분수 만들기",
+              "description": "분자와 분모에 같은 수를 곱하거나 나누어 크기가 같은 분수 생성",
+              "solutionMethod": "분자·분모 동시 곱셈/나눗셈",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["크기가 같은 분수", "동치 분수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-06-002",
+              "typeName": "약분하기",
+              "description": "분수를 약분하여 기약분수로 나타내기",
+              "solutionMethod": "공약수로 나누기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["약분", "기약분수", "공약수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-06-003",
+              "typeName": "통분하기",
+              "description": "분모가 다른 두 분수를 같은 분모로 통분하기",
+              "solutionMethod": "공통 분모(최소공배수) 구하기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["통분", "공통 분모", "최소공배수"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-07]",
+          "content": "분모가 다른 분수의 크기를 비교할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-07-001",
+              "typeName": "통분을 이용한 분수 크기 비교",
+              "description": "분모가 다른 분수를 통분하여 크기 비교",
+              "solutionMethod": "통분 후 분자 비교",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["분수", "크기 비교", "통분"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-07-002",
+              "typeName": "여러 분수의 크기 순서 정하기",
+              "description": "세 개 이상의 분수를 크기순으로 나열하기",
+              "solutionMethod": "통분 후 정렬",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["분수", "크기 비교", "순서", "나열"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-08]",
+          "content": "분모가 다른 분수의 덧셈과 뺄셈을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-08-001",
+              "typeName": "분모 다른 진분수 덧셈/뺄셈",
+              "description": "분모가 다른 진분수끼리 통분하여 덧셈·뺄셈",
+              "solutionMethod": "통분 + 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["분수", "덧셈", "뺄셈", "통분", "진분수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-08-002",
+              "typeName": "분모 다른 대분수 덧셈/뺄셈",
+              "description": "대분수끼리의 덧셈·뺄셈 (받아올림/받아내림 포함)",
+              "solutionMethod": "대분수 통분 + 자연수/분수 분리 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["대분수", "덧셈", "뺄셈", "통분"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-08-003",
+              "typeName": "분수 덧셈/뺄셈 문장제",
+              "description": "실생활에서 분모 다른 분수의 덧셈·뺄셈 활용",
+              "solutionMethod": "식 세우기 + 통분 계산",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["분수", "덧셈", "뺄셈", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-09]",
+          "content": "분수의 곱셈의 계산 원리를 이해하고 계산할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-09-001",
+              "typeName": "(분수)×(자연수) 계산",
+              "description": "분수와 자연수의 곱셈 원리와 계산",
+              "solutionMethod": "분자×자연수 / 분모",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["분수", "곱셈", "자연수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-09-002",
+              "typeName": "(분수)×(분수) 계산",
+              "description": "분수끼리의 곱셈 원리와 계산 (약분 포함)",
+              "solutionMethod": "분자×분자 / 분모×분모",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["분수", "곱셈", "약분"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-09-003",
+              "typeName": "분수의 곱셈 문장제",
+              "description": "넓이, 양 구하기 등 분수 곱셈 실생활 활용",
+              "solutionMethod": "식 세우기 + 분수 곱셈",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["분수", "곱셈", "문장제", "넓이"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-10]",
+          "content": "(자연수)÷(자연수)의 몫을 분수로 나타낼 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-10-001",
+              "typeName": "나눗셈 몫을 분수로 표현",
+              "description": "나누어떨어지지 않는 (자연수)÷(자연수)를 분수로 표현",
+              "solutionMethod": "a÷b = a/b",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["나눗셈", "몫", "분수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-10-002",
+              "typeName": "나눗셈 몫의 분수 표현 활용",
+              "description": "똑같이 나누기 상황에서 몫을 분수로 나타내기",
+              "solutionMethod": "등분 상황 → 분수 변환",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["나눗셈", "등분", "분수", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-11]",
+          "content": "분수의 나눗셈의 계산 원리를 이해하고 계산할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-11-001",
+              "typeName": "(분수)÷(자연수) 계산",
+              "description": "분수를 자연수로 나누는 계산 원리와 방법",
+              "solutionMethod": "분모×자연수 / 역수 곱셈",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["분수", "나눗셈", "자연수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-11-002",
+              "typeName": "(분수)÷(분수) 계산",
+              "description": "분수끼리의 나눗셈을 역수의 곱셈으로 변환하여 계산",
+              "solutionMethod": "역수 곱셈",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["분수", "나눗셈", "역수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-11-003",
+              "typeName": "분수의 나눗셈 문장제",
+              "description": "등분, 포함 등 분수 나눗셈 실생활 활용",
+              "solutionMethod": "식 세우기 + 역수 곱셈",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 4],
+              "keywords": ["분수", "나눗셈", "문장제", "활용"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-12]",
+          "content": "분수와 소수의 관계를 이해하고 크기를 비교할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-12-001",
+              "typeName": "분수↔소수 상호 변환",
+              "description": "분수를 소수로, 소수를 분수로 변환하기",
+              "solutionMethod": "나눗셈 / 자릿값 이용",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["분수", "소수", "변환"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-12-002",
+              "typeName": "분수와 소수 크기 비교",
+              "description": "분수와 소수가 섞인 수의 크기 비교 및 순서 나열",
+              "solutionMethod": "같은 형태로 변환 후 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["분수", "소수", "크기 비교"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-13]",
+          "content": "소수의 곱셈의 계산 원리를 이해하고 계산할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-13-001",
+              "typeName": "(소수)×(자연수) 계산",
+              "description": "소수와 자연수의 곱셈 원리와 소수점 처리",
+              "solutionMethod": "자연수 곱셈 후 소수점 이동",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["소수", "곱셈", "자연수", "소수점"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-13-002",
+              "typeName": "(소수)×(소수) 계산",
+              "description": "소수끼리의 곱셈에서 소수점 위치 결정",
+              "solutionMethod": "자연수 곱셈 + 소수점 자릿수 합산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["소수", "곱셈", "소수점"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-13-003",
+              "typeName": "소수의 곱셈 문장제",
+              "description": "길이, 넓이, 무게 등 소수 곱셈 실생활 활용",
+              "solutionMethod": "식 세우기 + 소수 곱셈",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["소수", "곱셈", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-14]",
+          "content": "(자연수)÷(자연수)의 몫을 소수로 나타낼 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-14-001",
+              "typeName": "나눗셈 몫을 소수로 표현",
+              "description": "나누어떨어지지 않는 (자연수)÷(자연수)를 소수로 나타내기",
+              "solutionMethod": "세로 나눗셈 + 소수점",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["나눗셈", "몫", "소수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-14-002",
+              "typeName": "몫의 소수 표현과 나머지",
+              "description": "몫을 소수로 나타내고 특정 자릿수까지 구하기 (반올림)",
+              "solutionMethod": "나눗셈 + 반올림",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["나눗셈", "소수", "반올림", "나머지"]
+            }
+          ]
+        },
+        {
+          "code": "[6수01-15]",
+          "content": "소수의 나눗셈의 계산 원리를 이해하고 계산할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-NUM-15-001",
+              "typeName": "(소수)÷(자연수) 계산",
+              "description": "소수를 자연수로 나누는 계산 원리와 방법",
+              "solutionMethod": "세로 나눗셈 + 소수점 위치",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["소수", "나눗셈", "자연수"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-15-002",
+              "typeName": "(소수)÷(소수) 계산",
+              "description": "소수끼리의 나눗셈에서 소수점 처리 (분모 자연수화)",
+              "solutionMethod": "나누는 수를 자연수로 변환",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["소수", "나눗셈", "소수점"]
+            },
+            {
+              "typeCode": "MA-ES56-NUM-15-003",
+              "typeName": "소수의 나눗셈 문장제",
+              "description": "길이, 무게, 양 등 소수 나눗셈 실생활 활용",
+              "solutionMethod": "식 세우기 + 소수 나눗셈",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["소수", "나눗셈", "문장제", "활용"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "변화와 관계",
+      "domain": "PAT",
+      "standards": [
+        {
+          "code": "[6수02-01]",
+          "content": "대응 관계를 표에서 규칙을 찾아 □, △ 등을 사용한 식으로 표현할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-PAT-01-001",
+              "typeName": "대응표에서 규칙 찾기",
+              "description": "두 양의 대응 관계 표에서 변화 규칙 발견",
+              "solutionMethod": "표 관찰 + 규칙 발견",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["대응 관계", "표", "규칙"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-01-002",
+              "typeName": "대응 관계 식으로 표현",
+              "description": "□, △ 등의 기호를 사용하여 대응 관계를 식으로 나타내기",
+              "solutionMethod": "기호식 표현",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["대응 관계", "식", "기호"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-01-003",
+              "typeName": "대응 관계 활용",
+              "description": "대응 관계식을 이용해 미지의 값 구하기",
+              "solutionMethod": "대응식에 값 대입",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["대응 관계", "미지수", "대입"]
+            }
+          ]
+        },
+        {
+          "code": "[6수02-02]",
+          "content": "비의 개념을 알고 두 양의 관계를 비로 나타낼 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-PAT-02-001",
+              "typeName": "비의 개념과 표현",
+              "description": "두 양의 관계를 비(a:b)로 나타내기",
+              "solutionMethod": "비 표현",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["비", "두 양", "관계"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-02-002",
+              "typeName": "간단한 자연수의 비로 나타내기",
+              "description": "비를 약분하여 가장 간단한 자연수의 비로 변환",
+              "solutionMethod": "공약수로 약분",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["간단한 비", "약분", "자연수의 비"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-02-003",
+              "typeName": "비 활용 문제",
+              "description": "실생활에서 두 양의 관계를 비로 표현하는 문제",
+              "solutionMethod": "상황 해석 + 비 표현",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["비", "실생활", "활용"]
+            }
+          ]
+        },
+        {
+          "code": "[6수02-03]",
+          "content": "비율을 이해하고 분수, 소수, 백분율로 나타낼 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-PAT-03-001",
+              "typeName": "비율 개념 이해",
+              "description": "기준량에 대한 비교하는 양의 크기(비율) 이해",
+              "solutionMethod": "(비교하는 양)÷(기준량)",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["비율", "기준량", "비교하는 양"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-03-002",
+              "typeName": "비율의 분수/소수/백분율 표현",
+              "description": "비율을 분수, 소수, 백분율(%)로 상호 변환",
+              "solutionMethod": "표현 형식 변환",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["비율", "분수", "소수", "백분율"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-03-003",
+              "typeName": "비율 실생활 활용",
+              "description": "할인율, 타율, 농도 등 실생활에서 비율 활용",
+              "solutionMethod": "비율 공식 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["비율", "백분율", "할인율", "실생활"]
+            }
+          ]
+        },
+        {
+          "code": "[6수02-04]",
+          "content": "비례식을 알고 비례식의 성질을 이해하며 간단한 비례식을 풀 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-PAT-04-001",
+              "typeName": "비례식의 뜻과 성질",
+              "description": "비례식의 의미와 내항의 곱 = 외항의 곱 성질 이해",
+              "solutionMethod": "비례식 성질 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["비례식", "내항", "외항", "성질"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-04-002",
+              "typeName": "비례식에서 미지수 구하기",
+              "description": "비례식의 성질을 이용하여 □ 값 구하기",
+              "solutionMethod": "내항곱 = 외항곱 → 방정식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["비례식", "미지수", "풀기"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-04-003",
+              "typeName": "비례식 활용 문제",
+              "description": "지도 축척, 요리 재료 등 비례식 실생활 활용",
+              "solutionMethod": "비례식 세우기 + 풀기",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["비례식", "활용", "축척", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수02-05]",
+          "content": "비례배분을 이해하고 비례배분을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-PAT-05-001",
+              "typeName": "비례배분 개념과 계산",
+              "description": "전체를 주어진 비로 나누어 각 부분의 양 구하기",
+              "solutionMethod": "비의 합 → 각 비율 × 전체",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["비례배분", "비", "나누기"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-05-002",
+              "typeName": "비례배분 문장제",
+              "description": "용돈 나누기, 넓이 배분 등 실생활 비례배분 문제",
+              "solutionMethod": "비례배분 공식 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["비례배분", "문장제", "실생활"]
+            },
+            {
+              "typeCode": "MA-ES56-PAT-05-003",
+              "typeName": "연속 비례배분",
+              "description": "세 양 이상의 비로 비례배분하기",
+              "solutionMethod": "연비 → 비례배분",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 4],
+              "keywords": ["비례배분", "연비", "세 양"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "도형과 측정",
+      "domain": "GEO",
+      "standards": [
+        {
+          "code": "[6수03-01]",
+          "content": "합동의 의미를 알고 합동인 도형의 성질을 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-01-001",
+              "typeName": "합동의 뜻과 판별",
+              "description": "두 도형이 합동인지 판별하고 대응 요소 찾기",
+              "solutionMethod": "포개기 / 대응 변·각 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["합동", "대응 변", "대응 각"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-01-002",
+              "typeName": "합동 도형의 대응 요소 구하기",
+              "description": "합동인 두 도형에서 대응 변의 길이, 대응 각의 크기 구하기",
+              "solutionMethod": "합동 성질 적용",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["합동", "대응", "변의 길이", "각의 크기"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-01-003",
+              "typeName": "합동 도형 그리기",
+              "description": "주어진 도형과 합동인 도형 그리기",
+              "solutionMethod": "대응 요소 이용 작도",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["합동", "그리기", "작도"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-02]",
+          "content": "선대칭도형과 점대칭도형을 이해하고 그릴 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-02-001",
+              "typeName": "선대칭도형 이해와 판별",
+              "description": "대칭축을 기준으로 접었을 때 완전히 겹치는 도형 판별",
+              "solutionMethod": "대칭축 찾기 / 접기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["선대칭", "대칭축", "도형"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-02-002",
+              "typeName": "점대칭도형 이해와 판별",
+              "description": "대칭의 중심으로 180도 돌렸을 때 겹치는 도형 판별",
+              "solutionMethod": "대칭 중심 찾기 / 회전",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["점대칭", "대칭 중심", "회전"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-02-003",
+              "typeName": "대칭도형 그리기/완성하기",
+              "description": "선대칭도형 또는 점대칭도형의 나머지 부분 완성하기",
+              "solutionMethod": "대칭 성질 이용 작도",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["대칭도형", "그리기", "완성"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-03]",
+          "content": "직육면체와 정육면체를 이해하고 구성 요소와 성질을 알 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-03-001",
+              "typeName": "직육면체/정육면체 개념과 구성 요소",
+              "description": "면, 모서리, 꼭짓점의 수와 관계 파악",
+              "solutionMethod": "도형 관찰 + 구성 요소 세기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["직육면체", "정육면체", "면", "모서리", "꼭짓점"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-03-002",
+              "typeName": "직육면체의 성질",
+              "description": "평행한 면, 수직인 면, 평행한 모서리 등 성질 파악",
+              "solutionMethod": "면과 모서리 관계 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["직육면체", "평행", "수직", "성질"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-03-003",
+              "typeName": "직육면체 성질 활용",
+              "description": "보이지 않는 모서리 길이 구하기, 면의 관계 추론",
+              "solutionMethod": "성질 적용 + 추론",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["직육면체", "모서리", "면", "추론"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-04]",
+          "content": "직육면체와 정육면체의 겨냥도와 전개도를 알 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-04-001",
+              "typeName": "겨냥도 이해와 그리기",
+              "description": "직육면체/정육면체의 겨냥도를 보고 이해하고 그리기",
+              "solutionMethod": "겨냥도 작도 규칙",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["겨냥도", "직육면체", "정육면체"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-04-002",
+              "typeName": "전개도 이해와 그리기",
+              "description": "직육면체/정육면체의 전개도를 보고 이해하고 그리기",
+              "solutionMethod": "펼치기 / 전개도 작도",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["전개도", "직육면체", "정육면체", "펼치기"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-04-003",
+              "typeName": "전개도에서 면/모서리 관계 추론",
+              "description": "전개도를 접었을 때 맞닿는 면, 모서리, 꼭짓점 찾기",
+              "solutionMethod": "전개도 접기 상상",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["전개도", "접기", "맞닿는 면", "추론"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-05]",
+          "content": "각기둥과 각뿔을 이해하고 구성 요소와 성질을 알 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-05-001",
+              "typeName": "각기둥의 개념과 구성 요소",
+              "description": "삼각기둥, 사각기둥 등 각기둥의 밑면, 옆면, 높이 파악",
+              "solutionMethod": "도형 관찰 + 분류",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["각기둥", "밑면", "옆면", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-05-002",
+              "typeName": "각뿔의 개념과 구성 요소",
+              "description": "삼각뿔, 사각뿔 등 각뿔의 밑면, 옆면, 꼭짓점 파악",
+              "solutionMethod": "도형 관찰 + 분류",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["각뿔", "밑면", "옆면", "꼭짓점"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-05-003",
+              "typeName": "각기둥/각뿔의 면·모서리·꼭짓점 수 구하기",
+              "description": "n각기둥/n각뿔의 면, 모서리, 꼭짓점 수의 규칙",
+              "solutionMethod": "공식/규칙 적용",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["각기둥", "각뿔", "면", "모서리", "꼭짓점", "규칙"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-06]",
+          "content": "각기둥의 전개도를 알 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-06-001",
+              "typeName": "각기둥 전개도 이해",
+              "description": "삼각기둥, 사각기둥 등의 전개도를 보고 각기둥 파악",
+              "solutionMethod": "전개도 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["각기둥", "전개도", "펼치기"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-06-002",
+              "typeName": "각기둥 전개도 그리기",
+              "description": "주어진 각기둥의 전개도를 정확하게 그리기",
+              "solutionMethod": "밑면 + 옆면 배치",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["각기둥", "전개도", "그리기"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-06-003",
+              "typeName": "전개도에서 길이/면 관계 파악",
+              "description": "각기둥 전개도에서 맞닿는 변, 겹치는 꼭짓점 추론",
+              "solutionMethod": "전개도 접기 추론",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["전개도", "접기", "모서리", "추론"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-07]",
+          "content": "원기둥, 원뿔, 구를 이해하고 구성 요소와 성질을 알 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-07-001",
+              "typeName": "원기둥의 개념과 구성 요소",
+              "description": "원기둥의 밑면, 옆면, 높이 등 구성 요소 파악",
+              "solutionMethod": "도형 관찰",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원기둥", "밑면", "옆면", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-07-002",
+              "typeName": "원뿔의 개념과 구성 요소",
+              "description": "원뿔의 밑면, 옆면, 꼭짓점, 모선 파악",
+              "solutionMethod": "도형 관찰",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원뿔", "밑면", "꼭짓점", "모선"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-07-003",
+              "typeName": "구의 개념과 성질",
+              "description": "구의 중심, 반지름 이해 및 구와 다른 입체도형 비교",
+              "solutionMethod": "도형 관찰 + 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["구", "중심", "반지름", "입체도형"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-08]",
+          "content": "원기둥의 전개도를 알 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-08-001",
+              "typeName": "원기둥 전개도 이해",
+              "description": "원기둥을 펼쳐 밑면(원)과 옆면(직사각형)으로 구성됨을 이해",
+              "solutionMethod": "전개도 구조 파악",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원기둥", "전개도", "밑면", "옆면"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-08-002",
+              "typeName": "원기둥 전개도에서 길이 관계",
+              "description": "옆면의 가로(원주)와 세로(높이)의 관계 파악",
+              "solutionMethod": "원주 = 옆면 가로",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["원기둥", "전개도", "원주", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-08-003",
+              "typeName": "원기둥 전개도 그리기",
+              "description": "밑면의 반지름과 높이가 주어졌을 때 전개도 그리기",
+              "solutionMethod": "원주 계산 + 전개도 작도",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["원기둥", "전개도", "그리기", "원주"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-09]",
+          "content": "쌓기나무로 만든 입체도형에서 쌓기나무의 개수를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-09-001",
+              "typeName": "쌓기나무 개수 세기",
+              "description": "그림을 보고 쌓기나무의 개수를 정확히 세기",
+              "solutionMethod": "층별/열별 세기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["쌓기나무", "개수", "입체도형"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-09-002",
+              "typeName": "쌓기나무 수 배열표 활용",
+              "description": "위에서 본 모양에 수를 적어 쌓기나무 개수 구하기",
+              "solutionMethod": "수 배열표 읽기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["쌓기나무", "수 배열표", "위에서 본 모양"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-10]",
+          "content": "쌓기나무로 만든 입체도형을 위, 앞, 옆에서 본 모양을 알고 추측할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-10-001",
+              "typeName": "위/앞/옆에서 본 모양 그리기",
+              "description": "쌓기나무 입체도형을 세 방향에서 본 모양 그리기",
+              "solutionMethod": "방향별 투영",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["쌓기나무", "위", "앞", "옆", "투영"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-10-002",
+              "typeName": "본 모양으로 입체도형 추측",
+              "description": "위, 앞, 옆에서 본 모양을 보고 입체도형 추측하기",
+              "solutionMethod": "세 방향 종합 추론",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["쌓기나무", "추측", "공간 감각"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-10-003",
+              "typeName": "쌓기나무 최소/최대 개수",
+              "description": "주어진 조건에서 쌓기나무의 최소/최대 개수 구하기",
+              "solutionMethod": "조건 분석 + 추론",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 4],
+              "keywords": ["쌓기나무", "최소", "최대", "추론"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-11]",
+          "content": "둘레의 의미를 알고 기본적인 평면도형의 둘레를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-11-001",
+              "typeName": "둘레의 개념 이해",
+              "description": "둘레의 뜻을 알고 기본 도형의 둘레 구하기",
+              "solutionMethod": "변의 길이 합",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["둘레", "평면도형", "변의 길이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-11-002",
+              "typeName": "다각형의 둘레 구하기",
+              "description": "삼각형, 사각형 등 다각형의 둘레 계산",
+              "solutionMethod": "모든 변의 합",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["둘레", "다각형", "삼각형", "사각형"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-11-003",
+              "typeName": "둘레 활용 문제",
+              "description": "울타리 길이, 테두리 등 둘레의 실생활 활용",
+              "solutionMethod": "둘레 공식 + 조건 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["둘레", "울타리", "실생활"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-12]",
+          "content": "넓이의 단위 cm², m², km²의 관계를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-12-001",
+              "typeName": "넓이 단위 이해",
+              "description": "1cm², 1m², 1km²의 크기와 의미 이해",
+              "solutionMethod": "단위 정의 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["넓이", "단위", "cm²", "m²", "km²"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-12-002",
+              "typeName": "넓이 단위 변환",
+              "description": "cm²↔m²↔km² 단위 사이의 변환",
+              "solutionMethod": "단위 환산 규칙",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["넓이", "단위 변환", "환산"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-13]",
+          "content": "직사각형과 정사각형의 넓이를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-13-001",
+              "typeName": "직사각형 넓이 구하기",
+              "description": "가로×세로를 이용한 직사각형 넓이 계산",
+              "solutionMethod": "가로 × 세로",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["직사각형", "넓이", "가로", "세로"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-13-002",
+              "typeName": "정사각형 넓이 구하기",
+              "description": "한 변의 길이를 이용한 정사각형 넓이 계산",
+              "solutionMethod": "한 변 × 한 변",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["정사각형", "넓이", "한 변"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-13-003",
+              "typeName": "직사각형/정사각형 넓이 활용",
+              "description": "방 넓이, 땅 넓이 등 넓이 활용 문장제",
+              "solutionMethod": "넓이 공식 + 문제 해석",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["넓이", "활용", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-14]",
+          "content": "평행사변형, 삼각형, 사다리꼴, 마름모의 넓이를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-14-001",
+              "typeName": "평행사변형 넓이 구하기",
+              "description": "밑변×높이를 이용한 평행사변형 넓이 계산",
+              "solutionMethod": "밑변 × 높이",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["평행사변형", "넓이", "밑변", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-14-002",
+              "typeName": "삼각형 넓이 구하기",
+              "description": "밑변×높이÷2를 이용한 삼각형 넓이 계산",
+              "solutionMethod": "밑변 × 높이 ÷ 2",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["삼각형", "넓이", "밑변", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-14-003",
+              "typeName": "사다리꼴 넓이 구하기",
+              "description": "(윗변+아랫변)×높이÷2를 이용한 사다리꼴 넓이 계산",
+              "solutionMethod": "(윗변 + 아랫변) × 높이 ÷ 2",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["사다리꼴", "넓이", "윗변", "아랫변", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-14-004",
+              "typeName": "마름모 넓이 구하기",
+              "description": "두 대각선의 곱÷2를 이용한 마름모 넓이 계산",
+              "solutionMethod": "대각선 × 대각선 ÷ 2",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["마름모", "넓이", "대각선"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-14-005",
+              "typeName": "다양한 도형 넓이 활용 문제",
+              "description": "복합 도형의 넓이, 실생활 넓이 문장제",
+              "solutionMethod": "도형 분할/합성 + 넓이 공식",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 4],
+              "keywords": ["넓이", "복합 도형", "활용", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-15]",
+          "content": "원주율의 의미를 이해하고 근삿값을 사용할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-15-001",
+              "typeName": "원주율 개념 이해",
+              "description": "원주와 지름의 비율(원주율)의 의미와 값 이해",
+              "solutionMethod": "원주 ÷ 지름 = π",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원주율", "원주", "지름", "파이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-15-002",
+              "typeName": "원주율 근삿값 사용",
+              "description": "원주율로 3.14 또는 3을 사용하여 계산하기",
+              "solutionMethod": "π ≈ 3.14 적용",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원주율", "3.14", "근삿값"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-16]",
+          "content": "원주와 원의 넓이를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-16-001",
+              "typeName": "원주 구하기",
+              "description": "지름 또는 반지름이 주어졌을 때 원주 계산",
+              "solutionMethod": "원주 = 지름 × π",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원주", "지름", "반지름", "원주율"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-16-002",
+              "typeName": "원의 넓이 구하기",
+              "description": "반지름이 주어졌을 때 원의 넓이 계산",
+              "solutionMethod": "넓이 = 반지름 × 반지름 × π",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원", "넓이", "반지름", "원주율"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-16-003",
+              "typeName": "원주/원 넓이 활용 문제",
+              "description": "반원, 부채꼴, 복합 도형에서 원주·넓이 활용",
+              "solutionMethod": "원 공식 + 도형 분석",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 4],
+              "keywords": ["원주", "원 넓이", "활용", "복합 도형"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-17]",
+          "content": "직육면체와 정육면체의 겉넓이를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-17-001",
+              "typeName": "직육면체 겉넓이 구하기",
+              "description": "6개 면의 넓이 합으로 직육면체 겉넓이 계산",
+              "solutionMethod": "세 쌍의 면 넓이 × 2",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["직육면체", "겉넓이", "면"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-17-002",
+              "typeName": "정육면체 겉넓이 구하기",
+              "description": "한 면의 넓이 × 6으로 정육면체 겉넓이 계산",
+              "solutionMethod": "한 면 넓이 × 6",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["정육면체", "겉넓이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-17-003",
+              "typeName": "겉넓이 활용 문제",
+              "description": "포장지 넓이, 페인트 칠 등 겉넓이 실생활 활용",
+              "solutionMethod": "겉넓이 공식 + 상황 적용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["겉넓이", "활용", "포장", "문장제"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-18]",
+          "content": "부피의 단위 cm³, m³의 관계를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-18-001",
+              "typeName": "부피 단위 이해",
+              "description": "1cm³, 1m³의 크기와 의미 이해",
+              "solutionMethod": "단위 정의 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["부피", "단위", "cm³", "m³"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-18-002",
+              "typeName": "부피 단위 변환",
+              "description": "cm³↔m³ 단위 사이의 변환 (1m³ = 1,000,000cm³)",
+              "solutionMethod": "단위 환산 규칙",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["부피", "단위 변환", "환산"]
+            }
+          ]
+        },
+        {
+          "code": "[6수03-19]",
+          "content": "직육면체와 정육면체의 부피를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-GEO-19-001",
+              "typeName": "직육면체 부피 구하기",
+              "description": "가로×세로×높이를 이용한 직육면체 부피 계산",
+              "solutionMethod": "가로 × 세로 × 높이",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["직육면체", "부피", "가로", "세로", "높이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-19-002",
+              "typeName": "정육면체 부피 구하기",
+              "description": "한 모서리의 길이를 이용한 정육면체 부피 계산",
+              "solutionMethod": "한 모서리 × 한 모서리 × 한 모서리",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["정육면체", "부피", "한 모서리"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-19-003",
+              "typeName": "부피 활용 문제",
+              "description": "물의 양, 상자 크기 등 부피 실생활 활용 문장제",
+              "solutionMethod": "부피 공식 + 상황 해석",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["부피", "활용", "문장제", "들이"]
+            },
+            {
+              "typeCode": "MA-ES56-GEO-19-004",
+              "typeName": "복합 입체도형 부피",
+              "description": "직육면체를 합치거나 빼서 만든 도형의 부피 구하기",
+              "solutionMethod": "부피 합/차",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["복합 도형", "부피", "합", "차"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "자료와 가능성",
+      "domain": "DAT",
+      "standards": [
+        {
+          "code": "[6수04-01]",
+          "content": "평균의 의미를 알고 평균을 구하고 해석할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-DAT-01-001",
+              "typeName": "평균 개념 이해",
+              "description": "평균의 의미(고르게 하기)를 이해하기",
+              "solutionMethod": "고르기/균등 배분 개념",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["평균", "고르기", "개념"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-01-002",
+              "typeName": "평균 구하기",
+              "description": "자료의 합을 자료의 수로 나누어 평균 계산",
+              "solutionMethod": "(자료의 합) ÷ (자료의 수)",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["평균", "계산", "합", "개수"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-01-003",
+              "typeName": "평균 활용 및 해석",
+              "description": "평균을 이용해 전체 합 추정, 빠진 값 구하기, 비교하기",
+              "solutionMethod": "평균 공식 역이용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["평균", "활용", "추정", "비교"]
+            }
+          ]
+        },
+        {
+          "code": "[6수04-02]",
+          "content": "띠그래프와 원그래프를 나타내고 해석할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-DAT-02-001",
+              "typeName": "띠그래프 나타내기와 읽기",
+              "description": "백분율 자료를 띠그래프로 나타내고 해석하기",
+              "solutionMethod": "백분율 → 띠 길이 배분",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["띠그래프", "백분율", "그래프"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-02-002",
+              "typeName": "원그래프 나타내기와 읽기",
+              "description": "백분율 자료를 원그래프로 나타내고 해석하기",
+              "solutionMethod": "백분율 → 중심각/부채꼴 배분",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["원그래프", "백분율", "부채꼴"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-02-003",
+              "typeName": "그래프 해석 및 비교",
+              "description": "띠그래프/원그래프를 보고 항목 간 비교, 정보 추출",
+              "solutionMethod": "그래프 읽기 + 비교",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["그래프", "해석", "비교", "정보 추출"]
+            }
+          ]
+        },
+        {
+          "code": "[6수04-03]",
+          "content": "탐구 문제를 정하고 자료를 수집, 정리하여 그래프로 나타내고 해석할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-DAT-03-001",
+              "typeName": "탐구 문제 설정과 자료 수집",
+              "description": "탐구 주제를 정하고 적절한 자료 수집 방법 결정",
+              "solutionMethod": "주제 선정 + 조사 계획",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["탐구", "자료 수집", "조사"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-03-002",
+              "typeName": "자료 정리 및 그래프 표현",
+              "description": "수집한 자료를 표/그래프로 정리하고 적절한 그래프 선택",
+              "solutionMethod": "표 정리 + 그래프 작성",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["자료 정리", "그래프", "표"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-03-003",
+              "typeName": "자료 해석과 결론 도출",
+              "description": "그래프를 해석하여 결론을 이끌어내기",
+              "solutionMethod": "그래프 분석 + 결론 도출",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["자료 해석", "결론", "분석"]
+            }
+          ]
+        },
+        {
+          "code": "[6수04-04]",
+          "content": "사건이 일어날 가능성을 말로 표현하고 비교할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-DAT-04-001",
+              "typeName": "가능성 말로 표현",
+              "description": "불가능하다, ~아닐 것 같다, 반반이다, ~일 것 같다, 확실하다 등으로 표현",
+              "solutionMethod": "가능성 수준 판단",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["가능성", "표현", "확실", "불가능"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-04-002",
+              "typeName": "가능성 비교",
+              "description": "두 사건의 가능성을 비교하여 어느 것이 더 가능성이 큰지 판단",
+              "solutionMethod": "사건 비교 판단",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["가능성", "비교", "판단"]
+            }
+          ]
+        },
+        {
+          "code": "[6수04-05]",
+          "content": "사건이 일어날 가능성을 수로 표현할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-DAT-05-001",
+              "typeName": "가능성을 수(0~1)로 표현",
+              "description": "사건의 가능성을 0부터 1까지의 수로 나타내기",
+              "solutionMethod": "가능성 수치화 (0, 1/2, 1 등)",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["가능성", "수", "0", "1"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-05-002",
+              "typeName": "간단한 확률 계산",
+              "description": "동전, 주사위 등에서 특정 사건의 가능성을 수로 구하기",
+              "solutionMethod": "(해당 경우의 수) ÷ (전체 경우의 수)",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["확률", "경우의 수", "동전", "주사위"]
+            }
+          ]
+        },
+        {
+          "code": "[6수04-06]",
+          "content": "자료를 바탕으로 가능성을 예상하고 적절한 판단을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES56-DAT-06-001",
+              "typeName": "자료 기반 가능성 예상",
+              "description": "주어진 자료(실험 결과 등)를 바탕으로 사건의 가능성 예상",
+              "solutionMethod": "빈도/비율 분석",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["자료", "가능성", "예상", "빈도"]
+            },
+            {
+              "typeCode": "MA-ES56-DAT-06-002",
+              "typeName": "가능성에 기반한 판단",
+              "description": "가능성을 고려하여 합리적인 의사결정 하기",
+              "solutionMethod": "가능성 비교 + 판단",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["가능성", "판단", "의사결정"]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "_statistics": {
+    "totalStandards": 45,
+    "totalTypes": 127,
+    "avgTypesPerStandard": 2.82,
+    "byDomain": {
+      "NUM": { "standards": 15, "types": 41 },
+      "PAT": { "standards": 5, "types": 15 },
+      "GEO": { "standards": 19, "types": 56 },
+      "DAT": { "standards": 6, "types": 15 }
+    }
+  }
+}

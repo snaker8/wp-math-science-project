@@ -1,0 +1,560 @@
+{
+  "curriculum": "2015 개정",
+  "subject": "수학Ⅰ",
+  "schoolLevel": "고등학교",
+  "level": "HS1",
+  "areas": [
+    {
+      "area": "지수함수와 로그함수",
+      "domain": "EXP",
+      "standards": [
+        {
+          "code": "[12수학Ⅰ01-01]",
+          "content": "거듭제곱과 거듭제곱근의 뜻을 알고, 그 성질을 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-01-001",
+              "typeName": "거듭제곱근의 계산",
+              "description": "ⁿ√a의 값 구하기, 거듭제곱근 성질 활용",
+              "solutionMethod": "거듭제곱근 성질",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["거듭제곱근", "계산"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-01-002",
+              "typeName": "거듭제곱근의 대소 비교",
+              "description": "서로 다른 거듭제곱근의 크기 비교",
+              "solutionMethod": "지수 통일",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["거듭제곱근", "대소비교"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-02]",
+          "content": "지수가 유리수, 실수까지 확장되는 과정을 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-02-001",
+              "typeName": "유리수 지수 계산",
+              "description": "a^(m/n) = ⁿ√(aᵐ) 변환 및 계산",
+              "solutionMethod": "지수법칙",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["유리수지수", "계산", "지수법칙"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-02-002",
+              "typeName": "지수법칙 활용 (종합)",
+              "description": "aˣ·aʸ=aˣ⁺ʸ, (aˣ)ʸ=aˣʸ 등 복합 계산",
+              "solutionMethod": "지수법칙 종합",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["지수법칙", "종합", "유리수"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-03]",
+          "content": "지수함수의 뜻을 알고, 그 그래프의 성질을 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-03-001",
+              "typeName": "지수함수 그래프의 성질",
+              "description": "y=aˣ 그래프의 증가/감소, 점근선, 정의역/치역",
+              "solutionMethod": "그래프 성질 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["지수함수", "그래프", "성질"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-03-002",
+              "typeName": "지수함수의 평행이동·대칭",
+              "description": "y=aˣ⁺ᵖ+q 형태의 그래프 변환",
+              "solutionMethod": "평행이동/대칭이동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["지수함수", "평행이동", "변환"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-03-003",
+              "typeName": "지수함수의 최대·최소",
+              "description": "제한된 범위에서 지수함수의 최대/최소",
+              "solutionMethod": "단조성 활용",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["지수함수", "최대최소", "범위"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-04]",
+          "content": "지수함수를 활용하여 문제를 해결할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-04-001",
+              "typeName": "지수방정식",
+              "description": "aˣ=b 또는 치환을 이용한 지수방정식",
+              "solutionMethod": "밑 통일 / 치환",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["지수방정식", "밑통일", "치환"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-04-002",
+              "typeName": "지수부등식",
+              "description": "aˣ>b, aˣ<b 형태의 부등식",
+              "solutionMethod": "단조성 + 밑 통일",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["지수부등식", "단조성"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-04-003",
+              "typeName": "지수함수 활용 (실생활)",
+              "description": "복리, 반감기, 인구성장 등 지수 모델",
+              "solutionMethod": "지수 모델링",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["지수함수", "활용", "복리", "반감기"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-05]",
+          "content": "로그의 뜻을 알고, 그 성질을 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-05-001",
+              "typeName": "로그의 정의와 기본 계산",
+              "description": "log_a(b)=c ⟺ aᶜ=b 변환",
+              "solutionMethod": "로그 정의",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["로그", "정의", "변환"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-05-002",
+              "typeName": "로그의 성질 활용",
+              "description": "log(ab), log(a/b), log(aⁿ) 등",
+              "solutionMethod": "로그 성질",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["로그", "성질", "계산"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-05-003",
+              "typeName": "밑의 변환 공식",
+              "description": "log_a(b) = log_c(b)/log_c(a)",
+              "solutionMethod": "밑변환 공식",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["밑변환", "로그", "공식"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-06]",
+          "content": "상용로그를 이해하고, 이를 활용할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-06-001",
+              "typeName": "상용로그의 지표와 가수",
+              "description": "log N의 지표·가수 구하기, 자릿수 결정",
+              "solutionMethod": "지표·가수 분리",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["상용로그", "지표", "가수", "자릿수"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-06-002",
+              "typeName": "상용로그 활용 문제",
+              "description": "큰 수의 자릿수, 소수점 이하 자릿수 등",
+              "solutionMethod": "상용로그 + 부등식",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["상용로그", "활용", "자릿수"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-07]",
+          "content": "로그함수의 뜻을 알고, 그 그래프의 성질을 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-07-001",
+              "typeName": "로그함수 그래프의 성질",
+              "description": "y=log_a(x) 그래프, 정의역·치역·점근선",
+              "solutionMethod": "그래프 성질",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["로그함수", "그래프", "성질"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-07-002",
+              "typeName": "로그함수의 평행이동·대칭",
+              "description": "y=log_a(x-p)+q 그래프 변환",
+              "solutionMethod": "평행이동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["로그함수", "평행이동"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-07-003",
+              "typeName": "지수·로그함수의 역함수 관계",
+              "description": "y=aˣ와 y=log_a(x)의 역함수 관계, y=x 대칭",
+              "solutionMethod": "역함수 대칭",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["역함수", "대칭", "지수", "로그"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ01-08]",
+          "content": "로그함수를 활용하여 문제를 해결할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-EXP-08-001",
+              "typeName": "로그방정식",
+              "description": "log_a(f(x))=b 또는 치환 활용",
+              "solutionMethod": "로그 정의 + 진수조건",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["로그방정식", "진수조건"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-08-002",
+              "typeName": "로그부등식",
+              "description": "log_a(f(x))>log_a(g(x)) 형태",
+              "solutionMethod": "단조성 + 진수조건",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["로그부등식", "진수조건", "단조성"]
+            },
+            {
+              "typeCode": "MA-HS1-EXP-08-003",
+              "typeName": "로그함수 활용 (실생활)",
+              "description": "pH, 데시벨, 리히터 스케일 등",
+              "solutionMethod": "로그 모델링",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["로그함수", "활용", "pH", "데시벨"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "삼각함수",
+      "domain": "TRI",
+      "standards": [
+        {
+          "code": "[12수학Ⅰ02-01]",
+          "content": "일반각과 호도법의 뜻을 안다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-TRI-01-001",
+              "typeName": "일반각과 호도법 변환",
+              "description": "도 ↔ 라디안 변환, 일반각 표현",
+              "solutionMethod": "π=180° 변환",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["호도법", "라디안", "일반각"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-01-002",
+              "typeName": "부채꼴의 호의 길이와 넓이",
+              "description": "l=rθ, S=½r²θ 공식 활용",
+              "solutionMethod": "부채꼴 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["부채꼴", "호의길이", "넓이"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ02-02]",
+          "content": "삼각함수의 뜻을 알고, 사인함수, 코사인함수, 탄젠트함수의 그래프를 그릴 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-TRI-02-001",
+              "typeName": "삼각함수의 정의와 값",
+              "description": "단위원에서 sin, cos, tan 값 구하기",
+              "solutionMethod": "단위원",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["삼각함수", "단위원", "값"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-02-002",
+              "typeName": "삼각함수 그래프의 성질",
+              "description": "주기, 진폭, 대칭, 최대/최소",
+              "solutionMethod": "그래프 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["삼각함수", "그래프", "주기", "진폭"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-02-003",
+              "typeName": "y=a sin(bx+c)+d 그래프",
+              "description": "진폭·주기·위상이동·수직이동 분석",
+              "solutionMethod": "매개변수 해석",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["삼각함수", "변환", "진폭", "위상"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-02-004",
+              "typeName": "삼각함수 사이의 관계",
+              "description": "sin²θ+cos²θ=1, tanθ=sinθ/cosθ 등",
+              "solutionMethod": "삼각함수 항등식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["삼각함수", "항등식", "관계"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ02-03]",
+          "content": "삼각함수를 활용하여 문제를 해결할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-TRI-03-001",
+              "typeName": "삼각방정식",
+              "description": "sinθ=a, cosθ=b 등 기본 삼각방정식",
+              "solutionMethod": "단위원 + 일반해",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["삼각방정식", "일반해"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-03-002",
+              "typeName": "삼각부등식",
+              "description": "sinθ≥a, cosθ<b 등 부등식의 해 구간",
+              "solutionMethod": "그래프 활용",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["삼각부등식", "해구간"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-03-003",
+              "typeName": "삼각함수의 최대·최소",
+              "description": "a sinθ + b cosθ의 최대·최소 (합성)",
+              "solutionMethod": "삼각함수 합성",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 5],
+              "keywords": ["삼각함수", "합성", "최대최소"]
+            },
+            {
+              "typeCode": "MA-HS1-TRI-03-004",
+              "typeName": "사인법칙·코사인법칙",
+              "description": "삼각형에서 사인법칙, 코사인법칙 활용",
+              "solutionMethod": "사인/코사인 법칙",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["사인법칙", "코사인법칙", "삼각형"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "수열",
+      "domain": "SEQ",
+      "standards": [
+        {
+          "code": "[12수학Ⅰ03-01]",
+          "content": "등차수열의 뜻을 알고, 일반항, 첫째항부터 제n항까지의 합을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-SEQ-01-001",
+              "typeName": "등차수열의 일반항",
+              "description": "aₙ=a₁+(n-1)d 구하기",
+              "solutionMethod": "등차수열 일반항 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["등차수열", "일반항", "공차"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-01-002",
+              "typeName": "등차수열의 합",
+              "description": "Sₙ = n(a₁+aₙ)/2 활용",
+              "solutionMethod": "등차수열 합 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["등차수열", "합", "Sn"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-01-003",
+              "typeName": "등차중항",
+              "description": "b=(a+c)/2 활용",
+              "solutionMethod": "등차중항 조건",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["등차중항", "조건"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ03-02]",
+          "content": "등비수열의 뜻을 알고, 일반항, 첫째항부터 제n항까지의 합을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-SEQ-02-001",
+              "typeName": "등비수열의 일반항",
+              "description": "aₙ=a₁·rⁿ⁻¹ 구하기",
+              "solutionMethod": "등비수열 일반항 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["등비수열", "일반항", "공비"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-02-002",
+              "typeName": "등비수열의 합",
+              "description": "Sₙ = a₁(rⁿ-1)/(r-1) 활용",
+              "solutionMethod": "등비수열 합 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["등비수열", "합"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-02-003",
+              "typeName": "등비중항",
+              "description": "b²=ac 활용",
+              "solutionMethod": "등비중항 조건",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["등비중항", "조건"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ03-03]",
+          "content": "수열의 합과 일반항 사이의 관계를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-SEQ-03-001",
+              "typeName": "Sₙ으로 aₙ 구하기",
+              "description": "aₙ = Sₙ - Sₙ₋₁ (n≥2) 활용",
+              "solutionMethod": "Sₙ - Sₙ₋₁",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["수열", "합", "일반항", "관계"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-03-002",
+              "typeName": "n=1 검증",
+              "description": "a₁=S₁ 별도 확인 필요한 경우",
+              "solutionMethod": "경우 분류 (n=1, n≥2)",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["수열", "n=1", "검증"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ03-04]",
+          "content": "여러 가지 수열의 첫째항부터 제n항까지의 합을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-SEQ-04-001",
+              "typeName": "Σ 기호와 성질",
+              "description": "Σk, Σk², Σk³ 공식 활용",
+              "solutionMethod": "시그마 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["시그마", "합공식", "Σ"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-04-002",
+              "typeName": "분수 수열의 합 (부분분수)",
+              "description": "1/(k(k+1)) = 1/k - 1/(k+1) 활용",
+              "solutionMethod": "부분분수 분해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["부분분수", "수열", "텔레스코핑"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-04-003",
+              "typeName": "(등차)×(등비) 수열의 합",
+              "description": "k·2ᵏ 형태의 합 구하기",
+              "solutionMethod": "S-rS 기법",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["등차등비", "SrS", "수열의합"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-04-004",
+              "typeName": "군수열",
+              "description": "수열을 그룹으로 나누어 일반항/합 구하기",
+              "solutionMethod": "그룹별 분석",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 5],
+              "keywords": ["군수열", "그룹", "규칙"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ03-05]",
+          "content": "수학적 귀납법의 원리를 이해하고, 이를 이용하여 자연수에 대한 명제를 증명할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-SEQ-05-001",
+              "typeName": "수학적 귀납법 기본",
+              "description": "n=1 확인 → n=k 가정 → n=k+1 증명",
+              "solutionMethod": "수학적 귀납법",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["수학적귀납법", "증명"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-05-002",
+              "typeName": "수학적 귀납법 활용",
+              "description": "부등식, 정수 성질 등 다양한 명제 증명",
+              "solutionMethod": "수학적 귀납법 + 부등식",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [4, 5],
+              "keywords": ["수학적귀납법", "활용", "부등식"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅰ03-06]",
+          "content": "점화식의 뜻을 이해하고, 이를 이용하여 수열의 일반항을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS1-SEQ-06-001",
+              "typeName": "aₙ₊₁=aₙ+f(n) 형 점화식",
+              "description": "계차수열 형태의 점화식",
+              "solutionMethod": "양변 합산 (텔레스코핑)",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["점화식", "계차수열"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-06-002",
+              "typeName": "aₙ₊₁=raₙ+d 형 점화식",
+              "description": "등비형 점화식 → 특성방정식",
+              "solutionMethod": "특성방정식 aₙ-α=r(aₙ₋₁-α)",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["점화식", "특성방정식", "등비"]
+            },
+            {
+              "typeCode": "MA-HS1-SEQ-06-003",
+              "typeName": "aₙ₊₁=f(n)·aₙ 형 점화식",
+              "description": "양변 곱 또는 역수 취하는 점화식",
+              "solutionMethod": "양변 조작 (곱/역수)",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 5],
+              "keywords": ["점화식", "곱형", "역수"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

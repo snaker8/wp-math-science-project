@@ -1,0 +1,1225 @@
+{
+  "_schema": {
+    "version": "1.0.0",
+    "description": "다사람수학 확장 세부유형 체계 — 505개 성취기준 → 3,500+ 세부유형",
+    "generated": "2026-02-16",
+    "typeCodeFormat": "MA-{LEVEL}-{DOMAIN}-{STD}-{SEQ}",
+    "typeCodeExample": "MA-HS0-EQU-01-003 → 고등(공통)-방정식-01번성취기준-3번유형",
+    "levelCodes": {
+      "ES12": "초등 1-2학년",
+      "ES34": "초등 3-4학년",
+      "ES56": "초등 5-6학년",
+      "MS": "중학교",
+      "HS0": "고등 공통(수학/공통수학)",
+      "HS1": "고등 수학I/대수",
+      "HS2": "고등 수학II",
+      "CAL": "미적분/미적분I",
+      "PRB": "확률과 통계",
+      "GEO": "기하"
+    },
+    "domainCodes": {
+      "POL": "다항식",
+      "EQU": "방정식",
+      "INE": "부등식",
+      "SET": "집합과 명제",
+      "FUN": "함수",
+      "CNT": "경우의 수",
+      "CRD": "좌표와 도형",
+      "EXP": "지수와 로그",
+      "TRI": "삼각함수",
+      "SEQ": "수열",
+      "LIM": "극한",
+      "DIF": "미분",
+      "INT": "적분",
+      "PER": "순열과 조합",
+      "PRB": "확률",
+      "STA": "통계",
+      "VEC": "벡터",
+      "CON": "이차곡선",
+      "SPC": "공간도형",
+      "NUM": "수와 연산",
+      "GEO": "도형과 측정",
+      "PAT": "변화와 관계",
+      "DAT": "자료와 가능성"
+    },
+    "cognitiveLabels": {
+      "CALC": "CALCULATION — 계산/연산",
+      "UNDR": "UNDERSTANDING — 개념 이해",
+      "INFR": "INFERENCE — 추론/논증",
+      "PRBS": "PROBLEM_SOLVING — 문제 해결/응용"
+    }
+  },
+  "subjects": [
+    {
+      "curriculum": "2015 개정",
+      "subject": "수학",
+      "schoolLevel": "고등학교",
+      "level": "HS0",
+      "areas": [
+        {
+          "area": "다항식",
+          "domain": "POL",
+          "standards": [
+            {
+              "code": "[10수학01-01]",
+              "content": "다항식의 덧셈, 뺄셈, 곱셈을 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-POL-01-001",
+                  "typeName": "다항식의 덧셈과 뺄셈",
+                  "description": "두 다항식의 합 또는 차 계산",
+                  "solutionMethod": "동류항 정리",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["다항식", "덧셈", "뺄셈", "동류항"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-01-002",
+                  "typeName": "다항식의 곱셈 (전개)",
+                  "description": "두 다항식의 곱 전개",
+                  "solutionMethod": "분배법칙",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["다항식", "곱셈", "전개", "분배법칙"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-01-003",
+                  "typeName": "곱셈 공식 활용",
+                  "description": "(a+b)², (a-b)², (a+b)(a-b), (x+a)(x+b) 등 공식 활용",
+                  "solutionMethod": "곱셈 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 3],
+                  "keywords": ["곱셈공식", "완전제곱식", "합차공식"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-01-004",
+                  "typeName": "곱셈 공식의 변형",
+                  "description": "a²+b²=(a+b)²-2ab, a³+b³ 등 변형 공식",
+                  "solutionMethod": "곱셈 공식 변형",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 4],
+                  "keywords": ["곱셈공식", "변형", "대칭식"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-02]",
+              "content": "다항식의 나눗셈을 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-POL-02-001",
+                  "typeName": "다항식의 나눗셈 (기본)",
+                  "description": "다항식 ÷ 다항식의 몫과 나머지 구하기",
+                  "solutionMethod": "장제법(내림차순 정리)",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["다항식", "나눗셈", "몫", "나머지", "장제법"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-02-002",
+                  "typeName": "조립제법",
+                  "description": "일차식으로 나눌 때 조립제법 활용",
+                  "solutionMethod": "조립제법",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["조립제법", "나눗셈", "일차식"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-02-003",
+                  "typeName": "다항식의 나눗셈 관계식",
+                  "description": "A=BQ+R 관계식을 이용한 미정계수 결정",
+                  "solutionMethod": "나눗셈 항등식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["나눗셈", "항등식", "미정계수"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-03]",
+              "content": "나머지정리의 의미를 이해하고, 이를 활용하여 문제를 해결할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-POL-03-001",
+                  "typeName": "나머지정리 기본",
+                  "description": "f(a)를 이용한 나머지 구하기",
+                  "solutionMethod": "나머지정리 f(a)",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["나머지정리", "다항식", "함수값"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-03-002",
+                  "typeName": "인수정리와 인수분해",
+                  "description": "f(a)=0이면 (x-a)가 인수, 인수분해 활용",
+                  "solutionMethod": "인수정리",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["인수정리", "인수분해", "인수"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-03-003",
+                  "typeName": "이차식으로 나눈 나머지",
+                  "description": "(x-a)(x-b)로 나눈 나머지 ax+b 꼴 결정",
+                  "solutionMethod": "연립방정식 + 나머지정리",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["나머지정리", "이차식", "연립방정식"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-03-004",
+                  "typeName": "조건부 나머지 문제",
+                  "description": "여러 나눗셈 조건에서 미정계수 결정",
+                  "solutionMethod": "나머지정리 + 미정계수법",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 5],
+                  "keywords": ["나머지정리", "미정계수", "조건"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-04]",
+              "content": "인수분해를 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-POL-04-001",
+                  "typeName": "공통인수 묶기",
+                  "description": "공통인수로 묶어 인수분해",
+                  "solutionMethod": "공통인수 추출",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["인수분해", "공통인수"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-04-002",
+                  "typeName": "공식을 이용한 인수분해",
+                  "description": "a²-b², a²±2ab+b², x²+(a+b)x+ab 공식",
+                  "solutionMethod": "인수분해 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["인수분해", "공식", "완전제곱식"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-04-003",
+                  "typeName": "복잡한 식의 인수분해",
+                  "description": "치환, 한 문자에 대해 정리 후 인수분해",
+                  "solutionMethod": "치환/문자정리",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["인수분해", "치환", "정리"]
+                },
+                {
+                  "typeCode": "MA-HS0-POL-04-004",
+                  "typeName": "인수정리를 이용한 고차식 인수분해",
+                  "description": "삼차 이상 다항식의 인수분해 (조립제법 포함)",
+                  "solutionMethod": "인수정리 + 조립제법",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["인수분해", "삼차식", "인수정리", "조립제법"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "area": "방정식과 부등식",
+          "domain": "EQU",
+          "standards": [
+            {
+              "code": "[10수학01-05]",
+              "content": "복소수의 뜻과 성질을 이해하고, 복소수의 사칙연산을 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-EQU-05-001",
+                  "typeName": "복소수의 뜻과 상등조건",
+                  "description": "a+bi=c+di ⇔ a=c, b=d 활용",
+                  "solutionMethod": "실부·허부 비교",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["복소수", "상등", "실부", "허부"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-05-002",
+                  "typeName": "복소수의 사칙연산",
+                  "description": "복소수의 덧셈, 뺄셈, 곱셈, 나눗셈",
+                  "solutionMethod": "i²=-1 활용",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["복소수", "사칙연산", "켤레복소수"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-05-003",
+                  "typeName": "켤레복소수와 성질",
+                  "description": "z̄의 성질, |z|² = z·z̄ 등",
+                  "solutionMethod": "켤레복소수 성질",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["켤레복소수", "절대값", "성질"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-05-004",
+                  "typeName": "i의 거듭제곱과 규칙성",
+                  "description": "i, i², i³, i⁴의 순환 패턴 활용",
+                  "solutionMethod": "주기성 (4주기)",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["복소수", "거듭제곱", "주기"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-06]",
+              "content": "이차방정식의 실근과 허근의 뜻을 안다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-EQU-06-001",
+                  "typeName": "판별식과 근의 분류",
+                  "description": "D=b²-4ac로 실근/허근 판별",
+                  "solutionMethod": "판별식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["이차방정식", "판별식", "실근", "허근"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-06-002",
+                  "typeName": "근의 공식으로 허근 구하기",
+                  "description": "D<0일 때 복소수 형태 근 구하기",
+                  "solutionMethod": "근의 공식 + 복소수",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["이차방정식", "허근", "근의 공식"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-06-003",
+                  "typeName": "켤레근의 성질",
+                  "description": "실수 계수 이차방정식의 허근은 켤레 관계",
+                  "solutionMethod": "켤레근 정리",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["허근", "켤레근", "실수계수"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-07]",
+              "content": "이차방정식의 근과 계수의 관계를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-EQU-07-001",
+                  "typeName": "근과 계수의 관계 기본",
+                  "description": "α+β=-b/a, αβ=c/a 직접 활용",
+                  "solutionMethod": "근과 계수의 관계",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["근과계수", "합", "곱"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-07-002",
+                  "typeName": "대칭식의 값 구하기",
+                  "description": "α²+β², 1/α+1/β, α³+β³ 등 대칭식 계산",
+                  "solutionMethod": "근과 계수의 관계 + 항등식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["대칭식", "근과계수", "변환"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-07-003",
+                  "typeName": "두 근으로 이차방정식 작성",
+                  "description": "주어진 두 근으로 x²-(α+β)x+αβ=0 구성",
+                  "solutionMethod": "역방향 활용",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["이차방정식", "작성", "근과계수"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-07-004",
+                  "typeName": "근의 조건에서 미정계수 결정",
+                  "description": "두 근의 비, 차, 관계식에서 계수 결정",
+                  "solutionMethod": "근과 계수의 관계 + 조건식",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["미정계수", "근의조건", "근과계수"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-08]",
+              "content": "이차방정식과 이차함수의 관계를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-EQU-08-001",
+                  "typeName": "이차함수 그래프와 x축 교점",
+                  "description": "y=ax²+bx+c 그래프와 x축 교점 ↔ 실근",
+                  "solutionMethod": "판별식 + 그래프",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["이차함수", "교점", "판별식"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-08-002",
+                  "typeName": "이차함수 그래프의 위치 관계",
+                  "description": "D>0, D=0, D<0에 따른 그래프 위치",
+                  "solutionMethod": "판별식 부호 해석",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["이차함수", "위치관계", "판별식"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-08-003",
+                  "typeName": "이차방정식의 근의 분리",
+                  "description": "그래프를 이용한 근의 범위 조건 문제",
+                  "solutionMethod": "꼭짓점+축+함수값 조건",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [4, 5],
+                  "keywords": ["근의분리", "이차함수", "그래프", "범위"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-09]",
+              "content": "이차함수의 최대, 최소를 이해하고, 이를 활용하여 문제를 해결할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-EQU-09-001",
+                  "typeName": "이차함수의 최댓값/최솟값 (전체 범위)",
+                  "description": "꼭짓점에서의 최대 또는 최소 구하기",
+                  "solutionMethod": "완전제곱식 변환",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["이차함수", "최댓값", "최솟값", "꼭짓점"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-09-002",
+                  "typeName": "제한된 범위에서의 최대/최소",
+                  "description": "a≤x≤b에서 이차함수의 최대·최소",
+                  "solutionMethod": "축의 위치에 따른 경우 분류",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["이차함수", "제한범위", "최대최소", "경우분류"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-09-003",
+                  "typeName": "이차함수 최대/최소 활용 (실생활)",
+                  "description": "넓이, 이익 등 실생활 문제에서 이차함수 최적화",
+                  "solutionMethod": "함수 모델링 + 최대/최소",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["이차함수", "활용", "실생활", "최적화"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-10]",
+              "content": "여러 가지 방정식을 풀 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-EQU-10-001",
+                  "typeName": "삼차·사차방정식 (인수분해)",
+                  "description": "인수분해를 이용한 고차방정식 풀이",
+                  "solutionMethod": "인수분해 → 근 구하기",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["삼차방정식", "사차방정식", "인수분해"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-10-002",
+                  "typeName": "치환을 이용한 고차방정식",
+                  "description": "x²=t 등 치환으로 이차방정식으로 변환",
+                  "solutionMethod": "치환",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["치환", "사차방정식", "복이차식"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-10-003",
+                  "typeName": "연립이차방정식",
+                  "description": "이차식이 포함된 연립방정식 풀이",
+                  "solutionMethod": "대입법/가감법",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["연립방정식", "이차", "대입법"]
+                },
+                {
+                  "typeCode": "MA-HS0-EQU-10-004",
+                  "typeName": "분수방정식·무리방정식",
+                  "description": "분모에 변수가 있는 방정식, 근호가 있는 방정식",
+                  "solutionMethod": "양변 제곱/통분 + 검증",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["분수방정식", "무리방정식", "무연근"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-11]",
+              "content": "여러 가지 부등식을 풀 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-INE-11-001",
+                  "typeName": "이차부등식 기본",
+                  "description": "ax²+bx+c>0 (≥,<,≤) 풀기",
+                  "solutionMethod": "인수분해 + 부호 판정",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["이차부등식", "인수분해", "부호"]
+                },
+                {
+                  "typeCode": "MA-HS0-INE-11-002",
+                  "typeName": "판별식과 이차부등식",
+                  "description": "D<0일 때 ax²+bx+c의 부호 판정",
+                  "solutionMethod": "판별식 + 최고차 계수 부호",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["이차부등식", "판별식", "항상 양/음"]
+                },
+                {
+                  "typeCode": "MA-HS0-INE-11-003",
+                  "typeName": "연립이차부등식",
+                  "description": "두 이차부등식의 공통 해 구하기",
+                  "solutionMethod": "수직선 표시 + 교집합",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["연립부등식", "이차", "공통해"]
+                },
+                {
+                  "typeCode": "MA-HS0-INE-11-004",
+                  "typeName": "이차부등식이 항상 성립할 조건",
+                  "description": "모든 실수 x에 대해 부등식 성립 조건",
+                  "solutionMethod": "판별식 D≤0 + 최고차계수",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["항상성립", "판별식", "조건"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학01-12]",
+              "content": "절대값을 포함한 일차부등식을 풀 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-INE-12-001",
+                  "typeName": "|ax+b|<c (≤) 풀기",
+                  "description": "-c<ax+b<c로 변환하여 풀기",
+                  "solutionMethod": "절대값 정의",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["절대값", "부등식", "범위"]
+                },
+                {
+                  "typeCode": "MA-HS0-INE-12-002",
+                  "typeName": "|ax+b|>c (≥) 풀기",
+                  "description": "ax+b>c 또는 ax+b<-c로 분리",
+                  "solutionMethod": "절대값 정의 (합집합)",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["절대값", "부등식", "합집합"]
+                },
+                {
+                  "typeCode": "MA-HS0-INE-12-003",
+                  "typeName": "절대값이 여러 개인 부등식",
+                  "description": "|x-a|+|x-b| 형태 부등식",
+                  "solutionMethod": "경우 분류 (구간별)",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["절대값", "경우분류", "구간"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "area": "도형의 방정식",
+          "domain": "CRD",
+          "standards": [
+            {
+              "code": "[10수학02-01]",
+              "content": "두 점 사이의 거리를 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-01-001",
+                  "typeName": "두 점 사이의 거리 공식",
+                  "description": "좌표평면 위 두 점 간 거리 계산",
+                  "solutionMethod": "거리 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["거리", "좌표", "두점"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-01-002",
+                  "typeName": "거리 조건을 만족하는 점",
+                  "description": "거리 조건에서 미지수 결정",
+                  "solutionMethod": "거리 공식 + 방정식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["거리", "조건", "미지수"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-02]",
+              "content": "선분의 내분점과 외분점의 좌표를 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-02-001",
+                  "typeName": "내분점의 좌표",
+                  "description": "m:n 내분점 좌표 구하기",
+                  "solutionMethod": "내분점 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["내분점", "좌표", "비율"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-02-002",
+                  "typeName": "외분점의 좌표",
+                  "description": "m:n 외분점 좌표 구하기",
+                  "solutionMethod": "외분점 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["외분점", "좌표", "비율"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-02-003",
+                  "typeName": "삼각형의 무게중심",
+                  "description": "세 꼭짓점 좌표로 무게중심 구하기",
+                  "solutionMethod": "무게중심 공식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["무게중심", "삼각형", "좌표"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-03]",
+              "content": "직선의 방정식을 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-03-001",
+                  "typeName": "기울기와 한 점으로 직선 방정식",
+                  "description": "y-y₁=m(x-x₁) 활용",
+                  "solutionMethod": "점-기울기 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["직선", "기울기", "방정식"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-03-002",
+                  "typeName": "두 점으로 직선 방정식",
+                  "description": "두 점을 지나는 직선 방정식 구하기",
+                  "solutionMethod": "기울기 계산 + 점-기울기",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["직선", "두점", "방정식"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-03-003",
+                  "typeName": "x절편, y절편을 이용한 직선",
+                  "description": "x/a + y/b = 1 형태",
+                  "solutionMethod": "절편 공식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 2],
+                  "keywords": ["직선", "절편", "방정식"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-04]",
+              "content": "두 직선의 평행 조건과 수직 조건을 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-04-001",
+                  "typeName": "두 직선의 평행 조건",
+                  "description": "m₁=m₂ 활용, 미정계수 결정",
+                  "solutionMethod": "기울기 비교",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["평행", "기울기", "직선"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-04-002",
+                  "typeName": "두 직선의 수직 조건",
+                  "description": "m₁·m₂=-1 활용, 미정계수 결정",
+                  "solutionMethod": "기울기 곱 = -1",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["수직", "기울기", "직선"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-04-003",
+                  "typeName": "평행/수직 조건 종합 활용",
+                  "description": "도형 문제에서 평행·수직 조건 복합 활용",
+                  "solutionMethod": "기울기 조건 + 연립",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["평행", "수직", "도형", "종합"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-05]",
+              "content": "점과 직선 사이의 거리를 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-05-001",
+                  "typeName": "점과 직선 사이의 거리 공식",
+                  "description": "|ax₁+by₁+c|/√(a²+b²) 직접 적용",
+                  "solutionMethod": "거리 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["점", "직선", "거리"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-05-002",
+                  "typeName": "평행한 두 직선 사이의 거리",
+                  "description": "평행한 두 직선 간 거리 구하기",
+                  "solutionMethod": "한 점 선택 + 거리 공식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 2],
+                  "keywords": ["평행", "거리", "두직선"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-05-003",
+                  "typeName": "삼각형의 넓이 (점과 직선 거리)",
+                  "description": "꼭짓점에서 대변까지 거리를 이용한 넓이",
+                  "solutionMethod": "거리 공식 + ½×밑변×높이",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["삼각형", "넓이", "거리"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-06]",
+              "content": "원의 방정식을 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-06-001",
+                  "typeName": "원의 방정식 표준형",
+                  "description": "(x-a)²+(y-b)²=r² 구하기",
+                  "solutionMethod": "중심·반지름 대입",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["원", "방정식", "표준형"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-06-002",
+                  "typeName": "원의 방정식 일반형",
+                  "description": "x²+y²+Dx+Ey+F=0에서 중심과 반지름",
+                  "solutionMethod": "완전제곱식 변환",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 2],
+                  "keywords": ["원", "일반형", "완전제곱식"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-06-003",
+                  "typeName": "세 점을 지나는 원",
+                  "description": "세 점의 좌표로 원의 방정식 결정",
+                  "solutionMethod": "연립방정식 (3원1차)",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["원", "세점", "연립방정식"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-07]",
+              "content": "좌표평면에서 직선과 원의 위치 관계를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-07-001",
+                  "typeName": "직선과 원의 위치 관계 판별",
+                  "description": "중심~직선 거리 d와 반지름 r 비교",
+                  "solutionMethod": "거리와 반지름 비교",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["원", "직선", "위치관계"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-07-002",
+                  "typeName": "직선과 원의 교점",
+                  "description": "연립방정식으로 교점 좌표 구하기",
+                  "solutionMethod": "연립 → 이차방정식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["교점", "연립", "원", "직선"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-07-003",
+                  "typeName": "원의 접선 (기울기 주어짐)",
+                  "description": "기울기 m인 원의 접선의 방정식",
+                  "solutionMethod": "d=r 조건 (판별식)",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["접선", "원", "기울기"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-07-004",
+                  "typeName": "원 위의 점에서의 접선",
+                  "description": "점 (x₁,y₁)에서 원에 대한 접선 방정식",
+                  "solutionMethod": "접선 공식 xx₁+yy₁=r²",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["접선", "원위의점", "공식"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-08]",
+              "content": "원과 원의 위치 관계를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-08-001",
+                  "typeName": "두 원의 위치 관계 판별",
+                  "description": "중심거리 d와 r₁,r₂로 위치관계 분류",
+                  "solutionMethod": "d와 r₁±r₂ 비교",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["원", "위치관계", "중심거리"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-08-002",
+                  "typeName": "두 원의 교점과 공통현",
+                  "description": "두 원의 교점을 지나는 직선(공통현) 구하기",
+                  "solutionMethod": "두 원 방정식 뺄셈",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["두원", "교점", "공통현"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학02-09]",
+              "content": "평행이동의 의미를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CRD-09-001",
+                  "typeName": "점의 평행이동",
+                  "description": "(x,y) → (x+a, y+b) 변환",
+                  "solutionMethod": "평행이동 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["평행이동", "점", "변환"]
+                },
+                {
+                  "typeCode": "MA-HS0-CRD-09-002",
+                  "typeName": "도형의 평행이동",
+                  "description": "직선/원의 방정식을 평행이동",
+                  "solutionMethod": "x→x-a, y→y-b 치환",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["평행이동", "도형", "치환"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "area": "집합과 명제",
+          "domain": "SET",
+          "standards": [
+            {
+              "code": "[10수학03-01]",
+              "content": "집합의 뜻을 알고, 집합 사이의 포함 관계를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-SET-01-001",
+                  "typeName": "집합의 표현과 원소 판별",
+                  "description": "조건제시법, 원소나열법, 벤 다이어그램",
+                  "solutionMethod": "집합 표현 변환",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["집합", "원소", "표현"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-01-002",
+                  "typeName": "부분집합의 개수",
+                  "description": "원소 n개 집합의 부분집합 수 = 2ⁿ",
+                  "solutionMethod": "2ⁿ 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["부분집합", "개수", "거듭제곱"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학03-02]",
+              "content": "집합의 연산을 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-SET-02-001",
+                  "typeName": "합집합·교집합·여집합·차집합",
+                  "description": "기본 집합 연산 계산",
+                  "solutionMethod": "벤 다이어그램/원소나열",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["합집합", "교집합", "여집합", "차집합"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-02-002",
+                  "typeName": "집합 원소의 개수 (포함-배제)",
+                  "description": "n(A∪B) = n(A)+n(B)-n(A∩B)",
+                  "solutionMethod": "포함-배제 원리",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["원소개수", "포함배제", "합집합"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-02-003",
+                  "typeName": "집합 연산 법칙 활용",
+                  "description": "드모르간 법칙, 분배법칙 등",
+                  "solutionMethod": "집합 연산 법칙",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["드모르간", "분배법칙", "집합법칙"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학03-03]",
+              "content": "명제의 뜻을 알고, 명제의 역과 대우를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-SET-03-001",
+                  "typeName": "명제의 참·거짓 판별",
+                  "description": "주어진 명제의 진리값 판별",
+                  "solutionMethod": "반례 찾기/논리 추론",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["명제", "참", "거짓", "반례"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-03-002",
+                  "typeName": "역·이·대우",
+                  "description": "명제 p→q의 역, 이, 대우 작성 및 진리값",
+                  "solutionMethod": "논리 구조 변환",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 2],
+                  "keywords": ["역", "이", "대우", "명제"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학03-04]",
+              "content": "충분조건, 필요조건, 필요충분조건의 의미를 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-SET-04-001",
+                  "typeName": "충분/필요/필요충분조건 판별",
+                  "description": "p⊂q, q⊂p, p=q 관계 판별",
+                  "solutionMethod": "진리집합 포함관계",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["충분조건", "필요조건", "필요충분"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-04-002",
+                  "typeName": "조건에서 미정계수 결정",
+                  "description": "충분/필요조건이 되기 위한 상수 범위",
+                  "solutionMethod": "진리집합 포함 + 범위",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["미정계수", "충분조건", "범위"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학03-05]",
+              "content": "대우를 이용한 증명법과 귀류법을 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-SET-05-001",
+                  "typeName": "대우 증명법",
+                  "description": "대우를 이용한 명제 증명",
+                  "solutionMethod": "대우 증명",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["대우", "증명", "귀류"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-05-002",
+                  "typeName": "귀류법",
+                  "description": "결론 부정 → 모순 도출",
+                  "solutionMethod": "귀류법",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["귀류법", "증명", "모순"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학03-06]",
+              "content": "절대부등식을 증명할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-SET-06-001",
+                  "typeName": "산술-기하 평균 부등식",
+                  "description": "(a+b)/2 ≥ √(ab) 활용",
+                  "solutionMethod": "산술-기하 평균",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["산술기하", "부등식", "증명"]
+                },
+                {
+                  "typeCode": "MA-HS0-SET-06-002",
+                  "typeName": "코시-슈바르츠 부등식",
+                  "description": "(a²+b²)(c²+d²)≥(ac+bd)² 활용",
+                  "solutionMethod": "코시-슈바르츠",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [4, 5],
+                  "keywords": ["코시슈바르츠", "부등식", "증명"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "area": "함수",
+          "domain": "FUN",
+          "standards": [
+            {
+              "code": "[10수학04-01]",
+              "content": "함수의 뜻을 안다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-FUN-01-001",
+                  "typeName": "함수의 정의와 판별",
+                  "description": "주어진 대응이 함수인지 판별",
+                  "solutionMethod": "정의역 원소 → 공역 대응 확인",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [1, 1],
+                  "keywords": ["함수", "정의", "대응"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-01-002",
+                  "typeName": "함수의 개수",
+                  "description": "정의역→공역 함수의 수 구하기",
+                  "solutionMethod": "경우의 수",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["함수", "개수", "경우의수"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학04-02]",
+              "content": "합성함수와 역함수의 의미를 이해하고 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-FUN-02-001",
+                  "typeName": "합성함수 계산",
+                  "description": "(f∘g)(x) = f(g(x)) 계산",
+                  "solutionMethod": "함수값 대입",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["합성함수", "계산"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-02-002",
+                  "typeName": "역함수 구하기",
+                  "description": "y=f(x) → x=f⁻¹(y) 변환",
+                  "solutionMethod": "x,y 교환 후 정리",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 2],
+                  "keywords": ["역함수", "교환"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-02-003",
+                  "typeName": "합성함수·역함수 성질 활용",
+                  "description": "f(f⁻¹(x))=x, 그래프 대칭성 등",
+                  "solutionMethod": "역함수 성질",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["합성", "역함수", "대칭"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학04-03]",
+              "content": "유리식을 약분, 통분하고, 유리식의 사칙연산을 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-FUN-03-001",
+                  "typeName": "유리식의 약분·통분",
+                  "description": "분자·분모 인수분해 후 약분/통분",
+                  "solutionMethod": "인수분해 + 약분",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["유리식", "약분", "통분"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-03-002",
+                  "typeName": "유리식의 사칙연산",
+                  "description": "유리식의 덧셈·뺄셈·곱셈·나눗셈",
+                  "solutionMethod": "통분 + 계산",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["유리식", "사칙연산"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학04-04]",
+              "content": "무리식의 뜻을 알고, 무리식의 계산을 할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-FUN-04-001",
+                  "typeName": "무리식의 계산",
+                  "description": "근호를 포함한 식의 사칙연산",
+                  "solutionMethod": "유리화",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["무리식", "유리화", "근호"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-04-002",
+                  "typeName": "이중근호 풀기",
+                  "description": "√(a±2√b) 형태 간소화",
+                  "solutionMethod": "이중근호 공식",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["이중근호", "간소화"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학04-05]",
+              "content": "유리함수 y=k/x와 무리함수 y=√(ax+b)의 그래프를 그릴 수 있고, 그 성질을 이해한다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-FUN-05-001",
+                  "typeName": "유리함수 그래프",
+                  "description": "y=k/x, y=k/(x-p)+q 그래프와 점근선",
+                  "solutionMethod": "평행이동 + 점근선",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["유리함수", "그래프", "점근선"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-05-002",
+                  "typeName": "무리함수 그래프",
+                  "description": "y=√(ax+b)+c 그래프와 정의역·치역",
+                  "solutionMethod": "정의역 조건 + 그래프",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["무리함수", "그래프", "정의역"]
+                },
+                {
+                  "typeCode": "MA-HS0-FUN-05-003",
+                  "typeName": "유리·무리함수와 직선의 교점",
+                  "description": "함수와 직선의 교점/접선 문제",
+                  "solutionMethod": "연립방정식 + 판별식",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["교점", "유리함수", "무리함수"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "area": "경우의 수",
+          "domain": "CNT",
+          "standards": [
+            {
+              "code": "[10수학05-01]",
+              "content": "합의 법칙과 곱의 법칙을 이해하고, 이를 이용하여 경우의 수를 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CNT-01-001",
+                  "typeName": "합의 법칙",
+                  "description": "동시에 일어나지 않는 사건의 경우의 수",
+                  "solutionMethod": "합의 법칙",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["합의법칙", "경우의수"]
+                },
+                {
+                  "typeCode": "MA-HS0-CNT-01-002",
+                  "typeName": "곱의 법칙",
+                  "description": "순차적 사건의 경우의 수",
+                  "solutionMethod": "곱의 법칙",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["곱의법칙", "경우의수"]
+                },
+                {
+                  "typeCode": "MA-HS0-CNT-01-003",
+                  "typeName": "합·곱의 법칙 종합",
+                  "description": "복합적 상황에서 합·곱 법칙 혼합 적용",
+                  "solutionMethod": "분류 + 합·곱 법칙",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["합의법칙", "곱의법칙", "종합"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학05-02]",
+              "content": "순열의 수를 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CNT-02-001",
+                  "typeName": "순열 기본 (nPr)",
+                  "description": "n개에서 r개를 순서있게 선택",
+                  "solutionMethod": "nPr 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["순열", "nPr", "경우의수"]
+                },
+                {
+                  "typeCode": "MA-HS0-CNT-02-002",
+                  "typeName": "조건부 순열",
+                  "description": "특정 자리 조건이 있는 순열 (이웃, 제외 등)",
+                  "solutionMethod": "조건 고정 + 나머지 배열",
+                  "typicalCognitive": "INFERENCE",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["순열", "조건", "배열"]
+                }
+              ]
+            },
+            {
+              "code": "[10수학05-03]",
+              "content": "조합의 수를 구할 수 있다.",
+              "types": [
+                {
+                  "typeCode": "MA-HS0-CNT-03-001",
+                  "typeName": "조합 기본 (nCr)",
+                  "description": "n개에서 r개를 순서 없이 선택",
+                  "solutionMethod": "nCr 공식",
+                  "typicalCognitive": "CALCULATION",
+                  "typicalDifficulty": [1, 2],
+                  "keywords": ["조합", "nCr", "선택"]
+                },
+                {
+                  "typeCode": "MA-HS0-CNT-03-002",
+                  "typeName": "조합의 성질 활용",
+                  "description": "nCr = nCn-r, nCr + nCr-1 = n+1Cr 등",
+                  "solutionMethod": "조합 성질",
+                  "typicalCognitive": "UNDERSTANDING",
+                  "typicalDifficulty": [2, 3],
+                  "keywords": ["조합", "성질", "파스칼"]
+                },
+                {
+                  "typeCode": "MA-HS0-CNT-03-003",
+                  "typeName": "조건부 조합 문제",
+                  "description": "특정 원소 포함/제외 조건의 조합",
+                  "solutionMethod": "분류 + 조합",
+                  "typicalCognitive": "PROBLEM_SOLVING",
+                  "typicalDifficulty": [3, 4],
+                  "keywords": ["조합", "조건", "포함배제"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "_statistics": {
+    "description": "이 파일의 통계 (자동 갱신 필요)",
+    "totalSubjects": 1,
+    "totalAreas": 5,
+    "totalStandards": 41,
+    "totalTypes": 113,
+    "avgTypesPerStandard": 2.76
+  }
+}

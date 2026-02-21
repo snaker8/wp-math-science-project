@@ -1,0 +1,373 @@
+{
+  "_description": "보충 세부유형 — 기존 유형 세분화 + 미커버 성취기준 + 2022대수 + 중학교",
+  "_generated": "2026-02-16",
+  "supplements": [
+    {
+      "target": "existing_refinement",
+      "description": "기존 2-유형 성취기준에 추가 유형 보충",
+      "additions": [
+        {"parentCode": "[10수학02-01]", "types": [
+          {"typeCode": "MA-HS0-CRD-01-003", "typeName": "선분의 길이와 삼각형 판별", "description": "세 변의 길이 조건으로 삼각형 존재 판별", "solutionMethod": "삼각부등식", "typicalCognitive": "INFERENCE", "typicalDifficulty": [2, 3], "keywords": ["삼각부등식", "삼각형", "판별"]}
+        ]},
+        {"parentCode": "[10수학02-08]", "types": [
+          {"typeCode": "MA-HS0-CRD-08-003", "typeName": "두 원의 교점을 지나는 원", "description": "두 원의 교점을 지나는 원의 방정식 결정", "solutionMethod": "k매개변수 + 조건", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["두원", "교점", "원", "매개변수"]}
+        ]},
+        {"parentCode": "[10수학02-09]", "types": [
+          {"typeCode": "MA-HS0-CRD-09-003", "typeName": "대칭이동", "description": "x축, y축, 원점, y=x 대칭", "solutionMethod": "대칭이동 공식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["대칭이동", "x축", "y축", "원점"]}
+        ]},
+        {"parentCode": "[10수학03-01]", "types": [
+          {"typeCode": "MA-HS0-SET-01-003", "typeName": "부분집합 조건 문제", "description": "A⊂B 조건에서 미정계수 결정", "solutionMethod": "포함관계 + 원소 조건", "typicalCognitive": "INFERENCE", "typicalDifficulty": [2, 3], "keywords": ["부분집합", "조건", "미정계수"]}
+        ]},
+        {"parentCode": "[10수학03-03]", "types": [
+          {"typeCode": "MA-HS0-SET-03-003", "typeName": "'모든'과 '어떤' 명제", "description": "전칭·존재 명제의 부정과 진리값", "solutionMethod": "양화사 부정", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["전칭", "존재", "부정", "명제"]}
+        ]},
+        {"parentCode": "[10수학03-04]", "types": [
+          {"typeCode": "MA-HS0-SET-04-003", "typeName": "여러 조건의 관계 종합", "description": "p→q, q→r 등 복합 조건 관계 판별", "solutionMethod": "진리집합 연쇄 포함", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["충분", "필요", "연쇄", "종합"]}
+        ]},
+        {"parentCode": "[10수학03-05]", "types": [
+          {"typeCode": "MA-HS0-SET-05-003", "typeName": "무리수의 성질 증명", "description": "√2 무리수 증명 등 대표 귀류법 문제", "solutionMethod": "귀류법 + 소인수분해", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["무리수", "증명", "귀류법"]}
+        ]},
+        {"parentCode": "[10수학03-06]", "types": [
+          {"typeCode": "MA-HS0-SET-06-003", "typeName": "절대부등식 증명 (기타)", "description": "변형된 부등식 증명 (치환, 등호 조건 포함)", "solutionMethod": "변형 + 등호조건", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 5], "keywords": ["절대부등식", "증명", "등호조건"]}
+        ]},
+        {"parentCode": "[10수학04-01]", "types": [
+          {"typeCode": "MA-HS0-FUN-01-003", "typeName": "일대일함수와 일대일대응", "description": "일대일, 위에의, 일대일대응 판별", "solutionMethod": "정의 확인", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [1, 2], "keywords": ["일대일", "대응", "판별"]}
+        ]},
+        {"parentCode": "[10수학04-03]", "types": [
+          {"typeCode": "MA-HS0-FUN-03-003", "typeName": "비례식과 유리식 활용", "description": "비례식에서 값 구하기, 조건부 유리식", "solutionMethod": "비례식 성질 + 유리식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["비례식", "유리식", "활용"]}
+        ]},
+        {"parentCode": "[10수학04-04]", "types": [
+          {"typeCode": "MA-HS0-FUN-04-003", "typeName": "무리식의 값 범위", "description": "근호 안 조건(≥0)과 값의 범위 결정", "solutionMethod": "정의역 조건", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["무리식", "범위", "정의역"]}
+        ]},
+        {"parentCode": "[10수학05-02]", "types": [
+          {"typeCode": "MA-HS0-CNT-02-003", "typeName": "원순열 (고1 수준)", "description": "원형 배열의 경우의 수 기초", "solutionMethod": "(n-1)! 기초", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["원순열", "배열", "기초"]}
+        ]},
+        {"parentCode": "[12수학Ⅰ01-01]", "types": [
+          {"typeCode": "MA-HS1-EXP-01-003", "typeName": "거듭제곱근의 성질 증명", "description": "ⁿ√(ab) = ⁿ√a · ⁿ√b 등 성질 활용", "solutionMethod": "거듭제곱근 성질", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["거듭제곱근", "성질"]}
+        ]},
+        {"parentCode": "[12수학Ⅰ01-02]", "types": [
+          {"typeCode": "MA-HS1-EXP-02-003", "typeName": "지수의 대소 비교", "description": "a^m과 b^n 크기 비교 (지수 통일)", "solutionMethod": "지수/밑 통일", "typicalCognitive": "INFERENCE", "typicalDifficulty": [2, 3], "keywords": ["지수", "대소비교"]}
+        ]},
+        {"parentCode": "[12수학Ⅰ01-06]", "types": [
+          {"typeCode": "MA-HS1-EXP-06-003", "typeName": "상용로그와 소수", "description": "첫째 자리 숫자, 소수점 아래 자릿수", "solutionMethod": "가수 활용", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["상용로그", "소수", "첫째자리"]}
+        ]},
+        {"parentCode": "[12수학Ⅰ02-01]", "types": [
+          {"typeCode": "MA-HS1-TRI-01-003", "typeName": "각의 변환과 삼각함수 값", "description": "일반각에서 삼각함수 값 구하기", "solutionMethod": "기준각 + 부호", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["일반각", "삼각함수", "변환"]}
+        ]},
+        {"parentCode": "[12수학Ⅰ03-03]", "types": [
+          {"typeCode": "MA-HS1-SEQ-03-003", "typeName": "Sₙ이 이차식일 때 수열", "description": "Sₙ=an²+bn+c 에서 aₙ 구하기", "solutionMethod": "Sₙ-Sₙ₋₁ + n=1 검증", "typicalCognitive": "INFERENCE", "typicalDifficulty": [2, 3], "keywords": ["수열", "이차식", "Sn"]}
+        ]},
+        {"parentCode": "[12수학Ⅰ03-05]", "types": [
+          {"typeCode": "MA-HS1-SEQ-05-003", "typeName": "수학적 귀납법으로 등식 증명", "description": "Σk = n(n+1)/2 등 등식 증명", "solutionMethod": "수학적 귀납법 (등식)", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["귀납법", "등식", "증명"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ01-01]", "types": [
+          {"typeCode": "MA-HS2-LIM-01-003", "typeName": "x→∞ 극한", "description": "x→∞에서 f(x)의 극한값 구하기", "solutionMethod": "최고차항 나누기", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["극한", "무한대"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ01-03]", "types": [
+          {"typeCode": "MA-HS2-LIM-03-003", "typeName": "불연속점의 분류", "description": "제거 가능 불연속, 점프 불연속 등", "solutionMethod": "극한값·함수값 비교", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["불연속", "분류", "제거가능"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ01-04]", "types": [
+          {"typeCode": "MA-HS2-LIM-04-003", "typeName": "중간값 정리 활용 문제", "description": "방정식 f(x)=0의 근의 존재성 증명", "solutionMethod": "중간값정리 + 부호", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["중간값정리", "활용", "근"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ02-01]", "types": [
+          {"typeCode": "MA-HS2-DIF-01-003", "typeName": "미분계수의 기하학적 의미", "description": "접선의 기울기로서의 미분계수", "solutionMethod": "기하학적 해석", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 2], "keywords": ["미분계수", "접선", "기울기"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ02-02]", "types": [
+          {"typeCode": "MA-HS2-DIF-02-003", "typeName": "구간별 정의 함수의 미분가능성", "description": "절대값, 구간별 함수에서 미분가능 조건", "solutionMethod": "좌미분=우미분=연속", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["미분가능", "구간별", "절대값"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ02-05]", "types": [
+          {"typeCode": "MA-HS2-DIF-05-003", "typeName": "함수가 항상 증가/감소할 조건", "description": "f'(x)≥0이 항상 성립할 계수 조건", "solutionMethod": "판별식 + 부호", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["증가", "항상", "판별식"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ02-07]", "types": [
+          {"typeCode": "MA-HS2-DIF-07-003", "typeName": "절대값 함수의 최대·최소", "description": "|f(x)| 형태의 최대·최소 구하기", "solutionMethod": "그래프 + 경우분류", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["절대값", "최대최소", "그래프"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ02-08]", "types": [
+          {"typeCode": "MA-HS2-DIF-08-003", "typeName": "방정식 f(x)=g(x) 실근 개수", "description": "두 함수 그래프 교점 수 분석", "solutionMethod": "그래프 비교 + 극값", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["교점", "실근개수", "두함수"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ02-09]", "types": [
+          {"typeCode": "MA-HS2-DIF-09-003", "typeName": "평면 위 운동의 속도·가속도", "description": "x(t), y(t)에서 속도벡터, 속력 구하기", "solutionMethod": "성분별 미분", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["평면운동", "속도벡터", "속력"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ03-01]", "types": [
+          {"typeCode": "MA-HS2-INT-01-003", "typeName": "부정적분 관계식 문제", "description": "f(x)=∫g(x)dx+C 조건으로 함수 결정", "solutionMethod": "적분 + 연립", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["부정적분", "관계식", "함수결정"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ03-02]", "types": [
+          {"typeCode": "MA-HS2-INT-02-003", "typeName": "정적분의 치환 (다항함수)", "description": "f(a+b-x) 치환 등 다항함수 정적분 기법", "solutionMethod": "치환 + 대칭성", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["정적분", "치환", "대칭"]}
+        ]},
+        {"parentCode": "[12수학Ⅱ03-05]", "types": [
+          {"typeCode": "MA-HS2-INT-05-003", "typeName": "위치·속도·가속도 종합", "description": "가속도→속도→위치 순차 적분 종합문제", "solutionMethod": "2중 적분 + 초기조건", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["가속도", "속도", "위치", "적분"]}
+        ]},
+        {"parentCode": "[12미적01-01]", "types": [
+          {"typeCode": "MA-CAL-LIM-01-003", "typeName": "무한급수의 수렴·발산", "description": "급수 Σaₙ의 수렴 필요조건 lim aₙ=0", "solutionMethod": "발산 판정법", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["급수", "수렴", "발산"]}
+        ]},
+        {"parentCode": "[12미적01-02]", "types": [
+          {"typeCode": "MA-CAL-LIM-02-003", "typeName": "급수와 부분합의 관계", "description": "Sₙ → S 에서 Σaₙ = S 활용", "solutionMethod": "부분합 극한", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["급수", "부분합", "극한"]}
+        ]},
+        {"parentCode": "[12미적01-04]", "types": [
+          {"typeCode": "MA-CAL-LIM-04-003", "typeName": "등비급수와 극한 종합", "description": "함수·도형에서 등비급수와 극한 복합문제", "solutionMethod": "등비급수 + 극한 종합", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["등비급수", "극한", "종합"]}
+        ]},
+        {"parentCode": "[12미적02-01]", "types": [
+          {"typeCode": "MA-CAL-DIF-01-003", "typeName": "lim (1+1/x)^x = e", "description": "자연상수 e의 정의와 관련 극한", "solutionMethod": "e 관련 극한 공식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["자연상수", "e", "극한"]}
+        ]},
+        {"parentCode": "[12미적02-02]", "types": [
+          {"typeCode": "MA-CAL-DIF-02-003", "typeName": "삼각함수 극한 종합", "description": "sinax/bx, (1-cosx)/x 등 복합 극한", "solutionMethod": "기본극한 조합", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["삼각함수", "극한", "종합"]}
+        ]},
+        {"parentCode": "[12미적02-04]", "types": [
+          {"typeCode": "MA-CAL-DIF-04-003", "typeName": "삼각함수 미분 종합", "description": "sec, csc 미분, 삼각 항등식 활용 미분", "solutionMethod": "기본 미분 + 항등식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["삼각함수", "미분", "sec", "csc"]}
+        ]},
+        {"parentCode": "[12미적02-06]", "types": [
+          {"typeCode": "MA-CAL-DIF-06-003", "typeName": "이계도함수와 극값 판정", "description": "f''(a)로 극대/극소 판정 (2차 판정법)", "solutionMethod": "2차 판정법", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 3], "keywords": ["이계도함수", "극값", "2차판정"]}
+        ]},
+        {"parentCode": "[12미적02-07]", "types": [
+          {"typeCode": "MA-CAL-DIF-07-003", "typeName": "음함수·매개변수 접선 응용", "description": "이차곡선, 삼각함수 매개변수 접선", "solutionMethod": "음함수/매개변수 미분", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["접선", "음함수", "응용"]}
+        ]},
+        {"parentCode": "[12미적02-08]", "types": [
+          {"typeCode": "MA-CAL-DIF-08-003", "typeName": "초월함수 극값·최적화", "description": "eˣ, lnx, sinx 등의 극값 활용 문제", "solutionMethod": "미분 + 극값 분석", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["초월함수", "극값", "최적화"]}
+        ]},
+        {"parentCode": "[12미적03-01]", "types": [
+          {"typeCode": "MA-CAL-INT-01-003", "typeName": "초월함수 적분 종합", "description": "∫eˣsinxdx 등 복합 초월함수 적분", "solutionMethod": "적분 기법 종합", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["초월함수", "적분", "종합"]}
+        ]},
+        {"parentCode": "[12미적03-02]", "types": [
+          {"typeCode": "MA-CAL-INT-02-003", "typeName": "정적분의 치환적분", "description": "구간 변환 포함 치환적분", "solutionMethod": "정적분 치환 (구간변환)", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["치환적분", "정적분", "구간"]}
+        ]},
+        {"parentCode": "[12미적03-03]", "types": [
+          {"typeCode": "MA-CAL-INT-03-003", "typeName": "부분적분 응용", "description": "∫lnxdx, ∫x²eˣdx 등", "solutionMethod": "부분적분 반복/조합", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["부분적분", "응용"]}
+        ]},
+        {"parentCode": "[12미적03-04]", "types": [
+          {"typeCode": "MA-CAL-INT-04-003", "typeName": "넓이의 최솟값/미정계수", "description": "넓이 조건에서 매개변수 결정", "solutionMethod": "적분 + 미분(최소)", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["넓이", "최솟값", "미정계수"]}
+        ]},
+        {"parentCode": "[12미적03-06]", "types": [
+          {"typeCode": "MA-CAL-INT-06-003", "typeName": "평면 운동 경로의 길이", "description": "매개변수 곡선의 호의 길이 종합", "solutionMethod": "호의 길이 + 매개변수", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["호의길이", "매개변수", "종합"]}
+        ]},
+        {"parentCode": "[12확통01-01]", "types": [
+          {"typeCode": "MA-PRB-PER-01-003", "typeName": "최단경로 문제", "description": "격자점 최단경로의 수", "solutionMethod": "같은것있는 순열 응용", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["최단경로", "격자", "순열"]}
+        ]},
+        {"parentCode": "[12확통01-03]", "types": [
+          {"typeCode": "MA-PRB-PER-03-003", "typeName": "자연수 분할·분배", "description": "n개를 k명에게 분배하는 경우의 수", "solutionMethod": "중복조합 + 분류", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 5], "keywords": ["분할", "분배", "중복조합"]}
+        ]},
+        {"parentCode": "[12확통02-02]", "types": [
+          {"typeCode": "MA-PRB-PRB-02-003", "typeName": "베이즈 정리", "description": "사후확률 P(Aᵢ|B) 구하기", "solutionMethod": "베이즈 정리", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["베이즈", "사후확률", "조건부"]}
+        ]},
+        {"parentCode": "[12확통02-03]", "types": [
+          {"typeCode": "MA-PRB-PRB-03-003", "typeName": "독립시행 활용 문제", "description": "n회 시행 특정 조건 확률 (최소 1번 등)", "solutionMethod": "여사건 + 독립시행", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["독립시행", "활용", "여사건"]}
+        ]},
+        {"parentCode": "[12확통03-02]", "types": [
+          {"typeCode": "MA-PRB-STA-02-003", "typeName": "이항분포 활용 문제", "description": "이항분포로 모델링한 실생활 확률 계산", "solutionMethod": "B(n,p) + 계산", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["이항분포", "활용", "모델링"]}
+        ]},
+        {"parentCode": "[12기하01-01]", "types": [
+          {"typeCode": "MA-GEO-CON-01-003", "typeName": "포물선의 초점 현", "description": "초점을 지나는 현의 길이·성질", "solutionMethod": "초점현 공식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["포물선", "초점현", "길이"]}
+        ]},
+        {"parentCode": "[12기하01-02]", "types": [
+          {"typeCode": "MA-GEO-CON-02-003", "typeName": "타원의 접선과 넓이", "description": "타원 접선 공식, 삼각형 넓이 활용", "solutionMethod": "접선 공식 + 넓이", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["타원", "접선", "넓이"]}
+        ]},
+        {"parentCode": "[12기하01-03]", "types": [
+          {"typeCode": "MA-GEO-CON-03-003", "typeName": "쌍곡선의 점근선과 접선", "description": "점근선 방정식, 접선 구하기", "solutionMethod": "점근선 + 접선 공식", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["쌍곡선", "점근선", "접선"]}
+        ]},
+        {"parentCode": "[12기하01-04]", "types": [
+          {"typeCode": "MA-GEO-CON-04-003", "typeName": "이차곡선의 넓이 문제", "description": "이차곡선과 직선으로 둘러싸인 넓이", "solutionMethod": "적분 + 이차곡선", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["이차곡선", "넓이", "적분"]}
+        ]},
+        {"parentCode": "[12기하02-01]", "types": [
+          {"typeCode": "MA-GEO-VEC-01-003", "typeName": "벡터를 이용한 도형 증명", "description": "중점, 평행, 같은 점 조건 벡터 증명", "solutionMethod": "벡터 연산 + 조건", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["벡터", "도형", "증명"]}
+        ]},
+        {"parentCode": "[12기하02-02]", "types": [
+          {"typeCode": "MA-GEO-VEC-02-002", "typeName": "단위벡터", "description": "크기가 1인 벡터, 방향벡터", "solutionMethod": "a⃗/|a⃗|", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["단위벡터", "방향"]},
+          {"typeCode": "MA-GEO-VEC-02-003", "typeName": "벡터의 성분과 좌표 활용", "description": "성분으로 거리, 중점, 내분점 구하기", "solutionMethod": "성분 연산", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["벡터", "성분", "좌표"]}
+        ]},
+        {"parentCode": "[12기하02-04]", "types": [
+          {"typeCode": "MA-GEO-VEC-04-003", "typeName": "벡터를 이용한 거리·넓이", "description": "점과 직선 거리, 삼각형 넓이 (벡터)", "solutionMethod": "벡터 내적/외적", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["벡터", "거리", "넓이"]}
+        ]},
+        {"parentCode": "[12기하03-01]", "types": [
+          {"typeCode": "MA-GEO-SPC-01-003", "typeName": "정다면체에서의 위치관계", "description": "정사면체, 정육면체에서 꼬인위치·각도", "solutionMethod": "공간 도형 분석", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["정다면체", "위치관계", "공간"]}
+        ]},
+        {"parentCode": "[12기하03-02]", "types": [
+          {"typeCode": "MA-GEO-SPC-02-003", "typeName": "정사면체·정육면체의 각도", "description": "대표적 입체에서 이면각, 직선-평면 각도", "solutionMethod": "좌표 설정 + 삼각비", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["정사면체", "각도", "이면각"]}
+        ]},
+        {"parentCode": "[12기하03-03]", "types": [
+          {"typeCode": "MA-GEO-SPC-03-002", "typeName": "정사영 활용 종합", "description": "정사영을 이용한 넓이·길이 종합문제", "solutionMethod": "정사영 + cosθ 종합", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["정사영", "종합", "넓이"]}
+        ]},
+        {"parentCode": "[12기하03-04]", "types": [
+          {"typeCode": "MA-GEO-SPC-04-002", "typeName": "좌표공간에서 대칭점", "description": "점의 평면/축/원점 대칭", "solutionMethod": "대칭 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["대칭점", "좌표공간"]},
+          {"typeCode": "MA-GEO-SPC-04-003", "typeName": "좌표공간에서 내분·외분", "description": "3차원 내분점·외분점 좌표", "solutionMethod": "내분점 공식 (3D)", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 2], "keywords": ["내분점", "외분점", "공간좌표"]}
+        ]},
+        {"parentCode": "[12기하03-05]", "types": [
+          {"typeCode": "MA-GEO-SPC-05-003", "typeName": "구·직선·평면 종합", "description": "구와 직선 접선, 구와 평면 교선 종합", "solutionMethod": "거리 + 구 방정식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["구", "직선", "평면", "종합"]}
+        ]}
+      ]
+    },
+    {
+      "target": "uncovered_2015",
+      "description": "2015 개정 핵심 과목 미커버 30개 성취기준",
+      "newStandards": [
+        {
+          "subject": "수학", "level": "HS0", "area": "다항식", "domain": "POL",
+          "standards": [
+            {"code": "[10수학01-13]", "content": "연립일차부등식을 풀 수 있다.", "types": [
+              {"typeCode": "MA-HS0-INE-13-001", "typeName": "연립일차부등식 기본", "description": "두 일차부등식의 공통 해 구하기", "solutionMethod": "각각 풀기 + 교집합", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["연립부등식", "일차", "공통해"]},
+              {"typeCode": "MA-HS0-INE-13-002", "typeName": "A<B<C 형태 부등식", "description": "연립부등식을 A<B<C로 한번에 풀기", "solutionMethod": "연쇄부등식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["연쇄부등식", "범위"]}
+            ]},
+            {"code": "[10수학01-14]", "content": "이차부등식과 연립이차부등식을 풀 수 있다.", "types": [
+              {"typeCode": "MA-HS0-INE-14-001", "typeName": "이차부등식과 연립 종합", "description": "이차+일차 연립부등식 복합", "solutionMethod": "이차 풀기 + 교집합", "typicalCognitive": "INFERENCE", "typicalDifficulty": [2, 3], "keywords": ["이차부등식", "연립", "종합"]},
+              {"typeCode": "MA-HS0-INE-14-002", "typeName": "부등식의 영역과 정수해", "description": "부등식의 해 중 정수해 개수", "solutionMethod": "해 구간 + 정수 세기", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["정수해", "부등식", "개수"]}
+            ]},
+            {"code": "[10수학01-15]", "content": "부등식의 영역을 이해하고, 간단한 경우에 부등식의 영역을 구할 수 있다.", "types": [
+              {"typeCode": "MA-HS0-INE-15-001", "typeName": "일차부등식의 영역", "description": "ax+by+c>0 영역 (직선 기준)", "solutionMethod": "직선 경계 + 부호", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["부등식영역", "직선", "경계"]},
+              {"typeCode": "MA-HS0-INE-15-002", "typeName": "원과 부등식 영역", "description": "x²+y²≤r² 등 원 포함 영역", "solutionMethod": "원 경계 + 안/밖", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["부등식영역", "원", "경계"]},
+              {"typeCode": "MA-HS0-INE-15-003", "typeName": "선형계획법 (최대·최소)", "description": "부등식 영역에서 ax+by의 최대·최소", "solutionMethod": "꼭짓점 대입", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["선형계획법", "최대최소", "꼭짓점"]}
+            ]},
+            {"code": "[10수학01-16]", "content": "부등식의 영역을 활용하여 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-HS0-INE-16-001", "typeName": "부등식 영역 활용 문제", "description": "영역 내 정수점, 넓이 등 활용", "solutionMethod": "영역 + 조건 분석", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["부등식영역", "활용", "정수점"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "수학", "level": "HS0", "area": "집합과 명제", "domain": "SET",
+          "standards": [
+            {"code": "[10수학03-07]", "content": "절대부등식의 의미를 이해한다.", "types": [
+              {"typeCode": "MA-HS0-SET-07-001", "typeName": "절대부등식의 의미", "description": "모든 실수에서 성립하는 부등식 이해", "solutionMethod": "정의 이해", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [1, 2], "keywords": ["절대부등식", "의미"]}
+            ]},
+            {"code": "[10수학03-08]", "content": "간단한 절대부등식을 증명할 수 있다.", "types": [
+              {"typeCode": "MA-HS0-SET-08-001", "typeName": "제곱 이용 부등식 증명", "description": "(a-b)²≥0 이용한 증명", "solutionMethod": "제곱≥0 이용", "typicalCognitive": "INFERENCE", "typicalDifficulty": [2, 3], "keywords": ["절대부등식", "제곱", "증명"]},
+              {"typeCode": "MA-HS0-SET-08-002", "typeName": "산술-기하 평균 증명 활용", "description": "최솟값 문제에 산술-기하 활용", "solutionMethod": "AM-GM", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["산술기하", "최솟값"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "수학Ⅰ", "level": "HS1", "area": "수열", "domain": "SEQ",
+          "standards": [
+            {"code": "[12수학Ⅰ03-07]", "content": "점화식을 이용하여 수열의 일반항을 구할 수 있다.", "types": [
+              {"typeCode": "MA-HS1-SEQ-07-001", "typeName": "aₙ₊₁=f(aₙ) 점화식 일반항", "description": "특성방정식, 역수 등 다양한 점화식", "solutionMethod": "특성방정식/변환", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["점화식", "일반항", "특성방정식"]},
+              {"typeCode": "MA-HS1-SEQ-07-002", "typeName": "분수형 점화식", "description": "aₙ₊₁=(aₙ+b)/(cₙ+d) 형태", "solutionMethod": "역수 치환", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["점화식", "분수형", "역수"]}
+            ]},
+            {"code": "[12수학Ⅰ03-08]", "content": "수열의 귀납적 정의를 이해한다.", "types": [
+              {"typeCode": "MA-HS1-SEQ-08-001", "typeName": "귀납적 정의의 이해", "description": "초항과 점화식으로 수열 정의", "solutionMethod": "귀납적 정의 이해", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["귀납적정의", "수열"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "수학Ⅱ", "level": "HS2", "area": "미분", "domain": "DIF",
+          "standards": [
+            {"code": "[12수학Ⅱ02-10]", "content": "롤의 정리를 이해한다.", "types": [
+              {"typeCode": "MA-HS2-DIF-10-001", "typeName": "롤의 정리", "description": "f(a)=f(b)이면 f'(c)=0인 c 존재", "solutionMethod": "롤의 정리", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [3, 3], "keywords": ["롤의정리", "중간값"]},
+              {"typeCode": "MA-HS2-DIF-10-002", "typeName": "롤의 정리 활용", "description": "근의 존재성 증명 등 활용", "solutionMethod": "롤의 정리 + 함수 구성", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["롤의정리", "활용", "증명"]}
+            ]},
+            {"code": "[12수학Ⅱ02-11]", "content": "평균값 정리를 이해한다.", "types": [
+              {"typeCode": "MA-HS2-DIF-11-001", "typeName": "평균값 정리", "description": "f'(c)=(f(b)-f(a))/(b-a)인 c 존재", "solutionMethod": "평균값 정리", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [3, 3], "keywords": ["평균값정리", "미분"]},
+              {"typeCode": "MA-HS2-DIF-11-002", "typeName": "평균값 정리 활용", "description": "부등식 증명, 근의 존재 등 활용", "solutionMethod": "평균값 정리 + 부등식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["평균값정리", "부등식", "증명"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "수학Ⅱ", "level": "HS2", "area": "적분", "domain": "INT",
+          "standards": [
+            {"code": "[12수학Ⅱ03-06]", "content": "정적분을 활용하여 부피를 구할 수 있다.", "types": [
+              {"typeCode": "MA-HS2-INT-06-001", "typeName": "x축 회전체 부피", "description": "다항함수의 x축 회전체 부피", "solutionMethod": "π∫{f(x)}²dx", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["회전체", "부피", "x축"]},
+              {"typeCode": "MA-HS2-INT-06-002", "typeName": "두 곡선 사이 회전체 부피", "description": "π∫{f(x)²-g(x)²}dx", "solutionMethod": "와셔법", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["회전체", "부피", "와셔법"]},
+              {"typeCode": "MA-HS2-INT-06-003", "typeName": "단면적으로 부피 구하기", "description": "V=∫A(x)dx (다항함수 범위)", "solutionMethod": "단면적 적분", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["단면적", "부피", "적분"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "미적분", "level": "CAL", "area": "수열의 극한", "domain": "LIM",
+          "standards": [
+            {"code": "[12미적01-05]", "content": "급수의 수렴, 발산을 판별할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-LIM-05-001", "typeName": "급수의 발산 판정", "description": "lim aₙ≠0이면 Σaₙ 발산", "solutionMethod": "필요조건 판정", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["급수", "발산", "판정"]},
+              {"typeCode": "MA-CAL-LIM-05-002", "typeName": "급수의 부분합과 수렴", "description": "Sₙ 구해서 lim Sₙ 계산", "solutionMethod": "부분합 극한", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["급수", "부분합", "수렴"]}
+            ]},
+            {"code": "[12미적01-06]", "content": "급수를 활용하여 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-LIM-06-001", "typeName": "급수 활용 문제", "description": "도형, 무한반복 등 급수 응용", "solutionMethod": "급수 모델링", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["급수", "활용", "모델링"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "미적분", "level": "CAL", "area": "미분법", "domain": "DIF",
+          "standards": [
+            {"code": "[12미적02-09]", "content": "함수의 증가와 감소를 판정할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-DIF-09-001", "typeName": "초월함수의 증가·감소", "description": "eˣ, lnx, sinx 포함 함수의 증감", "solutionMethod": "도함수 부호", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["증가", "감소", "초월함수"]}
+            ]},
+            {"code": "[12미적02-10]", "content": "함수의 극대, 극소를 구하고, 그래프의 개형을 그릴 수 있다.", "types": [
+              {"typeCode": "MA-CAL-DIF-10-001", "typeName": "초월함수 극값 구하기", "description": "eˣ, lnx, sinx 포함 함수의 극값", "solutionMethod": "f'=0 + 부호변화", "typicalCognitive": "CALCULATION", "typicalDifficulty": [3, 4], "keywords": ["극값", "초월함수"]},
+              {"typeCode": "MA-CAL-DIF-10-002", "typeName": "초월함수 그래프 개형 종합", "description": "정의역, 점근선, 극값, 변곡점 종합", "solutionMethod": "종합 분석", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["그래프개형", "종합"]}
+            ]},
+            {"code": "[12미적02-11]", "content": "함수의 최대, 최소를 구할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-DIF-11-001", "typeName": "초월함수의 폐구간 최대·최소", "description": "폐구간에서 eˣ, lnx 등의 최대·최소", "solutionMethod": "극값+양끝값", "typicalCognitive": "CALCULATION", "typicalDifficulty": [3, 4], "keywords": ["최대최소", "초월함수", "폐구간"]},
+              {"typeCode": "MA-CAL-DIF-11-002", "typeName": "초월함수 최적화 문제", "description": "넓이, 부피 등 초월함수 포함 최적화", "solutionMethod": "미분 + 최적화", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["최적화", "초월함수", "활용"]}
+            ]},
+            {"code": "[12미적02-12]", "content": "방정식에 대한 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-DIF-12-001", "typeName": "초월 방정식의 실근 개수", "description": "eˣ=ax, lnx=ax 등 실근 개수", "solutionMethod": "그래프 교점 분석", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["초월방정식", "실근", "교점"]}
+            ]},
+            {"code": "[12미적02-13]", "content": "부등식에 대한 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-DIF-13-001", "typeName": "미분을 이용한 부등식 증명 (초월)", "description": "g(x)=f(x)-h(x) 구성 후 최솟값≥0", "solutionMethod": "함수 구성 + 미분", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["부등식증명", "미분", "초월"]}
+            ]},
+            {"code": "[12미적02-14]", "content": "속도와 가속도에 대한 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-DIF-14-001", "typeName": "초월함수 운동 분석", "description": "x(t)=eᵗsinθ 등 초월 위치함수 미분", "solutionMethod": "초월함수 미분 + 운동", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["운동", "초월함수", "속도"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "미적분", "level": "CAL", "area": "적분법", "domain": "INT",
+          "standards": [
+            {"code": "[12미적03-07]", "content": "여러 가지 적분법을 활용하여 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-CAL-INT-07-001", "typeName": "적분법 종합 활용", "description": "치환+부분적분 혼합, 복합 적분 문제", "solutionMethod": "적분법 종합", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["적분법", "종합", "활용"]},
+              {"typeCode": "MA-CAL-INT-07-002", "typeName": "이상적분 (무한구간)", "description": "∫₁^∞ f(x)dx 수렴·발산 판별", "solutionMethod": "극한 + 정적분", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["이상적분", "무한구간"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "확률과 통계", "level": "PRB", "area": "확률", "domain": "PRB",
+          "standards": [
+            {"code": "[12확통02-04]", "content": "확률의 곱셈정리를 이해한다.", "types": [
+              {"typeCode": "MA-PRB-PRB-04-001", "typeName": "곱셈정리 기본", "description": "P(A∩B)=P(A)·P(B|A) 직접 활용", "solutionMethod": "곱셈정리", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["곱셈정리", "확률"]},
+              {"typeCode": "MA-PRB-PRB-04-002", "typeName": "복원/비복원 추출", "description": "복원·비복원 추출 확률 비교", "solutionMethod": "독립/종속 + 곱셈", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["복원", "비복원", "추출"]}
+            ]},
+            {"code": "[12확통02-05]", "content": "사건의 독립과 종속을 이해한다.", "types": [
+              {"typeCode": "MA-PRB-PRB-05-001", "typeName": "독립·종속 판별", "description": "P(A∩B)=P(A)P(B) 확인", "solutionMethod": "곱 비교", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["독립", "종속", "판별"]}
+            ]},
+            {"code": "[12확통02-06]", "content": "독립시행의 확률을 구할 수 있다.", "types": [
+              {"typeCode": "MA-PRB-PRB-06-001", "typeName": "독립시행 확률 계산", "description": "nCr·pʳ·qⁿ⁻ʳ 계산", "solutionMethod": "이항확률", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["독립시행", "확률"]},
+              {"typeCode": "MA-PRB-PRB-06-002", "typeName": "독립시행 응용", "description": "처음으로 성공, 연속 성공 등 조건부", "solutionMethod": "경우분류 + 독립시행", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["독립시행", "응용", "조건"]}
+            ]},
+            {"code": "[12확통02-07]", "content": "독립시행의 확률을 활용하여 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-PRB-PRB-07-001", "typeName": "독립시행 확률 활용", "description": "게임, 경기 등 실생활 독립시행", "solutionMethod": "독립시행 모델링", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["독립시행", "활용", "게임"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "확률과 통계", "level": "PRB", "area": "통계", "domain": "STA",
+          "standards": [
+            {"code": "[12확통03-05]", "content": "모비율의 추정을 이해한다.", "types": [
+              {"typeCode": "MA-PRB-STA-05-001", "typeName": "모비율의 신뢰구간", "description": "p̂ ± z√(p̂(1-p̂)/n)", "solutionMethod": "모비율 신뢰구간 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["모비율", "신뢰구간"]}
+            ]},
+            {"code": "[12확통03-06]", "content": "표본조사에서 모평균을 추정할 수 있다.", "types": [
+              {"typeCode": "MA-PRB-STA-06-001", "typeName": "모평균 추정 종합", "description": "표본평균 분포 + 신뢰구간 종합", "solutionMethod": "추정 종합", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["모평균", "추정", "종합"]}
+            ]},
+            {"code": "[12확통03-07]", "content": "모평균, 모비율 추정을 활용하여 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-PRB-STA-07-001", "typeName": "통계적 추정 활용", "description": "실생활 데이터에서 추정 문제", "solutionMethod": "추정 공식 + 해석", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["추정", "활용", "실생활"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "기하", "level": "GEO", "area": "평면벡터", "domain": "VEC",
+          "standards": [
+            {"code": "[12기하02-05]", "content": "벡터를 활용하여 문제를 해결할 수 있다.", "types": [
+              {"typeCode": "MA-GEO-VEC-05-001", "typeName": "벡터 활용 도형 문제", "description": "삼각형 넓이, 평행사변형 조건 등", "solutionMethod": "내적 + 도형 성질", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["벡터", "도형", "활용"]},
+              {"typeCode": "MA-GEO-VEC-05-002", "typeName": "벡터의 크기 조건 문제", "description": "|a⃗+b⃗|=k 등 조건에서 미지량 결정", "solutionMethod": "내적 전개 + 조건", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["벡터", "크기", "조건"]}
+            ]}
+          ]
+        },
+        {
+          "subject": "기하", "level": "GEO", "area": "공간도형과 공간좌표", "domain": "SPC",
+          "standards": [
+            {"code": "[12기하03-06]", "content": "좌표공간에서 직선의 방정식을 구할 수 있다.", "types": [
+              {"typeCode": "MA-GEO-SPC-06-001", "typeName": "공간 직선의 방정식", "description": "(x-x₁)/l = (y-y₁)/m = (z-z₁)/n", "solutionMethod": "방향벡터 + 점", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["공간직선", "방정식", "방향벡터"]},
+              {"typeCode": "MA-GEO-SPC-06-002", "typeName": "공간 직선의 교점·거리", "description": "두 직선 교점, 꼬인 위치 거리", "solutionMethod": "매개변수 연립", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["공간직선", "교점", "거리"]}
+            ]},
+            {"code": "[12기하03-07]", "content": "좌표공간에서 평면의 방정식을 구할 수 있다.", "types": [
+              {"typeCode": "MA-GEO-SPC-07-001", "typeName": "공간 평면의 방정식", "description": "ax+by+cz+d=0, 법선벡터", "solutionMethod": "법선벡터 + 점", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["평면방정식", "법선벡터"]},
+              {"typeCode": "MA-GEO-SPC-07-002", "typeName": "점과 평면 사이의 거리", "description": "|ax₁+by₁+cz₁+d|/√(a²+b²+c²)", "solutionMethod": "거리 공식 (3D)", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["점", "평면", "거리"]},
+              {"typeCode": "MA-GEO-SPC-07-003", "typeName": "직선·평면 위치관계 (좌표)", "description": "좌표로 직선-평면 교점, 각도 구하기", "solutionMethod": "매개변수 + 법선벡터", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["직선", "평면", "좌표", "교점"]}
+            ]}
+          ]
+        }
+      ]
+    }
+  ]
+}

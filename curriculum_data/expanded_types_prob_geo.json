@@ -1,0 +1,243 @@
+{
+  "subjects": [
+    {
+      "curriculum": "2015 개정",
+      "subject": "확률과 통계",
+      "schoolLevel": "고등학교",
+      "level": "PRB",
+      "areas": [
+        {
+          "area": "경우의 수",
+          "domain": "PER",
+          "standards": [
+            {
+              "code": "[12확통01-01]",
+              "content": "같은 것이 있는 순열의 수를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-PER-01-001", "typeName": "같은 것이 있는 순열", "description": "n!/(p!q!...) 활용", "solutionMethod": "같은것있는 순열 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["순열", "같은것", "경우의수"]},
+                {"typeCode": "MA-PRB-PER-01-002", "typeName": "문자 배열 문제", "description": "특정 문자가 반복되는 단어 배열", "solutionMethod": "공식 + 분류", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["문자배열", "순열", "조건"]}
+              ]
+            },
+            {
+              "code": "[12확통01-02]",
+              "content": "원순열과 중복순열의 수를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-PER-02-001", "typeName": "원순열", "description": "(n-1)! 공식, 회전 고정", "solutionMethod": "원순열 공식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["원순열", "경우의수"]},
+                {"typeCode": "MA-PRB-PER-02-002", "typeName": "중복순열", "description": "nᵣ (n개에서 중복 허용 r개 선택·배열)", "solutionMethod": "중복순열 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["중복순열", "경우의수"]},
+                {"typeCode": "MA-PRB-PER-02-003", "typeName": "염주순열·목걸이순열", "description": "뒤집기까지 고려한 원순열", "solutionMethod": "(n-1)!/2", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [3, 3], "keywords": ["염주순열", "뒤집기"]}
+              ]
+            },
+            {
+              "code": "[12확통01-03]",
+              "content": "중복조합의 수를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-PER-03-001", "typeName": "중복조합 기본 (H)", "description": "nHr = n+r-1Cr", "solutionMethod": "중복조합 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["중복조합", "H"]},
+                {"typeCode": "MA-PRB-PER-03-002", "typeName": "방정식의 음이 아닌 정수해", "description": "x₁+x₂+...+xₙ=r의 해의 수", "solutionMethod": "중복조합 변환", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["정수해", "중복조합", "방정식"]}
+              ]
+            }
+          ]
+        },
+        {
+          "area": "확률",
+          "domain": "PRB",
+          "standards": [
+            {
+              "code": "[12확통02-01]",
+              "content": "확률의 뜻과 활용을 이해하고, 확률의 기본 성질을 이해한다.",
+              "types": [
+                {"typeCode": "MA-PRB-PRB-01-001", "typeName": "수학적 확률", "description": "n(A)/n(S) 계산", "solutionMethod": "경우의 수 비", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["확률", "경우의수"]},
+                {"typeCode": "MA-PRB-PRB-01-002", "typeName": "확률의 덧셈정리", "description": "P(A∪B) = P(A)+P(B)-P(A∩B)", "solutionMethod": "덧셈정리", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["확률", "덧셈정리"]},
+                {"typeCode": "MA-PRB-PRB-01-003", "typeName": "여사건의 확률", "description": "P(Aᶜ) = 1-P(A)", "solutionMethod": "여사건", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["여사건", "확률"]}
+              ]
+            },
+            {
+              "code": "[12확통02-02]",
+              "content": "조건부확률의 의미를 이해하고, 이를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-PRB-02-001", "typeName": "조건부확률 계산", "description": "P(B|A) = P(A∩B)/P(A)", "solutionMethod": "조건부확률 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["조건부확률", "계산"]},
+                {"typeCode": "MA-PRB-PRB-02-002", "typeName": "확률의 곱셈정리", "description": "P(A∩B) = P(A)·P(B|A)", "solutionMethod": "곱셈정리", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["곱셈정리", "조건부확률"]}
+              ]
+            },
+            {
+              "code": "[12확통02-03]",
+              "content": "사건의 독립과 종속의 의미를 이해하고, 이를 활용할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-PRB-03-001", "typeName": "독립사건 판별", "description": "P(A∩B)=P(A)·P(B) 확인", "solutionMethod": "독립 조건 확인", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["독립", "종속", "사건"]},
+                {"typeCode": "MA-PRB-PRB-03-002", "typeName": "독립시행의 확률", "description": "n회 반복 시행에서 r회 성공 확률", "solutionMethod": "nCr·pʳ·(1-p)ⁿ⁻ʳ", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["독립시행", "반복", "확률"]}
+              ]
+            }
+          ]
+        },
+        {
+          "area": "통계",
+          "domain": "STA",
+          "standards": [
+            {
+              "code": "[12확통03-01]",
+              "content": "이산확률변수의 기댓값과 분산, 표준편차를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-STA-01-001", "typeName": "이산확률분포표와 기댓값", "description": "E(X)=Σxᵢpᵢ 계산", "solutionMethod": "기댓값 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["기댓값", "이산확률변수"]},
+                {"typeCode": "MA-PRB-STA-01-002", "typeName": "분산·표준편차 계산", "description": "V(X)=E(X²)-{E(X)}², σ(X)", "solutionMethod": "분산 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["분산", "표준편차"]},
+                {"typeCode": "MA-PRB-STA-01-003", "typeName": "E(aX+b), V(aX+b)", "description": "선형변환의 기댓값·분산", "solutionMethod": "선형변환 성질", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["기댓값", "분산", "선형변환"]}
+              ]
+            },
+            {
+              "code": "[12확통03-02]",
+              "content": "이항분포의 뜻을 알고, 그 성질을 이해한다.",
+              "types": [
+                {"typeCode": "MA-PRB-STA-02-001", "typeName": "이항분포 B(n,p)", "description": "P(X=k)=nCk·pᵏ·(1-p)ⁿ⁻ᵏ", "solutionMethod": "이항분포 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["이항분포", "B(n,p)"]},
+                {"typeCode": "MA-PRB-STA-02-002", "typeName": "이항분포의 기댓값·분산", "description": "E(X)=np, V(X)=np(1-p)", "solutionMethod": "이항분포 성질", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["이항분포", "기댓값", "분산"]}
+              ]
+            },
+            {
+              "code": "[12확통03-03]",
+              "content": "정규분포의 뜻을 알고, 그 성질을 이해한다.",
+              "types": [
+                {"typeCode": "MA-PRB-STA-03-001", "typeName": "정규분포와 표준정규분포", "description": "N(μ,σ²), Z=(X-μ)/σ 표준화", "solutionMethod": "표준화 공식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["정규분포", "표준화", "Z"]},
+                {"typeCode": "MA-PRB-STA-03-002", "typeName": "정규분포 확률 계산", "description": "P(a≤X≤b) = P(z₁≤Z≤z₂) 표준정규분포표 활용", "solutionMethod": "표준화 + 표 읽기", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["정규분포", "확률", "표"]},
+                {"typeCode": "MA-PRB-STA-03-003", "typeName": "이항분포의 정규근사", "description": "np≥5, n(1-p)≥5일 때 정규분포 근사", "solutionMethod": "정규근사", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [3, 3], "keywords": ["정규근사", "이항분포"]}
+              ]
+            },
+            {
+              "code": "[12확통03-04]",
+              "content": "모평균의 신뢰구간을 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-PRB-STA-04-001", "typeName": "표본평균의 분포", "description": "X̄ ~ N(μ, σ²/n)", "solutionMethod": "표본평균 분포", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["표본평균", "분포"]},
+                {"typeCode": "MA-PRB-STA-04-002", "typeName": "모평균 신뢰구간 (95%, 99%)", "description": "X̄ ± z·σ/√n", "solutionMethod": "신뢰구간 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["신뢰구간", "모평균"]},
+                {"typeCode": "MA-PRB-STA-04-003", "typeName": "표본 크기 결정", "description": "신뢰구간 폭 조건에서 n 결정", "solutionMethod": "부등식 풀이", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["표본크기", "신뢰구간"]}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "curriculum": "2015 개정",
+      "subject": "기하",
+      "schoolLevel": "고등학교",
+      "level": "GEO",
+      "areas": [
+        {
+          "area": "이차곡선",
+          "domain": "CON",
+          "standards": [
+            {
+              "code": "[12기하01-01]",
+              "content": "포물선의 뜻을 알고, 포물선의 방정식을 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-CON-01-001", "typeName": "포물선의 방정식", "description": "y²=4px, x²=4py 형태", "solutionMethod": "초점·준선 활용", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["포물선", "방정식", "초점"]},
+                {"typeCode": "MA-GEO-CON-01-002", "typeName": "포물선과 직선의 관계", "description": "접선, 교점, 초점 현 등", "solutionMethod": "연립 + 판별식", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["포물선", "접선", "초점현"]}
+              ]
+            },
+            {
+              "code": "[12기하01-02]",
+              "content": "타원의 뜻을 알고, 타원의 방정식을 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-CON-02-001", "typeName": "타원의 방정식", "description": "x²/a²+y²/b²=1, 초점·꼭짓점", "solutionMethod": "타원 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["타원", "방정식", "초점"]},
+                {"typeCode": "MA-GEO-CON-02-002", "typeName": "타원의 성질 활용", "description": "PF+PF'=2a, 접선, 넓이 등", "solutionMethod": "타원 정의 + 성질", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["타원", "성질", "초점거리"]}
+              ]
+            },
+            {
+              "code": "[12기하01-03]",
+              "content": "쌍곡선의 뜻을 알고, 쌍곡선의 방정식을 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-CON-03-001", "typeName": "쌍곡선의 방정식", "description": "x²/a²-y²/b²=1, 점근선", "solutionMethod": "쌍곡선 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["쌍곡선", "방정식", "점근선"]},
+                {"typeCode": "MA-GEO-CON-03-002", "typeName": "쌍곡선의 성질 활용", "description": "|PF-PF'|=2a, 점근선 활용 등", "solutionMethod": "쌍곡선 정의", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["쌍곡선", "성질", "점근선"]}
+              ]
+            },
+            {
+              "code": "[12기하01-04]",
+              "content": "이차곡선과 직선의 위치 관계를 이해한다.",
+              "types": [
+                {"typeCode": "MA-GEO-CON-04-001", "typeName": "이차곡선과 직선의 교점", "description": "연립방정식으로 교점/접선 구하기", "solutionMethod": "연립 + 판별식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [3, 4], "keywords": ["이차곡선", "직선", "교점"]},
+                {"typeCode": "MA-GEO-CON-04-002", "typeName": "이차곡선의 접선 방정식", "description": "곡선 위 점 또는 외부 점에서의 접선", "solutionMethod": "접선 공식/판별식", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 5], "keywords": ["접선", "이차곡선"]}
+              ]
+            }
+          ]
+        },
+        {
+          "area": "평면벡터",
+          "domain": "VEC",
+          "standards": [
+            {
+              "code": "[12기하02-01]",
+              "content": "벡터의 뜻을 알고, 벡터의 덧셈, 뺄셈, 실수배를 할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-VEC-01-001", "typeName": "벡터의 연산 (기본)", "description": "벡터 합, 차, 실수배 계산", "solutionMethod": "성분 연산", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["벡터", "연산", "실수배"]},
+                {"typeCode": "MA-GEO-VEC-01-002", "typeName": "위치벡터", "description": "점의 위치를 벡터로 표현, 내분·외분점", "solutionMethod": "위치벡터 공식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["위치벡터", "내분", "외분"]}
+              ]
+            },
+            {
+              "code": "[12기하02-02]",
+              "content": "좌표평면에서 벡터의 성분을 이해하고, 벡터의 크기를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-VEC-02-001", "typeName": "벡터의 성분과 크기", "description": "a⃗=(a₁,a₂), |a⃗|=√(a₁²+a₂²)", "solutionMethod": "성분·크기 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["벡터", "성분", "크기"]}
+              ]
+            },
+            {
+              "code": "[12기하02-03]",
+              "content": "두 벡터의 내적의 뜻을 알고, 이를 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-VEC-03-001", "typeName": "내적 계산", "description": "a⃗·b⃗ = |a⃗||b⃗|cosθ = a₁b₁+a₂b₂", "solutionMethod": "내적 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["내적", "계산"]},
+                {"typeCode": "MA-GEO-VEC-03-002", "typeName": "수직·평행 조건 (벡터)", "description": "a⃗·b⃗=0 (수직), a⃗=kb⃗ (평행)", "solutionMethod": "내적 = 0", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["수직", "평행", "내적"]},
+                {"typeCode": "MA-GEO-VEC-03-003", "typeName": "벡터의 정사영", "description": "a⃗를 b⃗ 위에 정사영한 벡터", "solutionMethod": "정사영 공식", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["정사영", "벡터", "내적"]}
+              ]
+            },
+            {
+              "code": "[12기하02-04]",
+              "content": "직선과 원의 방정식을 벡터를 이용하여 나타낼 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-VEC-04-001", "typeName": "벡터 방정식 (직선)", "description": "r⃗=a⃗+td⃗ 형태", "solutionMethod": "매개변수 벡터 방정식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["벡터방정식", "직선"]},
+                {"typeCode": "MA-GEO-VEC-04-002", "typeName": "벡터 방정식 (원)", "description": "|r⃗-c⃗|=r 형태", "solutionMethod": "벡터 원 방정식", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["벡터방정식", "원"]}
+              ]
+            }
+          ]
+        },
+        {
+          "area": "공간도형과 공간좌표",
+          "domain": "SPC",
+          "standards": [
+            {
+              "code": "[12기하03-01]",
+              "content": "직선과 직선, 직선과 평면, 평면과 평면의 위치 관계를 이해한다.",
+              "types": [
+                {"typeCode": "MA-GEO-SPC-01-001", "typeName": "공간에서의 위치 관계", "description": "평행, 꼬인 위치, 수직 판별", "solutionMethod": "위치관계 판별", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["공간", "위치관계", "평행", "꼬인위치"]},
+                {"typeCode": "MA-GEO-SPC-01-002", "typeName": "삼수선의 정리", "description": "평면 위의 점→직선 수선 관계", "solutionMethod": "삼수선의 정리", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["삼수선", "수선", "정리"]}
+              ]
+            },
+            {
+              "code": "[12기하03-02]",
+              "content": "직선과 평면이 이루는 각을 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-SPC-02-001", "typeName": "직선과 평면이 이루는 각", "description": "정사영 활용한 각도 계산", "solutionMethod": "정사영 + 삼각비", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["각", "직선", "평면"]},
+                {"typeCode": "MA-GEO-SPC-02-002", "typeName": "이면각", "description": "두 평면이 이루는 이면각 구하기", "solutionMethod": "이면각 정의", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["이면각", "두평면"]}
+              ]
+            },
+            {
+              "code": "[12기하03-03]",
+              "content": "정사영의 뜻을 알고, 이를 활용할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-SPC-03-001", "typeName": "정사영의 넓이", "description": "S'=S·cosθ (평면 정사영)", "solutionMethod": "정사영 넓이 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["정사영", "넓이", "cos"]}
+              ]
+            },
+            {
+              "code": "[12기하03-04]",
+              "content": "좌표공간에서 점의 좌표를 이해한다.",
+              "types": [
+                {"typeCode": "MA-GEO-SPC-04-001", "typeName": "공간좌표와 거리", "description": "두 점 사이의 거리, 대칭점", "solutionMethod": "거리 공식 (3D)", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["공간좌표", "거리"]}
+              ]
+            },
+            {
+              "code": "[12기하03-05]",
+              "content": "좌표공간에서 구의 방정식을 구할 수 있다.",
+              "types": [
+                {"typeCode": "MA-GEO-SPC-05-001", "typeName": "구의 방정식", "description": "(x-a)²+(y-b)²+(z-c)²=r²", "solutionMethod": "구 방정식 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["구", "방정식", "공간"]},
+                {"typeCode": "MA-GEO-SPC-05-002", "typeName": "구와 평면의 관계", "description": "구와 평면의 교선(원), 접선 조건", "solutionMethod": "중심~평면 거리", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["구", "평면", "교선"]}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
