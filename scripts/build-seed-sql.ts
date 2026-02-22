@@ -52,6 +52,11 @@ async function main() {
   const { ELA_V3, ELC_V3, ELM_V3, ELP_V3, ELR_V3, ELT_V3, ELW_V3, EM1_V3, ET1_V3 } = await import('./expansion-v3-elective');
   const { HS0_SUP, HS1_SUP, MS_SUP, ES12_SUP, ES34_SUP, ES56_SUP } = await import('./expansion-v3-supplement');
 
+  // V4 확장 데이터 로드
+  const { HS0_V4, HS1_V4, HS2_V4, CAL_V4, PRB_V4, GEO_V4 } = await import('./expansion-v4-hs');
+  const { MS_V4, ES12_V4, ES34_V4, ES56_V4 } = await import('./expansion-v4-ms-es');
+  const { HS0_V4S, HS1_V4S, HS2_V4S, MS_V4S, CAL_V4S, PRB_V4S, GEO_V4S, ES12_V4S, ES34_V4S, ES56_V4S, EL_V4S, FINAL_SUP } = await import('./expansion-v4-supplement');
+
   const allExpansions = [
     // V2
     { name: 'HS0 v2 (고등 공통)', types: HS0_EXPANSION },
@@ -91,6 +96,30 @@ async function main() {
     { name: 'ES12 보충', types: ES12_SUP },
     { name: 'ES34 보충', types: ES34_SUP },
     { name: 'ES56 보충', types: ES56_SUP },
+    // V4
+    { name: 'HS0 v4 (고등 공통 추가)', types: HS0_V4 },
+    { name: 'HS1 v4 (수학I 추가)', types: HS1_V4 },
+    { name: 'HS2 v4 (수학II 추가)', types: HS2_V4 },
+    { name: 'CAL v4 (미적분 추가)', types: CAL_V4 },
+    { name: 'PRB v4 (확률과통계 추가)', types: PRB_V4 },
+    { name: 'GEO v4 (기하 추가)', types: GEO_V4 },
+    { name: 'MS v4 (중학교 추가)', types: MS_V4 },
+    { name: 'ES12 v4 (초등1-2 추가)', types: ES12_V4 },
+    { name: 'ES34 v4 (초등3-4 추가)', types: ES34_V4 },
+    { name: 'ES56 v4 (초등5-6 추가)', types: ES56_V4 },
+    // V4 Supplement
+    { name: 'HS0 v4s (고등 공통 서술/융합)', types: HS0_V4S },
+    { name: 'HS1 v4s (수학I 서술/융합)', types: HS1_V4S },
+    { name: 'HS2 v4s (수학II 서술/융합)', types: HS2_V4S },
+    { name: 'MS v4s (중학교 서술/융합)', types: MS_V4S },
+    { name: 'CAL v4s (미적분 보충)', types: CAL_V4S },
+    { name: 'PRB v4s (확률과통계 보충)', types: PRB_V4S },
+    { name: 'GEO v4s (기하 보충)', types: GEO_V4S },
+    { name: 'ES12 v4s (초등1-2 보충)', types: ES12_V4S },
+    { name: 'ES34 v4s (초등3-4 보충)', types: ES34_V4S },
+    { name: 'ES56 v4s (초등5-6 보충)', types: ES56_V4S },
+    { name: '선택과목 v4s (9과목 보충)', types: EL_V4S },
+    { name: '최종 보충 (3,000개 달성)', types: FINAL_SUP },
   ];
 
   const lines: string[] = [];
@@ -98,6 +127,7 @@ async function main() {
   lines.push('-- 확장 세부유형 v2+v3 추가 데이터 (시중교재 분석 기반)');
   lines.push('-- v2: 쎈, 개념원리 RPM, 블랙라벨, 수학의 정석, 마플 시너지 교재 분석');
   lines.push('-- v3: 수능/내신 심화유형 + 선택과목 9개 레벨 확장');
+  lines.push('-- v4: 수능 기출 + 평가원 + 내신 기출 기반 추가 확장');
   lines.push(`-- Generated: ${new Date().toISOString().slice(0, 10)}`);
   lines.push('-- ============================================================================');
   lines.push('');
