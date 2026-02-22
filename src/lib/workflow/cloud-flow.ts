@@ -547,11 +547,26 @@ export async function processOCR(
 
 const CLASSIFICATION_PROMPT = `당신은 수학 문제 분류 전문가입니다. 주어진 수학 문제를 분석하여 **반드시 아래의 정확한 JSON 구조**로만 응답해주세요. 키 이름을 변경하지 마세요.
 
+## typeCode 형식 (필수 준수)
+형식: MA-{LEVEL}-{DOMAIN}-{STD:3자리}-{SEQ:3자리}
+
+LEVEL별 유효 DOMAIN 코드:
+- HS0(수학/공통):  POL(다항식), EQU(방정식), INE(부등식), SET(집합), FUN(함수), CRD(좌표기하), CNT(경우의수)
+- HS1(수학I):      EXP(지수로그), TRI(삼각함수), SEQ(수열)
+- HS2(수학II):     LIM(극한), DIF(미분), INT(적분)
+- CAL(미적분):     LIM(극한), DIF(미분), INT(적분)
+- PRB(확률과통계): PER(순열조합), PRB(확률), STA(통계)
+- GEO(기하):       CON(이차곡선), VEC(벡터), SPC(공간도형)
+- MS(중학교):      NUM(수와연산), PAT(문자와식), GEO(도형), DAT(자료)
+- ES12~ES56(초등): NUM, OPR, GEO, MEA, DAT
+
+예시: MA-HS0-POL-001-003 (수학, 다항식, 3번째 성취기준, 3번째 세부유형)
+
 {
   "classification": {
-    "typeCode": "MA-HS1-ALG-01-003",
+    "typeCode": "MA-HS0-POL-001-003",
     "typeName": "유형 이름",
-    "subject": "수학I 또는 수학II 또는 미적분 또는 확률과 통계 또는 기하",
+    "subject": "수학 또는 수학I 또는 수학II 또는 미적분 또는 확률과 통계 또는 기하 또는 중학교 수학",
     "chapter": "대단원명",
     "section": "중단원명",
     "difficulty": 3,

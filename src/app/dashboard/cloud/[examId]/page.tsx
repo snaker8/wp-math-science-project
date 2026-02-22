@@ -21,6 +21,8 @@ import {
   AlignJustify,
   Check,
   X,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
@@ -160,6 +162,132 @@ function FilterBadge({
   );
 }
 
+// ── 유사문제 인라인 패널 ──────────────────────────────────────────────────────
+interface InlineTwin {
+  contentLatex: string;
+  answer: string;
+  modifications?: Array<{ type: string; original: string; modified: string }>;
+}
+
+function InlineTwinPanel({
+  problem,
+  onClose,
+}: {
+  problem: ProblemData;
+  onClose: () => void;
+}) {
+  const [status, setStatus] = React.useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [twin, setTwin] = React.useState<InlineTwin | null>(null);
+  const [diffAdj, setDiffAdj] = React.useState<-1 | 0 | 1>(0);
+
+  const generate = React.useCallback(async () => {
+    setStatus('loading');
+    setTwin(null);
+    try {
+      const res = await fetch('/api/workflow/twin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problemIds: [problem.id],
+          studentId: 'inline',
+          options: { difficultyAdjustment: diffAdj, preserveStructure: true },
+          useLLM: true,
+          generateClinic: false,
+        }),
+      });
+      const data = await res.json();
+      if (data.twinProblems?.[0]) {
+        const t = data.twinProblems[0];
+        setTwin({
+          contentLatex: t.contentLatex || t.content || '',
+          answer: t.answer || '',
+          modifications: t.modifications,
+        });
+        setStatus('done');
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  }, [problem.id, diffAdj]);
+
+  // 마운트 시 자동 생성
+  React.useEffect(() => { generate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="border-t border-cyan-500/20 bg-cyan-500/5 px-4 py-3 rounded-b-xl">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+          <span className="text-xs font-bold text-cyan-400">유사문제</span>
+          <div className="flex items-center gap-0.5 ml-2">
+            {([-1, 0, 1] as const).map(adj => (
+              <button
+                key={adj}
+                onClick={() => setDiffAdj(adj)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                  diffAdj === adj
+                    ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:border-zinc-500'
+                }`}
+              >
+                {adj === -1 ? '쉽게' : adj === 0 ? '동급' : '어렵게'}
+              </button>
+            ))}
+          </div>
+          {status !== 'loading' && (
+            <button
+              onClick={generate}
+              className="p-0.5 rounded text-zinc-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+              title="다시 생성"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        <button onClick={onClose} className="p-0.5 text-zinc-600 hover:text-zinc-300">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* 상태별 렌더링 */}
+      {status === 'loading' && (
+        <div className="flex items-center gap-2 py-3 text-xs text-zinc-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+          <span>유사문제 생성 중...</span>
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="text-xs text-red-400 py-2">생성 실패. 다시 시도해주세요.</div>
+      )}
+      {status === 'done' && twin && (
+        <div className="space-y-2">
+          <div className="text-sm text-zinc-200 leading-relaxed">
+            <MixedContentRenderer content={twin.contentLatex} className="text-sm text-zinc-200" />
+          </div>
+          {twin.answer && (
+            <div className="text-[11px] text-zinc-500">
+              정답: <span className="text-cyan-400 font-medium">{twin.answer}</span>
+            </div>
+          )}
+          {twin.modifications && twin.modifications.length > 0 && (
+            <details className="text-[10px] text-zinc-600 cursor-pointer">
+              <summary className="hover:text-zinc-400">변형 포인트 {twin.modifications.length}개</summary>
+              <ul className="mt-1 pl-3 space-y-0.5">
+                {twin.modifications.map((m, i) => (
+                  <li key={i}>{m.type}: {m.original} → {m.modified}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProblemCardView({
   problem,
   onTwinGenerate,
@@ -175,6 +303,8 @@ function ProblemCardView({
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
 }) {
+  const [showInlineTwin, setShowInlineTwin] = React.useState(false);
+
   return (
     <div
       className={`group rounded-xl border transition-all cursor-pointer ${
@@ -204,9 +334,16 @@ function ProblemCardView({
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onTwinGenerate(problem); }}
-              className="p-1 rounded text-zinc-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
-              title="유사문제 만들기"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowInlineTwin(prev => !prev);
+              }}
+              className={`p-1 rounded transition-colors ${
+                showInlineTwin
+                  ? 'text-cyan-400 bg-cyan-500/10'
+                  : 'text-zinc-500 hover:text-cyan-400 hover:bg-cyan-500/10'
+              }`}
+              title="유사문제 인라인 표시"
             >
               <Sparkles className="h-3.5 w-3.5" />
             </button>
@@ -280,10 +417,18 @@ function ProblemCardView({
       </div>
 
       {/* 유형 footer (참조사이트 스타일) */}
-      {problem.typeCode && (
+      {problem.typeCode && !showInlineTwin && (
         <div className="px-4 py-1.5 border-t border-zinc-800/30 bg-zinc-900/60">
           <span className="text-[11px] text-zinc-500">유형: {problem.typeCode}. {problem.typeName}</span>
         </div>
+      )}
+
+      {/* 유사문제 인라인 패널 */}
+      {showInlineTwin && (
+        <InlineTwinPanel
+          problem={problem}
+          onClose={() => setShowInlineTwin(false)}
+        />
       )}
     </div>
   );

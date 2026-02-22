@@ -7,6 +7,92 @@ import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { processUploadJob, getStatusLabel } from '@/lib/workflow/cloud-flow';
 
+// ============================================================================
+// GPT typeCode → expanded_math_types DB 매칭 헬퍼
+// 형식: MA-{LEVEL}-{DOMAIN}-{STD:3자리}-{SEQ:3자리}
+// ============================================================================
+
+/** 캐시: level+domain → type_code 목록 (DB 중복 쿼리 방지) */
+const expandedTypeCache = new Map<string, string[]>();
+
+/**
+ * GPT가 생성한 typeCode를 DB의 expanded_math_types에 매칭
+ * 우선순위: 1) 정확한 코드 → 2) 같은 level+domain → 3) 같은 level → 4) null
+ */
+async function matchExpandedTypeCode(
+  gptTypeCode: string,
+  supabase: NonNullable<typeof supabaseAdmin>
+): Promise<string | null> {
+  if (!gptTypeCode || gptTypeCode === 'UNKNOWN') return null;
+
+  // 형식 파싱: MA-LEVEL-DOMAIN-STD-SEQ
+  const parts = gptTypeCode.toUpperCase().split('-');
+  if (parts.length < 3 || parts[0] !== 'MA') return null;
+
+  const levelCode = parts[1]; // HS0, HS1, MS, ES12 등
+  const domainCode = parts[2]; // POL, EQU, TRI 등
+  const cacheKey = `${levelCode}-${domainCode}`;
+
+  try {
+    // 1) 정확한 코드 매칭
+    const { data: exact } = await supabase
+      .from('expanded_math_types')
+      .select('type_code')
+      .eq('type_code', gptTypeCode)
+      .limit(1)
+      .single();
+    if (exact?.type_code) return exact.type_code;
+
+    // 2) 같은 level+domain에서 첫 번째
+    if (!expandedTypeCache.has(cacheKey)) {
+      const { data: domainTypes } = await supabase
+        .from('expanded_math_types')
+        .select('type_code')
+        .eq('level_code', levelCode)
+        .eq('domain_code', domainCode)
+        .eq('is_active', true)
+        .order('type_code')
+        .limit(50);
+      expandedTypeCache.set(cacheKey, (domainTypes || []).map(t => t.type_code));
+    }
+
+    const domainList = expandedTypeCache.get(cacheKey)!;
+    if (domainList.length > 0) {
+      // STD/SEQ 가장 가까운 코드 찾기
+      const stdNum = parseInt(parts[3] || '1', 10);
+      const seqNum = parseInt(parts[4] || '1', 10);
+      let best = domainList[0];
+      let bestDist = Infinity;
+      for (const code of domainList) {
+        const cp = code.split('-');
+        const cs = parseInt(cp[3] || '0', 10);
+        const cq = parseInt(cp[4] || '0', 10);
+        const dist = Math.abs(cs - stdNum) * 100 + Math.abs(cq - seqNum);
+        if (dist < bestDist) { bestDist = dist; best = code; }
+      }
+      return best;
+    }
+
+    // 3) 같은 level에서 첫 번째 매칭
+    const levelCacheKey = `${levelCode}-*`;
+    if (!expandedTypeCache.has(levelCacheKey)) {
+      const { data: levelTypes } = await supabase
+        .from('expanded_math_types')
+        .select('type_code')
+        .eq('level_code', levelCode)
+        .eq('is_active', true)
+        .order('type_code')
+        .limit(1);
+      expandedTypeCache.set(levelCacheKey, (levelTypes || []).map(t => t.type_code));
+    }
+    const levelList = expandedTypeCache.get(levelCacheKey)!;
+    return levelList.length > 0 ? levelList[0] : null;
+
+  } catch {
+    return null;
+  }
+}
+
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
 const globalForJobs = globalThis as unknown as {
@@ -611,9 +697,19 @@ async function saveProblemsToDB(
       if (problem) {
         const difficultyStr = String(result.classification.difficulty) as '1' | '2' | '3' | '4' | '5';
 
+        // GPT 생성 typeCode → expanded_math_types DB 매칭
+        const expandedTypeCode = supabaseAdmin
+          ? await matchExpandedTypeCode(result.classification.typeCode || '', supabaseAdmin)
+          : null;
+
+        if (expandedTypeCode) {
+          console.log(`[DB] typeCode 매칭: ${result.classification.typeCode} → ${expandedTypeCode}`);
+        }
+
         await supabase.from('classifications').insert({
           problem_id: problem.id,
           type_code: result.classification.typeCode || 'UNKNOWN',
+          expanded_type_code: expandedTypeCode,           // ← 신규: DB 세부유형 연결
           difficulty: difficultyStr,
           cognitive_domain: result.classification.cognitiveDomain || 'CALCULATION',
           ai_confidence: result.classification.confidence || 0.5,
