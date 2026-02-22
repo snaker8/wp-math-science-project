@@ -30,6 +30,7 @@ export interface UploadJob {
   currentStep: string;
   autoClassify?: boolean;
   generateSolutions?: boolean;
+  bookGroupId?: string;    // 클라우드 폴더(북그룹) ID
   error?: string;
   createdAt: string;
   updatedAt: string;

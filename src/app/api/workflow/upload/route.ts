@@ -175,6 +175,7 @@ export async function POST(request: NextRequest) {
       currentStep: '대기 중',
       autoClassify,
       generateSolutions,
+      bookGroupId: bookGroupId || undefined,   // 클라우드 폴더 ID 보존
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -297,12 +298,13 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobId, bookGroupId } = body;
+    const { jobId, bookGroupId: bodyBookGroupId } = body;
 
     if (!jobId) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
     }
 
+    // bookGroupId: PUT body → job에 저장된 값 순으로 폴백
     const job = jobStore.get(jobId);
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
@@ -317,8 +319,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No analysis results found' }, { status: 400 });
     }
 
+    // bookGroupId: PUT body → job에 저장된 값 순으로 폴백
+    const bookGroupId = bodyBookGroupId || job.bookGroupId || null;
+    console.log(`[DB] Save with bookGroupId: ${bookGroupId} (body: ${bodyBookGroupId}, job: ${job.bookGroupId})`);
+
     // DB에 저장 (bookGroupId 전달)
-    await saveProblemsToDB(jobId, results, bookGroupId || null);
+    await saveProblemsToDB(jobId, results, bookGroupId);
 
     return NextResponse.json({
       success: true,
