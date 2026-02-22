@@ -37,30 +37,67 @@ ON CONFLICT (type_code) DO UPDATE SET type_name=EXCLUDED.type_name, description=
 }
 
 async function main() {
-  // 동적 import로 각 확장 데이터 로드
+  // V2 확장 데이터 로드
   const { HS0_EXPANSION } = await import('./generate-expanded-types');
   const { HS1_EXPANSION } = await import('./expansion-data-hs1');
   const { HS2_EXPANSION, CAL_EXPANSION, PRB_EXPANSION, GEO_EXPANSION } = await import('./expansion-data-hs2-cal-prb-geo');
   const { MS_EXPANSION } = await import('./expansion-data-ms');
   const { ES12_EXPANSION, ES34_EXPANSION, ES56_EXPANSION } = await import('./expansion-data-es');
 
+  // V3 확장 데이터 로드
+  const { HS0_V3, HS1_V3 } = await import('./expansion-v3-hs0-hs1');
+  const { HS2_V3, CAL_V3, PRB_V3, GEO_V3 } = await import('./expansion-v3-hs2-cal-prb-geo');
+  const { MS_V3 } = await import('./expansion-v3-ms');
+  const { ES12_V3, ES34_V3, ES56_V3 } = await import('./expansion-v3-es');
+  const { ELA_V3, ELC_V3, ELM_V3, ELP_V3, ELR_V3, ELT_V3, ELW_V3, EM1_V3, ET1_V3 } = await import('./expansion-v3-elective');
+  const { HS0_SUP, HS1_SUP, MS_SUP, ES12_SUP, ES34_SUP, ES56_SUP } = await import('./expansion-v3-supplement');
+
   const allExpansions = [
-    { name: 'HS0 (고등 공통)', types: HS0_EXPANSION },
-    { name: 'HS1 (수학I)', types: HS1_EXPANSION },
-    { name: 'HS2 (수학II)', types: HS2_EXPANSION },
-    { name: 'CAL (미적분)', types: CAL_EXPANSION },
-    { name: 'PRB (확률과통계)', types: PRB_EXPANSION },
-    { name: 'GEO (기하)', types: GEO_EXPANSION },
-    { name: 'MS (중학교)', types: MS_EXPANSION },
-    { name: 'ES12 (초등 1-2)', types: ES12_EXPANSION },
-    { name: 'ES34 (초등 3-4)', types: ES34_EXPANSION },
-    { name: 'ES56 (초등 5-6)', types: ES56_EXPANSION },
+    // V2
+    { name: 'HS0 v2 (고등 공통)', types: HS0_EXPANSION },
+    { name: 'HS1 v2 (수학I)', types: HS1_EXPANSION },
+    { name: 'HS2 v2 (수학II)', types: HS2_EXPANSION },
+    { name: 'CAL v2 (미적분)', types: CAL_EXPANSION },
+    { name: 'PRB v2 (확률과통계)', types: PRB_EXPANSION },
+    { name: 'GEO v2 (기하)', types: GEO_EXPANSION },
+    { name: 'MS v2 (중학교)', types: MS_EXPANSION },
+    { name: 'ES12 v2 (초등 1-2)', types: ES12_EXPANSION },
+    { name: 'ES34 v2 (초등 3-4)', types: ES34_EXPANSION },
+    { name: 'ES56 v2 (초등 5-6)', types: ES56_EXPANSION },
+    // V3
+    { name: 'HS0 v3 (고등 공통 심화)', types: HS0_V3 },
+    { name: 'HS1 v3 (수학I 심화)', types: HS1_V3 },
+    { name: 'HS2 v3 (수학II 심화)', types: HS2_V3 },
+    { name: 'CAL v3 (미적분 심화)', types: CAL_V3 },
+    { name: 'PRB v3 (확률과통계 심화)', types: PRB_V3 },
+    { name: 'GEO v3 (기하 심화)', types: GEO_V3 },
+    { name: 'MS v3 (중학교 심화)', types: MS_V3 },
+    { name: 'ES12 v3 (초등1-2 심화)', types: ES12_V3 },
+    { name: 'ES34 v3 (초등3-4 심화)', types: ES34_V3 },
+    { name: 'ES56 v3 (초등5-6 심화)', types: ES56_V3 },
+    { name: 'ELA v3 (경제수학)', types: ELA_V3 },
+    { name: 'ELC v3 (실용수학)', types: ELC_V3 },
+    { name: 'ELM v3 (수학과제탐구)', types: ELM_V3 },
+    { name: 'ELP v3 (인공지능수학)', types: ELP_V3 },
+    { name: 'ELR v3 (기본수학)', types: ELR_V3 },
+    { name: 'ELT v3 (직무수학)', types: ELT_V3 },
+    { name: 'ELW v3 (심화수학)', types: ELW_V3 },
+    { name: 'EM1 v3 (심화수학I)', types: EM1_V3 },
+    { name: 'ET1 v3 (수학과제탐구I)', types: ET1_V3 },
+    // Supplement
+    { name: 'HS0 보충', types: HS0_SUP },
+    { name: 'HS1 보충', types: HS1_SUP },
+    { name: 'MS 보충', types: MS_SUP },
+    { name: 'ES12 보충', types: ES12_SUP },
+    { name: 'ES34 보충', types: ES34_SUP },
+    { name: 'ES56 보충', types: ES56_SUP },
   ];
 
   const lines: string[] = [];
   lines.push('-- ============================================================================');
-  lines.push('-- 확장 세부유형 v2 추가 데이터 (시중교재 분석 기반)');
-  lines.push('-- 쎈, 개념원리 RPM, 블랙라벨, 수학의 정석, 마플 시너지 교재 분석');
+  lines.push('-- 확장 세부유형 v2+v3 추가 데이터 (시중교재 분석 기반)');
+  lines.push('-- v2: 쎈, 개념원리 RPM, 블랙라벨, 수학의 정석, 마플 시너지 교재 분석');
+  lines.push('-- v3: 수능/내신 심화유형 + 선택과목 9개 레벨 확장');
   lines.push(`-- Generated: ${new Date().toISOString().slice(0, 10)}`);
   lines.push('-- ============================================================================');
   lines.push('');
@@ -97,7 +134,7 @@ async function main() {
   fs.writeFileSync(outputPath, lines.join('\n'), 'utf-8');
   console.log(`\n✅ Generated ${outputPath}`);
   console.log(`   Total new types: ${totalNew}`);
-  console.log(`   Combined with existing 1,139 → ~${1139 + totalNew} total`);
+  console.log(`   Combined with existing 1,094 (v1) → ~${1094 + totalNew} total`);
 }
 
 main().catch(console.error);
