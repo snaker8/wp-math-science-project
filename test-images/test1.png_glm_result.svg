@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="black"/>
+    </marker>
+  </defs>
+  
+  <g transform="translate(50, 50)">
+    <!-- Grid lines -->
+    <g stroke="#e0e0e0" stroke-width="1" stroke-dasharray="2,2">
+      <line x1="0" y1="0" x2="300" y2="0"/>
+      <line x1="0" y1="0" x2="0" y2="300"/>
+      <line x1="0" y1="60" x2="300" y2="60"/>
+      <line x1="0" y1="120" x2="300" y2="120"/>
+      <line x1="0" y1="180" x2="300" y2="180"/>
+      <line x1="0" y1="240" x2="300" y2="240"/>
+      <line x1="60" y1="0" x2="60" y2="300"/>
+      <line x1="120" y1="0" x2="120" y2="300"/>
+      <line x1="180" y1="0" x2="180" y2="300"/>
+      <line x1="240" y1="0" x2="240" y2="300"/>
+    </g>
+    
+    <!-- Axes -->
+    <line x1="0" y1="300" x2="300" y2="300" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <line x1="0" y1="0" x2="0" y2="300" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Labels -->
+    <text x="305" y="305" font-family="serif" font-size="14">x</text>
+    <text x="-15" y="5" font-family="serif" font-size="14">y</text>
+    <text x="-15" y="5" font-family="serif" font-size="14">y</text>
+    <text x="0" y="320" font-family="serif" font-size="12">O</text>
+    
+    <!-- Point A (intersection of two parabolas) -->
+    <circle cx="120" cy="120" r="3" fill="black"/>
+    <text x="125" y="110" font-family="serif" font-size="12">A</text>
+    
+    <!-- Point B (intersection of line and x-axis) -->
+    <circle cx="60" cy="300" r="3" fill="black"/>
+    <text x="55" y="320" font-family="serif" font-size="12">B</text>
+    
+    <!-- Point C (intersection of line and parabola) -->
+    <circle cx="240" cy="300" r="3" fill="black"/>
+    <text x="235" y="320" font-family="serif" font-size="12">C</text>
+    
+    <!-- Parabola 1: y = -x² + 8x - 12 -->
+    <path d="M 0 0 Q 60 60 120 120 Q 180 180 240 300" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Parabola 2: y = -x² + 8x - 12 -->
+    <path d="M 0 0 Q 60 60 120 120 Q 180 180 240 300" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Line: y = -x + 6 -->
+    <path d="M 0 0 L 60 300 L 240 300" fill="none" stroke="black" stroke-width="2"/>
+  </g>
+</svg>

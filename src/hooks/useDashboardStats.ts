@@ -21,14 +21,14 @@ export interface MonthlyExamCount {
 
 // Mock 데이터 (Supabase 미연결 시)
 const mockStats: DashboardStats = {
-    totalStudents: 1,
-    totalProblems: 154,
-    totalExams: 4,
-    totalTeachers: 1,
-    averageAccuracy: 78.4,
+    totalStudents: 0,
+    totalProblems: 0,
+    totalExams: 0,
+    totalTeachers: 0,
+    averageAccuracy: 0,
     studentsThisWeek: 0,
-    problemsThisWeek: 12,
-    examsThisMonth: 2,
+    problemsThisWeek: 0,
+    examsThisMonth: 0,
 };
 
 export function useDashboardStats() {
@@ -55,10 +55,10 @@ export function useDashboardStats() {
                     examsResult,
                     teachersResult,
                 ] = await Promise.all([
-                    supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).eq('role', 'student'),
+                    supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).eq('role', 'STUDENT'),
                     supabaseBrowser.from('problems').select('*', { count: 'exact', head: true }).is('deleted_at', null),
                     supabaseBrowser.from('exams').select('*', { count: 'exact', head: true }).is('deleted_at', null),
-                    supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).in('role', ['teacher', 'admin']),
+                    supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).in('role', ['TEACHER', 'ADMIN']),
                 ]);
 
                 // 이번 주/월 통계
@@ -69,7 +69,7 @@ export function useDashboardStats() {
                 monthStart.setHours(0, 0, 0, 0);
 
                 const [newStudentsResult, newProblemsResult, monthExamsResult] = await Promise.all([
-                    supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).eq('role', 'student').gte('created_at', weekAgo.toISOString()),
+                    supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).eq('role', 'STUDENT').gte('created_at', weekAgo.toISOString()),
                     supabaseBrowser.from('problems').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo.toISOString()),
                     supabaseBrowser.from('exams').select('*', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', monthStart.toISOString()),
                 ]);

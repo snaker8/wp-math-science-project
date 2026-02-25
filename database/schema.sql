@@ -144,7 +144,7 @@ CREATE TABLE source_files (
 COMMENT ON TABLE source_files IS 'PDF/IMG/HWP 업로드 파일 및 OCR 처리 결과';
 
 -- ----------------------------------------------------------------------------
--- 3.4 problem_types (문제 유형 마스터 - 3,569개 유형)
+-- 3.4 problem_types (문제 유형 마스터 - 505개 교육과정 성취기준 기반)
 -- ----------------------------------------------------------------------------
 CREATE TABLE problem_types (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -173,7 +173,7 @@ CREATE TABLE problem_types (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE problem_types IS '3,569개 문제 유형 마스터 테이블';
+COMMENT ON TABLE problem_types IS '교육과정 성취기준 기반 문제 유형 마스터 테이블 (505개 성취기준)';
 COMMENT ON COLUMN problem_types.type_code IS '유형 코드 (예: MA-ALG-001-A)';
 
 -- ----------------------------------------------------------------------------
@@ -244,7 +244,7 @@ CREATE TABLE classifications (
     problem_id UUID NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
 
     -- 분류 체계
-    type_code VARCHAR(20) NOT NULL,                -- 3,569개 유형 코드
+    type_code VARCHAR(20) NOT NULL,                -- 유형 코드 (성취기준 기반)
     type_id UUID REFERENCES problem_types(id) ON DELETE SET NULL,
     difficulty difficulty_level NOT NULL,          -- 1~5 난이도
     cognitive_domain cognitive_domain NOT NULL,    -- 인지 영역
@@ -268,9 +268,9 @@ CREATE TABLE classifications (
     UNIQUE(problem_id, type_code)
 );
 
-COMMENT ON TABLE classifications IS '문제 분류 (3,569개 유형, 5단계 난이도, 4가지 인지영역)';
-COMMENT ON COLUMN classifications.type_code IS '3,569개 유형을 구분하는 코드';
-COMMENT ON COLUMN classifications.difficulty IS '1(최하) ~ 5(최상) 단계';
+COMMENT ON TABLE classifications IS '문제 분류 (505개 성취기준, 5등급 난이도, 4가지 인지영역)';
+COMMENT ON COLUMN classifications.type_code IS '성취기준 기반 유형 코드';
+COMMENT ON COLUMN classifications.difficulty IS '1(하) ~ 5(상) 5등급';
 COMMENT ON COLUMN classifications.cognitive_domain IS 'CALCULATION, UNDERSTANDING, INFERENCE, PROBLEM_SOLVING';
 
 -- ----------------------------------------------------------------------------
@@ -886,7 +886,7 @@ FROM difficulty_analytics da;
 -- SECTION 8: SEED DATA (문제 유형 예시)
 -- ============================================================================
 
--- 일부 문제 유형 예시 데이터 (실제로는 3,569개 필요)
+-- 일부 문제 유형 예시 데이터 (실제 성취기준은 curriculum_data/unified_math_standards.json 참조)
 INSERT INTO problem_types (type_code, subject, chapter, section, type_name, keywords) VALUES
     ('MA1-POL-001', '수학I', '다항식', '다항식의 연산', '다항식의 덧셈과 뺄셈', ARRAY['다항식', '연산', '덧셈', '뺄셈']),
     ('MA1-POL-002', '수학I', '다항식', '다항식의 연산', '다항식의 곱셈', ARRAY['다항식', '연산', '곱셈']),
@@ -906,6 +906,40 @@ INSERT INTO problem_types (type_code, subject, chapter, section, type_name, keyw
     ('GEO-VEC-001', '기하', '벡터', '벡터의 연산', '벡터의 덧셈과 뺄셈', ARRAY['벡터', '연산', '덧셈']),
     ('GEO-VEC-002', '기하', '벡터', '벡터의 내적', '내적의 계산', ARRAY['벡터', '내적', '각도'])
 ON CONFLICT (type_code) DO NOTHING;
+
+-- ============================================================================
+-- SECTION 9: YOLO 학습 데이터 (문제 영역 감지 어노테이션)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS detection_annotations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    problem_id UUID REFERENCES problems(id) ON DELETE CASCADE,
+    exam_id UUID REFERENCES exams(id) ON DELETE SET NULL,
+    job_id TEXT,
+    page_number INTEGER NOT NULL,
+    page_image_path TEXT NOT NULL,
+    page_width INTEGER,
+    page_height INTEGER,
+    bbox_x REAL NOT NULL,
+    bbox_y REAL NOT NULL,
+    bbox_w REAL NOT NULL,
+    bbox_h REAL NOT NULL,
+    class_label VARCHAR(20) NOT NULL DEFAULT 'problem',
+    problem_number INTEGER,
+    detection_source VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_da_page_image ON detection_annotations(page_image_path);
+CREATE INDEX IF NOT EXISTS idx_da_class ON detection_annotations(class_label);
+CREATE INDEX IF NOT EXISTS idx_da_exam ON detection_annotations(exam_id);
+CREATE INDEX IF NOT EXISTS idx_da_job ON detection_annotations(job_id);
+
+ALTER TABLE detection_annotations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view detection annotations"
+    ON detection_annotations FOR SELECT USING (true);
+CREATE POLICY "Service can insert detection annotations"
+    ON detection_annotations FOR INSERT WITH CHECK (true);
 
 -- ============================================================================
 -- END OF SCHEMA

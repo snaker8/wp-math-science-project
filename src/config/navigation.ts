@@ -82,7 +82,7 @@ export const dashboardNavItems: NavItem[] = [
     href: '/dashboard/skills',
     icon: Puzzle,
     label: '유형/문제관리',
-    description: '3,569개 유형 체계',
+    description: '505개 성취기준 분류',
     activeColor: 'bg-violet-500/10 text-violet-500',
     group: 'main',
   },

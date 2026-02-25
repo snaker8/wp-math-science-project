@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
       currentStep: '대기 중',
       autoClassify,
       generateSolutions,
+      bookGroupId: bookGroupId || null,  // ★ 클라우드 북그룹 ID 저장
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -186,6 +187,18 @@ export async function GET(request: NextRequest) {
 
   const results = jobResults.get(jobId);
 
+  // ★ 디버그: results 내용 로그
+  if (results && results.length > 0) {
+    const first = results[0];
+    console.log(`[Upload API GET] jobId=${jobId}, ${results.length}개 결과, 첫 문제 solution:`,
+      first.solution ? `steps=${first.solution.steps?.length || 0}` : 'NONE',
+      'choices:', first.choices?.length || 0,
+      'content:', first.contentWithMath?.substring(0, 50) || 'NONE'
+    );
+  } else {
+    console.log(`[Upload API GET] jobId=${jobId}, results EMPTY (메모리에 없음)`);
+  }
+
   // PDF 파일 URL 생성 (서버 사이드 프록시를 통해 CORS 문제 회피)
   let pdfUrl: string | null = null;
   if (job.storagePath) {
@@ -211,7 +224,44 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobId, bookGroupId } = body;
+    const { jobId, bookGroupId, editedProblems, pageImages } = body;
+
+    console.log(`[Upload PUT] ★ bookGroupId 수신: "${bookGroupId}" (type: ${typeof bookGroupId})`);
+
+    // ★ YOLO 학습 데이터: 페이지 이미지를 Supabase Storage에 업로드
+    const pageImagePathMap = new Map<number, { path: string; width: number; height: number }>();
+    if (pageImages && Array.isArray(pageImages) && pageImages.length > 0 && supabaseAdmin) {
+      console.log(`[Upload PUT] YOLO 학습용 페이지 이미지 ${pageImages.length}개 업로드 시작`);
+      for (const pageImg of pageImages) {
+        try {
+          const base64Data = (pageImg.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '');
+          if (!base64Data) continue;
+          const buffer = Buffer.from(base64Data, 'base64');
+          const storagePath = `page-images/${jobId}/page-${pageImg.pageNumber}.png`;
+
+          const { data, error } = await supabaseAdmin.storage
+            .from('source-files')
+            .upload(storagePath, buffer, {
+              contentType: 'image/png',
+              upsert: true,
+            });
+
+          if (error) {
+            console.warn(`[Upload PUT] 페이지 ${pageImg.pageNumber} 이미지 업로드 실패:`, error.message);
+          } else {
+            pageImagePathMap.set(pageImg.pageNumber, {
+              path: data.path,
+              width: pageImg.width || 0,
+              height: pageImg.height || 0,
+            });
+            console.log(`[Upload PUT] 페이지 ${pageImg.pageNumber} 이미지 업로드 완료: ${data.path}`);
+          }
+        } catch (imgErr) {
+          console.warn(`[Upload PUT] 페이지 ${pageImg.pageNumber} 이미지 처리 오류:`, imgErr);
+        }
+      }
+      console.log(`[Upload PUT] 페이지 이미지 업로드 완료: ${pageImagePathMap.size}/${pageImages.length}개`);
+    }
 
     if (!jobId) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
@@ -221,18 +271,91 @@ export async function PUT(request: NextRequest) {
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
+    console.log(`[Upload PUT] job.bookGroupId: "${job.bookGroupId}" → 최종: "${bookGroupId || job.bookGroupId || null}"`);
+
+    const results = jobResults.get(jobId);
+
+    // ★ AutoCrop 모드: jobResults에 결과가 없지만 editedProblems에 데이터가 있는 경우
+    //    editedProblems 기반으로 직접 DB에 저장
+    if ((!results || results.length === 0) && editedProblems && editedProblems.length > 0) {
+      const acBookGroupId = bookGroupId || job.bookGroupId || null;
+      console.log(`[Upload PUT] AutoCrop 모드: ${editedProblems.length}개 문제 직접 저장, bookGroupId="${acBookGroupId}"`);
+      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap);
+    }
 
     if (job.status !== 'COMPLETED') {
       return NextResponse.json({ error: 'Job is not completed yet' }, { status: 400 });
     }
 
-    const results = jobResults.get(jobId);
     if (!results || results.length === 0) {
       return NextResponse.json({ error: 'No analysis results found' }, { status: 400 });
     }
 
-    // DB에 저장 (bookGroupId 전달)
-    await saveProblemsToDB(jobId, results, bookGroupId || null);
+    // ★ 수정된 문제 데이터(난이도 등)를 results에 오버라이드
+    // cropImageBase64를 번호별로 매핑
+    const cropImageMap = new Map<number, string>();
+    if (editedProblems && Array.isArray(editedProblems) && editedProblems.length > 0) {
+      for (const edited of editedProblems) {
+        const result = results.find(r => r.problemNumber === edited.number);
+        if (result) {
+          if (edited.difficulty !== undefined) result.classification.difficulty = edited.difficulty as 1|2|3|4|5;
+          if (edited.typeCode !== undefined) result.classification.typeCode = edited.typeCode;
+          if (edited.cognitiveDomain !== undefined) result.classification.cognitiveDomain = edited.cognitiveDomain as 'CALCULATION'|'UNDERSTANDING'|'INFERENCE'|'PROBLEM_SOLVING';
+          if (edited.content !== undefined) result.originalText = edited.content;
+          if (edited.choices) result.choices = edited.choices;
+          console.log(`[Upload PUT] 문제 ${edited.number}번 수정 적용: difficulty=${edited.difficulty}, typeCode=${edited.typeCode}`);
+        }
+        // ★ 크롭 이미지 저장 (번호별)
+        if (edited.cropImageBase64) {
+          cropImageMap.set(edited.number, edited.cropImageBase64);
+        }
+      }
+    }
+
+    // ★ 크롭 이미지를 Supabase Storage에 업로드
+    const imageUrlMap = new Map<number, string>();
+    if (cropImageMap.size > 0) {
+      const storageClient = supabaseAdmin;
+      if (storageClient) {
+        for (const [num, base64] of cropImageMap.entries()) {
+          try {
+            // data:image/png;base64,... 에서 실제 base64 추출
+            const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+            const buffer = Buffer.from(base64Data, 'base64');
+            const storagePath = `problem-crops/${jobId}/problem-${num}.png`;
+
+            const { data, error } = await storageClient.storage
+              .from('source-files')
+              .upload(storagePath, buffer, {
+                contentType: 'image/png',
+                upsert: true,
+              });
+
+            if (error) {
+              console.error(`[Upload PUT] 문제 ${num}번 이미지 업로드 실패:`, error.message);
+            } else {
+              // Public URL 생성
+              const { data: urlData } = storageClient.storage
+                .from('source-files')
+                .getPublicUrl(data.path);
+              if (urlData?.publicUrl) {
+                imageUrlMap.set(num, urlData.publicUrl);
+                console.log(`[Upload PUT] 문제 ${num}번 이미지 업로드 완료: ${urlData.publicUrl}`);
+              }
+            }
+          } catch (imgErr) {
+            console.error(`[Upload PUT] 문제 ${num}번 이미지 처리 오류:`, imgErr);
+          }
+        }
+      } else {
+        console.warn('[Upload PUT] Supabase Admin 미설정, 이미지 업로드 스킵');
+      }
+    }
+
+    // DB에 저장 (bookGroupId, imageUrlMap 전달) — 클라이언트 값 우선, 폴백으로 job.bookGroupId
+    const effectiveBookGroupId = bookGroupId || job.bookGroupId || null;
+    console.log(`[Upload PUT] ★ DB 저장 시 bookGroupId: "${effectiveBookGroupId}"`);
+    await saveProblemsToDB(jobId, results, effectiveBookGroupId, imageUrlMap, editedProblems, pageImagePathMap);
 
     return NextResponse.json({
       success: true,
@@ -380,10 +503,324 @@ async function processJobInBackground(
   }
 }
 
+/**
+ * AutoCrop 모드: editedProblems 기반으로 직접 DB에 저장
+ * jobResults에 결과가 없는 경우 (수동 분석 모드)
+ */
+async function saveEditedProblemsDirect(
+  jobId: string,
+  job: UploadJob,
+  editedProblems: Array<{
+    number: number;
+    content?: string;
+    choices?: string[];
+    answer?: string | number;
+    solution?: string;
+    difficulty?: number;
+    typeCode?: string;
+    cognitiveDomain?: string;
+    cropImageBase64?: string;
+    bbox?: { x: number; y: number; w: number; h: number };
+    pageIndex?: number;
+  }>,
+  bookGroupId: string | null,
+  pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map()
+) {
+  const supabase = supabaseAdmin;
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase Admin not configured' }, { status: 500 });
+  }
+
+  // ★ 크롭 이미지를 Supabase Storage에 업로드
+  const imageUrlMap = new Map<number, string>();
+  for (const edited of editedProblems) {
+    if (edited.cropImageBase64) {
+      try {
+        const base64Data = edited.cropImageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const storagePath = `problem-crops/${jobId}/problem-${edited.number}.png`;
+
+        const { data, error } = await supabase.storage
+          .from('source-files')
+          .upload(storagePath, buffer, {
+            contentType: 'image/png',
+            upsert: true,
+          });
+
+        if (!error && data) {
+          const { data: urlData } = supabase.storage
+            .from('source-files')
+            .getPublicUrl(data.path);
+          if (urlData?.publicUrl) {
+            imageUrlMap.set(edited.number, urlData.publicUrl);
+            console.log(`[Direct Save] 문제 ${edited.number}번 이미지 업로드 완료`);
+          }
+        }
+      } catch (imgErr) {
+        console.error(`[Direct Save] 문제 ${edited.number}번 이미지 오류:`, imgErr);
+      }
+    }
+  }
+
+  // ★ created_by: job.userId에서 가져옴 (supabaseAdmin.auth.getUser()는 서비스 키라 null)
+  const isValidUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+  const createdBy = isValidUUID(job.userId) ? job.userId : null;
+
+  // ★ institute_id 조회 (saveProblemsToDB와 동일 로직)
+  let instituteId: string | null = isValidUUID(job.instituteId) ? job.instituteId : null;
+  if (!instituteId && createdBy) {
+    try {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('institute_id')
+        .eq('id', createdBy)
+        .single();
+      if (userData?.institute_id) {
+        instituteId = userData.institute_id;
+        console.log(`[Direct Save] Found user's institute_id: ${instituteId}`);
+      }
+    } catch (e) {
+      console.log('[Direct Save] Could not fetch user institute_id:', e);
+    }
+  }
+  if (!instituteId) {
+    try {
+      const { data: defaultInst } = await supabase
+        .from('institutes')
+        .select('id')
+        .eq('name', '개인 사용자')
+        .limit(1)
+        .single();
+      if (defaultInst) {
+        instituteId = defaultInst.id;
+      } else {
+        const { data: newInst } = await supabase
+          .from('institutes')
+          .insert({ name: '개인 사용자' })
+          .select('id')
+          .single();
+        if (newInst) {
+          instituteId = newInst.id;
+          if (createdBy) {
+            await supabase.from('users').update({ institute_id: instituteId }).eq('id', createdBy);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[Direct Save] Institute lookup/create error:', e);
+    }
+  }
+
+  console.log(`[Direct Save] instituteId: ${instituteId}, createdBy: ${createdBy}, bookGroupId: ${bookGroupId}`);
+
+  // ★ Exam 레코드 생성 (자산화 시 시험지 목록에 표시되도록)
+  let examId: string | null = null;
+  try {
+    const examInsertData: Record<string, any> = {
+      title: job.fileName.replace(/\.[^/.]+$/, ''),
+      description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
+      status: 'COMPLETED',
+      created_by: createdBy,
+      institute_id: instituteId,
+      total_points: editedProblems.length * 4,
+      time_limit_minutes: 50,
+    };
+    if (bookGroupId) {
+      examInsertData.book_group_id = bookGroupId;
+    }
+
+    console.log(`[Direct Save] Creating exam:`, JSON.stringify(examInsertData, null, 2));
+
+    let examResult = await supabase
+      .from('exams')
+      .insert(examInsertData)
+      .select('id')
+      .single();
+
+    // 컬럼 에러 시 최소 컬럼만으로 재시도 (book_group_id는 유지!)
+    if (examResult.error && examResult.error.message.includes('column')) {
+      console.warn(`[Direct Save] Retrying exam insert: ${examResult.error.message}`);
+      const retryData: Record<string, any> = {
+        title: examInsertData.title,
+        description: examInsertData.description,
+        status: examInsertData.status,
+        created_by: createdBy,
+        institute_id: instituteId,
+      };
+      if (bookGroupId) retryData.book_group_id = bookGroupId;  // ★ book_group_id 유지
+      examResult = await supabase
+        .from('exams')
+        .insert(retryData)
+        .select('id')
+        .single();
+    }
+
+    if (examResult.error) {
+      console.error('[Direct Save] Exam create error:', examResult.error.message);
+    } else {
+      examId = examResult.data.id;
+      console.log(`[Direct Save] Created exam: ${examId}`);
+    }
+  } catch (err) {
+    console.error('[Direct Save] Exam create exception:', err);
+  }
+
+  let savedCount = 0;
+
+  for (const edited of editedProblems) {
+    if (!edited.content && !edited.cropImageBase64) continue; // 빈 문제 스킵
+
+    try {
+      const cropImageUrl = imageUrlMap.get(edited.number);
+      const imagesArray = cropImageUrl
+        ? [{ url: cropImageUrl, type: 'crop', label: `문제 ${edited.number} 크롭 이미지` }]
+        : [];
+
+      const choices = edited.choices || [];
+      const circledNumbers = ['①', '②', '③', '④', '⑤'];
+
+      // ★ 소문제 판별: "구하시오", "[N점]" 등이 포함되면 소문제 → (1)(2)(3) 형식 유지
+      const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+      const isSubProblem = choices.some((c: string) => subProblemPatterns.test(c));
+
+      let formattedChoices: string[];
+      let choiceType: string;
+      if (isSubProblem) {
+        // 소문제: (1), (2), (3) 형식 유지
+        formattedChoices = choices.map((c: string, i: number) => {
+          const stripped = c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+          return stripped ? `(${i + 1}) ${stripped}` : '';
+        }).filter(Boolean);
+        choiceType = 'sub_problems';
+      } else {
+        // 객관식: ①②③ 형식
+        formattedChoices = choices.map((c: string, i: number) => {
+          const stripped = c.replace(/^[①②③④⑤]\s*/, '');
+          return stripped ? `${circledNumbers[i]} ${stripped}` : '';
+        }).filter(Boolean);
+        choiceType = formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer';
+      }
+
+      // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
+      let contentLatex = edited.content || '(문제 내용 없음)';
+
+      const { data: problem, error: problemError } = await supabase
+        .from('problems')
+        .insert({
+          institute_id: instituteId,
+          created_by: createdBy,
+          source_file_id: null,
+          content_latex: contentLatex,
+          content_html: null,
+          solution_latex: edited.solution || '',
+          solution_html: null,
+          answer_json: {
+            finalAnswer: String(edited.answer || ''),
+            type: choiceType,
+            correct_answer: String(edited.answer || ''),
+            choices: formattedChoices,
+          },
+          images: imagesArray,
+          status: 'PENDING_REVIEW',
+          ai_analysis: {
+            classification: {
+              typeCode: edited.typeCode || '',
+              difficulty: edited.difficulty || 3,
+              cognitiveDomain: edited.cognitiveDomain || 'CALCULATION',
+            },
+          },
+          tags: [],
+          source_name: job.fileName,
+        })
+        .select()
+        .single();
+
+      if (problemError) {
+        console.error(`[Direct Save] 문제 ${edited.number}번 DB 에러:`, problemError.message);
+        continue;
+      }
+
+      // classifications 테이블에 저장
+      if (problem && edited.typeCode) {
+        await supabase.from('classifications').insert({
+          problem_id: problem.id,
+          type_code: edited.typeCode,
+          difficulty: String(edited.difficulty || 3) as '1' | '2' | '3' | '4' | '5',
+          cognitive_domain: edited.cognitiveDomain || 'CALCULATION',
+          ai_confidence: 0.5,
+          is_verified: false,
+        }).single();
+      }
+
+      savedCount++;
+      console.log(`[Direct Save] 문제 ${edited.number}번 저장 완료 (ID: ${problem?.id})`);
+
+      // ★ Exam-Problem 연결
+      if (examId && problem) {
+        const { error: epError } = await supabase.from('exam_problems').insert({
+          exam_id: examId,
+          problem_id: problem.id,
+          sequence_number: savedCount,
+          points: 4,
+        });
+        if (epError) {
+          console.error(`[Direct Save] exam_problems 연결 실패 (문제 ${edited.number}번):`, epError.message, epError.details);
+        } else {
+          console.log(`[Direct Save] exam_problems 연결 완료 (문제 ${edited.number}번 → exam ${examId})`);
+        }
+      }
+
+      // ★ YOLO 학습 데이터: detection_annotations 저장
+      if (problem && edited.bbox && edited.bbox.w > 0.01 && edited.bbox.h > 0.01) {
+        const pageNum = (edited.pageIndex ?? 0) + 1;
+        const pageImgInfo = pageImagePathMap.get(pageNum);
+        if (pageImgInfo) {
+          try {
+            await supabase.from('detection_annotations').insert({
+              problem_id: problem.id,
+              exam_id: examId,
+              job_id: jobId,
+              page_number: pageNum,
+              page_image_path: pageImgInfo.path,
+              page_width: pageImgInfo.width,
+              page_height: pageImgInfo.height,
+              bbox_x: edited.bbox.x,
+              bbox_y: edited.bbox.y,
+              bbox_w: edited.bbox.w,
+              bbox_h: edited.bbox.h,
+              class_label: 'problem',
+              problem_number: edited.number,
+              detection_source: 'MANUAL',
+            });
+            console.log(`[Direct Save] 문제 ${edited.number}번 YOLO 어노테이션 저장 완료`);
+          } catch (annErr) {
+            console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패 (무시):`, annErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[Direct Save] 문제 ${edited.number}번 오류:`, err);
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    message: `${savedCount}개 문제가 자산화되었습니다.`,
+    problemCount: savedCount,
+    examId: examId,
+  });
+}
+
 async function saveProblemsToDB(
   jobId: string,
   results: LLMAnalysisResult[],
-  bookGroupId: string | null = null
+  bookGroupId: string | null = null,
+  imageUrlMap: Map<number, string> = new Map(),
+  editedProblems?: Array<{ number: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; [key: string]: any }>,
+  pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map()
 ): Promise<void> {
   // Use Admin Client to bypass RLS for background processing
   const supabase = supabaseAdmin;
@@ -503,18 +940,20 @@ async function saveProblemsToDB(
       .select('id')
       .single();
 
-    // 컬럼 에러 시 (PostgREST 스키마 캐시 문제) 최소 컬럼만으로 재시도
+    // 컬럼 에러 시 (PostgREST 스키마 캐시 문제) 최소 컬럼만으로 재시도 (book_group_id는 유지!)
     if (examResult.error && examResult.error.message.includes('column')) {
       console.warn(`[DB] Retrying exam insert with minimal columns: ${examResult.error.message}`);
+      const retryData: Record<string, any> = {
+        title: examInsertData.title,
+        description: examInsertData.description,
+        status: examInsertData.status,
+        created_by: createdBy,
+        institute_id: instituteId,
+      };
+      if (bookGroupId) retryData.book_group_id = bookGroupId;  // ★ book_group_id 유지
       examResult = await supabase
         .from('exams')
-        .insert({
-          title: examInsertData.title,
-          description: examInsertData.description,
-          status: examInsertData.status,
-          created_by: createdBy,
-          institute_id: instituteId,
-        })
+        .insert(retryData)
         .select('id')
         .single();
     }
@@ -526,15 +965,16 @@ async function saveProblemsToDB(
       // institute_id NOT NULL 에러 시 institute_id 없이 한번 더 시도 (003_exams.sql은 nullable)
       if (examError.message.includes('institute_id') || examError.message.includes('not-null')) {
         console.warn('[DB] Retrying without institute_id (nullable in migration)...');
+        const retryInsertData: Record<string, any> = {
+          title: examInsertData.title,
+          description: examInsertData.description,
+          status: examInsertData.status,
+          created_by: createdBy,
+        };
+        if (bookGroupId) retryInsertData.book_group_id = bookGroupId;  // ★ book_group_id 유지
         const retryResult = await supabase
           .from('exams')
-          .insert({
-            title: examInsertData.title,
-            description: examInsertData.description,
-            status: examInsertData.status,
-            created_by: createdBy,
-            // problem_count not in schema.sql, use total_points instead
-          })
+          .insert(retryInsertData)
           .select('id')
           .single();
 
@@ -555,7 +995,9 @@ async function saveProblemsToDB(
 
   let savedCount = 0;
 
+  let problemIndex = 0;
   for (const result of results) {
+    problemIndex++;
     try {
       // 문제 내용: 원본 OCR 텍스트 사용 (없으면 해설 steps에서 추출)
       const problemContent = result.originalText
@@ -564,9 +1006,20 @@ async function saveProblemsToDB(
 
       // 수식 포함 콘텐츠 구성
       const mathExprs = result.originalMathExpressions || [];
-      const contentWithMath = mathExprs.length > 0
+      let contentWithMath = mathExprs.length > 0
         ? `${problemContent}\n\n수식:\n${mathExprs.map(m => `$${m}$`).join('\n')}`
         : problemContent;
+
+      // ★ 크롭 이미지 URL 조회 (문제 번호 기반)
+      const problemNum = result.problemNumber || problemIndex;
+      const cropImageUrl = imageUrlMap.get(problemNum);
+      const imagesArray = cropImageUrl
+        ? [{ url: cropImageUrl, type: 'crop', label: `문제 ${problemNum} 크롭 이미지` }]
+        : [];
+
+      // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
+      // 문제 표시는 OCR 텍스트 + 표 + 수식을 원본 배치 그대로 렌더링하는 것이 목표
+      // 크롭 이미지는 원본 참조용/폴백으로만 사용
 
       // problems 테이블에 저장
       const { data: problem, error: problemError } = await supabase
@@ -577,11 +1030,25 @@ async function saveProblemsToDB(
           source_file_id: null,
           content_latex: contentWithMath,
           content_html: null,
-          solution_latex: result.solution.steps && result.solution.steps.length > 0
-            ? result.solution.steps
+          solution_latex: (() => {
+            const parts: string[] = [];
+            // 접근법
+            if (result.solution.approach) {
+              parts.push(`[풀이 접근] ${result.solution.approach}`);
+            }
+            // 단계별 풀이
+            if (result.solution.steps && result.solution.steps.length > 0) {
+              const stepsText = result.solution.steps
                 .map((s) => `${s.stepNumber}. ${s.description}\n${s.latex || ''}`)
-                .join('\n\n')
-            : result.solution.approach || '해설 자동 생성 실패',
+                .join('\n\n');
+              parts.push(stepsText);
+            }
+            // 최종 답
+            if (result.solution.finalAnswer) {
+              parts.push(`∴ 정답: ${result.solution.finalAnswer}`);
+            }
+            return parts.length > 0 ? parts.join('\n\n') : '해설 자동 생성 실패';
+          })(),
           solution_html: null,
           answer_json: {
             finalAnswer: result.solution.finalAnswer || '',
@@ -589,7 +1056,7 @@ async function saveProblemsToDB(
             correct_answer: result.solution.finalAnswer || '',
             choices: result.choices || [],
           },
-          images: [],
+          images: imagesArray,
           status: 'PENDING_REVIEW',
           ai_analysis: {
             classification: result.classification,
@@ -627,15 +1094,52 @@ async function saveProblemsToDB(
 
         // Exam-Problem 연결
         if (examId) {
-          try {
-            await supabase.from('exam_problems').insert({
-              exam_id: examId,
-              problem_id: problem.id,
-              sequence_number: savedCount,
-              points: 4
-            });
-          } catch (e) {
-            console.log('[DB] exam_problems link failed (might not exist)', e);
+          const { error: epError } = await supabase.from('exam_problems').insert({
+            exam_id: examId,
+            problem_id: problem.id,
+            sequence_number: savedCount,
+            points: 4,
+          });
+          if (epError) {
+            console.error(`[DB] exam_problems 연결 실패 (문제 #${savedCount}, problem ${problem.id}):`, epError.message, epError.details);
+          } else {
+            console.log(`[DB] exam_problems 연결 완료 (문제 #${savedCount} → exam ${examId})`);
+          }
+        }
+
+        // ★ YOLO 학습 데이터: detection_annotations 저장
+        // editedProblems에서 bbox를 찾거나, result.bbox를 사용
+        const problemNum = result.problemNumber || problemIndex;
+        const editedBbox = editedProblems?.find(ep => ep.number === problemNum)?.bbox;
+        const editedPageIndex = editedProblems?.find(ep => ep.number === problemNum)?.pageIndex;
+        const bbox = editedBbox || result.bbox;
+        const pageIdx = editedPageIndex ?? result.pageIndex;
+
+        if (bbox && bbox.w > 0.01 && bbox.h > 0.01 && pageIdx !== undefined) {
+          const pageNum = pageIdx + 1;
+          const pageImgInfo = pageImagePathMap.get(pageNum);
+          if (pageImgInfo) {
+            try {
+              await supabase.from('detection_annotations').insert({
+                problem_id: problem.id,
+                exam_id: examId,
+                job_id: jobId,
+                page_number: pageNum,
+                page_image_path: pageImgInfo.path,
+                page_width: pageImgInfo.width,
+                page_height: pageImgInfo.height,
+                bbox_x: bbox.x,
+                bbox_y: bbox.y,
+                bbox_w: bbox.w,
+                bbox_h: bbox.h,
+                class_label: 'problem',
+                problem_number: problemNum,
+                detection_source: editedBbox ? 'MANUAL' : 'MATHPIX',
+              });
+              console.log(`[DB] 문제 ${problemNum}번 YOLO 어노테이션 저장`);
+            } catch (annErr) {
+              console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패 (무시):`, annErr);
+            }
           }
         }
       }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   FolderOpen,
   FileText,
@@ -43,32 +43,36 @@ interface ExamProblem {
 }
 
 // ============================================================================
-// Mock Data
+// Book Groups Hook (DB에서 가져오기)
 // ============================================================================
 
-const MOCK_GROUPS: ExamGroup[] = [
-  { id: 'all', name: '전체', children: [] },
-  { id: 'g1', name: '금곡고', children: [] },
-  { id: 'g2', name: '용인고', children: [] },
-];
+function useBookGroups() {
+  const [groups, setGroups] = useState<ExamGroup[]>([{ id: 'all', name: '전체', children: [] }]);
+  const [isLoading, setIsLoading] = useState(true);
 
-function generateMockExamProblems(): ExamProblem[] {
-  return [
-    {
-      id: 'ep1', number: 1, difficulty: 2,
-      content: '$x - y = -3$, $xy = 3$일 때, $\\frac{x^2}{y} - \\frac{y^2}{x}$ 의 값은?',
-      choices: ['① $-18$', '② $-9$', '③ $-3$', '④ $3$', '⑤ $18$'],
-      answer: 1,
-      solution: '$\\frac{x^2}{y} - \\frac{y^2}{x} = \\frac{x^3-y^3}{xy} = \\frac{(x-y)(x^2+xy+y^2)}{xy}$\n$x-y=-3$, $(x-y)^2=9$, $x^2+y^2=9+6=15$\n$= \\frac{(-3)(15+3)}{3} = -18$',
-    },
-    {
-      id: 'ep2', number: 2, difficulty: 3,
-      content: '이차방정식 $2x^2 + kx - 3 = 0$의 두 근이 $\\alpha$, $\\beta$이고\n$(1-\\alpha)(2-2\\beta) = 6$일 때, $(1+\\alpha)(1+\\beta)$의 값은?',
-      choices: ['① $-7$', '② $-6$', '③ $-5$', '④ $-4$', '⑤ $-3$'],
-      answer: 4,
-      solution: '근과 계수의 관계: $\\alpha+\\beta=-\\frac{k}{2}$, $\\alpha\\beta=-\\frac{3}{2}$\n$(1-\\alpha)(1-\\beta)=3$이므로 $k=7$\n$(1+\\alpha)(1+\\beta) = 1+(\\alpha+\\beta)+\\alpha\\beta = 1-\\frac{7}{2}-\\frac{3}{2} = -4$',
-    },
-  ];
+  useEffect(() => {
+    async function fetchGroups() {
+      try {
+        const res = await fetch('/api/book-groups');
+        if (res.ok) {
+          const data = await res.json();
+          const dbGroups: ExamGroup[] = (data.groups || []).map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            children: [],
+          }));
+          setGroups([{ id: 'all', name: '전체', children: [] }, ...dbGroups]);
+        }
+      } catch (err) {
+        console.error('[ExamManagement] Failed to fetch book groups:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchGroups();
+  }, []);
+
+  return { groups, isLoading };
 }
 
 // ============================================================================
@@ -192,26 +196,22 @@ export default function ExamManagementPage() {
   const [subjectFilter, setSubjectFilter] = useState('공통수학1 [2022개정]');
 
   // DB hooks
-  const { exams: dbExams, isLoading: examsLoading } = useExamList();
+  const { exams: dbExams, isLoading: examsLoading, refetch: refetchExams } = useExamList();
   const { problems: dbProblems, examInfo, isLoading: problemsLoading } = useExamProblems(selectedExamId);
+  const { groups: bookGroups } = useBookGroups();
 
-  const mockProblems = useMemo(() => generateMockExamProblems(), []);
-
-  // DB 문제 → ExamProblem 형식으로 변환 (mock fallback)
+  // DB 문제 → ExamProblem 형식으로 변환
   const problems: ExamProblem[] = useMemo(() => {
-    if (dbProblems.length > 0) {
-      return dbProblems.map((p) => ({
-        id: p.id,
-        number: p.number,
-        content: p.content,
-        choices: p.choices,
-        answer: p.answer,
-        solution: p.solution,
-        difficulty: p.difficulty,
-      }));
-    }
-    return mockProblems;
-  }, [dbProblems, mockProblems]);
+    return dbProblems.map((p) => ({
+      id: p.id,
+      number: p.number,
+      content: p.content,
+      choices: p.choices,
+      answer: p.answer,
+      solution: p.solution,
+      difficulty: p.difficulty,
+    }));
+  }, [dbProblems]);
 
   // 시험지 목록 (DB 데이터 우선, fallback mock)
   const examList = useMemo(() => {
@@ -219,11 +219,10 @@ export default function ExamManagementPage() {
     return [];
   }, [dbExams]);
 
-  // 선택된 시험지 목록 (그룹 필터는 추후 구현, 현재는 전체)
+  // 선택된 시험지 목록 (그룹 필터링)
   const groupExams = useMemo(() => {
-    if (selectedGroupId === 'all') return examList;
-    // 그룹 필터링 로직 (추후 DB에 group 컬럼 추가 시 활용)
-    return examList;
+    if (selectedGroupId === 'all' || !selectedGroupId) return examList;
+    return examList.filter((e: any) => e.book_group_id === selectedGroupId);
   }, [selectedGroupId, examList]);
 
   // 첫 시험지 자동 선택
@@ -237,8 +236,36 @@ export default function ExamManagementPage() {
     return groupExams.find((e) => e.id === selectedExamId);
   }, [selectedExamId, groupExams]);
 
+  // ★ 시험지 삭제 핸들러
+  const [isDeleting, setIsDeleting] = useState(false);
+  const handleDeleteExam = useCallback(async () => {
+    if (!selectedExamId || isDeleting) return;
+
+    const examTitle = selectedExam?.title || '선택된 시험지';
+    if (!confirm(`"${examTitle}"을(를) 삭제하시겠습니까?\n\n삭제된 시험지는 복구할 수 없습니다.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/exams/${selectedExamId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSelectedExamId(null);
+        await refetchExams();
+      } else {
+        const data = await res.json();
+        alert(`❌ 삭제 실패: ${data.error || data.detail || '알 수 없는 오류'}`);
+      }
+    } catch (err) {
+      console.error('[ExamManagement] Delete error:', err);
+      alert('❌ 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [selectedExamId, selectedExam, isDeleting, refetchExams]);
+
   const selectedGroupName = useMemo(() => {
-    return MOCK_GROUPS.find((g) => g.id === selectedGroupId)?.name || '전체';
+    return bookGroups.find((g) => g.id === selectedGroupId)?.name || '전체';
   }, [selectedGroupId]);
 
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
@@ -269,7 +296,7 @@ export default function ExamManagementPage() {
         <div className="w-52 flex-shrink-0 border-r border-zinc-800/50 flex flex-col">
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800/50">
             <span className="text-xs font-bold text-zinc-300">
-              시험지 그룹 <span className="text-cyan-400">{MOCK_GROUPS.length - 1}개</span>
+              시험지 그룹 <span className="text-cyan-400">{bookGroups.length - 1}개</span>
             </span>
             <button
               type="button"
@@ -280,7 +307,7 @@ export default function ExamManagementPage() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-            {MOCK_GROUPS.map((group) => (
+            {bookGroups.map((group) => (
               <GroupTreeItem
                 key={group.id}
                 group={group}
@@ -413,7 +440,9 @@ export default function ExamManagementPage() {
                   </button>
                   <button
                     type="button"
-                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10"
+                    onClick={handleDeleteExam}
+                    disabled={isDeleting}
+                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 disabled:opacity-50"
                     title="삭제"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

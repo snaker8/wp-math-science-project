@@ -12,7 +12,7 @@ export {
   processUploadJob,
   getStatusLabel,
   getStatusColor,
-  MATH_TYPE_HIERARCHY,
+  MATH_CURRICULUM_SYSTEM,
   type JobUpdateCallback,
   type FileType,
 } from './cloud-flow';

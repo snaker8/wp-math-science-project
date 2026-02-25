@@ -21,6 +21,7 @@ export interface ExamProblemData {
   typeCode: string;
   typeName: string;
   source: string;
+  images?: Array<{ url: string; type: string; label: string }>;
 }
 
 export interface ExamInfo {
@@ -65,34 +66,35 @@ function extractChoicesFromLatex(latex: string): { content: string; choices: str
     return { content: mainContent, choices };
   }
 
-  // 2차: (1)~(5) 패턴 시도 → ①~⑤로 변환하여 표시
-  const numberedMarkers = ['(1)', '(2)', '(3)', '(4)', '(5)'];
+  // 2차: (1)~(5) 패턴 시도 → 소문제인지 선택지인지 판별
   const firstNumberedIdx = latex.indexOf('(1)');
   if (firstNumberedIdx !== -1) {
-    // (1) 앞에 배점 패턴 (예: "2점]") 이 있으면 배점 앞까지가 본문
-    const beforeChoices = latex.substring(0, firstNumberedIdx);
-    const pointsMatch = beforeChoices.match(/\d+점\]\s*$/);
-    mainContent = beforeChoices.trim();
-
     const remaining = latex.substring(firstNumberedIdx);
 
-    for (let i = 0; i < numberedMarkers.length; i++) {
-      const marker = numberedMarkers[i];
-      const nextMarker = numberedMarkers[i + 1];
-      const startIdx = remaining.indexOf(marker);
-      if (startIdx === -1) continue;
+    // ★ 소문제 판별: "구하시오", "구하여라", "[N점]" 등이 있으면 소문제 → 분리하지 않음
+    const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+    if (!subProblemPatterns.test(remaining)) {
+      const numberedMarkers = ['(1)', '(2)', '(3)', '(4)', '(5)'];
+      mainContent = latex.substring(0, firstNumberedIdx).trim();
 
-      let endIdx = nextMarker ? remaining.indexOf(nextMarker) : remaining.length;
-      if (endIdx === -1) endIdx = remaining.length;
+      for (let i = 0; i < numberedMarkers.length; i++) {
+        const marker = numberedMarkers[i];
+        const nextMarker = numberedMarkers[i + 1];
+        const startIdx = remaining.indexOf(marker);
+        if (startIdx === -1) continue;
 
-      let choiceText = remaining.substring(startIdx, endIdx).trim();
-      // (1) → ① 변환
-      choiceText = choiceText.replace(/^\((\d)\)/, (_, num) => circledMarkers[parseInt(num) - 1] || `(${num})`);
-      if (choiceText) choices.push(choiceText);
+        let endIdx = nextMarker ? remaining.indexOf(nextMarker) : remaining.length;
+        if (endIdx === -1) endIdx = remaining.length;
+
+        let choiceText = remaining.substring(startIdx, endIdx).trim();
+        // (1) → ① 변환
+        choiceText = choiceText.replace(/^\((\d)\)/, (_, num) => circledMarkers[parseInt(num) - 1] || `(${num})`);
+        if (choiceText) choices.push(choiceText);
+      }
+
+      mainContent = mainContent.replace(/\n{3,}/g, '\n\n').trim();
+      return { content: mainContent, choices };
     }
-
-    mainContent = mainContent.replace(/\n{3,}/g, '\n\n').trim();
-    return { content: mainContent, choices };
   }
 
   // $ 기호로 감싸진 수학식 정리
@@ -144,7 +146,15 @@ function toExamProblemData(
     ? problem.classifications[0]
     : problem.classifications;
 
-  const { content, choices } = extractChoicesFromLatex(problem.content_latex || '');
+  // ★ 1순위: answer_json.choices (자산화 시 별도 저장된 선택지)
+  const answerJson = problem.answer_json || {};
+  const dbChoices: string[] = Array.isArray(answerJson.choices) ? answerJson.choices : [];
+
+  // ★ 2순위: content_latex에서 추출 (fallback)
+  const { content, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
+
+  // DB에 저장된 선택지가 있으면 우선 사용
+  const choices = dbChoices.length > 0 ? dbChoices : extractedChoices;
 
   // type_code에서 typeName 추론
   const typeCode = classification?.type_code || '';
@@ -159,7 +169,7 @@ function toExamProblemData(
     cognitiveDomain: classification?.cognitive_domain || 'UNDERSTANDING',
     content,
     choices,
-    answer: extractAnswerNumber(problem.answer_json || {}),
+    answer: extractAnswerNumber(answerJson),
     solution: problem.solution_latex || '',
     year: problem.source_year ? String(problem.source_year) : '',
     typeCode,

@@ -1,0 +1,914 @@
+{
+  "curriculum": "2022 개정",
+  "subject": "수학",
+  "schoolLevel": "초등학교",
+  "gradeGroup": "1~2학년군",
+  "level": "ES12",
+  "areas": [
+    {
+      "area": "수와 연산",
+      "domain": "NUM",
+      "standards": [
+        {
+          "code": "[2수01-01]",
+          "content": "수의 필요성을 인식하면서 0과 100까지의 수 개념을 이해하고, 수를 세고 읽고 쓸 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-01-001",
+              "typeName": "100까지의 수 세기",
+              "description": "1부터 100까지 수를 순서대로 또는 묶어 세기",
+              "solutionMethod": "수 세기 활동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["수 세기", "100까지의 수", "묶어 세기"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-01-002",
+              "typeName": "수 읽기와 쓰기",
+              "description": "0부터 100까지의 수를 바르게 읽고 쓰기",
+              "solutionMethod": "수 표기법 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["수 읽기", "수 쓰기", "0의 개념"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-01-003",
+              "typeName": "수의 순서와 수직선",
+              "description": "수의 순서를 이해하고 수직선에 수를 나타내기",
+              "solutionMethod": "수직선 활용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["수의 순서", "수직선", "몇째"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-02]",
+          "content": "일, 십, 백, 천의 자릿값을 이해하고, 네 자리 이하의 수를 읽고 쓸 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-02-001",
+              "typeName": "자릿값 이해",
+              "description": "일, 십, 백, 천의 자리에서 숫자가 나타내는 값 이해하기",
+              "solutionMethod": "자릿값 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["자릿값", "일의 자리", "십의 자리", "백의 자리", "천의 자리"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-02-002",
+              "typeName": "네 자리 이하 수 읽기와 쓰기",
+              "description": "네 자리 이하의 수를 정확하게 읽고 쓰기",
+              "solutionMethod": "수 표기 규칙",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["네 자리 수", "수 읽기", "수 쓰기"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-02-003",
+              "typeName": "자릿값에 따른 수 표현",
+              "description": "주어진 수를 자릿값에 따라 분해하여 표현하기 (예: 3254 = 3000+200+50+4)",
+              "solutionMethod": "자릿값 분해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["자릿값 분해", "수 표현", "전개식"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-03]",
+          "content": "네 자리 이하의 수의 계열을 이해하고, 수의 크기를 비교할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-03-001",
+              "typeName": "수의 계열 이해",
+              "description": "수의 순서와 뛰어 세기를 통해 수의 계열 파악하기",
+              "solutionMethod": "뛰어 세기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["수의 계열", "뛰어 세기", "수 배열"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-03-002",
+              "typeName": "네 자리 이하 수의 크기 비교",
+              "description": "두 수의 크기를 비교하여 부등호로 나타내기",
+              "solutionMethod": "자릿값 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["크기 비교", "부등호", "큰 수", "작은 수"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-04]",
+          "content": "하나의 수를 두 수로 분해하고 두 수를 하나의 수로 합성하는 활동을 통하여 수 감각을 기른다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-04-001",
+              "typeName": "수의 분해",
+              "description": "하나의 수를 두 수의 합으로 나타내기 (예: 7 = 3+4)",
+              "solutionMethod": "가르기 활동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["수 가르기", "수의 분해", "모으기"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-04-002",
+              "typeName": "수의 합성",
+              "description": "두 수를 하나의 수로 합성하기 (예: 3과 4를 모으면 7)",
+              "solutionMethod": "모으기 활동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["수 모으기", "수의 합성"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-04-003",
+              "typeName": "10 만들기와 수 감각",
+              "description": "10을 두 수로 가르기, 두 수를 모아 10 만들기 등 수 감각 활동",
+              "solutionMethod": "10의 보수 활용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["10 만들기", "수 감각", "보수"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-05]",
+          "content": "덧셈과 뺄셈이 이루어지는 실생활 상황을 통하여 덧셈과 뺄셈의 의미를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-05-001",
+              "typeName": "덧셈 상황 이해",
+              "description": "합치기, 첨가 등 실생활 상황에서 덧셈의 의미 이해하기",
+              "solutionMethod": "상황 파악 후 덧셈식 세우기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["덧셈", "합치기", "실생활", "덧셈 상황"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-05-002",
+              "typeName": "뺄셈 상황 이해",
+              "description": "남는 것 구하기, 차이 구하기 등 실생활 상황에서 뺄셈의 의미 이해하기",
+              "solutionMethod": "상황 파악 후 뺄셈식 세우기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["뺄셈", "남는 것", "차이", "뺄셈 상황"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-05-003",
+              "typeName": "덧셈·뺄셈 문장제",
+              "description": "실생활 문장을 읽고 덧셈식 또는 뺄셈식으로 나타내어 풀기",
+              "solutionMethod": "문장 해석 후 식 세우기",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["문장제", "식 세우기", "덧셈", "뺄셈"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-06]",
+          "content": "두 자리 수의 범위에서 덧셈과 뺄셈의 계산 원리를 이해하고 그 계산을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-06-001",
+              "typeName": "받아올림 없는 두 자리 수 덧셈",
+              "description": "받아올림이 없는 (두 자리 수)+(한/두 자리 수) 계산",
+              "solutionMethod": "자릿값별 더하기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["두 자리 수", "덧셈", "받아올림 없는"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-06-002",
+              "typeName": "받아올림 있는 두 자리 수 덧셈",
+              "description": "받아올림이 있는 (두 자리 수)+(한/두 자리 수) 계산",
+              "solutionMethod": "자릿값별 더하기 + 받아올림",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["두 자리 수", "덧셈", "받아올림"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-06-003",
+              "typeName": "받아내림 없는 두 자리 수 뺄셈",
+              "description": "받아내림이 없는 (두 자리 수)-(한/두 자리 수) 계산",
+              "solutionMethod": "자릿값별 빼기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["두 자리 수", "뺄셈", "받아내림 없는"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-06-004",
+              "typeName": "받아내림 있는 두 자리 수 뺄셈",
+              "description": "받아내림이 있는 (두 자리 수)-(한/두 자리 수) 계산",
+              "solutionMethod": "자릿값별 빼기 + 받아내림",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["두 자리 수", "뺄셈", "받아내림"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-07]",
+          "content": "덧셈과 뺄셈의 관계를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-07-001",
+              "typeName": "덧셈과 뺄셈의 역연산 관계",
+              "description": "덧셈식에서 뺄셈식을, 뺄셈식에서 덧셈식을 만들기 (예: 3+4=7이면 7-4=3)",
+              "solutionMethod": "역연산 관계 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["역연산", "덧셈과 뺄셈 관계", "관련 식"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-07-002",
+              "typeName": "한 가지 식에서 관련된 식 만들기",
+              "description": "하나의 덧셈식(또는 뺄셈식)에서 관련된 나머지 세 식 완성하기",
+              "solutionMethod": "네 관련 식 만들기",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["관련 식", "덧셈", "뺄셈", "관계"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-08]",
+          "content": "두 자리 수의 범위에서 세 수의 덧셈과 뺄셈을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-08-001",
+              "typeName": "세 수의 덧셈",
+              "description": "세 수를 연속하여 더하는 계산 (예: 12+5+3)",
+              "solutionMethod": "순서대로 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["세 수의 덧셈", "연속 덧셈"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-08-002",
+              "typeName": "세 수의 뺄셈",
+              "description": "세 수를 연속하여 빼는 계산 (예: 25-8-3)",
+              "solutionMethod": "순서대로 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["세 수의 뺄셈", "연속 뺄셈"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-08-003",
+              "typeName": "세 수의 덧셈과 뺄셈 혼합",
+              "description": "덧셈과 뺄셈이 섞인 세 수의 혼합 계산 (예: 15+7-4)",
+              "solutionMethod": "앞에서부터 순서대로 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["혼합 계산", "덧셈", "뺄셈", "세 수"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-09]",
+          "content": "□가 사용된 덧셈식과 뺄셈식에서 □의 값을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-09-001",
+              "typeName": "□가 있는 덧셈식",
+              "description": "□+3=7, 5+□=9 등 덧셈식에서 □의 값 구하기",
+              "solutionMethod": "역연산 활용",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["□ 구하기", "덧셈식", "미지수"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-09-002",
+              "typeName": "□가 있는 뺄셈식",
+              "description": "□-3=4, 9-□=5 등 뺄셈식에서 □의 값 구하기",
+              "solutionMethod": "역연산 활용",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["□ 구하기", "뺄셈식", "미지수"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-09-003",
+              "typeName": "□가 있는 덧셈·뺄셈 문장제",
+              "description": "실생활 상황에서 □를 사용한 식을 세우고 □의 값 구하기",
+              "solutionMethod": "식 세우기 + 역연산",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["□ 구하기", "문장제", "식 세우기"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-10]",
+          "content": "곱셈이 이루어지는 실생활 상황을 통하여 곱셈의 의미를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-10-001",
+              "typeName": "묶어 세기와 곱셈",
+              "description": "같은 수를 여러 번 더하는 상황을 곱셈으로 나타내기 (예: 3+3+3+3 = 3×4)",
+              "solutionMethod": "묶어 세기 → 곱셈식",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["묶어 세기", "곱셈의 의미", "같은 수 더하기"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-10-002",
+              "typeName": "배 개념과 곱셈",
+              "description": "'몇의 몇 배'를 이해하고 곱셈식으로 나타내기",
+              "solutionMethod": "배 개념 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["배", "곱셈", "몇 배"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-10-003",
+              "typeName": "곱셈 상황 문장제",
+              "description": "실생활 상황에서 곱셈식을 세우고 해결하기",
+              "solutionMethod": "상황 파악 후 곱셈식 세우기",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["곱셈 문장제", "실생활", "곱셈식"]
+            }
+          ]
+        },
+        {
+          "code": "[2수01-11]",
+          "content": "곱셈구구를 이해하고, 한 자리 수의 곱셈을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-NUM-11-001",
+              "typeName": "곱셈구구 외우기",
+              "description": "2단부터 9단까지 곱셈구구를 이해하고 암기하기",
+              "solutionMethod": "곱셈구구 암기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["곱셈구구", "구구단", "암기"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-11-002",
+              "typeName": "한 자리 수의 곱셈 계산",
+              "description": "곱셈구구를 활용하여 한 자리 수끼리의 곱셈 계산하기",
+              "solutionMethod": "곱셈구구 적용",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["한 자리 수", "곱셈", "계산"]
+            },
+            {
+              "typeCode": "MA-ES12-NUM-11-003",
+              "typeName": "곱셈구구 활용 문제",
+              "description": "곱셈구구를 이용하여 실생활 문제를 해결하기",
+              "solutionMethod": "곱셈구구 활용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["곱셈구구 활용", "실생활", "문제 해결"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "변화와 관계",
+      "domain": "PAT",
+      "standards": [
+        {
+          "code": "[2수02-01]",
+          "content": "물체, 무늬, 수 등의 배열에서 규칙을 찾아 여러 가지 방법으로 표현할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-PAT-01-001",
+              "typeName": "물체·무늬 배열의 규칙 찾기",
+              "description": "반복되는 물체나 무늬의 배열에서 규칙을 찾고 다음에 올 것 예측하기",
+              "solutionMethod": "반복 패턴 파악",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["규칙 찾기", "배열", "반복 패턴", "무늬"]
+            },
+            {
+              "typeCode": "MA-ES12-PAT-01-002",
+              "typeName": "수 배열의 규칙 찾기",
+              "description": "수 배열표에서 규칙을 찾고 빈칸에 알맞은 수 넣기",
+              "solutionMethod": "수의 증감 패턴 파악",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["수 배열", "규칙", "빈칸 채우기"]
+            },
+            {
+              "typeCode": "MA-ES12-PAT-01-003",
+              "typeName": "규칙을 여러 방법으로 표현하기",
+              "description": "발견한 규칙을 수, 말, 그림 등 다양한 방법으로 표현하기",
+              "solutionMethod": "다양한 표현 방법 활용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["규칙 표현", "다양한 방법", "설명하기"]
+            }
+          ]
+        },
+        {
+          "code": "[2수02-02]",
+          "content": "자신이 정한 규칙에 따라 물체, 무늬, 수 등을 배열할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-PAT-02-001",
+              "typeName": "규칙에 따라 배열 만들기",
+              "description": "스스로 정한 규칙에 따라 물체, 무늬, 수 등을 배열하기",
+              "solutionMethod": "규칙 정하기 + 배열 구성",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["규칙 만들기", "배열 구성", "창의적 표현"]
+            },
+            {
+              "typeCode": "MA-ES12-PAT-02-002",
+              "typeName": "규칙적인 수 배열 만들기",
+              "description": "일정한 규칙을 정하여 수를 배열하고 규칙 설명하기",
+              "solutionMethod": "수의 규칙 설정 + 나열",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["수 배열 만들기", "규칙 설정", "설명하기"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "도형과 측정",
+      "domain": "GEO",
+      "standards": [
+        {
+          "code": "[2수03-01]",
+          "content": "교실 및 생활 주변에서 직육면체, 원기둥, 구의 모양을 찾을 수 있고, 이러한 모양을 이용하여 여러 가지 모양을 만들 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-01-001",
+              "typeName": "입체도형 모양 찾기",
+              "description": "생활 주변에서 상자(직육면체), 둥근기둥(원기둥), 공(구) 모양 찾기",
+              "solutionMethod": "입체도형 특징 관찰",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["직육면체", "원기둥", "구", "모양 찾기"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-01-002",
+              "typeName": "입체도형으로 모양 만들기",
+              "description": "상자, 둥근기둥, 공 모양을 이용하여 여러 가지 모양 구성하기",
+              "solutionMethod": "입체도형 조합",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["모양 만들기", "입체도형", "조합"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-01-003",
+              "typeName": "입체도형 모양 분류",
+              "description": "여러 물건을 직육면체, 원기둥, 구 모양으로 분류하기",
+              "solutionMethod": "특징에 따른 분류",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["모양 분류", "입체도형", "구분하기"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-02]",
+          "content": "쌓기나무를 이용하여 여러 가지 입체도형을 만들고, 그 입체도형의 위치나 방향을 말로 설명할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-02-001",
+              "typeName": "쌓기나무로 모양 만들기",
+              "description": "쌓기나무를 이용하여 주어진 모양을 만들거나 개수 세기",
+              "solutionMethod": "쌓기나무 조작 활동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["쌓기나무", "모양 만들기", "개수 세기"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-02-002",
+              "typeName": "위치와 방향 설명하기",
+              "description": "쌓기나무의 위치(위, 아래, 앞, 뒤, 옆)와 방향을 말로 설명하기",
+              "solutionMethod": "위치·방향 언어 표현",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["위치", "방향", "위", "아래", "앞", "뒤", "옆"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-03]",
+          "content": "교실 및 생활 주변에서 삼각형, 사각형, 원의 모양을 찾을 수 있고, 이러한 모양을 이용하여 여러 가지 모양을 꾸밀 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-03-001",
+              "typeName": "평면도형 모양 찾기",
+              "description": "생활 주변에서 삼각형, 사각형, 원 모양 찾기",
+              "solutionMethod": "평면도형 특징 관찰",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["삼각형", "사각형", "원", "모양 찾기"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-03-002",
+              "typeName": "평면도형으로 모양 꾸미기",
+              "description": "삼각형, 사각형, 원을 이용하여 다양한 모양 꾸미기",
+              "solutionMethod": "평면도형 조합",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["모양 꾸미기", "평면도형", "조합"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-04]",
+          "content": "삼각형, 사각형, 원을 직관적으로 이해하고 그릴 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-04-001",
+              "typeName": "삼각형·사각형·원의 직관적 이해",
+              "description": "삼각형(꼭짓점 3개, 변 3개), 사각형(꼭짓점 4개, 변 4개), 원의 특징 이해하기",
+              "solutionMethod": "구성 요소 파악",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["삼각형", "사각형", "원", "꼭짓점", "변"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-04-002",
+              "typeName": "삼각형·사각형·원 그리기",
+              "description": "점, 점판, 모눈종이를 이용하여 삼각형, 사각형, 원 그리기",
+              "solutionMethod": "도형 그리기 활동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["도형 그리기", "삼각형", "사각형", "원"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-04-003",
+              "typeName": "도형 판별하기",
+              "description": "주어진 도형이 삼각형, 사각형, 원 중 어떤 것인지 판별하기",
+              "solutionMethod": "꼭짓점·변 수 확인",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["도형 판별", "삼각형", "사각형", "원"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-05]",
+          "content": "삼각형과 사각형의 공통점을 찾을 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-05-001",
+              "typeName": "삼각형과 사각형의 공통점 찾기",
+              "description": "삼각형과 사각형이 공통으로 가지는 성질(곧은 변, 꼭짓점) 찾기",
+              "solutionMethod": "비교·분석",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["공통점", "삼각형", "사각형", "비교"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-05-002",
+              "typeName": "삼각형과 사각형의 차이점 찾기",
+              "description": "삼각형과 사각형의 변의 수, 꼭짓점 수 등 차이점 찾기",
+              "solutionMethod": "구성 요소 비교",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["차이점", "삼각형", "사각형", "변의 수", "꼭짓점 수"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-06]",
+          "content": "구체물의 길이, 들이, 무게, 넓이를 비교하여 각각 '길다, 짧다', '많다, 적다', '무겁다, 가볍다', '넓다, 좁다' 등을 구별하여 말할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-06-001",
+              "typeName": "길이 비교하기",
+              "description": "두 물건의 길이를 직접 또는 간접 비교하여 '길다, 짧다'로 표현하기",
+              "solutionMethod": "직접·간접 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["길이 비교", "길다", "짧다"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-06-002",
+              "typeName": "들이·무게·넓이 비교하기",
+              "description": "두 물건의 들이, 무게, 넓이를 비교하여 적절한 표현(많다/적다, 무겁다/가볍다, 넓다/좁다)으로 나타내기",
+              "solutionMethod": "직접·간접 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["들이 비교", "무게 비교", "넓이 비교", "많다", "적다", "무겁다", "가볍다"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-06-003",
+              "typeName": "여러 물건의 양 비교 및 순서 짓기",
+              "description": "세 개 이상의 물건에서 길이, 들이, 무게, 넓이를 비교하여 순서 매기기",
+              "solutionMethod": "순서대로 비교",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["순서 매기기", "비교", "가장 긴", "가장 짧은"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-07]",
+          "content": "시계를 보고 시각을 '몇 시 몇 분'까지 읽을 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-07-001",
+              "typeName": "몇 시 읽기",
+              "description": "시계에서 정각(몇 시)을 읽기",
+              "solutionMethod": "시침 읽기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["시계", "몇 시", "정각", "시침"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-07-002",
+              "typeName": "몇 시 30분 읽기",
+              "description": "시계에서 30분 단위의 시각 읽기",
+              "solutionMethod": "시침·분침 읽기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["시계", "몇 시 30분", "분침"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-07-003",
+              "typeName": "몇 시 몇 분 읽기",
+              "description": "시계에서 분 단위까지 정확하게 시각 읽기",
+              "solutionMethod": "시침·분침 동시 읽기",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["시계", "몇 시 몇 분", "시각 읽기"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-08]",
+          "content": "1시간은 60분임을 알고, 시간을 '시간'과 '분'으로 표현할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-08-001",
+              "typeName": "1시간=60분 관계 이해",
+              "description": "1시간이 60분임을 이해하고 시간과 분의 관계 파악하기",
+              "solutionMethod": "시간 단위 변환",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["1시간", "60분", "시간과 분"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-08-002",
+              "typeName": "시간을 시와 분으로 표현하기",
+              "description": "주어진 시간을 '몇 시간 몇 분'으로 나타내기 (예: 90분 = 1시간 30분)",
+              "solutionMethod": "단위 변환",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["시간 표현", "단위 변환", "시간", "분"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-09]",
+          "content": "1분, 1시간, 1일, 1주일, 1개월, 1년 사이의 관계를 이해한다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-09-001",
+              "typeName": "시간 단위 사이의 관계",
+              "description": "1분, 1시간, 1일, 1주일, 1개월, 1년 사이의 관계 이해하기",
+              "solutionMethod": "시간 단위 관계 정리",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["시간 단위", "1일", "1주일", "1개월", "1년"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-09-002",
+              "typeName": "달력 읽기와 날짜 계산",
+              "description": "달력을 보고 요일, 날짜를 읽고 며칠 후/전의 날짜 구하기",
+              "solutionMethod": "달력 활용",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["달력", "요일", "날짜 계산"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-09-003",
+              "typeName": "시간 단위 변환",
+              "description": "시간 단위 사이를 변환하기 (예: 2주일 = 14일, 1년 = 12개월)",
+              "solutionMethod": "단위 간 변환",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["단위 변환", "주일", "일", "개월"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-10]",
+          "content": "1cm와 1m의 단위를 알고, 실생활에서 길이를 측정할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-10-001",
+              "typeName": "1cm 단위 이해와 측정",
+              "description": "1cm의 길이를 알고 자를 사용하여 길이를 cm 단위로 측정하기",
+              "solutionMethod": "자로 측정",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["1cm", "센티미터", "자", "측정"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-10-002",
+              "typeName": "1m 단위 이해와 측정",
+              "description": "1m의 길이를 알고 실생활에서 m 단위로 길이 측정하기",
+              "solutionMethod": "줄자·미터자 활용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["1m", "미터", "측정", "실생활"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-11]",
+          "content": "1m=100cm임을 알고, 길이를 m와 cm로 표현할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-11-001",
+              "typeName": "1m=100cm 관계 이해",
+              "description": "1m와 100cm가 같은 길이임을 이해하고 단위 변환하기",
+              "solutionMethod": "단위 관계 파악",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["1m", "100cm", "단위 관계"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-11-002",
+              "typeName": "길이를 m와 cm로 표현하기",
+              "description": "길이를 m와 cm를 사용하여 나타내기 (예: 135cm = 1m 35cm)",
+              "solutionMethod": "단위 변환 표현",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["길이 표현", "m와 cm", "단위 변환"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-12]",
+          "content": "길이를 어림하여 보고, 길이에 대한 양감을 기른다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-12-001",
+              "typeName": "길이 어림하기",
+              "description": "물건의 길이를 어림(짐작)한 후 실제로 재어 비교하기",
+              "solutionMethod": "어림 후 검증",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["어림", "길이 짐작", "양감"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-12-002",
+              "typeName": "길이의 양감 기르기",
+              "description": "1cm, 1m의 기준을 활용하여 실생활 물건의 길이를 짐작하기",
+              "solutionMethod": "기준 길이 활용 어림",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["양감", "기준 길이", "어림 측정"]
+            }
+          ]
+        },
+        {
+          "code": "[2수03-13]",
+          "content": "길이의 덧셈과 뺄셈을 할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-GEO-13-001",
+              "typeName": "같은 단위 길이의 덧셈·뺄셈",
+              "description": "같은 단위(cm 또는 m)의 길이끼리 더하거나 빼기",
+              "solutionMethod": "같은 단위끼리 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["길이 덧셈", "길이 뺄셈", "같은 단위"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-13-002",
+              "typeName": "m와 cm가 섞인 길이 계산",
+              "description": "m와 cm가 함께 사용된 길이의 덧셈과 뺄셈 (예: 1m 30cm + 50cm)",
+              "solutionMethod": "단위별 계산 또는 통일 후 계산",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["길이 계산", "m와 cm", "혼합 단위"]
+            },
+            {
+              "typeCode": "MA-ES12-GEO-13-003",
+              "typeName": "길이 계산 문장제",
+              "description": "실생활 상황에서 길이의 덧셈·뺄셈을 활용하여 문제 해결하기",
+              "solutionMethod": "식 세우기 + 길이 계산",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 3],
+              "keywords": ["길이 문장제", "실생활", "길이 계산 활용"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "자료와 가능성",
+      "domain": "DAT",
+      "standards": [
+        {
+          "code": "[2수04-01]",
+          "content": "교실 및 생활 주변에 있는 사물들을 정해진 기준 또는 자신이 정한 기준으로 분류하여 개수를 세고, 그 결과를 말할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-DAT-01-001",
+              "typeName": "기준에 따라 분류하기",
+              "description": "주어진 기준(모양, 색깔, 크기 등)에 따라 사물을 분류하기",
+              "solutionMethod": "기준 설정 + 분류 활동",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["분류", "기준", "모양", "색깔", "크기"]
+            },
+            {
+              "typeCode": "MA-ES12-DAT-01-002",
+              "typeName": "분류한 결과 세기와 설명하기",
+              "description": "분류한 각 그룹의 개수를 세고, 가장 많은/적은 것 등 결과 설명하기",
+              "solutionMethod": "세기 + 비교 + 설명",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["개수 세기", "결과 설명", "가장 많은", "가장 적은"]
+            },
+            {
+              "typeCode": "MA-ES12-DAT-01-003",
+              "typeName": "자신만의 기준으로 분류하기",
+              "description": "스스로 기준을 정하여 사물을 분류하고 그 이유 설명하기",
+              "solutionMethod": "기준 정하기 + 분류 + 설명",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["기준 정하기", "분류", "이유 설명"]
+            }
+          ]
+        },
+        {
+          "code": "[2수04-02]",
+          "content": "분류한 결과를 표로 나타내고, 표로 나타내면 편리한 점을 말할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-DAT-02-001",
+              "typeName": "분류 결과를 표로 나타내기",
+              "description": "분류하여 센 결과를 표의 빈칸에 알맞게 채워 넣기",
+              "solutionMethod": "표 작성",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["표", "분류 결과", "빈칸 채우기"]
+            },
+            {
+              "typeCode": "MA-ES12-DAT-02-002",
+              "typeName": "표 읽기와 해석하기",
+              "description": "주어진 표에서 정보를 읽고 비교하여 질문에 답하기",
+              "solutionMethod": "표 해석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["표 읽기", "표 해석", "정보 비교"]
+            },
+            {
+              "typeCode": "MA-ES12-DAT-02-003",
+              "typeName": "표의 편리함 이해하기",
+              "description": "표로 나타내면 편리한 점을 말하고, 자료 정리에 표 활용하기",
+              "solutionMethod": "표의 장점 이해",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["표의 편리함", "자료 정리", "비교"]
+            }
+          ]
+        },
+        {
+          "code": "[2수04-03]",
+          "content": "분류한 결과를 ○, ×, / 등을 이용하여 그래프로 나타내고, 그래프로 나타내면 편리한 점을 말할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-ES12-DAT-03-001",
+              "typeName": "○, ×, / 그래프 그리기",
+              "description": "분류한 결과를 ○, ×, / 등의 기호를 사용하여 그래프로 나타내기",
+              "solutionMethod": "기호 그래프 작성",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["그래프", "기호", "○", "×", "/"]
+            },
+            {
+              "typeCode": "MA-ES12-DAT-03-002",
+              "typeName": "그래프 읽기와 해석하기",
+              "description": "○, ×, / 그래프에서 정보를 읽고 비교하여 질문에 답하기",
+              "solutionMethod": "그래프 해석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["그래프 읽기", "그래프 해석", "비교"]
+            },
+            {
+              "typeCode": "MA-ES12-DAT-03-003",
+              "typeName": "그래프의 편리함 이해하기",
+              "description": "그래프로 나타내면 편리한 점을 말하고, 표와 그래프를 비교하기",
+              "solutionMethod": "그래프 장점 파악",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["그래프의 편리함", "표와 그래프 비교", "자료 표현"]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "_statistics": {
+    "totalStandards": 29,
+    "totalTypes": 78,
+    "avgTypesPerStandard": 2.69
+  }
+}

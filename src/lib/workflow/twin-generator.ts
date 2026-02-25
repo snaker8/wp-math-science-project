@@ -251,6 +251,35 @@ const DEFAULT_OPTIONS: Required<TwinGenerationOptions> = {
   numberVariationRatio: 0.7,
 };
 
+// ============================================================================
+// 이미지 추출/재삽입 유틸리티
+// ============================================================================
+
+const IMAGE_MARKDOWN_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
+
+/**
+ * content에서 ![alt](url) 이미지 마크다운을 분리
+ * - base64 이미지가 수천 글자라 GPT 프롬프트에 넣으면 혼란
+ * - 텍스트만 GPT에 전달하고, 이미지는 나중에 재삽입
+ */
+function extractImages(content: string): { textOnly: string; images: string[] } {
+  const images: string[] = [];
+  const textOnly = content.replace(IMAGE_MARKDOWN_REGEX, (match) => {
+    images.push(match);
+    return ''; // 이미지 제거
+  }).replace(/\n{3,}/g, '\n\n').trim(); // 빈 줄 정리
+
+  return { textOnly, images };
+}
+
+/**
+ * 생성된 twin content에 원본 이미지를 재삽입
+ */
+function reinsertImages(twinContent: string, images: string[]): string {
+  if (images.length === 0) return twinContent;
+  return twinContent + '\n\n' + images.join('\n');
+}
+
 /**
  * 쌍둥이 문제 생성
  */
@@ -261,15 +290,20 @@ export function generateTwinProblem(
     solutionLatex?: string;
     typeCode: string;
     answer?: string;
+    choices?: string[];
   },
   studentId: string,
   options: TwinGenerationOptions = {}
 ): TwinProblem {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const structure = analyzeLatexStructure(originalProblem.contentLatex);
+
+  // ★ 이미지 분리 — 숫자 변형 시 base64 문자열이 깨지지 않도록
+  const { textOnly, images: originalImages } = extractImages(originalProblem.contentLatex);
+
+  const structure = analyzeLatexStructure(textOnly);
   const modifications: ProblemModification[] = [];
 
-  let newContentLatex = originalProblem.contentLatex;
+  let newContentLatex = textOnly;
 
   // 숫자 변형 (뒤에서부터 치환하여 인덱스 유지)
   const numbersToVary = structure.numbers
@@ -302,6 +336,21 @@ export function generateTwinProblem(
     modifications.push(...condMods);
   }
 
+  // ★ 선택지 변형: 원본 선택지의 숫자도 동일하게 변형
+  const originalChoices = originalProblem.choices || [];
+  let newChoices: string[] = [];
+  if (originalChoices.length > 0) {
+    newChoices = originalChoices.map((choice) => {
+      let newChoice = choice;
+      for (const mod of modifications) {
+        if (mod.type === 'NUMBER' || mod.type === 'COEFFICIENT') {
+          newChoice = newChoice.split(mod.original).join(mod.modified);
+        }
+      }
+      return newChoice;
+    });
+  }
+
   // 해설 생성 (간단한 치환)
   let newSolutionLatex = originalProblem.solutionLatex || '';
   if (newSolutionLatex) {
@@ -311,6 +360,9 @@ export function generateTwinProblem(
       }
     }
   }
+
+  // ★ 원본 이미지 재삽입
+  newContentLatex = reinsertImages(newContentLatex, originalImages);
 
   // HTML 변환 (간단한 버전)
   const newContentHtml = latexToSimpleHtml(newContentLatex);
@@ -325,6 +377,7 @@ export function generateTwinProblem(
     solutionLatex: newSolutionLatex,
     solutionHtml: newSolutionHtml,
     answer: calculateNewAnswer(originalProblem.answer, modifications),
+    choices: newChoices,
     modifications,
     generatedAt: new Date().toISOString(),
     generatedFor: studentId,
@@ -341,6 +394,7 @@ export function generateTwinProblems(
     solutionLatex?: string;
     typeCode: string;
     answer?: string;
+    choices?: string[];
   }>,
   studentId: string,
   options: TwinGenerationOptions = {}
@@ -352,26 +406,49 @@ export function generateTwinProblems(
 // GPT-4o 기반 쌍둥이 문제 생성 (고급)
 // ============================================================================
 
-const TWIN_GENERATION_PROMPT = `당신은 수학 문제 변형 전문가입니다. 주어진 원본 문제를 분석하여 구조는 유지하면서 숫자와 조건만 변형한 쌍둥이 문제를 생성해주세요.
+const TWIN_GENERATION_PROMPT = `당신은 수학 문제 출제 및 풀이 전문가입니다. 주어진 원본 문제를 분석하여 구조는 유지하면서 숫자와 조건만 변형한 유사 문제를 생성하고, **변형된 문제에 대해 처음부터 완전한 풀이를 작성**해주세요.
 
-원본 문제:
+## 원본 문제
 {ORIGINAL_PROBLEM}
+{CHOICES_SECTION}
+## 원본 풀이
+{ORIGINAL_SOLUTION}
 
-요구사항:
-1. 문제의 수학적 구조와 풀이 방법은 동일하게 유지
-2. 숫자, 계수, 상수 등을 변형
-3. 난이도 조절: {DIFFICULTY_ADJUSTMENT}
-4. 새로운 정답 계산
+## 원본 정답
+{ORIGINAL_ANSWER}
 
-다음 JSON 형식으로 응답해주세요:
+## 난이도 조절
+{DIFFICULTY_ADJUSTMENT}
+
+## 핵심 요구사항
+1. 문제의 수학적 구조와 풀이 방법은 동일하게 유지하되, 숫자/계수/상수를 변형
+2. **풀이(solutionLatex)는 반드시 처음부터 끝까지 완전하게 작성** — 단계별로 계산 과정을 빠짐없이 서술
+3. 풀이의 각 단계에서 계산이 수학적으로 정확한지 스스로 검증
+4. **정답(answer)은 반드시 풀이의 최종 결과와 정확히 일치**해야 함
+5. 원본 풀이가 불완전하거나 없는 경우: 변형된 문제를 직접 분석하여 처음부터 풀이를 작성
+6. 객관식: 변형된 문제에 맞는 새로운 선택지 5개 생성. **정답이 반드시 선택지 중 하나와 일치**. answer에 정답 번호(1~5) 기재
+7. 주관식: answer에 최종 계산 결과값 기재
+8. 풀이에 LaTeX 수식을 사용하되, 한국어로 설명
+9. **표/도표 재현 (매우 중요)**:
+   - 원본에 표(조립제법, 함수값 표 등)가 있으면 변형 문제에도 **반드시 표를 포함**
+   - 표는 \\begin{array} 환경을 사용 ($$로 감싸지 말 것!)
+   - 표의 모든 셀에 **구체적인 숫자**를 채울 것 (빈 셀이나 대수식(ak, bk 등) 금지)
+   - 조립제법 예시: \\begin{array}{c|cccc} k & a_3 & a_2 & a_1 & a_0 \\\\ & & \\cdots & \\cdots & \\\\ \\hline & \\cdots & \\cdots & \\cdots & \\text{나머지} \\end{array}
+   - 행렬: \\begin{pmatrix} 또는 \\begin{bmatrix} 사용
+
+## 응답 형식 (JSON만 출력, 다른 텍스트 없이)
+\`\`\`json
 {
   "contentLatex": "변형된 문제 (LaTeX)",
-  "solutionLatex": "변형된 풀이 (LaTeX)",
-  "answer": "새로운 정답",
+  "solutionLatex": "단계별 완전한 풀이 (LaTeX)",
+  "answer": "정답 (객관식: 번호 1~5, 주관식: 계산 결과값)",
+  "choices": ["① 보기1", "② 보기2", "③ 보기3", "④ 보기4", "⑤ 보기5"],
   "modifications": [
     {"type": "NUMBER", "original": "원본값", "modified": "변경값"}
   ]
-}`;
+}
+\`\`\`
+객관식이 아닌 경우 "choices"는 빈 배열 []로 응답하세요.`;
 
 export async function generateTwinWithLLM(
   originalProblem: {
@@ -379,6 +456,8 @@ export async function generateTwinWithLLM(
     contentLatex: string;
     solutionLatex?: string;
     typeCode: string;
+    answer?: string;
+    choices?: string[];
   },
   studentId: string,
   options: TwinGenerationOptions = {}
@@ -389,7 +468,7 @@ export async function generateTwinWithLLM(
   if (!apiKey) {
     console.log('[Twin Generator] OpenAI API not configured, using rule-based generation');
     return generateTwinProblem(
-      { ...originalProblem, answer: '' },
+      { ...originalProblem, answer: originalProblem.answer || '' },
       studentId,
       options
     );
@@ -402,9 +481,63 @@ export async function generateTwinWithLLM(
         ? '난이도 상향 (어렵게)'
         : '동일 난이도';
 
+  // ★ 이미지 분리 — base64 이미지가 GPT 프롬프트에 포함되지 않도록
+  const { textOnly: contentTextOnly, images: originalImages } = extractImages(originalProblem.contentLatex);
+  if (originalImages.length > 0) {
+    console.log(`[Twin Generator] Extracted ${originalImages.length} images from original problem, will reinsert after generation`);
+  }
+
+  // ★ 선택지가 있으면 프롬프트에 포함 (동그라미 번호 → 괄호 번호 통일)
+  const choicesSection = originalProblem.choices && originalProblem.choices.length > 0
+    ? `\n원본 선택지:\n${originalProblem.choices.map(c => convertCircledNumbers(c)).join('\n')}\n`
+    : '\n(주관식 문제 - 선택지 없음)\n';
+
+  // ★ 원본 풀이 — 있으면 포함, 없거나 불완전하면 GPT에게 직접 풀도록 지시
+  const solutionText = originalProblem.solutionLatex && originalProblem.solutionLatex.trim().length > 10
+    ? originalProblem.solutionLatex
+    : '(원본 풀이가 제공되지 않았습니다. 변형된 문제를 직접 분석하여 처음부터 완전한 풀이를 작성하세요.)';
+
+  // ★ 원본 정답 — 있으면 포함, 없으면 GPT에게 도출하도록 지시
+  const answerText = originalProblem.answer && originalProblem.answer.trim() && originalProblem.answer !== '-'
+    ? originalProblem.answer
+    : '(원본 정답이 제공되지 않았습니다. 풀이를 통해 정확한 정답을 도출하세요.)';
+
+  // ★ 시각적 요소 감지 힌트 — 원본에 표/그래프가 있으면 GPT에게 재현 지시
+  // ★ 동그라미 번호 → 괄호 번호 통일 (GPT 입력에도 적용)
+  const contentText = convertCircledNumbers(contentTextOnly);
+  const visualHints: string[] = [];
+  if (/조립제법|조립 제법/.test(contentText)) {
+    visualHints.push(
+      '이 문제에는 조립제법 표가 포함되어 있습니다.\n' +
+      '변형된 문제의 contentLatex에 반드시 조립제법 표를 포함하세요.\n' +
+      '형식: \\begin{array}{c|cccc} k & a & b & c & d \\\\\\\\ & & 계산값1 & 계산값2 & 계산값3 \\\\\\\\ \\hline & a & 결과1 & 결과2 & 나머지 \\end{array}\n' +
+      '중요: $$로 감싸지 마세요. 모든 셀에 구체적인 숫자를 넣으세요. \\Box나 빈 셀은 금지입니다.'
+    );
+  }
+  if (/\\begin\{(array|tabular|matrix|pmatrix|bmatrix)/.test(contentText)) {
+    visualHints.push('이 문제에는 표/행렬이 포함되어 있습니다. 변형된 문제에서도 동일한 LaTeX 환경(\\begin{array} 등)을 사용하여 재현하세요. $$로 감싸지 마세요.');
+  }
+  if (/그래프|좌표|수직선|수선|그림/.test(contentText)) {
+    visualHints.push('이 문제에는 그래프/도형이 참조됩니다. 변형된 문제에서도 해당 시각적 요소를 텍스트로 설명하거나 LaTeX로 표현하세요.');
+  }
+  if (/함수값|표[는가를이]|다음 표/.test(contentText)) {
+    visualHints.push('이 문제에는 값의 표가 포함되어 있습니다. \\begin{array} 환경으로 표를 재현하세요. $$로 감싸지 마세요. 모든 셀에 구체적인 숫자를 넣으세요.');
+  }
+  const visualSection = visualHints.length > 0
+    ? `\n\n## ⚠ 시각적 요소 재현 필수\n${visualHints.join('\n')}\n`
+    : '';
+
+  // ★ 이미지가 있었으면 GPT에게 "원본에 그림이 포함되어 있다"고 알림
+  const imageNote = originalImages.length > 0
+    ? '\n\n(참고: 원본 문제에는 도형/그래프 이미지가 포함되어 있습니다. 이미지는 자동으로 삽입되므로 contentLatex에 이미지를 포함하지 마세요.)\n'
+    : '';
+
   const prompt = TWIN_GENERATION_PROMPT
-    .replace('{ORIGINAL_PROBLEM}', originalProblem.contentLatex)
-    .replace('{DIFFICULTY_ADJUSTMENT}', difficultyText);
+    .replace('{ORIGINAL_PROBLEM}', contentText + imageNote)
+    .replace('{CHOICES_SECTION}', choicesSection)
+    .replace('{ORIGINAL_SOLUTION}', solutionText)
+    .replace('{ORIGINAL_ANSWER}', answerText)
+    .replace('{DIFFICULTY_ADJUSTMENT}', difficultyText + visualSection);
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -418,12 +551,12 @@ export async function generateTwinWithLLM(
         messages: [
           {
             role: 'system',
-            content: '수학 문제 변형 전문가입니다. LaTeX 수식을 정확하게 작성합니다.',
+            content: '당신은 수학 교사이자 문제 출제 전문가입니다. 수학적 정확성이 최우선입니다. LaTeX 수식을 정확하게 작성하고, 모든 계산 과정을 빠짐없이 서술합니다. 풀이의 최종 결과와 정답이 반드시 일치해야 합니다.',
           },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.7,
-        max_tokens: 1500,
+        temperature: 0.3,
+        max_tokens: 3000,
       }),
     });
 
@@ -444,15 +577,23 @@ export async function generateTwinWithLLM(
 
     const parsed = JSON.parse(jsonStr);
 
+    // ★ GPT 출력 후처리 — MixedContentRenderer 호환성 확보
+    const cleanedContent = cleanLLMOutput(parsed.contentLatex || '');
+    const cleanedSolution = cleanLLMOutput(parsed.solutionLatex || '');
+
+    // ★ 원본 이미지 재삽입 — 도형/그래프가 유사문제에서도 표시되도록
+    const finalContent = reinsertImages(cleanedContent, originalImages);
+
     return {
       id: crypto.randomUUID(),
       originalProblemId: originalProblem.id,
       originalTypeCode: originalProblem.typeCode,
-      contentLatex: parsed.contentLatex,
-      contentHtml: latexToSimpleHtml(parsed.contentLatex),
-      solutionLatex: parsed.solutionLatex || '',
-      solutionHtml: parsed.solutionLatex ? latexToSimpleHtml(parsed.solutionLatex) : '',
-      answer: parsed.answer || '',
+      contentLatex: finalContent,
+      contentHtml: latexToSimpleHtml(finalContent),
+      solutionLatex: cleanedSolution,
+      solutionHtml: cleanedSolution ? latexToSimpleHtml(cleanedSolution) : '',
+      answer: String(parsed.answer || '').trim(),
+      choices: Array.isArray(parsed.choices) ? parsed.choices : [],
       modifications: parsed.modifications || [],
       generatedAt: new Date().toISOString(),
       generatedFor: studentId,
@@ -460,11 +601,67 @@ export async function generateTwinWithLLM(
   } catch (error) {
     console.error('[Twin Generator] LLM generation failed, using rule-based:', error);
     return generateTwinProblem(
-      { ...originalProblem, answer: '' },
+      { ...originalProblem, answer: originalProblem.answer || '' },
       studentId,
       options
     );
   }
+}
+
+// ============================================================================
+// GPT 출력 후처리 — MixedContentRenderer 호환
+// ============================================================================
+
+/**
+ * GPT-4o의 LaTeX 출력을 MixedContentRenderer가 올바르게 렌더링할 수 있도록 정리
+ * - $$...$$ 블록 수식 내부의 \begin{array}를 분리 (array는 별도 파싱됨)
+ * - \Box, \square 등 빈 플레이스홀더 제거
+ * - 불필요한 공백/줄바꿈 정리
+ */
+function cleanLLMOutput(text: string): string {
+  let result = text;
+
+  // 1. $$\begin{array}...\end{array}$$ → \begin{array}...\end{array} ($$제거)
+  //    MixedContentRenderer가 \begin{array}를 직접 감지하여 테이블로 렌더링하므로
+  //    $$로 감싸면 충돌이 발생함
+  result = result.replace(
+    /\$\$\s*(\\begin\{(?:array|tabular|pmatrix|bmatrix|matrix)\}[\s\S]*?\\end\{(?:array|tabular|pmatrix|bmatrix|matrix)\})\s*\$\$/g,
+    '$1'
+  );
+
+  // 2. 단독 $$ 라인 제거 (고아 $$)
+  result = result.replace(/^\$\$\s*$/gm, '');
+
+  // 3. \Box, \square → 빈 문자열 (빈 셀이 □로 표시되는 것 방지)
+  //    단, 표 셀 내부에서만 — 실제 수학에서 \Box 사용은 드묾
+  result = result.replace(/\\(?:Box|square)/g, '');
+
+  // 4. ①②③④⑤ → (1)(2)(3)(4)(5) 소문제 번호 통일
+  result = convertCircledNumbers(result);
+
+  // 5. 연속 줄바꿈 정리
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  // 6. 앞뒤 공백 제거
+  result = result.trim();
+
+  return result;
+}
+
+/**
+ * 동그라미 번호(①②③④⑤) → 괄호 번호((1)(2)(3)(4)(5)) 변환
+ * 소문제 표기 통일용
+ */
+function convertCircledNumbers(text: string): string {
+  const circledMap: Record<string, string> = {
+    '①': '(1)', '②': '(2)', '③': '(3)', '④': '(4)', '⑤': '(5)',
+    '⑥': '(6)', '⑦': '(7)', '⑧': '(8)', '⑨': '(9)', '⑩': '(10)',
+  };
+  let result = text;
+  for (const [circled, paren] of Object.entries(circledMap)) {
+    result = result.replaceAll(circled, paren);
+  }
+  return result;
 }
 
 // ============================================================================

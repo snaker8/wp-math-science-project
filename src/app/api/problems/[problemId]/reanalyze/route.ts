@@ -140,10 +140,21 @@ export async function POST(
     }
 
     if (analysis.solution) {
-      const solutionText = analysis.solution.steps
-        ?.map((s: any) => `${s.description}\n${s.latex || ''}`)
-        .join('\n') || '';
-      updateData.solution_latex = solutionText;
+      // upload/route.ts와 동일한 포맷 (approach + steps + finalAnswer 모두 포함)
+      const parts: string[] = [];
+      if (analysis.solution.approach) {
+        parts.push(`[풀이 접근] ${analysis.solution.approach}`);
+      }
+      if (analysis.solution.steps && analysis.solution.steps.length > 0) {
+        const stepsText = analysis.solution.steps
+          .map((s: any) => `${s.stepNumber || ''}. ${s.description}\n${s.latex || ''}`)
+          .join('\n\n');
+        parts.push(stepsText);
+      }
+      if (analysis.solution.finalAnswer) {
+        parts.push(`∴ 정답: ${analysis.solution.finalAnswer}`);
+      }
+      updateData.solution_latex = parts.length > 0 ? parts.join('\n\n') : '';
     }
 
     if (analysis.solution?.finalAnswer) {

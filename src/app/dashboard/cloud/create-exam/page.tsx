@@ -36,16 +36,6 @@ interface ExamGroup {
 }
 
 // ============================================================================
-// Mock Data
-// ============================================================================
-
-const MOCK_GROUPS: ExamGroup[] = [
-  { id: 'g1', name: '금곡고' },
-  { id: 'g2', name: '용인고' },
-  { id: 'g3', name: '2025 중간고사' },
-];
-
-// ============================================================================
 // Main Page Component
 // ============================================================================
 
@@ -54,7 +44,31 @@ export default function CreateExamPage() {
   const [problems, setProblems] = useState<SelectedProblem[]>([]);
   const [sourceTitle, setSourceTitle] = useState('');
   const [examTitle, setExamTitle] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(MOCK_GROUPS[0]?.id || null);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [bookGroups, setBookGroups] = useState<ExamGroup[]>([]);
+
+  // DB에서 book_groups 가져오기
+  useEffect(() => {
+    async function fetchGroups() {
+      try {
+        const res = await fetch('/api/book-groups');
+        if (res.ok) {
+          const data = await res.json();
+          const groups: ExamGroup[] = (data.groups || []).map((g: any) => ({
+            id: g.id,
+            name: g.name,
+          }));
+          setBookGroups(groups);
+          if (groups.length > 0 && !selectedGroup) {
+            setSelectedGroup(groups[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('[CreateExam] Failed to fetch book groups:', err);
+      }
+    }
+    fetchGroups();
+  }, []);
   const [isCreated, setIsCreated] = useState(false);
   const { createExam, isCreating, error: createError } = useCreateExam();
 
@@ -100,7 +114,7 @@ export default function CreateExamPage() {
             id: examId,
             title: examTitle,
             groupId: selectedGroup,
-            groupName: MOCK_GROUPS.find((g) => g.id === selectedGroup)?.name || '',
+            groupName: bookGroups.find((g) => g.id === selectedGroup)?.name || '',
             problems,
             createdAt: new Date().toISOString(),
           })
@@ -217,7 +231,7 @@ export default function CreateExamPage() {
         <div className="w-64 flex-shrink-0 border-r border-zinc-800/50 p-4 overflow-y-auto">
           <h3 className="text-sm font-bold text-zinc-300 mb-3">시험지 그룹 선택</h3>
           <div className="space-y-1">
-            {MOCK_GROUPS.map((group) => (
+            {bookGroups.map((group) => (
               <button
                 key={group.id}
                 type="button"

@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       useLLM = false,
       generateClinic = false,
       clinicOptions = {},
+      problemsData: clientProblemsData,
     } = body as {
       problemIds: string[];
       studentId: string;
@@ -47,6 +48,15 @@ export async function POST(request: NextRequest) {
         includeOriginals?: boolean;
         includeSolutions?: boolean;
       };
+      problemsData?: Array<{
+        id: string;
+        contentLatex: string;
+        solutionLatex?: string;
+        typeCode: string;
+        typeName: string;
+        answer?: string;
+        choices?: string[];
+      }>;
     };
 
     if (!problemIds || problemIds.length === 0) {
@@ -63,8 +73,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createSupabaseServerClient();
-
     // 원본 문제 조회
     let problems: Array<{
       id: string;
@@ -74,52 +82,63 @@ export async function POST(request: NextRequest) {
       typeCode: string;
       typeName: string;
       answer?: string;
+      choices?: string[];
     }> = [];
 
-    if (supabase) {
-      const { data: problemsData, error } = await supabase
-        .from('problems')
-        .select(`
-          id,
-          content_latex,
-          content_html,
-          solution_latex,
-          answer_json,
-          classifications (
-            type_code,
-            problem_types (
-              type_name
-            )
-          )
-        `)
-        .in('id', problemIds);
+    // ★ 1순위: 프론트엔드에서 직접 전달받은 문제 데이터 사용 (DB 재조회 불필요)
+    if (clientProblemsData && clientProblemsData.length > 0) {
+      problems = clientProblemsData;
+      console.log(`[Twin API] Using ${problems.length} problems from client data`);
+    } else {
+      // 2순위: DB에서 조회 (다른 호출자용 — ZeroWrongLoop 등)
+      const supabase = await createSupabaseServerClient();
 
-      if (error) {
-        console.error('Error fetching problems:', error);
-      } else if (problemsData) {
-        
-        problems = problemsData.map((p: any) => ({
-          id: p.id,
-          contentLatex: p.content_latex,
-          contentHtml: p.content_html,
-          solutionLatex: p.solution_latex,
-          typeCode: p.classifications?.[0]?.type_code || 'UNKNOWN',
-          typeName: p.classifications?.[0]?.problem_types?.type_name || '알 수 없는 유형',
-          answer: p.answer_json?.correct_answer,
+      if (supabase) {
+        const { data: dbProblemsData, error } = await supabase
+          .from('problems')
+          .select(`
+            id,
+            content_latex,
+            content_html,
+            solution_latex,
+            answer_json,
+            classifications (
+              type_code,
+              problem_types (
+                type_name
+              )
+            )
+          `)
+          .in('id', problemIds);
+
+        if (error) {
+          console.error('Error fetching problems:', error);
+        } else if (dbProblemsData) {
+          problems = dbProblemsData.map((p: any) => ({
+            id: p.id,
+            contentLatex: p.content_latex,
+            contentHtml: p.content_html,
+            solutionLatex: p.solution_latex,
+            typeCode: p.classifications?.[0]?.type_code || 'UNKNOWN',
+            typeName: p.classifications?.[0]?.problem_types?.type_name || '알 수 없는 유형',
+            answer: p.answer_json?.correct_answer,
+            choices: Array.isArray(p.answer_json?.choices) ? p.answer_json.choices : [],
+          }));
+        }
+      }
+
+      // 3순위: Mock 데이터 (Supabase 미설정 시)
+      if (problems.length === 0) {
+        console.warn('[Twin API] No problem data available, using mock data');
+        problems = problemIds.map((id, index) => ({
+          id,
+          contentLatex: `이차방정식 $x^2 - ${5 + index}x + ${6 + index} = 0$의 두 근을 구하시오.`,
+          solutionLatex: `인수분해하면 $(x-${2 + index})(x-${3 + index}) = 0$\n따라서 $x = ${2 + index}$ 또는 $x = ${3 + index}$`,
+          typeCode: `MA1-EQU-00${index + 1}`,
+          typeName: '이차방정식의 풀이',
+          answer: `x = ${2 + index} 또는 x = ${3 + index}`,
         }));
       }
-    }
-
-    // Supabase 미설정 또는 문제 조회 실패 시 Mock 데이터 사용
-    if (problems.length === 0) {
-      problems = problemIds.map((id, index) => ({
-        id,
-        contentLatex: `이차방정식 $x^2 - ${5 + index}x + ${6 + index} = 0$의 두 근을 구하시오.`,
-        solutionLatex: `인수분해하면 $(x-${2 + index})(x-${3 + index}) = 0$\n따라서 $x = ${2 + index}$ 또는 $x = ${3 + index}$`,
-        typeCode: `MA1-EQU-00${index + 1}`,
-        typeName: '이차방정식의 풀이',
-        answer: `x = ${2 + index} 또는 x = ${3 + index}`,
-      }));
     }
 
     // 쌍둥이 문제 생성

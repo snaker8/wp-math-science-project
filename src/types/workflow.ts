@@ -30,6 +30,7 @@ export interface UploadJob {
   currentStep: string;
   autoClassify?: boolean;
   generateSolutions?: boolean;
+  bookGroupId?: string | null;  // ★ 클라우드 북그룹 ID (자산화 시 사용)
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -76,7 +77,7 @@ export interface BoundingBox {
   height: number;
 }
 
-// 3,569개 유형 분류 시스템
+// 505개 교육과정 성취기준 기반 분류 시스템 (다사람수학)
 export interface TypeClassification {
   typeCode: string; // e.g., "MA-HS1-ALG-01-003"
   typeName: string;
@@ -92,6 +93,7 @@ export interface TypeClassification {
 
 export interface LLMAnalysisResult {
   problemId: string;
+  problemNumber?: number;      // 문제 번호 (1-based)
   originalText?: string;      // OCR 추출 원본 텍스트
   originalMathExpressions?: string[]; // OCR 추출 수식
   contentWithMath?: string;   // Mathpix Markdown (수식 $...$ 인라인 포함)
@@ -177,6 +179,7 @@ export interface TwinProblem {
   solutionLatex: string;
   solutionHtml: string;
   answer: string;
+  choices: string[];           // ★ 객관식 선택지
   modifications: ProblemModification[];
   generatedAt: string;
   generatedFor: string; // 학생 ID

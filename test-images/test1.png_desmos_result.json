@@ -1,0 +1,81 @@
+{
+  "description": "한국 수학 시험지 3번 문제 그래프. x축과 y축이 있는 좌표계에서 y = -x² + 8x - 12의 그래프와 이 그래프와 x축의 교점 B, C를 연결한 선분 BC가 그려져 있으며, A점에서 B, C를 연결하는 두 선분이 그려져 있고, A점은 두 곡선의 교점으로 표시됩니다.",
+  "visual_elements": [
+    {
+      "type": "곡선",
+      "description": "함수 y = -x² + 8x - 12"
+    },
+    {
+      "type": "선분",
+      "description": "x축과의 교점 B, C를 연결하는 선분 BC"
+    },
+    {
+      "type": "선분",
+      "description": "A점에서 B를 연결하는 선분 AB"
+    },
+    {
+      "type": "선분",
+      "description": "A점에서 C를 연결하는 선분 AC"
+    },
+    {
+      "type": "점",
+      "description": "A점(교점)"
+    },
+    {
+      "type": "점",
+      "description": "B점(x축과의 교점)"
+    },
+    {
+      "type": "점",
+      "description": "C점(x축과의 교점)"
+    }
+  ],
+  "desmos_expressions": [
+    {
+      "expr": "y = -x^2 + 8x - 12",
+      "label": "함수 곡선",
+      "note": "주어진 방정식의 그래프"
+    },
+    {
+      "expr": "y = -x^2 + 8x - 12 \\{x \\in [-2, 10]\\}",
+      "label": "함수 곡선(범위 제한)",
+      "note": "그래프가 보이는 범위"
+    },
+    {
+      "expr": "(2, 0)",
+      "label": "B점",
+      "note": "x축과의 교점"
+    },
+    {
+      "expr": "(6, 0)",
+      "label": "C점",
+      "note": "x축과의 교점"
+    },
+    {
+      "expr": "A",
+      "label": "A점",
+      "note": "곡선과 선분의 교점"
+    },
+    {
+      "expr": "y = 2x - 4 \\{x \\in [2, 6]\\}",
+      "label": "선분 BC",
+      "note": "B(2,0)에서 C(6,0)을 연결하는 선분"
+    },
+    {
+      "expr": "y = 2x - 4 \\{x \\in [2, 4]\\}",
+      "label": "선분 AB",
+      "note": "A(4, 4)에서 B(2,0)을 연결하는 선분"
+    },
+    {
+      "expr": "y = 2x - 4 \\{x \\in [4, 6]\\}",
+      "label": "선분 AC",
+      "note": "A(4, 4)에서 C(6,0)을 연결하는 선분"
+    }
+  ],
+  "axis_settings": {
+    "x_min": -2,
+    "x_max": 10,
+    "y_min": -5,
+    "y_max": 8
+  }
+}

@@ -1,0 +1,521 @@
+{
+  "curriculum": "2015 개정",
+  "subject": "수학Ⅱ",
+  "schoolLevel": "고등학교",
+  "level": "HS2",
+  "areas": [
+    {
+      "area": "함수의 극한과 연속",
+      "domain": "LIM",
+      "standards": [
+        {
+          "code": "[12수학Ⅱ01-01]",
+          "content": "함수의 극한의 개념을 안다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-LIM-01-001",
+              "typeName": "함수의 극한값 구하기 (대입)",
+              "description": "lim f(x) 에서 직접 대입으로 구하기",
+              "solutionMethod": "직접 대입",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["극한", "대입", "함수"]
+            },
+            {
+              "typeCode": "MA-HS2-LIM-01-002",
+              "typeName": "좌극한·우극한",
+              "description": "lim(x→a⁺), lim(x→a⁻) 비교, 극한 존재 판별",
+              "solutionMethod": "좌극한·우극한 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["좌극한", "우극한", "존재"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ01-02]",
+          "content": "함수의 극한에 대한 성질을 이해하고, 함수의 극한값을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-LIM-02-001",
+              "typeName": "0/0 부정형 극한 (인수분해)",
+              "description": "(x-a)로 약분 후 극한값 계산",
+              "solutionMethod": "인수분해 + 약분",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["극한", "부정형", "인수분해"]
+            },
+            {
+              "typeCode": "MA-HS2-LIM-02-002",
+              "typeName": "0/0 부정형 극한 (유리화)",
+              "description": "무리식 포함 극한의 유리화",
+              "solutionMethod": "분자/분모 유리화",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["극한", "유리화", "무리식"]
+            },
+            {
+              "typeCode": "MA-HS2-LIM-02-003",
+              "typeName": "∞/∞ 형 극한 (다항함수)",
+              "description": "x→∞에서 최고차항으로 나누기",
+              "solutionMethod": "최고차항 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["극한", "무한대", "최고차항"]
+            },
+            {
+              "typeCode": "MA-HS2-LIM-02-004",
+              "typeName": "극한값 조건에서 미정계수 결정",
+              "description": "lim f(x)가 존재하기 위한 조건",
+              "solutionMethod": "분자→0 조건",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["극한", "미정계수", "조건"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ01-03]",
+          "content": "함수의 연속의 뜻을 안다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-LIM-03-001",
+              "typeName": "함수의 연속 판별",
+              "description": "f(a)=lim f(x) 3조건 확인",
+              "solutionMethod": "연속 3조건",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["연속", "판별", "3조건"]
+            },
+            {
+              "typeCode": "MA-HS2-LIM-03-002",
+              "typeName": "연속이 되도록 미정계수 결정",
+              "description": "구간별 정의된 함수에서 연속 조건",
+              "solutionMethod": "좌극한=우극한=함수값",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["연속", "미정계수", "구간"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ01-04]",
+          "content": "연속함수의 성질을 이해하고, 이를 활용할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-LIM-04-001",
+              "typeName": "중간값 정리",
+              "description": "f(a)·f(b)<0이면 근이 존재",
+              "solutionMethod": "중간값 정리",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["중간값정리", "근의존재"]
+            },
+            {
+              "typeCode": "MA-HS2-LIM-04-002",
+              "typeName": "최대·최소 정리",
+              "description": "폐구간 연속함수의 최대·최소 존재",
+              "solutionMethod": "최대최소 정리",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["최대최소정리", "연속함수", "폐구간"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "미분",
+      "domain": "DIF",
+      "standards": [
+        {
+          "code": "[12수학Ⅱ02-01]",
+          "content": "미분계수의 뜻을 안다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-01-001",
+              "typeName": "미분계수의 정의 (극한)",
+              "description": "f'(a) = lim [f(a+h)-f(a)]/h",
+              "solutionMethod": "극한 정의",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["미분계수", "극한", "정의"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-01-002",
+              "typeName": "평균변화율과 순간변화율",
+              "description": "평균변화율 → 순간변화율(미분계수) 관계",
+              "solutionMethod": "변화율 개념",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["평균변화율", "순간변화율"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-02]",
+          "content": "함수의 미분가능성과 연속의 관계를 안다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-02-001",
+              "typeName": "미분가능성 판별",
+              "description": "좌미분계수=우미분계수 확인",
+              "solutionMethod": "좌/우 미분계수 비교",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["미분가능성", "연속", "좌미분"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-02-002",
+              "typeName": "미분가능 → 연속 (역은 성립하지 않음)",
+              "description": "|x| 같은 연속이지만 미분불가능한 경우",
+              "solutionMethod": "반례 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["미분가능", "연속", "반례"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-03]",
+          "content": "도함수를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-03-001",
+              "typeName": "다항함수의 미분 (기본)",
+              "description": "(xⁿ)'=nxⁿ⁻¹, 상수배, 합차 미분",
+              "solutionMethod": "미분 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["도함수", "다항함수", "미분"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-03-002",
+              "typeName": "곱의 미분법, 몫의 미분법",
+              "description": "(fg)'=f'g+fg', (f/g)'=(f'g-fg')/g²",
+              "solutionMethod": "곱/몫 미분법",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["곱의미분", "몫의미분"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-03-003",
+              "typeName": "합성함수의 미분",
+              "description": "{f(g(x))}'=f'(g(x))·g'(x) 연쇄법칙",
+              "solutionMethod": "연쇄법칙",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["합성함수", "연쇄법칙", "미분"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-04]",
+          "content": "접선의 방정식을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-04-001",
+              "typeName": "곡선 위 점에서의 접선",
+              "description": "y-f(a)=f'(a)(x-a) 접선 구하기",
+              "solutionMethod": "미분계수 = 기울기",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 2],
+              "keywords": ["접선", "기울기", "미분"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-04-002",
+              "typeName": "곡선 밖 점에서의 접선",
+              "description": "접점 (t, f(t)) 설정 후 조건식",
+              "solutionMethod": "접점 매개변수",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["접선", "외부점", "접점"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-04-003",
+              "typeName": "두 곡선의 공통접선",
+              "description": "두 곡선에 동시에 접하는 직선 구하기",
+              "solutionMethod": "공통접선 조건",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [4, 5],
+              "keywords": ["공통접선", "두곡선"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-05]",
+          "content": "함수의 증가와 감소를 판정할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-05-001",
+              "typeName": "증가·감소 판정",
+              "description": "f'(x)>0 증가, f'(x)<0 감소",
+              "solutionMethod": "도함수 부호 분석",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 2],
+              "keywords": ["증가", "감소", "도함수"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-05-002",
+              "typeName": "증감표 작성",
+              "description": "f'(x)=0인 점에서의 증감 변화",
+              "solutionMethod": "증감표",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["증감표", "도함수", "부호변화"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-06]",
+          "content": "함수의 극대, 극소를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-06-001",
+              "typeName": "극값 구하기 (삼차함수)",
+              "description": "f'(x)=0 → 부호변화로 극대/극소 판별",
+              "solutionMethod": "f'=0 + 부호변화",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["극대", "극소", "삼차함수"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-06-002",
+              "typeName": "극값 조건에서 미정계수 결정",
+              "description": "극값을 가질/가지지 않을 조건",
+              "solutionMethod": "판별식 + 극값 조건",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["극값", "미정계수", "판별식"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-06-003",
+              "typeName": "삼차함수 그래프 개형",
+              "description": "극대·극소·변곡점으로 그래프 스케치",
+              "solutionMethod": "증감표 + 그래프",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["삼차함수", "그래프", "개형"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-07]",
+          "content": "함수의 최대, 최소를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-07-001",
+              "typeName": "폐구간에서의 최대·최소",
+              "description": "[a,b]에서 극값과 양끝값 비교",
+              "solutionMethod": "극값 + 양끝값 비교",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["최대", "최소", "폐구간"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-07-002",
+              "typeName": "최대·최소 활용 문제",
+              "description": "넓이, 부피, 거리 등 최적화 문제",
+              "solutionMethod": "함수 모델링 + 미분",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [4, 5],
+              "keywords": ["최적화", "활용", "넓이", "부피"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-08]",
+          "content": "방정식과 부등식에 대한 문제를 해결할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-08-001",
+              "typeName": "방정식의 실근의 개수",
+              "description": "f(x)=k 그래프 → 직선 y=k와 교점 수",
+              "solutionMethod": "그래프 + 극값 분석",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["실근개수", "그래프", "극값"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-08-002",
+              "typeName": "부등식의 증명 (미분 활용)",
+              "description": "g(x)=f(x)-h(x) 정의 후 최솟값≥0 증명",
+              "solutionMethod": "함수 차이 + 미분",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [4, 5],
+              "keywords": ["부등식증명", "미분", "최솟값"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ02-09]",
+          "content": "속도와 가속도에 대한 문제를 해결할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-DIF-09-001",
+              "typeName": "속도와 가속도",
+              "description": "위치 x(t) → 속도 v(t)=x'(t) → 가속도 a(t)=v'(t)",
+              "solutionMethod": "위치 미분",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["속도", "가속도", "위치", "미분"]
+            },
+            {
+              "typeCode": "MA-HS2-DIF-09-002",
+              "typeName": "직선 위 운동 분석",
+              "description": "운동 방향 전환, 최대 속도 등",
+              "solutionMethod": "속도=0 분석",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["운동", "방향전환", "속도"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "적분",
+      "domain": "INT",
+      "standards": [
+        {
+          "code": "[12수학Ⅱ03-01]",
+          "content": "부정적분의 뜻을 알고, 다항함수의 부정적분을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-INT-01-001",
+              "typeName": "부정적분 기본",
+              "description": "∫xⁿdx = xⁿ⁺¹/(n+1)+C",
+              "solutionMethod": "적분 공식",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 1],
+              "keywords": ["부정적분", "다항함수"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-01-002",
+              "typeName": "조건을 만족하는 함수 결정",
+              "description": "f'(x) + 초기조건 → f(x) 결정",
+              "solutionMethod": "적분 + 초기조건",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["부정적분", "초기조건", "함수결정"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ03-02]",
+          "content": "정적분의 뜻을 안다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-INT-02-001",
+              "typeName": "정적분의 계산 (기본)",
+              "description": "∫ₐᵇ f(x)dx = F(b)-F(a)",
+              "solutionMethod": "미적분학 기본정리",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [1, 2],
+              "keywords": ["정적분", "기본정리"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-02-002",
+              "typeName": "정적분의 성질",
+              "description": "구간 분할, 상수배, 합 등 성질",
+              "solutionMethod": "정적분 성질",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["정적분", "성질", "구간분할"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ03-03]",
+          "content": "다항함수의 정적분을 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-INT-03-001",
+              "typeName": "우함수·기함수의 정적분",
+              "description": "∫₋ₐᵃ (우함수)=2∫₀ᵃ, ∫₋ₐᵃ (기함수)=0",
+              "solutionMethod": "대칭성 활용",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["우함수", "기함수", "대칭", "정적분"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-03-002",
+              "typeName": "정적분으로 정의된 함수",
+              "description": "∫₀ˣ f(t)dt = g(x) 형태에서 f(x) 또는 조건 구하기",
+              "solutionMethod": "양변 미분",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["정적분", "함수", "미분"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-03-003",
+              "typeName": "정적분과 급수의 관계",
+              "description": "lim Σf(k/n)·(1/n) = ∫₀¹ f(x)dx",
+              "solutionMethod": "구분구적법",
+              "typicalCognitive": "INFERENCE",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["구분구적", "급수", "정적분"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ03-04]",
+          "content": "곡선으로 둘러싸인 도형의 넓이를 구할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-INT-04-001",
+              "typeName": "곡선과 x축 사이의 넓이",
+              "description": "∫|f(x)|dx 로 넓이 계산",
+              "solutionMethod": "부호 분리 + 적분",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["넓이", "적분", "곡선"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-04-002",
+              "typeName": "두 곡선 사이의 넓이",
+              "description": "∫|f(x)-g(x)|dx 계산",
+              "solutionMethod": "교점 구하기 + 적분",
+              "typicalCognitive": "CALCULATION",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["넓이", "두곡선", "교점"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-04-003",
+              "typeName": "넓이 조건에서 미정계수 결정",
+              "description": "주어진 넓이 값으로 계수 결정",
+              "solutionMethod": "적분 = 넓이 조건",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["넓이", "미정계수", "적분"]
+            }
+          ]
+        },
+        {
+          "code": "[12수학Ⅱ03-05]",
+          "content": "속도와 거리에 대한 문제를 해결할 수 있다.",
+          "types": [
+            {
+              "typeCode": "MA-HS2-INT-05-001",
+              "typeName": "속도→위치 (적분)",
+              "description": "∫v(t)dt = 위치 변화량",
+              "solutionMethod": "속도 적분",
+              "typicalCognitive": "UNDERSTANDING",
+              "typicalDifficulty": [2, 3],
+              "keywords": ["속도", "위치", "적분"]
+            },
+            {
+              "typeCode": "MA-HS2-INT-05-002",
+              "typeName": "이동 거리",
+              "description": "∫|v(t)|dt = 총 이동 거리",
+              "solutionMethod": "절대값 적분",
+              "typicalCognitive": "PROBLEM_SOLVING",
+              "typicalDifficulty": [3, 4],
+              "keywords": ["이동거리", "절대값", "적분"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

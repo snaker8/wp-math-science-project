@@ -127,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, onToggle }) => {
             </div>
             <p className="font-semibold text-sm text-white mb-3">과사람 완전학습</p>
             <div className="text-xs text-gray-500">
-              3,569개 유형 · 무제한 문제
+              505개 성취기준 · 5등급 난이도 · 무제한 문제
             </div>
           </div>
         </div>

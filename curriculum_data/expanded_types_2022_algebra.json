@@ -1,0 +1,99 @@
+{
+  "curriculum": "2022 개정",
+  "subject": "대수",
+  "schoolLevel": "고등학교",
+  "level": "HS1",
+  "areas": [
+    {
+      "area": "지수·로그와 그 연산",
+      "domain": "EXP",
+      "standards": [
+        {"code": "[12대수01-01]", "content": "거듭제곱과 거듭제곱근의 뜻을 안다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A01-001", "typeName": "거듭제곱근 개념과 계산", "description": "n제곱근의 뜻, 기본 계산", "solutionMethod": "거듭제곱근 정의", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["거듭제곱근", "계산"]},
+          {"typeCode": "MA-HS1-EXP-A01-002", "typeName": "거듭제곱근의 성질", "description": "ⁿ√(aᵐ), ⁿ√a·ⁿ√b 등 성질 활용", "solutionMethod": "성질 활용", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["거듭제곱근", "성질"]}
+        ]},
+        {"code": "[12대수01-02]", "content": "지수가 유리수까지 확장됨을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A02-001", "typeName": "유리수 지수와 지수법칙", "description": "a^(m/n) 계산, 지수법칙 활용", "solutionMethod": "지수법칙", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["유리수지수", "지수법칙"]}
+        ]},
+        {"code": "[12대수01-03]", "content": "로그의 뜻을 알고, 로그의 성질을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A03-001", "typeName": "로그의 정의와 계산", "description": "log_a(b) 정의, 기본 성질 활용", "solutionMethod": "로그 정의+성질", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["로그", "정의", "성질"]},
+          {"typeCode": "MA-HS1-EXP-A03-002", "typeName": "밑의 변환 공식", "description": "log_a(b)=log_c(b)/log_c(a)", "solutionMethod": "밑변환", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["밑변환", "로그"]}
+        ]},
+        {"code": "[12대수01-04]", "content": "상용로그를 활용할 수 있다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A04-001", "typeName": "상용로그 기본", "description": "지표·가수, 자릿수 구하기", "solutionMethod": "상용로그", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["상용로그", "지표", "가수"]},
+          {"typeCode": "MA-HS1-EXP-A04-002", "typeName": "상용로그 활용 문제", "description": "큰 수 자릿수, 소수점 이하 등", "solutionMethod": "상용로그+부등식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["상용로그", "활용"]}
+        ]},
+        {"code": "[12대수01-05]", "content": "지수함수의 그래프와 성질을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A05-001", "typeName": "지수함수 그래프", "description": "y=aˣ 증가/감소, 점근선", "solutionMethod": "그래프 성질", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [1, 2], "keywords": ["지수함수", "그래프"]},
+          {"typeCode": "MA-HS1-EXP-A05-002", "typeName": "지수함수의 평행이동", "description": "y=aˣ⁺ᵖ+q 변환", "solutionMethod": "평행이동", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["지수함수", "평행이동"]}
+        ]},
+        {"code": "[12대수01-06]", "content": "로그함수의 그래프와 성질을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A06-001", "typeName": "로그함수 그래프", "description": "y=log_a(x) 성질, 정의역·치역", "solutionMethod": "그래프 성질", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [1, 2], "keywords": ["로그함수", "그래프"]},
+          {"typeCode": "MA-HS1-EXP-A06-002", "typeName": "지수·로그 역함수 관계", "description": "y=aˣ ↔ y=log_a(x) 대칭", "solutionMethod": "역함수 관계", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["역함수", "지수", "로그"]}
+        ]},
+        {"code": "[12대수01-07]", "content": "지수함수·로그함수를 활용하여 방정식·부등식을 풀 수 있다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A07-001", "typeName": "지수방정식", "description": "밑 통일, 치환 이용 지수방정식", "solutionMethod": "밑통일/치환", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["지수방정식", "밑통일"]},
+          {"typeCode": "MA-HS1-EXP-A07-002", "typeName": "로그방정식", "description": "진수조건+로그 정의 활용", "solutionMethod": "로그정의+진수조건", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["로그방정식", "진수조건"]},
+          {"typeCode": "MA-HS1-EXP-A07-003", "typeName": "지수·로그 부등식", "description": "단조성 이용 부등식 풀기", "solutionMethod": "단조성+진수조건", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["지수부등식", "로그부등식"]}
+        ]},
+        {"code": "[12대수01-08]", "content": "지수함수·로그함수를 활용하여 실생활 문제를 해결할 수 있다.", "types": [
+          {"typeCode": "MA-HS1-EXP-A08-001", "typeName": "지수·로그 활용 (실생활)", "description": "복리, 반감기, pH 등 모델링", "solutionMethod": "모델링+계산", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["지수로그", "활용", "실생활"]}
+        ]}
+      ]
+    },
+    {
+      "area": "삼각함수",
+      "domain": "TRI",
+      "standards": [
+        {"code": "[12대수02-01]", "content": "일반각과 호도법을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-TRI-A01-001", "typeName": "호도법과 도수법 변환", "description": "π↔180° 변환, 부채꼴", "solutionMethod": "변환 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["호도법", "라디안", "변환"]},
+          {"typeCode": "MA-HS1-TRI-A01-002", "typeName": "부채꼴의 호·넓이", "description": "l=rθ, S=½r²θ", "solutionMethod": "부채꼴 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["부채꼴", "호", "넓이"]}
+        ]},
+        {"code": "[12대수02-02]", "content": "삼각함수의 뜻을 알고 그 그래프의 성질을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-TRI-A02-001", "typeName": "삼각함수 값과 그래프", "description": "단위원, sin/cos/tan 그래프", "solutionMethod": "단위원+그래프", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["삼각함수", "그래프", "단위원"]},
+          {"typeCode": "MA-HS1-TRI-A02-002", "typeName": "삼각함수 변환 그래프", "description": "y=asin(bx+c)+d 분석", "solutionMethod": "매개변수 해석", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["삼각함수", "변환", "주기"]},
+          {"typeCode": "MA-HS1-TRI-A02-003", "typeName": "삼각함수 항등식", "description": "sin²+cos²=1, tanθ=sinθ/cosθ", "solutionMethod": "항등식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["항등식", "삼각함수"]}
+        ]},
+        {"code": "[12대수02-03]", "content": "삼각함수를 활용하여 문제를 해결할 수 있다.", "types": [
+          {"typeCode": "MA-HS1-TRI-A03-001", "typeName": "삼각방정식·부등식", "description": "sinθ=a, cosθ>b 등", "solutionMethod": "단위원+일반해", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["삼각방정식", "삼각부등식"]},
+          {"typeCode": "MA-HS1-TRI-A03-002", "typeName": "삼각함수 합성과 최대·최소", "description": "asinθ+bcosθ 합성", "solutionMethod": "합성공식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 5], "keywords": ["합성", "최대최소"]},
+          {"typeCode": "MA-HS1-TRI-A03-003", "typeName": "사인·코사인 법칙", "description": "삼각형 변·각 관계", "solutionMethod": "사인/코사인법칙", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["사인법칙", "코사인법칙"]}
+        ]}
+      ]
+    },
+    {
+      "area": "수열",
+      "domain": "SEQ",
+      "standards": [
+        {"code": "[12대수03-01]", "content": "등차수열·등비수열의 일반항과 합을 구할 수 있다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A01-001", "typeName": "등차수열 일반항·합", "description": "aₙ=a₁+(n-1)d, Sₙ 공식", "solutionMethod": "등차수열 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["등차수열", "일반항", "합"]},
+          {"typeCode": "MA-HS1-SEQ-A01-002", "typeName": "등비수열 일반항·합", "description": "aₙ=a₁rⁿ⁻¹, Sₙ 공식", "solutionMethod": "등비수열 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [2, 3], "keywords": ["등비수열", "일반항", "합"]},
+          {"typeCode": "MA-HS1-SEQ-A01-003", "typeName": "등차·등비 중항", "description": "등차중항, 등비중항 활용", "solutionMethod": "중항 조건", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["등차중항", "등비중항"]}
+        ]},
+        {"code": "[12대수03-02]", "content": "수열의 합과 일반항 사이의 관계를 이해한다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A02-001", "typeName": "Sₙ→aₙ 관계식", "description": "aₙ=Sₙ-Sₙ₋₁ (n≥2)", "solutionMethod": "Sₙ-Sₙ₋₁", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["Sn", "일반항", "관계"]}
+        ]},
+        {"code": "[12대수03-03]", "content": "여러 가지 수열의 합을 구할 수 있다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A03-001", "typeName": "Σ 공식 활용", "description": "Σk, Σk², Σk³ 활용", "solutionMethod": "시그마 공식", "typicalCognitive": "CALCULATION", "typicalDifficulty": [1, 2], "keywords": ["시그마", "합"]},
+          {"typeCode": "MA-HS1-SEQ-A03-002", "typeName": "부분분수·텔레스코핑", "description": "1/k(k+1) 분해 등", "solutionMethod": "부분분수", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["부분분수", "텔레스코핑"]},
+          {"typeCode": "MA-HS1-SEQ-A03-003", "typeName": "등차×등비 수열의 합", "description": "k·rᵏ 형태 SrS 기법", "solutionMethod": "S-rS", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["등차등비", "SrS"]}
+        ]},
+        {"code": "[12대수03-04]", "content": "수학적 귀납법을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A04-001", "typeName": "수학적 귀납법 기본", "description": "n=1 확인→k가정→k+1 증명", "solutionMethod": "수학적 귀납법", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 4], "keywords": ["귀납법", "증명"]},
+          {"typeCode": "MA-HS1-SEQ-A04-002", "typeName": "수학적 귀납법 응용", "description": "부등식, 정수성질 증명", "solutionMethod": "귀납법+부등식", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [4, 5], "keywords": ["귀납법", "응용"]}
+        ]},
+        {"code": "[12대수03-05]", "content": "점화식의 뜻을 이해한다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A05-001", "typeName": "점화식 기본 유형", "description": "aₙ₊₁=aₙ+f(n), aₙ₊₁=raₙ+d 등", "solutionMethod": "점화식 풀이법", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 3], "keywords": ["점화식", "기본"]},
+          {"typeCode": "MA-HS1-SEQ-A05-002", "typeName": "점화식 응용", "description": "특성방정식, 역수 치환 등", "solutionMethod": "변환+풀이", "typicalCognitive": "INFERENCE", "typicalDifficulty": [3, 5], "keywords": ["점화식", "응용"]}
+        ]},
+        {"code": "[12대수03-06]", "content": "수열의 귀납적 정의를 이해한다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A06-001", "typeName": "귀납적 정의 이해", "description": "초항+점화식으로 수열 결정", "solutionMethod": "귀납적 정의", "typicalCognitive": "UNDERSTANDING", "typicalDifficulty": [2, 2], "keywords": ["귀납적정의"]}
+        ]},
+        {"code": "[12대수03-07]", "content": "수열을 활용하여 문제를 해결할 수 있다.", "types": [
+          {"typeCode": "MA-HS1-SEQ-A07-001", "typeName": "수열 활용 문제 (실생활)", "description": "적금, 대출, 인구 등 수열 모델", "solutionMethod": "수열 모델링", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 4], "keywords": ["수열", "활용", "실생활"]},
+          {"typeCode": "MA-HS1-SEQ-A07-002", "typeName": "군수열·규칙성 문제", "description": "그룹 분할 수열, 규칙 찾기", "solutionMethod": "그룹별 분석", "typicalCognitive": "PROBLEM_SOLVING", "typicalDifficulty": [3, 5], "keywords": ["군수열", "규칙"]}
+        ]}
+      ]
+    }
+  ]
+}

@@ -350,7 +350,8 @@ function splitLargeBlock(
 function getContentBoundsAbs(
   canvas: HTMLCanvasElement,
   rect: AbsoluteRect,
-  padding = 10
+  padding = 10,
+  marginRatio = 0.10
 ): AbsoluteRect | null {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
@@ -365,8 +366,8 @@ function getContentBoundsAbs(
   const imageData = ctx.getImageData(startX, startY, w, h);
   const data = imageData.data;
 
-  // ★ 좌우 마진: 세로 구분선/외곽 테두리 무시 (양쪽 10%)
-  const marginX = Math.max(4, Math.floor(w * 0.10));
+  // ★ 좌우 마진: 세로 구분선/외곽 테두리 무시 (기본 양쪽 10%, 조정 가능)
+  const marginX = Math.max(4, Math.floor(w * marginRatio));
 
   let minX = w;
   let maxX = 0;
@@ -430,34 +431,25 @@ export function getMultiBlocks(
   const imageData = ctx.getImageData(startX, startY, w, h);
   const data = imageData.data;
 
-  // 좌우 마진: 테두리선/세로선/점선 무시 (양쪽 10% 제외)
-  const marginX = Math.max(4, Math.floor(w * 0.10));
-  const scanLeft = marginX;
-  const scanRight = w - marginX;
-  const scanWidth = scanRight - scanLeft;
-  // 콘텐츠 행 판정: darkPixel 비율이 일정 이상이어야 실제 텍스트/수식 행
-  // 텍스트 한 줄에 수십~수백 픽셀이 어두우므로, 스캔 폭의 1% 이상을 임계값으로 설정
-  const minDarkPixels = Math.max(3, Math.floor(scanWidth * 0.01));
+  // 판서제작기 방식: 마진/최소 dark 픽셀 없이 1픽셀이라도 어두우면 콘텐츠 행
+  // (수동 드래그 영역은 사용자가 지정하므로 테두리선 무시 불필요)
 
-  // 1. Y축 투영: 각 행에 충분한 어두운 픽셀(콘텐츠)이 있는지 확인
+  // 1. Y축 투영: 각 행에 어두운 픽셀이 있는지 확인 (판서제작기 동일)
   const hasContentRow = new Uint8Array(h);
   for (let y = 0; y < h; y++) {
     const rowOffset = y * w;
-    let darkCount = 0;
-    for (let x = scanLeft; x < scanRight; x++) {
+    for (let x = 0; x < w; x++) {
       const offset = (rowOffset + x) * 4;
       if (data[offset] + data[offset + 1] + data[offset + 2] < 600) {
-        darkCount++;
-        if (darkCount >= minDarkPixels) {
-          hasContentRow[y] = 1;
-          break; // 충분히 어두운 픽셀 있으면 콘텐츠 행
-        }
+        hasContentRow[y] = 1;
+        break; // 1픽셀이라도 있으면 콘텐츠 행
       }
     }
   }
 
-  // 최소 블록 높이: 캔버스 전체의 MIN_BLOCK_HEIGHT_RATIO 이상이어야 유효한 문제 블록
-  const minBlockH = Math.max(15, Math.floor(canvas.height * MIN_BLOCK_HEIGHT_RATIO));
+  // 최소 블록 높이: 선택 영역의 5% 또는 15px 중 큰 값 (판서제작기와 동일하게 선택 영역 기준)
+  // 기존: canvas.height * 0.10 → 전체 캔버스의 10%라 수동 드래그 시 작은 문제가 병합됨
+  const minBlockH = Math.max(15, Math.floor(h * 0.05));
 
   // 2. 블록 찾기 (sensitivity 이상 빈 행이 연속되면 블록 경계)
   const rawBlocks: { y: number; height: number }[] = [];
@@ -490,28 +482,9 @@ export function getMultiBlocks(
     rawBlocks.push({ y: blockStart, height: h - blockStart });
   }
 
-  // 3. 작은 블록을 인접한 블록에 병합 (선택지/소문항이 따로 잡힌 경우)
-  const blocks: { y: number; height: number }[] = [];
-  for (let i = 0; i < rawBlocks.length; i++) {
-    const cur = rawBlocks[i];
-    if (cur.height >= minBlockH) {
-      blocks.push(cur);
-    } else {
-      // 작은 블록 → 가장 가까운 (이전/다음) 블록에 병합
-      if (blocks.length > 0) {
-        // 이전 블록에 병합 (이전 블록 끝 ~ 현재 블록 끝까지 확장)
-        const prev = blocks[blocks.length - 1];
-        const mergedEnd = cur.y + cur.height;
-        prev.height = mergedEnd - prev.y;
-      } else if (i + 1 < rawBlocks.length) {
-        // 다음 블록에 병합 (현재 블록 시작부터)
-        const next = rawBlocks[i + 1];
-        next.height = (next.y + next.height) - cur.y;
-        next.y = cur.y;
-      }
-      // 둘 다 없으면 작은 블록 버림 (노이즈)
-    }
-  }
+  // 3. 판서제작기 방식: 병합 없이 최소 높이만 필터링
+  // 수동 드래그 영역에서는 사용자가 원하는 영역을 정확히 선택하므로 병합하지 않음
+  const blocks = rawBlocks.filter(b => b.height >= minBlockH);
 
   // 빈 행 통계 (디버그)
   let emptyRowCount = 0;
@@ -522,7 +495,7 @@ export function getMultiBlocks(
     else { if (currentGap > maxGap) maxGap = currentGap; currentGap = 0; }
   }
   if (currentGap > maxGap) maxGap = currentGap;
-  console.log(`[getMultiBlocks] 영역(${w}x${h}) sensitivity=${sensitivity}, 빈행=${emptyRowCount}/${h}, 최대갭=${maxGap}px, marginX=${marginX}, minDark=${minDarkPixels} → ${blocks.length}개 블록`);
+  console.log(`[getMultiBlocks] 영역(${w}x${h}) sensitivity=${sensitivity}, 빈행=${emptyRowCount}/${h}, 최대갭=${maxGap}px → ${blocks.length}개 블록`);
 
   // 3. 0개 → 빈 배열 반환 (유령 블록 방지)
   if (blocks.length === 0) {
@@ -537,7 +510,8 @@ export function getMultiBlocks(
       width: w,
       height: block.height,
     };
-    const refined = getContentBoundsAbs(canvas, blockRect);
+    // marginRatio=0: 판서제작기 원본과 동일하게 마진 없이 전체 스캔 (padding=10만)
+    const refined = getContentBoundsAbs(canvas, blockRect, 10, 0);
     if (!refined) return null;
     return {
       x: refined.x / canvas.width,
@@ -599,4 +573,159 @@ export function analyzePageBlocksSplit(
   console.log(`[AutoCrop Split] 좌측 ${leftBlocks.length}블록, 우측 ${rightBlocks.length}블록 (총 ${leftBlocks.length + rightBlocks.length}), sensitivity=${sensitivity}`);
 
   return [...leftBlocks, ...rightBlocks];
+}
+
+// ============================================================================
+// AI bbox 픽셀 정제 — GPT-4o Vision 감지 결과를 픽셀 분석으로 타이트하게 보정
+// ============================================================================
+
+/**
+ * AI(GPT-4o Vision)가 반환한 bbox를 캔버스 픽셀 분석으로 정제
+ *
+ * 1) 헤더/푸터 클리핑
+ * 2) getContentBoundsAbs로 타이트 피팅
+ * 3) 콘텐츠가 bbox 경계에 닿아있으면 소폭 확장 후 재스캔
+ * 4) 대형 블록(>30%) 분할 시도
+ * 5) 같은 컬럼 내 겹침 해소
+ * 6) 최소 크기 필터
+ */
+export function refineAiBboxes(
+  canvas: HTMLCanvasElement,
+  aiBboxes: CropRect[],
+  options?: {
+    padding?: number;
+    headerRatio?: number;
+    footerRatio?: number;
+    maxExpansion?: number;
+    splitThreshold?: number;
+  }
+): CropRect[] {
+  if (aiBboxes.length === 0) return [];
+
+  const padding = options?.padding ?? 10;
+  const headerRatio = options?.headerRatio ?? EXAM_HEADER_RATIO;
+  const footerRatio = options?.footerRatio ?? EXAM_FOOTER_RATIO;
+  const maxExpansion = options?.maxExpansion ?? 0.02;
+  const splitThreshold = options?.splitThreshold ?? 0.30;
+
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  console.log(`[RefineAI] 시작: ${aiBboxes.length}개 AI bbox (canvas ${cw}x${ch})`);
+
+  // ── Phase 1: 헤더/푸터 클리핑 ──
+  const clipped: CropRect[] = [];
+  for (const bbox of aiBboxes) {
+    let y = bbox.y;
+    let h = bbox.h;
+
+    // 헤더 클리핑
+    if (y < headerRatio) {
+      if (y + h <= headerRatio) {
+        console.log(`[RefineAI] 헤더 영역 제거: y=${y.toFixed(3)}, h=${h.toFixed(3)}`);
+        continue; // 전체가 헤더 내부
+      }
+      h = h - (headerRatio - y);
+      y = headerRatio;
+    }
+
+    // 푸터 클리핑
+    if (y + h > footerRatio) {
+      if (y >= footerRatio) {
+        console.log(`[RefineAI] 푸터 영역 제거: y=${y.toFixed(3)}, h=${h.toFixed(3)}`);
+        continue; // 전체가 푸터 내부
+      }
+      h = footerRatio - y;
+    }
+
+    if (h > 0.01) {
+      clipped.push({ x: bbox.x, y, w: bbox.w, h });
+    }
+  }
+
+  // ── Phase 2: 픽셀 타이트 피팅 ──
+  const refined: CropRect[] = [];
+  for (let i = 0; i < clipped.length; i++) {
+    const bbox = clipped[i];
+    const absRect: AbsoluteRect = {
+      x: bbox.x * cw,
+      y: bbox.y * ch,
+      width: bbox.w * cw,
+      height: bbox.h * ch,
+    };
+
+    // AI는 이미 컬럼을 인식하므로 좌우 마진 3%로 축소
+    let tight = getContentBoundsAbs(canvas, absRect, padding, 0.03);
+
+    if (!tight) {
+      // 콘텐츠 없음 → 원본 AI bbox 유지 (사용자가 수동 조정 가능)
+      console.log(`[RefineAI] #${i + 1} 콘텐츠 없음, 원본 유지`);
+      refined.push(bbox);
+      continue;
+    }
+
+    // ── Phase 3: 엣지 확장 감지 ──
+    // 콘텐츠가 AI bbox 경계에 닿아있으면 bbox가 너무 작을 수 있음 → 확장 후 재스캔
+    const expandPx = ch * maxExpansion;
+    let expanded = false;
+    const expandedRect = { ...absRect };
+
+    // 하단 경계 확인: tight 하단이 원본 하단 5px 이내
+    if (tight.y + tight.height >= absRect.y + absRect.height - 5) {
+      expandedRect.height = Math.min(ch - expandedRect.y, absRect.height + expandPx);
+      expanded = true;
+    }
+    // 상단 경계 확인: tight 상단이 원본 상단 5px 이내
+    if (tight.y <= absRect.y + 5) {
+      const newY = Math.max(0, absRect.y - expandPx);
+      expandedRect.height += expandedRect.y - newY;
+      expandedRect.y = newY;
+      expanded = true;
+    }
+
+    if (expanded) {
+      const retight = getContentBoundsAbs(canvas, expandedRect, padding, 0.03);
+      if (retight) {
+        tight = retight;
+      }
+    }
+
+    refined.push({
+      x: tight.x / cw,
+      y: tight.y / ch,
+      w: tight.width / cw,
+      h: tight.height / ch,
+    });
+  }
+
+  // ── Phase 4: 같은 컬럼 내 겹침 해소 ──
+  // AI가 이미 문제 단위로 감지했으므로 대형 블록 분할/최소 크기 필터는 적용하지 않음
+  // (대형 분할 → AI가 잡은 1문제를 여러 조각으로 쪼갬, 최소 필터 → 작은 문제 삭제)
+  const leftCol = refined.filter(b => b.x + b.w / 2 < 0.5).sort((a, b) => a.y - b.y);
+  const rightCol = refined.filter(b => b.x + b.w / 2 >= 0.5).sort((a, b) => a.y - b.y);
+
+  const resolveOverlaps = (bboxes: CropRect[]): CropRect[] => {
+    const result = bboxes.map(b => ({ ...b }));
+    for (let i = 0; i < result.length - 1; i++) {
+      const cur = result[i];
+      const next = result[i + 1];
+      const curBottom = cur.y + cur.h;
+      if (curBottom > next.y) {
+        // 겹침 → 중간점에서 분리
+        const mid = (curBottom + next.y) / 2;
+        cur.h = mid - cur.y;
+        const oldNextY = next.y;
+        next.y = mid;
+        next.h = next.h - (mid - oldNextY);
+      }
+    }
+    return result;
+  };
+
+  const resolvedLeft = resolveOverlaps(leftCol);
+  const resolvedRight = resolveOverlaps(rightCol);
+  const final = [...resolvedLeft, ...resolvedRight];
+
+  console.log(`[RefineAI] 완료: ${aiBboxes.length}개 AI → ${final.length}개 정제`);
+  return final;
 }

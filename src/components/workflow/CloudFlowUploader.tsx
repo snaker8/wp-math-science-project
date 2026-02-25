@@ -61,8 +61,8 @@ export default function CloudFlowUploader({
     QUICK_ANSWER: null,
   });
 
-  const [autoClassify, setAutoClassify] = useState(true);
-  const [generateSolutions, setGenerateSolutions] = useState(true);
+  const [autoClassify, setAutoClassify] = useState(false); // 기본 OFF — 분석 페이지에서 수동/AI 감지 선택
+  const [generateSolutions, setGenerateSolutions] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -159,8 +159,12 @@ export default function CloudFlowUploader({
       });
 
       // 자동 네비게이션: 업로드 시작 후 바로 분석 페이지로 이동
+      // bookGroupId를 URL query로 전달 (in-memory jobStore 핫리로드 대비)
       if (autoNavigateToAnalyze) {
-        router.push(`/dashboard/workflow/analyze/${data.jobId}`);
+        const analyzeUrl = bookGroupId
+          ? `/dashboard/workflow/analyze/${data.jobId}?bookGroupId=${bookGroupId}`
+          : `/dashboard/workflow/analyze/${data.jobId}`;
+        router.push(analyzeUrl);
         return;
       }
 
@@ -528,7 +532,7 @@ export default function CloudFlowUploader({
                       <span>{job.results.length}개 문제 분석 완료</span>
                     </div>
                     <a
-                      href={`/dashboard/workflow/analyze/${job.id}`}
+                      href={bookGroupId ? `/dashboard/workflow/analyze/${job.id}?bookGroupId=${bookGroupId}` : `/dashboard/workflow/analyze/${job.id}`}
                       className="analyze-link"
                       onClick={(e) => e.stopPropagation()}
                     >

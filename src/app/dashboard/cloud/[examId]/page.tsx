@@ -235,22 +235,75 @@ function ProblemCardView({
           />
         </div>
 
-        {/* 선택지 */}
-        {/* 선택지 */}
-        {problem.choices.length > 0 && (
-          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 pl-4">
-            {problem.choices.map((choice, i) => {
-              const circled = ['①', '②', '③', '④', '⑤'][i] || '';
-              const stripped = choice.replace(/^[①②③④⑤]\s*/, '');
-              return (
-                <div key={i} className="flex items-start gap-1 text-[13px] text-zinc-400">
-                  <span className="flex-shrink-0 text-zinc-500">{circled}</span>
-                  <MixedContentRenderer content={stripped} className="text-zinc-400" />
+        {/* 선택지/소문제 — 유형+길이에 따라 레이아웃 자동 전환 */}
+        {problem.choices.length > 0 && (() => {
+          // ★ 소문제 판별: (1) 형식이거나 "구하시오/[N점]" 포함
+          const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+          const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
+          const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
+
+          if (isSubProblem) {
+            // 소문제: (1), (2), (3) 세로 배치
+            return (
+              <div className="mt-3 space-y-2 pl-4">
+                {problem.choices.map((choice, i) => {
+                  const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+                  return (
+                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
+                      <span className="flex-shrink-0 text-cyan-500 font-medium">({i + 1})</span>
+                      <MixedContentRenderer content={stripped} className="text-zinc-400" />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          // 객관식 보기
+          const processed = problem.choices.map((choice, i) => {
+            const circled = ['①', '②', '③', '④', '⑤'][i] || '';
+            const stripped = choice.replace(/^[①②③④⑤]\s*/, '');
+            return { circled, stripped };
+          });
+          const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+          // 짧은 보기: 가로 나열
+          if (maxLen <= 12) {
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
+                {processed.map((c, i) => (
+                  <div key={i} className="flex items-center gap-1 text-[13px] text-zinc-400">
+                    <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
+                    <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          // 중간 길이: 2열 그리드
+          if (maxLen <= 30) {
+            return (
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
+                {processed.map((c, i) => (
+                  <div key={i} className="flex items-start gap-1 text-[13px] text-zinc-400">
+                    <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
+                    <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          // 긴 수식: 1열 세로 배치
+          return (
+            <div className="mt-2 space-y-1.5 pl-4">
+              {processed.map((c, i) => (
+                <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
+                  <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
+                  <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* 카드 하단: 연도 + 유형코드 + 유형명 + 출처 */}
@@ -398,15 +451,61 @@ function ExamPaperView({
                     <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                       <MixedContentRenderer content={problem.content} className="text-gray-800" />
                     </div>
-                    {problem.choices.length > 0 && (
-                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
-                        {problem.choices.map((choice, ci) => (
-                          <div key={ci} className="text-[13px] text-gray-700">
-                            <MixedContentRenderer content={choice} className="text-gray-700" />
+                    {problem.choices.length > 0 && (() => {
+                      // 소문제 판별
+                      const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+                      const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
+                      const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
+
+                      if (isSubProblem) {
+                        return (
+                          <div className="mt-2 space-y-1.5">
+                            {problem.choices.map((choice, ci) => {
+                              const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+                              return (
+                                <div key={ci} className="flex items-start gap-1.5 text-[13px] text-gray-700">
+                                  <span className="flex-shrink-0 font-medium text-gray-900">({ci + 1})</span>
+                                  <MixedContentRenderer content={stripped} className="text-gray-700" />
+                                </div>
+                              );
+                            })}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        );
+                      }
+
+                      const maxLen = Math.max(...problem.choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+                      if (maxLen <= 12) {
+                        return (
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {problem.choices.map((choice, ci) => (
+                              <div key={ci} className="text-[13px] text-gray-700">
+                                <MixedContentRenderer content={choice} className="text-gray-700" />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (maxLen <= 30) {
+                        return (
+                          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                            {problem.choices.map((choice, ci) => (
+                              <div key={ci} className="text-[13px] text-gray-700">
+                                <MixedContentRenderer content={choice} className="text-gray-700" />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="mt-2 space-y-1">
+                          {problem.choices.map((choice, ci) => (
+                            <div key={ci} className="text-[13px] text-gray-700">
+                              <MixedContentRenderer content={choice} className="text-gray-700" />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -663,32 +762,28 @@ export default function CloudExamDetailPage() {
   const params = useParams();
   const examId = params.examId as string;
 
-  // DB에서 문제 로드 (없으면 mock fallback)
+  // DB에서 문제 로드
   const { problems: dbProblems, examInfo, isLoading: dbLoading, refetch: refetchProblems } = useExamProblems(examId);
-  const mockProblems = useMemo(() => generateMockProblems(), []);
 
-  // DB 데이터가 있으면 사용, 없으면 mock
+  // DB 데이터 사용 (mock fallback 제거)
   const problems: ProblemData[] = useMemo(() => {
-    if (dbProblems.length > 0) {
-      return dbProblems.map((p) => ({
-        id: p.id,
-        number: p.number,
-        difficulty: p.difficulty,
-        cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
-        content: p.content,
-        choices: p.choices,
-        answer: p.answer,
-        solution: p.solution,
-        year: p.year,
-        typeCode: p.typeCode,
-        typeName: p.typeName,
-        source: p.source,
-      }));
-    }
-    return mockProblems;
-  }, [dbProblems, mockProblems]);
+    return dbProblems.map((p) => ({
+      id: p.id,
+      number: p.number,
+      difficulty: p.difficulty,
+      cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
+      content: p.content,
+      choices: p.choices,
+      answer: p.answer,
+      solution: p.solution,
+      year: p.year,
+      typeCode: p.typeCode,
+      typeName: p.typeName,
+      source: p.source,
+    }));
+  }, [dbProblems]);
 
-  const examTitle = examInfo?.title || '용인고등학교(부산 동래구) 2025 1-1 중간 공통수학_1854.pdf';
+  const examTitle = examInfo?.title || '(제목 없음)';
 
   // Filter state
   const [activeDifficulty, setActiveDifficulty] = useState<DifficultyKey | null>(null);
@@ -925,7 +1020,12 @@ export default function CloudExamDetailPage() {
       {/* ======== Content Area (View-dependent) ======== */}
       {activeView === 'spread' && (
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 px-4 py-4">
-          {filteredProblems.length > 0 ? (
+          {dbLoading ? (
+            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-cyan-500 mb-3" />
+              <p className="text-sm">문제 로딩 중...</p>
+            </div>
+          ) : filteredProblems.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {filteredProblems.map((problem) => (
                 <ProblemCardView
@@ -938,6 +1038,12 @@ export default function CloudExamDetailPage() {
                   onToggleSelect={toggleSelectProblem}
                 />
               ))}
+            </div>
+          ) : problems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
+              <AlertCircle className="h-10 w-10 mb-3 text-zinc-600" />
+              <p className="text-sm font-medium">아직 자산화된 문제가 없습니다</p>
+              <p className="text-xs text-zinc-600 mt-1">분석 워크플로우에서 자산화를 완료하면 여기에 문제가 표시됩니다.</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-64 text-zinc-500">

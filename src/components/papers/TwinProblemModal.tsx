@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   X,
   Sparkles,
@@ -11,11 +11,16 @@ import {
   Minus,
   Copy,
   Check,
-  Save,
   Wand2,
   BookOpen,
+  Pencil,
+  Eye,
+  EyeOff,
+  Plus,
+  Database,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
 
 // ============================================================================
 // Types
@@ -27,6 +32,8 @@ interface TwinProblemModalProps {
     number: number;
     content: string;
     choices: string[];
+    answer: number | string;
+    solution: string;
     difficulty: number;
     cognitiveDomain: string;
     typeCode: string;
@@ -42,6 +49,7 @@ interface GeneratedTwin {
   contentLatex: string;
   solutionLatex: string;
   answer: string;
+  choices: string[];
   modifications: Array<{
     type: string;
     original: string;
@@ -77,8 +85,24 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
   const [difficultyAdj, setDifficultyAdj] = useState<-1 | 0 | 1>(0);
   const [useLLM, setUseLLM] = useState(true);
   const [generatedTwins, setGeneratedTwins] = useState<GeneratedTwin[]>([]);
-  const [saved, setSaved] = useState(false);
-  const [showSolution, setShowSolution] = useState(false);
+  const [showSolution, setShowSolution] = useState(true);
+  // ★ 자산화 상태
+  const [assetizedIds, setAssetizedIds] = useState<Set<string>>(new Set());
+  const [assetizingId, setAssetizingId] = useState<string | null>(null);
+
+  // ★ 편집 모드 상태
+  const [editingTwinId, setEditingTwinId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    contentLatex: string;
+    solutionLatex: string;
+    answer: string;
+    choices: string[];
+  } | null>(null);
+  const [editPreview, setEditPreview] = useState(false);
+  const [showLatexModal, setShowLatexModal] = useState(false);
+  const [latexTarget, setLatexTarget] = useState<'content' | 'solution'>('content');
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const solutionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const diffCfg = DIFFICULTY_CONFIG[problem.difficulty] || DIFFICULTY_CONFIG[3];
   const domainCfg = DOMAIN_CONFIG[problem.cognitiveDomain] || DOMAIN_CONFIG['UNDERSTANDING'];
@@ -86,7 +110,9 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
   // 유사문제 생성
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
-    setSaved(false);
+    setAssetizedIds(new Set()); // 재생성 시 자산화 상태 초기화
+
+    let apiSucceeded = false;
 
     try {
       const res = await fetch('/api/workflow/twin', {
@@ -100,6 +126,16 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
             preserveStructure: true,
           },
           useLLM,
+          // ★ 프론트엔드에서 이미 로드된 문제 데이터를 직접 전달 (DB 재조회 불필요)
+          problemsData: [{
+            id: problem.id,
+            contentLatex: problem.content,
+            solutionLatex: problem.solution || '',
+            typeCode: problem.typeCode,
+            typeName: problem.typeName,
+            answer: String(problem.answer || ''),
+            choices: problem.choices || [],
+          }],
         }),
       });
 
@@ -107,38 +143,139 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
         const data = await res.json();
         if (data.twinProblems && data.twinProblems.length > 0) {
           setGeneratedTwins(data.twinProblems);
+          apiSucceeded = true;
         }
+      } else {
+        console.error('Twin API error:', res.status, await res.text().catch(() => ''));
       }
     } catch (err) {
       console.error('Twin generation failed:', err);
     }
 
-    // fallback: Mock 생성 (API 실패 시)
-    if (generatedTwins.length === 0) {
+    // fallback: API 실패 시에만 실행 (apiSucceeded로 정확하게 판단)
+    if (!apiSucceeded) {
+      // 간단한 숫자 변형 fallback (모든 문제 유형에 적용 가능)
+      const variedContent = problem.content
+        .replace(/(-?\d+)/g, (match) => {
+          const num = parseInt(match);
+          if (isNaN(num) || Math.abs(num) > 100) return match;
+          const delta = (Math.floor(Math.random() * 3) + 1) * (Math.random() > 0.5 ? 1 : -1);
+          return String(num + delta);
+        });
+      // 선택지도 숫자 변형
+      const variedChoices = problem.choices.map((c) =>
+        c.replace(/(-?\d+)/g, (match) => {
+          const num = parseInt(match);
+          if (isNaN(num) || Math.abs(num) > 100) return match;
+          const delta = (Math.floor(Math.random() * 3) + 1) * (Math.random() > 0.5 ? 1 : -1);
+          return String(num + delta);
+        })
+      );
       setGeneratedTwins([{
         id: `twin-${Date.now()}`,
-        contentLatex: problem.content
-          .replace(/3y\^2/g, '5y^2')
-          .replace(/2x\^2/g, '4x^2')
-          .replace(/-3/g, '-5')
-          .replace(/xy = 3/g, 'xy = 5'),
-        solutionLatex: '풀이: 주어진 조건에서 변형된 값을 대입하여 계산하면...\n\n$= \\frac{(x-y)(x+y)}{xy} = \\frac{(-5)(x+y)}{5}$\n\n$= -(x+y)$',
-        answer: '②',
+        contentLatex: variedContent,
+        solutionLatex: '(AI 유사문제 생성 서버에 연결할 수 없어 숫자만 변형하였습니다.)',
+        answer: '-',
+        choices: variedChoices,
         modifications: [
-          { type: 'NUMBER', original: '3', modified: '5' },
-          { type: 'COEFFICIENT', original: '2', modified: '4' },
+          { type: 'NUMBER', original: '(원본)', modified: '(변형됨)' },
         ],
       }]);
     }
 
     setGenerating(false);
-  }, [problem, difficultyAdj, useLLM, generatedTwins.length]);
+  }, [problem, difficultyAdj, useLLM]);
 
-  const handleSave = useCallback(() => {
-    setSaved(true);
-    // TODO: Supabase에 저장
-    setTimeout(() => setSaved(false), 2000);
+  // ★ 자산화: 유사문제를 문제은행(DB)에 저장
+  const handleAssetize = useCallback(async (twin: GeneratedTwin) => {
+    if (assetizedIds.has(twin.id) || assetizingId) return;
+    setAssetizingId(twin.id);
+
+    try {
+      const res = await fetch('/api/problems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contentLatex: twin.contentLatex,
+          solutionLatex: twin.solutionLatex,
+          answer: twin.answer,
+          choices: twin.choices,
+          originalProblemId: problem.id,
+          typeCode: problem.typeCode,
+          typeName: problem.typeName,
+          difficulty: problem.difficulty,
+          cognitiveDomain: problem.cognitiveDomain,
+        }),
+      });
+
+      if (res.ok) {
+        setAssetizedIds(prev => new Set([...prev, twin.id]));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error('[자산화 실패]', errData);
+        alert('자산화에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (err) {
+      console.error('[자산화 오류]', err);
+      alert('네트워크 오류가 발생했습니다.');
+    } finally {
+      setAssetizingId(null);
+    }
+  }, [assetizedIds, assetizingId, problem]);
+
+  // ★ 편집 시작
+  const handleStartEdit = useCallback((twin: GeneratedTwin) => {
+    setEditingTwinId(twin.id);
+    setEditForm({
+      contentLatex: twin.contentLatex,
+      solutionLatex: twin.solutionLatex,
+      answer: twin.answer,
+      choices: [...twin.choices],
+    });
+    setEditPreview(false);
   }, []);
+
+  // ★ 편집 적용
+  const handleApplyEdit = useCallback(() => {
+    if (!editingTwinId || !editForm) return;
+    setGeneratedTwins(prev => prev.map(twin =>
+      twin.id === editingTwinId
+        ? { ...twin, ...editForm }
+        : twin
+    ));
+    setEditingTwinId(null);
+    setEditForm(null);
+  }, [editingTwinId, editForm]);
+
+  // ★ 편집 취소
+  const handleCancelEdit = useCallback(() => {
+    setEditingTwinId(null);
+    setEditForm(null);
+  }, []);
+
+  // ★ LaTeX 수식 삽입
+  const handleInsertLatex = useCallback((latex: string, opts: { displayStyle: boolean; block: boolean }) => {
+    if (!editForm) return;
+    const wrapped = opts.block ? `$$${latex}$$` : `$${latex}$`;
+    const textarea = latexTarget === 'content' ? contentTextareaRef.current : solutionTextareaRef.current;
+    const field = latexTarget === 'content' ? 'contentLatex' : 'solutionLatex';
+
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const current = editForm[field];
+      const newValue = current.substring(0, start) + wrapped + current.substring(end);
+      setEditForm(prev => prev ? { ...prev, [field]: newValue } : prev);
+      // 커서 위치 복원
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + wrapped.length, start + wrapped.length);
+      }, 50);
+    } else {
+      setEditForm(prev => prev ? { ...prev, [field]: prev[field] + wrapped } : prev);
+    }
+    setShowLatexModal(false);
+  }, [editForm, latexTarget]);
 
   // ESC로 닫기
   React.useEffect(() => {
@@ -338,37 +475,217 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(twin.contentLatex);
-                          }}
-                          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
-                        >
-                          <Copy className="h-3 w-3" /> 복사
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSave}
-                          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
-                            saved
-                              ? 'text-emerald-400 bg-emerald-500/10'
-                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
-                          }`}
-                        >
-                          {saved ? <Check className="h-3 w-3" /> : <Save className="h-3 w-3" />}
-                          {saved ? '저장됨' : '저장'}
-                        </button>
+                        {editingTwinId === twin.id ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleApplyEdit}
+                              className="flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors"
+                            >
+                              <Check className="h-3 w-3" /> 적용
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
+                            >
+                              <X className="h-3 w-3" /> 취소
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(twin)}
+                              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" /> 편집
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(twin.contentLatex);
+                              }}
+                              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
+                            >
+                              <Copy className="h-3 w-3" /> 복사
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAssetize(twin)}
+                              disabled={assetizedIds.has(twin.id) || assetizingId === twin.id}
+                              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
+                                assetizedIds.has(twin.id)
+                                  ? 'text-emerald-400 bg-emerald-500/10 cursor-default'
+                                  : assetizingId === twin.id
+                                    ? 'text-cyan-400 bg-cyan-500/10 cursor-wait'
+                                    : 'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10'
+                              }`}
+                            >
+                              {assetizedIds.has(twin.id) ? (
+                                <><Check className="h-3 w-3" /> 자산화됨</>
+                              ) : assetizingId === twin.id ? (
+                                <><Loader2 className="h-3 w-3 animate-spin" /> 저장 중...</>
+                              ) : (
+                                <><Database className="h-3 w-3" /> 자산화</>
+                              )}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {/* 생성된 문제 본문 */}
-                    <div className="p-4">
-                      <MixedContentRenderer
-                        content={twin.contentLatex}
-                        className="text-sm text-zinc-300 leading-relaxed"
-                      />
-                    </div>
+                    {/* 생성된 문제 본문 — 편집/보기 모드 분기 */}
+                    {editingTwinId === twin.id && editForm ? (
+                      <div className="p-4 space-y-3">
+                        {/* 프리뷰 토글 */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditPreview(!editPreview)}
+                            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                          >
+                            {editPreview ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                            {editPreview ? '편집 모드' : '미리보기'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setLatexTarget('content'); setShowLatexModal(true); }}
+                            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors"
+                          >
+                            <Plus className="h-3 w-3" /> 수식 삽입
+                          </button>
+                        </div>
+
+                        {/* 문제 내용 */}
+                        <div>
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase mb-1 block">문제 내용</label>
+                          {editPreview ? (
+                            <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3 min-h-[80px]">
+                              <MixedContentRenderer content={editForm.contentLatex} className="text-sm text-zinc-300" />
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={contentTextareaRef}
+                              value={editForm.contentLatex}
+                              onChange={e => setEditForm(prev => prev ? { ...prev, contentLatex: e.target.value } : prev)}
+                              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-zinc-300 p-3 min-h-[80px] resize-y focus:outline-none focus:border-cyan-500/50 font-mono"
+                              placeholder="문제 내용 (LaTeX 가능)"
+                            />
+                          )}
+                        </div>
+
+                        {/* 선택지 */}
+                        {editForm.choices.length > 0 && (
+                          <div>
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase mb-1 block">선택지</label>
+                            <div className="space-y-1.5">
+                              {editForm.choices.map((choice, ci) => (
+                                <div key={ci} className="flex items-center gap-2">
+                                  <span className="text-[11px] text-zinc-500 w-4 text-center">{ci + 1}</span>
+                                  {editPreview ? (
+                                    <div className="flex-1 text-[13px] text-zinc-400">
+                                      <MixedContentRenderer content={choice} />
+                                    </div>
+                                  ) : (
+                                    <input
+                                      value={choice}
+                                      onChange={e => {
+                                        const newChoices = [...editForm.choices];
+                                        newChoices[ci] = e.target.value;
+                                        setEditForm(prev => prev ? { ...prev, choices: newChoices } : prev);
+                                      }}
+                                      className="flex-1 rounded border border-zinc-700 bg-zinc-900 text-[13px] text-zinc-300 px-2 py-1 focus:outline-none focus:border-cyan-500/50 font-mono"
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 정답 */}
+                        <div>
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase mb-1 block">정답</label>
+                          <input
+                            value={editForm.answer}
+                            onChange={e => setEditForm(prev => prev ? { ...prev, answer: e.target.value } : prev)}
+                            className="w-32 rounded border border-zinc-700 bg-zinc-900 text-sm text-emerald-300 px-2 py-1 focus:outline-none focus:border-cyan-500/50 font-mono"
+                          />
+                        </div>
+
+                        {/* 해설 */}
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase">해설</label>
+                            <button
+                              type="button"
+                              onClick={() => { setLatexTarget('solution'); setShowLatexModal(true); }}
+                              className="flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors"
+                            >
+                              <Plus className="h-2.5 w-2.5" /> 수식
+                            </button>
+                          </div>
+                          {editPreview ? (
+                            <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3 min-h-[60px]">
+                              <MixedContentRenderer content={editForm.solutionLatex} className="text-sm text-zinc-400" />
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={solutionTextareaRef}
+                              value={editForm.solutionLatex}
+                              onChange={e => setEditForm(prev => prev ? { ...prev, solutionLatex: e.target.value } : prev)}
+                              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-zinc-400 p-3 min-h-[60px] resize-y focus:outline-none focus:border-cyan-500/50 font-mono"
+                              placeholder="해설 (LaTeX 가능)"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4">
+                        <MixedContentRenderer
+                          content={twin.contentLatex}
+                          className="text-sm text-zinc-300 leading-relaxed"
+                        />
+                        {/* ★ 생성된 선택지 */}
+                        {twin.choices && twin.choices.length > 0 && (() => {
+                          const maxLen = Math.max(...twin.choices.map(c =>
+                            c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length
+                          ));
+                          if (maxLen <= 12) {
+                            return (
+                              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                                {twin.choices.map((choice, ci) => (
+                                  <div key={ci} className="text-[13px] text-zinc-400">
+                                    <MixedContentRenderer content={choice} />
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          if (maxLen <= 30) {
+                            return (
+                              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                {twin.choices.map((choice, ci) => (
+                                  <div key={ci} className="text-[13px] text-zinc-400">
+                                    <MixedContentRenderer content={choice} />
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="mt-3 space-y-1.5">
+                              {twin.choices.map((choice, ci) => (
+                                <div key={ci} className="text-[13px] text-zinc-400">
+                                  <MixedContentRenderer content={choice} />
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
 
                     {/* 변형 사항 */}
                     {twin.modifications.length > 0 && (
@@ -383,6 +700,16 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* 정답 표시 */}
+                    {twin.answer && twin.answer !== '-' && (
+                      <div className="mx-4 mb-3 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+                        <span className="text-xs font-bold text-emerald-400">정답</span>
+                        <span className="text-sm font-semibold text-emerald-300">
+                          <MixedContentRenderer content={twin.answer} />
+                        </span>
                       </div>
                     )}
 
@@ -401,6 +728,12 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                         </button>
                         {showSolution && (
                           <div className="px-4 pb-3">
+                            <div className="mb-2 flex items-center gap-1.5 text-[11px] text-amber-400/70">
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                              </svg>
+                              AI 생성 풀이 — 정확도를 확인하세요
+                            </div>
                             <MixedContentRenderer
                               content={twin.solutionLatex}
                               className="text-sm text-zinc-400 leading-relaxed"
@@ -439,6 +772,19 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
           </div>
         </div>
       </div>
+
+      {/* LaTeX 수식 입력 모달 */}
+      {showLatexModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowLatexModal(false)} />
+          <div className="relative z-10">
+            <LaTeXInputModal
+              onInsert={handleInsertLatex}
+              onCancel={() => setShowLatexModal(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

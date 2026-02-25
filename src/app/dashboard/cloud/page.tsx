@@ -36,6 +36,11 @@ import {
   BookMarked,
   ClipboardList,
   GraduationCap,
+  Shield,
+  Lock,
+  ChevronLeft,
+  AlertTriangle,
+  KeyRound,
 } from 'lucide-react';
 import CloudFlowUploader from '@/components/workflow/CloudFlowUploader';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -673,6 +678,25 @@ export default function CloudPage() {
   // --- Move Modal ---
   const [movingExam, setMovingExam] = useState<{ id: string; bookGroupId: string | null } | null>(null);
 
+  // --- Delete Confirm Modal (2-step + PIN) ---
+  const [deleteModal, setDeleteModal] = useState<{
+    type: 'single' | 'all';
+    examId?: string;
+    examName?: string;
+    step: 1 | 2;
+  } | null>(null);
+  const [deletePinInput, setDeletePinInput] = useState('');
+  const [deletePinError, setDeletePinError] = useState(false);
+  const [deleteModalError, setDeleteModalError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // --- PIN Change Modal ---
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinOld, setPinOld] = useState('');
+  const [pinNew, setPinNew] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [pinChangeError, setPinChangeError] = useState('');
+
   // --- Create Group Modal ---
   const [showCreateGroup, setShowCreateGroup] = useState<{ parentId: string | null } | null>(null);
 
@@ -718,10 +742,10 @@ export default function CloudPage() {
 
       const subjectParam = subject !== '전체' ? `?subject=${encodeURIComponent(subject)}` : '';
 
-      // 북그룹 + 시험지 병렬 fetch
+      // 북그룹 + 시험지 병렬 fetch (no-store: 삭제 후 최신 데이터 보장)
       const [groupsRes, examsRes] = await Promise.all([
-        fetch(`/api/book-groups${subjectParam}`),
-        fetch('/api/exams'),
+        fetch(`/api/book-groups${subjectParam}`, { cache: 'no-store' }),
+        fetch('/api/exams', { cache: 'no-store' }),
       ]);
 
       if (!groupsRes.ok) throw new Error(`BookGroups HTTP ${groupsRes.status}`);
@@ -730,8 +754,12 @@ export default function CloudPage() {
       const groupsData = await groupsRes.json();
       const examsData = await examsRes.json();
 
+      console.log('[Cloud] ★ /api/exams 응답:', JSON.stringify(examsData).substring(0, 500));
+      console.log('[Cloud] ★ /api/book-groups 응답:', JSON.stringify(groupsData).substring(0, 500));
+
       const groups: DBBookGroup[] = groupsData.groups || [];
       const exams: DBExam[] = examsData.exams || [];
+      console.log(`[Cloud] ★ groups: ${groups.length}개, exams: ${exams.length}개`);
 
       setDbGroups(groups);
       setDbExams(exams);
@@ -989,25 +1017,21 @@ export default function CloudPage() {
     }
   };
 
-  // --- 시험지 삭제 ---
-  const handleDeleteExam = useCallback(async (examId: string, examName: string) => {
-    if (!confirm(`"${examName}" 시험지를 삭제하시겠습니까?`)) return;
-
-    try {
-      const res = await fetch(`/api/exams/${examId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(`삭제 실패: ${err.error || '알 수 없는 오류'}`);
-        return;
-      }
-      // 로컬 상태에서 즉시 제거 + 트리 재구성
-      setDbExams((prev) => prev.filter((e) => e.id !== examId));
-      await fetchData();
-    } catch (err) {
-      console.error('[Cloud] Delete error:', err);
-      alert('삭제 중 오류가 발생했습니다.');
+  // --- PIN 헬퍼 ---
+  const getAdminPin = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gsaram_admin_pin') || '1234';
     }
-  }, [fetchData]);
+    return '1234';
+  }, []);
+
+  // --- 시험지 삭제 (모달 오픈) ---
+  const handleDeleteExam = useCallback((examId: string, examName: string) => {
+    setDeleteModal({ type: 'single', examId, examName, step: 1 });
+    setDeletePinInput('');
+    setDeletePinError(false);
+    setDeleteModalError('');
+  }, []);
 
   // --- 시험지 이름 변경 ---
   const handleStartRenameExam = useCallback((examId: string, currentName: string) => {
@@ -1061,32 +1085,86 @@ export default function CloudPage() {
     await fetchData();
   }, [movingExam, fetchData]);
 
-  // --- 헤더 삭제 버튼 ---
-  const handleDeleteAllVisible = useCallback(async () => {
+  // --- 전체 삭제 (모달 오픈) ---
+  const handleDeleteAllVisible = useCallback(() => {
     if (filteredExams.length === 0) return;
-    if (!confirm(`현재 표시된 ${filteredExams.length}개 시험지를 모두 삭제하시겠습니까?`)) return;
+    setDeleteModal({ type: 'all', step: 1 });
+    setDeletePinInput('');
+    setDeletePinError(false);
+    setDeleteModalError('');
+  }, [filteredExams]);
 
+  // --- Step 1 → Step 2 이동 ---
+  const handleDeleteNext = useCallback(() => {
+    setDeleteModal((prev) => (prev ? { ...prev, step: 2 } : null));
+    setDeletePinInput('');
+    setDeletePinError(false);
+    setDeleteModalError('');
+  }, []);
+
+  // --- Step 2: PIN 확인 후 삭제 실행 ---
+  const handleDeleteConfirm = useCallback(async () => {
+    if (deletePinInput !== getAdminPin()) {
+      setDeletePinError(true);
+      return;
+    }
+    setIsDeleting(true);
+    setDeleteModalError('');
     try {
-      const results = await Promise.allSettled(
-        filteredExams.map((exam) =>
-          fetch(`/api/exams/${exam.id}`, { method: 'DELETE' })
-        )
-      );
-
-      const successCount = results.filter(
-        (r) => r.status === 'fulfilled' && (r.value as Response).ok
-      ).length;
-
-      if (successCount < filteredExams.length) {
-        alert(`${successCount}/${filteredExams.length}개 삭제 완료 (일부 실패)`);
+      if (deleteModal?.type === 'single' && deleteModal.examId) {
+        const res = await fetch(`/api/exams/${deleteModal.examId}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const msg = errData.error || '알 수 없는 오류';
+          setDeleteModalError(`삭제 실패: ${msg}`);
+          console.error('[Cloud] Delete failed:', msg, errData.detail || '');
+          return; // 모달 열린 채로 에러 표시
+        }
+        setDbExams((prev) => prev.filter((e) => e.id !== deleteModal.examId));
+      } else if (deleteModal?.type === 'all') {
+        const results = await Promise.allSettled(
+          filteredExams.map((exam) => fetch(`/api/exams/${exam.id}`, { method: 'DELETE' }))
+        );
+        const successCount = results.filter(
+          (r) => r.status === 'fulfilled' && (r.value as Response).ok
+        ).length;
+        const failCount = filteredExams.length - successCount;
+        console.log(`[Cloud] 전체 삭제: ${successCount}/${filteredExams.length}개 완료`);
+        if (failCount > 0) {
+          setDeleteModalError(`${successCount}개 삭제 완료, ${failCount}개 실패. 서버 로그를 확인하세요.`);
+          await fetchData();
+          return;
+        }
       }
-
+      setDeleteModal(null);
       await fetchData();
     } catch (err) {
-      console.error('[Cloud] Bulk delete error:', err);
-      alert('삭제 중 오류가 발생했습니다.');
+      console.error('[Cloud] Delete error:', err);
+      setDeleteModalError('삭제 중 오류가 발생했습니다. 네트워크를 확인하세요.');
+    } finally {
+      setIsDeleting(false);
     }
-  }, [filteredExams, fetchData]);
+  }, [deleteModal, deletePinInput, filteredExams, fetchData, getAdminPin]);
+
+  // --- PIN 변경 ---
+  const handlePinChange = useCallback(() => {
+    if (pinOld !== getAdminPin()) {
+      setPinChangeError('현재 PIN이 올바르지 않습니다.');
+      return;
+    }
+    if (pinNew.length < 4) {
+      setPinChangeError('PIN은 최소 4자리 이상이어야 합니다.');
+      return;
+    }
+    if (pinNew !== pinConfirm) {
+      setPinChangeError('새 PIN이 일치하지 않습니다.');
+      return;
+    }
+    localStorage.setItem('gsaram_admin_pin', pinNew);
+    setShowPinModal(false);
+    setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError('');
+    alert('관리자 PIN이 변경되었습니다.');
+  }, [pinOld, pinNew, pinConfirm, getAdminPin]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
@@ -1100,6 +1178,15 @@ export default function CloudPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => { setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError(''); setShowPinModal(true); }}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors"
+            title="관리자 PIN 변경"
+          >
+            <KeyRound className="h-3.5 w-3.5" />
+            PIN 설정
+          </button>
           <button
             type="button"
             onClick={() => setShowUploadModal(true)}
@@ -1208,6 +1295,290 @@ export default function CloudPage() {
             onSave={handleCreateGroupSave}
             onClose={() => setShowCreateGroup(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ======== Delete Confirm Modal (2-step + PIN) ======== */}
+      <AnimatePresence>
+        {deleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget && !isDeleting) setDeleteModal(null); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl mx-4 overflow-hidden"
+            >
+              {/* ── Step Indicator ── */}
+              <div className="flex items-center gap-0 border-b border-zinc-800">
+                <div className={`flex-1 py-2.5 text-center text-xs font-semibold transition-colors ${deleteModal.step === 1 ? 'bg-red-900/20 text-red-400' : 'text-zinc-600'}`}>
+                  1단계 · 삭제 확인
+                </div>
+                <div className="h-full w-px bg-zinc-800" />
+                <div className={`flex-1 py-2.5 text-center text-xs font-semibold transition-colors ${deleteModal.step === 2 ? 'bg-red-900/20 text-red-400' : 'text-zinc-600'}`}>
+                  2단계 · 관리자 PIN
+                </div>
+              </div>
+
+              {/* ════ STEP 1: 삭제 대상 확인 ════ */}
+              {deleteModal.step === 1 && (
+                <>
+                  <div className="flex items-center gap-3 px-6 py-4">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-900/30 border border-red-900/50">
+                      <AlertTriangle className="h-5 w-5 text-red-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">
+                        {deleteModal.type === 'all' ? '시험지 전체 삭제' : '시험지 삭제'}
+                      </h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">이 작업은 되돌릴 수 없습니다</p>
+                    </div>
+                  </div>
+
+                  <div className="px-6 pb-4 space-y-3">
+                    {deleteModal.type === 'all' ? (
+                      <>
+                        <p className="text-sm text-zinc-300">
+                          현재 표시된 <span className="font-bold text-red-400">{filteredExams.length}개</span> 시험지를 모두 삭제합니다.
+                        </p>
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-800/40 divide-y divide-zinc-800/60 max-h-44 overflow-y-auto">
+                          {filteredExams.slice(0, 10).map((exam) => (
+                            <div key={exam.id} className="flex items-center gap-2 px-3 py-2">
+                              <FileText className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
+                              <span className="text-xs text-zinc-400 truncate">{exam.fileName}</span>
+                            </div>
+                          ))}
+                          {filteredExams.length > 10 && (
+                            <div className="px-3 py-2.5 text-xs text-zinc-600 text-center">
+                              외 {filteredExams.length - 10}개 더...
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-800/40 px-4 py-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-zinc-500 flex-shrink-0" />
+                        <span className="text-sm text-zinc-300 truncate">
+                          {deleteModal.examName}
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-xs text-zinc-600">
+                      ※ 연결된 문제 데이터, 시험 기록도 함께 삭제됩니다.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 border-t border-zinc-800 px-6 py-4">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModal(null)}
+                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteNext}
+                      className="flex items-center gap-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 px-4 py-2 text-sm font-bold text-white transition-colors"
+                    >
+                      다음
+                      <ChevronLeft className="h-4 w-4 rotate-180" />
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ════ STEP 2: 관리자 PIN 입력 ════ */}
+              {deleteModal.step === 2 && (
+                <>
+                  <div className="flex items-center gap-3 px-6 py-4">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-900/30 border border-amber-900/50">
+                      <Shield className="h-5 w-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">관리자 PIN 확인</h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">삭제를 진행하려면 관리자 PIN을 입력하세요</p>
+                    </div>
+                  </div>
+
+                  <div className="px-6 pb-4 space-y-3">
+                    {/* 삭제 대상 요약 */}
+                    <div className="rounded-lg border border-red-900/30 bg-red-900/10 px-3 py-2 flex items-center gap-2">
+                      <Trash2 className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                      <span className="text-xs text-red-400">
+                        {deleteModal.type === 'all'
+                          ? `${filteredExams.length}개 시험지 전체 삭제`
+                          : `"${deleteModal.examName}" 삭제`}
+                      </span>
+                    </div>
+
+                    {/* PIN 입력 */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-zinc-400">관리자 PIN</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                        <input
+                          type="password"
+                          value={deletePinInput}
+                          onChange={(e) => {
+                            setDeletePinInput(e.target.value);
+                            setDeletePinError(false);
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleDeleteConfirm(); }}
+                          placeholder="PIN 입력"
+                          autoFocus
+                          className={`w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-zinc-800 text-white placeholder-zinc-600 outline-none transition-colors ${
+                            deletePinError
+                              ? 'border-red-500 focus:border-red-400'
+                              : 'border-zinc-700 focus:border-cyan-500'
+                          }`}
+                        />
+                      </div>
+                      {deletePinError && (
+                        <p className="text-xs text-red-400 flex items-center gap-1">
+                          <X className="h-3 w-3" />
+                          PIN이 올바르지 않습니다.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* PIN 변경 링크 */}
+                    <button
+                      type="button"
+                      onClick={() => { setDeleteModal(null); setShowPinModal(true); }}
+                      className="text-xs text-zinc-600 hover:text-zinc-400 flex items-center gap-1 transition-colors"
+                    >
+                      <KeyRound className="h-3 w-3" />
+                      PIN 변경
+                    </button>
+
+                    <p className="text-xs text-zinc-700">초기 PIN: 1234</p>
+
+                    {/* 인라인 에러 메시지 */}
+                    {deleteModalError && (
+                      <div className="rounded-lg border border-red-900/40 bg-red-900/15 px-3 py-2 flex items-start gap-2">
+                        <X className="h-3.5 w-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-red-400 leading-relaxed">{deleteModalError}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-zinc-800 px-6 py-4">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModal((prev) => (prev ? { ...prev, step: 1 } : null))}
+                      disabled={isDeleting}
+                      className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      이전
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteModal(null)}
+                        disabled={isDeleting}
+                        className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors disabled:opacity-50"
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteConfirm}
+                        disabled={isDeleting || !deletePinInput}
+                        className="flex items-center gap-2 rounded-lg bg-red-700 hover:bg-red-600 disabled:bg-zinc-700 disabled:text-zinc-500 px-4 py-2 text-sm font-bold text-white transition-colors"
+                      >
+                        {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {isDeleting ? '삭제 중...' : '삭제 확인'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ======== PIN Change Modal ======== */}
+      <AnimatePresence>
+        {showPinModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) { setShowPinModal(false); setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError(''); } }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl mx-4"
+            >
+              <div className="flex items-center gap-3 border-b border-zinc-800 px-6 py-4">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-900/30 border border-cyan-900/50">
+                  <KeyRound className="h-4 w-4 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">관리자 PIN 변경</h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">삭제 작업에 필요한 PIN을 변경합니다</p>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 space-y-3">
+                {[
+                  { label: '현재 PIN', value: pinOld, setter: setPinOld, placeholder: '현재 PIN 입력' },
+                  { label: '새 PIN (4자리 이상)', value: pinNew, setter: setPinNew, placeholder: '새 PIN 입력' },
+                  { label: '새 PIN 확인', value: pinConfirm, setter: setPinConfirm, placeholder: '새 PIN 재입력' },
+                ].map(({ label, value, setter, placeholder }) => (
+                  <div key={label} className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-400">{label}</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                      <input
+                        type="password"
+                        value={value}
+                        onChange={(e) => { setter(e.target.value); setPinChangeError(''); }}
+                        placeholder={placeholder}
+                        className="w-full rounded-lg border border-zinc-700 pl-9 pr-4 py-2.5 text-sm bg-zinc-800 text-white placeholder-zinc-600 outline-none focus:border-cyan-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                ))}
+                {pinChangeError && (
+                  <p className="text-xs text-red-400 flex items-center gap-1">
+                    <X className="h-3 w-3" />
+                    {pinChangeError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-zinc-800 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowPinModal(false); setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError(''); }}
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePinChange}
+                  disabled={!pinOld || !pinNew || !pinConfirm}
+                  className="flex items-center gap-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:bg-zinc-700 disabled:text-zinc-500 px-4 py-2 text-sm font-bold text-white transition-colors"
+                >
+                  <Check className="h-4 w-4" />
+                  PIN 변경
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -1346,10 +1717,11 @@ export default function CloudPage() {
                       <button
                         type="button"
                         onClick={handleDeleteAllVisible}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-900/50 bg-red-900/10 text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors"
-                        title="삭제"
+                        className="flex h-8 items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-900/10 px-2.5 text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors text-xs font-medium"
+                        title="현재 보이는 시험지 전체 삭제"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
+                        전체 삭제
                       </button>
                     </div>
                   </div>
@@ -1376,7 +1748,7 @@ export default function CloudPage() {
                       >
                         문제 수
                       </span>
-                      <span className="w-14 text-center">작업</span>
+                      <span className="w-20 text-center">작업</span>
                     </div>
 
                     {/* Table Body */}
@@ -1439,7 +1811,18 @@ export default function CloudPage() {
                               </button>
                             )}
                           </span>
-                          <span className="w-14 flex justify-center">
+                          <span className="w-20 flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteExam(exam.id, exam.fileName);
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 hover:bg-red-900/20 hover:text-red-400 transition-colors"
+                              title="시험지 삭제"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                             <FileContextMenu
                               onRename={() => handleStartRenameExam(exam.id, exam.fileName)}
                               onView={() => router.push(`/dashboard/cloud/${exam.id}`)}

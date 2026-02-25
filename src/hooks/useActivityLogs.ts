@@ -37,7 +37,7 @@ export function useActivityLogs(limit: number = 10) {
                 // 최근 문제 생성 이력 조회
                 const { data: problems, error: problemError } = await supabaseBrowser
                     .from('problems')
-                    .select('id, type_name, created_at, created_by')
+                    .select('id, source_name, created_at, created_by')
                     .order('created_at', { ascending: false })
                     .limit(limit);
 
@@ -48,7 +48,7 @@ export function useActivityLogs(limit: number = 10) {
                     id: p.id,
                     type: 'problem_create' as const,
                     title: '문제 등록',
-                    description: `${p.type_name || '미분류'} 문제`,
+                    description: `${p.source_name || '미분류'} 문제`,
                     time: formatRelativeTime(p.created_at),
                     user: '선생님',
                 }));

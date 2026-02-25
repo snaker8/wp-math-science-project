@@ -38,11 +38,13 @@ function StatusCard({
   value,
   icon: Icon,
   color,
+  href,
 }: {
   label: string;
   value: string | number;
   icon: React.ElementType;
   color: string;
+  href?: string;
 }) {
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
     indigo: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'border-indigo-500/20' },
@@ -52,13 +54,28 @@ function StatusCard({
   };
   const c = colorMap[color] || colorMap.indigo;
 
-  return (
-    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-all">
+  const content = (
+    <>
       <div className={`p-2 ${c.bg} rounded-lg mb-3`}>
         <Icon className={`w-5 h-5 ${c.text}`} />
       </div>
       <span className="text-[11px] text-zinc-500 font-medium mb-1">{label}</span>
       <span className="text-3xl font-bold text-white">{value}</span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 hover:bg-zinc-800/50 transition-all cursor-pointer group">
+        {content}
+        <span className="text-[9px] text-zinc-600 group-hover:text-zinc-400 mt-2 transition-colors">클릭하여 이동 →</span>
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-all">
+      {content}
     </div>
   );
 }
@@ -214,12 +231,14 @@ export default function DashboardPage() {
               value={stats.totalTeachers}
               icon={Users}
               color="indigo"
+              href="/dashboard/settings"
             />
             <StatusCard
               label="발행한 시험지 수"
               value={stats.totalExams}
               icon={FileText}
               color="rose"
+              href="/dashboard/exam-management"
             />
             <StatusCard
               label="등록 학생 수"
@@ -232,6 +251,7 @@ export default function DashboardPage() {
               value={stats.totalProblems}
               icon={Database}
               color="emerald"
+              href="/dashboard/cloud"
             />
           </div>
         </GlowCard>
@@ -291,7 +311,7 @@ export default function DashboardPage() {
                 <p className="text-[10px] text-zinc-600">이번 달 제작 추이를 확인하세요.</p>
               </div>
               <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                   <BarChart data={chartData} barSize={16}>
                     <CartesianGrid
                       strokeDasharray="3 3"
