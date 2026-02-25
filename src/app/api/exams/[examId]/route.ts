@@ -227,32 +227,7 @@ export async function DELETE(
 
     console.log(`[API/exams] 삭제 대상: "${targetExam.title}" (${targetExam.id})`);
 
-    // 2) 연관 문제 ID 조회 (exam_problems에서)
-    const epRes = await fetch(
-      `${supabaseUrl}/rest/v1/exam_problems?select=problem_id&exam_id=eq.${examId}`,
-      { method: 'GET', headers, cache: 'no-store' as RequestCache }
-    );
-    const examProblemIds: string[] = epRes.ok
-      ? (await epRes.json() as { problem_id: string }[]).map(r => r.problem_id)
-      : [];
-    console.log(`[API/exams] 연관 문제 ${examProblemIds.length}개 발견`);
-
-    // 3) 다른 시험지에서도 사용 중인 문제 확인 → 이 시험지에만 속한 문제만 삭제
-    let orphanProblemIds: string[] = [];
-    if (examProblemIds.length > 0) {
-      const otherEpRes = await fetch(
-        `${supabaseUrl}/rest/v1/exam_problems?select=problem_id,exam_id&problem_id=in.(${examProblemIds.join(',')})&exam_id=neq.${examId}`,
-        { method: 'GET', headers, cache: 'no-store' as RequestCache }
-      );
-      const sharedIds = new Set<string>();
-      if (otherEpRes.ok) {
-        (await otherEpRes.json() as { problem_id: string }[]).forEach(r => sharedIds.add(r.problem_id));
-      }
-      orphanProblemIds = examProblemIds.filter(id => !sharedIds.has(id));
-      console.log(`[API/exams] 이 시험지에만 속한 문제: ${orphanProblemIds.length}개 (공유: ${sharedIds.size}개)`);
-    }
-
-    // 4) raw HTTP DELETE: 시험지 삭제 (exam_problems는 CASCADE)
+    // 2) raw HTTP DELETE 실행
     const deleteRes = await fetch(
       `${supabaseUrl}/rest/v1/exams?id=eq.${examId}`,
       {
@@ -262,7 +237,7 @@ export async function DELETE(
     );
 
     const deleteBody = await deleteRes.text();
-    console.log(`[API/exams] raw DELETE exam: status=${deleteRes.status}, body=${deleteBody.substring(0, 200)}`);
+    console.log(`[API/exams] raw DELETE: status=${deleteRes.status}, body=${deleteBody.substring(0, 200)}`);
 
     if (!deleteRes.ok) {
       console.error(`[API/exams] raw DELETE 실패!`);
@@ -272,26 +247,7 @@ export async function DELETE(
       );
     }
 
-    // 5) 고아 문제 삭제 (이 시험지에만 속했던 문제들)
-    if (orphanProblemIds.length > 0) {
-      // classifications 먼저 삭제 (FK 관계)
-      await fetch(
-        `${supabaseUrl}/rest/v1/classifications?problem_id=in.(${orphanProblemIds.join(',')})`,
-        { method: 'DELETE', headers: { ...headers, 'Prefer': 'return=minimal' } }
-      );
-
-      const delProblemsRes = await fetch(
-        `${supabaseUrl}/rest/v1/problems?id=in.(${orphanProblemIds.join(',')})`,
-        { method: 'DELETE', headers: { ...headers, 'Prefer': 'return=representation' } }
-      );
-      const delProblemsBody = await delProblemsRes.text();
-      console.log(`[API/exams] 고아 문제 삭제: status=${delProblemsRes.status}, ${orphanProblemIds.length}개`);
-      if (!delProblemsRes.ok) {
-        console.warn(`[API/exams] 문제 삭제 실패 (시험지는 삭제됨): ${delProblemsBody.substring(0, 200)}`);
-      }
-    }
-
-    // 6) 삭제 확인: 다시 raw SELECT (cache: 'no-store')
+    // 3) 삭제 확인: 다시 raw SELECT (cache: 'no-store')
     const verifyRes = await fetch(
       `${supabaseUrl}/rest/v1/exams?select=id&id=eq.${examId}`,
       { method: 'GET', headers, cache: 'no-store' as RequestCache }
@@ -306,7 +262,7 @@ export async function DELETE(
       );
     }
 
-    console.log(`[API/exams] ✓ 삭제 완료: 시험지=${examId}, 문제=${orphanProblemIds.length}개 함께 삭제`);
+    console.log(`[API/exams] ✓ 삭제 완료: ${examId}`);
     return NextResponse.json({ success: true, examId });
   } catch (err) {
     console.error('[API/exams] Delete unexpected error:', err);

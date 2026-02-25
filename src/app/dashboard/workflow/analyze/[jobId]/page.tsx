@@ -103,9 +103,6 @@ interface AnalyzedProblem {
   insertedImages?: InsertedImage[];
   // ★ 배점 (예: 3.4, 4 등 — OCR [3.4점] 패턴에서 추출)
   score?: number;
-  // ★ 합치기 시 두 번째 문제의 bbox (다른 컬럼에서 합친 경우)
-  secondaryBbox?: { x: number; y: number; w: number; h: number };
-  secondaryPageIndex?: number;
 }
 
 interface PageData {
@@ -325,11 +322,11 @@ function PageThumbnailList({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-zinc-800/50">
-        <span className="text-[10px] font-bold text-zinc-300">페이지</span>
-        <span className="text-[10px] text-cyan-400 font-bold">{maxPages}</span>
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800/50">
+        <span className="text-xs font-bold text-zinc-300">페이지</span>
+        <span className="text-xs text-cyan-400 font-bold">{maxPages}</span>
       </div>
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {Array.from({ length: maxPages }).map((_, i) => {
           const pageNum = i + 1;
           const pageData = pages.find(p => p.pageNumber === pageNum);
@@ -340,14 +337,14 @@ function PageThumbnailList({
               key={pageNum}
               type="button"
               onClick={() => onPageSelect(pageNum)}
-              className={`w-full flex items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-left transition-all ${
+              className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-all ${
                 isActive
                   ? 'bg-cyan-500/10 border-2 border-cyan-500/40'
                   : 'border-2 border-zinc-800 hover:border-zinc-600'
               }`}
             >
               {/* 페이지 번호 */}
-              <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold flex-shrink-0 ${
+              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 ${
                 isActive
                   ? 'bg-cyan-500 text-white'
                   : 'bg-zinc-700 text-zinc-400'
@@ -356,36 +353,36 @@ function PageThumbnailList({
               </div>
 
               {/* 썸네일 */}
-              <div className={`relative w-10 h-14 rounded border overflow-hidden flex-shrink-0 bg-white ${
+              <div className={`relative w-14 h-20 rounded border overflow-hidden flex-shrink-0 bg-white ${
                 isActive ? 'border-cyan-400' : 'border-zinc-600'
               }`}>
                 <PdfPageCanvas
                   pdfUrl={pdfUrl}
                   pageNumber={pageNum}
-                  width={40}
-                  height={56}
+                  width={56}
+                  height={80}
                 />
                 {/* AI 감지 상태 표시 */}
                 {aiDetectProgress?.get(i) === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                    <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />
+                    <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
                   </div>
                 )}
                 {aiDetectProgress?.get(i) === 'error' && (
                   <div className="absolute bottom-0.5 right-0.5">
-                    <AlertCircle className="h-2.5 w-2.5 text-amber-400" />
+                    <AlertCircle className="h-3 w-3 text-amber-400" />
                   </div>
                 )}
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className={`text-[10px] font-medium leading-tight ${
+                <div className={`text-xs font-medium ${
                   isActive ? 'text-cyan-300' : 'text-zinc-400'
                 }`}>
-                  P{pageNum}
+                  페이지 {pageNum}
                 </div>
                 {pageData && pageData.problems.length > 0 && (
-                  <div className="text-[9px] text-zinc-500">
+                  <div className="text-[10px] text-zinc-500 mt-0.5">
                     {pageData.problems.length}문항
                   </div>
                 )}
@@ -406,8 +403,6 @@ function DraggableBbox({
   problem,
   canvasSize,
   isSelected,
-  isMergeTarget,
-  mergeMode,
   onSelect,
   onDoubleClick,
   onBboxChange,
@@ -415,8 +410,6 @@ function DraggableBbox({
   problem: AnalyzedProblem;
   canvasSize: { width: number; height: number };
   isSelected: boolean;
-  isMergeTarget?: boolean;
-  mergeMode?: boolean;
   onSelect: () => void;
   onDoubleClick: () => void;
   onBboxChange: (bbox: { x: number; y: number; w: number; h: number }) => void;
@@ -440,10 +433,6 @@ function DraggableBbox({
   ) => {
     e.preventDefault();
     e.stopPropagation();
-
-    // ★ merge 모드에서는 bbox 영역 클릭/드래그 완전 차단 (버튼으로만 선택)
-    if (mergeMode) return;
-
     onSelect();
 
     dragRef.current = {
@@ -498,10 +487,10 @@ function DraggableBbox({
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [bbox, canvasSize, onBboxChange, onSelect, mergeMode]);
+  }, [bbox, canvasSize, onBboxChange, onSelect]);
 
-  // 리사이즈 핸들 (선택된 bbox만, merge 모드에서는 숨김)
-  const handles = (isSelected && !mergeMode) ? [
+  // 리사이즈 핸들 (선택된 bbox만)
+  const handles = isSelected ? [
     { pos: 'nw', cursor: 'nw-resize', style: { top: -4, left: -4 } },
     { pos: 'ne', cursor: 'ne-resize', style: { top: -4, right: -4 } },
     { pos: 'sw', cursor: 'sw-resize', style: { bottom: -4, left: -4 } },
@@ -522,16 +511,10 @@ function DraggableBbox({
         height: `${bbox.h * canvasSize.height}px`,
       }}
     >
-      {/* 파란 점선 박스 — merge 모드에서는 보라색 표시 */}
+      {/* 파란 점선 박스 (드래그 이동 영역) */}
       <div
         className={`absolute inset-0 rounded transition-colors ${
-          mergeMode
-            ? isMergeTarget
-              ? 'border-[3px] border-purple-500 bg-purple-500/20 ring-2 ring-purple-400'
-              : isSelected
-              ? 'border-2 border-blue-500 bg-blue-500/10 cursor-default'
-              : 'border-2 border-dashed border-purple-400/60 bg-purple-400/5'
-            : isSelected
+          isSelected
             ? 'border-2 border-blue-500 bg-blue-500/10 cursor-move'
             : isComplete
             ? 'border-2 border-dashed border-blue-400/60 bg-blue-400/5 cursor-pointer'
@@ -543,44 +526,16 @@ function DraggableBbox({
         }`}
         onMouseDown={(e) => handleMouseDown(e, isSelected ? 'move' : 'move')}
         onClick={(e) => {
-          e.stopPropagation();
-          // ★ merge 모드에서는 bbox 영역 클릭으로 선택하지 않음 (버튼으로만 선택)
-          if (mergeMode) return;
-          onSelect();
+          if (!isSelected) {
+            e.stopPropagation();
+            onSelect();
+          }
         }}
         onDoubleClick={(e) => {
-          if (mergeMode) return;
           e.stopPropagation();
           onDoubleClick();
         }}
       />
-
-      {/* ★ 합치기 모드: 선택 가능한 문제에 "합치기" 버튼 표시 (의도적 클릭만 인식) */}
-      {mergeMode && !isSelected && !isMergeTarget && (
-        <button
-          type="button"
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30
-            px-3 py-1.5 rounded-lg text-xs font-bold
-            bg-purple-600 text-white shadow-lg
-            hover:bg-purple-500 hover:scale-105 transition-all
-            border border-purple-400"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect();
-          }}
-        >
-          이 문제와 합치기
-        </button>
-      )}
-
-      {/* ★ 합치기 대상으로 선택된 문제 표시 */}
-      {mergeMode && isMergeTarget && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30
-          px-3 py-1.5 rounded-lg text-xs font-bold
-          bg-purple-500 text-white shadow-lg border border-purple-300">
-          선택됨 ✓
-        </div>
-      )}
 
       {/* 리사이즈 핸들 (선택된 bbox만 표시) */}
       {handles.map(({ pos, cursor, style }) => (
@@ -630,8 +585,6 @@ function PdfViewerWithBoxes({
   isAnalyzing,
   canvasRef: externalCanvasRef,
   onManualCropDetected,
-  mergeMode,
-  mergeTargetId,
 }: {
   pdfUrl?: string;
   pageNumber: number;
@@ -644,8 +597,6 @@ function PdfViewerWithBoxes({
   isAnalyzing: boolean;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   onManualCropDetected?: (pageNumber: number, blocks: CropRect[]) => void;
-  mergeMode?: boolean;
-  mergeTargetId?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -677,9 +628,6 @@ function PdfViewerWithBoxes({
 
   // ── 수동 드래그-크롭 핸들러 ──
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    // ★ merge 모드에서는 캔버스 드래그 선택 비활성화
-    if (mergeMode) return;
-
     // DraggableBbox 위에서는 시작 안함 (bbox는 stopPropagation 호출)
     const target = e.target as HTMLElement;
     if (target.tagName !== 'CANVAS' && target !== e.currentTarget) return;
@@ -691,7 +639,7 @@ function PdfViewerWithBoxes({
     setIsDragSelecting(true);
     setDragStart({ x, y });
     setDragRect({ x, y, w: 0, h: 0 });
-  }, [mergeMode]);
+  }, []);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragSelecting || !dragStart) return;
@@ -790,8 +738,8 @@ function PdfViewerWithBoxes({
         if (!container || cancelled) return;
 
         // 컨테이너 크기 계산 - 0인 경우 재시도
-        let containerWidth = container.clientWidth - 16;
-        let containerHeight = container.clientHeight - 16;
+        let containerWidth = container.clientWidth - 32;
+        let containerHeight = container.clientHeight - 32;
 
         if (containerWidth <= 0 || containerHeight <= 0) {
           // 레이아웃이 아직 계산되지 않은 경우 100ms 후 재시도
@@ -803,13 +751,13 @@ function PdfViewerWithBoxes({
         }
 
         // 최소 크기 보장
-        containerWidth = Math.max(containerWidth, 600);
-        containerHeight = Math.max(containerHeight, 700);
+        containerWidth = Math.max(containerWidth, 400);
+        containerHeight = Math.max(containerHeight, 600);
 
         const scale = Math.min(
           containerWidth / viewport.width,
           containerHeight / viewport.height,
-          3.5
+          2.5
         );
 
         const scaledViewport = page.getViewport({ scale });
@@ -908,14 +856,7 @@ function PdfViewerWithBoxes({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-auto flex flex-col items-center py-2 bg-zinc-950/30">
-      {/* ★ Merge 모드 안내 배너 */}
-      {mergeMode && (
-        <div className="mb-2 px-4 py-2 bg-purple-600/90 text-white rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg">
-          <Merge className="h-4 w-4" />
-          합칠 문제를 클릭하세요 (보라색 테두리 = 선택된 대상)
-        </div>
-      )}
+    <div ref={containerRef} className="flex-1 overflow-auto flex justify-center py-4 bg-zinc-950/30">
       <div
         className="relative inline-block"
         onMouseDown={handleCanvasMouseDown}
@@ -929,9 +870,7 @@ function PdfViewerWithBoxes({
           className="block shadow-2xl shadow-black/50"
           style={{
             background: 'white',
-            cursor: mergeMode
-              ? 'pointer'
-              : 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'%3E%3Cline x1=\'16\' y1=\'0\' x2=\'16\' y2=\'32\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Cline x1=\'0\' y1=\'16\' x2=\'32\' y2=\'16\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'3\' fill=\'%23e11d48\'/%3E%3C/svg%3E") 16 16, crosshair',
+            cursor: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'%3E%3Cline x1=\'16\' y1=\'0\' x2=\'16\' y2=\'32\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Cline x1=\'0\' y1=\'16\' x2=\'32\' y2=\'16\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'3\' fill=\'%23e11d48\'/%3E%3C/svg%3E") 16 16, crosshair',
           }}
         />
 
@@ -961,8 +900,6 @@ function PdfViewerWithBoxes({
               problem={problem}
               canvasSize={canvasSize}
               isSelected={selectedProblemId === problem.id}
-              isMergeTarget={mergeMode && mergeTargetId === problem.id}
-              mergeMode={mergeMode}
               onSelect={() => onSelectProblem(problem.id)}
               onDoubleClick={() => onEditProblem?.(problem)}
               onBboxChange={(newBbox) => onBboxUpdate?.(problem.id, newBbox)}
@@ -1115,7 +1052,7 @@ function ProblemCropPreview({
 
   // 동적 높이: 비율이 낮으면(가로로 넓은 문제) 낮게, 높으면(세로로 긴 문제) 높게
   // 최소 80px, 최대 500px — 문제 크기에 맞게 자동 조절
-  const dynamicMaxHeight = Math.max(100, Math.min(600, Math.round(aspectRatio * 500)));
+  const dynamicMaxHeight = Math.max(80, Math.min(500, Math.round(aspectRatio * 400)));
 
   return (
     <div className="relative bg-white rounded-lg border border-zinc-700 overflow-hidden"
@@ -1283,8 +1220,8 @@ function ProblemDetailPanel({
   return (
     <div className="flex flex-col h-full bg-white">
       {/* ===== 헤더: "문항 내용" + ID ===== */}
-      <div className="flex items-center justify-between px-6 py-2.5 border-b border-gray-200">
-        <span className="text-base font-bold text-gray-900">문항 내용</span>
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+        <span className="text-sm font-bold text-gray-900">문항 내용</span>
         {problem.problemId && (
           <span className="text-[10px] text-gray-400 font-mono">
             ID: {problem.problemId}
@@ -1317,7 +1254,7 @@ function ProblemDetailPanel({
 
       <div className="flex-1 overflow-y-auto">
         {/* ===== 크롭 이미지 (원본 확인용 + 이미지 삽입 드래그) ===== */}
-        <div className="px-6 pt-3 pb-2">
+        <div className="px-5 pt-4 pb-3">
           <div
             className={`relative rounded-lg border bg-white overflow-hidden shadow-sm select-none ${
               insertImageMode
@@ -1403,22 +1340,6 @@ function ProblemDetailPanel({
               </div>
             ) : null}
 
-            {/* ★ 합치기로 생긴 두 번째 영역 (다른 컬럼) — 별도 블록으로 분리 */}
-            {problem.secondaryBbox && (
-              <div className="mt-2 pointer-events-none">
-                <div className="flex items-center gap-2 mb-1 px-2">
-                  <div className="flex-1 border-t-2 border-dashed border-purple-400" />
-                  <span className="text-[10px] text-purple-500 font-medium flex-shrink-0">이어지는 영역</span>
-                  <div className="flex-1 border-t-2 border-dashed border-purple-400" />
-                </div>
-                <ProblemCropPreview
-                  pdfUrl={pdfUrl}
-                  pageIndex={problem.secondaryPageIndex ?? problem.pageIndex}
-                  bbox={problem.secondaryBbox}
-                />
-              </div>
-            )}
-
             {/* 드래그 선택 사각형 */}
             {insertImageMode && cropDragRect && cropDragRect.w > 3 && cropDragRect.h > 3 && (
               <div
@@ -1448,57 +1369,57 @@ function ProblemDetailPanel({
         </div>
 
         {/* ===== 액션 버튼 바 ===== */}
-        <div className="px-6 pb-3 flex items-center gap-2 flex-wrap">
+        <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
           <button type="button" onClick={() => { if (isEditing) { onSave({ content: editContent }); setIsEditing(false); } else { onSave({}); } }}
             disabled={isSaving}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
+            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             저장
           </button>
           <button type="button" onClick={onDelete}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-            <Trash2 className="h-4 w-4" />
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+            <Trash2 className="h-3.5 w-3.5" />
             삭제
           </button>
           <button type="button" onClick={onReanalyze} disabled={isReanalyzing}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50">
+            <RefreshCw className={`h-3.5 w-3.5 ${isReanalyzing ? 'animate-spin' : ''}`} />
             다시 분석
           </button>
           <button type="button" onClick={() => setShowAdvancedModal(true)} disabled={isReanalyzing}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-50">
-            <Sparkles className="h-4 w-4" />
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-50">
+            <Sparkles className="h-3.5 w-3.5" />
             고급 분석
           </button>
           <button type="button" onClick={onToggleInsertImage}
             disabled={!problem.bbox && !problem.cropImageBase64}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               insertImageMode
                 ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-500/30'
                 : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100'
             }`}>
-            <ImagePlus className={`h-4 w-4 ${insertImageMode ? 'text-white' : 'text-blue-600'}`} />
-            {insertImageMode ? '삽입 취소' : '이미지 삽입'}
+            <ImagePlus className={`h-3.5 w-3.5 ${insertImageMode ? 'text-white' : 'text-blue-600'}`} />
+            📷 {insertImageMode ? '삽입 취소' : '이미지 삽입'}
           </button>
           {problem.insertedImages && problem.insertedImages.length > 0 && (
             <button type="button" onClick={onDeleteLastImage}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 transition-colors shadow-sm">
-              <Trash2 className="h-4 w-4" />
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 transition-colors shadow-sm">
+              <Trash2 className="h-3.5 w-3.5" />
               이미지 삭제 ({problem.insertedImages.length})
             </button>
           )}
           {onStartMerge && (
             <button type="button" onClick={onStartMerge}
               disabled={mergeMode}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50">
-              <Merge className="h-4 w-4" />
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50">
+              <Merge className="h-3.5 w-3.5" />
               합치기
             </button>
           )}
         </div>
 
         {/* ===== 문제 번호 (참조사이트 스타일) ===== */}
-        <div className="px-6 pb-3">
+        <div className="px-5 pb-3">
           <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
             <button
               type="button"
@@ -1506,7 +1427,7 @@ function ProblemDetailPanel({
                 const newNum = prompt('문제 번호를 입력하세요', String(problem.number));
                 if (newNum) onSave({ number: parseInt(newNum, 10) });
               }}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500 text-white font-bold text-base flex-shrink-0 cursor-pointer hover:bg-emerald-600 transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:bg-emerald-600 transition-colors"
             >
               {problem.number || '?'}
             </button>
@@ -1558,11 +1479,11 @@ function ProblemDetailPanel({
           let displayContent = problem.content.replace(/\n{3,}/g, '\n\n').trim();
 
           return (
-              <div className="px-6 pb-3">
+              <div className="px-5 pb-3">
                 {/* ★ OCR 텍스트 (자산화된 본문) */}
                 <MixedContentRenderer
                   content={displayContent}
-                  className="text-[15px] text-gray-800 leading-[2] tracking-wide"
+                  className="text-[14px] text-gray-800 leading-[2] tracking-wide"
                 />
 
                 {/* 선택지 또는 소문제 렌더링 */}
@@ -1582,8 +1503,8 @@ function ProblemDetailPanel({
                           if (!choiceText) return null;
                           return (
                             <div key={i} className="flex items-start gap-2 py-0.5">
-                              <span className="flex-shrink-0 text-[15px] leading-[1.8] text-gray-700 font-medium">({i + 1})</span>
-                              <MixedContentRenderer content={choiceText} className="text-[15px] leading-[1.8] text-gray-800" />
+                              <span className="flex-shrink-0 text-[14px] leading-[1.8] text-gray-700 font-medium">({i + 1})</span>
+                              <MixedContentRenderer content={choiceText} className="text-[14px] leading-[1.8] text-gray-800" />
                             </div>
                           );
                         })}
@@ -1611,7 +1532,7 @@ function ProblemDetailPanel({
                             </span>
                             <MixedContentRenderer
                               content={choiceText}
-                              className={`text-[15px] leading-[1.6] ${isCorrect ? 'text-emerald-700 font-medium' : 'text-gray-700'}`}
+                              className={`text-[14px] leading-[1.6] ${isCorrect ? 'text-emerald-700 font-medium' : 'text-gray-700'}`}
                             />
                           </div>
                         );
@@ -1625,46 +1546,46 @@ function ProblemDetailPanel({
 
         {/* ===== 유형 분류 (505개 성취기준 + 5등급 난이도) ===== */}
         {(problem.typeCode || problem.achievementCode) && (
-          <div className="px-6 pb-3">
-            <div className="text-xs text-gray-500 mb-1.5 font-medium">분류 정보</div>
+          <div className="px-5 pb-3">
+            <div className="text-[10px] text-gray-500 mb-1.5 font-medium">분류 정보</div>
             <div className="space-y-2">
               {problem.achievementCode && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 w-14 flex-shrink-0">성취기준</span>
-                  <span className="text-[11px] px-2.5 py-1 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 font-mono">
+                  <span className="text-[10px] text-gray-500 w-14 flex-shrink-0">성취기준</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 font-mono">
                     {problem.achievementCode}
                   </span>
                 </div>
               )}
               <div className="flex flex-wrap gap-1.5">
                 {problem.typeCode && (
-                  <span className="text-[11px] px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {problem.typeCode}
                   </span>
                 )}
                 {problem.typeName && (
-                  <span className="text-[11px] px-2.5 py-1 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
                     {problem.typeName}
                   </span>
                 )}
-                <span className="text-[11px] px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                   난이도: {problem.difficultyLabel || diffCfg.label}
                 </span>
               </div>
               {(problem.subject || problem.chapter) && (
                 <div className="flex flex-wrap gap-1.5">
                   {problem.subject && (
-                    <span className="text-[11px] px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                       {problem.subject}
                     </span>
                   )}
                   {problem.chapter && (
-                    <span className="text-[11px] px-2.5 py-1 rounded bg-gray-50 text-gray-600 border border-gray-200">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-200">
                       {problem.chapter}
                     </span>
                   )}
                   {problem.section && (
-                    <span className="text-[11px] px-2.5 py-1 rounded bg-gray-50 text-gray-600 border border-gray-200">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-200">
                       {problem.section}
                     </span>
                   )}
@@ -1672,15 +1593,15 @@ function ProblemDetailPanel({
               )}
               {problem.cognitiveDomain && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 w-14 flex-shrink-0">인지영역</span>
-                  <span className="text-[11px] px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="text-[10px] text-gray-500 w-14 flex-shrink-0">인지영역</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                     {{ CALCULATION: '계산', UNDERSTANDING: '이해', INFERENCE: '추론', PROBLEM_SOLVING: '문제해결' }[problem.cognitiveDomain] || problem.cognitiveDomain}
                   </span>
                 </div>
               )}
               {problem.difficultyScores && (
                 <div className="mt-1">
-                  <div className="text-xs text-gray-500 mb-1">난이도 세부 채점 (총 {problem.difficultyScores.total}점)</div>
+                  <div className="text-[10px] text-gray-500 mb-1">난이도 세부 채점 (총 {problem.difficultyScores.total}점)</div>
                   <div className="grid grid-cols-3 gap-1">
                     {[
                       { label: '개념수', value: problem.difficultyScores.concept_count, max: 3 },
@@ -1710,12 +1631,12 @@ function ProblemDetailPanel({
 
         {/* ===== 풀이 ===== */}
         {problem.solution && (
-          <div className="px-6 pb-4">
-            <div className="text-xs text-gray-500 mb-1.5 font-medium">풀이</div>
+          <div className="px-5 pb-4">
+            <div className="text-[10px] text-gray-500 mb-1.5 font-medium">풀이</div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <MixedContentRenderer
                 content={problem.solution}
-                className="text-[14px] text-gray-700 leading-[1.8]"
+                className="text-[13px] text-gray-700 leading-[1.8]"
               />
             </div>
           </div>
@@ -2027,10 +1948,6 @@ export default function AnalyzeJobPage() {
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [mergeMode, setMergeMode] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
-
-  // ★ merge 모드를 ref로도 추적 (클로저 문제 방지 — setState는 비동기라서 이전 렌더의 콜백이 잘못된 값을 읽음)
-  const mergeModeRef = useRef(false);
-  const mergeJustEnteredRef = useRef(false); // 합치기 진입 직후 200ms 동안 선택 차단
   const [isSaving, setIsSaving] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [editingProblem, setEditingProblem] = useState<AnalyzedProblem | null>(null);
@@ -2745,15 +2662,8 @@ export default function AnalyzeJobPage() {
 
   // ★ 문제 합치기(Merge) 핸들러
   const handleStartMerge = useCallback(() => {
-    // ref를 즉시 업데이트 (클로저 문제 방지)
-    mergeModeRef.current = true;
-    mergeJustEnteredRef.current = true;
     setMergeMode(true);
     setMergeTargetId(null);
-    // 300ms 동안 선택 차단 (이벤트 버블링/재렌더 중 의도치 않은 선택 방지)
-    setTimeout(() => {
-      mergeJustEnteredRef.current = false;
-    }, 300);
   }, []);
 
   const handleMergeProblems = useCallback(() => {
@@ -2765,50 +2675,22 @@ export default function AnalyzeJobPage() {
     // 번호가 작은 것이 first
     const [first, second] = p1.number <= p2.number ? [p1, p2] : [p2, p1];
 
-    // ★ bbox 합치기: 같은 컬럼(X 중심 가까움)이면 union, 다른 컬럼이면 first만 사용
-    let mergedBbox = first.bbox || second.bbox;
-    if (first.bbox && second.bbox) {
-      const b1CenterX = first.bbox.x + first.bbox.w / 2;
-      const b2CenterX = second.bbox.x + second.bbox.w / 2;
-      const sameColumn = Math.abs(b1CenterX - b2CenterX) < 0.2; // X 중심 차이 20% 미만 = 같은 컬럼
-      if (sameColumn) {
-        mergedBbox = {
-          x: Math.min(first.bbox.x, second.bbox.x),
-          y: Math.min(first.bbox.y, second.bbox.y),
-          w: Math.max(first.bbox.x + first.bbox.w, second.bbox.x + second.bbox.w) - Math.min(first.bbox.x, second.bbox.x),
-          h: Math.max(first.bbox.y + first.bbox.h, second.bbox.y + second.bbox.h) - Math.min(first.bbox.y, second.bbox.y),
-        };
-      } else {
-        mergedBbox = first.bbox; // 다른 컬럼: first bbox만 유지
-      }
-    }
-
-    // ★ 다른 컬럼 합치기: second의 bbox를 secondaryBbox로 보존 (크롭 이미지 표시용)
-    const fb = first.bbox;
-    const sb = second.bbox;
-    const fb_cx = fb ? fb.x + fb.w / 2 : 0;
-    const sb_cx = sb ? sb.x + sb.w / 2 : 0;
-    const isDiffCol = !!(fb && sb && Math.abs(fb_cx - sb_cx) >= 0.2);
-
-    console.log('[Merge] first.bbox:', JSON.stringify(fb));
-    console.log('[Merge] second.bbox:', JSON.stringify(sb));
-    console.log('[Merge] centerX diff:', Math.abs(fb_cx - sb_cx).toFixed(3), 'isDiffCol:', isDiffCol);
-
     const merged: AnalyzedProblem = {
       ...first,
-      content: [first.content, second.content].filter(Boolean).join('\n\n'),
-      choices: second.choices.length > 0 ? second.choices : first.choices,
+      content: first.content + '\n\n' + second.content,
+      choices: first.choices.length > 0 ? first.choices : second.choices,
       answer: second.answer || first.answer,
       solution: [first.solution, second.solution].filter(Boolean).join('\n\n'),
-      bbox: mergedBbox,
-      secondaryBbox: isDiffCol ? sb : undefined,
-      secondaryPageIndex: isDiffCol ? second.pageIndex : undefined,
+      bbox: first.bbox && second.bbox ? {
+        x: Math.min(first.bbox.x, second.bbox.x),
+        y: Math.min(first.bbox.y, second.bbox.y),
+        w: Math.max(first.bbox.x + first.bbox.w, second.bbox.x + second.bbox.w) - Math.min(first.bbox.x, second.bbox.x),
+        h: Math.max(first.bbox.y + first.bbox.h, second.bbox.y + second.bbox.h) - Math.min(first.bbox.y, second.bbox.y),
+      } : first.bbox || second.bbox,
       difficulty: Math.max(first.difficulty, second.difficulty) as 1 | 2 | 3 | 4 | 5,
       number: first.number,
       status: 'edited' as const,
     };
-
-    console.log('[Merge] merged.secondaryBbox:', JSON.stringify(merged.secondaryBbox));
 
     // AutoCrop 모드 또는 레거시 모드에 따라 상태 업데이트
     if (autoCropProblems.size > 0) {
@@ -2845,27 +2727,18 @@ export default function AnalyzeJobPage() {
     }
 
     setSelectedProblemId(merged.id);
-    mergeModeRef.current = false;
     setMergeMode(false);
     setMergeTargetId(null);
   }, [selectedProblemId, mergeTargetId, allProblems, autoCropProblems]);
 
   const handleCancelMerge = useCallback(() => {
-    mergeModeRef.current = false;
     setMergeMode(false);
     setMergeTargetId(null);
   }, []);
 
   // 문제 선택 핸들러 (mergeMode 분기 포함)
   const handleSelectProblem = useCallback((id: string) => {
-    // ★ merge 모드 진입 직후 300ms 동안 선택 차단 (의도치 않은 자동 선택 방지)
-    if (mergeJustEnteredRef.current) {
-      console.log('[MergeGuard] 합치기 진입 직후 선택 차단:', id);
-      return;
-    }
-    // ★ ref로 최신 merge 상태 확인 (클로저의 stale mergeMode 방지)
-    const isMerge = mergeModeRef.current || mergeMode;
-    if (isMerge) {
+    if (mergeMode) {
       if (id !== selectedProblemId) {
         setMergeTargetId(id);
       }
@@ -2929,69 +2802,6 @@ export default function AnalyzeJobPage() {
       const sy = bbox.y * fullCanvas.height;
       const sw = bbox.w * fullCanvas.width;
       const sh = bbox.h * fullCanvas.height;
-
-      // ★ secondaryBbox가 있으면 두 영역을 세로로 합친 이미지 생성
-      if (problem.secondaryBbox) {
-        const sb = problem.secondaryBbox;
-        const secPageIndex = problem.secondaryPageIndex ?? problem.pageIndex;
-
-        // ★ secondaryBbox가 다른 페이지에 있으면 해당 페이지를 별도로 렌더링
-        let secondaryCanvas = fullCanvas; // 같은 페이지면 그대로 사용
-        if (secPageIndex !== problem.pageIndex) {
-          const secPageNum = secPageIndex + 1;
-          if (secPageNum <= pdf.numPages) {
-            const secPage = await pdf.getPage(secPageNum);
-            const secViewport = secPage.getViewport({ scale: 2.5 });
-            secondaryCanvas = document.createElement('canvas');
-            secondaryCanvas.width = secViewport.width;
-            secondaryCanvas.height = secViewport.height;
-            const secCtx = secondaryCanvas.getContext('2d');
-            if (secCtx) {
-              secCtx.fillStyle = '#ffffff';
-              secCtx.fillRect(0, 0, secondaryCanvas.width, secondaryCanvas.height);
-              const secRenderTask = secPage.render({ canvasContext: secCtx, viewport: secViewport });
-              await secRenderTask.promise;
-            }
-          }
-          console.log(`[getCropImageBase64] 다른 페이지 렌더링: primary=page${problem.pageIndex + 1}, secondary=page${secPageIndex + 1}`);
-        }
-
-        const sx2 = sb.x * secondaryCanvas.width;
-        const sy2 = sb.y * secondaryCanvas.height;
-        const sw2 = sb.w * secondaryCanvas.width;
-        const sh2 = sb.h * secondaryCanvas.height;
-
-        const maxW = Math.max(sw, sw2);
-        const gap = 8; // 두 영역 사이 간격
-        const totalH = sh + gap + sh2;
-
-        const mergedCanvas = document.createElement('canvas');
-        mergedCanvas.width = Math.max(1, Math.round(maxW));
-        mergedCanvas.height = Math.max(1, Math.round(totalH));
-        const mergedCtx = mergedCanvas.getContext('2d');
-        if (!mergedCtx) return null;
-
-        // 흰색 배경
-        mergedCtx.fillStyle = '#ffffff';
-        mergedCtx.fillRect(0, 0, mergedCanvas.width, mergedCanvas.height);
-
-        // 첫 번째 영역 (primary bbox - 원래 페이지)
-        mergedCtx.drawImage(fullCanvas, sx, sy, sw, sh, 0, 0, Math.round(sw), Math.round(sh));
-        // 구분선
-        mergedCtx.strokeStyle = '#a855f7';
-        mergedCtx.lineWidth = 2;
-        mergedCtx.setLineDash([6, 4]);
-        const lineY = Math.round(sh) + gap / 2;
-        mergedCtx.beginPath();
-        mergedCtx.moveTo(0, lineY);
-        mergedCtx.lineTo(mergedCanvas.width, lineY);
-        mergedCtx.stroke();
-        // 두 번째 영역 (secondary bbox - 해당 페이지 캔버스에서 크롭)
-        mergedCtx.drawImage(secondaryCanvas, sx2, sy2, sw2, sh2, 0, Math.round(sh + gap), Math.round(sw2), Math.round(sh2));
-
-        console.log(`[getCropImageBase64] 합친 이미지: ${mergedCanvas.width}x${mergedCanvas.height} (primary=page${problem.pageIndex + 1} ${Math.round(sw)}x${Math.round(sh)} + secondary=page${secPageIndex + 1} ${Math.round(sw2)}x${Math.round(sh2)})`);
-        return mergedCanvas.toDataURL('image/png');
-      }
 
       const cropCanvas = document.createElement('canvas');
       cropCanvas.width = Math.max(1, Math.round(sw));
@@ -3766,7 +3576,7 @@ export default function AnalyzeJobPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* ======== Header ======== */}
-      <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-1.5 flex-shrink-0">
+      <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-2.5 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
@@ -3965,7 +3775,7 @@ export default function AnalyzeJobPage() {
             <button
               type="button"
               onClick={handleBatchAnalyze}
-              className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold transition-all bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20 animate-pulse"
+              className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20 animate-pulse"
             >
               <Play className="h-3.5 w-3.5" />
               분석 시작 ({pendingCount}문항)
@@ -3978,7 +3788,7 @@ export default function AnalyzeJobPage() {
               <button
                 type="button"
                 onClick={() => router.push('/dashboard/cloud')}
-                className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
                 클라우드에서 확인하기 →
@@ -3988,7 +3798,7 @@ export default function AnalyzeJobPage() {
                 type="button"
                 onClick={handleSaveAll}
                 disabled={isSavingAll}
-                className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold transition-all bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 disabled:opacity-60"
+                className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 disabled:opacity-60"
               >
                 {isSavingAll ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -4003,7 +3813,7 @@ export default function AnalyzeJobPage() {
           <button
             type="button"
             onClick={() => router.push('/dashboard/cloud')}
-            className="px-3.5 py-2 rounded-lg bg-zinc-800 text-sm font-medium text-zinc-300 hover:bg-zinc-700"
+            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
           >
             닫기
           </button>
@@ -4011,7 +3821,7 @@ export default function AnalyzeJobPage() {
       </div>
 
       {/* 페이지 탭 바 */}
-      <div className="flex items-center gap-2 border-b border-zinc-800/50 px-4 py-1 flex-shrink-0 bg-zinc-950/50">
+      <div className="flex items-center gap-2 border-b border-zinc-800/50 px-4 py-1.5 flex-shrink-0 bg-zinc-950/50">
         <span className="text-xs text-cyan-400 font-bold bg-cyan-500/10 border border-cyan-500/30 rounded px-2 py-0.5">
           페이지 {currentPage} / {totalPdfPages}
         </span>
@@ -4035,7 +3845,7 @@ export default function AnalyzeJobPage() {
       {/* ======== Main 3-Panel Layout ======== */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- 좌측: 페이지 썸네일 --- */}
-        <div className="w-36 flex-shrink-0 border-r border-zinc-800/50">
+        <div className="w-52 flex-shrink-0 border-r border-zinc-800/50">
           <PageThumbnailList
             pages={activeJobData?.pages || jobData.pages}
             currentPage={currentPage}
@@ -4059,12 +3869,10 @@ export default function AnalyzeJobPage() {
           isAnalyzing={isProcessing && !isAutoCropActive}
           canvasRef={pdfCanvasRef}
           onManualCropDetected={handleManualCropDetected}
-          mergeMode={mergeMode}
-          mergeTargetId={mergeTargetId}
         />
 
         {/* --- 우측: 문제 상세 패널 --- */}
-        <div className="w-[520px] flex-shrink-0 border-l border-zinc-800/50">
+        <div className="w-[420px] flex-shrink-0 border-l border-zinc-800/50">
           <ProblemDetailPanel
             problem={selectedProblem}
             pdfUrl={jobData.pdfUrl}

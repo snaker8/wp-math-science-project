@@ -127,6 +127,7 @@ export type Database = {
           problem_id: string;
           type_code: string;
           type_id: string | null;
+          expanded_type_code: string | null;
           difficulty: '1' | '2' | '3' | '4' | '5';
           cognitive_domain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
           ai_confidence: number | null;
@@ -141,6 +142,32 @@ export type Database = {
         };
         Insert: Omit<Database['public']['Tables']['classifications']['Row'], 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['classifications']['Insert']>;
+      };
+      expanded_math_types: {
+        Row: {
+          id: string;
+          type_code: string;
+          type_name: string;
+          description: string | null;
+          solution_method: string | null;
+          subject: string;
+          area: string;
+          standard_code: string;
+          standard_content: string | null;
+          cognitive: string;
+          difficulty_min: number;
+          difficulty_max: number;
+          keywords: string[];
+          school_level: string;
+          level_code: string;
+          domain_code: string;
+          is_active: boolean;
+          problem_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['expanded_math_types']['Row'], 'id' | 'created_at' | 'updated_at' | 'problem_count'>;
+        Update: Partial<Database['public']['Tables']['expanded_math_types']['Insert']>;
       };
     };
   };

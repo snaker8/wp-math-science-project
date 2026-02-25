@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       currentStep: '대기 중',
       autoClassify,
       generateSolutions,
-      bookGroupId: bookGroupId || null,  // ★ 클라우드 북그룹 ID 저장
+      bookGroupId: bookGroupId || undefined,  // ★ 클라우드 북그룹 ID 저장
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -681,28 +681,10 @@ async function saveEditedProblemsDirect(
 
       const choices = edited.choices || [];
       const circledNumbers = ['①', '②', '③', '④', '⑤'];
-
-      // ★ 소문제 판별: "구하시오", "[N점]" 등이 포함되면 소문제 → (1)(2)(3) 형식 유지
-      const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
-      const isSubProblem = choices.some((c: string) => subProblemPatterns.test(c));
-
-      let formattedChoices: string[];
-      let choiceType: string;
-      if (isSubProblem) {
-        // 소문제: (1), (2), (3) 형식 유지
-        formattedChoices = choices.map((c: string, i: number) => {
-          const stripped = c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
-          return stripped ? `(${i + 1}) ${stripped}` : '';
-        }).filter(Boolean);
-        choiceType = 'sub_problems';
-      } else {
-        // 객관식: ①②③ 형식
-        formattedChoices = choices.map((c: string, i: number) => {
-          const stripped = c.replace(/^[①②③④⑤]\s*/, '');
-          return stripped ? `${circledNumbers[i]} ${stripped}` : '';
-        }).filter(Boolean);
-        choiceType = formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer';
-      }
+      const formattedChoices = choices.map((c: string, i: number) => {
+        const stripped = c.replace(/^[①②③④⑤]\s*/, '');
+        return stripped ? `${circledNumbers[i]} ${stripped}` : '';
+      }).filter(Boolean);
 
       // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
       let contentLatex = edited.content || '(문제 내용 없음)';
@@ -719,7 +701,7 @@ async function saveEditedProblemsDirect(
           solution_html: null,
           answer_json: {
             finalAnswer: String(edited.answer || ''),
-            type: choiceType,
+            type: formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer',
             correct_answer: String(edited.answer || ''),
             choices: formattedChoices,
           },
