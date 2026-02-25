@@ -88,6 +88,8 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
     setGenerating(true);
     setSaved(false);
 
+    let apiSucceeded = false;
+
     try {
       const res = await fetch('/api/workflow/twin', {
         method: 'POST',
@@ -107,32 +109,38 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
         const data = await res.json();
         if (data.twinProblems && data.twinProblems.length > 0) {
           setGeneratedTwins(data.twinProblems);
+          apiSucceeded = true;
         }
+      } else {
+        console.error('Twin API error:', res.status, await res.text().catch(() => ''));
       }
     } catch (err) {
       console.error('Twin generation failed:', err);
     }
 
-    // fallback: Mock 생성 (API 실패 시)
-    if (generatedTwins.length === 0) {
+    // fallback: API 실패 시에만 실행 (apiSucceeded로 정확하게 판단)
+    if (!apiSucceeded) {
+      // 간단한 숫자 변형 fallback (모든 문제 유형에 적용 가능)
+      const variedContent = problem.content
+        .replace(/(-?\d+)/g, (match) => {
+          const num = parseInt(match);
+          if (isNaN(num) || Math.abs(num) > 100) return match;
+          const delta = (Math.floor(Math.random() * 3) + 1) * (Math.random() > 0.5 ? 1 : -1);
+          return String(num + delta);
+        });
       setGeneratedTwins([{
         id: `twin-${Date.now()}`,
-        contentLatex: problem.content
-          .replace(/3y\^2/g, '5y^2')
-          .replace(/2x\^2/g, '4x^2')
-          .replace(/-3/g, '-5')
-          .replace(/xy = 3/g, 'xy = 5'),
-        solutionLatex: '풀이: 주어진 조건에서 변형된 값을 대입하여 계산하면...\n\n$= \\frac{(x-y)(x+y)}{xy} = \\frac{(-5)(x+y)}{5}$\n\n$= -(x+y)$',
-        answer: '②',
+        contentLatex: variedContent,
+        solutionLatex: '(AI 유사문제 생성 서버에 연결할 수 없어 숫자만 변형하였습니다.)',
+        answer: '-',
         modifications: [
-          { type: 'NUMBER', original: '3', modified: '5' },
-          { type: 'COEFFICIENT', original: '2', modified: '4' },
+          { type: 'NUMBER', original: '(원본)', modified: '(변형됨)' },
         ],
       }]);
     }
 
     setGenerating(false);
-  }, [problem, difficultyAdj, useLLM, generatedTwins.length]);
+  }, [problem, difficultyAdj, useLLM]);
 
   const handleSave = useCallback(() => {
     setSaved(true);

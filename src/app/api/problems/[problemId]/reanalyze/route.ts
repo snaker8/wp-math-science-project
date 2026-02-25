@@ -7,7 +7,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { buildClassificationPrompt } from '@/lib/ai/classification-prompt';
 
 export async function POST(
   request: NextRequest,
@@ -61,11 +60,24 @@ export async function POST(
     const model = isAdvanced ? 'gpt-4o' : (process.env.OPENAI_MODEL || 'gpt-4o-mini');
     const contentText = problem.content_latex || '';
 
-    // 확장 세부유형 기반 시스템 프롬프트 생성
-    const systemPrompt = await buildClassificationPrompt({
-      mode: isAdvanced ? 'full' : 'light',
-      levelCode: body.levelCode, // 선택적 레벨 필터
-    });
+    const systemPrompt = `당신은 한국 수학 교육 전문가입니다. 주어진 수학 문제를 분석하여 다음 JSON 형식으로 응답하세요:
+{
+  "classification": {
+    "typeCode": "유형 코드 (예: MA-HS1-ALG-01-003)",
+    "typeName": "유형 이름 (한국어)",
+    "subject": "과목명",
+    "chapter": "단원명",
+    "difficulty": 1-5,
+    "cognitiveDomain": "CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING",
+    "confidence": 0.0-1.0
+  },
+  "solution": {
+    "approach": "풀이 접근법",
+    "steps": [{"stepNumber": 1, "description": "단계 설명", "latex": "수식"}],
+    "finalAnswer": "최종 답"
+  },
+  "correctedContent": "수정이 필요하면 수정된 LaTeX 내용, 아니면 null"
+}`;
 
     const userPrompt = `다음 수학 문제를 분석해주세요:\n\n${contentText}`;
 
@@ -128,10 +140,21 @@ export async function POST(
     }
 
     if (analysis.solution) {
-      const solutionText = analysis.solution.steps
-        ?.map((s: any) => `${s.description}\n${s.latex || ''}`)
-        .join('\n') || '';
-      updateData.solution_latex = solutionText;
+      // upload/route.ts와 동일한 포맷 (approach + steps + finalAnswer 모두 포함)
+      const parts: string[] = [];
+      if (analysis.solution.approach) {
+        parts.push(`[풀이 접근] ${analysis.solution.approach}`);
+      }
+      if (analysis.solution.steps && analysis.solution.steps.length > 0) {
+        const stepsText = analysis.solution.steps
+          .map((s: any) => `${s.stepNumber || ''}. ${s.description}\n${s.latex || ''}`)
+          .join('\n\n');
+        parts.push(stepsText);
+      }
+      if (analysis.solution.finalAnswer) {
+        parts.push(`∴ 정답: ${analysis.solution.finalAnswer}`);
+      }
+      updateData.solution_latex = parts.length > 0 ? parts.join('\n\n') : '';
     }
 
     if (analysis.solution?.finalAnswer) {
@@ -151,13 +174,12 @@ export async function POST(
       console.error('[Reanalyze] Problem update error:', updateError);
     }
 
-    // 5. Classification 업데이트 (expanded_type_code 포함)
+    // 5. Classification 업데이트
     if (analysis.classification) {
-      const expandedCode = analysis.classification.expandedTypeCode || analysis.classification.typeCode || '';
       const classData: any = {
         problem_id: problemId,
-        type_code: expandedCode || existingClassification?.type_code || '',
-        expanded_type_code: expandedCode || null,
+        type_code: analysis.classification.typeCode || existingClassification?.type_code || '',
+        type_name: analysis.classification.typeName || existingClassification?.type_name || '',
         difficulty: String(analysis.classification.difficulty || 3),
         cognitive_domain: analysis.classification.cognitiveDomain || 'UNDERSTANDING',
         ai_confidence: analysis.classification.confidence || 0.5,

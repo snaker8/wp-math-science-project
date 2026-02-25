@@ -10,6 +10,7 @@ interface Problem {
   content_latex: string | null;
   solution_latex: string | null;
   answer_json: Record<string, any> | null;
+  images?: Array<{ url: string; type: string; label: string }> | null;
   status: string;
   source_name: string | null;
   ai_analysis: Record<string, any> | null;
@@ -116,6 +117,22 @@ export function ProblemCard({ index, problem, points }: ProblemCardProps) {
           className="text-sm text-gray-800 leading-relaxed"
         />
 
+        {/* 크롭 이미지 표시 (content_latex에 이미지 마크다운이 없는 경우만 — 이전 자산화 호환) */}
+        {problem.images && problem.images.length > 0 && !content.includes('![') && (
+          <div className="mt-2 space-y-2">
+            {problem.images.map((img, i) => (
+              <img
+                key={i}
+                src={img.url}
+                alt={img.label || '문제 이미지'}
+                className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm"
+                style={{ maxHeight: '400px' }}
+                loading="lazy"
+              />
+            ))}
+          </div>
+        )}
+
         {/* 배점 표시 */}
         {points && (
           <span className="text-xs text-gray-400 ml-1">[{points}점]</span>
@@ -178,12 +195,21 @@ function extractChoices(text: string): { body: string; choices: string[] } {
     return { body, choices };
   }
 
-  // 2차: (1)~(5) 패턴 시도 → ①~⑤로 변환
-  const numberedMarkers = ['(1)', '(2)', '(3)', '(4)', '(5)'];
+  // 2차: (1)~(5) 패턴 시도 → 소문제인지 선택지인지 판별
   const firstNumberedIdx = text.indexOf('(1)');
   if (firstNumberedIdx !== -1) {
-    const body = text.substring(0, firstNumberedIdx).trim();
     const remaining = text.substring(firstNumberedIdx);
+
+    // ★ 소문제 판별: (1) 뒤에 "구하시오", "구하여라", "구해라", "[N점]", "서술하시오" 등이 있으면 소문제
+    const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+    if (subProblemPatterns.test(remaining)) {
+      // 소문제이므로 선택지로 분리하지 않고 본문에 포함
+      return { body: text, choices: [] };
+    }
+
+    // 선택지 분리
+    const numberedMarkers = ['(1)', '(2)', '(3)', '(4)', '(5)'];
+    const body = text.substring(0, firstNumberedIdx).trim();
 
     const choices: string[] = [];
     for (let i = 0; i < numberedMarkers.length; i++) {

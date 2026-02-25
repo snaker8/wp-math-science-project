@@ -112,6 +112,98 @@ export interface ParsedQuestion {
     month?: number;     // 9
     grade?: string;     // "고1"
   };
+  /** GPT-4o Vision으로 해석된 도형/그래프 데이터 */
+  interpreted_figures?: InterpretedFigure[];
+}
+
+// ============================================================================
+// Vision 해석 관련 타입 (GPT-4o Vision → 에디터 렌더링)
+// ============================================================================
+
+/** 도형/그래프 이미지 유형 */
+export type FigureType = 'graph' | 'geometry' | 'table' | 'number_line' | 'diagram' | 'photo';
+
+/**
+ * GPT-4o Vision으로 해석된 도형/그래프 데이터
+ */
+export interface InterpretedFigure {
+  /** 이미지 유형 */
+  figureType: FigureType;
+  /** 이미지에 대한 텍스트 설명 */
+  description: string;
+  /** 원본 이미지 URL (fallback용) */
+  originalImageUrl: string;
+  /** 유형별 렌더링 데이터 */
+  rendering: GraphRendering | GeometryRendering | TableRendering | DiagramRendering | null;
+  /** 해석 신뢰도 (0~1) */
+  confidence: number;
+}
+
+/**
+ * 그래프 렌더링 데이터 (Desmos 호환)
+ */
+export interface GraphRendering {
+  type: 'graph';
+  /** Desmos 표현식 배열 */
+  expressions: GraphExpressionData[];
+  /** X축 범위 [min, max] */
+  xRange: [number, number];
+  /** Y축 범위 [min, max] */
+  yRange: [number, number];
+  /** 주요 점 표시 */
+  points: Array<{ x: number; y: number; label?: string }>;
+  /** 주석/설명 텍스트 */
+  annotations: string[];
+}
+
+export interface GraphExpressionData {
+  latex: string;
+  color?: string;
+  style?: 'solid' | 'dashed' | 'dotted';
+  hidden?: boolean;
+}
+
+/**
+ * 도형 렌더링 데이터
+ */
+export interface GeometryRendering {
+  type: 'geometry';
+  /** 도형을 표현하는 LaTeX 코드 */
+  latex: string;
+  /** SVG 코드 (선택) */
+  svg?: string;
+  /** 꼭짓점 좌표 */
+  vertices: Array<{ label: string; x: number; y: number }>;
+  /** 변(선분) 연결 */
+  segments: Array<[string, string]>;
+  /** 각도 정보 */
+  angles: Array<{ vertex: string; value: string }>;
+  /** 변의 길이 */
+  lengths: Array<{ from: string; to: string; value: string }>;
+}
+
+/**
+ * 표 렌더링 데이터
+ */
+export interface TableRendering {
+  type: 'table';
+  /** LaTeX 표 코드 */
+  latex: string;
+  /** 표 헤더 */
+  headers: string[];
+  /** 표 데이터 행 */
+  rows: string[][];
+}
+
+/**
+ * 다이어그램/수직선 등 기타 렌더링 데이터
+ */
+export interface DiagramRendering {
+  type: 'diagram' | 'number_line';
+  /** LaTeX 코드 */
+  latex: string;
+  /** 텍스트 설명 */
+  description: string;
 }
 
 /**

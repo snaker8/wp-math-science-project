@@ -26,6 +26,7 @@ interface DesmosCalculatorOptions {
   zoomButtons?: boolean;
   keypad?: boolean;
   graphpaper?: boolean;
+  showGrid?: boolean;
   border?: boolean;
   lockViewport?: boolean;
 }

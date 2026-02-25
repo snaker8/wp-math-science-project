@@ -291,7 +291,7 @@ export default function DashboardPage() {
                 <p className="text-[10px] text-zinc-600">이번 달 제작 추이를 확인하세요.</p>
               </div>
               <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                   <BarChart data={chartData} barSize={16}>
                     <CartesianGrid
                       strokeDasharray="3 3"

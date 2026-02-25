@@ -144,7 +144,7 @@ CREATE TABLE source_files (
 COMMENT ON TABLE source_files IS 'PDF/IMG/HWP 업로드 파일 및 OCR 처리 결과';
 
 -- ----------------------------------------------------------------------------
--- 3.4 problem_types (문제 유형 마스터 - 3,569개 유형)
+-- 3.4 problem_types (문제 유형 마스터 - 505개 교육과정 성취기준 기반)
 -- ----------------------------------------------------------------------------
 CREATE TABLE problem_types (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -173,42 +173,8 @@ CREATE TABLE problem_types (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE problem_types IS '(레거시) 문제 유형 마스터 테이블';
+COMMENT ON TABLE problem_types IS '교육과정 성취기준 기반 문제 유형 마스터 테이블 (505개 성취기준)';
 COMMENT ON COLUMN problem_types.type_code IS '유형 코드 (예: MA-ALG-001-A)';
-
--- ----------------------------------------------------------------------------
--- 3.4b expanded_math_types (확장 세부유형 - 505개 성취기준 → 1,139+ 유형)
--- ----------------------------------------------------------------------------
-CREATE TABLE expanded_math_types (
-    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    type_code       TEXT NOT NULL UNIQUE,             -- MA-{LEVEL}-{DOMAIN}-{STD}-{SEQ}
-    type_name       TEXT NOT NULL,
-    description     TEXT,
-    solution_method TEXT,
-    subject         TEXT NOT NULL,                    -- 과목명
-    area            TEXT NOT NULL,                    -- 영역명
-    standard_code   TEXT NOT NULL,                    -- 성취기준 코드 [10수학01-01]
-    standard_content TEXT,                            -- 성취기준 내용
-    cognitive       TEXT NOT NULL DEFAULT 'UNDERSTANDING'
-        CHECK (cognitive IN ('CALCULATION','UNDERSTANDING','INFERENCE','PROBLEM_SOLVING')),
-    difficulty_min  SMALLINT NOT NULL DEFAULT 1 CHECK (difficulty_min BETWEEN 1 AND 5),
-    difficulty_max  SMALLINT NOT NULL DEFAULT 3 CHECK (difficulty_max BETWEEN 1 AND 5),
-    keywords        JSONB DEFAULT '[]',
-    school_level    TEXT NOT NULL,                    -- 초등학교/중학교/고등학교
-    level_code      TEXT NOT NULL,                    -- ES12, ES34, ES56, MS, HS0, HS1, HS2, CAL, PRB, GEO
-    domain_code     TEXT NOT NULL,                    -- POL, EQU, INE 등 (24개)
-    is_active       BOOLEAN DEFAULT TRUE,
-    problem_count   INTEGER DEFAULT 0,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
-COMMENT ON TABLE expanded_math_types IS '505개 성취기준 → 1,139+ 세부유형 마스터 테이블';
-
-CREATE INDEX idx_emt_level_code ON expanded_math_types(level_code);
-CREATE INDEX idx_emt_domain_code ON expanded_math_types(domain_code);
-CREATE INDEX idx_emt_standard_code ON expanded_math_types(standard_code);
-CREATE INDEX idx_emt_level_domain ON expanded_math_types(level_code, domain_code);
 
 -- ----------------------------------------------------------------------------
 -- 3.5 problems (문제)
@@ -278,9 +244,8 @@ CREATE TABLE classifications (
     problem_id UUID NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
 
     -- 분류 체계
-    type_code VARCHAR(20) NOT NULL,                -- 유형 코드 (레거시 또는 확장)
+    type_code VARCHAR(20) NOT NULL,                -- 유형 코드 (성취기준 기반)
     type_id UUID REFERENCES problem_types(id) ON DELETE SET NULL,
-    expanded_type_code TEXT REFERENCES expanded_math_types(type_code) ON DELETE SET NULL,  -- 확장 세부유형 FK
     difficulty difficulty_level NOT NULL,          -- 1~5 난이도
     cognitive_domain cognitive_domain NOT NULL,    -- 인지 영역
 
@@ -303,10 +268,9 @@ CREATE TABLE classifications (
     UNIQUE(problem_id, type_code)
 );
 
-COMMENT ON TABLE classifications IS '문제 분류 (1,139+ 세부유형, 5단계 난이도, 4가지 인지영역)';
-COMMENT ON COLUMN classifications.type_code IS '유형 코드';
-COMMENT ON COLUMN classifications.expanded_type_code IS '확장 세부유형 코드 (MA-{LEVEL}-{DOMAIN}-{STD}-{SEQ})';
-COMMENT ON COLUMN classifications.difficulty IS '1(최하) ~ 5(최상) 단계';
+COMMENT ON TABLE classifications IS '문제 분류 (505개 성취기준, 5등급 난이도, 4가지 인지영역)';
+COMMENT ON COLUMN classifications.type_code IS '성취기준 기반 유형 코드';
+COMMENT ON COLUMN classifications.difficulty IS '1(하) ~ 5(상) 5등급';
 COMMENT ON COLUMN classifications.cognitive_domain IS 'CALCULATION, UNDERSTANDING, INFERENCE, PROBLEM_SOLVING';
 
 -- ----------------------------------------------------------------------------
@@ -922,7 +886,7 @@ FROM difficulty_analytics da;
 -- SECTION 8: SEED DATA (문제 유형 예시)
 -- ============================================================================
 
--- 일부 문제 유형 예시 데이터 (실제로는 3,569개 필요)
+-- 일부 문제 유형 예시 데이터 (실제 성취기준은 curriculum_data/unified_math_standards.json 참조)
 INSERT INTO problem_types (type_code, subject, chapter, section, type_name, keywords) VALUES
     ('MA1-POL-001', '수학I', '다항식', '다항식의 연산', '다항식의 덧셈과 뺄셈', ARRAY['다항식', '연산', '덧셈', '뺄셈']),
     ('MA1-POL-002', '수학I', '다항식', '다항식의 연산', '다항식의 곱셈', ARRAY['다항식', '연산', '곱셈']),
@@ -942,6 +906,40 @@ INSERT INTO problem_types (type_code, subject, chapter, section, type_name, keyw
     ('GEO-VEC-001', '기하', '벡터', '벡터의 연산', '벡터의 덧셈과 뺄셈', ARRAY['벡터', '연산', '덧셈']),
     ('GEO-VEC-002', '기하', '벡터', '벡터의 내적', '내적의 계산', ARRAY['벡터', '내적', '각도'])
 ON CONFLICT (type_code) DO NOTHING;
+
+-- ============================================================================
+-- SECTION 9: YOLO 학습 데이터 (문제 영역 감지 어노테이션)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS detection_annotations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    problem_id UUID REFERENCES problems(id) ON DELETE CASCADE,
+    exam_id UUID REFERENCES exams(id) ON DELETE SET NULL,
+    job_id TEXT,
+    page_number INTEGER NOT NULL,
+    page_image_path TEXT NOT NULL,
+    page_width INTEGER,
+    page_height INTEGER,
+    bbox_x REAL NOT NULL,
+    bbox_y REAL NOT NULL,
+    bbox_w REAL NOT NULL,
+    bbox_h REAL NOT NULL,
+    class_label VARCHAR(20) NOT NULL DEFAULT 'problem',
+    problem_number INTEGER,
+    detection_source VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_da_page_image ON detection_annotations(page_image_path);
+CREATE INDEX IF NOT EXISTS idx_da_class ON detection_annotations(class_label);
+CREATE INDEX IF NOT EXISTS idx_da_exam ON detection_annotations(exam_id);
+CREATE INDEX IF NOT EXISTS idx_da_job ON detection_annotations(job_id);
+
+ALTER TABLE detection_annotations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view detection annotations"
+    ON detection_annotations FOR SELECT USING (true);
+CREATE POLICY "Service can insert detection annotations"
+    ON detection_annotations FOR INSERT WITH CHECK (true);
 
 -- ============================================================================
 -- END OF SCHEMA

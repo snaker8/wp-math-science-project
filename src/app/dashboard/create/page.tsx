@@ -724,8 +724,8 @@ export default function PaperCreatePage() {
         formData.append('file', file);
         formData.append('instituteId', 'default');
         formData.append('userId', 'user');
-        formData.append('autoClassify', 'true');
-        formData.append('generateSolutions', 'true');
+        formData.append('autoClassify', 'false'); // 기본 OFF — 분석 페이지에서 수동 선택
+        formData.append('generateSolutions', 'false');
 
         const response = await fetch('/api/workflow/upload', {
           method: 'POST',

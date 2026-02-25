@@ -30,7 +30,7 @@ export interface UploadJob {
   currentStep: string;
   autoClassify?: boolean;
   generateSolutions?: boolean;
-  bookGroupId?: string;    // 클라우드 폴더(북그룹) ID
+  bookGroupId?: string | null;  // ★ 클라우드 북그룹 ID (자산화 시 사용)
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -77,26 +77,23 @@ export interface BoundingBox {
   height: number;
 }
 
-// 분류 시스템 (505개 성취기준 → 1,139+ 세부유형)
+// 505개 교육과정 성취기준 기반 분류 시스템 (다사람수학)
 export interface TypeClassification {
-  typeCode: string; // e.g., "MA-HS0-POL-01-001"
-  expandedTypeCode?: string; // expanded_math_types FK (새 코드 체계)
+  typeCode: string; // e.g., "MA-HS1-ALG-01-003"
   typeName: string;
-  subject: string; // 수학, 수학I, 미적분, 확률과 통계, 기하
-  chapter: string; // 대단원 (= area)
-  section: string; // 중단원 (= standard_code)
+  subject: string; // 수학I, 수학II, 미적분, 확률과 통계, 기하
+  chapter: string; // 대단원
+  section: string; // 중단원
   subSection?: string; // 소단원
   difficulty: 1 | 2 | 3 | 4 | 5;
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   confidence: number; // AI 신뢰도 0-1
   prerequisites: string[]; // 선수 유형 코드들
-  standardCode?: string; // 성취기준 코드 (예: [10수학01-01])
-  standardContent?: string; // 성취기준 내용
-  solutionMethod?: string; // 풀이 접근법
 }
 
 export interface LLMAnalysisResult {
   problemId: string;
+  problemNumber?: number;      // 문제 번호 (1-based)
   originalText?: string;      // OCR 추출 원본 텍스트
   originalMathExpressions?: string[]; // OCR 추출 수식
   contentWithMath?: string;   // Mathpix Markdown (수식 $...$ 인라인 포함)

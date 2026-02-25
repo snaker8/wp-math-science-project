@@ -27,19 +27,19 @@ import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } f
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o 기본 (mini는 분류/해설 정확도 낮음)
 const HWP_PYTHON_API = process.env.HWP_PYTHON_API || '/api/hwp/parse';
 
-// 3,569개 유형 분류 체계 (요약)
-export const MATH_TYPE_HIERARCHY = {
-  subjects: [
-    { code: 'MA-HS1', name: '수학I', chapters: 12 },
-    { code: 'MA-HS2', name: '수학II', chapters: 10 },
-    { code: 'MA-CAL', name: '미적분', chapters: 8 },
-    { code: 'MA-PRB', name: '확률과 통계', chapters: 6 },
-    { code: 'MA-GEO', name: '기하', chapters: 5 },
+// 다사람수학 교육과정 성취기준 체계 (505개 = 2022 개정 319개 + 2015 개정 186개)
+export const MATH_CURRICULUM_SYSTEM = {
+  name: '다사람수학 505개 성취기준 분류체계',
+  curriculums: [
+    { version: '2022 개정', count: 319, coverage: '초등·중등·고등 전체' },
+    { version: '2015 개정', count: 186, coverage: '고등학교 (2027년까지 고3 적용)' },
   ],
-  totalTypes: 3569,
+  totalStandards: 505,
+  difficultyLevels: 5,  // 하, 중하, 중, 중상, 상
+  difficultyItems: 6,    // 6항목 채점 (3~16점)
 };
 
 // ============================================================================
@@ -425,6 +425,38 @@ function parseChoicesFromText(text: string): string[] {
   return parts;
 }
 
+/**
+ * 선택지 배열 검증 — 문제 텍스트가 선택지에 섞인 경우 필터링
+ * - 최대 5개
+ * - 너무 긴 선택지 (50자 초과)는 문제 텍스트일 가능성 높음
+ * - 문제 패턴 ("의 값은", "[점]", "구하시오" 등) 포함 시 제외
+ */
+function validateChoices(choices: string[]): string[] {
+  if (!choices || choices.length === 0) return [];
+
+  const invalidPatterns = /의\s*값은|구하시오|구하여라|구해라|서술하시오|증명하시오|만족시킬\s*때|\[\s*\d+\.?\d*\s*점\s*\]|^\d{2,}\)/;
+
+  const validated = choices.filter(c => {
+    const text = c.replace(/^[①②③④⑤]\s*/, '').replace(/^[1-5]\s*\)\s*/, '').trim();
+    // 빈 선택지 제외
+    if (!text) return false;
+    // 50자 초과면 문제 텍스트일 가능성 높음 (일반 선택지는 짧음)
+    if (text.length > 80) {
+      console.warn(`[Cloud Flow] validateChoices: 선택지 너무 김 (${text.length}자) — 제외: "${text.substring(0, 40)}..."`);
+      return false;
+    }
+    // 문제 패턴 포함 시 제외
+    if (invalidPatterns.test(text)) {
+      console.warn(`[Cloud Flow] validateChoices: 문제 텍스트 패턴 감지 — 제외: "${text.substring(0, 40)}..."`);
+      return false;
+    }
+    return true;
+  });
+
+  // 최대 5개
+  return validated.slice(0, 5);
+}
+
 function createMockPDFResult(jobId: string): OCRResult {
   return {
     jobId,
@@ -545,43 +577,53 @@ export async function processOCR(
 // LLM Analysis (GPT-4o)
 // ============================================================================
 
-const CLASSIFICATION_PROMPT = `당신은 수학 문제 분류 전문가입니다. 주어진 수학 문제를 분석하여 **반드시 아래의 정확한 JSON 구조**로만 응답해주세요. 키 이름을 변경하지 마세요.
+const CLASSIFICATION_PROMPT = `당신은 "다사람수학"의 AI 수학 교육 전문가입니다.
+한국 교육과정(2015 개정, 2022 개정) 505개 성취기준에 기반하여 문제를 분류합니다.
 
-## typeCode 형식 (필수 준수)
-형식: MA-{LEVEL}-{DOMAIN}-{STD:3자리}-{SEQ:3자리}
+■ 난이도 채점 (6항목, 총점 3~16점 → 5등급)
+| 항목 | 1점 | 2점 | 3점 |
+| 필요 개념 수 | 1개 | 2개 | 3개+ |
+| 풀이 단계 수 | 1~2 | 3~4 | 5+ |
+| 계산 복잡도 | 단순 | 중간 | 복잡 |
+| 사고력 요구 | 단순적용 | 응용/변형 | 추론/증명 |
+| 자료 해석 | 0:불필요 | 1:단순 | 2:복합 |
+| 함정/오개념 | 0:없음 | - | 2:있음 |
+등급: 하(3~5)=1, 중하(6~7)=2, 중(8~9)=3, 중상(10~11)=4, 상(12+)=5
 
-LEVEL별 유효 DOMAIN 코드:
-- HS0(수학/공통):  POL(다항식), EQU(방정식), INE(부등식), SET(집합), FUN(함수), CRD(좌표기하), CNT(경우의수)
-- HS1(수학I):      EXP(지수로그), TRI(삼각함수), SEQ(수열)
-- HS2(수학II):     LIM(극한), DIF(미분), INT(적분)
-- CAL(미적분):     LIM(극한), DIF(미분), INT(적분)
-- PRB(확률과통계): PER(순열조합), PRB(확률), STA(통계)
-- GEO(기하):       CON(이차곡선), VEC(벡터), SPC(공간도형)
-- MS(중학교):      NUM(수와연산), PAT(문자와식), GEO(도형), DAT(자료)
-- ES12~ES56(초등): NUM, OPR, GEO, MEA, DAT
-
-예시: MA-HS0-POL-001-003 (수학, 다항식, 3번째 성취기준, 3번째 세부유형)
+주어진 수학 문제를 분석하여 **반드시 아래의 정확한 JSON 구조**로만 응답해주세요.
 
 {
   "classification": {
-    "typeCode": "MA-HS0-POL-001-003",
+    "achievementCode": "[12수학01-02]",
+    "typeCode": "MA-HS1-ALG-01-003",
     "typeName": "유형 이름",
-    "subject": "수학 또는 수학I 또는 수학II 또는 미적분 또는 확률과 통계 또는 기하 또는 중학교 수학",
+    "subject": "과목명 (수학I, 수학II, 미적분, 확률과 통계, 기하 등)",
     "chapter": "대단원명",
     "section": "중단원명",
     "difficulty": 3,
+    "difficultyLabel": "중",
+    "difficultyScores": {
+      "concept_count": 2, "step_count": 2, "calc_complexity": 1,
+      "thinking_level": 2, "data_interpretation": 0, "trap_misconception": 0, "total": 7
+    },
     "cognitiveDomain": "CALCULATION 또는 UNDERSTANDING 또는 INFERENCE 또는 PROBLEM_SOLVING",
     "confidence": 0.85,
     "prerequisites": []
   },
   "solution": {
-    "approach": "풀이 접근법",
+    "approach": "풀이의 핵심 전략을 한 문장으로 요약",
     "steps": [
-      {"stepNumber": 1, "description": "설명", "latex": "수식", "explanation": "상세설명"}
+      {"stepNumber": 1, "description": "이 단계에서 하는 일 (30자 이상)", "latex": "이 단계의 수식 (필수)", "explanation": "왜 이렇게 하는지 설명"}
     ],
-    "finalAnswer": "최종 답",
-    "commonMistakes": ["흔한 실수"]
+    "finalAnswer": "최종 정답 (예: 24, x=3, 5/2 등) ★필수★",
+    "commonMistakes": ["학생들이 자주 하는 실수"]
   },
+
+★ 해설(solution) 필수 규칙:
+1. steps: 최소 2단계 이상, 각 단계에 latex 수식 반드시 포함
+2. finalAnswer: 최종 답을 반드시 명시하세요. 빈 문자열("")은 절대 불가
+3. 계산 과정을 절대 생략하지 마세요. 중간 과정도 모두 포함
+4. 객관식이면 finalAnswer에 정답 번호(1~5)도 포함
   "metadata": {
     "estimatedTimeMinutes": 5,
     "keywordsTags": ["키워드"],
@@ -589,7 +631,7 @@ LEVEL별 유효 DOMAIN 코드:
   }
 }
 
-중요: 위 JSON 키 이름(classification, solution, metadata, typeCode, typeName 등)을 정확히 사용하세요. 한글 키 이름을 사용하지 마세요.
+중요: 위 JSON 키 이름을 정확히 사용하세요. 한글 키 이름을 사용하지 마세요.
 
 문제:
 {PROBLEM_TEXT}
@@ -703,16 +745,40 @@ export async function analyzeProblemWithLLM(
   }
 }
 
-async function callOpenAI(prompt: string, retries = 6, backoff = 5000, model?: string): Promise<string> {
+const DEFAULT_SYSTEM_MESSAGE = '당신은 한국 고등학교 수학 교육과정 전문가이자 수능/모의고사 출제위원급 전문가입니다. 문제의 유형, 난이도, 단원을 정확히 분류하고 상세한 풀이를 제공합니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.';
+
+const SOLUTION_SYSTEM_MESSAGE = '당신은 한국 수능/모의고사 수학 해설 전문가입니다. 학생이 완전히 이해할 수 있도록 단계별 풀이를 명확하게 작성합니다. 반드시 유효한 JSON으로만 응답하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요. 필수 규칙: (1) 각 단계에 LaTeX 수식 필수 포함 (2) 최종 답(finalAnswer)을 반드시 명시 — 빈 문자열 금지 (3) 계산 과정을 절대 생략하지 마세요.';
+
+interface CallOpenAIOptions {
+  retries?: number;
+  backoff?: number;
+  model?: string;
+  systemMessage?: string;
+  temperature?: number;
+}
+
+async function callOpenAI(prompt: string, retriesOrOptions?: number | CallOpenAIOptions, backoff = 5000, model?: string): Promise<string> {
   // 실제 OpenAI API 호출
   if (!OPENAI_API_KEY) {
     throw new Error('[Cloud Flow] OpenAI API key not configured. Set OPENAI_API_KEY in .env');
   }
 
-  const currentModel = model || OPENAI_MODEL;
+  // 하위 호환: (prompt, retries, backoff, model) 또는 (prompt, options) 모두 지원
+  let opts: CallOpenAIOptions;
+  if (typeof retriesOrOptions === 'object') {
+    opts = retriesOrOptions;
+  } else {
+    opts = { retries: retriesOrOptions ?? 6, backoff, model };
+  }
+
+  const currentModel = opts.model || OPENAI_MODEL;
+  const currentSystemMessage = opts.systemMessage || DEFAULT_SYSTEM_MESSAGE;
+  const currentTemperature = opts.temperature ?? 0.1;
+  const currentRetries = opts.retries ?? 6;
+  const currentBackoff = opts.backoff ?? 5000;
 
   try {
-    console.log(`[Cloud Flow] Calling OpenAI with model: ${currentModel}`);
+    console.log(`[Cloud Flow] Calling OpenAI with model: ${currentModel}, temp: ${currentTemperature}`);
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -724,35 +790,27 @@ async function callOpenAI(prompt: string, retries = 6, backoff = 5000, model?: s
         messages: [
           {
             role: 'system',
-            content: '당신은 한국 고등학교 수학 교육과정 전문가이자 수능/모의고사 출제위원급 전문가입니다. 문제의 유형, 난이도, 단원을 정확히 분류하고 상세한 풀이를 제공합니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.',
+            content: currentSystemMessage,
           },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.2,
-        max_tokens: 4000,
+        temperature: currentTemperature,
+        max_tokens: 6000,
         response_format: { type: 'json_object' },
       }),
     });
 
     if (!response.ok) {
       // 429 Rate Limit 처리
-      if (response.status === 429 && retries > 0) {
-        // Retry-After 헤더가 있으면 그 값을 사용, 없으면 backoff 사용
+      if (response.status === 429 && currentRetries > 0) {
         const retryAfterHeader = response.headers.get('Retry-After');
         const waitTime = retryAfterHeader
-          ? Math.max(parseInt(retryAfterHeader, 10) * 1000, backoff)
-          : backoff;
+          ? Math.max(parseInt(retryAfterHeader, 10) * 1000, currentBackoff)
+          : currentBackoff;
 
-        // 재시도 3회 이하 남으면 gpt-4o-mini로 폴백
-        let nextModel = currentModel;
-        if (retries <= 3 && currentModel !== 'gpt-4o-mini') {
-          nextModel = 'gpt-4o-mini';
-          console.warn(`[Cloud Flow] Falling back to ${nextModel} due to rate limits`);
-        }
-
-        console.warn(`[Cloud Flow] OpenAI 429 Rate Limit. Retrying in ${waitTime}ms with ${nextModel}... (${retries} retries left)`);
+        console.warn(`[Cloud Flow] OpenAI 429 Rate Limit. Retrying in ${waitTime}ms with ${currentModel}... (${currentRetries} retries left)`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
-        return callOpenAI(prompt, retries - 1, backoff * 2, nextModel);
+        return callOpenAI(prompt, { ...opts, retries: currentRetries - 1, backoff: currentBackoff * 2 });
       }
       throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
     }
@@ -760,16 +818,10 @@ async function callOpenAI(prompt: string, retries = 6, backoff = 5000, model?: s
     const data = await response.json();
     return data.choices[0].message.content;
   } catch (error) {
-    // 네트워크 에러 등도 재시도
-    if (retries > 0 && error instanceof Error && error.message.includes('429')) {
-      let nextModel = currentModel;
-      if (retries <= 3 && currentModel !== 'gpt-4o-mini') {
-        nextModel = 'gpt-4o-mini';
-        console.warn(`[Cloud Flow] Falling back to ${nextModel} due to rate limits`);
-      }
-      console.warn(`[Cloud Flow] OpenAI 429 Rate Limit (Exception). Retrying in ${backoff}ms with ${nextModel}... (${retries} retries left)`);
-      await new Promise(resolve => setTimeout(resolve, backoff));
-      return callOpenAI(prompt, retries - 1, backoff * 2, nextModel);
+    if (currentRetries > 0 && error instanceof Error && error.message.includes('429')) {
+      console.warn(`[Cloud Flow] OpenAI 429 Rate Limit (Exception). Retrying in ${currentBackoff}ms with ${currentModel}... (${currentRetries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, currentBackoff));
+      return callOpenAI(prompt, { ...opts, retries: currentRetries - 1, backoff: currentBackoff * 2 });
     }
     throw error;
   }
@@ -934,15 +986,11 @@ function parseAnalysisResponse(response: string): LLMAnalysisResult {
       try {
         parsed = JSON.parse(aggressiveSanitized);
       } catch {
-        // 3차 시도: 백슬래시를 모두 제거하고 파싱
-        console.warn('[Cloud Flow] Aggressive sanitization failed, trying backslash removal');
-        const noBackslash = jsonStr.replace(/\\/g, '');
-        try {
-          parsed = JSON.parse(noBackslash);
-        } catch {
-          // 최종 실패 — 원래 에러를 throw
-          throw firstError;
-        }
+        // ★ 3차 시도(백슬래시 전체 제거) 제거됨 — LaTeX 수식을 완전히 파괴하므로
+        // 대신 파싱 실패로 처리하여 fallback 분석 결과 반환
+        console.error('[Cloud Flow] JSON parse failed after aggressive sanitization. Throwing error for fallback.');
+        console.error('[Cloud Flow] Raw response (first 300 chars):', jsonStr.substring(0, 300));
+        throw firstError;
       }
     }
 
@@ -1029,7 +1077,7 @@ export interface JobUpdateCallback {
  * 업로드 Job 처리 (Background Worker)
  * 1. 파일 타입 감지 (PDF/HWP/IMG)
  * 2. 텍스트/수식 추출
- * 3. LLM으로 3,569개 유형 분류
+ * 3. LLM으로 505개 성취기준 분류
  * 4. 해설이 없으면 단계별 해설 생성
  * 5. DB(Problems)에 저장
  */
@@ -1137,8 +1185,10 @@ export async function processUploadJob(
           pageIndex: lq.pageIndex,
           bbox: lq.bbox,
           contentMmd: lq.contentMmd,
-          choicesFromOCR: lq.choices.length > 0 ? lq.choices
-            : parsedMatch?.choices?.map(c => `${c.label}) ${c.content_latex}`) || [],
+          choicesFromOCR: validateChoices(
+            lq.choices.length > 0 ? lq.choices
+              : parsedMatch?.choices?.map(c => `${c.label}) ${c.content_latex}`) || []
+          ),
         };
       });
     } else if (parsedQuestions.length > 0) {
@@ -1154,8 +1204,10 @@ export async function processUploadJob(
           pageIndex: lineMatch?.pageIndex,
           bbox: lineMatch?.bbox,
           contentMmd: lineMatch?.contentMmd || q.raw_text,
-          choicesFromOCR: lineMatch?.choices.length ? lineMatch.choices
-            : q.choices?.map(c => `${c.label}) ${c.content_latex}`) || [],
+          choicesFromOCR: validateChoices(
+            lineMatch?.choices.length ? lineMatch.choices
+              : q.choices?.map(c => `${c.label}) ${c.content_latex}`) || []
+          ),
         };
       });
     } else {
@@ -1181,7 +1233,7 @@ export async function processUploadJob(
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
 
-      // Step 4: 3,569개 유형 중 하나로 분류 + 해설 매칭
+      // Step 4: 505개 성취기준 분류 + 해설 매칭
       callbacks.onStatusChange('CLASSIFYING', `문제 ${i + 1}/${questionsToAnalyze.length} - 유형 분류 및 해설 매칭...`);
 
       const analysis = await analyzeProblemWithLLM(
@@ -1254,23 +1306,33 @@ async function generateStepByStepSolution(
   problemText: string,
   mathExpressions: string[]
 ): Promise<StepByStepSolution> {
-  const SOLUTION_PROMPT = `당신은 수학 교사입니다. 다음 문제의 단계별 풀이를 작성해주세요.
+  const SOLUTION_PROMPT = `다음 수학 문제의 완전한 단계별 풀이를 작성하세요.
 
-문제: ${problemText}
-수식: ${mathExpressions.join(', ')}
+문제:
+${problemText}
+${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
 
-다음 JSON 형식으로 응답해주세요:
+★ 필수 규칙:
+1. 각 단계마다 LaTeX 수식을 반드시 포함하세요
+2. 계산 과정을 절대 생략하지 마세요 (중간 과정 모두 표시)
+3. 최종 답(finalAnswer)을 반드시 명시하세요 — 빈 문자열 절대 불가
+4. 객관식이면 정답 번호(1~5)도 포함하세요
+
+다음 JSON 형식으로 응답하세요:
 {
-  "approach": "풀이 접근법",
+  "approach": "풀이의 핵심 전략 (한 문장)",
   "steps": [
-    { "stepNumber": 1, "description": "설명", "latex": "수식", "explanation": "상세 설명" }
+    { "stepNumber": 1, "description": "이 단계에서 하는 일 (구체적으로)", "latex": "수식 (필수)", "explanation": "왜 이렇게 하는지" }
   ],
-  "finalAnswer": "최종 답",
-  "commonMistakes": ["흔한 실수들"]
+  "finalAnswer": "최종 정답 (예: 24, x=3, ② 등) — 반드시 작성",
+  "commonMistakes": ["학생들이 자주 하는 실수"]
 }`;
 
   try {
-    const response = await callOpenAI(SOLUTION_PROMPT);
+    const response = await callOpenAI(SOLUTION_PROMPT, {
+      systemMessage: SOLUTION_SYSTEM_MESSAGE,
+      temperature: 0.3,  // 해설은 약간 높은 창의성
+    });
     let jsonStr = response;
     if (response.includes('```json')) {
       jsonStr = response.split('```json')[1].split('```')[0].trim();
@@ -1281,17 +1343,18 @@ async function generateStepByStepSolution(
     try {
       return JSON.parse(jsonStr);
     } catch {
-      // 폴백: aggressive 백슬래시 처리
       const aggressiveSanitized = jsonStr.replace(/\\/g, '\\\\');
       try {
         return JSON.parse(aggressiveSanitized);
       } catch {
-        return JSON.parse(jsonStr.replace(/\\/g, ''));
+        // ★ 백슬래시 전체 삭제(LaTeX 파괴) 대신 파싱 실패 처리
+        console.error('[Cloud Flow] Solution JSON parse failed. Raw:', jsonStr.substring(0, 200));
+        throw new Error('Solution JSON parse failed');
       }
     }
   } catch {
     return {
-      approach: '자동 생성 실패',
+      approach: '자동 생성 실패 - 수동 입력 필요',
       steps: [],
       finalAnswer: '',
       commonMistakes: [],
