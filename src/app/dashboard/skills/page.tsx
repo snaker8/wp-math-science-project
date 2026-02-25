@@ -17,10 +17,10 @@ import {
   LayoutGrid,
   ScrollText,
   CheckSquare,
+  BookOpen,
+  ListTree,
 } from 'lucide-react';
 import {
-  LEVEL_CODE_LABELS,
-  DOMAIN_CODE_LABELS,
   COGNITIVE_LABELS_KR,
   COGNITIVE_COLORS,
   DIFFICULTY_LABELS,
@@ -28,13 +28,17 @@ import {
 } from '@/types/expanded-types';
 import type {
   LevelNode,
-  DomainNode,
-  StandardNode,
   ExpandedMathType,
   CognitiveDomain,
 } from '@/types/expanded-types';
-import { useTypeTree, useTypeDetail } from '@/hooks/useExpandedTypes';
+import { useTypeTree, useTypeDetail, useExpandedTypesSearch } from '@/hooks/useExpandedTypes';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import {
+  CURRICULUM_GRADES,
+  CURRICULUM_BY_SCHOOL,
+  type CurriculumGrade,
+  type CurriculumChapter,
+} from '@/data/curriculum-tree';
 
 // ============================================================================
 // Constants
@@ -48,6 +52,8 @@ const schoolTabs = [
   { key: '중학교', label: '중학' },
   { key: '고등학교', label: '고등' },
 ] as const;
+
+type ViewMode = 'type' | 'curriculum';
 
 // ============================================================================
 // Sub-components
@@ -110,10 +116,33 @@ function StatsBadge({ label, count, color }: { label: string; count: number; col
   );
 }
 
-/**
- * 교과과정 트리 (학년/과목 → 대단원 → 소단원 → 세부유형)
- * 시중 수학프로그램 스타일: 코드 비노출, 단원명만 표시
- */
+/** 로마 숫자 변환 (대단원 넘버링) */
+function romanNumeral(n: number): string {
+  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+    'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+  return numerals[n - 1] || String(n);
+}
+
+/** 성취기준 내용을 소단원명으로 요약 */
+function summarizeStandard(content: string): string {
+  if (!content) return '(내용 없음)';
+  let text = content
+    .replace(/을\s*할\s*수\s*있다\.?$/g, '')
+    .replace(/를\s*할\s*수\s*있다\.?$/g, '')
+    .replace(/를?\s*이해한다\.?$/g, '')
+    .replace(/를?\s*안다\.?$/g, '')
+    .replace(/를?\s*구한다\.?$/g, '')
+    .replace(/를?\s*설명할\s*수\s*있다\.?$/g, '')
+    .replace(/할\s*수\s*있다\.?$/g, '')
+    .trim();
+  if (text.length > 40) text = text.slice(0, 38) + '…';
+  return text;
+}
+
+// ============================================================================
+// TypeTreeView — 세부유형 DB 기반 트리
+// ============================================================================
+
 function TypeTreeView({
   tree,
   selectedTypeCode,
@@ -138,10 +167,10 @@ function TypeTreeView({
   return (
     <div className="space-y-0.5">
       {tree.map((level, li) => {
+        void li;
         const isLevelOpen = expandedLevels.has(level.levelCode);
         return (
           <div key={level.levelCode}>
-            {/* 학년/과목 (초등 1-2학년, 중학교, 수학Ⅰ 등) */}
             <button
               type="button"
               onClick={() => toggle(setExpandedLevels, level.levelCode)}
@@ -161,7 +190,6 @@ function TypeTreeView({
               const isDomOpen = expandedDomains.has(domKey);
               return (
                 <div key={domKey}>
-                  {/* 대단원 (수와 연산, 다항식, 함수 등) */}
                   <button
                     type="button"
                     onClick={() => toggle(setExpandedDomains, domKey)}
@@ -182,7 +210,6 @@ function TypeTreeView({
                     const hasTypes = std.types.length > 1;
                     return (
                       <div key={stdKey}>
-                        {/* 소단원 (성취기준 내용을 단원명으로 표시) */}
                         <button
                           type="button"
                           onClick={() => {
@@ -215,7 +242,6 @@ function TypeTreeView({
                           </span>
                         </button>
 
-                        {/* 세부유형 (소단원 하위) */}
                         {isStdOpen && hasTypes && (
                           <div>
                             {std.types.map(t => (
@@ -252,33 +278,145 @@ function TypeTreeView({
   );
 }
 
-/** 로마 숫자 변환 (대단원 넘버링) */
-function romanNumeral(n: number): string {
-  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
-    'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
-  return numerals[n - 1] || String(n);
+// ============================================================================
+// CurriculumTreeView — 교과과정 기반 트리 (2015 개정 교육과정)
+// ============================================================================
+
+function CurriculumTreeView({
+  grades,
+  selectedChapterId,
+  onSelectChapter,
+}: {
+  grades: CurriculumGrade[];
+  selectedChapterId: string | null;
+  onSelectChapter: (chapter: CurriculumChapter, gradeName: string) => void;
+}) {
+  const [expandedGrades, setExpandedGrades] = useState<Set<string>>(new Set());
+  const [expandedSemesters, setExpandedSemesters] = useState<Set<string>>(new Set());
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+
+  const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
+    setter(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-0.5">
+      {grades.map((grade) => {
+        const isGradeOpen = expandedGrades.has(grade.id);
+        const hasSemesters = grade.semesters.length > 1;
+        return (
+          <div key={grade.id}>
+            {/* 학년 / 과목 */}
+            <button
+              type="button"
+              onClick={() => toggle(setExpandedGrades, grade.id)}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-zinc-100 hover:bg-zinc-800/80"
+            >
+              {isGradeOpen
+                ? <ChevronDown className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                : <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />}
+              <BookOpen className="h-3.5 w-3.5 text-emerald-500/60 flex-shrink-0" />
+              <span>{grade.label}</span>
+            </button>
+
+            {isGradeOpen && grade.semesters.map((sem) => {
+              const semKey = sem.id;
+              const isSemOpen = !hasSemesters || expandedSemesters.has(semKey);
+
+              return (
+                <div key={semKey}>
+                  {/* 학기 (초/중등만) */}
+                  {hasSemesters && (
+                    <button
+                      type="button"
+                      onClick={() => toggle(setExpandedSemesters, semKey)}
+                      className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-[13px] text-zinc-300 hover:bg-zinc-800/60"
+                      style={{ paddingLeft: '20px' }}
+                    >
+                      {isSemOpen
+                        ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />}
+                      <span className="text-emerald-400/70 text-xs">{sem.label}</span>
+                    </button>
+                  )}
+
+                  {isSemOpen && sem.chapters.map((chapter, ci) => {
+                    const chapKey = chapter.id;
+                    const isChapOpen = expandedChapters.has(chapKey);
+                    const hasUnits = chapter.units.length > 0;
+                    const isSelected = selectedChapterId === chapter.id;
+
+                    return (
+                      <div key={chapKey}>
+                        {/* 대단원 */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (hasUnits) {
+                              toggle(setExpandedChapters, chapKey);
+                            }
+                            onSelectChapter(chapter, grade.label);
+                          }}
+                          className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs transition-colors ${
+                            isSelected
+                              ? 'bg-emerald-900/30 text-emerald-300'
+                              : 'text-zinc-400 hover:bg-zinc-800/50'
+                          }`}
+                          style={{ paddingLeft: hasSemesters ? '40px' : '20px' }}
+                        >
+                          {hasUnits ? (
+                            isChapOpen
+                              ? <ChevronDown className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                              : <ChevronRight className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                          ) : (
+                            <span className="w-3 flex-shrink-0 text-center text-zinc-600">·</span>
+                          )}
+                          <span className="text-zinc-500 mr-0.5">{romanNumeral(ci + 1)}.</span>
+                          <span className="truncate">{chapter.name}</span>
+                          <span className="ml-auto flex-shrink-0 text-[10px] text-zinc-600">
+                            {chapter.units.length}
+                          </span>
+                        </button>
+
+                        {/* 소단원 */}
+                        {isChapOpen && chapter.units.map((unit, ui) => (
+                          <button
+                            key={unit.id}
+                            type="button"
+                            onClick={() => onSelectChapter({ ...chapter, name: unit.name, id: unit.id, units: [] }, grade.label)}
+                            className={`flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-xs transition-colors ${
+                              selectedChapterId === unit.id
+                                ? 'bg-emerald-900/30 text-emerald-300 font-medium'
+                                : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+                            }`}
+                            style={{ paddingLeft: hasSemesters ? '56px' : '36px' }}
+                          >
+                            <span className="h-1 w-1 rounded-full bg-zinc-600 flex-shrink-0" />
+                            <span className="text-zinc-600 mr-0.5">{ui + 1}.</span>
+                            <span className="truncate">{unit.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-/** 성취기준 내용을 소단원명으로 요약 (앞부분만, ~할 수 있다 제거) */
-function summarizeStandard(content: string): string {
-  if (!content) return '(내용 없음)';
-  // 너무 길면 앞부분만
-  let text = content;
-  // "~할 수 있다", "~를 이해한다" 등 서술어미 제거하여 단원명처럼 만들기
-  text = text
-    .replace(/을\s*할\s*수\s*있다\.?$/g, '')
-    .replace(/를\s*할\s*수\s*있다\.?$/g, '')
-    .replace(/를?\s*이해한다\.?$/g, '')
-    .replace(/를?\s*안다\.?$/g, '')
-    .replace(/를?\s*구한다\.?$/g, '')
-    .replace(/를?\s*설명할\s*수\s*있다\.?$/g, '')
-    .replace(/할\s*수\s*있다\.?$/g, '')
-    .trim();
-  if (text.length > 40) text = text.slice(0, 38) + '…';
-  return text;
-}
+// ============================================================================
+// TypeDetailCard
+// ============================================================================
 
-/** 유형 상세 카드 */
 function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
   const { type, relatedTypes, loading } = useTypeDetail(typeCode);
 
@@ -383,6 +521,103 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
 }
 
 // ============================================================================
+// CurriculumSearchPanel — 교과과정 모드 오른쪽 패널
+// ============================================================================
+
+function CurriculumSearchPanel({
+  searchTerm,
+  gradeName,
+  chapterName,
+  onSelectType,
+  selectedTypeCode,
+}: {
+  searchTerm: string;
+  gradeName: string;
+  chapterName: string;
+  onSelectType: (code: string) => void;
+  selectedTypeCode: string | null;
+}) {
+  const { results, count, loading } = useExpandedTypesSearch({
+    search: searchTerm,
+    limit: 50,
+  });
+
+  if (!searchTerm) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <BookOpen className="h-12 w-12 text-zinc-700 mb-4" />
+        <p className="text-sm text-zinc-400 mb-1">교과과정에서 단원을 선택하세요</p>
+        <p className="text-xs text-zinc-600">단원 클릭 → 관련 세부유형 목록 표시</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mb-2" />
+        <p className="text-sm text-zinc-500">유형 검색 중...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="px-1 pb-1">
+        <p className="text-xs text-zinc-500">
+          <span className="text-zinc-400 font-medium">{gradeName}</span>
+          <span className="mx-1 text-zinc-600">›</span>
+          <span className="text-emerald-400/80">{chapterName}</span>
+          <span className="ml-2 text-zinc-600">— 관련 유형 {count}개</span>
+        </p>
+      </div>
+      {results.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <Search className="h-8 w-8 text-zinc-700 mb-2" />
+          <p className="text-sm text-zinc-500">관련 세부유형이 없습니다.</p>
+          <p className="text-xs text-zinc-600 mt-1">DB에 매핑된 유형을 추가하거나 다른 단원을 선택하세요.</p>
+        </div>
+      ) : (
+        results.map((t: ExpandedMathType) => (
+          <button
+            key={t.typeCode}
+            type="button"
+            onClick={() => onSelectType(t.typeCode)}
+            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+              selectedTypeCode === t.typeCode
+                ? 'border-emerald-700/50 bg-emerald-900/20'
+                : 'border-zinc-800 bg-zinc-900 hover:border-emerald-700/30 hover:bg-zinc-800/50'
+            }`}
+          >
+            <span
+              className="h-2 w-2 rounded-full flex-shrink-0 mt-0.5"
+              style={{ backgroundColor: COGNITIVE_COLORS[t.cognitive] || '#666' }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-medium truncate ${selectedTypeCode === t.typeCode ? 'text-emerald-300' : 'text-zinc-300'}`}>
+                {t.typeName}
+              </p>
+              <p className="text-xs text-zinc-600 mt-0.5">{t.subject} · {t.area}</p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span
+                className="rounded-md border px-1.5 py-0.5 text-[10px]"
+                style={{ borderColor: COGNITIVE_COLORS[t.cognitive], color: COGNITIVE_COLORS[t.cognitive] }}
+              >
+                {COGNITIVE_LABELS_KR[t.cognitive]}
+              </span>
+              {t.problemCount > 0 && (
+                <span className="text-[10px] text-zinc-500">{t.problemCount}문제</span>
+              )}
+            </div>
+          </button>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // Main Page
 // ============================================================================
 
@@ -392,7 +627,16 @@ export default function SkillsPage() {
   const [selectedTypeCode, setSelectedTypeCode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // useTypeTree: school 필터 적용
+  // 뷰 모드: 유형별 | 교과과정별
+  const [viewMode, setViewMode] = useState<ViewMode>('type');
+
+  // 교과과정 모드에서 선택된 단원
+  const [curriculumSelectedId, setCurriculumSelectedId] = useState<string | null>(null);
+  const [curriculumSearchTerm, setCurriculumSearchTerm] = useState('');
+  const [curriculumGradeName, setCurriculumGradeName] = useState('');
+  const [curriculumChapterName, setCurriculumChapterName] = useState('');
+
+  // 유형별 트리 (DB)
   const treeFilters = useMemo(() => {
     const f: { school?: string } = {};
     if (schoolFilter !== 'all') f.school = schoolFilter;
@@ -400,9 +644,22 @@ export default function SkillsPage() {
   }, [schoolFilter]);
 
   const { tree, totalTypes, totalStandards, loading } = useTypeTree(treeFilters);
-  const { type: selectedTypeDetail, problems, relatedTypes, loading: detailLoading } = useTypeDetail(selectedTypeCode);
+  const { type: selectedTypeDetail, problems, loading: detailLoading } = useTypeDetail(selectedTypeCode);
 
-  // 검색 필터 (클라이언트 사이드)
+  // 교과과정 모드 학년 목록 필터링
+  const curriculumGrades = useMemo(() => {
+    if (schoolFilter === 'all') return CURRICULUM_GRADES;
+    const schoolLevelMap: Record<string, string> = {
+      '초등학교': '초등학교',
+      '중학교': '중학교',
+      '고등학교': '고등학교',
+    };
+    const level = schoolLevelMap[schoolFilter];
+    if (!level) return CURRICULUM_GRADES;
+    return CURRICULUM_BY_SCHOOL[level as keyof typeof CURRICULUM_BY_SCHOOL] ?? CURRICULUM_GRADES;
+  }, [schoolFilter]);
+
+  // 검색 필터 (유형별 트리)
   const filteredTree = useMemo(() => {
     if (!searchQuery.trim()) return tree;
     const q = searchQuery.toLowerCase();
@@ -430,7 +687,7 @@ export default function SkillsPage() {
       .filter(level => level.domains.length > 0);
   }, [tree, searchQuery]);
 
-  // 문제 통계 (선택된 유형의 문제들에서 집계)
+  // 문제 통계
   const problemStats = useMemo(() => {
     const diffCounts: Record<number, number> = {};
     const cogCounts: Record<string, number> = {};
@@ -440,6 +697,20 @@ export default function SkillsPage() {
     }
     return { diffCounts, cogCounts };
   }, [problems]);
+
+  const handleSchoolFilterChange = (key: string) => {
+    setSchoolFilter(key);
+    setSelectedTypeCode(null);
+    setCurriculumSelectedId(null);
+    setCurriculumSearchTerm('');
+  };
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    setSelectedTypeCode(null);
+    setCurriculumSelectedId(null);
+    setCurriculumSearchTerm('');
+  };
 
   return (
     <section className="flex h-full w-full overflow-hidden bg-black text-white">
@@ -459,43 +730,51 @@ export default function SkillsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* 검색 */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <input
-                type="text"
-                placeholder="유형 검색..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="h-9 w-64 rounded-lg border border-zinc-700 bg-zinc-900 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none"
-              />
-            </div>
+            {/* 검색 (유형별 모드에서만) */}
+            {viewMode === 'type' && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="유형 검색..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="h-9 w-64 rounded-lg border border-zinc-700 bg-zinc-900 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none"
+                />
+              </div>
+            )}
             {/* 통계 */}
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <span className="rounded-md bg-zinc-800 px-2 py-1">
-                <span className="font-semibold text-white">{totalTypes}</span> 유형
-              </span>
-              <span className="rounded-md bg-zinc-800 px-2 py-1">
-                <span className="font-semibold text-white">{totalStandards}</span> 성취기준
-              </span>
-            </div>
+            {viewMode === 'type' && (
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <span className="rounded-md bg-zinc-800 px-2 py-1">
+                  <span className="font-semibold text-white">{totalTypes}</span> 유형
+                </span>
+                <span className="rounded-md bg-zinc-800 px-2 py-1">
+                  <span className="font-semibold text-white">{totalStandards}</span> 성취기준
+                </span>
+              </div>
+            )}
+            {viewMode === 'curriculum' && (
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <span className="rounded-md bg-zinc-800 px-2 py-1">
+                  2015 개정 교육과정 기준
+                </span>
+              </div>
+            )}
           </div>
         </header>
 
         {/* Main Content - Split Panel */}
         <div className="flex min-h-0 flex-1 gap-2 overflow-hidden">
-          {/* Left Panel - 28% (학교급 탭 + 트리 + 상세) */}
+          {/* Left Panel */}
           <div className="flex w-[28%] flex-shrink-0 flex-col gap-2">
-            {/* School Level Tabs */}
+            {/* 학교급 탭 */}
             <div className="flex flex-shrink-0 gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
               {schoolTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => {
-                    setSchoolFilter(tab.key);
-                    setSelectedTypeCode(null);
-                  }}
+                  onClick={() => handleSchoolFilterChange(tab.key)}
                   className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                     schoolFilter === tab.key
                       ? 'bg-violet-600 text-white'
@@ -507,48 +786,101 @@ export default function SkillsPage() {
               ))}
             </div>
 
-            {/* Type Tree */}
-            <div className="flex h-[55%] flex-col rounded-xl border border-zinc-800 bg-zinc-900/50">
-              <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
-                <span className="text-xs font-medium text-zinc-400">교과과정</span>
-                <span className="text-xs text-zinc-600">{totalTypes}개 유형</span>
+            {/* 뷰 모드 토글 */}
+            <div className="flex flex-shrink-0 gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('type')}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === 'type'
+                    ? 'bg-violet-700/60 text-violet-200 border border-violet-700/50'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                }`}
+              >
+                <ListTree className="h-3.5 w-3.5" />
+                유형별
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('curriculum')}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === 'curriculum'
+                    ? 'bg-emerald-800/60 text-emerald-200 border border-emerald-700/50'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                }`}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                교과과정별
+              </button>
+            </div>
+
+            {/* 트리 영역 */}
+            <div className={`flex flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 ${viewMode === 'type' ? 'h-[55%]' : 'flex-1'}`}>
+              <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2 flex-shrink-0">
+                {viewMode === 'type' ? (
+                  <>
+                    <span className="text-xs font-medium text-zinc-400">교과과정 (세부유형)</span>
+                    <span className="text-xs text-zinc-600">{totalTypes}개 유형</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-medium text-zinc-400">교과과정 (단원별)</span>
+                    <span className="text-xs text-zinc-600">2015 개정</span>
+                  </>
+                )}
               </div>
               <div className="flex-1 overflow-auto p-2">
-                {loading ? (
-                  <div className="flex h-full items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
-                  </div>
-                ) : filteredTree.length > 0 ? (
-                  <TypeTreeView
-                    tree={filteredTree}
-                    selectedTypeCode={selectedTypeCode}
-                    onSelectType={setSelectedTypeCode}
-                  />
+                {viewMode === 'type' ? (
+                  loading ? (
+                    <div className="flex h-full items-center justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+                    </div>
+                  ) : filteredTree.length > 0 ? (
+                    <TypeTreeView
+                      tree={filteredTree}
+                      selectedTypeCode={selectedTypeCode}
+                      onSelectType={setSelectedTypeCode}
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center text-sm text-zinc-500">
+                      {searchQuery ? (
+                        <>
+                          <Search className="h-6 w-6 mb-2 text-zinc-600" />
+                          <p>&quot;{searchQuery}&quot; 검색 결과 없음</p>
+                        </>
+                      ) : (
+                        <p>데이터를 불러오는 중...</p>
+                      )}
+                    </div>
+                  )
                 ) : (
-                  <div className="flex h-full flex-col items-center justify-center text-sm text-zinc-500">
-                    {searchQuery ? (
-                      <>
-                        <Search className="h-6 w-6 mb-2 text-zinc-600" />
-                        <p>&quot;{searchQuery}&quot; 검색 결과 없음</p>
-                      </>
-                    ) : (
-                      <p>데이터를 불러오는 중...</p>
-                    )}
-                  </div>
+                  <CurriculumTreeView
+                    grades={curriculumGrades}
+                    selectedChapterId={curriculumSelectedId}
+                    onSelectChapter={(chapter, gradeName) => {
+                      setCurriculumSelectedId(chapter.id);
+                      setCurriculumSearchTerm(chapter.name);
+                      setCurriculumGradeName(gradeName);
+                      setCurriculumChapterName(chapter.name);
+                      setSelectedTypeCode(null);
+                    }}
+                  />
                 )}
               </div>
             </div>
 
-            {/* Type Detail */}
-            <div className="flex flex-1 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
-                <BookOpenCheck className="h-3.5 w-3.5 text-zinc-500" />
-                <span className="text-xs font-medium text-zinc-400">유형 상세</span>
+            {/* 유형 상세 (유형별 모드에서만) */}
+            {viewMode === 'type' && (
+              <div className="flex flex-1 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2 flex-shrink-0">
+                  <BookOpenCheck className="h-3.5 w-3.5 text-zinc-500" />
+                  <span className="text-xs font-medium text-zinc-400">유형 상세</span>
+                </div>
+                <div className="flex-1 overflow-auto">
+                  <TypeDetailCard typeCode={selectedTypeCode} />
+                </div>
               </div>
-              <div className="flex-1 overflow-auto">
-                <TypeDetailCard typeCode={selectedTypeCode} />
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Resize Handle */}
@@ -558,19 +890,25 @@ export default function SkillsPage() {
             </div>
           </div>
 
-          {/* Right Panel - 문제 목록 */}
+          {/* Right Panel */}
           <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
             {/* Current Type Header */}
             <div className="flex-shrink-0 rounded-xl border border-zinc-800 bg-zinc-900/50">
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-violet-400 shadow-sm">
-                    <LayoutGrid className="h-5 w-5" />
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 shadow-sm ${
+                    viewMode === 'curriculum' ? 'text-emerald-400' : 'text-violet-400'
+                  }`}>
+                    {viewMode === 'curriculum' ? <BookOpen className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">현재 유형</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                      {viewMode === 'curriculum' ? '선택된 단원' : '현재 유형'}
+                    </span>
                     <span className="text-base font-semibold text-white">
-                      {selectedTypeDetail?.type_name || '유형을 선택해 주세요'}
+                      {viewMode === 'curriculum'
+                        ? (curriculumChapterName || '단원을 선택해 주세요')
+                        : (selectedTypeDetail?.type_name || '유형을 선택해 주세요')}
                     </span>
                   </div>
                 </div>
@@ -603,108 +941,127 @@ export default function SkillsPage() {
               </div>
             </div>
 
-            {/* Problem List Area */}
+            {/* Content Area */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50">
-              {/* Stats bar (only when type selected) */}
-              {selectedTypeCode && problems.length > 0 && (
-                <div className="flex-shrink-0 flex items-center gap-3 border-b border-zinc-800 px-4 py-2">
-                  <span className="flex items-center rounded-md border border-zinc-600 bg-zinc-700 px-2 py-0.5 font-bold text-gray-100 text-sm">
-                    {problems.length}<span className="pl-1 font-normal"> 문제</span>
-                  </span>
-                  {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />}
-                  {Object.keys(problemStats.diffCounts).length > 0 && (
-                    <>
-                      <span className="text-xs text-zinc-500">난이도</span>
-                      {[1, 2, 3, 4, 5].map((d) =>
-                        problemStats.diffCounts[d] ? (
-                          <StatsBadge
-                            key={d}
-                            label={DIFFICULTY_LABELS[d]}
-                            count={problemStats.diffCounts[d]}
-                            color={DIFFICULTY_COLORS[d]}
-                          />
-                        ) : null
-                      )}
-                    </>
-                  )}
-                  {Object.keys(problemStats.cogCounts).length > 0 && (
-                    <>
-                      <span className="mx-1 h-4 border-l border-zinc-700" />
-                      <span className="text-xs text-zinc-500">인지</span>
-                      {Object.entries(problemStats.cogCounts).map(([cog, count]) => (
-                        <StatsBadge
-                          key={cog}
-                          label={COGNITIVE_LABELS_KR[cog as CognitiveDomain] || cog}
-                          count={count}
-                          color={COGNITIVE_COLORS[cog as CognitiveDomain] || '#666'}
-                        />
-                      ))}
-                    </>
-                  )}
+              {/* 교과과정 모드: 단원 → 유형 검색 패널 */}
+              {viewMode === 'curriculum' && !selectedTypeCode && (
+                <div className="flex-1 overflow-auto p-3">
+                  <CurriculumSearchPanel
+                    searchTerm={curriculumSearchTerm}
+                    gradeName={curriculumGradeName}
+                    chapterName={curriculumChapterName}
+                    onSelectType={setSelectedTypeCode}
+                    selectedTypeCode={selectedTypeCode}
+                  />
                 </div>
               )}
 
-              {/* Problem list */}
-              <div className="flex-1 overflow-auto p-3">
-                {selectedTypeCode ? (
-                  detailLoading ? (
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mb-2" />
-                      <p className="text-sm text-zinc-500">문제 불러오는 중...</p>
+              {/* 유형 선택됨 → 문제 목록 (두 모드 공통) */}
+              {selectedTypeCode && (
+                <>
+                  {/* Stats bar */}
+                  {problems.length > 0 && (
+                    <div className="flex-shrink-0 flex items-center gap-3 border-b border-zinc-800 px-4 py-2">
+                      <span className="flex items-center rounded-md border border-zinc-600 bg-zinc-700 px-2 py-0.5 font-bold text-gray-100 text-sm">
+                        {problems.length}<span className="pl-1 font-normal"> 문제</span>
+                      </span>
+                      {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />}
+                      {Object.keys(problemStats.diffCounts).length > 0 && (
+                        <>
+                          <span className="text-xs text-zinc-500">난이도</span>
+                          {[1, 2, 3, 4, 5].map((d) =>
+                            problemStats.diffCounts[d] ? (
+                              <StatsBadge
+                                key={d}
+                                label={DIFFICULTY_LABELS[d]}
+                                count={problemStats.diffCounts[d]}
+                                color={DIFFICULTY_COLORS[d]}
+                              />
+                            ) : null
+                          )}
+                        </>
+                      )}
+                      {Object.keys(problemStats.cogCounts).length > 0 && (
+                        <>
+                          <span className="mx-1 h-4 border-l border-zinc-700" />
+                          <span className="text-xs text-zinc-500">인지</span>
+                          {Object.entries(problemStats.cogCounts).map(([cog, count]) => (
+                            <StatsBadge
+                              key={cog}
+                              label={COGNITIVE_LABELS_KR[cog as CognitiveDomain] || cog}
+                              count={count}
+                              color={COGNITIVE_COLORS[cog as CognitiveDomain] || '#666'}
+                            />
+                          ))}
+                        </>
+                      )}
                     </div>
-                  ) : problems.length > 0 ? (
-                    <div className="space-y-2">
-                      {(problems as { id: string; problem_id: string; difficulty: number; cognitive_domain: string; problems: Record<string, unknown> | null }[])
-                        .map((item, i) => {
-                          const prob = item.problems;
-                          if (!prob) return null;
-                          return (
-                            <div
-                              key={String(item.id)}
-                              className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 hover:border-violet-500/30 transition-colors"
-                            >
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-300">
-                                {i + 1}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm text-zinc-300 leading-relaxed">
-                                  <MixedContentRenderer
-                                    content={String(prob.content_latex || '')}
-                                    className="text-sm"
-                                  />
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <span
-                                    className="rounded-md border px-2 py-0.5 text-xs"
-                                    style={{
-                                      borderColor: DIFFICULTY_COLORS[item.difficulty] || '#666',
-                                      color: DIFFICULTY_COLORS[item.difficulty] || '#666',
-                                    }}
-                                  >
-                                    {DIFFICULTY_LABELS[item.difficulty] || '미지정'}
-                                  </span>
-                                  <span className="text-xs text-zinc-500">
-                                    {COGNITIVE_LABELS_KR[item.cognitive_domain as CognitiveDomain] || ''}
-                                  </span>
-                                  {String(prob.source_name || '') && (
-                                    <span className="text-xs text-zinc-600">
-                                      {String(prob.source_name)} {prob.source_year ? String(prob.source_year) : ''}
+                  )}
+                  <div className="flex-1 overflow-auto p-3">
+                    {detailLoading ? (
+                      <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mb-2" />
+                        <p className="text-sm text-zinc-500">문제 불러오는 중...</p>
+                      </div>
+                    ) : problems.length > 0 ? (
+                      <div className="space-y-2">
+                        {(problems as { id: string; problem_id: string; difficulty: number; cognitive_domain: string; problems: Record<string, unknown> | null }[])
+                          .map((item, i) => {
+                            const prob = item.problems;
+                            if (!prob) return null;
+                            return (
+                              <div
+                                key={String(item.id)}
+                                className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 hover:border-violet-500/30 transition-colors"
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-300">
+                                  {i + 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-zinc-300 leading-relaxed">
+                                    <MixedContentRenderer
+                                      content={String(prob.content_latex || '')}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <span
+                                      className="rounded-md border px-2 py-0.5 text-xs"
+                                      style={{
+                                        borderColor: DIFFICULTY_COLORS[item.difficulty] || '#666',
+                                        color: DIFFICULTY_COLORS[item.difficulty] || '#666',
+                                      }}
+                                    >
+                                      {DIFFICULTY_LABELS[item.difficulty] || '미지정'}
                                     </span>
-                                  )}
+                                    <span className="text-xs text-zinc-500">
+                                      {COGNITIVE_LABELS_KR[item.cognitive_domain as CognitiveDomain] || ''}
+                                    </span>
+                                    {String(prob.source_name || '') && (
+                                      <span className="text-xs text-zinc-600">
+                                        {String(prob.source_name)} {prob.source_year ? String(prob.source_year) : ''}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <FileText className="h-10 w-10 text-zinc-700 mb-3" />
-                      <p className="text-sm text-zinc-500">이 유형에 등록된 문제가 없습니다.</p>
-                      <p className="text-xs text-zinc-600 mt-1">PDF 자산화를 통해 문제를 추가해 주세요.</p>
-                    </div>
-                  )
-                ) : (
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <FileText className="h-10 w-10 text-zinc-700 mb-3" />
+                        <p className="text-sm text-zinc-500">이 유형에 등록된 문제가 없습니다.</p>
+                        <p className="text-xs text-zinc-600 mt-1">PDF 자산화를 통해 문제를 추가해 주세요.</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* 아무것도 선택 안 됨 (유형별 모드) */}
+              {viewMode === 'type' && !selectedTypeCode && (
+                <div className="flex-1 overflow-auto p-3">
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <LayoutGrid className="h-12 w-12 text-zinc-700 mb-4" />
                     <p className="text-sm text-zinc-400 mb-1">
@@ -714,8 +1071,8 @@ export default function SkillsPage() {
                       학년 → 대단원 → 소단원 순서로 탐색하세요.
                     </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
