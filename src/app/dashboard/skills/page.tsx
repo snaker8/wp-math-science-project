@@ -110,7 +110,10 @@ function StatsBadge({ label, count, color }: { label: string; count: number; col
   );
 }
 
-/** 4단 트리 (Level → Domain → Standard → Type) */
+/**
+ * 교과과정 트리 (학년/과목 → 대단원 → 소단원 → 세부유형)
+ * 시중 수학프로그램 스타일: 코드 비노출, 단원명만 표시
+ */
 function TypeTreeView({
   tree,
   selectedTypeCode,
@@ -124,24 +127,8 @@ function TypeTreeView({
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedStandards, setExpandedStandards] = useState<Set<string>>(new Set());
 
-  const toggleLevel = (code: string) => {
-    setExpandedLevels(prev => {
-      const next = new Set(prev);
-      next.has(code) ? next.delete(code) : next.add(code);
-      return next;
-    });
-  };
-
-  const toggleDomain = (key: string) => {
-    setExpandedDomains(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-
-  const toggleStandard = (key: string) => {
-    setExpandedStandards(prev => {
+  const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
+    setter(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -150,67 +137,87 @@ function TypeTreeView({
 
   return (
     <div className="space-y-0.5">
-      {tree.map(level => {
+      {tree.map((level, li) => {
         const isLevelOpen = expandedLevels.has(level.levelCode);
         return (
           <div key={level.levelCode}>
-            {/* Level */}
+            {/* 학년/과목 (초등 1-2학년, 중학교, 수학Ⅰ 등) */}
             <button
               type="button"
-              onClick={() => toggleLevel(level.levelCode)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+              onClick={() => toggle(setExpandedLevels, level.levelCode)}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-zinc-100 hover:bg-zinc-800/80"
             >
               {isLevelOpen
-                ? <ChevronDown className="h-3.5 w-3.5 text-violet-400" />
-                : <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />}
+                ? <ChevronDown className="h-4 w-4 text-violet-400 flex-shrink-0" />
+                : <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />}
               <span>{level.label}</span>
-              <span className="ml-auto rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{level.typeCount}</span>
+              <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+                {level.typeCount}
+              </span>
             </button>
 
-            {isLevelOpen && level.domains.map(domain => {
+            {isLevelOpen && level.domains.map((domain, di) => {
               const domKey = `${level.levelCode}-${domain.domainCode}`;
               const isDomOpen = expandedDomains.has(domKey);
               return (
                 <div key={domKey}>
-                  {/* Domain */}
+                  {/* 대단원 (수와 연산, 다항식, 함수 등) */}
                   <button
                     type="button"
-                    onClick={() => toggleDomain(domKey)}
-                    className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
-                    style={{ paddingLeft: '24px' }}
+                    onClick={() => toggle(setExpandedDomains, domKey)}
+                    className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-[13px] text-zinc-300 hover:bg-zinc-800/60"
+                    style={{ paddingLeft: '20px' }}
                   >
                     {isDomOpen
-                      ? <ChevronDown className="h-3 w-3 text-zinc-500" />
-                      : <ChevronRight className="h-3 w-3 text-zinc-500" />}
-                    <span className="text-violet-400 text-xs font-mono">{domain.domainCode}</span>
+                      ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />}
+                    <span className="text-violet-400/80 text-xs mr-0.5">{romanNumeral(di + 1)}.</span>
                     <span>{domain.label}</span>
                     <span className="ml-auto text-[10px] text-zinc-600">{domain.typeCount}</span>
                   </button>
 
-                  {isDomOpen && domain.standards.map(std => {
+                  {isDomOpen && domain.standards.map((std, si) => {
                     const stdKey = `${domKey}-${std.standardCode}`;
                     const isStdOpen = expandedStandards.has(stdKey);
+                    const hasTypes = std.types.length > 1;
                     return (
                       <div key={stdKey}>
-                        {/* Standard */}
+                        {/* 소단원 (성취기준 내용을 단원명으로 표시) */}
                         <button
                           type="button"
-                          onClick={() => toggleStandard(stdKey)}
-                          className="flex w-full items-center gap-2 rounded-lg py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800"
+                          onClick={() => {
+                            if (hasTypes) {
+                              toggle(setExpandedStandards, stdKey);
+                            } else if (std.types.length === 1) {
+                              onSelectType(std.types[0].typeCode);
+                            }
+                          }}
+                          className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs hover:bg-zinc-800/50 ${
+                            !hasTypes && std.types.length === 1 && selectedTypeCode === std.types[0].typeCode
+                              ? 'bg-violet-900/30 text-violet-300'
+                              : 'text-zinc-400'
+                          }`}
                           style={{ paddingLeft: '40px' }}
                         >
-                          {isStdOpen
-                            ? <ChevronDown className="h-3 w-3 text-zinc-600" />
-                            : <ChevronRight className="h-3 w-3 text-zinc-600" />}
-                          <span className="font-mono text-emerald-500/70">{std.standardCode}</span>
-                          <span className="ml-auto text-zinc-600">{std.typeCount}</span>
+                          {hasTypes ? (
+                            isStdOpen
+                              ? <ChevronDown className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                              : <ChevronRight className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                          ) : (
+                            <span className="w-3 flex-shrink-0 text-center text-zinc-600">·</span>
+                          )}
+                          <span className="text-zinc-500 mr-0.5">{si + 1}.</span>
+                          <span className="truncate leading-snug">
+                            {summarizeStandard(std.standardContent)}
+                          </span>
+                          <span className="ml-auto flex-shrink-0 text-[10px] text-zinc-600">
+                            {std.typeCount}
+                          </span>
                         </button>
 
-                        {isStdOpen && (
-                          <div className="ml-1">
-                            <p className="text-xs text-zinc-500 px-2 py-1" style={{ paddingLeft: '52px' }}>
-                              {std.standardContent}
-                            </p>
+                        {/* 세부유형 (소단원 하위) */}
+                        {isStdOpen && hasTypes && (
+                          <div>
                             {std.types.map(t => (
                               <button
                                 key={t.typeCode}
@@ -219,7 +226,7 @@ function TypeTreeView({
                                 className={`flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-xs transition-colors ${
                                   selectedTypeCode === t.typeCode
                                     ? 'bg-violet-900/30 text-violet-300 font-medium'
-                                    : 'text-zinc-400 hover:bg-zinc-800/70'
+                                    : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
                                 }`}
                                 style={{ paddingLeft: '56px' }}
                               >
@@ -228,9 +235,6 @@ function TypeTreeView({
                                   style={{ backgroundColor: COGNITIVE_COLORS[t.cognitive] || '#666' }}
                                 />
                                 <span className="truncate">{t.typeName}</span>
-                                <span className="ml-auto text-zinc-600 font-mono text-[10px]">
-                                  {t.difficultyMin}-{t.difficultyMax}
-                                </span>
                               </button>
                             ))}
                           </div>
@@ -246,6 +250,32 @@ function TypeTreeView({
       })}
     </div>
   );
+}
+
+/** 로마 숫자 변환 (대단원 넘버링) */
+function romanNumeral(n: number): string {
+  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+    'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+  return numerals[n - 1] || String(n);
+}
+
+/** 성취기준 내용을 소단원명으로 요약 (앞부분만, ~할 수 있다 제거) */
+function summarizeStandard(content: string): string {
+  if (!content) return '(내용 없음)';
+  // 너무 길면 앞부분만
+  let text = content;
+  // "~할 수 있다", "~를 이해한다" 등 서술어미 제거하여 단원명처럼 만들기
+  text = text
+    .replace(/을\s*할\s*수\s*있다\.?$/g, '')
+    .replace(/를\s*할\s*수\s*있다\.?$/g, '')
+    .replace(/를?\s*이해한다\.?$/g, '')
+    .replace(/를?\s*안다\.?$/g, '')
+    .replace(/를?\s*구한다\.?$/g, '')
+    .replace(/를?\s*설명할\s*수\s*있다\.?$/g, '')
+    .replace(/할\s*수\s*있다\.?$/g, '')
+    .trim();
+  if (text.length > 40) text = text.slice(0, 38) + '…';
+  return text;
 }
 
 /** 유형 상세 카드 */
@@ -480,7 +510,7 @@ export default function SkillsPage() {
             {/* Type Tree */}
             <div className="flex h-[55%] flex-col rounded-xl border border-zinc-800 bg-zinc-900/50">
               <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
-                <span className="text-xs font-medium text-zinc-400">분류 체계</span>
+                <span className="text-xs font-medium text-zinc-400">교과과정</span>
                 <span className="text-xs text-zinc-600">{totalTypes}개 유형</span>
               </div>
               <div className="flex-1 overflow-auto p-2">
@@ -681,7 +711,7 @@ export default function SkillsPage() {
                       왼쪽 트리에서 유형을 선택하면 문제 목록이 표시됩니다.
                     </p>
                     <p className="text-xs text-zinc-600">
-                      초/중/고 → 영역 → 성취기준 → 세부유형 순서로 탐색하세요.
+                      학년 → 대단원 → 소단원 순서로 탐색하세요.
                     </p>
                   </div>
                 )}
