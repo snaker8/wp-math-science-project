@@ -35,6 +35,23 @@ export interface ExamInfo {
 }
 
 // ============================================================================
+// Type Code 표시용 변환
+// MA-HS0-POL-01-003 → POL-01-003 (영역-성취기준-순번)
+// ============================================================================
+
+function formatDisplayTypeCode(rawCode: string): string {
+  if (!rawCode) return '';
+  // 이미 짧은 형식이면 그대로 (A001, POL-01-003 등)
+  if (!rawCode.startsWith('MA-')) return rawCode;
+  // MA-{LEVEL}-{DOMAIN}-{STD}-{SEQ} → {DOMAIN}-{STD}-{SEQ}
+  const parts = rawCode.split('-');
+  if (parts.length >= 5) {
+    return parts.slice(2).join('-'); // POL-01-003
+  }
+  return rawCode;
+}
+
+// ============================================================================
 // LaTeX에서 선택지 추출
 // ============================================================================
 
@@ -156,8 +173,10 @@ function toExamProblemData(
   // DB에 저장된 선택지가 있으면 우선 사용
   const choices = dbChoices.length > 0 ? dbChoices : extractedChoices;
 
-  // type_code에서 typeName 추론
-  const typeCode = classification?.type_code || '';
+  // type_code → 표시용 짧은 코드 변환
+  // MA-HS0-POL-01-003 → POL-01-003, 이미 짧으면 그대로
+  const rawTypeCode = classification?.type_code || '';
+  const typeCode = formatDisplayTypeCode(rawTypeCode);
   const typeName = classification?.type_name || typeCode;
 
   return {
