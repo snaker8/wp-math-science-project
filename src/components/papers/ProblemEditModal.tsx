@@ -602,7 +602,7 @@ export function ProblemEditModal({
       const res = await fetch(`/api/problems/${problemId}/generate-solution`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: content }),
+        body: JSON.stringify({ content, choices: choices.filter(c => c.trim()) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '해설 생성 실패');
@@ -637,7 +637,7 @@ export function ProblemEditModal({
     } finally {
       setIsGeneratingSolution(false);
     }
-  }, [problemId, content]);
+  }, [problemId, content, choices]);
 
   // ESC 키로 닫기
   useEffect(() => {

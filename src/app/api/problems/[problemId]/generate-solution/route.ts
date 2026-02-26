@@ -23,6 +23,9 @@ export async function POST(
     }
 
     // 1. 문제 데이터 조회
+    const body = await request.json().catch(() => ({}));
+    const frontendChoices: string[] = body.choices || [];
+
     const { data: problem, error: fetchError } = await supabaseAdmin
       .from('problems')
       .select('id, content_latex, solution_latex, answer_json')
@@ -38,18 +41,33 @@ export async function POST(
       return NextResponse.json({ error: 'Problem content is empty' }, { status: 400 });
     }
 
+    // ★ 선택지 구성: 프론트에서 받은 choices 우선, 없으면 content_latex에서 추출
+    let choicesForPrompt: string[] = frontendChoices.filter(c => c.trim().length > 0);
+    if (choicesForPrompt.length === 0) {
+      // content_latex에서 ①~⑤ 패턴 추출 시도
+      choicesForPrompt = extractChoicesFromContent(problemText);
+    }
+
+    // 선택지가 있으면 프롬프트에 명시적으로 포함
+    const choicesSection = choicesForPrompt.length > 0
+      ? `\n\n[선택지]\n${choicesForPrompt.map((c, i) => `${['①','②','③','④','⑤'][i] || `(${i+1})`} ${c.replace(/^[①②③④⑤]\s*/, '')}`).join('\n')}`
+      : '';
+
+    const isObjective = choicesForPrompt.length > 0;
+
     // 2. Claude Sonnet으로 풀이 생성
     const solutionPrompt = `다음 수학 문제의 완전한 단계별 풀이를 작성하세요.
 
 문제:
-${problemText}
+${problemText}${choicesSection}
 
 ★ 필수 규칙:
 1. 각 단계마다 LaTeX 수식을 반드시 포함하세요
 2. 계산 과정을 절대 생략하지 마세요 (중간 과정 모두 표시)
 3. 최종 답(finalAnswer)을 반드시 명시하세요 — 빈 문자열 절대 불가
-4. 객관식이면 finalAnswer에 정답 번호(①~⑤ 또는 1~5)도 포함
-5. LaTeX 수식에서 백슬래시는 이중(\\\\)으로 작성
+${isObjective ? `4. 객관식 문제입니다. **각 선택지(①~⑤)를 하나씩 검증**하고, 정답/오답 여부를 판별하세요
+5. finalAnswer에 정답 번호(① 또는 1 등)를 반드시 포함하세요` : `4. 주관식이면 최종 수치/식을 정확히 제시하세요`}
+${isObjective ? '6' : '5'}. LaTeX 수식에서 백슬래시는 이중(\\\\)으로 작성
 
 다음 JSON 형식으로만 응답하세요:
 {
@@ -148,7 +166,7 @@ ${problemText}
             model: 'gpt-4o',
             messages: [
               { role: 'system', content: '당신은 수학 문제의 정답을 빠르고 정확하게 구하는 전문가입니다. 반드시 유효한 JSON으로만 응답하세요.' },
-              { role: 'user', content: `다음 수학 문제의 정답만 간결하게 구해주세요.\n\n문제:\n${problemText}\n\nJSON 형식: { "finalAnswer": "최종 정답" }` },
+              { role: 'user', content: `다음 수학 문제의 정답만 간결하게 구해주세요.\n\n문제:\n${problemText}${choicesSection}\n\nJSON 형식: { "finalAnswer": "최종 정답" }` },
             ],
             temperature: 0.0,
             max_tokens: 500,
@@ -252,6 +270,29 @@ function normalizeAnswer(ans: string): string {
     .replace(/\\,/g, '')
     .toLowerCase()
     .trim();
+}
+
+/** content_latex에서 ①~⑤ 선택지 추출 */
+function extractChoicesFromContent(latex: string): string[] {
+  const choices: string[] = [];
+  const circledMarkers = ['①', '②', '③', '④', '⑤'];
+  const firstIdx = latex.indexOf('①');
+  if (firstIdx === -1) return choices;
+
+  const remaining = latex.substring(firstIdx);
+  for (let i = 0; i < circledMarkers.length; i++) {
+    const marker = circledMarkers[i];
+    const nextMarker = circledMarkers[i + 1];
+    const startIdx = remaining.indexOf(marker);
+    if (startIdx === -1) continue;
+
+    let endIdx = nextMarker ? remaining.indexOf(nextMarker) : remaining.length;
+    if (endIdx === -1) endIdx = remaining.length;
+
+    const choiceText = remaining.substring(startIdx, endIdx).trim();
+    if (choiceText) choices.push(choiceText);
+  }
+  return choices;
 }
 
 function formatSolutionText(solution: any): string {
