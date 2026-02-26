@@ -197,14 +197,11 @@ function toExamProblemData(
   const rawTypeCode = classification?.type_code || '';
   const typeCode = formatDisplayTypeCode(rawTypeCode);
 
-  // typeName: DB에 저장된 값 → expanded_math_types 조회 가능한 데이터 → ai_analysis 폴백
-  let typeName = classification?.type_name || '';
-  if (!typeName || typeName === rawTypeCode || typeName === typeCode) {
-    // type_name이 없거나 코드와 동일하면 ai_analysis에서 추출 시도
-    const aiClass = problem.ai_analysis?.classification;
-    if (aiClass?.typeName && aiClass.typeName !== rawTypeCode) {
-      typeName = aiClass.typeName;
-    }
+  // typeName: ai_analysis에서 추출 (classifications 테이블에 type_name 컬럼 없음)
+  let typeName = '';
+  const aiClass = problem.ai_analysis?.classification;
+  if (aiClass?.typeName && aiClass.typeName !== rawTypeCode) {
+    typeName = aiClass.typeName;
   }
   // 여전히 없으면 typeCode 표시
   if (!typeName) typeName = typeCode;
