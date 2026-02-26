@@ -13,6 +13,7 @@ export type ProcessingStatus =
   | 'LLM_ANALYZING'
   | 'CLASSIFYING'
   | 'GENERATING_SOLUTION'
+  | 'VERIFYING_ANSWER'
   | 'COMPLETED'
   | 'FAILED';
 

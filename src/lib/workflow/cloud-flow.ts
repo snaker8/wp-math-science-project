@@ -27,7 +27,9 @@ import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } f
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o 기본 (mini는 분류/해설 정확도 낮음)
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o 기본 (분류 전담)
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';  // ★ Claude Sonnet (풀이 생성 전담)
 const HWP_PYTHON_API = process.env.HWP_PYTHON_API || '/api/hwp/parse';
 
 // 다사람수학 교육과정 성취기준 체계 (505개 = 2022 개정 319개 + 2015 개정 186개)
@@ -827,6 +829,180 @@ async function callOpenAI(prompt: string, retriesOrOptions?: number | CallOpenAI
   }
 }
 
+// ============================================================================
+// Claude Sonnet API — 풀이 생성 전담
+// ============================================================================
+
+interface CallClaudeOptions {
+  retries?: number;
+  backoff?: number;
+  systemMessage?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+async function callClaude(prompt: string, options: CallClaudeOptions = {}): Promise<string> {
+  if (!ANTHROPIC_API_KEY) {
+    console.warn('[Cloud Flow] ANTHROPIC_API_KEY not configured. Falling back to OpenAI for solution generation.');
+    return callOpenAI(prompt, {
+      systemMessage: options.systemMessage || SOLUTION_SYSTEM_MESSAGE,
+      temperature: options.temperature ?? 0.2,
+    });
+  }
+
+  const retries = options.retries ?? 3;
+  const backoff = options.backoff ?? 5000;
+  const systemMessage = options.systemMessage || SOLUTION_SYSTEM_MESSAGE;
+  const temperature = options.temperature ?? 0.2;
+  const maxTokens = options.maxTokens ?? 4000;
+
+  try {
+    console.log(`[Cloud Flow] Calling Claude Sonnet (${ANTHROPIC_MODEL}), temp: ${temperature}`);
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: maxTokens,
+        system: systemMessage,
+        messages: [
+          { role: 'user', content: prompt },
+        ],
+        temperature,
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429 && retries > 0) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? Math.max(parseInt(retryAfter, 10) * 1000, backoff) : backoff;
+        console.warn(`[Cloud Flow] Claude 429 Rate Limit. Retrying in ${waitTime}ms... (${retries} left)`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return callClaude(prompt, { ...options, retries: retries - 1, backoff: backoff * 2 });
+      }
+      if (response.status === 529 && retries > 0) {
+        console.warn(`[Cloud Flow] Claude 529 Overloaded. Retrying in ${backoff}ms... (${retries} left)`);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return callClaude(prompt, { ...options, retries: retries - 1, backoff: backoff * 2 });
+      }
+      const errorBody = await response.text();
+      throw new Error(`Claude API error: ${response.status} - ${errorBody.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const textBlock = data.content?.find((c: { type: string }) => c.type === 'text');
+    return textBlock?.text || '';
+  } catch (error) {
+    if (retries > 0 && error instanceof Error && (error.message.includes('429') || error.message.includes('529'))) {
+      console.warn(`[Cloud Flow] Claude error. Retrying in ${backoff}ms... (${retries} left)`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return callClaude(prompt, { ...options, retries: retries - 1, backoff: backoff * 2 });
+    }
+    // Claude 완전 실패 시 GPT-4o 폴백
+    console.error('[Cloud Flow] Claude failed, falling back to OpenAI:', error);
+    return callOpenAI(prompt, {
+      systemMessage: options.systemMessage || SOLUTION_SYSTEM_MESSAGE,
+      temperature: options.temperature ?? 0.2,
+    });
+  }
+}
+
+// ============================================================================
+// 정답 교차 검증 — GPT-4o로 독립 풀이 후 정답 비교
+// ============================================================================
+
+interface VerificationResult {
+  verified: boolean;       // 정답 일치 여부
+  gptoAnswer: string;      // GPT-4o가 구한 정답
+  sonnetAnswer: string;    // Sonnet이 구한 정답
+  mismatchFlag: boolean;   // 불일치 플래그 (사람 검수 필요)
+}
+
+async function verifyAnswerWithGPT(
+  problemText: string,
+  sonnetAnswer: string,
+  mathExpressions: string[] = []
+): Promise<VerificationResult> {
+  const VERIFY_PROMPT = `다음 수학 문제의 정답만 간결하게 구해주세요.
+풀이 과정은 최소화하고, 최종 정답만 명확하게 출력하세요.
+
+문제:
+${problemText}
+${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
+
+반드시 아래 JSON 형식으로만 응답하세요:
+{
+  "finalAnswer": "최종 정답 (예: 24, x=3, ②, 5/2 등)",
+  "brief": "핵심 풀이 한 줄 요약"
+}`;
+
+  try {
+    const response = await callOpenAI(VERIFY_PROMPT, {
+      systemMessage: '당신은 수학 문제의 정답을 빠르고 정확하게 구하는 전문가입니다. 반드시 유효한 JSON으로만 응답하세요.',
+      temperature: 0.0,  // 검증은 결정론적으로
+    });
+
+    let jsonStr = response;
+    if (response.includes('```json')) {
+      jsonStr = response.split('```json')[1].split('```')[0].trim();
+    } else if (response.includes('```')) {
+      jsonStr = response.split('```')[1].split('```')[0].trim();
+    }
+
+    const parsed = JSON.parse(jsonStr);
+    const gptoAnswer = String(parsed.finalAnswer || '').trim();
+    const cleanSonnet = String(sonnetAnswer || '').trim();
+
+    // 정답 비교 (정규화 후)
+    const verified = normalizeAnswer(gptoAnswer) === normalizeAnswer(cleanSonnet);
+
+    if (!verified) {
+      console.warn(`[Cloud Flow] ⚠️ 정답 불일치! Sonnet: "${cleanSonnet}" vs GPT-4o: "${gptoAnswer}"`);
+    } else {
+      console.log(`[Cloud Flow] ✅ 정답 일치 확인: "${cleanSonnet}"`);
+    }
+
+    return {
+      verified,
+      gptoAnswer,
+      sonnetAnswer: cleanSonnet,
+      mismatchFlag: !verified,
+    };
+  } catch (error) {
+    console.error('[Cloud Flow] Answer verification failed:', error);
+    // 검증 실패 시 플래그 처리 (정답은 Sonnet 것 유지)
+    return {
+      verified: false,
+      gptoAnswer: '',
+      sonnetAnswer: String(sonnetAnswer || '').trim(),
+      mismatchFlag: true,
+    };
+  }
+}
+
+/**
+ * 정답 문자열 정규화 (비교용)
+ * "② 24", "24", "  24 " 등을 통일
+ */
+function normalizeAnswer(ans: string): string {
+  return ans
+    .replace(/\s+/g, '')          // 공백 제거
+    .replace(/[①②③④⑤]/g, m => {  // 동그라미 번호 → 숫자
+      const map: Record<string, string> = { '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5' };
+      return map[m] || m;
+    })
+    .replace(/^\(|\)$/g, '')      // 괄호 제거
+    .replace(/\\text\{[^}]*\}/g, '') // \text{} 제거
+    .replace(/\\quad/g, '')
+    .replace(/\\,/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 function getMockLLMResponse(): string {
   return JSON.stringify({
     classification: {
@@ -1265,13 +1441,39 @@ export async function processUploadJob(
         analysis.choices = question.choicesFromOCR;
       }
 
-      // Step 5: 해설이 없으면 생성 (generateSolutions 옵션이 true인 경우에만)
+      // Step 5: Claude Sonnet 풀이 생성 + GPT-4o 교차검증
       const shouldGenerateSolutions = job.generateSolutions !== false; // 기본값 true
       if (shouldGenerateSolutions && (!analysis.solution.steps || analysis.solution.steps.length === 0)) {
-        callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - AI 해설 생성 중...`);
-        await new Promise(resolve => setTimeout(resolve, 5000)); // Rate limit 방지 대기
-        const solutionResult = await generateStepByStepSolution(question.text, question.mathExpressions);
-        analysis.solution = solutionResult;
+        callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - Claude Sonnet 해설 생성 중...`);
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Rate limit 방지 대기
+        const solutionResult = await generateStepByStepSolution(
+          question.text,
+          question.mathExpressions,
+          { onStatusChange: (status, msg) => callbacks.onStatusChange(status as ProcessingStatus, `문제 ${i + 1} - ${msg}`) }
+        );
+        // verification 정보 분리
+        const { verification, ...solutionOnly } = solutionResult;
+        analysis.solution = solutionOnly;
+        // 검증 결과를 analysis에 첨부
+        if (verification) {
+          (analysis as any).verification = verification;
+          if (verification.mismatchFlag) {
+            console.warn(`[Cloud Flow] ⚠️ 문제 ${i + 1}: 정답 불일치 — Sonnet: "${verification.sonnetAnswer}" vs GPT-4o: "${verification.gptoAnswer}"`);
+          }
+        }
+      } else if (shouldGenerateSolutions && analysis.solution.finalAnswer) {
+        // GPT-4o 분류 시 이미 해설이 생성된 경우에도 정답 교차검증 실행
+        callbacks.onStatusChange('GENERATING_SOLUTION', `문제 ${i + 1} - 정답 교차검증 중...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const verification = await verifyAnswerWithGPT(
+          question.text,
+          analysis.solution.finalAnswer,
+          question.mathExpressions
+        );
+        (analysis as any).verification = verification;
+        if (verification.mismatchFlag) {
+          console.warn(`[Cloud Flow] ⚠️ 문제 ${i + 1}: 정답 불일치 — 기존: "${verification.sonnetAnswer}" vs GPT-4o: "${verification.gptoAnswer}"`);
+        }
       } else if (!shouldGenerateSolutions) {
         console.log(`[Cloud Flow] Skipping solution generation for problem ${i + 1} (generateSolutions=false)`);
       }
@@ -1300,12 +1502,14 @@ export async function processUploadJob(
 }
 
 /**
- * 해설이 없는 문제에 대해 단계별 해설 생성
+ * ★ Claude Sonnet으로 단계별 해설 생성 + GPT-4o 정답 교차검증
+ * 기존 GPT-4o 단독 → Sonnet 생성 + GPT-4o 검증 2단계로 개선
  */
 async function generateStepByStepSolution(
   problemText: string,
-  mathExpressions: string[]
-): Promise<StepByStepSolution> {
+  mathExpressions: string[],
+  callbacks?: { onStatusChange?: (status: string, msg: string) => void }
+): Promise<StepByStepSolution & { verification?: VerificationResult }> {
   const SOLUTION_PROMPT = `다음 수학 문제의 완전한 단계별 풀이를 작성하세요.
 
 문제:
@@ -1316,9 +1520,10 @@ ${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
 1. 각 단계마다 LaTeX 수식을 반드시 포함하세요
 2. 계산 과정을 절대 생략하지 마세요 (중간 과정 모두 표시)
 3. 최종 답(finalAnswer)을 반드시 명시하세요 — 빈 문자열 절대 불가
-4. 객관식이면 정답 번호(1~5)도 포함하세요
+4. 객관식이면 finalAnswer에 정답 번호(①~⑤ 또는 1~5)도 포함
+5. LaTeX 수식에서 백슬래시는 이중(\\\\)으로 작성
 
-다음 JSON 형식으로 응답하세요:
+다음 JSON 형식으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요:
 {
   "approach": "풀이의 핵심 전략 (한 문장)",
   "steps": [
@@ -1329,10 +1534,13 @@ ${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
 }`;
 
   try {
-    const response = await callOpenAI(SOLUTION_PROMPT, {
+    // ── Step 1: Claude Sonnet으로 풀이 생성 ──
+    console.log('[Cloud Flow] 🧠 Generating solution with Claude Sonnet...');
+    const response = await callClaude(SOLUTION_PROMPT, {
       systemMessage: SOLUTION_SYSTEM_MESSAGE,
-      temperature: 0.3,  // 해설은 약간 높은 창의성
+      temperature: 0.2,
     });
+
     let jsonStr = response;
     if (response.includes('```json')) {
       jsonStr = response.split('```json')[1].split('```')[0].trim();
@@ -1340,24 +1548,44 @@ ${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
       jsonStr = response.split('```')[1].split('```')[0].trim();
     }
     jsonStr = sanitizeJsonString(jsonStr);
+
+    let solution: StepByStepSolution;
     try {
-      return JSON.parse(jsonStr);
+      solution = JSON.parse(jsonStr);
     } catch {
       const aggressiveSanitized = jsonStr.replace(/\\/g, '\\\\');
       try {
-        return JSON.parse(aggressiveSanitized);
+        solution = JSON.parse(aggressiveSanitized);
       } catch {
-        // ★ 백슬래시 전체 삭제(LaTeX 파괴) 대신 파싱 실패 처리
-        console.error('[Cloud Flow] Solution JSON parse failed. Raw:', jsonStr.substring(0, 200));
+        console.error('[Cloud Flow] Sonnet solution JSON parse failed. Raw:', jsonStr.substring(0, 200));
         throw new Error('Solution JSON parse failed');
       }
     }
-  } catch {
+
+    // ── Step 2: GPT-4o로 정답 교차검증 ──
+    console.log('[Cloud Flow] 🔍 Verifying answer with GPT-4o...');
+    callbacks?.onStatusChange?.('VERIFYING_ANSWER', '정답 교차검증 중...');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Rate limit 방지
+
+    const verification = await verifyAnswerWithGPT(
+      problemText,
+      solution.finalAnswer || '',
+      mathExpressions
+    );
+
+    // 검증 결과를 solution에 첨부
+    return {
+      ...solution,
+      verification,
+    };
+  } catch (error) {
+    console.error('[Cloud Flow] Solution generation failed:', error);
     return {
       approach: '자동 생성 실패 - 수동 입력 필요',
       steps: [],
       finalAnswer: '',
       commonMistakes: [],
+      verification: { verified: false, gptoAnswer: '', sonnetAnswer: '', mismatchFlag: true },
     };
   }
 }
@@ -1378,6 +1606,7 @@ export function getStatusLabel(status: ProcessingStatus): string {
     LLM_ANALYZING: 'AI 분석 중',
     CLASSIFYING: '유형 분류 중',
     GENERATING_SOLUTION: '해설 생성 중',
+    VERIFYING_ANSWER: '정답 검증 중',
     COMPLETED: '완료',
     FAILED: '실패',
   };
@@ -1392,6 +1621,7 @@ export function getStatusColor(status: ProcessingStatus): string {
     LLM_ANALYZING: '#f59e0b',
     CLASSIFYING: '#10b981',
     GENERATING_SOLUTION: '#06b6d4',
+    VERIFYING_ANSWER: '#f97316',
     COMPLETED: '#22c55e',
     FAILED: '#ef4444',
   };
