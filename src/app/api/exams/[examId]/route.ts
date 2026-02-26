@@ -71,7 +71,7 @@ export async function GET(
       // 4. classifications 별도 조회
       const { data: classData, error: cErr } = await supabaseAdmin
         .from('classifications')
-        .select('problem_id, type_code, difficulty, cognitive_domain, ai_confidence')
+        .select('problem_id, type_code, type_name, difficulty, cognitive_domain, ai_confidence')
         .in('problem_id', problemIds);
 
       if (cErr) {
