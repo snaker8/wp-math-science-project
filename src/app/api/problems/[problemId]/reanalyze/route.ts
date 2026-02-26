@@ -152,7 +152,6 @@ export async function POST(
       const classData: any = {
         problem_id: problemId,
         type_code: analysis.classification.typeCode || existingClassification?.type_code || '',
-        type_name: analysis.classification.typeName || existingClassification?.type_name || '',
         difficulty: String(analysis.classification.difficulty || 3),
         cognitive_domain: analysis.classification.cognitiveDomain || 'UNDERSTANDING',
         ai_confidence: analysis.classification.confidence || 0.5,

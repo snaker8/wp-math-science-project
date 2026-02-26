@@ -1081,7 +1081,6 @@ async function saveProblemsToDB(
         await supabase.from('classifications').insert({
           problem_id: problem.id,
           type_code: result.classification.typeCode || 'UNKNOWN',
-          type_name: result.classification.typeName || '',
           difficulty: difficultyStr,
           cognitive_domain: result.classification.cognitiveDomain || 'CALCULATION',
           ai_confidence: result.classification.confidence || 0.5,
