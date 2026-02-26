@@ -60,7 +60,11 @@ export async function POST(
     const model = isAdvanced ? 'gpt-4o' : (process.env.OPENAI_MODEL || 'gpt-4o-mini');
     const contentText = problem.content_latex || '';
 
-    const systemPrompt = `당신은 한국 수학 교육 전문가입니다. 주어진 수학 문제를 분석하여 다음 JSON 형식으로 응답하세요:
+    // ★ 재분석 = 분류 전담 (해설은 건드리지 않음 — 해설은 generate-solution API에서 Sonnet으로 별도 생성)
+    const systemPrompt = `당신은 한국 수학 교육 전문가입니다. 주어진 수학 문제의 **분류(유형/단원/난이도)만** 분석하세요.
+풀이나 해설은 생성하지 마세요.
+
+다음 JSON 형식으로 응답하세요:
 {
   "classification": {
     "typeCode": "유형 코드 (예: MA-HS1-ALG-01-003)",
@@ -70,11 +74,6 @@ export async function POST(
     "difficulty": 1-5,
     "cognitiveDomain": "CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING",
     "confidence": 0.0-1.0
-  },
-  "solution": {
-    "approach": "풀이 접근법",
-    "steps": [{"stepNumber": 1, "description": "단계 설명", "latex": "수식"}],
-    "finalAnswer": "최종 답"
   },
   "correctedContent": "수정이 필요하면 수정된 LaTeX 내용, 아니면 null"
 }`;
@@ -124,12 +123,12 @@ export async function POST(
       });
     }
 
-    // 4. DB 업데이트 - content 수정이 있으면 반영
+    // 4. DB 업데이트 — 분류만 갱신 (solution_latex, answer_json은 건드리지 않음)
+    //    해설은 generate-solution API에서 Sonnet으로 별도 생성
     const updateData: any = {
       ai_analysis: {
         ...problem.ai_analysis,
         classification: analysis.classification,
-        solution: analysis.solution,
         reanalyzedAt: new Date().toISOString(),
         model,
       },
@@ -137,32 +136,6 @@ export async function POST(
 
     if (analysis.correctedContent) {
       updateData.content_latex = analysis.correctedContent;
-    }
-
-    if (analysis.solution) {
-      // upload/route.ts와 동일한 포맷 (approach + steps + finalAnswer 모두 포함)
-      const parts: string[] = [];
-      if (analysis.solution.approach) {
-        parts.push(`[풀이 접근] ${analysis.solution.approach}`);
-      }
-      if (analysis.solution.steps && analysis.solution.steps.length > 0) {
-        const stepsText = analysis.solution.steps
-          .map((s: any) => `${s.stepNumber || ''}. ${s.description}\n${s.latex || ''}`)
-          .join('\n\n');
-        parts.push(stepsText);
-      }
-      if (analysis.solution.finalAnswer) {
-        parts.push(`∴ 정답: ${analysis.solution.finalAnswer}`);
-      }
-      updateData.solution_latex = parts.length > 0 ? parts.join('\n\n') : '';
-    }
-
-    if (analysis.solution?.finalAnswer) {
-      updateData.answer_json = {
-        ...problem.answer_json,
-        finalAnswer: analysis.solution.finalAnswer,
-        correct_answer: analysis.solution.finalAnswer,
-      };
     }
 
     const { error: updateError } = await supabaseAdmin
