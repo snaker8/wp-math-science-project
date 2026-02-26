@@ -398,11 +398,13 @@ function TagManagementPanel({
   difficulty, onDifficultyChange,
   cognitiveDomain, onCognitiveDomainChange,
   typeCode, typeName, onTypeCodeChange, onTypeNameChange,
+  onGenerateSolution, isGenerating,
 }: {
   difficulty: number; onDifficultyChange: (d: number) => void;
   cognitiveDomain: string; onCognitiveDomainChange: (d: string) => void;
   typeCode: string; typeName: string;
   onTypeCodeChange: (v: string) => void; onTypeNameChange: (v: string) => void;
+  onGenerateSolution: () => void; isGenerating: boolean;
 }) {
   const domains = [
     { key: 'CALCULATION', label: '계산' },
@@ -499,8 +501,20 @@ function TagManagementPanel({
             </svg>
           </summary>
           <div className="mt-2">
-            <button type="button" className="w-full rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors">
-              AI로 해설 자동 생성
+            <button
+              type="button"
+              onClick={onGenerateSolution}
+              disabled={isGenerating}
+              className="w-full rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Sonnet 해설 생성 + 검증 중...
+                </>
+              ) : (
+                'AI문 해설 자동 생성'
+              )}
             </button>
           </div>
         </details>
@@ -564,6 +578,9 @@ export function ProblemEditModal({
   const [typeCode, setTypeCode] = useState(initialTypeCode || '');
   const [typeName, setTypeName] = useState(initialTypeName || '');
 
+  // AI 해설 생성
+  const [isGeneratingSolution, setIsGeneratingSolution] = useState(false);
+
   // UI
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -576,6 +593,51 @@ export function ProblemEditModal({
 
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const solutionRef = useRef<HTMLTextAreaElement>(null);
+
+  // AI 해설 자동 생성 (Claude Sonnet + GPT-4o 검증)
+  const handleGenerateSolution = useCallback(async () => {
+    setIsGeneratingSolution(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/problems/${problemId}/generate-solution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '해설 생성 실패');
+
+      // 해설 텍스트를 solution 에디터에 반영
+      if (data.solution) {
+        setSolution(data.solution);
+      }
+
+      // 정답 반영
+      if (data.finalAnswer) {
+        const ans = data.finalAnswer;
+        // 숫자 1~5면 객관식 정답으로
+        if (/^[1-5]$/.test(String(ans))) {
+          setAnswerType('objective');
+          setCorrectAnswer(Number(ans));
+        } else {
+          setSubjectiveAnswer(String(ans));
+        }
+      }
+
+      // 검증 결과 로그
+      if (data.verification) {
+        if (data.verification.mismatchFlag) {
+          setError(`⚠️ 정답 불일치: Sonnet="${data.verification.sonnetAnswer}" vs GPT-4o="${data.verification.gptoAnswer}" — 확인 필요`);
+        }
+      }
+
+      console.log(`[ProblemEditModal] Solution generated with ${data.usedModel}, verified: ${data.verification?.verified}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '해설 생성 중 오류');
+    } finally {
+      setIsGeneratingSolution(false);
+    }
+  }, [problemId, content]);
 
   // ESC 키로 닫기
   useEffect(() => {
@@ -728,6 +790,8 @@ export function ProblemEditModal({
               cognitiveDomain={cognitiveDomain} onCognitiveDomainChange={setCognitiveDomain}
               typeCode={typeCode} typeName={typeName}
               onTypeCodeChange={setTypeCode} onTypeNameChange={setTypeName}
+              onGenerateSolution={handleGenerateSolution}
+              isGenerating={isGeneratingSolution}
             />
           </div>
         </div>
