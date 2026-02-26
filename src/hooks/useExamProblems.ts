@@ -24,6 +24,7 @@ export interface ExamProblemData {
   images?: Array<{ url: string; type: string; label: string }>;
   hasFigure?: boolean;
   figureSvg?: string;
+  figureData?: import('@/types/ocr').InterpretedFigure;
 }
 
 export interface ExamInfo {
@@ -226,9 +227,10 @@ function toExamProblemData(
   const rawImages = problem.images;
   const images: Array<{ url: string; type: string; label: string }> = Array.isArray(rawImages) ? rawImages : [];
 
-  // 도형 포함 여부 + AI 생성 SVG (ai_analysis에서 추출)
+  // 도형 포함 여부 + AI 생성 SVG + 구조화된 도형 데이터 (ai_analysis에서 추출)
   const hasFigure = problem.ai_analysis?.hasFigure || false;
   const figureSvg = problem.ai_analysis?.figureSvg || undefined;
+  const figureData = problem.ai_analysis?.figureData || undefined;
 
   return {
     id: problem.id,
@@ -248,6 +250,7 @@ function toExamProblemData(
     images,
     hasFigure,
     figureSvg,
+    figureData,
   };
 }
 

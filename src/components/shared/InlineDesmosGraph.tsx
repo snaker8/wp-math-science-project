@@ -27,6 +27,7 @@ interface InlineDesmosGraphProps {
   height?: number;
   className?: string;
   showExpressions?: boolean; // 수식 목록 표시 여부
+  darkMode?: boolean; // 다크 테마 여부 (기본: false)
 }
 
 const COLORS = ['#2d70b3', '#388c46', '#fa7e19', '#c74440', '#6042a6', '#000000'];
@@ -92,6 +93,7 @@ export function InlineDesmosGraph({
   height = 250,
   className = '',
   showExpressions = false,
+  darkMode = false,
 }: InlineDesmosGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const calculatorRef = useRef<DesmosCalcInstance | null>(null);
@@ -286,23 +288,28 @@ export function InlineDesmosGraph({
     return (
       <div className={`${className}`} style={{ width }}>
         <div
-          className="flex flex-col items-center justify-center bg-gray-50 border border-gray-200 rounded-lg text-gray-500 text-xs gap-1.5"
+          className={`flex flex-col items-center justify-center rounded-lg text-xs gap-1.5 ${
+            darkMode
+              ? 'bg-zinc-800/50 border border-zinc-700 text-zinc-400'
+              : 'bg-gray-50 border border-gray-200 text-gray-500'
+          }`}
           style={{ width, height: Math.min(height, 120) }}
         >
           <AlertTriangle className="h-4 w-4 text-amber-500" />
           <span>{error}</span>
           {addedExprs.length > 0 && (
-            <span className="text-[10px] text-gray-400">
+            <span className={`text-[10px] ${darkMode ? 'text-zinc-500' : 'text-gray-400'}`}>
               수식: {addedExprs.join(', ')}
             </span>
           )}
         </div>
-        {/* 에러 시에도 수식 목록은 표시 */}
         {expressions.length > 0 && (
-          <div className="mt-1.5 p-2 bg-gray-50 rounded border border-gray-200">
-            <div className="text-[10px] text-gray-500 font-medium mb-1">원본 수식:</div>
+          <div className={`mt-1.5 p-2 rounded border ${
+            darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'
+          }`}>
+            <div className={`text-[10px] font-medium mb-1 ${darkMode ? 'text-zinc-500' : 'text-gray-500'}`}>원본 수식:</div>
             {expressions.map((expr, i) => (
-              <div key={i} className="text-[11px] text-gray-600 font-mono py-0.5">
+              <div key={i} className={`text-[11px] font-mono py-0.5 ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>
                 {expr}
               </div>
             ))}
@@ -315,34 +322,48 @@ export function InlineDesmosGraph({
   return (
     <div className={`${className}`} style={{ width }}>
       {/* 그래프 영역 */}
-      <div className="relative rounded-lg overflow-hidden border border-gray-200" style={{ width, height }}>
+      <div
+        className={`relative rounded-lg overflow-hidden border ${
+          darkMode ? 'border-zinc-700' : 'border-gray-200'
+        }`}
+        style={{ width, height }}
+      >
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
+          <div className={`absolute inset-0 flex items-center justify-center z-10 ${
+            darkMode ? 'bg-zinc-900' : 'bg-white'
+          }`}>
             <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
           </div>
         )}
-        <div ref={containerRef} style={{ width, height }} />
+        <div
+          ref={containerRef}
+          style={{ width, height, ...(darkMode ? { filter: 'invert(1) hue-rotate(180deg)' } : {}) }}
+        />
       </div>
 
       {/* 수식 목록 토글 */}
       {addedExprs.length > 0 && (
         <button
           onClick={() => setShowExprs(!showExprs)}
-          className="mt-1 flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+          className={`mt-1 flex items-center gap-1 text-[10px] transition-colors ${
+            darkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-gray-400 hover:text-gray-600'
+          }`}
         >
           {showExprs ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           수식 {addedExprs.length}개 {showExprs ? '접기' : '보기'}
         </button>
       )}
       {showExprs && addedExprs.length > 0 && (
-        <div className="mt-1 p-2 bg-gray-50 rounded border border-gray-200">
+        <div className={`mt-1 p-2 rounded border ${
+          darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'
+        }`}>
           {addedExprs.map((expr, i) => (
             <div key={i} className="flex items-center gap-1.5 py-0.5">
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: COLORS[i % COLORS.length] }}
               />
-              <span className="text-[11px] text-gray-600 font-mono">{expr}</span>
+              <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
             </div>
           ))}
         </div>

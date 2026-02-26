@@ -1,44 +1,12 @@
 // ============================================================================
 // POST /api/problems/[problemId]/generate-figure
-// 문제의 도형 이미지를 AI Vision으로 분석하여 클린 SVG로 재생성
+// 문제의 도형 이미지를 AI Vision으로 분석하여 구조화된 데이터 + 클린 렌더링 생성
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-
-// SVG 생성 프롬프트
-const FIGURE_ANALYSIS_PROMPT = `You are a math figure reproduction specialist. Analyze the image and determine if it contains any mathematical figures, diagrams, or geometric shapes that need to be reproduced.
-
-IMPORTANT FIRST STEP:
-- If the image contains ONLY text, equations, or multiple-choice options with NO geometric figures/diagrams/graphs/shapes, respond with exactly: NO_FIGURE
-- If the image contains geometric figures, graphs, coordinate systems, diagrams, or other visual mathematical elements, generate SVG code.
-
-SVG Rules (only if figure exists):
-1. Output ONLY valid SVG code (starting with <svg and ending with </svg>)
-2. Use viewBox for responsive sizing (e.g., viewBox="0 0 300 250")
-3. Set width="100%" so it scales properly
-4. Use clean, sharp lines (stroke-width: 1.5~2)
-5. Use black (#000) for lines/text, light fill colors for shaded regions
-6. For shaded/highlighted areas, use semi-transparent fills (e.g., rgba(255,220,100,0.3) for yellow shading)
-7. Label all points, angles, and measurements exactly as shown
-8. For Korean text labels, use font-family="sans-serif"
-9. Position text labels clearly near their reference points
-10. Use proper geometric constructions (circles for arcs, paths for curves)
-11. Keep the SVG clean and minimal - no unnecessary elements
-12. For right angle markers, use small squares at the corner
-
-Common math figure elements:
-- Triangles, rectangles, parallelograms
-- Circles, arcs, sectors
-- Coordinate axes with graphs
-- Function graphs (parabolas, lines, etc.)
-- Shaded regions
-- Measurement labels (lengths, angles)
-- Number lines, tables
-
-Output either NO_FIGURE or SVG code only, no explanations.`;
+import { interpretImage } from '@/lib/vision/image-interpreter';
+import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
 
 export async function POST(
   request: NextRequest,
@@ -46,7 +14,7 @@ export async function POST(
 ) {
   const { problemId } = await params;
 
-  if (!OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: 'OpenAI API key not configured' },
       { status: 503 }
@@ -112,63 +80,19 @@ export async function POST(
       );
     }
 
-    // 4. GPT-4o Vision으로 도형 분석 + SVG 생성
+    // 4. 구조화된 Vision 해석 (image-interpreter 사용)
     const contentContext = problem.content_latex
-      ? `\n\nProblem text for reference (use this to ensure labels are correct):\n${problem.content_latex.substring(0, 500)}`
-      : '';
+      ? problem.content_latex.substring(0, 500)
+      : undefined;
 
-    const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: FIGURE_ANALYSIS_PROMPT,
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageDataUri,
-                  detail: 'high',
-                },
-              },
-              {
-                type: 'text',
-                text: `Look at this math problem image. If it contains geometric figures, graphs, or diagrams, generate clean SVG to reproduce them. If there are no figures (only text/equations/choices), respond with NO_FIGURE.${contentContext}`,
-              },
-            ],
-          },
-        ],
-        max_tokens: 4000,
-        temperature: 0.1,
-      }),
-    });
+    const interpreted = await interpretImage(imageDataUri, contentContext);
 
-    if (!gptResponse.ok) {
-      const errText = await gptResponse.text();
-      console.error(`[generate-figure] GPT-4o Vision failed: ${gptResponse.status}`, errText.substring(0, 300));
-      return NextResponse.json(
-        { error: `AI model failed (${gptResponse.status})`, detail: errText.substring(0, 200) },
-        { status: 502 }
-      );
-    }
+    console.log(`[generate-figure] Problem ${problemId}: type=${interpreted.figureType}, confidence=${interpreted.confidence}`);
 
-    const gptData = await gptResponse.json();
-    const rawContent = gptData.choices?.[0]?.message?.content || '';
+    // 5. 도형 없음 처리 (photo 타입 + 낮은 confidence)
+    if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
+      console.log(`[generate-figure] Problem ${problemId}: No figure detected (${interpreted.figureType}, confidence: ${interpreted.confidence})`);
 
-    // 4. NO_FIGURE 응답 처리 (도형 없는 문제)
-    if (rawContent.trim().startsWith('NO_FIGURE') || rawContent.trim() === 'NO_FIGURE') {
-      console.log(`[generate-figure] Problem ${problemId}: No figure detected`);
-
-      // hasFigure를 false로 업데이트
       const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
       await supabaseAdmin
         .from('problems')
@@ -185,43 +109,19 @@ export async function POST(
       });
     }
 
-    // 5. SVG 코드 추출 (마크다운 코드블록 제거)
-    let svgCode = rawContent.trim();
-    if (svgCode.includes('```svg')) {
-      svgCode = svgCode.split('```svg')[1].split('```')[0].trim();
-    } else if (svgCode.includes('```xml')) {
-      svgCode = svgCode.split('```xml')[1].split('```')[0].trim();
-    } else if (svgCode.includes('```html')) {
-      svgCode = svgCode.split('```html')[1].split('```')[0].trim();
-    } else if (svgCode.includes('```')) {
-      svgCode = svgCode.split('```')[1].split('```')[0].trim();
+    // 6. 레거시 figureSvg 생성 (하위 호환성)
+    let legacySvg: string | undefined;
+    if (interpreted.rendering?.type === 'geometry') {
+      legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
     }
 
-    // SVG 태그 확인
-    if (!svgCode.includes('<svg') || !svgCode.includes('</svg>')) {
-      // SVG를 추출 못했으면 도형 없음으로 처리 (에러가 아님)
-      console.log(`[generate-figure] Problem ${problemId}: AI response is not SVG, treating as no figure`);
-      return NextResponse.json({
-        success: true,
-        noFigure: true,
-        message: 'AI could not identify a reproducible figure',
-        problemId,
-      });
-    }
-
-    // <svg 시작 ~ </svg> 끝까지만 추출
-    const svgStart = svgCode.indexOf('<svg');
-    const svgEnd = svgCode.lastIndexOf('</svg>') + '</svg>'.length;
-    svgCode = svgCode.substring(svgStart, svgEnd);
-
-    console.log(`[generate-figure] SVG generated for ${problemId}: ${svgCode.length} chars`);
-
-    // 6. DB 저장 (ai_analysis.figureSvg에 저장)
+    // 7. DB 저장 (figureData + figureSvg)
     const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
     const updatedAnalysis = {
       ...currentAnalysis,
       hasFigure: true,
-      figureSvg: svgCode,
+      figureData: interpreted,
+      figureSvg: legacySvg || currentAnalysis.figureSvg || undefined,
       figureGeneratedAt: new Date().toISOString(),
       figureModel: 'gpt-4o',
     };
@@ -234,14 +134,16 @@ export async function POST(
     if (updateError) {
       console.error(`[generate-figure] DB update failed:`, updateError.message);
       return NextResponse.json(
-        { error: 'Failed to save SVG to database', detail: updateError.message },
+        { error: 'Failed to save figure data to database', detail: updateError.message },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      figureSvg: svgCode,
+      figureData: interpreted,
+      figureType: interpreted.figureType,
+      figureSvg: legacySvg,
       problemId,
     });
   } catch (error) {

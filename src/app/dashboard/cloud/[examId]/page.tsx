@@ -27,10 +27,12 @@ import {
   Shapes,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
 import { useExamProblems } from '@/hooks/useExamProblems';
+import type { InterpretedFigure } from '@/types/ocr';
 
 // ============================================================================
 // Types
@@ -52,6 +54,7 @@ interface ProblemData {
   images?: Array<{ url: string; type: string; label: string }>;
   hasFigure?: boolean;
   figureSvg?: string;
+  figureData?: InterpretedFigure;
 }
 
 type DifficultyKey = 1 | 2 | 3 | 4 | 5;
@@ -181,16 +184,6 @@ function splitContentByFigureMarker(content: string): Array<{ type: 'text' | 'fi
   return parts;
 }
 
-/** SVG 코드를 안전하게 렌더링하는 컴포넌트 */
-function FigureSvgRenderer({ svg, className }: { svg: string; className?: string }) {
-  return (
-    <div
-      className={`figure-svg-container ${className || ''}`}
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  );
-}
-
 function ProblemCardView({
   problem,
   onTwinGenerate,
@@ -238,11 +231,13 @@ function ProblemCardView({
           )}
           {problem.hasFigure && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-              problem.figureSvg
+              problem.figureData || problem.figureSvg
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                 : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
             }`}>
-              {problem.figureSvg ? '도형 SVG' : '도형 있음'}
+              {problem.figureData
+                ? figureTypeLabel(problem.figureData.figureType)
+                : problem.figureSvg ? '도형 SVG' : '도형 있음'}
             </span>
           )}
         </div>
@@ -326,23 +321,14 @@ function ProblemCardView({
                       />
                     ) : (
                       <div key={i} className="my-2 flex justify-center">
-                        {problem.figureSvg ? (
-                          <FigureSvgRenderer
-                            svg={problem.figureSvg}
-                            className="max-w-[280px] bg-white/5 rounded-lg p-2 border border-zinc-700"
-                          />
-                        ) : cropImage ? (
-                          <img
-                            src={cropImage.url}
-                            alt={`문제 ${problem.number} 도형`}
-                            className="max-w-[280px] rounded-lg border border-zinc-700 opacity-60"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="px-3 py-2 rounded bg-zinc-800 text-zinc-500 text-xs border border-zinc-700">
-                            [도형 미생성]
-                          </div>
-                        )}
+                        <FigureRenderer
+                          figureData={problem.figureData}
+                          figureSvg={problem.figureSvg}
+                          cropImageUrl={cropImage?.url}
+                          maxWidth={280}
+                          className="bg-white/5 rounded-lg p-2 border border-zinc-700"
+                          darkMode
+                        />
                       </div>
                     )
                   ))}
@@ -354,12 +340,15 @@ function ProblemCardView({
                     content={problem.content}
                     className="inline text-sm text-zinc-300 leading-relaxed"
                   />
-                  {/* 도형 SVG가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
-                  {problem.figureSvg && (
+                  {/* 도형 데이터가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
+                  {(problem.figureData || problem.figureSvg) && (
                     <div className="mt-2 flex justify-center">
-                      <FigureSvgRenderer
-                        svg={problem.figureSvg}
-                        className="max-w-[280px] bg-white/5 rounded-lg p-2 border border-zinc-700"
+                      <FigureRenderer
+                        figureData={problem.figureData}
+                        figureSvg={problem.figureSvg}
+                        maxWidth={280}
+                        className="bg-white/5 rounded-lg p-2 border border-zinc-700"
+                        darkMode
                       />
                     </div>
                   )}
@@ -588,30 +577,32 @@ function ExamPaperView({
                     <div className="flex-1">
                       <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                         {hasFigureInContent ? (
-                          /* [도형] 마커가 있는 경우: 텍스트/SVG 분할 렌더링 */
+                          /* [도형] 마커가 있는 경우: 타입별 도형 렌더링 */
                           parts.map((part, pi) => (
                             part.type === 'text' ? (
                               <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
                             ) : (
                               <div key={pi} className="my-2 flex justify-center">
-                                {problem.figureSvg ? (
-                                  <FigureSvgRenderer
-                                    svg={problem.figureSvg}
-                                    className="max-w-[260px]"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-gray-400 italic">[도형]</span>
-                                )}
+                                <FigureRenderer
+                                  figureData={problem.figureData}
+                                  figureSvg={problem.figureSvg}
+                                  maxWidth={260}
+                                  darkMode={false}
+                                />
                               </div>
                             )
                           ))
                         ) : (
                           <>
                             <MixedContentRenderer content={problem.content} className="text-gray-800" />
-                            {/* 도형 SVG가 있지만 마커가 없는 경우 → 하단 표시 */}
-                            {problem.figureSvg && (
+                            {(problem.figureData || problem.figureSvg) && (
                               <div className="mt-2 flex justify-center">
-                                <FigureSvgRenderer svg={problem.figureSvg} className="max-w-[260px]" />
+                                <FigureRenderer
+                                  figureData={problem.figureData}
+                                  figureSvg={problem.figureSvg}
+                                  maxWidth={260}
+                                  darkMode={false}
+                                />
                               </div>
                             )}
                           </>

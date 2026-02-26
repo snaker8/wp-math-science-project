@@ -146,10 +146,17 @@ function geometryToContent(rendering: GeometryRendering, fallbackUrl: string): F
 
 /**
  * 도형 데이터로 SVG 코드 생성
+ * @param rendering - 기하 도형 렌더링 데이터
+ * @param darkMode - 다크 테마 여부 (기본: false — 서버에서는 라이트 기본)
  */
-function generateGeometrySVG(rendering: GeometryRendering): string | null {
+export function generateGeometrySVG(rendering: GeometryRendering, darkMode = false): string | null {
   const { vertices, segments, angles, lengths } = rendering;
   if (vertices.length < 2) return null;
+
+  // 테마별 색상
+  const colors = darkMode
+    ? { stroke: '#d4d4d8', fill: '#e4e4e7', label: '#e4e4e7', length: '#a1a1aa', angle: '#60a5fa' }
+    : { stroke: '#333', fill: '#333', label: '#333', length: '#666', angle: '#2563eb' };
 
   // 좌표 범위 계산
   const xs = vertices.map(v => v.x);
@@ -173,8 +180,8 @@ function generateGeometrySVG(rendering: GeometryRendering): string | null {
 
   const vertexMap = new Map(vertices.map(v => [v.label, v]));
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" class="figure-geometry">`;
-  svg += `<style>.seg{stroke:#333;stroke-width:2;fill:none}.lbl{font:bold 14px sans-serif;fill:#333}.len{font:12px sans-serif;fill:#666}.ang{font:11px sans-serif;fill:#2563eb}</style>`;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" class="figure-geometry">`;
+  svg += `<style>.seg{stroke:${colors.stroke};stroke-width:2;fill:none}.lbl{font:bold 14px sans-serif;fill:${colors.label}}.len{font:12px sans-serif;fill:${colors.length}}.ang{font:11px sans-serif;fill:${colors.angle}}</style>`;
 
   // 선분 그리기
   for (const [fromLabel, toLabel] of segments) {
@@ -208,7 +215,7 @@ function generateGeometrySVG(rendering: GeometryRendering): string | null {
   for (const v of vertices) {
     const sx = toSvgX(v.x);
     const sy = toSvgY(v.y);
-    svg += `<circle cx="${sx}" cy="${sy}" r="3" fill="#333"/>`;
+    svg += `<circle cx="${sx}" cy="${sy}" r="3" fill="${colors.fill}"/>`;
     svg += `<text x="${sx}" y="${sy - 10}" text-anchor="middle" class="lbl">${v.label}</text>`;
   }
 

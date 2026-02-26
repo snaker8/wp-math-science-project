@@ -1152,16 +1152,19 @@ async function saveProblemsToDB(
 
   console.log(`[DB] Successfully saved ${savedCount}/${results.length} problems from job ${jobId}`);
 
-  // ★ 도형 포함 문제 자동 SVG 생성 (비동기, 실패해도 무시)
-  // 크롭 이미지가 있고 hasFigure가 true인 문제에 대해 GPT-4o Vision으로 SVG 생성
-  const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
-  if (OPENAI_KEY && supabase) {
+  // ★ 도형 포함 문제 자동 구조화된 해석 (비동기, 실패해도 무시)
+  // 크롭 이미지가 있고 hasFigure가 true인 문제에 대해 GPT-4o Vision으로 구조화된 도형 데이터 생성
+  if (process.env.OPENAI_API_KEY && supabase) {
     const figureProblems = results.filter(r => r.hasFigure);
     if (figureProblems.length > 0) {
-      console.log(`[Figure] ${figureProblems.length}개 도형 문제 감지, SVG 자동 생성 시작...`);
+      console.log(`[Figure] ${figureProblems.length}개 도형 문제 감지, 구조화된 해석 시작...`);
 
       // 비동기 실행 (await하지 않아 메인 플로우를 차단하지 않음)
       (async () => {
+        // 동적 import (서버사이드에서만 사용)
+        const { interpretImage } = await import('@/lib/vision/image-interpreter');
+        const { generateGeometrySVG } = await import('@/lib/vision/figure-renderer');
+
         for (const result of figureProblems) {
           try {
             // DB에서 저장된 문제 ID와 crop 이미지 URL 찾기
@@ -1182,7 +1185,7 @@ async function saveProblemsToDB(
               continue;
             }
 
-            console.log(`[Figure] 문제 ${result.problemNumber} SVG 생성 중...`);
+            console.log(`[Figure] 문제 ${result.problemNumber} 구조화된 해석 중...`);
 
             // 이미지를 base64로 변환 (GPT-4o Vision이 Supabase URL에 직접 접근 불가)
             const imgRes = await fetch(cropUrl);
@@ -1195,46 +1198,20 @@ async function saveProblemsToDB(
             const imgType = imgRes.headers.get('content-type') || 'image/png';
             const imgDataUri = `data:${imgType};base64,${imgBase64}`;
 
-            const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${OPENAI_KEY}`,
-              },
-              body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [
-                  {
-                    role: 'system',
-                    content: 'You are a math figure reproduction specialist. Analyze the image. If it contains NO geometric figures/diagrams/graphs (only text/equations), respond with NO_FIGURE. Otherwise generate clean SVG code (starting with <svg, ending with </svg>). Use viewBox, width="100%", black lines, clean labels.',
-                  },
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'image_url', image_url: { url: imgDataUri, detail: 'high' } },
-                      { type: 'text', text: 'Reproduce only the geometric figure/diagram in this math problem as clean SVG. If no figure exists, respond NO_FIGURE.' },
-                    ],
-                  },
-                ],
-                max_tokens: 3000,
-                temperature: 0.1,
-              }),
-            });
+            // 구조화된 Vision 해석
+            const interpreted = await interpretImage(imgDataUri, result.contentMmd?.substring(0, 500));
 
-            if (!gptRes.ok) continue;
-
-            const gptData = await gptRes.json();
-            let svgCode = gptData.choices?.[0]?.message?.content || '';
-
-            // SVG 추출
-            if (svgCode.includes('```')) {
-              svgCode = svgCode.replace(/```(?:svg|xml)?\n?/g, '').replace(/```/g, '').trim();
+            // 도형 없음 처리
+            if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
+              console.log(`[Figure] 문제 ${result.problemNumber}: 도형 없음 (${interpreted.figureType})`);
+              continue;
             }
-            if (!svgCode.includes('<svg') || !svgCode.includes('</svg>')) continue;
 
-            const svgStart = svgCode.indexOf('<svg');
-            const svgEnd = svgCode.lastIndexOf('</svg>') + '</svg>'.length;
-            svgCode = svgCode.substring(svgStart, svgEnd);
+            // 레거시 figureSvg 생성 (geometry인 경우)
+            let legacySvg: string | undefined;
+            if (interpreted.rendering?.type === 'geometry') {
+              legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
+            }
 
             // DB 업데이트
             const analysis = (savedProblem.ai_analysis as Record<string, unknown>) || {};
@@ -1243,19 +1220,21 @@ async function saveProblemsToDB(
               .update({
                 ai_analysis: {
                   ...analysis,
-                  figureSvg: svgCode,
+                  hasFigure: true,
+                  figureData: interpreted,
+                  figureSvg: legacySvg || analysis.figureSvg || undefined,
                   figureGeneratedAt: new Date().toISOString(),
                   figureModel: 'gpt-4o',
                 },
               })
               .eq('id', savedProblem.id);
 
-            console.log(`[Figure] 문제 ${result.problemNumber} SVG 생성 완료 (${svgCode.length} chars)`);
+            console.log(`[Figure] 문제 ${result.problemNumber} 해석 완료: ${interpreted.figureType} (confidence: ${interpreted.confidence})`);
           } catch (figErr) {
-            console.warn(`[Figure] 문제 ${result.problemNumber} SVG 생성 실패 (무시):`, figErr);
+            console.warn(`[Figure] 문제 ${result.problemNumber} 해석 실패 (무시):`, figErr);
           }
         }
-        console.log(`[Figure] SVG 자동 생성 프로세스 완료`);
+        console.log(`[Figure] 구조화된 도형 해석 프로세스 완료`);
       })();
     }
   }
