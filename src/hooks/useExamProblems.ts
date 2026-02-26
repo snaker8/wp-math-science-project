@@ -212,6 +212,10 @@ function toExamProblemData(
   const displayYear = problem.source_year ? String(problem.source_year) : parsed.year;
   const displaySource = parsed.school || sourceName.replace(/\.pdf$/i, '');
 
+  // images 배열 (크롭 이미지 등)
+  const rawImages = problem.images;
+  const images: Array<{ url: string; type: string; label: string }> = Array.isArray(rawImages) ? rawImages : [];
+
   return {
     id: problem.id,
     number: row.sequence_number ?? row.order_index ?? (index + 1),
@@ -227,6 +231,7 @@ function toExamProblemData(
     typeCode,
     typeName,
     source: displaySource,
+    images,
   };
 }
 
