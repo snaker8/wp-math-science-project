@@ -253,36 +253,36 @@ function ProblemCardView({
         )}
       </div>
 
-      {/* 카드 하단: 연도 + 유형코드 + 유형명 + 출처 */}
-      <div className="flex items-center justify-between border-t border-zinc-800/50 px-4 py-2">
+      {/* 카드 하단: 출처 + 유형코드.유형명 + 연도 (참조사이트 스타일) */}
+      <div className="border-t border-zinc-800/50 px-4 py-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {problem.year && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              {problem.year}
-            </span>
-          )}
-          {problem.typeCode && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              {problem.typeCode}. {problem.typeName}
-            </span>
-          )}
           {problem.source && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               {problem.source}
             </span>
           )}
+          {problem.typeCode && (
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+              {problem.typeCode}. {problem.typeName}
+            </span>
+          )}
+          {problem.year && (
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              {problem.year}
+            </span>
+          )}
         </div>
-        <button type="button" className="p-1 text-zinc-600 hover:text-zinc-400" title="유형 상세">
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-        </button>
       </div>
 
-      {/* 유형 footer (참조사이트 스타일) */}
+      {/* 유형 footer (편집 가능 영역) */}
       {problem.typeCode && (
-        <div className="px-4 py-1.5 border-t border-zinc-800/30 bg-zinc-900/60">
+        <div className="flex items-center justify-between px-4 py-1.5 border-t border-zinc-800/30 bg-zinc-900/60">
           <span className="text-[11px] text-zinc-500">유형: {problem.typeCode}. {problem.typeName}</span>
+          <button type="button" className="p-0.5 text-zinc-600 hover:text-zinc-400" title="유형 변경">
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </button>
         </div>
       )}
     </div>
