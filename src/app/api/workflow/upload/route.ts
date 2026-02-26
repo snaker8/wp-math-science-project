@@ -1014,22 +1014,40 @@ async function saveProblemsToDB(
           content_html: null,
           solution_latex: (() => {
             const parts: string[] = [];
-            // 접근법
-            if (result.solution.approach) {
-              parts.push(`[풀이 접근] ${result.solution.approach}`);
+            // 개념 정리 (신규 필드)
+            if ((result.solution as any).concept) {
+              parts.push(`[개념] ${(result.solution as any).concept}`);
+              parts.push('');
             }
-            // 단계별 풀이
+            // 풀이
+            parts.push('[풀이]');
             if (result.solution.steps && result.solution.steps.length > 0) {
-              const stepsText = result.solution.steps
-                .map((s) => `${s.stepNumber}. ${s.description}\n${s.latex || ''}`)
-                .join('\n\n');
-              parts.push(stepsText);
+              for (const s of result.solution.steps) {
+                const desc = s.description || '';
+                const latex = s.latex ? ` $${s.latex}$` : '';
+                parts.push(`${s.stepNumber}. ${desc}${latex}`);
+              }
+              parts.push('');
+            }
+            // 선택지 검증 (객관식)
+            if ((result.solution as any).choiceAnalysis && Array.isArray((result.solution as any).choiceAnalysis)) {
+              parts.push('[선택지 검증]');
+              for (const ca of (result.solution as any).choiceAnalysis) {
+                const icon = ca.isCorrect === false ? '✓' : (ca.isCorrect === true ? '✗' : '');
+                parts.push(`${ca.choice || ''} ${ca.expression || ''} → ${ca.result || ''} ${icon}`);
+              }
+              parts.push('');
             }
             // 최종 답
             if (result.solution.finalAnswer) {
               parts.push(`∴ 정답: ${result.solution.finalAnswer}`);
             }
-            return parts.length > 0 ? parts.join('\n\n') : '해설 자동 생성 실패';
+            // 팁
+            if ((result.solution as any).tip) {
+              parts.push('');
+              parts.push(`💡 ${(result.solution as any).tip}`);
+            }
+            return parts.length > 0 ? parts.join('\n') : '해설 자동 생성 실패';
           })(),
           solution_html: null,
           answer_json: {
