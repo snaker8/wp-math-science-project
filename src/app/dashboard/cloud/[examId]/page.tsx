@@ -869,8 +869,8 @@ export default function CloudExamDetailPage() {
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
 
-  const handleGenerateFigure = useCallback(async (problem: ProblemData) => {
-    if (generatingFigures.has(problem.id)) return;
+  const handleGenerateFigure = useCallback(async (problem: ProblemData): Promise<boolean> => {
+    if (generatingFigures.has(problem.id)) return false;
 
     setGeneratingFigures(prev => new Set(prev).add(problem.id));
 
@@ -879,18 +879,24 @@ export default function CloudExamDetailPage() {
         method: 'POST',
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error('[generate-figure] Failed:', err);
-        alert(`도형 생성 실패: ${err.error || '알 수 없는 오류'}`);
-        return;
+        console.warn(`[generate-figure] Problem ${problem.number}: ${data.error || 'failed'}`);
+        return false;
       }
 
-      // 성공 시 문제 목록 갱신
+      if (data.noFigure) {
+        console.log(`[generate-figure] Problem ${problem.number}: 도형 없음`);
+        return false;
+      }
+
+      // SVG 생성 성공 → 목록 갱신
       refetchProblems();
+      return true;
     } catch (err) {
       console.error('[generate-figure] Error:', err);
-      alert('도형 생성 중 오류가 발생했습니다.');
+      return false;
     } finally {
       setGeneratingFigures(prev => {
         const next = new Set(prev);
@@ -1150,7 +1156,7 @@ export default function CloudExamDetailPage() {
           </div>
         )}
 
-        {/* 도형 일괄 생성 버튼 (크롭 이미지가 있는 문제가 있을 때) */}
+        {/* 도형 일괄 생성 버튼 (크롭 이미지가 있는 문제 대상) */}
         {problems.some(p => p.images?.some(img => img.type === 'crop') && !p.figureSvg) && (
           <button
             type="button"
@@ -1159,16 +1165,21 @@ export default function CloudExamDetailPage() {
                 p => p.images?.some(img => img.type === 'crop') && !p.figureSvg
               );
               if (targets.length === 0) return;
-              if (!confirm(`${targets.length}개 문제의 도형을 AI로 생성합니다. 진행하시겠습니까?`)) return;
+              if (!confirm(`${targets.length}개 문제를 분석하여 도형을 AI로 생성합니다. 도형이 없는 문제는 자동으로 건너뜁니다. 진행하시겠습니까?`)) return;
+              let generated = 0;
+              let skipped = 0;
               for (const p of targets) {
-                await handleGenerateFigure(p);
+                const success = await handleGenerateFigure(p);
+                if (success) generated++;
+                else skipped++;
               }
+              alert(`완료: ${generated}개 도형 생성, ${skipped}개 건너뜀 (도형 없음)`);
             }}
             className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
             disabled={generatingFigures.size > 0}
           >
             <Shapes className="h-3.5 w-3.5" />
-            {generatingFigures.size > 0 ? '생성 중...' : '도형 일괄 생성'}
+            {generatingFigures.size > 0 ? `생성 중 (${generatingFigures.size})...` : '도형 일괄 생성'}
           </button>
         )}
 

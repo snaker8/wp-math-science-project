@@ -9,9 +9,13 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
 // SVG 생성 프롬프트
-const FIGURE_ANALYSIS_PROMPT = `You are a math figure reproduction specialist. Analyze the mathematical figure in this image and generate clean SVG code that precisely reproduces it.
+const FIGURE_ANALYSIS_PROMPT = `You are a math figure reproduction specialist. Analyze the image and determine if it contains any mathematical figures, diagrams, or geometric shapes that need to be reproduced.
 
-Rules:
+IMPORTANT FIRST STEP:
+- If the image contains ONLY text, equations, or multiple-choice options with NO geometric figures/diagrams/graphs/shapes, respond with exactly: NO_FIGURE
+- If the image contains geometric figures, graphs, coordinate systems, diagrams, or other visual mathematical elements, generate SVG code.
+
+SVG Rules (only if figure exists):
 1. Output ONLY valid SVG code (starting with <svg and ending with </svg>)
 2. Use viewBox for responsive sizing (e.g., viewBox="0 0 300 250")
 3. Set width="100%" so it scales properly
@@ -24,23 +28,17 @@ Rules:
 10. Use proper geometric constructions (circles for arcs, paths for curves)
 11. Keep the SVG clean and minimal - no unnecessary elements
 12. For right angle markers, use small squares at the corner
-13. For parallel marks, use small arrow marks on lines
-14. Ensure all mathematical notation (like angles, parallel symbols) is accurate
 
-Common math figure elements to handle:
-- Triangles (with labeled vertices A, B, C etc.)
-- Rectangles, squares, parallelograms
+Common math figure elements:
+- Triangles, rectangles, parallelograms
 - Circles, arcs, sectors
-- Coordinate axes with gridlines
+- Coordinate axes with graphs
 - Function graphs (parabolas, lines, etc.)
-- Shaded regions (intersections, areas)
+- Shaded regions
 - Measurement labels (lengths, angles)
-- Right angle markers (small squares)
-- Parallel/equal length markers
-- Number lines
-- Tables (synthetic division, etc.)
+- Number lines, tables
 
-Output the SVG code only, no explanations.`;
+Output either NO_FIGURE or SVG code only, no explanations.`;
 
 export async function POST(
   request: NextRequest,
@@ -75,7 +73,6 @@ export async function POST(
     }
 
     // 2. 도형 이미지 URL 찾기
-    // images 배열에서 crop 이미지 사용 (전체 문제 크롭)
     const images: Array<{ url: string; type: string; label: string }> =
       Array.isArray(problem.images) ? problem.images : [];
 
@@ -83,7 +80,7 @@ export async function POST(
 
     if (!cropImage?.url) {
       return NextResponse.json(
-        { error: 'No crop image found for this problem. Upload and process the PDF first.' },
+        { error: 'No crop image found for this problem.' },
         { status: 400 }
       );
     }
@@ -93,7 +90,6 @@ export async function POST(
     // 3. GPT-4o Vision으로 도형 분석 + SVG 생성
     const imageUrl = cropImage.url;
 
-    // 문제 본문도 컨텍스트로 제공 (정확한 라벨링을 위해)
     const contentContext = problem.content_latex
       ? `\n\nProblem text for reference (use this to ensure labels are correct):\n${problem.content_latex.substring(0, 500)}`
       : '';
@@ -123,7 +119,7 @@ export async function POST(
               },
               {
                 type: 'text',
-                text: `Analyze the mathematical figure(s) in this problem image and generate clean SVG code to reproduce them. Focus on geometric shapes, graphs, diagrams, and any visual elements. Ignore the text/equations - only reproduce the figures/diagrams.${contentContext}`,
+                text: `Look at this math problem image. If it contains geometric figures, graphs, or diagrams, generate clean SVG to reproduce them. If there are no figures (only text/equations/choices), respond with NO_FIGURE.${contentContext}`,
               },
             ],
           },
@@ -137,31 +133,57 @@ export async function POST(
       const errText = await gptResponse.text();
       console.error(`[generate-figure] GPT-4o Vision failed: ${gptResponse.status}`, errText.substring(0, 300));
       return NextResponse.json(
-        { error: `AI model failed (${gptResponse.status})` },
-        { status: 500 }
+        { error: `AI model failed (${gptResponse.status})`, detail: errText.substring(0, 200) },
+        { status: 502 }
       );
     }
 
     const gptData = await gptResponse.json();
     const rawContent = gptData.choices?.[0]?.message?.content || '';
 
-    // 4. SVG 코드 추출 (마크다운 코드블록 제거)
+    // 4. NO_FIGURE 응답 처리 (도형 없는 문제)
+    if (rawContent.trim().startsWith('NO_FIGURE') || rawContent.trim() === 'NO_FIGURE') {
+      console.log(`[generate-figure] Problem ${problemId}: No figure detected`);
+
+      // hasFigure를 false로 업데이트
+      const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
+      await supabaseAdmin
+        .from('problems')
+        .update({
+          ai_analysis: { ...currentAnalysis, hasFigure: false },
+        })
+        .eq('id', problemId);
+
+      return NextResponse.json({
+        success: true,
+        noFigure: true,
+        message: 'No figure detected in this problem',
+        problemId,
+      });
+    }
+
+    // 5. SVG 코드 추출 (마크다운 코드블록 제거)
     let svgCode = rawContent.trim();
     if (svgCode.includes('```svg')) {
       svgCode = svgCode.split('```svg')[1].split('```')[0].trim();
     } else if (svgCode.includes('```xml')) {
       svgCode = svgCode.split('```xml')[1].split('```')[0].trim();
+    } else if (svgCode.includes('```html')) {
+      svgCode = svgCode.split('```html')[1].split('```')[0].trim();
     } else if (svgCode.includes('```')) {
       svgCode = svgCode.split('```')[1].split('```')[0].trim();
     }
 
     // SVG 태그 확인
     if (!svgCode.includes('<svg') || !svgCode.includes('</svg>')) {
-      console.error(`[generate-figure] Invalid SVG output:`, svgCode.substring(0, 200));
-      return NextResponse.json(
-        { error: 'AI failed to generate valid SVG', rawOutput: svgCode.substring(0, 500) },
-        { status: 500 }
-      );
+      // SVG를 추출 못했으면 도형 없음으로 처리 (에러가 아님)
+      console.log(`[generate-figure] Problem ${problemId}: AI response is not SVG, treating as no figure`);
+      return NextResponse.json({
+        success: true,
+        noFigure: true,
+        message: 'AI could not identify a reproducible figure',
+        problemId,
+      });
     }
 
     // <svg 시작 ~ </svg> 끝까지만 추출
@@ -169,12 +191,13 @@ export async function POST(
     const svgEnd = svgCode.lastIndexOf('</svg>') + '</svg>'.length;
     svgCode = svgCode.substring(svgStart, svgEnd);
 
-    console.log(`[generate-figure] SVG generated: ${svgCode.length} chars`);
+    console.log(`[generate-figure] SVG generated for ${problemId}: ${svgCode.length} chars`);
 
-    // 5. DB 저장 (ai_analysis.figureSvg에 저장)
+    // 6. DB 저장 (ai_analysis.figureSvg에 저장)
     const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
     const updatedAnalysis = {
       ...currentAnalysis,
+      hasFigure: true,
       figureSvg: svgCode,
       figureGeneratedAt: new Date().toISOString(),
       figureModel: 'gpt-4o',
