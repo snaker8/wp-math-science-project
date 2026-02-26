@@ -98,9 +98,12 @@ export interface LLMAnalysisResult {
   originalText?: string;      // OCR 추출 원본 텍스트
   originalMathExpressions?: string[]; // OCR 추출 수식
   contentWithMath?: string;   // Mathpix Markdown (수식 $...$ 인라인 포함)
+  contentMmd?: string;        // Mathpix Markdown 원본 (도형 마커 [도형] 포함)
   choices?: string[];         // 선택지 배열 (수식 포함)
   pageIndex?: number;         // PDF 페이지 인덱스 (0-based)
   bbox?: { x: number; y: number; w: number; h: number }; // 문제 영역 bbox (비율 0~1)
+  hasFigure?: boolean;        // 도형/다이어그램 포함 여부
+  figureBbox?: { x: number; y: number; w: number; h: number } | null; // 도형 영역 bbox
   classification: TypeClassification;
   solution: StepByStepSolution;
   similarTypes: string[]; // 유사 유형 코드들

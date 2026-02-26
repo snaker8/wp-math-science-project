@@ -253,6 +253,8 @@ function groupLinesIntoQuestions(
   bbox: { x: number; y: number; w: number; h: number };
   contentMmd: string;
   choices: string[];
+  hasFigure: boolean;
+  figureBbox: { x: number; y: number; w: number; h: number } | null;
 }> {
   const results: Array<{
     questionNumber: number;
@@ -260,6 +262,8 @@ function groupLinesIntoQuestions(
     bbox: { x: number; y: number; w: number; h: number };
     contentMmd: string;
     choices: string[];
+    hasFigure: boolean;
+    figureBbox: { x: number; y: number; w: number; h: number } | null;
   }> = [];
 
   // 문제 번호 패턴 (한국 수능/모의고사 형식)
@@ -349,6 +353,8 @@ function buildQuestionResult(
   bbox: { x: number; y: number; w: number; h: number };
   contentMmd: string;
   choices: string[];
+  hasFigure: boolean;
+  figureBbox: { x: number; y: number; w: number; h: number } | null;
 } {
   // 모든 라인의 region을 합쳐 문제 전체 bbox 계산
   let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
@@ -379,9 +385,45 @@ function buildQuestionResult(
     h: (paddedMaxY - paddedMinY) / pageH,
   };
 
+  // ★ 도형/그래프 감지: diagram, figure_label 타입 라인 확인
+  const figureLines = group.lines.filter(
+    l => l.type === 'diagram' || l.type === 'figure' || l.type === 'figure_label'
+  );
+  const hasFigure = figureLines.length > 0;
+
+  // 도형 영역 bbox (도형 라인만의 bbox)
+  let figureBbox: { x: number; y: number; w: number; h: number } | null = null;
+  if (hasFigure) {
+    let fMinX = Infinity, fMinY = Infinity, fMaxX = 0, fMaxY = 0;
+    for (const fl of figureLines) {
+      const r = fl.region;
+      if (r) {
+        fMinX = Math.min(fMinX, r.top_left_x);
+        fMinY = Math.min(fMinY, r.top_left_y);
+        fMaxX = Math.max(fMaxX, r.top_left_x + r.width);
+        fMaxY = Math.max(fMaxY, r.top_left_y + r.height);
+      }
+    }
+    if (fMinX < Infinity) {
+      figureBbox = {
+        x: Math.max(0, fMinX - padX) / pageW,
+        y: Math.max(0, fMinY - padY) / pageH,
+        w: Math.min(pageW, fMaxX - fMinX + padX * 2) / pageW,
+        h: Math.min(pageH, fMaxY - fMinY + padY * 2) / pageH,
+      };
+      console.log(`[Cloud Flow] Q${group.number}: 도형 감지 (${figureLines.length}개 라인), figureBbox: ${JSON.stringify(figureBbox)}`);
+    }
+  }
+
   // Mathpix Markdown 텍스트 (수식 $...$ 인라인 포함)
+  // diagram 라인은 텍스트가 비어있을 수 있으므로 [도형] 마커 삽입
   const contentMmd = group.lines
-    .map(l => l.text_display || l.text)
+    .map(l => {
+      if ((l.type === 'diagram' || l.type === 'figure') && !(l.text_display || l.text || '').trim()) {
+        return '[도형]';
+      }
+      return l.text_display || l.text;
+    })
     .join('\n');
 
   // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
@@ -393,6 +435,8 @@ function buildQuestionResult(
     bbox,
     contentMmd,
     choices,
+    hasFigure,
+    figureBbox,
   };
 }
 
@@ -1349,6 +1393,9 @@ export async function processUploadJob(
       bbox?: { x: number; y: number; w: number; h: number };
       contentMmd?: string;  // Mathpix Markdown (수식 인라인)
       choicesFromOCR?: string[];
+      // 도형/그래프 감지
+      hasFigure?: boolean;
+      figureBbox?: { x: number; y: number; w: number; h: number } | null;
     };
 
     let questionsToAnalyze: QuestionToAnalyze[];
@@ -1372,6 +1419,8 @@ export async function processUploadJob(
             lq.choices.length > 0 ? lq.choices
               : parsedMatch?.choices?.map(c => `${c.label}) ${c.content_latex}`) || []
           ),
+          hasFigure: lq.hasFigure,
+          figureBbox: lq.figureBbox,
         };
       });
     } else if (parsedQuestions.length > 0) {
@@ -1391,6 +1440,8 @@ export async function processUploadJob(
             lineMatch?.choices.length ? lineMatch.choices
               : q.choices?.map(c => `${c.label}) ${c.content_latex}`) || []
           ),
+          hasFigure: lineMatch?.hasFigure,
+          figureBbox: lineMatch?.figureBbox,
         };
       });
     } else {
@@ -1446,6 +1497,15 @@ export async function processUploadJob(
       }
       if (question.choicesFromOCR && question.choicesFromOCR.length > 0) {
         analysis.choices = question.choicesFromOCR;
+      }
+
+      // ★ 도형/그래프 감지 정보 저장
+      if (question.hasFigure) {
+        analysis.hasFigure = true;
+        if (question.figureBbox) {
+          analysis.figureBbox = question.figureBbox;
+        }
+        console.log(`[Cloud Flow] Problem ${i + 1}: 도형 포함 문제 (hasFigure=true)`);
       }
 
       // Step 5: Claude Sonnet 풀이 생성 + GPT-4o 교차검증

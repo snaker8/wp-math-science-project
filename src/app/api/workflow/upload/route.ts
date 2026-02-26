@@ -1062,6 +1062,8 @@ async function saveProblemsToDB(
             classification: result.classification,
             solution: result.solution,
             analyzedAt: result.analyzedAt,
+            hasFigure: result.hasFigure || false,
+            figureBbox: result.figureBbox || null,
           },
           tags: result.keywordsTags || [],
           source_name: job.fileName,
@@ -1149,4 +1151,101 @@ async function saveProblemsToDB(
   }
 
   console.log(`[DB] Successfully saved ${savedCount}/${results.length} problems from job ${jobId}`);
+
+  // ★ 도형 포함 문제 자동 SVG 생성 (비동기, 실패해도 무시)
+  // 크롭 이미지가 있고 hasFigure가 true인 문제에 대해 GPT-4o Vision으로 SVG 생성
+  const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
+  if (OPENAI_KEY && supabase) {
+    const figureProblems = results.filter(r => r.hasFigure);
+    if (figureProblems.length > 0) {
+      console.log(`[Figure] ${figureProblems.length}개 도형 문제 감지, SVG 자동 생성 시작...`);
+
+      // 비동기 실행 (await하지 않아 메인 플로우를 차단하지 않음)
+      (async () => {
+        for (const result of figureProblems) {
+          try {
+            // DB에서 저장된 문제 ID와 crop 이미지 URL 찾기
+            const { data: savedProblem } = await supabase
+              .from('problems')
+              .select('id, images, ai_analysis')
+              .eq('source_name', job.fileName)
+              .ilike('content_latex', `%${(result.contentMmd || '').substring(0, 30).replace(/[%_]/g, '')}%`)
+              .limit(1)
+              .single();
+
+            if (!savedProblem?.id) continue;
+
+            const imgs: Array<{url: string; type: string}> = Array.isArray(savedProblem.images) ? savedProblem.images : [];
+            const cropUrl = imgs.find(i => i.type === 'crop')?.url;
+            if (!cropUrl) {
+              console.log(`[Figure] 문제 ${result.problemNumber}: 크롭 이미지 없음, 건너뜀`);
+              continue;
+            }
+
+            console.log(`[Figure] 문제 ${result.problemNumber} SVG 생성 중...`);
+
+            const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${OPENAI_KEY}`,
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'You are a math figure reproduction specialist. Analyze the mathematical figure and generate clean SVG code. Output ONLY valid SVG code (starting with <svg, ending with </svg>). Use viewBox, width="100%", black lines, clean labels.',
+                  },
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'image_url', image_url: { url: cropUrl, detail: 'high' } },
+                      { type: 'text', text: 'Reproduce only the geometric figure/diagram in this math problem as clean SVG. Ignore text/equations.' },
+                    ],
+                  },
+                ],
+                max_tokens: 3000,
+                temperature: 0.1,
+              }),
+            });
+
+            if (!gptRes.ok) continue;
+
+            const gptData = await gptRes.json();
+            let svgCode = gptData.choices?.[0]?.message?.content || '';
+
+            // SVG 추출
+            if (svgCode.includes('```')) {
+              svgCode = svgCode.replace(/```(?:svg|xml)?\n?/g, '').replace(/```/g, '').trim();
+            }
+            if (!svgCode.includes('<svg') || !svgCode.includes('</svg>')) continue;
+
+            const svgStart = svgCode.indexOf('<svg');
+            const svgEnd = svgCode.lastIndexOf('</svg>') + '</svg>'.length;
+            svgCode = svgCode.substring(svgStart, svgEnd);
+
+            // DB 업데이트
+            const analysis = (savedProblem.ai_analysis as Record<string, unknown>) || {};
+            await supabase
+              .from('problems')
+              .update({
+                ai_analysis: {
+                  ...analysis,
+                  figureSvg: svgCode,
+                  figureGeneratedAt: new Date().toISOString(),
+                  figureModel: 'gpt-4o',
+                },
+              })
+              .eq('id', savedProblem.id);
+
+            console.log(`[Figure] 문제 ${result.problemNumber} SVG 생성 완료 (${svgCode.length} chars)`);
+          } catch (figErr) {
+            console.warn(`[Figure] 문제 ${result.problemNumber} SVG 생성 실패 (무시):`, figErr);
+          }
+        }
+        console.log(`[Figure] SVG 자동 생성 프로세스 완료`);
+      })();
+    }
+  }
 }
