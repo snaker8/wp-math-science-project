@@ -22,6 +22,8 @@ export interface ExamProblemData {
   typeName: string;
   source: string;
   images?: Array<{ url: string; type: string; label: string }>;
+  hasFigure?: boolean;
+  figureSvg?: string;
 }
 
 export interface ExamInfo {
@@ -224,6 +226,10 @@ function toExamProblemData(
   const rawImages = problem.images;
   const images: Array<{ url: string; type: string; label: string }> = Array.isArray(rawImages) ? rawImages : [];
 
+  // 도형 포함 여부 + AI 생성 SVG (ai_analysis에서 추출)
+  const hasFigure = problem.ai_analysis?.hasFigure || false;
+  const figureSvg = problem.ai_analysis?.figureSvg || undefined;
+
   return {
     id: problem.id,
     number: row.sequence_number ?? row.order_index ?? (index + 1),
@@ -240,6 +246,8 @@ function toExamProblemData(
     typeName,
     source: displaySource,
     images,
+    hasFigure,
+    figureSvg,
   };
 }
 

@@ -23,6 +23,8 @@ import {
   X,
   Image as ImageIcon,
   Type,
+  RefreshCw,
+  Shapes,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
@@ -48,6 +50,8 @@ interface ProblemData {
   typeName: string;
   source: string;
   images?: Array<{ url: string; type: string; label: string }>;
+  hasFigure?: boolean;
+  figureSvg?: string;
 }
 
 type DifficultyKey = 1 | 2 | 3 | 4 | 5;
@@ -163,25 +167,55 @@ function FilterBadge({
   );
 }
 
+/** [도형] 마커를 SVG 또는 크롭 이미지로 교체하여 콘텐츠를 분할 */
+function splitContentByFigureMarker(content: string): Array<{ type: 'text' | 'figure'; text: string }> {
+  const marker = '[도형]';
+  if (!content.includes(marker)) return [{ type: 'text', text: content }];
+
+  const parts: Array<{ type: 'text' | 'figure'; text: string }> = [];
+  const segments = content.split(marker);
+  segments.forEach((seg, i) => {
+    if (seg.trim()) parts.push({ type: 'text', text: seg });
+    if (i < segments.length - 1) parts.push({ type: 'figure', text: '' });
+  });
+  return parts;
+}
+
+/** SVG 코드를 안전하게 렌더링하는 컴포넌트 */
+function FigureSvgRenderer({ svg, className }: { svg: string; className?: string }) {
+  return (
+    <div
+      className={`figure-svg-container ${className || ''}`}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
 function ProblemCardView({
   problem,
   onTwinGenerate,
   onEdit,
+  onGenerateFigure,
   isSelectionMode,
   isSelected,
   onToggleSelect,
   viewMode: globalViewMode,
+  isGeneratingFigure,
 }: {
   problem: ProblemData;
   onTwinGenerate: (p: ProblemData) => void;
   onEdit?: (p: ProblemData) => void;
+  onGenerateFigure?: (p: ProblemData) => void;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   viewMode?: 'clean' | 'original';
+  isGeneratingFigure?: boolean;
 }) {
   const cropImage = problem.images?.find(img => img.type === 'crop');
   const showOriginal = globalViewMode === 'original' && !!cropImage;
+  const contentParts = splitContentByFigureMarker(problem.content);
+  const hasFigureMarker = contentParts.some(p => p.type === 'figure');
 
   return (
     <div
@@ -202,6 +236,15 @@ function ProblemCardView({
               원본 있음
             </span>
           )}
+          {problem.hasFigure && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+              problem.figureSvg
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+            }`}>
+              {problem.figureSvg ? '도형 SVG' : '도형 있음'}
+            </span>
+          )}
         </div>
         {isSelectionMode ? (
           <div
@@ -215,6 +258,22 @@ function ProblemCardView({
           </div>
         ) : (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* 도형 재생성 버튼 (크롭 이미지가 있을 때만) */}
+            {cropImage && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onGenerateFigure?.(problem); }}
+                className={`p-1 rounded transition-colors ${
+                  isGeneratingFigure
+                    ? 'text-amber-400 animate-spin'
+                    : 'text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10'
+                }`}
+                title={problem.figureSvg ? '도형 재생성' : '도형 SVG 생성'}
+                disabled={isGeneratingFigure}
+              >
+                {isGeneratingFigure ? <RefreshCw className="h-3.5 w-3.5" /> : <Shapes className="h-3.5 w-3.5" />}
+              </button>
+            )}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onTwinGenerate(problem); }}
@@ -255,10 +314,57 @@ function ProblemCardView({
           <>
             <div className="mb-2">
               <span className="text-sm font-bold text-zinc-200 mr-2">{problem.number}.</span>
-              <MixedContentRenderer
-                content={problem.content}
-                className="inline text-sm text-zinc-300 leading-relaxed"
-              />
+              {hasFigureMarker ? (
+                /* 도형 마커가 있는 경우: 텍스트/도형 분할 렌더링 */
+                <div className="inline">
+                  {contentParts.map((part, i) => (
+                    part.type === 'text' ? (
+                      <MixedContentRenderer
+                        key={i}
+                        content={part.text}
+                        className="inline text-sm text-zinc-300 leading-relaxed"
+                      />
+                    ) : (
+                      <div key={i} className="my-2 flex justify-center">
+                        {problem.figureSvg ? (
+                          <FigureSvgRenderer
+                            svg={problem.figureSvg}
+                            className="max-w-[280px] bg-white/5 rounded-lg p-2 border border-zinc-700"
+                          />
+                        ) : cropImage ? (
+                          <img
+                            src={cropImage.url}
+                            alt={`문제 ${problem.number} 도형`}
+                            className="max-w-[280px] rounded-lg border border-zinc-700 opacity-60"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="px-3 py-2 rounded bg-zinc-800 text-zinc-500 text-xs border border-zinc-700">
+                            [도형 미생성]
+                          </div>
+                        )}
+                      </div>
+                    )
+                  ))}
+                </div>
+              ) : (
+                /* 일반 콘텐츠 렌더링 */
+                <>
+                  <MixedContentRenderer
+                    content={problem.content}
+                    className="inline text-sm text-zinc-300 leading-relaxed"
+                  />
+                  {/* 도형 SVG가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
+                  {problem.figureSvg && (
+                    <div className="mt-2 flex justify-center">
+                      <FigureSvgRenderer
+                        svg={problem.figureSvg}
+                        className="max-w-[280px] bg-white/5 rounded-lg p-2 border border-zinc-700"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* 선택지/소문제 — 유형+길이에 따라 레이아웃 자동 전환 */}
@@ -465,79 +571,112 @@ function ExamPaperView({
             className={`p-6 ${columns === 2 ? 'columns-2 gap-8' : ''}`}
             style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
           >
-            {problems.map((problem, idx) => (
-              <div
-                key={problem.id}
-                className="break-inside-avoid mb-0"
-                style={{ marginBottom: `${gap}px` }}
-              >
-                <div className="flex gap-2">
-                  <span className="text-sm font-bold text-gray-900 flex-shrink-0 pt-0.5">
-                    {problem.number}.
-                  </span>
-                  <div className="flex-1">
-                    <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
-                      <MixedContentRenderer content={problem.content} className="text-gray-800" />
-                    </div>
-                    {problem.choices.length > 0 && (() => {
-                      // 소문제 판별
-                      const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
-                      const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
-                      const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
+            {problems.map((problem, idx) => {
+              const parts = splitContentByFigureMarker(problem.content);
+              const hasFigureInContent = parts.some(p => p.type === 'figure');
 
-                      if (isSubProblem) {
-                        return (
-                          <div className="mt-2 space-y-1.5">
-                            {problem.choices.map((choice, ci) => {
-                              const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
-                              return (
-                                <div key={ci} className="flex items-start gap-1.5 text-[13px] text-gray-700">
-                                  <span className="flex-shrink-0 font-medium text-gray-900">({ci + 1})</span>
-                                  <MixedContentRenderer content={stripped} className="text-gray-700" />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      }
+              return (
+                <div
+                  key={problem.id}
+                  className="break-inside-avoid mb-0"
+                  style={{ marginBottom: `${gap}px` }}
+                >
+                  <div className="flex gap-2">
+                    <span className="text-sm font-bold text-gray-900 flex-shrink-0 pt-0.5">
+                      {problem.number}.
+                    </span>
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                        {hasFigureInContent ? (
+                          /* [도형] 마커가 있는 경우: 텍스트/SVG 분할 렌더링 */
+                          parts.map((part, pi) => (
+                            part.type === 'text' ? (
+                              <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
+                            ) : (
+                              <div key={pi} className="my-2 flex justify-center">
+                                {problem.figureSvg ? (
+                                  <FigureSvgRenderer
+                                    svg={problem.figureSvg}
+                                    className="max-w-[260px]"
+                                  />
+                                ) : (
+                                  <span className="text-xs text-gray-400 italic">[도형]</span>
+                                )}
+                              </div>
+                            )
+                          ))
+                        ) : (
+                          <>
+                            <MixedContentRenderer content={problem.content} className="text-gray-800" />
+                            {/* 도형 SVG가 있지만 마커가 없는 경우 → 하단 표시 */}
+                            {problem.figureSvg && (
+                              <div className="mt-2 flex justify-center">
+                                <FigureSvgRenderer svg={problem.figureSvg} className="max-w-[260px]" />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {problem.choices.length > 0 && (() => {
+                        // 소문제 판별
+                        const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+                        const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
+                        const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
 
-                      const maxLen = Math.max(...problem.choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
-                      if (maxLen <= 12) {
-                        return (
-                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {problem.choices.map((choice, ci) => (
-                              <div key={ci} className="text-[13px] text-gray-700">
-                                <MixedContentRenderer content={choice} className="text-gray-700" />
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      }
-                      if (maxLen <= 30) {
-                        return (
-                          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                            {problem.choices.map((choice, ci) => (
-                              <div key={ci} className="text-[13px] text-gray-700">
-                                <MixedContentRenderer content={choice} className="text-gray-700" />
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="mt-2 space-y-1">
-                          {problem.choices.map((choice, ci) => (
-                            <div key={ci} className="text-[13px] text-gray-700">
-                              <MixedContentRenderer content={choice} className="text-gray-700" />
+                        if (isSubProblem) {
+                          return (
+                            <div className="mt-2 space-y-1.5">
+                              {problem.choices.map((choice, ci) => {
+                                const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+                                return (
+                                  <div key={ci} className="flex items-start gap-1.5 text-[13px] text-gray-700">
+                                    <span className="flex-shrink-0 font-medium text-gray-900">({ci + 1})</span>
+                                    <MixedContentRenderer content={stripped} className="text-gray-700" />
+                                  </div>
+                                );
+                              })}
                             </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                          );
+                        }
+
+                        const maxLen = Math.max(...problem.choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+                        if (maxLen <= 12) {
+                          return (
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                              {problem.choices.map((choice, ci) => (
+                                <div key={ci} className="text-[13px] text-gray-700">
+                                  <MixedContentRenderer content={choice} className="text-gray-700" />
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+                        if (maxLen <= 30) {
+                          return (
+                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                              {problem.choices.map((choice, ci) => (
+                                <div key={ci} className="text-[13px] text-gray-700">
+                                  <MixedContentRenderer content={choice} className="text-gray-700" />
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="mt-2 space-y-1">
+                            {problem.choices.map((choice, ci) => (
+                              <div key={ci} className="text-[13px] text-gray-700">
+                                <MixedContentRenderer content={choice} className="text-gray-700" />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -808,6 +947,9 @@ export default function CloudExamDetailPage() {
       typeCode: p.typeCode,
       typeName: p.typeName,
       source: p.source,
+      images: p.images,
+      hasFigure: p.hasFigure,
+      figureSvg: p.figureSvg,
     }));
   }, [dbProblems]);
 
@@ -823,6 +965,40 @@ export default function CloudExamDetailPage() {
 
   // 원본/클린 렌더링 모드 (펼쳐보기에서 적용)
   const [renderMode, setRenderMode] = useState<'clean' | 'original'>('clean');
+
+  // 도형 재생성 상태
+  const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
+
+  const handleGenerateFigure = useCallback(async (problem: ProblemData) => {
+    if (generatingFigures.has(problem.id)) return;
+
+    setGeneratingFigures(prev => new Set(prev).add(problem.id));
+
+    try {
+      const res = await fetch(`/api/problems/${problem.id}/generate-figure`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[generate-figure] Failed:', err);
+        alert(`도형 생성 실패: ${err.error || '알 수 없는 오류'}`);
+        return;
+      }
+
+      // 성공 시 문제 목록 갱신
+      refetchProblems();
+    } catch (err) {
+      console.error('[generate-figure] Error:', err);
+      alert('도형 생성 중 오류가 발생했습니다.');
+    } finally {
+      setGeneratingFigures(prev => {
+        const next = new Set(prev);
+        next.delete(problem.id);
+        return next;
+      });
+    }
+  }, [generatingFigures, refetchProblems]);
 
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -1074,6 +1250,28 @@ export default function CloudExamDetailPage() {
           </div>
         )}
 
+        {/* 도형 일괄 생성 버튼 (크롭 이미지가 있는 문제가 있을 때) */}
+        {problems.some(p => p.images?.some(img => img.type === 'crop') && !p.figureSvg) && (
+          <button
+            type="button"
+            onClick={async () => {
+              const targets = problems.filter(
+                p => p.images?.some(img => img.type === 'crop') && !p.figureSvg
+              );
+              if (targets.length === 0) return;
+              if (!confirm(`${targets.length}개 문제의 도형을 AI로 생성합니다. 진행하시겠습니까?`)) return;
+              for (const p of targets) {
+                await handleGenerateFigure(p);
+              }
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
+            disabled={generatingFigures.size > 0}
+          >
+            <Shapes className="h-3.5 w-3.5" />
+            {generatingFigures.size > 0 ? '생성 중...' : '도형 일괄 생성'}
+          </button>
+        )}
+
         {/* 정보 버튼 */}
         <button type="button" className="ml-1 p-1 rounded-full border border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors">
           <AlertCircle className="h-4 w-4" />
@@ -1096,10 +1294,12 @@ export default function CloudExamDetailPage() {
                   problem={problem}
                   onTwinGenerate={setTwinModalProblem}
                   onEdit={setEditModalProblem}
+                  onGenerateFigure={handleGenerateFigure}
                   isSelectionMode={isSelectionMode}
                   isSelected={selectedProblems.has(problem.id)}
                   onToggleSelect={toggleSelectProblem}
                   viewMode={renderMode}
+                  isGeneratingFigure={generatingFigures.has(problem.id)}
                 />
               ))}
             </div>

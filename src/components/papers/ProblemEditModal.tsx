@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   X, Save, Loader2, Sigma, Trash2, AlertCircle,
   Bold, Italic, ImageIcon, Table2, List, Minus, Eye, EyeOff, Link2,
-  LineChart, Underline as UnderlineIcon,
+  LineChart, Underline as UnderlineIcon, RefreshCw,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
@@ -590,6 +590,9 @@ export function ProblemEditModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showGraphModal, setShowGraphModal] = useState(false);
   const [graphTarget, setGraphTarget] = useState<'content' | 'solution'>('content');
+  // ★ AI 재분석
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [reanalyzeSuccess, setReanalyzeSuccess] = useState(false);
 
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const solutionRef = useRef<HTMLTextAreaElement>(null);
@@ -691,6 +694,68 @@ export function ProblemEditModal({
       setIsSaving(false);
     }
   }, [problemId, content, solution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, onSaved, onClose]);
+
+  // ★ AI 재분석: GPT-4o가 풀이/정답/분류를 다시 분석
+  const handleReanalyze = useCallback(async () => {
+    if (isReanalyzing) return;
+    setIsReanalyzing(true);
+    setError(null);
+    setReanalyzeSuccess(false);
+
+    try {
+      const res = await fetch(`/api/problems/${problemId}/reanalyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ advanced: true }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `재분석 실패 (HTTP ${res.status})`);
+      }
+
+      const result = await res.json();
+      const { problem: updatedProblem, classification: updatedClassification } = result;
+
+      // 에디터 필드 갱신
+      if (updatedProblem?.content_latex) setContent(updatedProblem.content_latex);
+      if (updatedProblem?.solution_latex) setSolution(updatedProblem.solution_latex);
+
+      // 정답 갱신
+      if (updatedProblem?.answer_json) {
+        const aj = updatedProblem.answer_json;
+        const answer = aj.finalAnswer ?? aj.correct_answer ?? '';
+        if (typeof answer === 'number' && answer >= 1 && answer <= 5) {
+          setAnswerType('objective');
+          setCorrectAnswer(answer);
+        } else {
+          setAnswerType('subjective');
+          setSubjectiveAnswer(String(answer));
+        }
+
+        // 선택지 갱신
+        if (aj.choices && Array.isArray(aj.choices) && aj.choices.length > 0) {
+          setChoices(aj.choices.map((c: string) => c.replace(/^[①②③④⑤]\s*/, '')));
+        }
+      }
+
+      // 분류 갱신
+      if (updatedClassification) {
+        if (updatedClassification.difficulty) setDifficulty(Number(updatedClassification.difficulty) || 3);
+        if (updatedClassification.cognitive_domain) setCognitiveDomain(updatedClassification.cognitive_domain);
+        if (updatedClassification.type_code) setTypeCode(updatedClassification.type_code);
+        if (updatedClassification.type_name) setTypeName(updatedClassification.type_name);
+      }
+
+      setReanalyzeSuccess(true);
+      setTimeout(() => setReanalyzeSuccess(false), 3000);
+    } catch (err) {
+      console.error('[ProblemEdit] Reanalyze error:', err);
+      setError(err instanceof Error ? err.message : '재분석 실패');
+    } finally {
+      setIsReanalyzing(false);
+    }
+  }, [problemId, isReanalyzing]);
 
   // 삭제
   const handleDelete = useCallback(async () => {
@@ -831,6 +896,16 @@ export function ProblemEditModal({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* ★ AI 재분석 버튼 */}
+            <button type="button" onClick={handleReanalyze} disabled={isReanalyzing || isSaving}
+              className={`flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                reanalyzeSuccess
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+              }`}>
+              {isReanalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {reanalyzeSuccess ? 'AI 분석 완료' : isReanalyzing ? 'AI 분석 중...' : 'AI 재분석'}
+            </button>
             <button type="button" onClick={handleSave} disabled={isSaving}
               className="flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-5 py-2 text-sm font-bold text-white transition-colors disabled:opacity-50 shadow-lg shadow-cyan-500/20">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
