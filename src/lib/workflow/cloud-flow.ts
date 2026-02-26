@@ -925,14 +925,21 @@ interface VerificationResult {
 async function verifyAnswerWithGPT(
   problemText: string,
   sonnetAnswer: string,
-  mathExpressions: string[] = []
+  mathExpressions: string[] = [],
+  choices?: string[]
 ): Promise<VerificationResult> {
+  // ★ 선택지가 있으면 검증 프롬프트에도 포함
+  const validChoices = (choices || []).filter(c => c && c.trim().length > 0);
+  const choicesSection = validChoices.length > 0
+    ? `\n\n[선택지]\n${validChoices.map((c, i) => `${['①','②','③','④','⑤'][i] || `(${i+1})`} ${c.replace(/^[①②③④⑤]\s*/, '')}`).join('\n')}`
+    : '';
+
   const VERIFY_PROMPT = `다음 수학 문제의 정답만 간결하게 구해주세요.
 풀이 과정은 최소화하고, 최종 정답만 명확하게 출력하세요.
 
 문제:
 ${problemText}
-${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
+${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}${choicesSection}
 
 반드시 아래 JSON 형식으로만 응답하세요:
 {
@@ -1449,7 +1456,8 @@ export async function processUploadJob(
         const solutionResult = await generateStepByStepSolution(
           question.text,
           question.mathExpressions,
-          { onStatusChange: (status, msg) => callbacks.onStatusChange(status as ProcessingStatus, `문제 ${i + 1} - ${msg}`) }
+          { onStatusChange: (status, msg) => callbacks.onStatusChange(status as ProcessingStatus, `문제 ${i + 1} - ${msg}`) },
+          question.choicesFromOCR || analysis.choices
         );
         // verification 정보 분리
         const { verification, ...solutionOnly } = solutionResult;
@@ -1468,7 +1476,8 @@ export async function processUploadJob(
         const verification = await verifyAnswerWithGPT(
           question.text,
           analysis.solution.finalAnswer,
-          question.mathExpressions
+          question.mathExpressions,
+          question.choicesFromOCR || analysis.choices
         );
         (analysis as any).verification = verification;
         if (verification.mismatchFlag) {
@@ -1508,20 +1517,29 @@ export async function processUploadJob(
 async function generateStepByStepSolution(
   problemText: string,
   mathExpressions: string[],
-  callbacks?: { onStatusChange?: (status: string, msg: string) => void }
+  callbacks?: { onStatusChange?: (status: string, msg: string) => void },
+  choices?: string[]
 ): Promise<StepByStepSolution & { verification?: VerificationResult }> {
+  // ★ 선택지가 있으면 프롬프트에 명시적으로 포함
+  const validChoices = (choices || []).filter(c => c && c.trim().length > 0);
+  const choicesSection = validChoices.length > 0
+    ? `\n\n[선택지]\n${validChoices.map((c, i) => `${['①','②','③','④','⑤'][i] || `(${i+1})`} ${c.replace(/^[①②③④⑤]\s*/, '')}`).join('\n')}`
+    : '';
+  const isObjective = validChoices.length > 0;
+
   const SOLUTION_PROMPT = `다음 수학 문제의 완전한 단계별 풀이를 작성하세요.
 
 문제:
 ${problemText}
-${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
+${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}${choicesSection}
 
 ★ 필수 규칙:
 1. 각 단계마다 LaTeX 수식을 반드시 포함하세요
 2. 계산 과정을 절대 생략하지 마세요 (중간 과정 모두 표시)
 3. 최종 답(finalAnswer)을 반드시 명시하세요 — 빈 문자열 절대 불가
-4. 객관식이면 finalAnswer에 정답 번호(①~⑤ 또는 1~5)도 포함
-5. LaTeX 수식에서 백슬래시는 이중(\\\\)으로 작성
+${isObjective ? `4. 객관식 문제입니다. **각 선택지(①~⑤)를 하나씩 검증**하고, 정답/오답 여부를 판별하세요
+5. finalAnswer에 정답 번호(① 또는 1 등)를 반드시 포함하세요` : `4. 주관식이면 최종 수치/식을 정확히 제시하세요`}
+${isObjective ? '6' : '5'}. LaTeX 수식에서 백슬래시는 이중(\\\\)으로 작성
 
 다음 JSON 형식으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요:
 {
@@ -1570,7 +1588,8 @@ ${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}
     const verification = await verifyAnswerWithGPT(
       problemText,
       solution.finalAnswer || '',
-      mathExpressions
+      mathExpressions,
+      choices
     );
 
     // 검증 결과를 solution에 첨부
