@@ -87,9 +87,32 @@ export async function POST(
 
     console.log(`[generate-figure] Processing problem ${problemId}, image: ${cropImage.url.substring(0, 80)}...`);
 
-    // 3. GPT-4o Vision으로 도형 분석 + SVG 생성
-    const imageUrl = cropImage.url;
+    // 3. 이미지를 서버에서 다운로드하여 base64로 변환
+    //    (GPT-4o Vision이 Supabase Storage URL에 직접 접근 불가)
+    let imageDataUri: string;
+    try {
+      const imgRes = await fetch(cropImage.url);
+      if (!imgRes.ok) {
+        console.error(`[generate-figure] Image download failed: ${imgRes.status}`);
+        return NextResponse.json(
+          { error: `Failed to download crop image (${imgRes.status})` },
+          { status: 400 }
+        );
+      }
+      const imgBuffer = await imgRes.arrayBuffer();
+      const base64 = Buffer.from(imgBuffer).toString('base64');
+      const contentType = imgRes.headers.get('content-type') || 'image/png';
+      imageDataUri = `data:${contentType};base64,${base64}`;
+      console.log(`[generate-figure] Image downloaded: ${Math.round(imgBuffer.byteLength / 1024)}KB`);
+    } catch (dlErr) {
+      console.error(`[generate-figure] Image download error:`, dlErr);
+      return NextResponse.json(
+        { error: 'Failed to download crop image' },
+        { status: 400 }
+      );
+    }
 
+    // 4. GPT-4o Vision으로 도형 분석 + SVG 생성
     const contentContext = problem.content_latex
       ? `\n\nProblem text for reference (use this to ensure labels are correct):\n${problem.content_latex.substring(0, 500)}`
       : '';
@@ -113,7 +136,7 @@ export async function POST(
               {
                 type: 'image_url',
                 image_url: {
-                  url: imageUrl,
+                  url: imageDataUri,
                   detail: 'high',
                 },
               },

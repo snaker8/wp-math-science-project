@@ -1184,6 +1184,17 @@ async function saveProblemsToDB(
 
             console.log(`[Figure] 문제 ${result.problemNumber} SVG 생성 중...`);
 
+            // 이미지를 base64로 변환 (GPT-4o Vision이 Supabase URL에 직접 접근 불가)
+            const imgRes = await fetch(cropUrl);
+            if (!imgRes.ok) {
+              console.warn(`[Figure] 문제 ${result.problemNumber}: 이미지 다운로드 실패 (${imgRes.status})`);
+              continue;
+            }
+            const imgBuf = await imgRes.arrayBuffer();
+            const imgBase64 = Buffer.from(imgBuf).toString('base64');
+            const imgType = imgRes.headers.get('content-type') || 'image/png';
+            const imgDataUri = `data:${imgType};base64,${imgBase64}`;
+
             const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
               method: 'POST',
               headers: {
@@ -1195,13 +1206,13 @@ async function saveProblemsToDB(
                 messages: [
                   {
                     role: 'system',
-                    content: 'You are a math figure reproduction specialist. Analyze the mathematical figure and generate clean SVG code. Output ONLY valid SVG code (starting with <svg, ending with </svg>). Use viewBox, width="100%", black lines, clean labels.',
+                    content: 'You are a math figure reproduction specialist. Analyze the image. If it contains NO geometric figures/diagrams/graphs (only text/equations), respond with NO_FIGURE. Otherwise generate clean SVG code (starting with <svg, ending with </svg>). Use viewBox, width="100%", black lines, clean labels.',
                   },
                   {
                     role: 'user',
                     content: [
-                      { type: 'image_url', image_url: { url: cropUrl, detail: 'high' } },
-                      { type: 'text', text: 'Reproduce only the geometric figure/diagram in this math problem as clean SVG. Ignore text/equations.' },
+                      { type: 'image_url', image_url: { url: imgDataUri, detail: 'high' } },
+                      { type: 'text', text: 'Reproduce only the geometric figure/diagram in this math problem as clean SVG. If no figure exists, respond NO_FIGURE.' },
                     ],
                   },
                 ],
