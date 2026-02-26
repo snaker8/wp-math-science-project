@@ -21,6 +21,8 @@ import {
   AlignJustify,
   Check,
   X,
+  Image as ImageIcon,
+  Type,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
@@ -45,6 +47,7 @@ interface ProblemData {
   typeCode: string;
   typeName: string;
   source: string;
+  images?: Array<{ url: string; type: string; label: string }>;
 }
 
 type DifficultyKey = 1 | 2 | 3 | 4 | 5;
@@ -167,6 +170,7 @@ function ProblemCardView({
   isSelectionMode,
   isSelected,
   onToggleSelect,
+  viewMode: globalViewMode,
 }: {
   problem: ProblemData;
   onTwinGenerate: (p: ProblemData) => void;
@@ -174,7 +178,11 @@ function ProblemCardView({
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
+  viewMode?: 'clean' | 'original';
 }) {
+  const cropImage = problem.images?.find(img => img.type === 'crop');
+  const showOriginal = globalViewMode === 'original' && !!cropImage;
+
   return (
     <div
       className={`group rounded-xl border transition-all cursor-pointer ${
@@ -189,6 +197,11 @@ function ProblemCardView({
         <div className="flex items-center gap-1.5">
           <DifficultyBadge level={problem.difficulty} />
           <DomainBadge domain={problem.cognitiveDomain} />
+          {cropImage && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              원본 있음
+            </span>
+          )}
         </div>
         {isSelectionMode ? (
           <div
@@ -227,83 +240,98 @@ function ProblemCardView({
 
       {/* 문제 본문 */}
       <div className="px-4 pb-3">
-        <div className="mb-2">
-          <span className="text-sm font-bold text-zinc-200 mr-2">{problem.number}.</span>
-          <MixedContentRenderer
-            content={problem.content}
-            className="inline text-sm text-zinc-300 leading-relaxed"
-          />
-        </div>
-
-        {/* 선택지/소문제 — 유형+길이에 따라 레이아웃 자동 전환 */}
-        {problem.choices.length > 0 && (() => {
-          // ★ 소문제 판별: (1) 형식이거나 "구하시오/[N점]" 포함
-          const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
-          const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
-          const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
-
-          if (isSubProblem) {
-            // 소문제: (1), (2), (3) 세로 배치
-            return (
-              <div className="mt-3 space-y-2 pl-4">
-                {problem.choices.map((choice, i) => {
-                  const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
-                  return (
-                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
-                      <span className="flex-shrink-0 text-cyan-500 font-medium">({i + 1})</span>
-                      <MixedContentRenderer content={stripped} className="text-zinc-400" />
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          }
-
-          // 객관식 보기
-          const processed = problem.choices.map((choice, i) => {
-            const circled = ['①', '②', '③', '④', '⑤'][i] || '';
-            const stripped = choice.replace(/^[①②③④⑤]\s*/, '');
-            return { circled, stripped };
-          });
-          const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
-          // 짧은 보기: 가로 나열
-          if (maxLen <= 12) {
-            return (
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
-                {processed.map((c, i) => (
-                  <div key={i} className="flex items-center gap-1 text-[13px] text-zinc-400">
-                    <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
-                    <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
-                  </div>
-                ))}
-              </div>
-            );
-          }
-          // 중간 길이: 2열 그리드
-          if (maxLen <= 30) {
-            return (
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
-                {processed.map((c, i) => (
-                  <div key={i} className="flex items-start gap-1 text-[13px] text-zinc-400">
-                    <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
-                    <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
-                  </div>
-                ))}
-              </div>
-            );
-          }
-          // 긴 수식: 1열 세로 배치
-          return (
-            <div className="mt-2 space-y-1.5 pl-4">
-              {processed.map((c, i) => (
-                <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
-                  <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
-                  <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
-                </div>
-              ))}
+        {showOriginal ? (
+          /* 원본 크롭 이미지 모드 */
+          <div className="relative">
+            <img
+              src={cropImage!.url}
+              alt={`문제 ${problem.number} 원본`}
+              className="w-full rounded-lg border border-zinc-700"
+              loading="lazy"
+            />
+          </div>
+        ) : (
+          /* 클린 렌더링 모드 (기본) */
+          <>
+            <div className="mb-2">
+              <span className="text-sm font-bold text-zinc-200 mr-2">{problem.number}.</span>
+              <MixedContentRenderer
+                content={problem.content}
+                className="inline text-sm text-zinc-300 leading-relaxed"
+              />
             </div>
-          );
-        })()}
+
+            {/* 선택지/소문제 — 유형+길이에 따라 레이아웃 자동 전환 */}
+            {problem.choices.length > 0 && (() => {
+              // ★ 소문제 판별: (1) 형식이거나 "구하시오/[N점]" 포함
+              const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+              const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
+              const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
+
+              if (isSubProblem) {
+                // 소문제: (1), (2), (3) 세로 배치
+                return (
+                  <div className="mt-3 space-y-2 pl-4">
+                    {problem.choices.map((choice, i) => {
+                      const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+                      return (
+                        <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
+                          <span className="flex-shrink-0 text-cyan-500 font-medium">({i + 1})</span>
+                          <MixedContentRenderer content={stripped} className="text-zinc-400" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              // 객관식 보기
+              const processed = problem.choices.map((choice, i) => {
+                const circled = ['①', '②', '③', '④', '⑤'][i] || '';
+                const stripped = choice.replace(/^[①②③④⑤]\s*/, '');
+                return { circled, stripped };
+              });
+              const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+              // 짧은 보기: 가로 나열
+              if (maxLen <= 12) {
+                return (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
+                    {processed.map((c, i) => (
+                      <div key={i} className="flex items-center gap-1 text-[13px] text-zinc-400">
+                        <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
+                        <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+              // 중간 길이: 2열 그리드
+              if (maxLen <= 30) {
+                return (
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
+                    {processed.map((c, i) => (
+                      <div key={i} className="flex items-start gap-1 text-[13px] text-zinc-400">
+                        <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
+                        <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+              // 긴 수식: 1열 세로 배치
+              return (
+                <div className="mt-2 space-y-1.5 pl-4">
+                  {processed.map((c, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
+                      <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
+                      <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </>
+        )}
       </div>
 
       {/* 카드 하단: 출처 + 유형코드.유형명 + 연도 (참조사이트 스타일) */}
@@ -793,6 +821,9 @@ export default function CloudExamDetailPage() {
   const [editModalProblem, setEditModalProblem] = useState<ProblemData | null>(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
 
+  // 원본/클린 렌더링 모드 (펼쳐보기에서 적용)
+  const [renderMode, setRenderMode] = useState<'clean' | 'original'>('clean');
+
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
@@ -1011,6 +1042,38 @@ export default function CloudExamDetailPage() {
           ))}
         </div>
 
+        {/* 원본/클린 토글 */}
+        {activeView === 'spread' && (
+          <div className="flex items-center gap-0.5 rounded-lg border border-zinc-700 overflow-hidden ml-auto">
+            <button
+              type="button"
+              onClick={() => setRenderMode('clean')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors ${
+                renderMode === 'clean'
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title="LaTeX 클린 렌더링"
+            >
+              <Type className="h-3.5 w-3.5" />
+              클린
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenderMode('original')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors ${
+                renderMode === 'original'
+                  ? 'bg-violet-500/15 text-violet-400'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title="원본 크롭 이미지"
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+              원본
+            </button>
+          </div>
+        )}
+
         {/* 정보 버튼 */}
         <button type="button" className="ml-1 p-1 rounded-full border border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors">
           <AlertCircle className="h-4 w-4" />
@@ -1036,6 +1099,7 @@ export default function CloudExamDetailPage() {
                   isSelectionMode={isSelectionMode}
                   isSelected={selectedProblems.has(problem.id)}
                   onToggleSelect={toggleSelectProblem}
+                  viewMode={renderMode}
                 />
               ))}
             </div>
