@@ -749,7 +749,7 @@ export async function analyzeProblemWithLLM(
 
 const DEFAULT_SYSTEM_MESSAGE = '당신은 한국 고등학교 수학 교육과정 전문가이자 수능/모의고사 출제위원급 전문가입니다. 문제의 유형, 난이도, 단원을 정확히 분류하고 상세한 풀이를 제공합니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.';
 
-const SOLUTION_SYSTEM_MESSAGE = '당신은 한국 수능/모의고사 수학 해설 전문가입니다. 학생이 완전히 이해할 수 있도록 단계별 풀이를 명확하게 작성합니다. 반드시 유효한 JSON으로만 응답하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요. 필수 규칙: (1) 각 단계에 LaTeX 수식 필수 포함 (2) 최종 답(finalAnswer)을 반드시 명시 — 빈 문자열 금지 (3) 계산 과정을 절대 생략하지 마세요.';
+const SOLUTION_SYSTEM_MESSAGE = '당신은 한국 수학 시중 교재(수학의 정석, 쎈, 마플, RPM 등)의 해설지를 집필하는 전문가입니다. 학생이 혼자 읽고 완전히 이해할 수 있도록 교재 해설지처럼 명확하고 체계적으로 작성합니다. 반드시 유효한 JSON으로만 응답하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요. 필수 규칙: (1) 핵심 개념/공식부터 제시 (2) 교재처럼 자연스러운 서술체 풀이 (3) 최종 답 반드시 명시 (4) 계산 과정 절대 생략 금지.';
 
 interface CallOpenAIOptions {
   retries?: number;
@@ -1527,28 +1527,33 @@ async function generateStepByStepSolution(
     : '';
   const isObjective = validChoices.length > 0;
 
-  const SOLUTION_PROMPT = `다음 수학 문제의 완전한 단계별 풀이를 작성하세요.
+  const SOLUTION_PROMPT = `당신은 한국 수학 시중 교재의 해설지를 집필하는 전문가입니다.
+학생이 혼자 읽고 완전히 이해할 수 있도록 **교재 해설지 스타일**로 풀이를 작성하세요.
 
 문제:
 ${problemText}
 ${mathExpressions.length > 0 ? `수식: ${mathExpressions.join(', ')}` : ''}${choicesSection}
 
-★ 필수 규칙:
-1. 각 단계마다 LaTeX 수식을 반드시 포함하세요
-2. 계산 과정을 절대 생략하지 마세요 (중간 과정 모두 표시)
-3. 최종 답(finalAnswer)을 반드시 명시하세요 — 빈 문자열 절대 불가
-${isObjective ? `4. 객관식 문제입니다. **각 선택지(①~⑤)를 하나씩 검증**하고, 정답/오답 여부를 판별하세요
-5. finalAnswer에 정답 번호(① 또는 1 등)를 반드시 포함하세요` : `4. 주관식이면 최종 수치/식을 정확히 제시하세요`}
-${isObjective ? '6' : '5'}. LaTeX 수식에서 백슬래시는 이중(\\\\)으로 작성
+★ 작성 규칙:
+1. **개념 정리**: 이 문제를 풀기 위해 필요한 핵심 개념/공식을 1~2줄로 먼저 제시
+2. **풀이 과정**: 교재처럼 자연스러운 서술체로 작성 (번호 매기되, "~이므로", "~에 의해", "따라서" 등 접속사 활용)
+3. **수식 표기**: LaTeX 수식을 단계마다 포함. 중간 계산을 절대 생략하지 마세요
+4. **최종 답**: finalAnswer를 반드시 명시 (빈 문자열 절대 불가)
+${isObjective ? `5. **선택지 검증**: 객관식이므로 각 선택지를 하나씩 검증하여 참/거짓 판별. choiceAnalysis 배열에 결과 작성
+6. finalAnswer에 정답 번호(④ 또는 4 등) 반드시 포함` : `5. 주관식이면 최종 수치/식을 정확히 제시하세요`}
 
 다음 JSON 형식으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요:
 {
-  "approach": "풀이의 핵심 전략 (한 문장)",
+  "concept": "핵심 개념/공식 요약 (1~2줄)",
+  "approach": "풀이 전략 (한 문장)",
   "steps": [
-    { "stepNumber": 1, "description": "이 단계에서 하는 일 (구체적으로)", "latex": "수식 (필수)", "explanation": "왜 이렇게 하는지" }
-  ],
-  "finalAnswer": "최종 정답 (예: 24, x=3, ② 등) — 반드시 작성",
-  "commonMistakes": ["학생들이 자주 하는 실수"]
+    { "stepNumber": 1, "description": "교재 서술체로 풀이 과정 (수식 포함하여 자연스럽게)", "latex": "핵심 수식 (있으면)" }
+  ],${isObjective ? `
+  "choiceAnalysis": [
+    { "choice": "①", "expression": "선택지 내용", "result": "판별 결과", "isCorrect": true }
+  ],` : ''}
+  "finalAnswer": "최종 정답 (예: ④, 24, x=3 등) — 반드시 작성",
+  "tip": "이 유형 문제를 풀 때 핵심 포인트 또는 학생이 자주 하는 실수 (1줄)"
 }`;
 
   try {
