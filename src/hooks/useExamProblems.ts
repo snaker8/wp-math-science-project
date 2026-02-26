@@ -52,6 +52,33 @@ function formatDisplayTypeCode(rawCode: string): string {
 }
 
 // ============================================================================
+// source_name에서 학교명/연도 파싱
+// "2025학년 경남고1 공통수학1 1학기 중간.pdf" → { school: "경남고", year: "2025" }
+// ============================================================================
+
+function parseSourceName(sourceName: string): { school: string; year: string } {
+  if (!sourceName) return { school: '', year: '' };
+
+  // 연도 추출: "2025학년" 또는 "2025" 패턴
+  const yearMatch = sourceName.match(/(20\d{2})/);
+  const year = yearMatch ? yearMatch[1] : '';
+
+  // 학교명 추출: "경남고1", "용인고", "서울고2" 등 → 학교명만
+  // 패턴: 2~4글자 한글 + "고" 또는 "중" 또는 "초"
+  const schoolMatch = sourceName.match(/([가-힣]{1,6}(?:고|중|초))\d*/);
+  const school = schoolMatch ? schoolMatch[1] : '';
+
+  // 학교명을 못 찾으면 .pdf 확장자와 연도 제거 후 첫 토큰 사용
+  if (!school) {
+    const cleaned = sourceName.replace(/\.pdf$/i, '').replace(/20\d{2}학년?\s*/, '').trim();
+    const firstToken = cleaned.split(/\s+/)[0];
+    return { school: firstToken || sourceName.replace(/\.pdf$/i, ''), year };
+  }
+
+  return { school, year };
+}
+
+// ============================================================================
 // LaTeX에서 선택지 추출
 // ============================================================================
 
@@ -177,7 +204,24 @@ function toExamProblemData(
   // MA-HS0-POL-01-003 → POL-01-003, 이미 짧으면 그대로
   const rawTypeCode = classification?.type_code || '';
   const typeCode = formatDisplayTypeCode(rawTypeCode);
-  const typeName = classification?.type_name || typeCode;
+
+  // typeName: DB에 저장된 값 → expanded_math_types 조회 가능한 데이터 → ai_analysis 폴백
+  let typeName = classification?.type_name || '';
+  if (!typeName || typeName === rawTypeCode || typeName === typeCode) {
+    // type_name이 없거나 코드와 동일하면 ai_analysis에서 추출 시도
+    const aiClass = problem.ai_analysis?.classification;
+    if (aiClass?.typeName && aiClass.typeName !== rawTypeCode) {
+      typeName = aiClass.typeName;
+    }
+  }
+  // 여전히 없으면 typeCode 표시
+  if (!typeName) typeName = typeCode;
+
+  // source_name에서 학교명/연도 파싱
+  const sourceName = problem.source_name || '';
+  const parsed = parseSourceName(sourceName);
+  const displayYear = problem.source_year ? String(problem.source_year) : parsed.year;
+  const displaySource = parsed.school || sourceName.replace(/\.pdf$/i, '');
 
   return {
     id: problem.id,
@@ -190,10 +234,10 @@ function toExamProblemData(
     choices,
     answer: extractAnswerNumber(answerJson),
     solution: problem.solution_latex || '',
-    year: problem.source_year ? String(problem.source_year) : '',
+    year: displayYear,
     typeCode,
     typeName,
-    source: problem.source_name || '',
+    source: displaySource,
   };
 }
 
