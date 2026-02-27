@@ -940,6 +940,7 @@ export default function CloudExamDetailPage() {
       images: p.images,
       hasFigure: p.hasFigure,
       figureSvg: p.figureSvg,
+      figureData: p.figureData,
     }));
   }, [dbProblems]);
 

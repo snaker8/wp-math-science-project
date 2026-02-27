@@ -316,7 +316,7 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     }
   }
 
-  // ── 7. 각도 라벨 (꼭짓점 근처, 도형 안쪽) ──
+  // ── 7. 각도 라벨 (꼭짓점 근처, 도형 안쪽, 참조사이트 스타일) ──
   for (const ang of angles) {
     const v = vertexMap.get(ang.vertex);
     if (v) {
@@ -328,20 +328,22 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
       const dx = cx - vx;
       const dy = cy - vy;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const offsetAng = 22;
+      const offsetAng = 24;
       const ox = vx + (dx / dist) * offsetAng;
       const oy = vy + (dy / dist) * offsetAng;
+      // 배경 + 텍스트 (가독성 향상)
+      svg += `<rect x="${ox - 18}" y="${oy - 8}" width="36" height="16" fill="white" opacity="0.85" rx="2"/>`;
       svg += `<text x="${ox}" y="${oy}" text-anchor="middle" dominant-baseline="middle" font-size="12" font-family="sans-serif" fill="${colors.angle}">${ang.value}</text>`;
     }
   }
 
-  // ── 8. 꼭짓점 점 + 라벨 (바깥쪽으로 오프셋, 큰 폰트 + 배경) ──
+  // ── 8. 꼭짓점 점 + 라벨 (바깥쪽으로 오프셋, 참조사이트 스타일) ──
   for (const v of vertices) {
     const sx = toSvgX(v.x);
     const sy = toSvgY(v.y);
 
-    // 꼭짓점 점
-    svg += `<circle cx="${sx}" cy="${sy}" r="3.5" fill="${colors.fill}"/>`;
+    // 꼭짓점 점 (작은 원)
+    svg += `<circle cx="${sx}" cy="${sy}" r="3" fill="${colors.fill}"/>`;
 
     // 라벨: 중심에서 반대 방향 (바깥쪽)으로 배치
     const cx = toSvgX(centroidX);
@@ -349,13 +351,16 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     const dx = sx - cx;
     const dy = sy - cy;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const labelOffset = 22;
-    const lx = sx + (dx / dist) * labelOffset;
-    const ly = sy + (dy / dist) * labelOffset;
+    const labelOffset = 20;
+    let lx = sx + (dx / dist) * labelOffset;
+    let ly = sy + (dy / dist) * labelOffset;
 
-    // 흰색 배경으로 겹침 방지
-    svg += `<circle cx="${lx}" cy="${ly}" r="10" fill="white" opacity="0.8"/>`;
-    svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="bold" font-family="sans-serif" fill="${colors.label}">${v.label}</text>`;
+    // 화면 밖으로 나가지 않도록 클램핑
+    lx = Math.max(14, Math.min(width - 14, lx));
+    ly = Math.max(14, Math.min(height - 6, ly));
+
+    // 라벨 텍스트 (참조사이트 스타일: serif + italic)
+    svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="normal" font-style="italic" font-family="serif" fill="${colors.label}">${v.label}</text>`;
   }
 
   svg += '</svg>';
@@ -383,10 +388,10 @@ export function generateTableSVG(rendering: TableRendering): string | null {
   const { headers, rows } = rendering;
   if (headers.length === 0 && rows.length === 0) return null;
 
-  const COL_W = 65;   // 열 너비
-  const ROW_H = 40;   // 행 높이
-  const PAD_X = 20;   // 좌우 여백
-  const PAD_Y = 15;   // 상하 여백
+  const COL_W = 60;   // 열 너비
+  const ROW_H = 38;   // 행 높이
+  const PAD_X = 16;   // 좌우 여백
+  const PAD_Y = 12;   // 상하 여백
 
   const numCols = Math.max(headers.length, ...rows.map(r => r.length));
   const numDataRows = rows.length;
@@ -405,37 +410,49 @@ export function generateTableSVG(rendering: TableRendering): string | null {
   const y0 = PAD_Y;
 
   if (isSyntheticDivision) {
-    // ── 조립제법 스타일 ──
-    // L자형 구분선: 첫 열 오른쪽 세로선 + 마지막 행 위 가로선
-    const dividerX = x0 + COL_W; // 첫 열 오른쪽
-    const lastRowY = y0 + numDataRows * ROW_H; // 마지막 데이터 행 위
+    // ── 조립제법 스타일 (참조사이트 수준) ──
+    const dividerX = x0 + COL_W; // 첫 열 오른쪽 (L자 세로선)
+    const lastRowY = y0 + numDataRows * ROW_H; // 마지막 데이터 행 위 (L자 가로선)
+    const tableRight = x0 + numCols * COL_W;
+    const tableBottom = y0 + (1 + numDataRows) * ROW_H;
 
-    // 세로 구분선 (첫 열 오른쪽, 전체 높이)
-    svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${y0 + (1 + numDataRows) * ROW_H}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
+    // L자형 구분선: 세로 (첫 열 오른쪽)
+    svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
-    // 가로 구분선 (마지막 데이터 행 위, 첫 열 오른쪽부터)
-    svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${x0 + numCols * COL_W}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
+    // L자형 구분선: 가로 (마지막 행 위, 첫 열 오른쪽부터)
+    svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${tableRight}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
+
+    // 나머지 구분 세로선 (마지막 열 왼쪽, 결과행에서만)
+    if (numCols > 2) {
+      const remainderX = x0 + (numCols - 1) * COL_W;
+      svg += `<line x1="${remainderX}" y1="${lastRowY}" x2="${remainderX}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="1.5"/>`;
+    }
 
     // 헤더 행 텍스트
-    for (let c = 0; c < headers.length; c++) {
+    for (let c = 0; c < numCols; c++) {
+      const hText = c < headers.length ? headers[c] : '';
+      if (!hText) continue;
       const cx = x0 + c * COL_W + COL_W / 2;
       const cy = y0 + ROW_H / 2;
-      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="14" font-family="sans-serif" fill="${TABLE_COLORS.text}" font-weight="${c === 0 ? 'bold' : 'normal'}">${escapeXml(headers[c])}</text>`;
+      // 이탤릭 처리: 알파벳 변수(a,b,c 등)
+      const isVar = /^[a-zA-Z]$/.test(hText);
+      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="15" font-family="serif" fill="${TABLE_COLORS.text}"${isVar ? ' font-style="italic"' : ''}>${escapeXml(hText)}</text>`;
     }
 
     // 데이터 행 텍스트
     for (let r = 0; r < numDataRows; r++) {
-      for (let c = 0; c < rows[r].length; c++) {
+      for (let c = 0; c < numCols; c++) {
+        const cell = c < rows[r].length ? rows[r][c] : '';
         const cx = x0 + c * COL_W + COL_W / 2;
         const cy = y0 + (1 + r) * ROW_H + ROW_H / 2;
-        const cell = rows[r][c];
         if (cell === '' || cell === '□' || cell === '?') {
-          // 빈 셀 → 네모 박스
-          const boxSize = 20;
-          svg += `<rect x="${cx - boxSize / 2}" y="${cy - boxSize / 2}" width="${boxSize}" height="${boxSize}" stroke="${TABLE_COLORS.stroke}" stroke-width="1" fill="none" rx="2"/>`;
+          // 빈 셀 → 네모 박스 (참조사이트 스타일)
+          const boxW = 24;
+          const boxH = 20;
+          svg += `<rect x="${cx - boxW / 2}" y="${cy - boxH / 2}" width="${boxW}" height="${boxH}" stroke="#9ca3af" stroke-width="1.2" fill="none" rx="2"/>`;
         } else {
           const isLastRow = r === numDataRows - 1;
-          svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="14" font-family="sans-serif" fill="${TABLE_COLORS.text}" font-weight="${isLastRow ? 'bold' : 'normal'}">${escapeXml(cell)}</text>`;
+          svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="15" font-family="serif" fill="${TABLE_COLORS.text}" font-weight="${isLastRow ? '600' : 'normal'}">${escapeXml(cell)}</text>`;
         }
       }
     }
@@ -447,13 +464,11 @@ export function generateTableSVG(rendering: TableRendering): string | null {
     }
 
     // 격자선
-    // 수평선
     for (let r = 0; r <= 1 + numDataRows; r++) {
       const y = y0 + r * ROW_H;
-      const sw = r === 0 || r === 1 ? 2 : 1; // 외곽선과 헤더 구분선 두껍게
+      const sw = r === 0 || r === 1 ? 2 : 1;
       svg += `<line x1="${x0}" y1="${y}" x2="${x0 + numCols * COL_W}" y2="${y}" stroke="${TABLE_COLORS.stroke}" stroke-width="${sw}"/>`;
     }
-    // 수직선
     for (let c = 0; c <= numCols; c++) {
       const x = x0 + c * COL_W;
       const sw = c === 0 || c === numCols ? 2 : 1;
@@ -464,7 +479,7 @@ export function generateTableSVG(rendering: TableRendering): string | null {
     for (let c = 0; c < headers.length; c++) {
       const cx = x0 + c * COL_W + COL_W / 2;
       const cy = y0 + ROW_H / 2;
-      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="bold" font-family="sans-serif" fill="${TABLE_COLORS.text}">${escapeXml(headers[c])}</text>`;
+      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="bold" font-family="sans-serif" fill="${TABLE_COLORS.text}">${escapeXml(headers[c])}</text>`;
     }
 
     // 데이터 행 텍스트
@@ -474,10 +489,11 @@ export function generateTableSVG(rendering: TableRendering): string | null {
         const cy = y0 + (1 + r) * ROW_H + ROW_H / 2;
         const cell = rows[r][c];
         if (cell === '' || cell === '□' || cell === '?') {
-          const boxSize = 20;
-          svg += `<rect x="${cx - boxSize / 2}" y="${cy - boxSize / 2}" width="${boxSize}" height="${boxSize}" stroke="${TABLE_COLORS.stroke}" stroke-width="1" fill="none" rx="2"/>`;
+          const boxW = 24;
+          const boxH = 20;
+          svg += `<rect x="${cx - boxW / 2}" y="${cy - boxH / 2}" width="${boxW}" height="${boxH}" stroke="#9ca3af" stroke-width="1.2" fill="none" rx="2"/>`;
         } else {
-          svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="sans-serif" fill="${TABLE_COLORS.text}">${escapeXml(cell)}</text>`;
+          svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="14" font-family="sans-serif" fill="${TABLE_COLORS.text}">${escapeXml(cell)}</text>`;
         }
       }
     }
