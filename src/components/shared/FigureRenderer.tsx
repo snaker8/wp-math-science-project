@@ -15,7 +15,7 @@ import type {
   DiagramRendering,
 } from '@/types/ocr';
 import { MathRenderer } from './MathRenderer';
-import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
+import { generateGeometrySVG, generateTableSVG } from '@/lib/vision/figure-renderer';
 
 // Desmos는 실제 graph 타입이 있을 때만 로드 (성능 최적화)
 const InlineDesmosGraph = lazy(() =>
@@ -53,6 +53,15 @@ export function FigureRenderer({
   className = '',
   darkMode = true,
 }: FigureRendererProps) {
+  // DEBUG: figureData 상태 확인
+  if (figureData && figureData.rendering) {
+    const r = figureData.rendering as unknown as Record<string, unknown>;
+    console.log('[FigureRenderer] figureType:', figureData.figureType,
+      'hasSvg:', !!r.svg,
+      'svgLen:', typeof r.svg === 'string' ? r.svg.length : 0,
+      'vertices:', (r.vertices as unknown[])?.length || 0);
+  }
+
   // 1. 구조화된 figureData가 있고 신뢰도가 충분한 경우
   if (figureData && figureData.confidence >= 0.3 && figureData.figureType !== 'photo' && figureData.rendering) {
     return (
@@ -201,21 +210,23 @@ function GeometryFigure({
   rendering: GeometryRendering;
   darkMode: boolean;
 }) {
-  const svg = useMemo(() => {
-    // Vision이 직접 반환한 SVG가 있으면 사용
-    if (rendering.svg) return rendering.svg;
-    // 꼭짓점 데이터로 SVG 생성
+  const svgResult = useMemo(() => {
+    // 프로그래밍 기반 SVG만 사용 (Vision SVG는 빗금/손글씨 문제로 사용하지 않음)
+    // 코드가 polygon fill로 음영을 그리므로 빗금 문제 없음
     if (rendering.vertices.length >= 2) {
-      return generateGeometrySVG(rendering, darkMode);
+      const programmatic = generateGeometrySVG(rendering, false);
+      if (programmatic) return programmatic;
     }
+    // Legacy Vision SVG fallback (기존 데이터 호환)
+    if (rendering.svg) return rendering.svg;
     return null;
-  }, [rendering, darkMode]);
+  }, [rendering]);
 
-  if (svg) {
+  if (svgResult) {
     return (
       <div
-        className="figure-geometry-container"
-        dangerouslySetInnerHTML={{ __html: svg }}
+        className="figure-geometry-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
+        dangerouslySetInnerHTML={{ __html: svgResult }}
       />
     );
   }
@@ -239,12 +250,32 @@ function TableFigure({
   rendering: TableRendering;
   darkMode: boolean;
 }) {
-  // LaTeX 배열이 있으면 KaTeX로 렌더링 (더 정확)
+  const svgResult = useMemo(() => {
+    // 프로그래밍 기반 SVG만 사용 (Vision SVG는 손글씨 재현 문제로 사용하지 않음)
+    if (rendering.headers.length > 0 || rendering.rows.length > 0) {
+      const programmatic = generateTableSVG(rendering);
+      if (programmatic) return programmatic;
+    }
+    // Legacy Vision SVG fallback (기존 데이터 호환)
+    if (rendering.svg) return rendering.svg;
+    return null;
+  }, [rendering]);
+
+  if (svgResult) {
+    return (
+      <div
+        className="figure-table-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
+        dangerouslySetInnerHTML={{ __html: svgResult }}
+      />
+    );
+  }
+
+  // 우선순위 3: LaTeX 배열
   if (rendering.latex && rendering.latex.includes('\\begin')) {
     return <MathRenderer content={rendering.latex} block className={darkMode ? 'text-zinc-200' : ''} />;
   }
 
-  // HTML 테이블로 렌더링
+  // 우선순위 4: HTML 테이블
   return (
     <table className={`text-xs border-collapse ${
       darkMode ? 'text-zinc-300' : 'text-gray-800'

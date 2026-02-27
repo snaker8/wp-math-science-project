@@ -8,6 +8,22 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { interpretImage } from '@/lib/vision/image-interpreter';
 import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
 
+/**
+ * Supabase Storage URL에서 bucket과 파일 경로를 추출
+ * URL 예: https://xxx.supabase.co/storage/v1/object/public/source-files/path/to/file.png
+ */
+function extractStoragePath(url: string): { bucket: string; path: string } | null {
+  try {
+    const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)/);
+    if (match) {
+      return { bucket: match[1], path: decodeURIComponent(match[2]) };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
@@ -53,25 +69,72 @@ export async function POST(
       );
     }
 
-    console.log(`[generate-figure] Processing problem ${problemId}, image: ${cropImage.url.substring(0, 80)}...`);
+    console.log(`[generate-figure] Processing problem ${problemId}, fullUrl: ${cropImage.url}`);
 
     // 3. 이미지를 서버에서 다운로드하여 base64로 변환
-    //    (GPT-4o Vision이 Supabase Storage URL에 직접 접근 불가)
     let imageDataUri: string;
     try {
-      const imgRes = await fetch(cropImage.url);
-      if (!imgRes.ok) {
-        console.error(`[generate-figure] Image download failed: ${imgRes.status}`);
-        return NextResponse.json(
-          { error: `Failed to download crop image (${imgRes.status})` },
-          { status: 400 }
-        );
+      let imgBuffer: ArrayBuffer | null = null;
+      let contentType = 'image/png';
+
+      // URL에서 Storage bucket/path 추출
+      const storagePath = extractStoragePath(cropImage.url);
+      console.log(`[generate-figure] extractStoragePath:`, JSON.stringify(storagePath));
+
+      if (storagePath && supabaseAdmin) {
+        // 방법 1: supabaseAdmin.storage.download (인증됨)
+        console.log(`[generate-figure] Trying storage.download: ${storagePath.bucket}/${storagePath.path}`);
+        const { data: blob, error: dlError } = await supabaseAdmin.storage
+          .from(storagePath.bucket)
+          .download(storagePath.path);
+
+        if (!dlError && blob) {
+          imgBuffer = await blob.arrayBuffer();
+          contentType = blob.type || 'image/png';
+          console.log(`[generate-figure] storage.download OK: ${Math.round(imgBuffer.byteLength / 1024)}KB`);
+        } else {
+          console.warn(`[generate-figure] storage.download failed: ${dlError?.message}`);
+
+          // 방법 2: createSignedUrl → fetch
+          console.log(`[generate-figure] Trying createSignedUrl...`);
+          const { data: signedData, error: signErr } = await supabaseAdmin.storage
+            .from(storagePath.bucket)
+            .createSignedUrl(storagePath.path, 120);
+
+          if (!signErr && signedData?.signedUrl) {
+            console.log(`[generate-figure] signedUrl: ${signedData.signedUrl.substring(0, 100)}...`);
+            const signedRes = await fetch(signedData.signedUrl);
+            if (signedRes.ok) {
+              imgBuffer = await signedRes.arrayBuffer();
+              contentType = signedRes.headers.get('content-type') || 'image/png';
+              console.log(`[generate-figure] signedUrl download OK: ${Math.round(imgBuffer.byteLength / 1024)}KB`);
+            } else {
+              console.warn(`[generate-figure] signedUrl fetch failed: ${signedRes.status}`);
+            }
+          } else {
+            console.warn(`[generate-figure] createSignedUrl failed: ${signErr?.message}`);
+          }
+        }
       }
-      const imgBuffer = await imgRes.arrayBuffer();
+
+      // 방법 3: Public URL fetch (최종 fallback)
+      if (!imgBuffer) {
+        console.log(`[generate-figure] Trying public URL fetch: ${cropImage.url}`);
+        const imgRes = await fetch(cropImage.url);
+        if (!imgRes.ok) {
+          console.error(`[generate-figure] All download methods failed. Last: public URL ${imgRes.status}`);
+          return NextResponse.json(
+            { error: `Failed to download crop image (all methods failed)` },
+            { status: 400 }
+          );
+        }
+        imgBuffer = await imgRes.arrayBuffer();
+        contentType = imgRes.headers.get('content-type') || 'image/png';
+        console.log(`[generate-figure] Public URL download OK: ${Math.round(imgBuffer.byteLength / 1024)}KB`);
+      }
+
       const base64 = Buffer.from(imgBuffer).toString('base64');
-      const contentType = imgRes.headers.get('content-type') || 'image/png';
       imageDataUri = `data:${contentType};base64,${base64}`;
-      console.log(`[generate-figure] Image downloaded: ${Math.round(imgBuffer.byteLength / 1024)}KB`);
     } catch (dlErr) {
       console.error(`[generate-figure] Image download error:`, dlErr);
       return NextResponse.json(
@@ -116,15 +179,26 @@ export async function POST(
     }
 
     // 7. DB 저장 (figureData + figureSvg)
+    // originalImageUrl에서 base64 데이터 제거 (JSONB 크기 최적화)
+    const figureDataForDb = {
+      ...interpreted,
+      originalImageUrl: interpreted.originalImageUrl?.startsWith('data:')
+        ? cropImage.url  // base64 대신 원본 crop URL 저장
+        : interpreted.originalImageUrl,
+    };
+
     const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
     const updatedAnalysis = {
       ...currentAnalysis,
       hasFigure: true,
-      figureData: interpreted,
+      figureData: figureDataForDb,
       figureSvg: legacySvg || currentAnalysis.figureSvg || undefined,
       figureGeneratedAt: new Date().toISOString(),
       figureModel: 'gpt-4o',
     };
+
+    const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;
+    console.log(`[generate-figure] Saving figureData: type=${figureDataForDb.figureType}, hasSvg=${!!renderingAny?.svg}, svgLen=${typeof renderingAny?.svg === 'string' ? renderingAny.svg.length : 0}`);
 
     const { error: updateError } = await supabaseAdmin
       .from('problems')

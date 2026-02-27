@@ -145,82 +145,355 @@ function geometryToContent(rendering: GeometryRendering, fallbackUrl: string): F
 }
 
 /**
- * 도형 데이터로 SVG 코드 생성
+ * 도형 데이터로 프로그래밍 기반 SVG 코드 생성 (참조사이트 수준 품질)
+ * - 음영 영역 (polygon + 반투명 색상)
+ * - 점선/보조선
+ * - 직각 마커 (ㄱ 기호)
+ * - 스마트 라벨 배치 (겹침 방지)
+ * - 원
  * @param rendering - 기하 도형 렌더링 데이터
- * @param darkMode - 다크 테마 여부 (기본: false — 서버에서는 라이트 기본)
+ * @param darkMode - 다크 테마 여부 (기본: false)
  */
 export function generateGeometrySVG(rendering: GeometryRendering, darkMode = false): string | null {
   const { vertices, segments, angles, lengths } = rendering;
+  const dashedSegments = rendering.dashedSegments || [];
+  const shadedRegions = rendering.shadedRegions || [];
+  const rightAngles = rendering.rightAngles || [];
+  const circles = rendering.circles || [];
+
   if (vertices.length < 2) return null;
 
   // 테마별 색상
   const colors = darkMode
-    ? { stroke: '#d4d4d8', fill: '#e4e4e7', label: '#e4e4e7', length: '#a1a1aa', angle: '#60a5fa' }
-    : { stroke: '#333', fill: '#333', label: '#333', length: '#666', angle: '#2563eb' };
+    ? { stroke: '#d4d4d8', fill: '#e4e4e7', label: '#1f2937', length: '#6b7280', angle: '#60a5fa', dashed: '#a1a1aa', rightAngle: '#9ca3af' }
+    : { stroke: '#374151', fill: '#374151', label: '#1f2937', length: '#6b7280', angle: '#2563eb', dashed: '#9ca3af', rightAngle: '#6b7280' };
+
+  // 음영 색상 매핑
+  const SHADING_COLORS: Record<string, string> = {
+    yellow: 'rgba(250,204,21,0.40)',
+    blue: 'rgba(96,165,250,0.30)',
+    red: 'rgba(248,113,113,0.30)',
+    green: 'rgba(74,222,128,0.30)',
+    gray: 'rgba(156,163,175,0.25)',
+  };
 
   // 좌표 범위 계산
   const xs = vertices.map(v => v.x);
   const ys = vertices.map(v => v.y);
-  const minX = Math.min(...xs) - 1;
-  const maxX = Math.max(...xs) + 1;
-  const minY = Math.min(...ys) - 1;
-  const maxY = Math.max(...ys) + 1;
+  const rawMinX = Math.min(...xs);
+  const rawMaxX = Math.max(...xs);
+  const rawMinY = Math.min(...ys);
+  const rawMaxY = Math.max(...ys);
 
   const width = 400;
   const height = 350;
-  const padding = 40;
+  const padding = 50; // 라벨 공간 확보
 
-  // 좌표 → SVG 좌표 변환 (y축 반전)
-  const scaleX = (width - 2 * padding) / (maxX - minX);
-  const scaleY = (height - 2 * padding) / (maxY - minY);
+  // 좌표 → SVG 좌표 변환 (y축 반전, 센터링)
+  const rangeX = rawMaxX - rawMinX || 1;
+  const rangeY = rawMaxY - rawMinY || 1;
+  const scaleX = (width - 2 * padding) / rangeX;
+  const scaleY = (height - 2 * padding) / rangeY;
   const scale = Math.min(scaleX, scaleY);
 
-  const toSvgX = (x: number) => padding + (x - minX) * scale;
-  const toSvgY = (y: number) => height - padding - (y - minY) * scale;
+  // 도형을 가운데 배치
+  const usedWidth = rangeX * scale;
+  const usedHeight = rangeY * scale;
+  const offsetX = padding + (width - 2 * padding - usedWidth) / 2;
+  const offsetY = padding + (height - 2 * padding - usedHeight) / 2;
+
+  const toSvgX = (x: number) => offsetX + (x - rawMinX) * scale;
+  const toSvgY = (y: number) => height - offsetY - (y - rawMinY) * scale;
 
   const vertexMap = new Map(vertices.map(v => [v.label, v]));
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" class="figure-geometry">`;
-  svg += `<style>.seg{stroke:${colors.stroke};stroke-width:2;fill:none}.lbl{font:bold 14px sans-serif;fill:${colors.label}}.len{font:12px sans-serif;fill:${colors.length}}.ang{font:11px sans-serif;fill:${colors.angle}}</style>`;
+  // 도형 중심점 (라벨 배치에 사용)
+  const centroidX = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const centroidY = ys.reduce((a, b) => a + b, 0) / ys.length;
 
-  // 선분 그리기
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" class="figure-geometry">`;
+
+  // ── 1. 음영 영역 (가장 먼저 그려서 뒤에 배치) ──
+  for (const region of shadedRegions) {
+    const points = region.vertices
+      .map(label => vertexMap.get(label))
+      .filter(Boolean)
+      .map(v => `${toSvgX(v!.x)},${toSvgY(v!.y)}`)
+      .join(' ');
+    if (points) {
+      const fillColor = SHADING_COLORS[region.color] || SHADING_COLORS.yellow;
+      svg += `<polygon points="${points}" fill="${fillColor}" stroke="none"/>`;
+    }
+  }
+
+  // ── 2. 원 ──
+  for (const circle of circles) {
+    const center = vertexMap.get(circle.center);
+    if (center) {
+      const cx = toSvgX(center.x);
+      const cy = toSvgY(center.y);
+      const r = circle.radius * scale;
+      if (circle.style === 'dashed') {
+        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${colors.dashed}" stroke-width="1.5" stroke-dasharray="6,4" fill="none"/>`;
+      } else {
+        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${colors.stroke}" stroke-width="2" fill="none"/>`;
+      }
+    }
+  }
+
+  // ── 3. 실선 (변) — 도형의 주요 선분 ──
   for (const [fromLabel, toLabel] of segments) {
     const from = vertexMap.get(fromLabel);
     const to = vertexMap.get(toLabel);
     if (from && to) {
-      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" class="seg"/>`;
+      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${colors.stroke}" stroke-width="2.2" fill="none"/>`;
     }
   }
 
-  // 길이 라벨
+  // ── 4. 점선 (보조선) ──
+  for (const [fromLabel, toLabel] of dashedSegments) {
+    const from = vertexMap.get(fromLabel);
+    const to = vertexMap.get(toLabel);
+    if (from && to) {
+      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${colors.dashed}" stroke-width="1.5" stroke-dasharray="6,4" fill="none"/>`;
+    }
+  }
+
+  // ── 5. 직각 마커 (ㄱ 기호) ──
+  for (const label of rightAngles) {
+    const v = vertexMap.get(label);
+    if (!v) continue;
+    // 이 꼭짓점에 연결된 두 변을 찾아서 직각 기호 방향 결정
+    const allSegs = [...segments, ...dashedSegments];
+    const connected = allSegs
+      .filter(([a, b]) => a === label || b === label)
+      .map(([a, b]) => (a === label ? b : a))
+      .map(l => vertexMap.get(l))
+      .filter(Boolean) as Array<{ label: string; x: number; y: number }>;
+
+    if (connected.length >= 2) {
+      const vx = toSvgX(v.x);
+      const vy = toSvgY(v.y);
+
+      // 두 인접 꼭짓점 방향
+      const d1x = toSvgX(connected[0].x) - vx;
+      const d1y = toSvgY(connected[0].y) - vy;
+      const d2x = toSvgX(connected[1].x) - vx;
+      const d2y = toSvgY(connected[1].y) - vy;
+
+      const len1 = Math.sqrt(d1x * d1x + d1y * d1y) || 1;
+      const len2 = Math.sqrt(d2x * d2x + d2y * d2y) || 1;
+
+      const sz = 12; // 직각 기호 크기
+      const ux1 = (d1x / len1) * sz;
+      const uy1 = (d1y / len1) * sz;
+      const ux2 = (d2x / len2) * sz;
+      const uy2 = (d2y / len2) * sz;
+
+      svg += `<path d="M${vx + ux1},${vy + uy1} L${vx + ux1 + ux2},${vy + uy1 + uy2} L${vx + ux2},${vy + uy2}" stroke="${colors.rightAngle}" stroke-width="1.2" fill="none"/>`;
+    }
+  }
+
+  // ── 6. 길이 라벨 (변 중점에서 바깥쪽으로 오프셋) ──
   for (const len of lengths) {
     const from = vertexMap.get(len.from);
     const to = vertexMap.get(len.to);
     if (from && to) {
       const mx = (toSvgX(from.x) + toSvgX(to.x)) / 2;
       const my = (toSvgY(from.y) + toSvgY(to.y)) / 2;
-      svg += `<text x="${mx}" y="${my - 8}" text-anchor="middle" class="len">${len.value}</text>`;
+      // 중심에서 변 중점으로의 방향 반대 = 바깥쪽
+      const cx = toSvgX(centroidX);
+      const cy = toSvgY(centroidY);
+      const dx = mx - cx;
+      const dy = my - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const offsetLen = 14;
+      const ox = mx + (dx / dist) * offsetLen;
+      const oy = my + (dy / dist) * offsetLen;
+      // 흰색 배경으로 선분 위 텍스트 가독성
+      svg += `<rect x="${ox - 16}" y="${oy - 8}" width="32" height="16" fill="white" opacity="0.85" rx="2"/>`;
+      svg += `<text x="${ox}" y="${oy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="sans-serif" fill="${colors.length}">${len.value}</text>`;
     }
   }
 
-  // 각도 라벨
+  // ── 7. 각도 라벨 (꼭짓점 근처, 도형 안쪽) ──
   for (const ang of angles) {
     const v = vertexMap.get(ang.vertex);
     if (v) {
-      svg += `<text x="${toSvgX(v.x)}" y="${toSvgY(v.y) - 16}" text-anchor="middle" class="ang">${ang.value}</text>`;
+      const vx = toSvgX(v.x);
+      const vy = toSvgY(v.y);
+      const cx = toSvgX(centroidX);
+      const cy = toSvgY(centroidY);
+      // 꼭짓점에서 중심 방향 (도형 안쪽)
+      const dx = cx - vx;
+      const dy = cy - vy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const offsetAng = 22;
+      const ox = vx + (dx / dist) * offsetAng;
+      const oy = vy + (dy / dist) * offsetAng;
+      svg += `<text x="${ox}" y="${oy}" text-anchor="middle" dominant-baseline="middle" font-size="12" font-family="sans-serif" fill="${colors.angle}">${ang.value}</text>`;
     }
   }
 
-  // 꼭짓점 라벨
+  // ── 8. 꼭짓점 점 + 라벨 (바깥쪽으로 오프셋, 큰 폰트 + 배경) ──
   for (const v of vertices) {
     const sx = toSvgX(v.x);
     const sy = toSvgY(v.y);
-    svg += `<circle cx="${sx}" cy="${sy}" r="3" fill="${colors.fill}"/>`;
-    svg += `<text x="${sx}" y="${sy - 10}" text-anchor="middle" class="lbl">${v.label}</text>`;
+
+    // 꼭짓점 점
+    svg += `<circle cx="${sx}" cy="${sy}" r="3.5" fill="${colors.fill}"/>`;
+
+    // 라벨: 중심에서 반대 방향 (바깥쪽)으로 배치
+    const cx = toSvgX(centroidX);
+    const cy = toSvgY(centroidY);
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const labelOffset = 22;
+    const lx = sx + (dx / dist) * labelOffset;
+    const ly = sy + (dy / dist) * labelOffset;
+
+    // 흰색 배경으로 겹침 방지
+    svg += `<circle cx="${lx}" cy="${ly}" r="10" fill="white" opacity="0.8"/>`;
+    svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="bold" font-family="sans-serif" fill="${colors.label}">${v.label}</text>`;
   }
 
   svg += '</svg>';
   return svg;
+}
+
+// ============================================================================
+// 표 → 프로그래밍 기반 SVG (조립제법/일반 표 모두 지원)
+// ============================================================================
+
+const TABLE_COLORS = {
+  stroke: '#374151',
+  text: '#1f2937',
+  headerBg: '#f3f4f6',
+  divider: '#374151',
+};
+
+/**
+ * 표 데이터로 프로그래밍 기반 SVG 코드 생성
+ * 조립제법(합성나눗셈) 표: L자형 구분선
+ * 일반 표: 격자선
+ * @param rendering - 표 렌더링 데이터
+ */
+export function generateTableSVG(rendering: TableRendering): string | null {
+  const { headers, rows } = rendering;
+  if (headers.length === 0 && rows.length === 0) return null;
+
+  const COL_W = 65;   // 열 너비
+  const ROW_H = 40;   // 행 높이
+  const PAD_X = 20;   // 좌우 여백
+  const PAD_Y = 15;   // 상하 여백
+
+  const numCols = Math.max(headers.length, ...rows.map(r => r.length));
+  const numDataRows = rows.length;
+
+  // 조립제법 감지: 첫 헤더가 숫자 또는 비어있고, 데이터 행이 2개 이상
+  const isSyntheticDivision = headers.length > 0 &&
+    numDataRows >= 2 &&
+    (headers[0] === '' || /^-?\d+$/.test(headers[0].trim()));
+
+  const totalW = numCols * COL_W + 2 * PAD_X;
+  const totalH = (1 + numDataRows) * ROW_H + 2 * PAD_Y; // 1 = 헤더 행
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" width="100%" class="figure-table">`;
+
+  const x0 = PAD_X;
+  const y0 = PAD_Y;
+
+  if (isSyntheticDivision) {
+    // ── 조립제법 스타일 ──
+    // L자형 구분선: 첫 열 오른쪽 세로선 + 마지막 행 위 가로선
+    const dividerX = x0 + COL_W; // 첫 열 오른쪽
+    const lastRowY = y0 + numDataRows * ROW_H; // 마지막 데이터 행 위
+
+    // 세로 구분선 (첫 열 오른쪽, 전체 높이)
+    svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${y0 + (1 + numDataRows) * ROW_H}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
+
+    // 가로 구분선 (마지막 데이터 행 위, 첫 열 오른쪽부터)
+    svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${x0 + numCols * COL_W}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
+
+    // 헤더 행 텍스트
+    for (let c = 0; c < headers.length; c++) {
+      const cx = x0 + c * COL_W + COL_W / 2;
+      const cy = y0 + ROW_H / 2;
+      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="14" font-family="sans-serif" fill="${TABLE_COLORS.text}" font-weight="${c === 0 ? 'bold' : 'normal'}">${escapeXml(headers[c])}</text>`;
+    }
+
+    // 데이터 행 텍스트
+    for (let r = 0; r < numDataRows; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const cx = x0 + c * COL_W + COL_W / 2;
+        const cy = y0 + (1 + r) * ROW_H + ROW_H / 2;
+        const cell = rows[r][c];
+        if (cell === '' || cell === '□' || cell === '?') {
+          // 빈 셀 → 네모 박스
+          const boxSize = 20;
+          svg += `<rect x="${cx - boxSize / 2}" y="${cy - boxSize / 2}" width="${boxSize}" height="${boxSize}" stroke="${TABLE_COLORS.stroke}" stroke-width="1" fill="none" rx="2"/>`;
+        } else {
+          const isLastRow = r === numDataRows - 1;
+          svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="14" font-family="sans-serif" fill="${TABLE_COLORS.text}" font-weight="${isLastRow ? 'bold' : 'normal'}">${escapeXml(cell)}</text>`;
+        }
+      }
+    }
+  } else {
+    // ── 일반 표 스타일 ──
+    // 헤더 배경
+    if (headers.length > 0) {
+      svg += `<rect x="${x0}" y="${y0}" width="${numCols * COL_W}" height="${ROW_H}" fill="${TABLE_COLORS.headerBg}"/>`;
+    }
+
+    // 격자선
+    // 수평선
+    for (let r = 0; r <= 1 + numDataRows; r++) {
+      const y = y0 + r * ROW_H;
+      const sw = r === 0 || r === 1 ? 2 : 1; // 외곽선과 헤더 구분선 두껍게
+      svg += `<line x1="${x0}" y1="${y}" x2="${x0 + numCols * COL_W}" y2="${y}" stroke="${TABLE_COLORS.stroke}" stroke-width="${sw}"/>`;
+    }
+    // 수직선
+    for (let c = 0; c <= numCols; c++) {
+      const x = x0 + c * COL_W;
+      const sw = c === 0 || c === numCols ? 2 : 1;
+      svg += `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y0 + (1 + numDataRows) * ROW_H}" stroke="${TABLE_COLORS.stroke}" stroke-width="${sw}"/>`;
+    }
+
+    // 헤더 텍스트
+    for (let c = 0; c < headers.length; c++) {
+      const cx = x0 + c * COL_W + COL_W / 2;
+      const cy = y0 + ROW_H / 2;
+      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="bold" font-family="sans-serif" fill="${TABLE_COLORS.text}">${escapeXml(headers[c])}</text>`;
+    }
+
+    // 데이터 행 텍스트
+    for (let r = 0; r < numDataRows; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const cx = x0 + c * COL_W + COL_W / 2;
+        const cy = y0 + (1 + r) * ROW_H + ROW_H / 2;
+        const cell = rows[r][c];
+        if (cell === '' || cell === '□' || cell === '?') {
+          const boxSize = 20;
+          svg += `<rect x="${cx - boxSize / 2}" y="${cy - boxSize / 2}" width="${boxSize}" height="${boxSize}" stroke="${TABLE_COLORS.stroke}" stroke-width="1" fill="none" rx="2"/>`;
+        } else {
+          svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="sans-serif" fill="${TABLE_COLORS.text}">${escapeXml(cell)}</text>`;
+        }
+      }
+    }
+  }
+
+  svg += '</svg>';
+  return svg;
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 // ============================================================================

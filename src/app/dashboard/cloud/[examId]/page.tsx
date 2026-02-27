@@ -325,8 +325,7 @@ function ProblemCardView({
                           figureData={problem.figureData}
                           figureSvg={problem.figureSvg}
                           cropImageUrl={cropImage?.url}
-                          maxWidth={280}
-                          className="bg-white/5 rounded-lg p-2 border border-zinc-700"
+                          maxWidth={300}
                           darkMode
                         />
                       </div>
@@ -346,8 +345,8 @@ function ProblemCardView({
                       <FigureRenderer
                         figureData={problem.figureData}
                         figureSvg={problem.figureSvg}
-                        maxWidth={280}
-                        className="bg-white/5 rounded-lg p-2 border border-zinc-700"
+                        cropImageUrl={cropImage?.url}
+                        maxWidth={300}
                         darkMode
                       />
                     </div>

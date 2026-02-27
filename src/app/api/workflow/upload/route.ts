@@ -1187,15 +1187,37 @@ async function saveProblemsToDB(
 
             console.log(`[Figure] 문제 ${result.problemNumber} 구조화된 해석 중...`);
 
-            // 이미지를 base64로 변환 (GPT-4o Vision이 Supabase URL에 직접 접근 불가)
-            const imgRes = await fetch(cropUrl);
-            if (!imgRes.ok) {
-              console.warn(`[Figure] 문제 ${result.problemNumber}: 이미지 다운로드 실패 (${imgRes.status})`);
-              continue;
+            // 이미지를 base64로 변환 — Supabase Storage API 우선, public URL fallback
+            let imgBuf: ArrayBuffer | null = null;
+            let imgType = 'image/png';
+
+            // Supabase Storage API로 다운로드 (인증)
+            const storageMatch = cropUrl.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)/);
+            if (storageMatch && supabase) {
+              const [, bucket, filePath] = storageMatch;
+              const { data: blob, error: stErr } = await supabase.storage
+                .from(bucket)
+                .download(decodeURIComponent(filePath));
+              if (!stErr && blob) {
+                imgBuf = await blob.arrayBuffer();
+                imgType = blob.type || 'image/png';
+              } else {
+                console.warn(`[Figure] 문제 ${result.problemNumber}: Storage 다운로드 실패 (${stErr?.message}), public URL 시도`);
+              }
             }
-            const imgBuf = await imgRes.arrayBuffer();
+
+            // Public URL fallback
+            if (!imgBuf) {
+              const imgRes = await fetch(cropUrl);
+              if (!imgRes.ok) {
+                console.warn(`[Figure] 문제 ${result.problemNumber}: 이미지 다운로드 실패 (${imgRes.status})`);
+                continue;
+              }
+              imgBuf = await imgRes.arrayBuffer();
+              imgType = imgRes.headers.get('content-type') || 'image/png';
+            }
+
             const imgBase64 = Buffer.from(imgBuf).toString('base64');
-            const imgType = imgRes.headers.get('content-type') || 'image/png';
             const imgDataUri = `data:${imgType};base64,${imgBase64}`;
 
             // 구조화된 Vision 해석

@@ -170,16 +170,31 @@ export interface GeometryRendering {
   type: 'geometry';
   /** 도형을 표현하는 LaTeX 코드 */
   latex: string;
-  /** SVG 코드 (선택) */
+  /** SVG 코드 (Vision Step 2에서 생성, 선택) */
   svg?: string;
   /** 꼭짓점 좌표 */
   vertices: Array<{ label: string; x: number; y: number }>;
-  /** 변(선분) 연결 */
+  /** 변(선분) 연결 — 실선 */
   segments: Array<[string, string]>;
+  /** 점선/보조선 연결 */
+  dashedSegments?: Array<[string, string]>;
   /** 각도 정보 */
   angles: Array<{ vertex: string; value: string }>;
   /** 변의 길이 */
   lengths: Array<{ from: string; to: string; value: string }>;
+  /** 음영 영역 (꼭짓점 라벨 배열 + 색상) */
+  shadedRegions?: Array<{
+    vertices: string[];
+    color: string; // yellow | blue | red | green | gray
+  }>;
+  /** 직각 표시가 있는 꼭짓점 라벨 */
+  rightAngles?: string[];
+  /** 원 (선택) */
+  circles?: Array<{
+    center: string; // 꼭짓점 라벨 또는 좌표
+    radius: number;
+    style?: 'solid' | 'dashed';
+  }>;
 }
 
 /**
@@ -189,6 +204,8 @@ export interface TableRendering {
   type: 'table';
   /** LaTeX 표 코드 */
   latex: string;
+  /** SVG 코드 (선택 — Step 2에서 생성) */
+  svg?: string;
   /** 표 헤더 */
   headers: string[];
   /** 표 데이터 행 */
@@ -202,6 +219,8 @@ export interface DiagramRendering {
   type: 'diagram' | 'number_line';
   /** LaTeX 코드 */
   latex: string;
+  /** SVG 코드 (선택 — Step 2에서 생성) */
+  svg?: string;
   /** 텍스트 설명 */
   description: string;
 }
