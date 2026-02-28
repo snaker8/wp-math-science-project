@@ -490,19 +490,64 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
  * - 선분 연결
  */
 export function generateGraphSVG(rendering: GraphRendering): string | null {
-  const { expressions, xRange, yRange, points } = rendering;
+  const { expressions, points } = rendering;
   const shadedRegions = rendering.shadedRegions || [];
   const segments = rendering.segments || [];
 
   const width = 400;
   const height = 320;
-  const pad = { top: 25, right: 25, bottom: 35, left: 40 };
+  const pad = { top: 30, right: 30, bottom: 40, left: 45 };
 
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
-  const [xMin, xMax] = xRange;
-  const [yMin, yMax] = yRange;
+  // ── 스마트 범위 계산: 점 + 곡선 기반 자동 fit ──
+  // 1) 모든 점의 좌표 수집
+  const allXs = points.map(p => p.x);
+  const allYs = points.map(p => p.y);
+
+  // 2) 곡선의 실제 범위 탐색 (점 범위 주변)
+  const ptXmin = allXs.length > 0 ? Math.min(...allXs) : rendering.xRange[0];
+  const ptXmax = allXs.length > 0 ? Math.max(...allXs) : rendering.xRange[1];
+  const scanXmin = Math.min(ptXmin - 2, rendering.xRange[0]);
+  const scanXmax = Math.max(ptXmax + 2, rendering.xRange[1]);
+
+  for (const expr of expressions) {
+    if (expr.hidden) continue;
+    const fn = latexToJsFunction(expr.latex);
+    if (!fn) continue;
+    // 곡선을 100포인트 샘플링하여 실제 y범위 파악
+    for (let i = 0; i <= 100; i++) {
+      const x = scanXmin + (scanXmax - scanXmin) * i / 100;
+      const y = fn(x);
+      if (isFinite(y) && !isNaN(y) && Math.abs(y) < 1000) {
+        allXs.push(x);
+        allYs.push(y);
+      }
+    }
+  }
+
+  // 3) 원점 포함 보장 (좌표축이 보이도록)
+  allXs.push(0);
+  allYs.push(0);
+
+  // 4) 범위 결정: 콘텐츠 기반 + 여유 패딩
+  const contentXmin = Math.min(...allXs);
+  const contentXmax = Math.max(...allXs);
+  const contentYmin = Math.min(...allYs);
+  const contentYmax = Math.max(...allYs);
+  const xSpan = contentXmax - contentXmin || 1;
+  const ySpan = contentYmax - contentYmin || 1;
+  const xPad = xSpan * 0.15;
+  const yPad = ySpan * 0.18;
+
+  // AI 범위와 콘텐츠 범위 중 더 좁은(fit한) 것 선택
+  const xMin = Math.max(rendering.xRange[0], Math.floor(contentXmin - xPad));
+  const xMax = Math.min(rendering.xRange[1], Math.ceil(contentXmax + xPad));
+  const yMin = Math.max(rendering.yRange[0], Math.floor(contentYmin - yPad));
+  const yMax = Math.min(rendering.yRange[1], Math.ceil(contentYmax + yPad));
+
+  console.log('[GraphSVG] Range: AI', rendering.xRange, rendering.yRange, '→ fit', [xMin, xMax], [yMin, yMax]);
 
   const toSvgX = (x: number) => pad.left + ((x - xMin) / (xMax - xMin)) * plotW;
   const toSvgY = (y: number) => pad.top + ((yMax - y) / (yMax - yMin)) * plotH;
