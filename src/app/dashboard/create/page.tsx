@@ -7,8 +7,6 @@ import {
   Pencil,
   PlusCircle,
   RotateCcw,
-  Download,
-  GripVertical,
   AlertCircle,
   Upload,
   Loader2,
@@ -20,48 +18,37 @@ import {
   Check,
   PanelLeftClose,
   PanelRightClose,
-  Save,
   ArrowRight,
-  BookOpen,
-  Layers,
   Filter,
   Hash,
   Sparkles,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
+import type { LevelNode, SubjectCategory } from '@/types/expanded-types';
+import { SUBJECT_CATEGORIES } from '@/types/expanded-types';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface ProblemTypeNode {
-  id: string;
-  typeCode: string;
-  subject: string;
-  chapter: string;
-  section: string | null;
-  subsection: string | null;
-  typeName: string;
-  totalProblems: number;
-}
-
 interface SubjectTree {
-  subject: string;
+  subject: string;        // LevelNode.label (e.g. "고등 공통(수학)")
+  levelCode: string;      // LevelNode.levelCode (e.g. "HS0")
   chapters: ChapterNode[];
   totalProblems: number;
 }
 
 interface ChapterNode {
-  chapter: string;
+  chapter: string;        // DomainNode.label (e.g. "다항식")
+  domainCode: string;     // DomainNode.domainCode
   sections: SectionNode[];
   totalProblems: number;
 }
 
 interface SectionNode {
-  section: string;
-  typeCode: string;
-  totalProblems: number;
+  section: string;        // StandardNode.standardContent
+  typeCode: string;       // StandardNode.standardCode
+  totalProblems: number;  // StandardNode.typeCount (세부유형 수)
 }
 
 interface UploadedFile {
@@ -78,121 +65,40 @@ type QuestionTypeFilter = '전체' | '교과서' | '문제집' | '기출' | '모
 type DifficultyLevel = '최상' | '상' | '중' | '하' | '최하';
 
 // ============================================================================
-// Mock Subject Data (Supabase 미연결 시)
+// LevelNode[] → SubjectTree 변환 유틸리티 (교육과정 카테고리 기반)
 // ============================================================================
 
-const mockSubjectTree: SubjectTree[] = [
-  {
-    subject: '수학(상)',
-    totalProblems: 135,
-    chapters: [
-      {
-        chapter: '다항식',
-        totalProblems: 83,
-        sections: [
-          { section: '다항식의 연산', typeCode: 'MA-HS1-ALG-01', totalProblems: 45 },
-          { section: '나머지정리와 인수분해', typeCode: 'MA-HS1-ALG-02', totalProblems: 38 },
-        ],
-      },
-      {
-        chapter: '방정식과 부등식',
-        totalProblems: 52,
-        sections: [
-          { section: '복소수', typeCode: 'MA-HS1-EQ-01', totalProblems: 28 },
-          { section: '이차방정식', typeCode: 'MA-HS1-EQ-02', totalProblems: 24 },
-        ],
-      },
-    ],
-  },
-  {
-    subject: '수학(하)',
-    totalProblems: 77,
-    chapters: [
-      {
-        chapter: '집합과 명제',
-        totalProblems: 41,
-        sections: [
-          { section: '집합', typeCode: 'MA-HS1-SET-01', totalProblems: 22 },
-          { section: '명제', typeCode: 'MA-HS1-SET-02', totalProblems: 19 },
-        ],
-      },
-      {
-        chapter: '함수',
-        totalProblems: 36,
-        sections: [
-          { section: '함수의 개념', typeCode: 'MA-HS1-FN-01', totalProblems: 20 },
-          { section: '합성함수와 역함수', typeCode: 'MA-HS1-FN-02', totalProblems: 16 },
-        ],
-      },
-    ],
-  },
-  {
-    subject: '수학I',
-    totalProblems: 124,
-    chapters: [
-      {
-        chapter: '지수함수와 로그함수',
-        totalProblems: 65,
-        sections: [
-          { section: '지수', typeCode: 'MA-M1-EXP-01', totalProblems: 32 },
-          { section: '로그', typeCode: 'MA-M1-LOG-01', totalProblems: 33 },
-        ],
-      },
-      {
-        chapter: '삼각함수',
-        totalProblems: 59,
-        sections: [
-          { section: '삼각함수의 뜻과 그래프', typeCode: 'MA-M1-TRG-01', totalProblems: 30 },
-          { section: '삼각함수의 활용', typeCode: 'MA-M1-TRG-02', totalProblems: 29 },
-        ],
-      },
-    ],
-  },
-  {
-    subject: '수학II',
-    totalProblems: 98,
-    chapters: [
-      {
-        chapter: '함수의 극한과 연속',
-        totalProblems: 48,
-        sections: [
-          { section: '함수의 극한', typeCode: 'MA-M2-LIM-01', totalProblems: 25 },
-          { section: '함수의 연속', typeCode: 'MA-M2-LIM-02', totalProblems: 23 },
-        ],
-      },
-      {
-        chapter: '미분',
-        totalProblems: 50,
-        sections: [
-          { section: '미분계수와 도함수', typeCode: 'MA-M2-DIF-01', totalProblems: 26 },
-          { section: '도함수의 활용', typeCode: 'MA-M2-DIF-02', totalProblems: 24 },
-        ],
-      },
-    ],
-  },
-  {
-    subject: '미적분',
-    totalProblems: 86,
-    chapters: [
-      {
-        chapter: '수열의 극한',
-        totalProblems: 42,
-        sections: [
-          { section: '수열의 극한', typeCode: 'MA-CAL-SEQ-01', totalProblems: 22 },
-          { section: '급수', typeCode: 'MA-CAL-SEQ-02', totalProblems: 20 },
-        ],
-      },
-      {
-        chapter: '적분법',
-        totalProblems: 44,
-        sections: [
-          { section: '여러 가지 적분법', typeCode: 'MA-CAL-INT-01', totalProblems: 24 },
-          { section: '정적분의 활용', typeCode: 'MA-CAL-INT-02', totalProblems: 20 },
-        ],
-      },
-    ],
-  },
-];
+function levelNodeToSubjectTree(
+  level: LevelNode,
+  category: SubjectCategory,
+): SubjectTree | null {
+  // domainFilter가 있으면 해당 도메인만 포함
+  const filteredDomains = category.domainFilter
+    ? level.domains.filter((d) => category.domainFilter!.includes(d.domainCode))
+    : level.domains;
+
+  if (filteredDomains.length === 0) return null;
+
+  const totalProblems = filteredDomains.reduce((sum, d) => sum + d.typeCount, 0);
+
+  return {
+    subject: category.curriculum
+      ? `${category.label} [${category.curriculum}]`
+      : category.label,
+    levelCode: level.levelCode,
+    chapters: filteredDomains.map((domain) => ({
+      chapter: domain.label,
+      domainCode: domain.domainCode,
+      sections: domain.standards.map((std) => ({
+        section: std.standardContent || std.standardCode,
+        typeCode: std.standardCode,
+        totalProblems: std.typeCount,
+      })),
+      totalProblems: domain.typeCount,
+    })),
+    totalProblems,
+  };
+}
 
 const difficultyConfig: Record<DifficultyLevel, { bg: string; text: string; label: string }> = {
   '최상': { bg: 'bg-rose-500/20', text: 'text-rose-400', label: '최상' },
@@ -308,32 +214,21 @@ function DifficultyCounter({
   );
 }
 
-// Subject Tree Component
+// Subject Tree Component — 번호 표시 (1 다항식, 1.1 다항식의 연산)
 function SubjectTreeView({
   tree,
-  selectedSubject,
   selectedChapters,
   selectedSections,
-  onSelectSubject,
   onToggleChapter,
   onToggleSection,
 }: {
   tree: SubjectTree[];
-  selectedSubject: string | null;
   selectedChapters: string[];
   selectedSections: string[];
-  onSelectSubject: (subject: string) => void;
   onToggleChapter: (chapter: string) => void;
   onToggleSection: (section: string, typeCode: string) => void;
 }) {
-  const [expandedSubjects, setExpandedSubjects] = useState<string[]>([]);
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
-
-  const toggleExpandSubject = (subject: string) => {
-    setExpandedSubjects((prev) =>
-      prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject]
-    );
-  };
 
   const toggleExpandChapter = (chapter: string) => {
     setExpandedChapters((prev) =>
@@ -341,118 +236,82 @@ function SubjectTreeView({
     );
   };
 
+  // 선택된 카테고리의 첫 번째(유일한) SubjectTree만 사용
+  const subj = tree[0];
+  if (!subj) return null;
+
   return (
     <div className="space-y-0.5">
-      {tree.map((subj) => {
-        const isExpanded = expandedSubjects.includes(subj.subject);
-        const isSelected = selectedSubject === subj.subject;
+      {subj.chapters.map((ch, chIdx) => {
+        const chapterNum = chIdx + 1;
+        const isChExpanded = expandedChapters.includes(ch.chapter);
+        const isChSelected = selectedChapters.includes(ch.chapter);
 
         return (
-          <div key={subj.subject}>
-            {/* Subject Level */}
+          <div key={ch.chapter}>
             <button
               type="button"
               onClick={() => {
-                toggleExpandSubject(subj.subject);
-                onSelectSubject(subj.subject);
+                toggleExpandChapter(ch.chapter);
+                onToggleChapter(ch.chapter);
               }}
               className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all ${
-                isSelected
-                  ? 'bg-indigo-500/15 text-indigo-300'
-                  : 'text-content-secondary hover:bg-surface-raised'
+                isChSelected
+                  ? 'bg-indigo-500/10 text-indigo-300'
+                  : 'text-content-secondary hover:bg-surface-raised/50 hover:text-content-primary'
               }`}
             >
-              {isExpanded ? (
-                <ChevronDown size={14} className="text-content-tertiary shrink-0" />
+              {isChExpanded ? (
+                <ChevronDown size={12} className="text-content-muted shrink-0" />
               ) : (
-                <ChevronRight size={14} className="text-content-tertiary shrink-0" />
+                <ChevronRight size={12} className="text-content-muted shrink-0" />
               )}
-              <BookOpen size={14} className={isSelected ? 'text-indigo-400' : 'text-content-tertiary'} />
-              <span className="flex-1 text-left font-medium">{subj.subject}</span>
-              <span className="text-[10px] text-content-muted">{subj.totalProblems}</span>
+              <span className={`text-xs font-bold shrink-0 ${isChSelected ? 'text-indigo-400' : 'text-content-tertiary'}`}>
+                {chapterNum}
+              </span>
+              <span className="flex-1 text-left font-medium">{ch.chapter}</span>
+              <span className="text-[10px] text-content-muted">{ch.totalProblems}유형</span>
             </button>
 
-            {/* Chapters */}
+            {/* Sections */}
             <AnimatePresence>
-              {isExpanded && (
+              {isChExpanded && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: 0.12 }}
                   className="overflow-hidden"
                 >
-                  <div className="ml-4 space-y-0.5 border-l border-subtle pl-2">
-                    {subj.chapters.map((ch) => {
-                      const isChExpanded = expandedChapters.includes(ch.chapter);
-                      const isChSelected = selectedChapters.includes(ch.chapter);
+                  <div className="ml-5 space-y-0.5 border-l border-subtle pl-2">
+                    {ch.sections.map((sec, secIdx) => {
+                      const sectionNum = `${chapterNum}.${secIdx + 1}`;
+                      const isSecSelected = selectedSections.includes(sec.section);
 
                       return (
-                        <div key={ch.chapter}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              toggleExpandChapter(ch.chapter);
-                              onToggleChapter(ch.chapter);
-                            }}
-                            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-all ${
-                              isChSelected
-                                ? 'bg-indigo-500/10 text-indigo-300'
-                                : 'text-content-secondary hover:bg-surface-raised/50 hover:text-content-primary'
-                            }`}
-                          >
-                            {isChExpanded ? (
-                              <ChevronDown size={12} className="text-content-muted shrink-0" />
-                            ) : (
-                              <ChevronRight size={12} className="text-content-muted shrink-0" />
-                            )}
-                            <Layers size={12} className={isChSelected ? 'text-indigo-400' : 'text-content-muted'} />
-                            <span className="flex-1 text-left">{ch.chapter}</span>
-                            <span className="text-[10px] text-content-muted">{ch.totalProblems}</span>
-                          </button>
-
-                          {/* Sections */}
-                          <AnimatePresence>
-                            {isChExpanded && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.12 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="ml-5 space-y-0.5 border-l border-subtle pl-2">
-                                  {ch.sections.map((sec) => {
-                                    const isSecSelected = selectedSections.includes(sec.section);
-
-                                    return (
-                                      <button
-                                        key={sec.section}
-                                        type="button"
-                                        onClick={() => onToggleSection(sec.section, sec.typeCode)}
-                                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all ${
-                                          isSecSelected
-                                            ? 'bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/20'
-                                            : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
-                                        }`}
-                                      >
-                                        <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
-                                          isSecSelected
-                                            ? 'border-indigo-500 bg-indigo-500'
-                                            : 'border-zinc-600'
-                                        }`}>
-                                          {isSecSelected && <Check size={8} className="text-content-primary" />}
-                                        </div>
-                                        <span className="flex-1 text-left">{sec.section}</span>
-                                        <span className="text-[10px] text-content-muted">{sec.totalProblems}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                        <button
+                          key={sec.section}
+                          type="button"
+                          onClick={() => onToggleSection(sec.section, sec.typeCode)}
+                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all ${
+                            isSecSelected
+                              ? 'bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/20'
+                              : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
+                          }`}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                            isSecSelected
+                              ? 'border-indigo-500 bg-indigo-500'
+                              : 'border-zinc-600'
+                          }`}>
+                            {isSecSelected && <Check size={8} className="text-content-primary" />}
+                          </div>
+                          <span className={`text-[10px] font-bold shrink-0 ${isSecSelected ? 'text-indigo-400' : 'text-content-muted'}`}>
+                            {sectionNum}
+                          </span>
+                          <span className="flex-1 text-left">{sec.section}</span>
+                          <span className="text-[10px] text-content-muted">{sec.totalProblems}유형</span>
+                        </button>
                       );
                     })}
                   </div>
@@ -479,7 +338,6 @@ export default function PaperCreatePage() {
   const [questionTypeFilter, setQuestionTypeFilter] = useState<QuestionTypeFilter>('전체');
 
   // Subject/Chapter/Section selections
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [selectedTypeCodes, setSelectedTypeCodes] = useState<string[]>([]);
@@ -489,8 +347,32 @@ export default function PaperCreatePage() {
     '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0,
   });
 
-  // Subject tree data
-  const [subjectTree, setSubjectTree] = useState<SubjectTree[]>(mockSubjectTree);
+  // Subject tree data (expanded_math_types에서 로드)
+  const [allLevelNodes, setAllLevelNodes] = useState<LevelNode[]>([]);
+  const [isLoadingTree, setIsLoadingTree] = useState(true);
+
+  // 과목 드롭다운에서 선택한 카테고리 ID
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+
+  // 선택된 카테고리에 해당하는 SubjectTree 생성
+  const selectedCategory = useMemo(() =>
+    SUBJECT_CATEGORIES.find((c) => c.id === selectedCategoryId) || null,
+    [selectedCategoryId]
+  );
+
+  const subjectTree = useMemo(() => {
+    if (!selectedCategory) return [];
+    const level = allLevelNodes.find((l) => l.levelCode === selectedCategory.levelCode);
+    if (!level) return [];
+    const tree = levelNodeToSubjectTree(level, selectedCategory);
+    return tree ? [tree] : [];
+  }, [allLevelNodes, selectedCategory]);
+
+  // 드롭다운에 표시할 카테고리 목록 (실제 DB에 데이터가 있는 것만)
+  const availableCategories = useMemo(() => {
+    const levelCodes = new Set(allLevelNodes.map((l) => l.levelCode));
+    return SUBJECT_CATEGORIES.filter((c) => levelCodes.has(c.levelCode));
+  }, [allLevelNodes]);
 
   // Panel visibility
   const [showLeftPanel, setShowLeftPanel] = useState(true);
@@ -515,8 +397,11 @@ export default function PaperCreatePage() {
 
   // Summary text
   const scopeText = useMemo(() => {
-    if (!selectedSubject) return '과목 및 단원을 선택해 주세요';
-    const parts = [selectedSubject];
+    if (!selectedCategory) return '아래에서 과목 및 단원을 선택해 주세요.';
+    const label = selectedCategory.curriculum
+      ? `${selectedCategory.label} [${selectedCategory.curriculum}]`
+      : selectedCategory.label;
+    const parts = [label];
     if (selectedChapters.length > 0) {
       parts.push(`${selectedChapters.length}개 대단원`);
     }
@@ -524,86 +409,35 @@ export default function PaperCreatePage() {
       parts.push(`${selectedSections.length}개 단원`);
     }
     return parts.join(' > ');
-  }, [selectedSubject, selectedChapters, selectedSections]);
+  }, [selectedCategory, selectedChapters, selectedSections]);
 
-  // ---- Fetch real problem_types from DB ----
+  // ---- Fetch expanded_math_types tree from API ----
   useEffect(() => {
-    async function fetchProblemTypes() {
-      if (!isSupabaseConfigured || !supabaseBrowser) {
-        console.log('[Create] Supabase not configured, using mock tree');
-        return;
-      }
-
+    async function fetchExpandedTypesTree() {
+      setIsLoadingTree(true);
       try {
-        const { data, error } = await supabaseBrowser
-          .from('problem_types')
-          .select('id, type_code, subject, chapter, section, subsection, type_name, total_problems')
-          .eq('is_active', true)
-          .order('subject')
-          .order('chapter')
-          .order('section');
+        const res = await fetch('/api/expanded-types/tree');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { tree } = await res.json() as { tree: LevelNode[] };
 
-        if (error) {
-          console.error('[Create] Failed to fetch problem_types:', error.message);
-          return;
-        }
-
-        if (!data || data.length === 0) {
-          console.log('[Create] No problem_types found, using mock tree');
-          return;
-        }
-
-        // Build tree structure
-        const treeMap = new Map<string, SubjectTree>();
-
-        data.forEach((row: any) => {
-          const subject = row.subject || '미분류';
-          const chapter = row.chapter || '미분류';
-          const section = row.section || row.type_name || '기타';
-
-          if (!treeMap.has(subject)) {
-            treeMap.set(subject, {
-              subject,
-              chapters: [],
-              totalProblems: 0,
-            });
-          }
-
-          const subjNode = treeMap.get(subject)!;
-          let chapterNode = subjNode.chapters.find((c) => c.chapter === chapter);
-
-          if (!chapterNode) {
-            chapterNode = { chapter, sections: [], totalProblems: 0 };
-            subjNode.chapters.push(chapterNode);
-          }
-
-          const problemCount = row.total_problems || 0;
-          chapterNode.sections.push({
-            section,
-            typeCode: row.type_code,
-            totalProblems: problemCount,
-          });
-
-          chapterNode.totalProblems += problemCount;
-          subjNode.totalProblems += problemCount;
-        });
-
-        const tree = Array.from(treeMap.values());
-        if (tree.length > 0) {
-          setSubjectTree(tree);
+        if (tree && tree.length > 0) {
+          setAllLevelNodes(tree);
+          console.log(`[Create] Loaded ${tree.length} levels from expanded_math_types`);
         }
       } catch (err) {
-        console.error('[Create] Error building tree:', err);
+        console.error('[Create] Failed to fetch expanded-types tree:', err);
+      } finally {
+        setIsLoadingTree(false);
       }
     }
 
-    fetchProblemTypes();
+    fetchExpandedTypesTree();
   }, []);
 
   // ---- Handlers ----
   const handleReset = () => {
     setPaperName('');
-    setSelectedSubject(null);
+    setSelectedCategoryId('');
     setSelectedChapters([]);
     setSelectedSections([]);
     setSelectedTypeCodes([]);
@@ -611,10 +445,6 @@ export default function PaperCreatePage() {
     setCreateMode('auto');
     setDifficulties({ '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0 });
     setUploadedFiles([]);
-  };
-
-  const handleSelectSubject = (subject: string) => {
-    setSelectedSubject(subject);
   };
 
   const handleToggleChapter = (chapter: string) => {
@@ -678,7 +508,7 @@ export default function PaperCreatePage() {
         body: JSON.stringify({
           title: paperName,
           criteria: {
-            subject: selectedSubject,
+            subject: selectedCategory?.label || '',
             chapters: selectedChapters,
             sections: selectedSections,
             typeCodes: selectedTypeCodes,
@@ -694,7 +524,12 @@ export default function PaperCreatePage() {
         throw new Error(data.error || 'Failed to generate');
       }
 
-      router.push('/dashboard/repository');
+      // 생성 성공 → 시험지 관리 페이지로 이동
+      if (data.examId) {
+        router.push(`/dashboard/exam-management`);
+      } else {
+        router.push('/dashboard/exam-management');
+      }
     } catch (e) {
       console.error(e);
       alert('시험지 생성 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
@@ -960,7 +795,7 @@ export default function PaperCreatePage() {
                 {/* ---- Middle Area: 과목/단원 트리 ---- */}
                 <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                   <div className="flex items-center gap-2 px-4 py-2.5 border-b border-subtle flex-shrink-0">
-                    <StepBadge number={1} active={!selectedSubject} />
+                    <StepBadge number={1} active={!selectedCategoryId} />
                     <span className="text-sm font-semibold text-content-primary">과목 및 단원 선택</span>
                     {selectedSections.length > 0 && (
                       <span className="ml-auto text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
@@ -969,16 +804,78 @@ export default function PaperCreatePage() {
                     )}
                   </div>
 
+                  {/* 과목 드롭다운 — 교육과정별 optgroup */}
+                  <div className="flex-shrink-0 px-4 py-2 border-b border-subtle">
+                    <select
+                      value={selectedCategoryId}
+                      onChange={(e) => {
+                        setSelectedCategoryId(e.target.value);
+                        setSelectedChapters([]);
+                        setSelectedSections([]);
+                        setSelectedTypeCodes([]);
+                      }}
+                      className="w-full rounded-lg border border-subtle bg-surface-raised px-3 py-2.5 text-sm text-content-primary focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">과목을 선택해 주세요</option>
+                      {/* 2022 개정교육과정 */}
+                      {availableCategories.some((c) => c.curriculum === '2022개정') && (
+                        <optgroup label="2022 개정교육과정">
+                          {availableCategories
+                            .filter((c) => c.curriculum === '2022개정')
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.label} [{c.curriculum}]
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {/* 개정전 (2015 교육과정) */}
+                      {availableCategories.some((c) => c.curriculum === '개정전') && (
+                        <optgroup label="개정전 (2015 교육과정)">
+                          {availableCategories
+                            .filter((c) => c.curriculum === '개정전')
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.label} [{c.curriculum}]
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {/* 중·초등 */}
+                      {availableCategories.some((c) => c.curriculum === '') && (
+                        <optgroup label="중·초등학교">
+                          {availableCategories
+                            .filter((c) => c.curriculum === '')
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.label}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+
                   <div className="flex-1 overflow-auto p-2 scrollbar-thin">
+                    {isLoadingTree ? (
+                      <div className="flex items-center justify-center py-8 gap-2">
+                        <Loader2 size={16} className="animate-spin text-content-muted" />
+                        <span className="text-xs text-content-muted">과목 트리 로딩 중...</span>
+                      </div>
+                    ) : subjectTree.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2">
+                        <AlertCircle size={20} className="text-content-muted" />
+                        <span className="text-xs text-content-muted">등록된 유형이 없습니다</span>
+                      </div>
+                    ) : (
                     <SubjectTreeView
                       tree={subjectTree}
-                      selectedSubject={selectedSubject}
                       selectedChapters={selectedChapters}
                       selectedSections={selectedSections}
-                      onSelectSubject={handleSelectSubject}
                       onToggleChapter={handleToggleChapter}
                       onToggleSection={handleToggleSection}
                     />
+                    )}
                   </div>
                 </div>
 
@@ -1112,7 +1009,7 @@ export default function PaperCreatePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-content-tertiary">
-                    {selectedSubject && <span>{selectedSubject}</span>}
+                    {selectedCategory && <span>{selectedCategory.label} [{selectedCategory.curriculum}]</span>}
                     {selectedChapters.length > 0 && (
                       <span>| {selectedChapters.join(', ')}</span>
                     )}

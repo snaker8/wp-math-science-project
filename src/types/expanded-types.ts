@@ -184,6 +184,44 @@ export const LEVEL_CODE_ORDER: string[] = [
 ];
 
 // ============================================================================
+// 교육과정별 과목 카테고리 (시험지 출제 드롭다운용)
+// 2022개정 + 개정전(2015) 구분 — 시중 문제은행 프로그램 형식
+// ============================================================================
+
+export interface SubjectCategory {
+  id: string;
+  label: string;
+  curriculum: '2022개정' | '개정전' | '';
+  levelCode: string;
+  domainFilter?: string[];  // undefined = 해당 레벨 전체 도메인
+  order: number;
+}
+
+export const SUBJECT_CATEGORIES: SubjectCategory[] = [
+  // === 2022 개정교육과정 ===
+  { id: 'CM1',   label: '공통수학1',     curriculum: '2022개정', levelCode: 'HS0', domainFilter: ['POL', 'EQU', 'INE', 'CNT'], order: 1 },
+  { id: 'CM2',   label: '공통수학2',     curriculum: '2022개정', levelCode: 'HS0', domainFilter: ['CRD', 'SET', 'FUN'],        order: 2 },
+  { id: 'ALG',   label: '대수',          curriculum: '2022개정', levelCode: 'HS1',                                              order: 3 },
+  { id: 'CAL1',  label: '미적분I',       curriculum: '2022개정', levelCode: 'HS2',                                              order: 4 },
+  { id: 'PS22',  label: '확률과 통계',   curriculum: '2022개정', levelCode: 'PRB',                                              order: 5 },
+  { id: 'GEO22', label: '기하',          curriculum: '2022개정', levelCode: 'GEO',                                              order: 6 },
+  // === 개정전 (2015 교육과정) ===
+  { id: 'HSU',   label: '수학(상)',       curriculum: '개정전',   levelCode: 'HS0', domainFilter: ['POL', 'EQU', 'INE', 'CRD'], order: 7 },
+  { id: 'HSD',   label: '수학(하)',       curriculum: '개정전',   levelCode: 'HS0', domainFilter: ['SET', 'FUN', 'CNT'],        order: 8 },
+  { id: 'M1',    label: '수학I',          curriculum: '개정전',   levelCode: 'HS1',                                              order: 9 },
+  { id: 'M2',    label: '수학II',         curriculum: '개정전',   levelCode: 'HS2',                                              order: 10 },
+  { id: 'CALC',  label: '미적분',         curriculum: '개정전',   levelCode: 'CAL',                                              order: 11 },
+  { id: 'PS15',  label: '확률과 통계',   curriculum: '개정전',   levelCode: 'PRB',                                              order: 12 },
+  { id: 'GEO15', label: '기하',          curriculum: '개정전',   levelCode: 'GEO',                                              order: 13 },
+  // === 중학교 ===
+  { id: 'MS',    label: '중학교 수학',   curriculum: '',         levelCode: 'MS',                                               order: 14 },
+  // === 초등학교 ===
+  { id: 'ES56',  label: '초등 5-6학년',  curriculum: '',         levelCode: 'ES56',                                             order: 15 },
+  { id: 'ES34',  label: '초등 3-4학년',  curriculum: '',         levelCode: 'ES34',                                             order: 16 },
+  { id: 'ES12',  label: '초등 1-2학년',  curriculum: '',         levelCode: 'ES12',                                             order: 17 },
+];
+
+// ============================================================================
 // flat → tree 변환 유틸리티
 // ============================================================================
 
