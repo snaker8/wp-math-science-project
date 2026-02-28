@@ -368,7 +368,8 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 // 그래프 → 프로그래밍 기반 SVG (참조사이트 수준: 축 + 곡선 + 채우기)
 // ============================================================================
 
-const GRAPH_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ea580c', '#7c3aed', '#0891b2'];
+// 참조사이트 스타일: 곡선을 진한 파란/남색 계열로 통일
+const GRAPH_COLORS = ['#1e3a5f', '#2563eb', '#1e40af', '#374151', '#4338ca', '#0e7490'];
 
 // 음영 색상 (그래프용 — 참조사이트 수준: 거의 불투명한 진한 색상)
 const GRAPH_SHADING: Record<string, string> = {
@@ -670,7 +671,8 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     }
 
     if (pathData) {
-      const color = expr.color || GRAPH_COLORS[i % GRAPH_COLORS.length];
+      // 참조사이트 스타일: AI 색상 무시, 일관된 진한 색상 사용
+      const color = GRAPH_COLORS[i % GRAPH_COLORS.length];
       const dashAttr = expr.style === 'dashed' ? ' stroke-dasharray="6,4"' : '';
       svg += `<path d="${pathData}" stroke="${color}" stroke-width="2.5" fill="none" clip-path="url(#plot-clip)"${dashAttr}/>`;
     }
