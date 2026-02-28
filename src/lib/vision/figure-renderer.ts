@@ -418,8 +418,8 @@ export function generateTableSVG(rendering: TableRendering): string | null {
     const tableRight = x0 + numCols * COL_W;
     const tableBottom = y0 + (1 + numDataRows) * ROW_H;
 
-    // L자형 구분선: 세로 (첫 열 오른쪽, 전체 높이)
-    svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
+    // L자형 구분선: 세로 (첫 열 오른쪽, 헤더~가로선까지만)
+    svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
     // L자형 구분선: 가로 (마지막 행 위, 구분선부터 오른쪽 끝까지)
     svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${tableRight}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
