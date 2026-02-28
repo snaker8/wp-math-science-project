@@ -370,18 +370,19 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 
 const GRAPH_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ea580c', '#7c3aed', '#0891b2'];
 
-// 음영 색상 (그래프용)
+// 음영 색상 (그래프용 — 참조사이트 수준: 불투명에 가까운 진한 색상)
 const GRAPH_SHADING: Record<string, string> = {
-  yellow: 'rgba(250,204,21,0.55)',
-  blue: 'rgba(96,165,250,0.40)',
-  red: 'rgba(248,113,113,0.40)',
-  green: 'rgba(74,222,128,0.40)',
-  gray: 'rgba(156,163,175,0.30)',
+  yellow: 'rgba(250,204,21,0.75)',
+  blue: 'rgba(96,165,250,0.50)',
+  red: 'rgba(248,113,113,0.50)',
+  green: 'rgba(74,222,128,0.50)',
+  gray: 'rgba(156,163,175,0.35)',
 };
 
 /**
  * LaTeX 수식을 JS 함수 (x) => y 로 변환
  * 고등수학에서 흔히 나오는 다항식, 일차함수 등을 처리
+ * ★ 핵심: ^를 ** 대신 Math.pow로 변환 (-x**2 SyntaxError 방지)
  * 변환 불가능하면 null 반환
  */
 function latexToJsFunction(latex: string): ((x: number) => number) | null {
@@ -397,48 +398,72 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
       return null;
     }
 
-    // LaTeX → JS 변환
-    let js = expr
-      // 이중 백슬래시 정리
-      .replace(/\\\\/g, '\\')
-      // \frac{a}{b} → ((a)/(b))
-      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '(($1)/($2))')
-      // \sqrt{x} → Math.sqrt(x)
-      .replace(/\\sqrt\{([^}]+)\}/g, 'Math.sqrt($1)')
-      // \sin, \cos, \tan, \log, \ln
-      .replace(/\\sin/g, 'Math.sin')
-      .replace(/\\cos/g, 'Math.cos')
-      .replace(/\\tan/g, 'Math.tan')
-      .replace(/\\log/g, 'Math.log10')
-      .replace(/\\ln/g, 'Math.log')
-      // \pi → Math.PI
-      .replace(/\\pi/g, 'Math.PI')
-      // |x| → Math.abs(x)
-      .replace(/\\left\|([^|]+)\\right\|/g, 'Math.abs($1)')
-      .replace(/\|([^|]+)\|/g, 'Math.abs($1)')
-      // ^ → **
-      .replace(/\^/g, '**')
-      // LaTeX 래핑 제거
-      .replace(/\\left|\\right/g, '')
-      .replace(/\\cdot/g, '*')
-      .replace(/\\times/g, '*')
-      .replace(/\{|\}/g, '')
-      // 묵시적 곱셈: 2x → 2*x, )(  → )*(
-      .replace(/(\d)([a-z(])/gi, '$1*$2')
-      .replace(/([a-z)])(\d)/gi, '$1*$2')
-      .replace(/\)\s*\(/g, ')*(')
-      .replace(/([a-z])\s*\(/gi, '$1*(')
-      // 공백 정리
-      .replace(/\s+/g, '')
-      .trim();
+    let js = expr;
+
+    // 1. 이중 백슬래시 정리
+    js = js.replace(/\\\\/g, '\\');
+
+    // 2. \frac{a}{b} → ((a)/(b))
+    js = js.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '(($1)/($2))');
+
+    // 3. \sqrt{x} → Math.sqrt(x)
+    js = js.replace(/\\sqrt\{([^}]+)\}/g, 'Math.sqrt($1)');
+
+    // 4. Trig / log 함수
+    js = js.replace(/\\sin/g, 'Math.sin');
+    js = js.replace(/\\cos/g, 'Math.cos');
+    js = js.replace(/\\tan/g, 'Math.tan');
+    js = js.replace(/\\log/g, 'Math.log10');
+    js = js.replace(/\\ln/g, 'Math.log');
+
+    // 5. \pi → Math.PI
+    js = js.replace(/\\pi/g, 'Math.PI');
+
+    // 6. |x| → Math.abs(x)
+    js = js.replace(/\\left\|([^|]+)\\right\|/g, 'Math.abs($1)');
+    js = js.replace(/\|([^|]+)\|/g, 'Math.abs($1)');
+
+    // 7. \left, \right 제거 (괄호만 남김)
+    js = js.replace(/\\left/g, '');
+    js = js.replace(/\\right/g, '');
+
+    // 8. 거듭제곱: Math.pow 사용 (★ ** 대신 — -x**2 SyntaxError 방지)
+    //    (...)^{n} → Math.pow((...), n)
+    js = js.replace(/\(([^)]+)\)\^\{([^}]+)\}/g, 'Math.pow(($1),$2)');
+    //    var^{n} (단일 변수/숫자)
+    js = js.replace(/([a-zA-Z0-9]+)\^\{([^}]+)\}/g, 'Math.pow($1,$2)');
+    //    (...)^n (단일 숫자 지수)
+    js = js.replace(/\(([^)]+)\)\^([0-9])/g, 'Math.pow(($1),$2)');
+    //    var^n (단일 숫자 지수)
+    js = js.replace(/([a-zA-Z0-9])\^([0-9])/g, 'Math.pow($1,$2)');
+
+    // 9. \cdot, \times → *
+    js = js.replace(/\\cdot/g, '*');
+    js = js.replace(/\\times/g, '*');
+
+    // 10. 남은 { } 제거
+    js = js.replace(/[{}]/g, '');
+
+    // 11. 남은 LaTeX 명령 제거
+    js = js.replace(/\\[a-zA-Z]+/g, '');
+
+    // 12. 묵시적 곱셈: 2x → 2*x, )(  → )*(
+    js = js.replace(/(\d)([a-z(])/gi, '$1*$2');
+    js = js.replace(/([a-z)])(\d)/gi, '$1*$2');
+    js = js.replace(/\)\s*\(/g, ')*(');
+    js = js.replace(/([a-z])\s*\(/gi, '$1*(');
+
+    // 13. 공백 정리
+    js = js.replace(/\s+/g, '').trim();
 
     // 미지수(a, b, c 등 x가 아닌 변수)가 있으면 플롯 불가
     if (/[a-wyzA-Z]/.test(js.replace(/Math\.\w+/g, '').replace(/PI/g, ''))) {
+      console.warn('[GraphSVG] Expression has unknown variables:', latex, '→', js);
       return null;
     }
 
     // 안전 검증: 허용된 문자만
-    const safeJs = js.replace(/Math\.(sin|cos|tan|log|log10|sqrt|abs|PI|E)/g, '');
+    const safeJs = js.replace(/Math\.(sin|cos|tan|log|log10|sqrt|abs|pow|PI|E)/g, '');
     if (/[a-wyzA-Z]/.test(safeJs)) return null;
 
     // 함수 생성 및 테스트
@@ -446,9 +471,12 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     const test0 = fn(0);
     const test1 = fn(1);
     if (typeof test0 !== 'number' || typeof test1 !== 'number') return null;
+    if (isNaN(test0) && isNaN(test1)) return null;
 
+    console.log('[GraphSVG] Parsed expression:', latex, '→', js);
     return fn;
-  } catch {
+  } catch (e) {
+    console.warn('[GraphSVG] Failed to parse LaTeX:', latex, e);
     return null;
   }
 }
@@ -500,7 +528,7 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     }
   }
 
-  // ── 2. 좌표축 ──
+  // ── 2. 좌표축 (눈금 없이 깨끗한 스타일, 참조사이트 동일) ──
   const axisColor = '#374151';
   const originX = toSvgX(0);
   const originY = toSvgY(0);
@@ -529,31 +557,40 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     svg += `<text x="${originX - 12}" y="${originY + 16}" font-size="13" font-style="italic" font-family="serif" fill="${axisColor}">O</text>`;
   }
 
-  // 눈금 (주요 정수만)
-  const tickSize = 4;
-  for (let x = Math.ceil(xMin); x <= Math.floor(xMax); x++) {
-    if (x === 0) continue;
-    const sx = toSvgX(x);
-    if (axisInRange(0, yMin, yMax)) {
-      svg += `<line x1="${sx}" y1="${originY - tickSize}" x2="${sx}" y2="${originY + tickSize}" stroke="${axisColor}" stroke-width="1"/>`;
+  // 축 위 좌표 라벨 (점이 축 위에 있으면 좌표값 표시, 참조사이트 스타일)
+  const usedXLabels = new Set<number>();
+  const usedYLabels = new Set<number>();
+  for (const pt of points) {
+    if (!pt.label || pt.label === 'O') continue;
+    // x축 위의 점 (y=0) → x좌표 표시
+    if (pt.y === 0 && pt.x !== 0 && axisInRange(0, yMin, yMax)) {
+      if (!usedXLabels.has(pt.x)) {
+        usedXLabels.add(pt.x);
+        svg += `<text x="${toSvgX(pt.x)}" y="${originY + 16}" text-anchor="middle" font-size="12" font-family="serif" fill="${axisColor}">${pt.x}</text>`;
+      }
     }
-  }
-  for (let y = Math.ceil(yMin); y <= Math.floor(yMax); y++) {
-    if (y === 0) continue;
-    const sy = toSvgY(y);
-    if (axisInRange(0, xMin, xMax)) {
-      svg += `<line x1="${originX - tickSize}" y1="${sy}" x2="${originX + tickSize}" y2="${sy}" stroke="${axisColor}" stroke-width="1"/>`;
+    // y축 위의 점 (x=0) → y좌표 표시
+    if (pt.x === 0 && pt.y !== 0 && axisInRange(0, xMin, xMax)) {
+      if (!usedYLabels.has(pt.y)) {
+        usedYLabels.add(pt.y);
+        svg += `<text x="${originX - 8}" y="${toSvgY(pt.y) + 4}" text-anchor="end" font-size="12" font-family="serif" fill="${axisColor}">${pt.y}</text>`;
+      }
     }
   }
 
   // ── 3. 곡선 (수식 → JS 변환 → 샘플링) ──
-  const numSamples = 300;
+  const numSamples = 400;
+  let curveCount = 0;
   for (let i = 0; i < expressions.length; i++) {
     const expr = expressions[i];
     if (expr.hidden) continue;
 
     const fn = latexToJsFunction(expr.latex);
-    if (!fn) continue;
+    if (!fn) {
+      console.warn(`[GraphSVG] Could not parse expression[${i}]:`, expr.latex);
+      continue;
+    }
+    curveCount++;
 
     const step = (xMax - xMin) / numSamples;
     let pathData = '';
@@ -584,9 +621,10 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     if (pathData) {
       const color = expr.color || GRAPH_COLORS[i % GRAPH_COLORS.length];
       const dashAttr = expr.style === 'dashed' ? ' stroke-dasharray="6,4"' : '';
-      svg += `<path d="${pathData}" stroke="${color}" stroke-width="2.2" fill="none" clip-path="url(#plot-clip)"${dashAttr}/>`;
+      svg += `<path d="${pathData}" stroke="${color}" stroke-width="2.5" fill="none" clip-path="url(#plot-clip)"${dashAttr}/>`;
     }
   }
+  console.log(`[GraphSVG] Rendered ${curveCount}/${expressions.length} curves`);
 
   // ── 4. 선분 연결 ──
   for (const [fromLabel, toLabel] of segments) {
