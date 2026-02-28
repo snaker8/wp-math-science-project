@@ -609,20 +609,14 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     svg += `<text x="${originX - 12}" y="${originY + 16}" font-size="13" font-style="italic" font-family="serif" fill="${axisColor}">O</text>`;
   }
 
-  // 축 위 좌표 라벨 (점이 축 위에 있으면 좌표값 표시, 참조사이트 스타일)
-  const usedXLabels = new Set<number>();
+  // 축 위 좌표 라벨 — 라벨이 있는 점(B,C 등)은 숫자 대신 알파벳을 표시하므로 스킵
+  const labeledXCoords = new Set(points.filter(p => p.label && p.y === 0).map(p => p.x));
+  const labeledYCoords = new Set(points.filter(p => p.label && p.x === 0).map(p => p.y));
   const usedYLabels = new Set<number>();
   for (const pt of points) {
     if (!pt.label || pt.label === 'O') continue;
-    // x축 위의 점 (y=0) → x좌표 표시
-    if (pt.y === 0 && pt.x !== 0 && axisInRange(0, yMin, yMax)) {
-      if (!usedXLabels.has(pt.x)) {
-        usedXLabels.add(pt.x);
-        svg += `<text x="${toSvgX(pt.x)}" y="${originY + 16}" text-anchor="middle" font-size="12" font-family="serif" fill="${axisColor}">${pt.x}</text>`;
-      }
-    }
-    // y축 위의 점 (x=0) → y좌표 표시
-    if (pt.x === 0 && pt.y !== 0 && axisInRange(0, xMin, xMax)) {
+    // y축 위의 점 (x=0) → y좌표 표시 (라벨 없는 경우만)
+    if (pt.x === 0 && pt.y !== 0 && !labeledYCoords.has(pt.y) && axisInRange(0, xMin, xMax)) {
       if (!usedYLabels.has(pt.y)) {
         usedYLabels.add(pt.y);
         svg += `<text x="${originX - 8}" y="${toSvgY(pt.y) + 4}" text-anchor="end" font-size="12" font-family="serif" fill="${axisColor}">${pt.y}</text>`;
@@ -699,8 +693,9 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     let labelY: number;
 
     if (pt.y === 0) {
-      // x축 위의 점 (B, C 등): 플롯 영역 바깥(아래)에 배치하여 곡선과 절대 겹치지 않게
-      labelY = pad.top + plotH + 20;
+      // x축 위의 점 (B, C 등): 원본처럼 축 바로 아래, 살짝 옆에 배치
+      labelX = sx + 2;
+      labelY = originY + 18;
     } else if (pt.y > 0) {
       // 곡선 위 점 (A 등): 위로 올림
       labelY = sy - 16;
@@ -709,9 +704,7 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
       labelY = sy + 22;
     }
 
-    // 큰 불투명 흰색 배경 + 굵은 텍스트
-    svg += `<rect x="${labelX - 14}" y="${labelY - 13}" width="28" height="22" fill="white" rx="3"/>`;
-    svg += `<text x="${labelX}" y="${labelY + 1}" text-anchor="middle" font-size="17" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
+    svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="16" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
   }
 
   svg += '</svg>';
