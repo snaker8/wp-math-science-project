@@ -448,7 +448,9 @@ export function generateTableSVG(rendering: TableRendering): string | null {
         const cx = x0 + c * COL_W + COL_W / 2;
         const cy = y0 + (1 + r) * ROW_H + ROW_H / 2;
         if (cell === '' || cell === '□' || cell === '?') {
-          // 빈 셀 → 네모 박스 (참조사이트 스타일)
+          // 첫 열(k열)의 빈 셀은 박스를 그리지 않음 (원본 동일)
+          if (c === 0) continue;
+          // 빈 셀 → 네모 박스
           const boxW = 24;
           const boxH = 20;
           svg += `<rect x="${cx - boxW / 2}" y="${cy - boxH / 2}" width="${boxW}" height="${boxH}" stroke="#9ca3af" stroke-width="1.2" fill="none" rx="2"/>`;
