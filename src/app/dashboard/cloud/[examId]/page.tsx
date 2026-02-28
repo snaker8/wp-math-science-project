@@ -209,7 +209,12 @@ function ProblemCardView({
 }) {
   const cropImage = problem.images?.find(img => img.type === 'crop');
   const showOriginal = globalViewMode === 'original' && !!cropImage;
-  const contentParts = splitContentByFigureMarker(problem.content);
+
+  // ★ 클린 모드: 콘텐츠 내 마크다운 이미지 참조 제거
+  // figureData가 있거나 cropImage가 있으면 이미지 URL은 별도 렌더링됨
+  const cleanContent = problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim();
+
+  const contentParts = splitContentByFigureMarker(cleanContent);
   const hasFigureMarker = contentParts.some(p => p.type === 'figure');
 
   return (
@@ -338,7 +343,7 @@ function ProblemCardView({
                 /* 일반 콘텐츠 렌더링 */
                 <>
                   <MixedContentRenderer
-                    content={problem.content}
+                    content={cleanContent}
                     className="inline text-sm text-content-secondary leading-relaxed"
                   />
                   {/* 도형 데이터가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
