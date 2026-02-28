@@ -680,17 +680,19 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     let labelY: number;
 
     if (pt.y === 0) {
-      // x축 위의 점 (B, C 등): 원본처럼 축 바로 아래, 살짝 옆에 배치
-      labelX = sx + 2;
+      // x축 위의 점 (B, C 등): 축 바로 아래, 흰 배경으로 곡선 가림 방지
+      labelX = sx;
       labelY = originY + 18;
     } else if (pt.y > 0) {
-      // 곡선 위 점 (A 등): 위로 올림
       labelY = sy - 16;
     } else {
-      // 아래쪽 점: 더 아래로
       labelY = sy + 22;
     }
 
+    // x축 점은 곡선이 지나가므로 흰색 배경 필수
+    if (pt.y === 0) {
+      svg += `<rect x="${labelX - 10}" y="${labelY - 13}" width="20" height="18" fill="white" rx="2"/>`;
+    }
     svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="16" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
   }
 
