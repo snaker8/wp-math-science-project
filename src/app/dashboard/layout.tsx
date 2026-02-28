@@ -1,6 +1,6 @@
 'use client';
 
-import { Sidebar } from '@/components/layout/Sidebar';
+import { TopNav } from '@/components/layout/TopNav';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 
@@ -12,9 +12,9 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
-      <Sidebar />
-      <main className="ml-64 min-h-screen p-8 bg-black">
+    <div className="min-h-screen bg-surface-base text-content-primary selection:bg-accent/30">
+      <TopNav />
+      <main className="min-h-[calc(100vh-3.5rem)] px-6 lg:px-8 py-6">
         <AnimatePresence mode="popLayout">
           <motion.div
             key={pathname}
@@ -22,7 +22,7 @@ export default function DashboardLayout({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="mx-auto max-w-7xl"
+            className="mx-auto max-w-screen-2xl"
           >
             {children}
           </motion.div>

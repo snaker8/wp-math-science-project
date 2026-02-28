@@ -9,16 +9,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Gwasaram Pure Black Palette
+        // ── 세련된 다크 테마: 시맨틱 토큰 ──
+        surface: {
+          base: 'var(--bg-base)',
+          card: 'var(--bg-surface)',
+          raised: 'var(--bg-raised)',
+          overlay: 'var(--bg-overlay)',
+        },
+        content: {
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
+          muted: 'var(--text-muted)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          hover: 'var(--accent-hover)',
+          muted: 'var(--accent-muted)',
+        },
+        // 기존 색상 유지 (뱃지/상태 표시용)
         black: "#000000",
-        zinc: {
-          900: "#18181b", // Subtler backgrounds
-          950: "#09090b", // Card backgrounds
-        },
-        indigo: {
-          500: "#6366f1", // Point color
-          600: "#4f46e5", // Hover point
-        },
         white: "#ffffff",
       },
       fontFamily: {
@@ -26,13 +36,17 @@ const config: Config = {
         mono: ["var(--font-inter)", "monospace"],
       },
       borderColor: {
-        white: "rgba(255, 255, 255, 0.1)", // 1px ultra-slim border
+        DEFAULT: 'var(--border-default)',
+        subtle: 'var(--border-subtle)',
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
       },
       animation: {
         "spin-slow": "spin 3s linear infinite",
+      },
+      maxWidth: {
+        '8xl': '88rem',
       },
     },
   },

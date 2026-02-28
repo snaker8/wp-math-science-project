@@ -4,40 +4,67 @@
 
 @layer base {
   :root {
+    /* ── 폰트 ── */
     --font-pretendard: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
     --font-inter: "Inter", sans-serif;
+
+    /* ── 세련된 다크 팔레트 (GitHub Dark / Linear 스타일) ── */
+    --bg-base: #0f1117;
+    --bg-surface: #1a1d28;
+    --bg-raised: #232736;
+    --bg-overlay: #2a2e3d;
+
+    --border-default: rgba(148, 163, 184, 0.12);
+    --border-subtle: rgba(148, 163, 184, 0.06);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --text-muted: #475569;
+
+    --accent: #818cf8;
+    --accent-hover: #6366f1;
+    --accent-muted: rgba(129, 140, 248, 0.08);
   }
 
   html,
   body {
-    background-color: #000000;
-    color: #ffffff;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
     font-family: var(--font-pretendard);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* Custom Scrollbar for Minimal Look */
+/* ── KaTeX 수식-텍스트 통일 ── */
+.katex {
+  font-size: 1em !important;
+}
+.katex .base {
+  vertical-align: baseline;
+}
+
+/* ── Custom Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: var(--bg-base);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--bg-raised);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--bg-overlay);
 }
 
-/* Utilities */
+/* ── Utilities ── */
 @layer utilities {
   .text-balance {
     text-wrap: balance;

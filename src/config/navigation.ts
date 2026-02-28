@@ -215,7 +215,70 @@ export const parentNavItems: NavItem[] = [
   { href: '/parent/payment', icon: CreditCard, label: '결제 관리', group: 'parent' },
 ];
 
-// 전체 네비게이션 (Sidebar용)
+// ============================================================================
+// 상단 네비게이션 그룹 (TopNav용)
+// ============================================================================
+
+export interface NavGroup {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  href?: string;           // 직접 링크 (드롭다운 없음)
+  children?: NavItem[];     // 드롭다운 하위 메뉴
+}
+
+export const topNavGroups: NavGroup[] = [
+  {
+    id: 'dashboard',
+    label: '대시보드',
+    icon: LayoutDashboard,
+    href: '/dashboard',
+  },
+  {
+    id: 'repository',
+    label: '문제은행',
+    icon: FolderOpen,
+    children: [
+      dashboardNavItems[1], // 시험지저장소
+      dashboardNavItems[6], // 과사람클라우드
+      dashboardNavItems[5], // 유형/문제관리
+      dashboardNavItems[3], // 학원자료
+      dashboardNavItems[4], // 출판교재유사
+    ],
+  },
+  {
+    id: 'exams',
+    label: '시험지',
+    icon: SquarePen,
+    children: [
+      dashboardNavItems[2], // 시험지출제
+      dashboardNavItems[7], // 시험지관리
+    ],
+  },
+  {
+    id: 'teaching',
+    label: '수업관리',
+    icon: Users,
+    children: [
+      tutorNavItems[0], // 문제 업로드
+      tutorNavItems[1], // 반 관리
+      tutorNavItems[2], // 채점하기
+    ],
+  },
+  {
+    id: 'ai',
+    label: 'AI분석',
+    icon: Sparkles,
+    children: [
+      tutorNavItems[3], // AI처방/CLINIC
+      tutorNavItems[4], // AI 오토큐레이션
+      tutorNavItems[5], // 클리닉시험지
+      tutorNavItems[6], // 성적분석
+    ],
+  },
+];
+
+// 전체 네비게이션 (Sidebar용 — 레거시)
 export const allNavItems: NavItem[] = [
   ...dashboardNavItems,
   ...tutorNavItems,
