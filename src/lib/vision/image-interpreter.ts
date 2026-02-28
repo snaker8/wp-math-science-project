@@ -1,7 +1,7 @@
 // ============================================================================
-// GPT-4o Vision 이미지 해석 서비스
+// Vision 이미지 해석 서비스 (GPT-4o / Claude Sonnet 선택 가능)
 // 수학 문제의 그래프/도형/표 이미지를 분석하여 구조화된 데이터로 변환
-// 2단계: (1) 구조 분석 (JSON) → (2) geometry면 SVG 별도 생성
+// 코드 렌더러(figure-renderer.ts)가 JSON → SVG 생성
 // ============================================================================
 
 import type {
@@ -18,7 +18,12 @@ import type {
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const VISION_MODEL = 'gpt-4o';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+// 환경변수로 모델 전환: 'claude' | 'gpt' (기본: claude)
+const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'claude') as 'claude' | 'gpt';
+const GPT_MODEL = 'gpt-4o';
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 
 // ============================================================================
 // 1단계: 구조 분석 프롬프트 (JSON 응답)
@@ -190,8 +195,7 @@ SVG STYLE RULES FOR TABLES:
 // ============================================================================
 
 /**
- * 이미지를 GPT-4o Vision으로 해석
- * geometry 타입이면 추가로 SVG를 별도 생성
+ * 이미지를 Vision AI(Claude Sonnet 또는 GPT-4o)로 해석
  * @param imageUrl - 이미지 URL 또는 base64 data URL
  * @param context - 문제 텍스트 (맥락 제공, 선택)
  * @returns 해석된 도형 데이터
@@ -200,34 +204,84 @@ export async function interpretImage(
   imageUrl: string,
   context?: string
 ): Promise<InterpretedFigure> {
-  if (!OPENAI_API_KEY) {
-    console.warn('[Vision] OpenAI API key not configured, returning original image');
-    return createFallbackFigure(imageUrl, 'API 키 미설정');
+  const provider = VISION_PROVIDER;
+
+  // API 키 확인
+  if (provider === 'claude' && !ANTHROPIC_API_KEY) {
+    console.warn('[Vision] Anthropic API key not configured, trying GPT fallback');
+    if (!OPENAI_API_KEY) {
+      return createFallbackFigure(imageUrl, 'API 키 미설정');
+    }
+    return interpretImageWithGPT(imageUrl, context);
+  }
+  if (provider === 'gpt' && !OPENAI_API_KEY) {
+    console.warn('[Vision] OpenAI API key not configured, trying Claude fallback');
+    if (!ANTHROPIC_API_KEY) {
+      return createFallbackFigure(imageUrl, 'API 키 미설정');
+    }
+    return interpretImageWithClaude(imageUrl, context);
   }
 
   try {
-    console.log(`[Vision] Step 1: Analyzing image structure...`);
-
-    // 문제 텍스트 맥락을 최대 800자까지 전달 + 수학 조건 활용 지시
-    const userMessage = context
-      ? `이 이미지는 다음 수학 문제에 포함된 그래프/도형입니다:\n\n"${context.substring(0, 800)}"\n\n중요: 문제 텍스트의 수학적 조건(길이, 각도, 위치관계 등)을 반드시 읽고, 이를 기반으로 정확한 좌표를 계산하여 응답하세요. 음영 색상은 이미지에서 보이는 실제 색상(보통 yellow)을 사용하세요.`
-      : '이 수학 문제의 이미지를 분석해주세요.';
-
-    // Step 1: 구조 분석 (JSON)
-    const response = await callOpenAIVision(imageUrl, ANALYSIS_SYSTEM_PROMPT, userMessage, true);
-    const parsed = parseVisionResponse(response, imageUrl);
-
-    console.log(`[Vision] Step 1 result: ${parsed.figureType} (confidence: ${parsed.confidence})`);
-
-    // Step 2 (Vision SVG) 제거 — GPT-4o Vision SVG는 빗금/손글씨를 그대로 재현하는 문제가 있음
-    // 대신 프로그래밍 렌더러(generateGeometrySVG, generateTableSVG)가 Step 1 JSON 데이터로 깨끗한 SVG를 생성
-    // → 빗금 → 단색 polygon fill, 손글씨 → cleanTableCell로 제거
-
-    return parsed;
+    if (provider === 'claude') {
+      return await interpretImageWithClaude(imageUrl, context);
+    } else {
+      return await interpretImageWithGPT(imageUrl, context);
+    }
   } catch (error) {
-    console.error('[Vision] Image interpretation failed:', error);
+    console.error(`[Vision] ${provider} failed:`, error);
+
+    // 실패 시 다른 모델로 fallback
+    const fallbackProvider = provider === 'claude' ? 'gpt' : 'claude';
+    const fallbackKey = fallbackProvider === 'claude' ? ANTHROPIC_API_KEY : OPENAI_API_KEY;
+
+    if (fallbackKey) {
+      console.log(`[Vision] Falling back to ${fallbackProvider}...`);
+      try {
+        return fallbackProvider === 'claude'
+          ? await interpretImageWithClaude(imageUrl, context)
+          : await interpretImageWithGPT(imageUrl, context);
+      } catch (fallbackError) {
+        console.error(`[Vision] Fallback ${fallbackProvider} also failed:`, fallbackError);
+      }
+    }
+
     return createFallbackFigure(imageUrl, error instanceof Error ? error.message : '알 수 없는 오류');
   }
+}
+
+/**
+ * GPT-4o Vision으로 이미지 해석
+ */
+async function interpretImageWithGPT(imageUrl: string, context?: string): Promise<InterpretedFigure> {
+  console.log(`[Vision] GPT-4o: Analyzing image...`);
+
+  const userMessage = context
+    ? `이 이미지는 다음 수학 문제에 포함된 그래프/도형입니다:\n\n"${context.substring(0, 800)}"\n\n중요: 문제 텍스트의 수학적 조건(길이, 각도, 위치관계 등)을 반드시 읽고, 이를 기반으로 정확한 좌표를 계산하여 응답하세요. 음영 색상은 이미지에서 보이는 실제 색상(보통 yellow)을 사용하세요.`
+    : '이 수학 문제의 이미지를 분석해주세요.';
+
+  const response = await callOpenAIVision(imageUrl, ANALYSIS_SYSTEM_PROMPT, userMessage, true);
+  const parsed = parseVisionResponse(response, imageUrl);
+
+  console.log(`[Vision] GPT-4o result: ${parsed.figureType} (confidence: ${parsed.confidence})`);
+  return parsed;
+}
+
+/**
+ * Claude Sonnet Vision으로 이미지 해석
+ */
+async function interpretImageWithClaude(imageUrl: string, context?: string): Promise<InterpretedFigure> {
+  console.log(`[Vision] Claude Sonnet: Analyzing image...`);
+
+  const userMessage = context
+    ? `이 이미지는 다음 수학 문제에 포함된 그래프/도형입니다:\n\n"${context.substring(0, 800)}"\n\n중요: 문제 텍스트의 수학적 조건(길이, 각도, 위치관계 등)을 반드시 읽고, 이를 기반으로 정확한 좌표를 계산하여 응답하세요. 음영 색상은 이미지에서 보이는 실제 색상(보통 yellow)을 사용하세요.\n\nJSON으로만 응답하세요.`
+    : '이 수학 문제의 이미지를 분석해주세요. JSON으로만 응답하세요.';
+
+  const response = await callClaudeVision(imageUrl, ANALYSIS_SYSTEM_PROMPT, userMessage);
+  const parsed = parseVisionResponse(response, imageUrl);
+
+  console.log(`[Vision] Claude Sonnet result: ${parsed.figureType} (confidence: ${parsed.confidence})`);
+  return parsed;
 }
 
 /**
@@ -329,7 +383,7 @@ async function callOpenAIVision(
   };
 
   const body: Record<string, unknown> = {
-    model: VISION_MODEL,
+    model: GPT_MODEL,
     messages: [
       {
         role: 'system',
@@ -380,6 +434,110 @@ async function callOpenAIVision(
       console.warn(`[Vision] Rate limited (exception), retrying in ${backoff}ms`);
       await new Promise(resolve => setTimeout(resolve, backoff));
       return callOpenAIVision(imageUrl, systemPrompt, userMessage, jsonMode, retries - 1, backoff * 2);
+    }
+    throw error;
+  }
+}
+
+// ============================================================================
+// Claude Vision API 호출
+// ============================================================================
+
+async function callClaudeVision(
+  imageUrl: string,
+  systemPrompt: string,
+  userMessage: string,
+  retries = 3,
+  backoff = 3000
+): Promise<string> {
+  // base64 data URI를 파싱
+  let imageSource: Record<string, unknown>;
+
+  if (imageUrl.startsWith('data:')) {
+    // data:image/png;base64,AAAA... → media_type + data 추출
+    const match = imageUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    if (!match) {
+      throw new Error('Invalid base64 data URI format');
+    }
+    imageSource = {
+      type: 'base64',
+      media_type: match[1],
+      data: match[2],
+    };
+  } else {
+    // URL인 경우 직접 다운로드하여 base64로 변환
+    const res = await fetch(imageUrl);
+    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+    const buffer = await res.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    const contentType = res.headers.get('content-type') || 'image/png';
+    imageSource = {
+      type: 'base64',
+      media_type: contentType,
+      data: base64,
+    };
+  }
+
+  const body = {
+    model: CLAUDE_MODEL,
+    max_tokens: 4000,
+    system: systemPrompt,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: imageSource,
+          },
+          {
+            type: 'text',
+            text: userMessage,
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429 && retries > 0) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? Math.max(parseInt(retryAfter, 10) * 1000, backoff) : backoff;
+        console.warn(`[Vision/Claude] Rate limited, retrying in ${waitTime}ms (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return callClaudeVision(imageUrl, systemPrompt, userMessage, retries - 1, backoff * 2);
+      }
+      const errorBody = await response.text().catch(() => '');
+      throw new Error(`Anthropic API error: ${response.status} - ${errorBody.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+
+    // Claude Messages API 응답에서 텍스트 추출
+    if (data.content && Array.isArray(data.content)) {
+      const textBlock = data.content.find((block: Record<string, unknown>) => block.type === 'text');
+      if (textBlock && typeof textBlock.text === 'string') {
+        return textBlock.text;
+      }
+    }
+
+    throw new Error('Unexpected Claude response format');
+  } catch (error) {
+    if (retries > 0 && error instanceof Error && (error.message.includes('429') || error.message.includes('overloaded'))) {
+      console.warn(`[Vision/Claude] Retrying in ${backoff}ms`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return callClaudeVision(imageUrl, systemPrompt, userMessage, retries - 1, backoff * 2);
     }
     throw error;
   }

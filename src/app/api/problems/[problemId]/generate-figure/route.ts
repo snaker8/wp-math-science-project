@@ -194,7 +194,7 @@ export async function POST(
       figureData: figureDataForDb,
       figureSvg: legacySvg || currentAnalysis.figureSvg || undefined,
       figureGeneratedAt: new Date().toISOString(),
-      figureModel: 'gpt-4o',
+      figureModel: process.env.VISION_PROVIDER === 'gpt' ? 'gpt-4o' : 'claude-sonnet',
     };
 
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;
