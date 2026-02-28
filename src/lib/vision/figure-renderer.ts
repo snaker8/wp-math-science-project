@@ -370,13 +370,13 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 
 const GRAPH_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ea580c', '#7c3aed', '#0891b2'];
 
-// 음영 색상 (그래프용 — 참조사이트 수준: 불투명에 가까운 진한 색상)
+// 음영 색상 (그래프용 — 참조사이트 수준: 거의 불투명한 진한 색상)
 const GRAPH_SHADING: Record<string, string> = {
-  yellow: 'rgba(250,204,21,0.75)',
-  blue: 'rgba(96,165,250,0.50)',
-  red: 'rgba(248,113,113,0.50)',
-  green: 'rgba(74,222,128,0.50)',
-  gray: 'rgba(156,163,175,0.35)',
+  yellow: 'rgba(245,195,50,0.88)',
+  blue: 'rgba(96,165,250,0.65)',
+  red: 'rgba(248,113,113,0.65)',
+  green: 'rgba(74,222,128,0.65)',
+  gray: 'rgba(156,163,175,0.50)',
 };
 
 /**
@@ -524,7 +524,8 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
       .join(' ');
     if (pts) {
       const fill = GRAPH_SHADING[region.color] || GRAPH_SHADING.yellow;
-      svg += `<polygon points="${pts}" fill="${fill}" stroke="none" clip-path="url(#plot-clip)"/>`;
+      // 음영 + 테두리선 (참조사이트 동일: 진한 채움 + 변 라인)
+      svg += `<polygon points="${pts}" fill="${fill}" stroke="#374151" stroke-width="2" clip-path="url(#plot-clip)"/>`;
     }
   }
 
@@ -631,18 +632,21 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     const from = pointMap.get(fromLabel);
     const to = pointMap.get(toLabel);
     if (from && to) {
-      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${axisColor}" stroke-width="1.5" clip-path="url(#plot-clip)"/>`;
+      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${axisColor}" stroke-width="2.2" clip-path="url(#plot-clip)"/>`;
     }
   }
 
-  // ── 5. 점 라벨 (알파벳만, 마커 없음) ──
+  // ── 5. 점 라벨 (알파벳만, 마커 없음, 참조사이트 스타일) ──
   for (const pt of points) {
     if (!pt.label || pt.label === 'O') continue; // O는 이미 원점에 표시
     const sx = toSvgX(pt.x);
     const sy = toSvgY(pt.y);
-    // 라벨 위치: 점 위에 기본, x축 위의 점은 아래에
-    const labelY = pt.y <= 0 ? sy + 18 : sy - 10;
-    svg += `<text x="${sx}" y="${labelY}" text-anchor="middle" font-size="14" font-style="italic" font-family="serif" fill="#1f2937">${escapeXml(pt.label)}</text>`;
+    // 라벨 위치: x축 위 점은 아래에, 그 외는 위에. 좌우 오프셋으로 겹침 방지
+    let labelX = sx;
+    let labelY = pt.y <= 0 ? sy + 18 : sy - 12;
+    // A 라벨은 위쪽으로 더 올림 (곡선 위에 있으므로)
+    if (pt.y > 0) labelY = sy - 14;
+    svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="15" font-weight="bold" font-style="italic" font-family="serif" fill="#1f2937">${escapeXml(pt.label)}</text>`;
   }
 
   svg += '</svg>';
