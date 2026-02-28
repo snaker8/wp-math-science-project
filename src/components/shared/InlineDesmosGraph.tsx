@@ -158,21 +158,23 @@ export function InlineDesmosGraph({
 
       setAddedExprs(validExprs);
 
-      // 점 추가 (라벨 포함)
+      // 점은 라벨만 표시 (도드라진 점 마커 없이)
       points.forEach((pt, i) => {
         try {
           const ptExpr: Record<string, unknown> = {
             id: `point-${i}`,
             latex: `(${pt.x}, ${pt.y})`,
-            color: '#c74440',
-            pointStyle: 'POINT',
+            color: '#888888',
+            pointStyle: 'OPEN',
+            pointSize: 0,
+            pointOpacity: 0,
             dragMode: 'NONE',
           };
-          // Desmos label 지원
           if (pt.label) {
             ptExpr.label = pt.label;
             ptExpr.showLabel = true;
             ptExpr.labelOrientation = 'ABOVE';
+            ptExpr.labelSize = 'small';
           }
           calculator.setExpression(ptExpr as Parameters<DesmosCalcInstance['setExpression']>[0]);
         } catch (ptErr) {

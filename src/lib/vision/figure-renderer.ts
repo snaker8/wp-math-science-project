@@ -337,13 +337,10 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     }
   }
 
-  // ── 8. 꼭짓점 점 + 라벨 (바깥쪽으로 오프셋, 참조사이트 스타일) ──
+  // ── 8. 꼭짓점 라벨 (바깥쪽으로 오프셋, 점 표시 없이 알파벳만) ──
   for (const v of vertices) {
     const sx = toSvgX(v.x);
     const sy = toSvgY(v.y);
-
-    // 꼭짓점 점 (작은 원)
-    svg += `<circle cx="${sx}" cy="${sy}" r="3" fill="${colors.fill}"/>`;
 
     // 라벨: 중심에서 반대 방향 (바깥쪽)으로 배치
     const cx = toSvgX(centroidX);
