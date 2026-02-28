@@ -500,9 +500,9 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   const shadedRegions = rendering.shadedRegions || [];
   const segments = rendering.segments || [];
 
-  const width = 400;
-  const height = 340;
-  const pad = { top: 30, right: 30, bottom: 55, left: 45 };
+  const width = 420;
+  const height = 350;
+  const pad = { top: 30, right: 40, bottom: 60, left: 45 };
 
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -699,8 +699,8 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     let labelY: number;
 
     if (pt.y === 0) {
-      // x축 위의 점 (B, C 등): 좌표 숫자 바로 아래, 곡선에 가리지 않게 충분히 내림
-      labelY = originY + 40;
+      // x축 위의 점 (B, C 등): 플롯 영역 바깥(아래)에 배치하여 곡선과 절대 겹치지 않게
+      labelY = pad.top + plotH + 20;
     } else if (pt.y > 0) {
       // 곡선 위 점 (A 등): 위로 올림
       labelY = sy - 16;
@@ -709,9 +709,9 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
       labelY = sy + 22;
     }
 
-    // 불투명 흰색 배경으로 곡선 위에서도 확실히 보이게
-    svg += `<rect x="${labelX - 12}" y="${labelY - 12}" width="24" height="20" fill="white" opacity="1" rx="3"/>`;
-    svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="16" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
+    // 큰 불투명 흰색 배경 + 굵은 텍스트
+    svg += `<rect x="${labelX - 14}" y="${labelY - 13}" width="28" height="22" fill="white" rx="3"/>`;
+    svg += `<text x="${labelX}" y="${labelY + 1}" text-anchor="middle" font-size="17" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
   }
 
   svg += '</svg>';
