@@ -680,19 +680,18 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     let labelY: number;
 
     if (pt.y === 0) {
-      // x축 위의 점 (B, C 등): 축 바로 아래, 흰 배경으로 곡선 가림 방지
-      labelX = sx;
-      labelY = originY + 18;
+      // x축 위의 점 (B, C 등): 곡선이 지나가는 교차점을 피해 아래-옆으로 배치
+      // 원본 스타일: 글씨를 축 아래 + 약간 왼쪽/오른쪽으로 이동
+      const graphCenter = toSvgX((xMin + xMax) / 2);
+      const isLeft = sx < graphCenter;
+      labelX = isLeft ? sx - 12 : sx + 12; // 곡선 교차점에서 좌/우로 비켜남
+      labelY = originY + 16;
     } else if (pt.y > 0) {
       labelY = sy - 16;
     } else {
       labelY = sy + 22;
     }
 
-    // x축 점은 곡선이 지나가므로 흰색 배경 필수
-    if (pt.y === 0) {
-      svg += `<rect x="${labelX - 10}" y="${labelY - 13}" width="20" height="18" fill="white" rx="2"/>`;
-    }
     svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="16" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
   }
 
