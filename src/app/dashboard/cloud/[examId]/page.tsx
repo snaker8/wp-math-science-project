@@ -1337,7 +1337,7 @@ export default function CloudExamDetailPage() {
               <p className="text-sm">문제 로딩 중...</p>
             </div>
           ) : filteredProblems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {filteredProblems.map((problem) => (
                 <ProblemCardView
                   key={problem.id}
