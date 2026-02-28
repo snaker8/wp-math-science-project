@@ -368,8 +368,8 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 // 그래프 → 프로그래밍 기반 SVG (참조사이트 수준: 축 + 곡선 + 채우기)
 // ============================================================================
 
-// 참조사이트 스타일: 곡선을 진한 파란/남색 계열로 통일
-const GRAPH_COLORS = ['#1e3a5f', '#2563eb', '#1e40af', '#374151', '#4338ca', '#0e7490'];
+// 참조사이트 스타일: 모든 곡선/직선을 검은색 계열로 통일
+const GRAPH_COLORS = ['#1a1a1a', '#000000', '#1a1a1a', '#000000', '#1a1a1a', '#000000'];
 
 // 음영 색상 (그래프용 — 참조사이트 수준: 거의 불투명한 진한 색상)
 const GRAPH_SHADING: Record<string, string> = {
@@ -501,8 +501,8 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   const segments = rendering.segments || [];
 
   const width = 400;
-  const height = 320;
-  const pad = { top: 30, right: 30, bottom: 40, left: 45 };
+  const height = 340;
+  const pad = { top: 30, right: 30, bottom: 55, left: 45 };
 
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -693,12 +693,25 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     if (!pt.label || pt.label === 'O') continue; // O는 이미 원점에 표시
     const sx = toSvgX(pt.x);
     const sy = toSvgY(pt.y);
-    // 라벨 위치: x축 위 점은 아래에, 그 외는 위에. 좌우 오프셋으로 겹침 방지
+
+    // 라벨 배치: 위치별 스마트 오프셋
     let labelX = sx;
-    let labelY = pt.y <= 0 ? sy + 18 : sy - 12;
-    // A 라벨은 위쪽으로 더 올림 (곡선 위에 있으므로)
-    if (pt.y > 0) labelY = sy - 14;
-    svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="15" font-weight="bold" font-style="italic" font-family="serif" fill="#1f2937">${escapeXml(pt.label)}</text>`;
+    let labelY: number;
+
+    if (pt.y === 0) {
+      // x축 위의 점 (B, C 등): 축 아래로 충분히 내려서 좌표 숫자와 겹치지 않게
+      labelY = originY + 32;
+    } else if (pt.y > 0) {
+      // 곡선 위 점 (A 등): 위로 올림
+      labelY = sy - 16;
+    } else {
+      // 아래쪽 점: 더 아래로
+      labelY = sy + 22;
+    }
+
+    // 흰색 배경으로 가독성 확보
+    svg += `<rect x="${labelX - 10}" y="${labelY - 10}" width="20" height="18" fill="white" opacity="0.85" rx="2"/>`;
+    svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="16" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
   }
 
   svg += '</svg>';
