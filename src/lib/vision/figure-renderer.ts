@@ -395,12 +395,6 @@ export function generateTableSVG(rendering: TableRendering): string | null {
     numDataRows >= 2 &&
     (headers[0] === '' || /^-?\d+$/.test(headers[0].trim()) || /^k$/i.test(headers[0].trim()));
 
-  // 조립제법일 때 첫 열("k" 또는 빈 열) 제거 — 참조사이트처럼 계수 열만 표시
-  if (isSyntheticDivision && (headers[0] === '' || /^k$/i.test(headers[0].trim()))) {
-    headers = headers.slice(1);
-    rows = rows.map(row => row.slice(1));
-  }
-
   const COL_W = 60;   // 열 너비
   const ROW_H = 38;   // 행 높이
   const PAD_X = 16;   // 좌우 여백
@@ -417,17 +411,17 @@ export function generateTableSVG(rendering: TableRendering): string | null {
   const y0 = PAD_Y;
 
   if (isSyntheticDivision) {
-    // ── 조립제법 스타일 (참조사이트 수준) ──
-    // k열은 이미 제거됨 → L자 구분선은 좌측 가장자리
-    const dividerX = x0; // 좌측 가장자리 (참조사이트 동일)
+    // ── 조립제법 스타일 (원본 문제 동일) ──
+    // L자 구분선: 첫 번째 열(k/나누는 수) 오른쪽에 위치
+    const dividerX = x0 + COL_W; // 첫 열 오른쪽 (원본 동일)
     const lastRowY = y0 + numDataRows * ROW_H; // 마지막 데이터 행 위 (L자 가로선)
     const tableRight = x0 + numCols * COL_W;
     const tableBottom = y0 + (1 + numDataRows) * ROW_H;
 
-    // L자형 구분선: 세로 (좌측 가장자리, 전체 높이)
+    // L자형 구분선: 세로 (첫 열 오른쪽, 전체 높이)
     svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
-    // L자형 구분선: 가로 (마지막 행 위, 전체 너비)
+    // L자형 구분선: 가로 (마지막 행 위, 구분선부터 오른쪽 끝까지)
     svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${tableRight}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
     // 나머지 구분 세로선 (마지막 열 왼쪽, 결과행에서만)
