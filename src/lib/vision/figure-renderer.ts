@@ -168,13 +168,13 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     ? { stroke: '#d4d4d8', fill: '#e4e4e7', label: '#1f2937', length: '#6b7280', angle: '#60a5fa', dashed: '#a1a1aa', rightAngle: '#9ca3af' }
     : { stroke: '#374151', fill: '#374151', label: '#1f2937', length: '#6b7280', angle: '#2563eb', dashed: '#9ca3af', rightAngle: '#6b7280' };
 
-  // 음영 색상 매핑
+  // 음영 색상 매핑 (참조사이트 수준: 불투명에 가까운 진한 색상)
   const SHADING_COLORS: Record<string, string> = {
-    yellow: 'rgba(250,204,21,0.40)',
-    blue: 'rgba(96,165,250,0.30)',
-    red: 'rgba(248,113,113,0.30)',
-    green: 'rgba(74,222,128,0.30)',
-    gray: 'rgba(156,163,175,0.25)',
+    yellow: 'rgba(250,204,21,0.75)',
+    blue: 'rgba(96,165,250,0.45)',
+    red: 'rgba(248,113,113,0.45)',
+    green: 'rgba(74,222,128,0.45)',
+    gray: 'rgba(156,163,175,0.35)',
   };
 
   // 좌표 범위 계산
@@ -385,8 +385,21 @@ const TABLE_COLORS = {
  * @param rendering - 표 렌더링 데이터
  */
 export function generateTableSVG(rendering: TableRendering): string | null {
-  const { headers, rows } = rendering;
+  let { headers, rows } = rendering;
   if (headers.length === 0 && rows.length === 0) return null;
+
+  const numDataRows = rows.length;
+
+  // 조립제법 감지: 첫 헤더가 숫자, 비어있음, 또는 "k"이고, 데이터 행이 2개 이상
+  const isSyntheticDivision = headers.length > 0 &&
+    numDataRows >= 2 &&
+    (headers[0] === '' || /^-?\d+$/.test(headers[0].trim()) || /^k$/i.test(headers[0].trim()));
+
+  // 조립제법일 때 첫 열("k" 또는 빈 열) 제거 — 참조사이트처럼 계수 열만 표시
+  if (isSyntheticDivision && (headers[0] === '' || /^k$/i.test(headers[0].trim()))) {
+    headers = headers.slice(1);
+    rows = rows.map(row => row.slice(1));
+  }
 
   const COL_W = 60;   // 열 너비
   const ROW_H = 38;   // 행 높이
@@ -394,12 +407,6 @@ export function generateTableSVG(rendering: TableRendering): string | null {
   const PAD_Y = 12;   // 상하 여백
 
   const numCols = Math.max(headers.length, ...rows.map(r => r.length));
-  const numDataRows = rows.length;
-
-  // 조립제법 감지: 첫 헤더가 숫자 또는 비어있고, 데이터 행이 2개 이상
-  const isSyntheticDivision = headers.length > 0 &&
-    numDataRows >= 2 &&
-    (headers[0] === '' || /^-?\d+$/.test(headers[0].trim()));
 
   const totalW = numCols * COL_W + 2 * PAD_X;
   const totalH = (1 + numDataRows) * ROW_H + 2 * PAD_Y; // 1 = 헤더 행
@@ -411,15 +418,16 @@ export function generateTableSVG(rendering: TableRendering): string | null {
 
   if (isSyntheticDivision) {
     // ── 조립제법 스타일 (참조사이트 수준) ──
-    const dividerX = x0 + COL_W; // 첫 열 오른쪽 (L자 세로선)
+    // k열은 이미 제거됨 → L자 구분선은 좌측 가장자리
+    const dividerX = x0; // 좌측 가장자리 (참조사이트 동일)
     const lastRowY = y0 + numDataRows * ROW_H; // 마지막 데이터 행 위 (L자 가로선)
     const tableRight = x0 + numCols * COL_W;
     const tableBottom = y0 + (1 + numDataRows) * ROW_H;
 
-    // L자형 구분선: 세로 (첫 열 오른쪽)
+    // L자형 구분선: 세로 (좌측 가장자리, 전체 높이)
     svg += `<line x1="${dividerX}" y1="${y0}" x2="${dividerX}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
-    // L자형 구분선: 가로 (마지막 행 위, 첫 열 오른쪽부터)
+    // L자형 구분선: 가로 (마지막 행 위, 전체 너비)
     svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${tableRight}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
     // 나머지 구분 세로선 (마지막 열 왼쪽, 결과행에서만)
