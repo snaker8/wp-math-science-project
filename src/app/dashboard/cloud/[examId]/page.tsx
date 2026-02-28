@@ -340,9 +340,7 @@ function ProblemCardView({
                     className="inline text-sm text-zinc-300 leading-relaxed"
                   />
                   {/* 도형 데이터가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
-                  {/* 단, table 타입은 내용에 LaTeX 표가 이미 포함되어 있으므로 중복 렌더링 방지 */}
-                  {(problem.figureData || problem.figureSvg) &&
-                   problem.figureData?.rendering?.type !== 'table' && (
+                  {(problem.figureData || problem.figureSvg) && (
                     <div className="mt-2 flex justify-center">
                       <FigureRenderer
                         figureData={problem.figureData}
@@ -596,8 +594,7 @@ function ExamPaperView({
                         ) : (
                           <>
                             <MixedContentRenderer content={problem.content} className="text-gray-800" />
-                            {(problem.figureData || problem.figureSvg) &&
-                             problem.figureData?.rendering?.type !== 'table' && (
+                            {(problem.figureData || problem.figureSvg) && (
                               <div className="mt-2 flex justify-center">
                                 <FigureRenderer
                                   figureData={problem.figureData}
