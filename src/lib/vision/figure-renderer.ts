@@ -448,10 +448,15 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     js = js.replace(/\\[a-zA-Z]+/g, '');
 
     // 12. 묵시적 곱셈: 2x → 2*x, )(  → )*(
+    //     ★ Math.pow(, Math.sin( 등이 깨지지 않도록 함수명을 임시 보호
+    const savedFns: string[] = [];
+    js = js.replace(/Math\.\w+/g, (m) => { savedFns.push(m); return `§${savedFns.length - 1}§`; });
     js = js.replace(/(\d)([a-z(])/gi, '$1*$2');
     js = js.replace(/([a-z)])(\d)/gi, '$1*$2');
     js = js.replace(/\)\s*\(/g, ')*(');
-    js = js.replace(/([a-z])\s*\(/gi, '$1*(');
+    js = js.replace(/(?<![a-zA-Z])([a-z])\s*\(/gi, '$1*(');
+    // Math 함수 복원
+    js = js.replace(/§(\d+)§/g, (_, idx) => savedFns[parseInt(idx)]);
 
     // 13. 공백 정리
     js = js.replace(/\s+/g, '').trim();
