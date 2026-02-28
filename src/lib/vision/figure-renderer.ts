@@ -365,6 +365,253 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 }
 
 // ============================================================================
+// 그래프 → 프로그래밍 기반 SVG (참조사이트 수준: 축 + 곡선 + 채우기)
+// ============================================================================
+
+const GRAPH_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ea580c', '#7c3aed', '#0891b2'];
+
+// 음영 색상 (그래프용)
+const GRAPH_SHADING: Record<string, string> = {
+  yellow: 'rgba(250,204,21,0.55)',
+  blue: 'rgba(96,165,250,0.40)',
+  red: 'rgba(248,113,113,0.40)',
+  green: 'rgba(74,222,128,0.40)',
+  gray: 'rgba(156,163,175,0.30)',
+};
+
+/**
+ * LaTeX 수식을 JS 함수 (x) => y 로 변환
+ * 고등수학에서 흔히 나오는 다항식, 일차함수 등을 처리
+ * 변환 불가능하면 null 반환
+ */
+function latexToJsFunction(latex: string): ((x: number) => number) | null {
+  try {
+    let expr = latex.trim();
+
+    // y = f(x) 형태에서 우변 추출
+    const eqMatch = expr.match(/(?:y|f\s*\(\s*x\s*\))\s*=\s*(.+)/i);
+    if (eqMatch) {
+      expr = eqMatch[1].trim();
+    } else if (expr.includes('=')) {
+      // x = ... 같은 형태는 플롯 불가
+      return null;
+    }
+
+    // LaTeX → JS 변환
+    let js = expr
+      // 이중 백슬래시 정리
+      .replace(/\\\\/g, '\\')
+      // \frac{a}{b} → ((a)/(b))
+      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '(($1)/($2))')
+      // \sqrt{x} → Math.sqrt(x)
+      .replace(/\\sqrt\{([^}]+)\}/g, 'Math.sqrt($1)')
+      // \sin, \cos, \tan, \log, \ln
+      .replace(/\\sin/g, 'Math.sin')
+      .replace(/\\cos/g, 'Math.cos')
+      .replace(/\\tan/g, 'Math.tan')
+      .replace(/\\log/g, 'Math.log10')
+      .replace(/\\ln/g, 'Math.log')
+      // \pi → Math.PI
+      .replace(/\\pi/g, 'Math.PI')
+      // |x| → Math.abs(x)
+      .replace(/\\left\|([^|]+)\\right\|/g, 'Math.abs($1)')
+      .replace(/\|([^|]+)\|/g, 'Math.abs($1)')
+      // ^ → **
+      .replace(/\^/g, '**')
+      // LaTeX 래핑 제거
+      .replace(/\\left|\\right/g, '')
+      .replace(/\\cdot/g, '*')
+      .replace(/\\times/g, '*')
+      .replace(/\{|\}/g, '')
+      // 묵시적 곱셈: 2x → 2*x, )(  → )*(
+      .replace(/(\d)([a-z(])/gi, '$1*$2')
+      .replace(/([a-z)])(\d)/gi, '$1*$2')
+      .replace(/\)\s*\(/g, ')*(')
+      .replace(/([a-z])\s*\(/gi, '$1*(')
+      // 공백 정리
+      .replace(/\s+/g, '')
+      .trim();
+
+    // 미지수(a, b, c 등 x가 아닌 변수)가 있으면 플롯 불가
+    if (/[a-wyzA-Z]/.test(js.replace(/Math\.\w+/g, '').replace(/PI/g, ''))) {
+      return null;
+    }
+
+    // 안전 검증: 허용된 문자만
+    const safeJs = js.replace(/Math\.(sin|cos|tan|log|log10|sqrt|abs|PI|E)/g, '');
+    if (/[a-wyzA-Z]/.test(safeJs)) return null;
+
+    // 함수 생성 및 테스트
+    const fn = new Function('x', `"use strict"; return ${js};`) as (x: number) => number;
+    const test0 = fn(0);
+    const test1 = fn(1);
+    if (typeof test0 !== 'number' || typeof test1 !== 'number') return null;
+
+    return fn;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 그래프 데이터로 정적 SVG 코드 생성 (참조사이트 수준)
+ * - 좌표축 + 화살표 + 라벨 (x, y, O)
+ * - 곡선 (LaTeX → JS 변환 후 샘플링)
+ * - 점 라벨 (알파벳만, 점 마커 없음)
+ * - 음영 영역 (삼각형 등)
+ * - 선분 연결
+ */
+export function generateGraphSVG(rendering: GraphRendering): string | null {
+  const { expressions, xRange, yRange, points } = rendering;
+  const shadedRegions = rendering.shadedRegions || [];
+  const segments = rendering.segments || [];
+
+  const width = 400;
+  const height = 320;
+  const pad = { top: 25, right: 25, bottom: 35, left: 40 };
+
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+
+  const [xMin, xMax] = xRange;
+  const [yMin, yMax] = yRange;
+
+  const toSvgX = (x: number) => pad.left + ((x - xMin) / (xMax - xMin)) * plotW;
+  const toSvgY = (y: number) => pad.top + ((yMax - y) / (yMax - yMin)) * plotH;
+
+  // 점 라벨 → 좌표 매핑
+  const pointMap = new Map(points.map(p => [p.label || '', p]));
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" class="figure-graph">`;
+
+  // 클리핑 영역 (곡선이 축 밖으로 나가지 않게)
+  svg += `<defs><clipPath id="plot-clip"><rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}"/></clipPath></defs>`;
+
+  // ── 1. 음영 영역 (가장 먼저) ──
+  for (const region of shadedRegions) {
+    const pts = region.vertices
+      .map(label => pointMap.get(label))
+      .filter(Boolean)
+      .map(p => `${toSvgX(p!.x)},${toSvgY(p!.y)}`)
+      .join(' ');
+    if (pts) {
+      const fill = GRAPH_SHADING[region.color] || GRAPH_SHADING.yellow;
+      svg += `<polygon points="${pts}" fill="${fill}" stroke="none" clip-path="url(#plot-clip)"/>`;
+    }
+  }
+
+  // ── 2. 좌표축 ──
+  const axisColor = '#374151';
+  const originX = toSvgX(0);
+  const originY = toSvgY(0);
+  const axisInRange = (v: number, min: number, max: number) => v >= min && v <= max;
+
+  // X축 (y=0이 범위 안에 있을 때)
+  if (axisInRange(0, yMin, yMax)) {
+    svg += `<line x1="${pad.left}" y1="${originY}" x2="${pad.left + plotW + 8}" y2="${originY}" stroke="${axisColor}" stroke-width="1.5"/>`;
+    // 화살표
+    svg += `<polygon points="${pad.left + plotW + 8},${originY} ${pad.left + plotW + 2},${originY - 4} ${pad.left + plotW + 2},${originY + 4}" fill="${axisColor}"/>`;
+    // x 라벨
+    svg += `<text x="${pad.left + plotW + 12}" y="${originY + 4}" font-size="14" font-style="italic" font-family="serif" fill="${axisColor}">x</text>`;
+  }
+
+  // Y축 (x=0이 범위 안에 있을 때)
+  if (axisInRange(0, xMin, xMax)) {
+    svg += `<line x1="${originX}" y1="${pad.top + plotH + 8}" x2="${originX}" y2="${pad.top - 8}" stroke="${axisColor}" stroke-width="1.5"/>`;
+    // 화살표
+    svg += `<polygon points="${originX},${pad.top - 8} ${originX - 4},${pad.top - 2} ${originX + 4},${pad.top - 2}" fill="${axisColor}"/>`;
+    // y 라벨
+    svg += `<text x="${originX - 14}" y="${pad.top - 8}" font-size="14" font-style="italic" font-family="serif" fill="${axisColor}">y</text>`;
+  }
+
+  // 원점 O 라벨
+  if (axisInRange(0, xMin, xMax) && axisInRange(0, yMin, yMax)) {
+    svg += `<text x="${originX - 12}" y="${originY + 16}" font-size="13" font-style="italic" font-family="serif" fill="${axisColor}">O</text>`;
+  }
+
+  // 눈금 (주요 정수만)
+  const tickSize = 4;
+  for (let x = Math.ceil(xMin); x <= Math.floor(xMax); x++) {
+    if (x === 0) continue;
+    const sx = toSvgX(x);
+    if (axisInRange(0, yMin, yMax)) {
+      svg += `<line x1="${sx}" y1="${originY - tickSize}" x2="${sx}" y2="${originY + tickSize}" stroke="${axisColor}" stroke-width="1"/>`;
+    }
+  }
+  for (let y = Math.ceil(yMin); y <= Math.floor(yMax); y++) {
+    if (y === 0) continue;
+    const sy = toSvgY(y);
+    if (axisInRange(0, xMin, xMax)) {
+      svg += `<line x1="${originX - tickSize}" y1="${sy}" x2="${originX + tickSize}" y2="${sy}" stroke="${axisColor}" stroke-width="1"/>`;
+    }
+  }
+
+  // ── 3. 곡선 (수식 → JS 변환 → 샘플링) ──
+  const numSamples = 300;
+  for (let i = 0; i < expressions.length; i++) {
+    const expr = expressions[i];
+    if (expr.hidden) continue;
+
+    const fn = latexToJsFunction(expr.latex);
+    if (!fn) continue;
+
+    const step = (xMax - xMin) / numSamples;
+    let pathData = '';
+    let started = false;
+
+    for (let j = 0; j <= numSamples; j++) {
+      const x = xMin + j * step;
+      const y = fn(x);
+      if (isNaN(y) || !isFinite(y)) {
+        started = false;
+        continue;
+      }
+      // Y 범위 밖은 클리핑으로 처리하므로 약간 여유 둠
+      if (y < yMin - (yMax - yMin) * 2 || y > yMax + (yMax - yMin) * 2) {
+        started = false;
+        continue;
+      }
+      const sx = toSvgX(x);
+      const sy = toSvgY(y);
+      if (!started) {
+        pathData += `M${sx.toFixed(1)},${sy.toFixed(1)}`;
+        started = true;
+      } else {
+        pathData += ` L${sx.toFixed(1)},${sy.toFixed(1)}`;
+      }
+    }
+
+    if (pathData) {
+      const color = expr.color || GRAPH_COLORS[i % GRAPH_COLORS.length];
+      const dashAttr = expr.style === 'dashed' ? ' stroke-dasharray="6,4"' : '';
+      svg += `<path d="${pathData}" stroke="${color}" stroke-width="2.2" fill="none" clip-path="url(#plot-clip)"${dashAttr}/>`;
+    }
+  }
+
+  // ── 4. 선분 연결 ──
+  for (const [fromLabel, toLabel] of segments) {
+    const from = pointMap.get(fromLabel);
+    const to = pointMap.get(toLabel);
+    if (from && to) {
+      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${axisColor}" stroke-width="1.5" clip-path="url(#plot-clip)"/>`;
+    }
+  }
+
+  // ── 5. 점 라벨 (알파벳만, 마커 없음) ──
+  for (const pt of points) {
+    if (!pt.label || pt.label === 'O') continue; // O는 이미 원점에 표시
+    const sx = toSvgX(pt.x);
+    const sy = toSvgY(pt.y);
+    // 라벨 위치: 점 위에 기본, x축 위의 점은 아래에
+    const labelY = pt.y <= 0 ? sy + 18 : sy - 10;
+    svg += `<text x="${sx}" y="${labelY}" text-anchor="middle" font-size="14" font-style="italic" font-family="serif" fill="#1f2937">${escapeXml(pt.label)}</text>`;
+  }
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ============================================================================
 // 표 → 프로그래밍 기반 SVG (조립제법/일반 표 모두 지원)
 // ============================================================================
 

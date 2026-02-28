@@ -15,7 +15,7 @@ import type {
   DiagramRendering,
 } from '@/types/ocr';
 import { MathRenderer } from './MathRenderer';
-import { generateGeometrySVG, generateTableSVG } from '@/lib/vision/figure-renderer';
+import { generateGeometrySVG, generateTableSVG, generateGraphSVG } from '@/lib/vision/figure-renderer';
 
 // Desmos는 실제 graph 타입이 있을 때만 로드 (성능 최적화)
 const InlineDesmosGraph = lazy(() =>
@@ -145,7 +145,7 @@ function TypedFigureRenderer({
 }
 
 // ============================================================================
-// 그래프 → Desmos
+// 그래프 → SVG 우선, Desmos fallback
 // ============================================================================
 
 function GraphFigure({
@@ -157,9 +157,25 @@ function GraphFigure({
   darkMode: boolean;
   maxWidth: number;
 }) {
+  // SVG 렌더링 시도 (참조사이트 스타일)
+  const svgResult = useMemo(() => {
+    return generateGraphSVG(rendering);
+  }, [rendering]);
+
+  // SVG 성공 → 정적 SVG 표시
+  if (svgResult) {
+    return (
+      <div
+        className="figure-graph-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
+        dangerouslySetInnerHTML={{ __html: svgResult }}
+      />
+    );
+  }
+
+  // SVG 실패 (수식 변환 불가) → Desmos fallback
   const expressions = rendering.expressions.map(e => e.latex);
   const graphWidth = Math.min(maxWidth, 350);
-  const graphHeight = Math.round(graphWidth * 0.72); // 약 5:3.6 비율
+  const graphHeight = Math.round(graphWidth * 0.72);
 
   return (
     <div>

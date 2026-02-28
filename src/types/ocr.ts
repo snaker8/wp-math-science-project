@@ -154,6 +154,13 @@ export interface GraphRendering {
   points: Array<{ x: number; y: number; label?: string }>;
   /** 주석/설명 텍스트 */
   annotations: string[];
+  /** 음영 영역 (점 라벨 배열 + 색상) — SVG 렌더링용 */
+  shadedRegions?: Array<{
+    vertices: string[]; // 점 라벨로 참조
+    color: string; // yellow | blue | red | green | gray
+  }>;
+  /** 선분 연결 (점 라벨 쌍) — SVG 렌더링용 */
+  segments?: Array<[string, string]>;
 }
 
 export interface GraphExpressionData {
