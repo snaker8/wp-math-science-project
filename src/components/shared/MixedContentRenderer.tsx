@@ -215,7 +215,7 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
             const boxContent = conditionBoxes[boxIdx];
             if (boxContent) {
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-gray-300 bg-gray-50/50">
+                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-accent/20 bg-accent-muted">
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
               );
