@@ -616,13 +616,13 @@ async function saveEditedProblemsDirect(
 
   console.log(`[Direct Save] instituteId: ${instituteId}, createdBy: ${createdBy}, bookGroupId: ${bookGroupId}`);
 
-  // ★ Exam 레코드 생성 (자산화 시 시험지 목록에 표시되도록)
+  // ★ Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   let examId: string | null = null;
   try {
     const examInsertData: Record<string, any> = {
       title: job.fileName.replace(/\.[^/.]+$/, ''),
       description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
-      status: 'COMPLETED',
+      status: 'CLOUD_ASSET',  // ★ CLOUD_ASSET: 시험지관리에서 제외
       created_by: createdBy,
       institute_id: instituteId,
       total_points: editedProblems.length * 4,
@@ -891,7 +891,7 @@ async function saveProblemsToDB(
   console.log(`[DB] Saving ${results.length} problems for job ${jobId}`);
   console.log(`[DB] instituteId: ${instituteId}, createdBy: ${createdBy}`);
 
-  // 1. Exam 레코드 생성 (Repository 노출용)
+  // 1. Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   // 003_exams.sql 마이그레이션 스키마 기준 컬럼만 사용
   let examId: string | null = null;
   try {
@@ -902,7 +902,7 @@ async function saveProblemsToDB(
     const examInsertData: Record<string, any> = {
       title: job.fileName.replace(/\.[^/.]+$/, ""),
       description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
-      status: 'COMPLETED',
+      status: 'CLOUD_ASSET',  // ★ CLOUD_ASSET: 시험지관리에서 제외
       created_by: createdBy,
       institute_id: instituteId,
       total_points: results.length * 4,

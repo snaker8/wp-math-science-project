@@ -200,9 +200,15 @@ export async function POST(
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;
     console.log(`[generate-figure] Saving figureData: type=${figureDataForDb.figureType}, hasSvg=${!!renderingAny?.svg}, svgLen=${typeof renderingAny?.svg === 'string' ? renderingAny.svg.length : 0}`);
 
+    // ★ 도형 생성 성공 시 크롭 이미지 제거 (클린 렌더링으로 대체)
+    const updatedImages = images.filter((img) => img.type !== 'crop');
+
     const { error: updateError } = await supabaseAdmin
       .from('problems')
-      .update({ ai_analysis: updatedAnalysis })
+      .update({
+        ai_analysis: updatedAnalysis,
+        images: updatedImages,  // 크롭 이미지 제거
+      })
       .eq('id', problemId);
 
     if (updateError) {

@@ -21,11 +21,8 @@ export function TopNav() {
         {/* ── Left: 로고 + 탭 ── */}
         <div className="flex items-center gap-1">
           {/* 로고 */}
-          <Link href="/dashboard" className="flex items-center gap-2 mr-6 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-              <span className="text-white font-bold text-sm">과</span>
-            </div>
-            <span className="text-content-primary font-semibold text-sm hidden lg:block">
+          <Link href="/dashboard" className="flex items-center mr-6 shrink-0">
+            <span className="text-content-primary font-bold text-base">
               과사람
             </span>
           </Link>
@@ -60,9 +57,9 @@ export function TopNav() {
           <div className="w-px h-6 bg-surface-raised mx-1" />
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-raised transition-colors">
             <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center">
-              <span className="text-accent text-xs font-semibold">최</span>
+              <span className="text-accent text-xs font-semibold">임</span>
             </div>
-            <span className="text-content-secondary text-sm hidden md:block">최현철</span>
+            <span className="text-content-secondary text-sm hidden md:block">임세현</span>
           </button>
         </div>
       </div>

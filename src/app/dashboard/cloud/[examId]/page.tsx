@@ -25,6 +25,8 @@ import {
   Type,
   RefreshCw,
   Shapes,
+  Trash2,
+  CheckCheck,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
@@ -1050,6 +1052,47 @@ export default function CloudExamDetailPage() {
     });
   }, [problems, activeDifficulty, activeDomain]);
 
+  // ★ 전체 선택
+  const selectAll = useCallback(() => {
+    const allIds = new Set(filteredProblems.map(p => p.id));
+    setSelectedProblems(allIds);
+  }, [filteredProblems]);
+
+  // ★ 선택 삭제
+  const [isDeleting, setIsDeleting] = useState(false);
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedProblems.size === 0) return;
+    if (!confirm(`선택한 ${selectedProblems.size}개 문제를 삭제하시겠습니까?\n삭제된 문제는 복구할 수 없습니다.`)) return;
+
+    setIsDeleting(true);
+    let deleted = 0;
+    let failed = 0;
+
+    for (const problemId of selectedProblems) {
+      try {
+        const res = await fetch(`/api/problems/${problemId}`, { method: 'DELETE' });
+        if (res.ok) {
+          deleted++;
+        } else {
+          failed++;
+          console.error(`[Delete] Problem ${problemId} failed:`, await res.text());
+        }
+      } catch (err) {
+        failed++;
+        console.error(`[Delete] Problem ${problemId} error:`, err);
+      }
+    }
+
+    setIsDeleting(false);
+    setSelectedProblems(new Set());
+    setIsSelectionMode(false);
+    refetchProblems();
+
+    if (failed > 0) {
+      alert(`${deleted}개 삭제 완료, ${failed}개 실패`);
+    }
+  }, [selectedProblems, refetchProblems]);
+
   const toggleDifficulty = (d: DifficultyKey) => {
     setActiveDifficulty((prev) => (prev === d ? null : d));
   };
@@ -1341,32 +1384,64 @@ export default function CloudExamDetailPage() {
 
       {/* ======== Floating Selection Bar ======== */}
       <AnimatePresence>
-        {isSelectionMode && selectedProblems.size > 0 && (
+        {isSelectionMode && (
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-6 right-8 z-50 flex items-center gap-3"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border bg-surface-card/95 backdrop-blur-lg px-5 py-3 shadow-xl shadow-black/30"
           >
+            {/* 전체 선택 */}
+            <button
+              type="button"
+              onClick={selectAll}
+              className="flex items-center gap-1.5 text-sm text-content-secondary hover:text-content-primary transition-colors"
+            >
+              <CheckCheck className="h-4 w-4" />
+              <span>전체 선택</span>
+            </button>
             <button
               type="button"
               onClick={clearSelection}
-              className="text-sm text-content-secondary hover:text-content-primary underline underline-offset-2 transition-colors"
+              className="text-sm text-content-tertiary hover:text-content-primary transition-colors"
             >
-              선택 초기화
+              초기화
             </button>
-            <button
-              type="button"
-              onClick={handleCreateExam}
-              className="flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              <span>선택한 문제보기</span>
-              <span className="flex items-center justify-center bg-white/20 rounded-full w-6 h-6 text-xs font-bold">
-                {selectedProblems.size}
-              </span>
-            </button>
+
+            <div className="w-px h-6 bg-surface-raised" />
+
+            {/* 선택 개수 표시 */}
+            <span className="text-sm font-bold text-content-primary">
+              {selectedProblems.size}개 선택
+            </span>
+
+            <div className="w-px h-6 bg-surface-raised" />
+
+            {/* 시험지 만들기 */}
+            {selectedProblems.size > 0 && (
+              <button
+                type="button"
+                onClick={handleCreateExam}
+                className="flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-sm font-bold text-white transition-all"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                <span>시험지 만들기</span>
+              </button>
+            )}
+
+            {/* ★ 선택 삭제 */}
+            {selectedProblems.size > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={isDeleting}
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-500 px-4 py-2 text-sm font-bold text-white transition-all disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>{isDeleting ? '삭제 중...' : '삭제'}</span>
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
