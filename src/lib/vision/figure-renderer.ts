@@ -609,20 +609,7 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     svg += `<text x="${originX - 12}" y="${originY + 16}" font-size="13" font-style="italic" font-family="serif" fill="${axisColor}">O</text>`;
   }
 
-  // 축 위 좌표 라벨 — 라벨이 있는 점(B,C 등)은 숫자 대신 알파벳을 표시하므로 스킵
-  const labeledXCoords = new Set(points.filter(p => p.label && p.y === 0).map(p => p.x));
-  const labeledYCoords = new Set(points.filter(p => p.label && p.x === 0).map(p => p.y));
-  const usedYLabels = new Set<number>();
-  for (const pt of points) {
-    if (!pt.label || pt.label === 'O') continue;
-    // y축 위의 점 (x=0) → y좌표 표시 (라벨 없는 경우만)
-    if (pt.x === 0 && pt.y !== 0 && !labeledYCoords.has(pt.y) && axisInRange(0, xMin, xMax)) {
-      if (!usedYLabels.has(pt.y)) {
-        usedYLabels.add(pt.y);
-        svg += `<text x="${originX - 8}" y="${toSvgY(pt.y) + 4}" text-anchor="end" font-size="12" font-family="serif" fill="${axisColor}">${pt.y}</text>`;
-      }
-    }
-  }
+  // ※ 축 위 좌표 숫자는 표시하지 않음 — 좌표는 학생이 풀어야 하는 값이므로
 
   // ── 3. 곡선 (수식 → JS 변환 → 샘플링) ──
   const numSamples = 400;
