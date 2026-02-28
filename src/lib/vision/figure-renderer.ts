@@ -424,10 +424,13 @@ export function generateTableSVG(rendering: TableRendering): string | null {
     // L자형 구분선: 가로 (마지막 행 위, 구분선부터 오른쪽 끝까지)
     svg += `<line x1="${dividerX}" y1="${lastRowY}" x2="${tableRight}" y2="${lastRowY}" stroke="${TABLE_COLORS.divider}" stroke-width="2"/>`;
 
-    // 나머지 구분 세로선 (마지막 열 왼쪽, 결과행에서만)
+    // 나머지 구분 ㄴ 형태 (마지막 열: 세로선 + 아래 가로선)
     if (numCols > 2) {
       const remainderX = x0 + (numCols - 1) * COL_W;
+      // 세로선: 가로 구분선 ~ 표 하단
       svg += `<line x1="${remainderX}" y1="${lastRowY}" x2="${remainderX}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="1.5"/>`;
+      // 가로선: 표 하단 (ㄴ의 바닥)
+      svg += `<line x1="${remainderX}" y1="${tableBottom}" x2="${tableRight}" y2="${tableBottom}" stroke="${TABLE_COLORS.divider}" stroke-width="1.5"/>`;
     }
 
     // 헤더 행 텍스트
@@ -450,6 +453,8 @@ export function generateTableSVG(rendering: TableRendering): string | null {
         if (cell === '' || cell === '□' || cell === '?') {
           // 첫 열(k열)의 빈 셀은 박스를 그리지 않음 (원본 동일)
           if (c === 0) continue;
+          // 중간행(결과행 제외)의 첫 계수 칸(c=1)도 박스 없음 — 조립제법에서 첫 계수는 바로 내려감
+          if (c === 1 && r === 0) continue;
           // 빈 셀 → 네모 박스
           const boxW = 24;
           const boxH = 20;
