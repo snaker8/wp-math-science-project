@@ -59,22 +59,22 @@ function StatusCard({
       <div className={`p-2 ${c.bg} rounded-lg mb-3`}>
         <Icon className={`w-5 h-5 ${c.text}`} />
       </div>
-      <span className="text-[11px] text-zinc-500 font-medium mb-1">{label}</span>
-      <span className="text-3xl font-bold text-white">{value}</span>
+      <span className="text-[11px] text-content-tertiary font-medium mb-1">{label}</span>
+      <span className="text-3xl font-bold text-content-primary">{value}</span>
     </>
   );
 
   if (href) {
     return (
-      <Link href={href} className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 hover:bg-zinc-800/50 transition-all cursor-pointer group">
+      <Link href={href} className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/50 border border-subtle hover:border-white/10 hover:bg-surface-raised/50 transition-all cursor-pointer group">
         {content}
-        <span className="text-[9px] text-zinc-600 group-hover:text-zinc-400 mt-2 transition-colors">클릭하여 이동 →</span>
+        <span className="text-[9px] text-content-muted group-hover:text-content-secondary mt-2 transition-colors">클릭하여 이동 →</span>
       </Link>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-all">
+    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/50 border border-subtle hover:border-white/10 transition-all">
       {content}
     </div>
   );
@@ -102,14 +102,14 @@ function MonthSelector({
       <div className="flex items-center gap-2">
         <button
           onClick={() => onYearChange(selectedYear - 1)}
-          className="p-1 text-zinc-500 hover:text-white transition-colors"
+          className="p-1 text-content-tertiary hover:text-content-primary transition-colors"
         >
           <ChevronLeft size={14} />
         </button>
-        <span className="text-sm font-bold text-white min-w-[48px] text-center">{selectedYear}</span>
+        <span className="text-sm font-bold text-content-primary min-w-[48px] text-center">{selectedYear}</span>
         <button
           onClick={() => onYearChange(selectedYear + 1)}
-          className="p-1 text-zinc-500 hover:text-white transition-colors"
+          className="p-1 text-content-tertiary hover:text-content-primary transition-colors"
         >
           <ChevronRight size={14} />
         </button>
@@ -122,7 +122,7 @@ function MonthSelector({
             className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
               selectedMonth === m
                 ? 'bg-white text-black'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'
             }`}
           >
             {m}월
@@ -196,7 +196,7 @@ export default function DashboardPage() {
       {/* Header Section */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-zinc-400 font-medium mb-1">{currentDate}</h2>
+          <h2 className="text-content-secondary font-medium mb-1">{currentDate}</h2>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
             대시보드
           </h1>
@@ -204,13 +204,13 @@ export default function DashboardPage() {
         <div className="flex gap-3">
           <button
             onClick={() => router.push('/dashboard/settings')}
-            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-sm font-medium rounded-lg border border-white/10 transition-colors"
+            className="px-4 py-2 bg-surface-card hover:bg-surface-raised text-sm font-medium rounded-lg border border-white/10 transition-colors"
           >
             설정
           </button>
           <button
             onClick={() => router.push('/dashboard/create')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-content-primary text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
           >
             + 시험지 제작
           </button>
@@ -221,7 +221,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* 현재 등록 현황판 */}
         <GlowCard className="lg:col-span-3">
-          <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-content-primary mb-4 flex items-center gap-2">
             <Activity className="w-4 h-4 text-indigo-400" />
             현재 등록 현황판
           </h3>
@@ -259,11 +259,11 @@ export default function DashboardPage() {
         {/* 공지사항 */}
         <GlowCard className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <h3 className="text-sm font-bold text-content-primary flex items-center gap-2">
               <Bell className="w-4 h-4 text-amber-400" />
               공지사항
             </h3>
-            <span className="text-[10px] text-zinc-500">최근 {mockNotices.length}건</span>
+            <span className="text-[10px] text-content-tertiary">최근 {mockNotices.length}건</span>
           </div>
           <div className="space-y-0 divide-y divide-white/5">
             {mockNotices.map((notice) => (
@@ -277,9 +277,9 @@ export default function DashboardPage() {
                       긴급
                     </span>
                   )}
-                  <span className="text-sm text-zinc-300 truncate">{notice.title}</span>
+                  <span className="text-sm text-content-secondary truncate">{notice.title}</span>
                 </div>
-                <span className="text-[10px] text-zinc-600 shrink-0">{notice.date}</span>
+                <span className="text-[10px] text-content-muted shrink-0">{notice.date}</span>
               </div>
             ))}
           </div>
@@ -293,8 +293,8 @@ export default function DashboardPage() {
           <div className="flex-1 min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">월별 결산</h3>
-                <p className="text-[11px] text-zinc-500">선택한 연·월 기준으로 지표가 반영됩니다.</p>
+                <h3 className="text-sm font-bold text-content-primary mb-0.5">월별 결산</h3>
+                <p className="text-[11px] text-content-tertiary">선택한 연·월 기준으로 지표가 반영됩니다.</p>
               </div>
               <MonthSelector
                 selectedMonth={selectedMonth}
@@ -307,8 +307,8 @@ export default function DashboardPage() {
             {/* 시험지 출제 수 차트 */}
             <div>
               <div className="mb-3">
-                <h4 className="text-xs font-semibold text-zinc-300">시험지 출제 수</h4>
-                <p className="text-[10px] text-zinc-600">이번 달 제작 추이를 확인하세요.</p>
+                <h4 className="text-xs font-semibold text-content-secondary">시험지 출제 수</h4>
+                <p className="text-[10px] text-content-muted">이번 달 제작 추이를 확인하세요.</p>
               </div>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
@@ -333,8 +333,8 @@ export default function DashboardPage() {
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#18181b',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        backgroundColor: '#1a1d28',
+                        border: '1px solid rgba(148,163,184,0.12)',
                         borderRadius: '8px',
                         fontSize: '11px',
                         color: '#fff',
@@ -354,46 +354,46 @@ export default function DashboardPage() {
           </div>
 
           {/* 우측 사이드 섹션 */}
-          <div className="w-full lg:w-64 shrink-0 space-y-5 lg:border-l lg:border-white/5 lg:pl-6">
+          <div className="w-full lg:w-64 shrink-0 space-y-5 lg:border-l lg:border-subtle lg:pl-6">
             {/* AI 포인트 */}
             <div>
-              <h4 className="text-xs font-semibold text-zinc-300 mb-3 flex items-center gap-1.5">
+              <h4 className="text-xs font-semibold text-content-secondary mb-3 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
                 AI 포인트
               </h4>
               <div className="text-center mb-3">
-                <p className="text-[10px] text-zinc-500 mb-1">{selectedMonth}월 사용량</p>
+                <p className="text-[10px] text-content-tertiary mb-1">{selectedMonth}월 사용량</p>
                 <p className="text-3xl font-bold text-rose-400">{aiPoints.monthUsage} P</p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900/80 border border-white/5">
-                  <span className="text-xs text-zinc-400">현재 잔액</span>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
+                  <span className="text-xs text-content-secondary">현재 잔액</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white">{aiPoints.balance} P</span>
+                    <span className="text-sm font-bold text-content-primary">{aiPoints.balance} P</span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
                       정상
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900/80 border border-white/5">
-                  <span className="text-xs text-zinc-400">경고 임계치</span>
-                  <span className="text-sm font-bold text-zinc-500">{aiPoints.warningThreshold} P</span>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
+                  <span className="text-xs text-content-secondary">경고 임계치</span>
+                  <span className="text-sm font-bold text-content-tertiary">{aiPoints.warningThreshold} P</span>
                 </div>
               </div>
             </div>
 
             {/* DB 문제 현황 */}
             <div>
-              <h4 className="text-xs font-semibold text-zinc-300 mb-3 flex items-center gap-1.5">
+              <h4 className="text-xs font-semibold text-content-secondary mb-3 flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-indigo-400" />
                 DB 문제 현황
               </h4>
               <div className="text-center mb-3">
-                <p className="text-[10px] text-zinc-500 mb-1">총 등록 문제</p>
-                <p className="text-2xl font-bold text-white">{stats.totalProblems}</p>
+                <p className="text-[10px] text-content-tertiary mb-1">총 등록 문제</p>
+                <p className="text-2xl font-bold text-content-primary">{stats.totalProblems}</p>
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900/80 border border-white/5">
-                <span className="text-xs text-zinc-400">이번 주 추가</span>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
+                <span className="text-xs text-content-secondary">이번 주 추가</span>
                 <span className="text-sm font-bold text-indigo-400">+{stats.problemsThisWeek}</span>
               </div>
             </div>
@@ -408,7 +408,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <BrainCircuit className="w-5 h-5 text-indigo-400" />
-              <h3 className="text-sm font-semibold text-white">AI 취약 단원 분석</h3>
+              <h3 className="text-sm font-semibold text-content-primary">AI 취약 단원 분석</h3>
             </div>
           </div>
 
@@ -416,7 +416,7 @@ export default function DashboardPage() {
             <div className="min-w-[550px]">
               <div className="relative">
                 <div
-                  className="absolute -left-6 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-zinc-500 font-medium whitespace-nowrap"
+                  className="absolute -left-6 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-content-tertiary font-medium whitespace-nowrap"
                   style={{ transformOrigin: 'center center' }}
                 >
                   학생
@@ -432,7 +432,7 @@ export default function DashboardPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.2 + i * 0.03 }}
-                        className="text-[10px] text-zinc-500 text-center flex items-end justify-center break-keep leading-tight pb-1"
+                        className="text-[10px] text-content-tertiary text-center flex items-end justify-center break-keep leading-tight pb-1"
                       >
                         {unit}
                       </motion.div>
@@ -451,7 +451,7 @@ export default function DashboardPage() {
                   >
                     {heatmapConfig.students.map((student) => (
                       <div key={student} className="contents">
-                        <div className="text-[10px] font-medium text-zinc-500 text-right pr-3 py-1 whitespace-nowrap flex items-center justify-end">
+                        <div className="text-[10px] font-medium text-content-tertiary text-right pr-3 py-1 whitespace-nowrap flex items-center justify-end">
                           {student}
                         </div>
                         {heatmapConfig.units.map((unit) => {
@@ -475,11 +475,11 @@ export default function DashboardPage() {
                               className="relative group h-7 rounded-[2px] transition-all duration-200 cursor-pointer border border-transparent hover:border-white/20 hover:brightness-110 hover:z-10"
                               style={{ backgroundColor: getColor(score) }}
                             >
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-black/80 backdrop-blur-md border border-white/10 shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 min-w-[120px]">
-                                <div className="text-[10px] text-zinc-500 tracking-wide mb-1 font-medium">{student}</div>
-                                <div className="text-white text-xs font-semibold mb-1.5">{unit}</div>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-surface-base/80 backdrop-blur-md border border-white/10 shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 min-w-[120px]">
+                                <div className="text-[10px] text-content-tertiary tracking-wide mb-1 font-medium">{student}</div>
+                                <div className="text-content-primary text-xs font-semibold mb-1.5">{unit}</div>
                                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/10">
-                                  <span className="text-zinc-400">Proficiency</span>
+                                  <span className="text-content-secondary">Proficiency</span>
                                   <span className="text-indigo-400 font-bold font-mono">{score}%</span>
                                 </div>
                               </div>
@@ -490,15 +490,15 @@ export default function DashboardPage() {
                     ))}
                   </motion.div>
 
-                  <div className="text-[10px] text-zinc-500 text-center mt-3 font-medium">단원</div>
+                  <div className="text-[10px] text-content-tertiary text-center mt-3 font-medium">단원</div>
                 </div>
               </div>
 
               {/* Legend */}
-              <div className="flex items-center justify-end gap-3 mt-5 pt-3 border-t border-white/5">
-                <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-medium">Proficiency Index</span>
+              <div className="flex items-center justify-end gap-3 mt-5 pt-3 border-t border-subtle">
+                <span className="text-[9px] uppercase tracking-wider text-content-muted font-medium">Proficiency Index</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-zinc-500 font-medium">Low</span>
+                  <span className="text-[10px] text-content-tertiary font-medium">Low</span>
                   <div className="flex gap-[1px] h-2">
                     {[0, 20, 40, 60, 80, 100].map((s) => {
                       const t = s / 100;
@@ -513,7 +513,7 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
-                  <span className="text-[10px] text-zinc-500 font-medium">High</span>
+                  <span className="text-[10px] text-content-tertiary font-medium">High</span>
                 </div>
               </div>
             </div>
@@ -523,7 +523,7 @@ export default function DashboardPage() {
         {/* 빠른 작업 + 수식 미리보기 */}
         <div className="space-y-6">
           <GlowCard>
-            <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-content-primary mb-4 flex items-center gap-2">
               <Activity className="w-4 h-4 text-indigo-400" />
               빠른 작업
             </h3>
@@ -539,10 +539,10 @@ export default function DashboardPage() {
                   <button
                     key={i}
                     onClick={() => router.push(action.href)}
-                    className={`flex flex-col items-center justify-center gap-2 p-4 bg-zinc-900/50 border border-white/5 rounded-xl transition-all hover:bg-zinc-800 ${action.color} group`}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 bg-surface-card/50 border border-subtle rounded-xl transition-all hover:bg-surface-raised ${action.color} group`}
                   >
-                    <Icon size={20} className="text-zinc-500 group-hover:text-white transition-colors" />
-                    <span className="text-sm text-zinc-400 group-hover:text-white font-medium transition-colors">
+                    <Icon size={20} className="text-content-tertiary group-hover:text-content-primary transition-colors" />
+                    <span className="text-sm text-content-secondary group-hover:text-content-primary font-medium transition-colors">
                       {action.label}
                     </span>
                   </button>
@@ -551,11 +551,11 @@ export default function DashboardPage() {
             </div>
           </GlowCard>
 
-          <div className="p-4 rounded-xl bg-zinc-900/30 border border-white/5">
+          <div className="p-4 rounded-xl bg-surface-card/30 border border-subtle">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs text-zinc-500">수식 렌더링 미리보기</span>
+              <span className="text-xs text-content-tertiary">수식 렌더링 미리보기</span>
             </div>
-            <MathRenderer content="\int_{a}^{b} x^2 dx = [\frac{1}{3}x^3]_a^b" className="text-zinc-300 text-sm" />
+            <MathRenderer content="\int_{a}^{b} x^2 dx = [\frac{1}{3}x^3]_a^b" className="text-content-secondary text-sm" />
           </div>
         </div>
       </div>
@@ -564,7 +564,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 최근 활동 로그 */}
         <GlowCard>
-          <h3 className="text-sm font-semibold text-white mb-4">최근 활동 로그</h3>
+          <h3 className="text-sm font-semibold text-content-primary mb-4">최근 활동 로그</h3>
           <div className="space-y-0 divide-y divide-white/5">
             {activityLogs.map((log) => (
               <div key={log.id} className="py-4 first:pt-0 last:pb-0 flex items-start gap-3">
@@ -579,10 +579,10 @@ export default function DashboardPage() {
                 />
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
-                    <h4 className="text-sm font-medium text-white">{log.title}</h4>
-                    <span className="text-xs text-zinc-500">{log.time}</span>
+                    <h4 className="text-sm font-medium text-content-primary">{log.title}</h4>
+                    <span className="text-xs text-content-tertiary">{log.time}</span>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">{log.description}</p>
+                  <p className="text-xs text-content-secondary mt-1">{log.description}</p>
                 </div>
               </div>
             ))}
@@ -592,13 +592,13 @@ export default function DashboardPage() {
         {/* 오늘의 수업 현황 */}
         <GlowCard>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-content-primary flex items-center gap-2">
               <Calendar className="w-4 h-4 text-indigo-400" />
               오늘의 수업 현황
             </h3>
             <Link
               href="/dashboard/classes"
-              className="text-xs text-zinc-500 hover:text-white flex items-center gap-1 transition-colors"
+              className="text-xs text-content-tertiary hover:text-content-primary flex items-center gap-1 transition-colors"
             >
               전체 일정 <ArrowRight className="w-3 h-3" />
             </Link>
@@ -607,11 +607,11 @@ export default function DashboardPage() {
             {classStatus.map((cls) => (
               <div
                 key={cls.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-colors"
+                className="flex items-center justify-between p-3 rounded-lg bg-surface-card/50 border border-subtle hover:border-white/10 transition-colors"
               >
                 <div>
-                  <h4 className="text-sm font-medium text-white mb-0.5">{cls.name}</h4>
-                  <p className="text-xs text-zinc-500 flex items-center gap-2">
+                  <h4 className="text-sm font-medium text-content-primary mb-0.5">{cls.name}</h4>
+                  <p className="text-xs text-content-tertiary flex items-center gap-2">
                     <span>{cls.time}</span>
                     <span className="w-1 h-1 bg-zinc-700 rounded-full" />
                     <span>{cls.students}명</span>
@@ -622,8 +622,8 @@ export default function DashboardPage() {
                     cls.status === 'active'
                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       : cls.status === 'scheduled'
-                      ? 'bg-zinc-800 text-zinc-400 border border-white/5'
-                      : 'bg-zinc-900 text-zinc-600 border border-white/5'
+                      ? 'bg-surface-raised text-content-secondary border border-subtle'
+                      : 'bg-surface-card text-content-muted border border-subtle'
                   }`}
                 >
                   {cls.status === 'active' ? '수업 중' : cls.status === 'scheduled' ? '예정' : '종료'}

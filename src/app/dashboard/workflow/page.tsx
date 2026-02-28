@@ -84,8 +84,8 @@ export default function WorkflowPage() {
             {/* 1. Header & Stepper */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">완전학습 워크플로우</h1>
-                    <p className="text-zinc-400 text-sm">Upload → Deep Grading → Zero-Wrong Clinic</p>
+                    <h1 className="text-3xl font-bold text-content-primary mb-2">완전학습 워크플로우</h1>
+                    <p className="text-content-secondary text-sm">Upload → Deep Grading → Zero-Wrong Clinic</p>
                 </div>
 
                 {/* Minimal Stepper */}
@@ -103,8 +103,8 @@ export default function WorkflowPage() {
                   ${isActive
                                         ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.3)]'
                                         : isCompleted
-                                            ? 'bg-zinc-900 border-zinc-700 text-zinc-500'
-                                            : 'bg-zinc-900/50 border-white/5 text-zinc-600'
+                                            ? 'bg-surface-card border text-content-tertiary'
+                                            : 'bg-surface-card/50 border-subtle text-content-muted'
                                     }
                 `}>
                                     <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-indigo-400 animate-pulse' : isCompleted ? 'bg-emerald-500' : 'bg-zinc-700'}`} />
@@ -112,7 +112,7 @@ export default function WorkflowPage() {
                                         {step === 'upload' ? 'Cloud Flow' : step === 'grading' ? 'Deep Grading' : 'Zero-Wrong Loop'}
                                     </span>
                                 </div>
-                                {idx < 2 && <div className="w-6 h-[1px] bg-zinc-800" />}
+                                {idx < 2 && <div className="w-6 h-[1px] bg-surface-raised" />}
                             </div>
                         );
                     })}
@@ -179,21 +179,21 @@ export default function WorkflowPage() {
                                             주요 오답
                                         </div>
 
-                                        <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
-                                            <ScanLine className="w-5 h-5 text-zinc-400" />
+                                        <h3 className="text-lg font-semibold text-content-primary mb-6 flex items-center gap-2">
+                                            <ScanLine className="w-5 h-5 text-content-secondary" />
                                             원본 오답 분석
                                         </h3>
 
-                                        <div className="flex-1 bg-zinc-950/50 rounded-xl border border-dashed border-zinc-800 p-6 flex flex-col items-center justify-center relative">
-                                            <div className="absolute top-4 left-4 text-xs text-zinc-600 font-mono">Q. 14번 문항</div>
+                                        <div className="flex-1 bg-surface-raised/50 rounded-xl border border-dashed border-subtle p-6 flex flex-col items-center justify-center relative">
+                                            <div className="absolute top-4 left-4 text-xs text-content-muted font-mono">Q. 14번 문항</div>
                                             <div className="w-full max-w-[80%] opacity-80 filter brightness-90">
                                                 {/* Placeholder for Handwriting Image */}
-                                                <div className="aspect-[4/3] bg-zinc-900 rounded-lg flex items-center justify-center border border-white/5">
-                                                    <span className="text-zinc-600 text-sm">학생 풀이 이미지 영역</span>
+                                                <div className="aspect-[4/3] bg-surface-card rounded-lg flex items-center justify-center border border-subtle">
+                                                    <span className="text-content-muted text-sm">학생 풀이 이미지 영역</span>
                                                 </div>
                                             </div>
                                             <div className="mt-6 p-4 w-full bg-rose-500/5 border border-rose-500/10 rounded-lg">
-                                                <p className="text-sm text-zinc-300 leading-relaxed">
+                                                <p className="text-sm text-content-secondary leading-relaxed">
                                                     <span className="text-rose-400 font-semibold mb-1 block">Diagnosis:</span>
                                                     로그 부등식의 진수 성립 조건(x{'>'}0)을 누락하여 해의 범위를 잘못 도출함.
                                                 </p>
@@ -205,28 +205,28 @@ export default function WorkflowPage() {
                                 {/* 2. Twin Problems (Right) */}
                                 <div className="lg:col-span-7 flex flex-col gap-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <h3 className="text-xl font-bold text-content-primary flex items-center gap-2">
                                             <BrainCircuit className="w-6 h-6 text-emerald-400" />
                                             AI Twin Problems 생성 완료
                                         </h3>
-                                        <button className="text-xs text-zinc-500 flex items-center gap-1 hover:text-white transition-colors">
+                                        <button className="text-xs text-content-tertiary flex items-center gap-1 hover:text-content-primary transition-colors">
                                             <RefreshCw className="w-3 h-3" /> 재생성
                                         </button>
                                     </div>
 
                                     <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                                         {[1, 2, 3].map((num) => (
-                                            <div key={num} className="bg-zinc-900 border border-white/5 rounded-xl p-5 hover:border-emerald-500/30 transition-all cursor-pointer group">
+                                            <div key={num} className="bg-surface-card border border-subtle rounded-xl p-5 hover:border-emerald-500/30 transition-all cursor-pointer group">
                                                 <div className="flex justify-between items-start mb-3">
                                                     <h4 className="text-sm font-medium text-emerald-400">유사 문항 {num}</h4>
-                                                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded border border-white/5">난이도: 상</span>
+                                                    <span className="text-[10px] bg-surface-raised text-content-secondary px-2 py-0.5 rounded border border-subtle">난이도: 상</span>
                                                 </div>
                                                 <MathRenderer
                                                     content={`f(x) = \\log_2(x-${num}) + \\log_2(x+${num * 2}) < 4`}
-                                                    className="text-zinc-300 text-sm mb-3"
+                                                    className="text-content-secondary text-sm mb-3"
                                                 />
                                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
-                                                    <button className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 rounded border border-white/10">교체</button>
+                                                    <button className="px-3 py-1 bg-surface-raised hover:bg-zinc-700 text-xs text-content-secondary rounded border border-white/10">교체</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -234,7 +234,7 @@ export default function WorkflowPage() {
 
                                     {/* Bottom Action */}
                                     <div className="mt-2 flex justify-end">
-                                        <button className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:scale-105 transition-all">
+                                        <button className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-content-primary rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:scale-105 transition-all">
                                             <Send className="w-4 h-4" />
                                             학생에게 클리닉 전송
                                         </button>

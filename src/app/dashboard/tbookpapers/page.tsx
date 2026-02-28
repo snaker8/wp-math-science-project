@@ -66,11 +66,11 @@ const mockProblems: Problem[] = [
 // ============================================================================
 
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
-  <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-3xl bg-zinc-900/50 px-6 py-8 text-center border border-dashed border-zinc-800">
-    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800 text-zinc-500">
+  <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-3xl bg-surface-card/50 px-6 py-8 text-center border border-dashed border-subtle">
+    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-raised text-content-tertiary">
       <AlertCircle className="h-6 w-6" />
     </span>
-    <p className="text-sm font-semibold text-zinc-400">{message}</p>
+    <p className="text-sm font-semibold text-content-secondary">{message}</p>
   </div>
 );
 
@@ -82,14 +82,14 @@ const SectionHeader: React.FC<{
   countLabel?: string;
   rightContent?: React.ReactNode;
 }> = ({ number, title, subtitle, count, countLabel = '개', rightContent }) => (
-  <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+  <div className="flex items-center justify-between border-b border-subtle px-5 py-4">
     <div className="flex items-center gap-3">
       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
         {number}
       </span>
       <div className="flex flex-col">
-        <span className="text-sm font-semibold text-white">{title}</span>
-        {subtitle && <span className="text-xs text-zinc-500">{subtitle}</span>}
+        <span className="text-sm font-semibold text-content-primary">{title}</span>
+        {subtitle && <span className="text-xs text-content-tertiary">{subtitle}</span>}
       </div>
     </div>
     <div className="flex items-center gap-2">
@@ -104,7 +104,7 @@ const SectionHeader: React.FC<{
 );
 
 const ColumnHeader: React.FC<{ columns: { label: string; width: string; align?: 'left' | 'center' | 'right' }[] }> = ({ columns }) => (
-  <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-5 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+  <div className="flex items-center justify-between border-b border-subtle bg-surface-card/50 px-5 py-2 text-xs font-medium uppercase tracking-wide text-content-tertiary">
     {columns.map((col, idx) => (
       <span
         key={idx}
@@ -132,7 +132,7 @@ const Select: React.FC<{
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-11 w-full appearance-none rounded-full border border-zinc-700 bg-zinc-900 px-4 pr-10 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
+      className="h-11 w-full appearance-none rounded-full border border bg-surface-card px-4 pr-10 text-sm font-medium text-content-primary focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
     >
       {placeholder && <option value="">{placeholder}</option>}
       {options.map((opt) => (
@@ -141,7 +141,7 @@ const Select: React.FC<{
         </option>
       ))}
     </select>
-    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-content-tertiary" />
   </div>
 );
 
@@ -174,7 +174,7 @@ export default function TbookPapersPage() {
           <div className="min-w-[240px]">
             <div className="flex items-center gap-2 m-0 p-0">
               <div className="flex gap-2 items-center">
-                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <label className="text-xs font-semibold uppercase tracking-wide text-content-tertiary">
                   학년
                 </label>
                 <Select
@@ -189,7 +189,7 @@ export default function TbookPapersPage() {
                 />
               </div>
               <div className="flex gap-2 items-center">
-                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <label className="text-xs font-semibold uppercase tracking-wide text-content-tertiary">
                   학기
                 </label>
                 <Select
@@ -213,12 +213,12 @@ export default function TbookPapersPage() {
               className={`
                 inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all
                 ${hasSelectedProblems
-                  ? 'bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 hover:-translate-y-[1px] hover:shadow-indigo-500/30'
-                  : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed pointer-events-none border border-zinc-700'
+                  ? 'bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 text-content-primary shadow-lg shadow-indigo-500/20 hover:-translate-y-[1px] hover:shadow-indigo-500/30'
+                  : 'bg-surface-raised text-content-tertiary opacity-50 cursor-not-allowed pointer-events-none border border'
                 }
               `}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-content-primary">
                 <FileText className="h-3.5 w-3.5" />
               </span>
               <span className="whitespace-nowrap">유사 시험지 출제</span>
@@ -227,7 +227,7 @@ export default function TbookPapersPage() {
 
           <button
             onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-zinc-700 bg-transparent text-zinc-400 hover:bg-zinc-800 active:bg-zinc-700 transition-all"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border bg-transparent text-content-secondary hover:bg-surface-raised active:bg-zinc-700 transition-all"
           >
             <PanelLeftClose className="w-5 h-5" />
           </button>
@@ -238,7 +238,7 @@ export default function TbookPapersPage() {
           <main className="grid grid-cols-12 gap-4 font-pretendard h-full">
             {/* Column 1: 교재 목록 */}
             <section className="col-span-12 lg:col-span-3 h-[calc(100vh-220px)] min-h-[560px]">
-              <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/50">
                 <SectionHeader
                   number={1}
                   title="교재 목록"
@@ -246,13 +246,13 @@ export default function TbookPapersPage() {
                   countLabel="권"
                   rightContent={
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-content-tertiary" />
                       <input
                         type="text"
                         placeholder="교재명 검색"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-8 w-48 rounded-md border border-zinc-700 bg-zinc-800/50 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="h-8 w-48 rounded-md border border bg-surface-raised/50 pl-9 pr-3 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                   }
@@ -263,7 +263,7 @@ export default function TbookPapersPage() {
                     { label: '단원수', width: 'w-16', align: 'right' },
                   ]}
                 />
-                <div className="flex-1 overflow-y-auto bg-zinc-900">
+                <div className="flex-1 overflow-y-auto bg-surface-card">
                   <div className="divide-y divide-zinc-800">
                     {filteredTextbooks.length > 0 ? (
                       filteredTextbooks.map((textbook) => (
@@ -281,8 +281,8 @@ export default function TbookPapersPage() {
                             }
                           `}
                         >
-                          <span className="text-sm text-white">{textbook.name}</span>
-                          <span className="text-sm text-zinc-500">{textbook.unitCount}</span>
+                          <span className="text-sm text-content-primary">{textbook.name}</span>
+                          <span className="text-sm text-content-tertiary">{textbook.unitCount}</span>
                         </div>
                       ))
                     ) : (
@@ -295,7 +295,7 @@ export default function TbookPapersPage() {
 
             {/* Column 2: 단원/시험지 */}
             <section className="col-span-12 lg:col-span-3 h-[calc(100vh-220px)] min-h-[560px]">
-              <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/50">
                 <SectionHeader
                   number={2}
                   title="단원/시험지"
@@ -325,13 +325,13 @@ export default function TbookPapersPage() {
                             }
                           `}
                         >
-                          <span className="w-12 text-center text-sm text-zinc-500">
+                          <span className="w-12 text-center text-sm text-content-tertiary">
                             {unit.order}
                           </span>
-                          <span className="flex-1 pl-4 text-sm text-white">
+                          <span className="flex-1 pl-4 text-sm text-content-primary">
                             {unit.name}
                           </span>
-                          <span className="w-16 text-center text-sm text-zinc-500">
+                          <span className="w-16 text-center text-sm text-content-tertiary">
                             {unit.problemCount}
                           </span>
                         </div>
@@ -346,7 +346,7 @@ export default function TbookPapersPage() {
 
             {/* Column 3: 문제 미리보기 */}
             <section className="col-span-12 lg:col-span-6 h-[calc(100vh-220px)] min-h-[560px]">
-              <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/50">
                 {selectedUnit ? (
                   <>
                     <SectionHeader
@@ -361,14 +361,14 @@ export default function TbookPapersPage() {
                         {mockProblems.map((problem) => (
                           <div
                             key={problem.id}
-                            className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4 hover:border-indigo-500/50 transition-colors"
+                            className="rounded-xl border border bg-surface-raised/50 p-4 hover:border-indigo-500/50 transition-colors"
                           >
                             <div className="flex items-start gap-3">
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-700 text-sm font-semibold text-zinc-300">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-700 text-sm font-semibold text-content-secondary">
                                 {problem.number}
                               </span>
                               <div className="flex-1">
-                                <p className="text-sm text-zinc-200 leading-relaxed">
+                                <p className="text-sm text-content-primary leading-relaxed">
                                   {problem.content}
                                 </p>
                                 <div className="mt-3 flex items-center gap-2">

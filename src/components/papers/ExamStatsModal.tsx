@@ -120,10 +120,10 @@ function UnitTypeTable({ problems }: { problems: Problem[] }) {
 
   return (
     <div className="space-y-1">
-      <h3 className="text-sm font-bold text-zinc-200 mb-3">단원 및 유형별 문항 수</h3>
+      <h3 className="text-sm font-bold text-content-primary mb-3">단원 및 유형별 문항 수</h3>
 
       {/* 테이블 헤더 */}
-      <div className="grid grid-cols-[1fr_80px_60px_60px_60px_60px_60px] gap-0 rounded-t-lg bg-zinc-800 px-3 py-2 text-[11px] font-semibold text-zinc-400">
+      <div className="grid grid-cols-[1fr_80px_60px_60px_60px_60px_60px] gap-0 rounded-t-lg bg-surface-raised px-3 py-2 text-[11px] font-semibold text-content-secondary">
         <span>단원 및 유형</span>
         <span className="text-center">총 문항 수</span>
         <span className="text-center">최하</span>
@@ -134,27 +134,27 @@ function UnitTypeTable({ problems }: { problems: Problem[] }) {
       </div>
 
       {/* 테이블 바디 */}
-      <div className="divide-y divide-zinc-800/50 rounded-b-lg border border-zinc-800 overflow-hidden">
+      <div className="divide-y divide-zinc-800/50 rounded-b-lg border border-subtle overflow-hidden">
         {rows.map((row) => (
           <React.Fragment key={row.section}>
             <div
-              className="grid grid-cols-[1fr_80px_60px_60px_60px_60px_60px] gap-0 px-3 py-2.5 hover:bg-zinc-800/30 cursor-pointer transition-colors"
+              className="grid grid-cols-[1fr_80px_60px_60px_60px_60px_60px] gap-0 px-3 py-2.5 hover:bg-surface-raised/30 cursor-pointer transition-colors"
               onClick={() => toggleRow(row.section)}
             >
               <div className="flex items-center gap-2">
                 <ChevronRight
-                  className={`h-3.5 w-3.5 text-zinc-500 transition-transform ${
+                  className={`h-3.5 w-3.5 text-content-tertiary transition-transform ${
                     expandedRows.has(row.section) ? 'rotate-90' : ''
                   }`}
                 />
-                <span className="text-xs font-medium text-zinc-300">{row.section}</span>
+                <span className="text-xs font-medium text-content-secondary">{row.section}</span>
               </div>
-              <span className="text-center text-sm font-bold text-zinc-200">{row.total}</span>
+              <span className="text-center text-sm font-bold text-content-primary">{row.total}</span>
               {[1, 2, 3, 4, 5].map((d) => (
                 <span
                   key={d}
                   className={`text-center text-sm ${
-                    row.byDifficulty[d] > 0 ? 'font-semibold text-zinc-300' : 'text-zinc-600'
+                    row.byDifficulty[d] > 0 ? 'font-semibold text-content-secondary' : 'text-content-muted'
                   }`}
                 >
                   {row.byDifficulty[d]}
@@ -164,15 +164,15 @@ function UnitTypeTable({ problems }: { problems: Problem[] }) {
 
             {/* 확장 시 개별 문제 표시 */}
             {expandedRows.has(row.section) && (
-              <div className="bg-zinc-900/50 px-6 py-2 space-y-1">
+              <div className="bg-surface-card/50 px-6 py-2 space-y-1">
                 {row.problems.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center gap-3 text-[11px] text-zinc-500 py-1"
+                    className="flex items-center gap-3 text-[11px] text-content-tertiary py-1"
                   >
-                    <span className="w-6 text-right font-mono text-zinc-400">#{p.number}</span>
-                    <span className="text-zinc-400">{p.typeCode}</span>
-                    <span className="text-zinc-500 flex-1">{p.typeName}</span>
+                    <span className="w-6 text-right font-mono text-content-secondary">#{p.number}</span>
+                    <span className="text-content-secondary">{p.typeCode}</span>
+                    <span className="text-content-tertiary flex-1">{p.typeName}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                       p.difficulty >= 4 ? 'bg-red-500/10 text-red-400' :
                       p.difficulty === 3 ? 'bg-amber-500/10 text-amber-400' :
@@ -263,43 +263,43 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
       {/* 상단: 바 차트 + 파이 차트 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 난이도별 분포 - 바 차트 */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <h4 className="text-sm font-bold text-zinc-200 mb-4">난이도별 분포</h4>
+        <div className="rounded-xl border border-subtle bg-surface-card/50 p-4">
+          <h4 className="text-sm font-bold text-content-primary mb-4">난이도별 분포</h4>
           <div className="flex items-end gap-3 h-40 px-2">
             {[1, 2, 3, 4, 5].map((d) => {
               const count = difficultyDist[d];
               const heightPct = maxDiffCount > 0 ? (count / maxDiffCount) * 100 : 0;
               return (
                 <div key={d} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[11px] font-bold text-zinc-300">{count}</span>
+                  <span className="text-[11px] font-bold text-content-secondary">{count}</span>
                   <div className="w-full relative" style={{ height: '120px' }}>
                     <div
                       className={`absolute bottom-0 w-full rounded-t ${DIFFICULTY_BAR_COLORS[d]} transition-all`}
                       style={{ height: `${Math.max(heightPct, 2)}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-zinc-500">{DIFFICULTY_LABELS[d]}</span>
+                  <span className="text-[10px] text-content-tertiary">{DIFFICULTY_LABELS[d]}</span>
                 </div>
               );
             })}
             {/* 미분류 */}
             <div className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-[11px] font-bold text-zinc-300">0</span>
+              <span className="text-[11px] font-bold text-content-secondary">0</span>
               <div className="w-full relative" style={{ height: '120px' }}>
                 <div className="absolute bottom-0 w-full rounded-t bg-zinc-700" style={{ height: '2%' }} />
               </div>
-              <span className="text-[10px] text-zinc-500">미분류</span>
+              <span className="text-[10px] text-content-tertiary">미분류</span>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2 mt-3">
             <span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" />
-            <span className="text-[10px] text-zinc-500">문항 수</span>
+            <span className="text-[10px] text-content-tertiary">문항 수</span>
           </div>
         </div>
 
         {/* 출제 형태(L-Type) 분포 - 파이 차트 */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <h4 className="text-sm font-bold text-zinc-200 mb-4">출제 형태(L-Type) 분포</h4>
+        <div className="rounded-xl border border-subtle bg-surface-card/50 p-4">
+          <h4 className="text-sm font-bold text-content-primary mb-4">출제 형태(L-Type) 분포</h4>
           <div className="flex items-center justify-center">
             <div className="relative">
               <svg width="180" height="180" viewBox="0 0 200 200">
@@ -344,7 +344,7 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
                   className="inline-block w-3 h-3 rounded-sm"
                   style={{ backgroundColor: DOMAIN_PIE_COLORS[key] || '#71717a' }}
                 />
-                <span className="text-[10px] text-zinc-500">{label}</span>
+                <span className="text-[10px] text-content-tertiary">{label}</span>
               </div>
             ))}
           </div>
@@ -352,8 +352,8 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
       </div>
 
       {/* 하단: 단원별 문항 수 분포 */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-        <h4 className="text-sm font-bold text-zinc-200 mb-3">단원별 문항 수 분포</h4>
+      <div className="rounded-xl border border-subtle bg-surface-card/50 p-4">
+        <h4 className="text-sm font-bold text-content-primary mb-3">단원별 문항 수 분포</h4>
         <div className="space-y-2">
           {Object.entries(chapterDist)
             .sort(([, a], [, b]) => b - a)
@@ -362,10 +362,10 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
               return (
                 <div key={section}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-zinc-300 truncate flex-1">{section}</span>
-                    <span className="text-xs text-zinc-500 ml-2 shrink-0">{count}문항 ({pct}%)</span>
+                    <span className="text-xs font-medium text-content-secondary truncate flex-1">{section}</span>
+                    <span className="text-xs text-content-tertiary ml-2 shrink-0">{count}문항 ({pct}%)</span>
                   </div>
-                  <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-surface-raised rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full bg-cyan-500 transition-all"
                       style={{ width: `${pct}%` }}
@@ -402,23 +402,23 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-surface-base/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 flex flex-col w-[90vw] max-w-4xl h-[80vh] rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden">
+      <div className="relative z-10 flex flex-col w-[90vw] max-w-4xl h-[80vh] rounded-2xl border border bg-surface-card shadow-2xl overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-subtle flex-shrink-0">
           <div>
-            <h2 className="text-base font-bold text-zinc-100">문제 유형 분석</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">{examTitle}</p>
+            <h2 className="text-base font-bold text-content-primary">문제 유형 분석</h2>
+            <p className="text-xs text-content-tertiary mt-0.5">{examTitle}</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-400">
-              총 <span className="font-bold text-zinc-200">{problems.length}문항</span>
+            <span className="text-sm text-content-secondary">
+              총 <span className="font-bold text-content-primary">{problems.length}문항</span>
               {' '}(객관식 {objectiveCount} / 주관식 {subjectiveCount})
             </span>
             <button
               type="button"
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border bg-surface-raised px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-zinc-700 transition-colors"
             >
               <Printer className="h-3.5 w-3.5" />
               프린트
@@ -426,7 +426,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+              className="rounded-lg border border bg-surface-raised px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-zinc-700 transition-colors"
             >
               닫기
             </button>
@@ -434,14 +434,14 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
         </div>
 
         {/* 탭 */}
-        <div className="flex border-b border-zinc-800 flex-shrink-0">
+        <div className="flex border-b border-subtle flex-shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('table')}
             className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
               activeTab === 'table'
                 ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5'
-                : 'text-zinc-500 hover:text-zinc-300'
+                : 'text-content-tertiary hover:text-content-secondary'
             }`}
           >
             단원 및 유형별 문항 수
@@ -452,7 +452,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
               activeTab === 'chart'
                 ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5'
-                : 'text-zinc-500 hover:text-zinc-300'
+                : 'text-content-tertiary hover:text-content-secondary'
             }`}
           >
             통계 데이터 뷰
@@ -469,8 +469,8 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
         </div>
 
         {/* 하단 안내 */}
-        <div className="flex-shrink-0 border-t border-zinc-800 px-5 py-2 text-center">
-          <span className="text-[11px] text-zinc-600">
+        <div className="flex-shrink-0 border-t border-subtle px-5 py-2 text-center">
+          <span className="text-[11px] text-content-muted">
             통계 데이터는 <span className="text-cyan-500">실시간</span>으로 갱신됩니다. 최신 결과가 보이지 않으면 잠시 후 다시 확인하거나 새로고침해주세요.
           </span>
         </div>

@@ -50,11 +50,11 @@ const StatusBadge = ({ status }: { status: StudentRealtime['status'] }) => {
         solving: { color: 'text-indigo-400', bg: 'bg-indigo-500/10', label: '풀이 중', icon: Activity },
         completed: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: '완료', icon: CheckCircle2 },
         blocked: { color: 'text-rose-400', bg: 'bg-rose-500/10', label: '도움 필요', icon: AlertCircle },
-        idle: { color: 'text-zinc-500', bg: 'bg-zinc-800', label: '대기', icon: Clock },
+        idle: { color: 'text-content-tertiary', bg: 'bg-surface-raised', label: '대기', icon: Clock },
     };
     const config = configs[status];
     return (
-        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border border-white/5 ${config.bg} ${config.color}`}>
+        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border border-subtle ${config.bg} ${config.color}`}>
             <config.icon size={10} />
             {config.label}
         </div>
@@ -63,7 +63,7 @@ const StatusBadge = ({ status }: { status: StudentRealtime['status'] }) => {
 
 export default function MonitorPage() {
     return (
-        <div className="min-h-screen bg-black text-white p-6 space-y-8">
+        <div className="min-h-screen bg-surface-base text-content-primary p-6 space-y-8">
             {/* 1. Header Section */}
             <div className="flex items-end justify-between">
                 <div>
@@ -71,7 +71,7 @@ export default function MonitorPage() {
                         <div className="p-1 px-2 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-bold text-rose-400 tracking-tighter uppercase">
                             Live Session
                         </div>
-                        <span className="text-zinc-500 text-xs font-medium uppercase tracking-widest">Real-time Class Monitor</span>
+                        <span className="text-content-tertiary text-xs font-medium uppercase tracking-widest">Real-time Class Monitor</span>
                     </div>
                     <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
                         실시간 클래스 모니터
@@ -80,16 +80,16 @@ export default function MonitorPage() {
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-4 text-right">
                         <div>
-                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter">Current Class</div>
-                            <div className="text-sm font-bold text-white">고1 의대반 A</div>
+                            <div className="text-[10px] font-bold text-content-tertiary uppercase tracking-tighter">Current Class</div>
+                            <div className="text-sm font-bold text-content-primary">고1 의대반 A</div>
                         </div>
                         <div className="w-[1px] h-8 bg-white/10" />
                         <div>
-                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter">Active Students</div>
-                            <div className="text-sm font-bold text-white">12 / 15</div>
+                            <div className="text-[10px] font-bold text-content-tertiary uppercase tracking-tighter">Active Students</div>
+                            <div className="text-sm font-bold text-content-primary">12 / 15</div>
                         </div>
                     </div>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-content-primary text-xs font-bold rounded-xl shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all">
                         <Zap size={14} /> 세션 종료
                     </button>
                 </div>
@@ -102,9 +102,9 @@ export default function MonitorPage() {
                         <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
                             <Activity size={18} />
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase transition-colors">Avg. Pace</span>
+                        <span className="text-[10px] text-content-tertiary font-bold uppercase transition-colors">Avg. Pace</span>
                     </div>
-                    <div className="text-2xl font-bold text-white mb-1">1.2m <span className="text-xs font-normal text-zinc-500">/ prob</span></div>
+                    <div className="text-2xl font-bold text-content-primary mb-1">1.2m <span className="text-xs font-normal text-content-tertiary">/ prob</span></div>
                     <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                         <ArrowUpRight size={10} /> 8% Faster than goal
                     </div>
@@ -115,9 +115,9 @@ export default function MonitorPage() {
                         <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
                             <CheckCircle2 size={18} />
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase">Success Rate</span>
+                        <span className="text-[10px] text-content-tertiary font-bold uppercase">Success Rate</span>
                     </div>
-                    <div className="text-2xl font-bold text-white mb-1">78.5%</div>
+                    <div className="text-2xl font-bold text-content-primary mb-1">78.5%</div>
                     <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                         <ArrowUpRight size={10} /> +2.1% from last week
                     </div>
@@ -128,9 +128,9 @@ export default function MonitorPage() {
                         <div className="p-2 rounded-lg bg-rose-500/20 text-rose-400">
                             <AlertCircle size={18} />
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase transition-colors">Interventions</span>
+                        <span className="text-[10px] text-content-tertiary font-bold uppercase transition-colors">Interventions</span>
                     </div>
-                    <div className="text-2xl font-bold text-white mb-1">3 <span className="text-xs font-normal text-zinc-500">Students</span></div>
+                    <div className="text-2xl font-bold text-content-primary mb-1">3 <span className="text-xs font-normal text-content-tertiary">Students</span></div>
                     <div className="text-[10px] text-rose-400 font-bold">Action Required immediately</div>
                 </GlowCard>
 
@@ -139,9 +139,9 @@ export default function MonitorPage() {
                         <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
                             <Trophy size={18} />
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase">Class Score</span>
+                        <span className="text-[10px] text-content-tertiary font-bold uppercase">Class Score</span>
                     </div>
-                    <div className="text-2xl font-bold text-white mb-1">842 <span className="text-xs font-normal text-zinc-500">Pts</span></div>
+                    <div className="text-2xl font-bold text-content-primary mb-1">842 <span className="text-xs font-normal text-content-tertiary">Pts</span></div>
                     <div className="text-[10px] text-amber-400 font-bold">New High Score Potential</div>
                 </GlowCard>
             </div>
@@ -149,20 +149,20 @@ export default function MonitorPage() {
             {/* 3. Real-time Student Grid */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
                         <Users size={16} className="text-indigo-400" />
                         학생별 실시간 현황
                     </h3>
                     <div className="flex items-center gap-4">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" size={14} />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" size={14} />
                             <input
                                 type="text"
                                 placeholder="학생 이름 검색..."
-                                className="bg-zinc-900/50 border border-white/5 rounded-lg py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-white/10 w-48"
+                                className="bg-surface-card/50 border border-subtle rounded-lg py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-white/10 w-48"
                             />
                         </div>
-                        <button className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-zinc-500 hover:text-white">
+                        <button className="p-2 rounded-lg bg-surface-card border border-subtle text-content-tertiary hover:text-content-primary">
                             <Filter size={14} />
                         </button>
                     </div>
@@ -181,17 +181,17 @@ export default function MonitorPage() {
                                     relative p-5 rounded-2xl border transition-all cursor-pointer backdrop-blur-md
                                     ${student.status === 'blocked'
                                         ? 'bg-rose-500/10 border-rose-500/30'
-                                        : 'bg-zinc-900/40 border-white/5 hover:border-white/20'}
+                                        : 'bg-surface-card/40 border-subtle hover:border-white/20'}
                                 `}
                             >
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/10 flex items-center justify-center font-bold text-zinc-400">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/10 flex items-center justify-center font-bold text-content-secondary">
                                             {student.name[0]}
                                         </div>
                                         <div>
-                                            <div className="text-sm font-bold text-white">{student.name}</div>
-                                            <div className="text-[10px] text-zinc-500 font-medium">Last active: {student.lastActive}</div>
+                                            <div className="text-sm font-bold text-content-primary">{student.name}</div>
+                                            <div className="text-[10px] text-content-tertiary font-medium">Last active: {student.lastActive}</div>
                                         </div>
                                     </div>
                                     <StatusBadge status={student.status} />
@@ -201,10 +201,10 @@ export default function MonitorPage() {
                                     {/* Progress Bar */}
                                     <div className="space-y-1.5">
                                         <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
-                                            <span className="text-zinc-500">Progress</span>
-                                            <span className="text-white">{student.progress}%</span>
+                                            <span className="text-content-tertiary">Progress</span>
+                                            <span className="text-content-primary">{student.progress}%</span>
                                         </div>
-                                        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                        <div className="h-1.5 bg-surface-base/40 rounded-full overflow-hidden border border-subtle">
                                             <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${student.progress}%` }}
@@ -216,13 +216,13 @@ export default function MonitorPage() {
 
                                     {/* Stats Grid */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                            <div className="text-[9px] font-bold text-zinc-600 uppercase mb-1">Current</div>
-                                            <div className="text-xs font-bold text-zinc-300"># {student.currentProblem} <span className="text-[9px] font-normal text-zinc-600">Problem</span></div>
+                                        <div className="p-3 bg-surface-base/20 rounded-xl border border-subtle">
+                                            <div className="text-[9px] font-bold text-content-muted uppercase mb-1">Current</div>
+                                            <div className="text-xs font-bold text-content-secondary"># {student.currentProblem} <span className="text-[9px] font-normal text-content-muted">Problem</span></div>
                                         </div>
-                                        <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                            <div className="text-[9px] font-bold text-zinc-600 uppercase mb-1">Score</div>
-                                            <div className="text-xs font-bold text-zinc-300">{student.score} <span className="text-[9px] font-normal text-zinc-600">Points</span></div>
+                                        <div className="p-3 bg-surface-base/20 rounded-xl border border-subtle">
+                                            <div className="text-[9px] font-bold text-content-muted uppercase mb-1">Score</div>
+                                            <div className="text-xs font-bold text-content-secondary">{student.score} <span className="text-[9px] font-normal text-content-muted">Points</span></div>
                                         </div>
                                     </div>
 
@@ -239,7 +239,7 @@ export default function MonitorPage() {
                                     )}
 
                                     <div className="pt-2 flex items-center justify-between">
-                                        <button className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors">
+                                        <button className="flex items-center gap-1.5 text-[10px] font-bold text-content-tertiary hover:text-content-primary transition-colors">
                                             <MessageCircle size={12} /> 상담 메시지
                                         </button>
                                         <button className="flex items-center gap-1 text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors">

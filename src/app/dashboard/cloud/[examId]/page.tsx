@@ -65,7 +65,7 @@ type DomainKey = 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVIN
 // ============================================================================
 
 const DIFFICULTY_CONFIG: Record<DifficultyKey, { label: string; border: string; bg: string; text: string }> = {
-  1: { label: '최하', border: 'border-zinc-500', bg: 'bg-zinc-800', text: 'text-zinc-400' },
+  1: { label: '최하', border: 'border-zinc-500', bg: 'bg-surface-raised', text: 'text-content-secondary' },
   2: { label: '하', border: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-400' },
   3: { label: '중', border: 'border-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400' },
   4: { label: '상', border: 'border-red-500', bg: 'bg-red-500/10', text: 'text-red-400' },
@@ -77,7 +77,7 @@ const DOMAIN_CONFIG: Record<string, { label: string; border: string; bg: string;
   UNDERSTANDING: { label: '이해', border: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-400' },
   INFERENCE: { label: '추론', border: 'border-purple-500', bg: 'bg-purple-500/10', text: 'text-purple-400' },
   PROBLEM_SOLVING: { label: '해결', border: 'border-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400' },
-  UNASSIGNED: { label: '미지정', border: 'border-zinc-600', bg: 'bg-zinc-800', text: 'text-zinc-500' },
+  UNASSIGNED: { label: '미지정', border: 'border-zinc-600', bg: 'bg-surface-raised', text: 'text-content-tertiary' },
 };
 
 // ============================================================================
@@ -161,7 +161,7 @@ function FilterBadge({
       className={`flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium transition-colors ${
         active
           ? `${borderColor} bg-white/5`
-          : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 hover:border-zinc-500'
+          : 'border-subtle bg-surface-raised/50 text-content-tertiary hover:border-zinc-500'
       }`}
     >
       <span className="text-[10px] pr-1">{label}</span>
@@ -215,7 +215,7 @@ function ProblemCardView({
       className={`group rounded-xl border transition-all cursor-pointer ${
         isSelectionMode && isSelected
           ? 'border-cyan-500 bg-cyan-500/5 ring-1 ring-cyan-500/30'
-          : 'border-zinc-800 bg-zinc-900/80 hover:border-zinc-600'
+          : 'border-subtle bg-surface-card/80 hover:border-accent/30'
       }`}
       onClick={isSelectionMode ? () => onToggleSelect?.(problem.id) : undefined}
     >
@@ -246,7 +246,7 @@ function ProblemCardView({
             className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all ${
               isSelected
                 ? 'border-cyan-500 bg-cyan-500 text-white'
-                : 'border-zinc-600 bg-zinc-800 text-transparent hover:border-zinc-400'
+                : 'border-zinc-600 bg-surface-raised text-transparent hover:border-zinc-400'
             }`}
           >
             <Check className="h-3.5 w-3.5" />
@@ -261,7 +261,7 @@ function ProblemCardView({
                 className={`p-1 rounded transition-colors ${
                   isGeneratingFigure
                     ? 'text-amber-400 animate-spin'
-                    : 'text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10'
+                    : 'text-content-tertiary hover:text-orange-400 hover:bg-orange-500/10'
                 }`}
                 title={problem.figureSvg ? '도형 재생성' : '도형 SVG 생성'}
                 disabled={isGeneratingFigure}
@@ -272,18 +272,18 @@ function ProblemCardView({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onTwinGenerate(problem); }}
-              className="p-1 rounded text-zinc-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+              className="p-1 rounded text-content-tertiary hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
               title="유사문제 만들기"
             >
               <Sparkles className="h-3.5 w-3.5" />
             </button>
-            <button type="button" className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800" title="복사해서 만들기">
+            <button type="button" className="p-1 rounded text-content-tertiary hover:text-content-primary hover:bg-surface-raised" title="복사해서 만들기">
               <Copy className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onEdit?.(problem); }}
-              className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+              className="p-1 rounded text-content-tertiary hover:text-content-primary hover:bg-surface-raised"
               title="수정하기"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -300,7 +300,7 @@ function ProblemCardView({
             <img
               src={cropImage!.url}
               alt={`문제 ${problem.number} 원본`}
-              className="w-full rounded-lg border border-zinc-700"
+              className="w-full rounded-lg border"
               loading="lazy"
             />
           </div>
@@ -308,7 +308,7 @@ function ProblemCardView({
           /* 클린 렌더링 모드 (기본) */
           <>
             <div className="mb-2">
-              <span className="text-sm font-bold text-zinc-200 mr-2">{problem.number}.</span>
+              <span className="text-sm font-bold text-content-primary mr-2">{problem.number}.</span>
               {hasFigureMarker ? (
                 /* 도형 마커가 있는 경우: 텍스트/도형 분할 렌더링 */
                 <div className="inline">
@@ -317,7 +317,7 @@ function ProblemCardView({
                       <MixedContentRenderer
                         key={i}
                         content={part.text}
-                        className="inline text-sm text-zinc-300 leading-relaxed"
+                        className="inline text-sm text-content-secondary leading-relaxed"
                       />
                     ) : (
                       <div key={i} className="my-2 flex justify-center">
@@ -337,7 +337,7 @@ function ProblemCardView({
                 <>
                   <MixedContentRenderer
                     content={problem.content}
-                    className="inline text-sm text-zinc-300 leading-relaxed"
+                    className="inline text-sm text-content-secondary leading-relaxed"
                   />
                   {/* 도형 데이터가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
                   {(problem.figureData || problem.figureSvg) && (
@@ -369,9 +369,9 @@ function ProblemCardView({
                     {problem.choices.map((choice, i) => {
                       const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
                       return (
-                        <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
+                        <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
                           <span className="flex-shrink-0 text-cyan-500 font-medium">({i + 1})</span>
-                          <MixedContentRenderer content={stripped} className="text-zinc-400" />
+                          <MixedContentRenderer content={stripped} className="text-content-secondary" />
                         </div>
                       );
                     })}
@@ -391,9 +391,9 @@ function ProblemCardView({
                 return (
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[13px] text-zinc-400">
-                        <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                      <div key={i} className="flex items-center gap-1 text-[13px] text-content-secondary">
+                        <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
+                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                       </div>
                     ))}
                   </div>
@@ -404,9 +404,9 @@ function ProblemCardView({
                 return (
                   <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-start gap-1 text-[13px] text-zinc-400">
-                        <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                      <div key={i} className="flex items-start gap-1 text-[13px] text-content-secondary">
+                        <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
+                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                       </div>
                     ))}
                   </div>
@@ -416,9 +416,9 @@ function ProblemCardView({
               return (
                 <div className="mt-2 space-y-1.5 pl-4">
                   {processed.map((c, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-zinc-400">
-                      <span className="flex-shrink-0 text-zinc-500">{c.circled}</span>
-                      <MixedContentRenderer content={c.stripped} className="text-zinc-400" />
+                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
+                      <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
+                      <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                     </div>
                   ))}
                 </div>
@@ -429,7 +429,7 @@ function ProblemCardView({
       </div>
 
       {/* 카드 하단: 출처 + 유형코드.유형명 + 연도 (참조사이트 스타일) */}
-      <div className="border-t border-zinc-800/50 px-4 py-2">
+      <div className="border-t border-subtle px-4 py-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {problem.source && (
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -451,9 +451,9 @@ function ProblemCardView({
 
       {/* 유형 footer (편집 가능 영역) */}
       {problem.typeCode && (
-        <div className="flex items-center justify-between px-4 py-1.5 border-t border-zinc-800/30 bg-zinc-900/60">
-          <span className="text-[11px] text-zinc-500">유형: {problem.typeCode}. {problem.typeName}</span>
-          <button type="button" className="p-0.5 text-zinc-600 hover:text-zinc-400" title="유형 변경">
+        <div className="flex items-center justify-between px-4 py-1.5 border-t border-subtle bg-surface-card/60">
+          <span className="text-[11px] text-content-tertiary">유형: {problem.typeCode}. {problem.typeName}</span>
+          <button type="button" className="p-0.5 text-content-muted hover:text-content-secondary" title="유형 변경">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
@@ -483,16 +483,16 @@ function ExamPaperView({
   return (
     <div className="flex flex-col h-full">
       {/* 상단 컨트롤 바 */}
-      <div className="flex items-center justify-between border-b border-zinc-800/50 px-5 py-2 flex-shrink-0 bg-zinc-950/50">
+      <div className="flex items-center justify-between border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-zinc-700 overflow-hidden">
+          <div className="flex items-center gap-1 rounded-lg border overflow-hidden">
             <button
               type="button"
               onClick={() => setColumns(1)}
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 1
                   ? 'bg-cyan-500/10 text-cyan-400'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
               <AlignJustify className="h-3.5 w-3.5" />
@@ -504,7 +504,7 @@ function ExamPaperView({
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 2
                   ? 'bg-cyan-500/10 text-cyan-400'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
               <Columns2 className="h-3.5 w-3.5" />
@@ -512,7 +512,7 @@ function ExamPaperView({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">간격</span>
+            <span className="text-xs text-content-tertiary">간격</span>
             <input
               type="range"
               min={8}
@@ -521,7 +521,7 @@ function ExamPaperView({
               onChange={(e) => setGap(Number(e.target.value))}
               className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-zinc-500 w-6">{gap}</span>
+            <span className="text-xs text-content-tertiary w-6">{gap}</span>
           </div>
         </div>
         <button
@@ -534,7 +534,7 @@ function ExamPaperView({
       </div>
 
       {/* 시험지 본문 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-zinc-950/30">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
         <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
           {/* 시험지 헤더 테이블 */}
           <div className="border-b-2 border-gray-800 p-0">
@@ -688,7 +688,7 @@ function QuickAnswerView({
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-zinc-950/30">
+    <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
       <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
         {/* 헤더 테이블 */}
         <div className="border-b-2 border-gray-800 p-0">
@@ -780,16 +780,16 @@ function SolutionView({
   return (
     <div className="flex flex-col h-full">
       {/* 상단 컨트롤 바 */}
-      <div className="flex items-center justify-between border-b border-zinc-800/50 px-5 py-2 flex-shrink-0 bg-zinc-950/50">
+      <div className="flex items-center justify-between border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-zinc-700 overflow-hidden">
+          <div className="flex items-center gap-1 rounded-lg border overflow-hidden">
             <button
               type="button"
               onClick={() => setColumns(1)}
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 1
                   ? 'bg-cyan-500/10 text-cyan-400'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
               <AlignJustify className="h-3.5 w-3.5" />
@@ -801,7 +801,7 @@ function SolutionView({
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 2
                   ? 'bg-cyan-500/10 text-cyan-400'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
               <Columns2 className="h-3.5 w-3.5" />
@@ -809,7 +809,7 @@ function SolutionView({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">간격</span>
+            <span className="text-xs text-content-tertiary">간격</span>
             <input
               type="range"
               min={8}
@@ -818,7 +818,7 @@ function SolutionView({
               onChange={(e) => setGap(Number(e.target.value))}
               className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-zinc-500 w-6">{gap}</span>
+            <span className="text-xs text-content-tertiary w-6">{gap}</span>
           </div>
         </div>
         <button
@@ -831,7 +831,7 @@ function SolutionView({
       </div>
 
       {/* 해설지 본문 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-zinc-950/30">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
         <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
           {/* 헤더 테이블 */}
           <div className="border-b-2 border-gray-800 p-0">
@@ -1059,18 +1059,18 @@ export default function CloudExamDetailPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
       {/* ======== Header ======== */}
-      <div className="flex items-center justify-between border-b border-zinc-800/50 px-5 py-3 flex-shrink-0">
+      <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={() => router.push('/dashboard/cloud')}
-            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-1 rounded-lg text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-base font-bold text-white truncate max-w-[500px]">
+          <h1 className="text-base font-bold text-content-primary truncate max-w-[500px]">
             {examTitle}
           </h1>
         </div>
@@ -1090,23 +1090,23 @@ export default function CloudExamDetailPage() {
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                 isSelectionMode
                   ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                  : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
+                  : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
               <ShoppingCart className="h-4 w-4" />
               <span>{isSelectionMode ? `선택 중 (${selectedProblems.size})` : '문제 선택하기'}</span>
               {isSelectionMode && (
-                <X className="h-3.5 w-3.5 ml-0.5 text-zinc-400 hover:text-white" />
+                <X className="h-3.5 w-3.5 ml-0.5 text-content-secondary hover:text-content-primary" />
               )}
             </button>
-            <button type="button" className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors">
+            <button type="button" className="flex items-center gap-1.5 rounded-lg border bg-surface-card px-3 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors">
               <Sparkles className="h-4 w-4" />
               <span>유형 자동매핑</span>
             </button>
             <button
               type="button"
               onClick={() => setShowStatsModal(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border bg-surface-card px-3 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors"
             >
               <BarChart3 className="h-4 w-4" />
               <span>통계 보기</span>
@@ -1117,7 +1117,7 @@ export default function CloudExamDetailPage() {
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                 activeView === 'spread'
                   ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
-                  : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
+                  : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
               <LayoutList className="h-4 w-4" />
@@ -1133,7 +1133,7 @@ export default function CloudExamDetailPage() {
               className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 activeView === 'exam'
                   ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                  : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                  : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
               <ScrollText className="h-4 w-4" />
@@ -1145,7 +1145,7 @@ export default function CloudExamDetailPage() {
               className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 activeView === 'answer'
                   ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                  : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                  : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
               <CheckSquare className="h-4 w-4" />
@@ -1157,7 +1157,7 @@ export default function CloudExamDetailPage() {
               className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 activeView === 'solution'
                   ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                  : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                  : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
               <BookOpenCheck className="h-4 w-4" />
@@ -1166,20 +1166,20 @@ export default function CloudExamDetailPage() {
           </div>
 
           {/* 문항 수 + 더보기 */}
-          <span className="text-sm text-zinc-400 ml-2">{problems.length} 문항</span>
-          <button type="button" className="p-2 text-zinc-400 hover:text-zinc-200">
+          <span className="text-sm text-content-secondary ml-2">{problems.length} 문항</span>
+          <button type="button" className="p-2 text-content-secondary hover:text-content-primary">
             <MoreVertical className="h-5 w-5" />
           </button>
         </div>
       </div>
 
       {/* ======== Filter Bar (Sticky) ======== */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-zinc-800/50 bg-black/80 backdrop-blur-md px-5 py-2.5 flex-shrink-0">
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-subtle bg-surface-base/80 backdrop-blur-md px-5 py-2.5 flex-shrink-0">
         {/* 전체 문제 수 */}
         <button
           type="button"
           onClick={() => { setActiveDifficulty(null); setActiveDomain(null); }}
-          className="flex items-center rounded-md border border-zinc-500 bg-zinc-700 px-2 py-1 text-sm font-bold text-zinc-100 hover:bg-zinc-600 transition-colors"
+          className="flex items-center rounded-md border border-zinc-500 bg-surface-raised px-2 py-1 text-sm font-bold text-content-primary hover:bg-zinc-600 transition-colors"
         >
           {filteredProblems.length}
           <span className="text-xs font-medium pl-1">문제</span>
@@ -1187,7 +1187,7 @@ export default function CloudExamDetailPage() {
 
         {/* 난이도 필터 */}
         <div className="flex items-center gap-1">
-          <span className="text-[10px] uppercase text-zinc-500 mr-1">난이도</span>
+          <span className="text-[10px] uppercase text-content-tertiary mr-1">난이도</span>
           {([5, 4, 3, 2, 1] as DifficultyKey[]).map((d) => (
             <FilterBadge
               key={d}
@@ -1202,7 +1202,7 @@ export default function CloudExamDetailPage() {
 
         {/* 인지영역 필터 */}
         <div className="flex items-center gap-1">
-          <span className="text-[10px] uppercase text-zinc-500 mr-1">인지</span>
+          <span className="text-[10px] uppercase text-content-tertiary mr-1">인지</span>
           {(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING', 'UNASSIGNED'] as DomainKey[]).map((d) => (
             <FilterBadge
               key={d}
@@ -1217,14 +1217,14 @@ export default function CloudExamDetailPage() {
 
         {/* 원본/클린 토글 */}
         {activeView === 'spread' && (
-          <div className="flex items-center gap-0.5 rounded-lg border border-zinc-700 overflow-hidden ml-auto">
+          <div className="flex items-center gap-0.5 rounded-lg border overflow-hidden ml-auto">
             <button
               type="button"
               onClick={() => setRenderMode('clean')}
               className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors ${
                 renderMode === 'clean'
                   ? 'bg-emerald-500/15 text-emerald-400'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : 'text-content-tertiary hover:text-content-primary'
               }`}
               title="LaTeX 클린 렌더링"
             >
@@ -1237,7 +1237,7 @@ export default function CloudExamDetailPage() {
               className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors ${
                 renderMode === 'original'
                   ? 'bg-violet-500/15 text-violet-400'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : 'text-content-tertiary hover:text-content-primary'
               }`}
               title="원본 크롭 이미지"
             >
@@ -1275,7 +1275,7 @@ export default function CloudExamDetailPage() {
         )}
 
         {/* 정보 버튼 */}
-        <button type="button" className="ml-1 p-1 rounded-full border border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors">
+        <button type="button" className="ml-1 p-1 rounded-full border text-content-tertiary hover:text-content-primary transition-colors">
           <AlertCircle className="h-4 w-4" />
         </button>
       </div>
@@ -1284,12 +1284,12 @@ export default function CloudExamDetailPage() {
       {activeView === 'spread' && (
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 px-4 py-4">
           {dbLoading ? (
-            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-cyan-500 mb-3" />
+            <div className="flex flex-col items-center justify-center h-64 text-content-tertiary">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-t-cyan-500 mb-3" />
               <p className="text-sm">문제 로딩 중...</p>
             </div>
           ) : filteredProblems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
               {filteredProblems.map((problem) => (
                 <ProblemCardView
                   key={problem.id}
@@ -1306,14 +1306,14 @@ export default function CloudExamDetailPage() {
               ))}
             </div>
           ) : problems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
-              <AlertCircle className="h-10 w-10 mb-3 text-zinc-600" />
+            <div className="flex flex-col items-center justify-center h-64 text-content-tertiary">
+              <AlertCircle className="h-10 w-10 mb-3 text-content-muted" />
               <p className="text-sm font-medium">아직 자산화된 문제가 없습니다</p>
-              <p className="text-xs text-zinc-600 mt-1">분석 워크플로우에서 자산화를 완료하면 여기에 문제가 표시됩니다.</p>
+              <p className="text-xs text-content-muted mt-1">분석 워크플로우에서 자산화를 완료하면 여기에 문제가 표시됩니다.</p>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
-              <AlertCircle className="h-10 w-10 mb-3 text-zinc-600" />
+            <div className="flex flex-col items-center justify-center h-64 text-content-tertiary">
+              <AlertCircle className="h-10 w-10 mb-3 text-content-muted" />
               <p className="text-sm font-medium">필터 조건에 맞는 문제가 없습니다</p>
               <button
                 type="button"
@@ -1352,7 +1352,7 @@ export default function CloudExamDetailPage() {
             <button
               type="button"
               onClick={clearSelection}
-              className="text-sm text-zinc-400 hover:text-zinc-200 underline underline-offset-2 transition-colors"
+              className="text-sm text-content-secondary hover:text-content-primary underline underline-offset-2 transition-colors"
             >
               선택 초기화
             </button>

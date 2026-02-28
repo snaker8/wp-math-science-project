@@ -88,7 +88,7 @@ const StudentMonitorCard: React.FC<StudentMonitorCardProps> = ({ student }) => {
                             student.accuracy >= 70 ? 'text-indigo-600' : 'text-amber-600'
                         }`}>{student.accuracy}%</span>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-black/5 overflow-hidden">
+                <div className="h-1.5 w-full rounded-full bg-surface-base/5 overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all duration-500 ${student.accuracy >= 80 ? 'bg-emerald-500' : 'bg-amber-500'
                             }`}
@@ -99,7 +99,7 @@ const StudentMonitorCard: React.FC<StudentMonitorCardProps> = ({ student }) => {
 
             {/* Actions */}
             <div className="mt-auto pt-3 flex items-center justify-end opacity-0 transition-opacity group-hover:opacity-100">
-                <button className="rounded-full p-1.5 hover:bg-black/5 text-warm-text-secondary">
+                <button className="rounded-full p-1.5 hover:bg-surface-base/5 text-warm-text-secondary">
                     <MessageSquare size={16} />
                 </button>
             </div>
@@ -143,7 +143,7 @@ export default function MonitoringPage() {
                         <Zap size={16} className="text-amber-500" />
                         <span>전체 힌트 전송</span>
                     </button>
-                    <button className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition-colors hover:bg-indigo-700">
+                    <button className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-content-primary shadow-md shadow-indigo-200 transition-colors hover:bg-indigo-700">
                         <span>수업 종료</span>
                     </button>
                 </div>
@@ -204,7 +204,7 @@ export default function MonitoringPage() {
                         </div>
                     </div>
 
-                    <div className="mt-auto rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 p-5 text-white shadow-lg">
+                    <div className="mt-auto rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 p-5 text-content-primary shadow-lg">
                         <h3 className="font-bold">AI 수업 조교</h3>
                         <p className="mt-2 text-xs text-indigo-100 opacity-90">
                             &quot;현재 7번 문항에서 5명의 학생이 정체 중입니다. <br />

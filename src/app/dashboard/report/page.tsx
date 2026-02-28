@@ -49,7 +49,7 @@ export default function ReportPage() {
     const needleAngle = 180 - (needleValue / 100) * 180; // 0 is right (100%), 180 is left (0%)
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 md:p-8 space-y-8 pb-16">
+        <div className="min-h-screen bg-surface-base text-content-primary p-4 md:p-8 space-y-8 pb-16">
             {/* 1. Header Section */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 print:hidden">
                 <div className="space-y-2">
@@ -58,11 +58,11 @@ export default function ReportPage() {
                         <span className="text-sm font-medium tracking-wider uppercase">Student Analysis Report</span>
                     </div>
                     <h1 className="text-4xl font-bold tracking-tight">심층 분석 리포트</h1>
-                    <p className="text-zinc-400">학부모 상담 및 학습 전략 수립을 위한 심층 데이터 분석 결과입니다.</p>
+                    <p className="text-content-secondary">학부모 상담 및 학습 전략 수립을 위한 심층 데이터 분석 결과입니다.</p>
                 </div>
                 <button
                     onClick={handlePrint}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20 group"
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-content-primary px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20 group"
                 >
                     <Printer size={20} className="group-hover:scale-110 transition-transform" />
                     상담용 PDF 출력
@@ -80,7 +80,7 @@ export default function ReportPage() {
                 {/* Student Profile (Full Width in Print) */}
                 <motion.div
                     variants={itemVariants}
-                    className="col-span-12 md:col-span-4 bg-zinc-900/50 border border-white/5 rounded-3xl p-8 space-y-6 relative overflow-hidden group print:border-none print:shadow-none print:bg-white print:p-0"
+                    className="col-span-12 md:col-span-4 bg-surface-card/50 border border-subtle rounded-3xl p-8 space-y-6 relative overflow-hidden group print:border-none print:shadow-none print:bg-white print:p-0"
                 >
                     <div className="absolute top-0 right-0 p-12 -mt-10 -mr-10 bg-indigo-500/10 blur-[100px] rounded-full group-hover:bg-indigo-500/20 transition-all duration-700" />
 
@@ -95,22 +95,22 @@ export default function ReportPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 print:border-zinc-200">
-                            <p className="text-xs text-zinc-500 uppercase font-bold tracking-tighter">분석 기간</p>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-subtle print:border-zinc-200">
+                            <p className="text-xs text-content-tertiary uppercase font-bold tracking-tighter">분석 기간</p>
                             <p className="font-semibold mt-1">최근 6개월</p>
                         </div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 print:border-zinc-200">
-                            <p className="text-xs text-zinc-500 uppercase font-bold tracking-tighter">종합 등급</p>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-subtle print:border-zinc-200">
+                            <p className="text-xs text-content-tertiary uppercase font-bold tracking-tighter">종합 등급</p>
                             <p className="font-semibold mt-1 text-indigo-400">Superior (A+)</p>
                         </div>
                     </div>
 
                     <div className="space-y-4 pt-2">
-                        <div className="flex items-center gap-3 text-zinc-400 text-sm">
+                        <div className="flex items-center gap-3 text-content-secondary text-sm">
                             <Calendar size={16} />
                             <span>작성일시: 2026. 02. 07</span>
                         </div>
-                        <div className="flex items-center gap-3 text-zinc-400 text-sm">
+                        <div className="flex items-center gap-3 text-content-secondary text-sm">
                             <Award size={16} />
                             <span>수행 완료 과제: 156건</span>
                         </div>
@@ -133,12 +133,12 @@ export default function ReportPage() {
                     </div>
 
                     <div className="space-y-4">
-                        <p className="text-lg font-medium text-white print:text-black leading-relaxed">
+                        <p className="text-lg font-medium text-content-primary print:text-black leading-relaxed">
                             &quot;{aiInsights.summary}&quot;
                         </p>
                         <ul className="space-y-3">
                             {aiInsights.details.map((detail, idx) => (
-                                <li key={idx} className="flex gap-3 text-zinc-400 print:text-zinc-600 leading-relaxed">
+                                <li key={idx} className="flex gap-3 text-content-secondary print:text-content-muted leading-relaxed">
                                     <span className="text-indigo-500/50 mt-1">•</span>
                                     <span>{detail}</span>
                                 </li>
@@ -146,7 +146,7 @@ export default function ReportPage() {
                         </ul>
                         <div className="mt-6 p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 print:bg-zinc-50 print:border-zinc-200">
                             <p className="text-sm text-indigo-300 print:text-indigo-600 font-bold mb-1 italic">Future Strategy:</p>
-                            <p className="text-sm text-zinc-300 print:text-zinc-700">{aiInsights.recommendation}</p>
+                            <p className="text-sm text-content-secondary print:text-zinc-700">{aiInsights.recommendation}</p>
                         </div>
                     </div>
                 </motion.div>
@@ -154,7 +154,7 @@ export default function ReportPage() {
                 {/* Performance DNA (Radar Chart) */}
                 <motion.div
                     variants={itemVariants}
-                    className="col-span-12 md:col-span-6 bg-zinc-900/50 border border-white/5 rounded-3xl p-8 flex flex-col print:bg-white print:mt-12 print:border-zinc-200"
+                    className="col-span-12 md:col-span-6 bg-surface-card/50 border border-subtle rounded-3xl p-8 flex flex-col print:bg-white print:mt-12 print:border-zinc-200"
                 >
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-xl font-bold">수학 역량 DNA</h3>
@@ -182,7 +182,7 @@ export default function ReportPage() {
                     <div className="grid grid-cols-5 gap-2 mt-4">
                         {competencyData.map((d, i) => (
                             <div key={i} className="text-center">
-                                <p className="text-[10px] text-zinc-500 mb-1">{d.subject}</p>
+                                <p className="text-[10px] text-content-tertiary mb-1">{d.subject}</p>
                                 <p className="text-sm font-bold text-indigo-400">{d.value}%</p>
                             </div>
                         ))}
@@ -192,7 +192,7 @@ export default function ReportPage() {
                 {/* Growth Trend (Line Chart) */}
                 <motion.div
                     variants={itemVariants}
-                    className="col-span-12 md:col-span-6 bg-zinc-900/50 border border-white/5 rounded-3xl p-8 flex flex-col print:bg-white print:mt-12 print:border-zinc-200"
+                    className="col-span-12 md:col-span-6 bg-surface-card/50 border border-subtle rounded-3xl p-8 flex flex-col print:bg-white print:mt-12 print:border-zinc-200"
                 >
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-xl font-bold">최근 성취도 추이</h3>
@@ -248,7 +248,7 @@ export default function ReportPage() {
                 {/* Topic Mastery Matrix */}
                 <motion.div
                     variants={itemVariants}
-                    className="col-span-12 bg-zinc-900/50 border border-white/5 rounded-3xl p-8 print:bg-white print:mt-12 print:border-zinc-200"
+                    className="col-span-12 bg-surface-card/50 border border-subtle rounded-3xl p-8 print:bg-white print:mt-12 print:border-zinc-200"
                 >
                     <div className="flex items-center gap-2 mb-8">
                         <BookOpen size={24} className="text-indigo-400" />
@@ -257,8 +257,8 @@ export default function ReportPage() {
 
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                         {topicMasteryData.map((topic, i) => (
-                            <div key={i} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col justify-between h-32 group hover:border-indigo-500/30 transition-all print:border-zinc-200">
-                                <p className="text-sm font-semibold text-zinc-300 print:text-zinc-700">{topic.topic}</p>
+                            <div key={i} className="bg-white/5 border border-subtle rounded-2xl p-4 flex flex-col justify-between h-32 group hover:border-indigo-500/30 transition-all print:border-zinc-200">
+                                <p className="text-sm font-semibold text-content-secondary print:text-zinc-700">{topic.topic}</p>
                                 <div>
                                     <div className="flex justify-between items-end mb-2">
                                         <span className="text-2xl font-bold">{topic.progress}%</span>
@@ -289,10 +289,10 @@ export default function ReportPage() {
                 {/* New: Learning Attitude Section */}
                 <motion.div
                     variants={itemVariants}
-                    className="col-span-12 bg-zinc-900/50 border border-white/5 rounded-3xl p-8 flex flex-col md:flex-row gap-8 print:bg-white print:mt-12 print:border-zinc-200 page-break-inside-avoid"
+                    className="col-span-12 bg-surface-card/50 border border-subtle rounded-3xl p-8 flex flex-col md:flex-row gap-8 print:bg-white print:mt-12 print:border-zinc-200 page-break-inside-avoid"
                 >
                     {/* Gauge Chart Section */}
-                    <div className="w-full md:w-1/3 flex flex-col items-center justify-center border-r border-white/5 pr-8 print:border-zinc-200">
+                    <div className="w-full md:w-1/3 flex flex-col items-center justify-center border-r border-subtle pr-8 print:border-zinc-200">
                         <div className="flex items-center gap-2 mb-4 self-start">
                             <Zap size={24} className="text-amber-400" />
                             <h3 className="text-xl font-bold">월간 학습 태도</h3>
@@ -327,7 +327,7 @@ export default function ReportPage() {
                             <div className="absolute bottom-0 left-[142px] w-4 h-4 bg-white rounded-full z-20 shadow-lg shadow-indigo-500/50" />
                         </div>
                         <div className="mt-4 text-center">
-                            <p className="text-4xl font-black text-white print:text-black">{attitudeData.totalScore}<span className="text-xl text-zinc-500 ml-1">/ 100</span></p>
+                            <p className="text-4xl font-black text-content-primary print:text-black">{attitudeData.totalScore}<span className="text-xl text-content-tertiary ml-1">/ 100</span></p>
                         </div>
                     </div>
 
@@ -347,12 +347,12 @@ export default function ReportPage() {
                                             {metric.category === '수업 집중도' && <Zap size={16} />}
                                             {metric.category === '질문 빈도' && <MessageCircle size={16} />}
                                         </div>
-                                        <span className="font-semibold text-zinc-300 print:text-zinc-700">{metric.category}</span>
+                                        <span className="font-semibold text-content-secondary print:text-zinc-700">{metric.category}</span>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xl font-bold">{metric.score}</div>
                                         <div className={`text-xs flex items-center justify-end gap-1 ${metric.trend === 'up' ? 'text-emerald-400' :
-                                                metric.trend === 'down' ? 'text-rose-400' : 'text-zinc-500'
+                                                metric.trend === 'down' ? 'text-rose-400' : 'text-content-tertiary'
                                             }`}>
                                             {metric.trend === 'up' && <ArrowUpRight size={12} />}
                                             {metric.trend === 'down' && <ArrowDownRight size={12} />}
@@ -373,7 +373,7 @@ export default function ReportPage() {
                                 </div>
                                 <div>
                                     <p className="font-bold text-emerald-100 mb-1 print:text-emerald-800">AI Teaching Assistant&apos;s Note</p>
-                                    <p className="text-zinc-300 leading-relaxed text-sm print:text-zinc-700">
+                                    <p className="text-content-secondary leading-relaxed text-sm print:text-zinc-700">
                                         &quot;{attitudeData.comment}&quot;
                                     </p>
                                 </div>
@@ -385,7 +385,7 @@ export default function ReportPage() {
             </motion.div>
 
             {/* 3. Print Watermark Footer (Visible only in Print) */}
-            <div className="hidden print:flex fixed bottom-8 left-1/2 -translate-x-1/2 w-full justify-between px-12 items-center text-zinc-300">
+            <div className="hidden print:flex fixed bottom-8 left-1/2 -translate-x-1/2 w-full justify-between px-12 items-center text-content-secondary">
                 <div className="text-sm">© 2026 과사람 With-People. All rights reserved.</div>
                 <div className="text-2xl font-black italic opacity-20">과사람 WITH-PEOPLE</div>
             </div>

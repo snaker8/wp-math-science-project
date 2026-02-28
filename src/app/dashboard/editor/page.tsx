@@ -49,31 +49,31 @@ export default function ProblemEditorPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-2rem)] gap-0 overflow-hidden bg-zinc-950 text-zinc-300 font-sans">
+        <div className="flex h-[calc(100vh-2rem)] gap-0 overflow-hidden bg-surface-raised text-content-secondary font-sans">
 
             {/* 
         ============================================================================
         COL 1: LEFT LIBRARY (20%)
         ============================================================================ 
       */}
-            <div className="w-[280px] flex-shrink-0 flex flex-col border-r border-white/5 bg-zinc-900/30">
-                <div className="h-14 flex items-center px-4 border-b border-white/5 justify-between">
-                    <span className="font-semibold text-zinc-100 flex items-center gap-2">
+            <div className="w-[280px] flex-shrink-0 flex flex-col border-r border-subtle bg-surface-card/30">
+                <div className="h-14 flex items-center px-4 border-b border-subtle justify-between">
+                    <span className="font-semibold text-content-primary flex items-center gap-2">
                         <FileText className="w-4 h-4 text-indigo-400" />
                         Library
                     </span>
-                    <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded border border-white/5">
+                    <span className="text-[10px] bg-surface-raised text-content-tertiary px-1.5 py-0.5 rounded border border-subtle">
                         {LIBRARY_ITEMS.length} items
                     </span>
                 </div>
 
-                <div className="p-3 border-b border-white/5">
+                <div className="p-3 border-b border-subtle">
                     <div className="relative group">
-                        <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-zinc-600 transition-colors group-hover:text-zinc-400" />
+                        <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-content-muted transition-colors group-hover:text-content-secondary" />
                         <input
                             type="text"
                             placeholder="Search resources..."
-                            className="w-full bg-zinc-950/50 border border-white/5 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500/50 transition-all placeholder:text-zinc-700"
+                            className="w-full bg-surface-raised/50 border border-subtle rounded-lg pl-9 pr-3 py-2 text-xs text-content-secondary focus:outline-none focus:border-indigo-500/50 transition-all placeholder:text-zinc-700"
                         />
                     </div>
                 </div>
@@ -87,16 +87,16 @@ export default function ProblemEditorPage() {
                 w-full text-left p-3 rounded-lg mb-1 transition-all duration-200 group border border-transparent
                 ${activeItem === item.id
                                     ? 'bg-indigo-500/10 border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                                    : 'hover:bg-white/5 hover:border-white/5'}
+                                    : 'hover:bg-white/5 hover:border-subtle'}
               `}
                         >
                             <div className="flex items-start justify-between mb-1">
-                                <span className={`text-sm font-medium transition-colors ${activeItem === item.id ? 'text-indigo-200' : 'text-zinc-400 group-hover:text-zinc-200'}`}>
+                                <span className={`text-sm font-medium transition-colors ${activeItem === item.id ? 'text-indigo-200' : 'text-content-secondary group-hover:text-content-primary'}`}>
                                     {item.title}
                                 </span>
                                 {activeItem === item.id && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 shadow-[0_0_5px_currentColor]" />}
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-zinc-600">
+                            <div className="flex items-center gap-2 text-[10px] text-content-muted">
                                 <span className={`px-1.5 rounded border ${item.type === 'SCAN' ? 'bg-amber-900/20 border-amber-500/20 text-amber-500' :
                                     item.type === 'PDF' ? 'bg-rose-900/20 border-rose-500/20 text-rose-500' :
                                         'bg-emerald-900/20 border-emerald-500/20 text-emerald-500'
@@ -115,11 +115,11 @@ export default function ProblemEditorPage() {
         COL 2: CENTER EDITOR (MAIN)
         ============================================================================ 
       */}
-            <div className="flex-1 flex flex-col min-w-0 bg-zinc-950 relative">
+            <div className="flex-1 flex flex-col min-w-0 bg-surface-raised relative">
                 {/* Floating Toolbar (Top) */}
-                <div className="h-14 border-b border-indigo-500/10 flex items-center justify-between px-6 bg-zinc-900/20 backdrop-blur-sm z-10">
+                <div className="h-14 border-b border-indigo-500/10 flex items-center justify-between px-6 bg-surface-card/20 backdrop-blur-sm z-10">
                     <div className="flex items-center gap-4">
-                        <h1 className="text-zinc-200 font-bold text-sm">Problem Editor</h1>
+                        <h1 className="text-content-primary font-bold text-sm">Problem Editor</h1>
                         <div className="h-4 w-[1px] bg-white/10" />
                         <div className="flex items-center gap-1">
                             {[
@@ -131,13 +131,13 @@ export default function ProblemEditorPage() {
                                 <button
                                     key={i}
                                     onClick={() => insertLatex(tool.tex)}
-                                    className="p-1.5 rounded hover:bg-white/5 text-zinc-500 hover:text-indigo-400 transition-colors"
+                                    className="p-1.5 rounded hover:bg-white/5 text-content-tertiary hover:text-indigo-400 transition-colors"
                                     title={tool.label}
                                 >
                                     {tool.icon}
                                 </button>
                             ))}
-                            <button className="p-1.5 rounded hover:bg-white/5 text-zinc-500 hover:text-indigo-400 transition-colors ml-1">
+                            <button className="p-1.5 rounded hover:bg-white/5 text-content-tertiary hover:text-indigo-400 transition-colors ml-1">
                                 <HistoryIcon className="w-3.5 h-3.5" />
                             </button>
                         </div>
@@ -146,7 +146,7 @@ export default function ProblemEditorPage() {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setShowPreview(true)}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-white/5 bg-zinc-900 text-zinc-400 hover:text-white hover:border-indigo-500/50 hover:shadow-[0_0_10px_rgba(99,102,241,0.2)] transition-all"
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-subtle bg-surface-card text-content-secondary hover:text-content-primary hover:border-indigo-500/50 hover:shadow-[0_0_10px_rgba(99,102,241,0.2)] transition-all"
                         >
                             <Eye className="w-3.5 h-3.5" />
                             Preview
@@ -156,7 +156,7 @@ export default function ProblemEditorPage() {
                             className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all
                   ${showAiPanel
                                     ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
-                                    : 'bg-zinc-900 text-zinc-500 border-white/5 hover:text-zinc-300'}
+                                    : 'bg-surface-card text-content-tertiary border-subtle hover:text-content-secondary'}
                 `}
                         >
                             <Sparkles className="w-3.5 h-3.5" />
@@ -169,17 +169,17 @@ export default function ProblemEditorPage() {
                 <div className="flex-1 flex flex-col md:flex-row relative overflow-hidden">
 
                     {/* Left: Raw Input */}
-                    <div className="flex-1 flex flex-col border-r border-white/5 bg-zinc-900/10">
+                    <div className="flex-1 flex flex-col border-r border-subtle bg-surface-card/10">
                         <div className="flex-1 relative">
                             <textarea
                                 value={latexContent}
                                 onChange={(e) => setLatexContent(e.target.value)}
-                                className="w-full h-full bg-transparent p-6 text-sm font-mono text-zinc-300 resize-none focus:outline-none custom-scrollbar leading-relaxed"
+                                className="w-full h-full bg-transparent p-6 text-sm font-mono text-content-secondary resize-none focus:outline-none custom-scrollbar leading-relaxed"
                                 spellCheck={false}
                                 placeholder="Type LaTeX content here..."
                             />
                         </div>
-                        <div className="px-4 py-2 text-[10px] text-zinc-600 border-t border-white/5 font-mono select-none">
+                        <div className="px-4 py-2 text-[10px] text-content-muted border-t border-subtle font-mono select-none">
                             LaTeX Mode Active • {latexContent.length} chars
                         </div>
                     </div>
@@ -189,12 +189,12 @@ export default function ProblemEditorPage() {
                         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
 
                         <div className="flex-1 p-8 flex items-center justify-center overflow-auto custom-scrollbar">
-                            <div className="bg-zinc-900/80 backdrop-blur border border-white/5 p-8 rounded-xl shadow-2xl shadow-black/50 min-w-[300px] text-center">
+                            <div className="bg-surface-card/80 backdrop-blur border border-subtle p-8 rounded-xl shadow-2xl shadow-black/50 min-w-[300px] text-center">
                                 <MathRenderer content={latexContent || '\\text{No content}'} className="text-xl text-indigo-100" />
                             </div>
                         </div>
 
-                        <div className="absolute top-4 right-4 px-2 py-1 bg-black/50 backdrop-blur rounded text-[10px] text-zinc-500 font-mono border border-white/5">
+                        <div className="absolute top-4 right-4 px-2 py-1 bg-surface-base/50 backdrop-blur rounded text-[10px] text-content-tertiary font-mono border border-subtle">
                             LIVE PREVIEW
                         </div>
                     </div>
@@ -202,15 +202,15 @@ export default function ProblemEditorPage() {
                 </div>
 
                 {/* Sticky Footer */}
-                <div className="h-16 border-t border-indigo-500/20 bg-zinc-900/80 backdrop-blur-md flex items-center justify-between px-6 absolute bottom-0 w-full z-20">
-                    <div className="text-xs text-zinc-500">
+                <div className="h-16 border-t border-indigo-500/20 bg-surface-card/80 backdrop-blur-md flex items-center justify-between px-6 absolute bottom-0 w-full z-20">
+                    <div className="text-xs text-content-tertiary">
                         Last saved 2 mins ago
                     </div>
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setShowPreview(true)} className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-colors">
+                        <button onClick={() => setShowPreview(true)} className="px-4 py-2 rounded-lg text-xs font-medium text-content-secondary hover:text-content-primary hover:bg-white/5 transition-colors">
                             Preview
                         </button>
-                        <button onClick={() => alert('문제가 저장소에 저장되었습니다.')} className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all flex items-center gap-2">
+                        <button onClick={() => alert('문제가 저장소에 저장되었습니다.')} className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-content-primary text-xs font-bold shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all flex items-center gap-2">
                             <Save className="w-3.5 h-3.5" />
                             Save to Repository
                         </button>
@@ -231,10 +231,10 @@ export default function ProblemEditorPage() {
                         animate={{ width: 320, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="flex-shrink-0 border-l border-white/5 bg-zinc-900/30 flex flex-col"
+                        className="flex-shrink-0 border-l border-subtle bg-surface-card/30 flex flex-col"
                     >
-                        <div className="h-14 flex items-center px-5 border-b border-white/5">
-                            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                        <div className="h-14 flex items-center px-5 border-b border-subtle">
+                            <h2 className="text-xs font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
                                 <Settings className="w-3.5 h-3.5" />
                                 Configuration
                             </h2>
@@ -244,10 +244,10 @@ export default function ProblemEditorPage() {
 
                             {/* 1. Metadata Form */}
                             <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-zinc-200">Properties</h3>
+                                <h3 className="text-sm font-semibold text-content-primary">Properties</h3>
 
                                 <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-500 uppercase font-medium">Difficulty</label>
+                                    <label className="text-[10px] text-content-tertiary uppercase font-medium">Difficulty</label>
                                     <div className="flex gap-1">
                                         {[1, 2, 3, 4, 5].map(star => (
                                             <button
@@ -262,8 +262,8 @@ export default function ProblemEditorPage() {
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-500 uppercase font-medium">Topic Tag</label>
-                                    <select className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:border-indigo-500/50 outline-none appearance-none">
+                                    <label className="text-[10px] text-content-tertiary uppercase font-medium">Topic Tag</label>
+                                    <select className="w-full bg-surface-raised border border-white/10 rounded-lg px-3 py-2 text-xs text-content-secondary focus:border-indigo-500/50 outline-none appearance-none">
                                         <option>Calculus &gt; Limits</option>
                                         <option>Geometry &gt; Vectors</option>
                                     </select>
@@ -275,16 +275,16 @@ export default function ProblemEditorPage() {
                             {/* 2. AI Generator */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                                    <h3 className="text-sm font-semibold text-content-primary flex items-center gap-2">
                                         <Sparkles className="w-4 h-4 text-emerald-400" />
                                         AI Twin Generator
                                     </h3>
-                                    <button onClick={() => alert('AI 유사문제를 재생성합니다.')} className="p-1.5 rounded-md hover:bg-white/5 text-zinc-500 hover:text-emerald-400">
+                                    <button onClick={() => alert('AI 유사문제를 재생성합니다.')} className="p-1.5 rounded-md hover:bg-white/5 text-content-tertiary hover:text-emerald-400">
                                         <RefreshCw className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
-                                <p className="text-xs text-zinc-500 leading-relaxed">
+                                <p className="text-xs text-content-tertiary leading-relaxed">
                                     Based on current LaTeX content, AI suggests 3 variations. Click to swap.
                                 </p>
 
@@ -293,22 +293,22 @@ export default function ProblemEditorPage() {
                                         <div
                                             key={sug.id}
                                             onClick={() => setLatexContent(sug.content)}
-                                            className="group relative p-3 rounded-xl border border-white/5 bg-zinc-950 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all cursor-pointer"
+                                            className="group relative p-3 rounded-xl border border-subtle bg-surface-raised hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all cursor-pointer"
                                         >
                                             <div className="flex justify-between items-start mb-2">
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-900 border border-white/5 text-zinc-400 group-hover:text-indigo-300 transition-colors">
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-card border border-subtle text-content-secondary group-hover:text-indigo-300 transition-colors">
                                                     {sug.level}
                                                 </span>
-                                                <ArrowRightLeft className="w-3 h-3 text-zinc-600 group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all" />
+                                                <ArrowRightLeft className="w-3 h-3 text-content-muted group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all" />
                                             </div>
-                                            <div className="text-xs text-zinc-300 font-mono truncate opacity-60 group-hover:opacity-100 transition-opacity">
+                                            <div className="text-xs text-content-secondary font-mono truncate opacity-60 group-hover:opacity-100 transition-opacity">
                                                 {sug.content}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                <button onClick={() => alert('추가 유사문제가 생성되었습니다.')} className="w-full py-2.5 rounded-lg border border-dashed border-zinc-700 text-zinc-500 text-xs font-medium hover:border-indigo-500/30 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all">
+                                <button onClick={() => alert('추가 유사문제가 생성되었습니다.')} className="w-full py-2.5 rounded-lg border border-dashed border text-content-tertiary text-xs font-medium hover:border-indigo-500/30 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all">
                                     + Generate More
                                 </button>
                             </div>

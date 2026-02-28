@@ -99,7 +99,7 @@ function GroupTreeItem({
         className={`flex items-center gap-1.5 rounded-lg px-2 py-2 cursor-pointer transition-colors ${
           selectedGroupId === group.id
             ? 'bg-cyan-500/10 text-cyan-400'
-            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+            : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
         }`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={() => onSelect(group.id)}
@@ -123,7 +123,7 @@ function GroupTreeItem({
         <span className="text-sm font-medium truncate">{group.name}</span>
         <button
           type="button"
-          className="ml-auto p-0.5 text-zinc-600 hover:text-zinc-300 opacity-0 group-hover:opacity-100"
+          className="ml-auto p-0.5 text-content-muted hover:text-content-secondary opacity-0 group-hover:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           <MoreVertical className="h-3.5 w-3.5" />
@@ -161,7 +161,7 @@ function PageMap({
 }) {
   return (
     <div className="flex flex-col items-center gap-1 py-2">
-      <span className="text-[10px] text-zinc-500 mb-1">페이지 맵</span>
+      <span className="text-[10px] text-content-tertiary mb-1">페이지 맵</span>
       <div className="flex flex-col gap-1">
         {Array.from({ length: totalPages }).map((_, i) => (
           <button
@@ -171,7 +171,7 @@ function PageMap({
             className={`w-8 h-8 rounded text-xs font-bold border transition-colors ${
               currentPage === i + 1
                 ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                : 'border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                : 'border bg-surface-card text-content-tertiary hover:border-zinc-500 hover:text-content-secondary'
             }`}
           >
             {i + 1}
@@ -272,19 +272,19 @@ export default function ExamManagementPage() {
   const totalPages = Math.max(1, Math.ceil(problems.length / 10));
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
       {/* ======== Header ======== */}
-      <div className="flex items-center justify-between border-b border-zinc-800/50 px-5 py-3 flex-shrink-0">
+      <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-base font-bold text-white">시험지 관리</h1>
+          <h1 className="text-base font-bold text-content-primary">시험지 관리</h1>
           <div className="flex items-center gap-1 text-sm">
-            <span className="text-zinc-500">과목</span>
+            <span className="text-content-tertiary">과목</span>
             <button
               type="button"
-              className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+              className="flex items-center gap-1 rounded-lg border border bg-surface-card px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-raised"
             >
               {subjectFilter}
-              <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+              <ChevronDown className="h-3.5 w-3.5 text-content-tertiary" />
             </button>
           </div>
         </div>
@@ -293,14 +293,14 @@ export default function ExamManagementPage() {
       {/* ======== Main 3-Panel Layout ======== */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- 좌측: 시험지 그룹 트리 --- */}
-        <div className="w-52 flex-shrink-0 border-r border-zinc-800/50 flex flex-col">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800/50">
-            <span className="text-xs font-bold text-zinc-300">
+        <div className="w-52 flex-shrink-0 border-r border-subtle flex flex-col">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-subtle">
+            <span className="text-xs font-bold text-content-secondary">
               시험지 그룹 <span className="text-cyan-400">{bookGroups.length - 1}개</span>
             </span>
             <button
               type="button"
-              className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-cyan-400 transition-colors"
+              className="flex items-center gap-1 text-[10px] text-content-tertiary hover:text-cyan-400 transition-colors"
             >
               <Plus className="h-3 w-3" />
               최상위 그룹 추가
@@ -319,26 +319,26 @@ export default function ExamManagementPage() {
         </div>
 
         {/* --- 중앙: 시험지 목록 --- */}
-        <div className="w-80 flex-shrink-0 border-r border-zinc-800/50 flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/50">
+        <div className="w-80 flex-shrink-0 border-r border-subtle flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle">
             <div className="flex items-center gap-2">
               <FolderOpen className="h-4 w-4 text-cyan-400" />
-              <span className="text-sm font-bold text-zinc-200">{selectedGroupName}</span>
+              <span className="text-sm font-bold text-content-primary">{selectedGroupName}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="flex items-center gap-1 text-xs text-zinc-500 hover:text-cyan-400 transition-colors"
+                className="flex items-center gap-1 text-xs text-content-tertiary hover:text-cyan-400 transition-colors"
               >
                 <Plus className="h-3 w-3" />
                 시험지 생성
               </button>
-              <span className="text-xs text-zinc-600">{examsLoading ? '...' : `${groupExams.length}개`}</span>
+              <span className="text-xs text-content-muted">{examsLoading ? '...' : `${groupExams.length}개`}</span>
             </div>
           </div>
 
-          <div className="px-3 py-2 border-b border-zinc-800/30">
-            <span className="text-[10px] text-zinc-500 uppercase">시험지명</span>
+          <div className="px-3 py-2 border-b border-subtle">
+            <span className="text-[10px] text-content-tertiary uppercase">시험지명</span>
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -347,17 +347,17 @@ export default function ExamManagementPage() {
                 key={exam.id}
                 type="button"
                 onClick={() => setSelectedExamId(exam.id)}
-                className={`w-full flex items-start gap-2 px-3 py-2.5 text-left border-b border-zinc-800/30 transition-colors ${
+                className={`w-full flex items-start gap-2 px-3 py-2.5 text-left border-b border-subtle transition-colors ${
                   selectedExamId === exam.id
                     ? 'bg-cyan-500/5 border-l-2 border-l-cyan-500'
-                    : 'hover:bg-zinc-900 border-l-2 border-l-transparent'
+                    : 'hover:bg-surface-card border-l-2 border-l-transparent'
                 }`}
               >
                 <FileText className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
-                  selectedExamId === exam.id ? 'text-cyan-400' : 'text-zinc-600'
+                  selectedExamId === exam.id ? 'text-cyan-400' : 'text-content-muted'
                 }`} />
                 <span className={`text-sm leading-snug ${
-                  selectedExamId === exam.id ? 'text-cyan-300 font-medium' : 'text-zinc-400'
+                  selectedExamId === exam.id ? 'text-cyan-300 font-medium' : 'text-content-secondary'
                 }`}>
                   {exam.title}
                 </span>
@@ -372,29 +372,29 @@ export default function ExamManagementPage() {
             <>
               {/* 로딩 오버레이 */}
               {problemsLoading && (
-                <div className="flex items-center justify-center py-8 border-b border-zinc-800/50">
-                  <div className="flex items-center gap-2 text-zinc-400 text-sm">
+                <div className="flex items-center justify-center py-8 border-b border-subtle">
+                  <div className="flex items-center gap-2 text-content-secondary text-sm">
                     <div className="h-4 w-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
                     문제를 불러오는 중...
                   </div>
                 </div>
               )}
               {/* 액션 바 */}
-              <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-2 flex-shrink-0">
+              <div className="flex items-center justify-between border-b border-subtle px-4 py-2 flex-shrink-0">
                 <div className="flex items-center gap-1.5">
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 transition-colors">
+                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
                     <Pencil className="h-3.5 w-3.5" />
                     시험지 수정
                   </button>
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 transition-colors">
+                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
                     <Printer className="h-3.5 w-3.5" />
                     출력
                   </button>
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 transition-colors">
+                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
                     <Share2 className="h-3.5 w-3.5" />
                     시험지 배포
                   </button>
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 transition-colors">
+                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
                     <Copy className="h-3.5 w-3.5" />
                     유사 시험지 만들기
                   </button>
@@ -408,7 +408,7 @@ export default function ExamManagementPage() {
                     className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                       activeTab === 'exam'
                         ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                        : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
                     }`}
                   >
                     <ScrollText className="h-3.5 w-3.5" />
@@ -420,7 +420,7 @@ export default function ExamManagementPage() {
                     className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                       activeTab === 'answer'
                         ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                        : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
                     }`}
                   >
                     <CheckSquare className="h-3.5 w-3.5" />
@@ -432,7 +432,7 @@ export default function ExamManagementPage() {
                     className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                       activeTab === 'solution'
                         ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                        : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
                     }`}
                   >
                     <BookOpenCheck className="h-3.5 w-3.5" />
@@ -442,7 +442,7 @@ export default function ExamManagementPage() {
                     type="button"
                     onClick={handleDeleteExam}
                     disabled={isDeleting}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 disabled:opacity-50"
+                    className="p-1.5 text-content-tertiary hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 disabled:opacity-50"
                     title="삭제"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -453,7 +453,7 @@ export default function ExamManagementPage() {
               {/* 뷰어 영역 */}
               <div className="flex flex-1 overflow-hidden">
                 {/* 시험지 뷰 */}
-                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-4 bg-zinc-950/30">
+                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-4 bg-surface-raised/30">
                   <div className="w-full max-w-[800px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
                     {/* 헤더 테이블 */}
                     <div className="border-b-2 border-gray-800 p-0">
@@ -571,7 +571,7 @@ export default function ExamManagementPage() {
                 </div>
 
                 {/* 페이지 맵 (우측) */}
-                <div className="w-14 flex-shrink-0 border-l border-zinc-800/50 flex flex-col items-center py-3">
+                <div className="w-14 flex-shrink-0 border-l border-subtle flex flex-col items-center py-3">
                   <PageMap
                     totalPages={totalPages}
                     currentPage={currentPage}
@@ -581,16 +581,16 @@ export default function ExamManagementPage() {
               </div>
 
               {/* 하단 컨트롤 바 */}
-              <div className="flex items-center justify-between border-t border-zinc-800/50 px-4 py-2 flex-shrink-0 bg-zinc-950/50">
+              <div className="flex items-center justify-between border-t border-subtle px-4 py-2 flex-shrink-0 bg-surface-raised/50">
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 rounded-lg border border-zinc-700 overflow-hidden">
+                  <div className="flex items-center gap-1 rounded-lg border border overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setColumns(1)}
                       className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                         columns === 1
                           ? 'bg-cyan-500/10 text-cyan-400'
-                          : 'text-zinc-500 hover:text-zinc-300'
+                          : 'text-content-tertiary hover:text-content-secondary'
                       }`}
                     >
                       <AlignJustify className="h-3.5 w-3.5" />
@@ -602,7 +602,7 @@ export default function ExamManagementPage() {
                       className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                         columns === 2
                           ? 'bg-cyan-500/10 text-cyan-400'
-                          : 'text-zinc-500 hover:text-zinc-300'
+                          : 'text-content-tertiary hover:text-content-secondary'
                       }`}
                     >
                       <Columns2 className="h-3.5 w-3.5" />
@@ -610,7 +610,7 @@ export default function ExamManagementPage() {
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">gap : {gap}</span>
+                    <span className="text-xs text-content-tertiary">gap : {gap}</span>
                     <input
                       type="range"
                       min={8}
@@ -631,7 +631,7 @@ export default function ExamManagementPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
+            <div className="flex-1 flex flex-col items-center justify-center text-content-tertiary">
               <FileText className="h-12 w-12 text-zinc-700 mb-3" />
               <p className="text-sm">시험지를 선택해주세요</p>
             </div>

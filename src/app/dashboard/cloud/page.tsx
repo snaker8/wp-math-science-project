@@ -203,7 +203,7 @@ const SubjectDropdown: React.FC<{
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex h-9 items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+        className="flex h-9 items-center gap-2 rounded-lg border bg-surface-card px-3 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors"
       >
         <span className="truncate max-w-[200px]">{value}</span>
         <ChevronDown className="h-4 w-4 opacity-50 flex-shrink-0" />
@@ -211,13 +211,13 @@ const SubjectDropdown: React.FC<{
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 min-w-[240px] rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl">
+          <div className="absolute left-0 top-full z-20 mt-1 min-w-[240px] rounded-lg border bg-surface-card py-1 shadow-xl">
             {options.map((opt) => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => { onChange(opt); setOpen(false); }}
-                className={`w-full px-4 py-2 text-left text-sm hover:bg-zinc-800 transition-colors ${value === opt ? 'bg-zinc-800 text-cyan-400 font-medium' : 'text-zinc-400'}`}
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised transition-colors ${value === opt ? 'bg-surface-raised text-cyan-400 font-medium' : 'text-content-secondary'}`}
               >
                 {opt}
               </button>
@@ -241,19 +241,19 @@ const GroupContextMenu: React.FC<{
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className="rounded p-1 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+        className="rounded p-1 text-content-tertiary hover:bg-surface-raised hover:text-content-primary transition-colors opacity-0 group-hover:opacity-100"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-40 mt-1 min-w-[140px] rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl">
+          <div className="absolute right-0 top-full z-40 mt-1 min-w-[140px] rounded-lg border bg-surface-card py-1 shadow-xl">
             {onAddChild && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onAddChild(); setOpen(false); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-surface-raised hover:text-content-primary"
               >
                 <FolderPlus className="h-3.5 w-3.5" /> 하위 그룹 추가
               </button>
@@ -262,7 +262,7 @@ const GroupContextMenu: React.FC<{
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onRename(); setOpen(false); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-surface-raised hover:text-content-primary"
               >
                 <Pencil className="h-3.5 w-3.5" /> 이름 변경
               </button>
@@ -271,7 +271,7 @@ const GroupContextMenu: React.FC<{
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onDelete(); setOpen(false); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-zinc-800 hover:text-red-300"
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-surface-raised hover:text-red-300"
               >
                 <Trash2 className="h-3.5 w-3.5" /> 삭제
               </button>
@@ -297,47 +297,47 @@ const FileContextMenu: React.FC<{
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+        className="rounded-lg p-1.5 text-content-tertiary hover:bg-surface-raised hover:text-content-primary transition-colors opacity-0 group-hover:opacity-100"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-40 mt-1 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl">
+          <div className="absolute right-0 top-full z-40 mt-1 min-w-[160px] rounded-lg border bg-surface-card py-1 shadow-xl">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onRename(); setOpen(false); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-surface-raised hover:text-content-primary"
             >
               <Pencil className="h-3.5 w-3.5" /> 파일명 수정
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onView(); setOpen(false); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-surface-raised hover:text-content-primary"
             >
               <Eye className="h-3.5 w-3.5" /> 문제 보기
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onMove(); setOpen(false); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-surface-raised hover:text-content-primary"
             >
               <FolderInput className="h-3.5 w-3.5" /> 그룹 이동
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onDownload(); setOpen(false); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-surface-raised hover:text-content-primary"
             >
               <Download className="h-3.5 w-3.5" /> 원본 다운로드
             </button>
-            <div className="my-1 border-t border-zinc-800" />
+            <div className="my-1 border-t border-subtle" />
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onDelete(); setOpen(false); }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-zinc-800 hover:text-red-300"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-surface-raised hover:text-red-300"
             >
               <Trash2 className="h-3.5 w-3.5" /> 파일 삭제
             </button>
@@ -375,7 +375,7 @@ const TreeNodeComponent: React.FC<{
         className={`group flex items-center gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${
           isSelected
             ? 'bg-cyan-500/10 text-cyan-400'
-            : 'text-zinc-400 hover:bg-zinc-800/50'
+            : 'text-content-secondary hover:bg-surface-raised/50'
         }`}
         style={{ paddingLeft: `${8 + level * 16}px` }}
         onClick={() => {
@@ -385,9 +385,9 @@ const TreeNodeComponent: React.FC<{
       >
         {hasChildren ? (
           isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-content-tertiary" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+            <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-content-tertiary" />
           )
         ) : (
           <span className="w-3.5 flex-shrink-0" />
@@ -395,7 +395,7 @@ const TreeNodeComponent: React.FC<{
         {isExpanded || isSelected ? (
           <FolderOpen className="h-4 w-4 flex-shrink-0 text-cyan-500" />
         ) : (
-          <Folder className="h-4 w-4 flex-shrink-0 text-zinc-500" />
+          <Folder className="h-4 w-4 flex-shrink-0 text-content-tertiary" />
         )}
         {isRenaming ? (
           <input
@@ -409,7 +409,7 @@ const TreeNodeComponent: React.FC<{
             onBlur={onRenameConfirm}
             onClick={(e) => e.stopPropagation()}
             autoFocus
-            className="flex-1 bg-zinc-800 border border-cyan-500/50 rounded px-1.5 py-0.5 text-[13px] text-white outline-none"
+            className="flex-1 bg-surface-raised border border-cyan-500/50 rounded px-1.5 py-0.5 text-[13px] text-content-primary outline-none"
           />
         ) : (
           <span className={`flex-1 truncate text-[13px] ${isSelected ? 'font-semibold' : 'font-medium'}`}>
@@ -417,7 +417,7 @@ const TreeNodeComponent: React.FC<{
           </span>
         )}
         {node.examCount > 0 && !isRenaming && (
-          <span className="text-[10px] text-zinc-600 mr-1">{node.examCount}</span>
+          <span className="text-[10px] text-content-muted mr-1">{node.examCount}</span>
         )}
         {!node.isVirtual && !isRenaming && (
           <GroupContextMenu
@@ -474,11 +474,11 @@ const MoveToGroupModal: React.FC<{
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.2 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm mx-4 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-sm mx-4 bg-surface-card border rounded-2xl shadow-2xl overflow-hidden"
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-          <h3 className="text-sm font-bold text-white">그룹 이동</h3>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+        <div className="flex items-center justify-between border-b border-subtle px-5 py-3">
+          <h3 className="text-sm font-bold text-content-primary">그룹 이동</h3>
+          <button type="button" onClick={onClose} className="text-content-secondary hover:text-content-primary">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -487,7 +487,7 @@ const MoveToGroupModal: React.FC<{
             type="button"
             onClick={() => onMove(null)}
             className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
-              currentGroupId === null ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-400 hover:bg-zinc-800'
+              currentGroupId === null ? 'bg-cyan-500/10 text-cyan-400' : 'text-content-secondary hover:bg-surface-raised'
             }`}
           >
             <Folder className="h-3.5 w-3.5" />
@@ -500,7 +500,7 @@ const MoveToGroupModal: React.FC<{
               type="button"
               onClick={() => onMove(g.id)}
               className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
-                currentGroupId === g.id ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-400 hover:bg-zinc-800'
+                currentGroupId === g.id ? 'bg-cyan-500/10 text-cyan-400' : 'text-content-secondary hover:bg-surface-raised'
               }`}
             >
               <Folder className="h-3.5 w-3.5" />
@@ -558,7 +558,7 @@ const CreateGroupModal: React.FC<{
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.2 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg mx-4 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-lg mx-4 bg-surface-card border rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-cyan-600 to-indigo-600 px-6 py-5">
@@ -578,7 +578,7 @@ const CreateGroupModal: React.FC<{
         <div className="p-6 space-y-5">
           {/* 그룹 타입 */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-3">그룹타입</label>
+            <label className="block text-sm font-medium text-content-secondary mb-3">그룹타입</label>
             <div className="grid grid-cols-2 gap-3">
               {GROUP_TYPES.map((type) => {
                 const Icon = type.icon;
@@ -591,19 +591,19 @@ const CreateGroupModal: React.FC<{
                     className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all ${
                       isSelected
                         ? 'border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30'
-                        : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 hover:bg-zinc-800'
+                        : 'border bg-surface-raised/50 hover:border-content-muted hover:bg-surface-raised'
                     }`}
                   >
                     <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
-                      isSelected ? 'bg-cyan-500/20 text-cyan-400' : 'bg-zinc-700/50 text-zinc-500'
+                      isSelected ? 'bg-cyan-500/20 text-cyan-400' : 'bg-surface-raised/50 text-content-tertiary'
                     }`}>
                       <Icon className="h-4.5 w-4.5" />
                     </div>
                     <div className="min-w-0">
-                      <div className={`text-sm font-semibold ${isSelected ? 'text-cyan-400' : 'text-zinc-300'}`}>
+                      <div className={`text-sm font-semibold ${isSelected ? 'text-cyan-400' : 'text-content-secondary'}`}>
                         {type.label}
                       </div>
-                      <div className="text-[11px] text-zinc-500 leading-tight mt-0.5">{type.desc}</div>
+                      <div className="text-[11px] text-content-tertiary leading-tight mt-0.5">{type.desc}</div>
                     </div>
                   </button>
                 );
@@ -613,7 +613,7 @@ const CreateGroupModal: React.FC<{
 
           {/* 이름 입력 */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">북그룹 이름</label>
+            <label className="block text-sm font-medium text-content-secondary mb-2">북그룹 이름</label>
             <input
               type="text"
               value={name}
@@ -621,7 +621,7 @@ const CreateGroupModal: React.FC<{
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               placeholder="예) 2학년 1학기 교과서"
               autoFocus
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-800/50 px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500"
+              className="w-full rounded-xl border bg-surface-raised/50 px-4 py-3 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500"
             />
           </div>
 
@@ -638,7 +638,7 @@ const CreateGroupModal: React.FC<{
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors disabled:opacity-50"
+              className="rounded-lg border bg-surface-raised px-5 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors disabled:opacity-50"
             >
               취소
             </button>
@@ -646,7 +646,7 @@ const CreateGroupModal: React.FC<{
               type="button"
               onClick={handleSave}
               disabled={!name.trim() || saving}
-              className="flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-700 disabled:text-zinc-500 px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-cyan-500/20 disabled:shadow-none"
+              className="flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-surface-raised disabled:text-content-tertiary px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-cyan-500/20 disabled:shadow-none"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {saving ? '저장 중...' : '저장'}
@@ -1167,13 +1167,13 @@ export default function CloudPage() {
   }, [pinOld, pinNew, pinConfirm, getAdminPin]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
       {/* Header */}
-      <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-3 border-b border-zinc-800/50">
+      <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-3 border-b border-subtle/50">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-white">과사람클라우드 관리</h1>
+          <h1 className="text-lg font-semibold text-content-primary">과사람클라우드 관리</h1>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">과목</span>
+            <span className="text-xs text-content-tertiary">과목</span>
             <SubjectDropdown value={subject} options={subjectOptions} onChange={setSubject} />
           </div>
         </div>
@@ -1181,7 +1181,7 @@ export default function CloudPage() {
           <button
             type="button"
             onClick={() => { setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError(''); setShowPinModal(true); }}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border bg-surface-raised/60 px-3 py-2 text-xs text-content-tertiary hover:text-content-primary hover:bg-surface-raised transition-colors"
             title="관리자 PIN 변경"
           >
             <KeyRound className="h-3.5 w-3.5" />
@@ -1195,7 +1195,7 @@ export default function CloudPage() {
             <Upload className="h-4 w-4" />
             자료 업로드
           </button>
-          <span className="text-[11px] text-zinc-600">
+          <span className="text-[11px] text-content-muted">
             <Database className="inline h-3 w-3 mr-1" />
             DB 시험지 {dbExams.length}건
           </span>
@@ -1206,7 +1206,7 @@ export default function CloudPage() {
       {isLoading && (
         <div className="flex flex-1 items-center justify-center gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
-          <span className="text-sm text-zinc-400">시험지 데이터 로딩 중...</span>
+          <span className="text-sm text-content-secondary">시험지 데이터 로딩 중...</span>
         </div>
       )}
 
@@ -1241,18 +1241,18 @@ export default function CloudPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl mx-4 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden"
+              className="w-full max-w-2xl mx-4 bg-surface-card border rounded-2xl shadow-2xl overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+              <div className="flex items-center justify-between border-b border-subtle px-6 py-4">
                 <div>
-                  <h2 className="text-lg font-bold text-white">자료 업로드</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">PDF/이미지를 업로드하면 OCR + GPT-4o가 자동으로 분석합니다.</p>
+                  <h2 className="text-lg font-bold text-content-primary">자료 업로드</h2>
+                  <p className="text-xs text-content-tertiary mt-0.5">PDF/이미지를 업로드하면 OCR + GPT-4o가 자동으로 분석합니다.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
-                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                  className="rounded-lg p-1.5 text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1312,15 +1312,15 @@ export default function CloudPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl mx-4 overflow-hidden"
+              className="w-full max-w-md rounded-2xl border bg-surface-card shadow-2xl mx-4 overflow-hidden"
             >
               {/* ── Step Indicator ── */}
-              <div className="flex items-center gap-0 border-b border-zinc-800">
-                <div className={`flex-1 py-2.5 text-center text-xs font-semibold transition-colors ${deleteModal.step === 1 ? 'bg-red-900/20 text-red-400' : 'text-zinc-600'}`}>
+              <div className="flex items-center gap-0 border-b border-subtle">
+                <div className={`flex-1 py-2.5 text-center text-xs font-semibold transition-colors ${deleteModal.step === 1 ? 'bg-red-900/20 text-red-400' : 'text-content-muted'}`}>
                   1단계 · 삭제 확인
                 </div>
-                <div className="h-full w-px bg-zinc-800" />
-                <div className={`flex-1 py-2.5 text-center text-xs font-semibold transition-colors ${deleteModal.step === 2 ? 'bg-red-900/20 text-red-400' : 'text-zinc-600'}`}>
+                <div className="h-full w-px bg-surface-raised" />
+                <div className={`flex-1 py-2.5 text-center text-xs font-semibold transition-colors ${deleteModal.step === 2 ? 'bg-red-900/20 text-red-400' : 'text-content-muted'}`}>
                   2단계 · 관리자 PIN
                 </div>
               </div>
@@ -1333,58 +1333,58 @@ export default function CloudPage() {
                       <AlertTriangle className="h-5 w-5 text-red-400" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-white">
+                      <h3 className="text-sm font-bold text-content-primary">
                         {deleteModal.type === 'all' ? '시험지 전체 삭제' : '시험지 삭제'}
                       </h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">이 작업은 되돌릴 수 없습니다</p>
+                      <p className="text-xs text-content-tertiary mt-0.5">이 작업은 되돌릴 수 없습니다</p>
                     </div>
                   </div>
 
                   <div className="px-6 pb-4 space-y-3">
                     {deleteModal.type === 'all' ? (
                       <>
-                        <p className="text-sm text-zinc-300">
+                        <p className="text-sm text-content-secondary">
                           현재 표시된 <span className="font-bold text-red-400">{filteredExams.length}개</span> 시험지를 모두 삭제합니다.
                         </p>
-                        <div className="rounded-lg border border-zinc-800 bg-zinc-800/40 divide-y divide-zinc-800/60 max-h-44 overflow-y-auto">
+                        <div className="rounded-lg border border-subtle bg-surface-raised/40 divide-y divide-subtle/60 max-h-44 overflow-y-auto">
                           {filteredExams.slice(0, 10).map((exam) => (
                             <div key={exam.id} className="flex items-center gap-2 px-3 py-2">
-                              <FileText className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
-                              <span className="text-xs text-zinc-400 truncate">{exam.fileName}</span>
+                              <FileText className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />
+                              <span className="text-xs text-content-secondary truncate">{exam.fileName}</span>
                             </div>
                           ))}
                           {filteredExams.length > 10 && (
-                            <div className="px-3 py-2.5 text-xs text-zinc-600 text-center">
+                            <div className="px-3 py-2.5 text-xs text-content-muted text-center">
                               외 {filteredExams.length - 10}개 더...
                             </div>
                           )}
                         </div>
                       </>
                     ) : (
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-800/40 px-4 py-3 flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-zinc-500 flex-shrink-0" />
-                        <span className="text-sm text-zinc-300 truncate">
+                      <div className="rounded-lg border border-subtle bg-surface-raised/40 px-4 py-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-content-tertiary flex-shrink-0" />
+                        <span className="text-sm text-content-secondary truncate">
                           {deleteModal.examName}
                         </span>
                       </div>
                     )}
-                    <p className="text-xs text-zinc-600">
+                    <p className="text-xs text-content-muted">
                       ※ 연결된 문제 데이터, 시험 기록도 함께 삭제됩니다.
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 border-t border-zinc-800 px-6 py-4">
+                  <div className="flex items-center justify-end gap-3 border-t border-subtle px-6 py-4">
                     <button
                       type="button"
                       onClick={() => setDeleteModal(null)}
-                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                      className="rounded-lg border bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                     >
                       취소
                     </button>
                     <button
                       type="button"
                       onClick={handleDeleteNext}
-                      className="flex items-center gap-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 px-4 py-2 text-sm font-bold text-white transition-colors"
+                      className="flex items-center gap-2 rounded-lg bg-surface-raised hover:bg-surface-raised px-4 py-2 text-sm font-bold text-content-primary transition-colors"
                     >
                       다음
                       <ChevronLeft className="h-4 w-4 rotate-180" />
@@ -1401,8 +1401,8 @@ export default function CloudPage() {
                       <Shield className="h-5 w-5 text-amber-400" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-white">관리자 PIN 확인</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">삭제를 진행하려면 관리자 PIN을 입력하세요</p>
+                      <h3 className="text-sm font-bold text-content-primary">관리자 PIN 확인</h3>
+                      <p className="text-xs text-content-tertiary mt-0.5">삭제를 진행하려면 관리자 PIN을 입력하세요</p>
                     </div>
                   </div>
 
@@ -1419,9 +1419,9 @@ export default function CloudPage() {
 
                     {/* PIN 입력 */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-zinc-400">관리자 PIN</label>
+                      <label className="text-xs font-medium text-content-secondary">관리자 PIN</label>
                       <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-content-tertiary" />
                         <input
                           type="password"
                           value={deletePinInput}
@@ -1432,10 +1432,10 @@ export default function CloudPage() {
                           onKeyDown={(e) => { if (e.key === 'Enter') handleDeleteConfirm(); }}
                           placeholder="PIN 입력"
                           autoFocus
-                          className={`w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-zinc-800 text-white placeholder-zinc-600 outline-none transition-colors ${
+                          className={`w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-surface-raised text-content-primary placeholder-content-muted outline-none transition-colors ${
                             deletePinError
                               ? 'border-red-500 focus:border-red-400'
-                              : 'border-zinc-700 focus:border-cyan-500'
+                              : 'border focus:border-cyan-500'
                           }`}
                         />
                       </div>
@@ -1451,13 +1451,13 @@ export default function CloudPage() {
                     <button
                       type="button"
                       onClick={() => { setDeleteModal(null); setShowPinModal(true); }}
-                      className="text-xs text-zinc-600 hover:text-zinc-400 flex items-center gap-1 transition-colors"
+                      className="text-xs text-content-muted hover:text-content-secondary flex items-center gap-1 transition-colors"
                     >
                       <KeyRound className="h-3 w-3" />
                       PIN 변경
                     </button>
 
-                    <p className="text-xs text-zinc-700">초기 PIN: 1234</p>
+                    <p className="text-xs text-content-muted">초기 PIN: 1234</p>
 
                     {/* 인라인 에러 메시지 */}
                     {deleteModalError && (
@@ -1468,12 +1468,12 @@ export default function CloudPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-zinc-800 px-6 py-4">
+                  <div className="flex items-center justify-between border-t border-subtle px-6 py-4">
                     <button
                       type="button"
                       onClick={() => setDeleteModal((prev) => (prev ? { ...prev, step: 1 } : null))}
                       disabled={isDeleting}
-                      className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1.5 text-sm text-content-tertiary hover:text-content-primary transition-colors disabled:opacity-50"
                     >
                       <ChevronLeft className="h-4 w-4" />
                       이전
@@ -1483,7 +1483,7 @@ export default function CloudPage() {
                         type="button"
                         onClick={() => setDeleteModal(null)}
                         disabled={isDeleting}
-                        className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors disabled:opacity-50"
+                        className="rounded-lg border bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors disabled:opacity-50"
                       >
                         취소
                       </button>
@@ -1491,7 +1491,7 @@ export default function CloudPage() {
                         type="button"
                         onClick={handleDeleteConfirm}
                         disabled={isDeleting || !deletePinInput}
-                        className="flex items-center gap-2 rounded-lg bg-red-700 hover:bg-red-600 disabled:bg-zinc-700 disabled:text-zinc-500 px-4 py-2 text-sm font-bold text-white transition-colors"
+                        className="flex items-center gap-2 rounded-lg bg-red-700 hover:bg-red-600 disabled:bg-surface-raised disabled:text-content-tertiary px-4 py-2 text-sm font-bold text-white transition-colors"
                       >
                         {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
                         {isDeleting ? '삭제 중...' : '삭제 확인'}
@@ -1519,15 +1519,15 @@ export default function CloudPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl mx-4"
+              className="w-full max-w-sm rounded-2xl border bg-surface-card shadow-2xl mx-4"
             >
-              <div className="flex items-center gap-3 border-b border-zinc-800 px-6 py-4">
+              <div className="flex items-center gap-3 border-b border-subtle px-6 py-4">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-900/30 border border-cyan-900/50">
                   <KeyRound className="h-4 w-4 text-cyan-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">관리자 PIN 변경</h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">삭제 작업에 필요한 PIN을 변경합니다</p>
+                  <h3 className="text-sm font-bold text-content-primary">관리자 PIN 변경</h3>
+                  <p className="text-xs text-content-tertiary mt-0.5">삭제 작업에 필요한 PIN을 변경합니다</p>
                 </div>
               </div>
 
@@ -1538,15 +1538,15 @@ export default function CloudPage() {
                   { label: '새 PIN 확인', value: pinConfirm, setter: setPinConfirm, placeholder: '새 PIN 재입력' },
                 ].map(({ label, value, setter, placeholder }) => (
                   <div key={label} className="space-y-1.5">
-                    <label className="text-xs font-medium text-zinc-400">{label}</label>
+                    <label className="text-xs font-medium text-content-secondary">{label}</label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-content-tertiary" />
                       <input
                         type="password"
                         value={value}
                         onChange={(e) => { setter(e.target.value); setPinChangeError(''); }}
                         placeholder={placeholder}
-                        className="w-full rounded-lg border border-zinc-700 pl-9 pr-4 py-2.5 text-sm bg-zinc-800 text-white placeholder-zinc-600 outline-none focus:border-cyan-500 transition-colors"
+                        className="w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-surface-raised text-content-primary placeholder-content-muted outline-none focus:border-cyan-500 transition-colors"
                       />
                     </div>
                   </div>
@@ -1559,11 +1559,11 @@ export default function CloudPage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-zinc-800 px-6 py-4">
+              <div className="flex items-center justify-end gap-3 border-t border-subtle px-6 py-4">
                 <button
                   type="button"
                   onClick={() => { setShowPinModal(false); setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError(''); }}
-                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                  className="rounded-lg border bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                 >
                   취소
                 </button>
@@ -1571,7 +1571,7 @@ export default function CloudPage() {
                   type="button"
                   onClick={handlePinChange}
                   disabled={!pinOld || !pinNew || !pinConfirm}
-                  className="flex items-center gap-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:bg-zinc-700 disabled:text-zinc-500 px-4 py-2 text-sm font-bold text-white transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:bg-surface-raised disabled:text-content-tertiary px-4 py-2 text-sm font-bold text-white transition-colors"
                 >
                   <Check className="h-4 w-4" />
                   PIN 변경
@@ -1591,16 +1591,16 @@ export default function CloudPage() {
             style={{ width: `${leftWidth}%`, flexShrink: 0 }}
           >
             {/* Top Bar: Group Count + Add Button */}
-            <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/90 px-4 py-2.5 flex-shrink-0">
-              <span className="rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-[11px] font-semibold text-zinc-400">
+            <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
+              <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
                 북그룹 {totalGroups}개
               </span>
               <button
                 type="button"
                 onClick={handleAddRootGroup}
-                className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-400 transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
+                className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
               >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-zinc-400">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
                   <Plus className="h-3 w-3" />
                 </span>
                 <span>최상위 북그룹 추가</span>
@@ -1608,7 +1608,7 @@ export default function CloudPage() {
             </div>
 
             {/* Tree Panel */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/90">
+            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/90">
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 p-2">
                 {treeNodes.length > 0 ? (
                   <div className="space-y-0.5">
@@ -1634,8 +1634,8 @@ export default function CloudPage() {
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2">
                     <Smile className="h-12 w-12 text-cyan-500/50" />
-                    <p className="text-sm text-zinc-500">업로드된 시험지가 없습니다.</p>
-                    <p className="text-xs text-zinc-600">문제를 업로드하면 자동으로 표시됩니다.</p>
+                    <p className="text-sm text-content-tertiary">업로드된 시험지가 없습니다.</p>
+                    <p className="text-xs text-content-muted">문제를 업로드하면 자동으로 표시됩니다.</p>
                   </div>
                 )}
               </div>
@@ -1647,25 +1647,25 @@ export default function CloudPage() {
             className="flex w-3 flex-shrink-0 cursor-col-resize items-center justify-center"
             onMouseDown={handleMouseDown}
           >
-            <div className="flex h-8 w-3 items-center justify-center rounded-sm border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 transition-colors">
-              <GripVertical className="h-3 w-3 text-zinc-500" />
+            <div className="flex h-8 w-3 items-center justify-center rounded-sm border bg-surface-raised hover:bg-surface-raised transition-colors">
+              <GripVertical className="h-3 w-3 text-content-tertiary" />
             </div>
           </div>
 
           {/* ======== Right Panel: File List ======== */}
           <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-2">
-            <div className="flex h-full flex-col rounded-2xl border border-zinc-800 bg-zinc-900/90">
+            <div className="flex h-full flex-col rounded-2xl border border-subtle bg-surface-card/90">
               {selectedId ? (
                 <>
                   {/* Content Header */}
-                  <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
+                  <div className="flex items-center justify-between border-b border-subtle px-5 py-3.5">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10">
                         <FileText className="h-4 w-4 text-cyan-400" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="text-sm font-semibold text-white truncate">{selectedName}</h2>
-                        <p className="text-[11px] text-zinc-500">
+                        <h2 className="text-sm font-semibold text-content-primary truncate">{selectedName}</h2>
+                        <p className="text-[11px] text-content-tertiary">
                           총 {exams.length}건 · 표시 {filteredExams.length}건
                         </p>
                       </div>
@@ -1673,20 +1673,20 @@ export default function CloudPage() {
                     <div className="flex items-center gap-2">
                       {/* Search */}
                       <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-tertiary" />
                         <input
                           type="text"
                           placeholder="파일명으로 검색..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="h-8 w-48 rounded-lg border border-zinc-700 bg-zinc-800/50 pl-8 pr-3 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                          className="h-8 w-48 rounded-lg border bg-surface-raised/50 pl-8 pr-3 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-cyan-500"
                         />
                       </div>
                       {/* Sort */}
                       <button
                         type="button"
                         onClick={() => toggleSort('name')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border bg-surface-raised/50 text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                         title="정렬"
                       >
                         <ListFilter className="h-3.5 w-3.5" />
@@ -1694,7 +1694,7 @@ export default function CloudPage() {
                       <button
                         type="button"
                         onClick={() => toggleSort('order')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border bg-surface-raised/50 text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                         title="순서 정렬"
                       >
                         {sortDir === 'asc' ? <ArrowUpDown className="h-3.5 w-3.5" /> : <ArrowDownUp className="h-3.5 w-3.5" />}
@@ -1702,14 +1702,14 @@ export default function CloudPage() {
                       {/* Action buttons */}
                       <button
                         type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border bg-surface-raised/50 text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                         title="복사"
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border bg-surface-raised/50 text-content-secondary hover:bg-surface-raised hover:text-content-primary transition-colors"
                         title="내보내기"
                       >
                         <FileDown className="h-3.5 w-3.5" />
@@ -1729,21 +1729,21 @@ export default function CloudPage() {
                   {/* Table */}
                   <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700">
                     {/* Table Header */}
-                    <div className="sticky top-0 z-10 flex items-center border-b border-zinc-800 bg-zinc-800/60 backdrop-blur px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                    <div className="sticky top-0 z-10 flex items-center border-b border-subtle bg-surface-raised/60 backdrop-blur px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-content-tertiary">
                       <span
-                        className="w-14 text-center cursor-pointer hover:text-zinc-300"
+                        className="w-14 text-center cursor-pointer hover:text-content-primary"
                         onClick={() => toggleSort('order')}
                       >
                         순서
                       </span>
                       <span
-                        className="flex-1 pl-3 cursor-pointer hover:text-zinc-300"
+                        className="flex-1 pl-3 cursor-pointer hover:text-content-primary"
                         onClick={() => toggleSort('name')}
                       >
                         파일명
                       </span>
                       <span
-                        className="w-24 text-center cursor-pointer hover:text-zinc-300"
+                        className="w-24 text-center cursor-pointer hover:text-content-primary"
                         onClick={() => toggleSort('problems')}
                       >
                         문제 수
@@ -1752,15 +1752,15 @@ export default function CloudPage() {
                     </div>
 
                     {/* Table Body */}
-                    <div className="divide-y divide-zinc-800/40">
+                    <div className="divide-y divide-subtle/40">
                       {filteredExams.map((exam) => (
                         <div
                           key={exam.id}
-                          className="group flex items-center px-5 py-3 hover:bg-zinc-800/30 transition-colors cursor-pointer"
+                          className="group flex items-center px-5 py-3 hover:bg-surface-raised/30 transition-colors cursor-pointer"
                           onClick={() => router.push(`/dashboard/cloud/${exam.id}`)}
                         >
                           <span className="w-14 text-center">
-                            <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-zinc-800 px-1.5 text-[11px] font-bold text-zinc-400">
+                            <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-surface-raised px-1.5 text-[11px] font-bold text-content-secondary">
                               #{exam.order}
                             </span>
                           </span>
@@ -1777,10 +1777,10 @@ export default function CloudPage() {
                                 onBlur={handleConfirmRenameExam}
                                 onClick={(e) => e.stopPropagation()}
                                 autoFocus
-                                className="flex-1 bg-zinc-800 border border-cyan-500/50 rounded px-2 py-1 text-[13px] text-white outline-none"
+                                className="flex-1 bg-surface-raised border border-cyan-500/50 rounded px-2 py-1 text-[13px] text-content-primary outline-none"
                               />
                             ) : (
-                              <span className="truncate text-[13px] text-zinc-300 font-medium">
+                              <span className="truncate text-[13px] text-content-secondary font-medium">
                                 {exam.fileName}
                               </span>
                             )}

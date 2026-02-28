@@ -254,19 +254,19 @@ function SubjectBadge({ subject, detail }: { subject: string; detail: string }) 
       }`}>
         {subject}
       </span>
-      <span className="text-[10px] text-zinc-500 font-medium">{detail}</span>
+      <span className="text-[10px] text-content-tertiary font-medium">{detail}</span>
     </div>
   );
 }
 
 function DifficultyBar({ bars }: { bars: { color: string; percent: number }[] }) {
   return (
-    <div className="flex h-4 w-full overflow-hidden rounded-full bg-zinc-800">
+    <div className="flex h-4 w-full overflow-hidden rounded-full bg-surface-raised">
       {bars.map((bar, i) => (
         <div
           key={i}
           style={{ width: `${bar.percent}%`, backgroundColor: bar.color }}
-          className="flex items-center justify-center h-full text-[8px] font-bold text-white/80 leading-none"
+          className="flex items-center justify-center h-full text-[8px] font-bold text-content-primary/80 leading-none"
         >
           {bar.percent >= 15 ? `${bar.percent}%` : ''}
         </div>
@@ -277,11 +277,11 @@ function DifficultyBar({ bars }: { bars: { color: string; percent: number }[] })
 
 function EmptyState({ message, icon }: { message: string; icon?: React.ReactNode }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-2xl bg-zinc-900/50 px-6 py-12 text-center">
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800 text-zinc-500">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-2xl bg-surface-card/50 px-6 py-12 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-raised text-content-tertiary">
         {icon || <AlertCircle className="h-6 w-6" />}
       </span>
-      <p className="text-sm font-semibold text-zinc-400">{message}</p>
+      <p className="text-sm font-semibold text-content-secondary">{message}</p>
     </div>
   );
 }
@@ -397,14 +397,14 @@ export default function MaterialsPage() {
     <div className="flex h-[calc(100vh-6rem)] flex-col gap-2">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
-        <h1 className="text-xl font-bold text-white pl-1">학원 자료</h1>
+        <h1 className="text-xl font-bold text-content-primary pl-1">학원 자료</h1>
         <div className="flex items-center gap-2">
           <button
             disabled={!hasExams}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
               hasExams
-                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20 hover:-translate-y-[1px]'
-                : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-content-primary shadow-lg shadow-indigo-500/20 hover:-translate-y-[1px]'
+                : 'bg-surface-raised text-content-tertiary opacity-50 cursor-not-allowed'
             }`}
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
@@ -412,7 +412,7 @@ export default function MaterialsPage() {
             </span>
             <span>강좌에 추가</span>
           </button>
-          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 transition-colors">
+          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border bg-surface-raised/80 text-content-secondary hover:bg-zinc-700 transition-colors">
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
@@ -426,26 +426,26 @@ export default function MaterialsPage() {
           {/* ============================================================ */}
           <section className="col-span-12 lg:col-span-4 flex h-full flex-col gap-3 min-h-0">
             {/* 과사람 제공 자료 */}
-            <div className="flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 flex-shrink-0">
-              <div className="border-b border-zinc-800 px-4 py-3 flex justify-between items-start">
+            <div className="flex flex-col overflow-hidden rounded-xl border border-subtle bg-surface-raised flex-shrink-0">
+              <div className="border-b border-subtle px-4 py-3 flex justify-between items-start">
                 <div>
-                  <h2 className="text-sm font-bold text-white">과사람 제공 자료</h2>
-                  <p className="text-[11px] text-zinc-500">제공 폴더를 선택하여 시험지를 확인하세요.</p>
+                  <h2 className="text-sm font-bold text-content-primary">과사람 제공 자료</h2>
+                  <p className="text-[11px] text-content-tertiary">제공 폴더를 선택하여 시험지를 확인하세요.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-zinc-500">학년</span>
+                  <span className="text-xs font-medium text-content-tertiary">학년</span>
                   <div className="relative">
                     <select
                       value={grade}
                       onChange={(e) => handleGradeChange(e.target.value)}
-                      className="h-9 appearance-none rounded-full border border-zinc-700 bg-zinc-900 pl-3 pr-8 text-xs font-medium text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="h-9 appearance-none rounded-full border border bg-surface-card pl-3 pr-8 text-xs font-medium text-content-primary focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       style={{ width: '120px' }}
                     >
                       {gradeOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-tertiary" />
                   </div>
                 </div>
               </div>
@@ -460,7 +460,7 @@ export default function MaterialsPage() {
                     <ArrowLeft size={12} />
                     <span>그룹으로 돌아가기</span>
                     {selectedFolder && (
-                      <span className="text-zinc-500 ml-1">{selectedFolder.name}</span>
+                      <span className="text-content-tertiary ml-1">{selectedFolder.name}</span>
                     )}
                   </button>
                 )}
@@ -475,15 +475,15 @@ export default function MaterialsPage() {
                           key={group.id}
                           type="button"
                           onClick={() => handleSelectGroup(group)}
-                          className="w-full text-left rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2.5 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all"
+                          className="w-full text-left rounded-lg border border-subtle bg-surface-card/50 px-3 py-2.5 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all"
                         >
-                          <span className="text-sm font-medium text-zinc-200">{group.name}</span>
-                          <span className="text-[10px] text-zinc-600 ml-2">{group.folders.length}개 폴더</span>
+                          <span className="text-sm font-medium text-content-primary">{group.name}</span>
+                          <span className="text-[10px] text-content-muted ml-2">{group.folders.length}개 폴더</span>
                         </button>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-zinc-500 text-xs p-3">학년을 선택해 주세요.</p>
+                    <p className="text-content-tertiary text-xs p-3">학년을 선택해 주세요.</p>
                   )
                 ) : !selectedFolder ? (
                   // Show folder cards in grid
@@ -493,13 +493,13 @@ export default function MaterialsPage() {
                         key={folder.id}
                         type="button"
                         onClick={() => handleSelectFolder(folder)}
-                        className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all text-left"
+                        className="flex items-center gap-2 rounded-lg border border-subtle bg-surface-card/50 px-3 py-2 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all text-left"
                       >
-                        <Folder size={14} className="text-zinc-500 shrink-0" />
+                        <Folder size={14} className="text-content-tertiary shrink-0" />
                         <div className="min-w-0">
-                          <div className="text-xs font-medium text-zinc-200 truncate">{folder.name}</div>
+                          <div className="text-xs font-medium text-content-primary truncate">{folder.name}</div>
                           {folder.subfolderCount > 0 && (
-                            <div className="text-[10px] text-zinc-600 flex items-center gap-1">
+                            <div className="text-[10px] text-content-muted flex items-center gap-1">
                               <FolderOpen size={9} />
                               <span>{folder.subfolderCount}개 폴더</span>
                             </div>
@@ -519,11 +519,11 @@ export default function MaterialsPage() {
                         className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all text-left ${
                           selectedSubFolder?.id === sub.id
                             ? 'border-indigo-500/50 bg-indigo-500/10'
-                            : 'border-zinc-800 bg-zinc-900/50 hover:border-indigo-500/30 hover:bg-indigo-500/5'
+                            : 'border-subtle bg-surface-card/50 hover:border-indigo-500/30 hover:bg-indigo-500/5'
                         }`}
                       >
-                        <Folder size={13} className={selectedSubFolder?.id === sub.id ? 'text-indigo-400' : 'text-zinc-500'} />
-                        <span className={`text-xs font-medium ${selectedSubFolder?.id === sub.id ? 'text-indigo-300' : 'text-zinc-300'}`}>
+                        <Folder size={13} className={selectedSubFolder?.id === sub.id ? 'text-indigo-400' : 'text-content-tertiary'} />
+                        <span className={`text-xs font-medium ${selectedSubFolder?.id === sub.id ? 'text-indigo-300' : 'text-content-secondary'}`}>
                           {sub.name}
                         </span>
                       </button>
@@ -534,11 +534,11 @@ export default function MaterialsPage() {
             </div>
 
             {/* 학원자료 목록 */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 min-h-0">
-              <div className="border-b border-zinc-800 px-4 py-3 flex justify-between items-start flex-shrink-0">
+            <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-subtle bg-surface-raised min-h-0">
+              <div className="border-b border-subtle px-4 py-3 flex justify-between items-start flex-shrink-0">
                 <div>
-                  <h2 className="text-sm font-bold text-white">학원자료 목록</h2>
-                  <p className="text-[11px] text-zinc-500">학원자료를 선택해 시험지를 확인하세요.</p>
+                  <h2 className="text-sm font-bold text-content-primary">학원자료 목록</h2>
+                  <p className="text-[11px] text-content-tertiary">학원자료를 선택해 시험지를 확인하세요.</p>
                 </div>
                 <div className="flex items-center min-w-[180px]">
                   <div className="relative w-full">
@@ -547,9 +547,9 @@ export default function MaterialsPage() {
                       placeholder="학원자료 검색"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-8 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 pr-8 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="h-8 w-full rounded-md border border bg-surface-card px-3 pr-8 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
-                    <Search className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                    <Search className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-tertiary" />
                   </div>
                 </div>
               </div>
@@ -561,23 +561,23 @@ export default function MaterialsPage() {
                     <li
                       key={material.id}
                       onClick={() => handleSelectMaterial(material)}
-                      className={`cursor-pointer border-b border-zinc-800/50 px-4 py-2.5 transition-colors ${
+                      className={`cursor-pointer border-b border-subtle px-4 py-2.5 transition-colors ${
                         selectedMaterial?.id === material.id
                           ? 'bg-indigo-500/10 border-l-2 border-l-indigo-500'
-                          : 'hover:bg-zinc-900'
+                          : 'hover:bg-surface-card'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={13} className="text-zinc-600 shrink-0" />
-                          <span className="text-xs font-medium text-zinc-200 truncate">{material.name}</span>
+                          <FileText size={13} className="text-content-muted shrink-0" />
+                          <span className="text-xs font-medium text-content-primary truncate">{material.name}</span>
                           {material.type === 'provider' && (
                             <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400 shrink-0">
                               과사람
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-500 shrink-0 ml-2">{material.paperCount}장</span>
+                        <span className="text-[10px] text-content-tertiary shrink-0 ml-2">{material.paperCount}장</span>
                       </div>
                     </li>
                   ))}
@@ -585,13 +585,13 @@ export default function MaterialsPage() {
               </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-2 flex-shrink-0">
-                <p className="text-[11px] text-zinc-500">총 {filteredMaterials.length}</p>
+              <div className="flex items-center justify-between border-t border-subtle px-4 py-2 flex-shrink-0">
+                <p className="text-[11px] text-content-tertiary">총 {filteredMaterials.length}</p>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="inline-flex items-center gap-0.5 px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-800 rounded disabled:opacity-40"
+                    className="inline-flex items-center gap-0.5 px-2 py-1 text-[11px] font-medium text-content-secondary hover:bg-surface-raised rounded disabled:opacity-40"
                   >
                     <ChevronLeft size={12} />
                     Previous
@@ -599,7 +599,7 @@ export default function MaterialsPage() {
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage >= totalPages}
-                    className="inline-flex items-center gap-0.5 px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-800 rounded disabled:opacity-40"
+                    className="inline-flex items-center gap-0.5 px-2 py-1 text-[11px] font-medium text-content-secondary hover:bg-surface-raised rounded disabled:opacity-40"
                   >
                     Next
                     <ChevronRight size={12} />
@@ -613,12 +613,12 @@ export default function MaterialsPage() {
           {/* Right Column - 시험지 선택 */}
           {/* ============================================================ */}
           <section className="col-span-12 lg:col-span-8 flex h-full flex-col min-h-0">
-            <div className="flex h-full flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 min-h-0">
+            <div className="flex h-full flex-col overflow-hidden rounded-xl border border-subtle bg-surface-raised min-h-0">
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3 flex-shrink-0">
+              <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
                 <div>
-                  <h2 className="text-base font-bold text-white">시험지 선택</h2>
-                  <p className="text-[11px] text-zinc-500">
+                  <h2 className="text-base font-bold text-content-primary">시험지 선택</h2>
+                  <p className="text-[11px] text-content-tertiary">
                     리스트에서 시험지를 선택한 후 우측 상단의 버튼으로 강좌에 추가하세요.
                   </p>
                 </div>
@@ -628,7 +628,7 @@ export default function MaterialsPage() {
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                       activeTab === 'provider'
                         ? 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30'
-                        : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                        : 'bg-surface-raised text-content-tertiary hover:text-content-secondary'
                     }`}
                   >
                     과사람 제공 자료
@@ -638,7 +638,7 @@ export default function MaterialsPage() {
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                       activeTab === 'academy'
                         ? 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30'
-                        : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                        : 'bg-surface-raised text-content-tertiary hover:text-content-secondary'
                     }`}
                   >
                     학원 자료
@@ -648,7 +648,7 @@ export default function MaterialsPage() {
 
               {/* Table header */}
               {hasExams && (
-                <div className="flex items-center gap-3 border-b border-zinc-800/50 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-600 flex-shrink-0">
+                <div className="flex items-center gap-3 border-b border-subtle px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-content-muted flex-shrink-0">
                   <div className="w-16 text-center">과목</div>
                   <div className="flex-1">범위/문제명</div>
                   <div className="w-48 text-center">문항수 (주관식/객관식)</div>
@@ -663,23 +663,23 @@ export default function MaterialsPage() {
                     {examList.map((exam) => (
                       <div
                         key={exam.id}
-                        className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-900/50 transition-colors group"
+                        className="flex items-center gap-3 px-5 py-3 hover:bg-surface-card/50 transition-colors group"
                       >
                         {/* Subject badge */}
                         <SubjectBadge subject={exam.subject} detail={exam.subjectDetail} />
 
                         {/* Scope + Name */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] text-zinc-500 mb-0.5 truncate">{exam.scope}</p>
-                          <p className="text-sm font-semibold text-zinc-100 truncate">{exam.name}</p>
+                          <p className="text-[11px] text-content-tertiary mb-0.5 truncate">{exam.scope}</p>
+                          <p className="text-sm font-semibold text-content-primary truncate">{exam.name}</p>
                         </div>
 
                         {/* Problem count + bar */}
                         <div className="w-48 flex flex-col items-end gap-1.5">
                           <div className="flex items-center gap-2 text-xs">
-                            <span className="text-zinc-500">총 문항</span>
-                            <span className="font-bold text-white">{exam.totalProblems}</span>
-                            <span className="text-zinc-600">
+                            <span className="text-content-tertiary">총 문항</span>
+                            <span className="font-bold text-content-primary">{exam.totalProblems}</span>
+                            <span className="text-content-muted">
                               ({exam.subjectiveCount}/{exam.objectiveCount})
                             </span>
                           </div>
@@ -688,7 +688,7 @@ export default function MaterialsPage() {
 
                         {/* 출제 button */}
                         <div className="w-16 flex justify-center">
-                          <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-indigo-500 active:scale-95 shadow-sm shadow-indigo-500/20">
+                          <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-content-primary transition-all hover:bg-indigo-500 active:scale-95 shadow-sm shadow-indigo-500/20">
                             출제
                           </button>
                         </div>

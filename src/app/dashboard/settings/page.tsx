@@ -33,7 +33,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-10 pb-24 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-surface-base text-content-primary p-6 md:p-10 pb-24 relative overflow-hidden font-sans">
       {/* Background Grid */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03]"
         style={{ backgroundImage: 'linear-gradient(#6366f1 1px, transparent 1px), linear-gradient(90deg, #6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }}
@@ -47,7 +47,7 @@ export default function SettingsPage() {
             <span className="text-xs font-bold tracking-widest uppercase">System Control</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">시스템 설정 및 AI 엔진 제어</h1>
-          <p className="text-zinc-500 mt-1">플랫폼의 핵심 파라미터와 접근 권한을 관리하는 엔지니어링 워크스페이스입니다.</p>
+          <p className="text-content-tertiary mt-1">플랫폼의 핵심 파라미터와 접근 권한을 관리하는 엔지니어링 워크스페이스입니다.</p>
         </div>
 
         {/* Save Status - Mobile/Desktop */}
@@ -55,7 +55,7 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-full shadow-2xl shadow-indigo-500/30 flex items-center gap-4 z-50 cursor-pointer hover:bg-indigo-500 transition-colors"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-content-primary px-6 py-3 rounded-full shadow-2xl shadow-indigo-500/30 flex items-center gap-4 z-50 cursor-pointer hover:bg-indigo-500 transition-colors"
             onClick={handleSave}
           >
             <span className="font-semibold text-sm">변경 사항이 있습니다</span>
@@ -79,7 +79,7 @@ export default function SettingsPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as Tab)}
-            className={`pb-4 flex items-center gap-2 relative transition-colors ${activeTab === tab.id ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+            className={`pb-4 flex items-center gap-2 relative transition-colors ${activeTab === tab.id ? 'text-content-primary' : 'text-content-tertiary hover:text-content-secondary'
               }`}
           >
             <tab.icon size={18} />
@@ -109,7 +109,7 @@ export default function SettingsPage() {
             >
               {/* Sliders Panel */}
               <div className="lg:col-span-4 space-y-8">
-                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
                   <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                     <Cpu size={20} className="text-indigo-400" />
                     알고리즘 정밀 튜닝
@@ -119,7 +119,7 @@ export default function SettingsPage() {
                     {/* Slider 1 */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium text-zinc-300">유사 문제 변형 강도</label>
+                        <label className="text-sm font-medium text-content-secondary">유사 문제 변형 강도</label>
                         <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">{variationStrength}%</span>
                       </div>
                       <input
@@ -128,7 +128,7 @@ export default function SettingsPage() {
                         onChange={(e) => handleSettingChange(setVariationStrength, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <p className="text-xs text-zinc-500 leading-relaxed">
+                      <p className="text-xs text-content-tertiary leading-relaxed">
                         값이 높을수록 원본 문제의 구조를 더 과감하게 변형합니다. (30~60% 권장)
                       </p>
                     </div>
@@ -136,7 +136,7 @@ export default function SettingsPage() {
                     {/* Slider 2 */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium text-zinc-300">난이도 자동 조절 민감도</label>
+                        <label className="text-sm font-medium text-content-secondary">난이도 자동 조절 민감도</label>
                         <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">{difficultySensitivity}%</span>
                       </div>
                       <input
@@ -145,7 +145,7 @@ export default function SettingsPage() {
                         onChange={(e) => handleSettingChange(setDifficultySensitivity, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <p className="text-xs text-zinc-500 leading-relaxed">
+                      <p className="text-xs text-content-tertiary leading-relaxed">
                         학생의 오답률에 따라 난이도를 얼마나 빠르게 조정할지 결정합니다.
                       </p>
                     </div>
@@ -153,7 +153,7 @@ export default function SettingsPage() {
                     {/* Slider 3 */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium text-zinc-300">OCR 인식 정밀도 (Latency Trade-off)</label>
+                        <label className="text-sm font-medium text-content-secondary">OCR 인식 정밀도 (Latency Trade-off)</label>
                         <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">{ocrPrecision}%</span>
                       </div>
                       <input
@@ -162,7 +162,7 @@ export default function SettingsPage() {
                         onChange={(e) => handleSettingChange(setOcrPrecision, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <p className="text-xs text-zinc-500 leading-relaxed">
+                      <p className="text-xs text-content-tertiary leading-relaxed">
                         정밀도를 높이면 처리 속도가 늦어질 수 있습니다. (서술형 문제 권장: 90%+)
                       </p>
                     </div>
@@ -172,7 +172,7 @@ export default function SettingsPage() {
 
               {/* Live Preview Panel */}
               <div className="lg:col-span-8">
-                <div className="bg-zinc-900 border border-indigo-500/20 rounded-2xl p-1 relative overflow-hidden h-full min-h-[400px]">
+                <div className="bg-surface-card border border-indigo-500/20 rounded-2xl p-1 relative overflow-hidden h-full min-h-[400px]">
                   {/* Grid Background */}
                   <div className="absolute inset-0 bg-[linear-gradient(rgba(99,102,241,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.03)_1px,transparent_1px)] bg-[size:20px_20px]" />
 
@@ -184,12 +184,12 @@ export default function SettingsPage() {
                   <div className="h-full flex items-center justify-center p-8 relative z-10">
                     <div className="grid grid-cols-2 gap-8 w-full max-w-2xl">
                       {/* Original Problem */}
-                      <div className="bg-black/50 border border-white/10 p-6 rounded-xl backdrop-blur-md">
-                        <p className="text-xs text-zinc-500 mb-4 font-mono">INPUT_SOURCE</p>
-                        <div className="font-serif text-zinc-300 text-lg">
+                      <div className="bg-surface-base/50 border border-white/10 p-6 rounded-xl backdrop-blur-md">
+                        <p className="text-xs text-content-tertiary mb-4 font-mono">INPUT_SOURCE</p>
+                        <div className="font-serif text-content-secondary text-lg">
                           f(x) = x² + 2x + 1
                         </div>
-                        <div className="mt-4 text-sm text-zinc-500">
+                        <div className="mt-4 text-sm text-content-tertiary">
                           Find the derivative f&apos;(x).
                         </div>
                       </div>
@@ -211,7 +211,7 @@ export default function SettingsPage() {
                           key={variationStrength} // Re-render text on change
                           initial={{ opacity: 0.5, filter: 'blur(2px)' }}
                           animate={{ opacity: 1, filter: 'blur(0px)' }}
-                          className="font-serif text-white text-lg"
+                          className="font-serif text-content-primary text-lg"
                         >
                           {variationStrength < 30 ? "g(t) = t² + 4t + 4" :
                             variationStrength < 70 ? "h(x) = 3x² + 6x + 5" :
@@ -240,7 +240,7 @@ export default function SettingsPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
-              className="bg-zinc-900/50 border border-white/10 rounded-2xl overflow-hidden"
+              className="bg-surface-card/50 border border-white/10 rounded-2xl overflow-hidden"
             >
               <div className="p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -253,7 +253,7 @@ export default function SettingsPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-white/5 text-zinc-400 uppercase text-xs font-bold tracking-wider">
+                  <thead className="bg-white/5 text-content-secondary uppercase text-xs font-bold tracking-wider">
                     <tr>
                       <th className="px-6 py-4">Name / ID</th>
                       <th className="px-6 py-4">Role</th>
@@ -266,13 +266,13 @@ export default function SettingsPage() {
                     {teacherList.map((teacher, idx) => (
                       <tr key={idx} className="group hover:bg-white/[0.02] transition-colors">
                         <td className="px-6 py-4">
-                          <div className="font-medium text-white">{teacher.name}</div>
-                          <div className="text-xs text-zinc-500">{teacher.email}</div>
+                          <div className="font-medium text-content-primary">{teacher.name}</div>
+                          <div className="text-xs text-content-tertiary">{teacher.email}</div>
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-2 py-1 rounded text-xs font-bold ${teacher.role === 'Director' ? 'bg-purple-500/20 text-purple-400' :
                               teacher.role === 'Tutor' ? 'bg-indigo-500/20 text-indigo-400' :
-                                'bg-zinc-500/20 text-zinc-400'
+                                'bg-zinc-500/20 text-content-secondary'
                             }`}>
                             {teacher.role.toUpperCase()}
                           </span>
@@ -280,14 +280,14 @@ export default function SettingsPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${teacher.status === 'Active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                            <span className="text-zinc-300">{teacher.status}</span>
+                            <span className="text-content-secondary">{teacher.status}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 font-mono text-zinc-500">
+                        <td className="px-6 py-4 font-mono text-content-tertiary">
                           {teacher.lastActive}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="text-zinc-500 hover:text-white transition-colors">
+                          <button className="text-content-tertiary hover:text-content-primary transition-colors">
                             <MoreHorizontal size={18} />
                           </button>
                         </td>
@@ -309,7 +309,7 @@ export default function SettingsPage() {
               transition={{ duration: 0.2 }}
               className="grid grid-cols-1 md:grid-cols-2 gap-6"
             >
-              <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
+              <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
                     <Server size={20} className="text-blue-400" />
@@ -328,19 +328,19 @@ export default function SettingsPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 flex justify-between text-xs text-zinc-500 font-mono">
+                <div className="mt-4 flex justify-between text-xs text-content-tertiary font-mono">
                   <span>Latency (ms)</span>
                   <span>Last 30 min</span>
                 </div>
               </div>
 
-              <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
+              <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
                     <Database size={20} className="text-purple-400" />
                     <h3 className="font-bold">Database Connections</h3>
                   </div>
-                  <span className="text-zinc-500 text-sm">Active: 42</span>
+                  <span className="text-content-tertiary text-sm">Active: 42</span>
                 </div>
                 <div className="h-40">
                   <ResponsiveContainer width="100%" height="100%">
@@ -353,7 +353,7 @@ export default function SettingsPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 flex justify-between text-xs text-zinc-500 font-mono">
+                <div className="mt-4 flex justify-between text-xs text-content-tertiary font-mono">
                   <span>Pool Utilization (%)</span>
                   <span>Last 30 min</span>
                 </div>
@@ -366,7 +366,7 @@ export default function SettingsPage() {
               key="general"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center h-[400px] text-zinc-500"
+              className="flex flex-col items-center justify-center h-[400px] text-content-tertiary"
             >
               <Settings size={48} className="mb-4 opacity-20" />
               <p>General Environment Settings</p>

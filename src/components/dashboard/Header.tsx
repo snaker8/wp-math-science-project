@@ -74,7 +74,7 @@ const Header: React.FC = () => {
           <div className="flex items-center gap-3">
             <button className="flex items-center gap-2 rounded-full border border-gray-200 bg-white py-1.5 pl-1.5 pr-3 hover:bg-gray-50 transition-colors">
               <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-                <span className="text-xs font-bold text-white">T</span>
+                <span className="text-xs font-bold text-content-primary">T</span>
               </div>
               <span className="text-sm font-semibold text-gray-700">선생님</span>
             </button>

@@ -42,7 +42,7 @@ const mockHeatmapData = [
 // Components
 function ClinicCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-zinc-900 border border-white/10 rounded-2xl p-6 backdrop-blur-xl ${className}`}>
+    <div className={`bg-surface-card border border-white/10 rounded-2xl p-6 backdrop-blur-xl ${className}`}>
       {children}
     </div>
   );
@@ -51,8 +51,8 @@ function ClinicCard({ children, className = '' }: { children: React.ReactNode; c
 function ActionButton({ icon: Icon, label, primary = false }: any) {
   return (
     <button className={`flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${primary
-        ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
-        : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
+        ? 'bg-indigo-600 text-content-primary hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
+        : 'bg-white/5 text-content-primary border border-white/10 hover:bg-white/10'
       }`}>
       <Icon size={18} />
       <span>{label}</span>
@@ -70,9 +70,9 @@ function PrescriptionContent() {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
+    <div className="flex h-screen bg-surface-base text-content-primary font-sans overflow-hidden">
       {/* Sidebar (Simplified) */}
-      <div className={`flex-shrink-0 border-r border-white/10 bg-zinc-950 transition-all ${sidebarCollapsed ? 'w-0' : 'w-72'} flex flex-col`}>
+      <div className={`flex-shrink-0 border-r border-white/10 bg-surface-raised transition-all ${sidebarCollapsed ? 'w-0' : 'w-72'} flex flex-col`}>
         <div className="p-4 border-b border-white/10">
           <h2 className="font-bold text-lg mb-4">학생 선택</h2>
           <div className="relative">
@@ -81,7 +81,7 @@ function PrescriptionContent() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="이름 검색..."
-              className="w-full bg-zinc-900 border border-white/10 rounded-lg py-2 pl-10 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-full bg-surface-card border border-white/10 rounded-lg py-2 pl-10 text-sm focus:border-indigo-500 focus:outline-none"
             />
           </div>
         </div>
@@ -103,7 +103,7 @@ function PrescriptionContent() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md">
+        <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-surface-base/50 backdrop-blur-md">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-2 hover:bg-white/10 rounded-lg">
               <Menu size={20} />
@@ -187,7 +187,7 @@ function PrescriptionContent() {
                       &apos;삼각함수&apos; 단원의 오답률이 급격히 상승했습니다.
                       개념 보구 처방이 시급합니다.
                     </p>
-                    <Link href="/tutor/clinic" className="mt-3 inline-block text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded hover:bg-indigo-500">
+                    <Link href="/tutor/clinic" className="mt-3 inline-block text-xs font-bold text-content-primary bg-indigo-600 px-3 py-1.5 rounded hover:bg-indigo-500">
                       처방 생성하기
                     </Link>
                   </div>
@@ -235,7 +235,7 @@ function PrescriptionContent() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-black text-white">Loading Clinic...</div>}>
+    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-surface-base text-content-primary">Loading Clinic...</div>}>
       <PrescriptionContent />
     </Suspense>
   );

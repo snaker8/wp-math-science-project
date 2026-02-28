@@ -29,14 +29,14 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
     <Link
       href={item.href}
       className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
-          ? 'bg-zinc-900 text-white'
-          : 'text-zinc-400 hover:bg-zinc-900/50 hover:text-zinc-100'
+          ? 'bg-surface-card text-white'
+          : 'text-content-secondary hover:bg-surface-card/50 hover:text-content-primary'
         }`}
     >
       <div className="flex items-center gap-3">
         <Icon
           size={18}
-          className={`transition-colors duration-200 ${isActive ? 'text-indigo-500' : 'text-zinc-500 group-hover:text-zinc-300'
+          className={`transition-colors duration-200 ${isActive ? 'text-indigo-500' : 'text-content-tertiary group-hover:text-content-secondary'
             }`}
         />
         <span>{item.label}</span>
@@ -70,9 +70,9 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 border-r border-white/10 bg-black text-white flex flex-col">
+    <aside className="fixed left-0 top-0 h-screen w-64 border-r border bg-surface-base text-white flex flex-col">
       {/* 로고 */}
-      <Link href="/dashboard" className="flex h-16 items-center px-6 border-b border-white/5 hover:bg-zinc-900/30 transition-colors">
+      <Link href="/dashboard" className="flex h-16 items-center px-6 border-b border-subtle hover:bg-surface-card/30 transition-colors">
         <span className="text-lg font-bold tracking-tight">과사람</span>
         <span className="ml-2 rounded bg-indigo-500/10 px-1.5 py-0.5 text-xs font-medium text-indigo-400">
           PRO
@@ -83,7 +83,7 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {/* 메인 메뉴 (문제 은행) */}
         <nav className="px-4 py-4">
-          <div className="mb-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          <div className="mb-2 px-3 text-xs font-semibold text-content-tertiary uppercase tracking-wider">
             문제 은행
           </div>
           <div className="space-y-1">
@@ -98,11 +98,11 @@ export function Sidebar() {
         </nav>
 
         {/* 구분선 */}
-        <div className="mx-4 border-t border-white/5" />
+        <div className="mx-4 border-t border-subtle" />
 
         {/* 튜터 메뉴 (수업/채점) */}
         <nav className="px-4 py-4">
-          <div className="mb-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          <div className="mb-2 px-3 text-xs font-semibold text-content-tertiary uppercase tracking-wider">
             수업 관리
           </div>
           <div className="space-y-1">
@@ -118,7 +118,7 @@ export function Sidebar() {
       </div>
 
       {/* 하단 고정 메뉴 */}
-      <div className="border-t border-white/5 p-4 space-y-1">
+      <div className="border-t border-subtle p-4 space-y-1">
         {bottomMenuItems.map((item) => (
           <NavLink
             key={item.href}
@@ -130,9 +130,9 @@ export function Sidebar() {
         {/* 로그아웃 버튼 */}
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900/50 hover:text-zinc-100"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-card/50 hover:text-content-primary"
         >
-          <LogOut size={18} className="text-zinc-500" />
+          <LogOut size={18} className="text-content-tertiary" />
           <span>로그아웃</span>
         </button>
       </div>

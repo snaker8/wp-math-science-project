@@ -68,8 +68,8 @@ const Badge: React.FC<{ children: React.ReactNode; variant?: 'default' | 'primar
   <span
     className={`inline-flex items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold ${
       variant === 'primary'
-        ? 'border-zinc-800 bg-zinc-900/90 text-zinc-300'
-        : 'border-zinc-800 bg-zinc-900 px-3 py-1 text-zinc-500'
+        ? 'border-subtle bg-surface-card/90 text-content-secondary'
+        : 'border-subtle bg-surface-card px-3 py-1 text-content-tertiary'
     }`}
   >
     {children}
@@ -79,7 +79,7 @@ const Badge: React.FC<{ children: React.ReactNode; variant?: 'default' | 'primar
 const ResizeHandle: React.FC = () => (
   <div className="relative flex w-px items-center justify-center bg-zinc-700 after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 cursor-col-resize hover:bg-indigo-500 transition-colors">
     <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-zinc-600 bg-zinc-700">
-      <GripVertical className="h-2.5 w-2.5 text-zinc-500" />
+      <GripVertical className="h-2.5 w-2.5 text-content-tertiary" />
     </div>
   </div>
 );
@@ -90,7 +90,7 @@ const ResizeHandle: React.FC = () => (
 
 export default function PapersPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full bg-zinc-900 text-zinc-500">로딩 중...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-full bg-surface-card text-content-tertiary">로딩 중...</div>}>
       <PapersContent />
     </Suspense>
   );
@@ -294,31 +294,31 @@ function PapersContent() {
   };
 
   return (
-    <div className="p-0 w-full bg-zinc-900 h-full px-4 py-1 flex flex-col overflow-hidden">
+    <div className="p-0 w-full bg-surface-card h-full px-4 py-1 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="w-full flex items-center justify-between gap-x-4 pb-1 flex-shrink-0">
         <div className="flex items-center gap-3 flex-shrink-0">
-          <h1 className="text-lg font-semibold text-white pl-2">시험지 저장소</h1>
+          <h1 className="text-lg font-semibold text-content-primary pl-2">시험지 저장소</h1>
           <div className="relative ml-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-content-tertiary" size={14} />
             <input
               type="text"
               placeholder="검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 pr-3 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 w-48"
+              className="h-8 pl-8 pr-3 text-sm bg-surface-raised border border rounded-md text-content-primary placeholder-zinc-500 focus:outline-none focus:border-indigo-500 w-48"
             />
           </div>
         </div>
         <div className="flex flex-1 min-w-0 items-center justify-end gap-2">
           <button
             onClick={loadExams}
-            className="inline-flex h-8 items-center gap-1.5 px-3 rounded-md border border-zinc-700 bg-transparent text-zinc-400 hover:bg-zinc-800 text-sm transition-all"
+            className="inline-flex h-8 items-center gap-1.5 px-3 rounded-md border border bg-transparent text-content-secondary hover:bg-surface-raised text-sm transition-all"
           >
             <RefreshCw size={14} />
             새로고침
           </button>
-          <button className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700 bg-transparent text-zinc-400 hover:bg-zinc-800 active:bg-zinc-700 transition-all">
+          <button className="inline-flex h-8 w-8 items-center justify-center rounded-md border border bg-transparent text-content-secondary hover:bg-surface-raised active:bg-zinc-700 transition-all">
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
@@ -331,7 +331,7 @@ function PapersContent() {
             {/* Left Panel - 시험지 목록 */}
             <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden pr-1" style={{ width: '35%' }}>
               {/* Exam List Header */}
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/95 px-5 py-3 flex-shrink-0">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-subtle bg-surface-card/95 px-5 py-3 flex-shrink-0">
                 <Badge>
                   {loadingExams ? '로딩...' : `시험지 ${filteredExams.length}개`}
                 </Badge>
@@ -342,7 +342,7 @@ function PapersContent() {
                     setLoadingProblems(true);
                     loadProblemsDirectly().finally(() => setLoadingProblems(false));
                   }}
-                  className="group flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-500 transition-all hover:-translate-y-0.5 hover:border-indigo-500 hover:bg-zinc-800"
+                  className="group flex items-center gap-2 rounded-full border border-subtle bg-surface-card px-4 py-2 text-sm font-semibold text-content-tertiary transition-all hover:-translate-y-0.5 hover:border-indigo-500 hover:bg-surface-raised"
                 >
                   <BookOpen className="size-4" />
                   <span className="leading-none">전체 문제 보기</span>
@@ -350,10 +350,10 @@ function PapersContent() {
               </div>
 
               {/* Exam List */}
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 p-2">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/95 p-2">
                 <div className="flex-1 overflow-y-auto">
                   {loadingExams ? (
-                    <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
+                    <div className="flex items-center justify-center py-12 gap-2 text-content-tertiary">
                       <Loader2 className="animate-spin" size={20} />
                       <span>시험지 로딩 중...</span>
                     </div>
@@ -366,32 +366,32 @@ function PapersContent() {
                           className={`cursor-pointer rounded-xl px-4 py-3 transition-colors ${
                             selectedExam?.id === exam.id
                               ? 'bg-indigo-500/10 border-l-2 border-indigo-500'
-                              : 'hover:bg-zinc-800'
+                              : 'hover:bg-surface-raised'
                           }`}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <FileText size={14} className="text-indigo-400 flex-shrink-0" />
-                                <span className="text-sm font-medium text-white truncate">
+                                <span className="text-sm font-medium text-content-primary truncate">
                                   {exam.title}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                              <div className="flex items-center gap-2 text-xs text-content-tertiary">
                                 {exam.subject && <span>{exam.subject}</span>}
                                 <span>{new Date(exam.created_at).toLocaleDateString('ko-KR')}</span>
                               </div>
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               exam.status === 'COMPLETED' ? 'bg-green-500/20 text-green-400' :
-                              exam.status === 'DRAFT' ? 'bg-zinc-500/20 text-zinc-400' :
+                              exam.status === 'DRAFT' ? 'bg-zinc-500/20 text-content-secondary' :
                               'bg-indigo-500/20 text-indigo-400'
                             }`}>
                               {exam.status === 'COMPLETED' ? '완료' : exam.status === 'DRAFT' ? '임시' : exam.status}
                             </span>
                           </div>
                           {exam.description && (
-                            <p className="mt-1 text-xs text-zinc-600 truncate pl-6">
+                            <p className="mt-1 text-xs text-content-muted truncate pl-6">
                               {exam.description}
                             </p>
                           )}
@@ -399,10 +399,10 @@ function PapersContent() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
+                    <div className="flex flex-col items-center justify-center py-12 text-content-tertiary">
                       <ClipboardList size={32} className="mb-3 opacity-50" />
                       <p className="text-sm font-medium mb-1">저장된 시험지가 없습니다</p>
-                      <p className="text-xs text-zinc-600">문제를 업로드하면 자동으로 시험지가 생성됩니다</p>
+                      <p className="text-xs text-content-muted">문제를 업로드하면 자동으로 시험지가 생성됩니다</p>
                     </div>
                   )}
                 </div>
@@ -412,9 +412,9 @@ function PapersContent() {
             <ResizeHandle />
 
             {/* Right Panel - 시험지 뷰어 + 분석 */}
-            <div className="flex-1 h-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95">
+            <div className="flex-1 h-full overflow-hidden rounded-2xl border border-subtle bg-surface-card/95">
               {loadingProblems ? (
-                <div className="flex items-center justify-center h-full gap-2 text-zinc-500">
+                <div className="flex items-center justify-center h-full gap-2 text-content-tertiary">
                   <Loader2 className="animate-spin" size={20} />
                   <span>문제 로딩 중...</span>
                 </div>
@@ -473,10 +473,10 @@ function PapersContent() {
                   </div>
                 </div>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-zinc-300">
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-content-secondary">
                   <BookOpen size={40} className="text-zinc-700" />
                   <span className="font-medium">저장된 자산이 없습니다</span>
-                  <span className="text-xs text-zinc-500 text-center max-w-xs">
+                  <span className="text-xs text-content-tertiary text-center max-w-xs">
                     {selectedExam
                       ? '이 시험지에 연결된 문제가 없습니다.'
                       : '왼쪽 목록에서 시험지를 선택하거나, "전체 문제 보기"를 클릭하세요.'}

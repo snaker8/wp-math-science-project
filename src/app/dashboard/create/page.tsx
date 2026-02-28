@@ -210,7 +210,7 @@ function StepBadge({ number, active }: { number: number; active?: boolean }) {
   return (
     <span className={`
       flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-colors
-      ${active ? 'bg-indigo-500 text-white' : 'bg-zinc-700 text-zinc-400'}
+      ${active ? 'bg-indigo-500 text-content-primary' : 'bg-zinc-700 text-content-secondary'}
     `}>
       {number}
     </span>
@@ -232,8 +232,8 @@ function FilterChip({
       onClick={onClick}
       className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
         active
-          ? 'border-indigo-500 bg-indigo-500 text-white shadow-sm shadow-indigo-500/20'
-          : 'border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'
+          ? 'border-indigo-500 bg-indigo-500 text-content-primary shadow-sm shadow-indigo-500/20'
+          : 'border bg-surface-raised/80 text-content-secondary hover:bg-zinc-700 hover:text-content-secondary'
       }`}
     >
       {label}
@@ -261,10 +261,10 @@ function ModeButton({
       disabled={disabled}
       className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
         disabled
-          ? 'cursor-not-allowed border-zinc-800 bg-zinc-900 text-zinc-600 opacity-50'
+          ? 'cursor-not-allowed border-subtle bg-surface-card text-content-muted opacity-50'
           : active
           ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-300 shadow-sm shadow-indigo-500/10'
-          : 'border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+          : 'border bg-surface-raised/80 text-content-secondary hover:bg-zinc-700 hover:text-content-primary'
       }`}
     >
       {icon}
@@ -298,12 +298,12 @@ function DifficultyCounter({
         value={value}
         onChange={(e) => onChange(Math.max(0, Math.min(max, parseInt(e.target.value) || 0)))}
         disabled={disabled}
-        className="h-10 w-14 rounded-lg border border-zinc-700 bg-zinc-800 text-center text-lg font-bold text-white
+        className="h-10 w-14 rounded-lg border border bg-surface-raised text-center text-lg font-bold text-content-primary
           focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500
           disabled:cursor-not-allowed disabled:opacity-40
           [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
-      <span className="text-[9px] text-zinc-600">{max}문제</span>
+      <span className="text-[9px] text-content-muted">{max}문제</span>
     </div>
   );
 }
@@ -359,17 +359,17 @@ function SubjectTreeView({
               className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all ${
                 isSelected
                   ? 'bg-indigo-500/15 text-indigo-300'
-                  : 'text-zinc-300 hover:bg-zinc-800'
+                  : 'text-content-secondary hover:bg-surface-raised'
               }`}
             >
               {isExpanded ? (
-                <ChevronDown size={14} className="text-zinc-500 shrink-0" />
+                <ChevronDown size={14} className="text-content-tertiary shrink-0" />
               ) : (
-                <ChevronRight size={14} className="text-zinc-500 shrink-0" />
+                <ChevronRight size={14} className="text-content-tertiary shrink-0" />
               )}
-              <BookOpen size={14} className={isSelected ? 'text-indigo-400' : 'text-zinc-500'} />
+              <BookOpen size={14} className={isSelected ? 'text-indigo-400' : 'text-content-tertiary'} />
               <span className="flex-1 text-left font-medium">{subj.subject}</span>
-              <span className="text-[10px] text-zinc-600">{subj.totalProblems}</span>
+              <span className="text-[10px] text-content-muted">{subj.totalProblems}</span>
             </button>
 
             {/* Chapters */}
@@ -382,7 +382,7 @@ function SubjectTreeView({
                   transition={{ duration: 0.15 }}
                   className="overflow-hidden"
                 >
-                  <div className="ml-4 space-y-0.5 border-l border-zinc-800 pl-2">
+                  <div className="ml-4 space-y-0.5 border-l border-subtle pl-2">
                     {subj.chapters.map((ch) => {
                       const isChExpanded = expandedChapters.includes(ch.chapter);
                       const isChSelected = selectedChapters.includes(ch.chapter);
@@ -398,17 +398,17 @@ function SubjectTreeView({
                             className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-all ${
                               isChSelected
                                 ? 'bg-indigo-500/10 text-indigo-300'
-                                : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                                : 'text-content-secondary hover:bg-surface-raised/50 hover:text-content-primary'
                             }`}
                           >
                             {isChExpanded ? (
-                              <ChevronDown size={12} className="text-zinc-600 shrink-0" />
+                              <ChevronDown size={12} className="text-content-muted shrink-0" />
                             ) : (
-                              <ChevronRight size={12} className="text-zinc-600 shrink-0" />
+                              <ChevronRight size={12} className="text-content-muted shrink-0" />
                             )}
-                            <Layers size={12} className={isChSelected ? 'text-indigo-400' : 'text-zinc-600'} />
+                            <Layers size={12} className={isChSelected ? 'text-indigo-400' : 'text-content-muted'} />
                             <span className="flex-1 text-left">{ch.chapter}</span>
-                            <span className="text-[10px] text-zinc-600">{ch.totalProblems}</span>
+                            <span className="text-[10px] text-content-muted">{ch.totalProblems}</span>
                           </button>
 
                           {/* Sections */}
@@ -421,7 +421,7 @@ function SubjectTreeView({
                                 transition={{ duration: 0.12 }}
                                 className="overflow-hidden"
                               >
-                                <div className="ml-5 space-y-0.5 border-l border-zinc-800/50 pl-2">
+                                <div className="ml-5 space-y-0.5 border-l border-subtle pl-2">
                                   {ch.sections.map((sec) => {
                                     const isSecSelected = selectedSections.includes(sec.section);
 
@@ -433,7 +433,7 @@ function SubjectTreeView({
                                         className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all ${
                                           isSecSelected
                                             ? 'bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/20'
-                                            : 'text-zinc-500 hover:bg-zinc-800/30 hover:text-zinc-300'
+                                            : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
                                         }`}
                                       >
                                         <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
@@ -441,10 +441,10 @@ function SubjectTreeView({
                                             ? 'border-indigo-500 bg-indigo-500'
                                             : 'border-zinc-600'
                                         }`}>
-                                          {isSecSelected && <Check size={8} className="text-white" />}
+                                          {isSecSelected && <Check size={8} className="text-content-primary" />}
                                         </div>
                                         <span className="flex-1 text-left">{sec.section}</span>
-                                        <span className="text-[10px] text-zinc-600">{sec.totalProblems}</span>
+                                        <span className="text-[10px] text-content-muted">{sec.totalProblems}</span>
                                       </button>
                                     );
                                   })}
@@ -803,7 +803,7 @@ export default function PaperCreatePage() {
       {/* ================================================================ */}
       <div className="flex items-center justify-between gap-4 pb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-white">시험지 출제</h1>
+          <h1 className="text-xl font-bold text-content-primary">시험지 출제</h1>
           {hasSelection && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20">
               <Hash size={12} className="text-indigo-400" />
@@ -818,7 +818,7 @@ export default function PaperCreatePage() {
           <button
             type="button"
             onClick={() => setShowLeftPanel(!showLeftPanel)}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-2 text-xs font-medium text-zinc-400 transition-all hover:bg-zinc-700 hover:text-zinc-200"
+            className="flex items-center gap-1.5 rounded-lg border border bg-surface-raised/80 px-3 py-2 text-xs font-medium text-content-secondary transition-all hover:bg-zinc-700 hover:text-content-primary"
             title={showLeftPanel ? '패널 접기' : '패널 펼치기'}
           >
             {showLeftPanel ? <PanelLeftClose size={14} /> : <PanelRightClose size={14} />}
@@ -827,7 +827,7 @@ export default function PaperCreatePage() {
           <button
             type="button"
             onClick={handleReset}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-2 text-xs font-medium text-zinc-300 transition-all hover:bg-zinc-700"
+            className="flex items-center gap-1.5 rounded-lg border border bg-surface-raised/80 px-3 py-2 text-xs font-medium text-content-secondary transition-all hover:bg-zinc-700"
           >
             <RotateCcw size={14} />
             <span>초기화</span>
@@ -837,7 +837,7 @@ export default function PaperCreatePage() {
             type="button"
             onClick={handleSaveExam}
             disabled={totalQuestions === 0 || !paperName.trim() || isGenerating}
-            className="flex items-center gap-1.5 rounded-lg border border-indigo-500/50 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-500/50 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-content-primary shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             {isGenerating ? (
               <>
@@ -857,7 +857,7 @@ export default function PaperCreatePage() {
       {/* ================================================================ */}
       {/* Main Content - Split Panel */}
       {/* ================================================================ */}
-      <div ref={containerRef} className="flex flex-1 gap-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+      <div ref={containerRef} className="flex flex-1 gap-0 overflow-hidden rounded-xl border border-subtle bg-surface-raised">
         {/* ============================================================ */}
         {/* Left Panel - 범위 설정 */}
         {/* ============================================================ */}
@@ -868,20 +868,20 @@ export default function PaperCreatePage() {
               animate={{ width: `${leftWidthPercent}%`, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col overflow-hidden border-r border-zinc-800"
+              className="flex flex-col overflow-hidden border-r border-subtle"
             >
               {/* Left panel content wrapper */}
               <div className="flex flex-col h-full overflow-hidden">
                 {/* ---- Top Area: 범위 + 시험지명 + 총문항수 ---- */}
-                <div className="flex-shrink-0 border-b border-zinc-800">
+                <div className="flex-shrink-0 border-b border-subtle">
                   {/* 범위 표시 */}
-                  <div className="px-4 py-3 border-b border-zinc-800/50">
+                  <div className="px-4 py-3 border-b border-subtle">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">범위 설정</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary">범위 설정</span>
                     </div>
-                    <div className="flex items-center gap-2 rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2">
-                      <Filter size={12} className="text-zinc-600 shrink-0" />
-                      <span className={`text-xs ${hasSelection ? 'text-indigo-300 font-medium' : 'text-zinc-600'}`}>
+                    <div className="flex items-center gap-2 rounded-lg bg-surface-card border border-subtle px-3 py-2">
+                      <Filter size={12} className="text-content-muted shrink-0" />
+                      <span className={`text-xs ${hasSelection ? 'text-indigo-300 font-medium' : 'text-content-muted'}`}>
                         {scopeText}
                       </span>
                     </div>
@@ -890,7 +890,7 @@ export default function PaperCreatePage() {
                   {/* 시험지명 + 총문항수 */}
                   <div className="px-4 py-3 flex gap-3">
                     <div className="flex-1">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary mb-1.5 block">
                         시험지명
                       </label>
                       <input
@@ -898,22 +898,22 @@ export default function PaperCreatePage() {
                         value={paperName}
                         onChange={(e) => setPaperName(e.target.value)}
                         placeholder="시험지 이름을 입력하세요"
-                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600
+                        className="w-full rounded-lg border border bg-surface-raised px-3 py-2 text-sm text-content-primary placeholder:text-content-muted
                           focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div className="w-24 text-center">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary mb-1.5 block">
                         총 문항수
                       </label>
-                      <div className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2">
+                      <div className="rounded-lg border border bg-surface-raised px-3 py-2">
                         <span className="text-xl font-bold text-indigo-400">{totalQuestions}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* 출제 모드 */}
-                  <div className="px-4 py-2 border-t border-zinc-800/50">
+                  <div className="px-4 py-2 border-t border-subtle">
                     <div className="flex items-center gap-2">
                       <ModeButton
                         icon={<Wand2 size={14} />}
@@ -940,9 +940,9 @@ export default function PaperCreatePage() {
                   </div>
 
                   {/* 출제 유형 필터 */}
-                  <div className="px-4 py-2 border-t border-zinc-800/50">
+                  <div className="px-4 py-2 border-t border-subtle">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 shrink-0">출제유형</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary shrink-0">출제유형</span>
                       <div className="flex flex-wrap gap-1.5">
                         {(['전체', '교과서', '문제집', '기출', '모의고사'] as QuestionTypeFilter[]).map((type) => (
                           <FilterChip
@@ -959,9 +959,9 @@ export default function PaperCreatePage() {
 
                 {/* ---- Middle Area: 과목/단원 트리 ---- */}
                 <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800/50 flex-shrink-0">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-subtle flex-shrink-0">
                     <StepBadge number={1} active={!selectedSubject} />
-                    <span className="text-sm font-semibold text-zinc-200">과목 및 단원 선택</span>
+                    <span className="text-sm font-semibold text-content-primary">과목 및 단원 선택</span>
                     {selectedSections.length > 0 && (
                       <span className="ml-auto text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
                         {selectedSections.length}개 선택
@@ -989,13 +989,13 @@ export default function PaperCreatePage() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="flex-shrink-0 border-t border-zinc-800 overflow-hidden"
+                      className="flex-shrink-0 border-t border-subtle overflow-hidden"
                     >
                       <div className="px-4 py-3">
                         <div className="flex items-center gap-2 mb-3">
                           <StepBadge number={2} active />
-                          <span className="text-sm font-semibold text-zinc-200">문항수 선택</span>
-                          <span className="text-[10px] text-zinc-600">(난이도별 배분)</span>
+                          <span className="text-sm font-semibold text-content-primary">문항수 선택</span>
+                          <span className="text-[10px] text-content-muted">(난이도별 배분)</span>
                         </div>
                         <div className="flex items-center justify-center gap-3">
                           {(['최상', '상', '중', '하', '최하'] as DifficultyLevel[]).map((level) => (
@@ -1036,16 +1036,16 @@ export default function PaperCreatePage() {
         {/* ============================================================ */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Right panel header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle flex-shrink-0">
             <div className="flex items-center gap-2">
-              <FileText size={14} className="text-zinc-500" />
-              <span className="text-sm font-semibold text-zinc-200">시험지 미리보기</span>
+              <FileText size={14} className="text-content-tertiary" />
+              <span className="text-sm font-semibold text-content-primary">시험지 미리보기</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-all hover:bg-zinc-700 hover:text-zinc-200"
+                className="flex items-center gap-1.5 rounded-lg border border bg-surface-raised/80 px-3 py-1.5 text-xs font-medium text-content-secondary transition-all hover:bg-zinc-700 hover:text-content-primary"
               >
                 <Upload size={12} />
                 <span>파일 업로드</span>
@@ -1063,24 +1063,24 @@ export default function PaperCreatePage() {
 
           {/* Upload zone (drag & drop) */}
           {uploadedFiles.length > 0 && (
-            <div className="flex-shrink-0 px-4 py-2 border-b border-zinc-800">
+            <div className="flex-shrink-0 px-4 py-2 border-b border-subtle">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary">
                   업로드 파일 ({uploadedFiles.length})
                 </span>
               </div>
               <div className="max-h-24 space-y-1.5 overflow-auto">
                 {uploadedFiles.map((file) => (
-                  <div key={file.id} className="flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-1.5">
-                    <FileText size={12} className="text-zinc-500 shrink-0" />
-                    <span className="truncate text-xs text-zinc-300 flex-1">{file.name}</span>
+                  <div key={file.id} className="flex items-center gap-2 rounded-lg bg-surface-card px-3 py-1.5">
+                    <FileText size={12} className="text-content-tertiary shrink-0" />
+                    <span className="truncate text-xs text-content-secondary flex-1">{file.name}</span>
                     {file.status === 'uploading' && <Loader2 size={12} className="animate-spin text-indigo-400" />}
                     {file.status === 'processing' && <span className="text-[10px] text-amber-400">처리중</span>}
                     {file.status === 'done' && <CheckCircle size={12} className="text-emerald-400" />}
                     {file.status === 'error' && <AlertCircle size={12} className="text-rose-400" />}
                     <button
                       onClick={() => setUploadedFiles((prev) => prev.filter((f) => f.id !== file.id))}
-                      className="p-0.5 text-zinc-600 hover:text-rose-400 transition-colors"
+                      className="p-0.5 text-content-muted hover:text-rose-400 transition-colors"
                     >
                       <Trash2 size={10} />
                     </button>
@@ -1100,9 +1100,9 @@ export default function PaperCreatePage() {
             {totalQuestions > 0 ? (
               <div className="p-6">
                 {/* Paper header */}
-                <div className="mb-6 pb-4 border-b border-zinc-800">
+                <div className="mb-6 pb-4 border-b border-subtle">
                   <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-lg font-bold text-white">
+                    <h2 className="text-lg font-bold text-content-primary">
                       {paperName || '새 시험지'}
                     </h2>
                     <div className="flex items-center gap-2">
@@ -1111,7 +1111,7 @@ export default function PaperCreatePage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+                  <div className="flex items-center gap-3 text-[11px] text-content-tertiary">
                     {selectedSubject && <span>{selectedSubject}</span>}
                     {selectedChapters.length > 0 && (
                       <span>| {selectedChapters.join(', ')}</span>
@@ -1129,9 +1129,9 @@ export default function PaperCreatePage() {
                     const count = difficulties[level];
                     if (count === 0) return null;
                     return (
-                      <div key={level} className={`rounded-lg px-3 py-2 ${config.bg} border border-zinc-800`}>
+                      <div key={level} className={`rounded-lg px-3 py-2 ${config.bg} border border-subtle`}>
                         <div className={`text-[10px] font-bold ${config.text}`}>{config.label}</div>
-                        <div className="text-lg font-bold text-white">{count}</div>
+                        <div className="text-lg font-bold text-content-primary">{count}</div>
                       </div>
                     );
                   })}
@@ -1142,22 +1142,22 @@ export default function PaperCreatePage() {
                   {Array.from({ length: Math.min(totalQuestions, 10) }, (_, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+                      className="flex items-start gap-4 rounded-xl border border-subtle bg-surface-card/50 p-4"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800 text-sm font-bold text-zinc-400 shrink-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-raised text-sm font-bold text-content-secondary shrink-0">
                         {i + 1}
                       </div>
                       <div className="flex-1">
-                        <div className="h-3 w-3/4 rounded bg-zinc-800 mb-2" />
-                        <div className="h-3 w-1/2 rounded bg-zinc-800/50" />
+                        <div className="h-3 w-3/4 rounded bg-surface-raised mb-2" />
+                        <div className="h-3 w-1/2 rounded bg-surface-raised/50" />
                       </div>
-                      <div className="text-[10px] text-zinc-600">
+                      <div className="text-[10px] text-content-muted">
                         {createMode === 'auto' ? '자동 배정' : '수동 선택'}
                       </div>
                     </div>
                   ))}
                   {totalQuestions > 10 && (
-                    <div className="text-center py-3 text-xs text-zinc-600">
+                    <div className="text-center py-3 text-xs text-content-muted">
                       + {totalQuestions - 10}개 문항 더보기
                     </div>
                   )}
@@ -1171,27 +1171,27 @@ export default function PaperCreatePage() {
                 <div className={`p-6 rounded-2xl border-2 border-dashed transition-all ${
                   isDragging
                     ? 'border-indigo-500 bg-indigo-500/10'
-                    : 'border-zinc-800 bg-zinc-900/30'
+                    : 'border-subtle bg-surface-card/30'
                 }`}>
                   <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="p-4 rounded-xl bg-zinc-800/50">
-                      <Sparkles size={32} className="text-zinc-600" />
+                    <div className="p-4 rounded-xl bg-surface-raised/50">
+                      <Sparkles size={32} className="text-content-muted" />
                     </div>
-                    <h3 className="text-sm font-semibold text-zinc-400">
+                    <h3 className="text-sm font-semibold text-content-secondary">
                       시험지를 구성해 보세요
                     </h3>
-                    <p className="text-xs text-zinc-600 max-w-xs leading-relaxed">
+                    <p className="text-xs text-content-muted max-w-xs leading-relaxed">
                       왼쪽 패널에서 과목과 단원을 선택하고, 난이도별 문항수를 설정하면
                       시험지 미리보기가 여기에 표시됩니다.
                     </p>
                     <div className="mt-2 flex items-center gap-2">
-                      <div className="h-[1px] w-8 bg-zinc-800" />
+                      <div className="h-[1px] w-8 bg-surface-raised" />
                       <span className="text-[10px] text-zinc-700">또는</span>
-                      <div className="h-[1px] w-8 bg-zinc-800" />
+                      <div className="h-[1px] w-8 bg-surface-raised" />
                     </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+                      className="flex items-center gap-2 rounded-lg border border bg-surface-raised px-4 py-2 text-xs font-medium text-content-secondary hover:bg-zinc-700 transition-colors"
                     >
                       <Upload size={14} />
                       <span>파일을 드래그하거나 클릭하여 업로드</span>

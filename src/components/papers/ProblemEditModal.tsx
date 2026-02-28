@@ -120,36 +120,36 @@ function EditorToolbar({
       </button>
       <div className="w-px h-4 bg-zinc-700 mx-0.5" />
       <button type="button" onClick={onBold}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="굵게 (**text**)">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="굵게 (**text**)">
         <Bold className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onItalic}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="기울임 (*text*)">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="기울임 (*text*)">
         <Italic className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onUnderline}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="밑줄">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="밑줄">
         <UnderlineIcon className="h-3.5 w-3.5" />
       </button>
       <div className="w-px h-4 bg-zinc-700 mx-0.5" />
       <button type="button" onClick={onInsertImage}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="이미지 삽입">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="이미지 삽입">
         <ImageIcon className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onInsertTable}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="표 삽입">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="표 삽입">
         <Table2 className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onInsertList}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="번호 목록">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="번호 목록">
         <List className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onInsertDivider}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="구분선 삽입">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="구분선 삽입">
         <Minus className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onInsertLink}
-        className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="링크 삽입">
+        className="p-1 rounded text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors" title="링크 삽입">
         <Link2 className="h-3.5 w-3.5" />
       </button>
       <button type="button" onClick={onInsertGraph}
@@ -158,7 +158,7 @@ function EditorToolbar({
       </button>
       <div className="w-px h-4 bg-zinc-700 mx-0.5" />
       <button type="button" onClick={onTogglePreview}
-        className={`p-1 rounded transition-colors ${showPreview ? 'text-cyan-400 bg-cyan-500/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
+        className={`p-1 rounded transition-colors ${showPreview ? 'text-cyan-400 bg-cyan-500/10' : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'}`}
         title={showPreview ? '미리보기 끄기' : '수식 미리보기'}>
         {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
       </button>
@@ -221,9 +221,9 @@ function EditorPanel({
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 rounded-xl border border-zinc-700/60 bg-zinc-900/80 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 rounded-xl border border/60 bg-surface-card/80 overflow-hidden">
       {/* 레이블 + 툴바 */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 border-b border-zinc-700/50">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-raised/50 border-b border/50">
         <span className="text-xs font-bold text-cyan-400 flex-shrink-0">{label}</span>
         <EditorToolbar
           onInsertMath={onOpenLatex}
@@ -248,8 +248,8 @@ function EditorPanel({
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`resize-none bg-zinc-900 px-4 py-3 text-sm text-zinc-200 leading-relaxed placeholder:text-zinc-600 focus:outline-none ${
-            showPreview ? 'w-1/2 border-r border-zinc-700/50' : 'w-full'
+          className={`resize-none bg-surface-card px-4 py-3 text-sm text-content-primary leading-relaxed placeholder:text-content-muted focus:outline-none ${
+            showPreview ? 'w-1/2 border-r border/50' : 'w-full'
           }`}
           placeholder={placeholder}
           spellCheck={false}
@@ -312,18 +312,18 @@ function ChoicesEditor({
   };
 
   return (
-    <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/80 overflow-hidden">
+    <div className="rounded-xl border border/60 bg-surface-card/80 overflow-hidden">
       {/* 정답 유형 헤더 */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-800/50 border-b border-zinc-700/50">
-        <span className="text-xs font-bold text-zinc-400">정답 유형</span>
+      <div className="flex items-center justify-between px-4 py-2.5 bg-surface-raised/50 border-b border/50">
+        <span className="text-xs font-bold text-content-secondary">정답 유형</span>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => onAnswerTypeChange('objective')}
             className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              answerType === 'objective' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+              answerType === 'objective' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary hover:text-content-secondary border border-transparent'
             }`}>객관식</button>
           <button type="button" onClick={() => onAnswerTypeChange('subjective')}
             className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              answerType === 'subjective' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+              answerType === 'subjective' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary hover:text-content-secondary border border-transparent'
             }`}>주관식</button>
         </div>
       </div>
@@ -336,7 +336,7 @@ function ChoicesEditor({
               {[1, 2, 3, 5].map((cols) => (
                 <button key={cols} type="button" onClick={() => onChoiceLayoutChange(cols)}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                    choiceLayout === cols ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500 border border-zinc-700 hover:text-zinc-300'
+                    choiceLayout === cols ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary'
                   }`}>{cols}줄</button>
               ))}
             </div>
@@ -348,30 +348,30 @@ function ChoicesEditor({
           }`}>
             {choices.map((choice, i) => (
               <div key={i} className="flex items-center gap-1.5">
-                <span className="text-sm text-zinc-500 w-5 text-center flex-shrink-0">{circledNumbers[i]}</span>
+                <span className="text-sm text-content-tertiary w-5 text-center flex-shrink-0">{circledNumbers[i]}</span>
                 <input type="text"
                   value={choice.replace(/^[①②③④⑤]\s*/, '')}
                   onChange={(e) => handleChoiceChange(i, e.target.value)}
-                  className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
+                  className="flex-1 rounded-lg border border bg-surface-raised px-2.5 py-1.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
                   placeholder={`선택지 ${i + 1}`} />
               </div>
             ))}
           </div>
 
           {/* 정답 선택 */}
-          <div className="flex items-center gap-3 pt-1 border-t border-zinc-800">
-            <span className="text-xs font-medium text-zinc-400">정답 :</span>
+          <div className="flex items-center gap-3 pt-1 border-t border-subtle">
+            <span className="text-xs font-medium text-content-secondary">정답 :</span>
             <div className="flex items-center gap-1.5">
               {circledNumbers.map((num, i) => (
                 <button key={i} type="button" onClick={() => onCorrectAnswerChange(i + 1)}
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                     correctAnswer === i + 1
-                      ? 'bg-red-500 text-white ring-2 ring-red-400/50 shadow-lg shadow-red-500/20'
-                      : 'bg-zinc-800 text-zinc-500 border border-zinc-700 hover:border-zinc-500 hover:text-zinc-300'
+                      ? 'bg-red-500 text-content-primary ring-2 ring-red-400/50 shadow-lg shadow-red-500/20'
+                      : 'bg-surface-raised text-content-tertiary border border hover:border-zinc-500 hover:text-content-secondary'
                   }`}>{num}</button>
               ))}
             </div>
-            <label className="flex items-center gap-1.5 ml-auto text-xs text-zinc-500 cursor-pointer">
+            <label className="flex items-center gap-1.5 ml-auto text-xs text-content-tertiary cursor-pointer">
               <input type="checkbox" checked={isMultipleAnswer} onChange={(e) => onMultipleAnswerChange(e.target.checked)}
                 className="w-3.5 h-3.5 accent-cyan-500 rounded" />
               복수정답
@@ -380,9 +380,9 @@ function ChoicesEditor({
         </div>
       ) : (
         <div className="p-4">
-          <label className="block text-xs font-medium text-zinc-400 mb-2">주관식 정답</label>
+          <label className="block text-xs font-medium text-content-secondary mb-2">주관식 정답</label>
           <input type="text" value={subjectiveAnswer} onChange={(e) => onSubjectiveAnswerChange(e.target.value)}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-lg text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full rounded-lg border border bg-surface-raised px-3 py-2.5 text-lg text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
             placeholder="정답을 입력하세요" />
         </div>
       )}
@@ -419,19 +419,19 @@ function TagManagementPanel({
   ];
 
   return (
-    <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/80 overflow-hidden">
-      <div className="px-4 py-2.5 bg-zinc-800/50 border-b border-zinc-700/50">
-        <span className="text-xs font-bold text-zinc-300">태그 관리</span>
+    <div className="rounded-xl border border/60 bg-surface-card/80 overflow-hidden">
+      <div className="px-4 py-2.5 bg-surface-raised/50 border-b border/50">
+        <span className="text-xs font-bold text-content-secondary">태그 관리</span>
       </div>
       <div className="p-4 space-y-4">
         {/* 문제 영역 */}
         <div>
-          <label className="block text-[11px] font-medium text-zinc-500 mb-1.5">문제 영역</label>
+          <label className="block text-[11px] font-medium text-content-tertiary mb-1.5">문제 영역</label>
           <div className="flex flex-wrap gap-1">
             {domains.map((d) => (
               <button key={d.key} type="button" onClick={() => onCognitiveDomainChange(d.key)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  cognitiveDomain === d.key ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500 border border-zinc-700 hover:text-zinc-300 hover:border-zinc-500'
+                  cognitiveDomain === d.key ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary hover:border-zinc-500'
                 }`}>{d.label}</button>
             ))}
           </div>
@@ -439,12 +439,12 @@ function TagManagementPanel({
 
         {/* 난이도 */}
         <div>
-          <label className="block text-[11px] font-medium text-zinc-500 mb-1.5">난이도 지정</label>
+          <label className="block text-[11px] font-medium text-content-tertiary mb-1.5">난이도 지정</label>
           <div className="flex flex-wrap gap-1">
             {difficulties.map((d) => (
               <button key={d.key} type="button" onClick={() => onDifficultyChange(d.key)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  difficulty === d.key ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500 border border-zinc-700 hover:text-zinc-300 hover:border-zinc-500'
+                  difficulty === d.key ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary hover:border-zinc-500'
                 }`}>{d.label}</button>
             ))}
           </div>
@@ -452,10 +452,10 @@ function TagManagementPanel({
 
         {/* 채점 방법 */}
         <div>
-          <label className="block text-[11px] font-medium text-zinc-500 mb-1.5">채점 방법</label>
+          <label className="block text-[11px] font-medium text-content-tertiary mb-1.5">채점 방법</label>
           <div className="flex gap-1">
             <button type="button" className="px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">자동 채점</button>
-            <button type="button" className="px-2.5 py-1 rounded-md text-xs font-medium text-zinc-500 border border-zinc-700 hover:text-zinc-300">자기 채점</button>
+            <button type="button" className="px-2.5 py-1 rounded-md text-xs font-medium text-content-tertiary border border hover:text-content-secondary">자기 채점</button>
           </div>
         </div>
 
@@ -471,7 +471,7 @@ function TagManagementPanel({
               }}
               className="flex-1 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-1.5 text-sm text-amber-400 font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
               placeholder="유형코드. 유형명" />
-            <button type="button" className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors border border-zinc-700" title="유형 검색">
+            <button type="button" className="p-1.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors border border" title="유형 검색">
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
@@ -480,21 +480,21 @@ function TagManagementPanel({
         </div>
 
         {/* 문제 원본 이미지 */}
-        <details className="border-t border-zinc-800 pt-3">
-          <summary className="text-[11px] font-medium text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors flex items-center justify-between">
+        <details className="border-t border-subtle pt-3">
+          <summary className="text-[11px] font-medium text-content-tertiary cursor-pointer hover:text-content-secondary transition-colors flex items-center justify-between">
             <span>문제 원본 이미지</span>
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </summary>
-          <div className="mt-2 rounded-lg border border-zinc-700 bg-zinc-800 p-4 text-center">
-            <p className="text-xs text-zinc-600">원본 이미지 없음</p>
+          <div className="mt-2 rounded-lg border border bg-surface-raised p-4 text-center">
+            <p className="text-xs text-content-muted">원본 이미지 없음</p>
           </div>
         </details>
 
         {/* AI 해설 생성 */}
-        <details className="border-t border-zinc-800 pt-3">
-          <summary className="text-[11px] font-medium text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors flex items-center justify-between">
+        <details className="border-t border-subtle pt-3">
+          <summary className="text-[11px] font-medium text-content-tertiary cursor-pointer hover:text-content-secondary transition-colors flex items-center justify-between">
             <span>AI 해설 생성</span>
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -796,19 +796,19 @@ export function ProblemEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-surface-base/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 flex flex-col h-[92vh] w-[95vw] max-w-[1400px] overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl">
+      <div className="relative z-10 flex flex-col h-[92vh] w-[95vw] max-w-[1400px] overflow-hidden rounded-2xl border border bg-surface-raised shadow-2xl">
         {/* ======== 헤더 ======== */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3 flex-shrink-0">
+        <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-white">문제</span>
-            <span className="text-xs text-zinc-500 font-mono bg-zinc-800 px-2 py-0.5 rounded-md">
+            <span className="text-sm font-bold text-content-primary">문제</span>
+            <span className="text-xs text-content-tertiary font-mono bg-surface-raised px-2 py-0.5 rounded-md">
               {problemId.slice(0, 20)}...
             </span>
           </div>
           <button type="button" onClick={onClose}
-            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
+            className="p-2 rounded-lg text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -836,7 +836,7 @@ export function ProblemEditModal({
           </div>
 
           {/* 중: 해설 에디터 */}
-          <div className="flex-1 flex flex-col p-3 min-w-0 overflow-hidden border-l border-zinc-800">
+          <div className="flex-1 flex flex-col p-3 min-w-0 overflow-hidden border-l border-subtle">
             <EditorPanel
               label="해설"
               value={solution}
@@ -849,7 +849,7 @@ export function ProblemEditModal({
           </div>
 
           {/* 우: 추가 정보 */}
-          <div className="w-[280px] flex-shrink-0 border-l border-zinc-800 overflow-y-auto p-3 space-y-3">
+          <div className="w-[280px] flex-shrink-0 border-l border-subtle overflow-y-auto p-3 space-y-3">
             <TagManagementPanel
               difficulty={difficulty} onDifficultyChange={setDifficulty}
               cognitiveDomain={cognitiveDomain} onCognitiveDomainChange={setCognitiveDomain}
@@ -862,7 +862,7 @@ export function ProblemEditModal({
         </div>
 
         {/* ======== 하단: 선택지 ======== */}
-        <div className="border-t border-zinc-800 px-5 py-3 flex-shrink-0">
+        <div className="border-t border-subtle px-5 py-3 flex-shrink-0">
           <ChoicesEditor
             choices={choices} onChange={setChoices}
             correctAnswer={correctAnswer} onCorrectAnswerChange={setCorrectAnswer}
@@ -874,18 +874,18 @@ export function ProblemEditModal({
         </div>
 
         {/* ======== 최하단: 삭제/저장/닫기 ======== */}
-        <div className="flex items-center justify-between border-t border-zinc-800 px-5 py-3 flex-shrink-0 bg-zinc-900/50">
+        <div className="flex items-center justify-between border-t border-subtle px-5 py-3 flex-shrink-0 bg-surface-card/50">
           <div>
             {onDelete && (
               showDeleteConfirm ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-400">정말 삭제하시겠습니까?</span>
                   <button type="button" onClick={handleDelete} disabled={isDeleting}
-                    className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-500 transition-colors disabled:opacity-50">
+                    className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-content-primary hover:bg-red-500 transition-colors disabled:opacity-50">
                     {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}삭제
                   </button>
                   <button type="button" onClick={() => setShowDeleteConfirm(false)}
-                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors">취소</button>
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary transition-colors">취소</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => setShowDeleteConfirm(true)}
@@ -907,12 +907,12 @@ export function ProblemEditModal({
               {reanalyzeSuccess ? 'AI 분석 완료' : isReanalyzing ? 'AI 분석 중...' : 'AI 재분석'}
             </button>
             <button type="button" onClick={handleSave} disabled={isSaving}
-              className="flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-5 py-2 text-sm font-bold text-white transition-colors disabled:opacity-50 shadow-lg shadow-cyan-500/20">
+              className="flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-5 py-2 text-sm font-bold text-content-primary transition-colors disabled:opacity-50 shadow-lg shadow-cyan-500/20">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               저장 하기
             </button>
             <button type="button" onClick={onClose}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-5 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors">
+              className="rounded-lg border border bg-surface-raised px-5 py-2 text-sm font-medium text-content-secondary hover:bg-zinc-700 transition-colors">
               닫기
             </button>
           </div>

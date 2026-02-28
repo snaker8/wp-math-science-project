@@ -76,22 +76,22 @@ function SubjectSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-9 w-28 items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm text-white hover:border-zinc-600"
+        className="flex h-9 w-28 items-center justify-between rounded-lg border border bg-surface-card px-3 text-sm text-content-primary hover:border-accent/30"
       >
         <span>{value}</span>
-        <ChevronDown className="h-4 w-4 text-zinc-500" />
+        <ChevronDown className="h-4 w-4 text-content-tertiary" />
       </button>
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl">
+          <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-lg border border bg-surface-card py-1 shadow-xl">
             {options.map((opt) => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => { onChange(opt); setIsOpen(false); }}
-                className={`w-full px-4 py-2 text-left text-sm hover:bg-zinc-800 ${
-                  value === opt ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-400'
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised ${
+                  value === opt ? 'bg-surface-raised text-content-primary font-medium' : 'text-content-secondary'
                 }`}
               >
                 {opt}
@@ -174,13 +174,13 @@ function TypeTreeView({
             <button
               type="button"
               onClick={() => toggle(setExpandedLevels, level.levelCode)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-zinc-100 hover:bg-zinc-800/80"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-content-primary hover:bg-surface-raised/80"
             >
               {isLevelOpen
                 ? <ChevronDown className="h-4 w-4 text-violet-400 flex-shrink-0" />
-                : <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />}
+                : <ChevronRight className="h-4 w-4 text-content-tertiary flex-shrink-0" />}
               <span>{level.label}</span>
-              <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+              <span className="ml-auto rounded-full bg-surface-raised px-2 py-0.5 text-[10px] text-content-tertiary">
                 {level.typeCount}
               </span>
             </button>
@@ -193,15 +193,15 @@ function TypeTreeView({
                   <button
                     type="button"
                     onClick={() => toggle(setExpandedDomains, domKey)}
-                    className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-[13px] text-zinc-300 hover:bg-zinc-800/60"
+                    className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-[13px] text-content-secondary hover:bg-surface-raised/60"
                     style={{ paddingLeft: '20px' }}
                   >
                     {isDomOpen
-                      ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
-                      : <ChevronRight className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />}
+                      ? <ChevronDown className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />}
                     <span className="text-violet-400/80 text-xs mr-0.5">{romanNumeral(di + 1)}.</span>
                     <span>{domain.label}</span>
-                    <span className="ml-auto text-[10px] text-zinc-600">{domain.typeCount}</span>
+                    <span className="ml-auto text-[10px] text-content-muted">{domain.typeCount}</span>
                   </button>
 
                   {isDomOpen && domain.standards.map((std, si) => {
@@ -219,25 +219,25 @@ function TypeTreeView({
                               onSelectType(std.types[0].typeCode);
                             }
                           }}
-                          className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs hover:bg-zinc-800/50 ${
+                          className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs hover:bg-surface-raised/50 ${
                             !hasTypes && std.types.length === 1 && selectedTypeCode === std.types[0].typeCode
                               ? 'bg-violet-900/30 text-violet-300'
-                              : 'text-zinc-400'
+                              : 'text-content-secondary'
                           }`}
                           style={{ paddingLeft: '40px' }}
                         >
                           {hasTypes ? (
                             isStdOpen
-                              ? <ChevronDown className="h-3 w-3 text-zinc-600 flex-shrink-0" />
-                              : <ChevronRight className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                              ? <ChevronDown className="h-3 w-3 text-content-muted flex-shrink-0" />
+                              : <ChevronRight className="h-3 w-3 text-content-muted flex-shrink-0" />
                           ) : (
-                            <span className="w-3 flex-shrink-0 text-center text-zinc-600">·</span>
+                            <span className="w-3 flex-shrink-0 text-center text-content-muted">·</span>
                           )}
-                          <span className="text-zinc-500 mr-0.5">{si + 1}.</span>
+                          <span className="text-content-tertiary mr-0.5">{si + 1}.</span>
                           <span className="truncate leading-snug">
                             {summarizeStandard(std.standardContent)}
                           </span>
-                          <span className="ml-auto flex-shrink-0 text-[10px] text-zinc-600">
+                          <span className="ml-auto flex-shrink-0 text-[10px] text-content-muted">
                             {std.typeCount}
                           </span>
                         </button>
@@ -252,7 +252,7 @@ function TypeTreeView({
                                 className={`flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-xs transition-colors ${
                                   selectedTypeCode === t.typeCode
                                     ? 'bg-violet-900/30 text-violet-300 font-medium'
-                                    : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+                                    : 'text-content-tertiary hover:bg-surface-raised/50 hover:text-content-secondary'
                                 }`}
                                 style={{ paddingLeft: '56px' }}
                               >
@@ -314,11 +314,11 @@ function CurriculumTreeView({
             <button
               type="button"
               onClick={() => toggle(setExpandedGrades, grade.id)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-zinc-100 hover:bg-zinc-800/80"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-content-primary hover:bg-surface-raised/80"
             >
               {isGradeOpen
                 ? <ChevronDown className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                : <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />}
+                : <ChevronRight className="h-4 w-4 text-content-tertiary flex-shrink-0" />}
               <BookOpen className="h-3.5 w-3.5 text-emerald-500/60 flex-shrink-0" />
               <span>{grade.label}</span>
             </button>
@@ -334,12 +334,12 @@ function CurriculumTreeView({
                     <button
                       type="button"
                       onClick={() => toggle(setExpandedSemesters, semKey)}
-                      className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-[13px] text-zinc-300 hover:bg-zinc-800/60"
+                      className="flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-[13px] text-content-secondary hover:bg-surface-raised/60"
                       style={{ paddingLeft: '20px' }}
                     >
                       {isSemOpen
-                        ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
-                        : <ChevronRight className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />}
+                        ? <ChevronDown className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />}
                       <span className="text-emerald-400/70 text-xs">{sem.label}</span>
                     </button>
                   )}
@@ -364,20 +364,20 @@ function CurriculumTreeView({
                           className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs transition-colors ${
                             isSelected
                               ? 'bg-emerald-900/30 text-emerald-300'
-                              : 'text-zinc-400 hover:bg-zinc-800/50'
+                              : 'text-content-secondary hover:bg-surface-raised/50'
                           }`}
                           style={{ paddingLeft: hasSemesters ? '40px' : '20px' }}
                         >
                           {hasUnits ? (
                             isChapOpen
-                              ? <ChevronDown className="h-3 w-3 text-zinc-600 flex-shrink-0" />
-                              : <ChevronRight className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                              ? <ChevronDown className="h-3 w-3 text-content-muted flex-shrink-0" />
+                              : <ChevronRight className="h-3 w-3 text-content-muted flex-shrink-0" />
                           ) : (
-                            <span className="w-3 flex-shrink-0 text-center text-zinc-600">·</span>
+                            <span className="w-3 flex-shrink-0 text-center text-content-muted">·</span>
                           )}
-                          <span className="text-zinc-500 mr-0.5">{romanNumeral(ci + 1)}.</span>
+                          <span className="text-content-tertiary mr-0.5">{romanNumeral(ci + 1)}.</span>
                           <span className="truncate">{chapter.name}</span>
-                          <span className="ml-auto flex-shrink-0 text-[10px] text-zinc-600">
+                          <span className="ml-auto flex-shrink-0 text-[10px] text-content-muted">
                             {chapter.units.length}
                           </span>
                         </button>
@@ -391,12 +391,12 @@ function CurriculumTreeView({
                             className={`flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-xs transition-colors ${
                               selectedChapterId === unit.id
                                 ? 'bg-emerald-900/30 text-emerald-300 font-medium'
-                                : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+                                : 'text-content-tertiary hover:bg-surface-raised/50 hover:text-content-secondary'
                             }`}
                             style={{ paddingLeft: hasSemesters ? '56px' : '36px' }}
                           >
                             <span className="h-1 w-1 rounded-full bg-zinc-600 flex-shrink-0" />
-                            <span className="text-zinc-600 mr-0.5">{ui + 1}.</span>
+                            <span className="text-content-muted mr-0.5">{ui + 1}.</span>
                             <span className="truncate">{unit.name}</span>
                           </button>
                         ))}
@@ -422,7 +422,7 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
 
   if (!typeCode) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+      <div className="flex h-full items-center justify-center text-sm text-content-tertiary">
         트리에서 유형을 선택하세요
       </div>
     );
@@ -431,13 +431,13 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+        <Loader2 className="h-5 w-5 animate-spin text-content-tertiary" />
       </div>
     );
   }
 
   if (!type) {
-    return <div className="flex h-full items-center justify-center text-sm text-zinc-500">유형을 찾을 수 없습니다</div>;
+    return <div className="flex h-full items-center justify-center text-sm text-content-tertiary">유형을 찾을 수 없습니다</div>;
   }
 
   const cog = type.cognitive as CognitiveDomain;
@@ -445,35 +445,35 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
   return (
     <div className="flex flex-col gap-3 p-3 text-sm overflow-auto">
       <div>
-        <h3 className="text-base font-semibold text-white">{type.type_name}</h3>
-        <p className="mt-0.5 font-mono text-xs text-zinc-500">{type.type_code}</p>
+        <h3 className="text-base font-semibold text-content-primary">{type.type_name}</h3>
+        <p className="mt-0.5 font-mono text-xs text-content-tertiary">{type.type_code}</p>
       </div>
 
       {type.description && (
-        <div className="flex items-start gap-2 text-zinc-400">
-          <FileText className="h-4 w-4 mt-0.5 text-zinc-600 flex-shrink-0" />
+        <div className="flex items-start gap-2 text-content-secondary">
+          <FileText className="h-4 w-4 mt-0.5 text-content-muted flex-shrink-0" />
           <span>{type.description}</span>
         </div>
       )}
 
       {type.solution_method && (
-        <div className="flex items-start gap-2 text-zinc-400">
-          <BookOpenCheck className="h-4 w-4 mt-0.5 text-zinc-600 flex-shrink-0" />
+        <div className="flex items-start gap-2 text-content-secondary">
+          <BookOpenCheck className="h-4 w-4 mt-0.5 text-content-muted flex-shrink-0" />
           <span>풀이: {type.solution_method}</span>
         </div>
       )}
 
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-2.5">
+      <div className="rounded-lg border border-subtle bg-surface-card/80 p-2.5">
         <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-mono mb-1">
           <Hash className="h-3 w-3" />
           {type.standard_code}
         </div>
-        <p className="text-xs text-zinc-400 leading-relaxed">{type.standard_content}</p>
+        <p className="text-xs text-content-secondary leading-relaxed">{type.standard_content}</p>
       </div>
 
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <Brain className="h-3.5 w-3.5 text-zinc-600" />
+          <Brain className="h-3.5 w-3.5 text-content-muted" />
           <span
             className="rounded-md border px-2 py-0.5 text-xs font-medium"
             style={{ borderColor: COGNITIVE_COLORS[cog], color: COGNITIVE_COLORS[cog] }}
@@ -482,8 +482,8 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Gauge className="h-3.5 w-3.5 text-zinc-600" />
-          <span className="text-xs text-zinc-400">
+          <Gauge className="h-3.5 w-3.5 text-content-muted" />
+          <span className="text-xs text-content-secondary">
             난이도 {DIFFICULTY_LABELS[type.difficulty_min]} ~ {DIFFICULTY_LABELS[type.difficulty_max]}
           </span>
         </div>
@@ -491,9 +491,9 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
 
       {type.keywords && (
         <div className="flex flex-wrap gap-1.5">
-          <Tag className="h-3.5 w-3.5 text-zinc-600 mt-0.5" />
+          <Tag className="h-3.5 w-3.5 text-content-muted mt-0.5" />
           {(Array.isArray(type.keywords) ? type.keywords : JSON.parse(type.keywords as string)).map((kw: string) => (
-            <span key={kw} className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+            <span key={kw} className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-content-secondary">
               {kw}
             </span>
           ))}
@@ -502,10 +502,10 @@ function TypeDetailCard({ typeCode }: { typeCode: string | null }) {
 
       {relatedTypes.length > 0 && (
         <div className="mt-1">
-          <p className="text-xs text-zinc-500 mb-1.5">같은 성취기준의 다른 유형</p>
+          <p className="text-xs text-content-tertiary mb-1.5">같은 성취기준의 다른 유형</p>
           <div className="flex flex-col gap-1">
             {(relatedTypes as { type_code: string; type_name: string; cognitive: string }[]).map(rt => (
-              <span key={rt.type_code} className="text-xs text-zinc-500">
+              <span key={rt.type_code} className="text-xs text-content-tertiary">
                 <span
                   className="inline-block h-1.5 w-1.5 rounded-full mr-1.5"
                   style={{ backgroundColor: COGNITIVE_COLORS[rt.cognitive as CognitiveDomain] || '#666' }}
@@ -546,8 +546,8 @@ function CurriculumSearchPanel({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <BookOpen className="h-12 w-12 text-zinc-700 mb-4" />
-        <p className="text-sm text-zinc-400 mb-1">교과과정에서 단원을 선택하세요</p>
-        <p className="text-xs text-zinc-600">단원 클릭 → 관련 세부유형 목록 표시</p>
+        <p className="text-sm text-content-secondary mb-1">교과과정에서 단원을 선택하세요</p>
+        <p className="text-xs text-content-muted">단원 클릭 → 관련 세부유형 목록 표시</p>
       </div>
     );
   }
@@ -555,8 +555,8 @@ function CurriculumSearchPanel({
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mb-2" />
-        <p className="text-sm text-zinc-500">유형 검색 중...</p>
+        <Loader2 className="h-6 w-6 animate-spin text-content-tertiary mb-2" />
+        <p className="text-sm text-content-tertiary">유형 검색 중...</p>
       </div>
     );
   }
@@ -564,18 +564,18 @@ function CurriculumSearchPanel({
   return (
     <div className="space-y-2">
       <div className="px-1 pb-1">
-        <p className="text-xs text-zinc-500">
-          <span className="text-zinc-400 font-medium">{gradeName}</span>
-          <span className="mx-1 text-zinc-600">›</span>
+        <p className="text-xs text-content-tertiary">
+          <span className="text-content-secondary font-medium">{gradeName}</span>
+          <span className="mx-1 text-content-muted">›</span>
           <span className="text-emerald-400/80">{chapterName}</span>
-          <span className="ml-2 text-zinc-600">— 관련 유형 {count}개</span>
+          <span className="ml-2 text-content-muted">— 관련 유형 {count}개</span>
         </p>
       </div>
       {results.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <Search className="h-8 w-8 text-zinc-700 mb-2" />
-          <p className="text-sm text-zinc-500">관련 세부유형이 없습니다.</p>
-          <p className="text-xs text-zinc-600 mt-1">DB에 매핑된 유형을 추가하거나 다른 단원을 선택하세요.</p>
+          <p className="text-sm text-content-tertiary">관련 세부유형이 없습니다.</p>
+          <p className="text-xs text-content-muted mt-1">DB에 매핑된 유형을 추가하거나 다른 단원을 선택하세요.</p>
         </div>
       ) : (
         results.map((t: ExpandedMathType) => (
@@ -586,7 +586,7 @@ function CurriculumSearchPanel({
             className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
               selectedTypeCode === t.typeCode
                 ? 'border-emerald-700/50 bg-emerald-900/20'
-                : 'border-zinc-800 bg-zinc-900 hover:border-emerald-700/30 hover:bg-zinc-800/50'
+                : 'border-subtle bg-surface-card hover:border-emerald-700/30 hover:bg-surface-raised/50'
             }`}
           >
             <span
@@ -594,10 +594,10 @@ function CurriculumSearchPanel({
               style={{ backgroundColor: COGNITIVE_COLORS[t.cognitive] || '#666' }}
             />
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium truncate ${selectedTypeCode === t.typeCode ? 'text-emerald-300' : 'text-zinc-300'}`}>
+              <p className={`text-sm font-medium truncate ${selectedTypeCode === t.typeCode ? 'text-emerald-300' : 'text-content-secondary'}`}>
                 {t.typeName}
               </p>
-              <p className="text-xs text-zinc-600 mt-0.5">{t.subject} · {t.area}</p>
+              <p className="text-xs text-content-muted mt-0.5">{t.subject} · {t.area}</p>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span
@@ -607,7 +607,7 @@ function CurriculumSearchPanel({
                 {COGNITIVE_LABELS_KR[t.cognitive]}
               </span>
               {t.problemCount > 0 && (
-                <span className="text-[10px] text-zinc-500">{t.problemCount}문제</span>
+                <span className="text-[10px] text-content-tertiary">{t.problemCount}문제</span>
               )}
             </div>
           </button>
@@ -713,15 +713,15 @@ export default function SkillsPage() {
   };
 
   return (
-    <section className="flex h-full w-full overflow-hidden bg-black text-white">
+    <section className="flex h-full w-full overflow-hidden bg-surface-base text-content-primary">
       <div className="flex h-full w-full min-w-0 flex-col gap-2 p-4 px-4 py-1 font-pretendard text-sm">
         {/* Header */}
         <header className="flex w-full flex-shrink-0 items-center justify-between gap-x-4 pb-1">
           <div className="flex items-center gap-3 flex-shrink-0">
             <Puzzle className="h-5 w-5 text-violet-400" />
-            <h1 className="text-lg font-semibold text-white">유형/문제 관리</h1>
+            <h1 className="text-lg font-semibold text-content-primary">유형/문제 관리</h1>
             <div className="ml-2 flex items-center gap-2">
-              <span className="text-xs text-zinc-500">과목</span>
+              <span className="text-xs text-content-tertiary">과목</span>
               <SubjectSelect
                 value={selectedSubject}
                 options={subjects}
@@ -733,30 +733,30 @@ export default function SkillsPage() {
             {/* 검색 (유형별 모드에서만) */}
             {viewMode === 'type' && (
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-content-tertiary" />
                 <input
                   type="text"
                   placeholder="유형 검색..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="h-9 w-64 rounded-lg border border-zinc-700 bg-zinc-900 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none"
+                  className="h-9 w-64 rounded-lg border border bg-surface-card pl-9 pr-3 text-sm text-content-primary placeholder:text-content-tertiary focus:border-violet-500 focus:outline-none"
                 />
               </div>
             )}
             {/* 통계 */}
             {viewMode === 'type' && (
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <span className="rounded-md bg-zinc-800 px-2 py-1">
-                  <span className="font-semibold text-white">{totalTypes}</span> 유형
+              <div className="flex items-center gap-2 text-xs text-content-tertiary">
+                <span className="rounded-md bg-surface-raised px-2 py-1">
+                  <span className="font-semibold text-content-primary">{totalTypes}</span> 유형
                 </span>
-                <span className="rounded-md bg-zinc-800 px-2 py-1">
-                  <span className="font-semibold text-white">{totalStandards}</span> 성취기준
+                <span className="rounded-md bg-surface-raised px-2 py-1">
+                  <span className="font-semibold text-content-primary">{totalStandards}</span> 성취기준
                 </span>
               </div>
             )}
             {viewMode === 'curriculum' && (
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <span className="rounded-md bg-zinc-800 px-2 py-1">
+              <div className="flex items-center gap-2 text-xs text-content-tertiary">
+                <span className="rounded-md bg-surface-raised px-2 py-1">
                   2015 개정 교육과정 기준
                 </span>
               </div>
@@ -769,7 +769,7 @@ export default function SkillsPage() {
           {/* Left Panel */}
           <div className="flex w-[28%] flex-shrink-0 flex-col gap-2">
             {/* 학교급 탭 */}
-            <div className="flex flex-shrink-0 gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+            <div className="flex flex-shrink-0 gap-1 rounded-lg border border-subtle bg-surface-card/50 p-1">
               {schoolTabs.map((tab) => (
                 <button
                   key={tab.key}
@@ -777,8 +777,8 @@ export default function SkillsPage() {
                   onClick={() => handleSchoolFilterChange(tab.key)}
                   className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                     schoolFilter === tab.key
-                      ? 'bg-violet-600 text-white'
-                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                      ? 'bg-violet-600 text-content-primary'
+                      : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
                   }`}
                 >
                   {tab.label}
@@ -787,14 +787,14 @@ export default function SkillsPage() {
             </div>
 
             {/* 뷰 모드 토글 */}
-            <div className="flex flex-shrink-0 gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+            <div className="flex flex-shrink-0 gap-1 rounded-lg border border-subtle bg-surface-card/50 p-1">
               <button
                 type="button"
                 onClick={() => handleViewModeChange('type')}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                   viewMode === 'type'
                     ? 'bg-violet-700/60 text-violet-200 border border-violet-700/50'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
                 }`}
               >
                 <ListTree className="h-3.5 w-3.5" />
@@ -806,7 +806,7 @@ export default function SkillsPage() {
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                   viewMode === 'curriculum'
                     ? 'bg-emerald-800/60 text-emerald-200 border border-emerald-700/50'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
                 }`}
               >
                 <BookOpen className="h-3.5 w-3.5" />
@@ -815,17 +815,17 @@ export default function SkillsPage() {
             </div>
 
             {/* 트리 영역 */}
-            <div className={`flex flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 ${viewMode === 'type' ? 'h-[55%]' : 'flex-1'}`}>
-              <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2 flex-shrink-0">
+            <div className={`flex flex-col rounded-xl border border-subtle bg-surface-card/50 ${viewMode === 'type' ? 'h-[55%]' : 'flex-1'}`}>
+              <div className="flex items-center justify-between border-b border-subtle px-3 py-2 flex-shrink-0">
                 {viewMode === 'type' ? (
                   <>
-                    <span className="text-xs font-medium text-zinc-400">교과과정 (세부유형)</span>
-                    <span className="text-xs text-zinc-600">{totalTypes}개 유형</span>
+                    <span className="text-xs font-medium text-content-secondary">교과과정 (세부유형)</span>
+                    <span className="text-xs text-content-muted">{totalTypes}개 유형</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-xs font-medium text-zinc-400">교과과정 (단원별)</span>
-                    <span className="text-xs text-zinc-600">2015 개정</span>
+                    <span className="text-xs font-medium text-content-secondary">교과과정 (단원별)</span>
+                    <span className="text-xs text-content-muted">2015 개정</span>
                   </>
                 )}
               </div>
@@ -833,7 +833,7 @@ export default function SkillsPage() {
                 {viewMode === 'type' ? (
                   loading ? (
                     <div className="flex h-full items-center justify-center">
-                      <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+                      <Loader2 className="h-5 w-5 animate-spin text-content-tertiary" />
                     </div>
                   ) : filteredTree.length > 0 ? (
                     <TypeTreeView
@@ -842,10 +842,10 @@ export default function SkillsPage() {
                       onSelectType={setSelectedTypeCode}
                     />
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center text-sm text-zinc-500">
+                    <div className="flex h-full flex-col items-center justify-center text-sm text-content-tertiary">
                       {searchQuery ? (
                         <>
-                          <Search className="h-6 w-6 mb-2 text-zinc-600" />
+                          <Search className="h-6 w-6 mb-2 text-content-muted" />
                           <p>&quot;{searchQuery}&quot; 검색 결과 없음</p>
                         </>
                       ) : (
@@ -871,10 +871,10 @@ export default function SkillsPage() {
 
             {/* 유형 상세 (유형별 모드에서만) */}
             {viewMode === 'type' && (
-              <div className="flex flex-1 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2 flex-shrink-0">
-                  <BookOpenCheck className="h-3.5 w-3.5 text-zinc-500" />
-                  <span className="text-xs font-medium text-zinc-400">유형 상세</span>
+              <div className="flex flex-1 flex-col rounded-xl border border-subtle bg-surface-card/50 overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-subtle px-3 py-2 flex-shrink-0">
+                  <BookOpenCheck className="h-3.5 w-3.5 text-content-tertiary" />
+                  <span className="text-xs font-medium text-content-secondary">유형 상세</span>
                 </div>
                 <div className="flex-1 overflow-auto">
                   <TypeDetailCard typeCode={selectedTypeCode} />
@@ -885,7 +885,7 @@ export default function SkillsPage() {
 
           {/* Resize Handle */}
           <div className="flex w-px items-center justify-center mx-1">
-            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-zinc-800 border-zinc-700">
+            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-surface-raised border">
               <GripVertical className="h-2.5 w-2.5" />
             </div>
           </div>
@@ -893,19 +893,19 @@ export default function SkillsPage() {
           {/* Right Panel */}
           <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
             {/* Current Type Header */}
-            <div className="flex-shrink-0 rounded-xl border border-zinc-800 bg-zinc-900/50">
+            <div className="flex-shrink-0 rounded-xl border border-subtle bg-surface-card/50">
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 shadow-sm ${
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-surface-raised shadow-sm ${
                     viewMode === 'curriculum' ? 'text-emerald-400' : 'text-violet-400'
                   }`}>
                     {viewMode === 'curriculum' ? <BookOpen className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-content-tertiary">
                       {viewMode === 'curriculum' ? '선택된 단원' : '현재 유형'}
                     </span>
-                    <span className="text-base font-semibold text-white">
+                    <span className="text-base font-semibold text-content-primary">
                       {viewMode === 'curriculum'
                         ? (curriculumChapterName || '단원을 선택해 주세요')
                         : (selectedTypeDetail?.type_name || '유형을 선택해 주세요')}
@@ -916,25 +916,25 @@ export default function SkillsPage() {
                   <button
                     type="button"
                     disabled={!selectedTypeCode}
-                    className="flex h-9 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
+                    className="flex h-9 items-center gap-1 rounded-md border border bg-surface-raised px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-content-secondary"
                   >
-                    <ScrollText className="h-4 w-4 text-zinc-400" />
+                    <ScrollText className="h-4 w-4 text-content-secondary" />
                     <span>시험지</span>
                   </button>
                   <button
                     type="button"
                     disabled={!selectedTypeCode}
-                    className="flex h-9 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
+                    className="flex h-9 items-center gap-1 rounded-md border border bg-surface-raised px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-content-secondary"
                   >
-                    <CheckSquare className="h-4 w-4 text-zinc-400" />
+                    <CheckSquare className="h-4 w-4 text-content-secondary" />
                     <span>빠른정답</span>
                   </button>
                   <button
                     type="button"
                     disabled={!selectedTypeCode}
-                    className="flex h-9 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-zinc-300"
+                    className="flex h-9 items-center gap-1 rounded-md border border bg-surface-raised px-3 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none text-content-secondary"
                   >
-                    <BookOpenCheck className="h-4 w-4 text-zinc-400" />
+                    <BookOpenCheck className="h-4 w-4 text-content-secondary" />
                     <span>해설지</span>
                   </button>
                 </div>
@@ -942,7 +942,7 @@ export default function SkillsPage() {
             </div>
 
             {/* Content Area */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-subtle bg-surface-card/50">
               {/* 교과과정 모드: 단원 → 유형 검색 패널 */}
               {viewMode === 'curriculum' && !selectedTypeCode && (
                 <div className="flex-1 overflow-auto p-3">
@@ -961,14 +961,14 @@ export default function SkillsPage() {
                 <>
                   {/* Stats bar */}
                   {problems.length > 0 && (
-                    <div className="flex-shrink-0 flex items-center gap-3 border-b border-zinc-800 px-4 py-2">
+                    <div className="flex-shrink-0 flex items-center gap-3 border-b border-subtle px-4 py-2">
                       <span className="flex items-center rounded-md border border-zinc-600 bg-zinc-700 px-2 py-0.5 font-bold text-gray-100 text-sm">
                         {problems.length}<span className="pl-1 font-normal"> 문제</span>
                       </span>
-                      {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />}
+                      {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-content-tertiary" />}
                       {Object.keys(problemStats.diffCounts).length > 0 && (
                         <>
-                          <span className="text-xs text-zinc-500">난이도</span>
+                          <span className="text-xs text-content-tertiary">난이도</span>
                           {[1, 2, 3, 4, 5].map((d) =>
                             problemStats.diffCounts[d] ? (
                               <StatsBadge
@@ -983,8 +983,8 @@ export default function SkillsPage() {
                       )}
                       {Object.keys(problemStats.cogCounts).length > 0 && (
                         <>
-                          <span className="mx-1 h-4 border-l border-zinc-700" />
-                          <span className="text-xs text-zinc-500">인지</span>
+                          <span className="mx-1 h-4 border-l border" />
+                          <span className="text-xs text-content-tertiary">인지</span>
                           {Object.entries(problemStats.cogCounts).map(([cog, count]) => (
                             <StatsBadge
                               key={cog}
@@ -1000,8 +1000,8 @@ export default function SkillsPage() {
                   <div className="flex-1 overflow-auto p-3">
                     {detailLoading ? (
                       <div className="flex flex-col items-center justify-center py-12">
-                        <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mb-2" />
-                        <p className="text-sm text-zinc-500">문제 불러오는 중...</p>
+                        <Loader2 className="h-6 w-6 animate-spin text-content-tertiary mb-2" />
+                        <p className="text-sm text-content-tertiary">문제 불러오는 중...</p>
                       </div>
                     ) : problems.length > 0 ? (
                       <div className="space-y-2">
@@ -1012,13 +1012,13 @@ export default function SkillsPage() {
                             return (
                               <div
                                 key={String(item.id)}
-                                className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 hover:border-violet-500/30 transition-colors"
+                                className="flex items-start gap-3 rounded-xl border border-subtle bg-surface-card p-4 hover:border-violet-500/30 transition-colors"
                               >
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-300">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-raised text-sm font-semibold text-content-secondary">
                                   {i + 1}
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-sm text-zinc-300 leading-relaxed">
+                                  <div className="text-sm text-content-secondary leading-relaxed">
                                     <MixedContentRenderer
                                       content={String(prob.content_latex || '')}
                                       className="text-sm"
@@ -1034,11 +1034,11 @@ export default function SkillsPage() {
                                     >
                                       {DIFFICULTY_LABELS[item.difficulty] || '미지정'}
                                     </span>
-                                    <span className="text-xs text-zinc-500">
+                                    <span className="text-xs text-content-tertiary">
                                       {COGNITIVE_LABELS_KR[item.cognitive_domain as CognitiveDomain] || ''}
                                     </span>
                                     {String(prob.source_name || '') && (
-                                      <span className="text-xs text-zinc-600">
+                                      <span className="text-xs text-content-muted">
                                         {String(prob.source_name)} {prob.source_year ? String(prob.source_year) : ''}
                                       </span>
                                     )}
@@ -1051,8 +1051,8 @@ export default function SkillsPage() {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center">
                         <FileText className="h-10 w-10 text-zinc-700 mb-3" />
-                        <p className="text-sm text-zinc-500">이 유형에 등록된 문제가 없습니다.</p>
-                        <p className="text-xs text-zinc-600 mt-1">PDF 자산화를 통해 문제를 추가해 주세요.</p>
+                        <p className="text-sm text-content-tertiary">이 유형에 등록된 문제가 없습니다.</p>
+                        <p className="text-xs text-content-muted mt-1">PDF 자산화를 통해 문제를 추가해 주세요.</p>
                       </div>
                     )}
                   </div>
@@ -1064,10 +1064,10 @@ export default function SkillsPage() {
                 <div className="flex-1 overflow-auto p-3">
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <LayoutGrid className="h-12 w-12 text-zinc-700 mb-4" />
-                    <p className="text-sm text-zinc-400 mb-1">
+                    <p className="text-sm text-content-secondary mb-1">
                       왼쪽 트리에서 유형을 선택하면 문제 목록이 표시됩니다.
                     </p>
-                    <p className="text-xs text-zinc-600">
+                    <p className="text-xs text-content-muted">
                       학년 → 대단원 → 소단원 순서로 탐색하세요.
                     </p>
                   </div>

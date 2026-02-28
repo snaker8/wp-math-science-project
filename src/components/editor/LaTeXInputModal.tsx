@@ -117,25 +117,25 @@ export function LaTeXInputModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       {/* 배경 */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+      <div className="absolute inset-0 bg-surface-base/60 backdrop-blur-sm" onClick={onCancel} />
 
       {/* 모달 */}
-      <div className="relative z-10 w-[560px] max-h-[80vh] rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative z-10 w-[560px] max-h-[80vh] rounded-2xl border border bg-surface-card shadow-2xl overflow-hidden flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
-          <h3 className="text-base font-bold text-white">수식 입력하기</h3>
+        <div className="flex items-center justify-between border-b border-subtle px-5 py-3.5">
+          <h3 className="text-base font-bold text-content-primary">수식 입력하기</h3>
           <button
             type="button"
             onClick={onCancel}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
+            className="p-1.5 rounded-lg text-content-secondary hover:text-content-primary hover:bg-surface-raised"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* 프리뷰 영역 */}
-        <div className="border-b border-zinc-800 px-5 py-4">
-          <div className="min-h-[48px] flex items-center justify-center rounded-xl border border-zinc-700 bg-white px-4 py-3">
+        <div className="border-b border-subtle px-5 py-4">
+          <div className="min-h-[48px] flex items-center justify-center rounded-xl border border bg-white px-4 py-3">
             {previewError ? (
               <span className="text-sm text-red-500">{previewError}</span>
             ) : previewHtml ? (
@@ -150,9 +150,9 @@ export function LaTeXInputModal({
         </div>
 
         {/* 옵션 */}
-        <div className="flex items-center gap-6 px-5 py-2.5 border-b border-zinc-800/50">
-          <span className="text-xs text-zinc-500 font-medium">LaTeX</span>
-          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+        <div className="flex items-center gap-6 px-5 py-2.5 border-b border-subtle">
+          <span className="text-xs text-content-tertiary font-medium">LaTeX</span>
+          <label className="flex items-center gap-2 text-xs text-content-secondary cursor-pointer">
             <input
               type="checkbox"
               checked={displayStyle}
@@ -161,7 +161,7 @@ export function LaTeXInputModal({
             />
             displaystyle 적용
           </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+          <label className="flex items-center gap-2 text-xs text-content-secondary cursor-pointer">
             <input
               type="checkbox"
               checked={block}
@@ -173,13 +173,13 @@ export function LaTeXInputModal({
         </div>
 
         {/* 빠른 기호 입력 */}
-        <div className="flex flex-wrap gap-1 px-5 py-2 border-b border-zinc-800/50">
+        <div className="flex flex-wrap gap-1 px-5 py-2 border-b border-subtle">
           {quickSymbols.map((sym) => (
             <button
               key={sym.label}
               type="button"
               onClick={() => insertSymbol(sym.latex)}
-              className="px-2 py-1 rounded text-[11px] font-medium text-zinc-400 bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-200 border border-zinc-700/50 transition-colors"
+              className="px-2 py-1 rounded text-[11px] font-medium text-content-secondary bg-surface-raised hover:bg-zinc-700 hover:text-content-primary border border/50 transition-colors"
               title={sym.latex}
             >
               {sym.label}
@@ -194,18 +194,18 @@ export function LaTeXInputModal({
             value={latex}
             onChange={(e) => setLatex(e.target.value)}
             placeholder="LaTeX 수식을 입력하세요 (예: x^2 + y^2 = r^2)"
-            className="w-full h-32 resize-none rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-sm text-cyan-200 font-mono leading-relaxed placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+            className="w-full h-32 resize-none rounded-xl border border bg-surface-raised px-4 py-3 text-sm text-cyan-200 font-mono leading-relaxed placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
             spellCheck={false}
           />
         </div>
 
         {/* 버튼 */}
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-800 px-5 py-3.5">
+        <div className="flex items-center justify-end gap-2 border-t border-subtle px-5 py-3.5">
           {onRemoveMath && (
             <button
               type="button"
               onClick={onRemoveMath}
-              className="mr-auto rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+              className="mr-auto rounded-lg border border bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary hover:bg-zinc-700 hover:text-content-primary transition-colors"
             >
               수식 해제
             </button>
@@ -213,7 +213,7 @@ export function LaTeXInputModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors"
+            className="rounded-lg border border bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary hover:bg-zinc-700 transition-colors"
           >
             취소
           </button>
@@ -221,7 +221,7 @@ export function LaTeXInputModal({
             type="button"
             onClick={handleInsert}
             disabled={!latex.trim()}
-            className="rounded-lg bg-amber-600 hover:bg-amber-500 px-5 py-2 text-sm font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-lg bg-amber-600 hover:bg-amber-500 px-5 py-2 text-sm font-bold text-content-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             입력
           </button>

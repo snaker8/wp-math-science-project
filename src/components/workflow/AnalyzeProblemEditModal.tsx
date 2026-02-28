@@ -504,7 +504,7 @@ function ChoicesEditor({
                 <button key={i} type="button" onClick={() => onCorrectAnswerChange(i + 1)}
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                     correctAnswer === i + 1
-                      ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 shadow-lg shadow-emerald-500/20'
+                      ? 'bg-emerald-500 text-content-primary ring-2 ring-emerald-300 shadow-lg shadow-emerald-500/20'
                       : 'bg-gray-50 text-gray-400 border border-gray-200 hover:border-gray-400 hover:text-gray-700'
                   }`}>{num}</button>
               ))}
@@ -944,7 +944,7 @@ export default function AnalyzeProblemEditModal({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-base/40 backdrop-blur-sm">
         <div className="relative flex h-[92vh] w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
 
           {/* ======== Header ======== */}
@@ -961,7 +961,7 @@ export default function AnalyzeProblemEditModal({
                 <button type="button" onClick={() => setActiveTab('content')}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                     activeTab === 'content'
-                      ? 'bg-emerald-500 text-white'
+                      ? 'bg-emerald-500 text-content-primary'
                       : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
                   }`}>
                   문제
@@ -969,7 +969,7 @@ export default function AnalyzeProblemEditModal({
                 <button type="button" onClick={() => setActiveTab('solution')}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                     activeTab === 'solution'
-                      ? 'bg-emerald-500 text-white'
+                      ? 'bg-emerald-500 text-content-primary'
                       : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
                   }`}>
                   해설
@@ -1047,7 +1047,7 @@ export default function AnalyzeProblemEditModal({
                             }
                           }
                         }}
-                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-xs font-bold text-white transition-colors shadow-sm">
+                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-xs font-bold text-content-primary transition-colors shadow-sm">
                         넣기
                       </button>
                     </div>
@@ -1062,7 +1062,7 @@ export default function AnalyzeProblemEditModal({
                       <div className="relative rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
                         <img src={solutionImage} alt="해설 이미지" className="w-full max-h-[300px] object-contain" />
                         <button type="button" onClick={() => setSolutionImage(null)}
-                          className="absolute top-2 right-2 p-1 rounded-full bg-gray-900/50 text-white hover:bg-red-500 transition-colors">
+                          className="absolute top-2 right-2 p-1 rounded-full bg-gray-900/50 text-content-primary hover:bg-red-500 transition-colors">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -1230,7 +1230,7 @@ export default function AnalyzeProblemEditModal({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-500 font-medium">정말 삭제하시겠습니까?</span>
                   <button type="button" onClick={() => { onDelete(); onClose(); }}
-                    className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-xs font-bold text-white transition-colors">
+                    className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-xs font-bold text-content-primary transition-colors">
                     확인
                   </button>
                   <button type="button" onClick={() => setShowDeleteConfirm(false)}
@@ -1244,7 +1244,7 @@ export default function AnalyzeProblemEditModal({
             {/* 저장 & 닫기 */}
             <div className="flex items-center gap-2">
               <button type="button" onClick={handleSave} disabled={isSaving}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-5 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50 shadow-lg shadow-emerald-500/20">
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-5 py-2 text-xs font-bold text-content-primary transition-colors disabled:opacity-50 shadow-lg shadow-emerald-500/20">
                 {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 저장 하기
               </button>
