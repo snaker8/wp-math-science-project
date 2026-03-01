@@ -485,7 +485,7 @@ function ExamPaperView({
   examTitle: string;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
-  const [gap, setGap] = useState(24);
+  const [gap, setGap] = useState(30);
 
   return (
     <div className="flex flex-col h-full">
@@ -522,13 +522,13 @@ function ExamPaperView({
             <span className="text-xs text-content-tertiary">간격</span>
             <input
               type="range"
-              min={8}
-              max={48}
+              min={0}
+              max={700}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-content-tertiary w-6">{gap}</span>
+            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
         <button
@@ -781,7 +781,7 @@ function SolutionView({
   examTitle: string;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
-  const [gap, setGap] = useState(24);
+  const [gap, setGap] = useState(30);
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   return (
@@ -819,13 +819,13 @@ function SolutionView({
             <span className="text-xs text-content-tertiary">간격</span>
             <input
               type="range"
-              min={8}
-              max={48}
+              min={0}
+              max={700}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-content-tertiary w-6">{gap}</span>
+            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
         <button
