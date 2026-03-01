@@ -20,24 +20,33 @@ export async function GET(request: NextRequest) {
   const school = searchParams.get('school');
   const level = searchParams.get('level');
 
-  // expanded_math_types는 3,000+행 → Supabase 기본 limit=1000 우회
-  let query = supabaseAdmin
-    .from('expanded_math_types')
-    .select('*')
-    .eq('is_active', true)
-    .order('type_code')
-    .limit(5000);
+  // expanded_math_types는 3,000+행 → Supabase 서버 max_rows=1000 제한 우회
+  // level_code별 분할 쿼리 (각 레벨 < 1000행)로 전체 데이터 가져오기
+  const LEVEL_CODES = ['ES12', 'ES34', 'ES56', 'MS', 'HS0', 'HS1', 'HS2', 'CAL', 'PRB', 'GEO'];
+  const targetLevels = level ? [level] : LEVEL_CODES;
 
-  if (school) query = query.eq('school_level', school);
-  if (level) query = query.eq('level_code', level);
+  const db = supabaseAdmin; // null 체크 위에서 완료
+  const queries = targetLevels.map((lc) => {
+    let q = db
+      .from('expanded_math_types')
+      .select('*')
+      .eq('is_active', true)
+      .eq('level_code', lc)
+      .order('type_code');
+    if (school) q = q.eq('school_level', school);
+    return q;
+  });
 
-  const { data, error } = await query;
+  const results = await Promise.all(queries);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // 에러 체크
+  const firstError = results.find((r) => r.error);
+  if (firstError?.error) {
+    return NextResponse.json({ error: firstError.error.message }, { status: 500 });
   }
 
-  const types = (data || []).map((row: ExpandedMathTypeRow) => toExpandedMathType(row));
+  const allData = results.flatMap((r) => (r.data || []) as ExpandedMathTypeRow[]);
+  const types = allData.map((row: ExpandedMathTypeRow) => toExpandedMathType(row));
   const tree = buildTypeTree(types);
 
   return NextResponse.json({
