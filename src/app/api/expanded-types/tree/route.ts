@@ -20,22 +20,40 @@ export async function GET(request: NextRequest) {
   const school = searchParams.get('school');
   const level = searchParams.get('level');
 
-  let query = supabaseAdmin
-    .from('expanded_math_types')
-    .select('*')
-    .eq('is_active', true)
-    .order('type_code');
+  // expanded_math_types는 3,000+행 → Supabase 기본 1000행 제한 우회
+  // 페이지네이션으로 전체 데이터 가져오기
+  const allData: ExpandedMathTypeRow[] = [];
+  const PAGE_SIZE = 1000;
+  let offset = 0;
+  let hasMore = true;
 
-  if (school) query = query.eq('school_level', school);
-  if (level) query = query.eq('level_code', level);
+  while (hasMore) {
+    let query = supabaseAdmin
+      .from('expanded_math_types')
+      .select('*')
+      .eq('is_active', true)
+      .order('type_code')
+      .range(offset, offset + PAGE_SIZE - 1);
 
-  const { data, error } = await query;
+    if (school) query = query.eq('school_level', school);
+    if (level) query = query.eq('level_code', level);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data: pageData, error: pageError } = await query;
+
+    if (pageError) {
+      return NextResponse.json({ error: pageError.message }, { status: 500 });
+    }
+
+    if (pageData && pageData.length > 0) {
+      allData.push(...pageData);
+      offset += pageData.length;
+      hasMore = pageData.length === PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
   }
 
-  const types = (data || []).map((row: ExpandedMathTypeRow) => toExpandedMathType(row));
+  const types = allData.map((row: ExpandedMathTypeRow) => toExpandedMathType(row));
   const tree = buildTypeTree(types);
 
   return NextResponse.json({
