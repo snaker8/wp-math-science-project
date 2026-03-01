@@ -240,9 +240,27 @@ export const SUBJECT_CATEGORIES: SubjectCategory[] = [
       GEO: [6, 7, 8, 15, 16, 17, 18, 19],  // 피타고라스, 삼각비, 원
       DAT: [7, 8, 9],             // 분산·표준편차, 상자그림, 산점도
     }, order: 16 },
-  // === 초등학교 (4~6학년) ===
-  { id: 'ES56',  label: '초등 5-6학년',  curriculum: '',         levelCode: 'ES56', domainFilter: ['NUM', 'GEO', 'PAT', 'DAT'], order: 17 },
-  { id: 'ES34',  label: '초등 3-4학년',  curriculum: '',         levelCode: 'ES34', domainFilter: ['NUM', 'GEO', 'PAT', 'DAT'], order: 18 },
+  // === 초등학교 (학년별) ===
+  // 성취기준 번호 = [4수XX-YY] / [6수XX-YY]의 YY, 교과서 목차 기반 학년 매핑
+  { id: 'ES4', label: '초4 수학', curriculum: '', levelCode: 'ES34',
+    domainFilter: ['NUM', 'PAT', 'GEO', 'DAT'],
+    order: 17 },
+  { id: 'ES5', label: '초5 수학', curriculum: '', levelCode: 'ES56',
+    domainFilter: ['NUM', 'PAT', 'GEO', 'DAT'],
+    standardFilter: {
+      NUM: [1, 2, 3, 4, 5, 6, 7, 8, 9, 13],  // 혼합계산~분수곱셈, 소수곱셈
+      PAT: [1],                                 // 규칙과 대응
+      GEO: [1, 2, 3, 4, 7, 8, 11, 12, 13, 14], // 합동, 대칭, 직육면체, 넓이
+      DAT: [1, 2, 4, 5],                        // 평균, 그래프, 가능성
+    }, order: 18 },
+  { id: 'ES6', label: '초6 수학', curriculum: '', levelCode: 'ES56',
+    domainFilter: ['NUM', 'PAT', 'GEO', 'DAT'],
+    standardFilter: {
+      NUM: [10, 11, 12, 14, 15],               // 분수나눗셈, 소수나눗셈
+      PAT: [2, 3, 4, 5],                        // 비와 비율, 비례식, 정비례·반비례
+      GEO: [5, 6, 9, 10, 15, 16, 17, 18, 19],  // 원넓이, 각기둥·각뿔, 원기둥, 부피
+      DAT: [3, 6],                               // 탐구문제, 자료판단
+    }, order: 19 },
 ];
 
 /**

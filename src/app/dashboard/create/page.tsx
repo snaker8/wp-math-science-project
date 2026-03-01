@@ -16,10 +16,9 @@ import {
   ArrowRight,
   X,
   CheckCircle2,
-  LayoutTemplate,
-  Columns2,
   Minus,
   Plus,
+  Printer,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { LevelNode, DomainNode, StandardNode, ExpandedMathType, SubjectCategory } from '@/types/expanded-types';
@@ -53,7 +52,7 @@ interface SectionNode {
 type CreateMode = 'auto' | 'manual' | 'add';
 type QuestionTypeFilter = '전체' | '교과서 유형' | '문제집 유형' | '기출 유형' | '모의고사 유형';
 type DifficultyLevel = '최상' | '상' | '중' | '하' | '최하';
-type PreviewTab = '시험지' | '빠른정답' | '해설지' | '페이지당 문제' | '헤더 스타일 선택';
+type PreviewTab = '시험지' | '빠른정답' | '해설지';
 
 interface TypeGroup {
   standardLabel: string;
@@ -444,6 +443,8 @@ function ExamPreviewPanel({
   totalQuestions,
   layout,
   onLayoutChange,
+  gap,
+  onGapChange,
 }: {
   previewTab: PreviewTab;
   onTabChange: (tab: PreviewTab) => void;
@@ -455,12 +456,24 @@ function ExamPreviewPanel({
   totalQuestions: number;
   layout: 'single' | 'two-column';
   onLayoutChange: (layout: 'single' | 'two-column') => void;
+  gap: number;
+  onGapChange: (gap: number) => void;
 }) {
-  const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지', '페이지당 문제', '헤더 스타일 선택'];
+  const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
+
+  // 2단 레이아웃: 문제를 좌/우 컬럼으로 분할
+  const midIdx = Math.ceil(problems.length / 2);
+  const leftProblems = problems.slice(0, midIdx);
+  const rightProblems = problems.slice(midIdx);
+
+  // 보기가 수식을 포함하는지 판별 ($ 또는 \ 포함 시 수식)
+  const hasLatex = (text: string) => /[$\\]/.test(text);
+  const shouldStackChoices = (choices: string[]) =>
+    choices.some((c) => hasLatex(c) || c.length > 20);
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tab bar */}
+      {/* ── 상단 탭 바 ── */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-subtle flex-shrink-0 overflow-x-auto">
         {tabs.map((tab) => (
           <button
@@ -476,33 +489,13 @@ function ExamPreviewPanel({
             {tab}
           </button>
         ))}
-
-        {/* Layout toggle + page count */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <span className="text-xs font-bold text-content-secondary">{totalQuestions}</span>
           <span className="text-[10px] text-content-muted">문항</span>
-          <div className="flex gap-1 ml-2">
-            <button
-              type="button"
-              onClick={() => onLayoutChange('single')}
-              className={`p-1 rounded ${layout === 'single' ? 'bg-indigo-500/15 text-indigo-400' : 'text-content-muted hover:text-content-secondary'}`}
-              title="1단"
-            >
-              <LayoutTemplate size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => onLayoutChange('two-column')}
-              className={`p-1 rounded ${layout === 'two-column' ? 'bg-indigo-500/15 text-indigo-400' : 'text-content-muted hover:text-content-secondary'}`}
-              title="2단"
-            >
-              <Columns2 size={14} />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Preview area — white A4 paper on dark background */}
+      {/* ── 미리보기 본문 (흰색 A4 용지) ── */}
       <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50 p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-full gap-2">
@@ -510,70 +503,172 @@ function ExamPreviewPanel({
             <span className="text-xs text-content-muted">시험지 생성 중...</span>
           </div>
         ) : problems.length > 0 ? (
-          /* Rendered exam preview */
-          <div className="mx-auto bg-white rounded-lg shadow-xl" style={{ maxWidth: '680px' }}>
-            {/* Paper header */}
-            <div className="px-8 pt-8 pb-4 border-b border-gray-200 text-center">
-              <p className="text-[10px] text-gray-400 mb-1">{new Date().toLocaleDateString('ko-KR')}</p>
-              <h2 className="text-lg font-bold text-gray-900 mb-1">{paperName || '시험지'}</h2>
-              <p className="text-[10px] text-gray-500">{categoryLabel}</p>
-              <p className="text-[10px] text-gray-400">{scopeText} [ {totalQuestions} 문항 ]</p>
-            </div>
+          <div className="mx-auto bg-white rounded shadow-xl" style={{ maxWidth: '720px' }}>
+            {/* ── 헤더: 테이블 형식 (참조사이트 스타일) ── */}
+            <table className="w-full border-collapse text-xs" style={{ borderTop: '2px solid #111', borderBottom: '2px solid #111' }}>
+              <tbody>
+                <tr>
+                  <td className="border border-gray-300 bg-gray-50 text-gray-500 text-center font-medium px-3 py-2 whitespace-nowrap" style={{ width: '56px' }}>
+                    과목
+                  </td>
+                  <td className="border border-gray-300 text-gray-900 font-semibold px-3 py-2 whitespace-nowrap">
+                    {categoryLabel || '수학'}
+                  </td>
+                  <td className="border border-gray-300 bg-gray-50 text-gray-500 text-center font-medium px-3 py-2 whitespace-nowrap" style={{ width: '64px' }}>
+                    시험지명
+                  </td>
+                  <td className="border border-gray-300 text-gray-900 font-semibold px-3 py-2">
+                    {paperName || '시험지'}
+                  </td>
+                  <td className="border border-gray-300 bg-gray-50 text-gray-500 text-center font-medium px-3 py-2 whitespace-nowrap" style={{ width: '48px' }}>
+                    담당
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-            {/* Problems */}
+            {/* ── 시험지 탭: 문제 목록 ── */}
             {previewTab === '시험지' && (
-              <div className={`px-8 py-4 ${layout === 'two-column' ? 'columns-2 gap-6' : ''}`}>
-                {problems.map((p) => (
-                  <div key={p.id} className="mb-4 break-inside-avoid">
-                    <div className="flex items-start gap-2 mb-1">
-                      <span className="text-sm font-bold text-gray-900 shrink-0 w-6">{String(p.number).padStart(2, '0')}</span>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">
-                          {formatTypeCodeShort(p.typeCode)}
-                        </span>
-                        <span className="text-[9px] text-gray-500">{p.typeName}</span>
-                      </div>
+              <div className="px-6 py-5">
+                {layout === 'two-column' ? (
+                  <div className="grid grid-cols-2 gap-x-6">
+                    {/* 좌측 컬럼 */}
+                    <div>
+                      {leftProblems.map((p) => (
+                        <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
+                          <div className="flex items-start gap-1.5">
+                            <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
+                              {p.number}.
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-gray-800 leading-relaxed">
+                                <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
+                              </div>
+                              {p.choices.length > 0 && (
+                                shouldStackChoices(p.choices) ? (
+                                  <div className="mt-2 pl-2 space-y-1">
+                                    {p.choices.map((c, i) => (
+                                      <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
+                                        <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
+                                        <MixedContentRenderer content={c} className="text-sm text-gray-700" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
+                                    {p.choices.map((c, i) => (
+                                      <span key={i} className="inline-flex items-center gap-1">
+                                        <span className="text-gray-500">{'①②③④⑤'[i]}</span>
+                                        <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
+                                      </span>
+                                    ))}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="pl-8 text-xs text-gray-800 leading-relaxed">
-                      <MixedContentRenderer content={p.content} className="text-xs text-gray-800" />
+                    {/* 우측 컬럼 */}
+                    <div>
+                      {rightProblems.map((p) => (
+                        <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
+                          <div className="flex items-start gap-1.5">
+                            <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
+                              {p.number}.
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-gray-800 leading-relaxed">
+                                <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
+                              </div>
+                              {p.choices.length > 0 && (
+                                shouldStackChoices(p.choices) ? (
+                                  <div className="mt-2 pl-2 space-y-1">
+                                    {p.choices.map((c, i) => (
+                                      <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
+                                        <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
+                                        <MixedContentRenderer content={c} className="text-sm text-gray-700" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
+                                    {p.choices.map((c, i) => (
+                                      <span key={i} className="inline-flex items-center gap-1">
+                                        <span className="text-gray-500">{'①②③④⑤'[i]}</span>
+                                        <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
+                                      </span>
+                                    ))}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {p.choices.length > 0 && (
-                      <div className="pl-8 mt-1 flex flex-wrap gap-x-4 text-xs text-gray-700">
-                        {p.choices.map((c, i) => (
-                          <span key={i}>{'①②③④⑤'[i]} {c}</span>
-                        ))}
-                      </div>
-                    )}
-                    {p.source && (
-                      <div className="pl-8 mt-1 flex gap-1 flex-wrap">
-                        {p.source.split(' ').filter(Boolean).map((tag, i) => (
-                          <span key={i} className="text-[8px] border border-gray-300 rounded px-1 py-0.5 text-gray-500">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                ))}
+                ) : (
+                  /* 1단 레이아웃 */
+                  <div>
+                    {problems.map((p) => (
+                      <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
+                        <div className="flex items-start gap-1.5">
+                          <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
+                            {p.number}.
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-gray-800 leading-relaxed">
+                              <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
+                            </div>
+                            {p.choices.length > 0 && (
+                              shouldStackChoices(p.choices) ? (
+                                <div className="mt-2 pl-2 space-y-1">
+                                  {p.choices.map((c, i) => (
+                                    <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
+                                      <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
+                                      <MixedContentRenderer content={c} className="text-sm text-gray-700" />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
+                                  {p.choices.map((c, i) => (
+                                    <span key={i} className="inline-flex items-center gap-1">
+                                      <span className="text-gray-500">{'①②③④⑤'[i]}</span>
+                                      <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
+                                    </span>
+                                  ))}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
+            {/* ── 빠른정답 탭 ── */}
             {previewTab === '빠른정답' && (
-              <div className="px-8 py-4">
-                <table className="w-full text-xs">
+              <div className="px-6 py-4">
+                <table className="w-full text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="py-1 text-left text-gray-500 w-12">번호</th>
-                      <th className="py-1 text-left text-gray-500">정답</th>
-                      <th className="py-1 text-left text-gray-500">유형</th>
+                    <tr className="border-b-2 border-gray-300">
+                      <th className="py-1.5 text-left text-gray-500 w-12">번호</th>
+                      <th className="py-1.5 text-left text-gray-500">정답</th>
+                      <th className="py-1.5 text-left text-gray-500">유형</th>
                     </tr>
                   </thead>
                   <tbody>
                     {problems.map((p) => (
                       <tr key={p.id} className="border-b border-gray-100">
-                        <td className="py-1 font-bold text-gray-700">{String(p.number).padStart(2, '0')}</td>
-                        <td className="py-1 text-gray-800">{p.answer || '-'}</td>
-                        <td className="py-1 text-gray-500">{formatTypeCodeShort(p.typeCode)}</td>
+                        <td className="py-1.5 font-bold text-gray-700">{p.number}</td>
+                        <td className="py-1.5 text-gray-800">{p.answer || '-'}</td>
+                        <td className="py-1.5 text-gray-500 text-[10px]">{formatTypeCodeShort(p.typeCode)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -581,29 +676,24 @@ function ExamPreviewPanel({
               </div>
             )}
 
+            {/* ── 해설지 탭 ── */}
             {previewTab === '해설지' && (
-              <div className="px-8 py-4 space-y-4">
+              <div className="px-6 py-5 space-y-5">
                 {problems.map((p) => (
                   <div key={p.id} className="break-inside-avoid">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold text-gray-900">{String(p.number).padStart(2, '0')}</span>
-                      <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">정답: {p.answer || '-'}</span>
+                      <span className="text-sm font-bold text-gray-900">{p.number}.</span>
+                      <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">정답: {p.answer || '-'}</span>
                     </div>
                     {p.solution ? (
-                      <div className="pl-8 text-xs text-gray-700 leading-relaxed">
-                        <MixedContentRenderer content={p.solution} className="text-xs text-gray-700" />
+                      <div className="pl-7 text-sm text-gray-700 leading-relaxed">
+                        <MixedContentRenderer content={p.solution} className="text-sm text-gray-700" />
                       </div>
                     ) : (
-                      <p className="pl-8 text-xs text-gray-400 italic">해설 없음</p>
+                      <p className="pl-7 text-xs text-gray-400 italic">해설 없음</p>
                     )}
                   </div>
                 ))}
-              </div>
-            )}
-
-            {(previewTab === '페이지당 문제' || previewTab === '헤더 스타일 선택') && (
-              <div className="px-8 py-12 text-center">
-                <p className="text-xs text-gray-400">설정 기능은 준비 중입니다</p>
               </div>
             )}
           </div>
@@ -620,6 +710,61 @@ function ExamPreviewPanel({
             </p>
           </div>
         )}
+      </div>
+
+      {/* ── 하단 바: 1단/2단 토글 + 간격 슬라이더 + 출력 (참조사이트 스타일) ── */}
+      <div className="flex items-center gap-3 px-3 py-2 border-t border-subtle flex-shrink-0 bg-surface-card/50">
+        {/* 1단/2단 토글 */}
+        <div className="flex border border-subtle rounded overflow-hidden shrink-0">
+          <button
+            type="button"
+            onClick={() => onLayoutChange('single')}
+            className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              layout === 'single'
+                ? 'bg-indigo-500/20 text-indigo-300'
+                : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
+            }`}
+          >
+            1단
+          </button>
+          <button
+            type="button"
+            onClick={() => onLayoutChange('two-column')}
+            className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-subtle ${
+              layout === 'two-column'
+                ? 'bg-indigo-500/20 text-indigo-300'
+                : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
+            }`}
+          >
+            2단
+          </button>
+        </div>
+
+        {/* 간격 슬라이더 */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-[11px] text-content-muted whitespace-nowrap">간격</span>
+          <input
+            type="range"
+            min={0}
+            max={700}
+            step={1}
+            value={gap}
+            onChange={(e) => onGapChange(parseInt(e.target.value))}
+            className="flex-1 h-1.5 appearance-none bg-zinc-700 rounded-full cursor-pointer accent-emerald-500"
+            style={{ minWidth: '80px' }}
+          />
+          <span className="text-[11px] text-content-secondary tabular-nums w-8 text-right">{gap}</span>
+        </div>
+
+        {/* 출력 버튼 */}
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-content-secondary bg-surface-raised/50 hover:bg-surface-raised border border-subtle rounded transition-colors shrink-0"
+          onClick={() => window.print()}
+        >
+          <Printer size={13} />
+          출력
+        </button>
       </div>
     </div>
   );
@@ -727,7 +872,8 @@ export default function PaperCreatePage() {
 
   // Preview
   const [previewTab, setPreviewTab] = useState<PreviewTab>('시험지');
-  const [previewLayout, setPreviewLayout] = useState<'single' | 'two-column'>('single');
+  const [previewLayout, setPreviewLayout] = useState<'single' | 'two-column'>('two-column');
+  const [previewGap, setPreviewGap] = useState(30);
   const [previewProblems, setPreviewProblems] = useState<PreviewProblem[]>([]);
 
   // Generation state
@@ -1302,6 +1448,8 @@ export default function PaperCreatePage() {
             totalQuestions={totalQuestions}
             layout={previewLayout}
             onLayoutChange={setPreviewLayout}
+            gap={previewGap}
+            onGapChange={setPreviewGap}
           />
         </div>
       </div>
