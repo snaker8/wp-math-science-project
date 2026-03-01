@@ -193,7 +193,8 @@ export interface SubjectCategory {
   label: string;
   curriculum: '2022개정' | '개정전' | '';
   levelCode: string;
-  domainFilter?: string[];  // undefined = 해당 레벨 전체 도메인
+  domainFilter?: string[];  // 도메인 필터 + 표시 순서 결정
+  standardFilter?: Record<string, number[]>;  // domain → 포함할 성취기준 번호 (YY in [9수XX-YY])
   order: number;
 }
 
@@ -213,13 +214,50 @@ export const SUBJECT_CATEGORIES: SubjectCategory[] = [
   { id: 'CALC',  label: '미적분',         curriculum: '개정전',   levelCode: 'CAL',                                              order: 11 },
   { id: 'PS15',  label: '확률과 통계',   curriculum: '개정전',   levelCode: 'PRB',                                              order: 12 },
   { id: 'GEO15', label: '기하',          curriculum: '개정전',   levelCode: 'GEO',                                              order: 13 },
-  // === 중학교 ===
-  { id: 'MS',    label: '중학교 수학',   curriculum: '',         levelCode: 'MS',                                               order: 14 },
-  // === 초등학교 ===
-  { id: 'ES56',  label: '초등 5-6학년',  curriculum: '',         levelCode: 'ES56',                                             order: 15 },
-  { id: 'ES34',  label: '초등 3-4학년',  curriculum: '',         levelCode: 'ES34',                                             order: 16 },
-  { id: 'ES12',  label: '초등 1-2학년',  curriculum: '',         levelCode: 'ES12',                                             order: 17 },
+  // === 중학교 (학년별) ===
+  // 성취기준 번호 = [9수XX-YY]의 YY, 교과서 목차 기반 매핑
+  { id: 'MS1', label: '중1 수학', curriculum: '', levelCode: 'MS',
+    domainFilter: ['NUM', 'PAT', 'GEO', 'DAT'],
+    standardFilter: {
+      NUM: [1, 2, 3],              // 소인수분해, 정수와 유리수, 사칙연산
+      PAT: [1, 2, 3, 9, 10],      // 문자와 식, 일차식, 일차방정식, 좌표, 정비례·반비례
+      GEO: [1, 2, 3, 9],          // 기본 도형, 평행선, 삼각형 합동, 입체도형
+      DAT: [1, 2],                // 도수분포, 상대도수
+    }, order: 14 },
+  { id: 'MS2', label: '중2 수학', curriculum: '', levelCode: 'MS',
+    domainFilter: ['NUM', 'PAT', 'GEO', 'DAT'],
+    standardFilter: {
+      NUM: [4],                    // 유리수와 순환소수
+      PAT: [4, 5, 6, 11, 12, 15, 16, 17, 18], // 연립방정식, 부등식, 다항식, 일차함수
+      GEO: [4, 5, 10, 11, 12, 13, 14],        // 사각형, 닮음, 외심·내심, 평행선 비
+      DAT: [3, 4, 5, 6],          // 대푯값·산포도, 상관관계, 경우의 수, 확률
+    }, order: 15 },
+  { id: 'MS3', label: '중3 수학', curriculum: '', levelCode: 'MS',
+    domainFilter: ['NUM', 'PAT', 'GEO', 'DAT'],
+    standardFilter: {
+      NUM: [5, 6, 7, 8, 9, 10],   // 제곱근, 무리수, 실수, 근호 계산
+      PAT: [7, 8, 13, 14, 19, 20, 21, 22], // 인수분해, 이차방정식, 이차함수
+      GEO: [6, 7, 8, 15, 16, 17, 18, 19],  // 피타고라스, 삼각비, 원
+      DAT: [7, 8, 9],             // 분산·표준편차, 상자그림, 산점도
+    }, order: 16 },
+  // === 초등학교 (4~6학년) ===
+  { id: 'ES56',  label: '초등 5-6학년',  curriculum: '',         levelCode: 'ES56', domainFilter: ['NUM', 'GEO', 'PAT', 'DAT'], order: 17 },
+  { id: 'ES34',  label: '초등 3-4학년',  curriculum: '',         levelCode: 'ES34', domainFilter: ['NUM', 'GEO', 'PAT', 'DAT'], order: 18 },
 ];
+
+/**
+ * 성취기준 코드에서 번호 추출
+ * [9수01-01] → 1, [9수02-15] → 15, MA-MS-NUM-01 → 1
+ */
+export function extractStandardNumber(standardCode: string): number | null {
+  // [X수XX-YY] 형식 → YY 추출
+  const m = standardCode.match(/-(\d+)\]$/);
+  if (m) return parseInt(m[1], 10);
+  // MA-MS-NUM-01 형식 → 마지막 숫자 추출
+  const parts = standardCode.split('-');
+  if (parts.length >= 4) return parseInt(parts[3], 10);
+  return null;
+}
 
 // ============================================================================
 // flat → tree 변환 유틸리티

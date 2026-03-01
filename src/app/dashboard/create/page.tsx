@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { LevelNode, DomainNode, StandardNode, ExpandedMathType, SubjectCategory } from '@/types/expanded-types';
-import { SUBJECT_CATEGORIES } from '@/types/expanded-types';
+import { SUBJECT_CATEGORIES, extractStandardNumber } from '@/types/expanded-types';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 
 // ============================================================================
@@ -91,29 +91,59 @@ const DIFF_COLORS: Record<DifficultyLevel, { bg: string; text: string; border: s
 };
 
 function levelNodeToSubjectTree(level: LevelNode, category: SubjectCategory): SubjectTree | null {
-  const filteredDomains = category.domainFilter
+  // 1. 도메인 필터링
+  let filteredDomains = category.domainFilter
     ? level.domains.filter((d) => category.domainFilter!.includes(d.domainCode))
-    : level.domains;
+    : [...level.domains];
+
+  // 2. domainFilter 순서대로 정렬 (교과서 목차 순서)
+  if (category.domainFilter) {
+    const order = category.domainFilter;
+    filteredDomains.sort((a, b) => order.indexOf(a.domainCode) - order.indexOf(b.domainCode));
+  }
 
   if (filteredDomains.length === 0) return null;
 
-  const totalProblems = filteredDomains.reduce((sum, d) => sum + d.typeCount, 0);
+  // 3. 성취기준 필터링 (standardFilter가 있을 때만)
+  const chapters: ChapterNode[] = [];
+  let totalProblems = 0;
+
+  for (const domain of filteredDomains) {
+    const allowedStds = category.standardFilter?.[domain.domainCode];
+
+    // standardFilter가 있으면 해당 번호의 성취기준만 포함
+    const filteredStandards = allowedStds
+      ? domain.standards.filter((std) => {
+          const num = extractStandardNumber(std.standardCode);
+          return num !== null && allowedStds.includes(num);
+        })
+      : domain.standards;
+
+    if (filteredStandards.length === 0) continue;
+
+    const domainProblems = filteredStandards.reduce((sum, s) => sum + s.typeCount, 0);
+    totalProblems += domainProblems;
+
+    chapters.push({
+      chapter: domain.label,
+      domainCode: domain.domainCode,
+      sections: filteredStandards.map((std) => ({
+        section: std.standardContent || std.standardCode,
+        typeCode: std.standardCode,
+        totalProblems: std.typeCount,
+      })),
+      totalProblems: domainProblems,
+    });
+  }
+
+  if (chapters.length === 0) return null;
 
   return {
     subject: category.curriculum
       ? `${category.label} [${category.curriculum}]`
       : category.label,
     levelCode: level.levelCode,
-    chapters: filteredDomains.map((domain) => ({
-      chapter: domain.label,
-      domainCode: domain.domainCode,
-      sections: domain.standards.map((std) => ({
-        section: std.standardContent || std.standardCode,
-        typeCode: std.standardCode,
-        totalProblems: std.typeCount,
-      })),
-      totalProblems: domain.typeCount,
-    })),
+    chapters,
     totalProblems,
   };
 }
@@ -1168,10 +1198,21 @@ export default function PaperCreatePage() {
                           ))}
                       </optgroup>
                     )}
-                    {availableCategories.some((c) => c.curriculum === '') && (
-                      <optgroup label="중·초등학교">
+                    {availableCategories.some((c) => c.curriculum === '' && c.levelCode === 'MS') && (
+                      <optgroup label="중학교">
                         {availableCategories
-                          .filter((c) => c.curriculum === '')
+                          .filter((c) => c.curriculum === '' && c.levelCode === 'MS')
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    {availableCategories.some((c) => c.curriculum === '' && c.levelCode.startsWith('ES')) && (
+                      <optgroup label="초등학교">
+                        {availableCategories
+                          .filter((c) => c.curriculum === '' && c.levelCode.startsWith('ES'))
                           .map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.label}
