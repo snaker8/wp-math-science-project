@@ -567,7 +567,11 @@ function ExamPaperView({
             style={{ columnGap: columns === 2 ? '32px' : undefined }}
           >
             {problems.map((problem, idx) => {
-              const parts = splitContentByFigureMarker(problem.content);
+              // ★ figureData/figureSvg가 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (원본+수정본 중복 방지)
+              const cleanContent = (problem.figureData || problem.figureSvg)
+                ? problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
+                : problem.content;
+              const parts = splitContentByFigureMarker(cleanContent);
               const hasFigureInContent = parts.some(p => p.type === 'figure');
 
               return (
@@ -600,7 +604,7 @@ function ExamPaperView({
                           ))
                         ) : (
                           <>
-                            <MixedContentRenderer content={problem.content} className="text-gray-800" />
+                            <MixedContentRenderer content={cleanContent} className="text-gray-800" />
                             {(problem.figureData || problem.figureSvg) && (
                               <div className="mt-2 flex justify-center">
                                 <FigureRenderer
