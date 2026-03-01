@@ -563,8 +563,8 @@ function ExamPaperView({
 
           {/* 문제 영역 */}
           <div
-            className={`p-6 ${columns === 2 ? 'columns-2 gap-8' : ''}`}
-            style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
+            className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
+            style={{ columnGap: columns === 2 ? '32px' : undefined }}
           >
             {problems.map((problem, idx) => {
               const parts = splitContentByFigureMarker(problem.content);
@@ -573,7 +573,7 @@ function ExamPaperView({
               return (
                 <div
                   key={problem.id}
-                  className="break-inside-avoid mb-0"
+                  className="break-inside-avoid"
                   style={{ marginBottom: `${gap}px` }}
                 >
                   <div className="flex gap-2">
@@ -860,8 +860,8 @@ function SolutionView({
 
           {/* 해설 영역 */}
           <div
-            className={`p-6 ${columns === 2 ? 'columns-2 gap-8' : ''}`}
-            style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
+            className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
+            style={{ columnGap: columns === 2 ? '32px' : undefined }}
           >
             {problems.map((problem) => {
               const answerDisplay = typeof problem.answer === 'number' && problem.answer >= 1 && problem.answer <= 5
@@ -871,7 +871,7 @@ function SolutionView({
               return (
                 <div
                   key={problem.id}
-                  className="break-inside-avoid mb-0"
+                  className="break-inside-avoid"
                   style={{ marginBottom: `${gap}px` }}
                 >
                   {/* 문제 번호 + 정답 */}
