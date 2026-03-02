@@ -130,11 +130,19 @@ function levelNodeToSubjectTree(level: LevelNode, category: SubjectCategory): Su
     chapters.push({
       chapter: domain.label,
       domainCode: domain.domainCode,
-      sections: filteredStandards.map((std) => ({
-        section: std.standardContent || std.standardCode,
-        typeCode: std.standardCode,
-        totalProblems: std.typeCount,
-      })),
+      sections: filteredStandards.map((std) => {
+        // ★ type_code prefix (MA-HS0-POL-01) 추출 — classifications.type_code 매칭용
+        // expanded_math_types의 type_code (MA-HS0-POL-01-001) 에서 마지막 -NNN 제거
+        const firstType = std.types[0];
+        const typePrefix = firstType
+          ? firstType.typeCode.replace(/-\d{3}$/, '')
+          : std.standardCode;
+        return {
+          section: std.standardContent || std.standardCode,
+          typeCode: typePrefix,
+          totalProblems: std.typeCount,
+        };
+      }),
       totalProblems: domainProblems,
     });
   }
