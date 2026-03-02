@@ -907,23 +907,15 @@ function ExamPaperView({
 
       {/* 시험지 수식 스타일 + 인쇄 */}
       <style jsx global>{`
-        /* ── 시험지 KaTeX 수식 크기 보정 ── */
+        /* ── 시험지 KaTeX 미세 보정 ── */
         .exam-page .katex {
-          font-size: 1.12em !important;
-        }
-        /* 인라인 수식 수직 정렬 보정 */
-        .exam-page .katex .base {
-          vertical-align: -0.1em;
+          font-size: 1.05em !important;
         }
 
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */
         #exam-print-root { display: none; }
-        /* 인쇄 영역에도 동일한 KaTeX 스타일 적용 */
         #exam-print-root .katex {
-          font-size: 1.12em !important;
-        }
-        #exam-print-root .katex .base {
-          vertical-align: -0.1em;
+          font-size: 1.05em !important;
         }
 
         @media print {
