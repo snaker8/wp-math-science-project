@@ -33,6 +33,8 @@ interface TwinProblemModalProps {
     typeName: string;
     year: string;
     source: string;
+    answer?: number | string;
+    solution?: string;
   };
   onClose: () => void;
 }
@@ -102,6 +104,16 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
             preserveStructure: true,
           },
           useLLM,
+          // ★ 원본 문제 데이터를 직접 전달 (DB 조회 불필요)
+          problemsData: [{
+            id: problem.id,
+            contentLatex: problem.content,
+            solutionLatex: problem.solution || '',
+            typeCode: problem.typeCode || '',
+            typeName: problem.typeName || '',
+            answer: String(problem.answer ?? ''),
+            choices: problem.choices || [],
+          }],
         }),
       });
 
