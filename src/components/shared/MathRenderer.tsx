@@ -18,7 +18,11 @@ interface MathRendererProps {
 export function MathRenderer({ content, block = false, className }: MathRendererProps) {
     const html = useMemo(() => {
         try {
-            return katex.renderToString(content, {
+            // 인라인 수식에서 분수(\frac), 합(\sum) 등이 축소되지 않도록
+            // \displaystyle 을 자동 적용 (한국 수학 교재 표준)
+            const processedContent = block ? content : `\\displaystyle ${content}`;
+
+            return katex.renderToString(processedContent, {
                 throwOnError: false,
                 displayMode: block,
                 strict: false,
