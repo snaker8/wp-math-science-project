@@ -854,40 +854,63 @@ function ExamPaperView({
       {/* 인쇄 스타일 */}
       <style jsx global>{`
         @media print {
-          body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          body > * { visibility: hidden !important; }
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          /* 모든 요소 숨김 */
+          body * { visibility: hidden; }
+          /* 시험지 컨테이너만 표시 */
           .exam-print-container,
           .exam-print-container * { visibility: visible !important; }
+          /* 뷰포트 기준 고정 위치 (부모 레이아웃 무시) */
           .exam-print-container {
-            position: absolute !important;
+            position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             width: 100% !important;
+            height: auto !important;
+            z-index: 999999 !important;
+            overflow: visible !important;
+            display: block !important;
           }
+          /* 컨트롤/측정 영역 숨김 */
           .exam-controls { display: none !important; }
+          [aria-hidden="true"] { display: none !important; }
+          /* 스크롤 컨테이너 → 일반 블록 */
           .exam-page-scroll-bg {
             background: white !important;
             padding: 0 !important;
             overflow: visible !important;
             display: block !important;
+            height: auto !important;
+            flex: none !important;
           }
+          /* 각 A4 페이지 */
           .exam-page {
             width: 210mm !important;
+            height: 297mm !important;
             min-height: 297mm !important;
+            max-height: 297mm !important;
             margin: 0 !important;
             padding: 15mm !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             page-break-after: always;
+            overflow: hidden !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
           .exam-page:last-child { page-break-after: auto; }
+          /* 인쇄 시 문제 간격 상한 (화면에서 큰 간격이라도 인쇄는 최대 40px) */
           .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
+            margin-bottom: ${Math.min(gap, 40)}px !important;
           }
-          [aria-hidden="true"] { display: none !important; }
         }
         @page { size: A4 portrait; margin: 0; }
       `}</style>
