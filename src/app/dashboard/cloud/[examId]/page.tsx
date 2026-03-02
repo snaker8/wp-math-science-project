@@ -496,6 +496,9 @@ function ExamPaperView({
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
+  const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
+
+  const COLUMN_GAP = 28; // 고정 컬럼 간격 (px)
 
   // === 측정 기반 페이지네이션 ===
   const measureRef = useRef<HTMLDivElement>(null);
@@ -535,6 +538,15 @@ function ExamPaperView({
 
   // 페이지 분할
   const pages = useMemo(() => {
+    // 프리셋 모드: 지정된 문제 수로 강제 분할
+    if (perPagePreset) {
+      const result: ProblemData[][] = [];
+      for (let i = 0; i < problems.length; i += perPagePreset) {
+        result.push(problems.slice(i, i + perPagePreset));
+      }
+      return result.length > 0 ? result : [[]];
+    }
+
     if (!measured || problemHeights.length === 0) {
       // 폴백: 대략 분할
       const perPage = columns === 2 ? 10 : 5;
@@ -564,7 +576,7 @@ function ExamPaperView({
     }
     if (currentPage.length > 0) result.push(currentPage);
     return result.length > 0 ? result : [[]];
-  }, [problems, problemHeights, measured, columns, gap, FIRST_CONTENT_H, CONTENT_H]);
+  }, [problems, problemHeights, measured, columns, gap, perPagePreset, FIRST_CONTENT_H, CONTENT_H]);
 
   // 출력
   const handlePrint = useCallback(() => {
@@ -667,9 +679,9 @@ function ExamPaperView({
     );
   };
 
-  // 측정용 컬럼 너비
+  // 측정용 컬럼 너비 (고정 컬럼 간격 사용)
   const measureWidth = columns === 2
-    ? (A4_W - PAGE_PAD * 2 - gap) / 2
+    ? (A4_W - PAGE_PAD * 2 - COLUMN_GAP) / 2
     : A4_W - PAGE_PAD * 2;
 
   return (
@@ -677,6 +689,7 @@ function ExamPaperView({
       {/* 컨트롤 바 */}
       <div className="exam-controls flex items-center justify-between border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
         <div className="flex items-center gap-3">
+          {/* 1단/2단 토글 */}
           <div className="flex items-center gap-1 rounded-lg border overflow-hidden">
             <button
               type="button"
@@ -703,6 +716,26 @@ function ExamPaperView({
               2단
             </button>
           </div>
+
+          {/* 페이지당 문제 수 프리셋 */}
+          <div className="flex items-center gap-1 rounded-lg border overflow-hidden">
+            {([null, 4, 6, 8] as const).map((preset) => (
+              <button
+                key={preset ?? 'auto'}
+                type="button"
+                onClick={() => setPerPagePreset(preset)}
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  perPagePreset === preset
+                    ? 'bg-emerald-500/10 text-emerald-400'
+                    : 'text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                {preset === null ? '자동' : `${preset}문제`}
+              </button>
+            ))}
+          </div>
+
+          {/* 세로 간격 슬라이더 */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-content-tertiary">간격</span>
             <input
@@ -787,7 +820,7 @@ function ExamPaperView({
             <div
               style={{
                 columns: columns === 2 ? 2 : 1,
-                columnGap: `${gap}px`,
+                columnGap: `${COLUMN_GAP}px`,
                 columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined,
               }}
             >
@@ -1038,7 +1071,7 @@ function SolutionView({
           {/* 해설 영역 */}
           <div
             className={`p-6 ${columns === 2 ? 'columns-2 gap-8' : ''}`}
-            style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
+            style={{ columnGap: columns === 2 ? '28px' : undefined }}
           >
             {problems.map((problem) => {
               const answerDisplay = typeof problem.answer === 'number' && problem.answer >= 1 && problem.answer <= 5
