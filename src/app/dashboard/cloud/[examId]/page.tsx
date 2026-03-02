@@ -641,12 +641,12 @@ function ExamPaperView({
     const hasFigureInContent = parts.some(p => p.type === 'figure');
 
     return (
-      <div className="flex gap-2">
-        <span className="text-[15px] font-extrabold text-gray-900 flex-shrink-0 leading-snug" style={{ minWidth: '22px' }}>
+      <div className="flex gap-2.5">
+        <span className="text-[14.5px] font-bold text-gray-900 flex-shrink-0" style={{ minWidth: '24px', lineHeight: '1.7' }}>
           {problem.number}.
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] text-gray-800 whitespace-pre-line" style={{ lineHeight: '1.75' }}>
+          <div className="text-[14px] text-gray-800 whitespace-pre-line" style={{ lineHeight: '1.7' }}>
             {hasFigureInContent ? (
               parts.map((part, pi) => (
                 part.type === 'text' ? (
@@ -679,7 +679,7 @@ function ExamPaperView({
                   {problem.choices.map((choice, ci) => {
                     const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
                     return (
-                      <div key={ci} className="flex items-start gap-1.5 text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                      <div key={ci} className="flex items-start gap-1.5 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                         <span className="flex-shrink-0 font-semibold text-gray-900">({ci + 1})</span>
                         <MixedContentRenderer content={stripped} className="text-gray-700" />
                       </div>
@@ -694,7 +694,7 @@ function ExamPaperView({
               return (
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
                   {problem.choices.map((choice, ci) => (
-                    <div key={ci} className="text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                    <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                       <MixedContentRenderer content={choice} className="text-gray-700" />
                     </div>
                   ))}
@@ -705,7 +705,7 @@ function ExamPaperView({
               return (
                 <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
                   {problem.choices.map((choice, ci) => (
-                    <div key={ci} className="text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                    <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                       <MixedContentRenderer content={choice} className="text-gray-700" />
                     </div>
                   ))}
@@ -715,7 +715,7 @@ function ExamPaperView({
             return (
               <div className="mt-2.5 space-y-1.5">
                 {problem.choices.map((choice, ci) => (
-                  <div key={ci} className="text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                  <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                     <MixedContentRenderer content={choice} className="text-gray-700" />
                   </div>
                 ))}
@@ -834,8 +834,8 @@ function ExamPaperView({
           left: -99999,
           width: `${measureWidth}px`,
           fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
-          fontSize: '13px',
-          lineHeight: '1.75',
+          fontSize: '14px',
+          lineHeight: '1.7',
         }}
       >
         {problems.map((problem, idx) => (
@@ -905,10 +905,26 @@ function ExamPaperView({
         ))}
       </div>
 
-      {/* 인쇄 스타일 — DOM 복제 방식 (body > #exam-print-root) */}
+      {/* 시험지 수식 스타일 + 인쇄 */}
       <style jsx global>{`
+        /* ── 시험지 KaTeX 수식 크기 보정 ── */
+        .exam-page .katex {
+          font-size: 1.12em !important;
+        }
+        /* 인라인 수식 수직 정렬 보정 */
+        .exam-page .katex .base {
+          vertical-align: -0.1em;
+        }
+
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */
         #exam-print-root { display: none; }
+        /* 인쇄 영역에도 동일한 KaTeX 스타일 적용 */
+        #exam-print-root .katex {
+          font-size: 1.12em !important;
+        }
+        #exam-print-root .katex .base {
+          vertical-align: -0.1em;
+        }
 
         @media print {
           /* 기존 앱 전체 숨김, 복제된 인쇄 루트만 표시 */
