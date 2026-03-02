@@ -505,11 +505,11 @@ function ExamPaperView({
   const [problemHeights, setProblemHeights] = useState<number[]>([]);
   const [measured, setMeasured] = useState(false);
 
-  // 설정 변경 시 재측정
+  // 설정 변경 시 재측정 (gap은 측정에 영향 없으므로 제외)
   useEffect(() => {
     setMeasured(false);
     setProblemHeights([]);
-  }, [problems, columns, gap]);
+  }, [problems, columns]);
 
   // 문제 높이 측정
   useLayoutEffect(() => {
@@ -577,6 +577,40 @@ function ExamPaperView({
     if (currentPage.length > 0) result.push(currentPage);
     return result.length > 0 ? result : [[]];
   }, [problems, problemHeights, measured, columns, gap, perPagePreset, FIRST_CONTENT_H, CONTENT_H]);
+
+  // === 프리셋 모드: 페이지별 자동 간격 계산 ===
+  const pageAutoGaps = useMemo(() => {
+    if (!perPagePreset || !measured || problemHeights.length === 0) return null;
+
+    const colMult = columns === 2 ? 2 : 1;
+    let globalIdx = 0;
+
+    return pages.map((pageProblems, pageIdx) => {
+      const maxH = pageIdx === 0 ? FIRST_CONTENT_H : CONTENT_H;
+      let totalH = 0;
+      for (let i = 0; i < pageProblems.length; i++) {
+        if (globalIdx + i < problemHeights.length) {
+          totalH += problemHeights[globalIdx + i];
+        }
+      }
+      globalIdx += pageProblems.length;
+
+      // 사용 가능 높이 = 컬럼 수 × 페이지 높이 - 전체 문제 높이
+      const availableSpace = colMult * maxH - totalH;
+      const numProblems = pageProblems.length;
+      // 문제 간 간격을 균등 분배 (최소 8px)
+      const autoGap = numProblems > 0 ? Math.max(8, Math.floor(availableSpace / numProblems)) : 20;
+      return autoGap;
+    });
+  }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H]);
+
+  // 현재 유효 간격 (프리셋 모드면 자동, 아니면 슬라이더)
+  const getEffectiveGap = (pageIdx: number) => {
+    if (perPagePreset && pageAutoGaps && pageAutoGaps[pageIdx] !== undefined) {
+      return pageAutoGaps[pageIdx];
+    }
+    return gap;
+  };
 
   // 출력 — DOM 복제 방식 (KaTeX 수식 호환)
   const handlePrint = useCallback(() => {
@@ -749,19 +783,25 @@ function ExamPaperView({
             ))}
           </div>
 
-          {/* 세로 간격 슬라이더 */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-content-tertiary">간격</span>
-            <input
-              type="range"
-              min={8}
-              max={700}
-              value={gap}
-              onChange={(e) => setGap(Number(e.target.value))}
-              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
-            />
-            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
-          </div>
+          {/* 세로 간격 슬라이더 (자동 모드에서만 표시) */}
+          {!perPagePreset && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-content-tertiary">간격</span>
+              <input
+                type="range"
+                min={8}
+                max={700}
+                value={gap}
+                onChange={(e) => setGap(Number(e.target.value))}
+                className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
+            </div>
+          )}
+          {/* 프리셋 모드에서는 자동 간격 표시 */}
+          {perPagePreset && pageAutoGaps && (
+            <span className="text-xs text-emerald-400/70">자동 배치</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -799,7 +839,7 @@ function ExamPaperView({
         }}
       >
         {problems.map((problem, idx) => (
-          <div key={problem.id} data-problem-idx={idx} style={{ marginBottom: `${gap}px` }}>
+          <div key={problem.id} data-problem-idx={idx} style={{ marginBottom: '8px' }}>
             {renderProblem(problem)}
           </div>
         ))}
@@ -842,7 +882,7 @@ function ExamPaperView({
                 <div
                   key={problem.id}
                   className="break-inside-avoid"
-                  style={{ marginBottom: `${gap}px` }}
+                  style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
                 >
                   {renderProblem(problem)}
                 </div>
@@ -899,11 +939,10 @@ function ExamPaperView({
             print-color-adjust: exact;
           }
           #exam-print-root .exam-page:last-child { page-break-after: auto; }
-          /* 인쇄 시 문제 간격 상한 (화면에서 큰 간격이라도 인쇄는 최대 40px) */
+          /* 인쇄 시 간격은 화면 설정 그대로 반영 (인라인 스타일 유지) */
           #exam-print-root .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
-            margin-bottom: ${Math.min(gap, 40)}px !important;
           }
         }
         @page { size: A4 portrait; margin: 0; }
