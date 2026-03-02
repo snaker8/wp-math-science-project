@@ -2,6 +2,8 @@
 // PDF Generation Types
 // ============================================================================
 
+import type { ExamMeta } from '@/config/exam-templates';
+
 export interface PDFProblem {
   id: string;
   number: number;
@@ -50,6 +52,10 @@ export interface PDFExamConfig {
   showProblemPoints: boolean;
   showProblemNumbers: boolean;
   showAnswerSheet: boolean;  // 별도 답안지 페이지 생성
+
+  // 템플릿 설정
+  templateId?: string;       // 시험지 템플릿 ID
+  examMeta?: ExamMeta;       // 시험 메타데이터
 }
 
 export const DEFAULT_PDF_CONFIG: PDFExamConfig = {

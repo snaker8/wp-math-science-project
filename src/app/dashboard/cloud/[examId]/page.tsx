@@ -27,12 +27,16 @@ import {
   Shapes,
   Trash2,
   CheckCheck,
+  FileEdit,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
+import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
+import { TemplateSelector } from '@/components/exam/TemplateSelector';
+import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import type { InterpretedFigure } from '@/types/ocr';
 
@@ -480,9 +484,15 @@ function ProblemCardView({
 function ExamPaperView({
   problems,
   examTitle,
+  templateId,
+  examMeta,
+  onOpenTemplateModal,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  templateId: string;
+  examMeta: ExamMeta;
+  onOpenTemplateModal: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(24);
@@ -533,6 +543,14 @@ function ExamPaperView({
         </div>
         <button
           type="button"
+          onClick={onOpenTemplateModal}
+          className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
+        >
+          <FileEdit className="h-4 w-4" />
+          템플릿
+        </button>
+        <button
+          type="button"
           className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
         >
           <Printer className="h-4 w-4" />
@@ -543,23 +561,12 @@ function ExamPaperView({
       {/* 시험지 본문 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
         <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-          {/* 시험지 헤더 테이블 */}
-          <div className="border-b-2 border-gray-800 p-0">
-            <table className="w-full border-collapse text-black">
-              <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">과목</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold">공통수학 1</td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-20 bg-gray-50">시험지명</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>
-                    {examTitle}
-                  </td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">담당</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {/* 시험지 헤더 — 템플릿 기반 */}
+          <ExamPaperHeader
+            templateId={templateId}
+            meta={examMeta}
+            examTitle={examTitle}
+          />
 
           {/* 문제 영역 */}
           <div
@@ -688,32 +695,25 @@ function ExamPaperView({
 function QuickAnswerView({
   problems,
   examTitle,
+  templateId,
+  examMeta,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  templateId: string;
+  examMeta: ExamMeta;
 }) {
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
       <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-        {/* 헤더 테이블 */}
-        <div className="border-b-2 border-gray-800 p-0">
-          <table className="w-full border-collapse text-black">
-            <tbody>
-              <tr>
-                <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">과목</td>
-                <td className="border border-gray-400 px-3 py-2 text-sm font-bold">공통수학 1</td>
-                <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-20 bg-gray-50">시험지명</td>
-                <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>
-                  {examTitle}
-                </td>
-                <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">담당</td>
-                <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {/* 헤더 — 템플릿 기반 */}
+        <ExamPaperHeader
+          templateId={templateId}
+          meta={examMeta}
+          examTitle={examTitle}
+        />
 
         {/* 빠른 정답 제목 */}
         <div className="text-center py-4 border-b border-gray-200">
@@ -776,9 +776,15 @@ function QuickAnswerView({
 function SolutionView({
   problems,
   examTitle,
+  templateId,
+  examMeta,
+  onOpenTemplateModal,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  templateId: string;
+  examMeta: ExamMeta;
+  onOpenTemplateModal: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(24);
@@ -830,6 +836,14 @@ function SolutionView({
         </div>
         <button
           type="button"
+          onClick={onOpenTemplateModal}
+          className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
+        >
+          <FileEdit className="h-4 w-4" />
+          템플릿
+        </button>
+        <button
+          type="button"
           className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
         >
           <Printer className="h-4 w-4" />
@@ -840,23 +854,12 @@ function SolutionView({
       {/* 해설지 본문 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
         <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-          {/* 헤더 테이블 */}
-          <div className="border-b-2 border-gray-800 p-0">
-            <table className="w-full border-collapse text-black">
-              <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">과목</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold">공통수학 1</td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-20 bg-gray-50">시험지명</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>
-                    {examTitle} (해설)
-                  </td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">담당</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {/* 헤더 — 템플릿 기반 */}
+          <ExamPaperHeader
+            templateId={templateId}
+            meta={examMeta}
+            examTitle={`${examTitle} (해설)`}
+          />
 
           {/* 해설 영역 */}
           <div
@@ -963,6 +966,11 @@ export default function CloudExamDetailPage() {
 
   // 원본/클린 렌더링 모드 (펼쳐보기에서 적용)
   const [renderMode, setRenderMode] = useState<'clean' | 'original'>('clean');
+
+  // 시험지 템플릿
+  const [templateId, setTemplateId] = useState('simple');
+  const [examMeta, setExamMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
@@ -1376,15 +1384,32 @@ export default function CloudExamDetailPage() {
       )}
 
       {activeView === 'exam' && (
-        <ExamPaperView problems={filteredProblems} examTitle={examTitle} />
+        <ExamPaperView
+          problems={filteredProblems}
+          examTitle={examTitle}
+          templateId={templateId}
+          examMeta={examMeta}
+          onOpenTemplateModal={() => setShowTemplateModal(true)}
+        />
       )}
 
       {activeView === 'answer' && (
-        <QuickAnswerView problems={filteredProblems} examTitle={examTitle} />
+        <QuickAnswerView
+          problems={filteredProblems}
+          examTitle={examTitle}
+          templateId={templateId}
+          examMeta={examMeta}
+        />
       )}
 
       {activeView === 'solution' && (
-        <SolutionView problems={filteredProblems} examTitle={examTitle} />
+        <SolutionView
+          problems={filteredProblems}
+          examTitle={examTitle}
+          templateId={templateId}
+          examMeta={examMeta}
+          onOpenTemplateModal={() => setShowTemplateModal(true)}
+        />
       )}
 
       {/* ======== Floating Selection Bar ======== */}
@@ -1496,6 +1521,18 @@ export default function CloudExamDetailPage() {
           }}
         />
       )}
+
+      {/* 템플릿 선택 모달 */}
+      <TemplateSelector
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        templateId={templateId}
+        meta={examMeta}
+        onApply={(id, meta) => {
+          setTemplateId(id);
+          setExamMeta(meta);
+        }}
+      />
     </div>
   );
 }
