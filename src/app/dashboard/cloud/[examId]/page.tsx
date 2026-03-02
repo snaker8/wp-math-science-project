@@ -578,9 +578,23 @@ function ExamPaperView({
     return result.length > 0 ? result : [[]];
   }, [problems, problemHeights, measured, columns, gap, perPagePreset, FIRST_CONTENT_H, CONTENT_H]);
 
-  // 출력
+  // 출력 — DOM 복제 방식 (KaTeX 수식 호환)
   const handlePrint = useCallback(() => {
+    const pages = document.querySelectorAll('.exam-page');
+    if (pages.length === 0) return;
+
+    // 시험지 페이지들을 body 직속으로 복제
+    const printRoot = document.createElement('div');
+    printRoot.id = 'exam-print-root';
+    pages.forEach(page => {
+      printRoot.appendChild(page.cloneNode(true));
+    });
+    document.body.appendChild(printRoot);
+
     window.print();
+
+    // 인쇄 대화상자 닫힌 후 정리
+    document.body.removeChild(printRoot);
   }, []);
 
   // 문제 렌더링 헬퍼
@@ -851,9 +865,17 @@ function ExamPaperView({
         ))}
       </div>
 
-      {/* 인쇄 스타일 */}
+      {/* 인쇄 스타일 — DOM 복제 방식 (body > #exam-print-root) */}
       <style jsx global>{`
+        /* 평소에는 숨김 (handlePrint에서 동적 생성) */
+        #exam-print-root { display: none; }
+
         @media print {
+          /* 기존 앱 전체 숨김, 복제된 인쇄 루트만 표시 */
+          body > *:not(#exam-print-root) { display: none !important; }
+          #exam-print-root {
+            display: block !important;
+          }
           html, body {
             background: white !important;
             margin: 0 !important;
@@ -861,36 +883,8 @@ function ExamPaperView({
             height: auto !important;
             overflow: visible !important;
           }
-          /* 모든 요소 숨김 */
-          body * { visibility: hidden; }
-          /* 시험지 컨테이너만 표시 */
-          .exam-print-container,
-          .exam-print-container * { visibility: visible !important; }
-          /* 뷰포트 기준 고정 위치 (부모 레이아웃 무시) */
-          .exam-print-container {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            z-index: 999999 !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-          /* 컨트롤/측정 영역 숨김 */
-          .exam-controls { display: none !important; }
-          [aria-hidden="true"] { display: none !important; }
-          /* 스크롤 컨테이너 → 일반 블록 */
-          .exam-page-scroll-bg {
-            background: white !important;
-            padding: 0 !important;
-            overflow: visible !important;
-            display: block !important;
-            height: auto !important;
-            flex: none !important;
-          }
           /* 각 A4 페이지 */
-          .exam-page {
+          #exam-print-root .exam-page {
             width: 210mm !important;
             height: 297mm !important;
             min-height: 297mm !important;
@@ -904,9 +898,9 @@ function ExamPaperView({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .exam-page:last-child { page-break-after: auto; }
+          #exam-print-root .exam-page:last-child { page-break-after: auto; }
           /* 인쇄 시 문제 간격 상한 (화면에서 큰 간격이라도 인쇄는 최대 40px) */
-          .break-inside-avoid {
+          #exam-print-root .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
             margin-bottom: ${Math.min(gap, 40)}px !important;
