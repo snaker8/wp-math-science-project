@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -27,12 +27,16 @@ import {
   Shapes,
   Trash2,
   CheckCheck,
+  FileEdit,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
+import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
+import { TemplateSelector } from '@/components/exam/TemplateSelector';
+import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import type { InterpretedFigure } from '@/types/ocr';
 
@@ -480,17 +484,194 @@ function ProblemCardView({
 function ExamPaperView({
   problems,
   examTitle,
+  templateId,
+  examMeta,
+  onOpenTemplateModal,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  templateId: string;
+  examMeta: ExamMeta;
+  onOpenTemplateModal: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
-  const [gap, setGap] = useState(30);
+  const [gap, setGap] = useState(20);
+
+  // === 측정 기반 페이지네이션 ===
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [problemHeights, setProblemHeights] = useState<number[]>([]);
+  const [measured, setMeasured] = useState(false);
+
+  // 설정 변경 시 재측정
+  useEffect(() => {
+    setMeasured(false);
+    setProblemHeights([]);
+  }, [problems, columns, gap]);
+
+  // 문제 높이 측정
+  useLayoutEffect(() => {
+    if (measureRef.current && !measured && problems.length > 0) {
+      const timer = setTimeout(() => {
+        if (!measureRef.current) return;
+        const els = measureRef.current.querySelectorAll('[data-problem-idx]');
+        const heights = Array.from(els).map(el => el.getBoundingClientRect().height);
+        if (heights.length === problems.length) {
+          setProblemHeights(heights);
+          setMeasured(true);
+        }
+      }, 300); // KaTeX 렌더링 대기
+      return () => clearTimeout(timer);
+    }
+  }, [problems, measured]);
+
+  // A4 상수
+  const A4_W = 794;
+  const A4_H = 1123;
+  const PAGE_PAD = 57; // ~15mm
+  const FOOTER_H = 36;
+  const HEADER_H = 130;
+  const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
+  const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
+
+  // 페이지 분할
+  const pages = useMemo(() => {
+    if (!measured || problemHeights.length === 0) {
+      // 폴백: 대략 분할
+      const perPage = columns === 2 ? 10 : 5;
+      const result: ProblemData[][] = [];
+      for (let i = 0; i < problems.length; i += perPage) {
+        result.push(problems.slice(i, i + perPage));
+      }
+      return result.length > 0 ? result : [[]];
+    }
+
+    const colMult = columns === 2 ? 2 : 1;
+    const result: ProblemData[][] = [];
+    let currentPage: ProblemData[] = [];
+    let usedH = 0;
+
+    for (let i = 0; i < problems.length; i++) {
+      const h = (problemHeights[i] + gap) / colMult;
+      const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
+
+      if (currentPage.length > 0 && usedH + h > maxH) {
+        result.push(currentPage);
+        currentPage = [];
+        usedH = 0;
+      }
+      currentPage.push(problems[i]);
+      usedH += h;
+    }
+    if (currentPage.length > 0) result.push(currentPage);
+    return result.length > 0 ? result : [[]];
+  }, [problems, problemHeights, measured, columns, gap, FIRST_CONTENT_H, CONTENT_H]);
+
+  // 출력
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
+
+  // 문제 렌더링 헬퍼
+  const renderProblem = (problem: ProblemData) => {
+    const parts = splitContentByFigureMarker(problem.content);
+    const hasFigureInContent = parts.some(p => p.type === 'figure');
+
+    return (
+      <div className="flex gap-2">
+        <span className="text-[15px] font-extrabold text-gray-900 flex-shrink-0 leading-snug" style={{ minWidth: '22px' }}>
+          {problem.number}.
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] text-gray-800 whitespace-pre-line" style={{ lineHeight: '1.75' }}>
+            {hasFigureInContent ? (
+              parts.map((part, pi) => (
+                part.type === 'text' ? (
+                  <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
+                ) : (
+                  <div key={pi} className="my-2 flex justify-center">
+                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
+                  </div>
+                )
+              ))
+            ) : (
+              <>
+                <MixedContentRenderer content={problem.content} className="text-gray-800" />
+                {(problem.figureData || problem.figureSvg) && (
+                  <div className="mt-2 flex justify-center">
+                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          {problem.choices.length > 0 && (() => {
+            const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
+            const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
+            const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
+
+            if (isSubProblem) {
+              return (
+                <div className="mt-2 space-y-1.5">
+                  {problem.choices.map((choice, ci) => {
+                    const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+                    return (
+                      <div key={ci} className="flex items-start gap-1.5 text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                        <span className="flex-shrink-0 font-semibold text-gray-900">({ci + 1})</span>
+                        <MixedContentRenderer content={stripped} className="text-gray-700" />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            }
+
+            const maxLen = Math.max(...problem.choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+            if (maxLen <= 12) {
+              return (
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+                  {problem.choices.map((choice, ci) => (
+                    <div key={ci} className="text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                      <MixedContentRenderer content={choice} className="text-gray-700" />
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            if (maxLen <= 30) {
+              return (
+                <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
+                  {problem.choices.map((choice, ci) => (
+                    <div key={ci} className="text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                      <MixedContentRenderer content={choice} className="text-gray-700" />
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <div className="mt-2.5 space-y-1.5">
+                {problem.choices.map((choice, ci) => (
+                  <div key={ci} className="text-[13px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                    <MixedContentRenderer content={choice} className="text-gray-700" />
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    );
+  };
+
+  // 측정용 컬럼 너비
+  const measureWidth = columns === 2
+    ? (A4_W - PAGE_PAD * 2 - gap) / 2
+    : A4_W - PAGE_PAD * 2;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 상단 컨트롤 바 */}
-      <div className="flex items-center justify-between border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
+    <div className="flex flex-col h-full exam-print-container">
+      {/* 컨트롤 바 */}
+      <div className="exam-controls flex items-center justify-between border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 rounded-lg border overflow-hidden">
             <button
@@ -522,165 +703,157 @@ function ExamPaperView({
             <span className="text-xs text-content-tertiary">간격</span>
             <input
               type="range"
-              min={0}
-              max={700}
+              min={8}
+              max={48}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
+            <span className="text-xs text-content-tertiary w-6">{gap}</span>
           </div>
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-        >
-          <Printer className="h-4 w-4" />
-          출력
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenTemplateModal}
+            className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
+          >
+            <FileEdit className="h-4 w-4" />
+            템플릿
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+          >
+            <Printer className="h-4 w-4" />
+            출력
+          </button>
+        </div>
       </div>
 
-      {/* 시험지 본문 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
-        <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-          {/* 시험지 헤더 테이블 */}
-          <div className="border-b-2 border-gray-800 p-0">
-            <table className="w-full border-collapse text-black">
-              <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">과목</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold">공통수학 1</td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-20 bg-gray-50">시험지명</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>
-                    {examTitle}
-                  </td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">담당</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
-                </tr>
-              </tbody>
-            </table>
+      {/* 숨겨진 측정 영역 */}
+      <div
+        ref={measureRef}
+        aria-hidden
+        style={{
+          position: 'absolute',
+          visibility: 'hidden',
+          top: -99999,
+          left: -99999,
+          width: `${measureWidth}px`,
+          fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+          fontSize: '13px',
+          lineHeight: '1.75',
+        }}
+      >
+        {problems.map((problem, idx) => (
+          <div key={problem.id} data-problem-idx={idx} style={{ marginBottom: `${gap}px` }}>
+            {renderProblem(problem)}
           </div>
+        ))}
+      </div>
 
-          {/* 문제 영역 */}
+      {/* A4 페이지들 */}
+      <div className="exam-page-scroll-bg flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex flex-col items-center py-6 bg-surface-raised/30">
+        {pages.map((pageProblems, pageIdx) => (
           <div
-            className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
-            style={{ columnGap: columns === 2 ? '32px' : undefined }}
+            key={pageIdx}
+            className="exam-page bg-white"
+            style={{
+              width: `${A4_W}px`,
+              minHeight: `${A4_H}px`,
+              padding: '15mm',
+              marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
+              boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+              borderRadius: '4px',
+              position: 'relative',
+              boxSizing: 'border-box',
+              fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+            }}
           >
-            {problems.map((problem, idx) => {
-              // ★ figureData/figureSvg가 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (원본+수정본 중복 방지)
-              const cleanContent = (problem.figureData || problem.figureSvg)
-                ? problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
-                : problem.content;
-              const parts = splitContentByFigureMarker(cleanContent);
-              const hasFigureInContent = parts.some(p => p.type === 'figure');
+            {/* 헤더 — 첫 페이지만 */}
+            {pageIdx === 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <ExamPaperHeader templateId={templateId} meta={examMeta} examTitle={examTitle} />
+              </div>
+            )}
 
-              return (
+            {/* 문제 영역 */}
+            <div
+              style={{
+                columns: columns === 2 ? 2 : 1,
+                columnGap: `${gap}px`,
+                columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined,
+              }}
+            >
+              {pageProblems.map((problem) => (
                 <div
                   key={problem.id}
                   className="break-inside-avoid"
                   style={{ marginBottom: `${gap}px` }}
                 >
-                  <div className="flex gap-2">
-                    <span className="text-sm font-bold text-gray-900 flex-shrink-0 pt-0.5">
-                      {problem.number}.
-                    </span>
-                    <div className="flex-1">
-                      <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
-                        {hasFigureInContent ? (
-                          /* [도형] 마커가 있는 경우: 타입별 도형 렌더링 */
-                          parts.map((part, pi) => (
-                            part.type === 'text' ? (
-                              <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
-                            ) : (
-                              <div key={pi} className="my-2 flex justify-center">
-                                <FigureRenderer
-                                  figureData={problem.figureData}
-                                  figureSvg={problem.figureSvg}
-                                  maxWidth={260}
-                                  darkMode={false}
-                                />
-                              </div>
-                            )
-                          ))
-                        ) : (
-                          <>
-                            <MixedContentRenderer content={cleanContent} className="text-gray-800" />
-                            {(problem.figureData || problem.figureSvg) && (
-                              <div className="mt-2 flex justify-center">
-                                <FigureRenderer
-                                  figureData={problem.figureData}
-                                  figureSvg={problem.figureSvg}
-                                  maxWidth={260}
-                                  darkMode={false}
-                                />
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      {problem.choices.length > 0 && (() => {
-                        // 소문제 판별
-                        const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
-                        const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
-                        const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
-
-                        if (isSubProblem) {
-                          return (
-                            <div className="mt-2 space-y-1.5">
-                              {problem.choices.map((choice, ci) => {
-                                const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
-                                return (
-                                  <div key={ci} className="flex items-start gap-1.5 text-[13px] text-gray-700">
-                                    <span className="flex-shrink-0 font-medium text-gray-900">({ci + 1})</span>
-                                    <MixedContentRenderer content={stripped} className="text-gray-700" />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-
-                        const maxLen = Math.max(...problem.choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
-                        if (maxLen <= 12) {
-                          return (
-                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                              {problem.choices.map((choice, ci) => (
-                                <div key={ci} className="text-[13px] text-gray-700">
-                                  <MixedContentRenderer content={choice} className="text-gray-700" />
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        }
-                        if (maxLen <= 30) {
-                          return (
-                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                              {problem.choices.map((choice, ci) => (
-                                <div key={ci} className="text-[13px] text-gray-700">
-                                  <MixedContentRenderer content={choice} className="text-gray-700" />
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="mt-2 space-y-1">
-                            {problem.choices.map((choice, ci) => (
-                              <div key={ci} className="text-[13px] text-gray-700">
-                                <MixedContentRenderer content={choice} className="text-gray-700" />
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
+                  {renderProblem(problem)}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* 페이지 번호 */}
+            <div style={{
+              position: 'absolute',
+              bottom: '8mm',
+              left: 0,
+              right: 0,
+              textAlign: 'center',
+              fontSize: '10px',
+              color: '#aaa',
+            }}>
+              페이지 {pageIdx + 1}
+            </div>
           </div>
-        </div>
+        ))}
       </div>
+
+      {/* 인쇄 스타일 */}
+      <style jsx global>{`
+        @media print {
+          body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          body > * { visibility: hidden !important; }
+          .exam-print-container,
+          .exam-print-container * { visibility: visible !important; }
+          .exam-print-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+          }
+          .exam-controls { display: none !important; }
+          .exam-page-scroll-bg {
+            background: white !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          .exam-page {
+            width: 210mm !important;
+            min-height: 297mm !important;
+            margin: 0 !important;
+            padding: 15mm !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            page-break-after: always;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .exam-page:last-child { page-break-after: auto; }
+          .break-inside-avoid {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          [aria-hidden="true"] { display: none !important; }
+        }
+        @page { size: A4 portrait; margin: 0; }
+      `}</style>
     </div>
   );
 }
@@ -692,32 +865,25 @@ function ExamPaperView({
 function QuickAnswerView({
   problems,
   examTitle,
+  templateId,
+  examMeta,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  templateId: string;
+  examMeta: ExamMeta;
 }) {
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
       <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-        {/* 헤더 테이블 */}
-        <div className="border-b-2 border-gray-800 p-0">
-          <table className="w-full border-collapse text-black">
-            <tbody>
-              <tr>
-                <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">과목</td>
-                <td className="border border-gray-400 px-3 py-2 text-sm font-bold">공통수학 1</td>
-                <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-20 bg-gray-50">시험지명</td>
-                <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>
-                  {examTitle}
-                </td>
-                <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">담당</td>
-                <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {/* 헤더 — 템플릿 기반 */}
+        <ExamPaperHeader
+          templateId={templateId}
+          meta={examMeta}
+          examTitle={examTitle}
+        />
 
         {/* 빠른 정답 제목 */}
         <div className="text-center py-4 border-b border-gray-200">
@@ -780,12 +946,18 @@ function QuickAnswerView({
 function SolutionView({
   problems,
   examTitle,
+  templateId,
+  examMeta,
+  onOpenTemplateModal,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  templateId: string;
+  examMeta: ExamMeta;
+  onOpenTemplateModal: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
-  const [gap, setGap] = useState(30);
+  const [gap, setGap] = useState(24);
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   return (
@@ -823,15 +995,23 @@ function SolutionView({
             <span className="text-xs text-content-tertiary">간격</span>
             <input
               type="range"
-              min={0}
-              max={700}
+              min={8}
+              max={48}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
+            <span className="text-xs text-content-tertiary w-6">{gap}</span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onOpenTemplateModal}
+          className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
+        >
+          <FileEdit className="h-4 w-4" />
+          템플릿
+        </button>
         <button
           type="button"
           className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
@@ -844,28 +1024,17 @@ function SolutionView({
       {/* 해설지 본문 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
         <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-          {/* 헤더 테이블 */}
-          <div className="border-b-2 border-gray-800 p-0">
-            <table className="w-full border-collapse text-black">
-              <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">과목</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold">공통수학 1</td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-20 bg-gray-50">시험지명</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>
-                    {examTitle} (해설)
-                  </td>
-                  <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50">담당</td>
-                  <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {/* 헤더 — 템플릿 기반 */}
+          <ExamPaperHeader
+            templateId={templateId}
+            meta={examMeta}
+            examTitle={`${examTitle} (해설)`}
+          />
 
           {/* 해설 영역 */}
           <div
-            className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
-            style={{ columnGap: columns === 2 ? '32px' : undefined }}
+            className={`p-6 ${columns === 2 ? 'columns-2 gap-8' : ''}`}
+            style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
           >
             {problems.map((problem) => {
               const answerDisplay = typeof problem.answer === 'number' && problem.answer >= 1 && problem.answer <= 5
@@ -875,7 +1044,7 @@ function SolutionView({
               return (
                 <div
                   key={problem.id}
-                  className="break-inside-avoid"
+                  className="break-inside-avoid mb-0"
                   style={{ marginBottom: `${gap}px` }}
                 >
                   {/* 문제 번호 + 정답 */}
@@ -967,6 +1136,11 @@ export default function CloudExamDetailPage() {
 
   // 원본/클린 렌더링 모드 (펼쳐보기에서 적용)
   const [renderMode, setRenderMode] = useState<'clean' | 'original'>('clean');
+
+  // 시험지 템플릿
+  const [templateId, setTemplateId] = useState('simple');
+  const [examMeta, setExamMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
@@ -1380,15 +1554,32 @@ export default function CloudExamDetailPage() {
       )}
 
       {activeView === 'exam' && (
-        <ExamPaperView problems={filteredProblems} examTitle={examTitle} />
+        <ExamPaperView
+          problems={filteredProblems}
+          examTitle={examTitle}
+          templateId={templateId}
+          examMeta={examMeta}
+          onOpenTemplateModal={() => setShowTemplateModal(true)}
+        />
       )}
 
       {activeView === 'answer' && (
-        <QuickAnswerView problems={filteredProblems} examTitle={examTitle} />
+        <QuickAnswerView
+          problems={filteredProblems}
+          examTitle={examTitle}
+          templateId={templateId}
+          examMeta={examMeta}
+        />
       )}
 
       {activeView === 'solution' && (
-        <SolutionView problems={filteredProblems} examTitle={examTitle} />
+        <SolutionView
+          problems={filteredProblems}
+          examTitle={examTitle}
+          templateId={templateId}
+          examMeta={examMeta}
+          onOpenTemplateModal={() => setShowTemplateModal(true)}
+        />
       )}
 
       {/* ======== Floating Selection Bar ======== */}
@@ -1500,6 +1691,18 @@ export default function CloudExamDetailPage() {
           }}
         />
       )}
+
+      {/* 템플릿 선택 모달 */}
+      <TemplateSelector
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        templateId={templateId}
+        meta={examMeta}
+        onApply={(id, meta) => {
+          setTemplateId(id);
+          setExamMeta(meta);
+        }}
+      />
     </div>
   );
 }

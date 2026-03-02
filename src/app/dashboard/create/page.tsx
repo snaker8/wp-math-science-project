@@ -19,11 +19,15 @@ import {
   Minus,
   Plus,
   Printer,
+  FileEdit,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { LevelNode, DomainNode, StandardNode, ExpandedMathType, SubjectCategory } from '@/types/expanded-types';
 import { SUBJECT_CATEGORIES, extractStandardNumber } from '@/types/expanded-types';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
+import { TemplateSelector } from '@/components/exam/TemplateSelector';
+import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 
 // ============================================================================
 // Types
@@ -445,6 +449,9 @@ function ExamPreviewPanel({
   onLayoutChange,
   gap,
   onGapChange,
+  templateId,
+  examMeta,
+  onOpenTemplateModal,
 }: {
   previewTab: PreviewTab;
   onTabChange: (tab: PreviewTab) => void;
@@ -458,6 +465,9 @@ function ExamPreviewPanel({
   onLayoutChange: (layout: 'single' | 'two-column') => void;
   gap: number;
   onGapChange: (gap: number) => void;
+  templateId: string;
+  examMeta: ExamMeta;
+  onOpenTemplateModal: () => void;
 }) {
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
 
@@ -490,6 +500,14 @@ function ExamPreviewPanel({
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenTemplateModal}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-violet-400 hover:bg-violet-500/10 transition-colors"
+          >
+            <FileEdit size={12} />
+            템플릿
+          </button>
           <span className="text-xs font-bold text-content-secondary">{totalQuestions}</span>
           <span className="text-[10px] text-content-muted">문항</span>
         </div>
@@ -504,28 +522,12 @@ function ExamPreviewPanel({
           </div>
         ) : problems.length > 0 ? (
           <div className="mx-auto bg-white rounded shadow-xl" style={{ maxWidth: '720px' }}>
-            {/* ── 헤더: 테이블 형식 (참조사이트 스타일) ── */}
-            <table className="w-full border-collapse text-xs" style={{ borderTop: '2px solid #111', borderBottom: '2px solid #111' }}>
-              <tbody>
-                <tr>
-                  <td className="border border-gray-300 bg-gray-50 text-gray-500 text-center font-medium px-3 py-2 whitespace-nowrap" style={{ width: '56px' }}>
-                    과목
-                  </td>
-                  <td className="border border-gray-300 text-gray-900 font-semibold px-3 py-2 whitespace-nowrap">
-                    {categoryLabel || '수학'}
-                  </td>
-                  <td className="border border-gray-300 bg-gray-50 text-gray-500 text-center font-medium px-3 py-2 whitespace-nowrap" style={{ width: '64px' }}>
-                    시험지명
-                  </td>
-                  <td className="border border-gray-300 text-gray-900 font-semibold px-3 py-2">
-                    {paperName || '시험지'}
-                  </td>
-                  <td className="border border-gray-300 bg-gray-50 text-gray-500 text-center font-medium px-3 py-2 whitespace-nowrap" style={{ width: '48px' }}>
-                    담당
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            {/* ── 헤더: 템플릿 기반 ── */}
+            <ExamPaperHeader
+              templateId={templateId}
+              meta={{ ...examMeta, subject: examMeta.subject || categoryLabel || '수학' }}
+              examTitle={paperName || '시험지'}
+            />
 
             {/* ── 시험지 탭: 문제 목록 ── */}
             {previewTab === '시험지' && (
@@ -875,6 +877,11 @@ export default function PaperCreatePage() {
   const [previewLayout, setPreviewLayout] = useState<'single' | 'two-column'>('two-column');
   const [previewGap, setPreviewGap] = useState(30);
   const [previewProblems, setPreviewProblems] = useState<PreviewProblem[]>([]);
+
+  // Template
+  const [previewTemplateId, setPreviewTemplateId] = useState('simple');
+  const [previewExamMeta, setPreviewExamMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1450,9 +1457,24 @@ export default function PaperCreatePage() {
             onLayoutChange={setPreviewLayout}
             gap={previewGap}
             onGapChange={setPreviewGap}
+            templateId={previewTemplateId}
+            examMeta={previewExamMeta}
+            onOpenTemplateModal={() => setShowTemplateModal(true)}
           />
         </div>
       </div>
+
+      {/* 템플릿 선택 모달 */}
+      <TemplateSelector
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        templateId={previewTemplateId}
+        meta={previewExamMeta}
+        onApply={(id, meta) => {
+          setPreviewTemplateId(id);
+          setPreviewExamMeta(meta);
+        }}
+      />
     </section>
   );
 }

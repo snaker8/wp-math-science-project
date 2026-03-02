@@ -7,6 +7,7 @@
 
 import React, { forwardRef } from 'react';
 import type { PDFProblem, PDFExamConfig } from '@/types/pdf';
+import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 
 interface ExamTemplateProps {
   problems: PDFProblem[];
@@ -85,125 +86,14 @@ const ExamTemplate = forwardRef<HTMLDivElement, ExamTemplateProps>(
           </div>
         )}
 
-        {/* 헤더 */}
-        <header
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: '20px',
-            paddingBottom: '15px',
-            borderBottom: '2px solid #000',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          {/* 좌측: 학원 로고 및 정보 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {config.instituteLogo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={config.instituteLogo}
-                alt="Institute Logo"
-                style={{
-                  height: '50px',
-                  width: 'auto',
-                  objectFit: 'contain',
-                }}
-              />
-            )}
-            <div>
-              {config.instituteName && (
-                <div
-                  style={{
-                    fontSize: '12pt',
-                    fontWeight: 'bold',
-                    color: '#333',
-                  }}
-                >
-                  {config.instituteName}
-                </div>
-              )}
-              {config.date && (
-                <div style={{ fontSize: '9pt', color: '#666' }}>
-                  {config.date}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 우측: 시험 정보 및 응시자 정보 */}
-          <div style={{ textAlign: 'right' }}>
-            <div
-              style={{
-                fontSize: '18pt',
-                fontWeight: 'bold',
-                marginBottom: '8px',
-              }}
-            >
-              {config.title}
-            </div>
-            {config.subtitle && (
-              <div
-                style={{
-                  fontSize: '11pt',
-                  color: '#555',
-                  marginBottom: '10px',
-                }}
-              >
-                {config.subtitle}
-              </div>
-            )}
-
-            {/* 응시자 정보 필드 */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '15px',
-                justifyContent: 'flex-end',
-                fontSize: '10pt',
-              }}
-            >
-              {config.showClassField && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span>반:</span>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '50px',
-                      borderBottom: '1px solid #000',
-                    }}
-                  />
-                </div>
-              )}
-              {config.showNameField && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span>성명:</span>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '80px',
-                      borderBottom: '1px solid #000',
-                    }}
-                  />
-                </div>
-              )}
-              {config.showScoreField && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span>점수:</span>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '50px',
-                      borderBottom: '1px solid #000',
-                    }}
-                  />
-                  <span>/ 100</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
+        {/* 헤더 — 템플릿 기반 */}
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '20px' }}>
+          <ExamPaperHeader
+            templateId={config.templateId || 'simple'}
+            meta={config.examMeta}
+            examTitle={config.title}
+          />
+        </div>
 
         {/* 본문 - 문제 영역 */}
         <main
