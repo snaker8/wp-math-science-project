@@ -56,7 +56,8 @@ export function useDashboardStats() {
                     teachersResult,
                 ] = await Promise.all([
                     supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).eq('role', 'STUDENT'),
-                    supabaseBrowser.from('problems').select('*', { count: 'exact', head: true }).is('deleted_at', null),
+                    // ★ 시험에 연결된 문제만 카운트 (exam_problems 기준, 자산화된 문제)
+                    supabaseBrowser.from('exam_problems').select('problem_id', { count: 'exact', head: true }),
                     supabaseBrowser.from('exams').select('*', { count: 'exact', head: true }).is('deleted_at', null),
                     supabaseBrowser.from('users').select('*', { count: 'exact', head: true }).in('role', ['TEACHER', 'ADMIN']),
                 ]);
