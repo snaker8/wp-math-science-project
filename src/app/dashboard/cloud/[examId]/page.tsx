@@ -573,7 +573,11 @@ function ExamPaperView({
 
   // 문제 렌더링 헬퍼
   const renderProblem = (problem: ProblemData) => {
-    const parts = splitContentByFigureMarker(problem.content);
+    // ★ figureData/figureSvg 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (중복 방지)
+    const cleanContent = (problem.figureData || problem.figureSvg)
+      ? problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
+      : problem.content;
+    const parts = splitContentByFigureMarker(cleanContent);
     const hasFigureInContent = parts.some(p => p.type === 'figure');
 
     return (
@@ -595,7 +599,7 @@ function ExamPaperView({
               ))
             ) : (
               <>
-                <MixedContentRenderer content={problem.content} className="text-gray-800" />
+                <MixedContentRenderer content={cleanContent} className="text-gray-800" />
                 {(problem.figureData || problem.figureSvg) && (
                   <div className="mt-2 flex justify-center">
                     <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
@@ -704,12 +708,12 @@ function ExamPaperView({
             <input
               type="range"
               min={8}
-              max={48}
+              max={700}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-content-tertiary w-6">{gap}</span>
+            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -996,12 +1000,12 @@ function SolutionView({
             <input
               type="range"
               min={8}
-              max={48}
+              max={700}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-xs text-content-tertiary w-6">{gap}</span>
+            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
         <button
