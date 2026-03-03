@@ -514,7 +514,7 @@ export function useExamList() {
         .from('exams')
         .select('id, title, status, total_points, created_at, exam_problems(count)')
         .is('deleted_at', null)
-        .neq('status', 'CLOUD_ASSET')  // ★ 클라우드 자산화 시 자동 생성된 레코드 제외
+        // 클라우드 업로드 시험지도 시험관리에서 표시 (DRAFT 상태)
         .order('created_at', { ascending: false })
         .limit(200);
 
