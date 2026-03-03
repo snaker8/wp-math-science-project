@@ -704,7 +704,7 @@ async function saveEditedProblemsDirect(
     const examInsertData: Record<string, any> = {
       title: job.fileName.replace(/\.[^/.]+$/, ''),
       description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
-      status: 'CLOUD_ASSET',  // ★ CLOUD_ASSET: 시험지관리에서 제외
+      status: 'DRAFT',  // ★ DRAFT: DB enum 유효 값 (CLOUD_ASSET은 enum에 없어 INSERT 실패)
       created_by: createdBy,
       institute_id: instituteId,
       total_points: editedProblems.length * 4,
@@ -997,7 +997,7 @@ async function saveProblemsToDB(
     const examInsertData: Record<string, any> = {
       title: job.fileName.replace(/\.[^/.]+$/, ""),
       description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
-      status: 'CLOUD_ASSET',  // ★ CLOUD_ASSET: 시험지관리에서 제외
+      status: 'DRAFT',  // ★ DRAFT: DB enum 유효 값 (CLOUD_ASSET은 enum에 없어 INSERT 실패)
       created_by: createdBy,
       institute_id: instituteId,
       total_points: results.length * 4,
