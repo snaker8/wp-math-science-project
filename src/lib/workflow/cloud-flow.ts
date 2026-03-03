@@ -1314,7 +1314,7 @@ function createFallbackAnalysis(problemText: string): LLMAnalysisResult {
 export interface JobUpdateCallback {
   onStatusChange: (status: ProcessingStatus, step: string) => void;
   onProgress: (progress: number) => void;
-  onComplete: (result: LLMAnalysisResult[]) => void;
+  onComplete: (result: LLMAnalysisResult[]) => void | Promise<void>;
   onError: (error: string) => void;
   onPartialResult?: (results: LLMAnalysisResult[]) => void; // 문제별 중간 결과
 }
@@ -1578,7 +1578,7 @@ export async function processUploadJob(
     // Step 6: 완료
     callbacks.onStatusChange('COMPLETED', `${results.length}개 문제 처리 완료`);
     callbacks.onProgress(100);
-    callbacks.onComplete(results);
+    await callbacks.onComplete(results);
 
     return results;
   } catch (error) {
