@@ -19,12 +19,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log(`[PDF Proxy] Downloading: ${storagePath}`);
+    // ★ HWP/HWPX 파일이면 변환된 PDF 경로로 대체
+    let downloadPath = storagePath;
+    const ext = storagePath.split('.').pop()?.toLowerCase();
+    if (ext === 'hwp' || ext === 'hwpx') {
+      downloadPath = storagePath.replace(/\.(hwp|hwpx)$/i, '_converted.pdf');
+      console.log(`[PDF Proxy] HWP 파일 → 변환 PDF로 대체: ${downloadPath}`);
+    }
+
+    console.log(`[PDF Proxy] Downloading: ${downloadPath}`);
 
     // Supabase Storage에서 파일 다운로드
-    const { data, error } = await supabaseAdmin.storage
+    let { data, error } = await supabaseAdmin.storage
       .from('source-files')
-      .download(storagePath);
+      .download(downloadPath);
+
+    // 변환 PDF가 없으면 원본 경로로 폴백
+    if (error && downloadPath !== storagePath) {
+      console.warn(`[PDF Proxy] 변환 PDF 없음, 원본으로 폴백: ${storagePath}`);
+      const fallback = await supabaseAdmin.storage
+        .from('source-files')
+        .download(storagePath);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error || !data) {
       console.error(`[PDF Proxy] Download error for path '${storagePath}':`, error?.message);

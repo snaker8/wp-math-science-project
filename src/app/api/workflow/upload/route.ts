@@ -5,7 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
-import { processUploadJob, getStatusLabel } from '@/lib/workflow/cloud-flow';
+import { processUploadJob, getStatusLabel, convertedPdfStore } from '@/lib/workflow/cloud-flow';
+import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -448,6 +449,43 @@ async function processJobInBackground(
     return;
   }
 
+  // ★ HWP 파일이면 LibreOffice로 PDF 변환 (사전 처리)
+  if (job.fileType === 'HWP') {
+    try {
+      const currentJob = jobStore.get(jobId);
+      if (currentJob) {
+        currentJob.currentStep = '한글(HWP) → PDF 변환 중...';
+        currentJob.progress = 5;
+        jobStore.set(jobId, currentJob);
+      }
+
+      const pdfBuffer = await convertHWPtoPDF(currentBuffers.problem, job.fileName);
+      convertedPdfStore.set(jobId, pdfBuffer);
+      console.log(`[Job ${jobId}] HWP → PDF 변환 성공: ${pdfBuffer.byteLength} bytes`);
+
+      // ★ 변환된 PDF를 Storage에 업로드 (미리보기용)
+      try {
+        const pdfStoragePath = job.storagePath.replace(/\.(hwp|hwpx)$/i, '_converted.pdf');
+        const storageClient = supabaseAdmin || (await createSupabaseServerClient());
+        if (storageClient) {
+          await storageClient.storage
+            .from('source-files')
+            .upload(pdfStoragePath, Buffer.from(pdfBuffer), {
+              contentType: 'application/pdf',
+              upsert: true,
+            });
+          console.log(`[Job ${jobId}] 변환 PDF Storage 업로드: ${pdfStoragePath}`);
+        }
+      } catch (uploadErr) {
+        console.warn(`[Job ${jobId}] 변환 PDF Storage 업로드 실패:`, uploadErr);
+      }
+    } catch (convErr) {
+      console.warn(`[Job ${jobId}] HWP→PDF 변환 실패, 폴백 파싱 사용:`, convErr instanceof Error ? convErr.message : convErr);
+      console.warn(`[Job ${jobId}] ⚠️ LibreOffice를 설치하면 HWP 파일 처리 품질이 크게 향상됩니다.`);
+      console.warn(`[Job ${jobId}] 설치: winget install TheDocumentFoundation.LibreOffice`);
+    }
+  }
+
   try {
     const results = await processUploadJob(job, {
       onStatusChange: (status: ProcessingStatus, step: string) => {
@@ -476,11 +514,11 @@ async function processJobInBackground(
       },
       onComplete: (analysisResults: LLMAnalysisResult[]) => {
         jobResults.set(jobId, analysisResults);
+
+        // 변환 PDF 메모리 정리
+        convertedPdfStore.delete(jobId);
         // 버퍼 정리
         fileBufferStore.delete(jobId);
-
-        // DB 저장은 분석 페이지에서 검수 완료 후 수동으로 트리거
-        // saveProblemsToDB는 PUT /api/workflow/upload 에서 호출됨
       },
       onError: (error: string) => {
         const currentJob = jobStore.get(jobId);
