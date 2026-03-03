@@ -30,7 +30,6 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o 기본 (분류 전담)
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';  // ★ Claude Sonnet (풀이 생성 전담)
-const HWP_PYTHON_API = process.env.HWP_PYTHON_API || '/api/hwp/parse';
 
 // 다사람수학 교육과정 성취기준 체계 (505개 = 2022 개정 319개 + 2015 개정 186개)
 export const MATH_CURRICULUM_SYSTEM = {
@@ -98,32 +97,52 @@ export async function processDocument(
   }
 }
 
+// ============================================================================
+// HWP → PDF 변환 (LibreOffice headless)
+// ============================================================================
+
+// 변환된 PDF 버퍼를 저장하여 미리보기에 활용
+const globalForConvertedPdf = globalThis as unknown as {
+  __convertedPdfStore?: Map<string, ArrayBuffer>;
+};
+export const convertedPdfStore = globalForConvertedPdf.__convertedPdfStore ??
+  (globalForConvertedPdf.__convertedPdfStore = new Map<string, ArrayBuffer>());
+
 /**
  * HWP 파일 처리
+ * ★ LibreOffice 변환은 API Route에서 사전에 처리됨
+ *   변환 성공 시: convertedPdfBuffer가 전달되어 PDF 파이프라인 사용
+ *   변환 실패 시: 기존 클라이언트 사이드 파싱 (폴백)
  */
 async function processHWPDocument(
   fileBuffer: ArrayBuffer,
   jobId: string,
   onProgress?: (progress: number) => void
 ): Promise<OCRResult> {
+  if (onProgress) onProgress(5);
+
+  // ★ 변환된 PDF가 이미 있으면 (API Route에서 LibreOffice로 변환 완료) PDF 파이프라인으로
+  const convertedPdf = convertedPdfStore.get(jobId);
+  if (convertedPdf) {
+    console.log(`[Cloud Flow] HWP→PDF 변환 완료된 버퍼 사용 (${convertedPdf.byteLength} bytes)`);
+    if (onProgress) onProgress(20);
+    return processPDFDocument(convertedPdf, jobId, onProgress);
+  }
+
+  // 폴백: 기존 클라이언트 사이드 파싱
+  console.log('[Cloud Flow] HWP 클라이언트 사이드 파싱 (폴백)');
   if (onProgress) onProgress(10);
 
   let hwpResult: HWPParseResult;
-
   try {
-    // 먼저 Python API 서비스 시도 (더 정확한 파싱)
-    hwpResult = await processHWPWithPython(fileBuffer, HWP_PYTHON_API);
-  } catch {
-    // 폴백: 클라이언트 사이드 파싱
-    console.log('[Cloud Flow] Python HWP API unavailable, using client-side parsing');
     hwpResult = await parseHWPFile(fileBuffer);
+  } catch {
+    console.error('[Cloud Flow] HWP 클라이언트 파싱 실패');
+    hwpResult = { text: '', paragraphs: [], equations: [], images: [], metadata: {} };
   }
 
   if (onProgress) onProgress(40);
-
-  // HWP 결과를 OCR 형식으로 변환
   const ocrResult = convertHWPToOCRResult(hwpResult, jobId);
-
   if (onProgress) onProgress(50);
 
   return ocrResult;
@@ -1321,7 +1340,7 @@ export async function processUploadJob(
 
   try {
     // Step 1: Main Problem File Processing
-    const fileTypeLabel = job.fileType === 'HWP' ? 'HWP 파싱' :
+    const fileTypeLabel = job.fileType === 'HWP' ? '한글(HWP) → PDF 변환 + OCR' :
       job.fileType === 'PDF' ? 'PDF OCR' : '이미지 OCR';
     callbacks.onStatusChange('OCR_PROCESSING', `${fileTypeLabel} 처리 중...`);
 
