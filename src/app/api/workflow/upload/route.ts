@@ -14,11 +14,13 @@ const globalForJobs = globalThis as unknown as {
   __jobStore?: Map<string, UploadJob>;
   __jobResults?: Map<string, LLMAnalysisResult[]>;
   __fileBufferStore?: Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>;
+  __autoSavedExams?: Map<string, string>; // jobId → examId (자동 자산화된 시험지 ID)
 };
 
 const jobStore = globalForJobs.__jobStore ?? (globalForJobs.__jobStore = new Map<string, UploadJob>());
 const jobResults = globalForJobs.__jobResults ?? (globalForJobs.__jobResults = new Map<string, LLMAnalysisResult[]>());
 const fileBufferStore = globalForJobs.__fileBufferStore ?? (globalForJobs.__fileBufferStore = new Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>());
+const autoSavedExams = globalForJobs.__autoSavedExams ?? (globalForJobs.__autoSavedExams = new Map<string, string>());
 
 /**
  * POST /api/workflow/upload
@@ -207,6 +209,10 @@ export async function GET(request: NextRequest) {
     pdfUrl = `/api/workflow/pdf-proxy?path=${encodeURIComponent(job.storagePath)}`;
   }
 
+  // ★ 자동 자산화 완료 여부 확인
+  const autoExamId = autoSavedExams.get(jobId);
+  const savedToDb = !!autoExamId;
+
   return NextResponse.json({
     job: {
       ...job,
@@ -215,6 +221,8 @@ export async function GET(request: NextRequest) {
     pdfUrl,
     results: results || null,
     hasResults: !!results && results.length > 0,
+    savedToDb,
+    examId: autoExamId || null,
   });
 }
 
@@ -270,9 +278,33 @@ export async function PUT(request: NextRequest) {
 
     const job = jobStore.get(jobId);
     if (!job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      // ★ Job이 메모리에서 사라진 경우 (서버 재시작 등)
+      // 이미 자동 자산화된 examId가 있으면 성공으로 반환
+      const autoExamId = autoSavedExams.get(jobId);
+      if (autoExamId) {
+        console.log(`[Upload PUT] Job not in memory but auto-saved exam exists: ${autoExamId}`);
+        return NextResponse.json({
+          success: true,
+          message: '이미 자동 자산화가 완료되었습니다.',
+          examId: autoExamId,
+          alreadySaved: true,
+        });
+      }
+      return NextResponse.json({ error: 'Job not found. 서버가 재시작되어 작업 데이터가 사라졌습니다. 파일을 다시 업로드해주세요.' }, { status: 404 });
     }
     console.log(`[Upload PUT] job.bookGroupId: "${job.bookGroupId}" → 최종: "${bookGroupId || job.bookGroupId || null}"`);
+
+    // ★ 이미 자동 자산화된 경우, 성공 응답 반환
+    const existingExamId = autoSavedExams.get(jobId);
+    if (existingExamId) {
+      console.log(`[Upload PUT] 이미 자동 자산화 완료: examId=${existingExamId}`);
+      return NextResponse.json({
+        success: true,
+        message: '이미 자동 자산화가 완료되었습니다.',
+        examId: existingExamId,
+        alreadySaved: true,
+      });
+    }
 
     const results = jobResults.get(jobId);
 
@@ -512,13 +544,25 @@ async function processJobInBackground(
         // 문제 하나 분석 완료될 때마다 중간 결과 저장 (실시간 UI 업데이트)
         jobResults.set(jobId, partialResults);
       },
-      onComplete: (analysisResults: LLMAnalysisResult[]) => {
+      onComplete: async (analysisResults: LLMAnalysisResult[]) => {
         jobResults.set(jobId, analysisResults);
 
         // 변환 PDF 메모리 정리
         convertedPdfStore.delete(jobId);
         // 버퍼 정리
         fileBufferStore.delete(jobId);
+
+        // ★ 자동 자산화: 분석 완료 즉시 DB에 저장 (검수 전 초벌 저장)
+        // 분석 페이지에서 수동 자산화 시 기존 exam을 업데이트함
+        try {
+          const currentJob = jobStore.get(jobId);
+          const bookGroupId = currentJob?.bookGroupId || null;
+          console.log(`[Job ${jobId}] 자동 자산화 시작: ${analysisResults.length}개 문제, bookGroupId="${bookGroupId}"`);
+          await saveProblemsToDB(jobId, analysisResults, bookGroupId);
+          console.log(`[Job ${jobId}] 자동 자산화 완료`);
+        } catch (autoSaveErr) {
+          console.error(`[Job ${jobId}] 자동 자산화 실패 (수동 자산화로 대체):`, autoSaveErr);
+        }
       },
       onError: (error: string) => {
         const currentJob = jobStore.get(jobId);
@@ -824,6 +868,19 @@ async function saveEditedProblemsDirect(
     } catch (err) {
       console.error(`[Direct Save] 문제 ${edited.number}번 오류:`, err);
     }
+  }
+
+  // ★ 자산화 완료: examId를 기록하여 중복 저장 방지
+  if (examId) {
+    autoSavedExams.set(jobId, examId);
+  }
+
+  if (savedCount === 0) {
+    return NextResponse.json({
+      success: false,
+      error: `자산화 실패: 저장된 문제가 0개입니다.${!examId ? ' (시험지 생성도 실패)' : ''}`,
+      examId: examId,
+    }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -1189,6 +1246,12 @@ async function saveProblemsToDB(
   }
 
   console.log(`[DB] Successfully saved ${savedCount}/${results.length} problems from job ${jobId}`);
+
+  // ★ 자동 자산화 완료: examId를 기록하여 중복 저장 방지
+  if (examId) {
+    autoSavedExams.set(jobId, examId);
+    console.log(`[DB] 자동 자산화 기록: job ${jobId} → exam ${examId}`);
+  }
 
   // ★ 도형 포함 문제 자동 구조화된 해석 (비동기, 실패해도 무시)
   // 크롭 이미지가 있고 hasFigure가 true인 문제에 대해 GPT-4o Vision으로 구조화된 도형 데이터 생성
