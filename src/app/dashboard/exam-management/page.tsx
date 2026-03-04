@@ -21,7 +21,9 @@ import {
   X,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { useExamList, useExamProblems } from '@/hooks/useExamProblems';
+import type { InterpretedFigure } from '@/types/ocr';
 
 // ============================================================================
 // Types
@@ -41,6 +43,9 @@ interface ExamProblem {
   answer: number | string;
   solution: string;
   difficulty: 1 | 2 | 3 | 4 | 5;
+  hasFigure?: boolean;
+  figureSvg?: string;
+  figureData?: InterpretedFigure;
 }
 
 // ============================================================================
@@ -310,6 +315,9 @@ export default function ExamManagementPage() {
       answer: p.answer,
       solution: p.solution,
       difficulty: p.difficulty,
+      hasFigure: p.hasFigure,
+      figureSvg: p.figureSvg,
+      figureData: p.figureData,
     }));
   }, [dbProblems]);
 
@@ -606,6 +614,16 @@ export default function ExamManagementPage() {
                                 <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                                   <MixedContentRenderer content={problem.content} className="text-gray-800" />
                                 </div>
+                                {problem.hasFigure && (problem.figureData || problem.figureSvg) && (
+                                  <div className="my-2 flex justify-center">
+                                    <FigureRenderer
+                                      figureData={problem.figureData}
+                                      figureSvg={problem.figureSvg}
+                                      maxWidth={240}
+                                      darkMode={false}
+                                    />
+                                  </div>
+                                )}
                                 {problem.choices.length > 0 && (
                                   <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
                                     {problem.choices.map((choice, ci) => (
@@ -812,6 +830,16 @@ export default function ExamManagementPage() {
                         <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                           <MixedContentRenderer content={problem.content} className="text-gray-800" />
                         </div>
+                        {problem.hasFigure && (problem.figureData || problem.figureSvg) && (
+                          <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'center' }}>
+                            <FigureRenderer
+                              figureData={problem.figureData}
+                              figureSvg={problem.figureSvg}
+                              maxWidth={220}
+                              darkMode={false}
+                            />
+                          </div>
+                        )}
                         {problem.choices.length > 0 && (
                           <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px' }}>
                             {problem.choices.map((choice, ci) => (
