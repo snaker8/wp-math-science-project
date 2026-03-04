@@ -144,9 +144,9 @@ export async function POST(
     }
 
     // 4. 구조화된 Vision 해석 (image-interpreter 사용)
-    const contentContext = problem.content_latex
-      ? problem.content_latex.substring(0, 500)
-      : undefined;
+    // ★ content_latex 전체를 전달하여 수식 자동 감지가 정확히 동작하도록 함
+    // (image-interpreter 내부에서 800자로 잘라서 AI에 전달)
+    const contentContext = problem.content_latex || undefined;
 
     const interpreted = await interpretImage(imageDataUri, contentContext);
 

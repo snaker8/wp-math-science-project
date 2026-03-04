@@ -216,6 +216,89 @@ SVG STYLE RULES FOR TABLES:
 7. Empty cells: draw a small rect (20x20, stroke="#9ca3af", fill="none", rx="2") centered in the cell`;
 
 // ============================================================================
+// 수식 자동 감지 (content_latex에서 함수/그래프 정보 추출)
+// ============================================================================
+
+interface DetectedEquations {
+  /** 감지된 함수 수식들 (y=..., f(x)=... 등) */
+  equations: string[];
+  /** 그래프 관련 키워드 발견 여부 */
+  hasGraphKeywords: boolean;
+  /** 이미지가 반드시 graph 타입이어야 하는지 */
+  forceGraph: boolean;
+  /** AI에게 전달할 강화된 힌트 문자열 */
+  hint: string;
+}
+
+/**
+ * content_latex에서 함수 수식과 그래프 관련 키워드를 자동 감지
+ * 이미 OCR에서 추출된 수식 정보를 활용하여 Vision AI에 강력한 힌트 제공
+ */
+function detectEquationsFromContent(content: string): DetectedEquations {
+  const equations: string[] = [];
+
+  // 1. 함수 수식 패턴 감지 (LaTeX + 일반 텍스트)
+  const equationPatterns = [
+    // y = ... 형태 (LaTeX)
+    /y\s*=\s*[-+]?\s*\d*[a-z]?\s*(?:\\?(?:frac|sqrt|cdot))?\s*[-+\d\s\\{}^_xX().a-z]+/g,
+    // f(x) = ... 형태
+    /f\s*\(\s*x\s*\)\s*=\s*[-+\d\s\\{}^_xX().a-z]+/g,
+    // g(x) = ... 형태
+    /g\s*\(\s*x\s*\)\s*=\s*[-+\d\s\\{}^_xX().a-z]+/g,
+    // y=ax^2+bx+c 등 다항식
+    /y\s*=\s*[-+]?\s*\d*x\^?\{?\d*\}?\s*(?:[-+]\s*\d*x?\s*(?:\^?\{?\d*\}?)?)*/g,
+    // 이차함수 y=-2x²+5x 스타일
+    /y\s*=\s*[-+]?\d*x\s*[\^²³]\s*[-+]?\s*\d*x?/g,
+  ];
+
+  for (const pattern of equationPatterns) {
+    const matches = content.match(pattern);
+    if (matches) {
+      for (const m of matches) {
+        const cleaned = m.trim();
+        if (cleaned.length > 3 && !equations.includes(cleaned)) {
+          equations.push(cleaned);
+        }
+      }
+    }
+  }
+
+  // 2. 그래프 관련 키워드 감지
+  const graphKeywords = [
+    '그래프', '좌표', '포물선', '이차함수', '일차함수', '삼차함수',
+    '직선', 'x축', 'y축', '원점', '접선', '접한다', '교점',
+    '함수의 그래프', '함수 y', '함수 f',
+    '꼭짓점', '축의 방정식', '최댓값', '최솟값',
+    '증가', '감소', '볼록', '오목',
+    '\\text{그래프}', '\\text{좌표}',
+  ];
+
+  const hasGraphKeywords = graphKeywords.some(kw => content.includes(kw));
+
+  // 3. 그래프 강제 판별: 함수 수식이 있거나 그래프 키워드가 있으면
+  const forceGraph = equations.length > 0 || hasGraphKeywords;
+
+  // 4. AI에게 전달할 힌트 생성
+  let hint = '';
+  if (equations.length > 0) {
+    hint += `\n\n★★★ 중요: 이 문제의 텍스트에서 다음 함수 수식이 감지되었습니다:\n`;
+    equations.forEach(eq => { hint += `  • ${eq}\n`; });
+    hint += `따라서 이 이미지는 반드시 figureType="graph"로 분류하세요.\n`;
+    hint += `expressions에 위 수식을 포함시키세요.\n`;
+    hint += `좌표축 위에 도형(삼각형, 사각형 등)이 있더라도 figureType은 "graph"입니다.\n`;
+  } else if (hasGraphKeywords) {
+    hint += `\n\n★★ 참고: 이 문제 텍스트에 그래프/좌표 관련 키워드가 포함되어 있습니다.\n`;
+    hint += `이미지에 좌표축이 보이면 반드시 figureType="graph"로 분류하세요.\n`;
+  }
+
+  if (equations.length > 0 || hasGraphKeywords) {
+    console.log(`[Vision] 수식 자동 감지: equations=${JSON.stringify(equations)}, graphKeywords=${hasGraphKeywords}, forceGraph=${forceGraph}`);
+  }
+
+  return { equations, hasGraphKeywords, forceGraph, hint };
+}
+
+// ============================================================================
 // 핵심 함수
 // ============================================================================
 
@@ -231,28 +314,33 @@ export async function interpretImage(
 ): Promise<InterpretedFigure> {
   const provider = VISION_PROVIDER;
 
+  // content_latex에서 수식 자동 감지
+  const detected = context ? detectEquationsFromContent(context) : null;
+
   // API 키 확인
   if (provider === 'claude' && !ANTHROPIC_API_KEY) {
     console.warn('[Vision] Anthropic API key not configured, trying GPT fallback');
     if (!OPENAI_API_KEY) {
       return createFallbackFigure(imageUrl, 'API 키 미설정');
     }
-    return interpretImageWithGPT(imageUrl, context);
+    return postProcessResult(await interpretImageWithGPT(imageUrl, context, detected), detected);
   }
   if (provider === 'gpt' && !OPENAI_API_KEY) {
     console.warn('[Vision] OpenAI API key not configured, trying Claude fallback');
     if (!ANTHROPIC_API_KEY) {
       return createFallbackFigure(imageUrl, 'API 키 미설정');
     }
-    return interpretImageWithClaude(imageUrl, context);
+    return postProcessResult(await interpretImageWithClaude(imageUrl, context, detected), detected);
   }
 
   try {
+    let result: InterpretedFigure;
     if (provider === 'claude') {
-      return await interpretImageWithClaude(imageUrl, context);
+      result = await interpretImageWithClaude(imageUrl, context, detected);
     } else {
-      return await interpretImageWithGPT(imageUrl, context);
+      result = await interpretImageWithGPT(imageUrl, context, detected);
     }
+    return postProcessResult(result, detected);
   } catch (error) {
     console.error(`[Vision] ${provider} failed:`, error);
 
@@ -263,9 +351,10 @@ export async function interpretImage(
     if (fallbackKey) {
       console.log(`[Vision] Falling back to ${fallbackProvider}...`);
       try {
-        return fallbackProvider === 'claude'
-          ? await interpretImageWithClaude(imageUrl, context)
-          : await interpretImageWithGPT(imageUrl, context);
+        const fallbackResult = fallbackProvider === 'claude'
+          ? await interpretImageWithClaude(imageUrl, context, detected)
+          : await interpretImageWithGPT(imageUrl, context, detected);
+        return postProcessResult(fallbackResult, detected);
       } catch (fallbackError) {
         console.error(`[Vision] Fallback ${fallbackProvider} also failed:`, fallbackError);
       }
@@ -276,14 +365,73 @@ export async function interpretImage(
 }
 
 /**
+ * AI 응답 후처리: content_latex에서 감지된 수식 정보로 결과 보정
+ * - geometry로 분류되었지만 수식이 감지된 경우 → graph로 강제 전환
+ * - graph인데 expressions가 비어있으면 감지된 수식 주입
+ */
+function postProcessResult(
+  result: InterpretedFigure,
+  detected: DetectedEquations | null
+): InterpretedFigure {
+  if (!detected || !detected.forceGraph) return result;
+
+  // Case 1: AI가 geometry로 분류했지만 수식/그래프 키워드가 있는 경우
+  if (result.figureType === 'geometry' && detected.forceGraph) {
+    console.log(`[Vision] ★ 후처리 보정: geometry → graph (감지된 수식: ${detected.equations.join(', ')})`);
+
+    // geometry 렌더링 데이터에서 points, segments 등을 보존하여 graph로 전환
+    const geoRendering = result.rendering as GeometryRendering | null;
+    const graphRendering: GraphRendering = {
+      type: 'graph',
+      expressions: detected.equations.map(eq => ({
+        latex: eq.replace(/^y\s*=\s*/, 'y=').replace(/^f\s*\(\s*x\s*\)\s*=\s*/, 'y='),
+        color: '#2563eb',
+        style: 'solid' as const,
+        hidden: false,
+      })),
+      xRange: [-5, 10],
+      yRange: [-5, 10],
+      points: geoRendering?.vertices?.map(v => ({ x: v.x, y: v.y, label: v.label })) || [],
+      annotations: [],
+      segments: geoRendering?.segments,
+      shadedRegions: geoRendering?.shadedRegions,
+    };
+
+    return {
+      ...result,
+      figureType: 'graph',
+      rendering: graphRendering,
+    };
+  }
+
+  // Case 2: graph인데 expressions가 비어있으면 감지된 수식 주입
+  if (result.figureType === 'graph' && detected.equations.length > 0) {
+    const graphRendering = result.rendering as GraphRendering | null;
+    if (graphRendering && graphRendering.expressions.length === 0) {
+      console.log(`[Vision] ★ 후처리: graph에 감지된 수식 주입: ${detected.equations.join(', ')}`);
+      graphRendering.expressions = detected.equations.map(eq => ({
+        latex: eq.replace(/^y\s*=\s*/, 'y=').replace(/^f\s*\(\s*x\s*\)\s*=\s*/, 'y='),
+        color: '#2563eb',
+        style: 'solid' as const,
+        hidden: false,
+      }));
+    }
+  }
+
+  return result;
+}
+
+/**
  * GPT-4o Vision으로 이미지 해석
  */
-async function interpretImageWithGPT(imageUrl: string, context?: string): Promise<InterpretedFigure> {
+async function interpretImageWithGPT(
+  imageUrl: string,
+  context?: string,
+  detected?: DetectedEquations | null
+): Promise<InterpretedFigure> {
   console.log(`[Vision] GPT-4o: Analyzing image...`);
 
-  const userMessage = context
-    ? `이 이미지는 다음 수학 문제에 포함된 그래프/도형입니다:\n\n"${context.substring(0, 800)}"\n\n중요: 문제 텍스트의 수학적 조건(길이, 각도, 위치관계 등)을 반드시 읽고, 이를 기반으로 정확한 좌표를 계산하여 응답하세요. 음영 색상은 이미지에서 보이는 실제 색상(보통 yellow)을 사용하세요.`
-    : '이 수학 문제의 이미지를 분석해주세요.';
+  const userMessage = buildUserMessage(context, detected);
 
   const response = await callOpenAIVision(imageUrl, ANALYSIS_SYSTEM_PROMPT, userMessage, true);
   const parsed = parseVisionResponse(response, imageUrl);
@@ -295,18 +443,50 @@ async function interpretImageWithGPT(imageUrl: string, context?: string): Promis
 /**
  * Claude Sonnet Vision으로 이미지 해석
  */
-async function interpretImageWithClaude(imageUrl: string, context?: string): Promise<InterpretedFigure> {
+async function interpretImageWithClaude(
+  imageUrl: string,
+  context?: string,
+  detected?: DetectedEquations | null
+): Promise<InterpretedFigure> {
   console.log(`[Vision] Claude Sonnet: Analyzing image...`);
 
-  const userMessage = context
-    ? `이 이미지는 다음 수학 문제에 포함된 그래프/도형입니다:\n\n"${context.substring(0, 800)}"\n\n중요: 문제 텍스트의 수학적 조건(길이, 각도, 위치관계 등)을 반드시 읽고, 이를 기반으로 정확한 좌표를 계산하여 응답하세요. 음영 색상은 이미지에서 보이는 실제 색상(보통 yellow)을 사용하세요.\n\nJSON으로만 응답하세요.`
-    : '이 수학 문제의 이미지를 분석해주세요. JSON으로만 응답하세요.';
+  const userMessage = buildUserMessage(context, detected, true);
 
   const response = await callClaudeVision(imageUrl, ANALYSIS_SYSTEM_PROMPT, userMessage);
   const parsed = parseVisionResponse(response, imageUrl);
 
   console.log(`[Vision] Claude Sonnet result: ${parsed.figureType} (confidence: ${parsed.confidence})`);
   return parsed;
+}
+
+/**
+ * Vision AI에 전달할 사용자 메시지 구성
+ * content_latex에서 감지된 수식 정보를 강제 힌트로 포함
+ */
+function buildUserMessage(
+  context?: string,
+  detected?: DetectedEquations | null,
+  appendJsonInstruction = false
+): string {
+  if (!context) {
+    return appendJsonInstruction
+      ? '이 수학 문제의 이미지를 분석해주세요. JSON으로만 응답하세요.'
+      : '이 수학 문제의 이미지를 분석해주세요.';
+  }
+
+  let msg = `이 이미지는 다음 수학 문제에 포함된 그래프/도형입니다:\n\n"${context.substring(0, 800)}"`;
+  msg += `\n\n중요: 문제 텍스트의 수학적 조건(길이, 각도, 위치관계 등)을 반드시 읽고, 이를 기반으로 정확한 좌표를 계산하여 응답하세요. 음영 색상은 이미지에서 보이는 실제 색상(보통 yellow)을 사용하세요.`;
+
+  // ★ 수식 자동 감지 힌트 주입
+  if (detected?.hint) {
+    msg += detected.hint;
+  }
+
+  if (appendJsonInstruction) {
+    msg += '\n\nJSON으로만 응답하세요.';
+  }
+
+  return msg;
 }
 
 /**
