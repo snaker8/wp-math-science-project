@@ -56,20 +56,27 @@ export async function POST(
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
     }
 
-    // 2. 도형 이미지 URL 찾기
+    // 2. 도형 이미지 URL 찾기 (crop 우선, 없으면 다른 이미지 사용)
     const images: Array<{ url: string; type: string; label: string }> =
       Array.isArray(problem.images) ? problem.images : [];
 
     const cropImage = images.find((img) => img.type === 'crop');
+    // crop이 없으면 ai_analysis.figureData.originalImageUrl 또는 첫 번째 이미지 사용
+    const aiAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
+    const figureData = aiAnalysis.figureData as Record<string, unknown> | undefined;
+    const fallbackImageUrl = figureData?.originalImageUrl as string | undefined;
+    const anyImage = images[0]; // 아무 이미지라도 사용
 
-    if (!cropImage?.url) {
+    const targetImageUrl = cropImage?.url || fallbackImageUrl || anyImage?.url;
+
+    if (!targetImageUrl) {
       return NextResponse.json(
-        { error: 'No crop image found for this problem.' },
+        { error: 'No image found for this problem. Upload a crop image first.' },
         { status: 400 }
       );
     }
 
-    console.log(`[generate-figure] Processing problem ${problemId}, fullUrl: ${cropImage.url}`);
+    console.log(`[generate-figure] Processing problem ${problemId}, source=${cropImage ? 'crop' : fallbackImageUrl ? 'figureData' : 'fallback'}, url: ${targetImageUrl}`);
 
     // 3. 이미지를 서버에서 다운로드하여 base64로 변환
     let imageDataUri: string;
@@ -78,7 +85,7 @@ export async function POST(
       let contentType = 'image/png';
 
       // URL에서 Storage bucket/path 추출
-      const storagePath = extractStoragePath(cropImage.url);
+      const storagePath = extractStoragePath(targetImageUrl);
       console.log(`[generate-figure] extractStoragePath:`, JSON.stringify(storagePath));
 
       if (storagePath && supabaseAdmin) {
@@ -119,8 +126,8 @@ export async function POST(
 
       // 방법 3: Public URL fetch (최종 fallback)
       if (!imgBuffer) {
-        console.log(`[generate-figure] Trying public URL fetch: ${cropImage.url}`);
-        const imgRes = await fetch(cropImage.url);
+        console.log(`[generate-figure] Trying public URL fetch: ${targetImageUrl}`);
+        const imgRes = await fetch(targetImageUrl);
         if (!imgRes.ok) {
           console.error(`[generate-figure] All download methods failed. Last: public URL ${imgRes.status}`);
           return NextResponse.json(
@@ -183,7 +190,7 @@ export async function POST(
     const figureDataForDb = {
       ...interpreted,
       originalImageUrl: interpreted.originalImageUrl?.startsWith('data:')
-        ? cropImage.url  // base64 대신 원본 crop URL 저장
+        ? targetImageUrl  // base64 대신 원본 이미지 URL 저장
         : interpreted.originalImageUrl,
     };
 

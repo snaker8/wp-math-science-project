@@ -290,8 +290,8 @@ function ProblemCardView({
                 <Move className="h-3.5 w-3.5" />
               </button>
             )}
-            {/* ★ 도형 재생성 버튼 (크롭 이미지가 있으면 항상 표시) */}
-            {cropImage && (
+            {/* ★ 도형 재생성 버튼 (크롭 이미지 있거나, 도형이 있었던 문제면 항상 표시) */}
+            {(cropImage || problem.hasFigure || (problem.images && problem.images.length > 0)) && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGenerateFigure?.(problem); }}
