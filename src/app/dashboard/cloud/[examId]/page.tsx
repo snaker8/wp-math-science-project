@@ -271,7 +271,7 @@ function ProblemCardView({
             <Check className="h-3.5 w-3.5" />
           </div>
         ) : (
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5">
             {/* ★ 이미지 위치 편집 버튼 (도형/크롭 이미지가 있을 때) */}
             {hasFigureContent && (
               <button
@@ -280,7 +280,7 @@ function ProblemCardView({
                 className={`p-1 rounded transition-colors ${
                   isEditingPosition
                     ? 'text-violet-400 bg-violet-500/20'
-                    : 'text-content-tertiary hover:text-violet-400 hover:bg-violet-500/10'
+                    : 'text-content-muted hover:text-violet-400 hover:bg-violet-500/10'
                 }`}
                 title="이미지 위치 편집"
               >
@@ -295,7 +295,7 @@ function ProblemCardView({
                 className={`p-1 rounded transition-colors ${
                   isGeneratingFigure
                     ? 'text-amber-400 animate-spin'
-                    : 'text-content-tertiary hover:text-orange-400 hover:bg-orange-500/10'
+                    : 'text-content-muted hover:text-orange-400 hover:bg-orange-500/10'
                 }`}
                 title={problem.figureData ? '도형 재생성' : problem.figureSvg ? '도형 재생성' : '도형 AI 생성'}
                 disabled={isGeneratingFigure}
@@ -306,18 +306,18 @@ function ProblemCardView({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onTwinGenerate(problem); }}
-              className="p-1 rounded text-content-tertiary hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+              className="p-1 rounded text-content-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
               title="유사문제 만들기"
             >
               <Sparkles className="h-3.5 w-3.5" />
             </button>
-            <button type="button" className="p-1 rounded text-content-tertiary hover:text-content-primary hover:bg-surface-raised" title="복사해서 만들기">
+            <button type="button" className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-surface-raised transition-colors" title="복사해서 만들기">
               <Copy className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onEdit?.(problem); }}
-              className="p-1 rounded text-content-tertiary hover:text-content-primary hover:bg-surface-raised"
+              className="p-1 rounded text-content-muted hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
               title="수정하기"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -1674,7 +1674,7 @@ export default function CloudExamDetailPage() {
               <p className="text-sm">문제 로딩 중...</p>
             </div>
           ) : filteredProblems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredProblems.map((problem) => (
                 <ProblemCardView
                   key={problem.id}
