@@ -431,8 +431,8 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     // 8. 거듭제곱: Math.pow 사용 (★ ** 대신 — -x**2 SyntaxError 방지)
     //    (...)^{n} → Math.pow((...), n)
     js = js.replace(/\(([^)]+)\)\^\{([^}]+)\}/g, 'Math.pow(($1),$2)');
-    //    var^{n} (단일 변수/숫자)
-    js = js.replace(/([a-zA-Z0-9]+)\^\{([^}]+)\}/g, 'Math.pow($1,$2)');
+    //    var^{n} (단일 변수/숫자) ★ 계수 분리: "2x^{2}" → "2"+"Math.pow(x,2)" (NOT "Math.pow(2x,2)")
+    js = js.replace(/((?:[a-zA-Z]+)|(?:\d+))\^\{([^}]+)\}/g, 'Math.pow($1,$2)');
     //    (...)^n (단일 숫자 지수)
     js = js.replace(/\(([^)]+)\)\^([0-9])/g, 'Math.pow(($1),$2)');
     //    var^n (단일 숫자 지수)
@@ -458,6 +458,8 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     js = js.replace(/(?<![a-zA-Z])([a-z])\s*\(/gi, '$1*(');
     // Math 함수 복원
     js = js.replace(/§(\d+)§/g, (_, idx) => savedFns[parseInt(idx)]);
+    // ★ 숫자 바로 뒤 Math 함수: "2Math.pow" → "2*Math.pow" (묵시적 곱셈)
+    js = js.replace(/(\d)(Math\.)/g, '$1*$2');
 
     // 13. 공백 정리
     js = js.replace(/\s+/g, '').trim();
