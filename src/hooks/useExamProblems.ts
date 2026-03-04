@@ -208,13 +208,20 @@ function toExamProblemData(
   const rawTypeCode = classification?.type_code || '';
   const typeCode = formatDisplayTypeCode(rawTypeCode);
 
-  // typeName: ai_analysis에서 추출 (classifications 테이블에 type_name 컬럼 없음)
+  // typeName: 1순위 classifications.type_name (DB 조회), 2순위 ai_analysis
   let typeName = '';
-  const aiClass = problem.ai_analysis?.classification;
-  if (aiClass?.typeName && aiClass.typeName !== rawTypeCode) {
-    typeName = aiClass.typeName;
+  // ★ 1순위: API에서 expanded_math_types 조인한 type_name
+  if (classification?.type_name) {
+    typeName = classification.type_name;
   }
-  // 여전히 없으면 typeCode 표시
+  // ★ 2순위: ai_analysis에서 추출
+  if (!typeName) {
+    const aiClass = problem.ai_analysis?.classification;
+    if (aiClass?.typeName && aiClass.typeName !== rawTypeCode) {
+      typeName = aiClass.typeName;
+    }
+  }
+  // 3순위: typeCode 표시
   if (!typeName) typeName = typeCode;
 
   // source_name에서 학교명/연도 파싱

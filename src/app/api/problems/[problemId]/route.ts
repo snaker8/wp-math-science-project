@@ -22,13 +22,15 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { content_latex, solution_latex, answer_json, difficulty, type_code, cognitive_domain } = body;
+    const { content_latex, solution_latex, answer_json, images, ai_analysis, difficulty, type_code, cognitive_domain } = body;
 
     // problems 테이블 업데이트
     const updateData: Record<string, any> = {};
     if (content_latex !== undefined) updateData.content_latex = content_latex;
     if (solution_latex !== undefined) updateData.solution_latex = solution_latex;
     if (answer_json !== undefined) updateData.answer_json = answer_json;
+    if (images !== undefined) updateData.images = images;
+    if (ai_analysis !== undefined) updateData.ai_analysis = ai_analysis;
 
     let problem = null;
     if (Object.keys(updateData).length > 0) {

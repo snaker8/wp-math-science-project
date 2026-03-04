@@ -68,10 +68,10 @@ export async function GET(
         console.error('[API/exams] problems fetch error:', pErr.message);
       }
 
-      // 4. classifications 별도 조회
+      // 4. classifications 별도 조회 (expanded_type_code 포함)
       const { data: classData, error: cErr } = await supabaseAdmin
         .from('classifications')
-        .select('problem_id, type_code, difficulty, cognitive_domain, ai_confidence')
+        .select('problem_id, type_code, expanded_type_code, difficulty, cognitive_domain, ai_confidence')
         .in('problem_id', problemIds);
 
       if (cErr) {
@@ -80,6 +80,52 @@ export async function GET(
 
       const classMap = new Map<string, any>();
       (classData || []).forEach((c: any) => classMap.set(c.problem_id, c));
+
+      // 5. expanded_math_types에서 유형명 일괄 조회
+      // ★ classifications에는 "EQU-06-001" (짧은 형식), expanded_math_types에는 "MA-HS0-EQU-06-001" (전체 형식)
+      //    → 짧은 코드에 가능한 prefix를 붙여서 정확 매칭
+      const allTypeCodes = new Set<string>();
+      (classData || []).forEach((c: any) => {
+        if (c.type_code) allTypeCodes.add(c.type_code);
+        if (c.expanded_type_code) allTypeCodes.add(c.expanded_type_code);
+      });
+
+      const typeNamesMap = new Map<string, string>();
+      if (allTypeCodes.size > 0) {
+        // 짧은 코드(EQU-06-001)에 가능한 level prefix를 붙여 전체 코드 후보 생성
+        const LEVEL_PREFIXES = ['MA-HS0', 'MA-HS1', 'MA-HS2', 'MA-MS1', 'MA-MS2', 'MA-MS3', 'MA-EL4', 'MA-EL5', 'MA-EL6'];
+        const lookupCodes = new Set<string>();
+        allTypeCodes.forEach(code => {
+          lookupCodes.add(code); // 원본 코드
+          if (!code.startsWith('MA-')) {
+            // 짧은 코드 → 모든 prefix 조합 추가
+            LEVEL_PREFIXES.forEach(prefix => lookupCodes.add(`${prefix}-${code}`));
+          }
+        });
+
+        const { data: typeData } = await supabaseAdmin
+          .from('expanded_math_types')
+          .select('type_code, type_name')
+          .in('type_code', Array.from(lookupCodes));
+
+        (typeData || []).forEach((t: any) => {
+          typeNamesMap.set(t.type_code, t.type_name);
+          // 전체 코드에서 짧은 코드도 매핑 (MA-HS0-EQU-06-001 → EQU-06-001)
+          if (t.type_code.startsWith('MA-')) {
+            const parts = t.type_code.split('-');
+            if (parts.length >= 5) {
+              const shortCode = parts.slice(2).join('-');
+              typeNamesMap.set(shortCode, t.type_name);
+            }
+          }
+        });
+      }
+
+      // 6. classifications에 type_name 병합
+      (classData || []).forEach((c: any) => {
+        const typeName = typeNamesMap.get(c.expanded_type_code || '') || typeNamesMap.get(c.type_code || '');
+        if (typeName) c.type_name = typeName;
+      });
 
       (problemsData || []).forEach((p: any) => {
         problemsMap.set(p.id, {

@@ -144,9 +144,9 @@ export async function POST(
     }
 
     // 4. 구조화된 Vision 해석 (image-interpreter 사용)
-    const contentContext = problem.content_latex
-      ? problem.content_latex.substring(0, 500)
-      : undefined;
+    // ★ content_latex 전체를 전달하여 수식 자동 감지가 정확히 동작하도록 함
+    // (image-interpreter 내부에서 800자로 잘라서 AI에 전달)
+    const contentContext = problem.content_latex || undefined;
 
     const interpreted = await interpretImage(imageDataUri, contentContext);
 
@@ -200,14 +200,11 @@ export async function POST(
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;
     console.log(`[generate-figure] Saving figureData: type=${figureDataForDb.figureType}, hasSvg=${!!renderingAny?.svg}, svgLen=${typeof renderingAny?.svg === 'string' ? renderingAny.svg.length : 0}`);
 
-    // ★ 도형 생성 성공 시 크롭 이미지 제거 (클린 렌더링으로 대체)
-    const updatedImages = images.filter((img) => img.type !== 'crop');
-
+    // ★ 크롭 이미지 유지 (도형 재생성 시 필요하므로 삭제하지 않음)
     const { error: updateError } = await supabaseAdmin
       .from('problems')
       .update({
         ai_analysis: updatedAnalysis,
-        images: updatedImages,  // 크롭 이미지 제거
       })
       .eq('id', problemId);
 
