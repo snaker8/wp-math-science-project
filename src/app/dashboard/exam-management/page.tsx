@@ -244,7 +244,7 @@ function PrintMenu({
   const anySelected = sections.exam || sections.answer || sections.solution;
 
   return (
-    <div ref={menuRef} className="absolute bottom-full right-0 mb-2 w-48 rounded-lg border border-zinc-600 bg-zinc-800 shadow-xl z-50">
+    <div ref={menuRef} className="w-48 rounded-lg border border-zinc-600 bg-zinc-800 shadow-xl z-50">
       <div className="px-3 py-2 border-b border-zinc-700">
         <span className="text-xs font-bold text-content-secondary">출력할 항목 선택</span>
       </div>
