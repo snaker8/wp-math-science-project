@@ -680,6 +680,9 @@ export function ProblemEditModal({
             finalAnswer: finalAnswer,
             choices: formattedChoices,
           },
+          difficulty,
+          type_code: typeCode || undefined,
+          cognitive_domain: cognitiveDomain || undefined,
         }),
       });
       if (!res.ok) {
@@ -694,7 +697,7 @@ export function ProblemEditModal({
     } finally {
       setIsSaving(false);
     }
-  }, [problemId, content, solution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, onSaved, onClose]);
+  }, [problemId, content, solution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, onSaved, onClose]);
 
   // ★ AI 재분석: GPT-4o가 풀이/정답/분류를 다시 분석
   const handleReanalyze = useCallback(async () => {
