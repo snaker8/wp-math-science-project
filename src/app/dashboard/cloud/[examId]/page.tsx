@@ -28,9 +28,11 @@ import {
   Trash2,
   CheckCheck,
   FileEdit,
+  Move,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
+import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
@@ -195,6 +197,7 @@ function ProblemCardView({
   onTwinGenerate,
   onEdit,
   onGenerateFigure,
+  onUpdateContent,
   isSelectionMode,
   isSelected,
   onToggleSelect,
@@ -205,14 +208,17 @@ function ProblemCardView({
   onTwinGenerate: (p: ProblemData) => void;
   onEdit?: (p: ProblemData) => void;
   onGenerateFigure?: (p: ProblemData) => void;
+  onUpdateContent?: (problemId: string, content: string) => Promise<void>;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   viewMode?: 'clean' | 'original';
   isGeneratingFigure?: boolean;
 }) {
+  const [isEditingPosition, setIsEditingPosition] = useState(false);
   const cropImage = problem.images?.find(img => img.type === 'crop');
   const showOriginal = globalViewMode === 'original' && !!cropImage;
+  const hasFigureContent = problem.figureData || problem.figureSvg || cropImage;
 
   // ★ 클린 모드: 콘텐츠 내 마크다운 이미지 참조 제거
   // figureData가 있거나 cropImage가 있으면 이미지 URL은 별도 렌더링됨
@@ -226,6 +232,8 @@ function ProblemCardView({
       className={`group rounded-xl border transition-all cursor-pointer ${
         isSelectionMode && isSelected
           ? 'border-cyan-500 bg-cyan-500/5 ring-1 ring-cyan-500/30'
+          : isEditingPosition
+          ? 'border-violet-500 bg-violet-500/5 ring-1 ring-violet-500/20'
           : 'border-subtle bg-surface-card/80 hover:border-accent/30'
       }`}
       onClick={isSelectionMode ? () => onToggleSelect?.(problem.id) : undefined}
@@ -264,7 +272,22 @@ function ProblemCardView({
           </div>
         ) : (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* 도형 재생성 버튼 (크롭 이미지가 있을 때만) */}
+            {/* ★ 이미지 위치 편집 버튼 (도형/크롭 이미지가 있을 때) */}
+            {hasFigureContent && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setIsEditingPosition(!isEditingPosition); }}
+                className={`p-1 rounded transition-colors ${
+                  isEditingPosition
+                    ? 'text-violet-400 bg-violet-500/20'
+                    : 'text-content-tertiary hover:text-violet-400 hover:bg-violet-500/10'
+                }`}
+                title="이미지 위치 편집"
+              >
+                <Move className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {/* ★ 도형 재생성 버튼 (크롭 이미지가 있으면 항상 표시, figureData 유무 불문) */}
             {cropImage && (
               <button
                 type="button"
@@ -274,7 +297,7 @@ function ProblemCardView({
                     ? 'text-amber-400 animate-spin'
                     : 'text-content-tertiary hover:text-orange-400 hover:bg-orange-500/10'
                 }`}
-                title={problem.figureSvg ? '도형 재생성' : '도형 SVG 생성'}
+                title={problem.figureData ? '도형 재생성' : problem.figureSvg ? '도형 재생성' : '도형 AI 생성'}
                 disabled={isGeneratingFigure}
               >
                 {isGeneratingFigure ? <RefreshCw className="h-3.5 w-3.5" /> : <Shapes className="h-3.5 w-3.5" />}
@@ -305,7 +328,23 @@ function ProblemCardView({
 
       {/* 문제 본문 */}
       <div className="px-4 pb-3">
-        {showOriginal ? (
+        {isEditingPosition && hasFigureContent ? (
+          /* ★ 이미지 위치 편집 모드 */
+          <div>
+            <span className="text-sm font-bold text-content-primary mr-2 mb-2 inline-block">{problem.number}.</span>
+            <ImagePositionEditor
+              content={cleanContent}
+              figureData={problem.figureData}
+              figureSvg={problem.figureSvg}
+              cropImageUrl={cropImage?.url}
+              onSave={async (updatedContent) => {
+                await onUpdateContent?.(problem.id, updatedContent);
+                setIsEditingPosition(false);
+              }}
+              onCancel={() => setIsEditingPosition(false)}
+            />
+          </div>
+        ) : showOriginal ? (
           /* 원본 크롭 이미지 모드 */
           <div className="relative">
             <img
@@ -1283,6 +1322,25 @@ export default function CloudExamDetailPage() {
     }
   }, [generatingFigures, refetchProblems]);
 
+  // ★ 콘텐츠 업데이트 (이미지 위치 변경 시)
+  const handleUpdateContent = useCallback(async (problemId: string, updatedContent: string) => {
+    try {
+      const res = await fetch(`/api/problems/${problemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content_latex: updatedContent }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('[updateContent] Failed:', data.error);
+        return;
+      }
+      refetchProblems();
+    } catch (err) {
+      console.error('[updateContent] Error:', err);
+    }
+  }, [refetchProblems]);
+
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
@@ -1624,6 +1682,7 @@ export default function CloudExamDetailPage() {
                   onTwinGenerate={setTwinModalProblem}
                   onEdit={setEditModalProblem}
                   onGenerateFigure={handleGenerateFigure}
+                  onUpdateContent={handleUpdateContent}
                   isSelectionMode={isSelectionMode}
                   isSelected={selectedProblems.has(problem.id)}
                   onToggleSelect={toggleSelectProblem}

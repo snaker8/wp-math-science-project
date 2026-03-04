@@ -891,6 +891,48 @@ async function saveEditedProblemsDirect(
   });
 }
 
+/**
+ * 도형의 figureBbox 위치에 따라 content 텍스트에 [도형] 마커를 삽입
+ * figureBbox.y는 문제 영역 내 도형의 상대 위치 (0~1)
+ */
+function insertFigureMarker(
+  content: string,
+  figureBbox: { x: number; y: number; w: number; h: number }
+): string {
+  const lines = content.split('\n');
+  if (lines.length === 0) return '[도형]\n' + content;
+
+  // 도형 위치가 전체 높이 대비 어디쯤인지 (0~1)
+  const figureY = figureBbox.y;
+
+  // 빈 줄이 아닌 실제 콘텐츠 라인 인덱스 목록
+  const contentLineIndices = lines
+    .map((line, i) => ({ line, i }))
+    .filter(({ line }) => line.trim().length > 0);
+
+  if (contentLineIndices.length === 0) return '[도형]\n' + content;
+
+  // figureY에 가장 가까운 삽입 위치 계산
+  // 문제 영역 내에서 도형의 y 비율로 라인 인덱스 추정
+  const insertAfterContentIdx = Math.round(figureY * contentLineIndices.length);
+
+  // 삽입할 실제 라인 인덱스
+  let insertAt: number;
+  if (insertAfterContentIdx >= contentLineIndices.length) {
+    // 도형이 문제 끝부분 → 마지막 줄 다음에 삽입
+    insertAt = lines.length;
+  } else if (insertAfterContentIdx <= 0) {
+    // 도형이 문제 시작부분 → 첫 줄 다음에 삽입
+    insertAt = contentLineIndices.length > 0 ? contentLineIndices[0].i + 1 : 0;
+  } else {
+    // 중간: 해당 콘텐츠 라인 뒤에 삽입
+    insertAt = contentLineIndices[insertAfterContentIdx - 1].i + 1;
+  }
+
+  lines.splice(insertAt, 0, '[도형]');
+  return lines.join('\n');
+}
+
 async function saveProblemsToDB(
   jobId: string,
   results: LLMAnalysisResult[],
@@ -1094,9 +1136,10 @@ async function saveProblemsToDB(
         ? [{ url: cropImageUrl, type: 'crop', label: `문제 ${problemNum} 크롭 이미지` }]
         : [];
 
-      // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
-      // 문제 표시는 OCR 텍스트 + 표 + 수식을 원본 배치 그대로 렌더링하는 것이 목표
-      // 크롭 이미지는 원본 참조용/폴백으로만 사용
+      // ★ 도형이 있는 문제: figureBbox를 분석하여 [도형] 마커를 적절한 위치에 자동 삽입
+      if (result.hasFigure && result.figureBbox && !contentWithMath.includes('[도형]')) {
+        contentWithMath = insertFigureMarker(contentWithMath, result.figureBbox);
+      }
 
       // problems 테이블에 저장
       const { data: problem, error: problemError } = await supabase
