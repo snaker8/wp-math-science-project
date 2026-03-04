@@ -68,10 +68,10 @@ export async function GET(
         console.error('[API/exams] problems fetch error:', pErr.message);
       }
 
-      // 4. classifications 별도 조회
+      // 4. classifications 별도 조회 (expanded_type_code 포함)
       const { data: classData, error: cErr } = await supabaseAdmin
         .from('classifications')
-        .select('problem_id, type_code, difficulty, cognitive_domain, ai_confidence')
+        .select('problem_id, type_code, expanded_type_code, difficulty, cognitive_domain, ai_confidence')
         .in('problem_id', problemIds);
 
       if (cErr) {
@@ -80,6 +80,31 @@ export async function GET(
 
       const classMap = new Map<string, any>();
       (classData || []).forEach((c: any) => classMap.set(c.problem_id, c));
+
+      // 5. expanded_math_types에서 유형명 일괄 조회
+      const allTypeCodes = new Set<string>();
+      (classData || []).forEach((c: any) => {
+        if (c.type_code) allTypeCodes.add(c.type_code);
+        if (c.expanded_type_code) allTypeCodes.add(c.expanded_type_code);
+      });
+
+      const typeNamesMap = new Map<string, string>();
+      if (allTypeCodes.size > 0) {
+        const { data: typeData } = await supabaseAdmin
+          .from('expanded_math_types')
+          .select('type_code, type_name')
+          .in('type_code', Array.from(allTypeCodes));
+
+        (typeData || []).forEach((t: any) => {
+          typeNamesMap.set(t.type_code, t.type_name);
+        });
+      }
+
+      // 6. classifications에 type_name 병합
+      (classData || []).forEach((c: any) => {
+        const typeName = typeNamesMap.get(c.expanded_type_code || '') || typeNamesMap.get(c.type_code || '');
+        if (typeName) c.type_name = typeName;
+      });
 
       (problemsData || []).forEach((p: any) => {
         problemsMap.set(p.id, {

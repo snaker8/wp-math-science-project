@@ -197,6 +197,7 @@ function ProblemCardView({
   onTwinGenerate,
   onEdit,
   onGenerateFigure,
+  onDeleteFigure,
   onUpdateContent,
   isSelectionMode,
   isSelected,
@@ -208,6 +209,7 @@ function ProblemCardView({
   onTwinGenerate: (p: ProblemData) => void;
   onEdit?: (p: ProblemData) => void;
   onGenerateFigure?: (p: ProblemData) => void;
+  onDeleteFigure?: (p: ProblemData) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
   isSelectionMode?: boolean;
   isSelected?: boolean;
@@ -216,6 +218,7 @@ function ProblemCardView({
   isGeneratingFigure?: boolean;
 }) {
   const [isEditingPosition, setIsEditingPosition] = useState(false);
+  const [showFigureCompare, setShowFigureCompare] = useState(false);
   const cropImage = problem.images?.find(img => img.type === 'crop');
   const showOriginal = globalViewMode === 'original' && !!cropImage;
   const hasFigureContent = problem.figureData || problem.figureSvg || cropImage;
@@ -287,7 +290,7 @@ function ProblemCardView({
                 <Move className="h-3.5 w-3.5" />
               </button>
             )}
-            {/* ★ 도형 재생성 버튼 (크롭 이미지가 있으면 항상 표시, figureData 유무 불문) */}
+            {/* ★ 도형 재생성 버튼 (크롭 이미지가 있으면 항상 표시) */}
             {cropImage && (
               <button
                 type="button"
@@ -301,6 +304,37 @@ function ProblemCardView({
                 disabled={isGeneratingFigure}
               >
                 {isGeneratingFigure ? <RefreshCw className="h-3.5 w-3.5" /> : <Shapes className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            {/* ★ 도형 삭제 버튼 (AI 생성 도형이 있을 때만) */}
+            {(problem.figureData || problem.figureSvg) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm('AI 생성 도형을 삭제하시겠습니까?\n원본 크롭 이미지는 유지됩니다.')) {
+                    onDeleteFigure?.(problem);
+                  }
+                }}
+                className="p-1 rounded text-content-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="AI 도형 삭제 (원본 유지)"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {/* ★ 원본/AI 비교 토글 (크롭 이미지 + AI 도형 둘 다 있을 때) */}
+            {cropImage && (problem.figureData || problem.figureSvg) && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowFigureCompare(!showFigureCompare); }}
+                className={`p-1 rounded transition-colors ${
+                  showFigureCompare
+                    ? 'text-blue-400 bg-blue-500/20'
+                    : 'text-content-muted hover:text-blue-400 hover:bg-blue-500/10'
+                }`}
+                title="원본/AI 도형 비교"
+              >
+                <Columns2 className="h-3.5 w-3.5" />
               </button>
             )}
             <button
@@ -369,6 +403,30 @@ function ProblemCardView({
                         content={part.text}
                         className="inline text-sm text-content-secondary leading-relaxed"
                       />
+                    ) : showFigureCompare && cropImage ? (
+                      /* ★ 비교 모드 (마커 위치) */
+                      <div key={i} className="my-2 grid grid-cols-2 gap-3">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
+                          <img
+                            src={cropImage.url}
+                            alt="원본 도형"
+                            className="rounded border border-blue-500/30 max-h-48 object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
+                          <div className="border border-emerald-500/30 rounded p-1">
+                            <FigureRenderer
+                              figureData={problem.figureData}
+                              figureSvg={problem.figureSvg}
+                              maxWidth={200}
+                              darkMode
+                            />
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       <div key={i} className="my-2 flex justify-center">
                         <FigureRenderer
@@ -391,15 +449,41 @@ function ProblemCardView({
                   />
                   {/* 도형 데이터가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
                   {(problem.figureData || problem.figureSvg) && (
-                    <div className="mt-2 flex justify-center">
-                      <FigureRenderer
-                        figureData={problem.figureData}
-                        figureSvg={problem.figureSvg}
-                        cropImageUrl={cropImage?.url}
-                        maxWidth={300}
-                        darkMode
-                      />
-                    </div>
+                    showFigureCompare && cropImage ? (
+                      /* ★ 원본/AI 비교 모드: 나란히 표시 */
+                      <div className="mt-2 grid grid-cols-2 gap-3">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
+                          <img
+                            src={cropImage.url}
+                            alt="원본 도형"
+                            className="rounded border border-blue-500/30 max-h-48 object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
+                          <div className="border border-emerald-500/30 rounded p-1">
+                            <FigureRenderer
+                              figureData={problem.figureData}
+                              figureSvg={problem.figureSvg}
+                              maxWidth={200}
+                              darkMode
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex justify-center">
+                        <FigureRenderer
+                          figureData={problem.figureData}
+                          figureSvg={problem.figureSvg}
+                          cropImageUrl={cropImage?.url}
+                          maxWidth={300}
+                          darkMode
+                        />
+                      </div>
+                    )
                   )}
                 </>
               )}
@@ -1341,6 +1425,27 @@ export default function CloudExamDetailPage() {
     }
   }, [refetchProblems]);
 
+  // ★ AI 도형 삭제 (figureData/figureSvg 제거, 크롭 이미지 유지)
+  const handleDeleteFigure = useCallback(async (problem: ProblemData) => {
+    try {
+      // Supabase RPC로 figureData, figureSvg 필드만 삭제
+      // ai_analysis JSONB에서 해당 키만 제거
+      const patchRes = await fetch(`/api/problems/${problem.id}/delete-figure`, {
+        method: 'POST',
+      });
+
+      if (!patchRes.ok) {
+        console.error('[deleteFigure] Failed:', await patchRes.text());
+        return;
+      }
+
+      console.log(`[deleteFigure] Cleared figureData/figureSvg for problem ${problem.id}`);
+      refetchProblems();
+    } catch (err) {
+      console.error('[deleteFigure] Error:', err);
+    }
+  }, [refetchProblems]);
+
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
@@ -1682,6 +1787,7 @@ export default function CloudExamDetailPage() {
                   onTwinGenerate={setTwinModalProblem}
                   onEdit={setEditModalProblem}
                   onGenerateFigure={handleGenerateFigure}
+                  onDeleteFigure={handleDeleteFigure}
                   onUpdateContent={handleUpdateContent}
                   isSelectionMode={isSelectionMode}
                   isSelected={selectedProblems.has(problem.id)}
