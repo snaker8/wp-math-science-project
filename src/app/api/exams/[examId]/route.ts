@@ -82,6 +82,8 @@ export async function GET(
       (classData || []).forEach((c: any) => classMap.set(c.problem_id, c));
 
       // 5. expanded_math_types에서 유형명 일괄 조회
+      // ★ classifications에는 "EQU-06-001" (짧은 형식), expanded_math_types에는 "MA-HS0-EQU-06-001" (전체 형식)
+      //    → suffix 매칭으로 양쪽 모두 조회
       const allTypeCodes = new Set<string>();
       (classData || []).forEach((c: any) => {
         if (c.type_code) allTypeCodes.add(c.type_code);
@@ -90,14 +92,35 @@ export async function GET(
 
       const typeNamesMap = new Map<string, string>();
       if (allTypeCodes.size > 0) {
-        const { data: typeData } = await supabaseAdmin
-          .from('expanded_math_types')
-          .select('type_code, type_name')
-          .in('type_code', Array.from(allTypeCodes));
+        const codesArray = Array.from(allTypeCodes);
+        const fullCodes = codesArray.filter(c => c.startsWith('MA-'));
+        const shortCodes = codesArray.filter(c => !c.startsWith('MA-'));
 
-        (typeData || []).forEach((t: any) => {
-          typeNamesMap.set(t.type_code, t.type_name);
-        });
+        // 전체 형식은 정확히 매칭, 짧은 형식은 suffix 매칭
+        const orFilters: string[] = [];
+        fullCodes.forEach(code => orFilters.push(`type_code.eq.${code}`));
+        shortCodes.forEach(code => orFilters.push(`type_code.like.%-${code}`));
+        // 정확 매칭도 추가 (혹시 DB에 짧은 코드가 있을 경우)
+        shortCodes.forEach(code => orFilters.push(`type_code.eq.${code}`));
+
+        if (orFilters.length > 0) {
+          const { data: typeData } = await supabaseAdmin
+            .from('expanded_math_types')
+            .select('type_code, type_name')
+            .or(orFilters.join(','));
+
+          (typeData || []).forEach((t: any) => {
+            typeNamesMap.set(t.type_code, t.type_name);
+            // 전체 코드에서 짧은 코드도 매핑 (MA-HS0-EQU-06-001 → EQU-06-001)
+            if (t.type_code.startsWith('MA-')) {
+              const parts = t.type_code.split('-');
+              if (parts.length >= 5) {
+                const shortCode = parts.slice(2).join('-');
+                typeNamesMap.set(shortCode, t.type_name);
+              }
+            }
+          });
+        }
       }
 
       // 6. classifications에 type_name 병합
