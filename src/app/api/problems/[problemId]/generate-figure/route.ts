@@ -61,13 +61,14 @@ export async function POST(
       Array.isArray(problem.images) ? problem.images : [];
 
     const cropImage = images.find((img) => img.type === 'crop');
-    // crop이 없으면 ai_analysis.figureData.originalImageUrl 또는 첫 번째 이미지 사용
+    // crop이 없으면 다른 소스에서 이미지 URL 찾기 (우선순위)
     const aiAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
     const figureData = aiAnalysis.figureData as Record<string, unknown> | undefined;
-    const fallbackImageUrl = figureData?.originalImageUrl as string | undefined;
+    const savedCropUrl = aiAnalysis.cropImageUrl as string | undefined;      // delete-figure에서 보존한 URL
+    const originalImageUrl = figureData?.originalImageUrl as string | undefined;
     const anyImage = images[0]; // 아무 이미지라도 사용
 
-    const targetImageUrl = cropImage?.url || fallbackImageUrl || anyImage?.url;
+    const targetImageUrl = cropImage?.url || savedCropUrl || originalImageUrl || anyImage?.url;
 
     if (!targetImageUrl) {
       return NextResponse.json(
@@ -76,7 +77,7 @@ export async function POST(
       );
     }
 
-    console.log(`[generate-figure] Processing problem ${problemId}, source=${cropImage ? 'crop' : fallbackImageUrl ? 'figureData' : 'fallback'}, url: ${targetImageUrl}`);
+    console.log(`[generate-figure] Processing problem ${problemId}, source=${cropImage ? 'crop' : savedCropUrl ? 'savedCrop' : originalImageUrl ? 'figureData' : 'fallback'}, url: ${targetImageUrl}`);
 
     // 3. 이미지를 서버에서 다운로드하여 base64로 변환
     let imageDataUri: string;
