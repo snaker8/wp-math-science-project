@@ -534,11 +534,11 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     scanXmin = ptXmin - scanExt;
     scanXmax = ptXmax + scanExt;
     // Y 클램핑: 비대칭 — 상방은 넉넉히, 하방은 최소화
-    // ★ 핵심: 모든 점이 y≥0이면 x축 아래 곡선 확장을 최소화 (원본처럼)
+    // ★ 핵심: 모든 점이 y≥0이면 x축 아래는 거의 안 보이게 (원본처럼)
     const allPointsAboveAxis = ptYmin >= -0.01;
     const yClampUp = Math.max(ptYspan * 1.5, 3);
     const yClampDown = allPointsAboveAxis
-      ? Math.max(ptYspan * 0.5, 1.5)   // x축 위 점만: 하방 최소
+      ? Math.max(ptYspan * 0.15, 0.5)  // x축 위 점만: 하방 극소화
       : Math.max(ptYspan * 1.5, 4);    // 음수 점 있으면 넉넉히
     yClampLo = ptYmin - yClampDown;
     yClampHi = ptYmax + yClampUp;
@@ -580,9 +580,10 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   const yPad = ySpan * 0.15;
 
   // ★ 콘텐츠 기반 범위를 직접 사용 (AI 범위와의 교집합 아님)
+  // Math.round로 범위를 타이트하게 유지 (floor/ceil은 불필요한 공간 추가)
   const xMin = Math.floor(contentXmin - xPad);
   const xMax = Math.ceil(contentXmax + xPad);
-  const yMin = Math.floor(contentYmin - yPad);
+  const yMin = Math.round(contentYmin - yPad);
   const yMax = Math.ceil(contentYmax + yPad);
 
   console.log('[GraphSVG] Range: AI', rendering.xRange, rendering.yRange, '→ fit', [xMin, xMax], [yMin, yMax]);
