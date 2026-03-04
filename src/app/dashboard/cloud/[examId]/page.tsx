@@ -620,6 +620,19 @@ function ExamPaperView({
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
+  const printMenuRef = useRef<HTMLDivElement>(null);
+
+  // 출력 메뉴 외부 클릭 닫기
+  useEffect(() => {
+    if (!showPrintMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (printMenuRef.current && !printMenuRef.current.contains(e.target as Node)) setShowPrintMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPrintMenu]);
 
   const COLUMN_GAP = 28; // 고정 컬럼 간격 (px)
 
@@ -737,22 +750,45 @@ function ExamPaperView({
 
   // 출력 — DOM 복제 방식 (KaTeX 수식 호환)
   const handlePrint = useCallback(() => {
-    const pages = document.querySelectorAll('.exam-page');
-    if (pages.length === 0) return;
-
-    // 시험지 페이지들을 body 직속으로 복제
+    setShowPrintMenu(false);
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
-    pages.forEach(page => {
-      printRoot.appendChild(page.cloneNode(true));
-    });
+
+    // 1. 시험지 섹션
+    if (printSections.exam) {
+      const pages = document.querySelectorAll('.exam-page');
+      pages.forEach(page => {
+        printRoot.appendChild(page.cloneNode(true));
+      });
+    }
+
+    // 2. 빠른정답 섹션
+    if (printSections.answer) {
+      const answerEl = document.querySelector('.quick-answer-print');
+      if (answerEl) {
+        const clone = answerEl.cloneNode(true) as HTMLElement;
+        clone.classList.add('exam-page');
+        clone.style.cssText = 'background:white; padding:15mm; box-sizing:border-box;';
+        printRoot.appendChild(clone);
+      }
+    }
+
+    // 3. 해설지 섹션
+    if (printSections.solution) {
+      const solutionPages = document.querySelectorAll('.solution-page');
+      solutionPages.forEach(page => {
+        const clone = page.cloneNode(true) as HTMLElement;
+        clone.classList.add('exam-page');
+        printRoot.appendChild(clone);
+      });
+    }
+
+    if (printRoot.children.length === 0) return;
+
     document.body.appendChild(printRoot);
-
     window.print();
-
-    // 인쇄 대화상자 닫힌 후 정리
     document.body.removeChild(printRoot);
-  }, []);
+  }, [printSections]);
 
   // 문제 렌더링 헬퍼
   const renderProblem = (problem: ProblemData) => {
@@ -935,14 +971,51 @@ function ExamPaperView({
             <FileEdit className="h-4 w-4" />
             템플릿
           </button>
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-          >
-            <Printer className="h-4 w-4" />
-            출력
-          </button>
+          <div className="relative" ref={printMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowPrintMenu(!showPrintMenu)}
+              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+            >
+              <Printer className="h-4 w-4" />
+              출력
+            </button>
+            {showPrintMenu && (
+              <div className="absolute top-full right-0 mt-1 w-48 rounded-lg border border-zinc-600 bg-zinc-800 shadow-xl z-50">
+                <div className="px-3 py-2 border-b border-zinc-700">
+                  <span className="text-xs font-bold text-content-secondary">출력할 항목 선택</span>
+                </div>
+                <div className="p-2 space-y-1">
+                  {[
+                    { key: 'exam' as const, label: '시험지' },
+                    { key: 'answer' as const, label: '빠른정답' },
+                    { key: 'solution' as const, label: '해설지' },
+                  ].map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={printSections[key]}
+                        onChange={() => setPrintSections(prev => ({ ...prev, [key]: !prev[key] }))}
+                        className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
+                      />
+                      <span className="text-sm text-content-secondary">{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="px-2 pb-2">
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    disabled={!printSections.exam && !printSections.answer && !printSections.solution}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-400 px-3 py-2 text-sm font-bold text-white transition-colors"
+                  >
+                    <Printer className="h-4 w-4" />
+                    출력하기
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1101,7 +1174,7 @@ function QuickAnswerView({
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
-      <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
+      <div className="quick-answer-print w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
         {/* 헤더 — 템플릿 기반 */}
         <ExamPaperHeader
           templateId={templateId}
@@ -1228,26 +1301,11 @@ function SolutionView({
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onOpenTemplateModal}
-          className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
-        >
-          <FileEdit className="h-4 w-4" />
-          템플릿
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-        >
-          <Printer className="h-4 w-4" />
-          출력
-        </button>
       </div>
 
       {/* 해설지 본문 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
-        <div className="w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
+        <div className="solution-page w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
           {/* 헤더 — 템플릿 기반 */}
           <ExamPaperHeader
             templateId={templateId}
@@ -1846,6 +1904,25 @@ export default function CloudExamDetailPage() {
           examMeta={examMeta}
           onOpenTemplateModal={() => setShowTemplateModal(true)}
         />
+      )}
+
+      {/* 인쇄용 숨겨진 빠른정답/해설지 (시험지 탭에서 출력 시 DOM 복제용) */}
+      {activeView === 'exam' && (
+        <div style={{ position: 'absolute', left: -99999, top: -99999, width: 900 }} aria-hidden>
+          <QuickAnswerView
+            problems={filteredProblems}
+            examTitle={examTitle}
+            templateId={templateId}
+            examMeta={examMeta}
+          />
+          <SolutionView
+            problems={filteredProblems}
+            examTitle={examTitle}
+            templateId={templateId}
+            examMeta={examMeta}
+            onOpenTemplateModal={() => {}}
+          />
+        </div>
       )}
 
       {/* ======== Floating Selection Bar ======== */}
