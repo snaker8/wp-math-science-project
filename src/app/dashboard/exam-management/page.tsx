@@ -614,7 +614,7 @@ export default function ExamManagementPage() {
                                 <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                                   <MixedContentRenderer content={problem.content} className="text-gray-800" />
                                 </div>
-                                {problem.hasFigure && (problem.figureData || problem.figureSvg) && (
+                                {(problem.figureData || problem.figureSvg) && (
                                   <div className="my-2 flex justify-center">
                                     <FigureRenderer
                                       figureData={problem.figureData}
@@ -830,7 +830,7 @@ export default function ExamManagementPage() {
                         <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                           <MixedContentRenderer content={problem.content} className="text-gray-800" />
                         </div>
-                        {problem.hasFigure && (problem.figureData || problem.figureSvg) && (
+                        {(problem.figureData || problem.figureSvg) && (
                           <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'center' }}>
                             <FigureRenderer
                               figureData={problem.figureData}
