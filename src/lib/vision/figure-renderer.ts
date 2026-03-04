@@ -533,10 +533,15 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     const scanExt = Math.max(ptXspan * 0.5, 1.5);
     scanXmin = ptXmin - scanExt;
     scanXmax = ptXmax + scanExt;
-    // Y 클램핑: 점 범위의 ±1.5배 이내 (극단적 곡선값 차단)
-    const yClamp = Math.max(ptYspan * 1.5, 4);
-    yClampLo = ptYmin - yClamp;
-    yClampHi = ptYmax + yClamp;
+    // Y 클램핑: 비대칭 — 상방은 넉넉히, 하방은 최소화
+    // ★ 핵심: 모든 점이 y≥0이면 x축 아래 곡선 확장을 최소화 (원본처럼)
+    const allPointsAboveAxis = ptYmin >= -0.01;
+    const yClampUp = Math.max(ptYspan * 1.5, 3);
+    const yClampDown = allPointsAboveAxis
+      ? Math.max(ptYspan * 0.5, 1.5)   // x축 위 점만: 하방 최소
+      : Math.max(ptYspan * 1.5, 4);    // 음수 점 있으면 넉넉히
+    yClampLo = ptYmin - yClampDown;
+    yClampHi = ptYmax + yClampUp;
   } else {
     // 점이 없으면 AI 범위 사용 (기존 동작)
     scanXmin = rendering.xRange[0];
