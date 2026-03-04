@@ -199,10 +199,11 @@ function AnswerDisplay({ answer, className = '' }: { answer: number | string; cl
     return <span className={className}>{CIRCLED[answer]}</span>;
   }
   const str = String(answer);
-  if (str.includes('$') || str.includes('\\')) {
-    return <MixedContentRenderer content={str} className={className} />;
+  // 순수 숫자(정수)는 그대로 표시, 나머지 문자열은 수식일 수 있으므로 MixedContentRenderer
+  if (/^-?\d+$/.test(str)) {
+    return <span className={className}>{str}</span>;
   }
-  return <span className={className}>{str}</span>;
+  return <MixedContentRenderer content={str} className={className} />;
 }
 
 // ============================================================================
