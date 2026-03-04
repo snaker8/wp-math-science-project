@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   FolderOpen,
   FileText,
@@ -18,6 +18,7 @@ import {
   Columns2,
   AlignJustify,
   Trash2,
+  X,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { useExamList, useExamProblems } from '@/hooks/useExamProblems';
@@ -183,6 +184,93 @@ function PageMap({
 }
 
 // ============================================================================
+// 정답 렌더러: 객관식은 동그란 번호, 주관식은 수식 렌더링
+// ============================================================================
+
+const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
+
+function AnswerDisplay({ answer, className = '' }: { answer: number | string; className?: string }) {
+  if (typeof answer === 'number' && answer >= 1 && answer <= 5) {
+    return <span className={className}>{CIRCLED[answer]}</span>;
+  }
+  const str = String(answer);
+  if (str.includes('$') || str.includes('\\')) {
+    return <MixedContentRenderer content={str} className={className} />;
+  }
+  return <span className={className}>{str}</span>;
+}
+
+// ============================================================================
+// 출력 옵션 드롭다운
+// ============================================================================
+
+function PrintMenu({
+  show,
+  onClose,
+  sections,
+  onToggle,
+  onPrint,
+}: {
+  show: boolean;
+  onClose: () => void;
+  sections: { exam: boolean; answer: boolean; solution: boolean };
+  onToggle: (key: 'exam' | 'answer' | 'solution') => void;
+  onPrint: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!show) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [show, onClose]);
+
+  if (!show) return null;
+
+  const items = [
+    { key: 'exam' as const, label: '시험지' },
+    { key: 'answer' as const, label: '빠른정답' },
+    { key: 'solution' as const, label: '해설지' },
+  ];
+  const anySelected = sections.exam || sections.answer || sections.solution;
+
+  return (
+    <div ref={menuRef} className="absolute bottom-full right-0 mb-2 w-48 rounded-lg border border-zinc-600 bg-zinc-800 shadow-xl z-50">
+      <div className="px-3 py-2 border-b border-zinc-700">
+        <span className="text-xs font-bold text-content-secondary">출력할 항목 선택</span>
+      </div>
+      <div className="p-2 space-y-1">
+        {items.map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sections[key]}
+              onChange={() => onToggle(key)}
+              className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
+            />
+            <span className="text-sm text-content-secondary">{label}</span>
+          </label>
+        ))}
+      </div>
+      <div className="px-2 pb-2">
+        <button
+          type="button"
+          onClick={onPrint}
+          disabled={!anySelected}
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-400 px-3 py-2 text-sm font-bold text-white transition-colors"
+        >
+          <Printer className="h-4 w-4" />
+          출력하기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // Main Page Component
 // ============================================================================
 
@@ -194,6 +282,18 @@ export default function ExamManagementPage() {
   const [gap, setGap] = useState(30);
   const [currentPage, setCurrentPage] = useState(1);
   const [subjectFilter, setSubjectFilter] = useState('공통수학1 [2022개정]');
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const togglePrintSection = useCallback((key: 'exam' | 'answer' | 'solution') => {
+    setPrintSections(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const handlePrint = useCallback(() => {
+    setShowPrintMenu(false);
+    setTimeout(() => window.print(), 100);
+  }, []);
 
   // DB hooks
   const { exams: dbExams, isLoading: examsLoading, refetch: refetchExams } = useExamList();
@@ -268,7 +368,6 @@ export default function ExamManagementPage() {
     return bookGroups.find((g) => g.id === selectedGroupId)?.name || '전체';
   }, [selectedGroupId]);
 
-  const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
   const totalPages = Math.max(1, Math.ceil(problems.length / 10));
 
   return (
@@ -386,10 +485,25 @@ export default function ExamManagementPage() {
                     <Pencil className="h-3.5 w-3.5" />
                     시험지 수정
                   </button>
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
-                    <Printer className="h-3.5 w-3.5" />
-                    출력
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowPrintMenu(!showPrintMenu)}
+                      className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      출력
+                    </button>
+                    <div className="absolute top-full left-0 mt-1 z-50">
+                      <PrintMenu
+                        show={showPrintMenu}
+                        onClose={() => setShowPrintMenu(false)}
+                        sections={printSections}
+                        onToggle={togglePrintSection}
+                        onPrint={handlePrint}
+                      />
+                    </div>
+                  </div>
                   <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
                     <Share2 className="h-3.5 w-3.5" />
                     시험지 배포
@@ -509,36 +623,44 @@ export default function ExamManagementPage() {
                     )}
 
                     {activeTab === 'answer' && (
-                      <div className="p-8">
-                        <div className="text-center mb-4">
-                          <h2 className="text-lg font-bold text-gray-900">빠른 정답</h2>
+                      <div className="p-6">
+                        <div className="text-center mb-5">
+                          <h2 className="text-lg font-bold text-gray-900">{selectedExam.title}</h2>
+                          <p className="text-sm text-gray-500 mt-1">빠른 정답</p>
                         </div>
-                        <div className="grid grid-cols-4 gap-0 border border-gray-400 max-w-md mx-auto">
-                          <div className="bg-gray-100 border-b border-r border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">문항</div>
-                          <div className="bg-gray-100 border-b border-r border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">정답</div>
-                          <div className="bg-gray-100 border-b border-r border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">문항</div>
-                          <div className="bg-gray-100 border-b border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">정답</div>
-                          {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
-                            const leftNum = rowIdx + 1;
-                            const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
-                            const leftP = problems.find((p) => p.number === leftNum);
-                            const rightP = problems.find((p) => p.number === rightNum);
-                            return (
-                              <React.Fragment key={rowIdx}>
-                                <div className="border-b border-r border-gray-400 px-3 py-2.5 text-center text-sm font-bold text-gray-900">{leftNum}</div>
-                                <div className="border-b border-r border-gray-400 px-3 py-2.5 text-center text-lg font-bold text-blue-600">
-                                  {leftP ? (typeof leftP.answer === 'number' ? circledNumbers[leftP.answer] || leftP.answer : leftP.answer) : '-'}
-                                </div>
-                                <div className="border-b border-r border-gray-400 px-3 py-2.5 text-center text-sm font-bold text-gray-900">
-                                  {rightNum <= problems.length ? rightNum : ''}
-                                </div>
-                                <div className="border-b border-gray-400 px-3 py-2.5 text-center text-lg font-bold text-blue-600">
-                                  {rightP ? (typeof rightP.answer === 'number' ? circledNumbers[rightP.answer] || rightP.answer : rightP.answer) : ''}
-                                </div>
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
+                        <table className="w-full max-w-2xl mx-auto border-collapse border-2 border-gray-800">
+                          <thead>
+                            <tr>
+                              <th className="bg-gray-100 border border-gray-400 px-3 py-2.5 text-center text-xs font-bold text-gray-600 w-16">문항</th>
+                              <th className="bg-gray-100 border border-gray-400 px-3 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
+                              <th className="bg-gray-100 border border-gray-400 px-3 py-2.5 text-center text-xs font-bold text-gray-600 w-16">문항</th>
+                              <th className="bg-gray-100 border border-gray-400 px-3 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
+                              const leftNum = rowIdx + 1;
+                              const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
+                              const leftP = problems.find((p) => p.number === leftNum);
+                              const rightP = problems.find((p) => p.number === rightNum);
+                              const rowBg = rowIdx % 2 === 1 ? 'bg-blue-50/40' : '';
+                              return (
+                                <tr key={rowIdx} className={rowBg}>
+                                  <td className="border border-gray-300 px-3 py-2.5 text-center text-sm font-bold text-gray-900">{leftNum}</td>
+                                  <td className="border border-gray-300 px-3 py-2.5 text-center text-lg font-bold text-blue-600">
+                                    {leftP ? <AnswerDisplay answer={leftP.answer} className="text-blue-600" /> : '-'}
+                                  </td>
+                                  <td className="border border-gray-300 px-3 py-2.5 text-center text-sm font-bold text-gray-900">
+                                    {rightNum <= problems.length ? rightNum : ''}
+                                  </td>
+                                  <td className="border border-gray-300 px-3 py-2.5 text-center text-lg font-bold text-blue-600">
+                                    {rightP ? <AnswerDisplay answer={rightP.answer} className="text-blue-600" /> : ''}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
 
@@ -553,16 +675,18 @@ export default function ExamManagementPage() {
                             className="break-inside-avoid"
                             style={{ marginBottom: `${gap}px` }}
                           >
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="text-sm font-bold text-gray-900">{problem.number}.</span>
-                              <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-xs font-bold text-blue-700">
-                                정답 {typeof problem.answer === 'number' ? circledNumbers[problem.answer] || problem.answer : problem.answer}
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold flex-shrink-0">
+                                {problem.number}
+                              </span>
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-1 text-xs font-bold text-blue-700">
+                                정답 <AnswerDisplay answer={problem.answer} className="text-blue-700" />
                               </span>
                             </div>
-                            <div className="pl-5 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            <div className="ml-3 pl-4 border-l-2 border-blue-200 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
                               <MixedContentRenderer content={problem.solution} className="text-gray-700" />
                             </div>
-                            <div className="mt-2 border-b border-gray-200" />
+                            <div className="mt-3 border-b border-dashed border-gray-300" />
                           </div>
                         ))}
                       </div>
@@ -621,13 +745,23 @@ export default function ExamManagementPage() {
                     />
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-                >
-                  <Printer className="h-4 w-4" />
-                  출력
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrintMenu(!showPrintMenu)}
+                    className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                  >
+                    <Printer className="h-4 w-4" />
+                    출력
+                  </button>
+                  <PrintMenu
+                    show={showPrintMenu}
+                    onClose={() => setShowPrintMenu(false)}
+                    sections={printSections}
+                    onToggle={togglePrintSection}
+                    onPrint={handlePrint}
+                  />
+                </div>
               </div>
             </>
           ) : (
@@ -638,6 +772,134 @@ export default function ExamManagementPage() {
           )}
         </div>
       </div>
+
+      {/* ======== 인쇄 전용 영역 (화면에 안 보임, @media print에서만 표시) ======== */}
+      {selectedExam && problems.length > 0 && (
+        <div ref={printRef} className="print-only">
+          <style dangerouslySetInnerHTML={{ __html: `
+            .print-only { display: none; }
+            @media print {
+              body > *:not(.print-only) { display: none !important; }
+              .print-only { display: block !important; }
+              .print-section { page-break-after: always; }
+              .print-section:last-child { page-break-after: auto; }
+              .print-only * { color-adjust: exact !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+          `}} />
+
+          {/* 시험지 섹션 */}
+          {printSections.exam && (
+            <div className="print-section bg-white p-8">
+              <div className="border-b-2 border-gray-800 mb-4">
+                <table className="w-full border-collapse text-black">
+                  <tbody>
+                    <tr>
+                      <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50 text-center">과목</td>
+                      <td className="border border-gray-400 px-3 py-2 text-sm font-bold">수학1</td>
+                      <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={3}>{selectedExam.title}</td>
+                      <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50 text-center">담당</td>
+                      <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ columns: 2, columnGap: '30px' }}>
+                {problems.map((problem) => (
+                  <div key={problem.id} style={{ breakInside: 'avoid', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#111', flexShrink: 0, paddingTop: '2px' }}>{problem.number}.</span>
+                      <div style={{ flex: 1 }}>
+                        <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                          <MixedContentRenderer content={problem.content} className="text-gray-800" />
+                        </div>
+                        {problem.choices.length > 0 && (
+                          <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px' }}>
+                            {problem.choices.map((choice, ci) => (
+                              <div key={ci} className="text-[13px] text-gray-700">
+                                <MixedContentRenderer content={choice} className="text-gray-700" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 빠른정답 섹션 */}
+          {printSections.answer && (
+            <div className="print-section bg-white p-8">
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111' }}>{selectedExam.title}</h2>
+                <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>빠른 정답</p>
+              </div>
+              <table style={{ width: '100%', maxWidth: '600px', margin: '0 auto', borderCollapse: 'collapse', border: '2px solid #1f2937' }}>
+                <thead>
+                  <tr>
+                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563', width: '60px' }}>문항</th>
+                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563' }}>정답</th>
+                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563', width: '60px' }}>문항</th>
+                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563' }}>정답</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
+                    const leftNum = rowIdx + 1;
+                    const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
+                    const leftP = problems.find((p) => p.number === leftNum);
+                    const rightP = problems.find((p) => p.number === rightNum);
+                    return (
+                      <tr key={rowIdx} style={{ background: rowIdx % 2 === 1 ? '#eff6ff80' : 'white' }}>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px 12px', textAlign: 'center', fontSize: '14px', fontWeight: 700, color: '#111' }}>{leftNum}</td>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px 12px', textAlign: 'center', fontSize: '18px', fontWeight: 700, color: '#2563eb' }}>
+                          {leftP ? <AnswerDisplay answer={leftP.answer} className="text-blue-600" /> : '-'}
+                        </td>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px 12px', textAlign: 'center', fontSize: '14px', fontWeight: 700, color: '#111' }}>
+                          {rightNum <= problems.length ? rightNum : ''}
+                        </td>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px 12px', textAlign: 'center', fontSize: '18px', fontWeight: 700, color: '#2563eb' }}>
+                          {rightP ? <AnswerDisplay answer={rightP.answer} className="text-blue-600" /> : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 해설지 섹션 */}
+          {printSections.solution && (
+            <div className="print-section bg-white p-8">
+              <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #1f2937', paddingBottom: '12px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111' }}>{selectedExam.title}</h2>
+                <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>해설지</p>
+              </div>
+              <div style={{ columns: 2, columnGap: '30px' }}>
+                {problems.map((problem) => (
+                  <div key={problem.id} style={{ breakInside: 'avoid', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', background: '#1f2937', color: 'white', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
+                        {problem.number}
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '6px', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '4px 8px', fontSize: '12px', fontWeight: 700, color: '#1d4ed8' }}>
+                        정답 <AnswerDisplay answer={problem.answer} className="text-blue-700" />
+                      </span>
+                    </div>
+                    <div style={{ marginLeft: '12px', paddingLeft: '16px', borderLeft: '2px solid #bfdbfe', fontSize: '14px', color: '#374151', lineHeight: 1.6 }} className="whitespace-pre-line">
+                      <MixedContentRenderer content={problem.solution} className="text-gray-700" />
+                    </div>
+                    <div style={{ marginTop: '12px', borderBottom: '1px dashed #d1d5db' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
