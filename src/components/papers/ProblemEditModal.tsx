@@ -243,21 +243,22 @@ function EditorPanel({
 
       {/* 편집 영역 */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* textarea는 항상 표시 */}
+        {/* textarea는 항상 표시 — flex-1로 세로 전체 채움 */}
         <textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`resize-none bg-surface-card px-4 py-3 text-sm text-content-primary leading-relaxed placeholder:text-content-muted focus:outline-none ${
+          className={`flex-1 resize-none bg-surface-card px-4 py-3 text-sm text-content-primary leading-relaxed placeholder:text-content-muted focus:outline-none ${
             showPreview ? 'w-1/2 border-r border/50' : 'w-full'
           }`}
           placeholder={placeholder}
           spellCheck={false}
+          style={{ minHeight: '200px' }}
         />
 
         {/* 미리보기 (토글) */}
         {showPreview && (
-          <div className="w-1/2 overflow-y-auto bg-white px-4 py-3">
+          <div className="w-1/2 flex-1 overflow-y-auto bg-white px-4 py-3">
             {value ? (
               <div className="text-sm text-gray-800 leading-relaxed">
                 <MixedContentRenderer content={value} className="text-gray-800" />
@@ -820,8 +821,8 @@ export function ProblemEditModal({
           </div>
         )}
 
-        {/* ======== 메인: 3열 ======== */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* ======== 메인: 3열 — 최소 높이 보장 ======== */}
+        <div className="flex flex-1 min-h-[300px] overflow-hidden">
           {/* 좌: 문제 에디터 */}
           <div className="flex-1 flex flex-col p-3 min-w-0 overflow-hidden">
             <EditorPanel
