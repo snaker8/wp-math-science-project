@@ -792,8 +792,11 @@ function ExamPaperView({
 
   // 문제 렌더링 헬퍼
   const renderProblem = (problem: ProblemData) => {
-    // ★ figureData/figureSvg 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (중복 방지)
-    const cleanContent = (problem.figureData || problem.figureSvg)
+    // ★ 도형 렌더링용 크롭 이미지 (펼쳐보기와 동일한 fallback 체인)
+    const cropImage = problem.images?.find(img => img.type === 'crop');
+    // ★ figureData/figureSvg/cropImage 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (중복 방지)
+    const hasFigure = problem.figureData || problem.figureSvg || cropImage;
+    const cleanContent = hasFigure
       ? problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
       : problem.content;
     const parts = splitContentByFigureMarker(cleanContent);
@@ -812,16 +815,16 @@ function ExamPaperView({
                   <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
                 ) : (
                   <div key={pi} className="my-2 flex justify-center">
-                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
+                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} cropImageUrl={cropImage?.url} maxWidth={240} darkMode={false} />
                   </div>
                 )
               ))
             ) : (
               <>
                 <MixedContentRenderer content={cleanContent} className="text-gray-800" />
-                {(problem.figureData || problem.figureSvg) && (
+                {hasFigure && (
                   <div className="mt-2 flex justify-center">
-                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
+                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} cropImageUrl={cropImage?.url} maxWidth={240} darkMode={false} />
                   </div>
                 )}
               </>
