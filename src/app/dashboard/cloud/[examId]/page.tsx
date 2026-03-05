@@ -1204,10 +1204,17 @@ function QuickAnswerView({
               const rightP = problems.find((p) => p.number === rightNum);
               const isLast = rowIdx === Math.ceil(problems.length / 2) - 1;
 
-              const formatAnswer = (ans: number | string | undefined) => {
+              // 정답 표시: 객관식 → 원문자, 주관식 수식 → KaTeX 렌더링
+              const formatAnswer = (ans: number | string | undefined): React.ReactNode => {
                 if (ans === undefined || ans === '-') return '-';
                 if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
-                return String(ans);
+                const str = String(ans);
+                // 수식 포함 여부: $...$, ^, \frac, 알파벳 변수 등
+                const hasMath = /\$|\\frac|\^|[a-zA-Z].*[=+\-*/]/.test(str);
+                if (hasMath) {
+                  return <MixedContentRenderer content={str} className="text-blue-600" />;
+                }
+                return str;
               };
 
               return (
@@ -1254,8 +1261,104 @@ function SolutionView({
   onOpenTemplateModal: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
-  const [gap, setGap] = useState(24);
+  const [gap, setGap] = useState(20);
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
+
+  // ── 측정 기반 A4 페이지 분할 (시험지와 동일 방식) ──
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [problemHeights, setProblemHeights] = useState<number[]>([]);
+  const [measured, setMeasured] = useState(false);
+
+  useEffect(() => { setMeasured(false); setProblemHeights([]); }, [problems, columns]);
+
+  useLayoutEffect(() => {
+    if (measureRef.current && !measured && problems.length > 0) {
+      const timer = setTimeout(() => {
+        if (!measureRef.current) return;
+        const els = measureRef.current.querySelectorAll('[data-sol-idx]');
+        const heights = Array.from(els).map(el => el.getBoundingClientRect().height);
+        if (heights.length === problems.length) {
+          setProblemHeights(heights);
+          setMeasured(true);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [problems, measured]);
+
+  // A4 상수
+  const A4_W = 794;
+  const A4_H = 1123;
+  const PAGE_PAD = 57;
+  const FOOTER_H = 36;
+  const HEADER_H = 80;
+  const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
+  const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
+  const COLUMN_GAP = 28;
+
+  // 2단일 때 측정 영역 너비 = (A4 - 좌우패딩*2 - 컬럼간격) / 2
+  const measureWidth = columns === 2 ? Math.floor((A4_W - PAGE_PAD * 2 - COLUMN_GAP) / 2) : (A4_W - PAGE_PAD * 2);
+
+  const pages = useMemo(() => {
+    if (!measured || problemHeights.length === 0) {
+      const perPage = columns === 2 ? 8 : 4;
+      const result: ProblemData[][] = [];
+      for (let i = 0; i < problems.length; i += perPage) result.push(problems.slice(i, i + perPage));
+      return result.length > 0 ? result : [[]];
+    }
+
+    const colMult = columns === 2 ? 2 : 1;
+    const result: ProblemData[][] = [];
+    let currentPage: ProblemData[] = [];
+    let usedH = 0;
+
+    for (let i = 0; i < problems.length; i++) {
+      const h = (problemHeights[i] + gap) / colMult;
+      const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
+
+      if (currentPage.length > 0 && usedH + h > maxH) {
+        result.push(currentPage);
+        currentPage = [];
+        usedH = 0;
+      }
+      currentPage.push(problems[i]);
+      usedH += h;
+    }
+    if (currentPage.length > 0) result.push(currentPage);
+    return result.length > 0 ? result : [[]];
+  }, [problems, problemHeights, measured, columns, gap, FIRST_CONTENT_H, CONTENT_H]);
+
+  // 정답 표시 헬퍼
+  const formatSolAnswer = (ans: number | string | undefined): React.ReactNode => {
+    if (ans === undefined || ans === '-') return '-';
+    if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
+    const str = String(ans);
+    const hasMath = /\$|\\frac|\^|[a-zA-Z].*[=+\-*/]/.test(str);
+    if (hasMath) return <MixedContentRenderer content={str} className="text-blue-700" />;
+    return str;
+  };
+
+  // 해설 한 문제 렌더 (측정 + 실제 공통)
+  const renderSolution = (problem: ProblemData) => (
+    <div className="break-inside-avoid">
+      {/* 문제 번호 + 정답 배지 + 난이도 */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[14px] font-extrabold text-gray-900">{problem.number}.</span>
+        <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-xs font-bold text-blue-700">
+          정답 {formatSolAnswer(problem.answer)}
+        </span>
+        <DifficultyBadgeLight level={problem.difficulty} />
+      </div>
+
+      {/* 해설 본문 */}
+      <div className="pl-5 text-[13px] text-gray-700 whitespace-pre-line" style={{ lineHeight: '1.7' }}>
+        <MixedContentRenderer content={problem.solution || '해설이 등록되지 않았습니다.'} className="text-gray-700" />
+      </div>
+
+      {/* 구분선 */}
+      <div className="mt-2 border-b border-gray-200" />
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -1303,54 +1406,98 @@ function SolutionView({
         </div>
       </div>
 
-      {/* 해설지 본문 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-6 bg-surface-raised/30">
-        <div className="solution-page w-full max-w-[900px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-          {/* 헤더 — 템플릿 기반 */}
-          <ExamPaperHeader
-            templateId={templateId}
-            meta={examMeta}
-            examTitle={`${examTitle} (해설)`}
-          />
+      {/* 숨겨진 측정 영역 */}
+      <div
+        ref={measureRef}
+        aria-hidden
+        style={{
+          position: 'absolute',
+          visibility: 'hidden',
+          top: -99999,
+          left: -99999,
+          width: `${measureWidth}px`,
+          fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+          fontSize: '13px',
+          lineHeight: '1.7',
+        }}
+      >
+        {problems.map((problem, idx) => (
+          <div key={problem.id} data-sol-idx={idx} style={{ marginBottom: '8px' }}>
+            {renderSolution(problem)}
+          </div>
+        ))}
+      </div>
 
-          {/* 해설 영역 */}
+      {/* A4 페이지들 */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex flex-col items-center py-6 bg-surface-raised/30">
+        {pages.map((pageProblems, pageIdx) => (
           <div
-            className={`p-6 ${columns === 2 ? 'columns-2 gap-8' : ''}`}
-            style={{ columnGap: columns === 2 ? '28px' : undefined }}
+            key={pageIdx}
+            className="solution-page bg-white"
+            style={{
+              width: `${A4_W}px`,
+              minHeight: `${A4_H}px`,
+              padding: '15mm',
+              marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
+              boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+              borderRadius: '4px',
+              position: 'relative',
+              boxSizing: 'border-box',
+              fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+            }}
           >
-            {problems.map((problem) => {
-              const answerDisplay = typeof problem.answer === 'number' && problem.answer >= 1 && problem.answer <= 5
-                ? circledNumbers[problem.answer]
-                : String(problem.answer || '-');
+            {/* 헤더 — 첫 페이지만 */}
+            {pageIdx === 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <ExamPaperHeader
+                  templateId={templateId}
+                  meta={examMeta}
+                  examTitle={`${examTitle} — 해설`}
+                />
+              </div>
+            )}
 
-              return (
+            {/* 해설 영역 */}
+            <div
+              style={{
+                columns: columns === 2 ? 2 : 1,
+                columnGap: `${COLUMN_GAP}px`,
+                columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined,
+              }}
+            >
+              {pageProblems.map((problem) => (
                 <div
                   key={problem.id}
-                  className="break-inside-avoid mb-0"
+                  className="break-inside-avoid"
                   style={{ marginBottom: `${gap}px` }}
                 >
-                  {/* 문제 번호 + 정답 */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-sm font-bold text-gray-900">{problem.number}.</span>
-                    <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-xs font-bold text-blue-700">
-                      정답 {answerDisplay}
-                    </span>
-                    <DifficultyBadgeLight level={problem.difficulty} />
-                  </div>
-
-                  {/* 해설 본문 */}
-                  <div className="pl-5 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                    <MixedContentRenderer content={problem.solution || '해설이 등록되지 않았습니다.'} className="text-gray-700" />
-                  </div>
-
-                  {/* 구분선 */}
-                  <div className="mt-2 border-b border-gray-200" />
+                  {renderSolution(problem)}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* 페이지 번호 */}
+            <div style={{
+              position: 'absolute',
+              bottom: '8mm',
+              left: 0,
+              right: 0,
+              textAlign: 'center',
+              fontSize: '10px',
+              color: '#aaa',
+            }}>
+              해설 {pageIdx + 1}
+            </div>
           </div>
-        </div>
+        ))}
       </div>
+
+      {/* 해설지 KaTeX 스타일 */}
+      <style jsx global>{`
+        .solution-page .katex {
+          font-size: 1.05em !important;
+        }
+      `}</style>
     </div>
   );
 }
