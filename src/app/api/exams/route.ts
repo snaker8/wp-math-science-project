@@ -71,7 +71,9 @@ export async function GET(request: NextRequest) {
       return {
         id: exam.id,
         title: exam.title,
-        fileName: fileName || exam.title,
+        // ★ title 우선 (사용자가 파일명 수정 시 title이 변경됨)
+        // description에서 추출한 fileName은 원본 업로드명이라 수정 반영 안 됨
+        fileName: exam.title || fileName,
         status: exam.status,
         problemCount: problemCountMap.get(exam.id) || 0,
         hasImage,
