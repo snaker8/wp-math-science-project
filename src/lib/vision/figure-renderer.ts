@@ -497,10 +497,18 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
  * - 음영 영역 (삼각형 등)
  * - 선분 연결
  */
+// ★ clipPath ID 충돌 방지용 카운터
+// 시험지 뷰의 측정 영역 + A4 페이지에서 동일 문제가 중복 렌더링되면
+// 같은 id="plot-clip"이 DOM에 여러 개 → url(#plot-clip) 해석 오류 → 곡선 미표시
+let _graphSvgCounter = 0;
+
 export function generateGraphSVG(rendering: GraphRendering): string | null {
   const { expressions, points } = rendering;
   const shadedRegions = rendering.shadedRegions || [];
   const segments = rendering.segments || [];
+
+  // ★ 고유 clipPath ID 생성 (DOM 내 중복 방지)
+  const clipId = `plot-clip-${++_graphSvgCounter}`;
 
   const width = 420;
   const height = 350;
@@ -598,8 +606,8 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" class="figure-graph">`;
 
-  // 클리핑 영역 (곡선이 축 밖으로 나가지 않게)
-  svg += `<defs><clipPath id="plot-clip"><rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}"/></clipPath></defs>`;
+  // 클리핑 영역 (곡선이 축 밖으로 나가지 않게) — ★ 고유 ID 사용
+  svg += `<defs><clipPath id="${clipId}"><rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}"/></clipPath></defs>`;
 
   // ── 1. 음영 영역 (가장 먼저) ──
   for (const region of shadedRegions) {
@@ -611,7 +619,7 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     if (pts) {
       const fill = GRAPH_SHADING[region.color] || GRAPH_SHADING.yellow;
       // 음영 + 테두리선 (참조사이트 동일: 진한 채움 + 변 라인)
-      svg += `<polygon points="${pts}" fill="${fill}" stroke="#374151" stroke-width="2" clip-path="url(#plot-clip)"/>`;
+      svg += `<polygon points="${pts}" fill="${fill}" stroke="#374151" stroke-width="2" clip-path="url(#${clipId})"/>`;
     }
   }
 
@@ -690,7 +698,7 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
       // 참조사이트 스타일: AI 색상 무시, 일관된 진한 색상 사용
       const color = GRAPH_COLORS[i % GRAPH_COLORS.length];
       const dashAttr = expr.style === 'dashed' ? ' stroke-dasharray="6,4"' : '';
-      svg += `<path d="${pathData}" stroke="${color}" stroke-width="2.5" fill="none" clip-path="url(#plot-clip)"${dashAttr}/>`;
+      svg += `<path d="${pathData}" stroke="${color}" stroke-width="2.5" fill="none" clip-path="url(#${clipId})"${dashAttr}/>`;
     }
   }
   console.log(`[GraphSVG] Rendered ${curveCount}/${expressions.length} curves`);
@@ -700,7 +708,7 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     const from = pointMap.get(fromLabel);
     const to = pointMap.get(toLabel);
     if (from && to) {
-      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${axisColor}" stroke-width="2.2" clip-path="url(#plot-clip)"/>`;
+      svg += `<line x1="${toSvgX(from.x)}" y1="${toSvgY(from.y)}" x2="${toSvgX(to.x)}" y2="${toSvgY(to.y)}" stroke="${axisColor}" stroke-width="2.2" clip-path="url(#${clipId})"/>`;
     }
   }
 
