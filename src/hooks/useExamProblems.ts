@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
+import type { InterpretedFigure, GeometryRendering, GraphRendering } from '@/types/ocr';
 // Note: supabaseBrowser는 useCreateExam, useExamList에서 여전히 사용
 
 // ============================================================================
@@ -181,6 +182,62 @@ function extractAnswerNumber(answerJson: Record<string, unknown>): number | stri
 }
 
 // ============================================================================
+// 런타임 geometry → graph 변환
+// (분석 시점에 postProcessResult가 적용되지 않은 이전 데이터 대응)
+// image-interpreter.ts의 postProcessResult와 동일한 로직
+// ============================================================================
+
+function runtimeFixGeometryToGraph(
+  figureData: InterpretedFigure | undefined,
+  content: string
+): InterpretedFigure | undefined {
+  if (!figureData || !figureData.rendering || figureData.rendering.type !== 'geometry') return figureData;
+
+  // 수식 감지 (image-interpreter.ts의 detectEquationsFromContent 경량 버전)
+  const equations: string[] = [];
+  const eqPatterns = [
+    /y\s*=\s*[-+]?\s*\d*x\^?\{?\d*\}?\s*(?:[-+]\s*\d*x?\s*(?:\^?\{?\d*\}?)?)*/g,
+    /y\s*=\s*[-+]?\d*x\s*[\^²³]\s*[-+]?\s*\d*x?/g,
+    /f\s*\(\s*x\s*\)\s*=\s*[-+\d\s\\{}^_xX().a-z]+/g,
+    /g\s*\(\s*x\s*\)\s*=\s*[-+\d\s\\{}^_xX().a-z]+/g,
+  ];
+  for (const pattern of eqPatterns) {
+    const matches = content.match(pattern);
+    if (matches) {
+      for (const m of matches) {
+        const cleaned = m.trim();
+        if (cleaned.length > 3 && !equations.includes(cleaned)) equations.push(cleaned);
+      }
+    }
+  }
+  const graphKeywords = ['그래프', '포물선', '이차함수', '좌표', 'x축', 'y축'];
+  const hasGraphKeywords = graphKeywords.some(kw => content.includes(kw));
+
+  if (equations.length === 0 && !hasGraphKeywords) return figureData;
+
+  // geometry → graph 변환 (vertices → points, segments/shadedRegions 보존)
+  console.log(`[runtimeFix] geometry → graph 변환 (수식: ${equations.join(', ')})`);
+  const geo = figureData.rendering as GeometryRendering;
+  const graphRendering: GraphRendering = {
+    type: 'graph',
+    expressions: equations.map(eq => ({
+      latex: eq.replace(/^y\s*=\s*/, 'y=').replace(/^f\s*\(\s*x\s*\)\s*=\s*/, 'y='),
+      color: '#2563eb',
+      style: 'solid' as const,
+      hidden: false,
+    })),
+    xRange: [-5, 10],
+    yRange: [-5, 10],
+    points: geo.vertices?.map(v => ({ x: v.x, y: v.y, label: v.label })) || [],
+    annotations: [],
+    segments: geo.segments,
+    shadedRegions: geo.shadedRegions,
+  };
+
+  return { ...figureData, figureType: 'graph', rendering: graphRendering };
+}
+
+// ============================================================================
 // DB 행 → ExamProblemData 변환
 // ============================================================================
 
@@ -237,12 +294,16 @@ function toExamProblemData(
   // 도형 포함 여부 + AI 생성 SVG + 구조화된 도형 데이터 (ai_analysis에서 추출)
   const hasFigure = problem.ai_analysis?.hasFigure || false;
   const figureSvg = problem.ai_analysis?.figureSvg || undefined;
-  const figureData = problem.ai_analysis?.figureData || undefined;
+  const rawFigureData = problem.ai_analysis?.figureData || undefined;
+
+  // ★ 런타임 보정: geometry 타입인데 문제 본문에 수식/그래프 키워드 → graph로 변환
+  const figureData = runtimeFixGeometryToGraph(rawFigureData, content);
 
   // DEBUG: figureData 추출 확인
   if (hasFigure) {
     const aiKeys = problem.ai_analysis ? Object.keys(problem.ai_analysis) : [];
-    console.log(`[toExamProblemData] #${index + 1} aiKeys=[${aiKeys.join(',')}], hasFigureData=${!!figureData}, hasFigureSvg=${!!figureSvg}${figureData ? `, fdType=${figureData.figureType}, fdHasSvg=${!!figureData.rendering?.svg}` : ''}`);
+    const wasFixed = rawFigureData !== figureData;
+    console.log(`[toExamProblemData] #${index + 1} aiKeys=[${aiKeys.join(',')}], hasFigureData=${!!figureData}, hasFigureSvg=${!!figureSvg}${figureData ? `, fdType=${figureData.figureType}, fdHasSvg=${!!(figureData.rendering as any)?.svg}` : ''}${wasFixed ? ' ★FIXED geometry→graph' : ''}`);
   }
 
   return {
