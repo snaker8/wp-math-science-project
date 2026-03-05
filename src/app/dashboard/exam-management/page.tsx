@@ -46,7 +46,6 @@ interface ExamProblem {
   hasFigure?: boolean;
   figureSvg?: string;
   figureData?: InterpretedFigure;
-  images?: Array<{ url: string; type: string; label: string }>;
 }
 
 // ============================================================================
@@ -320,7 +319,6 @@ export default function ExamManagementPage() {
       hasFigure: p.hasFigure,
       figureSvg: p.figureSvg,
       figureData: p.figureData,
-      images: p.images,
     }));
   }, [dbProblems]);
 
@@ -617,12 +615,11 @@ export default function ExamManagementPage() {
                                 <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                                   <MixedContentRenderer content={problem.content} className="text-gray-800" />
                                 </div>
-                                {(problem.figureData || problem.figureSvg || problem.images?.some(img => img.type === 'crop')) && (
+                                {(problem.figureData || problem.figureSvg) && (
                                   <div className="my-2 flex justify-center">
                                     <FigureRenderer
                                       figureData={problem.figureData}
                                       figureSvg={problem.figureSvg}
-                                      cropImageUrl={problem.images?.find(img => img.type === 'crop')?.url}
                                       maxWidth={240}
                                       darkMode={false}
                                     />
@@ -834,12 +831,11 @@ export default function ExamManagementPage() {
                         <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                           <MixedContentRenderer content={problem.content} className="text-gray-800" />
                         </div>
-                        {(problem.figureData || problem.figureSvg || problem.images?.some(img => img.type === 'crop')) && (
+                        {(problem.figureData || problem.figureSvg) && (
                           <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'center' }}>
                             <FigureRenderer
                               figureData={problem.figureData}
                               figureSvg={problem.figureSvg}
-                              cropImageUrl={problem.images?.find(img => img.type === 'crop')?.url}
                               maxWidth={220}
                               darkMode={false}
                             />
