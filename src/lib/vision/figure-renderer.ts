@@ -410,10 +410,19 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     // 3. \sqrt{x} → Math.sqrt(x)
     js = js.replace(/\\sqrt\{([^}]+)\}/g, 'Math.sqrt($1)');
 
-    // 4. Trig / log 함수
-    js = js.replace(/\\sin/g, 'Math.sin');
-    js = js.replace(/\\cos/g, 'Math.cos');
-    js = js.replace(/\\tan/g, 'Math.tan');
+    // 4. Trig / log 함수 (★ 백슬래시 유무 모두 처리 — lookbehind로 단어 경계 보호)
+    js = js.replace(/(?<![a-zA-Z])\\?sin(?=[^a-zA-Z]|$)/g, 'Math.sin');
+    js = js.replace(/(?<![a-zA-Z])\\?cos(?=[^a-zA-Z]|$)/g, 'Math.cos');
+    js = js.replace(/(?<![a-zA-Z])\\?tan(?=[^a-zA-Z]|$)/g, 'Math.tan');
+    // ★ \log_2, \log_{10} 등 밑이 있는 로그 먼저 처리 (반드시 \log 앞에!)
+    // \log_{10}(x) → Math.log10(x)  (상용로그는 네이티브 함수 사용)
+    js = js.replace(/\\log_\{10\}/g, 'Math.log10');
+    // \log_{base}(x) → (1/Math.log(base))*Math.log(x) — 인수는 그대로 남음
+    js = js.replace(/\\log_\{([^}]+)\}/g, (_, base) => `(1/Math.log(${base}))*Math.log`);
+    // \log_2(x) → Math.log2(x)  (이진로그는 네이티브 함수 사용)
+    js = js.replace(/\\log_2/g, 'Math.log2');
+    // \log_N(x) → (1/Math.log(N))*Math.log(x)
+    js = js.replace(/\\log_(\d)/g, (_, base) => `(1/Math.log(${base}))*Math.log`);
     js = js.replace(/\\log/g, 'Math.log10');
     js = js.replace(/\\ln/g, 'Math.log');
 
@@ -455,6 +464,7 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     js = js.replace(/(\d)([a-z(])/gi, '$1*$2');
     js = js.replace(/([a-z)])(\d)/gi, '$1*$2');
     js = js.replace(/\)\s*\(/g, ')*(');
+    js = js.replace(/\)([a-z])/gi, ')*$1');              // ★ )x → )*x (누락된 패턴!)
     js = js.replace(/(?<![a-zA-Z])([a-z])\s*\(/gi, '$1*(');
     // Math 함수 복원
     js = js.replace(/§(\d+)§/g, (_, idx) => savedFns[parseInt(idx)]);
@@ -471,7 +481,7 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     }
 
     // 안전 검증: 허용된 문자만
-    const safeJs = js.replace(/Math\.(sin|cos|tan|log|log10|sqrt|abs|pow|PI|E)/g, '');
+    const safeJs = js.replace(/Math\.(sin|cos|tan|log10|log2|log|sqrt|abs|pow|PI|E)/g, '');
     if (/[a-wyzA-Z]/.test(safeJs)) return null;
 
     // 함수 생성 및 테스트
@@ -490,12 +500,74 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
 }
 
 /**
+ * LaTeX 수식을 HTML로 변환 (SVG foreignObject에서 사용)
+ * 실제 문제집처럼 위첨자/분수를 HTML sup/sub로 깔끔하게 표현
+ * 예: y=\left(\frac{1}{4}\right)^{x-a}+b → y=(<span class="frac">...</span>)<sup>x−a</sup>+b
+ */
+function latexToHtml(latex: string): string {
+  let s = latex;
+
+  // 1. \left( \right) → 괄호
+  s = s.replace(/\\left\s*\(/g, '(');
+  s = s.replace(/\\right\s*\)/g, ')');
+  s = s.replace(/\\left\s*\[/g, '[');
+  s = s.replace(/\\right\s*\]/g, ']');
+
+  // 2. \frac{a}{b} → HTML 분수 (세로 스타일 — 교과서 수준 가독성)
+  s = s.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, (_m, num, den) => {
+    const cleanNum = num.replace(/\\pi/g, 'π').replace(/\\[a-zA-Z]+/g, '');
+    const cleanDen = den.replace(/\\pi/g, 'π').replace(/\\[a-zA-Z]+/g, '');
+    return `<span style="display:inline-block;vertical-align:middle;text-align:center;font-size:0.95em"><span style="display:block;border-bottom:1.5px solid #1f2937;padding:0 3px;line-height:1.15">${cleanNum}</span><span style="display:block;padding:0 3px;line-height:1.15">${cleanDen}</span></span>`;
+  });
+
+  // 3. ^{...} → HTML 위첨자
+  s = s.replace(/\^\{([^}]+)\}/g, (_m, exp) => {
+    const cleanExp = exp.replace(/\\pi/g, 'π').replace(/\\[a-zA-Z]+/g, '').replace(/[{}]/g, '');
+    return `<sup style="font-size:0.75em;vertical-align:super">${cleanExp}</sup>`;
+  });
+  // ^단일문자
+  s = s.replace(/\^([a-z0-9])/gi, (_m: string, c: string) => {
+    return `<sup style="font-size:0.75em;vertical-align:super">${c}</sup>`;
+  });
+
+  // 4. _{...} → HTML 아래첨자
+  s = s.replace(/_\{([^}]+)\}/g, (_m, sub) => {
+    const cleanSub = sub.replace(/\\pi/g, 'π').replace(/\\[a-zA-Z]+/g, '').replace(/[{}]/g, '');
+    return `<sub style="font-size:0.7em">${cleanSub}</sub>`;
+  });
+  s = s.replace(/_([a-z0-9])/gi, (_m: string, c: string) => {
+    return `<sub style="font-size:0.7em">${c}</sub>`;
+  });
+
+  // 5. 그리스 문자 & 기호
+  s = s.replace(/\\pi/g, 'π');
+  s = s.replace(/\\cdot/g, '·');
+  s = s.replace(/\\times/g, '×');
+  s = s.replace(/\\pm/g, '±');
+  s = s.replace(/\\leq/g, '≤');
+  s = s.replace(/\\geq/g, '≥');
+  s = s.replace(/\\infty/g, '∞');
+  s = s.replace(/\\sin/g, 'sin');
+  s = s.replace(/\\cos/g, 'cos');
+  s = s.replace(/\\tan/g, 'tan');
+  s = s.replace(/\\log/g, 'log');
+
+  // 6. 남은 LaTeX 명령 & 중괄호 정리
+  s = s.replace(/\\[a-zA-Z]+/g, '');
+  s = s.replace(/[{}]/g, '');
+
+  return s.trim();
+}
+
+/**
  * 그래프 데이터로 정적 SVG 코드 생성 (참조사이트 수준)
  * - 좌표축 + 화살표 + 라벨 (x, y, O)
  * - 곡선 (LaTeX → JS 변환 후 샘플링)
  * - 점 라벨 (알파벳만, 점 마커 없음)
  * - 음영 영역 (삼각형 등)
  * - 선분 연결
+ * - annotations (원본 수식 표시)
+ * - 축 눈금 라벨 / 점근선 점선
  */
 // ★ clipPath ID 충돌 방지용 카운터
 // 시험지 뷰의 측정 영역 + A4 페이지에서 동일 문제가 중복 렌더링되면
@@ -525,6 +597,20 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   const pointXs = [...points.map(p => p.x), 0];
   const pointYs = [...points.map(p => p.y), 0];
 
+  // ★ 점근선(dashed expression) y값도 점 범위에 포함
+  // 지수함수 등에서 점근선이 y=-4면, Y범위가 -4까지 자동 확장됨
+  for (const expr of expressions) {
+    if (expr.style !== 'dashed') continue;
+    const constMatch = expr.latex.match(/^y\s*=\s*([-+]?\d+\.?\d*)$/);
+    if (constMatch) {
+      const yVal = parseFloat(constMatch[1]);
+      if (!isNaN(yVal)) {
+        pointYs.push(yVal);
+        console.log(`[GraphSVG] Asymptote y=${yVal} included in range calculation`);
+      }
+    }
+  }
+
   const ptXmin = Math.min(...pointXs);
   const ptXmax = Math.max(...pointXs);
   const ptYmin = Math.min(...pointYs);
@@ -538,18 +624,25 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   let scanXmin: number, scanXmax: number;
   let yClampLo: number, yClampHi: number;
 
+  // ★ 삼각함수 감지: expressions에 sin/cos/tan 포함 여부
+  const hasTrigExpr = expressions.some(e => /\\?sin|\\?cos|\\?tan/i.test(e.latex));
+
   if (hasLabeledPoints && ptXspan > 0.5) {
-    // ★ 점이 있는 경우: 점 범위의 ±50% 주변만 곡선 탐색
-    const scanExt = Math.max(ptXspan * 0.5, 1.5);
+    // ★ 점이 있는 경우: 점 범위의 ±80% 주변 곡선 탐색 (넓게)
+    const scanExt = Math.max(ptXspan * 0.8, 2.5);
     scanXmin = ptXmin - scanExt;
     scanXmax = ptXmax + scanExt;
+    // ★ 삼각함수: AI의 xRange를 병합 (주기 기반으로 더 넓은 범위 필요)
+    if (hasTrigExpr) {
+      scanXmin = Math.min(scanXmin, rendering.xRange[0]);
+      scanXmax = Math.max(scanXmax, rendering.xRange[1]);
+    }
     // Y 클램핑: 비대칭 — 상방은 넉넉히, 하방은 최소화
-    // ★ 핵심: 모든 점이 y≥0이면 x축 아래는 거의 안 보이게 (원본처럼)
     const allPointsAboveAxis = ptYmin >= -0.01;
-    const yClampUp = Math.max(ptYspan * 1.5, 3);
+    const yClampUp = Math.max(ptYspan * 1.2, 5);   // ★ 급경사 곡선 상방 여유 확대
     const yClampDown = allPointsAboveAxis
       ? Math.max(ptYspan * 0.15, 0.5)  // x축 위 점만: 하방 극소화
-      : Math.max(ptYspan * 1.5, 4);    // 음수 점 있으면 넉넉히
+      : Math.max(ptYspan * 0.5, 2);    // 점근선 포함: 적당한 여유
     yClampLo = ptYmin - yClampDown;
     yClampHi = ptYmax + yClampUp;
   } else {
@@ -661,6 +754,11 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     const expr = expressions[i];
     if (expr.hidden) continue;
 
+    // ★ dashed y=상수 수식은 section 7에서 점근선으로 별도 처리 → 여기서 건너뜀
+    if (expr.style === 'dashed' && /^y\s*=\s*[-+]?\d+\.?\d*$/.test(expr.latex)) {
+      continue;
+    }
+
     const fn = latexToJsFunction(expr.latex);
     if (!fn) {
       console.warn(`[GraphSVG] Could not parse expression[${i}]:`, expr.latex);
@@ -715,6 +813,9 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   // ── 5. 점 라벨 (알파벳만, 마커 없음, 참조사이트 스타일) ──
   for (const pt of points) {
     if (!pt.label || pt.label === 'O') continue; // O는 이미 원점에 표시
+    // ★ y축 위 점(x≈0, y≠0)은 section 6/7에서 축 눈금으로 처리 → 여기서 건너뜀
+    // ("A", "-3" 등 AI가 반환한 y축 포인트가 bold 점 라벨로 중복 표시되는 것 방지)
+    if (Math.abs(pt.x) < 0.1 && pt.y !== 0) continue;
     const sx = toSvgX(pt.x);
     const sy = toSvgY(pt.y);
 
@@ -736,6 +837,100 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     }
 
     svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="16" font-weight="bold" font-style="italic" font-family="serif" fill="#000000">${escapeXml(pt.label)}</text>`;
+  }
+
+  // ── 6. 축 위 숫자 라벨 (원본 그래프처럼 주요 좌표값 표시) ──
+  for (const pt of points) {
+    if (!pt.label || pt.label === 'O') continue;
+    // 순수 숫자 라벨은 건너뜀 (이미 5번에서 표시)
+    if (/^[A-Za-z]/.test(pt.label)) continue;
+  }
+  // x축/y축 위의 숫자 눈금: 점 좌표에서 정수/특수값 표시
+  const shownXticks = new Set<number>();
+  const shownYticks = new Set<number>();
+  for (const pt of points) {
+    if (pt.label === 'O') continue;
+    // x축 위의 점 (y=0): x 좌표 표시
+    if (pt.y === 0 && pt.x !== 0 && !shownXticks.has(pt.x)) {
+      shownXticks.add(pt.x);
+      const sx = toSvgX(pt.x);
+      // 눈금 선
+      svg += `<line x1="${sx}" y1="${originY - 3}" x2="${sx}" y2="${originY + 3}" stroke="${axisColor}" stroke-width="1"/>`;
+      // 숫자 라벨 (라벨이 있으면 라벨 사용, 없으면 숫자)
+      const tickLabel = pt.label || String(pt.x);
+      // ★ 분수 라벨 감지 (π/2, 3π/2 등) → 교과서 스타일 세로 분수 렌더링
+      const fracMatch = tickLabel.match(/^([^/]+)\/(.+)$/);
+      if (fracMatch) {
+        const num = fracMatch[1].replace(/pi/g, 'π').trim();
+        const den = fracMatch[2].replace(/pi/g, 'π').trim();
+        const foW = 36;
+        const foH = 34;
+        svg += `<foreignObject x="${sx - foW / 2}" y="${originY + 5}" width="${foW}" height="${foH}">`;
+        svg += `<div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;flex-direction:column;align-items:center;font-family:serif;font-size:12px;color:${axisColor};line-height:1.1">`;
+        svg += `<span style="font-style:italic">${num}</span>`;
+        svg += `<span style="width:90%;border-top:1px solid ${axisColor};margin:0"></span>`;
+        svg += `<span>${den}</span>`;
+        svg += `</div></foreignObject>`;
+      } else {
+        const xTickFontSize = tickLabel.includes('π') || tickLabel.includes('pi') ? 13 : 12;
+        svg += `<text x="${sx}" y="${originY + 18}" text-anchor="middle" font-size="${xTickFontSize}" font-family="serif" fill="${axisColor}">${escapeXml(tickLabel)}</text>`;
+      }
+    }
+    // y축 위의 점 (x=0): 명시적 숫자 라벨이 있는 경우만 눈금 표시
+    // ★ 라벨 없는 점이나 phantom 알파벳은 건너뜀 (점근선은 section 7에서 별도 처리)
+    if (pt.x === 0 && pt.y !== 0 && !shownYticks.has(pt.y)) {
+      // 숫자 라벨이 아니면 건너뜀 (alpha phantom + 라벨 없는 점 모두 필터)
+      if (!pt.label || /^[A-Za-z]$/.test(pt.label)) {
+        // skip — 점근선 값은 section 7에서 처리하므로 shownYticks에 등록하지 않음
+      } else {
+        shownYticks.add(pt.y);
+        const sy = toSvgY(pt.y);
+        svg += `<line x1="${originX - 3}" y1="${sy}" x2="${originX + 3}" y2="${sy}" stroke="${axisColor}" stroke-width="1"/>`;
+        svg += `<text x="${originX - 10}" y="${sy + 5}" text-anchor="end" font-size="14" font-family="serif" fill="${axisColor}">${escapeXml(pt.label)}</text>`;
+      }
+    }
+  }
+
+  // ── 7. 점근선 점선 (dashed 스타일 expression이나 points에서 감지) ──
+  for (const expr of expressions) {
+    if (expr.style !== 'dashed') continue;
+    // y=상수 형태의 점근선 감지
+    const constMatch = expr.latex.match(/^y\s*=\s*([-+]?\d+\.?\d*)$/);
+    if (constMatch) {
+      const yVal = parseFloat(constMatch[1]);
+      if (!isNaN(yVal) && yVal >= yMin && yVal <= yMax) {
+        const sy = toSvgY(yVal);
+        svg += `<line x1="${pad.left}" y1="${sy}" x2="${pad.left + plotW}" y2="${sy}" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="8,5" clip-path="url(#${clipId})"/>`;
+        // 점근선 라벨 (★ 원본처럼 크고 진하게)
+        if (!shownYticks.has(yVal)) {
+          svg += `<line x1="${originX - 3}" y1="${sy}" x2="${originX + 3}" y2="${sy}" stroke="${axisColor}" stroke-width="1.2"/>`;
+          svg += `<text x="${originX - 10}" y="${sy + 5}" text-anchor="end" font-size="16" font-weight="600" font-family="serif" fill="${axisColor}">${yVal}</text>`;
+        }
+      }
+    }
+  }
+
+  // ── 8. annotations (원본 수식 — foreignObject + HTML로 교과서 수준 렌더링) ──
+  // ★ 점근선 수식(y=상수)은 section 7에서 점선+라벨로 처리 → annotation에서 제외
+  const rawAnnotations = rendering.annotations || [];
+  const annotations = rawAnnotations.filter(anno => {
+    const cleaned = anno.replace(/\\[a-zA-Z]+/g, '').replace(/[{}\s]/g, '');
+    return !/^y=[-+]?\d+\.?\d*$/.test(cleaned);
+  });
+  if (annotations.length > 0) {
+    const annoX = pad.left + plotW * 0.22;
+    const annoY = pad.top + 2;
+    const annoW = plotW * 0.75;
+    const annoH = 40 * annotations.length;
+    svg += `<foreignObject x="${annoX}" y="${annoY}" width="${annoW}" height="${annoH}">`;
+    svg += `<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:'Times New Roman',Georgia,serif;font-style:italic;font-size:19px;color:#1f2937;text-align:right;line-height:1.5">`;
+    for (const anno of annotations) {
+      const html = latexToHtml(anno);
+      if (html) {
+        svg += `<div>${html}</div>`;
+      }
+    }
+    svg += `</div></foreignObject>`;
   }
 
   svg += '</svg>';

@@ -325,6 +325,23 @@ function groupLinesIntoQuestions(
 
       if (numberMatch) {
         const qNum = parseInt(numberMatch[1], 10);
+
+        // ★ 선택지 오인식 방지: 1~5번이고 ㄱ,ㄴ,ㄷ,ㄹ 조합이면 보기 선택지
+        // 예: "1) ㄱ, ㄴ", "(2) ㄱ, ㄷ", "3) ㄱ, ㄴ, ㄷ"
+        const afterNumber = lineText.substring(numberMatch[0].length).trim();
+        const isChoiceLine = qNum >= 1 && qNum <= 5 && /^[ㄱㄴㄷㄹㅁ,\s]+$/.test(afterNumber);
+        // 괄호로 시작: "(1)", "(2)" 등은 선택지
+        const startsWithParen = /^\s*\(/.test(lineText);
+
+        if (isChoiceLine || startsWithParen) {
+          // 선택지 → 현재 문제에 포함
+          if (currentQuestion) {
+            currentQuestion.lines.push(line);
+            currentQuestion.choiceTexts.push(lineText);
+          }
+          continue;
+        }
+
         matchedNumbers.push(qNum);
 
         // 이전 문제 저장

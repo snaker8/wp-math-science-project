@@ -160,9 +160,9 @@ export async function POST(
 
     console.log(`[generate-figure] Problem ${problemId}: type=${interpreted.figureType}, confidence=${interpreted.confidence}`);
 
-    // 5. 도형 없음 처리 (photo 타입 + 낮은 confidence)
+    // 5. 도형 없음 처리 (photo 타입 — postProcess에서 forceGraph인 경우 이미 graph로 전환됨)
     if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
-      console.log(`[generate-figure] Problem ${problemId}: No figure detected (${interpreted.figureType}, confidence: ${interpreted.confidence})`);
+      console.log(`[generate-figure] Problem ${problemId}: No figure detected (${interpreted.figureType}, confidence: ${interpreted.confidence}). content 일부: ${(problem.content_latex || '').substring(0, 100)}`);
 
       const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
       await supabaseAdmin

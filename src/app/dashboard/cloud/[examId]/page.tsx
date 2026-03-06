@@ -29,6 +29,8 @@ import {
   CheckCheck,
   FileEdit,
   Move,
+  ScanLine,
+  Loader2,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
@@ -196,6 +198,7 @@ function ProblemCardView({
   problem,
   onTwinGenerate,
   onEdit,
+  onRescan,
   onGenerateFigure,
   onDeleteFigure,
   onUpdateContent,
@@ -204,10 +207,12 @@ function ProblemCardView({
   onToggleSelect,
   viewMode: globalViewMode,
   isGeneratingFigure,
+  isRescanning,
 }: {
   problem: ProblemData;
   onTwinGenerate: (p: ProblemData) => void;
   onEdit?: (p: ProblemData) => void;
+  onRescan?: (p: ProblemData) => void;
   onGenerateFigure?: (p: ProblemData) => void;
   onDeleteFigure?: (p: ProblemData) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
@@ -216,6 +221,7 @@ function ProblemCardView({
   onToggleSelect?: (id: string) => void;
   viewMode?: 'clean' | 'original';
   isGeneratingFigure?: boolean;
+  isRescanning?: boolean;
 }) {
   const [isEditingPosition, setIsEditingPosition] = useState(false);
   const [showFigureCompare, setShowFigureCompare] = useState(false);
@@ -350,6 +356,15 @@ function ProblemCardView({
             </button>
             <button
               type="button"
+              onClick={(e) => { e.stopPropagation(); onRescan?.(problem); }}
+              className={`p-1 rounded transition-colors ${isRescanning ? 'text-green-400 animate-pulse' : 'text-content-muted hover:text-green-400 hover:bg-green-500/10'}`}
+              title="이미지로 재스캔 (문제 교체)"
+              disabled={isRescanning}
+            >
+              {isRescanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); onEdit?.(problem); }}
               className="p-1 rounded text-content-muted hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
               title="수정하기"
@@ -403,39 +418,51 @@ function ProblemCardView({
                         content={part.text}
                         className="inline text-sm text-content-secondary leading-relaxed"
                       />
-                    ) : showFigureCompare && cropImage ? (
-                      /* ★ 비교 모드 (마커 위치) */
-                      <div key={i} className="my-2 grid grid-cols-2 gap-3">
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
+                    ) : (problem.figureData || problem.figureSvg) ? (
+                      /* ① AI 도형 생성됨 → AI 도형 표시 (비교 모드 포함) */
+                      showFigureCompare && cropImage ? (
+                        <div key={i} className="my-2 grid grid-cols-2 gap-3">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
+                            <img src={cropImage.url} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
+                            <div className="border border-emerald-500/30 rounded p-1">
+                              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={200} darkMode />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={i} className="my-2 flex justify-center">
+                          <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={300} darkMode />
+                        </div>
+                      )
+                    ) : cropImage ? (
+                      /* ② AI 도형 아직 없음 → 원본 크롭 이미지로 도형 위치 표시 */
+                      <div key={i} className="my-2 flex justify-center">
+                        <div className="relative">
                           <img
                             src={cropImage.url}
-                            alt="원본 도형"
-                            className="rounded border border-blue-500/30 max-h-48 object-contain"
+                            alt={`문제 ${problem.number} 원본 도형`}
+                            className="rounded-lg border border-zinc-700 max-h-64 object-contain"
                             loading="lazy"
+                            onError={(e) => {
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<div class="flex flex-col items-center justify-center gap-2 py-6 px-8 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-400"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span class="text-xs text-orange-400 font-medium">도형 포함 — 도형 생성 버튼을 클릭하세요</span></div>`;
+                              }
+                            }}
                           />
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
-                          <div className="border border-emerald-500/30 rounded p-1">
-                            <FigureRenderer
-                              figureData={problem.figureData}
-                              figureSvg={problem.figureSvg}
-                              maxWidth={200}
-                              darkMode
-                            />
-                          </div>
                         </div>
                       </div>
                     ) : (
+                      /* ③ 크롭 이미지도 없음 → 플레이스홀더 */
                       <div key={i} className="my-2 flex justify-center">
-                        <FigureRenderer
-                          figureData={problem.figureData}
-                          figureSvg={problem.figureSvg}
-                          cropImageUrl={cropImage?.url}
-                          maxWidth={300}
-                          darkMode
-                        />
+                        <div className="flex flex-col items-center justify-center gap-2 py-6 px-8 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5">
+                          <Shapes className="h-6 w-6 text-orange-400" />
+                          <span className="text-xs text-orange-400 font-medium">도형 포함 — 도형 생성 버튼을 클릭하세요</span>
+                        </div>
                       </div>
                     )
                   ))}
@@ -447,41 +474,24 @@ function ProblemCardView({
                     content={cleanContent}
                     className="inline text-sm text-content-secondary leading-relaxed"
                   />
-                  {/* 도형 데이터가 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
+                  {/* AI 도형이 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
                   {(problem.figureData || problem.figureSvg) && (
                     showFigureCompare && cropImage ? (
-                      /* ★ 원본/AI 비교 모드: 나란히 표시 */
                       <div className="mt-2 grid grid-cols-2 gap-3">
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
-                          <img
-                            src={cropImage.url}
-                            alt="원본 도형"
-                            className="rounded border border-blue-500/30 max-h-48 object-contain"
-                            loading="lazy"
-                          />
+                          <img src={cropImage.url} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
                         </div>
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                           <div className="border border-emerald-500/30 rounded p-1">
-                            <FigureRenderer
-                              figureData={problem.figureData}
-                              figureSvg={problem.figureSvg}
-                              maxWidth={200}
-                              darkMode
-                            />
+                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={200} darkMode />
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-2 flex justify-center">
-                        <FigureRenderer
-                          figureData={problem.figureData}
-                          figureSvg={problem.figureSvg}
-                          cropImageUrl={cropImage?.url}
-                          maxWidth={300}
-                          darkMode
-                        />
+                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={300} darkMode />
                       </div>
                     )
                   )}
@@ -790,14 +800,23 @@ function ExamPaperView({
     document.body.removeChild(printRoot);
   }, [printSections]);
 
-  // 문제 렌더링 헬퍼
+  // 문제 렌더링 헬퍼 (시험지 출력용)
   const renderProblem = (problem: ProblemData) => {
-    // ★ figureData/figureSvg 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (중복 방지)
-    const cleanContent = (problem.figureData || problem.figureSvg)
+    const hasAiFigure = problem.figureData || problem.figureSvg;
+    // ★ AI 도형 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (중복 방지)
+    const cleanContent = hasAiFigure
       ? problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
       : problem.content;
     const parts = splitContentByFigureMarker(cleanContent);
     const hasFigureInContent = parts.some(p => p.type === 'figure');
+
+    // 시험지 출력: AI 도형만 표시
+    const renderFigureForPrint = () => {
+      if (hasAiFigure) {
+        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />;
+      }
+      return null;
+    };
 
     return (
       <div className="flex gap-2.5">
@@ -812,16 +831,16 @@ function ExamPaperView({
                   <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
                 ) : (
                   <div key={pi} className="my-2 flex justify-center">
-                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
+                    {renderFigureForPrint()}
                   </div>
                 )
               ))
             ) : (
               <>
                 <MixedContentRenderer content={cleanContent} className="text-gray-800" />
-                {(problem.figureData || problem.figureSvg) && (
+                {hasAiFigure && (
                   <div className="mt-2 flex justify-center">
-                    <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />
+                    {renderFigureForPrint()}
                   </div>
                 )}
               </>
@@ -1183,60 +1202,64 @@ function QuickAnswerView({
         />
 
         {/* 빠른 정답 제목 */}
-        <div className="text-center py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">빠른 정답</h2>
+        <div className="text-center pt-8 pb-5">
+          <h2 className="text-xl font-bold text-gray-900 tracking-wider">빠 른 정 답</h2>
         </div>
 
-        {/* 정답 그리드 */}
-        <div className="p-8">
-          <div className="grid grid-cols-4 gap-0 border border-gray-400">
-            {/* 헤더 */}
-            <div className="bg-gray-100 border-b border-r border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">문항</div>
-            <div className="bg-gray-100 border-b border-r border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">정답</div>
-            <div className="bg-gray-100 border-b border-r border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">문항</div>
-            <div className="bg-gray-100 border-b border-gray-400 px-3 py-2 text-center text-xs font-bold text-gray-600">정답</div>
-
-            {/* 정답 행들 - 좌우 2열 배치 */}
+        {/* 정답 테이블 */}
+        <div className="px-12 pb-10">
+          <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '38%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '38%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">문항</th>
+                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">정답</th>
+                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">문항</th>
+                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">정답</th>
+              </tr>
+            </thead>
+            <tbody>
             {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
               const leftNum = rowIdx + 1;
               const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
               const leftP = problems.find((p) => p.number === leftNum);
               const rightP = problems.find((p) => p.number === rightNum);
-              const isLast = rowIdx === Math.ceil(problems.length / 2) - 1;
 
-              // 정답 표시: 객관식 → 원문자, 주관식 수식 → KaTeX 렌더링
               const formatAnswer = (ans: number | string | undefined): React.ReactNode => {
                 if (ans === undefined || ans === '-') return '-';
                 if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
                 const str = String(ans);
-                // 수식 포함 여부: $...$, ^, \frac, 알파벳 변수 등
                 const hasMath = /\$|\\frac|\^|[a-zA-Z].*[=+\-*/]/.test(str);
                 if (hasMath) {
-                  return <MixedContentRenderer content={str} className="text-blue-600" />;
+                  return <MixedContentRenderer content={str} className="text-blue-700" />;
                 }
                 return str;
               };
 
               return (
-                <React.Fragment key={rowIdx}>
-                  {/* 왼쪽 */}
-                  <div className={`${!isLast ? 'border-b' : ''} border-r border-gray-400 px-3 py-2.5 text-center text-sm font-bold text-gray-900`}>
+                <tr key={rowIdx}>
+                  <td className="border border-gray-400 py-3 text-center text-sm font-semibold text-gray-800">
                     {leftNum}
-                  </div>
-                  <div className={`${!isLast ? 'border-b' : ''} border-r border-gray-400 px-3 py-2.5 text-center text-lg font-bold text-blue-600`}>
+                  </td>
+                  <td className="border border-gray-400 py-3 text-center text-base font-bold text-blue-700">
                     {formatAnswer(leftP?.answer)}
-                  </div>
-                  {/* 오른쪽 */}
-                  <div className={`${!isLast ? 'border-b' : ''} border-r border-gray-400 px-3 py-2.5 text-center text-sm font-bold text-gray-900`}>
+                  </td>
+                  <td className="border border-gray-400 py-3 text-center text-sm font-semibold text-gray-800">
                     {rightNum <= problems.length ? rightNum : ''}
-                  </div>
-                  <div className={`${!isLast ? 'border-b' : ''} border-gray-400 px-3 py-2.5 text-center text-lg font-bold text-blue-600`}>
+                  </td>
+                  <td className="border border-gray-400 py-3 text-center text-base font-bold text-blue-700">
                     {rightNum <= problems.length ? formatAnswer(rightP?.answer) : ''}
-                  </div>
-                </React.Fragment>
+                  </td>
+                </tr>
               );
             })}
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1580,6 +1603,8 @@ export default function CloudExamDetailPage() {
     setGeneratingFigures(prev => new Set(prev).add(problem.id));
 
     try {
+      console.log(`[generate-figure] Starting for problem #${problem.number} (${problem.id}), images: ${JSON.stringify(problem.images?.map(i => ({ type: i.type, url: i.url?.substring(0, 80) })))}`);
+
       const res = await fetch(`/api/problems/${problem.id}/generate-figure`, {
         method: 'POST',
       });
@@ -1587,20 +1612,25 @@ export default function CloudExamDetailPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.warn(`[generate-figure] Problem ${problem.number}: ${data.error || 'failed'}`);
+        const errMsg = data.error || `서버 오류 (${res.status})`;
+        console.warn(`[generate-figure] Problem ${problem.number}: ${errMsg}`);
+        alert(`도형 생성 실패 (#${problem.number}): ${errMsg}`);
         return false;
       }
 
       if (data.noFigure) {
         console.log(`[generate-figure] Problem ${problem.number}: 도형 없음`);
+        alert(`문제 ${problem.number}: 도형이 감지되지 않았습니다.`);
         return false;
       }
 
+      console.log(`[generate-figure] Problem ${problem.number}: 성공! type=${data.figureType}`);
       // SVG 생성 성공 → 목록 갱신
       refetchProblems();
       return true;
     } catch (err) {
       console.error('[generate-figure] Error:', err);
+      alert(`도형 생성 중 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
       return false;
     } finally {
       setGeneratingFigures(prev => {
@@ -1648,6 +1678,99 @@ export default function CloudExamDetailPage() {
       refetchProblems();
     } catch (err) {
       console.error('[deleteFigure] Error:', err);
+    }
+  }, [refetchProblems]);
+
+  // ★ 단일 문제 재스캔 (이미지 업로드 → OCR → 교체)
+  const [rescanningId, setRescanningId] = useState<string | null>(null);
+  const rescanInputRef = useRef<HTMLInputElement>(null);
+  const rescanTargetRef = useRef<ProblemData | null>(null);
+
+  const handleRescanProblem = useCallback((problem: ProblemData) => {
+    rescanTargetRef.current = problem;
+    rescanInputRef.current?.click();
+  }, []);
+
+  const handleRescanFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const problem = rescanTargetRef.current;
+    if (!file || !problem) return;
+    e.target.value = ''; // reset input
+
+    setRescanningId(problem.id);
+    try {
+      // 1. 파일 → base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]); // data:image/...;base64, 제거
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // 2. OCR + 분류
+      const ocrRes = await fetch('/api/workflow/reanalyze-crop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          fullAnalysis: true,
+          problemNumber: problem.number,
+        }),
+      });
+
+      if (!ocrRes.ok) {
+        const errData = await ocrRes.json().catch(() => ({}));
+        throw new Error(errData.error || `OCR 실패 (${ocrRes.status})`);
+      }
+
+      const ocrData = await ocrRes.json();
+      console.log('[Rescan] OCR result:', ocrData);
+
+      // 3. 문제 업데이트
+      const updateBody: Record<string, unknown> = {
+        content_latex: ocrData.ocrText,
+      };
+
+      // 선택지가 있으면 answer_json에 포함
+      if (ocrData.choices && ocrData.choices.length > 0) {
+        updateBody.answer_json = {
+          correct_answer: problem.answer, // 기존 정답 유지
+          choices: ocrData.choices,
+        };
+      }
+
+      // 분류 결과가 있으면 ai_analysis 업데이트
+      if (ocrData.classification) {
+        updateBody.ai_analysis = {
+          ...ocrData.classification,
+          hasFigure: problem.hasFigure,
+          figureData: problem.figureData,
+          figureSvg: problem.figureSvg,
+        };
+      }
+
+      const patchRes = await fetch(`/api/problems/${problem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateBody),
+      });
+
+      if (!patchRes.ok) {
+        const errData = await patchRes.json().catch(() => ({}));
+        throw new Error(errData.error || `저장 실패 (${patchRes.status})`);
+      }
+
+      console.log(`[Rescan] Problem #${problem.number} updated successfully`);
+      refetchProblems();
+    } catch (err) {
+      console.error('[Rescan] Error:', err);
+      alert(`재스캔 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+    } finally {
+      setRescanningId(null);
+      rescanTargetRef.current = null;
     }
   }, [refetchProblems]);
 
@@ -1991,6 +2114,7 @@ export default function CloudExamDetailPage() {
                   problem={problem}
                   onTwinGenerate={setTwinModalProblem}
                   onEdit={setEditModalProblem}
+                  onRescan={handleRescanProblem}
                   onGenerateFigure={handleGenerateFigure}
                   onDeleteFigure={handleDeleteFigure}
                   onUpdateContent={handleUpdateContent}
@@ -1999,6 +2123,7 @@ export default function CloudExamDetailPage() {
                   onToggleSelect={toggleSelectProblem}
                   viewMode={renderMode}
                   isGeneratingFigure={generatingFigures.has(problem.id)}
+                  isRescanning={rescanningId === problem.id}
                 />
               ))}
             </div>
@@ -2152,6 +2277,15 @@ export default function CloudExamDetailPage() {
           onClose={() => setShowStatsModal(false)}
         />
       )}
+
+      {/* 숨겨진 재스캔 파일 입력 */}
+      <input
+        ref={rescanInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleRescanFileChange}
+      />
 
       {/* 문제 수정 모달 */}
       {editModalProblem && (

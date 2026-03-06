@@ -246,20 +246,34 @@ function TextSegment({ text }: { text: string }) {
 }
 
 /**
- * 인라인 포맷팅: **bold**, __(보기)__ 등
+ * 인라인 포맷팅: **bold**, ㄱ./ㄴ./ㄷ./ㄹ. 사각 테두리 등
  */
 function renderInlineFormatting(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  // **bold** 패턴
-  const boldRegex = /\*\*(.+?)\*\*/g;
+  // **bold** + ㄱ~ㄹ 보기 라벨 사각 테두리
+  const formatRegex = /\*\*(.+?)\*\*|([ㄱㄴㄷㄹㅁ])\s*[.)]/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = boldRegex.exec(text)) !== null) {
+  while ((match = formatRegex.exec(text)) !== null) {
     if (match.index > lastIdx) {
       parts.push(text.substring(lastIdx, match.index));
     }
-    parts.push(<strong key={`b${match.index}`} className="font-bold">{match[1]}</strong>);
+    if (match[1] !== undefined) {
+      // **bold**
+      parts.push(<strong key={`b${match.index}`} className="font-bold">{match[1]}</strong>);
+    } else if (match[2] !== undefined) {
+      // ㄱ. ㄴ. ㄷ. ㄹ. → 사각 테두리 라벨
+      parts.push(
+        <span
+          key={`k${match.index}`}
+          className="inline-flex items-center justify-center w-6 h-6 border-2 border-gray-700 rounded-sm text-sm font-bold mr-1 align-middle"
+          style={{ lineHeight: 1 }}
+        >
+          {match[2]}
+        </span>
+      );
+    }
     lastIdx = match.index + match[0].length;
   }
 
