@@ -33,8 +33,11 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
   const mathSectionIndex = normalized.indexOf('\n\n수식:\n');
   const bodyText = mathSectionIndex >= 0 ? normalized.substring(0, mathSectionIndex) : normalized;
 
+  // ★ content_latex 끝에 포함된 선택지 줄 제거 (choices 배열과 중복 방지)
+  const bodyWithoutTrailingChoices = stripTrailingChoiceLines(bodyText);
+
   // 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 분리
-  const { mainContent, conditionBoxes } = extractConditionBoxes(bodyText);
+  const { mainContent, conditionBoxes } = extractConditionBoxes(bodyWithoutTrailingChoices);
 
   const elements = parseMixedContent(mainContent);
 
@@ -215,7 +218,8 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
             const boxContent = conditionBoxes[boxIdx];
             if (boxContent) {
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-accent/20 bg-accent-muted">
+                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600">
+                  <div className="text-center text-xs text-zinc-400 font-medium mb-2 pb-1.5 border-b border-zinc-700">〈보 기〉</div>
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
               );
@@ -246,12 +250,12 @@ function TextSegment({ text }: { text: string }) {
 }
 
 /**
- * 인라인 포맷팅: **bold**, ㄱ./ㄴ./ㄷ./ㄹ. 사각 테두리 등
+ * 인라인 포맷팅: **bold**, ㄱ./ㄴ./ㄷ./ㄹ. 굵은 라벨
  */
 function renderInlineFormatting(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  // **bold** + ㄱ~ㄹ 보기 라벨 사각 테두리
-  const formatRegex = /\*\*(.+?)\*\*|([ㄱㄴㄷㄹㅁ])\s*[.)]/g;
+  // **bold** + ㄱ~ㅁ 보기 라벨 (굵은 텍스트 + 마침표)
+  const formatRegex = /\*\*(.+?)\*\*|([ㄱㄴㄷㄹㅁ])\s*([.)]\s*)/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
 
@@ -263,14 +267,10 @@ function renderInlineFormatting(text: string): React.ReactNode[] {
       // **bold**
       parts.push(<strong key={`b${match.index}`} className="font-bold">{match[1]}</strong>);
     } else if (match[2] !== undefined) {
-      // ㄱ. ㄴ. ㄷ. ㄹ. → 사각 테두리 라벨
+      // ㄱ. ㄴ. ㄷ. ㄹ. ㅁ. → 굵은 텍스트 라벨 (사각형 없음)
       parts.push(
-        <span
-          key={`k${match.index}`}
-          className="inline-flex items-center justify-center w-6 h-6 border-2 border-gray-700 rounded-sm text-sm font-bold mr-1 align-middle"
-          style={{ lineHeight: 1 }}
-        >
-          {match[2]}
+        <span key={`k${match.index}`} className="font-bold mr-0.5">
+          {match[2]}.
         </span>
       );
     }
@@ -294,6 +294,40 @@ type ContentElement =
   | { type: 'table'; rows: string[][]; hasHlines: boolean[]; verticalLines?: number[] };
 
 /**
+ * content_latex 끝에 포함된 선택지 줄 제거
+ * OCR 결과에 ①~⑤ 또는 (1)~(5) 선택지가 본문에 포함되어 있으면
+ * choices 배열과 중복 렌더링되므로, 마지막 선택지 블록을 제거
+ */
+function stripTrailingChoiceLines(text: string): string {
+  const lines = text.split('\n');
+
+  // 끝에서부터 선택지 줄 찾기
+  let lastNonEmptyIdx = lines.length - 1;
+  while (lastNonEmptyIdx >= 0 && !lines[lastNonEmptyIdx].trim()) lastNonEmptyIdx--;
+
+  // 선택지 패턴: ①~⑤, (1)~(5), 1)~5)
+  const choiceLinePattern = /^\s*(?:[①②③④⑤]|\(\s*[1-5]\s*\)|[1-5]\s*\))/;
+
+  let firstChoiceIdx = -1;
+  for (let i = lastNonEmptyIdx; i >= 0; i--) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue; // 빈 줄 건너뛰기
+    if (choiceLinePattern.test(trimmed)) {
+      firstChoiceIdx = i;
+    } else {
+      break; // 선택지가 아닌 줄을 만나면 중단
+    }
+  }
+
+  if (firstChoiceIdx >= 0) {
+    // 선택지 블록 제거
+    return lines.slice(0, firstChoiceIdx).join('\n').trimEnd();
+  }
+
+  return text;
+}
+
+/**
  * 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 본문에서 분리
  * 시험지에서 조건이 사각형 테두리 박스 안에 들어가는 형식을 구현
  */
@@ -310,21 +344,31 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
 
-    // 조건 시작: (가), (나), (다), <보기>, ㄱ., ㄴ., ㄷ.
+    // 조건 시작: (가), (나), (다), <보기>, | 보 기 |, ㄱ., ㄴ., ㄷ.
+    // ★ \displaystyle이 앞에 붙어있을 수 있으므로 선택적으로 매칭
+    // ★ 보기 헤더: 단독 줄에 있는 경우만 (문장 중간 <보기>는 무시)
+    // ★ 장식 문자: _, -, ─, —, =, $, \, . (Mathpix가 $\_\_\_\_$ 형식으로 출력)
+    const isBogiHeader = /^\s*(?:[$_\\\-─—=.\s]{2,}\s*)?(?:<\s*보기\s*>|〈\s*보\s*기\s*〉)\s*(?:[$_\\\-─—=.\s]{2,})?\s*$/.test(trimmed) ||
+                         /^\s*\|\s*보\s*기\s*\|\s*$/.test(trimmed);
     const isConditionStart = /^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(trimmed) ||
-                             /^\s*<\s*보기\s*>/.test(trimmed) ||
-                             /^\s*[ㄱㄴㄷㄹ]\s*[.)]/.test(trimmed);
+                             isBogiHeader ||
+                             /^\s*(?:\\displaystyle\s*)?[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
 
     if (isConditionStart && !inConditionBlock) {
       inConditionBlock = true;
-      conditionLines = [lines[i]];
+      // ★ 보기 헤더 줄 자체는 제외 (렌더링 시 별도 헤더로 표시)
+      if (isBogiHeader) {
+        conditionLines = [];
+      } else {
+        conditionLines = [lines[i]];
+      }
       continue;
     }
 
     if (inConditionBlock) {
       // 조건 계속: (나), (다), ㄴ., ㄷ. 등이 나오거나 이전 조건에 이어지는 줄
       const isContinuation = /^\s*[\(（]\s*[나다라마]\s*[\)）]/.test(trimmed) ||
-                             /^\s*[ㄴㄷㄹ]\s*[.)]/.test(trimmed);
+                             /^\s*(?:\\displaystyle\s*)?[ㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
 
       if (isContinuation || (trimmed && !isEndOfConditionBlock(trimmed, lines, i))) {
         conditionLines.push(lines[i]);
@@ -363,11 +407,13 @@ function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: num
   // 선택지 시작 (1) 2) ① 등
   if (/^\s*[\(（]\s*[1-5]\s*[\)）]/.test(trimmed)) return true;
   if (/^\s*[①②③④⑤]/.test(trimmed)) return true;
+  // 이미지 줄이면 종료
+  if (/^!\[/.test(trimmed)) return true;
   // 빈 줄 후 비조건 내용이 오면 종료
   if (!trimmed && currentIdx + 1 < lines.length) {
     const nextTrimmed = lines[currentIdx + 1].trim();
     if (nextTrimmed && !/^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(nextTrimmed) &&
-        !/^\s*[ㄱㄴㄷㄹ]\s*[.)]/.test(nextTrimmed)) {
+        !/^\s*(?:\\displaystyle\s*)?[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(nextTrimmed)) {
       return true;
     }
   }
@@ -384,64 +430,87 @@ function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: num
 function preprocessMathpixContent(text: string): string {
   let result = text;
 
-  // 0. Mathpix # 접두사 → \ 변환 (모든 #LaTeX 명령어)
-  // #begin, #end, #hline, #sqrt, #frac, #bar, #text 등 모두 처리
+  // ═══ Phase 0: 전각 ASCII → 반각 정규화 (Mathpix가 ．，（）？등 전각 출력) ═══
+  result = result.replace(/[\uff01-\uff5e]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
+  );
+
+  // ═══ Phase 1: Format 변환 (Mathpix → 표준 $...$) ═══
+
+  // 1-0. Mathpix # 접두사 → \ 변환
   result = result.replace(/#begin\{/g, '\\begin{');
   result = result.replace(/#end\{/g, '\\end{');
   result = result.replace(/#hline\b/g, '\\hline');
-  // ## → \\ (행 구분자) — 먼저 처리
   result = result.replace(/##/g, '\\\\');
-  // 나머지 # + LaTeX 명령어 → \ + 명령어
-  // 예: #sqrt → \sqrt, #frac → \frac, #bar → \bar, #text → \text 등
   result = result.replace(/#([a-zA-Z]+)/g, '\\$1');
 
-  // 1. \(...\) → $...$ (인라인 수식, Mathpix 스타일) — 's' 플래그로 멀티라인 허용
+  // 1-1. \(...\) → $...$ (인라인 수식, Mathpix 스타일)
   result = result.replace(/\\\((.+?)\\\)/gs, (_, inner) => `$${inner.trim()}$`);
-
-  // 1b. 불완전한 \( 변환: \( 는 있지만 \)가 없는 경우 → $ 처리
-  //     예: "\( -x^{2}-2 x-8" (선택지 분리 시 잘림) → "$ -x^{2}-2 x-8$"
+  // 1-1b. 불완전한 \( → $
   result = result.replace(/\\\(([^$\n]+?)$/gm, (_, inner) => `$${inner.trim()}$`);
-  // 1c. 반대: \)만 있고 시작 \(가 없는 경우 → 앞부분을 $로 감싸기
   result = result.replace(/^([^$\n]+?)\\\)/gm, (_, inner) => `$${inner.trim()}$`);
 
-  // 2. \[...\] → $$...$$ (디스플레이 수식, Mathpix 스타일)
+  // 1-2. \[...\] → $$...$$
   result = result.replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`);
 
-  // 2b. 고립된 $ 기호 정리: "$\begin{array}" 같이 $ + \begin이 붙은 경우
-  // → $를 제거하고 step 3에서 $$로 감싸기
+  // 1-3. 고립된 $ + \begin 정리
   result = result.replace(/\$\\begin\{/g, '\\begin{');
   result = result.replace(/\\end\{([^}]+)\}\s*\$/g, '\\end{$1}');
 
-  // 3. \begin{...}...\end{...} 블록이 $$ 안에 없으면 $$로 감싸기
-  // ★ 주의: array/tabular 환경은 HTML 표로 렌더링하므로 $$로 감싸지 않음
+  // 1-4. bare \begin{...}...\end{...} → $$...$$
   result = result.replace(
     /(?<!\$)\\begin\{(aligned|align|gather|cases|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|equation|equation\*)\}([\s\S]*?)\\end\{\1\}(?!\$)/g,
     (match, envName) => {
-      // array 환경 중 & 셀 구분이 있으면 표(tabular)로 처리 → $$로 감싸지 않음
-      if (envName === 'array' && /&/.test(match)) {
-        return match; // parseMixedContent에서 tabular placeholder로 처리됨
-      }
+      if (envName === 'array' && /&/.test(match)) return match;
       return `$$${match}$$`;
     }
   );
 
-  // 4. bare \textbf{...} (수식 바깥) → **...**
-  // 주의: $...$ 내부의 \textbf는 건드리지 않음 (wrapBareLatex에서 처리)
+  // 1-5. bare \textbf{...} → **...**
   result = result.replace(/(?<!\$)\\textbf\{([^}]*)\}(?!\$)/g, '**$1**');
 
-  // 5. 전체가 LaTeX인 줄 감지: 줄 전체가 수식 표현인 경우 $...$로 감싸기
-  // 예: "\frac{1}{2} + \frac{3}{4}" 전체 줄
+  // 1-6. 전체가 LaTeX인 줄 → $...$로 감싸기
   result = result.replace(/^(\\[a-zA-Z]+[\s\S]*?)$/gm, (line) => {
-    // 이미 $로 감싸져 있으면 스킵
     if (line.trim().startsWith('$')) return line;
-    // tabular/array 블록 관련 줄은 스킵 (HTML 표로 별도 처리)
     if (/\\(begin|end)\{(?:tabular|array)\}|\\hline|&/.test(line)) return line;
-    // LaTeX 명령어가 있고, 한글이 없는 줄이면 수식으로 감싸기
     if (/\\[a-zA-Z]+/.test(line) && !/[가-힣]/.test(line)) {
       return `$${line.trim()}$`;
     }
     return line;
   });
+
+  // ═══ Phase 2: OCR 후처리 (이제 모든 수식이 $...$로 통일됨) ═══
+
+  // 2-1. OCR ㄱ→\neg/¬ 오인식 보정
+  // (a) $\neg$ 단독 → ㄱ
+  result = result.replace(/\$\\neg\$/g, 'ㄱ');
+  // (b) $\neg . MATH$ → ㄱ. $MATH$ (라벨이 수식 블록 안에 갇힌 경우 분리)
+  result = result.replace(/\$\\neg\s*\.\s*/g, 'ㄱ. $');
+  result = result.replace(/\$¬\s*\.\s*/g, 'ㄱ. $');
+  // (c) ¬ (유니코드) 뒤에 점/쉼표 → ㄱ
+  result = result.replace(/¬(?=\s*[.,)}\s])/g, 'ㄱ');
+  // (d) bare \neg 뒤에 점/쉼표 → ㄱ
+  result = result.replace(/\\neg(?=\s*[.,)])/g, 'ㄱ');
+
+  // 2-2. \displaystyle 정리 (MathRenderer가 자동 추가하므로 중복 제거)
+  // (a) $\displaystyle ...$ → $...$
+  result = result.replace(/\$\s*\\displaystyle\s+/g, '$');
+  // (b) $$\displaystyle ...$$ → $$...$$
+  result = result.replace(/\$\$\s*\\displaystyle\s+/g, '$$');
+  // (c) bare \displaystyle (수식 밖) → 제거
+  result = result.replace(/(?<!\$)\\displaystyle\s*/g, '');
+
+  // 2-3. 선택지 (1)(2)(3)(4)(5) → ①②③④⑤ 정규화
+  result = normalizeChoiceParensForRender(result);
+
+  // 2-4. \left\{ → \lbrace, \right. → 제거 (piecewise/cases 함수 처리)
+  // \left\{ 는 매칭 \right 없으면 KaTeX 에러 → \lbrace로 안전 대체
+  // (a) 모든 \left\{ → \lbrace (수식 안팎 모두)
+  result = result.replace(/\\left\s*\\?\{/g, '\\lbrace');
+  // (b) \right. (invisible delimiter) → 제거 (수식 안팎 모두)
+  result = result.replace(/\\right\s*\./g, '');
+  // (c) $$ 만 남은 빈 블록 제거
+  result = result.replace(/\$\s*\$/g, '');
 
   return result;
 }
@@ -899,4 +968,60 @@ function parseMixedContent(text: string): ContentElement[] {
   }
 
   return elements;
+}
+
+/**
+ * 렌더링 시점에서 (1)(2)(3)(4)(5) → ①②③④⑤ 선택지 정규화
+ * DB에 이미 저장된 데이터에 대한 보정용
+ *
+ * ★ 매우 보수적 규칙 (서술형 오변환 방지):
+ * - (1)~(5) 5개 모두 존재해야만 변환 (4개 이하는 서술형 소문제일 수 있음)
+ * - 이미 ①②③이 있으면 변환하지 않음
+ * - 수식 내부($...$)의 (1)은 변환하지 않음
+ * - 서술형 키워드가 하나라도 있으면 변환하지 않음
+ * - 각 (N) 사이 간격이 너무 넓으면(소문제) 변환하지 않음
+ */
+function normalizeChoiceParensForRender(text: string): string {
+  // 이미 원문자가 있으면 변환 불필요
+  if (/[①②③④⑤]/.test(text)) return text;
+
+  const circleMap: Record<string, string> = { '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤' };
+  const parenRegex = /\(([1-5])\)/g;
+
+  // 수식 밖에서만 매칭 수집
+  const matches: { index: number; num: string; fullMatch: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = parenRegex.exec(text)) !== null) {
+    const before = text.substring(0, m.index);
+    const dollarCount = (before.match(/\$/g) || []).length;
+    if (dollarCount % 2 === 0) {
+      matches.push({ index: m.index, num: m[1], fullMatch: m[0] });
+    }
+  }
+
+  // ★ 5개 모두 있어야만 변환 (서술형은 보통 (1)(2)(3) 3개 또는 (1)(2)(3)(4) 4개)
+  const nums = new Set(matches.map(m => m.num));
+  if (!nums.has('1') || !nums.has('2') || !nums.has('3') || !nums.has('4') || !nums.has('5')) {
+    return text;
+  }
+
+  // ★ 서술형 키워드가 하나라도 있으면 무조건 변환하지 않음
+  if (/구하시오|구하여라|구해라|풀이하시오|증명하시오|보이시오|서술하시오|나타내시오|설명하시오|구하세요|풀어라|값을\s*구하|의\s*값은|을\s*구하|를\s*구하|\[\s*\d+\s*점\s*\]|서답형|서술형|주관식/.test(text)) {
+    return text;
+  }
+
+  // ★ 각 (N) 사이 평균 간격이 50자 이상이면 소문제일 가능성 높음 → 변환하지 않음
+  // 선택지는 보통 "(1) ㄱ (2) ㄴ (3) ㄱ,ㄴ" 처럼 간격이 짧음
+  if (matches.length > 1) {
+    const avgSpacing = (matches[matches.length - 1].index - matches[0].index) / (matches.length - 1);
+    if (avgSpacing > 50) return text;
+  }
+
+  // 역순 치환 (인덱스가 밀리지 않도록)
+  let result = text;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const { index, num, fullMatch } = matches[i];
+    result = result.substring(0, index) + circleMap[num] + result.substring(index + fullMatch.length);
+  }
+  return result;
 }

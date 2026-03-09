@@ -5,7 +5,7 @@
 // figureData (구조화) → figureSvg (레거시) → cropImage 순서로 fallback
 // ============================================================================
 
-import React, { Suspense, lazy, useMemo } from 'react';
+import React, { Suspense, lazy, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type {
   InterpretedFigure,
@@ -27,12 +27,16 @@ const InlineDesmosGraph = lazy(() =>
 // ============================================================================
 
 interface FigureRendererProps {
-  /** 구조화된 도형 데이터 (우선) */
+  /** 구조화된 도형 데이터 */
   figureData?: InterpretedFigure;
   /** 레거시 raw SVG (fallback) */
   figureSvg?: string;
   /** 크롭 이미지 URL (최종 fallback) */
   cropImageUrl?: string;
+  /** ★ 업스케일된 크롭 이미지 URL (최우선) */
+  upscaledCropUrl?: string;
+  /** 도형 소스 타입 */
+  figureSource?: 'upscaled_crop' | 'ai_generated' | undefined;
   /** 최대 너비 */
   maxWidth?: number;
   /** 추가 클래스 */
@@ -49,6 +53,8 @@ export function FigureRenderer({
   figureData,
   figureSvg,
   cropImageUrl,
+  upscaledCropUrl,
+  figureSource,
   maxWidth = 280,
   className = '',
   darkMode = true,
@@ -62,7 +68,27 @@ export function FigureRenderer({
       'vertices:', (r.vertices as unknown[])?.length || 0);
   }
 
-  // 1. 구조화된 figureData가 있고 신뢰도가 충분한 경우
+  // ★ 0. 업스케일된 크롭 이미지 (최우선 — 원본이 쓸만할 때 AI 생성 없이 사용)
+  // UpscaledImage 컴포넌트로 분리하여 로드 실패 시 자동 폴백 처리
+  if (upscaledCropUrl || figureSource === 'upscaled_crop') {
+    const url = upscaledCropUrl || cropImageUrl;
+    if (url) {
+      return (
+        <UpscaledImageWithFallback
+          url={url}
+          maxWidth={maxWidth}
+          className={className}
+          darkMode={darkMode}
+          // 폴백 props (이미지 로드 실패 시 다음 단계로)
+          figureData={figureData}
+          figureSvg={figureSvg}
+          cropImageUrl={cropImageUrl}
+        />
+      );
+    }
+  }
+
+  // 1. 구조화된 figureData가 있고 신뢰도가 충분한 경우 (AI 생성)
   if (figureData && figureData.confidence >= 0.3 && figureData.figureType !== 'photo' && figureData.rendering) {
     return (
       <div className={className} style={{ maxWidth }}>
@@ -87,7 +113,7 @@ export function FigureRenderer({
     );
   }
 
-  // 3. 크롭 이미지 fallback
+  // 3. 크롭 이미지 fallback (원본)
   if (cropImageUrl) {
     return (
       <img
@@ -360,6 +386,88 @@ function DiagramFigure({
   }
 
   return null;
+}
+
+// ============================================================================
+// 업스케일 이미지 + 로드 실패 시 자동 폴백
+// ============================================================================
+
+function UpscaledImageWithFallback({
+  url,
+  maxWidth,
+  className,
+  darkMode,
+  figureData,
+  figureSvg,
+  cropImageUrl,
+}: {
+  url: string;
+  maxWidth: number;
+  className: string;
+  darkMode: boolean;
+  figureData?: InterpretedFigure;
+  figureSvg?: string;
+  cropImageUrl?: string;
+}) {
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // 이미지 로드 실패 → 기존 렌더링으로 폴백
+  if (loadFailed) {
+    // figureData 폴백
+    if (figureData && figureData.confidence >= 0.3 && figureData.figureType !== 'photo' && figureData.rendering) {
+      return (
+        <div className={className} style={{ maxWidth }}>
+          <TypedFigureRenderer
+            figureType={figureData.figureType}
+            rendering={figureData.rendering}
+            darkMode={darkMode}
+            maxWidth={maxWidth}
+          />
+        </div>
+      );
+    }
+    // figureSvg 폴백
+    if (figureSvg) {
+      return (
+        <div
+          className={`figure-svg-container ${className}`}
+          style={{ maxWidth }}
+          dangerouslySetInnerHTML={{ __html: figureSvg }}
+        />
+      );
+    }
+    // cropImage 폴백
+    if (cropImageUrl) {
+      return (
+        <img
+          src={cropImageUrl}
+          alt="문제 도형"
+          className={`rounded-lg border opacity-60 ${
+            darkMode ? 'border-zinc-700' : 'border-gray-300'
+          } ${className}`}
+          style={{ maxWidth }}
+          loading="lazy"
+        />
+      );
+    }
+    return null;
+  }
+
+  return (
+    <img
+      src={url}
+      alt="문제 도형 (업스케일)"
+      className={`rounded-lg border shadow-sm ${
+        darkMode ? 'border-zinc-600 bg-white' : 'border-gray-300 bg-white'
+      } ${className}`}
+      style={{ maxWidth }}
+      loading="lazy"
+      onError={() => {
+        console.warn(`[FigureRenderer] 업스케일 이미지 로드 실패: ${url}`);
+        setLoadFailed(true);
+      }}
+    />
+  );
 }
 
 // ============================================================================

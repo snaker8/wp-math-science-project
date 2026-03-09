@@ -552,6 +552,11 @@ function latexToHtml(latex: string): string {
   s = s.replace(/\\tan/g, 'tan');
   s = s.replace(/\\log/g, 'log');
 
+  // 5.5. 계수와 함수명 사이 공백 삽입 (asin→a\u2009sin, 2cos→2\u2009cos)
+  // "asin"이 "arcsin"으로 오독되는 것 방지 (\u2009 = thin space)
+  s = s.replace(/([a-zA-Z])(sin|cos|tan|log)/g, '$1\u2009$2');
+  s = s.replace(/(\d)(sin|cos|tan|log)/g, '$1\u2009$2');
+
   // 6. 남은 LaTeX 명령 & 중괄호 정리
   s = s.replace(/\\[a-zA-Z]+/g, '');
   s = s.replace(/[{}]/g, '');
@@ -628,8 +633,8 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   const hasTrigExpr = expressions.some(e => /\\?sin|\\?cos|\\?tan/i.test(e.latex));
 
   if (hasLabeledPoints && ptXspan > 0.5) {
-    // ★ 점이 있는 경우: 점 범위의 ±80% 주변 곡선 탐색 (넓게)
-    const scanExt = Math.max(ptXspan * 0.8, 2.5);
+    // ★ 점이 있는 경우: 점 범위의 ±50% 주변 곡선 탐색
+    const scanExt = Math.max(ptXspan * 0.5, 2);
     scanXmin = ptXmin - scanExt;
     scanXmax = ptXmax + scanExt;
     // ★ 삼각함수: AI의 xRange를 병합 (주기 기반으로 더 넓은 범위 필요)
@@ -637,9 +642,10 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
       scanXmin = Math.min(scanXmin, rendering.xRange[0]);
       scanXmax = Math.max(scanXmax, rendering.xRange[1]);
     }
-    // Y 클램핑: 비대칭 — 상방은 넉넉히, 하방은 최소화
+    // Y 클램핑: 비대칭 — 상방은 적당히, 하방은 최소화
+    // ★ 직선이 범위를 과도하게 넓히면 포물선이 작아보이므로 상방 여유를 줄임
     const allPointsAboveAxis = ptYmin >= -0.01;
-    const yClampUp = Math.max(ptYspan * 1.2, 5);   // ★ 급경사 곡선 상방 여유 확대
+    const yClampUp = Math.max(ptYspan * 0.8, 4);   // 상방 여유 (절충: 포물선 비중↑ + 지수함수 충분)
     const yClampDown = allPointsAboveAxis
       ? Math.max(ptYspan * 0.15, 0.5)  // x축 위 점만: 하방 극소화
       : Math.max(ptYspan * 0.5, 2);    // 점근선 포함: 적당한 여유
@@ -750,6 +756,14 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   // ── 3. 곡선 (수식 → JS 변환 → 샘플링) ──
   const numSamples = 400;
   let curveCount = 0;
+  // ★ 점근선 y값 수집 (곡선이 점근선에 너무 가까이 가지 않도록)
+  const asymptoteYs: number[] = [];
+  for (const expr of expressions) {
+    if (expr.style !== 'dashed') continue;
+    const cm = expr.latex.match(/^y\s*=\s*([-+]?\d+\.?\d*)$/);
+    if (cm) asymptoteYs.push(parseFloat(cm[1]));
+  }
+
   for (let i = 0; i < expressions.length; i++) {
     const expr = expressions[i];
     if (expr.hidden) continue;
@@ -769,13 +783,24 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     const step = (xMax - xMin) / numSamples;
     let pathData = '';
     let started = false;
+    // ★ 점근선 근접 임계값 (SVG 픽셀 기준 2px 이상 간격 유지)
+    const asymGapPx = 4;
+    const yPerPx = (yMax - yMin) / plotH;
+    const asymGapY = asymGapPx * yPerPx;
 
     for (let j = 0; j <= numSamples; j++) {
       const x = xMin + j * step;
-      const y = fn(x);
+      let y = fn(x);
       if (isNaN(y) || !isFinite(y)) {
         started = false;
         continue;
+      }
+      // ★ 점근선 근접 시 약간 떨어뜨림 (시각적으로 "거의 닿지만 안 닿는" 효과)
+      for (const aY of asymptoteYs) {
+        const dist = Math.abs(y - aY);
+        if (dist < asymGapY && dist > 0.001) {
+          y = y > aY ? aY + asymGapY : aY - asymGapY;
+        }
       }
       // Y 범위 밖은 클리핑으로 처리하므로 약간 여유 둠
       if (y < yMin - (yMax - yMin) * 2 || y > yMax + (yMax - yMin) * 2) {
@@ -840,41 +865,39 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
   }
 
   // ── 6. 축 위 숫자 라벨 (원본 그래프처럼 주요 좌표값 표시) ──
-  for (const pt of points) {
-    if (!pt.label || pt.label === 'O') continue;
-    // 순수 숫자 라벨은 건너뜀 (이미 5번에서 표시)
-    if (/^[A-Za-z]/.test(pt.label)) continue;
-  }
-  // x축/y축 위의 숫자 눈금: 점 좌표에서 정수/특수값 표시
+  // ★ X축 눈금: 먼저 후보를 수집한 후 겹침 검사 (π/2, π, 3π/2, 2π 등이 겹치지 않도록)
   const shownXticks = new Set<number>();
   const shownYticks = new Set<number>();
+  const xTickCandidates: Array<{x: number; sx: number; label: string; isFraction: boolean; width: number}> = [];
+
   for (const pt of points) {
     if (pt.label === 'O') continue;
-    // x축 위의 점 (y=0): x 좌표 표시
+    // x축 위의 점 (y=0): x 좌표를 후보에 추가
     if (pt.y === 0 && pt.x !== 0 && !shownXticks.has(pt.x)) {
       shownXticks.add(pt.x);
-      const sx = toSvgX(pt.x);
-      // 눈금 선
-      svg += `<line x1="${sx}" y1="${originY - 3}" x2="${sx}" y2="${originY + 3}" stroke="${axisColor}" stroke-width="1"/>`;
-      // 숫자 라벨 (라벨이 있으면 라벨 사용, 없으면 숫자)
-      const tickLabel = pt.label || String(pt.x);
-      // ★ 분수 라벨 감지 (π/2, 3π/2 등) → 교과서 스타일 세로 분수 렌더링
-      const fracMatch = tickLabel.match(/^([^/]+)\/(.+)$/);
-      if (fracMatch) {
-        const num = fracMatch[1].replace(/pi/g, 'π').trim();
-        const den = fracMatch[2].replace(/pi/g, 'π').trim();
-        const foW = 36;
-        const foH = 34;
-        svg += `<foreignObject x="${sx - foW / 2}" y="${originY + 5}" width="${foW}" height="${foH}">`;
-        svg += `<div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;flex-direction:column;align-items:center;font-family:serif;font-size:12px;color:${axisColor};line-height:1.1">`;
-        svg += `<span style="font-style:italic">${num}</span>`;
-        svg += `<span style="width:90%;border-top:1px solid ${axisColor};margin:0"></span>`;
-        svg += `<span>${den}</span>`;
-        svg += `</div></foreignObject>`;
-      } else {
-        const xTickFontSize = tickLabel.includes('π') || tickLabel.includes('pi') ? 13 : 12;
-        svg += `<text x="${sx}" y="${originY + 18}" text-anchor="middle" font-size="${xTickFontSize}" font-family="serif" fill="${axisColor}">${escapeXml(tickLabel)}</text>`;
+      // ★ 알파벳 라벨(B, C 등)은 section 5에서 bold로 이미 표시 → 눈금 선만 그리고 텍스트 생략
+      if (pt.label && /^[A-Za-z]/.test(pt.label)) {
+        const sx = toSvgX(pt.x);
+        svg += `<line x1="${sx}" y1="${originY - 3}" x2="${sx}" y2="${originY + 3}" stroke="${axisColor}" stroke-width="1"/>`;
+        continue;
       }
+      const sx = toSvgX(pt.x);
+      // ★ LaTeX 분수 → 간단한 형식으로 정규화 (Gemini/GPT가 \frac{\pi}{2} 형태로 반환)
+      let tickLabel = pt.label || String(pt.x);
+      // 다중 이스케이프 정규화: \\\\, \\, \ 모두 처리
+      tickLabel = tickLabel
+        .replace(/\\{1,2}frac\{([^}]*)\}\{([^}]*)\}/g, '$1/$2')  // \frac{a}{b} or \\frac{a}{b} → a/b
+        .replace(/\\{1,2}pi/g, 'π')                                // \pi or \\pi → π
+        .replace(/\{/g, '').replace(/\}/g, '')                     // 잔여 {} 제거
+        .replace(/\s+/g, '')                                        // 공백 제거
+        .trim();
+      const isFraction = /\//.test(tickLabel);
+      // 라벨 폭 추정 (분수=50px, π포함=글자수×10, 일반=글자수×8)
+      const estWidth = isFraction ? 50
+        : (tickLabel.includes('π') || tickLabel.includes('pi'))
+          ? Math.max(tickLabel.length * 10, 24)
+          : Math.max(tickLabel.length * 8, 16);
+      xTickCandidates.push({ x: pt.x, sx, label: tickLabel, isFraction, width: estWidth });
     }
     // y축 위의 점 (x=0): 명시적 숫자 라벨이 있는 경우만 눈금 표시
     // ★ 라벨 없는 점이나 phantom 알파벳은 건너뜀 (점근선은 section 7에서 별도 처리)
@@ -891,6 +914,48 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     }
   }
 
+  // X축 눈금 렌더링 (★ 겹침 방지 — 좌→우 순서로 배치, 겹치면 건너뜀)
+  xTickCandidates.sort((a, b) => a.sx - b.sx);
+  const MIN_TICK_GAP = 24; // 라벨 간 최소 간격 (px) — 분수 라벨(π/2 등) 겹침 방지
+  // 원점 O 라벨이 있으면 그 오른쪽 끝에서 시작 (O와 첫 눈금 겹침 방지)
+  let lastTickRightEdge = (axisInRange(0, xMin, xMax) && axisInRange(0, yMin, yMax))
+    ? originX + 14 : -Infinity;
+
+  for (const tick of xTickCandidates) {
+    const leftEdge = tick.sx - tick.width / 2;
+    if (leftEdge < lastTickRightEdge + MIN_TICK_GAP) {
+      // 겹침 → 눈금 선만 표시, 라벨은 건너뜀
+      svg += `<line x1="${tick.sx}" y1="${originY - 3}" x2="${tick.sx}" y2="${originY + 3}" stroke="${axisColor}" stroke-width="1"/>`;
+      continue;
+    }
+
+    // 눈금 선
+    svg += `<line x1="${tick.sx}" y1="${originY - 3}" x2="${tick.sx}" y2="${originY + 3}" stroke="${axisColor}" stroke-width="1"/>`;
+
+    if (tick.isFraction) {
+      // ★ 시중교재 세로 분수 (분자 / 선 / 분모)
+      const fracMatch = tick.label.match(/^([^/]+)\/(.+)$/);
+      if (fracMatch) {
+        const num = fracMatch[1].replace(/pi/g, 'π').trim();
+        const den = fracMatch[2].replace(/pi/g, 'π').trim();
+        const fx = tick.sx;
+        const numY = originY + 12;
+        const barY = originY + 15;
+        const denY = originY + 25;
+        const barW = Math.max(num.length, den.length) * 7 + 6;
+        svg += `<text x="${fx}" y="${numY}" text-anchor="middle" font-size="12" font-style="italic" font-family="serif" fill="${axisColor}">${escapeXml(num)}</text>`;
+        svg += `<line x1="${fx - barW / 2}" y1="${barY}" x2="${fx + barW / 2}" y2="${barY}" stroke="${axisColor}" stroke-width="0.8"/>`;
+        svg += `<text x="${fx}" y="${denY}" text-anchor="middle" font-size="12" font-family="serif" fill="${axisColor}">${escapeXml(den)}</text>`;
+      }
+    } else {
+      const xTickFontSize = tick.label.includes('π') || tick.label.includes('pi') ? 13 : 12;
+      svg += `<text x="${tick.sx}" y="${originY + 18}" text-anchor="middle" font-size="${xTickFontSize}" font-family="serif" fill="${axisColor}">${escapeXml(tick.label)}</text>`;
+    }
+
+    lastTickRightEdge = tick.sx + tick.width / 2;
+  }
+
+
   // ── 7. 점근선 점선 (dashed 스타일 expression이나 points에서 감지) ──
   for (const expr of expressions) {
     if (expr.style !== 'dashed') continue;
@@ -901,21 +966,25 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
       if (!isNaN(yVal) && yVal >= yMin && yVal <= yMax) {
         const sy = toSvgY(yVal);
         svg += `<line x1="${pad.left}" y1="${sy}" x2="${pad.left + plotW}" y2="${sy}" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="8,5" clip-path="url(#${clipId})"/>`;
-        // 점근선 라벨 (★ 원본처럼 크고 진하게)
+        // 점근선 라벨 (★ 점선 아래에 배치하여 겹침 방지)
         if (!shownYticks.has(yVal)) {
           svg += `<line x1="${originX - 3}" y1="${sy}" x2="${originX + 3}" y2="${sy}" stroke="${axisColor}" stroke-width="1.2"/>`;
-          svg += `<text x="${originX - 10}" y="${sy + 5}" text-anchor="end" font-size="16" font-weight="600" font-family="serif" fill="${axisColor}">${yVal}</text>`;
+          // ★ 점근선 위(y>0)면 라벨을 위에, 점근선 아래(y<0)면 라벨을 아래에 배치
+          const asymLabelY = yVal >= 0 ? sy - 8 : sy + 20;
+          svg += `<text x="${originX - 10}" y="${asymLabelY}" text-anchor="end" font-size="16" font-weight="600" font-family="serif" fill="${axisColor}">${yVal}</text>`;
         }
       }
     }
   }
 
-  // ── 8. annotations (원본 수식 — foreignObject + HTML로 교과서 수준 렌더링) ──
-  // ★ 점근선 수식(y=상수)은 section 7에서 점선+라벨로 처리 → annotation에서 제외
+  // ── 8. annotations (원본 이미지에 실제 보이는 수식만 렌더링) ──
+  // ★ image-interpreter가 원본 이미지에서 보이는 수식만 annotations에 포함
+  // 점근선 수식(y=상수)은 section 7에서 점선+라벨로 이미 처리 → 중복 제외
   const rawAnnotations = rendering.annotations || [];
   const annotations = rawAnnotations.filter(anno => {
     const cleaned = anno.replace(/\\[a-zA-Z]+/g, '').replace(/[{}\s]/g, '');
-    return !/^y=[-+]?\d+\.?\d*$/.test(cleaned);
+    if (/^y=[-+]?\d+\.?\d*$/.test(cleaned)) return false;
+    return true;
   });
   if (annotations.length > 0) {
     const annoX = pad.left + plotW * 0.22;

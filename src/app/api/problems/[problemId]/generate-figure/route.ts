@@ -1,12 +1,14 @@
 // ============================================================================
 // POST /api/problems/[problemId]/generate-figure
-// 문제의 도형 이미지를 AI Vision으로 분석하여 구조화된 데이터 + 클린 렌더링 생성
+// 도형 이미지 처리: 업스케일 우선 → AI Vision 폴백
+// 원본 크롭이 쓸만하면 업스케일만으로 완료, 안되면 AI 생성
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { interpretImage } from '@/lib/vision/image-interpreter';
 import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
+import { tryUpscaleCrop } from '@/lib/vision/image-upscaler';
 
 /**
  * Supabase Storage URL에서 bucket과 파일 경로를 추출
@@ -30,12 +32,8 @@ export async function POST(
 ) {
   const { problemId } = await params;
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: 'OpenAI API key not configured' },
-      { status: 503 }
-    );
-  }
+  // ★ OpenAI 키 체크는 AI Vision 폴백 시에만 필요 (업스케일은 키 불필요)
+  // 최상단에서는 DB만 체크
 
   if (!supabaseAdmin) {
     return NextResponse.json(
@@ -68,7 +66,72 @@ export async function POST(
     const originalImageUrl = figureData?.originalImageUrl as string | undefined;
     const anyImage = images[0]; // 아무 이미지라도 사용
 
-    const targetImageUrl = cropImage?.url || savedCropUrl || originalImageUrl || anyImage?.url;
+    let targetImageUrl = cropImage?.url || savedCropUrl || originalImageUrl || anyImage?.url;
+    let isPageCrop = false; // 페이지 이미지에서 자동 크롭한 경우 (문제 전체 포함 → 업스케일 스킵)
+
+    // ★ 크롭 이미지가 없으면 detection_annotations에서 페이지 이미지 + bbox로 자동 크롭
+    if (!targetImageUrl && supabaseAdmin) {
+      console.log(`[generate-figure] No crop image found. Trying page image fallback via detection_annotations...`);
+      try {
+        const { data: annot } = await supabaseAdmin
+          .from('detection_annotations')
+          .select('page_image_path, bbox_x, bbox_y, bbox_w, bbox_h, problem_number')
+          .eq('problem_id', problemId)
+          .order('created_at', { ascending: false })  // ★ 최신 레코드 우선
+          .limit(1)
+          .single();
+
+        if (annot?.page_image_path) {
+          const { data: pageBlob, error: pageDlErr } = await supabaseAdmin.storage
+            .from('source-files')
+            .download(annot.page_image_path);
+
+          if (!pageDlErr && pageBlob) {
+            const { default: sharp } = await import('sharp');
+            const pageBuffer = Buffer.from(await pageBlob.arrayBuffer());
+            const meta = await sharp(pageBuffer).metadata();
+            const imgW = meta.width || 1;
+            const imgH = meta.height || 1;
+
+            const cropX = Math.round(annot.bbox_x * imgW);
+            const cropY = Math.round(annot.bbox_y * imgH);
+            const cropW = Math.min(Math.round(annot.bbox_w * imgW), imgW - cropX);
+            const cropH = Math.min(Math.round(annot.bbox_h * imgH), imgH - cropY);
+
+            if (cropW > 10 && cropH > 10) {
+              const croppedBuf = await sharp(pageBuffer)
+                .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
+                .png()
+                .toBuffer();
+
+              // Storage에 크롭 저장
+              const cropPath = `problem-crops/${problemId}.png`;
+              await supabaseAdmin.storage
+                .from('source-files')
+                .upload(cropPath, croppedBuf, { contentType: 'image/png', upsert: true });
+
+              const newCropUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/source-files/${cropPath}`;
+
+              // DB에 크롭 URL 저장 (다음번엔 바로 사용)
+              const curAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
+              await supabaseAdmin
+                .from('problems')
+                .update({
+                  ai_analysis: { ...curAnalysis, cropImageUrl: newCropUrl },
+                  images: [{ url: newCropUrl, type: 'crop', label: '자동 크롭 (페이지)' }],
+                })
+                .eq('id', problemId);
+
+              targetImageUrl = newCropUrl;
+              isPageCrop = true; // 문제 전체 영역 크롭 → 업스케일 건너뛰고 AI Vision으로 직행
+              console.log(`[generate-figure] ✅ Auto-cropped from page image: ${cropW}x${cropH} → ${cropPath} (isPageCrop=true, will skip upscale)`);
+            }
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn(`[generate-figure] Page image fallback failed:`, fallbackErr);
+      }
+    }
 
     if (!targetImageUrl) {
       return NextResponse.json(
@@ -81,6 +144,7 @@ export async function POST(
 
     // 3. 이미지를 서버에서 다운로드하여 base64로 변환
     let imageDataUri: string;
+    let imageRawBuffer: Buffer | null = null; // 업스케일용 원본 버퍼
     try {
       let imgBuffer: ArrayBuffer | null = null;
       let contentType = 'image/png';
@@ -143,6 +207,7 @@ export async function POST(
 
       const base64 = Buffer.from(imgBuffer).toString('base64');
       imageDataUri = `data:${contentType};base64,${base64}`;
+      imageRawBuffer = Buffer.from(imgBuffer);
     } catch (dlErr) {
       console.error(`[generate-figure] Image download error:`, dlErr);
       return NextResponse.json(
@@ -151,7 +216,116 @@ export async function POST(
       );
     }
 
-    // 4. 구조화된 Vision 해석 (image-interpreter 사용)
+    // ================================================================
+    // 3.5. ★ 업스케일 우선 시도 (forceAI가 아닌 경우)
+    // 원본 크롭이 쓸만하면 업스케일만으로 완료 → AI Vision 호출 스킵
+    // ================================================================
+    const body = await request.clone().json().catch(() => ({}));
+    const forceAI = body?.forceAI === true || isPageCrop; // 페이지 크롭은 문제 전체 포함 → AI 필수
+    const upscaleOnly = body?.upscaleOnly === true; // ★ 업스케일만 (AI 폴백 없음)
+
+    if (upscaleOnly && !imageRawBuffer) {
+      // 업스케일 전용인데 이미지 없음 → 즉시 반환
+      return NextResponse.json({ success: true, noFigure: true, reason: 'no_crop_image' });
+    }
+
+    if ((!forceAI || upscaleOnly) && imageRawBuffer) {
+      console.log(`[generate-figure] ★ 업스케일 우선 시도 (forceAI=${forceAI})`);
+      const upscaleResult = await tryUpscaleCrop(imageRawBuffer);
+
+      if (upscaleResult) {
+        const { quality, upscaled } = upscaleResult;
+        console.log(`[generate-figure] ✅ 업스케일 성공: ${quality.width}x${quality.height} → ${upscaled.width}x${upscaled.height} (${upscaled.scale}x)`);
+
+        // 업스케일된 이미지를 Supabase Storage에 업로드
+        let upscaledUrl: string | null = null;
+        try {
+          // problemId에서 storage 경로 생성
+          const upscaledPath = `problem-crops/upscaled/${problemId}.png`;
+          const upscaledBuffer = Buffer.from(upscaled.base64, 'base64');
+
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from('source-files')
+            .upload(upscaledPath, upscaledBuffer, {
+              contentType: 'image/png',
+              upsert: true, // 기존 파일 덮어쓰기
+            });
+
+          if (uploadError) {
+            console.warn(`[generate-figure] 업스케일 이미지 업로드 실패: ${uploadError.message}`);
+          } else {
+            // ★ Private 버킷이므로 프록시 URL 사용 (/api/storage/image?path=...)
+            upscaledUrl = `/api/storage/image?path=${encodeURIComponent(upscaledPath)}`;
+            console.log(`[generate-figure] 업스케일 이미지 저장: ${upscaledUrl}`);
+          }
+        } catch (uploadErr) {
+          console.warn(`[generate-figure] 업스케일 업로드 중 오류:`, uploadErr);
+        }
+
+        // DB에 업스케일 정보 저장
+        if (upscaledUrl) {
+          const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
+          const updatedAnalysis = {
+            ...currentAnalysis,
+            hasFigure: true,
+            figureSource: 'upscaled_crop' as const,
+            upscaledCropUrl: upscaledUrl,
+            upscaleInfo: {
+              originalSize: { width: quality.width, height: quality.height },
+              upscaledSize: { width: upscaled.width, height: upscaled.height },
+              scale: upscaled.scale,
+              qualityScore: quality.score,
+              processedAt: new Date().toISOString(),
+            },
+            cropImageUrl: targetImageUrl, // 원본 URL 보존
+          };
+
+          const { error: updateError } = await supabaseAdmin
+            .from('problems')
+            .update({ ai_analysis: updatedAnalysis })
+            .eq('id', problemId);
+
+          if (updateError) {
+            console.error(`[generate-figure] DB 업데이트 실패:`, updateError.message);
+          } else {
+            console.log(`[generate-figure] ★ 업스케일 완료! AI Vision 스킵.`);
+            return NextResponse.json({
+              success: true,
+              figureSource: 'upscaled_crop',
+              upscaledCropUrl: upscaledUrl,
+              upscaleInfo: {
+                originalSize: `${quality.width}x${quality.height}`,
+                upscaledSize: `${upscaled.width}x${upscaled.height}`,
+                scale: upscaled.scale,
+              },
+              problemId,
+            });
+          }
+        }
+      } else {
+        if (upscaleOnly) {
+          // ★ upscaleOnly: AI 폴백 없이 즉시 반환
+          console.log(`[generate-figure] 업스케일 불가 + upscaleOnly → AI 폴백 없이 종료`);
+          return NextResponse.json({ success: true, noFigure: true, reason: 'upscale_failed' });
+        }
+        console.log(`[generate-figure] 업스케일 불가 → AI Vision으로 폴백`);
+      }
+    }
+
+    // ★ upscaleOnly면 여기까지 왔으면 이미지 없거나 업로드 실패 → 종료
+    if (upscaleOnly) {
+      return NextResponse.json({ success: true, noFigure: true, reason: 'upscale_not_available' });
+    }
+
+    // ================================================================
+    // 4. AI Vision 해석 (업스케일 불가하거나 forceAI일 때)
+    // ================================================================
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured (업스케일도 실패하여 AI 폴백 필요하지만 키 없음)' },
+        { status: 503 }
+      );
+    }
     // ★ content_latex 전체를 전달하여 수식 자동 감지가 정확히 동작하도록 함
     // (image-interpreter 내부에서 800자로 잘라서 AI에 전달)
     const contentContext = problem.content_latex || undefined;
@@ -200,9 +374,12 @@ export async function POST(
       ...currentAnalysis,
       hasFigure: true,
       figureData: figureDataForDb,
+      figureSource: 'ai_generated' as const, // ★ 업스케일 → AI 전환
+      upscaledCropUrl: undefined,             // ★ 업스케일 데이터 제거
+      upscaleInfo: undefined,                 // ★ 업스케일 데이터 제거
       figureSvg: legacySvg || currentAnalysis.figureSvg || undefined,
       figureGeneratedAt: new Date().toISOString(),
-      figureModel: process.env.VISION_PROVIDER === 'gpt' ? 'gpt-4o' : 'claude-sonnet',
+      figureModel: process.env.VISION_PROVIDER === 'gpt' ? 'gpt-4o' : process.env.VISION_PROVIDER === 'claude' ? 'claude-sonnet' : `gemini (${process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview'})`,
     };
 
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;

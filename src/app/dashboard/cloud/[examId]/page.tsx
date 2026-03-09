@@ -31,6 +31,8 @@ import {
   Move,
   ScanLine,
   Loader2,
+  ZoomIn,
+  Wand2,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
@@ -65,6 +67,10 @@ interface ProblemData {
   hasFigure?: boolean;
   figureSvg?: string;
   figureData?: InterpretedFigure;
+  /** ★ 업스케일된 크롭 이미지 URL */
+  upscaledCropUrl?: string;
+  /** 도형 소스 타입 */
+  figureSource?: 'upscaled_crop' | 'ai_generated';
 }
 
 type DifficultyKey = 1 | 2 | 3 | 4 | 5;
@@ -194,12 +200,29 @@ function splitContentByFigureMarker(content: string): Array<{ type: 'text' | 'fi
   return parts;
 }
 
+/**
+ * Supabase Storage 직접 URL → 프록시 URL 변환
+ * private 버킷이라 직접 접근 불가 → /api/storage/image 프록시 경유
+ */
+function getProxiedImageUrl(url: string): string {
+  if (!url) return url;
+  // 이미 프록시 URL이면 그대로 반환
+  if (url.startsWith('/api/storage/image')) return url;
+  // Supabase storage URL 패턴: .../storage/v1/object/public/source-files/problem-crops/...
+  const storageMatch = url.match(/\/storage\/v1\/object\/(?:public|sign(?:ed)?)\/source-files\/(.+)/);
+  if (storageMatch) {
+    return `/api/storage/image?path=${encodeURIComponent(storageMatch[1])}`;
+  }
+  return url;
+}
+
 function ProblemCardView({
   problem,
   onTwinGenerate,
   onEdit,
   onRescan,
   onGenerateFigure,
+  onGenerateAIFigure,
   onDeleteFigure,
   onUpdateContent,
   isSelectionMode,
@@ -214,6 +237,7 @@ function ProblemCardView({
   onEdit?: (p: ProblemData) => void;
   onRescan?: (p: ProblemData) => void;
   onGenerateFigure?: (p: ProblemData) => void;
+  onGenerateAIFigure?: (p: ProblemData) => void;
   onDeleteFigure?: (p: ProblemData) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
   isSelectionMode?: boolean;
@@ -227,7 +251,7 @@ function ProblemCardView({
   const [showFigureCompare, setShowFigureCompare] = useState(false);
   const cropImage = problem.images?.find(img => img.type === 'crop');
   const showOriginal = globalViewMode === 'original' && !!cropImage;
-  const hasFigureContent = problem.figureData || problem.figureSvg || cropImage;
+  const hasFigureContent = problem.upscaledCropUrl || problem.figureData || problem.figureSvg || cropImage;
 
   // ★ 클린 모드: 콘텐츠 내 마크다운 이미지 참조 제거
   // figureData가 있거나 cropImage가 있으면 이미지 URL은 별도 렌더링됨
@@ -259,13 +283,15 @@ function ProblemCardView({
           )}
           {problem.hasFigure && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-              problem.figureData || problem.figureSvg
+              problem.upscaledCropUrl || problem.figureData || problem.figureSvg
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                 : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
             }`}>
-              {problem.figureData
-                ? figureTypeLabel(problem.figureData.figureType)
-                : problem.figureSvg ? '도형 SVG' : '도형 있음'}
+              {problem.upscaledCropUrl
+                ? '업스케일'
+                : problem.figureData
+                  ? figureTypeLabel(problem.figureData.figureType)
+                  : problem.figureSvg ? '도형 SVG' : '도형 있음'}
             </span>
           )}
         </div>
@@ -296,20 +322,36 @@ function ProblemCardView({
                 <Move className="h-3.5 w-3.5" />
               </button>
             )}
-            {/* ★ 도형 재생성 버튼 (크롭 이미지 있거나, 도형이 있었던 문제면 항상 표시) */}
-            {(cropImage || problem.hasFigure || (problem.images && problem.images.length > 0)) && (
+            {/* ★ 도형 업스케일 버튼 (크롭 있고 아직 업스케일/AI 안 됨) */}
+            {(cropImage || problem.hasFigure) && !problem.upscaledCropUrl && !problem.figureData && !problem.figureSvg && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGenerateFigure?.(problem); }}
                 className={`p-1 rounded transition-colors ${
                   isGeneratingFigure
-                    ? 'text-amber-400 animate-spin'
-                    : 'text-content-muted hover:text-orange-400 hover:bg-orange-500/10'
+                    ? 'text-blue-400 animate-pulse'
+                    : 'text-content-muted hover:text-blue-400 hover:bg-blue-500/10'
                 }`}
-                title={problem.figureData ? '도형 재생성' : problem.figureSvg ? '도형 재생성' : '도형 AI 생성'}
+                title="도형 업스케일 (원본 정리)"
                 disabled={isGeneratingFigure}
               >
-                {isGeneratingFigure ? <RefreshCw className="h-3.5 w-3.5" /> : <Shapes className="h-3.5 w-3.5" />}
+                {isGeneratingFigure ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ZoomIn className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            {/* ★ AI 도형 생성 버튼 (크롭 이미지 있을 때 언제든 사용 가능) */}
+            {(cropImage || problem.hasFigure || (problem.images && problem.images.length > 0)) && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onGenerateAIFigure?.(problem); }}
+                className={`p-1 rounded transition-colors ${
+                  isGeneratingFigure
+                    ? 'text-orange-400 animate-pulse'
+                    : 'text-content-muted hover:text-orange-400 hover:bg-orange-500/10'
+                }`}
+                title="AI 도형 생성 (Vision AI)"
+                disabled={isGeneratingFigure}
+              >
+                {isGeneratingFigure ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
               </button>
             )}
             {/* ★ 도형 삭제 버튼 (AI 생성 도형이 있을 때만) */}
@@ -385,7 +427,7 @@ function ProblemCardView({
               content={cleanContent}
               figureData={problem.figureData}
               figureSvg={problem.figureSvg}
-              cropImageUrl={cropImage?.url}
+              cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined}
               onSave={async (updatedContent) => {
                 await onUpdateContent?.(problem.id, updatedContent);
                 setIsEditingPosition(false);
@@ -397,7 +439,7 @@ function ProblemCardView({
           /* 원본 크롭 이미지 모드 */
           <div className="relative">
             <img
-              src={cropImage!.url}
+              src={getProxiedImageUrl(cropImage!.url)}
               alt={`문제 ${problem.number} 원본`}
               className="w-full rounded-lg border"
               loading="lazy"
@@ -424,18 +466,18 @@ function ProblemCardView({
                         <div key={i} className="my-2 grid grid-cols-2 gap-3">
                           <div className="flex flex-col items-center">
                             <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
-                            <img src={cropImage.url} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
+                            <img src={getProxiedImageUrl(cropImage.url)} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
                           </div>
                           <div className="flex flex-col items-center">
                             <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                             <div className="border border-emerald-500/30 rounded p-1">
-                              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={200} darkMode />
+                              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={200} darkMode />
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div key={i} className="my-2 flex justify-center">
-                          <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={300} darkMode />
+                          <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={300} darkMode />
                         </div>
                       )
                     ) : cropImage ? (
@@ -443,7 +485,7 @@ function ProblemCardView({
                       <div key={i} className="my-2 flex justify-center">
                         <div className="relative">
                           <img
-                            src={cropImage.url}
+                            src={getProxiedImageUrl(cropImage.url)}
                             alt={`문제 ${problem.number} 원본 도형`}
                             className="rounded-lg border border-zinc-700 max-h-64 object-contain"
                             loading="lazy"
@@ -480,18 +522,18 @@ function ProblemCardView({
                       <div className="mt-2 grid grid-cols-2 gap-3">
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
-                          <img src={cropImage.url} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
+                          <img src={getProxiedImageUrl(cropImage.url)} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
                         </div>
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                           <div className="border border-emerald-500/30 rounded p-1">
-                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={200} darkMode />
+                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={200} darkMode />
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-2 flex justify-center">
-                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={300} darkMode />
+                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={300} darkMode />
                       </div>
                     )
                   )}
@@ -524,9 +566,11 @@ function ProblemCardView({
               }
 
               // 객관식 보기
+              // ★ 보기형 문제: 선택지에 ㄱ,ㄴ,ㄷ 조합이 있으면 (1) 형태 번호 사용
+              const isBoggiType = problem.choices.some(c => /[ㄱㄴㄷㄹㅁ].*,\s*[ㄱㄴㄷㄹㅁ]/.test(c));
               const processed = problem.choices.map((choice, i) => {
-                const circled = ['①', '②', '③', '④', '⑤'][i] || '';
-                const stripped = choice.replace(/^[①②③④⑤]\s*/, '');
+                const circled = isBoggiType ? `(${i + 1})` : (['①', '②', '③', '④', '⑤'][i] || '');
+                const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
                 return { circled, stripped };
               });
               const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
@@ -813,7 +857,7 @@ function ExamPaperView({
     // 시험지 출력: AI 도형만 표시
     const renderFigureForPrint = () => {
       if (hasAiFigure) {
-        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} maxWidth={240} darkMode={false} />;
+        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={240} darkMode={false} />;
       }
       return null;
     };
@@ -867,11 +911,18 @@ function ExamPaperView({
               );
             }
 
-            const maxLen = Math.max(...problem.choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+            // ★ 보기형 문제: ㄱ,ㄴ,ㄷ 조합 → (1) 형태 번호
+            const isBoggiPrint = problem.choices.some(c => /[ㄱㄴㄷㄹㅁ].*,\s*[ㄱㄴㄷㄹㅁ]/.test(c));
+            const printChoices = problem.choices.map((choice, ci) => {
+              const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
+              const prefix = isBoggiPrint ? `(${ci + 1}) ` : `${['①', '②', '③', '④', '⑤'][ci] || ''} `;
+              return prefix + stripped;
+            });
+            const maxLen = Math.max(...printChoices.map(c => c.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
             if (maxLen <= 12) {
               return (
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                  {problem.choices.map((choice, ci) => (
+                  {printChoices.map((choice, ci) => (
                     <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                       <MixedContentRenderer content={choice} className="text-gray-700" />
                     </div>
@@ -882,7 +933,7 @@ function ExamPaperView({
             if (maxLen <= 30) {
               return (
                 <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
-                  {problem.choices.map((choice, ci) => (
+                  {printChoices.map((choice, ci) => (
                     <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                       <MixedContentRenderer content={choice} className="text-gray-700" />
                     </div>
@@ -892,7 +943,7 @@ function ExamPaperView({
             }
             return (
               <div className="mt-2.5 space-y-1.5">
-                {problem.choices.map((choice, ci) => (
+                {printChoices.map((choice, ci) => (
                   <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                     <MixedContentRenderer content={choice} className="text-gray-700" />
                   </div>
@@ -1573,6 +1624,8 @@ export default function CloudExamDetailPage() {
       hasFigure: p.hasFigure,
       figureSvg: p.figureSvg,
       figureData: p.figureData,
+      upscaledCropUrl: p.upscaledCropUrl,
+      figureSource: p.figureSource,
     }));
   }, [dbProblems]);
 
@@ -1597,40 +1650,81 @@ export default function CloudExamDetailPage() {
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
 
-  const handleGenerateFigure = useCallback(async (problem: ProblemData): Promise<boolean> => {
+  // ★ 업스케일 전용 (AI Vision 안 함, 실패 시 silent)
+  const handleUpscaleFigure = useCallback(async (problem: ProblemData): Promise<boolean> => {
     if (generatingFigures.has(problem.id)) return false;
 
     setGeneratingFigures(prev => new Set(prev).add(problem.id));
 
     try {
-      console.log(`[generate-figure] Starting for problem #${problem.number} (${problem.id}), images: ${JSON.stringify(problem.images?.map(i => ({ type: i.type, url: i.url?.substring(0, 80) })))}`);
+      console.log(`[upscale-figure] Starting upscale for problem #${problem.number} (${problem.id})`);
 
       const res = await fetch(`/api/problems/${problem.id}/generate-figure`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upscaleOnly: true }), // ★ 업스케일만, AI 폴백 없음
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.warn(`[upscale-figure] Problem ${problem.number}: ${data.error}`);
+        return false; // 자동 업스케일 실패는 alert 안 함
+      }
+
+      if (data.noFigure) {
+        console.log(`[upscale-figure] Problem ${problem.number}: 업스케일 불가 (${data.reason})`);
+        return false;
+      }
+
+      console.log(`[upscale-figure] Problem ${problem.number}: 업스케일 성공!`);
+      return true; // refetch는 호출자가 일괄로 처리
+    } catch (err) {
+      console.error('[upscale-figure] Error:', err);
+      return false;
+    } finally {
+      setGeneratingFigures(prev => {
+        const next = new Set(prev);
+        next.delete(problem.id);
+        return next;
+      });
+    }
+  }, [generatingFigures]);
+
+  // ★ AI Vision 도형 생성 (사용자가 명시적으로 클릭 시)
+  const handleGenerateAIFigure = useCallback(async (problem: ProblemData): Promise<boolean> => {
+    if (generatingFigures.has(problem.id)) return false;
+
+    setGeneratingFigures(prev => new Set(prev).add(problem.id));
+
+    try {
+      console.log(`[ai-figure] Starting AI generation for problem #${problem.number} (${problem.id})`);
+
+      const res = await fetch(`/api/problems/${problem.id}/generate-figure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceAI: true }), // ★ AI Vision 강제
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         const errMsg = data.error || `서버 오류 (${res.status})`;
-        console.warn(`[generate-figure] Problem ${problem.number}: ${errMsg}`);
-        alert(`도형 생성 실패 (#${problem.number}): ${errMsg}`);
+        alert(`AI 도형 생성 실패 (#${problem.number}): ${errMsg}`);
         return false;
       }
 
       if (data.noFigure) {
-        console.log(`[generate-figure] Problem ${problem.number}: 도형 없음`);
-        alert(`문제 ${problem.number}: 도형이 감지되지 않았습니다.`);
+        alert(`문제 ${problem.number}: AI가 도형을 감지하지 못했습니다.`);
         return false;
       }
 
-      console.log(`[generate-figure] Problem ${problem.number}: 성공! type=${data.figureType}`);
-      // SVG 생성 성공 → 목록 갱신
+      console.log(`[ai-figure] Problem ${problem.number}: AI 생성 성공! type=${data.figureType}`);
       refetchProblems();
       return true;
     } catch (err) {
-      console.error('[generate-figure] Error:', err);
-      alert(`도형 생성 중 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+      console.error('[ai-figure] Error:', err);
+      alert(`AI 도형 생성 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
       return false;
     } finally {
       setGeneratingFigures(prev => {
@@ -1640,6 +1734,41 @@ export default function CloudExamDetailPage() {
       });
     }
   }, [generatingFigures, refetchProblems]);
+
+  // 호환성 유지 (기존 참조)
+  const handleGenerateFigure = handleUpscaleFigure;
+
+  // ★ 페이지 로드 시 자동 업스케일: hasFigure=true + 크롭 있음 + 아직 업스케일 안 된 문제
+  const [autoUpscaleRan, setAutoUpscaleRan] = useState(false);
+
+  useEffect(() => {
+    if (dbLoading || problems.length === 0 || autoUpscaleRan) return;
+
+    const targets = problems.filter(p =>
+      p.hasFigure &&
+      p.images?.some((img: { type: string }) => img.type === 'crop') &&
+      !p.upscaledCropUrl &&
+      !p.figureData &&
+      !p.figureSvg
+    );
+
+    setAutoUpscaleRan(true);
+
+    if (targets.length === 0) return;
+
+    console.log(`[auto-upscale] ${targets.length}개 문제 자동 업스케일 시작...`);
+
+    // 순차 처리 (서버 부하 방지) → 전부 완료 후 1회 refetch
+    (async () => {
+      let success = 0;
+      for (const p of targets) {
+        const ok = await handleUpscaleFigure(p);
+        if (ok) success++;
+      }
+      console.log(`[auto-upscale] 완료: ${success}/${targets.length} 성공`);
+      if (success > 0) refetchProblems();
+    })();
+  }, [dbLoading, problems, autoUpscaleRan, handleUpscaleFigure, refetchProblems]);
 
   // ★ 콘텐츠 업데이트 (이미지 위치 변경 시)
   const handleUpdateContent = useCallback(async (problemId: string, updatedContent: string) => {
@@ -1710,7 +1839,7 @@ export default function CloudExamDetailPage() {
         reader.readAsDataURL(file);
       });
 
-      // 2. OCR + 분류
+      // 2. OCR + 분류 + 이미지 Storage 저장
       const ocrRes = await fetch('/api/workflow/reanalyze-crop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1718,6 +1847,7 @@ export default function CloudExamDetailPage() {
           imageBase64: base64,
           fullAnalysis: true,
           problemNumber: problem.number,
+          problemId: problem.id,
         }),
       });
 
@@ -1743,13 +1873,35 @@ export default function CloudExamDetailPage() {
       }
 
       // 분류 결과가 있으면 ai_analysis 업데이트
-      if (ocrData.classification) {
-        updateBody.ai_analysis = {
-          ...ocrData.classification,
-          hasFigure: problem.hasFigure,
-          figureData: problem.figureData,
-          figureSvg: problem.figureSvg,
-        };
+      const aiAnalysis: Record<string, unknown> = {
+        ...(ocrData.classification || {}),
+        hasFigure: problem.hasFigure,
+        figureData: problem.figureData,
+        figureSvg: problem.figureSvg,
+      };
+
+      // Storage에 저장된 크롭 URL이 있으면 ai_analysis에 추가
+      if (ocrData.cropUrl) {
+        aiAnalysis.cropImageUrl = ocrData.cropUrl;
+      }
+
+      // 그래프 데이터가 있으면 hasFigure 설정
+      if (ocrData.graphData && ocrData.graphData.type !== 'none') {
+        aiAnalysis.hasFigure = true;
+        aiAnalysis.graphAnalysis = ocrData.graphData;
+      }
+
+      updateBody.ai_analysis = aiAnalysis;
+
+      // images 배열 업데이트 (크롭 이미지 교체)
+      if (ocrData.cropUrl) {
+        const existingImages = (problem.images || []).filter(
+          (img: { type: string }) => img.type !== 'crop'
+        );
+        updateBody.images = [
+          { url: ocrData.cropUrl, type: 'crop', label: '재스캔 크롭' },
+          ...existingImages,
+        ];
       }
 
       const patchRes = await fetch(`/api/problems/${problem.id}`, {
@@ -2065,30 +2217,55 @@ export default function CloudExamDetailPage() {
           </div>
         )}
 
-        {/* 도형 일괄 생성 버튼 (크롭 이미지가 있는 문제 대상) */}
-        {problems.some(p => p.images?.some(img => img.type === 'crop') && !p.figureSvg) && (
+        {/* ★ 도형 일괄 업스케일 (크롭 이미지가 있고 아직 처리 안 된 문제 대상) */}
+        {problems.some(p => p.hasFigure && p.images?.some(img => img.type === 'crop') && !p.upscaledCropUrl && !p.figureData && !p.figureSvg) && (
           <button
             type="button"
             onClick={async () => {
               const targets = problems.filter(
-                p => p.images?.some(img => img.type === 'crop') && !p.figureSvg
+                p => p.hasFigure && p.images?.some(img => img.type === 'crop') && !p.upscaledCropUrl && !p.figureData && !p.figureSvg
               );
               if (targets.length === 0) return;
-              if (!confirm(`${targets.length}개 문제를 분석하여 도형을 AI로 생성합니다. 도형이 없는 문제는 자동으로 건너뜁니다. 진행하시겠습니까?`)) return;
+              if (!confirm(`${targets.length}개 문제의 도형을 업스케일합니다. 진행하시겠습니까?`)) return;
+              let success = 0;
+              for (const p of targets) {
+                const ok = await handleUpscaleFigure(p);
+                if (ok) success++;
+              }
+              if (success > 0) refetchProblems();
+              alert(`완료: ${success}/${targets.length}개 업스케일 성공`);
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+            disabled={generatingFigures.size > 0}
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+            {generatingFigures.size > 0 ? `업스케일 중 (${generatingFigures.size})...` : '도형 일괄 업스케일'}
+          </button>
+        )}
+        {/* ★ AI 일괄 생성 (업스케일 완료 후 AI 도형 교체 원할 때) */}
+        {problems.some(p => p.hasFigure && (p.upscaledCropUrl || p.images?.some(img => img.type === 'crop')) && !p.figureData && !p.figureSvg) && (
+          <button
+            type="button"
+            onClick={async () => {
+              const targets = problems.filter(
+                p => p.hasFigure && (p.upscaledCropUrl || p.images?.some(img => img.type === 'crop')) && !p.figureData && !p.figureSvg
+              );
+              if (targets.length === 0) return;
+              if (!confirm(`${targets.length}개 문제에 AI Vision으로 도형을 생성합니다.\n잘못된 도형이 생성될 수 있습니다. 진행하시겠습니까?`)) return;
               let generated = 0;
               let skipped = 0;
               for (const p of targets) {
-                const success = await handleGenerateFigure(p);
-                if (success) generated++;
+                const ok = await handleGenerateAIFigure(p);
+                if (ok) generated++;
                 else skipped++;
               }
-              alert(`완료: ${generated}개 도형 생성, ${skipped}개 건너뜀 (도형 없음)`);
+              alert(`완료: ${generated}개 AI 도형 생성, ${skipped}개 건너뜀`);
             }}
             className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
             disabled={generatingFigures.size > 0}
           >
-            <Shapes className="h-3.5 w-3.5" />
-            {generatingFigures.size > 0 ? `생성 중 (${generatingFigures.size})...` : '도형 일괄 생성'}
+            <Wand2 className="h-3.5 w-3.5" />
+            {generatingFigures.size > 0 ? `AI 생성 중 (${generatingFigures.size})...` : 'AI 일괄 생성'}
           </button>
         )}
 
@@ -2115,7 +2292,8 @@ export default function CloudExamDetailPage() {
                   onTwinGenerate={setTwinModalProblem}
                   onEdit={setEditModalProblem}
                   onRescan={handleRescanProblem}
-                  onGenerateFigure={handleGenerateFigure}
+                  onGenerateFigure={handleUpscaleFigure}
+                  onGenerateAIFigure={handleGenerateAIFigure}
                   onDeleteFigure={handleDeleteFigure}
                   onUpdateContent={handleUpdateContent}
                   isSelectionMode={isSelectionMode}

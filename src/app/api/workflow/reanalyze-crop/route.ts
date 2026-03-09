@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
+import { supabaseAdmin } from '@/lib/supabase/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -281,7 +282,7 @@ async function classifyProblemWithGPT(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageBase64, customPrompt, analyzeGraph = true, fullAnalysis = false, problemNumber } = body;
+    const { imageBase64, customPrompt, analyzeGraph = true, fullAnalysis = false, problemNumber, problemId } = body;
 
     if (!imageBase64) {
       return NextResponse.json(
@@ -326,7 +327,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ★ OCR 한글 오타 자동 교정 (GPT-4o-mini)
-    const ocrText = await correctOcrTypos(rawOcrText);
+    const correctedText = await correctOcrTypos(rawOcrText);
+
+    // ★ 전각 괄호 → 반각 괄호 정규화 (Mathpix/GPT가 （1）형식으로 출력하는 경우)
+    const normalizedParens = correctedText.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
+    // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (Mathpix 원문자 오변환 교정)
+    const ocrText = normalizeChoiceParens(normalizedParens);
 
     // 2. 선택지 추출
     const choices = extractChoicesFromOCR(ocrText);
@@ -375,6 +381,33 @@ export async function POST(request: NextRequest) {
       responseData.classification = classification;
     }
 
+    // ★ problemId가 있으면 이미지를 Storage에 저장
+    if (problemId && supabaseAdmin) {
+      try {
+        const imgBuffer = Buffer.from(imageBase64, 'base64');
+        const cropPath = `problem-crops/${problemId}.png`;
+
+        const { error: uploadErr } = await supabaseAdmin.storage
+          .from('source-files')
+          .upload(cropPath, imgBuffer, {
+            contentType: 'image/png',
+            upsert: true,
+          });
+
+        if (uploadErr) {
+          console.warn('[Reanalyze] Storage upload failed:', uploadErr.message);
+        } else {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+          const cropUrl = `${supabaseUrl}/storage/v1/object/public/source-files/${cropPath}`;
+          responseData.cropUrl = cropUrl;
+          responseData.cropPath = cropPath;
+          console.log(`[Reanalyze] Crop image saved: ${cropPath}`);
+        }
+      } catch (err) {
+        console.warn('[Reanalyze] Storage upload error:', err);
+      }
+    }
+
     return NextResponse.json(responseData);
   } catch (error) {
     console.error('[Reanalyze] Error:', error);
@@ -394,6 +427,90 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * (1)(2)(3)(4)(5) → ①②③④⑤ 정규화
+ * Mathpix OCR이 원문자를 괄호 숫자로 잘못 변환하는 경우 교정
+ *
+ * ★ 서술형 소문제 (1)(2)(3) 구별 로직:
+ *   - (1)~(5) 5개 모두 존재 → 거의 확실히 선택지 → 변환
+ *   - (1)~(4) 4개 존재 + 간격 짧음 → 선택지 가능성 높음 → 변환
+ *   - (1)~(3) 3개만 → 서술형 소문제 가능성 → 변환 안 함
+ *   - "구하시오", "구하여라", "[N점]", "의 값" 등 포함 → 소문제 → 변환 안 함
+ */
+function normalizeChoiceParens(text: string): string {
+  const NUMBER_TO_CIRCLED: Record<string, string> = {
+    '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
+  };
+
+  // 이미 ①②③ 가 있으면 변환 불필요
+  if (/[①②③④⑤]/.test(text)) return text;
+
+  // (1)~(5) 위치 찾기 (수식 내부 제외)
+  const parenRegex = /\(([1-5])\)/g;
+  const matches: { index: number; num: string; len: number }[] = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = parenRegex.exec(text)) !== null) {
+    // 수식 내부인지 간단 체크: 앞쪽에 $가 홀수 개면 수식 안
+    const before = text.substring(Math.max(0, m.index - 100), m.index);
+    const dollarCount = (before.match(/(?<![\\])\$/g) || []).length;
+    const isInMath = dollarCount % 2 === 1 || /\\\(\s*$/.test(before);
+    if (!isInMath) {
+      matches.push({ index: m.index, num: m[1], len: m[0].length });
+    }
+  }
+
+  // ★ 최소 4개 이상 필요 (3개면 서술형 소문제일 가능성 높음)
+  if (matches.length < 4) return text;
+
+  // 순서 검증: (1)(2)(3)(4) 최소 포함
+  const nums = matches.map(m => parseInt(m.num));
+  if (!nums.includes(1) || !nums.includes(2) || !nums.includes(3) || !nums.includes(4)) return text;
+
+  // 간격 확인: 평균 간격 150자 이하 (선택지는 보통 짧음)
+  const totalSpan = matches[matches.length - 1].index - matches[0].index;
+  if (totalSpan / (matches.length - 1) > 150) return text;
+
+  // ★ 소문제 패턴 감지: 내용에 "서술형" 키워드가 있으면 변환 안 함
+  const subQuestionKeywords = /구하시오|구하여라|구해라|서술하시오|증명하시오|의\s*값을?\s*구|풀이\s*과정|설명하시오|나타내시오|보이시오|\[\s*\d+\s*점\s*\]/;
+
+  for (let i = 0; i < matches.length - 1; i++) {
+    const start = matches[i].index + matches[i].len;
+    const end = matches[i + 1].index;
+    const content = text.substring(start, end).trim();
+    // 내용이 100자 초과이거나 서술형 키워드 포함 → 소문제
+    if (content.length > 100 || subQuestionKeywords.test(content)) {
+      console.log('[NormalizeChoices] 서술형 소문제 감지 — 변환 건너뜀');
+      return text;
+    }
+  }
+
+  // 5개 모두 있으면 확실한 선택지
+  const hasFive = nums.includes(5);
+  if (!hasFive) {
+    // 4개만 있을 때 추가 검증: 각 내용이 아주 짧아야 함 (선택지 특성)
+    for (let i = 0; i < matches.length - 1; i++) {
+      const start = matches[i].index + matches[i].len;
+      const end = matches[i + 1].index;
+      const content = text.substring(start, end).trim();
+      if (content.length > 50) return text; // 50자 초과면 소문제
+    }
+  }
+
+  // 변환 실행 (뒤→앞 순서로 인덱스 유지)
+  let result = text;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const { index, num, len } = matches[i];
+    const circled = NUMBER_TO_CIRCLED[num];
+    if (circled) {
+      result = result.substring(0, index) + circled + result.substring(index + len);
+    }
+  }
+
+  console.log('[NormalizeChoices] (N) → ⓝ 변환 완료');
+  return result;
+}
+
+/**
  * OCR 텍스트에서 선택지 추출
  * 정방향 분리: ①②③④⑤ 위치를 모두 찾고 사이 텍스트를 추출
  */
@@ -405,7 +522,6 @@ function extractChoicesFromOCR(text: string): string[] {
   while ((m = circledRegex.exec(text)) !== null) {
     positions.push({ idx: m.index, len: m[0].length });
   }
-
   if (positions.length >= 2) {
     const choices: string[] = [];
     for (let i = 0; i < positions.length; i++) {

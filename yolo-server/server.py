@@ -28,13 +28,14 @@ app = FastAPI(
 # CORS 설정 (Next.js 개발 서버 허용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 모델 로드
-MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "models/best.pt")
+# 모델 로드 (절대 경로로 안정적 로딩)
+_SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.getenv("YOLO_MODEL_PATH", os.path.join(_SERVER_DIR, "models", "best.pt"))
 CLASS_NAMES = {0: "problem", 1: "graph", 2: "table"}
 model = None
 

@@ -290,8 +290,8 @@ function groupLinesIntoQuestions(
   // Mathpix MMD 형식: "**01**", "\\textbf{01}" 등 볼드 마커도 처리
   // "03" 단독 라인 (번호만 있고 뒤에 아무것도 없는 경우)도 매칭
   const questionStartPattern = /^[\s]*(?:\*{1,2})?(\d{1,2})(?:\*{1,2})?[\s]*(?:[.)번\]]|[\s]+(?=[가-힣])|$)/;
-  // 선택지 패턴
-  const choicePattern = /[①②③④⑤]/;
+  // 선택지 패턴: ①②③④⑤ 원문자 또는 (1)(2)(3) 괄호 패턴
+  const choicePattern = /[①②③④⑤]|\([1-5]\)\s*\S/;
 
   for (let pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
     const page = allPages[pageIdx];
@@ -356,8 +356,11 @@ function groupLinesIntoQuestions(
         };
       } else if (currentQuestion) {
         currentQuestion.lines.push(line);
-        // 선택지 감지
+        // 선택지 감지: ①②③ 또는 (1)(2)(3) 패턴
         if (choicePattern.test(lineText)) {
+          currentQuestion.choiceTexts.push(lineText);
+        } else if (/\([1-5]\)\s*\S/.test(lineText) && (lineText.match(/\([1-5]\)/g) || []).length >= 2) {
+          // (1)(2)...(5) 패턴이 한 줄에 2개 이상 있으면 선택지 라인
           currentQuestion.choiceTexts.push(lineText);
         }
       }
@@ -453,7 +456,7 @@ function buildQuestionResult(
 
   // Mathpix Markdown 텍스트 (수식 $...$ 인라인 포함)
   // diagram 라인은 텍스트가 비어있을 수 있으므로 [도형] 마커 삽입
-  const contentMmd = group.lines
+  const rawContentMmd = group.lines
     .map(l => {
       if ((l.type === 'diagram' || l.type === 'figure') && !(l.text_display || l.text || '').trim()) {
         return '[도형]';
@@ -461,6 +464,11 @@ function buildQuestionResult(
       return l.text_display || l.text;
     })
     .join('\n');
+
+  // ★ 전각 괄호 → 반각 정규화 (Mathpix가 （1）형식으로 출력하는 경우)
+  const halfWidthMmd = rawContentMmd.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
+  // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (content_latex에도 원문자 반영)
+  const contentMmd = normalizeChoiceParensForCloudFlow(halfWidthMmd);
 
   // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
   const choices = parseChoicesFromText(group.choiceTexts.join('\n'));
@@ -477,16 +485,21 @@ function buildQuestionResult(
 }
 
 /**
- * 텍스트에서 선택지 분리 (①②③④⑤ 형식)
+ * 텍스트에서 선택지 분리 (①②③④⑤ / (1)(2)(3)(4)(5) 형식)
  */
 function parseChoicesFromText(text: string): string[] {
   if (!text.trim()) return [];
+
+  // ★ 전각 괄호 → 반각 정규화
+  const halfWidth = text.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
+  // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (Mathpix 원문자 오변환 교정)
+  const normalizedText = normalizeChoiceParensForCloudFlow(halfWidth);
 
   const circledNumbers = ['①', '②', '③', '④', '⑤'];
   const parts: string[] = [];
 
   // ①②③④⑤로 분할
-  let remaining = text;
+  let remaining = normalizedText;
   for (let i = circledNumbers.length - 1; i >= 0; i--) {
     const idx = remaining.lastIndexOf(circledNumbers[i]);
     if (idx >= 0) {
@@ -498,13 +511,68 @@ function parseChoicesFromText(text: string): string[] {
 
   // 원형 숫자 분할이 안 된 경우 번호 기반 시도
   if (parts.length === 0) {
-    const numbered = text.match(/[1-5]\s*\)\s*([^1-5)]+)/g);
+    const numbered = normalizedText.match(/[1-5]\s*\)\s*([^1-5)]+)/g);
     if (numbered) {
       return numbered.map(m => m.replace(/^\d\s*\)\s*/, '').trim());
     }
   }
 
   return parts;
+}
+
+/**
+ * (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (cloud-flow용)
+ * Mathpix가 잘못 변환한 괄호 숫자를 원문자로 복원
+ *
+ * ★ 서술형 소문제 구별:
+ *   - (1)~(5) 5개 모두 존재 → 선택지 → 변환
+ *   - (1)~(4) 4개 + 내용 짧음 → 선택지 → 변환
+ *   - (1)~(3) 3개 이하 → 서술형 소문제 가능성 → 변환 안 함
+ *   - "구하시오", "[N점]" 등 포함 → 소문제 → 변환 안 함
+ */
+function normalizeChoiceParensForCloudFlow(text: string): string {
+  const NUMBER_TO_CIRCLED: Record<string, string> = {
+    '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
+  };
+
+  // 이미 ①②③ 가 있으면 변환 불필요
+  if (/[①②③④⑤]/.test(text)) return text;
+
+  // (1)~(5) 위치 수집
+  const parenMatches = [...text.matchAll(/\(([1-5])\)/g)];
+  if (parenMatches.length < 4) return text; // 4개 미만이면 소문제일 수 있음
+
+  // 번호 검증: (1)(2)(3)(4) 최소 포함
+  const nums = parenMatches.map(m => parseInt(m[1]));
+  if (!nums.includes(1) || !nums.includes(2) || !nums.includes(3) || !nums.includes(4)) return text;
+
+  // 소문제 키워드 감지
+  const subQuestionKeywords = /구하시오|구하여라|구해라|서술하시오|증명하시오|의\s*값을?\s*구|풀이\s*과정|설명하시오|나타내시오|보이시오|\[\s*\d+\s*점\s*\]/;
+
+  // 각 (N) 사이 내용 검증
+  for (let i = 0; i < parenMatches.length - 1; i++) {
+    const start = parenMatches[i].index! + parenMatches[i][0].length;
+    const end = parenMatches[i + 1].index!;
+    const content = text.substring(start, end).trim();
+    if (content.length > 100 || subQuestionKeywords.test(content)) {
+      return text; // 소문제 패턴 감지 → 변환 안 함
+    }
+  }
+
+  // (5)가 없으면 추가 검증: 각 내용이 50자 이하여야 함
+  if (!nums.includes(5)) {
+    for (let i = 0; i < parenMatches.length - 1; i++) {
+      const start = parenMatches[i].index! + parenMatches[i][0].length;
+      const end = parenMatches[i + 1].index!;
+      const content = text.substring(start, end).trim();
+      if (content.length > 50) return text;
+    }
+  }
+
+  // 안전하게 변환
+  return text.replace(/\(([1-5])\)/g, (full, num) => {
+    return NUMBER_TO_CIRCLED[num] || full;
+  });
 }
 
 /**

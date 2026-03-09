@@ -25,6 +25,10 @@ export interface ExamProblemData {
   hasFigure?: boolean;
   figureSvg?: string;
   figureData?: import('@/types/ocr').InterpretedFigure;
+  /** ★ 업스케일된 크롭 이미지 URL */
+  upscaledCropUrl?: string;
+  /** 도형 소스: 'upscaled_crop' = 업스케일 원본 사용, 'ai_generated' 등 */
+  figureSource?: 'upscaled_crop' | 'ai_generated';
 }
 
 export interface ExamInfo {
@@ -238,6 +242,9 @@ function toExamProblemData(
   const hasFigure = problem.ai_analysis?.hasFigure || false;
   const figureSvg = problem.ai_analysis?.figureSvg || undefined;
   const figureData = problem.ai_analysis?.figureData || undefined;
+  // ★ 업스케일된 크롭 이미지 (원본이 쓸만할 때 AI 없이 사용)
+  const upscaledCropUrl = problem.ai_analysis?.upscaledCropUrl || undefined;
+  const figureSource = problem.ai_analysis?.figureSource || undefined;
 
   // DEBUG: figureData 추출 확인
   if (hasFigure) {
@@ -264,6 +271,8 @@ function toExamProblemData(
     hasFigure,
     figureSvg,
     figureData,
+    upscaledCropUrl,
+    figureSource,
   };
 }
 

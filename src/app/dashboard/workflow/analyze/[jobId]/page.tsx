@@ -1261,7 +1261,7 @@ function ProblemDetailPanel({
                 ? 'border-blue-400 ring-2 ring-blue-300/50'
                 : 'border-gray-200'
             }`}
-            style={insertImageMode ? { cursor: 'crosshair' } : undefined}
+            style={insertImageMode ? { cursor: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'%3E%3Cline x1=\'16\' y1=\'0\' x2=\'16\' y2=\'32\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Cline x1=\'0\' y1=\'16\' x2=\'32\' y2=\'16\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'3\' fill=\'%23e11d48\'/%3E%3C/svg%3E") 16 16, crosshair' } : undefined}
             onMouseDown={(e) => {
               if (!insertImageMode) return;
               const rect = e.currentTarget.getBoundingClientRect();
@@ -1490,12 +1490,14 @@ function ProblemDetailPanel({
                 {problem.choices && problem.choices.length > 0 && (() => {
                   const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|\[\s*\d+\s*점\s*\]/;
                   const isSubProblem = problem.choices.some(c => subProblemPatterns.test(c));
+                  // ★ 보기형 문제: 선택지에 ㄱ,ㄴ,ㄷ 조합이 있으면 (1) 형태 번호 사용
+                  const isBoggiType = problem.choices.some(c => /[ㄱㄴㄷㄹㅁ].*,\s*[ㄱㄴㄷㄹㅁ]/.test(c));
 
                   if (isSubProblem) {
                     return (
                       <div className="mt-3 space-y-2">
                         {problem.choices.map((choice, i) => {
-                          let choiceText = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^[1-5]\s*\)\s*/, '').trim();
+                          let choiceText = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^[1-5]\s*\)\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
                           choiceText = choiceText.replace(/\\\((.+?)\\\)/gs, (_, inner: string) => `$${inner.trim()}$`);
                           choiceText = choiceText.replace(/\\\((.+)$/s, (_: string, inner: string) => `$${inner.trim()}$`);
                           choiceText = choiceText.replace(/^(.+?)\\\)(\s*)$/s, (_: string, inner: string) => `$${inner.trim()}$`);
@@ -1516,7 +1518,7 @@ function ProblemDetailPanel({
                     <div className="mt-3 space-y-1.5">
                       {problem.choices.map((choice, i) => {
                         const isCorrect = typeof problem.answer === 'number' && problem.answer === i + 1;
-                        let choiceText = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^[1-5]\s*\)\s*/, '').trim();
+                        let choiceText = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^[1-5]\s*\)\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
                         choiceText = choiceText.replace(/\\\((.+?)\\\)/gs, (_, inner: string) => `$${inner.trim()}$`);
                         choiceText = choiceText.replace(/\\\((.+)$/s, (_: string, inner: string) => `$${inner.trim()}$`);
                         choiceText = choiceText.replace(/^(.+?)\\\)(\s*)$/s, (_: string, inner: string) => `$${inner.trim()}$`);
@@ -1525,10 +1527,14 @@ function ProblemDetailPanel({
                           choiceText = `$${choiceText.trim()}$`;
                         }
                         if (!choiceText) return null;
+                        // ★ 보기형(ㄱ,ㄴ 조합)은 (1) 형태, 일반 객관식은 ① 형태
+                        const numberLabel = isBoggiType
+                          ? `(${i + 1})`
+                          : (circledNumbers[i + 1] || `${i + 1}`);
                         return (
                           <div key={i} className={`flex items-start gap-2 py-1 px-2 rounded-md ${isCorrect ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
                             <span className={`flex-shrink-0 text-[15px] leading-[1.6] ${isCorrect ? 'text-emerald-600 font-bold' : 'text-gray-500'}`}>
-                              {circledNumbers[i + 1] || `${i + 1}`}
+                              {numberLabel}
                             </span>
                             <MixedContentRenderer
                               content={choiceText}

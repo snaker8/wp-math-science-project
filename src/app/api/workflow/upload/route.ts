@@ -843,6 +843,8 @@ async function saveEditedProblemsDirect(
         const pageImgInfo = pageImagePathMap.get(pageNum);
         if (pageImgInfo) {
           try {
+            // ★ 기존 레코드 삭제 후 insert (중복 방지)
+            await supabase.from('detection_annotations').delete().eq('problem_id', problem.id);
             await supabase.from('detection_annotations').insert({
               problem_id: problem.id,
               exam_id: examId,
@@ -1260,6 +1262,8 @@ async function saveProblemsToDB(
           const pageImgInfo = pageImagePathMap.get(pageNum);
           if (pageImgInfo) {
             try {
+              // ★ 기존 레코드 삭제 후 insert (중복 방지)
+              await supabase.from('detection_annotations').delete().eq('problem_id', problem.id);
               await supabase.from('detection_annotations').insert({
                 problem_id: problem.id,
                 exam_id: examId,
@@ -1296,25 +1300,29 @@ async function saveProblemsToDB(
     console.log(`[DB] 자동 자산화 기록: job ${jobId} → exam ${examId}`);
   }
 
-  // ★ 도형 포함 문제 자동 구조화된 해석 (비동기, 실패해도 무시)
-  // 크롭 이미지가 있고 hasFigure가 true인 문제에 대해 GPT-4o Vision으로 구조화된 도형 데이터 생성
-  if (process.env.OPENAI_API_KEY && supabase) {
+  // ★ 도형 포함 문제: 업스케일 우선 → AI Vision 폴백 (비동기, 실패해도 무시)
+  // 원본 크롭이 쓸만하면 업스케일만으로 완료, 안되면 GPT-4o Vision으로 구조화된 도형 생성
+  if (supabase) {
     const figureProblems = results.filter(r => r.hasFigure);
     if (figureProblems.length > 0) {
-      console.log(`[Figure] ${figureProblems.length}개 도형 문제 감지, 구조화된 해석 시작...`);
+      console.log(`[Figure] ${figureProblems.length}개 도형 문제 감지, 업스케일 우선 + AI 폴백 시작...`);
 
       // 비동기 실행 (await하지 않아 메인 플로우를 차단하지 않음)
       (async () => {
         // 동적 import (서버사이드에서만 사용)
+        const { tryUpscaleCrop } = await import('@/lib/vision/image-upscaler');
         const { interpretImage } = await import('@/lib/vision/image-interpreter');
         const { generateGeometrySVG } = await import('@/lib/vision/figure-renderer');
+
+        let upscaledCount = 0;
+        let aiGeneratedCount = 0;
 
         for (const result of figureProblems) {
           try {
             // DB에서 저장된 문제 ID와 crop 이미지 URL 찾기
             const { data: savedProblem } = await supabase
               .from('problems')
-              .select('id, images, ai_analysis')
+              .select('id, images, ai_analysis, content_latex')
               .eq('source_name', job.fileName)
               .ilike('content_latex', `%${(result.contentMmd || '').substring(0, 30).replace(/[%_]/g, '')}%`)
               .limit(1)
@@ -1329,13 +1337,10 @@ async function saveProblemsToDB(
               continue;
             }
 
-            console.log(`[Figure] 문제 ${result.problemNumber} 구조화된 해석 중...`);
-
-            // 이미지를 base64로 변환 — Supabase Storage API 우선, public URL fallback
+            // 이미지 다운로드
             let imgBuf: ArrayBuffer | null = null;
             let imgType = 'image/png';
 
-            // Supabase Storage API로 다운로드 (인증)
             const storageMatch = cropUrl.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)/);
             if (storageMatch && supabase) {
               const [, bucket, filePath] = storageMatch;
@@ -1345,12 +1350,9 @@ async function saveProblemsToDB(
               if (!stErr && blob) {
                 imgBuf = await blob.arrayBuffer();
                 imgType = blob.type || 'image/png';
-              } else {
-                console.warn(`[Figure] 문제 ${result.problemNumber}: Storage 다운로드 실패 (${stErr?.message}), public URL 시도`);
               }
             }
 
-            // Public URL fallback
             if (!imgBuf) {
               const imgRes = await fetch(cropUrl);
               if (!imgRes.ok) {
@@ -1361,32 +1363,92 @@ async function saveProblemsToDB(
               imgType = imgRes.headers.get('content-type') || 'image/png';
             }
 
-            const imgBase64 = Buffer.from(imgBuf).toString('base64');
+            const rawBuffer = Buffer.from(imgBuf);
+            const analysis = (savedProblem.ai_analysis as Record<string, unknown>) || {};
+
+            // ================================================================
+            // ★ Step 1: 업스케일 우선 시도
+            // ================================================================
+            console.log(`[Figure] 문제 ${result.problemNumber}: 업스케일 시도 중...`);
+            const upscaleResult = await tryUpscaleCrop(rawBuffer);
+
+            if (upscaleResult) {
+              const { quality, upscaled } = upscaleResult;
+              console.log(`[Figure] 문제 ${result.problemNumber}: ✅ 업스케일 성공 (${quality.width}x${quality.height} → ${upscaled.width}x${upscaled.height})`);
+
+              // 업스케일 이미지 Supabase Storage에 업로드
+              const upscaledPath = `problem-crops/upscaled/${savedProblem.id}.png`;
+              const upscaledBuffer = Buffer.from(upscaled.base64, 'base64');
+
+              const { error: uploadErr } = await supabase.storage
+                .from('source-files')
+                .upload(upscaledPath, upscaledBuffer, { contentType: 'image/png', upsert: true });
+
+              if (!uploadErr) {
+                // ★ Private 버킷이므로 프록시 URL 사용
+                const proxyUrl = `/api/storage/image?path=${encodeURIComponent(upscaledPath)}`;
+
+                await supabase
+                  .from('problems')
+                  .update({
+                    ai_analysis: {
+                      ...analysis,
+                      hasFigure: true,
+                      figureSource: 'upscaled_crop',
+                      upscaledCropUrl: proxyUrl,
+                      upscaleInfo: {
+                        originalSize: { width: quality.width, height: quality.height },
+                        upscaledSize: { width: upscaled.width, height: upscaled.height },
+                        scale: upscaled.scale,
+                        qualityScore: quality.score,
+                        processedAt: new Date().toISOString(),
+                      },
+                      cropImageUrl: cropUrl,
+                    },
+                  })
+                  .eq('id', savedProblem.id);
+
+                upscaledCount++;
+                console.log(`[Figure] 문제 ${result.problemNumber}: 업스케일 저장 완료 → AI 스킵`);
+                continue; // ★ AI 생성 스킵
+              } else {
+                console.warn(`[Figure] 문제 ${result.problemNumber}: 업스케일 업로드 실패, AI 폴백`);
+              }
+            } else {
+              console.log(`[Figure] 문제 ${result.problemNumber}: 업스케일 불가 → AI Vision 폴백`);
+            }
+
+            // ================================================================
+            // ★ Step 2: AI Vision 폴백 (업스케일 불가일 때만)
+            // ================================================================
+            if (!process.env.OPENAI_API_KEY) {
+              console.log(`[Figure] 문제 ${result.problemNumber}: OpenAI API 키 없음, AI 폴백 불가`);
+              continue;
+            }
+
+            console.log(`[Figure] 문제 ${result.problemNumber} AI Vision 해석 중...`);
+            const imgBase64 = rawBuffer.toString('base64');
             const imgDataUri = `data:${imgType};base64,${imgBase64}`;
 
-            // 구조화된 Vision 해석
             const interpreted = await interpretImage(imgDataUri, result.contentMmd?.substring(0, 500));
 
-            // 도형 없음 처리
             if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
               console.log(`[Figure] 문제 ${result.problemNumber}: 도형 없음 (${interpreted.figureType})`);
               continue;
             }
 
-            // 레거시 figureSvg 생성 (geometry인 경우)
             let legacySvg: string | undefined;
             if (interpreted.rendering?.type === 'geometry') {
               legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
             }
 
-            // DB 업데이트
-            const analysis = (savedProblem.ai_analysis as Record<string, unknown>) || {};
             await supabase
               .from('problems')
               .update({
                 ai_analysis: {
                   ...analysis,
                   hasFigure: true,
+                  figureSource: 'ai_generated',
                   figureData: interpreted,
                   figureSvg: legacySvg || analysis.figureSvg || undefined,
                   figureGeneratedAt: new Date().toISOString(),
@@ -1395,12 +1457,13 @@ async function saveProblemsToDB(
               })
               .eq('id', savedProblem.id);
 
-            console.log(`[Figure] 문제 ${result.problemNumber} 해석 완료: ${interpreted.figureType} (confidence: ${interpreted.confidence})`);
+            aiGeneratedCount++;
+            console.log(`[Figure] 문제 ${result.problemNumber} AI 해석 완료: ${interpreted.figureType} (confidence: ${interpreted.confidence})`);
           } catch (figErr) {
-            console.warn(`[Figure] 문제 ${result.problemNumber} 해석 실패 (무시):`, figErr);
+            console.warn(`[Figure] 문제 ${result.problemNumber} 처리 실패 (무시):`, figErr);
           }
         }
-        console.log(`[Figure] 구조화된 도형 해석 프로세스 완료`);
+        console.log(`[Figure] 도형 처리 완료: 업스케일 ${upscaledCount}개 + AI ${aiGeneratedCount}개 / 총 ${figureProblems.length}개`);
       })();
     }
   }

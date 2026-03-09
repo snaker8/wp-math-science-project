@@ -33,28 +33,38 @@ export interface ClassStatus {
     status: 'active' | 'scheduled' | 'finished';
 }
 
+// ★ 시드 기반 의사난수 (hydration mismatch 방지 — Math.random() 사용 금지)
+function seededRandom(seed: number) {
+    let s = seed;
+    return () => {
+        s = (s * 16807 + 0) % 2147483647;
+        return (s - 1) / 2147483646;
+    };
+}
+
 // 1. Stats Data with Sparkline points
+const sparkRng = seededRandom(42);
 export const statsData: StatCardData[] = [
     {
         title: '총 수강생',
         value: '1,248',
         trend: '+12%',
         trendUp: true,
-        data: Array.from({ length: 20 }, () => ({ value: 40 + Math.random() * 60 })),
+        data: Array.from({ length: 20 }, () => ({ value: 40 + sparkRng() * 60 })),
     },
     {
         title: '활성 학습지',
         value: '856',
         trend: '+5.4%',
         trendUp: true,
-        data: Array.from({ length: 20 }, () => ({ value: 30 + Math.random() * 70 })),
+        data: Array.from({ length: 20 }, () => ({ value: 30 + sparkRng() * 70 })),
     },
     {
         title: '평균 성취도',
         value: '78.4점',
         trend: '-2.1%',
         trendUp: false,
-        data: Array.from({ length: 20 }, () => ({ value: 60 + Math.random() * 40 })),
+        data: Array.from({ length: 20 }, () => ({ value: 60 + sparkRng() * 40 })),
     },
 ];
 
@@ -63,11 +73,12 @@ export const heatmapData: HeatmapCell[] = [];
 const students = ['김민수', '이서준', '박지윤', '최서연', '정현우', '강하은', '조민재', '윤서아', '임도현', '한예린'];
 const units = ['다항식', '방정식', '부등식', '함수', '삼각함수', '수열', '지수로그', '극한', '미분', '적분'];
 
+const heatRng = seededRandom(123);
 students.forEach((student) => {
     units.forEach((unit) => {
         // Generate clearer patterns for demo purposes
         // Some students are generally good, some struggle with specific units (e.g., Calculus)
-        let baseScore = Math.random() * 40 + 60; // 60-100 base
+        let baseScore = heatRng() * 40 + 60; // 60-100 base
         if (unit === '미분' || unit === '적분') baseScore -= 15; // Harder units
         if (student === '김민수') baseScore += 10; // Top student
 

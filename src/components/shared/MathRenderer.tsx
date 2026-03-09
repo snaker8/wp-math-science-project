@@ -20,7 +20,9 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
         try {
             // 인라인 수식에서 분수(\frac), 합(\sum) 등이 축소되지 않도록
             // \displaystyle 을 자동 적용 (한국 수학 교재 표준)
-            const processedContent = block ? content : `\\displaystyle ${content}`;
+            // ★ 이미 \displaystyle이 있으면 중복 추가하지 않음
+            const stripped = content.replace(/^\s*\\displaystyle\s*/, '').trim();
+            const processedContent = block ? stripped : `\\displaystyle ${stripped}`;
 
             return katex.renderToString(processedContent, {
                 throwOnError: false,
@@ -29,8 +31,36 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                 trust: true,
             });
         } catch (error) {
-            console.error('KaTeX rendering error:', error);
-            return content;
+            // ★ KaTeX 렌더링 실패 시 orphan \left/\right 제거 후 재시도
+            // OCR에서 piecewise 함수의 \left\{와 \right.가 분리된 경우
+            try {
+                let fallback = content
+                    .replace(/\\left\s*\\?[{([\]|.]/g, (m) => {
+                        // \left\{ → \lbrace, \left( → (, \left[ → [
+                        if (m.includes('{')) return '\\lbrace';
+                        if (m.includes('(')) return '(';
+                        if (m.includes('[')) return '[';
+                        return '';
+                    })
+                    .replace(/\\right\s*\\?[})\]|.]/g, (m) => {
+                        if (m.includes('}')) return '\\rbrace';
+                        if (m.includes(')')) return ')';
+                        if (m.includes(']')) return ']';
+                        return '';
+                    })
+                    .replace(/^\s*\\displaystyle\s*/, '').trim();
+                if (!fallback) return '';
+                const fallbackContent = block ? fallback : `\\displaystyle ${fallback}`;
+                return katex.renderToString(fallbackContent, {
+                    throwOnError: false,
+                    displayMode: block,
+                    strict: false,
+                    trust: true,
+                });
+            } catch {
+                console.error('KaTeX rendering error (after fallback):', error);
+                return content;
+            }
         }
     }, [content, block]);
 
