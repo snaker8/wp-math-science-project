@@ -22,7 +22,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { content_latex, solution_latex, answer_json, images, ai_analysis, difficulty, type_code, cognitive_domain } = body;
+    const { content_latex, solution_latex, answer_json, images, ai_analysis, difficulty, type_code, cognitive_domain, source_number, sequence_number } = body;
 
     // problems 테이블 업데이트
     const updateData: Record<string, any> = {};
@@ -31,6 +31,9 @@ export async function PATCH(
     if (answer_json !== undefined) updateData.answer_json = answer_json;
     if (images !== undefined) updateData.images = images;
     if (ai_analysis !== undefined) updateData.ai_analysis = ai_analysis;
+    // 문제 번호 (source_number 또는 sequence_number → source_number로 저장)
+    const newNumber = source_number ?? sequence_number;
+    if (newNumber !== undefined) updateData.source_number = newNumber;
 
     let problem = null;
     if (Object.keys(updateData).length > 0) {
@@ -74,7 +77,21 @@ export async function PATCH(
       console.log(`[API/problems] Classification updated: difficulty=${difficulty}, type_code=${type_code}`);
     }
 
-    if (!problem && difficulty === undefined && type_code === undefined) {
+    // exam_problems 테이블의 sequence_number도 업데이트
+    if (newNumber !== undefined) {
+      const { error: seqError } = await supabaseAdmin
+        .from('exam_problems')
+        .update({ sequence_number: newNumber })
+        .eq('problem_id', problemId);
+
+      if (seqError) {
+        console.warn(`[API/problems] exam_problems sequence_number update failed:`, seqError.message);
+      } else {
+        console.log(`[API/problems] sequence_number updated to ${newNumber}`);
+      }
+    }
+
+    if (!problem && difficulty === undefined && type_code === undefined && newNumber === undefined) {
       return NextResponse.json(
         { error: 'No fields to update' },
         { status: 400 }

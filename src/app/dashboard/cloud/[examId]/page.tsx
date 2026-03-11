@@ -460,8 +460,8 @@ function ProblemCardView({
                         content={part.text}
                         className="inline text-sm text-content-secondary leading-relaxed"
                       />
-                    ) : (problem.figureData || problem.figureSvg) ? (
-                      /* ① AI 도형 생성됨 → AI 도형 표시 (비교 모드 포함) */
+                    ) : (problem.figureData || problem.figureSvg || problem.upscaledCropUrl) ? (
+                      /* ① AI 도형 또는 업스케일 이미지 → FigureRenderer 표시 (비교 모드 포함) */
                       showFigureCompare && cropImage ? (
                         <div key={i} className="my-2 grid grid-cols-2 gap-3">
                           <div className="flex flex-col items-center">
@@ -471,13 +471,13 @@ function ProblemCardView({
                           <div className="flex flex-col items-center">
                             <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                             <div className="border border-emerald-500/30 rounded p-1">
-                              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={200} darkMode />
+                              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} />
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div key={i} className="my-2 flex justify-center">
-                          <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={300} darkMode />
+                          <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} />
                         </div>
                       )
                     ) : cropImage ? (
@@ -516,8 +516,8 @@ function ProblemCardView({
                     content={cleanContent}
                     className="inline text-sm text-content-secondary leading-relaxed"
                   />
-                  {/* AI 도형이 있지만 마커가 없는 경우 (기존 문제) → 하단에 표시 */}
-                  {(problem.figureData || problem.figureSvg) && (
+                  {/* AI 도형 또는 업스케일 이미지가 있지만 마커가 없는 경우 → 하단에 표시 */}
+                  {(problem.figureData || problem.figureSvg || problem.upscaledCropUrl) && (
                     showFigureCompare && cropImage ? (
                       <div className="mt-2 grid grid-cols-2 gap-3">
                         <div className="flex flex-col items-center">
@@ -527,13 +527,13 @@ function ProblemCardView({
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                           <div className="border border-emerald-500/30 rounded p-1">
-                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={200} darkMode />
+                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} />
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-2 flex justify-center">
-                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={300} darkMode />
+                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} />
                       </div>
                     )
                   )}
@@ -846,7 +846,7 @@ function ExamPaperView({
 
   // 문제 렌더링 헬퍼 (시험지 출력용)
   const renderProblem = (problem: ProblemData) => {
-    const hasAiFigure = problem.figureData || problem.figureSvg;
+    const hasAiFigure = problem.figureData || problem.figureSvg || problem.upscaledCropUrl;
     // ★ AI 도형 있으면 콘텐츠 내 마크다운 이미지 참조 제거 (중복 방지)
     const cleanContent = hasAiFigure
       ? problem.content.replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
@@ -854,10 +854,11 @@ function ExamPaperView({
     const parts = splitContentByFigureMarker(cleanContent);
     const hasFigureInContent = parts.some(p => p.type === 'figure');
 
-    // 시험지 출력: AI 도형만 표시
+    // 시험지 출력: AI 도형/업스케일 이미지 표시
     const renderFigureForPrint = () => {
       if (hasAiFigure) {
-        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} maxWidth={240} darkMode={false} />;
+        const printCropImage = problem.images?.find(img => img.type === 'crop');
+        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={printCropImage?.url ? getProxiedImageUrl(printCropImage.url) : undefined} maxWidth={240} darkMode={false} />;
       }
       return null;
     };
@@ -1678,7 +1679,8 @@ export default function CloudExamDetailPage() {
       }
 
       console.log(`[upscale-figure] Problem ${problem.number}: 업스케일 성공!`);
-      return true; // refetch는 호출자가 일괄로 처리
+      refetchProblems(); // ★ DB에 저장된 upscaledCropUrl을 반영하기 위해 즉시 refetch
+      return true;
     } catch (err) {
       console.error('[upscale-figure] Error:', err);
       return false;
@@ -1689,7 +1691,7 @@ export default function CloudExamDetailPage() {
         return next;
       });
     }
-  }, [generatingFigures]);
+  }, [generatingFigures, refetchProblems]);
 
   // ★ AI Vision 도형 생성 (사용자가 명시적으로 클릭 시)
   const handleGenerateAIFigure = useCallback(async (problem: ProblemData): Promise<boolean> => {
@@ -1787,6 +1789,16 @@ export default function CloudExamDetailPage() {
     } catch (err) {
       console.error('[updateContent] Error:', err);
     }
+  }, [refetchProblems]);
+
+  // ★ GraphModal에서 수정 저장 후 자동 refetch (FigureRenderer가 이벤트 발행)
+  useEffect(() => {
+    const handler = () => {
+      console.log('[graph-edited] 그래프 수정 감지 → refetch');
+      refetchProblems();
+    };
+    window.addEventListener('graph-edited', handler);
+    return () => window.removeEventListener('graph-edited', handler);
   }, [refetchProblems]);
 
   // ★ AI 도형 삭제 (figureData/figureSvg 제거, 크롭 이미지 유지)

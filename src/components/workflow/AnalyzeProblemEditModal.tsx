@@ -326,7 +326,7 @@ function EditorPanel({
                 setEditMode('rendered');
               }
             }}
-            className="w-full resize-none bg-white px-4 py-3 text-sm text-gray-800 leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-300/50"
+            className="w-full h-full resize-none bg-white px-4 py-3 text-sm text-gray-800 leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-300/50"
             placeholder={placeholder}
             spellCheck={false}
             autoFocus
@@ -1166,7 +1166,7 @@ export default function AnalyzeProblemEditModal({
             </div>
 
             {/* === 우측 패널 === */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
+            <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4 bg-white">
               {/* 에디터 — 수식 클릭 시 편집기 열기 (참조사이트 스타일) */}
               <EditorPanel
                 label={activeTab === 'content' ? '문제 내용' : '해설'}
@@ -1178,41 +1178,44 @@ export default function AnalyzeProblemEditModal({
                 onMathClick={handleMathClick}
               />
 
-              {/* 선택지 편집기 */}
-              <ChoicesEditor
-                choices={choices}
-                onChange={setChoices}
-                correctAnswer={correctAnswer}
-                onCorrectAnswerChange={setCorrectAnswer}
-                answerType={answerType}
-                onAnswerTypeChange={setAnswerType}
-                subjectiveAnswer={subjectiveAnswer}
-                onSubjectiveAnswerChange={setSubjectiveAnswer}
-                choiceLayout={choiceLayout}
-                onChoiceLayoutChange={setChoiceLayout}
-                isMultipleAnswer={isMultipleAnswer}
-                onMultipleAnswerChange={setIsMultipleAnswer}
-              />
+              {/* 하단: 선택지 + AI분류 (스크롤 가능, 축소 허용) */}
+              <div className="flex-shrink-0 overflow-y-auto space-y-4 max-h-[45%]">
+                {/* 선택지 편집기 */}
+                <ChoicesEditor
+                  choices={choices}
+                  onChange={setChoices}
+                  correctAnswer={correctAnswer}
+                  onCorrectAnswerChange={setCorrectAnswer}
+                  answerType={answerType}
+                  onAnswerTypeChange={setAnswerType}
+                  subjectiveAnswer={subjectiveAnswer}
+                  onSubjectiveAnswerChange={setSubjectiveAnswer}
+                  choiceLayout={choiceLayout}
+                  onChoiceLayoutChange={setChoiceLayout}
+                  isMultipleAnswer={isMultipleAnswer}
+                  onMultipleAnswerChange={setIsMultipleAnswer}
+                />
 
-              {/* 유형 분류 표시 (읽기 전용) */}
-              {problem.typeCode && (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-bold text-gray-500">AI 분류 결과</span>
+                {/* 유형 분류 표시 (읽기 전용) */}
+                {problem.typeCode && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-gray-500">AI 분류 결과</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs px-2.5 py-1 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 font-mono">
+                        {problem.typeCode}
+                      </span>
+                      <span className="text-xs px-2.5 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200">
+                        {problem.typeName}
+                      </span>
+                      <span className="text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                        난이도: {difficulties.find(d => d.key === problem.difficulty)?.label || '중'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-xs px-2.5 py-1 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 font-mono">
-                      {problem.typeCode}
-                    </span>
-                    <span className="text-xs px-2.5 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                      {problem.typeName}
-                    </span>
-                    <span className="text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                      난이도: {difficulties.find(d => d.key === problem.difficulty)?.label || '중'}
-                    </span>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 

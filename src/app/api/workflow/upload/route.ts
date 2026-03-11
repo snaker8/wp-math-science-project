@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
 
   const results = jobResults.get(jobId);
 
-  // ★ 디버그: results 내용 로그
+  // 디버그: results 내용 로그 (결과 있을 때만 — EMPTY는 처리 중 정상이므로 무시)
   if (results && results.length > 0) {
     const first = results[0];
     console.log(`[Upload API GET] jobId=${jobId}, ${results.length}개 결과, 첫 문제 solution:`,
@@ -198,8 +198,6 @@ export async function GET(request: NextRequest) {
       'choices:', first.choices?.length || 0,
       'content:', first.contentWithMath?.substring(0, 50) || 'NONE'
     );
-  } else {
-    console.log(`[Upload API GET] jobId=${jobId}, results EMPTY (메모리에 없음)`);
   }
 
   // PDF 파일 URL 생성 (서버 사이드 프록시를 통해 CORS 문제 회피)

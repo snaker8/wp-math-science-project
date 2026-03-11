@@ -5,8 +5,8 @@
 // figureData (구조화) → figureSvg (레거시) → cropImage 순서로 fallback
 // ============================================================================
 
-import React, { Suspense, lazy, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { Suspense, lazy, useMemo, useState, useCallback } from 'react';
+import { Loader2, Pencil } from 'lucide-react';
 import type {
   InterpretedFigure,
   GraphRendering,
@@ -21,6 +21,9 @@ import { generateGeometrySVG, generateTableSVG, generateGraphSVG } from '@/lib/v
 const InlineDesmosGraph = lazy(() =>
   import('./InlineDesmosGraph').then(mod => ({ default: mod.InlineDesmosGraph }))
 );
+
+// GraphModal — 그래프 편집 모달 (lazy load)
+const GraphModal = lazy(() => import('@/components/editor/modals/GraphModal'));
 
 // ============================================================================
 // Props
@@ -43,6 +46,17 @@ interface FigureRendererProps {
   className?: string;
   /** 다크 테마 (기본: true) */
   darkMode?: boolean;
+  /** ★ 그래프 편집 가능 여부 (편집 버튼 표시) */
+  editable?: boolean;
+  /** ★ 문제 ID (편집 후 DB 저장에 필요) */
+  problemId?: string;
+  /** ★ 그래프 편집 완료 콜백 */
+  onGraphEdited?: (data: {
+    expressions: Array<{ id: string; latex: string; color?: string }>;
+    xRange: [number, number];
+    yRange: [number, number];
+    imageDataUrl: string;
+  }) => void;
 }
 
 // ============================================================================
@@ -58,7 +72,12 @@ export function FigureRenderer({
   maxWidth = 280,
   className = '',
   darkMode = true,
+  editable = false,
+  problemId,
+  onGraphEdited,
 }: FigureRendererProps) {
+  const [graphEditOpen, setGraphEditOpen] = useState(false);
+
   // DEBUG: figureData 상태 확인
   if (figureData && figureData.rendering) {
     const r = figureData.rendering as unknown as Record<string, unknown>;
@@ -67,6 +86,51 @@ export function FigureRenderer({
       'svgLen:', typeof r.svg === 'string' ? r.svg.length : 0,
       'vertices:', (r.vertices as unknown[])?.length || 0);
   }
+
+  // ★ 그래프 편집 핸들러 — DB 업데이트
+  const handleGraphSave = useCallback(async (data: {
+    expressions: Array<{ id: string; latex: string; color?: string }>;
+    xRange: [number, number];
+    yRange: [number, number];
+    imageDataUrl: string;
+  }) => {
+    // 부모 콜백 호출
+    if (onGraphEdited) {
+      onGraphEdited(data);
+    }
+
+    // problemId가 있으면 직접 DB 업데이트
+    if (problemId) {
+      try {
+        const res = await fetch(`/api/problems/${problemId}/update-figure`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            figureType: 'graph',
+            rendering: {
+              type: 'graph',
+              expressions: data.expressions.map(e => ({
+                latex: e.latex,
+                color: e.color || '#2563eb',
+                style: 'solid',
+              })),
+              xRange: data.xRange,
+              yRange: data.yRange,
+              points: [],
+              annotations: [],
+            },
+          }),
+        });
+        if (res.ok) {
+          console.log(`[FigureRenderer] ✅ 그래프 편집 저장 완료 (problem ${problemId})`);
+          // ★ 저장 성공 → 페이지 데이터 갱신 이벤트 발행
+          window.dispatchEvent(new CustomEvent('graph-edited', { detail: { problemId } }));
+        }
+      } catch (err) {
+        console.error(`[FigureRenderer] 그래프 편집 저장 실패:`, err);
+      }
+    }
+  }, [problemId, onGraphEdited]);
 
   // ★ 0. 업스케일된 크롭 이미지 (최우선 — 원본이 쓸만할 때 AI 생성 없이 사용)
   // UpscaledImage 컴포넌트로 분리하여 로드 실패 시 자동 폴백 처리
@@ -90,14 +154,54 @@ export function FigureRenderer({
 
   // 1. 구조화된 figureData가 있고 신뢰도가 충분한 경우 (AI 생성)
   if (figureData && figureData.confidence >= 0.3 && figureData.figureType !== 'photo' && figureData.rendering) {
+    const isGraph = figureData.rendering.type === 'graph';
+    const graphRendering = isGraph ? figureData.rendering as GraphRendering : null;
+
     return (
-      <div className={className} style={{ maxWidth }}>
+      <div className={`relative group ${className}`} style={{ maxWidth }}>
         <TypedFigureRenderer
           figureType={figureData.figureType}
           rendering={figureData.rendering}
           darkMode={darkMode}
           maxWidth={maxWidth}
         />
+        {/* ★ 그래프 편집 버튼 — hover 시 표시 */}
+        {editable && isGraph && graphRendering && (
+          <>
+            <button
+              onClick={() => setGraphEditOpen(true)}
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity
+                bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-2.5 py-1.5
+                text-xs font-medium flex items-center gap-1.5 shadow-lg z-10"
+              title="그래프 수정"
+            >
+              <Pencil size={12} />
+              수정
+            </button>
+            {/* GraphModal */}
+            {graphEditOpen && (
+              <Suspense fallback={null}>
+                <GraphModal
+                  isOpen={graphEditOpen}
+                  onClose={() => setGraphEditOpen(false)}
+                  onInsert={() => {}}
+                  initialGraphData={{
+                    expressions: graphRendering.expressions.map(e => ({
+                      latex: e.latex,
+                      color: e.color,
+                      style: e.style,
+                      hidden: e.hidden,
+                    })),
+                    xRange: graphRendering.xRange,
+                    yRange: graphRendering.yRange,
+                    points: graphRendering.points,
+                  }}
+                  onSaveGraphData={handleGraphSave}
+                />
+              </Suspense>
+            )}
+          </>
+        )}
       </div>
     );
   }

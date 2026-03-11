@@ -13,6 +13,12 @@ import type {
   DiagramRendering,
 } from '@/types/ocr';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  shouldRetryWithVP,
+  applyVisualPrompting,
+  createVPEnhancedPrompt,
+  compareResults,
+} from './visual-prompting';
 
 // ============================================================================
 // Configuration
@@ -497,6 +503,66 @@ export async function interpretImage(
         } catch (retryErr) {
           console.warn(`[Vision] ${retryP} 재시도 실패:`, retryErr);
         }
+      }
+    }
+
+    // ================================================================
+    // ★ EVPM: Visual Prompting 재시도 (저신뢰 graph/geometry 결과)
+    // 주석 이미지를 생성하여 같은 VLM으로 2차 해석 시도
+    // ================================================================
+    if (shouldRetryWithVP(result)) {
+      console.log(`[Vision] ★★ EVPM 재시도 시작: confidence=${result.confidence.toFixed(2)}, type=${result.figureType}`);
+
+      try {
+        const vpResult = await applyVisualPrompting(imageUrl, result, context);
+
+        if (vpResult.applied && vpResult.annotatedImageUrl) {
+          // VP 강화 프롬프트 생성
+          const vpPromptHint = createVPEnhancedPrompt(
+            vpResult.annotationsUsed || [],
+            vpResult.axesDetected,
+          );
+          const vpContext = (context || '') + vpPromptHint;
+
+          // VP 주석 이미지로 2차 VLM 호출
+          const vpDetected = vpContext ? detectEquationsFromContent(vpContext) : null;
+          const vpProvider = availableProviders[0];
+          console.log(`[Vision] EVPM: ${vpProvider}로 주석 이미지 해석 중...`);
+
+          const vpInterpreted = await callProvider(vpProvider);
+          // ★ vpInterpreted는 원본 이미지로 호출됨 — 주석 이미지로 재호출 필요
+          // 실제로는 주석 이미지 URL을 사용해야 하므로, 별도 함수로 호출
+          let vpReinterpret: InterpretedFigure;
+          switch (vpProvider) {
+            case 'gemini':
+              vpReinterpret = await interpretImageWithGemini(vpResult.annotatedImageUrl, vpContext, vpDetected);
+              break;
+            case 'gpt':
+              vpReinterpret = await interpretImageWithGPT(vpResult.annotatedImageUrl, vpContext, vpDetected);
+              break;
+            case 'claude':
+              vpReinterpret = await interpretImageWithClaude(vpResult.annotatedImageUrl, vpContext, vpDetected);
+              break;
+            default:
+              vpReinterpret = await interpretImageWithGemini(vpResult.annotatedImageUrl, vpContext, vpDetected);
+          }
+
+          const vpProcessed = postProcessResult(vpReinterpret, detected);
+
+          // 결과 비교
+          const comparison = compareResults(result, vpProcessed);
+          console.log(`[Vision] EVPM 결과: winner=${comparison.winner}, reason=${comparison.reason}`);
+
+          if (comparison.winner === 'vp') {
+            console.log(`[Vision] ★★ EVPM 채택! ${result.confidence.toFixed(2)} → ${vpProcessed.confidence.toFixed(2)}`);
+            // originalImageUrl은 원본으로 유지 (주석 이미지가 아닌)
+            vpProcessed.originalImageUrl = result.originalImageUrl || imageUrl;
+            return vpProcessed;
+          }
+        }
+      } catch (vpErr) {
+        console.warn(`[Vision] EVPM 재시도 실패:`, vpErr);
+        // VP 실패해도 원본 결과는 유지
       }
     }
 

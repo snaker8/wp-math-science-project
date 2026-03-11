@@ -254,7 +254,7 @@ function toExamProblemData(
 
   return {
     id: problem.id,
-    number: row.sequence_number ?? row.order_index ?? (index + 1),
+    number: problem.source_number ?? row.sequence_number ?? row.order_index ?? (index + 1),
     difficulty: classification
       ? (parseInt(classification.difficulty, 10) as 1 | 2 | 3 | 4 | 5)
       : 3,
@@ -388,8 +388,14 @@ export function useExamProblems(examId: string | null) {
         );
         // 중복 문제 감지 및 제거 (OCR이 문제와 보기를 따로 스캔하는 경우)
         const deduped = deduplicateProblems(mapped);
-        // 번호 재정렬
-        const renumbered = deduped.map((p, idx) => ({ ...p, number: idx + 1 }));
+        // source_number가 설정된 문제는 번호 유지, 없는 경우만 순서대로 매김
+        const hasSourceNumbers = deduped.some((p) => {
+          const row = data.problems.find((r: any) => (r.problems?.id || r.id) === p.id);
+          return row?.problems?.source_number != null || row?.source_number != null;
+        });
+        const renumbered = hasSourceNumbers
+          ? deduped // source_number 기반 번호 유지
+          : deduped.map((p, idx) => ({ ...p, number: idx + 1 })); // 순서대로
         setProblems(renumbered);
         console.log(`[ExamProblems] Loaded ${mapped.length} problems, deduped to ${renumbered.length} for exam ${examId}`);
       } else {

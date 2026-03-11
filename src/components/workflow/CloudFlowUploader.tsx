@@ -195,9 +195,9 @@ export default function CloudFlowUploader({
     const MAX_ERRORS = 15; // 최대 15회 (30초) 연속 실패 시 폴링 중지
 
     const stopPolling = (id: string) => {
-      const interval = pollingRef.current.get(id);
-      if (interval) {
-        clearInterval(interval);
+      const timer = pollingRef.current.get(id);
+      if (timer) {
+        clearTimeout(timer);
         pollingRef.current.delete(id);
       }
     };
@@ -278,9 +278,27 @@ export default function CloudFlowUploader({
     // 즉시 한 번 실행
     poll();
 
-    // 2초 간격으로 폴링
-    const interval = setInterval(poll, 2000);
-    pollingRef.current.set(jobId, interval);
+    // 점진적 폴링: 초기 2초 → 최대 8초 (결과 없으면 간격 증가, 있으면 2초 복귀)
+    let pollCount = 0;
+    const getPollInterval = () => {
+      pollCount++;
+      if (pollCount <= 5) return 2000;   // 처음 10초: 2초
+      if (pollCount <= 15) return 4000;  // 다음 40초: 4초
+      return 8000;                        // 이후: 8초
+    };
+
+    const schedulePoll = () => {
+      const timeout = setTimeout(async () => {
+        await poll();
+        // 아직 폴링 중이면 다음 스케줄
+        if (pollingRef.current.has(jobId)) {
+          schedulePoll();
+        }
+      }, getPollInterval());
+      pollingRef.current.set(jobId, timeout);
+    };
+
+    schedulePoll();
   }, [onComplete]);
 
   // 드래그 앤 드롭
@@ -303,9 +321,9 @@ export default function CloudFlowUploader({
 
   // Job 삭제
   const handleRemoveJob = (jobId: string) => {
-    const interval = pollingRef.current.get(jobId);
-    if (interval) {
-      clearInterval(interval);
+    const timer = pollingRef.current.get(jobId);
+    if (timer) {
+      clearTimeout(timer);
       pollingRef.current.delete(jobId);
     }
     setJobs((prev) => prev.filter((j) => j.id !== jobId));

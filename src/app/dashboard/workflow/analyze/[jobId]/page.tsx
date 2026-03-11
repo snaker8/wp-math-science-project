@@ -1191,6 +1191,9 @@ function ProblemDetailPanel({
   const [editContent, setEditContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [showAdvancedModal, setShowAdvancedModal] = useState(false);
+  const [isEditingNumber, setIsEditingNumber] = useState(false);
+  const [editNumberValue, setEditNumberValue] = useState('');
+  const numberInputRef = React.useRef<HTMLInputElement>(null);
 
   // ── 크롭 이미지 드래그 선택 상태 ──
   const [isCropDragging, setIsCropDragging] = useState(false);
@@ -1418,19 +1421,46 @@ function ProblemDetailPanel({
           )}
         </div>
 
-        {/* ===== 문제 번호 (참조사이트 스타일) ===== */}
+        {/* ===== 문제 번호 (인라인 수정) ===== */}
         <div className="px-5 pb-3">
           <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-            <button
-              type="button"
-              onClick={() => {
-                const newNum = prompt('문제 번호를 입력하세요', String(problem.number));
-                if (newNum) onSave({ number: parseInt(newNum, 10) });
-              }}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:bg-emerald-600 transition-colors"
-            >
-              {problem.number || '?'}
-            </button>
+            {isEditingNumber ? (
+              <input
+                ref={numberInputRef}
+                type="number"
+                value={editNumberValue}
+                onChange={(e) => setEditNumberValue(e.target.value)}
+                onBlur={() => {
+                  const num = parseInt(editNumberValue, 10);
+                  if (!isNaN(num) && num > 0) onSave({ number: num });
+                  setIsEditingNumber(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const num = parseInt(editNumberValue, 10);
+                    if (!isNaN(num) && num > 0) onSave({ number: num });
+                    setIsEditingNumber(false);
+                  } else if (e.key === 'Escape') {
+                    setIsEditingNumber(false);
+                  }
+                }}
+                className="w-10 h-8 rounded-full bg-emerald-500 text-white font-bold text-sm text-center flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                min={1}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditNumberValue(String(problem.number || 1));
+                  setIsEditingNumber(true);
+                  setTimeout(() => numberInputRef.current?.select(), 50);
+                }}
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:bg-emerald-600 transition-colors"
+              >
+                {problem.number || '?'}
+              </button>
+            )}
             <div className="flex-1">
               <div className="flex items-center gap-1">
                 <Pencil className="h-3 w-3 text-emerald-500" />
@@ -2213,12 +2243,12 @@ export default function AnalyzeJobPage() {
         problems.push({
           id: `problem-${idx}`,
           problemId: result.problemId,
-          number: idx + 1,
+          number: isEdited ? (prevProblem.number ?? idx + 1) : (idx + 1),
           content: isEdited ? prevProblem.content : contentSource,
           choices: isEdited ? prevProblem.choices : (result.choices || result.answer_json?.choices || []),
           answer: isEdited ? prevProblem.answer : (result.solution?.finalAnswer || result.answer_json?.correct_answer || ''),
           solution: isEdited ? prevProblem.solution : serverSolution,
-          difficulty: (result.classification?.difficulty || 3) as 1|2|3|4|5,
+          difficulty: isEdited ? (prevProblem.difficulty ?? (result.classification?.difficulty || 3)) : ((result.classification?.difficulty || 3) as 1|2|3|4|5),
           typeCode: isEdited ? (prevProblem.typeCode || result.classification?.typeCode || '') : (result.classification?.typeCode || ''),
           typeName: isEdited ? (prevProblem.typeName || result.classification?.typeName || '') : (result.classification?.typeName || ''),
           confidence: result.classification?.confidence || 0.5,
@@ -2227,7 +2257,7 @@ export default function AnalyzeJobPage() {
           pageIndex: result.pageIndex ?? 0,
           bbox: result.bbox || undefined,
           insertedImages: prevProblem?.insertedImages,  // ★ 삽입 이미지 보존
-          score: extractedScore,  // ★ 배점 (OCR에서 추출)
+          score: isEdited ? (prevProblem.score ?? extractedScore) : extractedScore,  // ★ 배점 보존
         });
       });
     }
@@ -2389,9 +2419,11 @@ export default function AnalyzeJobPage() {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
       const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImageBase64?: string; solution?: string; choices?: string[]; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
+      let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
         for (const p of pageProbs) {
           if (p.status === 'edited' || p.status === 'completed') {
+            globalProblemNumber++;
             pagesWithProblems.add(pageIdx);
             // ★ 크롭 이미지: 캐시된 base64 또는 즉석 생성
             let cropImage = p.cropImageBase64;
@@ -2401,7 +2433,7 @@ export default function AnalyzeJobPage() {
               } catch { /* 무시 */ }
             }
             editedProblems.push({
-              number: p.number,
+              number: globalProblemNumber, // ★ 전역 순번 사용 (p.number는 페이지별로 리셋되어 크롭 파일 충돌)
               difficulty: p.difficulty,
               typeCode: p.typeCode,
               cognitiveDomain: p.cognitiveDomain,
@@ -2574,7 +2606,7 @@ export default function AnalyzeJobPage() {
         const body: Record<string, unknown> = {};
         if (updated.content !== undefined) body.content_latex = updated.content;
         if (updated.solution !== undefined) body.solution_latex = updated.solution;
-        if (updated.number !== undefined) body.sequence_number = updated.number;
+        if (updated.number !== undefined) body.source_number = updated.number;
 
         // 정답/선택지 변경 시 answer_json으로 통합 저장
         if (updated.answer !== undefined || updated.choices !== undefined) {

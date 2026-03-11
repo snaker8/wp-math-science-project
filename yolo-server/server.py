@@ -16,8 +16,16 @@ from ultralytics import YOLO
 from PIL import Image
 import io
 import base64
+import json
 import os
 import time
+
+from annotator import (
+    annotate_image,
+    create_math_graph_preset,
+    create_detection_overlay,
+    detect_axes_position,
+)
 
 app = FastAPI(
     title="Math Exam Problem Detector",
@@ -164,6 +172,115 @@ async def detect_problems(
         "inference_ms": round(inference_ms, 1),
         "image_size": {"width": img_w, "height": img_h},
     }
+
+
+@app.post("/annotate")
+async def annotate_endpoint(
+    image: UploadFile = File(None),
+    image_base64: str = Form(None),
+    annotations: str = Form(None),
+    preset: str = Form(None),
+    auto_detect_axes: bool = Form(False),
+):
+    """
+    이미지에 시각적 주석 오버레이 (EVPM — Enhanced Visual Prompt Markup)
+
+    Args:
+        image: 이미지 파일 (multipart upload)
+        image_base64: base64 인코딩된 이미지
+        annotations: JSON 문자열 — 주석 리스트 (manual mode)
+            예: [{"type":"grid","spacing":40},{"type":"label","text":"A","x":0.5,"y":0.3}]
+        preset: 프리셋 이름 (auto mode)
+            - "math_graph": 격자 + 축 + 눈금 + 원점
+            - "detection": YOLO 감지 결과 기반 SoM 오버레이 (annotations에 detections 전달)
+        auto_detect_axes: True면 이미지 분석으로 축 위치 자동 감지 (math_graph 프리셋에 적용)
+
+    Returns:
+        annotated_base64: 주석된 이미지 (base64)
+        annotations_used: 적용된 주석 리스트
+        axes_detected: 자동 감지된 축 위치 (auto_detect_axes=True일 때)
+    """
+    # 이미지 파싱
+    try:
+        if image and image.filename:
+            img_bytes = await image.read()
+        elif image_base64:
+            b64 = image_base64
+            if "," in b64:
+                b64 = b64.split(",", 1)[1]
+            img_bytes = base64.b64decode(b64)
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Provide image file or image_base64"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Failed to parse image: {str(e)}"},
+        )
+
+    start_time = time.time()
+
+    # 주석 리스트 결정
+    ann_list = []
+    axes_info = None
+
+    if preset == "math_graph":
+        # 수학 그래프 프리셋
+        kwargs = {}
+        if auto_detect_axes:
+            axes_info = detect_axes_position(img_bytes)
+            kwargs["axis_cx"] = axes_info["cx"]
+            kwargs["axis_cy"] = axes_info["cy"]
+        ann_list = create_math_graph_preset(**kwargs)
+    elif preset == "detection" and annotations:
+        # YOLO 감지 결과 → SoM 오버레이
+        try:
+            detections = json.loads(annotations)
+            ann_list = create_detection_overlay(detections)
+        except json.JSONDecodeError:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid JSON in annotations field"},
+            )
+    elif annotations:
+        # 수동 주석
+        try:
+            ann_list = json.loads(annotations)
+        except json.JSONDecodeError:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid JSON in annotations field"},
+            )
+    else:
+        # 기본값: 수학 그래프 프리셋 (자동 축 감지 포함)
+        axes_info = detect_axes_position(img_bytes)
+        ann_list = create_math_graph_preset(
+            axis_cx=axes_info["cx"],
+            axis_cy=axes_info["cy"],
+        )
+
+    # 주석 적용
+    result_bytes = annotate_image(img_bytes, ann_list)
+    result_b64 = base64.b64encode(result_bytes).decode("utf-8")
+
+    elapsed_ms = (time.time() - start_time) * 1000
+
+    response = {
+        "annotated_base64": f"data:image/png;base64,{result_b64}",
+        "annotations_used": ann_list,
+        "inference_ms": round(elapsed_ms, 1),
+        "image_size": {
+            "width": Image.open(io.BytesIO(img_bytes)).width,
+            "height": Image.open(io.BytesIO(img_bytes)).height,
+        },
+    }
+
+    if axes_info:
+        response["axes_detected"] = axes_info
+
+    return response
 
 
 if __name__ == "__main__":

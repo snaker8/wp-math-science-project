@@ -380,6 +380,8 @@ export async function POST(
       figureSvg: legacySvg || currentAnalysis.figureSvg || undefined,
       figureGeneratedAt: new Date().toISOString(),
       figureModel: process.env.VISION_PROVIDER === 'gpt' ? 'gpt-4o' : process.env.VISION_PROVIDER === 'claude' ? 'claude-sonnet' : `gemini (${process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview'})`,
+      // EVPM 메타: confidence 기록 (VP 재시도 여부는 image-interpreter 로그 참조)
+      figureConfidence: interpreted.confidence,
     };
 
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;

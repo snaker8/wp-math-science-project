@@ -36,10 +36,95 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
   // ★ content_latex 끝에 포함된 선택지 줄 제거 (choices 배열과 중복 방지)
   const bodyWithoutTrailingChoices = stripTrailingChoiceLines(bodyText);
 
-  // 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 분리
-  const { mainContent, conditionBoxes } = extractConditionBoxes(bodyWithoutTrailingChoices);
+  // ★ $\begin{array}...\end{array}$ 에서 보기형이면 $ 래퍼 제거 (KaTeX가 한글 처리 못함)
+  // 1) $$...$$로 감싸진 경우
+  // 2) $...$ 로 감싸진 경우
+  let bodyForTabular = bodyWithoutTrailingChoices;
+  // $$...$$
+  bodyForTabular = bodyForTabular.replace(
+    /\$\$([\s\S]*?\\begin\{(?:tabular|array)\}[\s\S]*?\\end\{(?:tabular|array)\}[\s\S]*?)\$\$/gi,
+    (_m, inner) => {
+      if (/[가나다라마]/.test(inner) || /\\text/.test(inner)) {
+        console.log('[$ 래퍼 제거] $$...$$:', inner.substring(0, 100));
+        return inner;
+      }
+      return _m;
+    }
+  );
+  // $...$  (단일)
+  bodyForTabular = bodyForTabular.replace(
+    /\$([\s\S]*?\\begin\{(?:tabular|array)\}[\s\S]*?\\end\{(?:tabular|array)\}[\s\S]*?)\$/gi,
+    (_m, inner) => {
+      if (/[가나다라마]/.test(inner) || /\\text/.test(inner)) {
+        console.log('[$ 래퍼 제거] $...$:', inner.substring(0, 100));
+        return inner;
+      }
+      return _m;
+    }
+  );
 
-  const elements = parseMixedContent(mainContent);
+  // ★ tabular/array 블록 처리
+  // 보기형 tabular (ㄱ./ㄴ./ㄷ. 포함)는 조건박스로 변환, 나머지는 보호
+  const tabularProtected: string[] = [];
+  let protectedBody = bodyForTabular.replace(
+    /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
+    (m) => {
+      // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
+      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(m);
+      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(m);
+      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(m);
+      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(m);
+      if (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels) {
+        // tabular → 각 보기를 개별 줄로 변환
+        let converted = m
+          .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '') // 시작 태그 제거
+          .replace(/\\end\{(?:tabular|array)\}/, '')                  // 끝 태그 제거
+          .replace(/\s*###\s*/g, ' ')                                 // ### → 공백
+          .replace(/\s*\\\\\s*/g, ' ')                                // \\ → 공백
+          .replace(/\s*&\s*/g, ' ')                                   // & → 공백
+          .replace(/<?\s*보기\s*>?\s*/g, '')                          // <보기> 잔여 제거
+          .replace(/\\quad\s*/g, ' ')                                 // \quad → 공백
+          .trim();
+        // ★ 1단계: \text{...} 래퍼 벗기기 (내용만 추출)
+        converted = converted.replace(/\\text\s*\{([^}]*)\}/g, '$1');
+        // ★ 2단계: 가./나./다./라./마. → ㄱ./ㄴ./ㄷ./ㄹ./ㅁ.
+        converted = converted.replace(/가\s*([.)])/g, 'ㄱ$1');
+        converted = converted.replace(/나\s*([.)])/g, 'ㄴ$1');
+        converted = converted.replace(/다\s*([.)])/g, 'ㄷ$1');
+        converted = converted.replace(/라\s*([.)])/g, 'ㄹ$1');
+        converted = converted.replace(/마\s*([.)])/g, 'ㅁ$1');
+        // 마침표 없는 가/나/다 단독 → ㄱ/ㄴ/ㄷ (뒤에 수식이 바로 오는 경우)
+        converted = converted.replace(/가(?=\s*[\$y\\])/g, 'ㄱ.');
+        converted = converted.replace(/나(?=\s*[\$y\\])/g, 'ㄴ.');
+        converted = converted.replace(/다(?=\s*[\$y\\])/g, 'ㄷ.');
+        converted = converted.replace(/라(?=\s*[\$y\\])/g, 'ㄹ.');
+        converted = converted.replace(/마(?=\s*[\$y\\])/g, 'ㅁ.');
+        // OCR 오인: c. → ㄷ.
+        converted = converted.replace(/\bc\s*([.)])/g, 'ㄷ$1');
+        // 각 보기 라벨 앞에 줄바꿈 → 개별 줄로 분리
+        converted = converted.replace(/([ㄱㄴㄷㄹㅁ])\s*([.)])/g, '\n$1$2');
+        return '\n' + converted.trim() + '\n';
+      }
+      // 일반 tabular: 보호 (조건박스 오인 방지)
+      const idx = tabularProtected.length;
+      tabularProtected.push(m);
+      return `__TABULAR_PROTECT_${idx}__`;
+    }
+  );
+
+  // 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 분리
+  const { mainContent, conditionBoxes } = extractConditionBoxes(protectedBody);
+
+  // tabular 블록 복원
+  let restoredMainContent = mainContent;
+  const restoredConditionBoxes = conditionBoxes.map(box =>
+    box.replace(/__TABULAR_PROTECT_(\d+)__/g, (_, idx) => tabularProtected[parseInt(idx, 10)] || '')
+  );
+  restoredMainContent = restoredMainContent.replace(
+    /__TABULAR_PROTECT_(\d+)__/g, (_, idx) => tabularProtected[parseInt(idx, 10)] || ''
+  );
+
+  const elements = parseMixedContent(restoredMainContent);
 
   // 수식 클릭 가능 스타일
   const mathClickStyle = onMathClick ? 'cursor-pointer hover:bg-blue-100/20 rounded px-0.5 transition-colors' : '';
@@ -215,7 +300,7 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
           const boxMatch = el.value.match(/^__CONDITION_BOX_(\d+)__$/);
           if (boxMatch) {
             const boxIdx = parseInt(boxMatch[1], 10);
-            const boxContent = conditionBoxes[boxIdx];
+            const boxContent = restoredConditionBoxes[boxIdx];
             if (boxContent) {
               return (
                 <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600">
@@ -435,6 +520,11 @@ function preprocessMathpixContent(text: string): string {
     String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
   );
 
+  // 0-1. 인라인 <보기> 잔여 태그 정리 (OCR이 <보기> 를 "보기>" 등으로 부분 출력하는 경우)
+  result = result.replace(/(?:〈|<)\s*보\s*기\s*(?:〉|>)/g, '<보기>');
+  // "보기>" 잔여 (< 가 누락된 경우) — < 없이 "보기>" 만 있으면 제거
+  result = result.replace(/(?<!<)보기>\s*/g, '');
+
   // ═══ Phase 1: Format 변환 (Mathpix → 표준 $...$) ═══
 
   // 1-0. Mathpix # 접두사 → \ 변환
@@ -493,24 +583,66 @@ function preprocessMathpixContent(text: string): string {
   result = result.replace(/\\neg(?=\s*[.,)])/g, 'ㄱ');
 
   // 2-2. \displaystyle 정리 (MathRenderer가 자동 추가하므로 중복 제거)
-  // (a) $\displaystyle ...$ → $...$
+  // ★ 디버그: displaystyle 존재 여부 확인
+  if (result.includes('displaystyle')) {
+    const idx = result.indexOf('displaystyle');
+    const charBefore = idx > 0 ? result.charCodeAt(idx - 1) : -1;
+    console.log('[preprocessMathpix] displaystyle 발견!', {
+      charBeforeCode: charBefore,
+      charBefore: idx > 0 ? result[idx - 1] : 'N/A',
+      context: result.substring(Math.max(0, idx - 10), idx + 20),
+    });
+  }
+  // (a) $\displaystyle$ 단독 → 제거 (OCR 아티팩트)
+  result = result.replace(/\$\s*\\displaystyle\s*\$/g, '');
+  // (b) $\displaystyle ...$ → $...$
   result = result.replace(/\$\s*\\displaystyle\s+/g, '$');
-  // (b) $$\displaystyle ...$$ → $$...$$
+  // (c) $$\displaystyle ...$$ → $$...$$
   result = result.replace(/\$\$\s*\\displaystyle\s+/g, '$$');
-  // (c) bare \displaystyle (수식 밖) → 제거
-  result = result.replace(/(?<!\$)\\displaystyle\s*/g, '');
+  // (d) bare \displaystyle (수식 밖, 한글 앞 포함) → 제거 (₩ = U+20A9 한글 원화 기호도 포함)
+  result = result.replace(/[\\₩]displaystyle\s*/g, '');
 
   // 2-3. 선택지 (1)(2)(3)(4)(5) → ①②③④⑤ 정규화
   result = normalizeChoiceParensForRender(result);
 
-  // 2-4. \left\{ → \lbrace, \right. → 제거 (piecewise/cases 함수 처리)
-  // \left\{ 는 매칭 \right 없으면 KaTeX 에러 → \lbrace로 안전 대체
-  // (a) 모든 \left\{ → \lbrace (수식 안팎 모두)
+  // 2-4a. $\begin{env}...\end{env}$ (멀티라인 단일$) → $$...$$ (디스플레이 수식으로 승격)
+  // KaTeX는 $...$에서 멀티라인 환경을 처리 못하므로 $$...$$로 변환
+  result = result.replace(
+    /\$\s*(\\begin\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[\s\S]*?\\end\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\})\s*\$/g,
+    (_m, inner) => `$$${inner}$$`
+  );
+
+  // 2-4b. piecewise 함수: \left\{\begin{array}...\end{array}\right. → \begin{cases}...\end{cases}
+  // cases 환경은 KaTeX가 자동으로 큰 중괄호를 렌더링
+  result = result.replace(
+    /\\left\s*\\?\{\s*\\begin\{array\}(?:\{[^}]*\})?([\s\S]*?)\\end\{array\}\s*\\right\s*\./g,
+    (_match, inner) => `\\begin{cases}${inner}\\end{cases}`
+  );
+  // \left\{...\right. (array 없이) → \begin{cases}...\end{cases}
+  result = result.replace(
+    /\\left\s*\\?\{([\s\S]*?)\\right\s*\./g,
+    (_match, inner) => {
+      // 내부에 \\ (행 구분) 또는 & (열 구분)가 있으면 cases로 변환
+      if (/\\\\|&/.test(inner)) {
+        return `\\begin{cases}${inner}\\end{cases}`;
+      }
+      // 단일 내용이면 그냥 중괄호로
+      return `\\lbrace ${inner}`;
+    }
+  );
+  // 고아 \left\{ (매칭 \right 없음) → \lbrace
   result = result.replace(/\\left\s*\\?\{/g, '\\lbrace');
-  // (b) \right. (invisible delimiter) → 제거 (수식 안팎 모두)
+  // 고아 \right. → 제거
   result = result.replace(/\\right\s*\./g, '');
-  // (c) $$ 만 남은 빈 블록 제거
+  // $$ 만 남은 빈 블록 제거
   result = result.replace(/\$\s*\$/g, '');
+
+  // 2-5. <보기> 태그 분리 복구
+  // "것을 <에서" 또는 "것을 < 에서" → "것을 〈보기〉 에서"
+  result = result.replace(/<\s*에서/g, '〈보기〉 에서');
+  // 줄 끝의 고아 '<' 제거
+  result = result.replace(/<\s*$/gm, '');
+  // "<보기>" 또는 "〈보기〉" 이미 있으면 그대로 유지 (중복 방지)
 
   return result;
 }
@@ -841,6 +973,15 @@ function parseTabularBlock(block: string): ContentElement {
 }
 
 function parseMixedContent(text: string): ContentElement[] {
+  // ★ 안전장치: \displaystyle 잔여 제거 (preprocessMathpixContent에서 놓친 경우)
+  // ₩ (U+20A9) = 한국어 Windows에서 백슬래시 대체 문자
+  text = text.replace(/\$\s*[\\₩]displaystyle\s*\$/g, '');
+  text = text.replace(/\$\s*[\\₩]displaystyle\s+/g, '$');
+  text = text.replace(/\$\$\s*[\\₩]displaystyle\s+/g, '$$');
+  text = text.replace(/[\\₩]displaystyle\s*/g, '');
+  // ★ 보기> 잔여 텍스트 제거 (OCR에서 <보기> 태그가 깨진 경우)
+  text = text.replace(/보기>\s*/g, '');
+
   // ★ 디버그: 표 관련 콘텐츠 감지
   if (text.includes('array') || text.includes('tabular') || text.includes('hline')) {
     console.log('[MixedContent] ★ 표 입력 감지:', text.substring(0, 500));
@@ -848,10 +989,24 @@ function parseMixedContent(text: string): ContentElement[] {
 
   // 0단계: \begin{tabular}...\end{tabular} 및 \begin{array}...\end{array} 블록을 플레이스홀더로 대체
   // 조립제법, 진리표 등 array 환경도 표로 렌더링
+  // ★ 단, \left\{ 뒤의 array는 piecewise 수식이므로 KaTeX에서 처리 → 추출 안 함
   const tabularBlocks: ContentElement[] = [];
   let textWithPlaceholders = text.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
-    (match) => {
+    (match, offset, fullText) => {
+      // \left\{ 또는 \left\lbrace 뒤에 오는 array는 piecewise 수식 → 추출 안 함
+      const before = fullText.substring(Math.max(0, offset - 20), offset);
+      if (/\\left\s*[\\{]|\\left\s*\\lbrace/.test(before)) {
+        return match; // KaTeX가 처리하도록 그대로 둠
+      }
+      // $...$나 $$...$$ 내부의 array도 KaTeX가 처리해야 함
+      // offset 앞에 열린 $ 가 있고 닫히지 않았으면 수식 내부
+      const textBefore = fullText.substring(0, offset);
+      const dollarCount = (textBefore.match(/(?<!\$)\$(?!\$)/g) || []).length;
+      const doubleDollarCount = (textBefore.match(/\$\$/g) || []).length;
+      if (dollarCount % 2 === 1 || doubleDollarCount % 2 === 1) {
+        return match; // 수식 내부 → 추출 안 함
+      }
       const tableEl = parseTabularBlock(match);
       const idx = tabularBlocks.length;
       tabularBlocks.push(tableEl);
