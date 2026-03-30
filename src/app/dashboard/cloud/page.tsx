@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -91,6 +91,9 @@ interface DBExam {
   school: string;
   year: string;
   bookGroupId: string | null;
+  subject: string;
+  examType: string;
+  grade: string;
   createdAt: string;
 }
 
@@ -183,12 +186,25 @@ function collectGroupIds(node: TreeNode): string[] {
 
 const subjectOptions = [
   '전체',
-  '공통수학1 [2022개정]',
-  '공통수학2 [2022개정]',
-  '수학I [2022개정]',
-  '수학II [2022개정]',
-  '미적분 [2022개정]',
-  '확률과 통계 [2022개정]',
+  '── 수학 ──',
+  '공통수학1',
+  '공통수학2',
+  '수학1',
+  '수학2',
+  '미적분',
+  '확률과통계',
+  '기하',
+  '── 과학 ──',
+  '공통과학1',
+  '공통과학2',
+  '물리학1',
+  '물리학2',
+  '화학1',
+  '화학2',
+  '생명과학1',
+  '생명과학2',
+  '지구과학1',
+  '지구과학2',
 ];
 
 // 과목 드롭다운
@@ -212,16 +228,26 @@ const SubjectDropdown: React.FC<{
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute left-0 top-full z-20 mt-1 min-w-[240px] rounded-lg border bg-surface-card py-1 shadow-xl">
-            {options.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => { onChange(opt); setOpen(false); }}
-                className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised transition-colors ${value === opt ? 'bg-surface-raised text-cyan-400 font-medium' : 'text-content-secondary'}`}
-              >
-                {opt}
-              </button>
-            ))}
+            {options.map((opt) => {
+              const isSeparator = opt.startsWith('──');
+              if (isSeparator) {
+                return (
+                  <div key={opt} className="px-4 py-1.5 text-[11px] font-bold text-content-tertiary border-t border-subtle mt-1 pt-2">
+                    {opt.replace(/──\s?/g, '').trim()}
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => { onChange(opt); setOpen(false); }}
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised transition-colors ${value === opt ? 'bg-surface-raised text-cyan-400 font-medium' : 'text-content-secondary'}`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
           </div>
         </>
       )}
@@ -664,6 +690,8 @@ const CreateGroupModal: React.FC<{
 
 export default function CloudPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const appendToExamId = searchParams.get('appendTo') || undefined;
 
   // --- DB Data ---
   const [dbExams, setDbExams] = useState<DBExam[]>([]);
@@ -672,8 +700,11 @@ export default function CloudPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // --- Upload Modal ---
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId);
   const [userId, setUserId] = useState<string>('');
+  // --- Source List (출처 목록 보기) ---
+  const [showSourceList, setShowSourceList] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState('');
 
   // --- Move Modal ---
   const [movingExam, setMovingExam] = useState<{ id: string; bookGroupId: string | null } | null>(null);
@@ -962,21 +993,27 @@ export default function CloudPage() {
     return null;
   }, []);
 
+  // 과목 필터 적용된 시험지
+  const subjectFilteredExams = useMemo(() => {
+    if (subject === '전체') return dbExams;
+    return dbExams.filter((e) => e.subject === subject);
+  }, [dbExams, subject]);
+
   const exams: ExamFile[] = useMemo(() => {
-    if (!selectedId || dbExams.length === 0) return [];
+    if (!selectedId || subjectFilteredExams.length === 0) return [];
 
     let filtered: DBExam[];
 
     if (selectedId === 'all') {
-      filtered = dbExams;
+      filtered = subjectFilteredExams;
     } else if (selectedId === 'unclassified') {
-      filtered = dbExams.filter((e) => !e.bookGroupId);
+      filtered = subjectFilteredExams.filter((e) => !e.bookGroupId);
     } else {
       // 선택된 그룹 + 자손 그룹의 시험지
       const node = findNodeById(treeNodes, selectedId);
       if (node) {
         const groupIds = new Set(collectGroupIds(node));
-        filtered = dbExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
+        filtered = subjectFilteredExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
       } else {
         filtered = [];
       }
@@ -991,7 +1028,7 @@ export default function CloudPage() {
       bookGroupId: exam.bookGroupId,
       createdAt: exam.createdAt,
     }));
-  }, [selectedId, dbExams, treeNodes, findNodeById]);
+  }, [selectedId, subjectFilteredExams, treeNodes, findNodeById]);
 
   const filteredExams = useMemo(() => {
     let result = exams;
@@ -1189,6 +1226,19 @@ export default function CloudPage() {
           </button>
           <button
             type="button"
+            onClick={() => setShowSourceList(!showSourceList)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${
+              showSourceList
+                ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-400'
+                : 'bg-surface-raised/60 text-content-tertiary hover:text-content-primary hover:bg-surface-raised'
+            }`}
+            title="업로드된 출처 목록"
+          >
+            <ClipboardList className="h-3.5 w-3.5" />
+            출처 목록
+          </button>
+          <button
+            type="button"
             onClick={() => setShowUploadModal(true)}
             className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition-colors shadow-lg shadow-indigo-500/20"
           >
@@ -1224,6 +1274,94 @@ export default function CloudPage() {
           </div>
         </div>
       )}
+
+      {/* ======== Source List Panel (출처 목록) ======== */}
+      <AnimatePresence>
+        {showSourceList && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden border-b border-subtle/50 bg-surface-card/50"
+          >
+            <div className="px-6 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-content-primary flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-cyan-400" />
+                  업로드된 출처 목록 ({dbExams.length}건)
+                </h3>
+                <div className="flex items-center gap-2">
+                  {/* 과목 필터 */}
+                  {(() => {
+                    const subjects = [...new Set(dbExams.map(e => e.subject || '미지정'))].sort();
+                    return subjects.length > 1 ? (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setSourceFilter('')}
+                          className={`px-2 py-0.5 rounded text-[10px] transition-colors ${!sourceFilter ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-surface-raised/60 text-content-muted hover:text-content-primary'}`}
+                        >전체</button>
+                        {subjects.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => setSourceFilter(s)}
+                            className={`px-2 py-0.5 rounded text-[10px] transition-colors ${sourceFilter === s ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-surface-raised/60 text-content-muted hover:text-content-primary'}`}
+                          >{s}</button>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                  <button onClick={() => setShowSourceList(false)} className="p-1 rounded hover:bg-surface-raised">
+                    <X className="h-4 w-4 text-content-muted" />
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 max-h-48 overflow-y-auto">
+                {dbExams
+                  .filter(e => !sourceFilter || (e.subject || '미지정') === sourceFilter)
+                  .map(exam => {
+                    // 중복 체크: 같은 title이 2개 이상이면 표시
+                    const dupeCount = dbExams.filter(e => e.title === exam.title).length;
+                    return (
+                      <div
+                        key={exam.id}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] group cursor-pointer transition-colors ${
+                          dupeCount > 1
+                            ? 'bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50'
+                            : 'bg-surface-raised/60 border-subtle/50 hover:border-cyan-500/30'
+                        }`}
+                        onClick={() => {
+                          setShowSourceList(false);
+                          router.push(`/dashboard/cloud/${exam.id}`);
+                        }}
+                        title={`${exam.title}\n과목: ${exam.subject || '미지정'}\n유형: ${exam.examType || '미지정'}\n학년: ${exam.grade || '미지정'}\n생성: ${exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('ko-KR') : '?'}`}
+                      >
+                        <FileText className={`h-3 w-3 flex-shrink-0 ${dupeCount > 1 ? 'text-amber-400' : 'text-content-muted'}`} />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className={`truncate ${dupeCount > 1 ? 'text-amber-300' : 'text-content-secondary group-hover:text-cyan-400'}`}>
+                            {exam.title || exam.fileName}
+                          </span>
+                          <span className="text-[9px] text-content-muted truncate">
+                            {exam.subject || ''} {exam.grade || ''} {exam.examType || ''}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-[9px] text-content-muted">{exam.problemCount}문제</span>
+                          {dupeCount > 1 && (
+                            <span className="text-[8px] text-amber-400 font-bold">중복{dupeCount}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              {dbExams.length === 0 && (
+                <p className="text-xs text-content-muted py-4 text-center">업로드된 자료가 없습니다</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ======== Upload Modal ======== */}
       <AnimatePresence>
@@ -1262,11 +1400,17 @@ export default function CloudPage() {
                 <CloudFlowUploader
                   userId={userId}
                   bookGroupId={selectedId && selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : undefined}
-                  autoNavigateToAnalyze={true}
+                  appendToExamId={appendToExamId}
+                  autoNavigateToAnalyze={!appendToExamId}
+                  existingFileNames={dbExams.map(e => e.title || e.fileName)}
                   onComplete={(results) => {
                     console.log('Upload complete', results);
                     setShowUploadModal(false);
                     fetchData();
+                    // appendTo가 있으면 기존 시험지로 이동
+                    if (appendToExamId) {
+                      router.push(`/dashboard/cloud/${appendToExamId}`);
+                    }
                   }}
                 />
               </div>

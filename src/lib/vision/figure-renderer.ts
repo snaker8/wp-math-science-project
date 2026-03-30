@@ -114,17 +114,8 @@ function graphToContent(rendering: GraphRendering, description: string): FigureC
 // ============================================================================
 
 function geometryToContent(rendering: GeometryRendering, fallbackUrl: string): FigureContent {
-  // SVG가 있으면 SVG 사용
-  if (rendering.svg) {
-    return {
-      type: 'svg',
-      svg: rendering.svg,
-      fallbackLatex: rendering.latex,
-    };
-  }
-
-  // 꼭짓점 좌표로 SVG 생성 시도
-  if (rendering.vertices.length >= 2) {
+  // ★ 꼭짓점 좌표가 있으면 항상 코드 기반 SVG 생성 (Gemini SVG보다 정확)
+  if (rendering.vertices && rendering.vertices.length >= 2) {
     const svg = generateGeometrySVG(rendering);
     if (svg) {
       return {
@@ -163,6 +154,56 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 
   if (vertices.length < 2) return null;
 
+  // ── 후처리: 회전축을 도형에 강제 정렬 ──
+  const axisLabelNames = new Set<string>();
+
+  // 1) L로 시작하는 점
+  for (const v of vertices) {
+    if (/^L\d*$/i.test(v.label)) axisLabelNames.add(v.label);
+  }
+  // 2) lengths에서 "l" / "ℓ" 값을 가진 세그먼트의 꼭짓점
+  for (const len of lengths) {
+    if (len.value === 'l' || len.value === 'ℓ' || len.value === '\\ell') {
+      axisLabelNames.add(len.from);
+      axisLabelNames.add(len.to);
+    }
+  }
+  // 3) 기하학적 감지: 모든 세그먼트 중 거의 수직(x차이<0.5)이고 도형 오른쪽에 있는 것
+  const allSegs = [...segments, ...dashedSegments];
+  const tempVMap = new Map(vertices.map(v => [v.label, v]));
+  if (axisLabelNames.size === 0) {
+    for (const seg of allSegs) {
+      const v1 = tempVMap.get(seg[0]);
+      const v2 = tempVMap.get(seg[1]);
+      if (!v1 || !v2) continue;
+      const dx = Math.abs(v1.x - v2.x);
+      const dy = Math.abs(v1.y - v2.y);
+      // 수직 선분 (dx < 0.5, dy > 1) 이고 도형에서 가장 오른쪽 근처
+      if (dx < 0.5 && dy > 1) {
+        const nonAxisVerts = vertices.filter(v => v.label !== seg[0] && v.label !== seg[1]);
+        const maxX = nonAxisVerts.length > 0 ? Math.max(...nonAxisVerts.map(v => v.x)) : 0;
+        // 이 수직선이 도형 오른쪽 (maxX의 60% 이상)에 있으면 축으로 판단
+        if (v1.x >= maxX * 0.6) {
+          axisLabelNames.add(seg[0]);
+          axisLabelNames.add(seg[1]);
+        }
+      }
+    }
+  }
+
+  // 축 점들의 x좌표를 도형 가장 오른쪽 꼭짓점에 맞춤
+  if (axisLabelNames.size > 0) {
+    const nonAxisVerts = vertices.filter(v => !axisLabelNames.has(v.label));
+    if (nonAxisVerts.length > 0) {
+      const maxX = Math.max(...nonAxisVerts.map(v => v.x));
+      for (const v of vertices) {
+        if (axisLabelNames.has(v.label)) {
+          v.x = maxX;
+        }
+      }
+    }
+  }
+
   // 테마별 색상
   const colors = darkMode
     ? { stroke: '#d4d4d8', fill: '#e4e4e7', label: '#1f2937', length: '#6b7280', angle: '#60a5fa', dashed: '#a1a1aa', rightAngle: '#9ca3af' }
@@ -180,10 +221,14 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
   // 좌표 범위 계산
   const xs = vertices.map(v => v.x);
   const ys = vertices.map(v => v.y);
-  const rawMinX = Math.min(...xs);
-  const rawMaxX = Math.max(...xs);
-  const rawMinY = Math.min(...ys);
-  const rawMaxY = Math.max(...ys);
+  // 축 보조점은 스케일 계산에서 제외 (도형 크기 왜곡 방지)
+  const nonAxisVs = vertices.filter(v => !axisLabelNames.has(v.label));
+  const scaleXs = nonAxisVs.length >= 2 ? nonAxisVs.map(v => v.x) : xs;
+  const scaleYs = nonAxisVs.length >= 2 ? nonAxisVs.map(v => v.y) : ys;
+  const rawMinX = Math.min(...scaleXs);
+  const rawMaxX = Math.max(...scaleXs);
+  const rawMinY = Math.min(...scaleYs);
+  const rawMaxY = Math.max(...scaleYs);
 
   const width = 400;
   const height = 350;
@@ -213,6 +258,36 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" class="figure-geometry">`;
 
+  // ── 0. 회전축 (axisLabelNames가 있으면 도형 오른쪽 꼭짓점에 축 직접 그리기) ──
+  if (axisLabelNames.size > 0 && nonAxisVs.length > 0) {
+    // 가장 오른쪽 꼭짓점 찾기
+    const rightV = nonAxisVs.reduce((a, b) => a.x > b.x ? a : b);
+    const axisX = toSvgX(rightV.x);
+    const axisTop = padding * 0.3;
+    const axisBottom = height - padding * 0.5;
+    // 축 직선
+    svg += `<line x1="${axisX}" y1="${axisTop}" x2="${axisX}" y2="${axisBottom}" stroke="${colors.stroke}" stroke-width="1.8"/>`;
+    // "l" 라벨 (축 위쪽)
+    svg += `<text x="${axisX + 10}" y="${axisTop - 2}" text-anchor="start" font-size="16" font-style="italic" font-family="serif" fill="${colors.label}">l</text>`;
+    // 회전 화살표 (축 오른쪽, 시계방향 — 위→오른쪽→아래, 크고 선명하게)
+    const arrowCy = axisTop + 55;
+    const arrowRx = 22;
+    const arrowRy = 14;
+    // 위에서 시작 → 왼쪽(축 뒤)으로 돌아 → 아래에서 끝 (반시계 sweep=0, 왼쪽으로 열림)
+    const aTopX = axisX + 3;
+    const aTopY = arrowCy - arrowRy;
+    const aBotX = axisX + 3;
+    const aBotY = arrowCy + arrowRy;
+    svg += `<path d="M${aTopX},${aTopY} A${arrowRx},${arrowRy} 0 0 0 ${aBotX},${aBotY}" fill="none" stroke="${colors.stroke}" stroke-width="2"/>`;
+    // 화살촉 (아래쪽 끝, 왼쪽→아래 방향)
+    const aL = 8;
+    svg += `<polygon points="${aBotX},${aBotY} ${aBotX + aL},${aBotY - aL * 0.6} ${aBotX + aL * 0.3},${aBotY - aL}" fill="${colors.stroke}"/>`;
+  }
+
+  // 축 보조점 관련 세그먼트 필터링 (일반 세그먼트에서 제거)
+  const filteredSegments = segments.filter(s => !axisLabelNames.has(s[0]) && !axisLabelNames.has(s[1]));
+  const filteredDashed = dashedSegments.filter(s => !axisLabelNames.has(s[0]) && !axisLabelNames.has(s[1]));
+
   // ── 1. 음영 영역 (가장 먼저 그려서 뒤에 배치) ──
   for (const region of shadedRegions) {
     const points = region.vertices
@@ -221,7 +296,9 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
       .map(v => `${toSvgX(v!.x)},${toSvgY(v!.y)}`)
       .join(' ');
     if (points) {
-      const fillColor = SHADING_COLORS[region.color] || SHADING_COLORS.yellow;
+      // gray는 yellow로 강제 변환 (시험지 도형은 보통 노란색 음영)
+      const colorKey = region.color === 'gray' ? 'yellow' : region.color;
+      const fillColor = SHADING_COLORS[colorKey] || SHADING_COLORS.yellow;
       svg += `<polygon points="${points}" fill="${fillColor}" stroke="none"/>`;
     }
   }
@@ -241,8 +318,8 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     }
   }
 
-  // ── 3. 실선 (변) — 도형의 주요 선분 ──
-  for (const [fromLabel, toLabel] of segments) {
+  // ── 3. 실선 (변) — 축 세그먼트 제외 ──
+  for (const [fromLabel, toLabel] of filteredSegments) {
     const from = vertexMap.get(fromLabel);
     const to = vertexMap.get(toLabel);
     if (from && to) {
@@ -250,8 +327,8 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     }
   }
 
-  // ── 4. 점선 (보조선) ──
-  for (const [fromLabel, toLabel] of dashedSegments) {
+  // ── 4. 점선 (보조선) — 축 세그먼트 제외 ──
+  for (const [fromLabel, toLabel] of filteredDashed) {
     const from = vertexMap.get(fromLabel);
     const to = vertexMap.get(toLabel);
     if (from && to) {
@@ -295,24 +372,47 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
   }
 
   // ── 6. 길이 라벨 (변 중점에서 바깥쪽으로 오프셋) ──
+  // LaTeX 수식을 SVG tspan으로 변환 (위첨자/아래첨자)
+  function mathToSvgText(text: string): string {
+    let result = text;
+    // Unicode 위첨자 매핑 (가장 안정적)
+    const supMap: Record<string, string> = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', 'n': 'ⁿ' };
+    const subMap: Record<string, string> = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+    // ^{...} → Unicode 위첨자
+    result = result.replace(/\^{([^}]+)}/g, (_, s) => s.split('').map((c: string) => supMap[c] || c).join(''));
+    // ^단일문자 → Unicode 위첨자
+    result = result.replace(/\^([0-9n])/g, (_, c) => supMap[c] || c);
+    // _{...} → Unicode 아래첨자
+    result = result.replace(/_{([^}]+)}/g, (_, s) => s.split('').map((c: string) => subMap[c] || c).join(''));
+    // _단일문자 → Unicode 아래첨자
+    result = result.replace(/_([0-9])/g, (_, c) => subMap[c] || c);
+    // \times → ×
+    result = result.replace(/\\times/g, '×');
+    // \leq → ≤, \geq → ≥
+    result = result.replace(/\\leq/g, '≤').replace(/\\geq/g, '≥');
+    return result;
+  }
+
   for (const len of lengths) {
+    // 축 라벨은 이미 직접 그렸으므로 스킵
+    if (axisLabelNames.has(len.from) || axisLabelNames.has(len.to)) continue;
     const from = vertexMap.get(len.from);
     const to = vertexMap.get(len.to);
     if (from && to) {
       const mx = (toSvgX(from.x) + toSvgX(to.x)) / 2;
       const my = (toSvgY(from.y) + toSvgY(to.y)) / 2;
-      // 중심에서 변 중점으로의 방향 반대 = 바깥쪽
       const cx = toSvgX(centroidX);
       const cy = toSvgY(centroidY);
       const dx = mx - cx;
       const dy = my - cy;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const offsetLen = 14;
+      const offsetLen = 22;
       const ox = mx + (dx / dist) * offsetLen;
       const oy = my + (dy / dist) * offsetLen;
-      // 흰색 배경으로 선분 위 텍스트 가독성
-      svg += `<rect x="${ox - 16}" y="${oy - 8}" width="32" height="16" fill="white" opacity="0.85" rx="2"/>`;
-      svg += `<text x="${ox}" y="${oy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="sans-serif" fill="${colors.length}">${len.value}</text>`;
+      // 라벨 텍스트 너비 추정 (수식 길이에 따라)
+      const labelW = Math.max(32, len.value.length * 8);
+      svg += `<rect x="${ox - labelW/2}" y="${oy - 8}" width="${labelW}" height="16" fill="white" opacity="0.85" rx="2"/>`;
+      svg += `<text x="${ox}" y="${oy}" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="bold" font-family="serif" font-style="italic" fill="${colors.label}">${mathToSvgText(len.value)}</text>`;
     }
   }
 
@@ -356,9 +456,14 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     lx = Math.max(14, Math.min(width - 14, lx));
     ly = Math.max(14, Math.min(height - 6, ly));
 
+    // 축 보조점(L1, L2 등)은 라벨 숨기기
+    if (axisLabelNames.has(v.label)) continue;
+
     // 라벨 텍스트 (참조사이트 스타일: serif + italic)
     svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="normal" font-style="italic" font-family="serif" fill="${colors.label}">${v.label}</text>`;
   }
+
+  // (회전 화살표는 ── 0. 회전축 ── 에서 이미 렌더링됨)
 
   svg += '</svg>';
   return svg;

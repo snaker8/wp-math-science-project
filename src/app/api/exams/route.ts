@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     // ★ 시험지 목록 조회 (exam_problems 관계형 조인은 supabaseAdmin에서 0건 반환 이슈로 제거)
     const { data: exams, error: examsError } = await supabaseAdmin
       .from('exams')
-      .select('id, title, description, status, total_points, created_at, book_group_id')
+      .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade')
       .order('created_at', { ascending: false })
       .limit(200);
 
@@ -80,6 +80,9 @@ export async function GET(request: NextRequest) {
         school: schoolMatch?.[1] || '',
         year: yearMatch?.[1] || '',
         bookGroupId: exam.book_group_id || null,
+        subject: exam.subject || '공통수학1',
+        examType: exam.exam_type || '학교기출',
+        grade: exam.grade || '고1',
         createdAt: exam.created_at,
       };
     });

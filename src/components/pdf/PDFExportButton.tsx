@@ -11,6 +11,8 @@ import PDFOptionsModal from './PDFOptionsModal';
 import PDFPreviewModal from './PDFPreviewModal';
 import ExamTemplate from './ExamTemplate';
 import { downloadPDF } from '@/lib/pdf/generator';
+import { downloadHWPX } from '@/lib/export/hwpx-generator';
+import type { HwpxProblem } from '@/lib/export/hwpx-generator';
 import type { PDFProblem, PDFExamConfig } from '@/types/pdf';
 import { DEFAULT_PDF_CONFIG } from '@/types/pdf';
 
@@ -44,6 +46,7 @@ export default function PDFExportButton({
     ...initialConfig,
   });
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingHWPX, setIsGeneratingHWPX] = useState(false);
   const [progress, setProgress] = useState(0);
 
   // 숨겨진 렌더링 영역을 위한 ref
@@ -94,6 +97,37 @@ export default function PDFExportButton({
     }
   };
 
+  // HWPX 생성 및 다운로드
+  const handleGenerateHWPX = async (config: PDFExamConfig) => {
+    setIsGeneratingHWPX(true);
+    try {
+      const probs = getProblems();
+      // PDFProblem → HwpxProblem 변환
+      const hwpxProblems: HwpxProblem[] = probs.map(p => ({
+        number: p.number,
+        content: p.content,
+        choices: (p as any).choices || [],
+        answer: (p as any).answer,
+        solution: (p as any).solution,
+        points: p.points,
+      }));
+
+      await downloadHWPX(hwpxProblems, {
+        title: config.title || '수학 평가',
+        subtitle: config.subtitle,
+        instituteName: config.instituteName,
+        showNameField: config.showNameField,
+        showAnswerSheet: config.showAnswerSheet,
+        columns: config.layout === 'two-column' ? 2 : 1,
+      }, `${config.title || 'exam'}.hwpx`);
+    } catch (error) {
+      console.error('HWPX generation error:', error);
+      alert('HWP 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsGeneratingHWPX(false);
+    }
+  };
+
   const buttonClasses = {
     primary: `
       inline-flex items-center gap-2 px-5 py-2.5
@@ -138,8 +172,10 @@ export default function PDFExportButton({
         onClose={() => setShowOptionsModal(false)}
         onGenerate={handleGenerate}
         onPreview={handlePreview}
+        onGenerateHWPX={handleGenerateHWPX}
         initialConfig={initialConfig}
         isGenerating={isGenerating}
+        isGeneratingHWPX={isGeneratingHWPX}
         progress={progress}
       />
 

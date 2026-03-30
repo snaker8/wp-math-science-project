@@ -21,7 +21,11 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
             // 인라인 수식에서 분수(\frac), 합(\sum) 등이 축소되지 않도록
             // \displaystyle 을 자동 적용 (한국 수학 교재 표준)
             // ★ 이미 \displaystyle이 있으면 중복 추가하지 않음
-            const stripped = content.replace(/^\s*\\displaystyle\s*/, '').trim();
+            const stripped = content
+                .replace(/^\s*\\displaystyle\s*/, '')
+                // ★ KaTeX에서 \square가 기호로 인식 안 되는 문제 → 빈 네모 박스로 변환
+                .replace(/\\square/g, '\\boxed{\\phantom{X}}')
+                .trim();
             const processedContent = block ? stripped : `\\displaystyle ${stripped}`;
 
             return katex.renderToString(processedContent, {

@@ -30,6 +30,7 @@ interface ProblemEditModalProps {
   initialCognitiveDomain?: string;
   initialTypeCode?: string;
   initialTypeName?: string;
+  cropImageUrl?: string;
   onClose: () => void;
   onSaved: () => void;
   onDelete?: () => void;
@@ -96,6 +97,7 @@ function EditorToolbar({
   onInsertDivider,
   onInsertLink,
   onInsertGraph,
+  onCircleConvert,
   showPreview,
   onTogglePreview,
 }: {
@@ -109,6 +111,7 @@ function EditorToolbar({
   onInsertDivider: () => void;
   onInsertLink: () => void;
   onInsertGraph: () => void;
+  onCircleConvert: () => void;
   showPreview: boolean;
   onTogglePreview: () => void;
 }) {
@@ -155,6 +158,10 @@ function EditorToolbar({
       <button type="button" onClick={onInsertGraph}
         className="p-1 rounded text-green-500 hover:text-green-300 hover:bg-green-500/10 transition-colors" title="그래프 삽입">
         <LineChart className="h-3.5 w-3.5" />
+      </button>
+      <button type="button" onClick={onCircleConvert}
+        className="px-1.5 py-0.5 rounded text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 transition-colors" title="(1)(2)(3) → ①②③ 변환">
+        ①②③
       </button>
       <div className="w-px h-4 bg-zinc-700 mx-0.5" />
       <button type="button" onClick={onTogglePreview}
@@ -220,6 +227,11 @@ function EditorPanel({
     }
   };
 
+  const handleCircleConvert = () => {
+    const map: Record<string, string> = { '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤' };
+    onChange(value.replace(/\(([1-5])\)/g, (_, n) => map[n] || _));
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0 rounded-xl border border/60 bg-surface-card/80 overflow-hidden">
       {/* 레이블 + 툴바 */}
@@ -236,6 +248,7 @@ function EditorPanel({
           onInsertDivider={handleInsertDivider}
           onInsertLink={handleInsertLink}
           onInsertGraph={onOpenGraph}
+          onCircleConvert={handleCircleConvert}
           showPreview={showPreview}
           onTogglePreview={() => setShowPreview(!showPreview)}
         />
@@ -538,10 +551,47 @@ export function ProblemEditModal({
   initialCognitiveDomain,
   initialTypeCode,
   initialTypeName,
+  cropImageUrl,
   onClose,
   onSaved,
   onDelete,
 }: ProblemEditModalProps) {
+  // 텍스트 읽어내기 (OCR)
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const handleReadText = useCallback(async () => {
+    if (!cropImageUrl) return;
+    setIsOcrLoading(true);
+    try {
+      // 크롭 이미지 다운로드 → base64
+      const imgRes = await fetch(cropImageUrl);
+      const imgBlob = await imgRes.blob();
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(imgBlob);
+      });
+      // reanalyze-crop API 호출
+      const res = await fetch('/api/workflow/reanalyze-crop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, fullAnalysis: false, analyzeGraph: false }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ocrText && data.ocrText.trim()) {
+          setContent(data.ocrText);
+          if (data.choices && data.choices.length > 0) {
+            setChoices(data.choices.map((c: string) => c.replace(/^[①②③④⑤]\s*/, '')));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('OCR failed:', err);
+    } finally {
+      setIsOcrLoading(false);
+    }
+  }, [cropImageUrl]);
+
   // 문제 내용
   const [content, setContent] = useState(initialContent);
   const [solution, setSolution] = useState(initialSolution);
@@ -618,13 +668,23 @@ export function ProblemEditModal({
 
       // 정답 반영
       if (data.finalAnswer) {
-        const ans = data.finalAnswer;
-        // 숫자 1~5면 객관식 정답으로
-        if (/^[1-5]$/.test(String(ans))) {
+        const ans = String(data.finalAnswer).trim();
+        // ①~⑤ → 숫자 변환
+        const circledToNum: Record<string, number> = { '①': 1, '②': 2, '③': 3, '④': 4, '⑤': 5 };
+        const numFromCircled = circledToNum[ans];
+
+        if (numFromCircled) {
+          // ①~⑤ 형식
+          setAnswerType('objective');
+          setCorrectAnswer(numFromCircled);
+        } else if (/^[1-5]$/.test(ans)) {
+          // 숫자 1~5
           setAnswerType('objective');
           setCorrectAnswer(Number(ans));
         } else {
-          setSubjectiveAnswer(String(ans));
+          // 주관식 정답
+          setAnswerType('subjective');
+          setSubjectiveAnswer(ans);
         }
       }
 
@@ -837,6 +897,16 @@ export function ProblemEditModal({
               onOpenLatex={() => openLatexModal('content')}
               onOpenGraph={() => openGraphModal('content')}
             />
+            {cropImageUrl && (
+              <button
+                type="button"
+                onClick={handleReadText}
+                disabled={isOcrLoading}
+                className="mx-3 mb-2 px-3 py-1.5 text-xs rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-medium flex items-center gap-1.5"
+              >
+                {isOcrLoading ? '읽는 중...' : '📄 텍스트 읽어내기'}
+              </button>
+            )}
           </div>
 
           {/* 중: 해설 에디터 */}

@@ -39,7 +39,7 @@ interface FigureRendererProps {
   /** ★ 업스케일된 크롭 이미지 URL (최우선) */
   upscaledCropUrl?: string;
   /** 도형 소스 타입 */
-  figureSource?: 'upscaled_crop' | 'ai_generated' | undefined;
+  figureSource?: 'upscaled_crop' | 'ai_generated' | 'diagram_db' | 'original_crop' | undefined;
   /** 최대 너비 */
   maxWidth?: number;
   /** 추가 클래스 */
@@ -93,6 +93,7 @@ export function FigureRenderer({
     xRange: [number, number];
     yRange: [number, number];
     imageDataUrl: string;
+    desmosState?: unknown;
   }) => {
     // 부모 콜백 호출
     if (onGraphEdited) {
@@ -102,35 +103,55 @@ export function FigureRenderer({
     // problemId가 있으면 직접 DB 업데이트
     if (problemId) {
       try {
+        // ★ 원본 rendering 완전 보존 + 사용자 추가 수식만 합침
+        const origRendering = figureData?.rendering as Record<string, unknown> | undefined;
+        const origExpressions = (origRendering?.expressions || []) as Array<{ latex: string; color?: string; style?: string }>;
+
+        // 사용자가 추가한 수식 추출 (원본에 없는 것, 헬퍼 제외)
+        const origLatexSet = new Set(origExpressions.map(e => e.latex.trim()));
+        const userAddedExprs = data.expressions
+          .filter(e => {
+            const latex = e.latex.trim();
+            if (origLatexSet.has(latex)) return false;
+            // 슬라이더/변수 대입
+            // 슬라이더 변수 — x, y는 제외 (x=-4는 점근선/직선)
+            if (/^[a-wz](_\{?\d+\}?)?\s*=\s*-?[\d.]+$/.test(latex)) return false;
+            // 포인트
+            if (/^[A-Z](_\{?\d+\}?)?\s*=\s*\(/.test(latex)) return false;
+            // 투영선 파라메트릭
+            if (/^\(\s*[xy]_\{?\d+\}?\s*,\s*t\s*\)$/.test(latex)) return false;
+            if (/^\(\s*t\s*,\s*[xy]_\{?\d+\}?\s*\)$/.test(latex)) return false;
+            return true;
+          })
+          .map(e => ({ latex: e.latex, color: e.color || '#888888', style: 'solid' }));
+
         const res = await fetch(`/api/problems/${problemId}/update-figure`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             figureType: 'graph',
             rendering: {
+              ...(origRendering || {}),
               type: 'graph',
-              expressions: data.expressions.map(e => ({
-                latex: e.latex,
-                color: e.color || '#2563eb',
-                style: 'solid',
-              })),
+              // 원본 수식 + 사용자 추가 수식 합치기
+              expressions: [...origExpressions, ...userAddedExprs],
               xRange: data.xRange,
               yRange: data.yRange,
-              points: [],
-              annotations: [],
+              // Desmos 전체 상태 + 스크린샷 저장
+              desmosState: data.desmosState,
+              editedImageDataUrl: data.imageDataUrl,
             },
           }),
         });
         if (res.ok) {
           console.log(`[FigureRenderer] ✅ 그래프 편집 저장 완료 (problem ${problemId})`);
-          // ★ 저장 성공 → 페이지 데이터 갱신 이벤트 발행
           window.dispatchEvent(new CustomEvent('graph-edited', { detail: { problemId } }));
         }
       } catch (err) {
         console.error(`[FigureRenderer] 그래프 편집 저장 실패:`, err);
       }
     }
-  }, [problemId, onGraphEdited]);
+  }, [problemId, onGraphEdited, figureData]);
 
   // ★ 0. 업스케일된 크롭 이미지 (최우선 — 원본이 쓸만할 때 AI 생성 없이 사용)
   // UpscaledImage 컴포넌트로 분리하여 로드 실패 시 자동 폴백 처리
@@ -156,15 +177,41 @@ export function FigureRenderer({
   if (figureData && figureData.confidence >= 0.3 && figureData.figureType !== 'photo' && figureData.rendering) {
     const isGraph = figureData.rendering.type === 'graph';
     const graphRendering = isGraph ? figureData.rendering as GraphRendering : null;
+    const savedDesmosState = (figureData.rendering as Record<string, unknown>)?.desmosState;
 
     return (
       <div className={`relative group ${className}`} style={{ maxWidth }}>
-        <TypedFigureRenderer
-          figureType={figureData.figureType}
-          rendering={figureData.rendering}
-          darkMode={darkMode}
-          maxWidth={maxWidth}
-        />
+        {/* ★ 편집된 스크린샷이 있으면 이미지 표시, 없으면 기존 렌더링 */}
+        {isGraph && (figureData.rendering as Record<string, unknown>)?.editedImageDataUrl ? (
+          <div className={`relative rounded-lg overflow-hidden border ${darkMode ? 'border-zinc-700 bg-white' : 'border-gray-200'}`}>
+            <img
+              src={(figureData.rendering as Record<string, unknown>).editedImageDataUrl as string}
+              alt="편집된 그래프"
+              style={{ width: maxWidth, height: 'auto', display: 'block' }}
+            />
+            {/* ★ 원본 annotations 오버레이 (수식, 라벨) */}
+            {graphRendering?.annotations && graphRendering.annotations.length > 0 && (
+              <div className="absolute top-2 right-3 text-right" style={{ fontFamily: "'Times New Roman', Georgia, serif", fontStyle: 'italic', fontSize: '13px', color: '#1f2937', lineHeight: 1.5 }}>
+                {graphRendering.annotations.map((anno, i) => (
+                  <div key={i} dangerouslySetInnerHTML={{ __html: anno
+                    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<sup>$1</sup>&frasl;<sub>$2</sub>')
+                    .replace(/\\log/g, 'log')
+                    .replace(/\\[a-zA-Z]+/g, '')
+                    .replace(/[{}]/g, '')
+                  }} />
+                ))}
+              </div>
+            )}
+            {/* points 라벨은 스크린샷에 포함되므로 오버레이 불필요 */}
+          </div>
+        ) : (
+          <TypedFigureRenderer
+            figureType={figureData.figureType}
+            rendering={figureData.rendering}
+            darkMode={darkMode}
+            maxWidth={maxWidth}
+          />
+        )}
         {/* ★ 그래프 편집 버튼 — hover 시 표시 */}
         {editable && isGraph && graphRendering && (
           <>
@@ -195,6 +242,7 @@ export function FigureRenderer({
                     xRange: graphRendering.xRange,
                     yRange: graphRendering.yRange,
                     points: graphRendering.points,
+                    desmosState: savedDesmosState, // ★ 이전 편집 상태 복원
                   }}
                   onSaveGraphData={handleGraphSave}
                 />
@@ -357,14 +405,13 @@ function GeometryFigure({
   darkMode: boolean;
 }) {
   const svgResult = useMemo(() => {
-    // 프로그래밍 기반 SVG만 사용 (Vision SVG는 빗금/손글씨 문제로 사용하지 않음)
-    // 코드가 polygon fill로 음영을 그리므로 빗금 문제 없음
+    // ★ AI 직접 생성 SVG 우선 (호/곡선/부채꼴 등 복잡 도형 정확)
+    if (rendering.svg) return rendering.svg;
+    // 프로그래밍 기반 SVG 폴백 (직선/다각형만 가능)
     if (rendering.vertices.length >= 2) {
       const programmatic = generateGeometrySVG(rendering, false);
       if (programmatic) return programmatic;
     }
-    // Legacy Vision SVG fallback (기존 데이터 호환)
-    if (rendering.svg) return rendering.svg;
     return null;
   }, [rendering]);
 
@@ -397,13 +444,13 @@ function TableFigure({
   darkMode: boolean;
 }) {
   const svgResult = useMemo(() => {
-    // 프로그래밍 기반 SVG만 사용 (Vision SVG는 손글씨 재현 문제로 사용하지 않음)
+    // ★ AI 직접 생성 SVG 우선
+    if (rendering.svg) return rendering.svg;
+    // 프로그래밍 기반 SVG 폴백
     if (rendering.headers.length > 0 || rendering.rows.length > 0) {
       const programmatic = generateTableSVG(rendering);
       if (programmatic) return programmatic;
     }
-    // Legacy Vision SVG fallback (기존 데이터 호환)
-    if (rendering.svg) return rendering.svg;
     return null;
   }, [rendering]);
 

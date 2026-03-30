@@ -58,7 +58,9 @@ export async function POST(
     const images: Array<{ url: string; type: string; label: string }> =
       Array.isArray(problem.images) ? problem.images : [];
 
-    const cropImage = images.find((img) => img.type === 'crop');
+    // ★ figure_crop(수동 삽입 도형) 우선, 없으면 crop(문제 전체)
+    const figureCropImage = images.find((img) => img.type === 'figure_crop');
+    const cropImage = figureCropImage || images.find((img) => img.type === 'crop');
     // crop이 없으면 다른 소스에서 이미지 URL 찾기 (우선순위)
     const aiAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
     const figureData = aiAnalysis.figureData as Record<string, unknown> | undefined;
@@ -221,7 +223,9 @@ export async function POST(
     // 원본 크롭이 쓸만하면 업스케일만으로 완료 → AI Vision 호출 스킵
     // ================================================================
     const body = await request.clone().json().catch(() => ({}));
-    const forceAI = body?.forceAI === true || isPageCrop; // 페이지 크롭은 문제 전체 포함 → AI 필수
+    // ★ figure_crop이 없고 crop(문제 전체 영역)만 있으면 → 업스케일하면 문제 전체가 나옴 → AI 필수
+    const isCropOnly = !figureCropImage && !!cropImage;
+    const forceAI = body?.forceAI === true || isPageCrop || isCropOnly;
     const upscaleOnly = body?.upscaleOnly === true; // ★ 업스케일만 (AI 폴백 없음)
 
     if (upscaleOnly && !imageRawBuffer) {
@@ -229,7 +233,13 @@ export async function POST(
       return NextResponse.json({ success: true, noFigure: true, reason: 'no_crop_image' });
     }
 
-    if ((!forceAI || upscaleOnly) && imageRawBuffer) {
+    // ★ isCropOnly일 때 upscaleOnly 모드면 → 업스케일하면 문제 전체가 나옴 → 스킵
+    if (upscaleOnly && isCropOnly) {
+      console.log(`[generate-figure] ⚠️ crop(문제 전체)만 있어서 업스케일 스킵 (figure_crop 없음)`);
+      return NextResponse.json({ success: true, noFigure: true, reason: 'crop_is_full_problem' });
+    }
+
+    if ((!forceAI || (upscaleOnly && !isCropOnly)) && imageRawBuffer) {
       console.log(`[generate-figure] ★ 업스케일 우선 시도 (forceAI=${forceAI})`);
       const upscaleResult = await tryUpscaleCrop(imageRawBuffer);
 
@@ -354,9 +364,10 @@ export async function POST(
       });
     }
 
-    // 6. 레거시 figureSvg 생성 (하위 호환성)
+    // 6. figureSvg 결정: 항상 코드 기반 SVG 사용 (AI SVG는 부정확하므로 무시)
     let legacySvg: string | undefined;
     if (interpreted.rendering?.type === 'geometry') {
+      // ★ AI SVG(rendering.svg) 무시 → 코드 기반 SVG만 사용
       legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
     }
 

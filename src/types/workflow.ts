@@ -32,6 +32,10 @@ export interface UploadJob {
   autoClassify?: boolean;
   generateSolutions?: boolean;
   bookGroupId?: string | null;  // ★ 클라우드 북그룹 ID (자산화 시 사용)
+  appendToExamId?: string;       // ★ 기존 시험지에 병합 (문제 추가 기능)
+  subjectArea?: 'math' | 'science';  // ★ 과목 영역 (수학/과학)
+  scienceSubject?: string;           // ★ 과학 세부 과목 코드 (ScienceSubjectCode)
+  curriculumVersion?: '2015' | '2022'; // ★ 교육과정 버전
   error?: string;
   createdAt: string;
   updatedAt: string;

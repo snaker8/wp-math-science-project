@@ -24,6 +24,7 @@ import {
   CreditCard,
   Sparkles,
   HelpCircle,
+  ImageIcon,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -68,6 +69,14 @@ export const dashboardNavItems: NavItem[] = [
     label: '학원자료',
     description: '학원 교재 및 자료',
     activeColor: 'bg-emerald-500/10 text-emerald-500',
+    group: 'main',
+  },
+  {
+    href: '/dashboard/materials/diagrams',
+    icon: ImageIcon,
+    label: '도식 갤러리',
+    description: '추출된 과학/수학 도식 이미지',
+    activeColor: 'bg-teal-500/10 text-teal-500',
     group: 'main',
   },
   {
@@ -240,10 +249,18 @@ export const topNavGroups: NavGroup[] = [
     icon: FolderOpen,
     children: [
       dashboardNavItems[1], // 시험지저장소
-      dashboardNavItems[6], // 과사람클라우드
-      dashboardNavItems[5], // 유형/문제관리
+      dashboardNavItems[7], // 과사람클라우드
+      dashboardNavItems[6], // 유형/문제관리
+      dashboardNavItems[5], // 출판교재유사
+    ],
+  },
+  {
+    id: 'materials',
+    label: '학원자료',
+    icon: BookOpen,
+    children: [
       dashboardNavItems[3], // 학원자료
-      dashboardNavItems[4], // 출판교재유사
+      dashboardNavItems[4], // 도식 갤러리
     ],
   },
   {
@@ -252,7 +269,7 @@ export const topNavGroups: NavGroup[] = [
     icon: SquarePen,
     children: [
       dashboardNavItems[2], // 시험지출제
-      dashboardNavItems[7], // 시험지관리
+      dashboardNavItems[8], // 시험지관리
     ],
   },
   {

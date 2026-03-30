@@ -34,14 +34,17 @@ export async function GET(request: NextRequest) {
       .from('source-files')
       .download(downloadPath);
 
-    // 변환 PDF가 없으면 원본 경로로 폴백
+    // 변환 PDF가 없으면: HWP는 에러 반환 (원본 HWP를 PDF.js에 넘기면 깨짐)
     if (error && downloadPath !== storagePath) {
-      console.warn(`[PDF Proxy] 변환 PDF 없음, 원본으로 폴백: ${storagePath}`);
-      const fallback = await supabaseAdmin.storage
-        .from('source-files')
-        .download(storagePath);
-      data = fallback.data;
-      error = fallback.error;
+      console.warn(`[PDF Proxy] 변환 PDF 없음: ${storagePath}`);
+      return NextResponse.json(
+        {
+          error: 'HWP_NOT_CONVERTED',
+          message: 'HWP 파일의 PDF 변환본이 없습니다. LibreOffice를 설치하면 자동 변환됩니다.',
+          path: storagePath,
+        },
+        { status: 422 }
+      );
     }
 
     if (error || !data) {

@@ -294,11 +294,16 @@ export default function CreateExamPage() {
                       </div>
                       {problem.choices.length > 0 && (
                         <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
-                          {problem.choices.map((choice, ci) => (
-                            <div key={ci} className="text-[13px] text-gray-700">
-                              <MixedContentRenderer content={choice} className="text-gray-700" />
-                            </div>
-                          ))}
+                          {problem.choices.map((choice, ci) => {
+                            const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
+                            const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
+                            return (
+                              <div key={ci} className="flex items-start gap-1 text-[13px] text-gray-700">
+                                <span className="flex-shrink-0 text-gray-500">{prefix}</span>
+                                <MixedContentRenderer content={stripped} className="text-gray-700" />
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

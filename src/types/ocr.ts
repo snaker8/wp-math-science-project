@@ -202,6 +202,12 @@ export interface GeometryRendering {
     radius: number;
     style?: 'solid' | 'dashed';
   }>;
+  /** 기하 주석 (회전 화살표 등) */
+  geoAnnotations?: Array<{
+    type: 'rotation';
+    center: string;  // 회전축 위쪽 꼭짓점 라벨
+    direction: 'cw' | 'ccw';
+  }>;
 }
 
 /**

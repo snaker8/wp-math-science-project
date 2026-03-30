@@ -68,13 +68,19 @@ export function ProblemCard({ index, problem, points }: ProblemCardProps) {
   const domainLabel = COGNITIVE_DOMAIN_LABELS[domain] || domain;
   const domainColor = DOMAIN_COLORS[domain] || DOMAIN_COLORS['UNDERSTANDING'];
 
-  // 콘텐츠 분리: 본문 vs 선택지
-  const content = problem.content_latex || '';
-  const { body, choices } = extractChoices(content);
-
   // 정답
   const answerJson = problem.answer_json as any;
   const finalAnswer = answerJson?.finalAnswer || answerJson?.correct_answer || '';
+
+  // 콘텐츠 분리: 본문 vs 선택지
+  const content = problem.content_latex || '';
+  const { body, choices: extractedChoices } = extractChoices(content);
+
+  // ★ 1순위: answer_json.choices (자산화 시 별도 저장된 선택지), 2순위: content_latex에서 추출
+  const answerChoices: string[] = Array.isArray(answerJson?.choices) ? answerJson.choices : [];
+  const choices = answerChoices.length > 0 ? answerChoices : extractedChoices;
+  // answer_json.choices가 있으면 body를 full content로 사용 (content_latex에서 추출할 필요 없음)
+  const bodyText = answerChoices.length > 0 ? content : body;
 
   // source에서 학교/연도 추출
   const sourceTags = extractSourceTags(problem.source_name);
@@ -113,39 +119,53 @@ export function ProblemCard({ index, problem, points }: ProblemCardProps) {
       {/* 문제 본문 */}
       <div className="pl-7">
         <MixedContentRenderer
-          content={body}
+          content={bodyText}
           className="text-sm text-gray-800 leading-relaxed"
         />
 
-        {/* 크롭 이미지 표시 (content_latex에 이미지 마크다운이 없는 경우만 — 이전 자산화 호환) */}
-        {problem.images && problem.images.length > 0 && !content.includes('![') && (
-          <div className="mt-2 space-y-2">
-            {problem.images.map((img, i) => (
-              <img
-                key={i}
-                src={img.url}
-                alt={img.label || '문제 이미지'}
-                className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm"
-                style={{ maxHeight: '400px' }}
-                loading="lazy"
-              />
-            ))}
-          </div>
-        )}
+        {/* 크롭 이미지 표시: 도형 포함 문제(hasFigure)이고 AI 도형이 아직 없는 경우에만 원본 크롭 표시 */}
+        {(() => {
+          const hasFigure = problem.ai_analysis?.hasFigure === true;
+          const hasAIFigure = !!(problem.ai_analysis?.figureData || problem.ai_analysis?.figureSvg || problem.ai_analysis?.upscaledCropUrl);
+          const figureImages = (problem.images || []).filter(img => img.type === 'crop');
+          // 도형 문제이면서 AI 도형이 아직 없는 경우에만 원본 크롭 이미지 표시
+          if (hasFigure && !hasAIFigure && figureImages.length > 0 && !content.includes('![')) {
+            return (
+              <div className="mt-2 space-y-2">
+                {figureImages.map((img, i) => (
+                  <img
+                    key={i}
+                    src={img.url}
+                    alt={img.label || '문제 이미지'}
+                    className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm"
+                    style={{ maxHeight: '400px' }}
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* 배점 표시 */}
         {points && (
           <span className="text-xs text-gray-400 ml-1">[{points}점]</span>
         )}
 
-        {/* 선택지 */}
+        {/* 선택지 — ① 번호를 분리하여 MixedContentRenderer의 stripTrailingChoiceLines 회피 */}
         {choices.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1">
-            {choices.map((choice, i) => (
-              <div key={i} className="text-sm text-gray-700">
-                <MixedContentRenderer content={choice} />
-              </div>
-            ))}
+            {choices.map((choice, i) => {
+              const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
+              const prefix = ['①', '②', '③', '④', '⑤'][i] || '';
+              return (
+                <div key={i} className="flex items-start gap-1 text-sm text-gray-700">
+                  <span className="flex-shrink-0 text-gray-500">{prefix}</span>
+                  <MixedContentRenderer content={stripped} />
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -190,6 +210,16 @@ function extractChoices(text: string): { body: string; choices: string[] } {
         .filter((idx) => idx > start);
       const end = nextStarts.length > 0 ? Math.min(...nextStarts) : choiceSection.length;
       choices.push(choiceSection.substring(start, end).trim());
+    }
+
+    // ★ 서술형 소문제 검증: 선택지 내용이 길거나 서술형 키워드가 있으면 선택지가 아님
+    const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오|넓이를?\s*구|길이를?\s*구|값을?\s*구|과정을?\s*쓰|\[\s*\d+\s*점\s*\]|\d+점/;
+    const choiceTexts = choices.map(c => c.replace(/^[①②③④⑤]\s*/, '').trim());
+    const longCount = choiceTexts.filter(c => c.length > 30).length;
+    const subProblemCount = choiceTexts.filter(c => subProblemKeywords.test(c)).length;
+    if (subProblemCount > 0 || (longCount >= 2 && choices.length <= 3)) {
+      // 서술형 소문제 → 선택지 분리 안 함
+      return { body: text, choices: [] };
     }
 
     return { body, choices };

@@ -12,6 +12,7 @@ import { Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 interface DesmosCalcInstance {
   setExpression: (expr: { id: string; latex?: string; color?: string; hidden?: boolean; pointStyle?: string; dragMode?: string }) => void;
   removeExpression: (expr: { id: string }) => void;
+  setState: (state: unknown) => void;
   setMathBounds: (bounds: { left: number; right: number; bottom: number; top: number }) => void;
   getExpressions: () => Array<{ id: string; latex?: string; color?: string }>;
   destroy: () => void;
@@ -28,6 +29,8 @@ interface InlineDesmosGraphProps {
   className?: string;
   showExpressions?: boolean; // 수식 목록 표시 여부
   darkMode?: boolean; // 다크 테마 여부 (기본: false)
+  /** ★ Desmos 전체 상태 (편집 후 저장된 상태 복원용) */
+  desmosState?: unknown;
 }
 
 const COLORS = ['#2d70b3', '#388c46', '#fa7e19', '#c74440', '#6042a6', '#000000'];
@@ -94,6 +97,7 @@ export function InlineDesmosGraph({
   className = '',
   showExpressions = false,
   darkMode = false,
+  desmosState,
 }: InlineDesmosGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const calculatorRef = useRef<DesmosCalcInstance | null>(null);

@@ -158,27 +158,32 @@ function extractChoicesFromLatex(latex: string): { content: string; choices: str
 // answer_json에서 정답 번호 추출
 // ============================================================================
 
+/** ①~⑤ → 1~5 매핑 */
+const CIRCLED_TO_NUM: Record<string, number> = { '①': 1, '②': 2, '③': 3, '④': 4, '⑤': 5 };
+
 function extractAnswerNumber(answerJson: Record<string, unknown>): number | string {
-  // 다양한 포맷 지원
-  if (answerJson.correct_answer !== undefined) {
-    const ans = answerJson.correct_answer;
-    if (typeof ans === 'number') return ans;
-    if (typeof ans === 'string') {
-      const num = parseInt(ans, 10);
-      if (!isNaN(num) && num >= 1 && num <= 5) return num;
-      return ans;
+  // 다양한 포맷 지원 (우선순위 순)
+  const candidates = ['correct_answer', 'finalAnswer', 'answer', 'value'];
+  for (const key of candidates) {
+    if (answerJson[key] !== undefined && answerJson[key] !== null && answerJson[key] !== '') {
+      const ans = answerJson[key];
+      if (typeof ans === 'number') {
+        // 1~5 → 객관식 번호, 그 외 정수는 주관식 정답
+        return ans;
+      }
+      if (typeof ans === 'string' && ans.trim()) {
+        const trimmed = ans.trim();
+        // ★ ①~⑤로 시작하면 객관식 답번호 추출 (선택지 텍스트 포함 시)
+        const firstChar = trimmed.charAt(0);
+        if (CIRCLED_TO_NUM[firstChar]) return CIRCLED_TO_NUM[firstChar];
+        // 순수 정수 문자열 → 숫자 반환
+        const num = parseInt(trimmed, 10);
+        if (!isNaN(num) && String(num) === trimmed) return num;
+        // 그 외 문자열 (수식 등) 그대로 반환
+        return trimmed;
+      }
     }
   }
-  if (answerJson.answer !== undefined) {
-    const ans = answerJson.answer;
-    if (typeof ans === 'number') return ans;
-    if (typeof ans === 'string') {
-      const num = parseInt(ans, 10);
-      if (!isNaN(num)) return num;
-      return ans;
-    }
-  }
-  if (answerJson.value !== undefined) return answerJson.value as number;
   if (answerJson.values !== undefined) return String(answerJson.values);
 
   return '-';
@@ -414,12 +419,33 @@ export function useExamProblems(examId: string | null) {
     fetchProblems();
   }, [fetchProblems]);
 
+  // 기존 시험지에 문제 추가
+  const addProblems = useCallback(async (problemIds: string[]) => {
+    if (!examId || problemIds.length === 0) return { success: false, added: 0 };
+    try {
+      const res = await fetch(`/api/exams/${examId}/problems`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problemIds }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await fetchProblems(); // 목록 새로고침
+      }
+      return data;
+    } catch (err: any) {
+      console.error('[useExamProblems] addProblems error:', err.message);
+      return { success: false, error: err.message };
+    }
+  }, [examId, fetchProblems]);
+
   return {
     problems,
     examInfo,
     isLoading,
     error,
     refetch: fetchProblems,
+    addProblems,
   };
 }
 
@@ -512,6 +538,7 @@ export interface ExamListItem {
   id: string;
   title: string;
   subject: string | null;
+  examType: string | null;
   grade: string | null;
   status: string;
   problemCount: number;
@@ -534,7 +561,7 @@ export function useExamList() {
     try {
       const { data, error: fetchError } = await supabaseBrowser
         .from('exams')
-        .select('id, title, status, total_points, created_at, exam_problems(count)')
+        .select('id, title, subject, exam_type, grade, status, total_points, created_at, exam_problems(count)')
         .is('deleted_at', null)
         // 클라우드 업로드 시험지도 시험관리에서 표시 (DRAFT 상태)
         .order('created_at', { ascending: false })
@@ -551,8 +578,9 @@ export function useExamList() {
         (data || []).map((e: any) => ({
           id: e.id,
           title: e.title,
-          subject: null,
-          grade: null,
+          subject: e.subject || '공통수학1',
+          examType: e.exam_type || '학교기출',
+          grade: e.grade || '',
           status: e.status,
           problemCount: e.exam_problems?.[0]?.count ?? 0,
           createdAt: e.created_at,

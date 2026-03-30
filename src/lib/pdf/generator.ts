@@ -154,10 +154,13 @@ export async function downloadPDF(options: GeneratePDFOptions): Promise<void> {
 }
 
 /**
- * 수식 렌더링 완료 대기
+ * 수식 렌더링 완료 대기 (최대 3초 타임아웃)
  */
 async function waitForMathRendering(element: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
+    const MAX_WAIT_MS = 3000; // 최대 3초 대기
+    const startTime = Date.now();
+
     // KaTeX 요소가 있는지 확인
     const mathElements = element.querySelectorAll('.katex, .katex-display, .MathJax');
 
@@ -166,10 +169,16 @@ async function waitForMathRendering(element: HTMLElement): Promise<void> {
       return;
     }
 
-    // 모든 수식이 렌더링될 때까지 대기
+    // 모든 수식이 렌더링될 때까지 대기 (타임아웃 포함)
     const checkRendering = () => {
+      // 타임아웃 체크 — 무한 루프 방지
+      if (Date.now() - startTime > MAX_WAIT_MS) {
+        console.warn('[waitForMathRendering] Timeout after', MAX_WAIT_MS, 'ms — proceeding anyway');
+        resolve();
+        return;
+      }
+
       const allRendered = Array.from(mathElements).every((el) => {
-        // KaTeX 요소의 크기가 0이 아닌지 확인
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
       });

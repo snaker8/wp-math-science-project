@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { background: white; display: flex; justify-content: center; padding: 20px; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 340" width="780" height="340" font-family="'Malgun Gothic', sans-serif">
+  <defs>
+    <!-- 비커 (원본 스타일: 직선적, 단순) -->
+    <g id="bk">
+      <!-- 몸체: 양쪽 직선 + 아래는 곡선으로 바닥 타원에 연결 -->
+      <path d="M12,28 L12,125 Q12,141 70,141 Q128,141 128,125 L128,28"
+            fill="none" stroke="black" stroke-width="2"/>
+      <!-- 주둥이: 왼쪽에 작은 부리 -->
+      <path d="M12,28 Q6,24 4,20 Q3,17 8,22 Q10,24 12,28" fill="white" stroke="black" stroke-width="1.5"/>
+      <!-- 입구 타원 -->
+      <ellipse cx="70" cy="28" rx="58" ry="7" fill="none" stroke="black" stroke-width="1.8"/>
+      <!-- 용액 수면 (단순 타원) -->
+      <ellipse cx="70" cy="48" rx="56" ry="6" fill="rgba(220,235,250,0.4)" stroke="black" stroke-width="0.8"/>
+      <!-- 바닥 타원 뒷면만 점선 (앞면은 몸체 곡선이 담당) -->
+      <path d="M12,133 A58,8 0 0,1 128,133" fill="none" stroke="black" stroke-width="1" stroke-dasharray="5,4"/>
+    </g>
+    <!-- 도형들 -->
+    <g id="cw"><circle cx="0" cy="0" r="6.5" fill="white" stroke="black" stroke-width="1.3"/></g>
+    <g id="tg"><polygon points="0,-7.5 6.5,5.5 -6.5,5.5" fill="#999" stroke="black" stroke-width="1.3"/></g>
+    <g id="tw"><polygon points="0,-7.5 6.5,5.5 -6.5,5.5" fill="white" stroke="black" stroke-width="1.3"/></g>
+    <g id="sd"><rect x="-5.5" y="-5.5" width="11" height="11" fill="#666" stroke="black" stroke-width="1.3"/></g>
+    <g id="sw">
+      <polygon points="0,-8.5 2.2,-2.8 8.5,-2.8 3.5,1.5 5.5,7.5 0,4 -5.5,7.5 -3.5,1.5 -8.5,-2.8 -2.2,-2.8"
+             fill="white" stroke="black" stroke-width="1.1"/>
+    </g>
+  </defs>
+
+  <!-- ① ○3, △3 -->
+  <g transform="translate(5, 15)">
+    <text x="2" y="-2" font-size="16" font-weight="bold">①</text>
+    <g transform="translate(22,0)">
+      <use href="#bk"/>
+      <use href="#cw" x="35" y="72"/><use href="#tg" x="70" y="70"/><use href="#cw" x="105" y="74"/>
+      <use href="#tw" x="35" y="100"/><use href="#cw" x="70" y="102"/><use href="#tg" x="105" y="98"/>
+    </g>
+  </g>
+
+  <!-- ② ☆3, △2 -->
+  <g transform="translate(190, 15)">
+    <text x="2" y="-2" font-size="16" font-weight="bold">②</text>
+    <g transform="translate(22,0)">
+      <use href="#bk"/>
+      <use href="#sw" x="35" y="72"/><use href="#tg" x="70" y="70"/><use href="#sw" x="105" y="74"/>
+      <use href="#tg" x="45" y="102"/><use href="#sw" x="85" y="100"/>
+    </g>
+  </g>
+
+  <!-- ③ □3, △1, ☆1 -->
+  <g transform="translate(375, 15)">
+    <text x="2" y="-2" font-size="16" font-weight="bold">③</text>
+    <g transform="translate(22,0)">
+      <use href="#bk"/>
+      <use href="#sd" x="35" y="72"/><use href="#tg" x="70" y="70"/><use href="#sd" x="105" y="74"/>
+      <use href="#sw" x="45" y="102"/><use href="#sd" x="85" y="100"/>
+    </g>
+  </g>
+
+  <!-- ④ △3, ☆2, □1 -->
+  <g transform="translate(70, 195)">
+    <text x="2" y="-2" font-size="16" font-weight="bold">④</text>
+    <g transform="translate(22,0)">
+      <use href="#bk"/>
+      <use href="#tw" x="35" y="72"/><use href="#sw" x="70" y="70"/><use href="#tw" x="105" y="74"/>
+      <use href="#tw" x="35" y="102"/><use href="#sw" x="70" y="100"/><use href="#sd" x="105" y="98"/>
+    </g>
+  </g>
+
+  <!-- ⑤ □2, ☆2, △1 -->
+  <g transform="translate(310, 195)">
+    <text x="2" y="-2" font-size="16" font-weight="bold">⑤</text>
+    <g transform="translate(22,0)">
+      <use href="#bk"/>
+      <use href="#sd" x="35" y="72"/><use href="#sw" x="70" y="70"/><use href="#tw" x="105" y="74"/>
+      <use href="#sd" x="45" y="102"/><use href="#sw" x="85" y="100"/>
+    </g>
+  </g>
+</svg>
+</body>
+</html>

@@ -25,8 +25,10 @@ interface PDFOptionsModalProps {
   onClose: () => void;
   onGenerate: (config: PDFExamConfig) => void;
   onPreview: (config: PDFExamConfig) => void;
+  onGenerateHWPX?: (config: PDFExamConfig) => void;
   initialConfig?: Partial<PDFExamConfig>;
   isGenerating?: boolean;
+  isGeneratingHWPX?: boolean;
   progress?: number;
 }
 
@@ -35,8 +37,10 @@ export default function PDFOptionsModal({
   onClose,
   onGenerate,
   onPreview,
+  onGenerateHWPX,
   initialConfig,
   isGenerating = false,
+  isGeneratingHWPX = false,
   progress = 0,
 }: PDFOptionsModalProps) {
   const [config, setConfig] = useState<PDFExamConfig>({
@@ -507,11 +511,22 @@ export default function PDFOptionsModal({
             <button
               className="btn-primary"
               onClick={() => onGenerate(config)}
-              disabled={isGenerating}
+              disabled={isGenerating || isGeneratingHWPX}
             >
               <Download size={16} />
               {isGenerating ? 'PDF 생성 중...' : 'PDF 다운로드'}
             </button>
+            {onGenerateHWPX && (
+              <button
+                className="btn-primary"
+                onClick={() => onGenerateHWPX(config)}
+                disabled={isGenerating || isGeneratingHWPX}
+                style={{ background: '#2563eb' }}
+              >
+                <FileText size={16} />
+                {isGeneratingHWPX ? 'HWP 생성 중...' : 'HWP 다운로드'}
+              </button>
+            )}
           </div>
         </div>
       </div>

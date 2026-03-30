@@ -45,23 +45,46 @@
   vertical-align: baseline;
 }
 
-/* ── Custom Scrollbar ── */
+/* ── Custom Scrollbar — 항상 보이는 스타일 ── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-base);
+  background: rgba(30, 30, 36, 0.8);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-raised);
-  border-radius: 3px;
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-overlay);
+  background: rgba(148, 163, 184, 0.7);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Firefox 스크롤바 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.5) rgba(30, 30, 36, 0.8);
+}
+
+/* ── Print — 해설지 상하 여백 확보 ── */
+@media print {
+  .solution-page {
+    padding-top: 12mm !important;
+    padding-bottom: 12mm !important;
+  }
+  .solution-page .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
 
 /* ── Utilities ── */

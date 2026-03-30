@@ -5,7 +5,7 @@
 // PDF 업로드 → OCR → AI 분류/해설 자동화 UI
 // ============================================================================
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Upload,
@@ -20,18 +20,32 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Beaker,
+  Calculator,
+  ImagePlus,
+  AlertTriangle,
 } from 'lucide-react';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { getStatusLabel, getStatusColor } from '@/lib/workflow/cloud-flow';
+import {
+  SCIENCE_SUBJECTS,
+  type ScienceSubjectCode,
+  type CurriculumVersion,
+  type ScienceSubjectMeta,
+} from '@/lib/image-pipeline/types';
 
 interface CloudFlowUploaderProps {
   instituteId?: string;
   userId?: string;
   /** 업로드 시 연결할 북그룹 ID */
   bookGroupId?: string;
+  /** 기존 시험지에 병합 (문제 추가 기능) */
+  appendToExamId?: string;
   onComplete?: (results: LLMAnalysisResult[]) => void;
   /** true이면 업로드 시작 후 바로 분석 페이지로 이동 */
   autoNavigateToAnalyze?: boolean;
+  /** 기존 업로드된 파일명 목록 (중복 체크용) */
+  existingFileNames?: string[];
 }
 
 interface JobWithResults extends UploadJob {
@@ -42,8 +56,10 @@ export default function CloudFlowUploader({
   instituteId = 'default',
   userId = 'user',
   bookGroupId,
+  appendToExamId,
   onComplete,
   autoNavigateToAnalyze = false,
+  existingFileNames = [],
 }: CloudFlowUploaderProps) {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobWithResults[]>([]);
@@ -61,11 +77,42 @@ export default function CloudFlowUploader({
     QUICK_ANSWER: null,
   });
 
+  // 과목 선택 상태
+  const [subjectArea, setSubjectArea] = useState<'math' | 'science'>('math');
+  const [scienceSubject, setScienceSubject] = useState<ScienceSubjectCode>('IS1');
+  const [curriculumVersion, setCurriculumVersion] = useState<CurriculumVersion>('2022');
+
+  // 과학 처리 모드: 'diagrams_only' = 도식 추출만 | 'full' = 문제까지 자산화
+  const [scienceMode, setScienceMode] = useState<'diagrams_only' | 'full'>('full');
+
   const [autoClassify, setAutoClassify] = useState(false); // 기본 OFF — 분석 페이지에서 수동/AI 감지 선택
   const [generateSolutions, setGenerateSolutions] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
+  // 카테고리별 과학 과목 그룹 (중복 제거)
+  const scienceSubjectGroups = useMemo(() => {
+    const groups: Record<string, { label: string; subjects: ScienceSubjectMeta[] }> = {
+      middle: { label: '중학교', subjects: [] },
+      common: { label: '고등 공통', subjects: [] },
+      general: { label: '고등 일반선택', subjects: [] },
+      career: { label: '고등 진로선택', subjects: [] },
+      fusion: { label: '고등 융합선택', subjects: [] },
+    };
+    const seen = new Set<string>();
+    for (const s of SCIENCE_SUBJECTS) {
+      const key = `${s.code}-${s.category}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        groups[s.category].subjects.push(s);
+      }
+    }
+    return groups;
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // ★ 중복 파일명 경고 상태
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   // 파일 선택 처리 (Staging)
   const handleFileSelect = useCallback((files: FileList | File[]) => {
@@ -74,11 +121,25 @@ export default function CloudFlowUploader({
 
     // 현재 활성화된 탭에 파일 할당 (첫 번째 파일만)
     const file = fileArray[0];
+
+    // ★ 중복 체크 — 기존 업로드된 파일명과 비교
+    if (activeTab === 'PROBLEM' && existingFileNames.length > 0) {
+      const baseName = file.name.replace(/\.[^.]+$/, '').trim().toLowerCase();
+      const found = existingFileNames.find(n =>
+        n.replace(/\.[^.]+$/, '').trim().toLowerCase() === baseName
+      );
+      if (found) {
+        setDuplicateWarning(`"${file.name}" — 이미 업로드된 자료입니다 ("${found}")`);
+      } else {
+        setDuplicateWarning(null);
+      }
+    }
+
     setPendingFiles(prev => ({
       ...prev,
       [activeTab]: file
     }));
-  }, [activeTab]);
+  }, [activeTab, existingFileNames]);
 
   // 업로드 시작 (Processing)
   const startProcessing = useCallback(async () => {
@@ -120,11 +181,26 @@ export default function CloudFlowUploader({
 
       formData.append('instituteId', instituteId);
       formData.append('userId', userId);
-      formData.append('documentType', 'PROBLEM'); // 메인 타입은 항상 PROBLEM
-      formData.append('autoClassify', String(autoClassify));
-      formData.append('generateSolutions', String(generateSolutions));
+      formData.append('documentType', 'PROBLEM');
+      formData.append('subjectArea', subjectArea);
+
+      if (subjectArea === 'science') {
+        formData.append('scienceSubject', scienceSubject);
+        formData.append('curriculumVersion', curriculumVersion);
+        formData.append('scienceMode', scienceMode); // ★ 서버에 모드 전달
+        // 과학은 항상 autoClassify OFF — full 모드에서도 분석 페이지에서 수동 크롭/감지
+        formData.append('autoClassify', 'false');
+        formData.append('generateSolutions', 'false');
+      } else {
+        // 수학 모드: 기존 OCR/분류 파이프라인
+        formData.append('autoClassify', String(autoClassify));
+        formData.append('generateSolutions', String(generateSolutions));
+      }
       if (bookGroupId) {
         formData.append('bookGroupId', bookGroupId);
+      }
+      if (appendToExamId) {
+        formData.append('appendTo', appendToExamId);
       }
 
       const response = await fetch('/api/workflow/upload', {
@@ -158,19 +234,33 @@ export default function CloudFlowUploader({
         QUICK_ANSWER: null,
       });
 
-      // 자동 네비게이션: 업로드 시작 후 바로 분석 페이지로 이동
-      // bookGroupId를 URL query로 전달 (in-memory jobStore 핫리로드 대비)
-      if (autoNavigateToAnalyze) {
-        const analyzeUrl = bookGroupId
-          ? `/dashboard/workflow/analyze/${data.jobId}?bookGroupId=${bookGroupId}`
-          : `/dashboard/workflow/analyze/${data.jobId}`;
-        router.push(analyzeUrl);
+      // ★ 과학 도식 추출만 모드: 갤러리로 이동
+      if (subjectArea === 'science' && scienceMode === 'diagrams_only') {
+        router.push('/dashboard/materials/diagrams?uploading=true');
         return;
       }
 
-      // 폴링 시작
-      if (autoClassify) {
-        startPolling(data.jobId);
+      // ★ 과학 전체 모드: 항상 분석 페이지로 이동 (수동 크롭 → 분석 → 자산화)
+      if (subjectArea === 'science' && scienceMode === 'full') {
+        const params = new URLSearchParams();
+        if (bookGroupId) params.set('bookGroupId', bookGroupId);
+        params.set('subjectArea', 'science');
+        params.set('scienceSubject', scienceSubject);
+        params.set('curriculumVersion', curriculumVersion);
+        const qs = params.toString();
+        router.push(`/dashboard/workflow/analyze/${data.jobId}?${qs}`);
+        return;
+      }
+
+      // 수학 모드: 분석 페이지로 이동 (appendTo 모드 포함)
+      {
+        const params = new URLSearchParams();
+        if (bookGroupId) params.set('bookGroupId', bookGroupId);
+        params.set('subjectArea', subjectArea);
+        if (appendToExamId) params.set('appendTo', appendToExamId);
+        const qs = params.toString();
+        router.push(`/dashboard/workflow/analyze/${data.jobId}?${qs}`);
+        return;
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -187,7 +277,7 @@ export default function CloudFlowUploader({
       );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingFiles, userId, instituteId, autoClassify, generateSolutions]);
+  }, [pendingFiles, userId, instituteId, autoClassify, generateSolutions, subjectArea, scienceSubject, curriculumVersion, scienceMode]);
 
   // Job 상태 폴링
   const startPolling = useCallback((jobId: string) => {
@@ -336,6 +426,78 @@ export default function CloudFlowUploader({
 
   return (
     <div className="cloud-flow-uploader">
+      {/* ── 과목 영역 선택 (수학/과학) ── */}
+      <div className="subject-area-selector">
+        <button
+          className={`subject-area-btn ${subjectArea === 'math' ? 'active math' : ''}`}
+          onClick={() => setSubjectArea('math')}
+        >
+          <Calculator size={16} />
+          수학
+        </button>
+        <button
+          className={`subject-area-btn ${subjectArea === 'science' ? 'active science' : ''}`}
+          onClick={() => setSubjectArea('science')}
+        >
+          <Beaker size={16} />
+          과학
+        </button>
+      </div>
+
+      {/* ── 과학 세부 과목 선택 ── */}
+      {subjectArea === 'science' && (
+        <div className="science-subject-picker">
+          <div className="science-picker-header">
+            <select
+              className="curriculum-version-select"
+              value={curriculumVersion}
+              onChange={(e) => setCurriculumVersion(e.target.value as CurriculumVersion)}
+            >
+              <option value="2022">2022 개정</option>
+              <option value="2015">2015 개정</option>
+            </select>
+          </div>
+          <div className="science-subject-groups">
+            {Object.entries(scienceSubjectGroups).map(([cat, group]) => (
+              group.subjects.length > 0 && (
+                <div key={cat} className="science-group">
+                  <span className="science-group-label">{group.label}</span>
+                  <div className="science-group-items">
+                    {group.subjects.map((s) => (
+                      <button
+                        key={s.code}
+                        className={`science-subject-btn ${scienceSubject === s.code ? 'active' : ''}`}
+                        onClick={() => setScienceSubject(s.code)}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+
+          {/* 과학 처리 모드 선택 */}
+          <div className="science-mode-selector">
+            <button
+              className={`science-mode-btn ${scienceMode === 'diagrams_only' ? 'active' : ''}`}
+              onClick={() => setScienceMode('diagrams_only')}
+            >
+              <ImagePlus size={14} />
+              도식 추출만
+            </button>
+            <button
+              className={`science-mode-btn ${scienceMode === 'full' ? 'active' : ''}`}
+              onClick={() => setScienceMode('full')}
+            >
+              <Brain size={14} />
+              문제 자산화까지
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="upload-controls">
         <div className="document-type-selector">
           <button
@@ -410,15 +572,27 @@ export default function CloudFlowUploader({
         </h3>
 
         {pendingFiles[activeTab] ? (
-          <div className="mt-4 p-3 bg-zinc-800 rounded-lg flex items-center gap-3 border border-indigo-500/30">
-            <CheckCircle className="text-indigo-400" size={20} />
-            <span className="text-indigo-100 font-medium">{pendingFiles[activeTab]?.name}</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); clearPendingFile(activeTab); }}
-              className="ml-auto text-zinc-500 hover:text-red-400"
-            >
-              <XCircle size={18} />
-            </button>
+          <div className="mt-4 space-y-2">
+            <div className="p-3 bg-zinc-800 rounded-lg flex items-center gap-3 border border-indigo-500/30">
+              <CheckCircle className="text-indigo-400" size={20} />
+              <span className="text-indigo-100 font-medium">{pendingFiles[activeTab]?.name}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); clearPendingFile(activeTab); setDuplicateWarning(null); }}
+                className="ml-auto text-zinc-500 hover:text-red-400"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            {/* ★ 중복 경고 */}
+            {duplicateWarning && activeTab === 'PROBLEM' && (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-amber-300 font-medium">{duplicateWarning}</p>
+                  <p className="text-[10px] text-amber-400/70 mt-0.5">그래도 업로드하려면 시작 버튼을 누르세요.</p>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="mt-2 text-zinc-500 text-sm">
@@ -609,6 +783,163 @@ export default function CloudFlowUploader({
       <style jsx>{`
         .cloud-flow-uploader {
           width: 100%;
+        }
+
+        .subject-area-selector {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 16px;
+        }
+
+        .subject-area-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          background: rgba(39, 39, 42, 0.5);
+          border: 2px solid rgba(255, 255, 255, 0.08);
+          color: #a1a1aa;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border-radius: 10px;
+          transition: all 0.2s;
+          flex: 1;
+          justify-content: center;
+        }
+
+        .subject-area-btn:hover {
+          color: #ffffff;
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        .subject-area-btn.active.math {
+          background: rgba(99, 102, 241, 0.15);
+          border-color: rgba(99, 102, 241, 0.5);
+          color: #a5b4fc;
+        }
+
+        .subject-area-btn.active.science {
+          background: rgba(16, 185, 129, 0.15);
+          border-color: rgba(16, 185, 129, 0.5);
+          color: #6ee7b7;
+        }
+
+        .science-subject-picker {
+          margin-bottom: 16px;
+          padding: 16px;
+          background: rgba(16, 185, 129, 0.05);
+          border: 1px solid rgba(16, 185, 129, 0.15);
+          border-radius: 12px;
+        }
+
+        .science-picker-header {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 12px;
+        }
+
+        .curriculum-version-select {
+          padding: 4px 10px;
+          background: rgba(39, 39, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 6px;
+          color: #d4d4d8;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .curriculum-version-select:focus {
+          outline: none;
+          border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        .science-subject-groups {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .science-group {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+        }
+
+        .science-group-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: #71717a;
+          min-width: 90px;
+          padding-top: 6px;
+          white-space: nowrap;
+        }
+
+        .science-group-items {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .science-subject-btn {
+          padding: 5px 12px;
+          background: rgba(39, 39, 42, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 6px;
+          color: #a1a1aa;
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+
+        .science-subject-btn:hover {
+          color: #ffffff;
+          border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .science-subject-btn.active {
+          background: rgba(16, 185, 129, 0.2);
+          border-color: rgba(16, 185, 129, 0.5);
+          color: #6ee7b7;
+          font-weight: 600;
+        }
+
+        .science-mode-selector {
+          display: flex;
+          gap: 6px;
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px solid rgba(16, 185, 129, 0.1);
+        }
+
+        .science-mode-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 14px;
+          background: rgba(39, 39, 42, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          color: #a1a1aa;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s;
+          flex: 1;
+          justify-content: center;
+        }
+
+        .science-mode-btn:hover {
+          color: #ffffff;
+          border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .science-mode-btn.active {
+          background: rgba(16, 185, 129, 0.15);
+          border-color: rgba(16, 185, 129, 0.5);
+          color: #6ee7b7;
+          font-weight: 600;
         }
 
         .upload-zone {

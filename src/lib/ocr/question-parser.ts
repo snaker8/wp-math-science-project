@@ -231,12 +231,35 @@ export class QuestionParser {
     const circledMatches = text.match(CHOICE_PATTERNS.CIRCLED_NUMBER);
     if (circledMatches && circledMatches.length >= 2) {
       const result = this.parseCircledChoices(text);
+      // ★ 서술형 소문제가 선택지로 잘못 분류되었는지 검증
+      // 선택지 내용이 길거나 서술형 키워드가 포함되면 선택지로 보지 않음
+      const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오|넓이를?\s*구|길이를?\s*구|값을?\s*구|과정을?\s*쓰|\[\s*\d+\s*점\s*\]|\d+점/;
+      const longChoiceCount = result.choices.filter(c => c.content_latex.length > 30).length;
+      const subProblemChoiceCount = result.choices.filter(c => subProblemKeywords.test(c.content_latex)).length;
+      if (subProblemChoiceCount > 0 || (longChoiceCount >= 2 && result.choices.length <= 3)) {
+        // 서술형 소문제로 판단 → 선택지 분리하지 않고 본문에 유지
+        return { questionText: text, choices: [] };
+      }
       return result;
     }
 
     // 2. 숫자 보기 (1), 2), 3)...) 추출
+    // ★ 서술형 소문제 패턴 감지 — (1) 구하시오, (2) 설명하시오 등은 선택지가 아님
     const numberedMatches = [...text.matchAll(/(?:^|\n)\s*([1-5])\s*\)\s*(.+?)(?=(?:\n\s*[1-5]\s*\))|$)/gs)];
     if (numberedMatches.length >= 2) {
+      // 서술형 키워드가 있는지 체크
+      const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해 보시오/;
+      const parenSubProblemKeywords = /^\s*\(\d+\)/;
+      const isSubProblem = numberedMatches.some(m => subProblemKeywords.test(m[2]));
+      // (1), (2) 형태 (괄호 포함)도 체크
+      const parenMatches = [...text.matchAll(/(?:^|\n)\s*\((\d+)\)\s*(.+?)(?=(?:\n\s*\(\d+\))|$)/gs)];
+      const isParenSubProblem = parenMatches.length >= 2 && parenMatches.some(m => subProblemKeywords.test(m[2]));
+
+      if (isSubProblem || isParenSubProblem) {
+        // 서술형 소문제 → 선택지로 분리하지 않고 본문에 유지
+        return { questionText: text, choices: [] };
+      }
+
       for (const match of numberedMatches) {
         const label = match[1];
         const choiceContent = match[2].trim();

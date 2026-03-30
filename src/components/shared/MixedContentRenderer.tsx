@@ -303,8 +303,8 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
             const boxContent = restoredConditionBoxes[boxIdx];
             if (boxContent) {
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600">
-                  <div className="text-center text-xs text-zinc-400 font-medium mb-2 pb-1.5 border-b border-zinc-700">〈보 기〉</div>
+                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
+                  <div className="text-center text-xs text-zinc-400 font-medium mb-2 pb-1.5 border-b border-zinc-700 leading-normal">〈보 기〉</div>
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
               );
@@ -405,6 +405,14 @@ function stripTrailingChoiceLines(text: string): string {
   }
 
   if (firstChoiceIdx >= 0) {
+    // ★ 서술형 소문제 (1)(2) 오인식 방지:
+    // 연속 선택지 줄이 3개 미만이면 서술형 소문제일 가능성 높으므로 제거하지 않음
+    const choiceLineCount = lastNonEmptyIdx - firstChoiceIdx + 1;
+    if (choiceLineCount < 3) return text;
+    // ★ 서술형 키워드가 포함된 줄이 있으면 서술형 소문제이므로 제거하지 않음
+    const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오|넓이를?\s*구|길이를?\s*구|값을?\s*구|과정을?\s*쓰|\[\s*\d+\s*점\s*\]|\d+점/;
+    const choiceBlock = lines.slice(firstChoiceIdx, lastNonEmptyIdx + 1).join('\n');
+    if (subProblemKeywords.test(choiceBlock)) return text;
     // 선택지 블록 제거
     return lines.slice(0, firstChoiceIdx).join('\n').trimEnd();
   }
@@ -520,10 +528,10 @@ function preprocessMathpixContent(text: string): string {
     String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
   );
 
-  // 0-1. 인라인 <보기> 잔여 태그 정리 (OCR이 <보기> 를 "보기>" 등으로 부분 출력하는 경우)
-  result = result.replace(/(?:〈|<)\s*보\s*기\s*(?:〉|>)/g, '<보기>');
-  // "보기>" 잔여 (< 가 누락된 경우) — < 없이 "보기>" 만 있으면 제거
-  result = result.replace(/(?<!<)보기>\s*/g, '');
+  // 0-1. 인라인 <보기> 태그 → 〈보기〉 (전각 꺾쇠)로 통일 (HTML 태그 오인식 방지)
+  result = result.replace(/(?:〈|<)\s*보\s*기\s*(?:〉|>)/g, '〈보기〉');
+  // "보기>" 잔여 (< 가 누락된 경우) → 〈보기〉로 복원
+  result = result.replace(/(?<!〈)보기(?:〉|>)\s*/g, '〈보기〉 ');
 
   // ═══ Phase 1: Format 변환 (Mathpix → 표준 $...$) ═══
 
@@ -539,6 +547,9 @@ function preprocessMathpixContent(text: string): string {
   // 1-1b. 불완전한 \( → $
   result = result.replace(/\\\(([^$\n]+?)$/gm, (_, inner) => `$${inner.trim()}$`);
   result = result.replace(/^([^$\n]+?)\\\)/gm, (_, inner) => `$${inner.trim()}$`);
+
+  // 1-1c. ★ KaTeX에서 \square가 기호로 인식 안 되는 문제 → 빈 네모 박스로 변환
+  result = result.replace(/\\square/g, '\\boxed{\\phantom{X}}');
 
   // 1-2. \[...\] → $$...$$
   result = result.replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`);
@@ -640,9 +651,10 @@ function preprocessMathpixContent(text: string): string {
   // 2-5. <보기> 태그 분리 복구
   // "것을 <에서" 또는 "것을 < 에서" → "것을 〈보기〉 에서"
   result = result.replace(/<\s*에서/g, '〈보기〉 에서');
-  // 줄 끝의 고아 '<' 제거
-  result = result.replace(/<\s*$/gm, '');
-  // "<보기>" 또는 "〈보기〉" 이미 있으면 그대로 유지 (중복 방지)
+  // "< 에서" 패턴이 아닌 줄 끝의 고아 '<' → 〈보기〉로 복원 (문맥상 보기 태그인 경우)
+  result = result.replace(/<\s*$/gm, '〈보기〉');
+  // "<보기>" 잔여 → 〈보기〉 (전각 꺾쇠로 통일)
+  result = result.replace(/<보기>/g, '〈보기〉');
 
   return result;
 }
@@ -979,8 +991,8 @@ function parseMixedContent(text: string): ContentElement[] {
   text = text.replace(/\$\s*[\\₩]displaystyle\s+/g, '$');
   text = text.replace(/\$\$\s*[\\₩]displaystyle\s+/g, '$$');
   text = text.replace(/[\\₩]displaystyle\s*/g, '');
-  // ★ 보기> 잔여 텍스트 제거 (OCR에서 <보기> 태그가 깨진 경우)
-  text = text.replace(/보기>\s*/g, '');
+  // ★ 보기> 잔여 텍스트 → 〈보기〉 복원 (OCR에서 <보기> 태그가 깨진 경우)
+  text = text.replace(/(?<!〈)보기(?:〉|>)\s*/g, '〈보기〉 ');
 
   // ★ 디버그: 표 관련 콘텐츠 감지
   if (text.includes('array') || text.includes('tabular') || text.includes('hline')) {

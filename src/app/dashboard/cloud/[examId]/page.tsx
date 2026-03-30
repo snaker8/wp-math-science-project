@@ -33,6 +33,7 @@ import {
   Loader2,
   ZoomIn,
   Wand2,
+  PlusCircle,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
@@ -40,11 +41,20 @@ import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
+import dynamic from 'next/dynamic';
+const AddProblemsModal = dynamic(() => import('@/components/papers/AddProblemsModal'), { ssr: false });
+import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import type { InterpretedFigure } from '@/types/ocr';
+
+/** 해설에서 [선택지 검증] 섹션 제거 (기존 DB 데이터 호환) */
+function stripChoiceAnalysis(s: string): string {
+  if (!s) return s;
+  return s.replace(/\[선택지 검증\][\s\S]*?(?=\n\[|∴|💡|$)/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 // ============================================================================
 // Types
@@ -186,17 +196,44 @@ function FilterBadge({
   );
 }
 
-/** [도형] 마커를 SVG 또는 크롭 이미지로 교체하여 콘텐츠를 분할 */
-function splitContentByFigureMarker(content: string): Array<{ type: 'text' | 'figure'; text: string }> {
-  const marker = '[도형]';
-  if (!content.includes(marker)) return [{ type: 'text', text: content }];
+/** [도형] / [도형:right:40%] 마커를 파싱하여 콘텐츠를 분할 */
+function splitContentByFigureMarker(content: string): Array<{
+  type: 'text' | 'figure';
+  text: string;
+  floatMode?: 'right' | 'left';
+  widthPercent?: number;
+}> {
+  // [도형], [도형:right:40%], [도형:left:35%] 등 모든 형태 매칭
+  const markerRegex = /\[도형(?::(\w+[-\w]*))?(?::(\d+)%?)?\]/;
+  if (!markerRegex.test(content)) return [{ type: 'text', text: content }];
 
-  const parts: Array<{ type: 'text' | 'figure'; text: string }> = [];
-  const segments = content.split(marker);
-  segments.forEach((seg, i) => {
-    if (seg.trim()) parts.push({ type: 'text', text: seg });
-    if (i < segments.length - 1) parts.push({ type: 'figure', text: '' });
-  });
+  const parts: Array<{ type: 'text' | 'figure'; text: string; floatMode?: 'right' | 'left'; widthPercent?: number }> = [];
+  // 글로벌 매칭으로 분할
+  const globalRegex = /\[도형(?::(\w+[-\w]*))?(?::(\d+)%?)?\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = globalRegex.exec(content)) !== null) {
+    const before = content.slice(lastIndex, match.index);
+    if (before.trim()) parts.push({ type: 'text', text: before });
+
+    const modeStr = match[1];
+    const widthStr = match[2];
+    let floatMode: 'right' | 'left' | undefined;
+    if (modeStr === 'right' || modeStr === 'float-right') floatMode = 'right';
+    else if (modeStr === 'left' || modeStr === 'float-left') floatMode = 'left';
+
+    parts.push({
+      type: 'figure',
+      text: '',
+      floatMode,
+      widthPercent: widthStr ? parseInt(widthStr, 10) : undefined,
+    });
+    lastIndex = match.index + match[0].length;
+  }
+
+  const after = content.slice(lastIndex);
+  if (after.trim()) parts.push({ type: 'text', text: after });
   return parts;
 }
 
@@ -216,6 +253,182 @@ function getProxiedImageUrl(url: string): string {
   return url;
 }
 
+// ============================================================================
+// FigureMarkerRenderer — [도형] / [도형:right:40%] 마커 기반 렌더링
+// 라인 모드: 기존 블록 사이 삽입 / 플로트 모드: CSS float로 텍스트 감싸기
+// ============================================================================
+
+function FigureMarkerRenderer({
+  contentParts,
+  problem,
+  cropImage,
+  showFigureCompare,
+  getProxiedImageUrl: proxyUrl,
+}: {
+  contentParts: Array<{ type: 'text' | 'figure'; text: string; floatMode?: 'right' | 'left'; widthPercent?: number }>;
+  problem: ProblemData;
+  cropImage?: { url: string; type: string } | undefined;
+  showFigureCompare: boolean;
+  getProxiedImageUrl: (url: string) => string;
+}) {
+  const hasFigureSource = problem.figureData || problem.figureSvg || problem.upscaledCropUrl;
+  const proxiedCrop = cropImage?.url ? proxyUrl(cropImage.url) : undefined;
+
+  // 플로트 모드인 figure 파트가 있는지 확인
+  const floatPart = contentParts.find(p => p.type === 'figure' && p.floatMode);
+  const isFloatMode = !!floatPart;
+
+  // ═══ 플로트 모드 렌더링 ═══
+  if (isFloatMode && floatPart) {
+    const figureIdx = contentParts.indexOf(floatPart);
+    const beforeParts = contentParts.slice(0, figureIdx);
+    const afterParts = contentParts.slice(figureIdx + 1);
+    const floatSide = floatPart.floatMode === 'left' ? 'float-left mr-3' : 'float-right ml-3';
+    const widthPct = floatPart.widthPercent || 40;
+
+    return (
+      <div className="inline">
+        {/* 플로트 전 텍스트 */}
+        {beforeParts.map((part, i) =>
+          part.type === 'text' ? (
+            <MixedContentRenderer
+              key={`pre-${i}`}
+              content={part.text}
+              className="inline text-sm text-content-secondary leading-relaxed"
+            />
+          ) : null
+        )}
+        {/* 플로트 이미지 + 이후 텍스트가 감싸는 영역 */}
+        <div>
+          <div
+            className={`${floatSide} mb-2`}
+            style={{ width: `${widthPct}%`, maxWidth: '240px' }}
+          >
+            {hasFigureSource ? (
+              <FigureRenderer
+                figureData={problem.figureData}
+                figureSvg={problem.figureSvg}
+                upscaledCropUrl={problem.upscaledCropUrl}
+                figureSource={problem.figureSource}
+                cropImageUrl={proxiedCrop}
+                maxWidth={240}
+                darkMode
+                editable
+                problemId={problem.id}
+              />
+            ) : proxiedCrop ? (
+              <img
+                src={proxiedCrop}
+                alt={`문제 ${problem.number} 도형`}
+                className="rounded-lg border border-zinc-700 w-full object-contain"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex items-center justify-center py-4 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5">
+                <Shapes className="h-5 w-5 text-orange-400" />
+              </div>
+            )}
+          </div>
+          {afterParts.map((part, i) =>
+            part.type === 'text' ? (
+              <MixedContentRenderer
+                key={`post-${i}`}
+                content={part.text}
+                className="text-sm text-content-secondary leading-relaxed"
+              />
+            ) : null
+          )}
+          <div style={{ clear: 'both' }} />
+        </div>
+      </div>
+    );
+  }
+
+  // ═══ 라인 모드 렌더링 ═══
+  // ★ 다중 [도형] 마커 지원: figure_crop 배열에서 순서대로 이미지 매칭
+  const allFigureCrops = problem.images?.filter((img: { type: string }) => img.type === 'figure_crop') || [];
+  let figureCounter = 0;
+
+  return (
+    <div className="inline">
+      {contentParts.map((part, i) => {
+        if (part.type === 'text') {
+          return (
+            <MixedContentRenderer
+              key={i}
+              content={part.text}
+              className="inline text-sm text-content-secondary leading-relaxed"
+            />
+          );
+        }
+
+        // figure 파트 — figureCounter로 순서 매칭
+        const currentFigureIdx = figureCounter++;
+        const matchedCrop = allFigureCrops[currentFigureIdx];
+
+        // 첫 번째 도형: 기존 FigureRenderer (upscaledCropUrl/figureData 등)
+        if (currentFigureIdx === 0 && hasFigureSource) {
+          return showFigureCompare && cropImage ? (
+            <div key={i} className="my-2 grid grid-cols-2 gap-3">
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
+                <img src={proxyUrl(cropImage.url)} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
+                <div className="border border-emerald-500/30 rounded p-1">
+                  <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={200} darkMode editable problemId={problem.id} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div key={i} className="my-2 flex justify-center">
+              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={300} darkMode editable problemId={problem.id} />
+            </div>
+          );
+        }
+
+        // 2번째 이후 도형 또는 첫 번째에 figureSource 없을 때: figure_crop 이미지 직접 표시
+        if (matchedCrop) {
+          return (
+            <div key={i} className="my-2 flex justify-center">
+              <img
+                src={proxyUrl(matchedCrop.url)}
+                alt={matchedCrop.label || `도형 ${currentFigureIdx + 1}`}
+                className="rounded-lg border border-zinc-600 bg-white max-h-64 object-contain shadow-sm"
+                loading="lazy"
+              />
+            </div>
+          );
+        }
+
+        // figure_crop도 없으면 일반 crop 또는 플레이스홀더
+        if (cropImage && currentFigureIdx === 0) {
+          return (
+            <div key={i} className="my-2 flex justify-center">
+              <img
+                src={proxyUrl(cropImage.url)}
+                alt={`문제 ${problem.number} 원본 도형`}
+                className="rounded-lg border border-zinc-700 max-h-64 object-contain"
+                loading="lazy"
+              />
+            </div>
+          );
+        }
+
+        return (
+          <div key={i} className="my-2 flex justify-center">
+            <div className="flex flex-col items-center justify-center gap-2 py-6 px-8 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5">
+              <Shapes className="h-6 w-6 text-orange-400" />
+              <span className="text-xs text-orange-400 font-medium">도형 포함 — 도형 생성 버튼을 클릭하세요</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProblemCardView({
   problem,
   onTwinGenerate,
@@ -224,6 +437,7 @@ function ProblemCardView({
   onGenerateFigure,
   onGenerateAIFigure,
   onDeleteFigure,
+  onReplaceDiagram,
   onUpdateContent,
   isSelectionMode,
   isSelected,
@@ -239,6 +453,7 @@ function ProblemCardView({
   onGenerateFigure?: (p: ProblemData) => void;
   onGenerateAIFigure?: (p: ProblemData) => void;
   onDeleteFigure?: (p: ProblemData) => void;
+  onReplaceDiagram?: (p: ProblemData) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
   isSelectionMode?: boolean;
   isSelected?: boolean;
@@ -322,36 +537,83 @@ function ProblemCardView({
                 <Move className="h-3.5 w-3.5" />
               </button>
             )}
-            {/* ★ 도형 업스케일 버튼 (크롭 있고 아직 업스케일/AI 안 됨) */}
-            {(cropImage || problem.hasFigure) && !problem.upscaledCropUrl && !problem.figureData && !problem.figureSvg && (
+            {/* ★ 도형 업스케일 버튼 (도형 있고 아직 업스케일/AI 안 됨) */}
+            {problem.hasFigure && !problem.upscaledCropUrl && !problem.figureData && !problem.figureSvg && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGenerateFigure?.(problem); }}
-                className={`p-1 rounded transition-colors ${
+                className={`px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors ${
                   isGeneratingFigure
-                    ? 'text-blue-400 animate-pulse'
-                    : 'text-content-muted hover:text-blue-400 hover:bg-blue-500/10'
+                    ? 'text-blue-400 bg-blue-500/20 animate-pulse'
+                    : 'text-blue-400 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20'
                 }`}
                 title="도형 업스케일 (원본 정리)"
                 disabled={isGeneratingFigure}
               >
-                {isGeneratingFigure ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ZoomIn className="h-3.5 w-3.5" />}
+                {isGeneratingFigure ? <Loader2 className="h-3 w-3 animate-spin" /> : <ZoomIn className="h-3 w-3" />}
+                업스케일
               </button>
             )}
-            {/* ★ AI 도형 생성 버튼 (크롭 이미지 있을 때 언제든 사용 가능) */}
-            {(cropImage || problem.hasFigure || (problem.images && problem.images.length > 0)) && (
+            {/* ★ AI 도형 생성 버튼 (도형이 있는 문제만) */}
+            {problem.hasFigure && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGenerateAIFigure?.(problem); }}
-                className={`p-1 rounded transition-colors ${
+                className={`px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors ${
                   isGeneratingFigure
-                    ? 'text-orange-400 animate-pulse'
-                    : 'text-content-muted hover:text-orange-400 hover:bg-orange-500/10'
+                    ? 'text-orange-400 bg-orange-500/20 animate-pulse'
+                    : 'text-orange-400 bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20'
                 }`}
                 title="AI 도형 생성 (Vision AI)"
                 disabled={isGeneratingFigure}
               >
-                {isGeneratingFigure ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                {isGeneratingFigure ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                AI 생성
+              </button>
+            )}
+            {/* ★ 원본 사용 버튼 (AI 생성 도형 → 원본 크롭으로 되돌리기) */}
+            {cropImage && (problem.figureData || problem.figureSvg) && (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!confirm('AI 생성 도형을 제거하고 원본 크롭 이미지를 사용하시겠습니까?')) return;
+                  try {
+                    const existRes = await fetch(`/api/problems/${problem.id}`);
+                    const existData = existRes.ok ? await existRes.json() : {};
+                    const ai = { ...(existData.ai_analysis || {}) };
+                    delete ai.figureData;
+                    delete ai.figureSvg;
+                    ai.upscaledCropUrl = cropImage.url;
+                    ai.figureSource = 'original_crop';
+                    ai.hasFigure = true;
+                    await fetch(`/api/problems/${problem.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ai_analysis: ai }),
+                    });
+                    window.dispatchEvent(new CustomEvent('problems-updated'));
+                  } catch (err) {
+                    console.error('[OriginalCrop] Error:', err);
+                  }
+                }}
+                className="px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors text-violet-400 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20"
+                title="AI 도형 제거, 원본 크롭 이미지 사용"
+              >
+                <ImageIcon className="h-3 w-3" />
+                원본사용
+              </button>
+            )}
+            {/* ★ 도식 교체 버튼 (도형이 있는 문제 — DB에서 교체) */}
+            {(problem.hasFigure || cropImage) && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReplaceDiagram?.(problem); }}
+                className="px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors text-teal-400 bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20"
+                title="도식 DB에서 이미지 교체"
+              >
+                <ImageIcon className="h-3 w-3" />
+                도식교체
               </button>
             )}
             {/* ★ 도형 삭제 버튼 (AI 생성 도형이 있을 때만) */}
@@ -428,6 +690,8 @@ function ProblemCardView({
               figureData={problem.figureData}
               figureSvg={problem.figureSvg}
               cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined}
+              upscaledCropUrl={problem.upscaledCropUrl}
+              figureSource={problem.figureSource}
               onSave={async (updatedContent) => {
                 await onUpdateContent?.(problem.id, updatedContent);
                 setIsEditingPosition(false);
@@ -452,63 +716,13 @@ function ProblemCardView({
               <span className="text-sm font-bold text-content-primary mr-2">{problem.number}.</span>
               {hasFigureMarker ? (
                 /* 도형 마커가 있는 경우: 텍스트/도형 분할 렌더링 */
-                <div className="inline">
-                  {contentParts.map((part, i) => (
-                    part.type === 'text' ? (
-                      <MixedContentRenderer
-                        key={i}
-                        content={part.text}
-                        className="inline text-sm text-content-secondary leading-relaxed"
-                      />
-                    ) : (problem.figureData || problem.figureSvg || problem.upscaledCropUrl) ? (
-                      /* ① AI 도형 또는 업스케일 이미지 → FigureRenderer 표시 (비교 모드 포함) */
-                      showFigureCompare && cropImage ? (
-                        <div key={i} className="my-2 grid grid-cols-2 gap-3">
-                          <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
-                            <img src={getProxiedImageUrl(cropImage.url)} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
-                          </div>
-                          <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
-                            <div className="border border-emerald-500/30 rounded p-1">
-                              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} />
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div key={i} className="my-2 flex justify-center">
-                          <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} />
-                        </div>
-                      )
-                    ) : cropImage ? (
-                      /* ② AI 도형 아직 없음 → 원본 크롭 이미지로 도형 위치 표시 */
-                      <div key={i} className="my-2 flex justify-center">
-                        <div className="relative">
-                          <img
-                            src={getProxiedImageUrl(cropImage.url)}
-                            alt={`문제 ${problem.number} 원본 도형`}
-                            className="rounded-lg border border-zinc-700 max-h-64 object-contain"
-                            loading="lazy"
-                            onError={(e) => {
-                              const parent = e.currentTarget.parentElement;
-                              if (parent) {
-                                parent.innerHTML = `<div class="flex flex-col items-center justify-center gap-2 py-6 px-8 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-400"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span class="text-xs text-orange-400 font-medium">도형 포함 — 도형 생성 버튼을 클릭하세요</span></div>`;
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      /* ③ 크롭 이미지도 없음 → 플레이스홀더 */
-                      <div key={i} className="my-2 flex justify-center">
-                        <div className="flex flex-col items-center justify-center gap-2 py-6 px-8 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5">
-                          <Shapes className="h-6 w-6 text-orange-400" />
-                          <span className="text-xs text-orange-400 font-medium">도형 포함 — 도형 생성 버튼을 클릭하세요</span>
-                        </div>
-                      </div>
-                    )
-                  ))}
-                </div>
+                <FigureMarkerRenderer
+                  contentParts={contentParts}
+                  problem={problem}
+                  cropImage={cropImage}
+                  showFigureCompare={showFigureCompare}
+                  getProxiedImageUrl={getProxiedImageUrl}
+                />
               ) : (
                 /* 일반 콘텐츠 렌더링 */
                 <>
@@ -854,10 +1068,20 @@ function ExamPaperView({
     const parts = splitContentByFigureMarker(cleanContent);
     const hasFigureInContent = parts.some(p => p.type === 'figure');
 
-    // 시험지 출력: AI 도형/업스케일 이미지 표시
-    const renderFigureForPrint = () => {
+    // 시험지 출력: AI 도형/업스케일 이미지 표시 (figIdx로 figure_crop 구분)
+    const printFigureCrops = problem.images?.filter(img => img.type === 'figure_crop') || [];
+    const printCropImage = problem.images?.find(img => img.type === 'crop');
+    const renderFigureForPrint = (figIdx: number = 0) => {
+      // 첫 번째 도형: FigureRenderer (upscaledCropUrl 등)
+      if (figIdx === 0 && hasAiFigure) {
+        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={printCropImage?.url ? getProxiedImageUrl(printCropImage.url) : undefined} maxWidth={240} darkMode={false} />;
+      }
+      // 두 번째 이후: figure_crop 배열에서 직접 표시
+      if (printFigureCrops[figIdx]) {
+        return <img src={getProxiedImageUrl(printFigureCrops[figIdx].url)} alt={`도형 ${figIdx+1}`} className="max-h-48 object-contain" />;
+      }
+      // fallback
       if (hasAiFigure) {
-        const printCropImage = problem.images?.find(img => img.type === 'crop');
         return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={printCropImage?.url ? getProxiedImageUrl(printCropImage.url) : undefined} maxWidth={240} darkMode={false} />;
       }
       return null;
@@ -870,17 +1094,39 @@ function ExamPaperView({
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-[14px] text-gray-800 whitespace-pre-line" style={{ lineHeight: '1.7' }}>
-            {hasFigureInContent ? (
-              parts.map((part, pi) => (
+            {hasFigureInContent ? (() => {
+              const floatFigure = parts.find(p => p.type === 'figure' && p.floatMode);
+              if (floatFigure) {
+                // 플로트 모드 (프린트)
+                const figIdx = parts.indexOf(floatFigure);
+                const before = parts.slice(0, figIdx);
+                const after = parts.slice(figIdx + 1);
+                const side = floatFigure.floatMode === 'left' ? 'float-left mr-3' : 'float-right ml-3';
+                const wPct = floatFigure.widthPercent || 40;
+                return (
+                  <>
+                    {before.map((p, pi) => p.type === 'text' ? <MixedContentRenderer key={`b-${pi}`} content={p.text} className="text-gray-800" /> : null)}
+                    <div>
+                      <div className={`${side} mb-2`} style={{ width: `${wPct}%`, maxWidth: '200px' }}>
+                        {renderFigureForPrint()}
+                      </div>
+                      {after.map((p, pi) => p.type === 'text' ? <MixedContentRenderer key={`a-${pi}`} content={p.text} className="text-gray-800" /> : null)}
+                      <div style={{ clear: 'both' }} />
+                    </div>
+                  </>
+                );
+              }
+              let printFigCounter = 0;
+              return parts.map((part, pi) => (
                 part.type === 'text' ? (
                   <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
                 ) : (
                   <div key={pi} className="my-2 flex justify-center">
-                    {renderFigureForPrint()}
+                    {renderFigureForPrint(printFigCounter++)}
                   </div>
                 )
-              ))
-            ) : (
+              ));
+            })() : (
               <>
                 <MixedContentRenderer content={cleanContent} className="text-gray-800" />
                 {hasAiFigure && (
@@ -892,6 +1138,8 @@ function ExamPaperView({
             )}
           </div>
           {problem.choices.length > 0 && (() => {
+            // ★ 핵심: MixedContentRenderer의 stripTrailingChoiceLines가 ①-⑤로 시작하는 텍스트를
+            // "중복 선택지"로 인식해 삭제하므로, 번호(prefix)와 내용(stripped)을 분리하여 렌더링
             const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
             const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
             const isSubProblem = hasParenPrefix || problem.choices.some(c => subProblemPatterns.test(c));
@@ -914,18 +1162,24 @@ function ExamPaperView({
 
             // ★ 보기형 문제: ㄱ,ㄴ,ㄷ 조합 → (1) 형태 번호
             const isBoggiPrint = problem.choices.some(c => /[ㄱㄴㄷㄹㅁ].*,\s*[ㄱㄴㄷㄹㅁ]/.test(c));
-            const printChoices = problem.choices.map((choice, ci) => {
+            const choiceItems = problem.choices.map((choice, ci) => {
               const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
-              const prefix = isBoggiPrint ? `(${ci + 1}) ` : `${['①', '②', '③', '④', '⑤'][ci] || ''} `;
-              return prefix + stripped;
+              const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
+              // ★ ㄱ,ㄴ,ㄷ 등 한글 자음+쉼표만 있는 선택지는 수식 파싱 불필요
+              const isPlainJamo = /^[ㄱㄴㄷㄹㅁ](?:\s*,\s*[ㄱㄴㄷㄹㅁ])*\s*$/.test(stripped);
+              return { prefix, content: stripped, isPlainJamo };
             });
-            const maxLen = Math.max(...printChoices.map(c => c.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
+            const maxLen = Math.max(...choiceItems.map(c => c.content.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length + 2));
             if (maxLen <= 12) {
               return (
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                  {printChoices.map((choice, ci) => (
-                    <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
-                      <MixedContentRenderer content={choice} className="text-gray-700" />
+                  {choiceItems.map((item, ci) => (
+                    <div key={ci} className="flex items-center gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                      <span className="flex-shrink-0 text-gray-500">{item.prefix}</span>
+                      {item.isPlainJamo
+                        ? <span className="text-gray-700" style={{ fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif" }}>{item.content}</span>
+                        : <MixedContentRenderer content={item.content} className="text-gray-700" />
+                      }
                     </div>
                   ))}
                 </div>
@@ -934,9 +1188,13 @@ function ExamPaperView({
             if (maxLen <= 30) {
               return (
                 <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
-                  {printChoices.map((choice, ci) => (
-                    <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
-                      <MixedContentRenderer content={choice} className="text-gray-700" />
+                  {choiceItems.map((item, ci) => (
+                    <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                      <span className="flex-shrink-0 text-gray-500">{item.prefix}</span>
+                      {item.isPlainJamo
+                        ? <span className="text-gray-700" style={{ fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif" }}>{item.content}</span>
+                        : <MixedContentRenderer content={item.content} className="text-gray-700" />
+                      }
                     </div>
                   ))}
                 </div>
@@ -944,9 +1202,13 @@ function ExamPaperView({
             }
             return (
               <div className="mt-2.5 space-y-1.5">
-                {printChoices.map((choice, ci) => (
-                  <div key={ci} className="text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
-                    <MixedContentRenderer content={choice} className="text-gray-700" />
+                {choiceItems.map((item, ci) => (
+                  <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+                    <span className="flex-shrink-0 text-gray-500">{item.prefix}</span>
+                    {item.isPlainJamo
+                      ? <span className="text-gray-700" style={{ fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif" }}>{item.content}</span>
+                      : <MixedContentRenderer content={item.content} className="text-gray-700" />
+                    }
                   </div>
                 ))}
               </div>
@@ -1219,6 +1481,21 @@ function ExamPaperView({
             break-inside: avoid;
             page-break-inside: avoid;
           }
+          /* 해설지: 자연스러운 페이지 흐름 + 상하 여백 확보 */
+          #exam-print-root .exam-page.solution-page {
+            height: auto !important;
+            min-height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            page-break-after: auto;
+            page-break-inside: auto;
+            padding-top: 12mm !important;
+            padding-bottom: 12mm !important;
+          }
+          #exam-print-root .exam-page.solution-page .break-inside-avoid {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
         }
         @page { size: A4 portrait; margin: 0; }
       `}</style>
@@ -1337,6 +1614,8 @@ function SolutionView({
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
+  const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   // ── 측정 기반 A4 페이지 분할 (시험지와 동일 방식) ──
@@ -1427,7 +1706,7 @@ function SolutionView({
 
       {/* 해설 본문 */}
       <div className="pl-5 text-[13px] text-gray-700 whitespace-pre-line" style={{ lineHeight: '1.7' }}>
-        <MixedContentRenderer content={problem.solution || '해설이 등록되지 않았습니다.'} className="text-gray-700" />
+        <MixedContentRenderer content={stripChoiceAnalysis(problem.solution || '') || '해설이 등록되지 않았습니다.'} className="text-gray-700" />
       </div>
 
       {/* 구분선 */}
@@ -1479,6 +1758,44 @@ function SolutionView({
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
+        {/* ★ 일괄 해설 생성 버튼 */}
+        <button
+          type="button"
+          disabled={isGeneratingBatch}
+          onClick={async () => {
+            const unsolved = problems.filter(p => !p.solution || p.solution.trim().length < 30);
+            if (unsolved.length === 0) { alert('모든 문제에 해설이 있습니다.'); return; }
+            if (!confirm(`${unsolved.length}문제의 해설을 AI로 생성합니다.\n(Claude Sonnet + Gemini 교차검증)\n\n진행하시겠습니까?`)) return;
+            setIsGeneratingBatch(true);
+            setBatchProgress({ current: 0, total: unsolved.length });
+            let success = 0;
+            for (let i = 0; i < unsolved.length; i++) {
+              try {
+                const res = await fetch(`/api/problems/${unsolved[i].id}/generate-solution`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ choices: unsolved[i].choices || [] }),
+                });
+                if (res.ok) success++;
+              } catch { /* skip */ }
+              setBatchProgress({ current: i + 1, total: unsolved.length });
+            }
+            setIsGeneratingBatch(false);
+            alert(`완료: ${success}/${unsolved.length}문제 해설 생성`);
+            window.location.reload();
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            isGeneratingBatch
+              ? 'bg-cyan-500/20 text-cyan-400 animate-pulse'
+              : 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
+          }`}
+        >
+          <Wand2 className="h-3.5 w-3.5" />
+          {isGeneratingBatch
+            ? `생성 중 ${batchProgress.current}/${batchProgress.total}...`
+            : `일괄 해설 생성 (${problems.filter(p => !p.solution || p.solution.trim().length < 30).length}문제)`
+          }
+        </button>
       </div>
 
       {/* 숨겨진 측정 영역 */}
@@ -1632,6 +1949,32 @@ export default function CloudExamDetailPage() {
 
   const examTitle = examInfo?.title || '(제목 없음)';
 
+  // ★ 자동 검증 — 문제 목록 로드 후 이슈 감지
+  const validationIssues = useMemo(() => {
+    if (problems.length === 0) return [];
+    const issues: Array<{ problemNum: number; type: string; message: string }> = [];
+    for (const p of problems) {
+      // 1. 빈 content
+      if (!p.content || p.content.trim().length < 10) {
+        issues.push({ problemNum: p.number, type: 'empty', message: '내용이 비어있음 (OCR 실패 가능)' });
+      }
+      // 2. 분류 누락
+      if (!p.typeName && !p.typeCode) {
+        issues.push({ problemNum: p.number, type: 'unclassified', message: '분류 미완료' });
+      }
+      // 3. 서술형인데 choices가 있는 경우 (오인식 가능성)
+      const hasSubProblemMarker = /\(1\)|\(2\)|풀이\s*과정|구하시오|서술하시오|완성하시오|답하시오/.test(p.content);
+      if (hasSubProblemMarker && p.choices.length > 0 && p.choices.some(c => c.length > 50)) {
+        issues.push({ problemNum: p.number, type: 'choice_misdetect', message: '서술형 소문제가 선택지로 인식된 가능성' });
+      }
+      // 4. 도형 있는데 이미지 없음
+      if (p.hasFigure && !p.upscaledCropUrl && !p.figureData && !p.figureSvg && (!p.images || !p.images.some(img => img.type === 'figure_crop'))) {
+        issues.push({ problemNum: p.number, type: 'missing_figure', message: '도형 표시 필요하지만 이미지 없음' });
+      }
+    }
+    return issues;
+  }, [problems]);
+
   // Filter state
   const [activeDifficulty, setActiveDifficulty] = useState<DifficultyKey | null>(null);
   const [activeDomain, setActiveDomain] = useState<DomainKey | null>(null);
@@ -1650,6 +1993,67 @@ export default function CloudExamDetailPage() {
 
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
+
+  // ★ 도식 교체 모달 상태
+  const [diagramBrowserProblem, setDiagramBrowserProblem] = useState<ProblemData | null>(null);
+
+  const handleReplaceDiagram = useCallback((problem: ProblemData) => {
+    setDiagramBrowserProblem(problem);
+  }, []);
+
+  const handleDiagramSelected = useCallback(async (imageUrl: string) => {
+    if (!diagramBrowserProblem) return;
+    try {
+      // 문제의 images 배열에서 기존 figure_crop 교체 또는 추가
+      const existingImages = (diagramBrowserProblem.images || []).filter(
+        (img) => img.type !== 'figure_crop'
+      );
+      const newImages = [
+        ...existingImages,
+        { url: imageUrl, type: 'figure_crop', label: '도식 DB 교체' },
+      ];
+
+      // ai_analysis에 hasFigure + upscaledCropUrl 설정
+      const existRes = await fetch(`/api/problems/${diagramBrowserProblem.id}`);
+      let existingAi: Record<string, unknown> = {};
+      if (existRes.ok) {
+        const existData = await existRes.json();
+        existingAi = existData.ai_analysis || {};
+      }
+
+      const updatedAi: Record<string, unknown> = {
+        ...existingAi,
+        hasFigure: true,
+        upscaledCropUrl: imageUrl,
+        figureSource: 'diagram_db',
+      };
+      // 기존 AI 생성 도형 제거 (교체된 이미지 우선)
+      delete updatedAi.figureData;
+      delete updatedAi.figureSvg;
+
+      const patchRes = await fetch(`/api/problems/${diagramBrowserProblem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          images: newImages,
+          ai_analysis: updatedAi,
+        }),
+      });
+
+      if (patchRes.ok) {
+        console.log(`[DiagramReplace] Problem #${diagramBrowserProblem.number} 도식 교체 완료`);
+        refetchProblems();
+      } else {
+        const err = await patchRes.json().catch(() => ({}));
+        alert(`도식 교체 실패: ${err.error || patchRes.status}`);
+      }
+    } catch (err) {
+      console.error('[DiagramReplace] Error:', err);
+      alert(`도식 교체 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+    } finally {
+      setDiagramBrowserProblem(null);
+    }
+  }, [diagramBrowserProblem, refetchProblems]);
 
   // ★ 업스케일 전용 (AI Vision 안 함, 실패 시 silent)
   const handleUpscaleFigure = useCallback(async (problem: ProblemData): Promise<boolean> => {
@@ -1798,7 +2202,11 @@ export default function CloudExamDetailPage() {
       refetchProblems();
     };
     window.addEventListener('graph-edited', handler);
-    return () => window.removeEventListener('graph-edited', handler);
+    window.addEventListener('problems-updated', handler);
+    return () => {
+      window.removeEventListener('graph-edited', handler);
+      window.removeEventListener('problems-updated', handler);
+    };
   }, [refetchProblems]);
 
   // ★ AI 도형 삭제 (figureData/figureSvg 제거, 크롭 이미지 유지)
@@ -1858,6 +2266,7 @@ export default function CloudExamDetailPage() {
         body: JSON.stringify({
           imageBase64: base64,
           fullAnalysis: true,
+          analyzeGraph: false,
           problemNumber: problem.number,
           problemId: problem.id,
         }),
@@ -1871,10 +2280,11 @@ export default function CloudExamDetailPage() {
       const ocrData = await ocrRes.json();
       console.log('[Rescan] OCR result:', ocrData);
 
-      // 3. 문제 업데이트
-      const updateBody: Record<string, unknown> = {
-        content_latex: ocrData.ocrText,
-      };
+      // 3. 문제 업데이트 — OCR 텍스트가 있을 때만 갱신
+      const updateBody: Record<string, unknown> = {};
+      if (ocrData.ocrText && ocrData.ocrText.trim().length > 0) {
+        updateBody.content_latex = ocrData.ocrText;
+      }
 
       // 선택지가 있으면 answer_json에 포함
       if (ocrData.choices && ocrData.choices.length > 0) {
@@ -1884,12 +2294,19 @@ export default function CloudExamDetailPage() {
         };
       }
 
-      // 분류 결과가 있으면 ai_analysis 업데이트
+      // 분류 결과가 있으면 ai_analysis 업데이트 — 기존 도형 데이터 완전 보존
+      // DB에서 기존 ai_analysis를 먼저 가져옴
+      let existingAi: Record<string, unknown> = {};
+      try {
+        const existRes = await fetch(`/api/problems/${problem.id}`);
+        if (existRes.ok) {
+          const existData = await existRes.json();
+          existingAi = existData.ai_analysis || {};
+        }
+      } catch {}
       const aiAnalysis: Record<string, unknown> = {
+        ...existingAi,
         ...(ocrData.classification || {}),
-        hasFigure: problem.hasFigure,
-        figureData: problem.figureData,
-        figureSvg: problem.figureSvg,
       };
 
       // Storage에 저장된 크롭 URL이 있으면 ai_analysis에 추가
@@ -1897,10 +2314,15 @@ export default function CloudExamDetailPage() {
         aiAnalysis.cropImageUrl = ocrData.cropUrl;
       }
 
-      // 그래프 데이터가 있으면 hasFigure 설정
-      if (ocrData.graphData && ocrData.graphData.type !== 'none') {
+      // 재스캔: 원본 이미지를 업스케일 크롭으로 우선 표시
+      // (AI 그래프 생성은 사용자가 "AI 생성" 버튼을 누를 때)
+      if (ocrData.cropUrl) {
         aiAnalysis.hasFigure = true;
-        aiAnalysis.graphAnalysis = ocrData.graphData;
+        aiAnalysis.upscaledCropUrl = ocrData.cropUrl;
+        aiAnalysis.figureSource = 'upscaled_crop';
+        // 기존 AI 생성 도형 제거 (원본 우선)
+        delete aiAnalysis.figureData;
+        delete aiAnalysis.figureSvg;
       }
 
       updateBody.ai_analysis = aiAnalysis;
@@ -1940,6 +2362,7 @@ export default function CloudExamDetailPage() {
 
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showAddProblemsModal, setShowAddProblemsModal] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
 
   const toggleSelectProblem = useCallback((id: string) => {
@@ -2095,6 +2518,14 @@ export default function CloudExamDetailPage() {
             </button>
             <button
               type="button"
+              onClick={() => setShowAddProblemsModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20 transition-colors"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>문제 추가</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveView('spread')}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                 activeView === 'spread'
@@ -2154,6 +2585,27 @@ export default function CloudExamDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* ======== 자동 검증 배너 ======== */}
+      {validationIssues.length > 0 && (
+        <div className="mx-5 mt-2 mb-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
+          <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-1">
+            <span>⚠ 자동 검증: {validationIssues.length}건 이슈 감지</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {validationIssues.map((issue, idx) => (
+              <span key={idx} className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                issue.type === 'empty' ? 'border-red-500/30 bg-red-500/10 text-red-400' :
+                issue.type === 'unclassified' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' :
+                issue.type === 'choice_misdetect' ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400' :
+                'border-violet-500/30 bg-violet-500/10 text-violet-400'
+              }`}>
+                #{issue.problemNum} {issue.message}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ======== Filter Bar (Sticky) ======== */}
       <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-subtle bg-surface-base/80 backdrop-blur-md px-5 py-2.5 flex-shrink-0">
@@ -2228,6 +2680,38 @@ export default function CloudExamDetailPage() {
             </button>
           </div>
         )}
+
+        {/* ★ 자동수정 버튼 — 분류/서술형/점수 등 공통 오류 일괄 수정 */}
+        <button
+          type="button"
+          onClick={async () => {
+            if (!confirm('자동수정을 실행합니다.\n- 과목/학년 불일치 수정\n- 서술형 소문제 복원\n- 점수 표기 정리\n\n진행하시겠습니까?')) return;
+            try {
+              const res = await fetch(`/api/exams/${examId}/auto-fix`, { method: 'POST' });
+              const data = await res.json();
+              if (data.error) {
+                alert('오류: ' + data.error);
+                return;
+              }
+              const msg = `자동수정 완료!\n\n` +
+                `총 ${data.totalProblems}문제 중 ${data.fixedProblems}문제 수정\n` +
+                `총 ${data.totalFixes}건 수정, ${data.totalErrors}건 오류\n` +
+                `시험지 과목: ${data.examSubject || '미감지'}\n` +
+                `학년: ${data.examGrade || '미감지'}\n\n` +
+                (data.results || []).map((r: { number: number; fixes: string[] }) =>
+                  `#${r.number}: ${r.fixes.join(', ')}`
+                ).filter((s: string) => s.includes(':')).join('\n');
+              alert(msg);
+              refetchProblems();
+            } catch (err) {
+              alert('자동수정 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'));
+            }
+          }}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+        >
+          <Wand2 className="h-3.5 w-3.5" />
+          자동수정
+        </button>
 
         {/* ★ 도형 일괄 업스케일 (크롭 이미지가 있고 아직 처리 안 된 문제 대상) */}
         {problems.some(p => p.hasFigure && p.images?.some(img => img.type === 'crop') && !p.upscaledCropUrl && !p.figureData && !p.figureSvg) && (
@@ -2307,6 +2791,7 @@ export default function CloudExamDetailPage() {
                   onGenerateFigure={handleUpscaleFigure}
                   onGenerateAIFigure={handleGenerateAIFigure}
                   onDeleteFigure={handleDeleteFigure}
+                  onReplaceDiagram={handleReplaceDiagram}
                   onUpdateContent={handleUpdateContent}
                   isSelectionMode={isSelectionMode}
                   isSelected={selectedProblems.has(problem.id)}
@@ -2468,6 +2953,17 @@ export default function CloudExamDetailPage() {
         />
       )}
 
+      {showAddProblemsModal && (
+        <AddProblemsModal
+          examId={examId}
+          onClose={() => setShowAddProblemsModal(false)}
+          onAdded={(count) => {
+            refetchProblems();
+            setShowAddProblemsModal(false);
+          }}
+        />
+      )}
+
       {/* 숨겨진 재스캔 파일 입력 */}
       <input
         ref={rescanInputRef}
@@ -2489,6 +2985,7 @@ export default function CloudExamDetailPage() {
           initialCognitiveDomain={editModalProblem.cognitiveDomain}
           initialTypeCode={editModalProblem.typeCode}
           initialTypeName={editModalProblem.typeName}
+          cropImageUrl={editModalProblem.images?.find(img => img.type === 'crop')?.url}
           onClose={() => setEditModalProblem(null)}
           onSaved={() => {
             // DB 데이터 새로고침
@@ -2505,6 +3002,15 @@ export default function CloudExamDetailPage() {
           }}
         />
       )}
+
+      {/* 도식 교체 모달 */}
+      <DiagramBrowserModal
+        isOpen={!!diagramBrowserProblem}
+        onClose={() => setDiagramBrowserProblem(null)}
+        onSelect={handleDiagramSelected}
+        currentImageUrl={diagramBrowserProblem?.images?.find(img => img.type === 'figure_crop' || img.type === 'crop')?.url}
+        problemNumber={diagramBrowserProblem?.number}
+      />
 
       {/* 템플릿 선택 모달 */}
       <TemplateSelector

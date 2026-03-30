@@ -315,11 +315,28 @@ export async function POST(request: NextRequest) {
         })
       : Promise.resolve(null);
 
-    const [ocrResult, graphData] = await Promise.all([ocrPromise, graphPromise]);
+    // OCR이 image_no_content로 실패해도 도형 분석은 계속 진행
+    let ocrResult: any = null;
+    let ocrFailed = false;
+    let graphData: any = null;
+    try {
+      const [ocr, graph] = await Promise.all([ocrPromise, graphPromise]);
+      ocrResult = ocr;
+      graphData = graph;
+    } catch (ocrErr: any) {
+      // Mathpix "Content not found" — 도형만 있는 이미지
+      if (ocrErr?.details?.error_info?.id === 'image_no_content' || ocrErr?.message?.includes('Content not found')) {
+        console.log('[Reanalyze] OCR: 텍스트 없음 (도형만 있는 이미지) — 도형 분석만 진행');
+        ocrFailed = true;
+        graphData = analyzeGraph ? await analyzeGraphWithVision(imageBase64).catch(() => null) : null;
+      } else {
+        throw ocrErr;
+      }
+    }
 
     // Mathpix Markdown 텍스트 (수식 $...$ 인라인)
-    const rawOcrText = ocrResult.latex_styled || ocrResult.text || '';
-    const confidence = ocrResult.confidence || 0.8;
+    const rawOcrText = ocrFailed ? '' : (ocrResult?.latex_styled || ocrResult?.text || '');
+    const confidence = ocrFailed ? 0 : (ocrResult?.confidence || 0.8);
 
     console.log(`[Reanalyze] OCR result: ${rawOcrText.length} chars, confidence=${confidence}`);
     if (graphData && graphData.type !== 'none') {
@@ -534,9 +551,9 @@ function extractChoicesFromOCR(text: string): string[] {
   }
 
   // 2. (1) (2) (3) (4) (5) 정방향 분리
-  // 소문제("구하시오", "[N점]" 등)든 선택지든 모두 분리하여 choices로 반환
-  // 프론트에서 소문제 패턴 감지 시 (1)(2)(3) 형태로 렌더링
+  // ★ 서술형 소문제 감지: "구하시오", "설명하시오" 등이 포함되면 선택지가 아닌 본문으로 유지
   {
+    const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오/;
     const parenRegex = /\(([1-5])\)/g;
     const parenPositions: { idx: number; len: number }[] = [];
     while ((m = parenRegex.exec(text)) !== null) {
@@ -544,6 +561,24 @@ function extractChoicesFromOCR(text: string): string[] {
     }
 
     if (parenPositions.length >= 2) {
+      // 각 (N) 뒤 텍스트에서 서술형 키워드 확인
+      let hasSubProblem = false;
+      for (let i = 0; i < parenPositions.length; i++) {
+        const start = parenPositions[i].idx + parenPositions[i].len;
+        const end = i + 1 < parenPositions.length ? parenPositions[i + 1].idx : text.length;
+        const segment = text.substring(start, end).trim();
+        if (subProblemKeywords.test(segment)) {
+          hasSubProblem = true;
+          break;
+        }
+      }
+
+      // 서술형 소문제면 choices로 분리하지 않음
+      if (hasSubProblem) {
+        // choices 빈 배열 반환 → 본문에 (1)(2) 유지
+        return [];
+      }
+
       const choices: string[] = [];
       for (let i = 0; i < parenPositions.length; i++) {
         const start = parenPositions[i].idx + parenPositions[i].len;
@@ -556,6 +591,7 @@ function extractChoicesFromOCR(text: string): string[] {
   }
 
   // 3. 1) 2) 3) ... 정방향 분리
+  // ★ 서술형 감지 동일 적용
   const numRegex = /(?:^|\s)([1-5])\s*\)/gm;
   const numPositions: { idx: number; len: number }[] = [];
   while ((m = numRegex.exec(text)) !== null) {
@@ -563,6 +599,15 @@ function extractChoicesFromOCR(text: string): string[] {
   }
 
   if (numPositions.length >= 2) {
+    const subProblemKw2 = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오/;
+    let hasSub2 = false;
+    for (let i = 0; i < numPositions.length; i++) {
+      const start = numPositions[i].idx + numPositions[i].len;
+      const end = i + 1 < numPositions.length ? numPositions[i + 1].idx : text.length;
+      if (subProblemKw2.test(text.substring(start, end))) { hasSub2 = true; break; }
+    }
+    if (hasSub2) return [];
+
     const choices: string[] = [];
     for (let i = 0; i < numPositions.length; i++) {
       const start = numPositions[i].idx + numPositions[i].len;
@@ -611,27 +656,20 @@ function normalizeChoiceText(text: string): string {
  * 함수 그래프, 좌표 평면, 기하 도형 등을 해석하여 Desmos 수식으로 변환
  */
 async function analyzeGraphWithVision(imageBase64: string): Promise<GraphData | null> {
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  if (!OPENAI_API_KEY) return null;
+  const apiKey = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('[GraphVision] No GOOGLE_AI_KEY or GEMINI_API_KEY');
+    return null;
+  }
 
-  const visionController = new AbortController();
-  const visionTimeout = setTimeout(() => visionController.abort(), 15000); // 15초 타임아웃
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const geminiModelName = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 
-  let response: Response;
-  try {
-    response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      signal: visionController.signal,
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `당신은 수학 시험지의 그래프/도형을 분석하여 Desmos 그래핑 계산기용 수식으로 변환하는 전문가입니다.
+  const imageData = imageBase64.startsWith('data:')
+    ? imageBase64.split(',')[1]
+    : imageBase64;
+
+  const prompt = `당신은 수학 시험지의 그래프/도형을 분석하여 Desmos 그래핑 계산기용 수식으로 변환하는 전문가입니다.
 
 이미지에서 그래프를 찾아 Desmos가 렌더링할 수 있는 정확한 수식을 추출하세요.
 
@@ -689,54 +727,28 @@ async function analyzeGraphWithVision(imageBase64: string): Promise<GraphData | 
 ■ description:
 - 한국어로 그래프 설명 (이 필드만 한국어 허용)
 
-■ 그래프가 없으면: {"type": "none"}`,
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageBase64,
-                  detail: 'high',
-                },
-              },
-              {
-                type: 'text',
-                text: '이 수학 문제 이미지에서 그래프가 있으면 Desmos 수식으로 변환해주세요. 매개변수(a,b,c)는 반드시 구체적 숫자로 대입하세요. JSON으로만 응답하세요.',
-              },
-            ],
-          },
-        ],
-        temperature: 0.1,
-        max_tokens: 600,
-      }),
+■ 그래프가 없으면: {"type": "none"}
+
+이 수학 문제 이미지에서 그래프가 있으면 Desmos 수식으로 변환해주세요. 매개변수(a,b,c)는 반드시 구체적 숫자로 대입하세요. JSON으로만 응답하세요.`;
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: geminiModelName,
+      generationConfig: { temperature: 0.1, maxOutputTokens: 800 },
     });
-  } catch (err: unknown) {
-    clearTimeout(visionTimeout);
-    if (err instanceof Error && err.name === 'AbortError') {
-      console.warn('[GraphVision] Timeout (15s), skipping graph analysis');
-      return null;
-    }
-    throw err;
-  } finally {
-    clearTimeout(visionTimeout);
-  }
 
-  if (!response.ok) {
-    // 429는 rate limit — 로그만 남기고 조용히 null 반환
-    if (response.status === 429) {
-      console.warn('[GraphVision] Rate limited (429), skipping graph analysis');
-      return null;
-    }
-    throw new Error(`GPT-4o Vision API error: ${response.status}`);
-  }
+    console.log(`[GraphVision] Gemini (${geminiModelName}) 그래프 분석 시작...`);
 
-  const data = await response.json();
-  const content = data.choices[0]?.message?.content?.trim();
-  if (!content) return null;
+    const result = await model.generateContent([
+      { inlineData: { mimeType: 'image/png', data: imageData } },
+      { text: prompt },
+    ]);
 
-  console.log('[GraphVision] Raw GPT response:', content);
+    const content = result.response.text()?.trim();
+    if (!content) return null;
+
+    console.log('[GraphVision] Gemini response:', content.substring(0, 200));
 
   try {
     // JSON 파싱 (```json ... ``` 래핑 제거)
@@ -776,8 +788,12 @@ async function analyzeGraphWithVision(imageBase64: string): Promise<GraphData | 
     }
 
     return parsed;
-  } catch {
-    console.warn('[GraphVision] Failed to parse GPT response:', content);
+  } catch (parseErr) {
+    console.warn('[GraphVision] Failed to parse response:', parseErr);
+    return null;
+  }
+  } catch (err) {
+    console.warn('[GraphVision] Gemini graph analysis error:', err instanceof Error ? err.message : err);
     return null;
   }
 }

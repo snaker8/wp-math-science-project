@@ -9,6 +9,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
+/** 과학 과목인지 판단 */
+function isScienceSubject(subject?: string): boolean {
+  if (!subject) return false;
+  return /과학|물리|화학|생명|생물|지구|IS[12]|PHY|CHE|BIO|ESC|science/i.test(subject);
+}
+
+/** 문제가 속한 시험지의 과목 조회 */
+async function getExamSubject(problemId: string): Promise<string | null> {
+  if (!supabaseAdmin) return null;
+  const { data: ep } = await supabaseAdmin
+    .from('exam_problems')
+    .select('exam_id')
+    .eq('problem_id', problemId)
+    .limit(1)
+    .single();
+  if (!ep?.exam_id) return null;
+  const { data: exam } = await supabaseAdmin
+    .from('exams')
+    .select('subject')
+    .eq('id', ep.exam_id)
+    .single();
+  return exam?.subject || null;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
@@ -29,7 +53,7 @@ export async function POST(
     // 1. 기존 문제 데이터 조회
     const { data: problem, error: fetchError } = await supabaseAdmin
       .from('problems')
-      .select('id, content_latex, solution_latex, answer_json, ai_analysis, images, question_number, tags')
+      .select('id, content_latex, solution_latex, answer_json, ai_analysis, images, source_number, tags')
       .eq('id', problemId)
       .single();
 
@@ -47,6 +71,11 @@ export async function POST(
       .eq('problem_id', problemId)
       .single();
 
+    // ★ 시험지 과목 확인 (과학/수학 분류 분기용)
+    const examSubject = await getExamSubject(problemId);
+    const isScience = isScienceSubject(examSubject || '');
+    console.log(`[Reanalyze] problemId=${problemId}, examSubject="${examSubject}", isScience=${isScience}`);
+
     // 3. 크롭 이미지가 있는지 확인 → 있으면 OCR 재실행
     const cropImageUrl = findCropImageUrl(problem);
 
@@ -60,7 +89,7 @@ export async function POST(
     // 4. 크롭 이미지 없음 → 기존 content_latex 기반 분류만 재실행
     console.log(`[Reanalyze] 크롭 이미지 없음 — 분류만 재실행`);
     return await reanalyzeClassificationOnly(
-      problemId, problem, existingClassification, isAdvanced
+      problemId, problem, existingClassification, isAdvanced, isScience, examSubject
     );
   } catch (error) {
     console.error('[Reanalyze] Error:', error);
@@ -132,7 +161,7 @@ async function reanalyzeWithOCR(
       body: JSON.stringify({
         imageBase64,
         fullAnalysis: true,
-        problemNumber: problem.question_number,
+        problemNumber: problem.source_number,
         problemId,
         analyzeGraph: true,
       }),
@@ -149,10 +178,11 @@ async function reanalyzeWithOCR(
     const ocrData = await reanalyzeRes.json();
     console.log(`[Reanalyze] OCR 완료: ${ocrData.ocrText?.length || 0}자, 선택지 ${ocrData.choices?.length || 0}개`);
 
-    // 3. DB 업데이트 — OCR 텍스트 + 선택지 + 분류 모두 갱신
-    const updateData: Record<string, unknown> = {
-      content_latex: ocrData.ocrText,
-    };
+    // 3. DB 업데이트 — OCR 텍스트가 있을 때만 갱신 (빈 문자열이면 기존 유지)
+    const updateData: Record<string, unknown> = {};
+    if (ocrData.ocrText && ocrData.ocrText.trim().length > 0) {
+      updateData.content_latex = ocrData.ocrText;
+    }
 
     // 선택지 업데이트
     if (ocrData.choices && ocrData.choices.length > 0) {
@@ -265,7 +295,9 @@ async function reanalyzeClassificationOnly(
   problemId: string,
   problem: any,
   existingClassification: any,
-  isAdvanced: boolean
+  isAdvanced: boolean,
+  isScience: boolean = false,
+  examSubject: string | null = null
 ) {
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) {
@@ -279,7 +311,42 @@ async function reanalyzeClassificationOnly(
   const model = isAdvanced ? 'gpt-4o' : (process.env.OPENAI_MODEL || 'gpt-4o-mini');
   const contentText = problem.content_latex || '';
 
-  const systemPrompt = `당신은 한국 수학 교육 전문가입니다. 주어진 수학 문제의 **분류(유형/단원/난이도)만** 분석하세요.
+  // ★ 과학/수학에 따라 프롬프트 분기
+  const systemPrompt = isScience
+    ? `당신은 한국 고등학교 과학 교육과정(통합과학, 물리학, 화학, 생명과학, 지구과학) 전문가입니다.
+주어진 과학 문제의 **분류(과목/단원/난이도)와 풀이**를 분석하세요.
+
+■ 과목 체계: IS1=공통과학1, IS2=공통과학2, PHY1=물리학1, CHE1=화학1, BIO1=생명과학1, ESC1=지구과학1
+■ 난이도 6단계 (사고 과정 복잡도 기준):
+  <1>개념: 용어/정의 알면 바로. <2>이해: 원리 1개 적용/단순 계산 1회.
+  <3>해석: 자료 해석 핵심(자료 안 읽으면 못 풀림). <4>응용: 복합 조건/합답형ㄱㄴㄷ/다단원 연계.
+  <5>최고난도: 비정형 추론/모델링/숨은 조건. <6>특이: 범위밖/오류(중복태그).
+■ 핵심 규칙: 합답형(ㄱㄴㄷ)→원칙적 <4>응용. 추론 고난도면 <5>. 자료해석+개념2개연결→<4>.
+  계산 길어도 공식대입 반복이면 <2>or<3>. 자료있어도 읽을 필요없이 답 나오면 <1>.
+■ 시험지 과목: ${examSubject || '미지정'}
+
+다음 JSON 형식으로 응답하세요:
+{
+  "classification": {
+    "typeCode": "과목코드-단원-번호 (예: IS1-02-001)",
+    "typeName": "유형 이름 (한국어)",
+    "subject": "과목명 (공통과학1, 물리학1, 화학1, 생명과학1, 지구과학1 등)",
+    "scienceSubject": "과목코드 (IS1, PHY1, CHE1, BIO1, ESC1 등)",
+    "chapter": "대단원명",
+    "section": "소단원명",
+    "difficulty": 3,
+    "difficultyLabel": "해석",
+    "cognitiveDomain": "UNDERSTANDING|CALCULATION|INFERENCE|PROBLEM_SOLVING",
+    "confidence": 0.85
+  },
+  "solution": {
+    "approach": "풀이 전략 요약",
+    "steps": [{"stepNumber": 1, "description": "풀이 설명", "explanation": "근거"}],
+    "finalAnswer": "최종 정답 ★필수★"
+  },
+  "correctedContent": null
+}`
+    : `당신은 한국 수학 교육 전문가입니다. 주어진 수학 문제의 **분류(유형/단원/난이도)만** 분석하세요.
 풀이나 해설은 생성하지 마세요.
 
 다음 JSON 형식으로 응답하세요:
@@ -296,7 +363,8 @@ async function reanalyzeClassificationOnly(
   "correctedContent": "수정이 필요하면 수정된 LaTeX 내용, 아니면 null"
 }`;
 
-  const userPrompt = `다음 수학 문제를 분석해주세요:\n\n${contentText}`;
+  const subjectLabel = isScience ? '과학' : '수학';
+  const userPrompt = `다음 ${subjectLabel} 문제를 분석해주세요:\n\n${contentText}`;
 
   const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',

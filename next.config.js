@@ -8,6 +8,12 @@ const nextConfig = {
   compiler: {
     styledComponents: false,
   },
+  // ★ 대용량 PDF 업로드 지원 (기본 4MB → 100MB)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
+  },
 };
 
 module.exports = nextConfig;

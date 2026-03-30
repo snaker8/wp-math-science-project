@@ -120,6 +120,17 @@ interface JobData {
   pages: PageData[];
   pdfUrl?: string;
   bookGroupId?: string | null;  // ★ 클라우드 북그룹 ID (자산화 시 사용)
+  subjectArea?: 'math' | 'science';
+  scienceSubject?: string;
+  curriculumVersion?: '2015' | '2022';
+  imagePipeline?: {
+    status: 'running' | 'done' | 'error';
+    extracted_count: number;
+    enhanced_count: number;
+    db_entries_added: number;
+    images: Array<{ filename: string; page: number; width: number; height: number; upscaled: boolean }>;
+    error?: string;
+  } | null;
 }
 
 // ============================================================================
@@ -1893,6 +1904,16 @@ function extractProblemContent(rawContent: string, fallbackTypeName?: string): {
     cleanedLines.push(line);
   }
 
+  // ★ 문제 시작점을 못 찾았으면 헤더만 제거하고 전체 내용 사용
+  if (!foundQuestionStart) {
+    const headerFiltered = lines.filter(line => {
+      const t = line.trim();
+      if (!t) return true;
+      return !HEADER_LINE_PATTERNS.some(p => p.test(t));
+    });
+    return { content: headerFiltered.join('\n').trim() || rawContent.trim() };
+  }
+
   const cleaned = cleanedLines.join('\n').trim();
 
   // 2. 정리된 텍스트에서 문제 번호 이후 내용 추출
@@ -1976,6 +1997,9 @@ export default function AnalyzeJobPage() {
   const searchParams = useSearchParams();
   const jobId = params.jobId as string;
   const urlBookGroupId = searchParams.get('bookGroupId');
+  const urlSubjectArea = searchParams.get('subjectArea') as 'math' | 'science' | null;
+  const urlScienceSubject = searchParams.get('scienceSubject');
+  const urlCurriculumVersion = searchParams.get('curriculumVersion') as '2015' | '2022' | null;
 
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -2312,6 +2336,10 @@ export default function AnalyzeJobPage() {
       pages,
       pdfUrl: pdfUrl || undefined,
       bookGroupId: job.bookGroupId || prevData?.bookGroupId || urlBookGroupId || null,  // ★ 북그룹 ID 보존 (URL 파라미터 폴백)
+      subjectArea: job.subjectArea || prevData?.subjectArea || urlSubjectArea || 'math',
+      scienceSubject: job.scienceSubject || prevData?.scienceSubject || urlScienceSubject || undefined,
+      curriculumVersion: job.curriculumVersion || prevData?.curriculumVersion || urlCurriculumVersion || '2022',
+      imagePipeline: job._imagePipeline || prevData?.imagePipeline || null,
     };
   }, []);
 
@@ -2329,7 +2357,9 @@ export default function AnalyzeJobPage() {
         }
 
         const data = await res.json();
-        const { job, results, pdfUrl, savedToDb } = data;
+        const { job, results, pdfUrl, savedToDb, imagePipeline } = data;
+        // 이미지 파이프라인 결과를 job 객체에 주입 (buildJobData에서 사용)
+        if (imagePipeline) job._imagePipeline = imagePipeline;
 
         // ★ 디버그: 서버에서 받은 데이터 확인
         if (results && results.length > 0) {
@@ -2403,9 +2433,18 @@ export default function AnalyzeJobPage() {
       fetchAndUpdate();
     }, 2000);
 
+    // 탭 복귀 시 즉시 폴링 (비활성 탭에서 setInterval 제한 보완)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !cancelled) {
+        fetchAndUpdate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
       if (pollInterval) clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [jobId, buildJobData]);
 
@@ -3624,7 +3663,18 @@ export default function AnalyzeJobPage() {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider">PDF 문제 분석</div>
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+              {jobData.subjectArea === 'science' ? (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]">
+                  과학
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold text-[10px]">
+                  수학
+                </span>
+              )}
+              문제 분석
+            </div>
             <h1 className="text-sm font-bold text-white truncate max-w-[400px]">
               {jobData.fileName}
             </h1>
@@ -3632,6 +3682,25 @@ export default function AnalyzeJobPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* 이미지 파이프라인 결과 배지 */}
+          {jobData.imagePipeline && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${
+              jobData.imagePipeline.status === 'running'
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                : jobData.imagePipeline.status === 'done'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-300 border border-red-500/30'
+            }`}>
+              {jobData.imagePipeline.status === 'running' ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> 도식 추출 중...</>
+              ) : jobData.imagePipeline.status === 'done' ? (
+                <><ImagePlus className="h-3 w-3" /> 도식 {jobData.imagePipeline.extracted_count}개 추출 · {jobData.imagePipeline.enhanced_count}개 보정</>
+              ) : (
+                <><AlertCircle className="h-3 w-3" /> 이미지 파이프라인 오류</>
+              )}
+            </div>
+          )}
+
           {/* 배치 분석 진행률 */}
           {isBatchAnalyzing && (
             <div className="flex items-center gap-2">
@@ -3895,6 +3964,12 @@ export default function AnalyzeJobPage() {
         </div>
 
         {/* --- 중앙: PDF 이미지 + 바운딩 박스 --- */}
+        {jobData.fileName?.match(/\.hwpx?$/i) && !jobData.pdfUrl && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-blue-500/20 border border-blue-500/40 rounded-lg text-blue-300 text-xs text-center max-w-md animate-pulse">
+            <Loader2 className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5 animate-spin" />
+            HWP → PDF 변환 중... 완료되면 미리보기가 표시됩니다.
+          </div>
+        )}
         <PdfViewerWithBoxes
           pdfUrl={jobData.pdfUrl}
           pageNumber={currentPage}

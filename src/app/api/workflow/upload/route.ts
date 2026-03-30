@@ -2,6 +2,10 @@
 // Cloud Flow API - PDF 업로드 및 자동 분류 백그라운드 작업
 // ============================================================================
 
+// ★ 대용량 PDF 지원: API Route 설정
+export const maxDuration = 300; // 5분 타임아웃
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
@@ -10,17 +14,29 @@ import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
+/** 이미지 파이프라인 결과 타입 */
+interface ImagePipelineResult {
+  status: 'running' | 'done' | 'error';
+  extracted_count: number;
+  enhanced_count: number;
+  db_entries_added: number;
+  images: Array<{ filename: string; page: number; width: number; height: number; upscaled: boolean }>;
+  error?: string;
+}
+
 const globalForJobs = globalThis as unknown as {
   __jobStore?: Map<string, UploadJob>;
   __jobResults?: Map<string, LLMAnalysisResult[]>;
   __fileBufferStore?: Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>;
   __autoSavedExams?: Map<string, string>; // jobId → examId (자동 자산화된 시험지 ID)
+  __imagePipelineResults?: Map<string, ImagePipelineResult>; // jobId → 이미지 파이프라인 결과
 };
 
 const jobStore = globalForJobs.__jobStore ?? (globalForJobs.__jobStore = new Map<string, UploadJob>());
 const jobResults = globalForJobs.__jobResults ?? (globalForJobs.__jobResults = new Map<string, LLMAnalysisResult[]>());
 const fileBufferStore = globalForJobs.__fileBufferStore ?? (globalForJobs.__fileBufferStore = new Map<string, { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }>());
 const autoSavedExams = globalForJobs.__autoSavedExams ?? (globalForJobs.__autoSavedExams = new Map<string, string>());
+const imagePipelineResults = globalForJobs.__imagePipelineResults ?? (globalForJobs.__imagePipelineResults = new Map<string, ImagePipelineResult>());
 
 /**
  * POST /api/workflow/upload
@@ -58,6 +74,11 @@ export async function POST(request: NextRequest) {
     const autoClassify = formData.get('autoClassify') === 'true';
     const generateSolutions = formData.get('generateSolutions') === 'true';
     const bookGroupId = formData.get('bookGroupId') as string | null;
+    const appendToExamId = formData.get('appendTo') as string | null; // 기존 시험지에 병합
+    const subjectArea = (formData.get('subjectArea') as 'math' | 'science') || 'math';
+    const scienceSubject = formData.get('scienceSubject') as string | null;
+    const curriculumVersion = (formData.get('curriculumVersion') as '2015' | '2022') || '2022';
+    const scienceMode = (formData.get('scienceMode') as 'diagrams_only' | 'full') || 'full';
 
     if (!file) {
       return NextResponse.json(
@@ -74,6 +95,31 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // ★ 과학 도식 추출만 모드: Storage/Job 생성 없이 이미지 파이프라인만 실행
+    const isDiagramsOnly = subjectArea === 'science' && scienceMode === 'diagrams_only';
+    if (isDiagramsOnly) {
+      const fileBuffer = await file.arrayBuffer();
+      const tempJobId = crypto.randomUUID();
+
+      // 이미지 파이프라인만 실행 (Storage 업로드, Job 생성 안 함)
+      runScienceImagePipeline(tempJobId, fileBuffer, file.name, scienceSubject).catch(console.error);
+
+      return NextResponse.json({
+        success: true,
+        jobId: tempJobId,
+        mode: 'diagrams_only',
+        message: '도식 이미지 추출이 시작되었습니다.',
+        job: {
+          id: tempJobId,
+          fileName: file.name,
+          status: 'UPLOADING',
+          progress: 0,
+        },
+      });
+    }
+
+    // ── 이하: 수학 or 과학 문제 자산화 모드 ──
 
     // Job 생성 (userId는 인증된 사용자 ID 우선 사용)
     const effectiveUserId = userId !== 'anonymous' ? userId : (formUserId || 'anonymous');
@@ -93,6 +139,10 @@ export async function POST(request: NextRequest) {
       autoClassify,
       generateSolutions,
       bookGroupId: bookGroupId || undefined,  // ★ 클라우드 북그룹 ID 저장
+      appendToExamId: appendToExamId || undefined, // ★ 기존 시험지에 병합
+      subjectArea,
+      scienceSubject: scienceSubject || undefined,
+      curriculumVersion: subjectArea === 'science' ? curriculumVersion : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -129,9 +179,19 @@ export async function POST(request: NextRequest) {
 
     fileBufferStore.set(job.id, buffers);
 
+    // ★ HWP 파일: autoClassify 여부와 무관하게 PDF 변환 실행 (미리보기용)
+    if (fileType === 'HWP') {
+      convertHWPInBackground(job.id, buffers.problem, job).catch(console.error);
+    }
+
     // 백그라운드 처리 시작 (non-blocking)
     if (autoClassify) {
       processJobInBackground(job.id, buffers).catch(console.error);
+    }
+
+    // ★ 과학 문제 자산화 모드: 이미지 파이프라인도 병렬 실행
+    if (subjectArea === 'science') {
+      runScienceImagePipeline(job.id, fileBuffer, file.name, scienceSubject).catch(console.error);
     }
 
     return NextResponse.json({
@@ -201,9 +261,10 @@ export async function GET(request: NextRequest) {
   }
 
   // PDF 파일 URL 생성 (서버 사이드 프록시를 통해 CORS 문제 회피)
+  // ★ HWP 파일은 변환 완료 전까지 pdfUrl을 null로 반환 (PDF.js 422 에러 방지)
   let pdfUrl: string | null = null;
-  if (job.storagePath) {
-    // 프록시 URL 사용 (CORS 문제 없음)
+  if (job.storagePath && !job.storagePath.match(/\.(hwp|hwpx)$/i)) {
+    // PDF 또는 변환된 PDF만 프록시 URL 생성
     pdfUrl = `/api/workflow/pdf-proxy?path=${encodeURIComponent(job.storagePath)}`;
   }
 
@@ -211,12 +272,16 @@ export async function GET(request: NextRequest) {
   const autoExamId = autoSavedExams.get(jobId);
   const savedToDb = !!autoExamId;
 
+  // ★ 이미지 파이프라인 결과
+  const imgPipeResult = imagePipelineResults.get(jobId) || null;
+
   return NextResponse.json({
     job: {
       ...job,
       statusLabel: getStatusLabel(job.status),
     },
     pdfUrl,
+    imagePipeline: imgPipeResult,
     results: results || null,
     hasResults: !!results && results.length > 0,
     savedToDb,
@@ -464,6 +529,108 @@ async function uploadToStorage(
   return storagePath;
 }
 
+/**
+ * 과학 과목 이미지 파이프라인 — 업로드 즉시 실행 (autoClassify 무관)
+ * OCR/분류와 독립적으로 도식 이미지만 추출·보정·DB 저장
+ */
+async function runScienceImagePipeline(
+  jobId: string,
+  fileBuffer: ArrayBuffer,
+  fileName: string,
+  scienceSubject?: string | null,
+): Promise<void> {
+  // 시작 상태 저장
+  imagePipelineResults.set(jobId, {
+    status: 'running', extracted_count: 0, enhanced_count: 0, db_entries_added: 0, images: [],
+  });
+
+  try {
+    const { extractDocumentImages } = await import('@/lib/image-pipeline/workflow-integration');
+    console.log(`[Job ${jobId}] 과학 이미지 파이프라인 시작 (subject: ${scienceSubject || 'science'})`);
+    const imageResult = await extractDocumentImages(fileBuffer, fileName, {
+      subject: 'science',
+      sourceName: fileName.replace(/\.[^.]+$/, ''),
+      scienceSubject: scienceSubject || undefined,
+      uploadToSupabase: true,
+    });
+    if (imageResult) {
+      console.log(`[Job ${jobId}] 이미지 파이프라인 완료: ${imageResult.extracted_count}개 추출, ${imageResult.enhanced_count}개 보정`);
+      imagePipelineResults.set(jobId, {
+        status: 'done',
+        extracted_count: imageResult.extracted_count,
+        enhanced_count: imageResult.enhanced_count,
+        db_entries_added: imageResult.db_entries_added,
+        images: imageResult.images.map(img => ({
+          filename: img.filename, page: img.page,
+          width: img.width, height: img.height, upscaled: img.upscaled,
+        })),
+      });
+    } else {
+      console.log(`[Job ${jobId}] 이미지 파이프라인 서버 미실행 — 건너뜀`);
+      imagePipelineResults.set(jobId, {
+        status: 'error', extracted_count: 0, enhanced_count: 0, db_entries_added: 0, images: [],
+        error: '이미지 파이프라인 서버 미실행 (port 8200)',
+      });
+    }
+  } catch (err) {
+    console.warn(`[Job ${jobId}] 이미지 파이프라인 실패 (무시):`, err);
+    imagePipelineResults.set(jobId, {
+      status: 'error', extracted_count: 0, enhanced_count: 0, db_entries_added: 0, images: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * HWP → PDF 변환만 단독 실행 (autoClassify=false일 때 미리보기용)
+ * autoClassify=true일 때는 processJobInBackground 내에서 처리하므로 중복 실행하지 않음
+ */
+async function convertHWPInBackground(
+  jobId: string,
+  problemBuffer: ArrayBuffer,
+  job: UploadJob,
+): Promise<void> {
+  try {
+    const currentJob = jobStore.get(jobId);
+    if (currentJob) {
+      currentJob.currentStep = '한글(HWP) → PDF 변환 중...';
+      currentJob.progress = 5;
+      jobStore.set(jobId, currentJob);
+    }
+
+    const pdfBuffer = await convertHWPtoPDF(problemBuffer, job.fileName);
+    convertedPdfStore.set(jobId, pdfBuffer);
+    console.log(`[Job ${jobId}] HWP → PDF 변환 성공: ${pdfBuffer.byteLength} bytes`);
+
+    // 변환된 PDF를 Storage에 업로드 + storagePath 갱신
+    try {
+      const pdfStoragePath = job.storagePath.replace(/\.(hwp|hwpx)$/i, '_converted.pdf');
+      const storageClient = supabaseAdmin || (await createSupabaseServerClient());
+      if (storageClient) {
+        await storageClient.storage
+          .from('source-files')
+          .upload(pdfStoragePath, Buffer.from(pdfBuffer), {
+            contentType: 'application/pdf',
+            upsert: true,
+          });
+        console.log(`[Job ${jobId}] 변환 PDF Storage 업로드: ${pdfStoragePath}`);
+
+        const updatedJob = jobStore.get(jobId);
+        if (updatedJob) {
+          updatedJob.storagePath = pdfStoragePath;
+          jobStore.set(jobId, updatedJob);
+        }
+      }
+    } catch (uploadErr) {
+      console.warn(`[Job ${jobId}] 변환 PDF Storage 업로드 실패:`, uploadErr);
+    }
+  } catch (convErr) {
+    const errMsg = convErr instanceof Error ? convErr.message : String(convErr);
+    console.error(`[Job ${jobId}] HWP→PDF 사전 변환 실패:`, errMsg);
+    // 사전 변환 실패는 processJobInBackground에서 재시도됨
+  }
+}
+
 async function processJobInBackground(
   jobId: string,
   buffers?: { problem: ArrayBuffer; answer?: ArrayBuffer; quickAnswer?: ArrayBuffer }
@@ -480,7 +647,8 @@ async function processJobInBackground(
   }
 
   // ★ HWP 파일이면 LibreOffice로 PDF 변환 (사전 처리)
-  if (job.fileType === 'HWP') {
+  // convertHWPInBackground에서 이미 변환된 경우 스킵
+  if (job.fileType === 'HWP' && !convertedPdfStore.has(jobId)) {
     try {
       const currentJob = jobStore.get(jobId);
       if (currentJob) {
@@ -493,7 +661,7 @@ async function processJobInBackground(
       convertedPdfStore.set(jobId, pdfBuffer);
       console.log(`[Job ${jobId}] HWP → PDF 변환 성공: ${pdfBuffer.byteLength} bytes`);
 
-      // ★ 변환된 PDF를 Storage에 업로드 (미리보기용)
+      // ★ 변환된 PDF를 Storage에 업로드 (미리보기용) + storagePath 갱신
       try {
         const pdfStoragePath = job.storagePath.replace(/\.(hwp|hwpx)$/i, '_converted.pdf');
         const storageClient = supabaseAdmin || (await createSupabaseServerClient());
@@ -505,14 +673,28 @@ async function processJobInBackground(
               upsert: true,
             });
           console.log(`[Job ${jobId}] 변환 PDF Storage 업로드: ${pdfStoragePath}`);
+
+          const updatedJob = jobStore.get(jobId);
+          if (updatedJob) {
+            updatedJob.storagePath = pdfStoragePath;
+            jobStore.set(jobId, updatedJob);
+          }
         }
       } catch (uploadErr) {
         console.warn(`[Job ${jobId}] 변환 PDF Storage 업로드 실패:`, uploadErr);
       }
     } catch (convErr) {
-      console.warn(`[Job ${jobId}] HWP→PDF 변환 실패, 폴백 파싱 사용:`, convErr instanceof Error ? convErr.message : convErr);
-      console.warn(`[Job ${jobId}] ⚠️ LibreOffice를 설치하면 HWP 파일 처리 품질이 크게 향상됩니다.`);
-      console.warn(`[Job ${jobId}] 설치: winget install TheDocumentFoundation.LibreOffice`);
+      const errMsg = convErr instanceof Error ? convErr.message : String(convErr);
+      console.error(`[Job ${jobId}] HWP→PDF 변환 실패:`, errMsg);
+      // ★ 변환 실패 시 사용자에게 에러 표시 (쓰레기 데이터로 진행하지 않음)
+      const failedJob = jobStore.get(jobId);
+      if (failedJob) {
+        failedJob.status = 'ERROR';
+        failedJob.currentStep = `HWP→PDF 변환 실패: LibreOffice 오류. ${errMsg.includes('timeout') || errMsg.includes('SIGKILL') ? 'LibreOffice가 응답하지 않습니다. 서버를 재시작해 주세요.' : errMsg}`;
+        failedJob.updatedAt = new Date().toISOString();
+        jobStore.set(jobId, failedJob);
+      }
+      return; // 변환 실패 시 더 이상 진행하지 않음
     }
   }
 
@@ -699,14 +881,46 @@ async function saveEditedProblemsDirect(
   // ★ Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   let examId: string | null = null;
   try {
+    // 파일명에서 과목/유형/학년 자동 추출
+    const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
+    const detectSubject = (t: string) => {
+      if (/공통과학1/.test(t)) return '공통과학1';
+      if (/공통과학2/.test(t)) return '공통과학2';
+      if (/물리/.test(t)) return '물리학1';
+      if (/화학/.test(t)) return '화학1';
+      if (/생명|생물/.test(t)) return '생명과학1';
+      if (/지구/.test(t)) return '지구과학1';
+      if (/과학/.test(t)) return '공통과학1';
+      if (/공통수학1/.test(t)) return '공통수학1';
+      if (/공통수학2/.test(t)) return '공통수학2';
+      if (/미적분/.test(t)) return '미적분';
+      if (/확률과통계|확통/.test(t)) return '확률과통계';
+      if (/기하/.test(t)) return '기하';
+      if (/수[학]?2/.test(t)) return '수학2';
+      if (/수[학]?1/.test(t)) return '수학1';
+      return '공통수학1';
+    };
+    const detectExamType = (t: string) => /모의고사|모의|평가원/.test(t) ? '모의고사' : '학교기출';
+    const detectGrade = (t: string) => {
+      if (/중1|1학년.*중/.test(t)) return '중1';
+      if (/중2|2학년.*중/.test(t)) return '중2';
+      if (/중3|3학년.*중|중등/.test(t)) return '중3';
+      if (/고3|3학년/.test(t)) return '고3';
+      if (/고2|2학년/.test(t)) return '고2';
+      return '고1';
+    };
+
     const examInsertData: Record<string, any> = {
-      title: job.fileName.replace(/\.[^/.]+$/, ''),
+      title: fileTitle,
       description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
-      status: 'DRAFT',  // ★ DRAFT: DB enum 유효 값 (CLOUD_ASSET은 enum에 없어 INSERT 실패)
+      status: 'DRAFT',
       created_by: createdBy,
       institute_id: instituteId,
       total_points: editedProblems.length * 4,
       time_limit_minutes: 50,
+      subject: detectSubject(fileTitle),
+      exam_type: detectExamType(fileTitle),
+      grade: detectGrade(fileTitle),
     };
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
@@ -755,7 +969,7 @@ async function saveEditedProblemsDirect(
 
     try {
       const cropImageUrl = imageUrlMap.get(edited.number);
-      const imagesArray = cropImageUrl
+      const imagesArray: Array<{ url: string; type: string; label: string }> = cropImageUrl
         ? [{ url: cropImageUrl, type: 'crop', label: `문제 ${edited.number} 크롭 이미지` }]
         : [];
 
@@ -768,6 +982,40 @@ async function saveEditedProblemsDirect(
 
       // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
       let contentLatex = edited.content || '(문제 내용 없음)';
+
+      // ★ content_latex 내 base64 이미지 → Storage 업로드 + figure_crop 타입으로 분리
+      const base64ImageRegex = /!\[이미지\]\(data:image\/png;base64,([A-Za-z0-9+/=]+)\)/g;
+      let figureIdx = 0;
+      let base64Match;
+      while ((base64Match = base64ImageRegex.exec(contentLatex)) !== null) {
+        try {
+          const imgBase64 = base64Match[1];
+          const imgBuffer = Buffer.from(imgBase64, 'base64');
+          const figurePath = `problem-crops/${jobId}/problem-${edited.number}-figure${figureIdx > 0 ? `-${figureIdx}` : ''}.png`;
+
+          const { data: figData, error: figError } = await supabase.storage
+            .from('source-files')
+            .upload(figurePath, imgBuffer, { contentType: 'image/png', upsert: true });
+
+          if (!figError && figData) {
+            const { data: figUrlData } = supabase.storage
+              .from('source-files')
+              .getPublicUrl(figData.path);
+
+            if (figUrlData?.publicUrl) {
+              // base64를 Storage URL로 교체 (DB 용량 절감)
+              contentLatex = contentLatex.replace(base64Match[0], `![이미지](${figUrlData.publicUrl})`);
+              imagesArray.push({ url: figUrlData.publicUrl, type: 'figure_crop', label: `수동 삽입 도형${figureIdx > 0 ? ` ${figureIdx + 1}` : ''}` });
+              console.log(`[Direct Save] 문제 ${edited.number}번 figure_crop 업로드 완료: ${figUrlData.publicUrl}`);
+            }
+          }
+          figureIdx++;
+        } catch (figErr) {
+          console.error(`[Direct Save] 문제 ${edited.number}번 figure_crop 업로드 오류:`, figErr);
+        }
+        // regex lastIndex 리셋 (contentLatex가 변경되었으므로)
+        base64ImageRegex.lastIndex = 0;
+      }
 
       const { data: problem, error: problemError } = await supabase
         .from('problems')
@@ -787,12 +1035,17 @@ async function saveEditedProblemsDirect(
           },
           images: imagesArray,
           status: 'PENDING_REVIEW',
+          source_number: edited.number || null,
           ai_analysis: {
             classification: {
               typeCode: edited.typeCode || '',
               difficulty: edited.difficulty || 3,
               cognitiveDomain: edited.cognitiveDomain || 'CALCULATION',
             },
+            // ★ figure_crop 또는 인라인 이미지가 있으면 hasFigure 자동 설정
+            ...(imagesArray.some(img => img.type === 'figure_crop')
+              ? { hasFigure: true }
+              : {}),
           },
           tags: [],
           source_name: job.fileName,
@@ -1035,15 +1288,73 @@ async function saveProblemsToDB(
     const firstResult = results[0];
     const classification = firstResult?.classification;
 
-    // schema.sql 기준 컬럼만 사용 (grade, subject, unit, difficulty, problem_count는 schema.sql에 없음)
+    // ★ appendToExamId가 있으면 기존 시험지에 병합 (새 시험지 생성 건너뜀)
+    if (job.appendToExamId) {
+      console.log(`[DB] appendToExamId=${job.appendToExamId} — 기존 시험지에 ${savedProblemIds.length}개 문제 병합`);
+
+      // 마지막 sequence_number 조회
+      const { data: lastSeqData } = await supabase
+        .from('exam_problems')
+        .select('sequence_number')
+        .eq('exam_id', job.appendToExamId)
+        .order('sequence_number', { ascending: false })
+        .limit(1)
+        .single();
+
+      const startSeq = (lastSeqData?.sequence_number || 0) + 1;
+
+      // 이미 연결된 문제 제외
+      const { data: existingEp } = await supabase
+        .from('exam_problems')
+        .select('problem_id')
+        .eq('exam_id', job.appendToExamId)
+        .in('problem_id', savedProblemIds);
+
+      const existingSet = new Set((existingEp || []).map((r: any) => r.problem_id));
+      const toAdd = savedProblemIds.filter(id => !existingSet.has(id));
+
+      for (let i = 0; i < toAdd.length; i++) {
+        await supabase.from('exam_problems').insert({
+          exam_id: job.appendToExamId,
+          problem_id: toAdd[i],
+          sequence_number: startSeq + i,
+          points: 4,
+        });
+      }
+
+      autoSavedExams.set(jobId, job.appendToExamId);
+      console.log(`[DB] 기존 시험지에 ${toAdd.length}개 문제 병합 완료`);
+      return;
+    }
+
+    // schema.sql 기준 컬럼만 사용
+    const fileTitle = job.fileName.replace(/\.[^/.]+$/, "");
+    const detectSubjectAuto = (t: string) => {
+      if (/공통과학1/.test(t)) return '공통과학1';
+      if (/공통과학2/.test(t)) return '공통과학2';
+      if (/물리/.test(t)) return '물리학1';
+      if (/화학/.test(t)) return '화학1';
+      if (/생명|생물/.test(t)) return '생명과학1';
+      if (/지구/.test(t)) return '지구과학1';
+      if (/과학/.test(t)) return '공통과학1';
+      if (/공통수학1/.test(t)) return '공통수학1';
+      if (/공통수학2/.test(t)) return '공통수학2';
+      if (/미적분/.test(t)) return '미적분';
+      if (/확률과통계|확통/.test(t)) return '확률과통계';
+      if (/기하/.test(t)) return '기하';
+      if (/수[학]?2/.test(t)) return '수학2';
+      if (/수[학]?1/.test(t)) return '수학1';
+      return '공통수학1';
+    };
     const examInsertData: Record<string, any> = {
-      title: job.fileName.replace(/\.[^/.]+$/, ""),
+      title: fileTitle,
       description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
-      status: 'DRAFT',  // ★ DRAFT: DB enum 유효 값 (CLOUD_ASSET은 enum에 없어 INSERT 실패)
+      status: 'DRAFT',
       created_by: createdBy,
       institute_id: instituteId,
       total_points: results.length * 4,
       time_limit_minutes: 50,
+      subject: detectSubjectAuto(fileTitle),
     };
 
     // 북그룹 ID가 있으면 설정
@@ -1167,15 +1478,6 @@ async function saveProblemsToDB(
               }
               parts.push('');
             }
-            // 선택지 검증 (객관식)
-            if ((result.solution as any).choiceAnalysis && Array.isArray((result.solution as any).choiceAnalysis)) {
-              parts.push('[선택지 검증]');
-              for (const ca of (result.solution as any).choiceAnalysis) {
-                const icon = ca.isCorrect === false ? '✓' : (ca.isCorrect === true ? '✗' : '');
-                parts.push(`${ca.choice || ''} ${ca.expression || ''} → ${ca.result || ''} ${icon}`);
-              }
-              parts.push('');
-            }
             // 최종 답
             if (result.solution.finalAnswer) {
               parts.push(`∴ 정답: ${result.solution.finalAnswer}`);
@@ -1196,6 +1498,7 @@ async function saveProblemsToDB(
           },
           images: imagesArray,
           status: 'PENDING_REVIEW',
+          source_number: problemNum || null,
           ai_analysis: {
             classification: result.classification,
             solution: result.solution,

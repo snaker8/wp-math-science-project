@@ -1016,6 +1016,15 @@ export default function AnalyzeProblemEditModal({
                       <ImageIcon className="h-3.5 w-3.5" />
                       이미지 추가
                     </button>
+                    <button type="button" onClick={() => {
+                      const map: Record<string, string> = { '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤' };
+                      setOcrText(prev => prev.replace(/\(([1-5])\)/g, (_, n) => map[n] || _));
+                      setEditContent(prev => prev.replace(/\(([1-5])\)/g, (_, n) => map[n] || _));
+                      setEditChoices(prev => prev.map(c => c.replace(/\(([1-5])\)/g, (_, n) => map[n] || _)));
+                    }}
+                      className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-100 transition-colors shadow-sm">
+                      ①②③ 변환
+                    </button>
                   </div>
 
                   {/* OCR 텍스트 영역 */}

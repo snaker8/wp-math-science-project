@@ -34,7 +34,7 @@ interface DesmosCalculatorOptions {
 }
 
 interface DesmosCalculator {
-  setExpression: (expr: { id: string; latex?: string; color?: string; hidden?: boolean; dragMode?: number; pointSize?: number; pointStyle?: string }) => void;
+  setExpression: (expr: { id: string; latex?: string; color?: string; hidden?: boolean; dragMode?: number; pointSize?: number; pointStyle?: string; style?: unknown; lineWidth?: number; parametricDomain?: { min: string; max: string } }) => void;
   removeExpression: (expr: { id: string }) => void;
   getState: () => { expressions: { list: Array<{ id: string; latex?: string; color?: string }> } };
   setState: (state: unknown) => void;
@@ -52,6 +52,8 @@ interface GraphEditData {
   xRange?: [number, number];
   yRange?: [number, number];
   points?: Array<{ x: number; y: number; label?: string }>;
+  /** ★ Desmos 전체 상태 (이전 편집 복원용) */
+  desmosState?: unknown;
 }
 
 interface GraphModalProps {
@@ -67,6 +69,7 @@ interface GraphModalProps {
     xRange: [number, number];
     yRange: [number, number];
     imageDataUrl: string;
+    desmosState?: unknown;
   }) => void;
 }
 
@@ -80,8 +83,10 @@ const GraphModal: React.FC<GraphModalProps> = ({
   onSaveGraphData,
 }) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [showProjections, setShowProjections] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const calculatorRef = useRef<DesmosCalculator | null>(null);
+  const pointCountRef = useRef(0);
 
   // 계산기 초기화
   const initializeCalculator = useCallback(() => {
@@ -104,6 +109,21 @@ const GraphModal: React.FC<GraphModalProps> = ({
     calculatorRef.current = calculator;
     setIsLoading(false);
 
+    // ★ 이전 Desmos 상태가 있으면 통째로 복원 (편집 재개)
+    if (initialGraphData?.desmosState) {
+      try {
+        calculator.setState(initialGraphData.desmosState);
+        // 뷰포트 설정
+        const xRange = initialGraphData?.xRange || [-10, 10];
+        const yRange = initialGraphData?.yRange || [-10, 10];
+        calculator.setMathBounds({ left: xRange[0], right: xRange[1], bottom: yRange[0], top: yRange[1] });
+        setTimeout(() => { try { calculator.resize(); } catch { /* ignore */ } }, 100);
+        return;
+      } catch (err) {
+        console.warn('[GraphModal] Desmos state restore failed, falling back:', err);
+      }
+    }
+
     // AI 데이터가 있으면 초기 수식 설정
     if (initialGraphData?.expressions && initialGraphData.expressions.length > 0) {
       initialGraphData.expressions.forEach((expr, i) => {
@@ -116,17 +136,47 @@ const GraphModal: React.FC<GraphModalProps> = ({
         }
       });
 
-      // ★ 드래그 가능한 점 추가 — 마우스로 위치 조정 가능
+      // ★ 드래그 가능한 점 + 축 투영선 — 변수 기반으로 드래그 시 투영선도 연동
       if (initialGraphData.points) {
+        pointCountRef.current = initialGraphData.points.length;
         initialGraphData.points.forEach((pt, i) => {
-          // 라벨이 있으면 변수 포인트로 생성 (슬라이더 자동 생성)
-          const varName = pt.label || `P_{${i + 1}}`;
+          const xVar = `x_{${i + 1}}`;
+          const yVar = `y_{${i + 1}}`;
+
+          // 변수 정의 (드래그 시 자동 업데이트)
+          calculator.setExpression({ id: `px-${i}`, latex: `${xVar}=${pt.x}` });
+          calculator.setExpression({ id: `py-${i}`, latex: `${yVar}=${pt.y}` });
+
+          // 드래그 가능한 점
+          const label = pt.label || `P_{${i + 1}}`;
           calculator.setExpression({
             id: `point-${i}`,
-            latex: `${varName}=(${pt.x}, ${pt.y})`,
+            latex: `${label}=(${xVar}, ${yVar})`,
             color: '#c74440',
-            dragMode: 2, // Desmos.DragModes.XY = 2 (양방향 드래그)
+            dragMode: 2,
             pointSize: 12,
+          });
+
+          // x축으로 수직 점선 (점 → x축)
+          calculator.setExpression({
+            id: `dashV-${i}`,
+            latex: `(${xVar}, t)`,
+            parametricDomain: { min: '0', max: yVar },
+            color: '#888888',
+            style: (window.Desmos as Record<string, unknown>)?.Styles?.DASHED ?? undefined,
+            lineWidth: 1.5,
+            hidden: !showProjections,
+          });
+
+          // y축으로 수평 점선 (점 → y축)
+          calculator.setExpression({
+            id: `dashH-${i}`,
+            latex: `(t, ${yVar})`,
+            parametricDomain: { min: '0', max: xVar },
+            color: '#888888',
+            style: (window.Desmos as Record<string, unknown>)?.Styles?.DASHED ?? undefined,
+            lineWidth: 1.5,
+            hidden: !showProjections,
           });
         });
       }
@@ -196,6 +246,20 @@ const GraphModal: React.FC<GraphModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialGraphData]);
 
+  // 투영선 토글
+  const toggleProjections = useCallback(() => {
+    setShowProjections(prev => {
+      const next = !prev;
+      if (calculatorRef.current) {
+        for (let i = 0; i < pointCountRef.current; i++) {
+          calculatorRef.current.setExpression({ id: `dashV-${i}`, hidden: !next });
+          calculatorRef.current.setExpression({ id: `dashH-${i}`, hidden: !next });
+        }
+      }
+      return next;
+    });
+  }, []);
+
   // 수식 초기화 (리셋 버튼)
   const handleReset = () => {
     if (calculatorRef.current) {
@@ -213,11 +277,34 @@ const GraphModal: React.FC<GraphModalProps> = ({
       targetPixelRatio: 2,
     });
 
-    // 현재 수식 상태 추출
+    // 현재 수식 상태 추출 — 투영선/변수/포인트 보조 표현식 제외
+    const HELPER_PREFIX = ['px-', 'py-', 'dashV-', 'dashH-', 'point-'];
+
     const state = calculatorRef.current.getState();
     const bounds = calculatorRef.current.graphpaperBounds || { left: -10, right: 10, bottom: -10, top: 10 };
-    const validExprs: GraphExpression[] = (state.expressions?.list || [])
-      .filter((e: { latex?: string }) => e.latex && e.latex.trim().length > 0)
+
+    const isHelperExpr = (id: string, latex: string): boolean => {
+      // ID 기반 필터
+      if (HELPER_PREFIX.some(p => id.startsWith(p))) return true;
+      // 변수 대입 (x_{1}=3, y_{2}=-4 등)
+      if (/^[xy]_\{?\d+\}?\s*=\s*-?[\d.]+$/.test(latex)) return true;
+      // 투영선 파라메트릭 (x_{1}, t) 또는 (t, y_{1})
+      if (/^\(\s*[xy]_\{?\d+\}?\s*,\s*t\s*\)$/.test(latex)) return true;
+      if (/^\(\s*t\s*,\s*[xy]_\{?\d+\}?\s*\)$/.test(latex)) return true;
+      // 포인트 (P_{1}=(x_{1}, y_{1}) 등)
+      if (/^[A-Z](_\{?\d+\}?)?\s*=\s*\(/.test(latex)) return true;
+      // 단순 슬라이더 (a=1, b=2 등) — x, y는 제외 (x=-4는 점근선/직선)
+      if (/^[a-wz]\s*=\s*-?[\d.]+$/.test(latex)) return true;
+      return false;
+    };
+
+    const allExprs = (state.expressions?.list || []);
+    const validExprs: GraphExpression[] = allExprs
+      .filter((e: { id?: string; latex?: string; type?: string }) => {
+        if (!e.latex || e.latex.trim().length === 0) return false;
+        if (e.type === 'folder') return false;
+        return !isHelperExpr(e.id || '', e.latex.trim());
+      })
       .map((e: { id: string; latex?: string; color?: string }, i: number) => ({
         id: e.id || `expr-${i}`,
         latex: e.latex || '',
@@ -225,6 +312,8 @@ const GraphModal: React.FC<GraphModalProps> = ({
         lineStyle: 'solid' as const,
         hidden: false,
       }));
+
+    console.log('[GraphModal] 저장할 수식:', validExprs.map(e => e.latex));
 
     onInsert(imageDataUrl, validExprs);
 
@@ -234,6 +323,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
         xRange: [bounds.left, bounds.right],
         yRange: [bounds.bottom, bounds.top],
         imageDataUrl,
+        desmosState: state, // ★ Desmos 전체 상태 저장
       });
     }
 
@@ -256,6 +346,16 @@ const GraphModal: React.FC<GraphModalProps> = ({
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {pointCountRef.current > 0 && (
+              <button
+                onClick={toggleProjections}
+                className={`btn-reset ${showProjections ? 'btn-active' : ''}`}
+                title="축 투영선 ON/OFF"
+                style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+              >
+                투영선 {showProjections ? 'ON' : 'OFF'}
+              </button>
+            )}
             <button onClick={handleReset} className="btn-reset" title="초기 상태로 리셋">
               <RotateCcw size={16} />
             </button>
@@ -364,6 +464,12 @@ const GraphModal: React.FC<GraphModalProps> = ({
         .btn-reset:hover {
           background-color: #f3f4f6;
           color: #111827;
+        }
+
+        .btn-active {
+          background-color: #eef2ff;
+          border-color: #6366f1;
+          color: #4f46e5;
         }
 
         .graph-modal-body {

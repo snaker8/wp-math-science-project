@@ -324,7 +324,8 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                             : 'text-content-secondary'
                         }`}
                       >
-                        <MixedContentRenderer content={choice} />
+                        <span className="flex-shrink-0">{['①', '②', '③', '④', '⑤'][i] || ''}</span>
+                        <MixedContentRenderer content={choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '')} />
                         {isAnswer && (
                           <span className="ml-1.5 text-[10px] text-cyan-500 font-bold">← 정답</span>
                         )}
