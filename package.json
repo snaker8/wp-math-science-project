@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names next,yolo,imgpipe --prefix-colors blue,yellow,green \"next dev\" \"cd yolo-server && python -m uvicorn server:app --host 0.0.0.0 --port 8100\" \"cd image-pipeline && python -m uvicorn server:app --host 0.0.0.0 --port 8200\"",
+    "dev": "concurrently --kill-others-on-fail --names next,yolo,imgpipe --prefix-colors blue,yellow,green \"next dev\" \"cd yolo-server && python -m uvicorn server:app --host 0.0.0.0 --port 8100\" \"cd image-pipeline && python -m uvicorn server:app --host 0.0.0.0 --port 8200 --timeout-keep-alive 120\"",
     "dev:next": "next dev",
     "dev:yolo": "cd yolo-server && python -m uvicorn server:app --host 0.0.0.0 --port 8100",
     "dev:imgpipe": "cd image-pipeline && python -m uvicorn server:app --host 0.0.0.0 --port 8200",

@@ -27,7 +27,9 @@ export async function GET(request: NextRequest) {
   }
 
   if (!existsSync(absPath)) {
-    return NextResponse.json({ error: 'Image not found', path: normalized }, { status: 404 });
+    console.error(`[diagram-proxy] NOT FOUND: ${absPath}`);
+    console.error(`[diagram-proxy] DB_ROOT: ${DB_ROOT}, filepath: ${filepath}, normalized: ${normalized}`);
+    return NextResponse.json({ error: 'Image not found', path: normalized, absPath, dbRoot: DB_ROOT }, { status: 404 });
   }
 
   try {

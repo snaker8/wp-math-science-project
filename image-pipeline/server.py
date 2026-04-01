@@ -152,6 +152,25 @@ async def extract_images(
                 except Exception as e:
                     item["enhance_error"] = str(e)
 
+        # ★ 쓰레기 이미지 필터링 (배경/그라데이션/장식 자동 제거)
+        processing_status["phase"] = "filtering"
+        filtered = []
+        trash_count = 0
+        for item in extracted:
+            img_path = item.get("enhanced_path") or item["filepath"]
+            if _is_trash_image(img_path):
+                trash_count += 1
+                # 쓰레기 파일 삭제
+                for p in [item.get("enhanced_path"), item["filepath"]]:
+                    if p and os.path.exists(p):
+                        try: os.remove(p)
+                        except: pass
+            else:
+                filtered.append(item)
+        if trash_count > 0:
+            print(f"[Extract] {source_name}: 쓰레기 이미지 {trash_count}개 제거, {len(filtered)}개 유지")
+        extracted = filtered
+
         # DB 인덱스에 추가
         db_entries = []
         for item in extracted:
@@ -170,38 +189,50 @@ async def extract_images(
         db_manager.add_source(source_name, tmp_file, subject, len(extracted))
         db_manager.save_index()
 
-        # ★ AI 태깅 (추출 직후 자동 실행)
+        # ★ AI 태깅 (백그라운드에서 비동기 실행 — 추출 응답은 즉시 반환)
         tagged_count = 0
         if auto_tag and db_entries:
-            processing_status["phase"] = "tagging"
-            try:
-                tag_paths = []
-                for entry in db_entries:
-                    abs_path = str(db_manager.db_root / entry["filepath"])
-                    if os.path.exists(abs_path):
-                        tag_paths.append(abs_path)
+            tag_paths = []
+            for entry in db_entries:
+                abs_path = str(db_manager.db_root / entry["filepath"])
+                if os.path.exists(abs_path):
+                    tag_paths.append(abs_path)
+            if tag_paths:
+                import threading
+                def _bg_tag(paths, src_name):
+                    try:
+                        print(f"[Extract] {src_name}: 백그라운드 AI 태깅 시작 ({len(paths)}개)...")
+                        results = tag_batch(paths)
+                        path_to_result = {r["_source_path"]: r for r in results if "error" not in r}
+                        count = 0
+                        for img in db_manager.index["images"]:
+                            ap = str(db_manager.db_root / img["filepath"])
+                            if ap in path_to_result:
+                                result = path_to_result[ap]
+                                img["tags"] = result
+                                if result.get("unit_code"): img["unit_code"] = result["unit_code"]
+                                if result.get("unit_name"): img["unit_name"] = result["unit_name"]
+                                count += 1
+                        # 배경/장식 자동 제거
+                        trash_types = {"배경", "장식", "로고", "표지", "워터마크", "빈이미지", "그라데이션"}
+                        removed = 0
+                        for img in list(db_manager.index["images"]):
+                            dt = (img.get("tags") or {}).get("diagram_type", "")
+                            if dt in trash_types:
+                                ap = str(db_manager.db_root / img["filepath"])
+                                if os.path.exists(ap):
+                                    try: os.remove(ap)
+                                    except: pass
+                                db_manager.index["images"].remove(img)
+                                removed += 1
+                        db_manager.save_index()
+                        print(f"[Extract] {src_name}: 백그라운드 태깅 완료 ({count}개 태깅, {removed}개 제거)")
+                    except Exception as e:
+                        print(f"[Extract] {src_name}: 백그라운드 태깅 오류 — {e}")
+                threading.Thread(target=_bg_tag, args=(tag_paths, source_name), daemon=True).start()
+                print(f"[Extract] {source_name}: 태깅 {len(tag_paths)}개 백그라운드 시작")
 
-                if tag_paths:
-                    print(f"[Extract] {source_name}: AI 태깅 시작 ({len(tag_paths)}개)...")
-                    tag_results = tag_batch(tag_paths)
-
-                    # DB 인덱스에 태그 반영
-                    path_to_result = {r["_source_path"]: r for r in tag_results if "error" not in r}
-                    for img in db_manager.index["images"]:
-                        abs_path = str(db_manager.db_root / img["filepath"])
-                        if abs_path in path_to_result:
-                            result = path_to_result[abs_path]
-                            img["tags"] = result
-                            if result.get("unit_code"):
-                                img["unit_code"] = result["unit_code"]
-                            if result.get("unit_name"):
-                                img["unit_name"] = result["unit_name"]
-                            tagged_count += 1
-
-                    db_manager.save_index()
-                    print(f"[Extract] {source_name}: AI 태깅 완료 ({tagged_count}/{len(tag_paths)})")
-            except Exception as e:
-                print(f"[Extract] {source_name}: AI 태깅 오류 — {e}")
+        # (기존 동기 태깅 제거 — 위에서 백그라운드 스레드로 대체)
 
         processing_status["phase"] = "done"
         processing_status["active"] = False
@@ -840,6 +871,35 @@ def _auto_crop_pages(page_images: list[dict], min_size: tuple) -> list[dict]:
         })
 
     return cropped_results
+
+
+def _is_trash_image(image_path: str) -> bool:
+    """배경/그라데이션/장식 이미지인지 판별 (색상 분산 + 엣지 비율)"""
+    try:
+        from PIL import Image
+        import numpy as np
+        im = Image.open(image_path).convert("RGB")
+        arr = np.array(im, dtype=np.float32)
+
+        # 색상 표준편차 — 배경/그라데이션은 낮음
+        std = arr.std()
+
+        # 엣지 비율 — 실제 도식은 선/텍스트가 있어 엣지가 많음
+        gray = arr.mean(axis=2)
+        dx = np.abs(np.diff(gray, axis=1))
+        dy = np.abs(np.diff(gray, axis=0))
+        edge_ratio = (np.sum(dx > 20) + np.sum(dy > 20)) / gray.size
+
+        # 지배적 색상 비율 — 단색이면 쓰레기
+        dominant_pct = 0.0
+        for ch in range(3):
+            vals, counts = np.unique((arr[:, :, ch] / 16).astype(int), return_counts=True)
+            dominant_pct = max(dominant_pct, float(counts.max()) / float(counts.sum()))
+
+        is_trash = (std < 25 and edge_ratio < 0.02) or (dominant_pct > 0.85 and edge_ratio < 0.03)
+        return is_trash
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

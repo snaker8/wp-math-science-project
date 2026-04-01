@@ -206,7 +206,7 @@ export async function retagAll(
 export async function checkHealth(): Promise<boolean> {
   try {
     const res = await fetch(`${PIPELINE_URL}/health`, {
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(15000), // 태깅 중에도 응답 대기
     });
     return res.ok;
   } catch {

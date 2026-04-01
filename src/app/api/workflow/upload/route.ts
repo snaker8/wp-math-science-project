@@ -1595,6 +1595,32 @@ async function saveProblemsToDB(
 
   console.log(`[DB] Successfully saved ${savedCount}/${results.length} problems from job ${jobId}`);
 
+  // ★ 분류 결과 기반 exam subject 자동 보정
+  // GPT 분류에서 가장 많이 나온 과목으로 exam subject 업데이트
+  if (examId && supabase) {
+    try {
+      const subjectVotes: Record<string, number> = {};
+      for (const r of results) {
+        const cls = r.classification?.subject || r.classification?.classification?.subject;
+        if (cls && typeof cls === 'string' && cls.length > 1) {
+          subjectVotes[cls] = (subjectVotes[cls] || 0) + 1;
+        }
+      }
+      const topSubject = Object.entries(subjectVotes).sort((a, b) => b[1] - a[1])[0];
+      if (topSubject && topSubject[1] >= Math.ceil(results.length * 0.3)) {
+        const detectedSubject = topSubject[0];
+        const currentSubject = detectSubjectAuto(fileTitle);
+        // 파일명 감지와 GPT 분류가 다르면 GPT 결과로 보정
+        if (detectedSubject !== currentSubject) {
+          await supabase.from('exams').update({ subject: detectedSubject }).eq('id', examId);
+          console.log(`[DB] exam subject 자동 보정: "${currentSubject}" → "${detectedSubject}" (GPT 분류 ${topSubject[1]}/${results.length}문제)`);
+        }
+      }
+    } catch (subjectErr) {
+      console.warn('[DB] exam subject 자동 보정 실패 (무시):', subjectErr);
+    }
+  }
+
   // ★ 자동 자산화 완료: examId를 기록하여 중복 저장 방지
   if (examId) {
     autoSavedExams.set(jobId, examId);
