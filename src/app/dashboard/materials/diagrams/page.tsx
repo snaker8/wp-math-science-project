@@ -159,11 +159,14 @@ export default function DiagramGalleryPage() {
         if (data?.db_stats) setLocalStats(data.db_stats);
         if (data?.processing) {
           setProcessingInfo(data.processing);
-          if (data.processing.active) {
+          if (data.processing.active && data.processing.phase !== 'done') {
             setExtracting(true);
           } else {
             setExtracting(false);
           }
+        } else if (extracting) {
+          // 서버에서 processing 정보가 없으면 추출 상태 해제
+          setExtracting(false);
         }
         // 태깅 상태 추적
         if (data?.tagging) {
@@ -370,19 +373,21 @@ export default function DiagramGalleryPage() {
       </div>
 
       {/* 추출 진행률 배너 (이미지가 있는 상태에서 추출 중일 때) */}
-      {extracting && processingInfo?.active && filteredLocal.length > 0 && (
+      {extracting && processingInfo?.active && processingInfo.phase !== 'done' && filteredLocal.length > 0 && (
         <div className="max-w-7xl mx-auto px-6 pt-4">
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center gap-4">
             <Loader2 className="h-4 w-4 animate-spin text-emerald-400 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-emerald-300 font-medium truncate">
-                  {processingInfo.source} —{' '}
+                  {processingInfo.source || '파일 처리'} —{' '}
                   {processingInfo.phase === 'extracting'
                     ? `페이지 추출 중 (${processingInfo.current_page}/${processingInfo.total_pages})`
                     : processingInfo.phase === 'enhancing'
                       ? '이미지 보정 중'
-                      : '처리 중'}
+                      : processingInfo.phase === 'filtering'
+                        ? '이미지 필터링 중'
+                        : '처리 중'}
                 </p>
                 {processingInfo.total_pages > 0 && (
                   <span className="text-[10px] text-emerald-400/70 ml-2">
@@ -471,10 +476,10 @@ export default function DiagramGalleryPage() {
               <>
                 <Loader2 className="h-10 w-10 animate-spin text-emerald-400 mx-auto mb-4" />
                 <p className="text-sm text-emerald-300 font-medium">도식 이미지 추출 중...</p>
-                {processingInfo?.active && (
+                {processingInfo?.active && processingInfo.phase !== 'done' && (
                   <div className="mt-4 w-72 mx-auto">
                     <p className="text-xs text-zinc-400 mb-1 font-medium">
-                      {processingInfo.source}
+                      {processingInfo.source || '파일 처리 중'}
                     </p>
                     <p className="text-xs text-emerald-400/80 mb-2 font-mono">
                       {processingInfo.phase === 'extracting'

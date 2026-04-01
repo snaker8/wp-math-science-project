@@ -94,7 +94,7 @@ async def extract_images(
             "images": [{ id, filename, width, height, ... }]
         }
     """
-    if not source_name:
+    if not source_name or source_name in ("null", "undefined", "None"):
         source_name = Path(file.filename or "unknown").stem
 
     # 임시 디렉토리에 파일 저장
@@ -284,6 +284,15 @@ async def extract_images(
             }
         )
 
+    except HTTPException:
+        processing_status["active"] = False
+        processing_status["phase"] = "error"
+        raise
+    except Exception as e:
+        processing_status["active"] = False
+        processing_status["phase"] = "error"
+        print(f"[Extract] 추출 중 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"추출 오류: {str(e)}")
     finally:
         # 임시 파일 정리 (DB에 복사된 후)
         try:

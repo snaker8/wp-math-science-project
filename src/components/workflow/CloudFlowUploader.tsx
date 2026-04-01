@@ -209,7 +209,8 @@ export default function CloudFlowUploader({
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorData = await response.json().catch(() => ({ error: '서버 응답 오류' }));
+        throw new Error(errorData.error || errorData.message || `업로드 실패 (${response.status})`);
       }
 
       const data = await response.json();
@@ -264,13 +265,15 @@ export default function CloudFlowUploader({
       }
     } catch (error) {
       console.error('Upload error:', error);
+      const errorMsg = error instanceof Error ? error.message : '알 수 없는 오류';
+      alert(`업로드 실패: ${errorMsg}`);
       setJobs((prev) =>
         prev.map((j) =>
           j.id === tempJob.id
             ? {
               ...j,
               status: 'FAILED',
-              error: '업로드 실패',
+              error: errorMsg,
             }
             : j
         )
