@@ -185,26 +185,10 @@ export async function POST(
         const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02` : 'MS07-01-03-02';
 
         try {
-          // Gemini 3 Flash 우선, 없으면 GPT fallback
           const useGemini = !!GOOGLE_AI_KEY;
-          const apiUrl = useGemini
-            ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-            : 'https://api.openai.com/v1/chat/completions';
-          const apiKey = useGemini ? GOOGLE_AI_KEY : OPENAI_API_KEY;
           const modelName = useGemini ? 'gemini-3-flash-preview' : 'gpt-4.1-mini';
 
-          // Rate limit 재시도 (최대 3회, 429 시 대기)
-          let gptRes: Response | null = null;
-          for (let attempt = 0; attempt < 3; attempt++) {
-
-            gptRes = await fetch(apiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-              body: JSON.stringify({
-                model: modelName,
-                messages: [
-                  { role: 'system', content: `한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.` },
-                  { role: 'user', content: `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
+          const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
 
 ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
@@ -213,43 +197,88 @@ ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode�
 JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":3,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
 문제:
-${content.slice(0, 1500)}` }
-                ],
-                temperature: 0.1, max_tokens: 2000, response_format: { type: 'json_object' }
-              })
+${content.slice(0, 1500)}`;
+
+          let rawContent = '{}';
+
+          if (useGemini) {
+            // ★ Gemini 네이티브 SDK — JSON 잘림 없음
+            const { GoogleGenerativeAI } = await import('@google/generative-ai');
+            const genAI = new GoogleGenerativeAI(GOOGLE_AI_KEY);
+            const model = genAI.getGenerativeModel({
+              model: modelName,
+              systemInstruction: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.',
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 2000,
+                responseMimeType: 'application/json',
+              },
             });
 
-            if (gptRes.status !== 429) break;
-            // 429 → 대기 후 재시도
-            const waitSec = Math.min(15 * (attempt + 1), 30);
-            console.log(`[auto-fix] #${seqNum} rate limited, waiting ${waitSec}s (attempt ${attempt + 1}/3)`);
-            await new Promise(r => setTimeout(r, waitSec * 1000));
-          }
-
-          if (gptRes && gptRes.ok) {
-            const gptData = await gptRes.json();
-            let rawContent = gptData.choices?.[0]?.message?.content || '{}';
-            // Gemini가 마크다운 코드블록으로 감쌀 수 있음
-            rawContent = rawContent.trim().replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
-            console.log(`[auto-fix] #${seqNum} [${modelName}] response: ${rawContent.slice(0, 200)}`);
-
-            // JSON 파싱 — 잘린 응답 복구 시도
-            let reclassified: Record<string, unknown>;
-            try {
-              reclassified = JSON.parse(rawContent);
-            } catch {
-              // typeCode만이라도 추출
-              const tcMatch = rawContent.match(/"typeCode"\s*:\s*"(MS[\d-]+)"/);
-              const tnMatch = rawContent.match(/"typeName"\s*:\s*"([^"]+)"/);
-              const diffMatch = rawContent.match(/"difficulty"\s*:\s*(\d+)/);
-              if (tcMatch) {
-                console.log(`[auto-fix] #${seqNum} JSON 잘림 → typeCode 부분 추출: ${tcMatch[1]}`);
-                reclassified = { classification: { typeCode: tcMatch[1], typeName: tnMatch?.[1] || '', difficulty: parseInt(diffMatch?.[1] || '3') } };
-              } else {
-                throw new Error('JSON 파싱 실패 + typeCode 추출 불가');
+            let lastError: Error | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                const result = await model.generateContent(userPrompt);
+                rawContent = result.response.text().trim();
+                rawContent = rawContent.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
+                lastError = null;
+                break;
+              } catch (e) {
+                lastError = e instanceof Error ? e : new Error(String(e));
+                if (lastError.message.includes('429') || lastError.message.includes('503')) {
+                  const waitSec = Math.min(15 * (attempt + 1), 30);
+                  console.log(`[auto-fix] #${seqNum} rate limited, waiting ${waitSec}s`);
+                  await new Promise(r => setTimeout(r, waitSec * 1000));
+                  continue;
+                }
+                break;
               }
             }
-            const newCls = (reclassified.classification || {}) as Record<string, unknown>;
+            if (lastError) throw lastError;
+          } else {
+            // GPT fallback
+            let gptRes: Response | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+                body: JSON.stringify({
+                  model: 'gpt-4.1-mini',
+                  messages: [
+                    { role: 'system', content: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.' },
+                    { role: 'user', content: userPrompt },
+                  ],
+                  temperature: 0.1, max_tokens: 2000, response_format: { type: 'json_object' }
+                })
+              });
+              if (gptRes && gptRes.status !== 429) break;
+              const waitSec = Math.min(15 * (attempt + 1), 30);
+              await new Promise(r => setTimeout(r, waitSec * 1000));
+            }
+            if (gptRes && gptRes.ok) {
+              const gptData = await gptRes.json();
+              rawContent = gptData.choices?.[0]?.message?.content || '{}';
+            }
+          }
+
+          console.log(`[auto-fix] #${seqNum} [${modelName}] response: ${rawContent.slice(0, 200)}`);
+
+          // JSON 파싱
+          let reclassified: Record<string, unknown>;
+          try {
+            reclassified = JSON.parse(rawContent);
+          } catch {
+            const tcMatch = rawContent.match(/"typeCode"\s*:\s*"(MS[\d-]+)"/);
+            const tnMatch = rawContent.match(/"typeName"\s*:\s*"([^"]+)"/);
+            const diffMatch = rawContent.match(/"difficulty"\s*:\s*(\d+)/);
+            if (tcMatch) {
+              console.log(`[auto-fix] #${seqNum} JSON 부분 추출: ${tcMatch[1]}`);
+              reclassified = { classification: { typeCode: tcMatch[1], typeName: tnMatch?.[1] || '', difficulty: parseInt(diffMatch?.[1] || '3') } };
+            } else {
+              throw new Error('JSON 파싱 실패');
+            }
+          }
+          const newCls = (reclassified.classification || {}) as Record<string, unknown>;
 
             // ★ typeName이 비어있으면 mathsecr_types에서 조회
             if (newCls.typeCode && (!newCls.typeName || newCls.typeName === newCls.typeCode)) {
