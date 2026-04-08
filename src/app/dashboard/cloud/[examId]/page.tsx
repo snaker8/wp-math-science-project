@@ -2504,7 +2504,23 @@ export default function CloudExamDetailPage() {
                 <X className="h-3.5 w-3.5 ml-0.5 text-content-secondary hover:text-content-primary" />
               )}
             </button>
-            <button type="button" className="flex items-center gap-1.5 rounded-lg border bg-surface-card px-3 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('전체 문제를 자동 재분류합니다. 진행할까요?')) return;
+                try {
+                  const res = await fetch(`/api/exams/${examId}/auto-fix`, { method: 'POST' });
+                  if (!res.ok) throw new Error('자동매핑 실패');
+                  const data = await res.json();
+                  const fixCount = data.fixes?.filter((f: any) => f.fixes?.length > 0).length || 0;
+                  alert(`자동매핑 완료: ${fixCount}개 문제 수정됨`);
+                  window.location.reload();
+                } catch (e) {
+                  alert('자동매핑 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border bg-surface-card px-3 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors"
+            >
               <Sparkles className="h-4 w-4" />
               <span>유형 자동매핑</span>
             </button>
