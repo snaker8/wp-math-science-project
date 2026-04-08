@@ -520,6 +520,9 @@ function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: num
 function preprocessMathpixContent(text: string): string {
   let result = text;
 
+  // ═══ Phase 0a: 단독 \ 줄 제거 (조건박스 구분자 — 렌더링 불필요) ═══
+  result = result.replace(/^\s*\\+\s*$/gm, '');
+
   // ═══ Phase 0: 전각 ASCII → 반각 정규화 (Mathpix가 ．，（）？등 전각 출력) ═══
   result = result.replace(/[\uff01-\uff5e]/g, ch =>
     String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
