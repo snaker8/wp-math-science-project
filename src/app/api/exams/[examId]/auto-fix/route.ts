@@ -165,10 +165,12 @@ export async function POST(
           if (resolvedCode) {
             mathsecrTypeTable = buildTypeTable(resolvedCode);
 
-            // ★ 복합 과목: 수학(상)=07+08, 수학(하)=08 등
+            // ★ 복합 과목: 이전 교육과정 시험지는 여러 과목 범위가 섞임
             const COMBINED_SUBJECTS: Record<string, string[]> = {
-              '07': ['08'],       // 공통수학1 → +공통수학2 (2015 수학(상))
-              '09': ['10', '11'], // 대수 → +미적분1, 확통 (구 수학I 범위 혼재)
+              '07': ['08'],       // 공통수학1 → +공통수학2 (2015 수학(상) = 다항식+방정식+좌표+집합)
+              '08': ['07'],       // 공통수학2 → +공통수학1 (2015 수학(하) 범위 혼재)
+              '09': ['10', '11'], // 대수(구 수학I) → +미적분1, 확통
+              '10': ['09'],       // 미적분1(구 수학II) → +대수 (같은 학년 범위)
             };
             const extras = COMBINED_SUBJECTS[resolvedCode] || [];
             for (const extra of extras) {
@@ -565,7 +567,9 @@ function detectSubjectFromTitle(title: string): string {
     return '중등 수학';
   }
 
-  // 고등 — 공통수학을 먼저 체크, 미적분1/2도 공통수학보다 뒤에
+  // 고등 — 수학(상/하) 먼저 체크 (2015 교육과정)
+  if (/수학\s*\(상\)/.test(title)) return '공통수학1'; // 수학(상) = 공통수학1+2 범위 → 07로 매핑, 08도 COMBINED로 포함
+  if (/수학\s*\(하\)/.test(title)) return '공통수학2'; // 수학(하) = 공통수학2 범위 → 08로 매핑
   if (/공통수학[12]/.test(title)) return title.match(/공통수학[12]/)?.[0] || '공통수학1';
   if (/공통수학/.test(title)) return '공통수학1';
   if (/대수/.test(title)) return '대수';
