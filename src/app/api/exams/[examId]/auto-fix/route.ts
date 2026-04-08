@@ -201,7 +201,7 @@ JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중
 문제:
 ${content.slice(0, 1500)}` }
                 ],
-                temperature: 0.1, max_tokens: 500, response_format: { type: 'json_object' }
+                temperature: 0.1, max_tokens: 1000, response_format: { type: 'json_object' }
               })
             });
 
@@ -215,7 +215,7 @@ ${content.slice(0, 1500)}` }
           if (gptRes && gptRes.ok) {
             const gptData = await gptRes.json();
             const rawContent = gptData.choices?.[0]?.message?.content || '{}';
-            console.log(`[auto-fix] #${seqNum} GPT response: ${rawContent.slice(0, 200)}`);
+            console.log(`[auto-fix] #${seqNum} [${modelName}] response: ${rawContent.slice(0, 200)}`);
             const reclassified = JSON.parse(rawContent);
             const newCls = reclassified.classification || {};
 
