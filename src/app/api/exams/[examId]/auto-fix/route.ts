@@ -134,13 +134,16 @@ export async function POST(
       const isHighSchoolExam = !isMiddleSchoolExam && examGrade?.startsWith('고');
       const isWrongLevelHS = isHighSchoolExam && /^MA-MS/.test(existingTypeCode);
 
+      // ★ 수학비서 코드(MS)가 아닌 모든 문제를 재분류
+      const hasMathsecrCode = existingTypeCode?.startsWith('MS');
       const needsReclassify = examSubject && (
+        !hasMathsecrCode || // MS 코드가 없으면 무조건 재분류
         !matchesSubject(currentSubject, examSubject) ||
         !matchesSubject(clsSubject, examSubject) ||
         isWrongLevel ||
         isWrongLevelHS ||
-        !clsChapter || // chapter가 비어있으면 재분류
-        !clsTypeName   // typeName이 비어있으면 재분류
+        !clsChapter ||
+        !clsTypeName
       );
 
       if (needsReclassify && OPENAI_API_KEY && content.trim()) {
@@ -203,10 +206,9 @@ ${content.slice(0, 1500)}` }
               is_verified: false,
             };
 
-            // type_code가 잘못된 경우만 갱신 (기존 유효한 코드는 유지)
-            if (isWrongLevel || isWrongLevelHS || !existingTypeCode) {
-              // 중등/고등 레벨이 맞지 않거나 비어있을 때만 type_code 변경
-              classUpdateData.type_code = newCls.typeCode || existingTypeCode || '';
+            // ★ 수학비서 코드(MS)로 항상 갱신
+            if (newCls.typeCode) {
+              classUpdateData.type_code = newCls.typeCode;
             }
 
             if (existingCls) {
