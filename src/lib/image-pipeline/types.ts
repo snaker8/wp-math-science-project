@@ -587,8 +587,27 @@ export function findUnitByCode(unitCode: string): { unit: CurriculumUnit; subjec
 
 /** 2015 구 과목 코드 → 2022 신 코드 매핑 (하위 호환) */
 export const LEGACY_SUBJECT_MAP: Record<string, ScienceSubjectCode> = {
+  // 영문 키
   'physics': 'PHY',
   'chemistry': 'CHM',
   'biology': 'BIO',
   'earth_science': 'EAR',
+  // 2015 개정 코드 → 2022 일반선택 (기본 매핑)
+  'PHY1': 'PHY',
+  'PHY2': 'PHY_ME',  // 물리학II → 역학과 에너지 (기본), 내용에 따라 PHY_EQ 가능
+  'CHE1': 'CHM',
+  'CHE2': 'CHM_ME',  // 화학II → 물질과 에너지 (기본), 내용에 따라 CHM_RW 가능
+  'BIO1': 'BIO',
+  'BIO2': 'BIO_CM',  // 생명과학II → 세포와 물질대사 (기본), 내용에 따라 BIO_GN 가능
+  'ESC1': 'EAR',
+  'ESC2': 'EAR_SS',  // 지구과학II → 지구시스템과학 (기본), 내용에 따라 EAR_PS 가능
+  // 한글 과목명
+  '물리학1': 'PHY',
+  '물리학2': 'PHY_ME',
+  '화학1': 'CHM',
+  '화학2': 'CHM_ME',
+  '생명과학1': 'BIO',
+  '생명과학2': 'BIO_CM',
+  '지구과학1': 'EAR',
+  '지구과학2': 'EAR_SS',
 };

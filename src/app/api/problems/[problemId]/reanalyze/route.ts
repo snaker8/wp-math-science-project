@@ -316,7 +316,7 @@ async function reanalyzeClassificationOnly(
     ? `당신은 한국 고등학교 과학 교육과정(통합과학, 물리학, 화학, 생명과학, 지구과학) 전문가입니다.
 주어진 과학 문제의 **분류(과목/단원/난이도)와 풀이**를 분석하세요.
 
-■ 과목 체계: IS1=공통과학1, IS2=공통과학2, PHY1=물리학1, CHE1=화학1, BIO1=생명과학1, ESC1=지구과학1
+■ 과목 체계 (2022 개정): IS1=통합과학1, IS2=통합과학2, PHY=물리학, CHM=화학, BIO=생명과학, EAR=지구과학, PHY_ME=역학과에너지, PHY_EQ=전자기와양자, CHM_ME=물질과에너지, CHM_RW=화학반응의세계, BIO_CM=세포와물질대사, BIO_GN=생명의유전, EAR_SS=지구시스템과학, EAR_PS=행성우주과학
 ■ 난이도 6단계 (사고 과정 복잡도 기준):
   <1>개념: 용어/정의 알면 바로. <2>이해: 원리 1개 적용/단순 계산 1회.
   <3>해석: 자료 해석 핵심(자료 안 읽으면 못 풀림). <4>응용: 복합 조건/합답형ㄱㄴㄷ/다단원 연계.
@@ -330,8 +330,8 @@ async function reanalyzeClassificationOnly(
   "classification": {
     "typeCode": "과목코드-단원-번호 (예: IS1-02-001)",
     "typeName": "유형 이름 (한국어)",
-    "subject": "과목명 (공통과학1, 물리학1, 화학1, 생명과학1, 지구과학1 등)",
-    "scienceSubject": "과목코드 (IS1, PHY1, CHE1, BIO1, ESC1 등)",
+    "subject": "과목명 (통합과학1, 물리학, 화학, 생명과학, 지구과학, 역학과 에너지 등)",
+    "scienceSubject": "과목코드 (IS1, PHY, CHM, BIO, EAR, PHY_ME, PHY_EQ 등)",
     "chapter": "대단원명",
     "section": "소단원명",
     "difficulty": 3,
