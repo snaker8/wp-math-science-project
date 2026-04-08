@@ -494,17 +494,15 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
 
 /** 조건 블록이 끝나는지 판단 */
 function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: number): boolean {
-  // 문제 지시어("구하시오", "구하여라" 등)가 나오면 조건 블록 종료
-  if (/구하시오|구하여라|구해라|값은\?|값을\s*구/.test(trimmed)) return true;
-  // 선택지 시작 (1) 2) ① 등
+  // 빈 줄 → 박스 종료
+  if (!trimmed) return true;
+  // 문제 지시어 → 종료
+  if (/구하시오|구하여라|구해라|값은\s*\?|값을\s*구|의\s*값은|일\s*때|에\s*대하여|만족시키는|만족하는|최솟값|최댓값|의\s*값/.test(trimmed)) return true;
+  // 선택지 시작
   if (/^\s*[\(（]\s*[1-5]\s*[\)）]/.test(trimmed)) return true;
   if (/^\s*[①②③④⑤]/.test(trimmed)) return true;
-  // 이미지 줄이면 종료
-  if (/^!\[/.test(trimmed)) return true;
-  // 빈 줄이 나오면 조건 블록 종료 (엔터로 구분된 내용은 박스 밖으로)
-  if (!trimmed) {
-    return true;
-  }
+  // 이미지/도형
+  if (/^!\[/.test(trimmed) || /^\[도형\]/.test(trimmed)) return true;
   return false;
 }
 
