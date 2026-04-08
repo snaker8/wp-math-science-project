@@ -156,7 +156,7 @@ export async function POST(
       console.log(`[auto-fix] #${seqNum}: typeCode=${existingTypeCode}, needsReclassify=${needsReclassify}, subject=${clsSubject}, chapter=${clsChapter}`);
 
       if (needsReclassify && OPENAI_API_KEY && content.trim()) {
-        // GPT-4o로 수학비서 체계 기반 재분류
+        // 수학비서 체계 기반 재분류 — 복합 과목 지원
         let mathsecrTypeTable = '';
         let resolvedCode = '';
         try {
@@ -164,6 +164,16 @@ export async function POST(
           resolvedCode = resolveSubjectCode(examGrade, examSubject) || '';
           if (resolvedCode) {
             mathsecrTypeTable = buildTypeTable(resolvedCode);
+
+            // ★ 복합 과목: 수학(상)=07+08, 수학(하)=08 등
+            const COMBINED_SUBJECTS: Record<string, string[]> = {
+              '07': ['08'],       // 공통수학1 → +공통수학2 (2015 수학(상))
+              '09': ['10', '11'], // 대수 → +미적분1, 확통 (구 수학I 범위 혼재)
+            };
+            const extras = COMBINED_SUBJECTS[resolvedCode] || [];
+            for (const extra of extras) {
+              mathsecrTypeTable += '\n\n' + buildTypeTable(extra);
+            }
           }
         } catch (e) {
           console.warn('[auto-fix] mathsecr-prompt load failed:', e);
