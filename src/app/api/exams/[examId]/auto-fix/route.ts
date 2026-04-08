@@ -134,57 +134,80 @@ export async function POST(
       const isHighSchoolExam = !isMiddleSchoolExam && examGrade?.startsWith('고');
       const isWrongLevelHS = isHighSchoolExam && /^MA-MS/.test(existingTypeCode);
 
-      // ★ 수학비서 코드(MS)가 아닌 모든 문제를 재분류
+      // ★ 모드에 따라 재분류 여부 결정
+      const { searchParams: fixParams } = new URL(request.url);
+      const mode = fixParams.get('mode') || 'full'; // 'full' | 'fix' | 'classify'
+      const forceReclassify = fixParams.get('force') === '1';
       const hasMathsecrCode = existingTypeCode?.startsWith('MS');
-      const needsReclassify = examSubject && (
-        !hasMathsecrCode || // MS 코드가 없으면 무조건 재분류
-        !matchesSubject(currentSubject, examSubject) ||
+
+      // mode=fix → 분류 건너뜀 (content 수정만)
+      // mode=classify 또는 force=1 → 강제 재분류
+      // mode=full → 필요시만 재분류
+      const needsReclassify = mode !== 'fix' && examSubject && (
+        forceReclassify || mode === 'classify' ||
+        !hasMathsecrCode ||
         !matchesSubject(clsSubject, examSubject) ||
-        isWrongLevel ||
-        isWrongLevelHS ||
         !clsChapter ||
         !clsTypeName
       );
 
+      console.log(`[auto-fix] #${seqNum}: typeCode=${existingTypeCode}, needsReclassify=${needsReclassify}, subject=${clsSubject}, chapter=${clsChapter}`);
+
       if (needsReclassify && OPENAI_API_KEY && content.trim()) {
         // GPT-4o로 수학비서 체계 기반 재분류
         let mathsecrTypeTable = '';
+        let resolvedCode = '';
         try {
           const { resolveSubjectCode, buildTypeTable } = await import('@/lib/workflow/mathsecr-prompt');
-          const subjectCode = resolveSubjectCode(examGrade, examSubject);
-          if (subjectCode) {
-            mathsecrTypeTable = buildTypeTable(subjectCode);
+          resolvedCode = resolveSubjectCode(examGrade, examSubject) || '';
+          if (resolvedCode) {
+            mathsecrTypeTable = buildTypeTable(resolvedCode);
           }
         } catch (e) {
           console.warn('[auto-fix] mathsecr-prompt load failed:', e);
         }
 
+        // 예제 코드에 실제 resolvedCode 반영
+        const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02` : 'MS07-01-03-02';
+
         try {
-          const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-            body: JSON.stringify({
-              model: 'gpt-4o',
-              messages: [
-                { role: 'system', content: `한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.` },
-                { role: 'user', content: `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
+          // Rate limit 재시도 (최대 3회, 429 시 대기)
+          let gptRes: Response | null = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+              body: JSON.stringify({
+                model: 'gpt-4.1-mini',
+                messages: [
+                  { role: 'system', content: `한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.` },
+                  { role: 'user', content: `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
 
 ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
 난이도 1~10
 
-JSON: {"classification":{"typeCode":"MS07-01-03-02","typeName":"대단원 > 중단원 > 소단원","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":3,"cognitiveDomain":"CALCULATION","confidence":0.9}}
+JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":3,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
 문제:
 ${content.slice(0, 1500)}` }
-              ],
-              temperature: 0.1, max_tokens: 500, response_format: { type: 'json_object' }
-            })
-          });
+                ],
+                temperature: 0.1, max_tokens: 500, response_format: { type: 'json_object' }
+              })
+            });
 
-          if (gptRes.ok) {
+            if (gptRes.status !== 429) break;
+            // 429 → 대기 후 재시도
+            const waitSec = Math.min(15 * (attempt + 1), 30);
+            console.log(`[auto-fix] #${seqNum} rate limited, waiting ${waitSec}s (attempt ${attempt + 1}/3)`);
+            await new Promise(r => setTimeout(r, waitSec * 1000));
+          }
+
+          if (gptRes && gptRes.ok) {
             const gptData = await gptRes.json();
-            const reclassified = JSON.parse(gptData.choices?.[0]?.message?.content || '{}');
+            const rawContent = gptData.choices?.[0]?.message?.content || '{}';
+            console.log(`[auto-fix] #${seqNum} GPT response: ${rawContent.slice(0, 200)}`);
+            const reclassified = JSON.parse(rawContent);
             const newCls = reclassified.classification || {};
 
             // ★ ai_analysis 업데이트
@@ -198,10 +221,26 @@ ${content.slice(0, 1500)}` }
             ai.reanalyzedAt = new Date().toISOString();
             aiChanged = true;
 
-            // ★ classifications 테이블도 함께 업데이트 (FIX 7에서 중복 처리 방지)
+            // ★ cognitive_domain 유효값 매핑
+            const VALID_COGNITIVE = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
+            const COGNITIVE_MAP: Record<string, string> = {
+              'ANALYSIS': 'INFERENCE',
+              'REASONING': 'INFERENCE',
+              'APPLICATION': 'PROBLEM_SOLVING',
+              'COMPREHENSION': 'UNDERSTANDING',
+              'KNOWLEDGE': 'UNDERSTANDING',
+            };
+            const rawCognitive = newCls.cognitiveDomain || 'CALCULATION';
+            const mappedCognitive = VALID_COGNITIVE.has(rawCognitive) ? rawCognitive : (COGNITIVE_MAP[rawCognitive] || 'CALCULATION');
+
+            // ★ difficulty 1~10 → 1~5 매핑
+            const rawDiff = parseInt(newCls.difficulty) || 3;
+            const mappedDiff = Math.max(1, Math.min(5, Math.ceil(rawDiff / 2)));
+
+            // ★ classifications 테이블도 함께 업데이트
             const classUpdateData: Record<string, unknown> = {
-              difficulty: String(newCls.difficulty || 3),
-              cognitive_domain: newCls.cognitiveDomain || 'CALCULATION',
+              difficulty: String(mappedDiff),
+              cognitive_domain: mappedCognitive,
               ai_confidence: newCls.confidence || 0.8,
               is_verified: false,
             };
@@ -212,10 +251,20 @@ ${content.slice(0, 1500)}` }
             }
 
             if (existingCls) {
-              await supabaseAdmin
+              // 1) 첫 번째 행만 업데이트
+              const { error: clsErr } = await supabaseAdmin
                 .from('classifications')
                 .update(classUpdateData)
                 .eq('id', existingCls.id);
+              if (clsErr) console.error(`[auto-fix] #${seqNum} cls update error:`, clsErr.message);
+              else console.log(`[auto-fix] #${seqNum} → ${newCls.typeCode}`);
+
+              // 2) 같은 problem_id의 중복 행 삭제 (첫 번째만 남김)
+              await supabaseAdmin
+                .from('classifications')
+                .delete()
+                .eq('problem_id', problem.id)
+                .neq('id', existingCls.id);
             } else {
               // ★ 분류 행이 없으면 INSERT
               await supabaseAdmin
@@ -231,8 +280,13 @@ ${content.slice(0, 1500)}` }
             }
 
             result.fixes.push(`재분류: ${newCls.chapter || '?'} > ${newCls.typeName || '?'} (diff:${newCls.difficulty})`);
+          } else if (gptRes) {
+            const errBody = await gptRes.text().catch(() => '');
+            console.error(`[auto-fix] #${seqNum} GPT HTTP ${gptRes.status}: ${errBody.slice(0, 200)}`);
+            result.errors.push(`GPT 호출 실패 (HTTP ${gptRes.status})`);
           }
         } catch (e) {
+          console.error(`[auto-fix] #${seqNum} GPT/DB error:`, e instanceof Error ? e.message : e);
           // GPT 실패 시 과목만 변경
           ai.subject = examSubject;
           ai.autoFixedSubject = true;
@@ -271,32 +325,24 @@ ${content.slice(0, 1500)}` }
         result.fixes.push(`과목: "${currentSubject}" → "${examSubject}"`);
       }
 
-      // ─── FIX 2: 서술형 (1)(2)가 choices에 들어간 경우 복원 ───
+      // ─── FIX 2: 서술형 소문제가 choices에 잘못 들어간 경우만 복원 ───
       const answerJson = problem.answer_json as Record<string, unknown> || {};
       const choices = (answerJson.choices as string[]) || [];
-      const subProblemKeywordsInContent = /\(\d+\)|풀이\s*과정|구하시오|서술하시오|완성하시오|답하시오|설명하시오|구하여라|쓰시오|보이시오|나타내시오/.test(content);
 
-      if (choices.length > 0) {
-        // 감지 조건 1: choices 중 (1)(2) 패턴이 있는 경우
-        const subProblemChoices = choices.filter(c =>
-          /^\s*\(\d+\)/.test(c) || /^\s*\(가\)|\(나\)|\(다\)/.test(c)
-        );
-        // 감지 조건 2: content에 서술형 키워드가 있고 + choices에 50자 이상 긴 텍스트가 있는 경우
-        const hasLongChoice = choices.some(c => c.length > 50);
-        // 감지 조건 3: choices 내용 자체에 서술형 키워드가 포함
-        const choicesHaveSubKeyword = choices.some(c =>
-          /구하시오|구하여라|서술하시오|설명하시오|완성하시오|답하시오|쓰시오|풀이\s*과정|보이시오|나타내시오|증명하시오|구하세요|구해\s*보시오/.test(c)
-        );
+      // ★ 안전장치: 4개 이상 choices는 절대 건드리지 않음 (객관식/ㄱㄴㄷ)
+      if (choices.length >= 2 && choices.length <= 3) {
+        const subKeyword = /구하시오|구하여라|서술하시오|설명하시오|완성하시오|답하시오|쓰시오|쓰고|풀이\s*과정|보이시오|나타내시오|증명하시오|구하세요|구해\s*보시오/;
+        const anyChoiceHasKeyword = choices.some(c => subKeyword.test(c));
 
-        const shouldRestore =
-          (subProblemChoices.length > 0 && subProblemChoices.length >= choices.length * 0.5) ||
-          (subProblemKeywordsInContent && hasLongChoice) ||
-          choicesHaveSubKeyword;
-
-        if (shouldRestore) {
-          // choices를 content 뒤에 붙이기
+        // 조건: choices 2~3개 + 하나라도 서술형 키워드 포함
+        // (객관식 보기에는 "구하시오/쓰시오" 등이 절대 안 나옴)
+        if (anyChoiceHasKeyword) {
+          const numberedChoices = choices.map((c, i) => {
+            const hasParenNum = /^\s*\(\d+\)/.test(c);
+            return hasParenNum ? c : `(${i + 1}) ${c}`;
+          });
           const currentContent = (updates.content_latex as string) || content;
-          const restoredContent = currentContent + '\n\n' + choices.join('\n');
+          const restoredContent = (currentContent.trim() ? currentContent.trim() + '\n\n' : '') + numberedChoices.join('\n');
           updates.content_latex = restoredContent;
           updates.answer_json = { ...answerJson, choices: [] };
           result.fixes.push(`서술형 소문제 ${choices.length}개를 choices에서 content로 복원`);
@@ -478,14 +524,17 @@ function detectSubjectFromTitle(title: string): string {
     return '중등 수학';
   }
 
-  // 고등
-  if (/수학[1I](?!\d)/.test(title) || /수[1I]\b/.test(title)) return '수학1';
-  if (/수학[2II](?!\d)/.test(title) || /수[2II]\b/.test(title)) return '수학2';
-  if (/미적분/.test(title)) return '미적분';
-  if (/확률.*통계|확통/.test(title)) return '확률과통계';
-  if (/기하/.test(title)) return '기하';
+  // 고등 — 공통수학을 먼저 체크, 미적분1/2도 공통수학보다 뒤에
   if (/공통수학[12]/.test(title)) return title.match(/공통수학[12]/)?.[0] || '공통수학1';
   if (/공통수학/.test(title)) return '공통수학1';
+  if (/대수/.test(title)) return '대수';
+  if (/미적분[12]/.test(title)) return title.match(/미적분[12]/)?.[0] || '미적분1';
+  if (/미적분/.test(title)) return '미적분'; // 구 교육과정 미적분 → code 12
+  if (/확률.*통계|확통/.test(title)) return '확률과통계';
+  if (/기하/.test(title)) return '기하';
+  // 구 수학I = 대수(09), 구 수학II = 미적분1(10)
+  if (/수학[1IⅠ](?!\d)/.test(title) || /수[1IⅠ]\b/.test(title)) return '수학I';
+  if (/수학[2IⅡ](?!\d)/.test(title) || /수[2IⅡ]\b/.test(title)) return '수학II';
 
   // 과학
   if (/과학|물리|화학|생명|생물|지구/.test(title)) {
@@ -528,9 +577,16 @@ function detectGradeFromTitle(title: string): string {
     return '중2'; // 중학교인데 학년 불명 → 기본값 중2
   }
 
-  if (/고1/.test(title)) return '고1';
-  if (/고2/.test(title)) return '고2';
-  if (/고3/.test(title)) return '고3';
+  // 명시적 학년 패턴: "고1 ", "고2 " (뒤에 공백/숫자/한글이 와야 함 — "고" 단독 매칭 방지)
+  if (/고1(?:\s|$|학년)/.test(title)) return '고1';
+  if (/고2(?:\s|$|학년)/.test(title)) return '고2';
+  if (/고3(?:\s|$|학년)/.test(title)) return '고3';
+
+  // 과목명으로 학년 추론 (명시적 학년 없을 때)
+  if (/공통수학/.test(title)) return '고1';
+  if (/수학[1IⅠ](?!\d)|대수|확률.*통계|확통/.test(title)) return '고2';
+  if (/수학[2IⅡ](?!\d)|미적분|기하/.test(title)) return '고3';
+
   return '';
 }
 

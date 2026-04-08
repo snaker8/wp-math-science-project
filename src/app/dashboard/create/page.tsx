@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
@@ -15,54 +15,38 @@ import {
   Check,
   ArrowRight,
   X,
-  CheckCircle2,
   Minus,
   Plus,
   Printer,
   FileEdit,
+  Download,
+  Search,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { LevelNode, DomainNode, StandardNode, ExpandedMathType, SubjectCategory } from '@/types/expanded-types';
-import { SUBJECT_CATEGORIES, extractStandardNumber } from '@/types/expanded-types';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
+import { downloadPDF } from '@/lib/pdf/generator';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface SubjectTree {
-  subject: string;
-  levelCode: string;
-  chapters: ChapterNode[];
-  totalProblems: number;
+interface MathsecrNode {
+  t: string; // text
+  c: string; // code
+  ch?: MathsecrNode[];
 }
 
-interface ChapterNode {
-  chapter: string;
-  domainCode: string;
-  sections: SectionNode[];
-  totalProblems: number;
+interface SubjectInfo {
+  code: string;
+  name: string;
 }
 
-interface SectionNode {
-  section: string;
-  typeCode: string;
-  totalProblems: number;
-}
-
-type CreateMode = 'auto' | 'manual' | 'add';
-type QuestionTypeFilter = '전체' | '교과서 유형' | '문제집 유형' | '기출 유형' | '모의고사 유형';
+type CreateMode = 'auto' | 'manual';
 type DifficultyLevel = '최상' | '상' | '중' | '하' | '최하';
 type PreviewTab = '시험지' | '빠른정답' | '해설지';
-
-interface TypeGroup {
-  standardLabel: string;
-  standardCode: string;
-  items: ExpandedMathType[];
-}
 
 interface PreviewProblem {
   id: string;
@@ -77,8 +61,21 @@ interface PreviewProblem {
   source: string;
 }
 
+interface SearchProblem {
+  id: string;
+  content: string;
+  typeCode: string;
+  typeName: string;
+  difficulty: number;
+  choices: string[];
+  answer: string | number;
+  source: string;
+  year: string;
+  alreadyInExam: boolean;
+}
+
 // ============================================================================
-// Utility Functions
+// Constants
 // ============================================================================
 
 const DIFF_LEVEL_MAP: Record<DifficultyLevel, string> = {
@@ -93,82 +90,13 @@ const DIFF_COLORS: Record<DifficultyLevel, { bg: string; text: string; border: s
   '최하': { bg: 'bg-zinc-500/20', text: 'text-zinc-400', border: 'border-zinc-500/30' },
 };
 
-function levelNodeToSubjectTree(level: LevelNode, category: SubjectCategory): SubjectTree | null {
-  // 1. 도메인 필터링
-  let filteredDomains = category.domainFilter
-    ? level.domains.filter((d) => category.domainFilter!.includes(d.domainCode))
-    : [...level.domains];
-
-  // 2. domainFilter 순서대로 정렬 (교과서 목차 순서)
-  if (category.domainFilter) {
-    const order = category.domainFilter;
-    filteredDomains.sort((a, b) => order.indexOf(a.domainCode) - order.indexOf(b.domainCode));
-  }
-
-  if (filteredDomains.length === 0) return null;
-
-  // 3. 성취기준 필터링 (standardFilter가 있을 때만)
-  const chapters: ChapterNode[] = [];
-  let totalProblems = 0;
-
-  for (const domain of filteredDomains) {
-    const allowedStds = category.standardFilter?.[domain.domainCode];
-
-    // standardFilter가 있으면 해당 번호의 성취기준만 포함
-    const filteredStandards = allowedStds
-      ? domain.standards.filter((std) => {
-          const num = extractStandardNumber(std.standardCode);
-          return num !== null && allowedStds.includes(num);
-        })
-      : domain.standards;
-
-    if (filteredStandards.length === 0) continue;
-
-    const domainProblems = filteredStandards.reduce((sum, s) => sum + s.typeCount, 0);
-    totalProblems += domainProblems;
-
-    chapters.push({
-      chapter: domain.label,
-      domainCode: domain.domainCode,
-      sections: filteredStandards.map((std) => {
-        // ★ type_code prefix (MA-HS0-POL-01) 추출 — classifications.type_code 매칭용
-        // expanded_math_types의 type_code (MA-HS0-POL-01-001) 에서 마지막 -NNN 제거
-        const firstType = std.types[0];
-        const typePrefix = firstType
-          ? firstType.typeCode.replace(/-\d{3}$/, '')
-          : std.standardCode;
-        return {
-          section: std.standardContent || std.standardCode,
-          typeCode: typePrefix,
-          totalProblems: std.typeCount,
-        };
-      }),
-      totalProblems: domainProblems,
-    });
-  }
-
-  if (chapters.length === 0) return null;
-
-  return {
-    subject: category.curriculum
-      ? `${category.label} [${category.curriculum}]`
-      : category.label,
-    levelCode: level.levelCode,
-    chapters,
-    totalProblems,
-  };
-}
-
-function formatTypeCodeShort(code: string): string {
-  if (!code) return '';
-  // MA-HS0-POL-01-003 → A003 형태로 변환
-  const parts = code.split('-');
-  if (parts.length >= 5) {
-    const seq = parts[parts.length - 1];
-    return `A${seq}`;
-  }
-  return code;
-}
+const DIFF_BADGE: Record<number, { label: string; cls: string }> = {
+  1: { label: '최하', cls: 'border-zinc-500 bg-zinc-500/10 text-zinc-400' },
+  2: { label: '하', cls: 'border-blue-500 bg-blue-500/10 text-blue-400' },
+  3: { label: '중', cls: 'border-amber-500 bg-amber-500/10 text-amber-400' },
+  4: { label: '상', cls: 'border-red-500 bg-red-500/10 text-red-400' },
+  5: { label: '최상', cls: 'border-red-700 bg-red-700/10 text-red-300' },
+};
 
 // ============================================================================
 // Sub Components
@@ -185,111 +113,90 @@ function StepBadge({ number, active }: { number: number; active?: boolean }) {
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
-        active
-          ? 'border-indigo-500 bg-indigo-500 text-white shadow-sm shadow-indigo-500/20'
-          : 'border-subtle bg-surface-raised/80 text-content-secondary hover:bg-zinc-700 hover:text-content-primary'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
 // ============================================================================
-// Column 1: Subject Tree Panel
+// Column 1: Mathsecr Tree Panel
 // ============================================================================
 
-function SubjectTreePanel({
+function MathsecrTreePanel({
   tree,
-  selectedChapters,
-  selectedSections,
-  onToggleChapter,
-  onToggleSection,
+  subjectCode,
+  selectedL2Keys,
+  onToggleL1,
+  onToggleL2,
+  onToggleL3,
+  selectedL3Keys,
 }: {
-  tree: SubjectTree[];
-  selectedChapters: string[];
-  selectedSections: string[];
-  onToggleChapter: (chapter: string, sections: SectionNode[]) => void;
-  onToggleSection: (section: string, typeCode: string) => void;
+  tree: MathsecrNode | null;
+  subjectCode: string;
+  selectedL2Keys: Set<string>;
+  selectedL3Keys: Set<string>;
+  onToggleL1: (l1: MathsecrNode) => void;
+  onToggleL2: (l1: MathsecrNode, l2: MathsecrNode) => void;
+  onToggleL3: (key: string) => void;
 }) {
-  const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
+  const [expandedL1, setExpandedL1] = useState<Set<string>>(new Set());
+  const [expandedL2, setExpandedL2] = useState<Set<string>>(new Set());
 
-  const toggleExpand = (e: React.MouseEvent, chapter: string) => {
+  if (!tree || !tree.ch) return null;
+
+  const toggleExpandL1 = (e: React.MouseEvent, code: string) => {
     e.stopPropagation();
-    setExpandedChapters((prev) =>
-      prev.includes(chapter) ? prev.filter((c) => c !== chapter) : [...prev, chapter]
-    );
+    setExpandedL1(prev => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
   };
 
-  const subj = tree[0];
-  if (!subj) return null;
+  const toggleExpandL2 = (e: React.MouseEvent, key: string) => {
+    e.stopPropagation();
+    setExpandedL2(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-0.5">
-      {subj.chapters.map((ch, chIdx) => {
-        const chapterNum = chIdx + 1;
-        const isChExpanded = expandedChapters.includes(ch.chapter);
-        const isChSelected = selectedChapters.includes(ch.chapter);
-        // 모든 하위 섹션이 선택된 경우 full check, 일부만 partial
-        const selectedChildCount = ch.sections.filter(s => selectedSections.includes(s.section)).length;
-        const isPartial = selectedChildCount > 0 && selectedChildCount < ch.sections.length;
+      {tree.ch.map((l1, l1Idx) => {
+        const l1Key = `${subjectCode}-${l1.c}`;
+        const isL1Expanded = expandedL1.has(l1Key);
+        // L1 selected if ALL its L2 children are selected
+        const l2Children = l1.ch || [];
+        const l2SelectedCount = l2Children.filter(l2 => {
+          const l2Key = `${l1Key}-${l2.c}`;
+          return selectedL2Keys.has(l2Key);
+        }).length;
+        const isL1Selected = l2Children.length > 0 && l2SelectedCount === l2Children.length;
+        const isL1Partial = l2SelectedCount > 0 && l2SelectedCount < l2Children.length;
 
         return (
-          <div key={ch.chapter}>
+          <div key={l1Key}>
+            {/* L1: 대단원 */}
             <div className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-all ${
-              isChSelected
+              isL1Selected
                 ? 'bg-indigo-500/10 text-indigo-300'
                 : 'text-content-secondary hover:bg-surface-raised/50 hover:text-content-primary'
             }`}>
-              {/* 접기/펼치기 토글 */}
-              <button
-                type="button"
-                onClick={(e) => toggleExpand(e, ch.chapter)}
-                className="p-0.5 shrink-0"
-              >
-                {isChExpanded ? (
-                  <ChevronDown size={14} className="text-content-muted" />
-                ) : (
-                  <ChevronRight size={14} className="text-content-muted" />
-                )}
+              <button type="button" onClick={(e) => toggleExpandL1(e, l1Key)} className="p-0.5 shrink-0">
+                {isL1Expanded ? <ChevronDown size={14} className="text-content-muted" /> : <ChevronRight size={14} className="text-content-muted" />}
               </button>
-
-              {/* 챕터 체크박스 + 라벨 (클릭 시 전체선택) */}
-              <button
-                type="button"
-                onClick={() => onToggleChapter(ch.chapter, ch.sections)}
-                className="flex items-center gap-2 flex-1 text-left"
-              >
+              <button type="button" onClick={() => onToggleL1(l1)} className="flex items-center gap-2 flex-1 text-left">
                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                  isChSelected
-                    ? 'border-indigo-500 bg-indigo-500'
-                    : isPartial
-                    ? 'border-indigo-400 bg-indigo-500/40'
-                    : 'border-zinc-600'
+                  isL1Selected ? 'border-indigo-500 bg-indigo-500'
+                  : isL1Partial ? 'border-indigo-400 bg-indigo-500/40'
+                  : 'border-zinc-600'
                 }`}>
-                  {(isChSelected || isPartial) && <Check size={9} className="text-white" />}
+                  {(isL1Selected || isL1Partial) && <Check size={9} className="text-white" />}
                 </div>
-                <span className="font-medium">{chapterNum} {ch.chapter}</span>
+                <span className="font-medium">{l1Idx + 1}. {l1.t}</span>
               </button>
             </div>
 
-            {/* Sections */}
+            {/* L2: 중단원 */}
             <AnimatePresence>
-              {isChExpanded && (
+              {isL1Expanded && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -298,34 +205,85 @@ function SubjectTreePanel({
                   className="overflow-hidden"
                 >
                   <div className="ml-6 space-y-0.5 border-l border-subtle pl-2 py-0.5">
-                    {ch.sections.map((sec, secIdx) => {
-                      const sectionNum = `${chapterNum}.${secIdx + 1}`;
-                      const isSecSelected = selectedSections.includes(sec.section);
+                    {l2Children.map((l2, l2Idx) => {
+                      const l2Key = `${l1Key}-${l2.c}`;
+                      const isL2Expanded = expandedL2.has(l2Key);
+                      const l3Children = l2.ch || [];
+                      const l3SelectedCount = l3Children.filter(l3 => selectedL3Keys.has(`${l2Key}-${l3.c}`)).length;
+                      const isL2Selected = selectedL2Keys.has(l2Key);
+                      const isL2Partial = l3SelectedCount > 0 && l3SelectedCount < l3Children.length;
 
                       return (
-                        <button
-                          key={sec.section}
-                          type="button"
-                          onClick={() => onToggleSection(sec.section, sec.typeCode)}
-                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all ${
-                            isSecSelected
-                              ? 'bg-indigo-500/10 text-indigo-300'
+                        <div key={l2Key}>
+                          <div className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-all ${
+                            isL2Selected
+                              ? 'bg-blue-500/10 text-blue-300'
                               : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
-                          }`}
-                        >
-                          {/* 원형 체크 */}
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                            isSecSelected
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-zinc-600'
                           }`}>
-                            {isSecSelected && <Check size={9} className="text-white" />}
+                            {l3Children.length > 0 && (
+                              <button type="button" onClick={(e) => toggleExpandL2(e, l2Key)} className="p-0.5 shrink-0">
+                                {isL2Expanded ? <ChevronDown size={12} className="text-content-muted" /> : <ChevronRight size={12} className="text-content-muted" />}
+                              </button>
+                            )}
+                            {l3Children.length === 0 && <span className="w-5" />}
+                            <button type="button" onClick={() => onToggleL2(l1, l2)} className="flex items-center gap-2 flex-1 text-left">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                isL2Selected ? 'border-blue-500 bg-blue-500'
+                                : isL2Partial ? 'border-blue-400 bg-blue-500/40'
+                                : 'border-zinc-600'
+                              }`}>
+                                {(isL2Selected || isL2Partial) && <Check size={9} className="text-white" />}
+                              </div>
+                              <span className={`text-[10px] font-bold shrink-0 ${isL2Selected ? 'text-blue-400' : 'text-content-muted'}`}>
+                                {l1Idx + 1}.{l2Idx + 1}
+                              </span>
+                              <span className="flex-1 text-left truncate">{l2.t}</span>
+                            </button>
                           </div>
-                          <span className={`text-[10px] font-bold shrink-0 ${isSecSelected ? 'text-indigo-400' : 'text-content-muted'}`}>
-                            {sectionNum}
-                          </span>
-                          <span className="flex-1 text-left">{sec.section}</span>
-                        </button>
+
+                          {/* L3: 소단원 */}
+                          <AnimatePresence>
+                            {isL2Expanded && l3Children.length > 0 && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.1 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="ml-6 space-y-0.5 border-l border-subtle/50 pl-2 py-0.5">
+                                  {l3Children.map((l3, l3Idx) => {
+                                    const l3Key = `${l2Key}-${l3.c}`;
+                                    const isL3Selected = selectedL3Keys.has(l3Key);
+
+                                    return (
+                                      <button
+                                        key={l3Key}
+                                        type="button"
+                                        onClick={() => onToggleL3(l3Key)}
+                                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-[11px] transition-all ${
+                                          isL3Selected
+                                            ? 'bg-emerald-500/10 text-emerald-300'
+                                            : 'text-content-tertiary hover:bg-surface-raised/20 hover:text-content-secondary'
+                                        }`}
+                                      >
+                                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                          isL3Selected ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-600'
+                                        }`}>
+                                          {isL3Selected && <Check size={8} className="text-white" />}
+                                        </div>
+                                        <span className={`text-[9px] font-bold shrink-0 ${isL3Selected ? 'text-emerald-400' : 'text-content-muted'}`}>
+                                          {l3Idx + 1}
+                                        </span>
+                                        <span className="flex-1 text-left truncate">{l3.t}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       );
                     })}
                   </div>
@@ -340,7 +298,7 @@ function SubjectTreePanel({
 }
 
 // ============================================================================
-// Column 2: Type Detail Panel
+// Column 2: Type Detail Panel (세부유형)
 // ============================================================================
 
 function TypeDetailPanel({
@@ -350,10 +308,10 @@ function TypeDetailPanel({
   onSelectAllGroup,
   onChangeTypeCount,
 }: {
-  typeGroups: TypeGroup[];
+  typeGroups: { label: string; key: string; items: { code: string; name: string; typeCode: string }[] }[];
   selectedTypeItems: Map<string, number>;
   onToggleType: (typeCode: string) => void;
-  onSelectAllGroup: (standardCode: string, items: ExpandedMathType[]) => void;
+  onSelectAllGroup: (key: string, items: { typeCode: string }[]) => void;
   onChangeTypeCount: (typeCode: string, count: number) => void;
 }) {
   if (typeGroups.length === 0) {
@@ -370,72 +328,218 @@ function TypeDetailPanel({
   return (
     <div className="space-y-1">
       {typeGroups.map((group) => (
-        <div key={group.standardCode}>
-          {/* Group header */}
+        <div key={group.key}>
           <div className="flex items-center justify-between px-3 py-2 sticky top-0 bg-surface-raised/95 backdrop-blur-sm z-10 border-b border-subtle">
             <span className="text-xs font-bold text-content-secondary truncate flex-1">
-              {group.standardLabel}
+              {group.label}
             </span>
             <button
               type="button"
-              onClick={() => onSelectAllGroup(group.standardCode, group.items)}
+              onClick={() => onSelectAllGroup(group.key, group.items)}
               className="text-[10px] text-blue-400 hover:text-blue-300 font-medium shrink-0 ml-2"
             >
               전체 선택
             </button>
           </div>
 
-          {/* Type items */}
           <div className="space-y-0.5 px-1">
-            {group.items.map((type) => {
-              const isSelected = selectedTypeItems.has(type.typeCode);
-              const count = selectedTypeItems.get(type.typeCode) || 0;
-              const shortCode = formatTypeCodeShort(type.typeCode);
+            {group.items.map((item, idx) => {
+              const isSelected = selectedTypeItems.has(item.typeCode);
+              const count = selectedTypeItems.get(item.typeCode) || 0;
 
               return (
                 <div
-                  key={type.typeCode}
+                  key={item.typeCode}
                   className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-blue-500/10 text-blue-300 ring-1 ring-blue-500/20'
                       : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
                   }`}
-                  onClick={() => onToggleType(type.typeCode)}
+                  onClick={() => onToggleType(item.typeCode)}
                 >
-                  {/* Type code + name */}
-                  <span className="font-mono text-[10px] text-content-muted shrink-0 w-8">{shortCode}.</span>
-                  <span className="flex-1 text-left truncate">{type.typeName}</span>
+                  <span className="font-mono text-[10px] text-content-muted shrink-0 w-6">{idx + 1}.</span>
+                  <span className="flex-1 text-left truncate">{item.name}</span>
 
-                  {/* Selected count control */}
                   {isSelected && (
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       <Check size={10} className="text-blue-400" />
-                      <button
-                        onClick={() => onChangeTypeCount(type.typeCode, Math.max(1, count - 1))}
-                        className="p-0.5 text-blue-400 hover:text-blue-300"
-                      >
+                      <button onClick={() => onChangeTypeCount(item.typeCode, Math.max(1, count - 1))} className="p-0.5 text-blue-400 hover:text-blue-300">
                         <Minus size={10} />
                       </button>
                       <span className="text-blue-400 font-bold w-4 text-center">{count}</span>
-                      <button
-                        onClick={() => onChangeTypeCount(type.typeCode, count + 1)}
-                        className="p-0.5 text-blue-400 hover:text-blue-300"
-                      >
+                      <button onClick={() => onChangeTypeCount(item.typeCode, count + 1)} className="p-0.5 text-blue-400 hover:text-blue-300">
                         <Plus size={10} />
                       </button>
                     </div>
                   )}
-
-                  {/* Problem count */}
-                  <span className="text-[10px] text-content-muted shrink-0 w-8 text-right">
-                    {type.problemCount}
-                  </span>
                 </div>
               );
             })}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// Column 2 (Manual Mode): Problem Search Panel
+// ============================================================================
+
+function ManualSearchPanel({
+  subjectCode,
+  selectedTypeCodes,
+  manualSelected,
+  onToggleSelect,
+}: {
+  subjectCode: string;
+  selectedTypeCodes: string[];
+  manualSelected: Set<string>;
+  onToggleSelect: (id: string, problem: SearchProblem) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [difficulty, setDifficulty] = useState('');
+  const [results, setResults] = useState<SearchProblem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const handleSearch = useCallback(async () => {
+    setIsLoading(true);
+    setHasSearched(true);
+    try {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (difficulty) params.set('difficulty', difficulty);
+      // typeCode: 선택된 MS prefix 중 첫 번째 사용, 없으면 과목 코드
+      const tc = selectedTypeCodes.length > 0
+        ? selectedTypeCodes[0]
+        : subjectCode ? `MS${subjectCode}` : '';
+      if (tc) params.set('typeCode', tc);
+      params.set('limit', '30');
+
+      const res = await fetch(`/api/problems/search?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setResults(data.problems || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoading(false);
+    }
+  }, [query, difficulty, subjectCode, selectedTypeCodes]);
+
+  // 엔터키 검색
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Search bar */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-subtle space-y-2">
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted" />
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="키워드 검색..."
+              className="w-full rounded-md border border-subtle bg-surface-raised pl-8 pr-3 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <select
+            value={difficulty}
+            onChange={e => setDifficulty(e.target.value)}
+            className="rounded-md border border-subtle bg-surface-raised px-2 py-1.5 text-xs text-content-primary focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="">난이도</option>
+            <option value="1">최하</option>
+            <option value="2">하</option>
+            <option value="3">중</option>
+            <option value="4">상</option>
+            <option value="5">최상</option>
+          </select>
+          <button
+            type="button"
+            onClick={handleSearch}
+            disabled={isLoading}
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 transition-colors shrink-0"
+          >
+            {isLoading ? <Loader2 size={12} className="animate-spin" /> : '검색'}
+          </button>
+        </div>
+        {manualSelected.size > 0 && (
+          <div className="text-[10px] text-blue-400 font-medium">
+            {manualSelected.size}개 문제 선택됨
+          </div>
+        )}
+      </div>
+
+      {/* Results */}
+      <div className="flex-1 overflow-auto p-2 space-y-2 scrollbar-thin">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8 gap-2">
+            <Loader2 size={16} className="animate-spin text-content-muted" />
+            <span className="text-xs text-content-muted">검색 중...</span>
+          </div>
+        ) : results.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-2">
+            <Search size={20} className="text-content-muted" />
+            <span className="text-xs text-content-muted text-center">
+              {hasSearched ? '검색 결과가 없습니다' : '키워드로 문제를 검색하세요'}
+            </span>
+          </div>
+        ) : (
+          results.map((p) => {
+            const isSelected = manualSelected.has(p.id);
+            const diffBadge = DIFF_BADGE[p.difficulty] || DIFF_BADGE[3];
+
+            return (
+              <div
+                key={p.id}
+                onClick={() => onToggleSelect(p.id, p)}
+                className={`rounded-lg border p-3 cursor-pointer transition-all ${
+                  isSelected
+                    ? 'border-cyan-500 bg-cyan-500/5 ring-1 ring-cyan-500/30'
+                    : 'border-subtle bg-surface-card/80 hover:border-accent/30'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  {/* Checkbox */}
+                  <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                    isSelected ? 'border-cyan-500 bg-cyan-500' : 'border-zinc-600'
+                  }`}>
+                    {isSelected && <Check size={10} className="text-white" />}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    {/* Badges */}
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${diffBadge.cls}`}>
+                        {diffBadge.label}
+                      </span>
+                      {p.typeCode && (
+                        <span className="text-[9px] font-mono text-content-muted">{p.typeCode}</span>
+                      )}
+                      {p.source && (
+                        <span className="text-[9px] text-content-muted truncate">{p.source}</span>
+                      )}
+                    </div>
+
+                    {/* Content preview */}
+                    <div className="text-xs text-content-secondary line-clamp-3">
+                      <MixedContentRenderer content={p.content} className="text-xs" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -450,7 +554,6 @@ function ExamPreviewPanel({
   problems,
   isLoading,
   paperName,
-  scopeText,
   categoryLabel,
   totalQuestions,
   layout,
@@ -460,13 +563,15 @@ function ExamPreviewPanel({
   templateId,
   examMeta,
   onOpenTemplateModal,
+  previewRef,
+  onDownloadPDF,
+  isPDFGenerating,
 }: {
   previewTab: PreviewTab;
   onTabChange: (tab: PreviewTab) => void;
   problems: PreviewProblem[];
   isLoading: boolean;
   paperName: string;
-  scopeText: string;
   categoryLabel: string;
   totalQuestions: number;
   layout: 'single' | 'two-column';
@@ -476,22 +581,60 @@ function ExamPreviewPanel({
   templateId: string;
   examMeta: ExamMeta;
   onOpenTemplateModal: () => void;
+  previewRef: React.MutableRefObject<HTMLDivElement | null>;
+  onDownloadPDF: () => void;
+  isPDFGenerating: boolean;
 }) {
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
 
-  // 2단 레이아웃: 문제를 좌/우 컬럼으로 분할
   const midIdx = Math.ceil(problems.length / 2);
   const leftProblems = problems.slice(0, midIdx);
   const rightProblems = problems.slice(midIdx);
 
-  // 보기가 수식을 포함하는지 판별 ($ 또는 \ 포함 시 수식)
   const hasLatex = (text: string) => /[$\\]/.test(text);
   const shouldStackChoices = (choices: string[]) =>
     choices.some((c) => hasLatex(c) || c.length > 20);
 
+  // 문제 렌더 함수 (중복 제거)
+  const renderProblem = (p: PreviewProblem) => (
+    <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
+      <div className="flex items-start gap-1.5">
+        <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
+          {p.number}.
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-gray-800 leading-relaxed">
+            <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
+          </div>
+          {p.choices.length > 0 && (
+            shouldStackChoices(p.choices) ? (
+              <div className="mt-2 pl-2 space-y-1">
+                {p.choices.map((c, i) => (
+                  <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
+                    <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
+                    <MixedContentRenderer content={c} className="text-sm text-gray-700" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
+                {p.choices.map((c, i) => (
+                  <span key={i} className="inline-flex items-center gap-1">
+                    <span className="text-gray-500">{'①②③④⑤'[i]}</span>
+                    <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
+                  </span>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full">
-      {/* ── 상단 탭 바 ── */}
+      {/* 상단 탭 바 */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-subtle flex-shrink-0 overflow-x-auto">
         {tabs.map((tab) => (
           <button
@@ -521,7 +664,7 @@ function ExamPreviewPanel({
         </div>
       </div>
 
-      {/* ── 미리보기 본문 (흰색 A4 용지) ── */}
+      {/* 미리보기 본문 */}
       <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50 p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-full gap-2">
@@ -529,140 +672,28 @@ function ExamPreviewPanel({
             <span className="text-xs text-content-muted">시험지 생성 중...</span>
           </div>
         ) : problems.length > 0 ? (
-          <div className="mx-auto bg-white rounded shadow-xl" style={{ maxWidth: '720px' }}>
-            {/* ── 헤더: 템플릿 기반 ── */}
+          <div ref={previewRef} className="mx-auto bg-white rounded shadow-xl" style={{ maxWidth: '720px' }}>
             <ExamPaperHeader
               templateId={templateId}
               meta={{ ...examMeta, subject: examMeta.subject || categoryLabel || '수학' }}
               examTitle={paperName || '시험지'}
             />
 
-            {/* ── 시험지 탭: 문제 목록 ── */}
+            {/* 시험지 탭 */}
             {previewTab === '시험지' && (
               <div className="px-6 py-5">
                 {layout === 'two-column' ? (
                   <div className="grid grid-cols-2 gap-x-6">
-                    {/* 좌측 컬럼 */}
-                    <div>
-                      {leftProblems.map((p) => (
-                        <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
-                          <div className="flex items-start gap-1.5">
-                            <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
-                              {p.number}.
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-gray-800 leading-relaxed">
-                                <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
-                              </div>
-                              {p.choices.length > 0 && (
-                                shouldStackChoices(p.choices) ? (
-                                  <div className="mt-2 pl-2 space-y-1">
-                                    {p.choices.map((c, i) => (
-                                      <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
-                                        <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
-                                        <MixedContentRenderer content={c} className="text-sm text-gray-700" />
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
-                                    {p.choices.map((c, i) => (
-                                      <span key={i} className="inline-flex items-center gap-1">
-                                        <span className="text-gray-500">{'①②③④⑤'[i]}</span>
-                                        <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
-                                      </span>
-                                    ))}
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* 우측 컬럼 */}
-                    <div>
-                      {rightProblems.map((p) => (
-                        <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
-                          <div className="flex items-start gap-1.5">
-                            <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
-                              {p.number}.
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-gray-800 leading-relaxed">
-                                <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
-                              </div>
-                              {p.choices.length > 0 && (
-                                shouldStackChoices(p.choices) ? (
-                                  <div className="mt-2 pl-2 space-y-1">
-                                    {p.choices.map((c, i) => (
-                                      <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
-                                        <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
-                                        <MixedContentRenderer content={c} className="text-sm text-gray-700" />
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
-                                    {p.choices.map((c, i) => (
-                                      <span key={i} className="inline-flex items-center gap-1">
-                                        <span className="text-gray-500">{'①②③④⑤'[i]}</span>
-                                        <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
-                                      </span>
-                                    ))}
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <div>{leftProblems.map(renderProblem)}</div>
+                    <div>{rightProblems.map(renderProblem)}</div>
                   </div>
                 ) : (
-                  /* 1단 레이아웃 */
-                  <div>
-                    {problems.map((p) => (
-                      <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
-                        <div className="flex items-start gap-1.5">
-                          <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
-                            {p.number}.
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm text-gray-800 leading-relaxed">
-                              <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
-                            </div>
-                            {p.choices.length > 0 && (
-                              shouldStackChoices(p.choices) ? (
-                                <div className="mt-2 pl-2 space-y-1">
-                                  {p.choices.map((c, i) => (
-                                    <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
-                                      <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
-                                      <MixedContentRenderer content={c} className="text-sm text-gray-700" />
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
-                                  {p.choices.map((c, i) => (
-                                    <span key={i} className="inline-flex items-center gap-1">
-                                      <span className="text-gray-500">{'①②③④⑤'[i]}</span>
-                                      <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
-                                    </span>
-                                  ))}
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div>{problems.map(renderProblem)}</div>
                 )}
               </div>
             )}
 
-            {/* ── 빠른정답 탭 ── */}
+            {/* 빠른정답 탭 */}
             {previewTab === '빠른정답' && (
               <div className="px-6 py-4">
                 <table className="w-full text-xs border-collapse">
@@ -678,7 +709,7 @@ function ExamPreviewPanel({
                       <tr key={p.id} className="border-b border-gray-100">
                         <td className="py-1.5 font-bold text-gray-700">{p.number}</td>
                         <td className="py-1.5 text-gray-800">{p.answer || '-'}</td>
-                        <td className="py-1.5 text-gray-500 text-[10px]">{formatTypeCodeShort(p.typeCode)}</td>
+                        <td className="py-1.5 text-gray-500 text-[10px]">{p.typeCode}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -686,7 +717,7 @@ function ExamPreviewPanel({
               </div>
             )}
 
-            {/* ── 해설지 탭 ── */}
+            {/* 해설지 탭 */}
             {previewTab === '해설지' && (
               <div className="px-6 py-5 space-y-5">
                 {problems.map((p) => (
@@ -708,21 +739,20 @@ function ExamPreviewPanel({
             )}
           </div>
         ) : (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="p-4 rounded-xl bg-surface-card/30 border border-dashed border-subtle">
               <FileText size={32} className="text-content-muted" />
             </div>
             <p className="text-xs text-content-muted text-center leading-relaxed">
               과목과 단원을 선택한 후<br />
-              <strong className="text-content-secondary">자동출제</strong>를 클릭하면<br />
-              시험지 미리보기가 표시됩니다
+              <strong className="text-content-secondary">자동출제</strong> 또는 <strong className="text-content-secondary">수동출제</strong>로<br />
+              시험지를 생성하세요
             </p>
           </div>
         )}
       </div>
 
-      {/* ── 하단 바: 1단/2단 토글 + 간격 슬라이더 + 출력 (참조사이트 스타일) ── */}
+      {/* 하단 바 */}
       <div className="flex items-center gap-3 px-3 py-2 border-t border-subtle flex-shrink-0 bg-surface-card/50">
         {/* 1단/2단 토글 */}
         <div className="flex border border-subtle rounded overflow-hidden shrink-0">
@@ -765,6 +795,17 @@ function ExamPreviewPanel({
           />
           <span className="text-[11px] text-content-secondary tabular-nums w-8 text-right">{gap}</span>
         </div>
+
+        {/* PDF 저장 */}
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded transition-colors shrink-0 disabled:opacity-50"
+          onClick={onDownloadPDF}
+          disabled={problems.length === 0 || isPDFGenerating}
+        >
+          {isPDFGenerating ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          PDF 저장
+        </button>
 
         {/* 출력 버튼 */}
         <button
@@ -811,7 +852,6 @@ function DifficultyDistributionBar({
         </div>
       </div>
 
-      {/* Difficulty rows */}
       <div className="grid grid-cols-5 gap-2">
         {levels.map((level) => {
           const dbKey = DIFF_LEVEL_MAP[level];
@@ -822,7 +862,7 @@ function DifficultyDistributionBar({
 
           return (
             <div key={level} className={`flex flex-col items-center gap-1 rounded-lg border ${colors.border} ${colors.bg} px-2 py-2`}>
-              <span className={`text-[10px] font-bold ${colors.text}`}>{level}{level !== '최상' && level !== '최하' ? ' ↑' : ''}</span>
+              <span className={`text-[10px] font-bold ${colors.text}`}>{level}</span>
               <input
                 type="number"
                 value={value}
@@ -849,36 +889,36 @@ function DifficultyDistributionBar({
 
 export default function PaperCreatePage() {
   const router = useRouter();
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // ---- State ----
   const [paperName, setPaperName] = useState(() =>
     `[${new Date().toISOString().slice(0, 10)}] 시험지`
   );
   const [createMode, setCreateMode] = useState<CreateMode>('auto');
-  const [questionTypeFilter, setQuestionTypeFilter] = useState<QuestionTypeFilter>('전체');
 
-  // Subject/Chapter/Section selections
-  const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
-  const [selectedSections, setSelectedSections] = useState<string[]>([]);
-  const [selectedTypeCodes, setSelectedTypeCodes] = useState<string[]>([]);
+  // Mathsecr subject/tree
+  const [subjects, setSubjects] = useState<SubjectInfo[]>([]);
+  const [selectedSubjectCode, setSelectedSubjectCode] = useState('');
+  const [mathsecrTree, setMathsecrTree] = useState<MathsecrNode | null>(null);
+  const [isLoadingTree, setIsLoadingTree] = useState(false);
 
-  // Type-level selection (Column 2)
+  // Tree selection: L2 keys = "{subjectCode}-{L1.c}-{L2.c}", L3 keys = "{subjectCode}-{L1.c}-{L2.c}-{L3.c}"
+  const [selectedL2Keys, setSelectedL2Keys] = useState<Set<string>>(new Set());
+  const [selectedL3Keys, setSelectedL3Keys] = useState<Set<string>>(new Set());
+
+  // Type-level selection (Column 2) — key: full MS typeCode
   const [selectedTypeItems, setSelectedTypeItems] = useState<Map<string, number>>(new Map());
 
   // Difficulty
   const [difficulties, setDifficulties] = useState<Record<DifficultyLevel, number>>({
     '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0,
   });
-
-  // Available counts from DB
   const [availableCounts, setAvailableCounts] = useState<Record<string, number>>({});
 
-  // Subject tree data
-  const [allLevelNodes, setAllLevelNodes] = useState<LevelNode[]>([]);
-  const [isLoadingTree, setIsLoadingTree] = useState(true);
-
-  // Category selection
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  // Manual mode
+  const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
+  const [manualProblems, setManualProblems] = useState<Map<string, SearchProblem>>(new Map());
 
   // Preview
   const [previewTab, setPreviewTab] = useState<PreviewTab>('시험지');
@@ -894,91 +934,113 @@ export default function PaperCreatePage() {
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedExamId, setGeneratedExamId] = useState<string | null>(null);
+  const [isPDFGenerating, setIsPDFGenerating] = useState(false);
 
   // ---- Computed ----
-  const selectedCategory = useMemo(() =>
-    SUBJECT_CATEGORIES.find((c) => c.id === selectedCategoryId) || null,
-    [selectedCategoryId]
-  );
+  const selectedTypeCodes = useMemo(() => {
+    // L3 keys → MS prefix codes for API
+    return [...selectedL3Keys].map(key => {
+      // key format: "07-01-02-03" → "MS07-01-02-03"
+      const parts = key.split('-');
+      return `MS${parts.join('-')}`;
+    });
+  }, [selectedL3Keys]);
 
-  const subjectTree = useMemo(() => {
-    if (!selectedCategory) return [];
-    const level = allLevelNodes.find((l) => l.levelCode === selectedCategory.levelCode);
-    if (!level) return [];
-    const tree = levelNodeToSubjectTree(level, selectedCategory);
-    return tree ? [tree] : [];
-  }, [allLevelNodes, selectedCategory]);
+  // typeGroups for Column 2 — 선택된 L3의 세부유형(L4)
+  const typeGroups = useMemo(() => {
+    if (!mathsecrTree || selectedL3Keys.size === 0) return [];
 
-  const availableCategories = useMemo(() => {
-    const levelCodes = new Set(allLevelNodes.map((l) => l.levelCode));
-    return SUBJECT_CATEGORIES.filter((c) => levelCodes.has(c.levelCode));
-  }, [allLevelNodes]);
+    const groups: { label: string; key: string; items: { code: string; name: string; typeCode: string }[] }[] = [];
 
-  // Type groups for Column 2 (derived from in-memory tree)
-  const typeGroups = useMemo<TypeGroup[]>(() => {
-    if (!selectedCategory || subjectTree.length === 0) return [];
-    const groups: TypeGroup[] = [];
-    const subj = subjectTree[0];
-    if (!subj) return groups;
+    for (const l3Key of selectedL3Keys) {
+      const parts = l3Key.split('-'); // [subjectCode, l1c, l2c, l3c]
+      if (parts.length < 4) continue;
 
-    const level = allLevelNodes.find(l => l.levelCode === selectedCategory.levelCode);
-    if (!level) return groups;
+      const [, l1c, l2c, l3c] = parts;
+      const l1 = mathsecrTree.ch?.find(n => n.c === l1c);
+      if (!l1) continue;
+      const l2 = l1.ch?.find(n => n.c === l2c);
+      if (!l2) continue;
+      const l3 = l2.ch?.find(n => n.c === l3c);
+      if (!l3 || !l3.ch || l3.ch.length === 0) continue;
 
-    for (const ch of subj.chapters) {
-      for (const sec of ch.sections) {
-        if (!selectedSections.includes(sec.section)) continue;
-
-        const domain = level.domains.find(d => d.domainCode === ch.domainCode);
-        if (!domain) continue;
-        const standard = domain.standards.find(s => s.standardCode === sec.typeCode);
-        if (!standard || standard.types.length === 0) continue;
-
-        groups.push({
-          standardLabel: sec.section,
-          standardCode: sec.typeCode,
-          items: standard.types,
-        });
-      }
+      groups.push({
+        label: `${l1.t} > ${l2.t} > ${l3.t}`,
+        key: l3Key,
+        items: l3.ch.map(l4 => ({
+          code: l4.c,
+          name: l4.t,
+          typeCode: `MS${selectedSubjectCode}-${l1c}-${l2c}-${l3c}-${l4.c}`,
+        })),
+      });
     }
-    return groups;
-  }, [subjectTree, selectedSections, selectedCategory, allLevelNodes]);
 
-  const totalQuestions = Object.values(difficulties).reduce((sum, val) => sum + val, 0);
-  const hasSelection = selectedSections.length > 0;
+    return groups;
+  }, [mathsecrTree, selectedL3Keys, selectedSubjectCode]);
+
+  const totalQuestions = createMode === 'manual'
+    ? manualSelected.size
+    : Object.values(difficulties).reduce((sum, val) => sum + val, 0);
 
   const categoryLabel = useMemo(() => {
-    if (!selectedCategory) return '';
-    return selectedCategory.curriculum
-      ? `${selectedCategory.label}[${selectedCategory.curriculum}]`
-      : selectedCategory.label;
-  }, [selectedCategory]);
+    const subj = subjects.find(s => s.code === selectedSubjectCode);
+    return subj?.name || '';
+  }, [subjects, selectedSubjectCode]);
 
-  // Scope text — range format
   const scopeText = useMemo(() => {
-    if (selectedSections.length === 0) return '';
-    if (selectedSections.length === 1) return selectedSections[0];
-    return `${selectedSections[0]} ~ ${selectedSections[selectedSections.length - 1]}`;
-  }, [selectedSections]);
+    if (selectedL2Keys.size === 0) return '';
+    const labels: string[] = [];
+    if (!mathsecrTree) return '';
+    for (const key of selectedL2Keys) {
+      const parts = key.split('-');
+      if (parts.length < 3) continue;
+      const [, l1c, l2c] = parts;
+      const l1 = mathsecrTree.ch?.find(n => n.c === l1c);
+      const l2 = l1?.ch?.find(n => n.c === l2c);
+      if (l2) labels.push(l2.t);
+    }
+    if (labels.length <= 2) return labels.join(', ');
+    return `${labels[0]} ~ ${labels[labels.length - 1]}`;
+  }, [selectedL2Keys, mathsecrTree]);
 
-  // ---- Fetch tree ----
+  // ---- Fetch subjects on mount ----
   useEffect(() => {
-    async function fetchExpandedTypesTree() {
-      setIsLoadingTree(true);
+    async function fetchSubjects() {
       try {
-        const res = await fetch('/api/expanded-types/tree');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const { tree } = await res.json() as { tree: LevelNode[] };
-        if (tree && tree.length > 0) {
-          setAllLevelNodes(tree);
-        }
-      } catch (err) {
-        console.error('[Create] Failed to fetch tree:', err);
-      } finally {
-        setIsLoadingTree(false);
+        const res = await fetch('/api/mathsecr/tree');
+        if (!res.ok) return;
+        const data = await res.json();
+        setSubjects(data.subjects || []);
+      } catch {
+        // ignore
       }
     }
-    fetchExpandedTypesTree();
+    fetchSubjects();
   }, []);
+
+  // ---- Fetch tree when subject changes ----
+  useEffect(() => {
+    if (!selectedSubjectCode) {
+      setMathsecrTree(null);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingTree(true);
+    async function fetchTree() {
+      try {
+        const res = await fetch(`/api/mathsecr/tree?subject=${selectedSubjectCode}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setMathsecrTree(data.tree || null);
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setIsLoadingTree(false);
+      }
+    }
+    fetchTree();
+    return () => { cancelled = true; };
+  }, [selectedSubjectCode]);
 
   // ---- Fetch available counts (debounced) ----
   useEffect(() => {
@@ -1003,63 +1065,118 @@ export default function PaperCreatePage() {
   // ---- Handlers ----
   const handleReset = () => {
     setPaperName(`[${new Date().toISOString().slice(0, 10)}] 시험지`);
-    setSelectedCategoryId('');
-    setSelectedChapters([]);
-    setSelectedSections([]);
-    setSelectedTypeCodes([]);
+    setSelectedSubjectCode('');
+    setMathsecrTree(null);
+    setSelectedL2Keys(new Set());
+    setSelectedL3Keys(new Set());
     setSelectedTypeItems(new Map());
-    setQuestionTypeFilter('전체');
     setCreateMode('auto');
     setDifficulties({ '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0 });
     setPreviewProblems([]);
     setGeneratedExamId(null);
     setAvailableCounts({});
+    setManualSelected(new Set());
+    setManualProblems(new Map());
   };
 
-  const handleToggleChapter = useCallback((chapter: string, sections: SectionNode[]) => {
-    setSelectedChapters((prev) => {
-      const isSelected = prev.includes(chapter);
-      if (isSelected) {
-        // Deselect chapter + all its sections
-        const sectionNames = new Set(sections.map(s => s.section));
-        const sectionCodes = new Set(sections.map(s => s.typeCode));
-        setSelectedSections(p => p.filter(s => !sectionNames.has(s)));
-        setSelectedTypeCodes(p => p.filter(t => !sectionCodes.has(t)));
-        return prev.filter(c => c !== chapter);
-      } else {
-        // Select chapter + all its sections
-        const newSections = sections.map(s => s.section);
-        const newCodes = sections.map(s => s.typeCode);
-        setSelectedSections(p => [...new Set([...p, ...newSections])]);
-        setSelectedTypeCodes(p => [...new Set([...p, ...newCodes])]);
-        return [...prev, chapter];
-      }
-    });
-  }, []);
+  const handleSubjectChange = (code: string) => {
+    setSelectedSubjectCode(code);
+    setSelectedL2Keys(new Set());
+    setSelectedL3Keys(new Set());
+    setSelectedTypeItems(new Map());
+    setDifficulties({ '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0 });
+  };
 
-  const handleToggleSection = useCallback((section: string, typeCode: string) => {
-    setSelectedSections((prev) =>
-      prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
-    );
-    setSelectedTypeCodes((prev) =>
-      prev.includes(typeCode) ? prev.filter((t) => t !== typeCode) : [...prev, typeCode]
-    );
+  // Toggle L1: select/deselect all L2 and L3 children
+  const handleToggleL1 = useCallback((l1: MathsecrNode) => {
+    const sc = selectedSubjectCode;
+    const l2Children = l1.ch || [];
+    const l2Keys = l2Children.map(l2 => `${sc}-${l1.c}-${l2.c}`);
+    const l3Keys: string[] = [];
+    l2Children.forEach(l2 => {
+      (l2.ch || []).forEach(l3 => l3Keys.push(`${sc}-${l1.c}-${l2.c}-${l3.c}`));
+    });
+
+    setSelectedL2Keys(prev => {
+      const allSelected = l2Keys.every(k => prev.has(k));
+      const next = new Set(prev);
+      if (allSelected) {
+        l2Keys.forEach(k => next.delete(k));
+      } else {
+        l2Keys.forEach(k => next.add(k));
+      }
+      return next;
+    });
+    setSelectedL3Keys(prev => {
+      const allSelected = l3Keys.every(k => prev.has(k));
+      const next = new Set(prev);
+      if (allSelected) {
+        l3Keys.forEach(k => next.delete(k));
+      } else {
+        l3Keys.forEach(k => next.add(k));
+      }
+      return next;
+    });
+  }, [selectedSubjectCode]);
+
+  // Toggle L2: select/deselect all L3 children
+  const handleToggleL2 = useCallback((l1: MathsecrNode, l2: MathsecrNode) => {
+    const sc = selectedSubjectCode;
+    const l2Key = `${sc}-${l1.c}-${l2.c}`;
+    const l3Children = l2.ch || [];
+    const l3Keys = l3Children.map(l3 => `${l2Key}-${l3.c}`);
+
+    setSelectedL2Keys(prev => {
+      const next = new Set(prev);
+      next.has(l2Key) ? next.delete(l2Key) : next.add(l2Key);
+      return next;
+    });
+    setSelectedL3Keys(prev => {
+      const allSelected = l3Keys.every(k => prev.has(k));
+      const next = new Set(prev);
+      if (allSelected) {
+        l3Keys.forEach(k => next.delete(k));
+      } else {
+        l3Keys.forEach(k => next.add(k));
+      }
+      return next;
+    });
+  }, [selectedSubjectCode]);
+
+  // Toggle L3
+  const handleToggleL3 = useCallback((l3Key: string) => {
+    setSelectedL3Keys(prev => {
+      const next = new Set(prev);
+      next.has(l3Key) ? next.delete(l3Key) : next.add(l3Key);
+      return next;
+    });
+    // Also update L2 parent
+    const parts = l3Key.split('-');
+    if (parts.length >= 4) {
+      const l2Key = parts.slice(0, 3).join('-');
+      // Check if all siblings of this L3 are now selected/deselected
+      // We need the tree to know siblings, so just toggle L2 based on any child selected
+      setSelectedL2Keys(prev => {
+        const next = new Set(prev);
+        // If we're deselecting and this might leave L2 empty, still keep L2 selected
+        // as long as any L3 under it is selected. This is checked in the tree panel.
+        // For simplicity, always keep L2 selected when any L3 is.
+        next.add(l2Key);
+        return next;
+      });
+    }
   }, []);
 
   // Type item handlers (Column 2)
   const handleToggleType = useCallback((typeCode: string) => {
     setSelectedTypeItems(prev => {
       const next = new Map(prev);
-      if (next.has(typeCode)) {
-        next.delete(typeCode);
-      } else {
-        next.set(typeCode, 1);
-      }
+      next.has(typeCode) ? next.delete(typeCode) : next.set(typeCode, 1);
       return next;
     });
   }, []);
 
-  const handleSelectAllGroup = useCallback((standardCode: string, items: ExpandedMathType[]) => {
+  const handleSelectAllGroup = useCallback((key: string, items: { typeCode: string }[]) => {
     setSelectedTypeItems(prev => {
       const next = new Map(prev);
       const allSelected = items.every(t => next.has(t.typeCode));
@@ -1080,41 +1197,65 @@ export default function PaperCreatePage() {
     });
   }, []);
 
+  // Manual mode: toggle problem selection
+  const handleManualToggle = useCallback((id: string, problem: SearchProblem) => {
+    setManualSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+    setManualProblems(prev => {
+      const next = new Map(prev);
+      next.set(id, problem);
+      return next;
+    });
+  }, []);
+
   // Save / Generate exam
   const handleSaveExam = async () => {
     if (!paperName.trim()) {
       alert('시험지 이름을 입력해주세요.');
       return;
     }
-    if (totalQuestions === 0) {
-      alert('문항수를 설정해주세요.');
-      return;
+
+    if (createMode === 'manual') {
+      if (manualSelected.size === 0) {
+        alert('문제를 선택해주세요.');
+        return;
+      }
+    } else {
+      if (totalQuestions === 0) {
+        alert('문항수를 설정해주세요.');
+        return;
+      }
     }
 
     setIsGenerating(true);
 
     try {
+      const body: Record<string, unknown> = {
+        title: paperName,
+      };
+
+      if (createMode === 'manual') {
+        body.problemIds = [...manualSelected];
+      } else {
+        body.criteria = {
+          subject: categoryLabel || '',
+          typeCodes: selectedTypeCodes,
+          difficulty_distribution: difficulties,
+          mode: createMode,
+        };
+      }
+
       const response = await fetch('/api/exams/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: paperName,
-          criteria: {
-            subject: selectedCategory?.label || '',
-            chapters: selectedChapters,
-            sections: selectedSections,
-            typeCodes: selectedTypeCodes,
-            questionType: questionTypeFilter,
-            difficulty_distribution: difficulties,
-            mode: createMode,
-          },
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate');
-      }
+      if (!response.ok) throw new Error(data.error || 'Failed to generate');
 
       if (data.examId) {
         setGeneratedExamId(data.examId);
@@ -1126,22 +1267,18 @@ export default function PaperCreatePage() {
             const probs: PreviewProblem[] = (examData.problems || []).map((ep: Record<string, unknown>, idx: number) => {
               const prob = (ep.problems || ep) as Record<string, unknown>;
               const classification = Array.isArray(prob.classifications) ? prob.classifications[0] as Record<string, unknown> | undefined : undefined;
-
-              // Extract choices from answer_json
               const answerJson = prob.answer_json as Record<string, unknown> | null;
-              const choices: string[] = answerJson?.choices
-                ? (answerJson.choices as string[])
-                : [];
+              const choices: string[] = answerJson?.choices ? (answerJson.choices as string[]) : [];
 
               return {
                 id: (prob.id || `gen-${idx}`) as string,
                 number: ((ep.sequence_number as number) || idx + 1),
                 content: (prob.content_latex || prob.content_html || '') as string,
-                typeCode: (classification?.type_code || classification?.expanded_type_code || '') as string,
+                typeCode: (classification?.type_code || '') as string,
                 typeName: '',
                 difficulty: (classification?.difficulty || 3) as number,
                 choices,
-                answer: (answerJson?.answer || '') as string | number,
+                answer: (answerJson?.answer || answerJson?.correct_answer || '') as string | number,
                 solution: (prob.solution_latex || '') as string,
                 source: (prob.source_name || '') as string,
               };
@@ -1161,22 +1298,50 @@ export default function PaperCreatePage() {
     }
   };
 
+  // PDF download
+  const handleDownloadPDF = async () => {
+    if (!previewRef.current || previewProblems.length === 0) return;
+    setIsPDFGenerating(true);
+    try {
+      await downloadPDF({
+        element: previewRef.current,
+        config: {
+          title: paperName,
+          layout: previewLayout,
+          fontSize: 12,
+          pageSize: 'A4',
+          orientation: 'portrait',
+          margin: { top: 15, right: 15, bottom: 15, left: 15 },
+          showProblemPoints: false,
+          showProblemNumbers: true,
+          showAnswerSheet: false,
+          showNameField: true,
+          showClassField: true,
+          showScoreField: false,
+          problemSpacing: previewGap,
+          watermark: { enabled: false, opacity: 0 },
+        },
+        filename: `${paperName.replace(/[[\]]/g, '')}.pdf`,
+      });
+    } catch (e) {
+      console.error('PDF 생성 실패:', e);
+      alert('PDF 생성에 실패했습니다.');
+    } finally {
+      setIsPDFGenerating(false);
+    }
+  };
+
   // ============================================================================
   // Render
   // ============================================================================
 
   return (
     <section className="flex h-[calc(100vh-6rem)] flex-col overflow-hidden">
-      {/* ================================================================ */}
       {/* Header Area */}
-      {/* ================================================================ */}
       <div className="flex-shrink-0 pb-2">
         {/* Row 1: Title + actions */}
         <div className="flex items-center justify-between gap-4 mb-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-content-primary">시험지 출제</h1>
-          </div>
-
+          <h1 className="text-xl font-bold text-content-primary">시험지 출제</h1>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1189,32 +1354,24 @@ export default function PaperCreatePage() {
             <button
               type="button"
               onClick={generatedExamId ? () => router.push('/dashboard/exam-management') : handleSaveExam}
-              disabled={generatedExamId ? false : (totalQuestions === 0 || !paperName.trim() || isGenerating)}
+              disabled={generatedExamId ? false : (
+                createMode === 'manual' ? manualSelected.size === 0 : totalQuestions === 0
+              ) || !paperName.trim() || isGenerating}
               className="flex items-center gap-1.5 rounded-lg border border-indigo-500/50 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               {isGenerating ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>생성 중...</span>
-                </>
+                <><Loader2 size={14} className="animate-spin" /><span>생성 중...</span></>
               ) : generatedExamId ? (
-                <>
-                  <ArrowRight size={14} />
-                  <span>다음 단계로</span>
-                </>
+                <><ArrowRight size={14} /><span>시험지 관리로</span></>
               ) : (
-                <>
-                  <ArrowRight size={14} />
-                  <span>다음 단계로</span>
-                </>
+                <><Wand2 size={14} /><span>{createMode === 'manual' ? '시험지 생성' : '자동 출제'}</span></>
               )}
             </button>
           </div>
         </div>
 
-        {/* Row 2: Scope + paper name + total + mode buttons */}
+        {/* Row 2: Scope + paper name + mode */}
         <div className="flex items-center gap-3 mb-2">
-          {/* Scope text */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
@@ -1229,14 +1386,12 @@ export default function PaperCreatePage() {
                   type="text"
                   value={paperName}
                   onChange={(e) => setPaperName(e.target.value)}
-                  className="block w-52 rounded-md border border-subtle bg-surface-raised px-2 py-1 text-xs text-content-primary mt-0.5
-                    focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="block w-52 rounded-md border border-subtle bg-surface-raised px-2 py-1 text-xs text-content-primary mt-0.5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
             </div>
           </div>
 
-          {/* Total + mode buttons */}
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-center px-3">
               <span className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary">총 문항수</span>
@@ -1245,17 +1400,16 @@ export default function PaperCreatePage() {
 
             <div className="flex gap-1">
               {[
-                { mode: 'auto' as CreateMode, icon: <Wand2 size={13} />, label: '자동출제', bg: 'bg-indigo-600 hover:bg-indigo-500' },
-                { mode: 'manual' as CreateMode, icon: <Pencil size={13} />, label: '수동출제', bg: 'bg-zinc-600 hover:bg-zinc-500' },
-                { mode: 'add' as CreateMode, icon: <PlusCircle size={13} />, label: '문제추가', bg: 'bg-zinc-600 hover:bg-zinc-500' },
-              ].map(({ mode, icon, label, bg }) => (
+                { mode: 'auto' as CreateMode, icon: <Wand2 size={13} />, label: '자동출제' },
+                { mode: 'manual' as CreateMode, icon: <Pencil size={13} />, label: '수동출제' },
+              ].map(({ mode, icon, label }) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setCreateMode(mode)}
                   className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-all ${
                     createMode === mode
-                      ? `${mode === 'auto' ? 'bg-indigo-600 ring-2 ring-indigo-400/50' : 'bg-zinc-600 ring-2 ring-zinc-400/50'}`
+                      ? mode === 'auto' ? 'bg-indigo-600 ring-2 ring-indigo-400/50' : 'bg-zinc-600 ring-2 ring-zinc-400/50'
                       : 'bg-zinc-700/50 text-content-secondary hover:bg-zinc-700'
                   }`}
                 >
@@ -1266,121 +1420,50 @@ export default function PaperCreatePage() {
             </div>
           </div>
         </div>
-
-        {/* Row 3: Question type filter chips */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary shrink-0">출제유형</span>
-          <div className="flex flex-wrap gap-1.5">
-            {(['전체', '교과서 유형', '문제집 유형', '기출 유형', '모의고사 유형'] as QuestionTypeFilter[]).map((type) => (
-              <FilterChip
-                key={type}
-                label={type}
-                active={questionTypeFilter === type}
-                onClick={() => setQuestionTypeFilter(type)}
-              />
-            ))}
-          </div>
-        </div>
       </div>
 
-      {/* ================================================================ */}
       {/* Main 3-Column Area */}
-      {/* ================================================================ */}
       <div className="flex flex-1 gap-0 overflow-hidden rounded-xl border border-subtle bg-surface-raised">
-        {/* ============================================================ */}
         {/* Left Group: Column 1 + Column 2 + Bottom */}
-        {/* ============================================================ */}
         <div className="flex flex-col overflow-hidden" style={{ width: '56%' }}>
-          {/* Top: Two columns side by side */}
           <div className="flex flex-1 min-h-0">
-            {/* Column 1: Subject Tree */}
+            {/* Column 1: Mathsecr Tree */}
             <div className="w-1/2 border-r border-subtle flex flex-col overflow-hidden">
-              {/* Header */}
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-subtle flex-shrink-0">
-                <StepBadge number={1} active={!selectedCategoryId} />
-                <span className="text-sm font-semibold text-content-primary">과목을 선택해 주세요</span>
+                <StepBadge number={1} active={!selectedSubjectCode} />
+                <span className="text-sm font-semibold text-content-primary">과목·단원 선택</span>
               </div>
 
-              {/* Subject tag or dropdown */}
+              {/* Subject selector */}
               <div className="flex-shrink-0 px-3 py-2 border-b border-subtle">
-                {selectedCategoryId && selectedCategory ? (
-                  /* Tag chip */
+                {selectedSubjectCode ? (
                   <div className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2">
-                    <span className="text-xs font-medium text-indigo-300 flex-1 truncate">
-                      {categoryLabel}
-                    </span>
+                    <span className="text-xs font-medium text-indigo-300 flex-1 truncate">{categoryLabel}</span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedCategoryId('');
-                        setSelectedChapters([]);
-                        setSelectedSections([]);
-                        setSelectedTypeCodes([]);
-                        setSelectedTypeItems(new Map());
-                      }}
+                      onClick={() => handleSubjectChange('')}
                       className="p-0.5 text-indigo-400 hover:text-indigo-300 transition-colors"
                     >
                       <X size={14} />
                     </button>
                   </div>
                 ) : (
-                  /* Dropdown */
                   <select
-                    value={selectedCategoryId}
-                    onChange={(e) => {
-                      setSelectedCategoryId(e.target.value);
-                      setSelectedChapters([]);
-                      setSelectedSections([]);
-                      setSelectedTypeCodes([]);
-                      setSelectedTypeItems(new Map());
-                    }}
+                    value={selectedSubjectCode}
+                    onChange={e => handleSubjectChange(e.target.value)}
                     className="w-full rounded-lg border border-subtle bg-surface-raised px-3 py-2 text-sm text-content-primary focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     <option value="">과목을 선택해 주세요</option>
-                    {availableCategories.some((c) => c.curriculum === '2022개정') && (
-                      <optgroup label="2022 개정교육과정">
-                        {availableCategories
-                          .filter((c) => c.curriculum === '2022개정')
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.label} [{c.curriculum}]
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
-                    {availableCategories.some((c) => c.curriculum === '개정전') && (
-                      <optgroup label="개정전 (2015 교육과정)">
-                        {availableCategories
-                          .filter((c) => c.curriculum === '개정전')
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.label} [{c.curriculum}]
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
-                    {availableCategories.some((c) => c.curriculum === '' && c.levelCode === 'MS') && (
-                      <optgroup label="중학교">
-                        {availableCategories
-                          .filter((c) => c.curriculum === '' && c.levelCode === 'MS')
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.label}
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
-                    {availableCategories.some((c) => c.curriculum === '' && c.levelCode.startsWith('ES')) && (
-                      <optgroup label="초등학교">
-                        {availableCategories
-                          .filter((c) => c.curriculum === '' && c.levelCode.startsWith('ES'))
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.label}
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
+                    <optgroup label="중학교">
+                      {subjects.filter(s => parseInt(s.code) <= 6).map(s => (
+                        <option key={s.code} value={s.code}>{s.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="고등학교">
+                      {subjects.filter(s => parseInt(s.code) >= 7).map(s => (
+                        <option key={s.code} value={s.code}>{s.name}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 )}
               </div>
@@ -1390,67 +1473,104 @@ export default function PaperCreatePage() {
                 {isLoadingTree ? (
                   <div className="flex items-center justify-center py-8 gap-2">
                     <Loader2 size={16} className="animate-spin text-content-muted" />
-                    <span className="text-xs text-content-muted">과목 트리 로딩 중...</span>
+                    <span className="text-xs text-content-muted">트리 로딩 중...</span>
                   </div>
-                ) : subjectTree.length === 0 ? (
+                ) : !mathsecrTree ? (
                   <div className="flex flex-col items-center justify-center py-8 gap-2">
                     <AlertCircle size={20} className="text-content-muted" />
                     <span className="text-xs text-content-muted text-center">
-                      {selectedCategoryId ? '등록된 유형이 없습니다' : '과목을 먼저 선택해 주세요'}
+                      {selectedSubjectCode ? '트리를 불러올 수 없습니다' : '과목을 먼저 선택해 주세요'}
                     </span>
                   </div>
                 ) : (
-                  <SubjectTreePanel
-                    tree={subjectTree}
-                    selectedChapters={selectedChapters}
-                    selectedSections={selectedSections}
-                    onToggleChapter={handleToggleChapter}
-                    onToggleSection={handleToggleSection}
+                  <MathsecrTreePanel
+                    tree={mathsecrTree}
+                    subjectCode={selectedSubjectCode}
+                    selectedL2Keys={selectedL2Keys}
+                    selectedL3Keys={selectedL3Keys}
+                    onToggleL1={handleToggleL1}
+                    onToggleL2={handleToggleL2}
+                    onToggleL3={handleToggleL3}
                   />
                 )}
               </div>
             </div>
 
-            {/* Column 2: Type Detail */}
+            {/* Column 2: Type Detail or Manual Search */}
             <div className="w-1/2 flex flex-col overflow-hidden">
-              {/* Header */}
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-subtle flex-shrink-0">
-                <StepBadge number={2} active={hasSelection} />
-                <span className="text-sm font-semibold text-content-primary">항목을 선택해 주세요</span>
-                {selectedTypeItems.size > 0 && (
+                <StepBadge number={2} active={selectedL2Keys.size > 0 || createMode === 'manual'} />
+                <span className="text-sm font-semibold text-content-primary">
+                  {createMode === 'manual' ? '문제 검색' : '세부유형 선택'}
+                </span>
+                {createMode === 'auto' && selectedTypeItems.size > 0 && (
                   <span className="ml-auto text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
                     {selectedTypeItems.size}개 선택
                   </span>
                 )}
+                {createMode === 'manual' && manualSelected.size > 0 && (
+                  <span className="ml-auto text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">
+                    {manualSelected.size}개 선택
+                  </span>
+                )}
               </div>
 
-              {/* Type list */}
-              <div className="flex-1 overflow-auto p-1 scrollbar-thin">
-                <TypeDetailPanel
-                  typeGroups={typeGroups}
-                  selectedTypeItems={selectedTypeItems}
-                  onToggleType={handleToggleType}
-                  onSelectAllGroup={handleSelectAllGroup}
-                  onChangeTypeCount={handleChangeTypeCount}
-                />
+              <div className="flex-1 overflow-auto scrollbar-thin">
+                {createMode === 'manual' ? (
+                  <ManualSearchPanel
+                    subjectCode={selectedSubjectCode}
+                    selectedTypeCodes={selectedTypeCodes}
+                    manualSelected={manualSelected}
+                    onToggleSelect={handleManualToggle}
+                  />
+                ) : (
+                  <TypeDetailPanel
+                    typeGroups={typeGroups}
+                    selectedTypeItems={selectedTypeItems}
+                    onToggleType={handleToggleType}
+                    onSelectAllGroup={handleSelectAllGroup}
+                    onChangeTypeCount={handleChangeTypeCount}
+                  />
+                )}
               </div>
             </div>
           </div>
 
-          {/* Bottom: Difficulty Distribution */}
-          <div className="flex-shrink-0 border-t border-subtle">
-            <DifficultyDistributionBar
-              difficulties={difficulties}
-              availableCounts={availableCounts}
-              totalQuestions={totalQuestions}
-              onChange={setDifficulties}
-            />
-          </div>
+          {/* Bottom: Difficulty Distribution (auto mode only) */}
+          {createMode === 'auto' && (
+            <div className="flex-shrink-0 border-t border-subtle">
+              <DifficultyDistributionBar
+                difficulties={difficulties}
+                availableCounts={availableCounts}
+                totalQuestions={totalQuestions}
+                onChange={setDifficulties}
+              />
+            </div>
+          )}
+
+          {/* Bottom: Manual mode summary */}
+          {createMode === 'manual' && manualSelected.size > 0 && (
+            <div className="flex-shrink-0 border-t border-subtle px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <StepBadge number={3} active />
+                  <span className="text-sm font-semibold text-content-primary">선택된 문제</span>
+                  <span className="text-lg font-bold text-cyan-400">{manualSelected.size}</span>
+                  <span className="text-xs text-content-muted">문항</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setManualSelected(new Set()); setManualProblems(new Map()); }}
+                  className="text-xs text-content-muted hover:text-content-secondary transition-colors"
+                >
+                  선택 초기화
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ============================================================ */}
         {/* Column 3: Exam Preview */}
-        {/* ============================================================ */}
         <div className="flex-1 flex flex-col overflow-hidden border-l border-subtle">
           <ExamPreviewPanel
             previewTab={previewTab}
@@ -1458,9 +1578,8 @@ export default function PaperCreatePage() {
             problems={previewProblems}
             isLoading={isGenerating}
             paperName={paperName}
-            scopeText={scopeText}
             categoryLabel={categoryLabel}
-            totalQuestions={totalQuestions}
+            totalQuestions={previewProblems.length}
             layout={previewLayout}
             onLayoutChange={setPreviewLayout}
             gap={previewGap}
@@ -1468,6 +1587,9 @@ export default function PaperCreatePage() {
             templateId={previewTemplateId}
             examMeta={previewExamMeta}
             onOpenTemplateModal={() => setShowTemplateModal(true)}
+            previewRef={previewRef}
+            onDownloadPDF={handleDownloadPDF}
+            isPDFGenerating={isPDFGenerating}
           />
         </div>
       </div>

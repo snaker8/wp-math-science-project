@@ -965,6 +965,7 @@ async function saveEditedProblemsDirect(
   }
 
   let savedCount = 0;
+  const savedProblemIds: string[] = []; // ★ 저장된 문제 ID 수집 (appendTo용)
 
   for (const edited of editedProblems) {
     if (!edited.content && !edited.cropImageBase64) continue; // 빈 문제 스킵
@@ -1073,6 +1074,7 @@ async function saveEditedProblemsDirect(
       }
 
       savedCount++;
+      if (problem?.id) savedProblemIds.push(problem.id);
       console.log(`[Direct Save] 문제 ${edited.number}번 저장 완료 (ID: ${problem?.id})`);
 
       // ★ Exam-Problem 연결

@@ -234,9 +234,13 @@ export class QuestionParser {
       // ★ 서술형 소문제가 선택지로 잘못 분류되었는지 검증
       // 선택지 내용이 길거나 서술형 키워드가 포함되면 선택지로 보지 않음
       const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오|넓이를?\s*구|길이를?\s*구|값을?\s*구|과정을?\s*쓰|\[\s*\d+\s*점\s*\]|\d+점/;
+      // [1],[2],[3] 대괄호 번호 — 서술형 소문제 내 하위 번호
+      const hasBracketSubItems = result.choices.some(c => /\[\d+\]/.test(c.content_latex));
       const longChoiceCount = result.choices.filter(c => c.content_latex.length > 30).length;
       const subProblemChoiceCount = result.choices.filter(c => subProblemKeywords.test(c.content_latex)).length;
-      if (subProblemChoiceCount > 0 || (longChoiceCount >= 2 && result.choices.length <= 3)) {
+      // 보기가 2~3개뿐이면 객관식(5지선다)이 아니라 서술형 소문제일 가능성 높음
+      const tooFewForMultipleChoice = result.choices.length >= 2 && result.choices.length <= 3;
+      if (subProblemChoiceCount > 0 || hasBracketSubItems || (tooFewForMultipleChoice && longChoiceCount >= 1)) {
         // 서술형 소문제로 판단 → 선택지 분리하지 않고 본문에 유지
         return { questionText: text, choices: [] };
       }

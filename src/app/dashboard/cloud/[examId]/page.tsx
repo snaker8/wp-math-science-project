@@ -1954,19 +1954,16 @@ export default function CloudExamDetailPage() {
     if (problems.length === 0) return [];
     const issues: Array<{ problemNum: number; type: string; message: string }> = [];
     for (const p of problems) {
-      // 1. 빈 content
-      if (!p.content || p.content.trim().length < 10) {
+      // 1. 빈 content — choices가 있으면 내용 있는 것으로 간주
+      const totalContentLen = (p.content?.trim().length || 0) + (p.choices?.join('').length || 0);
+      if (totalContentLen < 5) {
         issues.push({ problemNum: p.number, type: 'empty', message: '내용이 비어있음 (OCR 실패 가능)' });
       }
       // 2. 분류 누락
       if (!p.typeName && !p.typeCode) {
         issues.push({ problemNum: p.number, type: 'unclassified', message: '분류 미완료' });
       }
-      // 3. 서술형인데 choices가 있는 경우 (오인식 가능성)
-      const hasSubProblemMarker = /\(1\)|\(2\)|풀이\s*과정|구하시오|서술하시오|완성하시오|답하시오/.test(p.content);
-      if (hasSubProblemMarker && p.choices.length > 0 && p.choices.some(c => c.length > 50)) {
-        issues.push({ problemNum: p.number, type: 'choice_misdetect', message: '서술형 소문제가 선택지로 인식된 가능성' });
-      }
+      // 3. 서술형 소문제 오인식 감지 — 제거 (오탐이 많아서 비활성화)
       // 4. 도형 있는데 이미지 없음
       if (p.hasFigure && !p.upscaledCropUrl && !p.figureData && !p.figureSvg && (!p.images || !p.images.some(img => img.type === 'figure_crop'))) {
         issues.push({ problemNum: p.number, type: 'missing_figure', message: '도형 표시 필요하지만 이미지 없음' });
@@ -2507,12 +2504,12 @@ export default function CloudExamDetailPage() {
             <button
               type="button"
               onClick={async () => {
-                if (!confirm('전체 문제를 자동 재분류합니다. 진행할까요?')) return;
+                if (!confirm('전체 문제를 강제 재분류합니다. 진행할까요?')) return;
                 try {
-                  const res = await fetch(`/api/exams/${examId}/auto-fix`, { method: 'POST' });
+                  const res = await fetch(`/api/exams/${examId}/auto-fix?force=1`, { method: 'POST' });
                   if (!res.ok) throw new Error('자동매핑 실패');
                   const data = await res.json();
-                  const fixCount = data.fixes?.filter((f: any) => f.fixes?.length > 0).length || 0;
+                  const fixCount = data.fixedProblems || data.results?.filter((f: any) => f.fixes?.length > 0).length || 0;
                   alert(`자동매핑 완료: ${fixCount}개 문제 수정됨`);
                   window.location.reload();
                 } catch (e) {
@@ -2703,7 +2700,7 @@ export default function CloudExamDetailPage() {
           onClick={async () => {
             if (!confirm('자동수정을 실행합니다.\n- 과목/학년 불일치 수정\n- 서술형 소문제 복원\n- 점수 표기 정리\n\n진행하시겠습니까?')) return;
             try {
-              const res = await fetch(`/api/exams/${examId}/auto-fix`, { method: 'POST' });
+              const res = await fetch(`/api/exams/${examId}/auto-fix?mode=fix`, { method: 'POST' });
               const data = await res.json();
               if (data.error) {
                 alert('오류: ' + data.error);

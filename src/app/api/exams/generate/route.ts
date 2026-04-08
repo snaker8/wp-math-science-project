@@ -14,16 +14,50 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { title, criteria } = body;
+    const { title, criteria, problemIds } = body;
 
+    // ---- Manual mode: problemIds 직접 전달 ----
+    if (Array.isArray(problemIds) && problemIds.length > 0) {
+      const { data: exam, error: examError } = await supabaseAdmin
+        .from('exams')
+        .insert({
+          title: title || '수동 출제 시험지',
+          status: 'DRAFT',
+          subject: criteria?.subject || '수학',
+          total_points: problemIds.length * 4,
+        })
+        .select('id')
+        .single();
+
+      if (examError || !exam) {
+        return NextResponse.json({ error: '시험지 생성 실패', detail: examError?.message }, { status: 500 });
+      }
+
+      const linkPayload = problemIds.map((pid: string, idx: number) => ({
+        exam_id: exam.id,
+        problem_id: pid,
+        sequence_number: idx + 1,
+        points: 4,
+      }));
+
+      const { error: linkError } = await supabaseAdmin.from('exam_problems').insert(linkPayload);
+      if (linkError) {
+        console.error('[Generate] manual exam_problems insert error:', linkError.message);
+      }
+
+      console.log(`[Generate] Created manual exam ${exam.id} with ${problemIds.length} problems`);
+      return NextResponse.json({ success: true, examId: exam.id, problemCount: problemIds.length });
+    }
+
+    // ---- Auto mode: criteria 기반 ----
     // criteria: {
-    //   subject, chapters, sections, typeCodes: string[],
-    //   questionType, difficulty_distribution: Record<string, number>,
-    //   mode: 'auto' | 'manual' | 'add'
+    //   subject, typeCodes: string[],
+    //   difficulty_distribution: Record<string, number>,
+    //   mode: 'auto'
     // }
 
-    const typeCodes: string[] = criteria.typeCodes || [];
-    const diffDist: Record<string, number> = criteria.difficulty_distribution || {};
+    const typeCodes: string[] = criteria?.typeCodes || [];
+    const diffDist: Record<string, number> = criteria?.difficulty_distribution || {};
     const totalNeeded = Object.values(diffDist).reduce((s: number, v: number) => s + v, 0);
 
     if (totalNeeded === 0) {

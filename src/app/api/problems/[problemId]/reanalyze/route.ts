@@ -76,18 +76,8 @@ export async function POST(
     const isScience = isScienceSubject(examSubject || '');
     console.log(`[Reanalyze] problemId=${problemId}, examSubject="${examSubject}", isScience=${isScience}`);
 
-    // 3. 크롭 이미지가 있는지 확인 → 있으면 OCR 재실행
-    const cropImageUrl = findCropImageUrl(problem);
-
-    if (cropImageUrl) {
-      console.log(`[Reanalyze] 크롭 이미지 발견 — OCR 재실행: ${cropImageUrl}`);
-      return await reanalyzeWithOCR(
-        problemId, problem, existingClassification, cropImageUrl, isAdvanced, request
-      );
-    }
-
-    // 4. 크롭 이미지 없음 → 기존 content_latex 기반 분류만 재실행
-    console.log(`[Reanalyze] 크롭 이미지 없음 — 분류만 재실행`);
+    // 3. 항상 분류만 재실행 (OCR 재실행 안 함 — content/이미지 보존)
+    console.log(`[Reanalyze] 분류만 재실행 (content 유지)`);
     return await reanalyzeClassificationOnly(
       problemId, problem, existingClassification, isAdvanced, isScience, examSubject
     );

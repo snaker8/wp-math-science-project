@@ -60,21 +60,36 @@ export async function GET(request: NextRequest) {
       excludedIds = new Set((existing || []).map((r: any) => r.problem_id));
     }
 
-    // 6. 유형명 조회
-    const typeCodes = [...new Set(
+    // 6. 유형명 조회 — mathsecr_types + expanded_math_types 모두 시도
+    const allTypeCodes = [...new Set(
       (problems || []).flatMap((p: any) =>
-        (p.classifications || []).map((c: any) => c.expanded_type_code).filter(Boolean)
+        (p.classifications || []).flatMap((c: any) =>
+          [c.type_code, c.expanded_type_code].filter(Boolean)
+        )
       )
     )];
 
     let typeNameMap = new Map<string, string>();
-    if (typeCodes.length > 0) {
-      const { data: types } = await supabaseAdmin
-        .from('expanded_math_types')
-        .select('type_code, type_name')
-        .in('type_code', typeCodes);
+    if (allTypeCodes.length > 0) {
+      // MS 코드 → mathsecr_types
+      const msCodes = allTypeCodes.filter(c => c.startsWith('MS'));
+      if (msCodes.length > 0) {
+        const { data: msTypes } = await supabaseAdmin
+          .from('mathsecr_types')
+          .select('type_code, type_name')
+          .in('type_code', msCodes);
+        (msTypes || []).forEach((t: any) => typeNameMap.set(t.type_code, t.type_name));
+      }
 
-      (types || []).forEach((t: any) => typeNameMap.set(t.type_code, t.type_name));
+      // MA 코드 → expanded_math_types (레거시 호환)
+      const maCodes = allTypeCodes.filter(c => c.startsWith('MA'));
+      if (maCodes.length > 0) {
+        const { data: maTypes } = await supabaseAdmin
+          .from('expanded_math_types')
+          .select('type_code, type_name')
+          .in('type_code', maCodes);
+        (maTypes || []).forEach((t: any) => typeNameMap.set(t.type_code, t.type_name));
+      }
     }
 
     // 7. 응답 매핑
