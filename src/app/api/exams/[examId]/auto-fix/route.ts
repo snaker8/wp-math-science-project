@@ -172,16 +172,17 @@ export async function POST(
         const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02` : 'MS07-01-03-02';
 
         try {
+          // Gemini 3 Flash 우선, 없으면 GPT fallback
+          const useGemini = !!GOOGLE_AI_KEY;
+          const apiUrl = useGemini
+            ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+            : 'https://api.openai.com/v1/chat/completions';
+          const apiKey = useGemini ? GOOGLE_AI_KEY : OPENAI_API_KEY;
+          const modelName = useGemini ? 'gemini-3-flash-preview' : 'gpt-4.1-mini';
+
           // Rate limit 재시도 (최대 3회, 429 시 대기)
           let gptRes: Response | null = null;
           for (let attempt = 0; attempt < 3; attempt++) {
-            // Gemini 3 Flash 우선, 없으면 GPT fallback
-            const useGemini = !!GOOGLE_AI_KEY;
-            const apiUrl = useGemini
-              ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-              : 'https://api.openai.com/v1/chat/completions';
-            const apiKey = useGemini ? GOOGLE_AI_KEY : OPENAI_API_KEY;
-            const modelName = useGemini ? 'gemini-3-flash-preview' : 'gpt-4.1-mini';
 
             gptRes = await fetch(apiUrl, {
               method: 'POST',
