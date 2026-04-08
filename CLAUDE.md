@@ -111,15 +111,35 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - **OCR 문제 번호 인식 개선** (`src/lib/workflow/cloud-flow.ts`)
   - 단독 숫자 라인("03", "3") 매칭 + 범위 검증(1~30)
 
-### 다음 할 일
-- 사용자 테스트 후 OCR 로그 확인 → 추가 패턴 조정
-- 클라우드 업로드 라우팅 버그 재확인 (실제 사용 흐름 테스트)
-- expanded_math_types 활용 통계 확인 (classifications.expanded_type_code 채워지는지)
-- 처방 학습 페이지 (prescription/) 연동
+- **수학비서(mathsecr) 분류 체계 적용** (2026-04-09)
+  - `mathsecr_complete.json` — 수학비서 전체 분류 트리 (18과목, 19,423 leaf 유형)
+  - Supabase `mathsecr_types` 테이블 — 22,785행 시딩 완료
+  - `scripts/seed-mathsecr-types.ts` — 시딩 스크립트
+  - `src/lib/workflow/mathsecr-prompt.ts` — 과목별 소단원 테이블 빌더 (JSON import)
+  - `src/lib/workflow/cloud-flow.ts` — CLASSIFICATION_PROMPT에 {MATHSECR_TYPES} 동적 주입
+  - `src/app/api/exams/[examId]/auto-fix/route.ts` — 수학비서 유형 테이블 기반 재분류
+  - `src/app/api/problems/[problemId]/reanalyze/route.ts` — 수학비서 코드 사용
+  - typeCode 형식: `MS07-01-03-02` (MS + 과목코드 + 대단원 + 중단원 + 소단원)
+- **로그인 복구 + 도식 추출 수정** (2026-04-08~09)
+  - `@supabase/ssr` 0.1.0→0.10.0 업데이트
+  - `src/lib/supabase/middleware.ts` — getAuthUser 버그 수정
+  - `src/lib/image-pipeline/client.ts` — extract-local 엔드포인트 (파일 경로 전달 방식)
+  - `image-pipeline/server.py` — /extract-local 엔드포인트 추가
+  - `src/lib/workflow/cloud-flow.ts` — 해설 검산(verification) 프롬프트 추가
+- **과학 과목 코드 2022 개정** — PHY1/PHY2 → PHY, PHY_ME 등
+- **UI 수정** — 보기 박스 헤더 제거, f(1) 선택지 오인식 수정, 업로드 팝업 리사이징
 
-### 참조 사이트 (수작) 분석 결과
-- 사이트: suzag (수작 - 최고의 수학 학습 플랫폼)
-- URL 패턴: `/tutor/cloud/bookgroup/[fileId]`
-- 핵심 Provider: QueryProvider, AuthProvider, SessionTokenProvider, EditorProvider, ProblemSelectorProvider, SimilarProblemProvider
-- 우리 코드 기능 완성도: ~85% (Provider 추가 후)
+### 다음 할 일 (우선순위)
+- ★ **시험지 출제 기능** — 문제은행에서 단원/유형/난이도 필터 → 문제 선택 → 시험지 생성 → PDF 출력
+  - 수학비서 참조: 유형기준 탭(단원·유형 트리 + 난이도 1~10 필터), 시험지 목록(난이도 분포 표시)
+  - 우리 구현: 과목 선택 → 수학비서 트리에서 단원/유형 필터 → 문제 검색 → 선택 → 시험지 편성 → PDF
+- 수학비서 자동매핑 테스트 (MS 코드로 분류되는지 확인)
+- 처방 학습 페이지 연동
+
+### 참조 사이트
+- **수학비서** (mathsecr.com) — 분류 체계 참조 (200만 문제 검증된 트리 구조)
+  - 상단 메뉴: 내신시험지, 수학비서INDEX, 수학B서점, 학생관리, 포스트지오, 즐겨찾기, 내문제지, 나만의DB
+  - 내신시험지 4탭: 학교시험 / 유형기준 / 특정문항기준 / 출처기준
+  - 출제 플로우: 유형기준 탭 → 단원·유형·난이도 필터 → 문제 검색 → 선택 → 시험지 편성 → PDF/한글 다운
+- **수작** (suzag) — UI/UX 참조
 - 참조 사이트 디자인: 라이트 테마 (warm 색상), 우리: 다크 테마 (zinc/black)
