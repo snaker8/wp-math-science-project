@@ -220,8 +220,24 @@ ${content.slice(0, 1500)}` }
             // Gemini가 마크다운 코드블록으로 감쌀 수 있음
             rawContent = rawContent.trim().replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
             console.log(`[auto-fix] #${seqNum} [${modelName}] response: ${rawContent.slice(0, 200)}`);
-            const reclassified = JSON.parse(rawContent);
-            const newCls = reclassified.classification || {};
+
+            // JSON 파싱 — 잘린 응답 복구 시도
+            let reclassified: Record<string, unknown>;
+            try {
+              reclassified = JSON.parse(rawContent);
+            } catch {
+              // typeCode만이라도 추출
+              const tcMatch = rawContent.match(/"typeCode"\s*:\s*"(MS[\d-]+)"/);
+              const tnMatch = rawContent.match(/"typeName"\s*:\s*"([^"]+)"/);
+              const diffMatch = rawContent.match(/"difficulty"\s*:\s*(\d+)/);
+              if (tcMatch) {
+                console.log(`[auto-fix] #${seqNum} JSON 잘림 → typeCode 부분 추출: ${tcMatch[1]}`);
+                reclassified = { classification: { typeCode: tcMatch[1], typeName: tnMatch?.[1] || '', difficulty: parseInt(diffMatch?.[1] || '3') } };
+              } else {
+                throw new Error('JSON 파싱 실패 + typeCode 추출 불가');
+              }
+            }
+            const newCls = (reclassified.classification || {}) as Record<string, unknown>;
 
             // ★ ai_analysis 업데이트
             ai.classification = { ...cls, ...newCls, subject: examSubject };
