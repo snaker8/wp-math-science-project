@@ -29,7 +29,8 @@ const CURRICULUM: Record<string, string> = {
 };
 
 // 중학교 이름 패턴 (학교명에 "중"이 들어가면 중학교)
-const MIDDLE_SCHOOL_PATTERN = /[가-힣]{1,6}중(?:학교)?(?!\d)/;
+// ★ "중간", "중심" 등 비학교명 제외, "고등학교"가 있으면 중학교 아님
+const MIDDLE_SCHOOL_PATTERN = /[가-힣]{1,6}중(?:학교)?(?!\d)(?!간|심|요)/;
 
 interface FixResult {
   problemId: string;
@@ -202,7 +203,7 @@ JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중
 문제:
 ${content.slice(0, 1500)}` }
                 ],
-                temperature: 0.1, max_tokens: 1000, response_format: { type: 'json_object' }
+                temperature: 0.1, max_tokens: 2000, response_format: { type: 'json_object' }
               })
             });
 
@@ -501,7 +502,9 @@ function detectSubjectFromTitle(title: string): string {
   if (!title) return '';
 
   // ★ 중학교 이름 감지: "사직중", "여명중", "OO중학교" 등
-  const isMiddleSchool = MIDDLE_SCHOOL_PATTERN.test(title);
+  // "고등학교"가 명시되어 있으면 중학교 아님
+  const hasHighSchool = /고등학교|고등/.test(title);
+  const isMiddleSchool = !hasHighSchool && MIDDLE_SCHOOL_PATTERN.test(title);
 
   // ★ 중등 — [2026][2-1-M] 패턴 (각각 별개 괄호)
   const bracketMatch = title.match(/\[\d{4}\]\s*\[(\d)-(\d)-?([ME])?\]/);
@@ -563,8 +566,9 @@ function detectSubjectFromTitle(title: string): string {
 function detectGradeFromTitle(title: string): string {
   if (!title) return '';
 
-  // ★ 중학교 이름 감지
-  const isMiddleSchool = MIDDLE_SCHOOL_PATTERN.test(title);
+  // ★ 중학교 이름 감지 ("고등학교" 있으면 제외)
+  const hasHighSchool = /고등학교|고등/.test(title);
+  const isMiddleSchool = !hasHighSchool && MIDDLE_SCHOOL_PATTERN.test(title);
 
   // ★ [2026][2-1-M] 패턴
   const bracketMatch = title.match(/\[\d{4}\]\s*\[(\d)-(\d)-?([ME])?\]/);
