@@ -926,6 +926,37 @@ async function saveEditedProblemsDirect(
     };
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
+    } else {
+      // ★ 과목 기반 자동 폴더 배치: book_groups에서 과목명 매칭
+      const detectedSubject = examInsertData.subject || '';
+      if (detectedSubject) {
+        const subjectFolderMap: Record<string, string> = {
+          '공통수학1': '공통수학1 기출', '공통수학2': '공통수학2 기출',
+          '수학I': '대수 기출', '수학1': '대수 기출', '대수': '대수 기출',
+          '수학II': '미적분1 기출', '수학2': '미적분1 기출', '미적분1': '미적분1 기출',
+          '미적분': '미적분1 기출', '미적분2': '미적분1 기출',
+          '확률과통계': '확률과 통계 기출', '확률과 통계': '확률과 통계 기출',
+          '기하': '기하 기출',
+        };
+        // 중학교 과목
+        if (/중1/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중1 기출';
+        if (/중2/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중2 기출';
+        if (/중3/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중3 기출';
+
+        const targetFolderName = subjectFolderMap[detectedSubject];
+        if (targetFolderName) {
+          const { data: matchedGroup } = await supabase
+            .from('book_groups')
+            .select('id')
+            .eq('name', targetFolderName)
+            .limit(1)
+            .single();
+          if (matchedGroup?.id) {
+            examInsertData.book_group_id = matchedGroup.id;
+            console.log(`[Direct Save] 자동 폴더 배치: "${detectedSubject}" → "${targetFolderName}"`);
+          }
+        }
+      }
     }
 
     console.log(`[Direct Save] Creating exam:`, JSON.stringify(examInsertData, null, 2));
