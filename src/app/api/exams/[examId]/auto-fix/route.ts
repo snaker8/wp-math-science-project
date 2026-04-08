@@ -251,6 +251,21 @@ ${content.slice(0, 1500)}` }
             }
             const newCls = (reclassified.classification || {}) as Record<string, unknown>;
 
+            // ★ typeName이 비어있으면 mathsecr_types에서 조회
+            if (newCls.typeCode && (!newCls.typeName || newCls.typeName === newCls.typeCode)) {
+              try {
+                const { data: msType } = await supabaseAdmin
+                  .from('mathsecr_types')
+                  .select('type_name')
+                  .eq('type_code', newCls.typeCode)
+                  .limit(1)
+                  .single();
+                if (msType?.type_name) {
+                  newCls.typeName = msType.type_name;
+                }
+              } catch { /* ignore */ }
+            }
+
             // ★ ai_analysis 업데이트
             ai.classification = { ...cls, ...newCls, subject: examSubject };
             ai.subject = examSubject;
