@@ -215,7 +215,9 @@ ${content.slice(0, 1500)}` }
 
           if (gptRes && gptRes.ok) {
             const gptData = await gptRes.json();
-            const rawContent = gptData.choices?.[0]?.message?.content || '{}';
+            let rawContent = gptData.choices?.[0]?.message?.content || '{}';
+            // Gemini가 마크다운 코드블록으로 감쌀 수 있음
+            rawContent = rawContent.trim().replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
             console.log(`[auto-fix] #${seqNum} [${modelName}] response: ${rawContent.slice(0, 200)}`);
             const reclassified = JSON.parse(rawContent);
             const newCls = reclassified.classification || {};
