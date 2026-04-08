@@ -496,13 +496,17 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
 function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: number): boolean {
   // 빈 줄 → 박스 종료
   if (!trimmed) return true;
-  // 문제 지시어 → 종료
-  if (/구하시오|구하여라|구해라|값은\s*\?|값을\s*구|의\s*값은|일\s*때|에\s*대하여|만족시키는|만족하는|최솟값|최댓값|의\s*값/.test(trimmed)) return true;
+  // ★ 단독 \ (LaTeX 줄바꿈) → 박스 종료 (수동 구분자)
+  if (/^\\+$/.test(trimmed)) return true;
   // 선택지 시작
   if (/^\s*[\(（]\s*[1-5]\s*[\)）]/.test(trimmed)) return true;
   if (/^\s*[①②③④⑤]/.test(trimmed)) return true;
   // 이미지/도형
   if (/^!\[/.test(trimmed) || /^\[도형\]/.test(trimmed)) return true;
+  // ★ 질문 패턴 — 단, 조건 라벨((가)(나), ㄱ.ㄴ.)로 시작하는 줄은 제외
+  const isConditionLabel = /^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(trimmed) ||
+                           /^\s*[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
+  if (!isConditionLabel && /구하시오|구하여라|값은\s*\?|값을\s*구|의\s*값은/.test(trimmed)) return true;
   return false;
 }
 
