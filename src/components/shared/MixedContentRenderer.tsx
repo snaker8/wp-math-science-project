@@ -458,14 +458,20 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
     }
 
     if (inConditionBlock) {
-      // 조건 계속: (나), (다), ㄴ., ㄷ. 등이 나오거나 이전 조건에 이어지는 줄
-      const isContinuation = /^\s*[\(（]\s*[나다라마]\s*[\)）]/.test(trimmed) ||
-                             /^\s*(?:\\displaystyle\s*)?[ㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
+      // ★ 조건 라벨: (나)(다), ㄴ.ㄷ. → 무조건 조건 계속
+      const isConditionLabel = /^\s*[\(（]\s*[나다라마]\s*[\)）]/.test(trimmed) ||
+                               /^\s*(?:\\displaystyle\s*)?[ㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
+      // ★ 조건 부연설명: (단, ...), 여기서/이때 등
+      const isConditionNote = /^\s*[\(（]\s*단/.test(trimmed) ||
+                              /^\s*여기서|^\s*이때|^\s*단,/.test(trimmed);
 
-      if (isContinuation || (trimmed && !isEndOfConditionBlock(trimmed, lines, i))) {
+      if (isConditionLabel || isConditionNote) {
         conditionLines.push(lines[i]);
         continue;
-      } else {
+      }
+
+      // ★ 그 외 모든 줄 → 박스 종료 (비-라벨 줄은 본문)
+      {
         // 조건 블록 종료 → placeholder를 본문에 삽입
         if (conditionLines.length > 0) {
           conditionBoxes.push(conditionLines.join('\n'));
