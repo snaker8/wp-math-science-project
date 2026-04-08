@@ -5,18 +5,8 @@
  * 과목별 소단원(L3) 테이블을 AI 프롬프트에 동적 주입한다.
  */
 
-// fs/path는 서버 전용 — 동적 import로 클라이언트 번들 오류 방지
-let _fs: typeof import('fs') | null = null;
-let _path: typeof import('path') | null = null;
-
-async function getFs() {
-  if (!_fs) _fs = await import('fs');
-  return _fs;
-}
-async function getPath() {
-  if (!_path) _path = await import('path');
-  return _path;
-}
+// JSON 직접 import (fs 불필요 — webpack/Next.js에서 정상 동작)
+import mathsecrTree from '../../../mathsecr_complete.json';
 
 interface TreeNode {
   t: string; // text
@@ -53,16 +43,8 @@ const CODE_TO_NAME: Record<string, string> = {
   '10': '미적분1', '11': '확률과 통계', '12': '미적분2', '13': '기하',
 };
 
-// 캐시
-let _treeCache: TreeNode[] | null = null;
-
-async function loadTree(): Promise<TreeNode[]> {
-  if (_treeCache) return _treeCache;
-  const fs = await getFs();
-  const path = await getPath();
-  const jsonPath = path.join(process.cwd(), 'mathsecr_complete.json');
-  _treeCache = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-  return _treeCache!;
+function loadTree(): TreeNode[] {
+  return mathsecrTree as unknown as TreeNode[];
 }
 
 /**
@@ -81,8 +63,8 @@ export function resolveSubjectCode(gradeHint?: string, subject?: string): string
  * 과목 코드에 해당하는 소단원(L3) 테이블을 프롬프트 문자열로 반환
  * AI가 typeCode를 선택할 수 있도록 코드 + 경로 형태
  */
-export async function buildTypeTable(subjectCode: string): Promise<string> {
-  const tree = await loadTree();
+export function buildTypeTable(subjectCode: string): string {
+  const tree = loadTree();
   const subject = tree.find(s => s.c === subjectCode);
   if (!subject) return '';
 
@@ -106,9 +88,9 @@ export async function buildTypeTable(subjectCode: string): Promise<string> {
 /**
  * 분류 프롬프트에 주입할 수학비서 유형 체계 텍스트 생성
  */
-export async function buildMathsecrPromptSection(subjectCode: string): Promise<string> {
+export function buildMathsecrPromptSection(subjectCode: string): string {
   const subjectName = CODE_TO_NAME[subjectCode] || '수학';
-  const typeTable = await buildTypeTable(subjectCode);
+  const typeTable = buildTypeTable(subjectCode);
 
   if (!typeTable) return '';
 

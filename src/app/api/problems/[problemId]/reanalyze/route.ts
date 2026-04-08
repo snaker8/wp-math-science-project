@@ -346,12 +346,12 @@ async function reanalyzeClassificationOnly(
   },
   "correctedContent": null
 }`
-    : await (async () => {
+    : (() => {
       let typeTable = '';
       try {
-        const { resolveSubjectCode, buildTypeTable } = await import('@/lib/workflow/mathsecr-prompt');
+        const { resolveSubjectCode, buildTypeTable } = require('@/lib/workflow/mathsecr-prompt');
         const subjectCode = resolveSubjectCode(examSubject);
-        if (subjectCode) typeTable = await buildTypeTable(subjectCode);
+        if (subjectCode) typeTable = buildTypeTable(subjectCode);
       } catch {}
 
       return `당신은 한국 수학 교육 전문가입니다. 수학비서 분류 체계로 문제를 분류하세요.

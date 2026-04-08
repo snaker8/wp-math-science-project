@@ -1154,7 +1154,7 @@ export async function analyzeProblemWithLLM(
         const { resolveSubjectCode, buildMathsecrPromptSection, buildSubjectOnlyPrompt } = await import('./mathsecr-prompt');
         const subjectCode = resolveSubjectCode(gradeHint, subject);
         mathsecrSection = subjectCode
-          ? await buildMathsecrPromptSection(subjectCode)
+          ? buildMathsecrPromptSection(subjectCode)
           : buildSubjectOnlyPrompt();
       } catch (e) {
         console.warn('[analyzeProblemWithLLM] mathsecr-prompt load failed:', e);
