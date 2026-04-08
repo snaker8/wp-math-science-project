@@ -102,20 +102,22 @@ export async function POST(request: NextRequest) {
       const fileBuffer = await file.arrayBuffer();
       const tempJobId = crypto.randomUUID();
 
-      // 이미지 파이프라인만 실행 (Storage 업로드, Job 생성 안 함)
-      runScienceImagePipeline(tempJobId, fileBuffer, file.name, scienceSubject).catch(console.error);
+      // 파이프라인 동기 실행 (Next.js가 응답 후 백그라운드 작업을 중단하므로 await 필수)
+      await runScienceImagePipeline(tempJobId, fileBuffer, file.name, scienceSubject);
+      const pipelineResult = imagePipelineResults.get(tempJobId);
 
       return NextResponse.json({
         success: true,
         jobId: tempJobId,
         mode: 'diagrams_only',
-        message: '도식 이미지 추출이 시작되었습니다.',
+        message: '도식 이미지 추출이 완료되었습니다.',
         job: {
           id: tempJobId,
           fileName: file.name,
-          status: 'UPLOADING',
-          progress: 0,
+          status: pipelineResult?.status === 'done' ? 'COMPLETED' : 'FAILED',
+          progress: 100,
         },
+        result: pipelineResult,
       });
     }
 

@@ -44,6 +44,7 @@ export default function DiagramGalleryPage() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [extracting, setExtracting] = useState(isUploading);
+  const [seenActive, setSeenActive] = useState(false); // active:true를 한 번이라도 봤는지
   const [processingInfo, setProcessingInfo] = useState<{
     active: boolean; phase: string; current_page: number; total_pages: number; source: string;
   } | null>(null);
@@ -161,11 +162,12 @@ export default function DiagramGalleryPage() {
           setProcessingInfo(data.processing);
           if (data.processing.active && data.processing.phase !== 'done') {
             setExtracting(true);
-          } else {
+            setSeenActive(true);
+          } else if (seenActive || !isUploading) {
+            // uploading 모드에서는 active:true를 한 번 본 후에만 해제
             setExtracting(false);
           }
-        } else if (extracting) {
-          // 서버에서 processing 정보가 없으면 추출 상태 해제
+        } else if (extracting && (seenActive || !isUploading)) {
           setExtracting(false);
         }
         // 태깅 상태 추적
@@ -187,7 +189,7 @@ export default function DiagramGalleryPage() {
       })
       .catch(() => {
         // 파이프라인 서버 미실행 시 추출 상태 해제 (무한로딩 방지)
-        if (extracting) setExtracting(false);
+        if (extracting && (seenActive || !isUploading)) setExtracting(false);
       });
   }, [tagging, extracting]);
 

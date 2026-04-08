@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+
 import { useRouter } from 'next/navigation';
 import { ArrowRight, User, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
@@ -81,19 +81,22 @@ export default function LoginPage() {
   };
 
   const navigateByRole = (role: string) => {
+    let path = '/dashboard';
     switch (role) {
       case 'student':
-        router.push('/student');
+        path = '/student';
         break;
       case 'parent':
-        router.push('/parent');
+        path = '/parent';
         break;
       case 'teacher':
       case 'admin':
       default:
-        router.push('/dashboard');
+        path = '/dashboard';
         break;
     }
+    // 전체 페이지 이동으로 쿠키가 미들웨어에 제대로 전달되도록
+    window.location.href = path;
   };
 
   return (
@@ -102,20 +105,15 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent_50%)]" />
 
       {/* Logo */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
         className="mb-12 text-center"
       >
         <h1 className="text-3xl font-bold tracking-tight mb-2">과사람 <span className="text-indigo-500">With-People</span></h1>
         <p className="text-zinc-500 text-sm">프리미엄 수학 교육 플랫폼</p>
-      </motion.div>
+      </div>
 
       {/* Login Card */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1 }}
+      <div
         className="w-full max-w-md bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-xl"
       >
         {/* Type Switcher */}
@@ -141,14 +139,12 @@ export default function LoginPage() {
 
         {/* Error Message */}
         {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+          <div
             className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm"
           >
             <AlertCircle size={16} />
             <span>{error}</span>
-          </motion.div>
+          </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -216,7 +212,7 @@ export default function LoginPage() {
             </p>
           )}
         </div>
-      </motion.div>
+      </div>
 
       <footer className="absolute bottom-6 text-center">
         <p className="text-[10px] text-zinc-700">© 2026 Core Science & Math Institute. All Code Secure.</p>

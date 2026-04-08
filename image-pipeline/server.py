@@ -24,6 +24,7 @@ load_dotenv(_env_path, override=True)
 print(f"[Server] .env loaded from {_env_path}, ANTHROPIC_API_KEY={'SET' if os.getenv('ANTHROPIC_API_KEY') else 'MISSING'}")
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -67,6 +68,50 @@ tagging_status: dict = {"active": False, "current": 0, "total": 0, "tagged": 0, 
 async def health():
     stats = db_manager.stats()
     return {"status": "ok", "db_stats": stats, "processing": processing_status, "tagging": tagging_status}
+
+
+class ExtractLocalRequest(BaseModel):
+    """로컬 파일 경로로 추출 요청 (대용량 파일 HTTP 전송 우회)"""
+    file_path: str
+    file_name: str = ""
+    subject: str = "math"
+    source_name: str = ""
+    science_subject: str = ""
+    enhance: bool = True
+    upload_to_supabase: bool = False
+    auto_tag: bool = True
+    min_width: int = 200
+    min_height: int = 200
+
+
+@app.post("/extract-local")
+async def extract_images_local(req: ExtractLocalRequest):
+    """로컬 파일 경로를 받아 이미지 추출 (HTTP 파일 업로드 없이)"""
+    if not os.path.exists(req.file_path):
+        raise HTTPException(status_code=400, detail=f"파일 없음: {req.file_path}")
+
+    # UploadFile 대신 로컬 파일을 직접 사용하도록 가짜 File 객체 구성
+    class _LocalFile:
+        def __init__(self, path, name):
+            self.filename = name or Path(path).name
+        async def read(self):
+            with open(req.file_path, "rb") as f:
+                return f.read()
+
+    file_name = req.file_name or Path(req.file_path).name
+    fake_file = _LocalFile(req.file_path, file_name)
+
+    return await extract_images(
+        file=fake_file,
+        subject=req.subject,
+        source_name=req.source_name,
+        science_subject=req.science_subject,
+        enhance=req.enhance,
+        upload_to_supabase=req.upload_to_supabase,
+        auto_tag=req.auto_tag,
+        min_width=req.min_width,
+        min_height=req.min_height,
+    )
 
 
 @app.post("/extract")

@@ -203,6 +203,17 @@ export default function CloudFlowUploader({
         formData.append('appendTo', appendToExamId);
       }
 
+      // 과학 도식 추출 모드: 서버에서 추출 완료까지 대기하므로 상태 표시 업데이트
+      if (subjectArea === 'science' && scienceMode === 'diagrams_only') {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === tempJob.id
+              ? { ...j, currentStep: '도식 이미지 추출 중... (수 분 소요)' }
+              : j
+          )
+        );
+      }
+
       const response = await fetch('/api/workflow/upload', {
         method: 'POST',
         body: formData,
@@ -235,9 +246,9 @@ export default function CloudFlowUploader({
         QUICK_ANSWER: null,
       });
 
-      // ★ 과학 도식 추출만 모드: 갤러리로 이동
+      // ★ 과학 도식 추출만 모드: 갤러리로 이동 (jobId 전달하여 진행상태 표시)
       if (subjectArea === 'science' && scienceMode === 'diagrams_only') {
-        router.push('/dashboard/materials/diagrams?uploading=true');
+        router.push(`/dashboard/materials/diagrams?uploading=true&jobId=${data.jobId}&fileName=${encodeURIComponent(problemFile.name)}`);
         return;
       }
 

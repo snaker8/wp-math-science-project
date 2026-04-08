@@ -1379,7 +1379,7 @@ export default function CloudPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl mx-4 bg-surface-card border rounded-2xl shadow-2xl overflow-hidden"
+              className="w-full max-w-2xl mx-4 max-h-[90vh] bg-surface-card border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-subtle px-6 py-4">
@@ -1396,7 +1396,7 @@ export default function CloudPage() {
                 </button>
               </div>
               {/* Modal Body */}
-              <div className="p-6">
+              <div className="p-6 overflow-y-auto flex-1">
                 <CloudFlowUploader
                   userId={userId}
                   bookGroupId={selectedId && selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : undefined}

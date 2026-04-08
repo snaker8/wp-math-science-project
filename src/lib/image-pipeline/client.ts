@@ -12,7 +12,7 @@ import type {
 } from './types';
 
 const PIPELINE_URL =
-  process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://localhost:8200';
+  process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://127.0.0.1:8200';
 
 /** Buffer → Blob 변환 헬퍼 */
 function toBlob(buf: Buffer): Blob {
@@ -51,8 +51,68 @@ export async function extractImages(
     minHeight?: number;
   } = {}
 ): Promise<ImageExtractResponse> {
+  const buf = Buffer.isBuffer(file) ? file : null;
+  const fileName = options.fileName || 'upload.pdf';
+
+  // 대용량 Buffer(1MB 이상): 임시 파일 저장 후 경로만 전달 (Node.js fetch 대용량 FormData 버그 우회)
+  if (buf && buf.length > 1_000_000) {
+    const fs = await import('fs');
+    const os = await import('os');
+    const path = await import('path');
+    const ext = path.extname(fileName) || '.pdf';
+    const tmpFile = path.join(os.tmpdir(), `imgpipe_${Date.now()}${ext}`);
+    fs.writeFileSync(tmpFile, buf);
+
+    console.log(`[image-pipeline] extract-local — file: ${tmpFile} (${buf.length} bytes)`);
+
+    try {
+      // http 모듈로 직접 요청 (Node.js fetch의 헤더 타임아웃 5분 제한 우회)
+      const http = await import('http');
+      const reqBody = JSON.stringify({
+        file_path: tmpFile,
+        file_name: fileName,
+        subject: options.subject || 'math',
+        source_name: options.sourceName || '',
+        science_subject: options.scienceSubject || '',
+        enhance: options.enhance ?? true,
+        upload_to_supabase: options.uploadToSupabase ?? false,
+        min_width: options.minWidth ?? 100,
+        min_height: options.minHeight ?? 100,
+      });
+
+      const url = new URL(`${PIPELINE_URL}/extract-local`);
+      const res: { status: number; body: string } = await new Promise((resolve, reject) => {
+        const req = http.request({
+          hostname: '127.0.0.1',
+          port: Number(url.port) || 8200,
+          path: url.pathname,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) },
+          timeout: 1_200_000, // 20분
+        }, (resp) => {
+          const chunks: Buffer[] = [];
+          resp.on('data', (c: Buffer) => chunks.push(c));
+          resp.on('end', () => resolve({ status: resp.statusCode || 0, body: Buffer.concat(chunks).toString() }));
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout (20min)')); });
+        req.write(reqBody);
+        req.end();
+      });
+
+      console.log(`[image-pipeline] POST /extract-local response: ${res.status}`);
+      if (res.status !== 200) {
+        throw new Error(`Image extraction failed (${res.status}): ${res.body.slice(0, 300)}`);
+      }
+      return JSON.parse(res.body);
+    } finally {
+      try { (await import('fs')).unlinkSync(tmpFile); } catch { /* ignore */ }
+    }
+  }
+
+  // 소용량 파일: 기존 FormData 방식 (정상 작동)
   const form = new FormData();
-  appendFile(form, file, options.fileName || 'upload.pdf');
+  appendFile(form, file, fileName);
 
   form.append('subject', options.subject || 'math');
   form.append('source_name', options.sourceName || '');
@@ -65,7 +125,7 @@ export async function extractImages(
   const res = await fetch(`${PIPELINE_URL}/extract`, {
     method: 'POST',
     body: form,
-    signal: AbortSignal.timeout(600_000), // 10분 타임아웃 (대용량 PDF)
+    signal: AbortSignal.timeout(600_000),
   } as RequestInit);
 
   if (!res.ok) {
@@ -205,10 +265,23 @@ export async function retagAll(
  */
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${PIPELINE_URL}/health`, {
-      signal: AbortSignal.timeout(15000), // 태깅 중에도 응답 대기
+    const http = await import('http');
+    const url = new URL(`${PIPELINE_URL}/health`);
+    return new Promise((resolve) => {
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port: Number(url.port) || 8200,
+        path: '/health',
+        method: 'GET',
+        timeout: 15000,
+      }, (res) => {
+        res.resume(); // drain response
+        resolve(res.statusCode === 200);
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+      req.end();
     });
-    return res.ok;
   } catch {
     return false;
   }

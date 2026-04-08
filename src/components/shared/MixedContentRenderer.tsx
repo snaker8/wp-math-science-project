@@ -304,7 +304,6 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
             if (boxContent) {
               return (
                 <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
-                  <div className="text-center text-xs text-zinc-400 font-medium mb-2 pb-1.5 border-b border-zinc-700 leading-normal">〈보 기〉</div>
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
               );
@@ -502,13 +501,9 @@ function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: num
   if (/^\s*[①②③④⑤]/.test(trimmed)) return true;
   // 이미지 줄이면 종료
   if (/^!\[/.test(trimmed)) return true;
-  // 빈 줄 후 비조건 내용이 오면 종료
-  if (!trimmed && currentIdx + 1 < lines.length) {
-    const nextTrimmed = lines[currentIdx + 1].trim();
-    if (nextTrimmed && !/^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(nextTrimmed) &&
-        !/^\s*(?:\\displaystyle\s*)?[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(nextTrimmed)) {
-      return true;
-    }
+  // 빈 줄이 나오면 조건 블록 종료 (엔터로 구분된 내용은 박스 밖으로)
+  if (!trimmed) {
+    return true;
   }
   return false;
 }
@@ -1162,6 +1157,10 @@ function normalizeChoiceParensForRender(text: string): string {
     const before = text.substring(0, m.index);
     const dollarCount = (before.match(/\$/g) || []).length;
     if (dollarCount % 2 === 0) {
+      // ★ 바로 앞에 영문/한글/숫자/닫는괄호가 있으면 함수 호출이므로 변환하지 않음
+      // 예: f(1), g(2), sin(3), 값(1) 등
+      const charBefore = m.index > 0 ? text[m.index - 1] : '';
+      if (/[a-zA-Zㄱ-힣0-9_)\]}]/.test(charBefore)) continue;
       matches.push({ index: m.index, num: m[1], fullMatch: m[0] });
     }
   }

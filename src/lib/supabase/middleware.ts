@@ -96,18 +96,16 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
       }
     }
 
-    if (!session) {
-      // getUser로도 시도
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+    let user = session?.user ?? null;
 
-      if (authError || !user) {
+    if (!user) {
+      // getUser로도 시도
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !authUser) {
         return null;
       }
-    }
-
-    const user = session?.user;
-    if (!user) {
-      return null;
+      user = authUser;
     }
 
     // users 테이블에서 역할 정보 조회
