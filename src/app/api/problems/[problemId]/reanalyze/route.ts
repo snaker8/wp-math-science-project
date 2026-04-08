@@ -346,22 +346,35 @@ async function reanalyzeClassificationOnly(
   },
   "correctedContent": null
 }`
-    : `당신은 한국 수학 교육 전문가입니다. 주어진 수학 문제의 **분류(유형/단원/난이도)만** 분석하세요.
+    : (() => {
+      // 수학비서 유형 테이블 동적 로드
+      let typeTable = '';
+      try {
+        const { resolveSubjectCode, buildTypeTable } = require('@/lib/workflow/mathsecr-prompt');
+        const subjectCode = resolveSubjectCode(examSubject);
+        if (subjectCode) typeTable = buildTypeTable(subjectCode);
+      } catch {}
+
+      return `당신은 한국 수학 교육 전문가입니다. 수학비서 분류 체계로 문제를 분류하세요.
 풀이나 해설은 생성하지 마세요.
+
+${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${typeTable}\n` : ''}
 
 다음 JSON 형식으로 응답하세요:
 {
   "classification": {
-    "typeCode": "유형 코드 (예: MA-HS1-ALG-01-003)",
-    "typeName": "유형 이름 (한국어)",
-    "subject": "과목명",
-    "chapter": "단원명",
-    "difficulty": 1-5,
+    "typeCode": "MS07-01-03-02 (수학비서 유형 코드)",
+    "typeName": "대단원 > 중단원 > 소단원",
+    "subject": "과목명 (공통수학1, 대수, 미적분1 등)",
+    "chapter": "대단원명",
+    "section": "중단원명",
+    "difficulty": 1-10,
     "cognitiveDomain": "CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING",
     "confidence": 0.0-1.0
   },
   "correctedContent": "수정이 필요하면 수정된 LaTeX 내용, 아니면 null"
 }`;
+    })();
 
   const subjectLabel = isScience ? '과학' : '수학';
   const userPrompt = `다음 ${subjectLabel} 문제를 분석해주세요:\n\n${contentText}`;

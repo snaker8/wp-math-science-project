@@ -144,11 +144,17 @@ export async function POST(
       );
 
       if (needsReclassify && OPENAI_API_KEY && content.trim()) {
-        // GPT-4o로 정확한 과목/단원 재분류
-        const gradeKey = examGrade === '중2' ? '중2-1' : examGrade === '중3' ? '중3-1' : examGrade;
-        const curriculum = CURRICULUM[gradeKey] ||
-          CURRICULUM[examSubject.replace(' 수학', '').replace('수학', '')] ||
-          CURRICULUM[examSubject] || '';
+        // GPT-4o로 수학비서 체계 기반 재분류
+        let mathsecrTypeTable = '';
+        try {
+          const { resolveSubjectCode, buildTypeTable } = await import('@/lib/workflow/mathsecr-prompt');
+          const subjectCode = resolveSubjectCode(examGrade, examSubject);
+          if (subjectCode) {
+            mathsecrTypeTable = buildTypeTable(subjectCode);
+          }
+        } catch (e) {
+          console.warn('[auto-fix] mathsecr-prompt load failed:', e);
+        }
 
         try {
           const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -157,18 +163,14 @@ export async function POST(
             body: JSON.stringify({
               model: 'gpt-4o',
               messages: [
-                { role: 'system', content: `한국 수학 교육과정 전문가. 반드시 JSON만 응답. 학년/과목 범위를 절대 벗어나지 마세요.` },
-                { role: 'user', content: `★★ 이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
-★★ 반드시 아래 단원 범위 내에서만 분류하세요. 이 범위를 벗어나는 상위 과정으로 분류하면 안 됩니다.
-- 고1 문제를 수학I/수학II/미적분으로 분류 금지
-- 고2 수학I 문제를 미적분/기하로 분류 금지
-- 2차함수 문제를 삼차함수 극값으로 분류 금지
+                { role: 'system', content: `한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.` },
+                { role: 'user', content: `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
+반드시 해당 과목 범위 내에서 분류하세요.
 
-과목: ${examSubject}
-허용 단원: ${curriculum}
-난이도 1~5
+${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
+난이도 1~10
 
-JSON: {"classification":{"typeName":"유형명","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":3,"cognitiveDomain":"CALCULATION","confidence":0.9}}
+JSON: {"classification":{"typeCode":"MS07-01-03-02","typeName":"대단원 > 중단원 > 소단원","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":3,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
 문제:
 ${content.slice(0, 1500)}` }
