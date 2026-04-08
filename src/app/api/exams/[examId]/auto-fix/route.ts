@@ -9,6 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 export const maxDuration = 300; // 5분 타임아웃 (재분류 포함)
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
 
 const CURRICULUM: Record<string, string> = {
   '중1': '1.자연수의성질 2.정수와유리수 3.일차방정식 4.좌표평면과그래프 5.기본도형 6.평면도형과입체도형 7.통계',
@@ -174,11 +175,19 @@ export async function POST(
           // Rate limit 재시도 (최대 3회, 429 시 대기)
           let gptRes: Response | null = null;
           for (let attempt = 0; attempt < 3; attempt++) {
-            gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+            // Gemini 3 Flash 우선, 없으면 GPT fallback
+            const useGemini = !!GOOGLE_AI_KEY;
+            const apiUrl = useGemini
+              ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+              : 'https://api.openai.com/v1/chat/completions';
+            const apiKey = useGemini ? GOOGLE_AI_KEY : OPENAI_API_KEY;
+            const modelName = useGemini ? 'gemini-3-flash-preview' : 'gpt-4.1-mini';
+
+            gptRes = await fetch(apiUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
               body: JSON.stringify({
-                model: 'gpt-4.1-mini',
+                model: modelName,
                 messages: [
                   { role: 'system', content: `한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.` },
                   { role: 'user', content: `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
