@@ -150,7 +150,7 @@ export async function POST(
           const { resolveSubjectCode, buildTypeTable } = await import('@/lib/workflow/mathsecr-prompt');
           const subjectCode = resolveSubjectCode(examGrade, examSubject);
           if (subjectCode) {
-            mathsecrTypeTable = buildTypeTable(subjectCode);
+            mathsecrTypeTable = await buildTypeTable(subjectCode);
           }
         } catch (e) {
           console.warn('[auto-fix] mathsecr-prompt load failed:', e);

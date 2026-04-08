@@ -346,13 +346,12 @@ async function reanalyzeClassificationOnly(
   },
   "correctedContent": null
 }`
-    : (() => {
-      // 수학비서 유형 테이블 동적 로드
+    : await (async () => {
       let typeTable = '';
       try {
-        const { resolveSubjectCode, buildTypeTable } = require('@/lib/workflow/mathsecr-prompt');
+        const { resolveSubjectCode, buildTypeTable } = await import('@/lib/workflow/mathsecr-prompt');
         const subjectCode = resolveSubjectCode(examSubject);
-        if (subjectCode) typeTable = buildTypeTable(subjectCode);
+        if (subjectCode) typeTable = await buildTypeTable(subjectCode);
       } catch {}
 
       return `당신은 한국 수학 교육 전문가입니다. 수학비서 분류 체계로 문제를 분류하세요.
