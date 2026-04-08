@@ -598,8 +598,14 @@ function detectGradeFromTitle(title: string): string {
   if (/고2(?:\s|$|학년)/.test(title)) return '고2';
   if (/고3(?:\s|$|학년)/.test(title)) return '고3';
 
+  // "고등학교"가 제목에 있으면 학년 추출
+  if (/고등학교|고등/.test(title)) {
+    const gradeMatch = title.match(/(\d)\s*학년/);
+    if (gradeMatch) return `고${gradeMatch[1]}`;
+  }
+
   // 과목명으로 학년 추론 (명시적 학년 없을 때)
-  if (/공통수학/.test(title)) return '고1';
+  if (/공통수학|수학\s*\(상\)|수학\s*\(하\)/.test(title)) return '고1';
   if (/수학[1IⅠ](?!\d)|대수|확률.*통계|확통/.test(title)) return '고2';
   if (/수학[2IⅡ](?!\d)|미적분|기하/.test(title)) return '고3';
 
