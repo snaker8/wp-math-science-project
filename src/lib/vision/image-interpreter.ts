@@ -30,8 +30,8 @@ const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY ||
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
-// 환경변수로 모델 전환 (기본: glm — ChartQA SOTA 테스트)
-const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'glm') as 'gemini' | 'claude' | 'gpt' | 'glm';
+// 비전 분석: Gemini Flash-Lite 고정
+const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Opus와 결과 동일 — Sonnet 유지
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
@@ -1048,7 +1048,7 @@ async function interpretImageWithGLM(
 ): Promise<InterpretedFigure> {
   const apiKey = ZHIPU_API_KEY || OPENROUTER_API_KEY;
   const useZhipu = !!ZHIPU_API_KEY;
-  const modelName = useZhipu ? 'glm-4v-plus' : GLM_MODEL;
+  const modelName = useZhipu ? 'glm-4.6v' : GLM_MODEL;
   console.log(`[Vision] GLM (${modelName}, ${useZhipu ? 'Z.AI' : 'OpenRouter'}): Analyzing image...`);
 
   if (!apiKey) {
@@ -1423,27 +1423,22 @@ function buildSectorSvg(geo: GeometryRendering): string | null {
     lines.push(`  <!-- 오른쪽 반지름 (실선) -->`);
     lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${oRSvg.x}" y2="${oRSvg.y}" stroke="#374151" stroke-width="2"/>`);
 
-    // ★ r₁, r₂ 표시: OC 방향 기준, 바깥쪽(시계방향)에 동심 점선 호
-    // A와 C는 같은 반지름 선(OC) 위에 있으므로 모두 OC 방향 기준으로 호를 그림
-    const ocAngle = Math.atan2(oRSvg.y - cSvg.y, oRSvg.x - cSvg.x);
-    const arcSpan = 38 * Math.PI / 180; // 38° 바깥으로 (시계방향)
-    const arcEndAngle = ocAngle + arcSpan;
+    // ★ r₁, r₂ 표시: O→A 점선(r₁), O→C 점선(r₂) — 원본 그대로
+    // r₁: O에서 오른쪽 내부점(A)까지 점선
+    lines.push(`  <!-- r₁: O → A (점선) -->`);
+    lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${iRSvg.x}" y2="${iRSvg.y}" stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`);
+    // r₁ 라벨: O→A 중점 아래쪽
+    const r1MidX = (cSvg.x + iRSvg.x) / 2;
+    const r1MidY = (cSvg.y + iRSvg.y) / 2;
+    lines.push(`  <text x="${r1MidX}" y="${r1MidY + 18}" fill="#374151" font-family="serif" font-size="14" font-style="italic" text-anchor="middle">r<tspan dy="3" font-size="10">1</tspan></text>`);
 
-    // r₁ 점선: O에서 시작 → 직선으로 A까지 → 호로 38°
-    const r1ArcPt = { x: Math.round(cSvg.x + svgR1 * Math.cos(ocAngle)), y: Math.round(cSvg.y + svgR1 * Math.sin(ocAngle)) };
-    const r1EX = Math.round(cSvg.x + svgR1 * Math.cos(arcEndAngle));
-    const r1EY = Math.round(cSvg.y + svgR1 * Math.sin(arcEndAngle));
-    lines.push(`  <!-- r₁: O → A(직선) → 호 -->`);
-    lines.push(`  <path d="M ${cSvg.x} ${cSvg.y} L ${r1ArcPt.x} ${r1ArcPt.y} A ${svgR1} ${svgR1} 0 0 1 ${r1EX} ${r1EY}" fill="none" stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`);
-    lines.push(`  <text x="${r1EX + 7}" y="${r1EY + 5}" fill="#374151" font-family="serif" font-size="14" font-style="italic">r<tspan dy="3" font-size="10">1</tspan></text>`);
-
-    // r₂ 점선: O에서 시작 → 직선으로 C까지 → 호로 38°
-    const r2ArcPt = { x: Math.round(cSvg.x + svgR2 * Math.cos(ocAngle)), y: Math.round(cSvg.y + svgR2 * Math.sin(ocAngle)) };
-    const r2EX = Math.round(cSvg.x + svgR2 * Math.cos(arcEndAngle));
-    const r2EY = Math.round(cSvg.y + svgR2 * Math.sin(arcEndAngle));
-    lines.push(`  <!-- r₂: O → C(직선) → 호 -->`);
-    lines.push(`  <path d="M ${cSvg.x} ${cSvg.y} L ${r2ArcPt.x} ${r2ArcPt.y} A ${svgR2} ${svgR2} 0 0 1 ${r2EX} ${r2EY}" fill="none" stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`);
-    lines.push(`  <text x="${r2EX + 7}" y="${r2EY + 5}" fill="#374151" font-family="serif" font-size="14" font-style="italic">r<tspan dy="3" font-size="10">2</tspan></text>`);
+    // r₂: O에서 오른쪽 외부점(C)까지 점선
+    lines.push(`  <!-- r₂: O → C (점선) -->`);
+    lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${oRSvg.x}" y2="${oRSvg.y}" stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`);
+    // r₂ 라벨: O→C 중점 아래쪽
+    const r2MidX = (cSvg.x + oRSvg.x) / 2;
+    const r2MidY = (cSvg.y + oRSvg.y) / 2;
+    lines.push(`  <text x="${r2MidX}" y="${r2MidY + 18}" fill="#374151" font-family="serif" font-size="14" font-style="italic" text-anchor="middle">r<tspan dy="3" font-size="10">2</tspan></text>`);
     // ★ 꼭짓점 라벨 — 도형 바깥에 배치
     // 각 점에서 중심(centroid) 반대 방향으로 offset
     const centroidX = (oLSvg.x + oRSvg.x + iLSvg.x + iRSvg.x + cSvg.x) / 5;
