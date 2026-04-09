@@ -80,7 +80,7 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
           .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '') // 시작 태그 제거
           .replace(/\\end\{(?:tabular|array)\}/, '')                  // 끝 태그 제거
           .replace(/\s*###\s*/g, ' ')                                 // ### → 공백
-          .replace(/\s*\\\\\s*/g, ' ')                                // \\ → 공백
+          .replace(/\s*\\\\\s*/g, '\n')                               // \\ → 줄바꿈 (공백 아님!)
           .replace(/\s*&\s*/g, ' ')                                   // & → 공백
           .replace(/<?\s*보기\s*>?\s*/g, '')                          // <보기> 잔여 제거
           .replace(/\\quad\s*/g, ' ')                                 // \quad → 공백
