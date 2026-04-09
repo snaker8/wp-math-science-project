@@ -445,16 +445,26 @@ function parseJsonResponse(text: string): any {
 }
 
 function normalizeAnswer(ans: string): string {
-  return ans
+  let s = ans.trim();
+
+  // ★ 원형 숫자가 포함되어 있으면 번호만 추출 (객관식)
+  const circledMatch = s.match(/[①②③④⑤]/);
+  if (circledMatch) {
+    const map: Record<string, string> = { '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5' };
+    return map[circledMatch[0]] || circledMatch[0];
+  }
+
+  // 숫자 번호 패턴: "5번", "(5)", "5)" 등
+  const numMatch = s.match(/^[(\s]*([1-5])\s*[)번]?\s*$/);
+  if (numMatch) return numMatch[1];
+
+  return s
     .replace(/\s+/g, '')
-    .replace(/[①②③④⑤]/g, m => {
-      const map: Record<string, string> = { '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5' };
-      return map[m] || m;
-    })
     .replace(/^\(|\)$/g, '')
     .replace(/\\text\{[^}]*\}/g, '')
     .replace(/\\quad/g, '')
     .replace(/\\,/g, '')
+    .replace(/\$/g, '')
     .toLowerCase()
     .trim();
 }
