@@ -32,12 +32,11 @@ const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY ||
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 // 모델 옵션:
-// - 'gemini-3.1-flash-lite-preview' — 가장 빠름, 비용 최저, 2.5 Pro 수준 성능
+// - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%, CharXiv 80.3%)
+// - 'gemini-3.1-flash-lite-preview' — 가장 빠름, 비용 최저 (비전 약간 약함)
 // - 'gemini-2.5-pro' — 최고 정확도 (느림/비쌈)
-// - 'gemini-2.5-flash' — 중간 (빠름/저렴)
-// ★ gemini-3-flash-preview는 Vision에서 graph를 photo로 오분류 (2026.03 기준)
 
 // ============================================================================
 // 1단계: 구조 분석 프롬프트 (JSON 응답)
