@@ -291,11 +291,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 0. 낙서 제거 전처리
+    let cleanedBase64 = imageBase64;
+    try {
+      const fd = new FormData();
+      const imgBuffer = Buffer.from(imageBase64, 'base64');
+      fd.append('file', new Blob([imgBuffer], { type: 'image/png' }), 'crop.png');
+      fd.append('aggressiveness', '0.5');
+      const cleanRes = await fetch('http://localhost:8200/clean-handwriting', {
+        method: 'POST',
+        body: fd,
+      });
+      if (cleanRes.ok) {
+        const cleanData = await cleanRes.json();
+        if (cleanData.cleaned && cleanData.image_base64 && cleanData.removed_ratio > 0.001) {
+          cleanedBase64 = cleanData.image_base64;
+          console.log(`[Reanalyze] 낙서 제거: ${(cleanData.removed_ratio * 100).toFixed(1)}% 제거`);
+        }
+      }
+    } catch {
+      console.log('[Reanalyze] 낙서 제거 건너뜀 (image-pipeline 미실행)');
+    }
+
     // 1. Mathpix OCR + Vision 그래프 분석 병렬 실행
     console.log('[Reanalyze] Sending crop image to Mathpix OCR...');
     const mathpix = getMathpixClient();
 
-    const ocrPromise = mathpix.processImage(imageBase64, {
+    const ocrPromise = mathpix.processImage(cleanedBase64, {
       formats: ['text', 'latex_styled'],
       data_options: {
         include_latex: true,
