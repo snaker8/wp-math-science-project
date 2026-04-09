@@ -1048,7 +1048,7 @@ async function interpretImageWithGLM(
 ): Promise<InterpretedFigure> {
   const apiKey = ZHIPU_API_KEY || OPENROUTER_API_KEY;
   const useZhipu = !!ZHIPU_API_KEY;
-  const modelName = useZhipu ? 'glm-4v-plus' : GLM_MODEL;
+  const modelName = useZhipu ? 'glm-4.6v' : GLM_MODEL;
   console.log(`[Vision] GLM (${modelName}, ${useZhipu ? 'Z.AI' : 'OpenRouter'}): Analyzing image...`);
 
   if (!apiKey) {
