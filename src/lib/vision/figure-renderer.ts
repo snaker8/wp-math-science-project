@@ -390,6 +390,9 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     result = result.replace(/\\times/g, '×');
     // \leq → ≤, \geq → ≥
     result = result.replace(/\\leq/g, '≤').replace(/\\geq/g, '≥');
+    // ★ 그리스 문자: \alpha → α, a → α (길이 라벨용)
+    result = result.replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\gamma/g, 'γ');
+    result = result.replace(/\\delta/g, 'δ').replace(/\\theta/g, 'θ').replace(/\\pi/g, 'π');
     return result;
   }
 
@@ -438,9 +441,30 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
   }
 
   // ── 8. 꼭짓점 라벨 (바깥쪽으로 오프셋, 점 표시 없이 알파벳만) ──
+  // ★ segments에 연결된 꼭짓점만 라벨 표시 (불필요한 내부 보조점 숨기기)
+  const connectedLabels = new Set<string>();
+  for (const seg of [...filteredSegments, ...filteredDashed]) {
+    connectedLabels.add(seg[0]);
+    connectedLabels.add(seg[1]);
+  }
+  // 음영 영역 꼭짓점도 포함
+  for (const region of shadedRegions) {
+    for (const label of region.vertices) connectedLabels.add(label);
+  }
+
+  // ★ 그리스 문자 변환 (라벨용)
+  const GREEK_MAP: Record<string, string> = {
+    'a': 'α', 'b': 'β', 'c': 'γ', 'd': 'δ', 'e': 'ε',
+    'alpha': 'α', 'beta': 'β', 'gamma': 'γ', 'delta': 'δ',
+    'theta': 'θ', 'phi': 'φ', 'pi': 'π', 'omega': 'ω',
+  };
+
   for (const v of vertices) {
     const sx = toSvgX(v.x);
     const sy = toSvgY(v.y);
+
+    // 축 보조점(L1, L2 등)은 라벨 숨기기
+    if (axisLabelNames.has(v.label)) continue;
 
     // 라벨: 중심에서 반대 방향 (바깥쪽)으로 배치
     const cx = toSvgX(centroidX);
@@ -456,11 +480,11 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     lx = Math.max(14, Math.min(width - 14, lx));
     ly = Math.max(14, Math.min(height - 6, ly));
 
-    // 축 보조점(L1, L2 등)은 라벨 숨기기
-    if (axisLabelNames.has(v.label)) continue;
+    // ★ 라벨 텍스트: 그리스 문자 변환 적용
+    const displayLabel = GREEK_MAP[v.label.toLowerCase()] || v.label;
 
     // 라벨 텍스트 (참조사이트 스타일: serif + italic)
-    svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="normal" font-style="italic" font-family="serif" fill="${colors.label}">${v.label}</text>`;
+    svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="normal" font-style="italic" font-family="serif" fill="${colors.label}">${displayLabel}</text>`;
   }
 
   // (회전 화살표는 ── 0. 회전축 ── 에서 이미 렌더링됨)
