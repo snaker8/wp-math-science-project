@@ -650,7 +650,30 @@ async function processImageDocument(
 
   try {
     const mathpix = getMathpixClient();
-    const buffer = Buffer.from(fileBuffer);
+    let buffer = Buffer.from(fileBuffer);
+
+    // ★ OCR 전 낙서 제거 전처리 (image-pipeline 서버 호출)
+    try {
+      const cleanRes = await fetch('http://localhost:8200/clean-handwriting', {
+        method: 'POST',
+        body: (() => {
+          const fd = new FormData();
+          fd.append('file', new Blob([buffer], { type: 'image/png' }), 'exam.png');
+          fd.append('aggressiveness', '0.5');
+          return fd;
+        })(),
+      });
+      if (cleanRes.ok) {
+        const cleanData = await cleanRes.json();
+        if (cleanData.cleaned && cleanData.image_base64) {
+          buffer = Buffer.from(cleanData.image_base64, 'base64');
+          console.log(`[OCR] 낙서 제거 완료: ${(cleanData.removed_ratio * 100).toFixed(1)}% 제거`);
+        }
+      }
+    } catch {
+      // image-pipeline 서버 안 돌면 무시 — 원본으로 진행
+      console.log('[OCR] 낙서 제거 건너뜀 (image-pipeline 서버 미실행)');
+    }
 
     if (onProgress) onProgress(25);
 
