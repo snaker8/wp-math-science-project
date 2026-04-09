@@ -111,6 +111,64 @@ async def clean_handwriting(
                 os.remove(p)
 
 
+@app.post("/clean-pdf")
+async def clean_pdf_handwriting(
+    file: UploadFile = File(...),
+    aggressiveness: float = Form(0.5),
+):
+    """PDF의 각 페이지에서 손글씨/낙서를 제거한 PDF 반환"""
+    import fitz  # PyMuPDF
+    from handwriting_remover import remove_handwriting
+    import tempfile
+    import base64
+
+    content = await file.read()
+    doc = fitz.open(stream=content, filetype="pdf")
+
+    cleaned_pages = 0
+    total_removed = 0.0
+
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        # 페이지를 이미지로 렌더링 (300 DPI)
+        mat = fitz.Matrix(300/72, 300/72)
+        pix = page.get_pixmap(matrix=mat)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+            pix.save(tmp.name)
+            tmp_path = tmp.name
+
+        try:
+            out_path = tmp_path.replace('.png', '_clean.png')
+            result = remove_handwriting(tmp_path, out_path, aggressiveness)
+
+            if result.get("cleaned") and result.get("removed_ratio", 0) > 0.001:
+                # 정리된 이미지로 페이지 교체
+                clean_pix = fitz.Pixmap(out_path)
+                page.clean_contents()
+                # 페이지를 빈 페이지로 만들고 정리된 이미지 삽입
+                page_rect = page.rect
+                page.insert_image(page_rect, pixmap=clean_pix)
+                cleaned_pages += 1
+                total_removed += result.get("removed_ratio", 0)
+        finally:
+            for p in [tmp_path, tmp_path.replace('.png', '_clean.png')]:
+                if os.path.exists(p):
+                    os.remove(p)
+
+    # 정리된 PDF를 바이트로 반환
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    return {
+        "cleaned": cleaned_pages > 0,
+        "total_pages": len(doc) if hasattr(doc, '__len__') else 0,
+        "cleaned_pages": cleaned_pages,
+        "avg_removed_ratio": round(total_removed / max(cleaned_pages, 1), 4),
+        "pdf_base64": base64.b64encode(pdf_bytes).decode(),
+    }
+
+
 @app.post("/clean-handwriting-local")
 async def clean_handwriting_local(req: dict):
     """로컬 파일 경로로 낙서 제거"""
