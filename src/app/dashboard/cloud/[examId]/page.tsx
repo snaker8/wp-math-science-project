@@ -34,6 +34,7 @@ import {
   ZoomIn,
   Wand2,
   PlusCircle,
+  FileText,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
@@ -45,6 +46,7 @@ import dynamic from 'next/dynamic';
 const AddProblemsModal = dynamic(() => import('@/components/papers/AddProblemsModal'), { ssr: false });
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
+import { AnswerMatchModal } from '@/components/exam/AnswerMatchModal';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
@@ -2360,6 +2362,7 @@ export default function CloudExamDetailPage() {
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showAddProblemsModal, setShowAddProblemsModal] = useState(false);
+  const [showAnswerMatchModal, setShowAnswerMatchModal] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
 
   const toggleSelectProblem = useCallback((id: string) => {
@@ -2536,6 +2539,14 @@ export default function CloudExamDetailPage() {
             >
               <PlusCircle className="h-4 w-4" />
               <span>문제 추가</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAnswerMatchModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              <span>빠른답/해설</span>
             </button>
             <button
               type="button"
@@ -2974,6 +2985,16 @@ export default function CloudExamDetailPage() {
             refetchProblems();
             setShowAddProblemsModal(false);
           }}
+        />
+      )}
+
+      {/* 빠른답/해설 매칭 모달 */}
+      {showAnswerMatchModal && (
+        <AnswerMatchModal
+          isOpen={showAnswerMatchModal}
+          examId={examId}
+          onClose={() => setShowAnswerMatchModal(false)}
+          onApplied={() => refetchProblems()}
         />
       )}
 
