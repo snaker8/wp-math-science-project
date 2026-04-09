@@ -118,7 +118,7 @@ function getRoleBasedRedirect(role: UserRole, baseUrl: string): URL {
 
   return new URL(redirectPaths[role] || '/dashboard', baseUrl);
 }
---- 로그인 활성화 시 여기까지 주석 해제 --- */
+// --- 로그인 활성화 시 여기까지 주석 해제 --- */
 
 // 미들웨어가 실행될 경로 설정
 export const config = {
