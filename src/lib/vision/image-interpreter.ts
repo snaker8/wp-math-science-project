@@ -34,8 +34,8 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gpt') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Opus와 결과 동일 — Sonnet 유지
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-pro-preview-05-06';
-// ★ 2.5 Pro: 비전 최고 정확도 + JSON 안정 — 도형 분석용
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
+// ★ 2.5 Pro (GA): 비전 최고 정확도 + JSON 안정
 // ❌ gemini-3-flash-preview: JSON 잘림 (2026.04)
 // ❌ gemini-3.1-flash-lite-preview: 분석 디테일 부족
 const GLM_MODEL = 'thudm/glm-4.1v-9b-thinking'; // OpenRouter 경유
@@ -1042,7 +1042,7 @@ async function interpretImageWithGLM(
 ): Promise<InterpretedFigure> {
   const apiKey = ZHIPU_API_KEY || OPENROUTER_API_KEY;
   const useZhipu = !!ZHIPU_API_KEY;
-  const modelName = useZhipu ? 'glm-4v-flash' : GLM_MODEL;
+  const modelName = useZhipu ? 'glm-4v-plus' : GLM_MODEL;
   console.log(`[Vision] GLM (${modelName}, ${useZhipu ? 'Z.AI' : 'OpenRouter'}): Analyzing image...`);
 
   if (!apiKey) {
