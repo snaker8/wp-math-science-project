@@ -34,7 +34,8 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+// ❌ gemini-3-flash-preview: graph→photo 오분류 + JSON 잘림 (2026.03~04 확인)
 const GLM_MODEL = 'thudm/glm-4.1v-9b-thinking'; // OpenRouter 경유
 // 모델 옵션:
 // - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%) — 테스트 중
