@@ -452,11 +452,10 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     for (const label of region.vertices) connectedLabels.add(label);
   }
 
-  // ★ 그리스 문자 변환 (라벨용)
-  const GREEK_MAP: Record<string, string> = {
-    'a': 'α', 'b': 'β', 'c': 'γ', 'd': 'δ', 'e': 'ε',
-    'alpha': 'α', 'beta': 'β', 'gamma': 'γ', 'delta': 'δ',
-    'theta': 'θ', 'phi': 'φ', 'pi': 'π', 'omega': 'ω',
+  // ★ LaTeX 그리스 문자만 변환 (\alpha → α), 일반 알파벳(a, b)은 그대로
+  const GREEK_LATEX: Record<string, string> = {
+    '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ',
+    '\\theta': 'θ', '\\phi': 'φ', '\\pi': 'π', '\\omega': 'ω',
   };
 
   for (const v of vertices) {
@@ -480,8 +479,11 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     lx = Math.max(14, Math.min(width - 14, lx));
     ly = Math.max(14, Math.min(height - 6, ly));
 
-    // ★ 라벨 텍스트: 그리스 문자 변환 적용
-    const displayLabel = GREEK_MAP[v.label.toLowerCase()] || v.label;
+    // ★ 라벨 텍스트: LaTeX 그리스 문자만 변환 (\alpha → α), 일반 알파벳은 그대로
+    let displayLabel = v.label;
+    for (const [latex, greek] of Object.entries(GREEK_LATEX)) {
+      displayLabel = displayLabel.replace(latex, greek);
+    }
 
     // 라벨 텍스트 (참조사이트 스타일: serif + italic)
     svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="normal" font-style="italic" font-family="serif" fill="${colors.label}">${displayLabel}</text>`;
