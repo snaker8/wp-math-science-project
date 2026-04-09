@@ -27,6 +27,7 @@ import {
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
+const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
 // 환경변수로 모델 전환: 'gemini' | 'gpt' | 'claude' | 'glm' (기본: gemini)
@@ -485,7 +486,7 @@ export async function interpretImage(
   const detected = context ? detectEquationsFromContent(context) : null;
 
   // API 키 확인 + 자동 fallback 순서: gemini → gpt → claude
-  const providerKeyMap: Record<string, string> = { gemini: GOOGLE_AI_KEY, gpt: OPENAI_API_KEY, claude: ANTHROPIC_API_KEY, glm: OPENROUTER_API_KEY };
+  const providerKeyMap: Record<string, string> = { gemini: GOOGLE_AI_KEY, gpt: OPENAI_API_KEY, claude: ANTHROPIC_API_KEY, glm: ZHIPU_API_KEY || OPENROUTER_API_KEY };
   const fallbackOrder: Array<'gemini' | 'gpt' | 'claude' | 'glm'> =
     provider === 'gemini' ? ['gemini', 'glm', 'gpt', 'claude'] :
     provider === 'glm'    ? ['glm', 'gemini', 'gpt', 'claude'] :
@@ -1016,23 +1017,31 @@ async function interpretImageWithGLM(
   context?: string,
   detected?: DetectedEquations | null
 ): Promise<InterpretedFigure> {
-  console.log(`[Vision] GLM (${GLM_MODEL}): Analyzing image...`);
+  const apiKey = ZHIPU_API_KEY || OPENROUTER_API_KEY;
+  const useZhipu = !!ZHIPU_API_KEY;
+  const modelName = useZhipu ? 'glm-4v-flash' : GLM_MODEL;
+  console.log(`[Vision] GLM (${modelName}, ${useZhipu ? 'Z.AI' : 'OpenRouter'}): Analyzing image...`);
 
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY not configured');
+  if (!apiKey) {
+    throw new Error('ZHIPU_API_KEY 또는 OPENROUTER_API_KEY not configured');
   }
 
   const userMessage = buildUserMessage(context, detected);
   const combinedPrompt = fullSystemPrompt + '\n\n---\n\n' + userMessage + '\n\nJSON으로만 응답하세요.';
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  // Z.AI 직접 API 또는 OpenRouter
+  const apiUrl = useZhipu
+    ? 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+    : 'https://openrouter.ai/api/v1/chat/completions';
+
+  const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: GLM_MODEL,
+      model: modelName,
       messages: [
         {
           role: 'user',
@@ -1059,7 +1068,6 @@ async function interpretImageWithGLM(
 
   console.log(`[Vision] GLM raw (first 500):`, text.substring(0, 500));
 
-  // 마크다운 코드블록 제거
   const cleaned = text.trim().replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
   const parsed = parseVisionResponse(cleaned, imageUrl);
 
