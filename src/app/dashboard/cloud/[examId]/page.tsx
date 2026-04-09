@@ -1767,7 +1767,7 @@ function SolutionView({
           onClick={async () => {
             const unsolved = problems.filter(p => !p.solution || p.solution.trim().length < 30);
             if (unsolved.length === 0) { alert('모든 문제에 해설이 있습니다.'); return; }
-            if (!confirm(`${unsolved.length}문제의 해설을 AI로 생성합니다.\n(Claude Sonnet + Gemini 교차검증)\n\n진행하시겠습니까?`)) return;
+            if (!confirm(`${unsolved.length}문제의 해설을 AI로 생성합니다.\n(풀이 생성 + 교차 검산)\n\n진행하시겠습니까?`)) return;
             setIsGeneratingBatch(true);
             setBatchProgress({ current: 0, total: unsolved.length });
             let success = 0;

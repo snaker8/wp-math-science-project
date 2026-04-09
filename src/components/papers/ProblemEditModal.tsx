@@ -524,7 +524,7 @@ function TagManagementPanel({
               {isGenerating ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Sonnet 해설 생성 + 검증 중...
+                  해설 생성 + 검증 중...
                 </>
               ) : (
                 'AI문 해설 자동 생성'
@@ -648,7 +648,7 @@ export function ProblemEditModal({
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const solutionRef = useRef<HTMLTextAreaElement>(null);
 
-  // AI 해설 자동 생성 (Claude Sonnet + GPT-4o 검증)
+  // AI 해설 자동 생성 + 교차 검증
   const handleGenerateSolution = useCallback(async () => {
     setIsGeneratingSolution(true);
     setError(null);
@@ -691,7 +691,7 @@ export function ProblemEditModal({
       // 검증 결과 로그
       if (data.verification) {
         if (data.verification.mismatchFlag) {
-          setError(`⚠️ 정답 불일치: Sonnet="${data.verification.sonnetAnswer}" vs Gemini="${data.verification.verifyAnswer || data.verification.gptoAnswer}" — 확인 필요`);
+          setError(`⚠️ 정답 불일치: 풀이="${data.verification.sonnetAnswer}" vs 검산="${data.verification.verifyAnswer || data.verification.gptoAnswer}" — 확인 필요`);
         }
       }
 
@@ -759,7 +759,7 @@ export function ProblemEditModal({
     }
   }, [problemId, content, solution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, onSaved, onClose]);
 
-  // ★ AI 재분석: GPT-4o가 풀이/정답/분류를 다시 분석
+  // ★ AI 재분석: 분류 재실행
   const handleReanalyze = useCallback(async () => {
     if (isReanalyzing) return;
     setIsReanalyzing(true);
