@@ -70,6 +70,61 @@ async def health():
     return {"status": "ok", "db_stats": stats, "processing": processing_status, "tagging": tagging_status}
 
 
+# ★ 낙서/필기 제거 엔드포인트
+@app.post("/clean-handwriting")
+async def clean_handwriting(
+    file: UploadFile = File(...),
+    aggressiveness: float = Form(0.5),
+):
+    """시험지 이미지에서 손글씨/낙서를 제거하여 OCR 정확도 향상"""
+    from handwriting_remover import remove_handwriting
+    import tempfile
+
+    # 임시 파일에 저장
+    suffix = Path(file.filename or "image.png").suffix
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        output_path = tmp_path.replace(suffix, f"_clean{suffix}")
+        result = remove_handwriting(tmp_path, output_path, aggressiveness)
+
+        if not result.get("cleaned"):
+            raise HTTPException(status_code=400, detail=result.get("error", "처리 실패"))
+
+        # 결과 이미지를 base64로 반환
+        import base64
+        with open(output_path, "rb") as f:
+            img_base64 = base64.b64encode(f.read()).decode()
+
+        return {
+            **result,
+            "image_base64": img_base64,
+            "content_type": file.content_type or "image/png",
+        }
+    finally:
+        # 임시 파일 정리
+        for p in [tmp_path, tmp_path.replace(suffix, f"_clean{suffix}")]:
+            if os.path.exists(p):
+                os.remove(p)
+
+
+@app.post("/clean-handwriting-local")
+async def clean_handwriting_local(req: dict):
+    """로컬 파일 경로로 낙서 제거"""
+    from handwriting_remover import clean_exam_image
+
+    file_path = req.get("file_path", "")
+    output_path = req.get("output_path", None)
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail=f"파일을 찾을 수 없습니다: {file_path}")
+
+    result = clean_exam_image(file_path, output_path)
+    return result
+
+
 class ExtractLocalRequest(BaseModel):
     """로컬 파일 경로로 추출 요청 (대용량 파일 HTTP 전송 우회)"""
     file_path: str
