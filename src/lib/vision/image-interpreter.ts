@@ -1422,21 +1422,7 @@ function buildSectorSvg(geo: GeometryRendering): string | null {
     // 오른쪽 반지름: 실선 제거 — r₁, r₂ 점선으로만 표시 (원본 일치)
 
     // ★ r₁, r₂ 표시: O→A 점선(r₁), O→C 점선(r₂) — 원본 그대로
-    // r₁: O에서 오른쪽 내부점(A)까지 점선
-    lines.push(`  <!-- r₁: O → A (점선) -->`);
-    lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${iRSvg.x}" y2="${iRSvg.y}" stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`);
-    // r₁ 라벨: O→A 중점 아래쪽 (넉넉하게)
-    const r1MidX = (cSvg.x + iRSvg.x) / 2;
-    const r1MidY = (cSvg.y + iRSvg.y) / 2;
-    lines.push(`  <text x="${r1MidX}" y="${r1MidY + 28}" fill="#374151" font-family="serif" font-size="14" font-style="italic" text-anchor="middle">r<tspan dy="3" font-size="10">1</tspan></text>`);
-
-    // r₂: O에서 오른쪽 외부점(C)까지 점선
-    lines.push(`  <!-- r₂: O → C (점선) -->`);
-    lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${oRSvg.x}" y2="${oRSvg.y}" stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`);
-    // r₂ 라벨: O→C 중점 아래쪽 (넉넉하게)
-    const r2MidX = (cSvg.x + oRSvg.x) / 2;
-    const r2MidY = (cSvg.y + oRSvg.y) / 2;
-    lines.push(`  <text x="${r2MidX + 10}" y="${r2MidY + 28}" fill="#374151" font-family="serif" font-size="14" font-style="italic" text-anchor="middle">r<tspan dy="3" font-size="10">2</tspan></text>`);
+    // r₁, r₂ 점선/라벨 제거 — 문제 텍스트에 정의 있으므로 그림에 불필요
     // ★ 꼭짓점 라벨 — 도형 바깥에 배치
     // 각 점에서 중심(centroid) 반대 방향으로 offset
     const centroidX = (oLSvg.x + oRSvg.x + iLSvg.x + iRSvg.x + cSvg.x) / 5;
