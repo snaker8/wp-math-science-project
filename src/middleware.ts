@@ -117,8 +117,7 @@ function getRoleBasedRedirect(role: UserRole, baseUrl: string): URL {
   };
 
   return new URL(redirectPaths[role] || '/dashboard', baseUrl);
-}
-*/
+} */
 
 // 미들웨어가 실행될 경로 설정
 export const config = {
