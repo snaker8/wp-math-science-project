@@ -1113,6 +1113,7 @@ async function interpretImageWithGPT(
   const userMessage = buildUserMessage(context, detected);
 
   const response = await callOpenAIVision(imageUrl, systemPrompt, userMessage, true);
+  console.log(`[Vision] GPT-4o raw (first 500):`, response.substring(0, 500));
   const parsed = parseVisionResponse(response, imageUrl);
 
   // ★ 디버그: 반환된 expressions 로깅
