@@ -365,11 +365,6 @@ ${content.slice(0, 1500)}`;
             }
 
             result.fixes.push(`재분류: ${newCls.chapter || '?'} > ${newCls.typeName || '?'} (diff:${newCls.difficulty})`);
-          } else if (gptRes) {
-            const errBody = await gptRes.text().catch(() => '');
-            console.error(`[auto-fix] #${seqNum} GPT HTTP ${gptRes.status}: ${errBody.slice(0, 200)}`);
-            result.errors.push(`GPT 호출 실패 (HTTP ${gptRes.status})`);
-          }
         } catch (e) {
           console.error(`[auto-fix] #${seqNum} GPT/DB error:`, e instanceof Error ? e.message : e);
           // GPT 실패 시 과목만 변경
