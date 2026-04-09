@@ -409,7 +409,7 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
       const dx = mx - cx;
       const dy = my - cy;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const offsetLen = 22;
+      const offsetLen = 28; // ★ 선분에서 더 떨어지게 (22→28)
       const ox = mx + (dx / dist) * offsetLen;
       const oy = my + (dy / dist) * offsetLen;
       // 라벨 텍스트 너비 추정 (수식 길이에 따라)
@@ -485,6 +485,9 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
       displayLabel = displayLabel.replace(latex, greek);
     }
 
+    // ★ 라벨 뒤에 흰색 배경 (선분 겹침 방지)
+    const labelW = Math.max(16, displayLabel.length * 12);
+    svg += `<rect x="${lx - labelW/2}" y="${ly - 10}" width="${labelW}" height="20" fill="white" opacity="0.9" rx="2"/>`;
     // 라벨 텍스트 (참조사이트 스타일: serif + italic)
     svg += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="normal" font-style="italic" font-family="serif" fill="${colors.label}">${displayLabel}</text>`;
   }
