@@ -33,7 +33,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 // 환경변수로 모델 전환: 'gemini' | 'gpt' | 'claude' | 'glm' (기본: gemini)
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
-const CLAUDE_MODEL = 'claude-opus-4-20250514'; // SVG 생성 정확도를 위해 Opus 사용
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Opus와 결과 동일 — Sonnet 유지
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 // ❌ gemini-3-flash-preview: 분석은 정확하나 JSON 잘림 → photo fallback (2026.04 재확인)
 const GLM_MODEL = 'thudm/glm-4.1v-9b-thinking'; // OpenRouter 경유
