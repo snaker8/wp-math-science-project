@@ -27,16 +27,18 @@ import {
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
-// 환경변수로 모델 전환: 'gemini' | 'gpt' | 'claude' (기본: gemini)
-const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt';
+// 환경변수로 모델 전환: 'gemini' | 'gpt' | 'claude' | 'glm' (기본: gemini)
+const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+const GLM_MODEL = 'thudm/glm-4.1v-9b-thinking'; // OpenRouter 경유
 // 모델 옵션:
 // - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%) — 테스트 중
 // - 'gemini-3.1-flash-lite-preview' — 이전 기본 (graph→photo 오분류 이슈로 Flash 3 대신 사용했음)
-// - 'gemini-2.5-pro' — 최고 정확도 (느림/비쌈)
+// - 'thudm/glm-4.1v-9b-thinking' — ChartQA SOTA, 수학 도형 특화 (OpenRouter fallback)
 
 // ============================================================================
 // 1단계: 구조 분석 프롬프트 (JSON 응답)
@@ -483,23 +485,25 @@ export async function interpretImage(
   const detected = context ? detectEquationsFromContent(context) : null;
 
   // API 키 확인 + 자동 fallback 순서: gemini → gpt → claude
-  const providerKeyMap: Record<string, string> = { gemini: GOOGLE_AI_KEY, gpt: OPENAI_API_KEY, claude: ANTHROPIC_API_KEY };
-  const fallbackOrder: Array<'gemini' | 'gpt' | 'claude'> =
-    provider === 'gemini' ? ['gemini', 'gpt', 'claude'] :
-    provider === 'gpt'    ? ['gpt', 'gemini', 'claude'] :
-                            ['claude', 'gemini', 'gpt'];
+  const providerKeyMap: Record<string, string> = { gemini: GOOGLE_AI_KEY, gpt: OPENAI_API_KEY, claude: ANTHROPIC_API_KEY, glm: OPENROUTER_API_KEY };
+  const fallbackOrder: Array<'gemini' | 'gpt' | 'claude' | 'glm'> =
+    provider === 'gemini' ? ['gemini', 'glm', 'gpt', 'claude'] :
+    provider === 'glm'    ? ['glm', 'gemini', 'gpt', 'claude'] :
+    provider === 'gpt'    ? ['gpt', 'gemini', 'glm', 'claude'] :
+                            ['claude', 'gemini', 'glm', 'gpt'];
 
   // 사용 가능한 provider 필터링
   const availableProviders = fallbackOrder.filter(p => providerKeyMap[p]);
   if (availableProviders.length === 0) {
-    return createFallbackFigure(imageUrl, 'API 키 미설정 (Gemini/GPT/Claude 중 하나 필요)');
+    return createFallbackFigure(imageUrl, 'API 키 미설정 (Gemini/GPT/Claude/GLM 중 하나 필요)');
   }
 
-  const callProvider = async (p: 'gemini' | 'gpt' | 'claude'): Promise<InterpretedFigure> => {
+  const callProvider = async (p: 'gemini' | 'gpt' | 'claude' | 'glm'): Promise<InterpretedFigure> => {
     switch (p) {
       case 'gemini': return interpretImageWithGemini(imageUrl, context, detected);
       case 'gpt':    return interpretImageWithGPT(imageUrl, context, detected);
       case 'claude': return interpretImageWithClaude(imageUrl, context, detected);
+      case 'glm':    return interpretImageWithGLM(imageUrl, context, detected);
     }
   };
 
@@ -1001,6 +1005,66 @@ ${detected?.forceGraph ? '★★★ 이 이미지에는 수학 그래프/도형/
   }
 
   throw lastError || new Error('Gemini: unknown error after retries');
+}
+
+/**
+ * GLM-4.1V-Thinking으로 이미지 해석 (OpenRouter 경유)
+ * ChartQA SOTA — 수학 차트/도형 분석 특화
+ */
+async function interpretImageWithGLM(
+  imageUrl: string,
+  context?: string,
+  detected?: DetectedEquations | null
+): Promise<InterpretedFigure> {
+  console.log(`[Vision] GLM (${GLM_MODEL}): Analyzing image...`);
+
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY not configured');
+  }
+
+  const userMessage = buildUserMessage(context, detected);
+  const combinedPrompt = fullSystemPrompt + '\n\n---\n\n' + userMessage + '\n\nJSON으로만 응답하세요.';
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: GLM_MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: imageUrl } },
+            { type: 'text', text: combinedPrompt },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 8000,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`GLM API error ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content || '';
+
+  if (!text) throw new Error('GLM returned empty response');
+
+  console.log(`[Vision] GLM raw (first 500):`, text.substring(0, 500));
+
+  // 마크다운 코드블록 제거
+  const cleaned = text.trim().replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
+  const parsed = parseVisionResponse(cleaned, imageUrl);
+
+  console.log(`[Vision] GLM result: ${parsed.figureType} (confidence: ${parsed.confidence})`);
+  return parsed;
 }
 
 /**
