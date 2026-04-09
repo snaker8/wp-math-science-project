@@ -564,9 +564,16 @@ function preprocessMathpixContent(text: string): string {
   result = result.replace(/\$\\begin\{/g, '\\begin{');
   result = result.replace(/\\end\{([^}]+)\}\s*\$/g, '\\end{$1}');
 
+  // 1-3b. ★ \displaystyle \begin{cases} $ ... \end{cases} 패턴 정리
+  // Mathpix가 \displaystyle + $ 를 섞어서 출력하는 경우
+  result = result.replace(
+    /\\displaystyle\s*\\begin\{(cases|array)\}\s*\$?/g,
+    '\\begin{$1}'
+  );
+
   // 1-4. bare \begin{...}...\end{...} → $$...$$
   result = result.replace(
-    /(?<!\$)\\begin\{(aligned|align|gather|cases|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|equation|equation\*)\}([\s\S]*?)\\end\{\1\}(?!\$)/g,
+    /(?<!\$)(?:\\displaystyle\s*)?\\begin\{(aligned|align|gather|cases|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|equation|equation\*)\}([\s\S]*?)\\end\{\1\}(?!\$)/g,
     (match, envName) => {
       if (envName === 'array' && /&/.test(match)) return match;
       return `$$${match}$$`;
