@@ -691,7 +691,7 @@ export function ProblemEditModal({
       // 검증 결과 로그
       if (data.verification) {
         if (data.verification.mismatchFlag) {
-          setError(`⚠️ 정답 불일치: Sonnet="${data.verification.sonnetAnswer}" vs GPT-4o="${data.verification.gptoAnswer}" — 확인 필요`);
+          setError(`⚠️ 정답 불일치: Sonnet="${data.verification.sonnetAnswer}" vs Gemini="${data.verification.verifyAnswer || data.verification.gptoAnswer}" — 확인 필요`);
         }
       }
 
