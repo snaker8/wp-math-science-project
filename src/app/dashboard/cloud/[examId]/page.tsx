@@ -556,8 +556,8 @@ function ProblemCardView({
                 업스케일
               </button>
             )}
-            {/* ★ AI 도형 생성 버튼 (도형이 있는 문제만) */}
-            {problem.hasFigure && (
+            {/* ★ AI 도형 생성 버튼 (도형 또는 크롭 이미지가 있는 문제) */}
+            {(problem.hasFigure || cropImage) && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGenerateAIFigure?.(problem); }}
