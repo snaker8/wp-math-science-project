@@ -781,11 +781,9 @@ function ProblemCardView({
                 );
               }
 
-              // 객관식 보기
-              // ★ 보기형 문제: 선택지에 ㄱ,ㄴ,ㄷ 조합이 있으면 (1) 형태 번호 사용
-              const isBoggiType = problem.choices.some(c => /[ㄱㄴㄷㄹㅁ].*,\s*[ㄱㄴㄷㄹㅁ]/.test(c));
+              // 객관식 보기 — 항상 ①②③④⑤ 사용
               const processed = problem.choices.map((choice, i) => {
-                const circled = isBoggiType ? `(${i + 1})` : (['①', '②', '③', '④', '⑤'][i] || '');
+                const circled = ['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`;
                 const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
                 return { circled, stripped };
               });
