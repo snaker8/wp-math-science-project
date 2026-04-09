@@ -169,6 +169,103 @@ async def clean_pdf_handwriting(
     }
 
 
+@app.post("/clean-pdf-base64")
+async def clean_pdf_base64(req: dict):
+    """base64 PDF로 낙서 제거 (Next.js 호환)"""
+    import fitz
+    from handwriting_remover import remove_handwriting
+    import tempfile
+    import base64
+
+    pdf_base64 = req.get("pdf_base64", "")
+    aggressiveness = req.get("aggressiveness", 0.5)
+
+    if not pdf_base64:
+        raise HTTPException(status_code=400, detail="pdf_base64 필요")
+
+    pdf_bytes = base64.b64decode(pdf_base64)
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+    cleaned_pages = 0
+    total_removed = 0.0
+
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        mat = fitz.Matrix(300/72, 300/72)
+        pix = page.get_pixmap(matrix=mat)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+            pix.save(tmp.name)
+            tmp_path = tmp.name
+
+        try:
+            out_path = tmp_path.replace('.png', '_clean.png')
+            result = remove_handwriting(tmp_path, out_path, aggressiveness)
+
+            if result.get("cleaned") and result.get("removed_ratio", 0) > 0.001:
+                clean_pix = fitz.Pixmap(out_path)
+                page.clean_contents()
+                page_rect = page.rect
+                page.insert_image(page_rect, pixmap=clean_pix)
+                cleaned_pages += 1
+                total_removed += result.get("removed_ratio", 0)
+        finally:
+            for p in [tmp_path, tmp_path.replace('.png', '_clean.png')]:
+                if os.path.exists(p):
+                    os.remove(p)
+
+    out_pdf = doc.tobytes()
+    total_pages = len(doc)
+    doc.close()
+
+    return {
+        "cleaned": cleaned_pages > 0,
+        "cleaned_pages": cleaned_pages,
+        "total_pages": total_pages,
+        "avg_removed_ratio": round(total_removed / max(cleaned_pages, 1), 4),
+        "pdf_base64": base64.b64encode(out_pdf).decode(),
+    }
+
+
+@app.post("/clean-handwriting-base64")
+async def clean_handwriting_base64(req: dict):
+    """base64 이미지로 낙서 제거 (Next.js 호환)"""
+    from handwriting_remover import remove_handwriting
+    import tempfile
+    import base64
+
+    image_base64 = req.get("image_base64", "")
+    aggressiveness = req.get("aggressiveness", 0.5)
+
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 필요")
+
+    img_bytes = base64.b64decode(image_base64)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+        tmp.write(img_bytes)
+        tmp_path = tmp.name
+
+    try:
+        output_path = tmp_path.replace('.png', '_clean.png')
+        result = remove_handwriting(tmp_path, output_path, aggressiveness)
+
+        if not result.get("cleaned"):
+            raise HTTPException(status_code=400, detail=result.get("error", "처리 실패"))
+
+        with open(output_path, "rb") as f:
+            out_base64 = base64.b64encode(f.read()).decode()
+
+        return {
+            **result,
+            "image_base64": out_base64,
+        }
+    finally:
+        for p in [tmp_path, tmp_path.replace('.png', '_clean.png')]:
+            if os.path.exists(p):
+                os.remove(p)
+
+
 @app.post("/clean-handwriting-local")
 async def clean_handwriting_local(req: dict):
     """로컬 파일 경로로 낙서 제거"""
