@@ -458,12 +458,27 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     '\\theta': 'θ', '\\phi': 'φ', '\\pi': 'π', '\\omega': 'ω',
   };
 
+  // ★ 주요 꼭짓점만 라벨 표시 — segments의 양 끝점만 (내부 보조점 제외)
+  const segmentEndpoints = new Set<string>();
+  for (const seg of [...filteredSegments, ...filteredDashed]) {
+    segmentEndpoints.add(seg[0]);
+    segmentEndpoints.add(seg[1]);
+  }
+  for (const region of shadedRegions) {
+    for (const label of region.vertices) segmentEndpoints.add(label);
+  }
+
   for (const v of vertices) {
     const sx = toSvgX(v.x);
     const sy = toSvgY(v.y);
 
     // 축 보조점(L1, L2 등)은 라벨 숨기기
     if (axisLabelNames.has(v.label)) continue;
+
+    // ★ segments에 연결 안 된 내부 보조점은 라벨 숨기기 (H, D, I 등)
+    // 단, lengths에 포함된 점은 유지
+    const isInLengths = lengths.some(l => l.from === v.label || l.to === v.label);
+    if (!segmentEndpoints.has(v.label) && !isInLengths) continue;
 
     // 라벨: 중심에서 반대 방향 (바깥쪽)으로 배치
     const cx = toSvgX(centroidX);
