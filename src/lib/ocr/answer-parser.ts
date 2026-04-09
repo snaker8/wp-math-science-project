@@ -71,21 +71,52 @@ export function parseQuickAnswers(ocrText: string): ParsedAnswer[] {
 
   if (answers.length >= 3) return deduplicateAnswers(answers);
 
-  // 방법 2: 줄별 파싱 — "번호  답" 형태
+  // 방법 2: 줄별 파싱 — 다양한 형태
   const lines = text.split('\n').filter(l => l.trim());
   for (const line of lines) {
-    // "1  ③" 또는 "1    4" 형태
-    const lineMatch = line.match(/^\s*(\d{1,2})\s{2,}([①②③④⑤]|\d+(?:\.\d+)?)\s*$/);
-    if (lineMatch) {
-      const num = parseInt(lineMatch[1]);
-      const rawAnswer = lineMatch[2].trim();
-      if (num < 1 || num > 50) continue;
+    const trimmed = line.trim();
 
-      answers.push({
-        problemNumber: num,
-        answer: CIRCLED_PATTERN.test(rawAnswer) ? (CIRCLED_TO_NUM[rawAnswer] || rawAnswer) : rawAnswer,
-        answerType: CIRCLED_PATTERN.test(rawAnswer) ? 'choice' : 'numeric',
-      });
+    // 2a. "번호  답" 형태 (공백 2개 이상 구분)
+    const spaceMatch = trimmed.match(/^(\d{1,2})\s{2,}(.+)$/);
+    if (spaceMatch) {
+      const num = parseInt(spaceMatch[1]);
+      const rawAnswer = spaceMatch[2].trim();
+      if (num >= 1 && num <= 50 && rawAnswer) {
+        answers.push({ problemNumber: num, answer: extractAnswer(rawAnswer), answerType: detectAnswerType(rawAnswer) });
+        continue;
+      }
+    }
+
+    // 2b. 마크다운 테이블 "| 번호 | 답 |" 또는 "|번호|답|"
+    const tableMatch = trimmed.match(/^\|?\s*(\d{1,2})\s*\|\s*(.+?)\s*\|?\s*$/);
+    if (tableMatch) {
+      const num = parseInt(tableMatch[1]);
+      const rawAnswer = tableMatch[2].trim();
+      if (num >= 1 && num <= 50 && rawAnswer && !/^[-=]+$/.test(rawAnswer) && !/경남|학교|번호/.test(rawAnswer)) {
+        answers.push({ problemNumber: num, answer: extractAnswer(rawAnswer), answerType: detectAnswerType(rawAnswer) });
+        continue;
+      }
+    }
+
+    // 2c. 탭 구분 "번호\t답"
+    const tabMatch = trimmed.match(/^(\d{1,2})\t+(.+)$/);
+    if (tabMatch) {
+      const num = parseInt(tabMatch[1]);
+      const rawAnswer = tabMatch[2].trim();
+      if (num >= 1 && num <= 50 && rawAnswer) {
+        answers.push({ problemNumber: num, answer: extractAnswer(rawAnswer), answerType: detectAnswerType(rawAnswer) });
+        continue;
+      }
+    }
+
+    // 2d. 단순 "번호 답" (공백 1개, 숫자 답)
+    const simpleMatch = trimmed.match(/^(\d{1,2})\s+([①②③④⑤]|\d+(?:[.,]\d+)?)\s*$/);
+    if (simpleMatch) {
+      const num = parseInt(simpleMatch[1]);
+      const rawAnswer = simpleMatch[2].trim();
+      if (num >= 1 && num <= 50) {
+        answers.push({ problemNumber: num, answer: extractAnswer(rawAnswer), answerType: detectAnswerType(rawAnswer) });
+      }
     }
   }
 
@@ -209,6 +240,23 @@ export function parseAnswerDocument(ocrText: string): ParseResult {
       : solutions.length > 0 ? 'solution'
       : 'unknown',
   };
+}
+
+/** 답 텍스트에서 핵심 답만 추출 */
+function extractAnswer(raw: string): string {
+  let s = raw.trim();
+  // 원형 숫자 → 번호
+  if (CIRCLED_PATTERN.test(s)) return CIRCLED_TO_NUM[s.match(/[①②③④⑤]/)?.[0] || ''] || s;
+  // LaTeX 정리
+  s = s.replace(/\$/g, '').replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2').trim();
+  return s;
+}
+
+/** 답 유형 감지 */
+function detectAnswerType(raw: string): 'choice' | 'numeric' | 'text' {
+  if (CIRCLED_PATTERN.test(raw)) return 'choice';
+  if (/^\d+([.,]\d+)?$/.test(raw.trim())) return 'numeric';
+  return 'text';
 }
 
 /** 중복 제거 (같은 번호면 마지막 것 사용) */
