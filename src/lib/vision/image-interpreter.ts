@@ -53,7 +53,7 @@ const ANALYSIS_SYSTEM_PROMPT = `당신은 수학 교육 자료의 시각적 요�
 
 {
   "figureType": "graph" | "geometry" | "table" | "number_line" | "diagram" | "photo",
-  "description": "이미지에 대한 간단한 한국어 설명",
+  "description": "이미지에 대한 상세한 한국어 설명 (★ 기하 도형: 어떤 도형이 어떤 변/꼭짓점에 접하는지, 내접/외접 관계, 각 점의 위치 관계를 구체적으로 서술)",
   "confidence": 0.0~1.0,
   "rendering": { ... }
 }
@@ -196,6 +196,17 @@ const ANALYSIS_SYSTEM_PROMPT = `당신은 수학 교육 자료의 시각적 요�
 - 도형 내부 점(D, E, F 등)은 기준 삼각형의 좌표를 기준으로 비례 계산
 - segments에 포함된 모든 꼭짓점은 반드시 vertices 배열에 있어야 합니다
 - 좌표는 소수점 1자리까지 사용 가능
+
+#### ★★★ 내접/외접/접점 좌표 규칙 (정확도 핵심):
+- 어떤 도형이 다른 도형에 **내접**할 때, 접하는 꼭짓점은 반드시 해당 변 위에 있어야 합니다.
+- **직선 위의 점 검증**: 점 P가 선분 AB 위에 있으면, P = A + t*(B-A) (0≤t≤1)를 만족해야 합니다.
+- 예: 직각삼각형 ABC(B직각)에 내접하는 정사각형, 한 꼭짓점 D가 빗변 AC 위에 있으면:
+  → B(0,0), A(0,α), C(β,0) 설정
+  → 정사각형 한 변 s = αβ/(α+β)
+  → 정사각형 꼭짓점: B(0,0), E(s,0), D(s, s*α/β) ← D가 AC 위에 있는지 검증 필수!
+  → AC 직선: x/β + y/α = 1 → D(s, s*α/β) 대입하여 등식 성립 확인
+- **검증 필수**: 내접 꼭짓점이 실제로 해당 변의 직선 방정식 위에 있는지 반드시 확인하세요.
+- description에 "정사각형의 꼭짓점 D가 빗변 AC 위에 놓인다" 등 접점 관계를 구체적으로 서술하세요.
 
 #### segments vs dashedSegments 구분 (★중요):
 - **segments**: 이미지에서 실선(진한 선)으로 그려진 모든 선분. 도형의 변, 보조선 모두 포함
@@ -1174,7 +1185,8 @@ function buildSvgPrompt(parsed: InterpretedFigure, context?: string): string {
   const parts: string[] = [];
 
   parts.push('★ Look at the ORIGINAL IMAGE carefully and reproduce it as clean SVG.');
-  parts.push(`★ Figure description: "${parsed.description}"`);
+  parts.push(`★★★ Figure description (기하 관계 필수 준수): "${parsed.description}"`);
+  parts.push('★★★ 내접/접점 관계가 description에 명시되어 있으면, 해당 꼭짓점이 반드시 해당 변 위에 정확히 놓이도록 좌표를 계산하세요!');
 
   if (context) {
     parts.push(`\nProblem context: "${context.substring(0, 400)}"`);
