@@ -623,16 +623,25 @@ export async function interpretImage(
     }
 
     // ================================================================
-    // ★★★ 2단계: geometry/table → AI 직접 SVG 생성
-    // 구조화된 JSON(vertices/segments)으로는 호(arc), 곡선 등을 표현 못함
-    // GPT-4o에게 원본 이미지를 보고 직접 SVG를 그리게 함
+    // ★★★ 2단계: AI SVG 생성 — 코드 렌더러가 못 그리는 경우에만
+    // geometry는 1단계 좌표로 코드 렌더러가 그리는 게 더 정확함
+    // table/diagram 또는 geometry인데 좌표 데이터가 부족한 경우만 AI SVG
     // ================================================================
-    if (
+    const hasGoodCoordinates = result.figureType === 'geometry' &&
+      result.rendering?.type === 'geometry' &&
+      (result.rendering as GeometryRendering).vertices?.length >= 3 &&
+      (result.rendering as GeometryRendering).segments?.length >= 2;
+
+    const needsAiSvg = !hasGoodCoordinates &&
       (result.figureType === 'geometry' || result.figureType === 'table' || result.figureType === 'diagram') &&
-      result.confidence >= 0.3
-    ) {
-      // ★ geometry도 2단계 SVG 생성 실행 (노란 음영, 점선 치수 등 스타일 규칙 적용)
-      console.log(`[Vision] ★★ 2단계: ${result.figureType} → AI 직접 SVG 생성 시작`);
+      result.confidence >= 0.3;
+
+    if (hasGoodCoordinates) {
+      console.log(`[Vision] ★ 코드 렌더러 사용 (vertices: ${(result.rendering as GeometryRendering).vertices.length}, segments: ${(result.rendering as GeometryRendering).segments?.length || 0})`);
+    }
+
+    if (needsAiSvg) {
+      console.log(`[Vision] ★★ 2단계: ${result.figureType} → AI SVG 생성 (좌표 데이터 부족)`);
       try {
         const svgResult = await generateSvgStep2(imageUrl, result, context);
         if (svgResult) {
