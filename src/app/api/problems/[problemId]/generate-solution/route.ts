@@ -314,6 +314,50 @@ JSON 형식: { "finalAnswer": "최종 정답" }`;
         };
 
         console.log(`[generate-solution] Verification: ${match ? '✅ MATCH' : '⚠️ MISMATCH'} — Sonnet: "${sonnetAnswer}" vs Gemini: "${geminiAnswer}"`);
+
+        // ★ 불일치 시 Gemini로 재풀이 → 검산 결과로 교차 수정
+        if (!match && geminiAnswer) {
+          console.log(`[generate-solution] 불일치 → Gemini 재풀이 요청`);
+          try {
+            const resolvePrompt = `다음 수학 문제를 풀어주세요. 단계별 풀이와 최종 정답을 JSON으로 응답하세요.
+
+${contentForPrompt}
+
+두 AI가 서로 다른 답을 냈습니다:
+- AI-A 답: ${sonnetAnswer}
+- AI-B 답: ${geminiAnswer}
+
+정확한 풀이와 정답을 제공하세요.
+JSON: {"finalAnswer": "최종정답", "steps": ["풀이 단계1", "풀이 단계2", ...], "correctAI": "A 또는 B"}`;
+
+            const resolveResult = await verifyModel.generateContent(resolvePrompt);
+            const resolveText = resolveResult.response.text()?.trim() || '';
+            const resolveClean = resolveText.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+            const resolveParsed = parseJsonResponse(resolveClean);
+
+            if (resolveParsed?.finalAnswer) {
+              const resolvedAnswer = String(resolveParsed.finalAnswer).trim();
+              console.log(`[generate-solution] 검산 결과: ${resolvedAnswer} (correctAI: ${resolveParsed.correctAI || '?'})`);
+
+              // Gemini 검산 답으로 교체
+              solution.finalAnswer = resolvedAnswer;
+              verification.verified = true;
+              verification.verifyAnswer = resolvedAnswer;
+              verification.mismatchFlag = false;
+
+              // Gemini 풀이 단계가 있으면 해설에 추가
+              if (resolveParsed.steps && Array.isArray(resolveParsed.steps)) {
+                solution.steps = resolveParsed.steps.map((s: string, i: number) => ({
+                  step_number: i + 1,
+                  description: s,
+                  math_expression: '',
+                }));
+              }
+            }
+          } catch (resolveErr) {
+            console.error('[generate-solution] 검산 실패:', resolveErr);
+          }
+        }
       } catch (e) {
         console.error('[generate-solution] Verification failed:', e);
       }
