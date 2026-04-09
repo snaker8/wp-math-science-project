@@ -1494,7 +1494,7 @@ async function generateSvgStep2(
       let rawResponse: string;
 
       if (provider === 'claude') {
-        console.log(`[Vision] 2단계 SVG: Claude Sonnet 사용`);
+        console.log(`[Vision] 2단계 SVG: ${CLAUDE_MODEL} 사용`);
         rawResponse = await callClaudeVision(imageUrl, SVG_GENERATION_PROMPT, svgUserPrompt, 2, 2000);
       } else if (provider === 'gpt') {
         console.log(`[Vision] 2단계 SVG: GPT-4o 사용`);
