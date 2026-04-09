@@ -43,6 +43,10 @@ const IGNORED_PATHS = [
 ];
 
 export async function middleware(request: NextRequest) {
+  // ★ 개발 중 로그인 비활성화 — 모든 경로 통과
+  return NextResponse.next();
+
+  /* --- 로그인 활성화 시 아래 주석 해제 ---
   const { pathname } = request.nextUrl;
 
   // 정적 파일 및 무시할 경로 스킵
@@ -114,6 +118,7 @@ function getRoleBasedRedirect(role: UserRole, baseUrl: string): URL {
 
   return new URL(redirectPaths[role] || '/dashboard', baseUrl);
 }
+--- 로그인 활성화 시 여기까지 주석 해제 --- */
 
 // 미들웨어가 실행될 경로 설정
 export const config = {
