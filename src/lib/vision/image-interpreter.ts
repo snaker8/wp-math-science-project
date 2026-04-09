@@ -30,8 +30,8 @@ const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY ||
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
-// 환경변수로 모델 전환: 'gemini' | 'gpt' | 'claude' | 'glm' (기본: gemini — GPT는 fallback)
-const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
+// 환경변수로 모델 전환: 'gpt' | 'gemini' | 'claude' | 'glm' (기본: gpt — 코드 렌더러 정확도 최고)
+const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gpt') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Opus와 결과 동일 — Sonnet 유지
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
