@@ -1419,9 +1419,7 @@ function buildSectorSvg(geo: GeometryRendering): string | null {
     lines.push(`  <!-- 왼쪽 반지름 (실선) -->`);
     lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${oLSvg.x}" y2="${oLSvg.y}" stroke="#374151" stroke-width="2"/>`);
 
-    // 오른쪽 반지름 (실선: O → C)
-    lines.push(`  <!-- 오른쪽 반지름 (실선) -->`);
-    lines.push(`  <line x1="${cSvg.x}" y1="${cSvg.y}" x2="${oRSvg.x}" y2="${oRSvg.y}" stroke="#374151" stroke-width="2"/>`);
+    // 오른쪽 반지름: 실선 제거 — r₁, r₂ 점선으로만 표시 (원본 일치)
 
     // ★ r₁, r₂ 표시: O→A 점선(r₁), O→C 점선(r₂) — 원본 그대로
     // r₁: O에서 오른쪽 내부점(A)까지 점선
