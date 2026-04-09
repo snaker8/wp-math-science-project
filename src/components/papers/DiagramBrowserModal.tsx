@@ -222,8 +222,11 @@ export function DiagramBrowserModal({
           </div>
         )}
 
-        {/* 필터 바 (browse 탭) */}
-        {activeTab === 'browse' && <div className="px-6 py-3 border-b border-subtle flex items-center gap-3">
+        {/* browse 탭 전체 */}
+        {activeTab === 'browse' && (
+          <>
+        {/* 필터 바 */}
+        <div className="px-6 py-3 border-b border-subtle flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-content-muted" />
             <input
@@ -255,9 +258,6 @@ export function DiagramBrowserModal({
           </button>
         </div>
 
-        </div>}
-
-        {activeTab === 'browse' && <>
         {/* 현재 이미지 비교 */}
         {currentImageUrl && (
           <div className="px-6 py-3 border-b border-subtle">
@@ -380,7 +380,8 @@ export function DiagramBrowserModal({
           )}
         </div>
 
-        </>}
+          </>
+        )}
 
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-subtle flex items-center justify-between">
