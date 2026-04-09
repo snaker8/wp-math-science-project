@@ -158,7 +158,27 @@ async function processPDFDocument(
 
   try {
     const mathpix = getMathpixClient();
-    const buffer = Buffer.from(fileBuffer);
+    let buffer = Buffer.from(fileBuffer);
+
+    // ★ OCR 전 PDF 낙서 제거 전처리
+    try {
+      const fd = new FormData();
+      fd.append('file', new Blob([buffer], { type: 'application/pdf' }), 'exam.pdf');
+      fd.append('aggressiveness', '0.5');
+      const cleanRes = await fetch('http://localhost:8200/clean-pdf', {
+        method: 'POST',
+        body: fd,
+      });
+      if (cleanRes.ok) {
+        const cleanData = await cleanRes.json();
+        if (cleanData.cleaned && cleanData.pdf_base64) {
+          buffer = Buffer.from(cleanData.pdf_base64, 'base64');
+          console.log(`[OCR] PDF 낙서 제거: ${cleanData.cleaned_pages}/${cleanData.total_pages} 페이지, 평균 ${(cleanData.avg_removed_ratio * 100).toFixed(1)}% 제거`);
+        }
+      }
+    } catch {
+      console.log('[OCR] PDF 낙서 제거 건너뜀 (image-pipeline 서버 미실행)');
+    }
 
     if (onProgress) onProgress(20);
 
