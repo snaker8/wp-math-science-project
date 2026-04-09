@@ -631,10 +631,12 @@ export async function interpretImage(
     // geometry는 1단계 좌표로 코드 렌더러가 그리는 게 더 정확함
     // table/diagram 또는 geometry인데 좌표 데이터가 부족한 경우만 AI SVG
     // ================================================================
-    const hasGoodCoordinates = result.figureType === 'geometry' &&
-      result.rendering?.type === 'geometry' &&
-      (result.rendering as GeometryRendering).vertices?.length >= 3 &&
-      (result.rendering as GeometryRendering).segments?.length >= 2;
+    // ★ 코드 렌더러 사용 조건: 직선만으로 그릴 수 있는 geometry
+    const geo = result.rendering?.type === 'geometry' ? result.rendering as GeometryRendering : null;
+    const hasCirclesOrArcs = geo?.circles?.length > 0 ||
+      /호|부채꼴|원|반원|arc|circle|sector/i.test(result.description || '');
+    const hasGoodCoordinates = result.figureType === 'geometry' && geo &&
+      geo.vertices?.length >= 3 && geo.segments?.length >= 2 && !hasCirclesOrArcs;
 
     const needsAiSvg = !hasGoodCoordinates &&
       (result.figureType === 'geometry' || result.figureType === 'table' || result.figureType === 'diagram') &&
