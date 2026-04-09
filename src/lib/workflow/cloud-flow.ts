@@ -160,20 +160,18 @@ async function processPDFDocument(
     const mathpix = getMathpixClient();
     let buffer = Buffer.from(fileBuffer);
 
-    // ★ OCR 전 PDF 낙서 제거 전처리
+    // ★ OCR 전 PDF 낙서 제거 전처리 (base64 방식)
     try {
-      const fd = new FormData();
-      fd.append('file', new Blob([buffer], { type: 'application/pdf' }), 'exam.pdf');
-      fd.append('aggressiveness', '0.5');
-      const cleanRes = await fetch('http://localhost:8200/clean-pdf', {
+      const cleanRes = await fetch('http://localhost:8200/clean-pdf-base64', {
         method: 'POST',
-        body: fd,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdf_base64: buffer.toString('base64'), aggressiveness: 0.5 }),
       });
       if (cleanRes.ok) {
         const cleanData = await cleanRes.json();
         if (cleanData.cleaned && cleanData.pdf_base64) {
           buffer = Buffer.from(cleanData.pdf_base64, 'base64');
-          console.log(`[OCR] PDF 낙서 제거: ${cleanData.cleaned_pages}/${cleanData.total_pages} 페이지, 평균 ${(cleanData.avg_removed_ratio * 100).toFixed(1)}% 제거`);
+          console.log(`[OCR] PDF 낙서 제거: ${cleanData.cleaned_pages}페이지, 평균 ${(cleanData.avg_removed_ratio * 100).toFixed(1)}% 제거`);
         }
       }
     } catch {
@@ -672,16 +670,12 @@ async function processImageDocument(
     const mathpix = getMathpixClient();
     let buffer = Buffer.from(fileBuffer);
 
-    // ★ OCR 전 낙서 제거 전처리 (image-pipeline 서버 호출)
+    // ★ OCR 전 낙서 제거 전처리 (base64 방식)
     try {
-      const cleanRes = await fetch('http://localhost:8200/clean-handwriting', {
+      const cleanRes = await fetch('http://localhost:8200/clean-handwriting-base64', {
         method: 'POST',
-        body: (() => {
-          const fd = new FormData();
-          fd.append('file', new Blob([buffer], { type: 'image/png' }), 'exam.png');
-          fd.append('aggressiveness', '0.5');
-          return fd;
-        })(),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: buffer.toString('base64'), aggressiveness: 0.5 }),
       });
       if (cleanRes.ok) {
         const cleanData = await cleanRes.json();

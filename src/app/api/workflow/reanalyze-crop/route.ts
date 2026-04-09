@@ -291,16 +291,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 0. 낙서 제거 전처리
+    // 0. 낙서 제거 전처리 (base64 방식 — FormData 호환 문제 해결)
     let cleanedBase64 = imageBase64;
     try {
-      const fd = new FormData();
-      const imgBuffer = Buffer.from(imageBase64, 'base64');
-      fd.append('file', new Blob([imgBuffer], { type: 'image/png' }), 'crop.png');
-      fd.append('aggressiveness', '0.5');
-      const cleanRes = await fetch('http://localhost:8200/clean-handwriting', {
+      const cleanRes = await fetch('http://localhost:8200/clean-handwriting-base64', {
         method: 'POST',
-        body: fd,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: imageBase64, aggressiveness: 0.5 }),
       });
       if (cleanRes.ok) {
         const cleanData = await cleanRes.json();
