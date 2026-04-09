@@ -285,7 +285,7 @@ JSON:
       try {
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(geminiKey);
-        const geminiModelName = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+        const geminiModelName = 'gemini-3-flash-preview'; // 검증은 정확도가 중요 → Flash (Lite 아님)
         const verifyModel = genAI.getGenerativeModel({
           model: geminiModelName,
           generationConfig: { temperature: 0.0, maxOutputTokens: 500 },
