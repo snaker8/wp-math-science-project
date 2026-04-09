@@ -34,8 +34,8 @@ const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 // 모델 옵션:
-// - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%, CharXiv 80.3%)
-// - 'gemini-3.1-flash-lite-preview' — 가장 빠름, 비용 최저 (비전 약간 약함)
+// - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%) — 테스트 중
+// - 'gemini-3.1-flash-lite-preview' — 이전 기본 (graph→photo 오분류 이슈로 Flash 3 대신 사용했음)
 // - 'gemini-2.5-pro' — 최고 정확도 (느림/비쌈)
 
 // ============================================================================
