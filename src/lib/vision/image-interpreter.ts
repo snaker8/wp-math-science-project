@@ -34,10 +34,10 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Opus와 결과 동일 — Sonnet 유지
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
-// ★ 2.5 Pro (GA): 비전 최고 정확도 + JSON 안정
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+// ★ Flash-Lite: JSON 안정 + 그래프 정상 인식 (확정)
+// ❌ gemini-2.5-pro: JSON 잘림 (2026.04)
 // ❌ gemini-3-flash-preview: JSON 잘림 (2026.04)
-// ❌ gemini-3.1-flash-lite-preview: 분석 디테일 부족
 const GLM_MODEL = 'thudm/glm-4.1v-9b-thinking'; // OpenRouter 경유
 // 모델 옵션:
 // - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%) — 테스트 중
