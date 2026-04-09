@@ -285,12 +285,12 @@ ${content.slice(0, 1500)}`;
               try {
                 const { data: msType } = await supabaseAdmin
                   .from('mathsecr_types')
-                  .select('type_name')
-                  .eq('type_code', newCls.typeCode)
+                  .select('full_path')
+                  .eq('code', newCls.typeCode)
                   .limit(1)
                   .single();
-                if (msType?.type_name) {
-                  newCls.typeName = msType.type_name;
+                if (msType?.full_path) {
+                  newCls.typeName = msType.full_path;
                 }
               } catch { /* ignore */ }
             }
