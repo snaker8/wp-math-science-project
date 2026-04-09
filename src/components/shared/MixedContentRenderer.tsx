@@ -560,9 +560,9 @@ function preprocessMathpixContent(text: string): string {
   // 1-2. \[...\] → $$...$$
   result = result.replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`);
 
-  // 1-3. 고립된 $ + \begin 정리
-  result = result.replace(/\$\\begin\{/g, '\\begin{');
-  result = result.replace(/\\end\{([^}]+)\}\s*\$/g, '\\end{$1}');
+  // 1-3. 고립된 $ + \begin 정리 — $$도 처리
+  result = result.replace(/\${1,2}\\begin\{/g, '\\begin{');
+  result = result.replace(/\\end\{([^}]+)\}\s*\${1,2}/g, '\\end{$1}');
 
   // 1-3b. ★ \displaystyle \begin{cases} $ ... \end{cases} 패턴 정리
   // Mathpix가 \displaystyle + $ 를 섞어서 출력하는 경우
