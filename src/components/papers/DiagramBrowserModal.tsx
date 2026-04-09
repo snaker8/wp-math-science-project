@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Search, Loader2, Check, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { X, Search, Loader2, Check, Image as ImageIcon, RefreshCw, Upload } from 'lucide-react';
 
 interface DiagramImage {
   id: string;
@@ -35,6 +35,7 @@ export function DiagramBrowserModal({
   currentImageUrl,
   problemNumber,
 }: DiagramBrowserModalProps) {
+  const [activeTab, setActiveTab] = useState<'browse' | 'upload'>('browse');
   const [diagrams, setDiagrams] = useState<DiagramImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -43,6 +44,11 @@ export function DiagramBrowserModal({
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 30;
+
+  // 업로드 탭 상태
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const fetchDiagrams = useCallback(async () => {
     setLoading(true);
@@ -97,26 +103,127 @@ export function DiagramBrowserModal({
     }
   };
 
+  // 파일 선택 시 미리보기
+  const handleFileSelect = (file: File) => {
+    setUploadFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setUploadPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // 업로드 + Supabase 저장 + 도식 교체
+  const handleUploadAndReplace = async () => {
+    if (!uploadFile) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      if (problemNumber) formData.append('problemNumber', String(problemNumber));
+
+      const res = await fetch('/api/diagram-images/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error('업로드 실패');
+      const data = await res.json();
+
+      if (data.publicUrl) {
+        onSelect(data.publicUrl);
+      }
+    } catch (err) {
+      alert('이미지 업로드 실패: ' + (err instanceof Error ? err.message : ''));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-surface-card border border-subtle rounded-2xl shadow-2xl w-[900px] max-h-[85vh] flex flex-col">
-        {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
-          <div className="flex items-center gap-3">
-            <ImageIcon className="h-5 w-5 text-teal-400" />
-            <h2 className="text-lg font-bold text-content-primary">
-              도식 이미지 교체 {problemNumber ? `— ${problemNumber}번 문제` : ''}
-            </h2>
+        {/* 헤더 + 탭 */}
+        <div className="px-6 py-4 border-b border-subtle">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <ImageIcon className="h-5 w-5 text-teal-400" />
+              <h2 className="text-lg font-bold text-content-primary">
+                도식 이미지 교체 {problemNumber ? `— ${problemNumber}번 문제` : ''}
+              </h2>
+            </div>
+            <button onClick={onClose} className="p-1 rounded hover:bg-surface-raised transition-colors">
+              <X className="h-5 w-5 text-content-muted" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-raised transition-colors">
-            <X className="h-5 w-5 text-content-muted" />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('browse')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'browse' ? 'bg-teal-500/15 text-teal-400' : 'text-content-muted hover:text-content-secondary'
+              }`}
+            >
+              DB 검색
+            </button>
+            <button
+              onClick={() => setActiveTab('upload')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'upload' ? 'bg-teal-500/15 text-teal-400' : 'text-content-muted hover:text-content-secondary'
+              }`}
+            >
+              직접 업로드
+            </button>
+          </div>
         </div>
 
-        {/* 필터 바 */}
-        <div className="px-6 py-3 border-b border-subtle flex items-center gap-3">
+        {/* 업로드 탭 */}
+        {activeTab === 'upload' && (
+          <div className="flex-1 overflow-y-auto px-6 py-8">
+            <div
+              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f); }}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => document.getElementById('diagram-upload-input')?.click()}
+              className="border-2 border-dashed border-subtle rounded-xl p-12 text-center hover:border-teal-500/50 transition-colors cursor-pointer"
+            >
+              <input
+                id="diagram-upload-input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+                className="hidden"
+              />
+              {uploadPreview ? (
+                <div className="space-y-4">
+                  <img src={uploadPreview} alt="미리보기" className="mx-auto max-h-64 rounded-lg border border-subtle object-contain bg-white" />
+                  <p className="text-sm text-content-secondary">{uploadFile?.name}</p>
+                  <p className="text-xs text-content-muted">다른 이미지를 선택하려면 클릭하세요</p>
+                </div>
+              ) : (
+                <div>
+                  <Upload size={40} className="mx-auto text-content-muted mb-3" />
+                  <p className="text-sm text-content-secondary">이미지를 드래그하거나 클릭하여 선택</p>
+                  <p className="text-xs text-content-muted mt-1">PNG, JPG 지원 — 서버에 자동 저장됩니다</p>
+                </div>
+              )}
+            </div>
+
+            {uploadPreview && (
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={handleUploadAndReplace}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white font-medium text-sm hover:bg-teal-500 disabled:opacity-50 transition-colors"
+                >
+                  {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {isUploading ? '업로드 중...' : '이미지 교체'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 필터 바 (browse 탭) */}
+        {activeTab === 'browse' && <div className="px-6 py-3 border-b border-subtle flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-content-muted" />
             <input
@@ -148,6 +255,9 @@ export function DiagramBrowserModal({
           </button>
         </div>
 
+        </div>}
+
+        {activeTab === 'browse' && <>
         {/* 현재 이미지 비교 */}
         {currentImageUrl && (
           <div className="px-6 py-3 border-b border-subtle">
@@ -269,6 +379,8 @@ export function DiagramBrowserModal({
             </>
           )}
         </div>
+
+        </>}
 
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-subtle flex items-center justify-between">
