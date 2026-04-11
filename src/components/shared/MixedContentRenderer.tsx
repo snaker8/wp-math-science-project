@@ -596,7 +596,13 @@ function preprocessMathpixContent(text: string): string {
   result = result.replace(/#([a-zA-Z]+)/g, '\\$1');
 
   // 1-1. \(...\) → $...$ (인라인 수식, Mathpix 스타일)
+  // ★ \left(, \right) 등 LaTeX 명령어 뒤의 괄호는 구분자가 아님
+  //    먼저 임시 치환 → \( \) 변환 → 복원
+  result = result.replace(/\\left\(/g, '\uE001');
+  result = result.replace(/\\right\)/g, '\uE002');
   result = result.replace(/\\\((.+?)\\\)/gs, (_, inner) => `$${inner.trim()}$`);
+  result = result.replace(/\uE001/g, '\\left(');
+  result = result.replace(/\uE002/g, '\\right)');
   // 1-1b. 불완전한 \( → $
   result = result.replace(/\\\(([^$\n]+?)$/gm, (_, inner) => `$${inner.trim()}$`);
   result = result.replace(/^([^$\n]+?)\\\)/gm, (_, inner) => `$${inner.trim()}$`);
