@@ -39,15 +39,16 @@ const InlineDesmosGraph = dynamic(
 // Types
 // ============================================================================
 
-// 그래프/도형 분석 결과 (GPT-4o Vision)
+// 그래프/도형 분석 결과 (Gemini Vision)
 interface GraphData {
-  type: 'function' | 'geometry' | 'coordinate' | 'none';
+  type: 'function' | 'geometry' | 'coordinate' | 'sketch' | 'none';
   expressions?: string[];
   xRange?: [number, number];
   yRange?: [number, number];
   points?: { x: number; y: number; label?: string }[];
   description?: string;
   imageBbox?: { top: number; left: number; bottom: number; right: number };
+  svg?: string;  // ★ sketch 타입: 보이는 대로 생성한 SVG
 }
 
 // ★ 사용자 삽입 이미지 메타 (재분석 시 보존용)
@@ -1517,7 +1518,19 @@ function ProblemDetailPanel({
         {/* ===== 자산화된 문제: OCR 텍스트 + 원본 이미지 + 선택지 ===== */}
         {problem.content && problem.status !== 'pending' && (() => {
           // OCR 텍스트 전처리
-          let displayContent = problem.content.replace(/\n{3,}/g, '\n\n').trim();
+          if (problem.content.includes('displaystyle')) {
+            console.log(`[DEBUG] 문제 ${problem.number} displaystyle 포함:`, JSON.stringify(problem.content.substring(0, 300)));
+          }
+          let displayContent = problem.content
+            .replace(/\n{3,}/g, '\n\n').trim();
+          // ★ $ 밖의 \displaystyle 수식을 $$...$$ 로 감싸기 (여러 줄 지원)
+          // 괄호가 모두 닫힐 때까지 수집
+          displayContent = displayContent.replace(
+            /(?<!\$)\\displaystyle\s*([\s\S]*?)(?=\n\s*\n|\n\s*[①②③④⑤\d]+[.)]\s|$)/g,
+            (_, expr) => `$$${expr.trim()}$$`
+          );
+          // ★ 이미 $ 안에 있는 \displaystyle은 단순 제거
+          displayContent = displayContent.replace(/\\displaystyle\s*/g, '');
 
           return (
               <div className="px-5 pb-3">

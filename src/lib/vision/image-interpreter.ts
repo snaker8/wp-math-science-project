@@ -19,6 +19,10 @@ import {
   createVPEnhancedPrompt,
   compareResults,
 } from './visual-prompting';
+import {
+  fetchCorrectionExamples,
+  buildCorrectionPromptBlock,
+} from './correction-examples';
 
 // ============================================================================
 // Configuration
@@ -294,6 +298,8 @@ CRITICAL OUTPUT RULES:
 - Keep it SIMPLE and CLEAN — like a professional digital textbook figure
 - ★★★ The ORIGINAL IMAGE is the ground truth. Always match the image, not just the text description.
 
+★ NET DIAGRAMS (전개도): Draw each face as a separate rectangle in cross shape. Fold lines = stroke-dasharray="4,3". Fill 85% of viewBox.
+
 SVG STYLE RULES FOR GEOMETRY:
 1. viewBox="0 0 400 300" width="100%", transparent background
 2. ★ SIZE: Fill 80-90% of the viewBox. The figure should be LARGE, not tiny.
@@ -353,6 +359,74 @@ SVG STYLE RULES FOR TABLES:
    - Only reproduce PRINTED text/numbers. Any letter that looks handwritten (like a scribbled 'p', 'β', etc.) = EMPTY cell
    - The original image may have student handwriting on a printed table — IGNORE all handwriting
 7. Empty cells: draw a small rect (20x20, stroke="#9ca3af", fill="none", rx="2") centered in the cell`;
+
+// ============================================================================
+// ★★ 전개도(Net Diagram) 전용 SVG 프롬프트
+// ============================================================================
+
+const NET_DIAGRAM_SVG_PROMPT = `You are a math figure reproduction specialist.
+Your ONLY job: reproduce the net diagram (전개도) from the image as CLEAN SVG.
+
+OUTPUT: ONLY valid SVG code (<svg>...</svg>). No explanations.
+
+★★★ CRITICAL STEPS — follow in order:
+1. COUNT the exact number of rectangular faces and their positions:
+   - How many faces LEFT of center? (0, 1, 2...)
+   - How many faces RIGHT of center? (0, 1, 2...)
+   - How many faces ABOVE center? (0, 1...)
+   - How many faces BELOW center? (0, 1...)
+   Example: "center + left 1 + right 2 + top 1 + bottom 1 = 6 faces"
+   ★ Count EACH SEPARATE face, even if they look similar or are empty.
+
+2. NOTE the text/label in EACH face (which face has what text, which is empty)
+
+3. DRAW each face as a SEPARATE rectangle with fill="white":
+   - viewBox="0 0 500 400" width="100%"
+   - All faces in the HORIZONTAL row: same height, aligned top/bottom edges
+   - All faces in the VERTICAL column: same width, aligned left/right edges
+   - Proportions must match the original image exactly
+   - Fill 80% of viewBox — figure should be LARGE
+
+4. LINE RULES (★★★ CRITICAL):
+   - OUTER edges (edges that touch the OUTSIDE of the net): stroke="#374151" stroke-width="2" SOLID
+   - INNER edges (shared edges BETWEEN two adjacent faces = fold lines): stroke="#374151" stroke-width="1.5" stroke-dasharray="8,5" (DASHED)
+   - Every adjacent face pair has a shared edge → that shared edge MUST be DASHED
+   - The outer boundary of the entire net shape = SOLID lines
+
+5. Labels: font-family="sans-serif" font-size="18" font-weight="bold" fill="#1f2937"
+   - Use <text> with text-anchor="middle" and dominant-baseline="central"
+   - Place each label CENTERED in its face
+
+★★★ IMPLEMENTATION METHOD (MUST FOLLOW):
+Step A: Draw each face as <rect fill="white" stroke="none"> (NO border on rects!)
+Step B: Draw the OUTER boundary of the entire net as <path> or <polyline> with stroke="#374151" stroke-width="2" (SOLID)
+Step C: Draw each INNER fold line as a separate <line> with stroke="#374151" stroke-width="1.5" stroke-dasharray="8,5" (DASHED)
+
+★ Why: If you put stroke on <rect>, shared edges between faces become double-solid and hide the dashes.
+Instead: rects have NO stroke, outer boundary is ONE solid path, fold lines are separate dashed lines.
+
+★★★ FOLD LINE CHECKLIST — verify EVERY adjacent face pair has a dashed line:
+- For horizontal row with N faces: draw N-1 vertical dashed lines between them
+- For vertical column with N faces: draw N-1 horizontal dashed lines between them
+- Example: if horizontal row = [empty][A][empty][4a+2b], that's 4 faces → 3 vertical dashed lines
+- NEVER merge two adjacent faces into one big rectangle. Each face = separate rect.`;
+
+function buildNetDiagramPrompt(context?: string): string {
+  const parts: string[] = [];
+  parts.push('이 수학 문제의 전개도를 원본 이미지와 정확히 같은 구조로 SVG로 그려주세요.');
+  parts.push('★ 면의 개수(왼쪽 몇개, 오른쪽 몇개, 위 몇개, 아래 몇개), 각 면의 텍스트, 점선(접는 선) 위치를 이미지에서 정확히 파악하세요.');
+  // ★ 직육면체 = 6면, 정육면체 = 6면 — 면 개수 힌트
+  if (context) {
+    const ctx = context.substring(0, 400);
+    if (/직육면체|rectangular\s*prism/i.test(ctx)) {
+      parts.push('★★★ 직육면체 전개도 = 반드시 6면! 십자형 배치: 가로 4면(왼쪽1 + 중앙 + 오른쪽2) + 위1 + 아래1. 오른쪽은 면이 2개: 빈면 + 텍스트면. 각 면을 별도 사각형으로 그리고 면 사이에 점선 넣으세요.');
+    } else if (/정육면체|cube/i.test(ctx)) {
+      parts.push('★★★ 정육면체 전개도 = 반드시 6면!');
+    }
+    parts.push(`\n문제 내용: "${ctx}"`);
+  }
+  return parts.join('\n');
+}
 
 // ============================================================================
 // 수식 자동 감지 (content_latex에서 함수/그래프 정보 추출)
@@ -635,8 +709,11 @@ export async function interpretImage(
     const geo = result.rendering?.type === 'geometry' ? result.rendering as GeometryRendering : null;
     const hasCirclesOrArcs = geo?.circles?.length > 0 ||
       /호|부채꼴|원|반원|arc|circle|sector/i.test(result.description || '');
+    // ★ 전개도 감지: 코드 렌더러로 그릴 수 없음 → 2단계 AI SVG 강제
+    const isNetDiagram = /전개도|net\s*diagram/i.test(result.description || '') ||
+      /전개도/i.test(context || '');
     const hasGoodCoordinates = result.figureType === 'geometry' && geo &&
-      geo.vertices?.length >= 3 && geo.segments?.length >= 2 && !hasCirclesOrArcs;
+      geo.vertices?.length >= 3 && geo.segments?.length >= 2 && !hasCirclesOrArcs && !isNetDiagram;
 
     const needsAiSvg = !hasGoodCoordinates &&
       (result.figureType === 'geometry' || result.figureType === 'table' || result.figureType === 'diagram') &&
@@ -652,14 +729,13 @@ export async function interpretImage(
         const svgResult = await generateSvgStep2(imageUrl, result, context);
         if (svgResult) {
           // rendering.svg에 저장 → figure-renderer.ts가 SVG 우선 사용
-          if (result.rendering && result.rendering.type === 'geometry') {
-            (result.rendering as GeometryRendering).svg = svgResult;
-            console.log(`[Vision] ★★ 2단계 SVG 생성 성공! (${svgResult.length}자)`);
-          } else if (result.rendering) {
-            // table/diagram도 svg 필드에 저장
+          if (result.rendering) {
             (result.rendering as unknown as Record<string, unknown>).svg = svgResult;
-            console.log(`[Vision] ★★ 2단계 SVG 생성 성공 (${result.figureType})! (${svgResult.length}자)`);
+          } else {
+            // rendering이 없으면 생성
+            result.rendering = { type: 'geometry', svg: svgResult, vertices: [], segments: [] } as any;
           }
+          console.log(`[Vision] ★★ 2단계 SVG 저장 완료 (${result.figureType})! (${svgResult.length}자)`);
         }
       } catch (svgErr) {
         console.warn(`[Vision] 2단계 SVG 생성 실패 (프로그래밍 SVG 폴백 사용):`, svgErr);
@@ -1010,7 +1086,7 @@ ${detected?.forceGraph ? '★★★ 이 이미지에는 수학 그래프/도형/
 
       if (!text) throw new Error('Gemini returned empty response');
 
-      console.log(`[Vision] Gemini raw (first 500):`, text.substring(0, 500));
+      console.log(`[Vision] Gemini raw (first 1500):`, text.substring(0, 1500));
 
       const parsed = parseVisionResponse(text, imageUrl);
 
@@ -1220,6 +1296,12 @@ function buildSvgPrompt(parsed: InterpretedFigure, context?: string): string {
       parts.push(`★★ Use SVG arc commands for curves. Replace hatching with solid yellow fill rgba(250,204,21,0.35).`);
       parts.push(`★★ ORIENTATION: Match the original EXACTLY. Symmetric = centered and upright. Do NOT tilt.`);
       parts.push(`★★ SIZE: SCALE the figure to fill 80-90% of the 400×300 viewBox. Do NOT use the raw reference coordinates as SVG coordinates.`);
+      // ★ 자동생성 라벨 감지 → 잘못된 데이터이므로 Claude에 전달하지 않음
+      const hasAutoLabels = geo.vertices.some(v => /_tl|_tr|_bl|_br|Top|Bot|Left|Right|Far/.test(v.label || ''));
+      if (hasAutoLabels) {
+        // Gemini 데이터 전부 스킵 — 이미지만으로 그리게 함
+        return parts.join('\n');
+      }
       if (geo.vertices.length > 0) {
         // ★ Y축 반전: 수학 좌표계(y↑) → SVG 좌표계(y↓)
         const maxY = Math.max(...geo.vertices.map(v => v.y), 0);
@@ -1490,7 +1572,45 @@ async function generateSvgStep2(
     console.warn(`[Vision] 프로그래밍 SVG 실패, AI 폴백:`, progErr);
   }
 
-  const svgUserPrompt = buildSvgPrompt(parsed, context);
+  // ★ 전개도 감지 → 전용 프롬프트 (면 개수/위치를 구체적으로 분석)
+  const isNetDiagram = /전개도|net\s*diagram/i.test(parsed.description || '') ||
+    /전개도/i.test(context || '');
+  // ★ autoLabels 감지: Gemini 데이터가 엉터리 → 단순 프롬프트
+  const geoCheck = parsed.rendering?.type === 'geometry' ? parsed.rendering as GeometryRendering : null;
+  const hasAutoLabelsForSvg = geoCheck?.vertices?.some(v => /Top|Bot|Left|Right|Far|_tl|_tr|_bl|_br/.test(v.label || ''));
+
+  let svgSystemPrompt: string;
+  let svgUserPrompt: string;
+
+  if (isNetDiagram) {
+    // ★★ 전개도: 전용 프롬프트 (면 개수, 위치, 텍스트를 정확히 분석)
+    svgSystemPrompt = NET_DIAGRAM_SVG_PROMPT;
+    svgUserPrompt = buildNetDiagramPrompt(context);
+    console.log(`[Vision] 2단계: ★ 전개도 전용 프롬프트 모드`);
+  } else if (hasAutoLabelsForSvg) {
+    svgSystemPrompt = `You are an SVG reproduction specialist. Look at the image and reproduce it as clean SVG code. Output ONLY valid SVG (starting with <svg, ending with </svg>). No explanations. Use viewBox="0 0 400 300". Fill 85% of viewBox. Use stroke="#374151" stroke-width="2". Dashed lines where the original shows dashes: stroke-dasharray="6,4". Labels: font-size="16" font-weight="bold" fill="#1f2937". White background for shapes.`;
+    svgUserPrompt = `이 수학 문제의 도형을 원본 이미지와 똑같이 SVG로 그려주세요. 원본의 비율, 점선 위치, 라벨을 정확히 재현하세요. SVG 코드만 출력하세요.`;
+    console.log(`[Vision] 2단계: 단순 프롬프트 모드 (autoLabels 감지)`);
+  } else {
+    svgSystemPrompt = SVG_GENERATION_PROMPT;
+    svgUserPrompt = buildSvgPrompt(parsed, context);
+  }
+
+  // ★ 교정 이력 few-shot 주입 (자동 학습)
+  try {
+    const corrections = await fetchCorrectionExamples({
+      figureType: parsed.figureType,
+      limit: 3,
+    });
+    if (corrections.length > 0) {
+      const block = buildCorrectionPromptBlock(corrections);
+      svgUserPrompt += block;
+      console.log(`[Vision] 2단계: ★ 교정 사례 ${corrections.length}건 few-shot 주입`);
+    }
+  } catch (corrErr) {
+    // 교정 조회 실패해도 SVG 생성은 계속 진행
+    console.warn('[Vision] 교정 사례 조회 실패 (무시):', corrErr);
+  }
 
   // ★ Claude 우선 (SVG 정확도 + 지시사항 준수 최고)
   // 도형 3~4개/시험지이므로 비용 부담 적음
@@ -1504,8 +1624,9 @@ async function generateSvgStep2(
       let rawResponse: string;
 
       if (provider === 'claude') {
-        console.log(`[Vision] 2단계 SVG: ${CLAUDE_MODEL} 사용`);
-        rawResponse = await callClaudeVision(imageUrl, SVG_GENERATION_PROMPT, svgUserPrompt, 2, 2000);
+        const mode = isNetDiagram ? ' (전개도 모드)' : hasAutoLabelsForSvg ? ' (단순 모드)' : '';
+        console.log(`[Vision] 2단계 SVG: ${CLAUDE_MODEL} 사용${mode}`);
+        rawResponse = await callClaudeVision(imageUrl, svgSystemPrompt, svgUserPrompt, 2, isNetDiagram ? 4000 : 2000);
       } else if (provider === 'gpt') {
         console.log(`[Vision] 2단계 SVG: GPT-4o 사용`);
         rawResponse = await callOpenAIVision(imageUrl, SVG_GENERATION_PROMPT, svgUserPrompt, false, 2, 2000);

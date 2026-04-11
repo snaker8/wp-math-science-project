@@ -543,6 +543,7 @@ export interface ExamListItem {
   status: string;
   problemCount: number;
   createdAt: string;
+  bookGroupId: string | null;
 }
 
 export function useExamList() {
@@ -551,43 +552,33 @@ export function useExamList() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchExams = useCallback(async () => {
-    if (!isSupabaseConfigured || !supabaseBrowser) {
-      console.log('[ExamList] Supabase not configured');
-      setExams([]);
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const { data, error: fetchError } = await supabaseBrowser
-        .from('exams')
-        .select('id, title, subject, exam_type, grade, status, total_points, created_at, exam_problems(count)')
-        .is('deleted_at', null)
-        // 클라우드 업로드 시험지도 시험관리에서 표시 (DRAFT 상태)
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (fetchError) {
-        console.error('[ExamList] Fetch error:', fetchError.message);
-        setError(fetchError.message);
+      // ★ API route 사용 (supabaseAdmin으로 RLS 바이패스)
+      const res = await fetch('/api/exams');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error('[ExamList] API error:', res.status, errData);
+        setError(errData.error || `HTTP ${res.status}`);
         setExams([]);
         return;
       }
 
+      const data = await res.json();
       setExams(
-        (data || []).map((e: any) => ({
+        (data.exams || []).map((e: any) => ({
           id: e.id,
           title: e.title,
           subject: e.subject || '공통수학1',
-          examType: e.exam_type || '학교기출',
+          examType: e.examType || '학교기출',
           grade: e.grade || '',
           status: e.status,
-          problemCount: e.exam_problems?.[0]?.count ?? 0,
-          createdAt: e.created_at,
+          problemCount: e.problemCount ?? 0,
+          createdAt: e.createdAt,
+          bookGroupId: e.bookGroupId || null,
         }))
       );
 
-      console.log(`[ExamList] Loaded ${data?.length || 0} exams`);
+      console.log(`[ExamList] Loaded ${data.exams?.length || 0} exams via API`);
     } catch (err) {
       console.error('[ExamList] Error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load exams');

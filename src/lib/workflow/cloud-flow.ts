@@ -160,23 +160,7 @@ async function processPDFDocument(
     const mathpix = getMathpixClient();
     let buffer = Buffer.from(fileBuffer);
 
-    // ★ OCR 전 PDF 낙서 제거 전처리 (base64 방식)
-    try {
-      const cleanRes = await fetch('http://localhost:8200/clean-pdf-base64', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdf_base64: buffer.toString('base64'), aggressiveness: 0.5 }),
-      });
-      if (cleanRes.ok) {
-        const cleanData = await cleanRes.json();
-        if (cleanData.cleaned && cleanData.pdf_base64) {
-          buffer = Buffer.from(cleanData.pdf_base64, 'base64');
-          console.log(`[OCR] PDF 낙서 제거: ${cleanData.cleaned_pages}페이지, 평균 ${(cleanData.avg_removed_ratio * 100).toFixed(1)}% 제거`);
-        }
-      }
-    } catch {
-      console.log('[OCR] PDF 낙서 제거 건너뜀 (image-pipeline 서버 미실행)');
-    }
+    // ★ 낙서 제거 비활성화 (OpenCV 방식이 인쇄체까지 삭제하는 문제)
 
     if (onProgress) onProgress(20);
 
@@ -490,8 +474,10 @@ function buildQuestionResult(
     })
     .join('\n');
 
+  // ★ \displaystyle 제거 (KaTeX 인라인 렌더링 깨짐 방지)
+  const noDisplayStyle = rawContentMmd.replace(/\\displaystyle\s*/g, '');
   // ★ 전각 괄호 → 반각 정규화 (Mathpix가 （1）형식으로 출력하는 경우)
-  const halfWidthMmd = rawContentMmd.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
+  const halfWidthMmd = noDisplayStyle.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
   // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (content_latex에도 원문자 반영)
   const contentMmd = normalizeChoiceParensForCloudFlow(halfWidthMmd);
 
@@ -670,24 +656,7 @@ async function processImageDocument(
     const mathpix = getMathpixClient();
     let buffer = Buffer.from(fileBuffer);
 
-    // ★ OCR 전 낙서 제거 전처리 (base64 방식)
-    try {
-      const cleanRes = await fetch('http://localhost:8200/clean-handwriting-base64', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: buffer.toString('base64'), aggressiveness: 0.5 }),
-      });
-      if (cleanRes.ok) {
-        const cleanData = await cleanRes.json();
-        if (cleanData.cleaned && cleanData.image_base64) {
-          buffer = Buffer.from(cleanData.image_base64, 'base64');
-          console.log(`[OCR] 낙서 제거 완료: ${(cleanData.removed_ratio * 100).toFixed(1)}% 제거`);
-        }
-      }
-    } catch {
-      // image-pipeline 서버 안 돌면 무시 — 원본으로 진행
-      console.log('[OCR] 낙서 제거 건너뜀 (image-pipeline 서버 미실행)');
-    }
+    // ★ 낙서 제거 비활성화 (OpenCV 방식이 인쇄체까지 삭제하는 문제)
 
     if (onProgress) onProgress(25);
 

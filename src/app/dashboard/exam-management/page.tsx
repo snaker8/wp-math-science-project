@@ -28,6 +28,7 @@ import {
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
+import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { downloadExamDocx } from '@/lib/export/docx-generator';
 import type { DocxProblem } from '@/lib/export/docx-generator';
 // HWPX는 /api/export/hwpx API로 서버사이드 생성
@@ -56,7 +57,9 @@ interface ExamProblem {
   figureSvg?: string;
   figureData?: InterpretedFigure;
   upscaledCropUrl?: string;
+  figureSource?: 'upscaled_crop' | 'ai_generated';
   images?: Array<{ url: string; type: string; label: string }>;
+  points?: number;
 }
 
 // ============================================================================
@@ -397,6 +400,14 @@ export default function ExamManagementPage() {
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
   const printRef = useRef<HTMLDivElement>(null);
 
+  // ★ 시험지 헤더 편집 필드
+  const [editInstitute, setEditInstitute] = useState('');  // 학원명
+  const [editExamTitle, setEditExamTitle] = useState('');   // 시험지명
+  const [editSubject, setEditSubject] = useState('');       // 과목
+  const [editExamType, setEditExamType] = useState('');     // 시험유형
+  const [editGrade, setEditGrade] = useState('');           // 학년
+  const [editTeacher, setEditTeacher] = useState('');       // 담당
+
   // === 자동 간격 측정 ===
   const measureRef = useRef<HTMLDivElement>(null);
   const [problemHeights, setProblemHeights] = useState<number[]>([]);
@@ -493,6 +504,7 @@ export default function ExamManagementPage() {
       figureSvg: p.figureSvg,
       figureData: p.figureData,
       upscaledCropUrl: p.upscaledCropUrl,
+      figureSource: p.figureSource,
       images: p.images,
     }));
   }, [dbProblems]);
@@ -524,7 +536,7 @@ export default function ExamManagementPage() {
   // 선택된 시험지 목록 (그룹 필터링)
   const groupExams = useMemo(() => {
     if (selectedGroupId === 'all' || !selectedGroupId) return examList;
-    return examList.filter((e: any) => e.book_group_id === selectedGroupId);
+    return examList.filter((e: any) => (e.bookGroupId || e.book_group_id) === selectedGroupId);
   }, [selectedGroupId, examList]);
 
   // 필터 변경 시 선택 초기화
@@ -542,6 +554,41 @@ export default function ExamManagementPage() {
   const selectedExam = useMemo(() => {
     return groupExams.find((e) => e.id === selectedExamId);
   }, [selectedExamId, groupExams]);
+
+  // ★ 시험지 선택 시 헤더 편집 필드 자동 기입
+  useEffect(() => {
+    if (selectedExam) {
+      // title에서 학원명/시험지명/과목/학년 등 자동 파싱
+      const title = selectedExam.title || '';
+      // 학원명: "경남고1" → "경남고"
+      const schoolMatch = title.match(/([가-힣]{1,6}(?:고|중|초|학원))\d*/);
+      setEditInstitute(schoolMatch ? schoolMatch[1] : '');
+      setEditExamTitle(title);
+      setEditSubject(selectedExam.subject || '공통수학1');
+      setEditExamType(selectedExam.examType || '학교기출');
+      setEditGrade(selectedExam.grade || '고1');
+      setEditTeacher('');
+    }
+  }, [selectedExam]);
+
+  // ★ 시험지 메타 수정 핸들러
+  const handleExamMetaChange = useCallback(async (field: string, value: string) => {
+    if (!selectedExamId) return;
+    try {
+      const res = await fetch(`/api/exams/${selectedExamId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (res.ok) {
+        refetchExams();
+      } else {
+        console.error('[ExamMeta] Update failed:', await res.text());
+      }
+    } catch (err) {
+      console.error('[ExamMeta] Error:', err);
+    }
+  }, [selectedExamId, refetchExams]);
 
   // ★ 시험지 삭제 핸들러
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1037,18 +1084,82 @@ export default function ExamManagementPage() {
                 {/* 시험지 뷰 */}
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-4 bg-surface-raised/30">
                   <div className="w-full max-w-[800px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-                    {/* 헤더 테이블 */}
+                    {/* 헤더 테이블 — 편집 가능 */}
                     <div className="border-b-2 border-gray-800 p-0">
                       <table className="w-full border-collapse text-black">
                         <tbody>
+                          {/* 1행: 학원명 + 시험지명 */}
                           <tr>
-                            <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50 text-center">과목</td>
-                            <td className="border border-gray-400 px-3 py-2 text-sm font-bold">{subjectFilter}</td>
-                            <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={3}>
-                              {selectedExam.title}
+                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학원명</td>
+                            <td className="border border-gray-400 px-1 py-1">
+                              <input
+                                type="text"
+                                value={editInstitute}
+                                onChange={(e) => setEditInstitute(e.target.value)}
+                                placeholder="학원명"
+                                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
+                              />
                             </td>
-                            <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50 text-center">담당</td>
-                            <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
+                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시험명</td>
+                            <td className="border border-gray-400 px-1 py-1" colSpan={2}>
+                              <input
+                                type="text"
+                                value={editExamTitle}
+                                onChange={(e) => setEditExamTitle(e.target.value)}
+                                onBlur={() => editExamTitle !== selectedExam.title && handleExamMetaChange('title', editExamTitle)}
+                                placeholder="시험지명"
+                                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
+                              />
+                            </td>
+                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">담당</td>
+                            <td className="border border-gray-400 px-1 py-1 w-20">
+                              <input
+                                type="text"
+                                value={editTeacher}
+                                onChange={(e) => setEditTeacher(e.target.value)}
+                                placeholder="선생님"
+                                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
+                              />
+                            </td>
+                          </tr>
+                          {/* 2행: 과목 + 시험유형 + 학년 */}
+                          <tr>
+                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">과목</td>
+                            <td className="border border-gray-400 px-1 py-1">
+                              <select
+                                value={editSubject}
+                                onChange={(e) => { setEditSubject(e.target.value); handleExamMetaChange('subject', e.target.value); }}
+                                className="w-full px-1 py-0.5 text-xs font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
+                              >
+                                {[...SUBJECT_CATEGORIES['수학'].filter(s => s !== '전체'), ...SUBJECT_CATEGORIES['과학'].filter(s => s !== '전체')].map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
+                            <td className="border border-gray-400 px-1 py-1">
+                              <select
+                                value={editExamType}
+                                onChange={(e) => { setEditExamType(e.target.value); handleExamMetaChange('examType', e.target.value); }}
+                                className="w-full px-1 py-0.5 text-xs font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
+                              >
+                                {['학교기출', '모의고사', '자체제작', '교재', '기타'].map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
+                            <td className="border border-gray-400 px-1 py-1" colSpan={2}>
+                              <select
+                                value={editGrade}
+                                onChange={(e) => { setEditGrade(e.target.value); handleExamMetaChange('grade', e.target.value); }}
+                                className="w-full px-1 py-0.5 text-xs font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
+                              >
+                                {['중1', '중2', '중3', '고1', '고2', '고3'].map((g) => (
+                                  <option key={g} value={g}>{g}</option>
+                                ))}
+                              </select>
+                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -1062,7 +1173,7 @@ export default function ExamManagementPage() {
                           let globalStartIdx = 0;
                           for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].length;
 
-                          // 문제 렌더 헬퍼
+                          // ★ 문제 렌더 헬퍼 — 공통 컴포넌트 사용
                           const renderProblem = (problem: ExamProblem, idx: number) => (
                             <div
                               key={problem.id}
@@ -1070,40 +1181,7 @@ export default function ExamManagementPage() {
                               className="break-inside-avoid"
                               style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
                             >
-                              <div className="flex gap-2">
-                                <span className="text-sm font-bold text-gray-900 flex-shrink-0 pt-0.5">
-                                  {problem.number}.
-                                </span>
-                                <div className="flex-1">
-                                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
-                                    <MixedContentRenderer content={problem.content} className="text-gray-800" />
-                                  </div>
-                                  {(problem.figureData || problem.figureSvg) && (
-                                    <div className="my-2 flex justify-center">
-                                      <FigureRenderer
-                                        figureData={problem.figureData}
-                                        figureSvg={problem.figureSvg}
-                                        maxWidth={240}
-                                        darkMode={false}
-                                      />
-                                    </div>
-                                  )}
-                                  {problem.choices.length > 0 && (
-                                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
-                                      {problem.choices.map((choice, ci) => {
-                                        const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
-                                        const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
-                                        return (
-                                          <div key={ci} className="flex items-start gap-1.5 text-[13.5px] text-gray-700">
-                                            <span className="flex-shrink-0 text-gray-500">{prefix}</span>
-                                            <MixedContentRenderer content={stripped} className="text-gray-700" />
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                              <ExamProblemRenderer problem={problem} />
                             </div>
                           );
 
@@ -1368,7 +1446,9 @@ export default function ExamManagementPage() {
           }
           #exam-print-root .exam-page {
             width: 210mm !important;
+            height: 297mm !important;
             min-height: 297mm !important;
+            max-height: 297mm !important;
             margin: 0 !important;
             padding: 15mm !important;
             box-shadow: none !important;
@@ -1424,11 +1504,20 @@ export default function ExamManagementPage() {
                     <table className="w-full border-collapse text-black">
                       <tbody>
                         <tr>
-                          <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50 text-center">과목</td>
-                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold">{subjectFilter}</td>
-                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={3}>{selectedExam.title}</td>
-                          <td className="border border-gray-400 px-3 py-2 text-xs font-bold text-gray-600 w-16 bg-gray-50 text-center">담당</td>
-                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20"></td>
+                          <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학원명</td>
+                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold">{editInstitute || ''}</td>
+                          <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시험명</td>
+                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>{editExamTitle || selectedExam.title}</td>
+                          <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">담당</td>
+                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20">{editTeacher || ''}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">과목</td>
+                          <td className="border border-gray-400 px-3 py-1.5 text-xs font-bold">{editSubject || selectedExam.subject}</td>
+                          <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
+                          <td className="border border-gray-400 px-3 py-1.5 text-xs font-bold">{editExamType || selectedExam.examType}</td>
+                          <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
+                          <td className="border border-gray-400 px-3 py-1.5 text-xs font-bold" colSpan={2}>{editGrade || selectedExam.grade}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1436,69 +1525,12 @@ export default function ExamManagementPage() {
                 </div>
               )}
               {(() => {
-                const renderPrintProblem = (problem: ExamProblem) => {
-                  // ★ 인쇄용 content: 문제번호 중복 제거 + 점수 제거
-                  const printContent = problem.content
-                    .replace(/^\s*\d+\.\s*/, '')
-                    .replace(/\[\s*\d+(\.\d+)?\s*점\s*\]/g, '')
-                    .trim();
-                  const hasMarker = /\[도형/.test(printContent);
-                  const figureCrops = (problem as any).images?.filter((img: any) => img.type === 'figure_crop') || [];
-                  const hasFigureSource = problem.figureData || problem.figureSvg || (problem as any).upscaledCropUrl;
-
-                  const renderFig = (figIdx: number) => {
-                    if (figIdx === 0 && hasFigureSource) {
-                      return <div className="my-2 flex justify-center"><FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={(problem as any).upscaledCropUrl} figureSource={(problem as any).figureSource} cropImageUrl={figureCrops[0]?.url} maxWidth={240} darkMode={false} /></div>;
-                    }
-                    if (figureCrops[figIdx]) {
-                      // ★ Supabase private 버킷 → 프록시 URL 변환
-                      let figUrl = figureCrops[figIdx].url;
-                      const storageMatch = figUrl.match(/\/storage\/v1\/object\/(?:public|sign(?:ed)?)\/source-files\/(.+)/);
-                      if (storageMatch) figUrl = `/api/storage/image?path=${encodeURIComponent(storageMatch[1])}`;
-                      return <div className="my-2 flex justify-center"><img src={figUrl} alt={`도형 ${figIdx+1}`} className="max-h-48 object-contain" /></div>;
-                    }
-                    return null;
-                  };
-
-                  let parts: Array<{type:'text'|'figure';text:string}> = [];
-                  if (hasMarker) {
-                    const rx = /\[도형(?::[\w%-]*)*\]/g;
-                    let li = 0; let mm: RegExpExecArray|null;
-                    while ((mm = rx.exec(printContent)) !== null) {
-                      const b = printContent.slice(li, mm.index);
-                      if (b.trim()) parts.push({type:'text',text:b});
-                      parts.push({type:'figure',text:''});
-                      li = mm.index + mm[0].length;
-                    }
-                    const af = printContent.slice(li);
-                    if (af.trim()) parts.push({type:'text',text:af});
-                  }
-
-                  return (
-                    <div key={problem.id} className="break-inside-avoid" style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}>
-                      <div className="flex gap-2.5">
-                        <span className="text-[14.5px] font-bold text-gray-900 flex-shrink-0" style={{ minWidth: '24px', lineHeight: '1.7' }}>{problem.number}.</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[14px] text-gray-800 whitespace-pre-line" style={{ lineHeight: '1.7' }}>
-                            {hasMarker && parts.length > 0 ? (() => { let fc=0; return parts.map((pt,pi) => pt.type==='text' ? <MixedContentRenderer key={pi} content={pt.text} className="text-gray-800"/> : <React.Fragment key={pi}>{renderFig(fc++)}</React.Fragment>); })() : (
-                              <>
-                                <MixedContentRenderer content={printContent} className="text-gray-800" />
-                                {hasFigureSource && <div className="mt-2 flex justify-center"><FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={(problem as any).upscaledCropUrl} figureSource={(problem as any).figureSource} cropImageUrl={figureCrops[0]?.url} maxWidth={240} darkMode={false} /></div>}
-                              </>
-                            )}
-                          </div>
-                          {problem.choices.length > 0 && (() => {
-                            const items = problem.choices.map((c,ci) => ({ prefix: ['①','②','③','④','⑤'][ci]||'', content: c.replace(/^[①②③④⑤]\s*/,'').replace(/^\(\s*\d+\s*\)\s*/,'') }));
-                            const ml = Math.max(...items.map(c => c.content.replace(/\$[^$]*\$/g,'XX').replace(/\\[a-z]+/gi,'').length+2));
-                            if (ml <= 12) return <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">{items.map((it,ci) => <div key={ci} className="flex items-center gap-1 text-[13.5px] text-gray-700" style={{lineHeight:'1.65'}}><span className="flex-shrink-0 text-gray-500">{it.prefix}</span><MixedContentRenderer content={it.content} className="text-gray-700"/></div>)}</div>;
-                            if (ml <= 30) return <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">{items.map((it,ci) => <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{lineHeight:'1.65'}}><span className="flex-shrink-0 text-gray-500">{it.prefix}</span><MixedContentRenderer content={it.content} className="text-gray-700"/></div>)}</div>;
-                            return <div className="mt-2.5 space-y-1.5">{items.map((it,ci) => <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{lineHeight:'1.65'}}><span className="flex-shrink-0 text-gray-500">{it.prefix}</span><MixedContentRenderer content={it.content} className="text-gray-700"/></div>)}</div>;
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                };
+                // ★ 인쇄용 문제 렌더러 — 공통 컴포넌트 사용
+                const renderPrintProblem = (problem: ExamProblem) => (
+                  <div key={problem.id} className="break-inside-avoid" style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}>
+                    <ExamProblemRenderer problem={problem} />
+                  </div>
+                );
 
                 const usePrintManualCols = perPagePreset && columns === 2;
                 const printHalf = Math.ceil(pageProblems.length / 2);

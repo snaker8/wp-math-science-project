@@ -78,13 +78,32 @@ export function FigureRenderer({
 }: FigureRendererProps) {
   const [graphEditOpen, setGraphEditOpen] = useState(false);
 
-  // DEBUG: figureData 상태 확인
+  // DEBUG: figureData 상태 확인 + 품질 로깅
   if (figureData && figureData.rendering) {
     const r = figureData.rendering as unknown as Record<string, unknown>;
     console.log('[FigureRenderer] figureType:', figureData.figureType,
       'hasSvg:', !!r.svg,
       'svgLen:', typeof r.svg === 'string' ? r.svg.length : 0,
       'vertices:', (r.vertices as unknown[])?.length || 0);
+
+    // ★ 도형 품질 자동 로깅 (confidence 낮거나 임의 라벨 감지)
+    const confidence = (figureData as Record<string, unknown>).confidence as number;
+    const vertices = (r.vertices as Array<{ label?: string }>) || [];
+    const hasAutoLabels = vertices.some(v => /_tl|_tr|_bl|_br|Top_|Bot_|Left_|Right_/.test(v.label || ''));
+    if (confidence < 0.5 || hasAutoLabels) {
+      try {
+        const { logRenderingErrorDedup } = require('@/lib/error-logger');
+        logRenderingErrorDedup({
+          problemId,
+          errorType: 'figure',
+          errorDetail: hasAutoLabels
+            ? `자동생성 라벨 감지: ${vertices.map(v => v.label).join(',')}`
+            : `낮은 confidence: ${confidence}`,
+          rawInput: (figureData as Record<string, unknown>).description as string,
+          metadata: { confidence, figureType: figureData.figureType, vertexCount: vertices.length },
+        });
+      } catch { /* ignore */ }
+    }
   }
 
   // ★ 그래프 편집 핸들러 — DB 업데이트
@@ -377,6 +396,8 @@ function GraphFigure({
           xRange={rendering.xRange}
           yRange={rendering.yRange}
           points={rendering.points}
+          segments={rendering.segments}
+          shadedRegions={rendering.shadedRegions}
           width={graphWidth}
           height={graphHeight}
           darkMode={darkMode}

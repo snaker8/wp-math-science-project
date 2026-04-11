@@ -79,8 +79,9 @@ function graphToContent(rendering: GraphRendering, description: string): FigureC
   }));
 
   // 주요 점을 Desmos 표현식으로 추가
+  const pointMap = new Map<string, { x: number; y: number }>();
   for (const point of rendering.points) {
-    const label = point.label ? `${point.label}` : '';
+    if (point.label) pointMap.set(point.label, { x: point.x, y: point.y });
     expressions.push({
       id: `vision-point-${point.label || Date.now()}`,
       latex: `(${point.x}, ${point.y})`,
@@ -88,9 +89,42 @@ function graphToContent(rendering: GraphRendering, description: string): FigureC
       lineStyle: 'solid',
       hidden: false,
     });
-    if (label) {
-      // 라벨이 있는 점은 주석으로 추가 (annotations에서 처리)
-    }
+  }
+
+  // ★ shadedRegions → Desmos polygon (채움 영역)
+  if (rendering.shadedRegions && rendering.shadedRegions.length > 0) {
+    rendering.shadedRegions.forEach((region: { vertices: string[]; color?: string }, i: number) => {
+      const coords = region.vertices
+        .map((label: string) => pointMap.get(label))
+        .filter(Boolean) as { x: number; y: number }[];
+      if (coords.length >= 3) {
+        const polyLatex = coords.map(c => `(${c.x},${c.y})`).join(',');
+        expressions.push({
+          id: `vision-region-${i}`,
+          latex: `\\operatorname{polygon}\\left(${polyLatex}\\right)`,
+          color: region.color || '#cccccc',
+          lineStyle: 'solid',
+          hidden: false,
+        });
+      }
+    });
+  }
+
+  // ★ segments → Desmos polygon 선분 (두 점 연결)
+  if (rendering.segments && rendering.segments.length > 0) {
+    rendering.segments.forEach((seg: [string, string], i: number) => {
+      const p1 = pointMap.get(seg[0]);
+      const p2 = pointMap.get(seg[1]);
+      if (p1 && p2) {
+        expressions.push({
+          id: `vision-seg-${i}`,
+          latex: `\\operatorname{polygon}\\left((${p1.x},${p1.y}),(${p2.x},${p2.y})\\right)`,
+          color: '#555555',
+          lineStyle: 'solid',
+          hidden: false,
+        });
+      }
+    });
   }
 
   const settings: GraphSettings = {

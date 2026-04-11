@@ -9,6 +9,14 @@ import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
+
+  // ★ 개발 중 로그인 비활성화
+  React.useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === 'true') {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loginType, setLoginType] = useState<'student' | 'teacher' | 'parent'>('student');

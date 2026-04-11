@@ -63,6 +63,15 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                 });
             } catch {
                 console.error('KaTeX rendering error (after fallback):', error);
+                // ★ 에러 자동 로깅
+                try {
+                  const { logRenderingErrorDedup } = require('@/lib/error-logger');
+                  logRenderingErrorDedup({
+                    errorType: 'katex',
+                    errorDetail: error instanceof Error ? error.message : 'Unknown KaTeX error',
+                    rawInput: content.substring(0, 500),
+                  });
+                } catch { /* ignore */ }
                 return content;
             }
         }

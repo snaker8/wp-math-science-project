@@ -25,9 +25,36 @@ interface MixedContentRendererProps {
  */
 export function MixedContentRenderer({ content, className, onMathClick }: MixedContentRendererProps) {
   if (!content) return <span className={className}>(문제 내용 없음)</span>;
+  // ★ OCR 교정 패턴 자동 로깅
+  if (content.includes('displaystyle') || content.includes('\\lbrace') || content.includes('\\rbrace')) {
+    console.log('[MCR] OCR 교정 필요:', content.substring(0, 200));
+    try {
+      const { logRenderingErrorDedup } = require('@/lib/error-logger');
+      const patterns: string[] = [];
+      if (content.includes('displaystyle')) patterns.push('displaystyle');
+      if (content.includes('\\lbrace')) patterns.push('lbrace');
+      if (content.includes('\\rbrace')) patterns.push('rbrace');
+      logRenderingErrorDedup({
+        errorType: 'ocr',
+        errorDetail: `OCR 교정 패턴: ${patterns.join(', ')}`,
+        rawInput: content.substring(0, 500),
+      });
+    } catch { /* ignore */ }
+  }
 
   // 전처리: Mathpix 특유 포맷 정규화
-  const normalized = preprocessMathpixContent(content);
+  const normalized = preprocessMathpixContent(content)
+    // ★ $ 밖의 \displaystyle 수식 블록 → $$...$$ 로 감싸기 (KaTeX 렌더링)
+    .replace(/(?<!\$)\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
+    .replace(/(?<!\$)\\\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
+    // ★ 이미 $ 안에 있는 \displaystyle은 단순 제거
+    .replace(/\\displaystyle\s*/g, '')
+    // ★ ㄱ./ㄴ./ㄷ. 보기가 붙어있으면 줄바꿈 삽입 (조건 박스 파싱용)
+    .replace(/([^\n])\s+(ㄱ\s*[.)])/g, '$1\n$2')
+    .replace(/([^\n])\s+(ㄴ\s*[.)])/g, '$1\n$2')
+    .replace(/([^\n])\s+(ㄷ\s*[.)])/g, '$1\n$2')
+    .replace(/([^\n])\s+(ㄹ\s*[.)])/g, '$1\n$2')
+    .replace(/([^\n])\s+(ㅁ\s*[.)])/g, '$1\n$2');
 
   // "수식:" 섹션 분리 (보조 수식 블록)
   const mathSectionIndex = normalized.indexOf('\n\n수식:\n');
@@ -113,7 +140,7 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
   );
 
   // 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 분리
-  const { mainContent, conditionBoxes } = extractConditionBoxes(protectedBody);
+  const { mainContent, conditionBoxes, conditionHeaders } = extractConditionBoxes(protectedBody);
 
   // tabular 블록 복원
   let restoredMainContent = mainContent;
@@ -252,12 +279,16 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
                   {row.map((cell, ci) => {
                     // 세로줄: verticalLines에 해당 열 인덱스가 있으면 왼쪽에 border
                     const hasLeftBorder = vLines.includes(ci);
-                    const bottomBorder = ri === el.rows.length - 1 && el.hasHlines[ri] ? 'border-b-2 border-b-gray-500' : '';
+                    // ★ 마지막 열 오른쪽 border: vLines에 열 개수(ci+1)가 있으면
+                    const hasRightBorder = ci === row.length - 1 && vLines.includes(ci + 1);
+                    // ★ 마지막 행 밑줄: trailing \hline은 hasHlines[rows.length]에 저장됨
+                    const bottomBorder = ri === el.rows.length - 1 && el.hasHlines[el.rows.length] ? 'border-b-2 border-b-gray-500' : '';
                     const leftBorder = hasLeftBorder ? 'border-l-2 border-l-gray-500' : '';
+                    const rightBorder = hasRightBorder ? 'border-r-2 border-r-gray-500' : '';
                     return (
                       <td
                         key={ci}
-                        className={`px-3 py-1.5 text-center ${bottomBorder} ${leftBorder}`}
+                        className={`px-3 py-1.5 text-center ${bottomBorder} ${leftBorder} ${rightBorder}`}
                       >
                         {cell.trim() ? (
                           /[\\^_{}$]/.test(cell) ? (
@@ -301,9 +332,13 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
           if (boxMatch) {
             const boxIdx = parseInt(boxMatch[1], 10);
             const boxContent = restoredConditionBoxes[boxIdx];
+            const hasHeader = conditionHeaders[boxIdx];
             if (boxContent) {
               return (
                 <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
+                  {hasHeader && (
+                    <div className="text-xs font-bold text-zinc-400 mb-2 -mt-1">&lt;보기&gt;</div>
+                  )}
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
               );
@@ -423,14 +458,16 @@ function stripTrailingChoiceLines(text: string): string {
  * 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 본문에서 분리
  * 시험지에서 조건이 사각형 테두리 박스 안에 들어가는 형식을 구현
  */
-function extractConditionBoxes(text: string): { mainContent: string; conditionBoxes: string[] } {
+function extractConditionBoxes(text: string): { mainContent: string; conditionBoxes: string[]; conditionHeaders: boolean[] } {
   const lines = text.split('\n');
   const conditionBoxes: string[] = [];
+  const conditionHeaders: boolean[] = []; // ★ <보기> 헤더 유무
   const mainLines: string[] = [];
 
   // (가)/(나)/(다) 또는 <보기> 블록 감지
   let inConditionBlock = false;
   let conditionLines: string[] = [];
+  let currentHasHeader = false;
   let boxIndex = 0;
 
   for (let i = 0; i < lines.length; i++) {
@@ -448,6 +485,7 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
 
     if (isConditionStart && !inConditionBlock) {
       inConditionBlock = true;
+      currentHasHeader = isBogiHeader;
       // ★ 보기 헤더 줄 자체는 제외 (렌더링 시 별도 헤더로 표시)
       if (isBogiHeader) {
         conditionLines = [];
@@ -470,20 +508,28 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
         continue;
       }
 
-      // ★ 그 외 모든 줄 → 박스 종료 (비-라벨 줄은 본문)
-      {
-        // 조건 블록 종료 → placeholder를 본문에 삽입
+      // ★ 박스 종료 조건: 선택지, 문제번호, 질문 문장, 빈 줄
+      const isBlockEnd = /^\s*[①②③④⑤]/.test(trimmed) ||
+                         /^\s*\(\s*[1-5]\s*\)/.test(trimmed) ||
+                         /^\s*\d+\s*[.)]\s/.test(trimmed) ||
+                         /것은\s*\?|고르시오|고른\s*것|옳은\s*것|있는\s*대로|만을\s*고|보기.*고른|에서.*옳/.test(trimmed) ||
+                         trimmed === '';
+      if (isBlockEnd) {
         if (conditionLines.length > 0) {
           conditionBoxes.push(conditionLines.join('\n'));
+          conditionHeaders.push(currentHasHeader);
           mainLines.push(`__CONDITION_BOX_${boxIndex}__`);
           boxIndex++;
         }
         inConditionBlock = false;
         conditionLines = [];
-        // 현재 줄은 본문에 추가
-        mainLines.push(lines[i]);
+        currentHasHeader = false;
+        if (trimmed !== '') mainLines.push(lines[i]);
         continue;
       }
+      // ㄱ/ㄴ/ㄷ 내용이 여러 줄이면 계속 수집
+      conditionLines.push(lines[i]);
+      continue;
     }
 
     mainLines.push(lines[i]);
@@ -492,10 +538,11 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
   // 마지막 조건 블록 처리
   if (inConditionBlock && conditionLines.length > 0) {
     conditionBoxes.push(conditionLines.join('\n'));
+    conditionHeaders.push(currentHasHeader);
     mainLines.push(`__CONDITION_BOX_${boxIndex}__`);
   }
 
-  return { mainContent: mainLines.join('\n'), conditionBoxes };
+  return { mainContent: mainLines.join('\n'), conditionBoxes, conditionHeaders };
 }
 
 /** 조건 블록이 끝나는지 판단 */

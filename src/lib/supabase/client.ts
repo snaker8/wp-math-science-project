@@ -19,9 +19,34 @@ export const isSupabaseConfigured = supabaseUrl &&
  * @supabase/ssr 기본 설정 사용 (자동 쿠키 관리)
  * Returns null if Supabase is not configured
  */
-export const supabaseBrowser = isSupabaseConfigured
+const _supabaseBrowser = isSupabaseConfigured
   ? createBrowserClient(supabaseUrl, supabaseAnonKey)
   : null;
+
+// ★ 개발 중 로그인 비활성화
+const DEV_SKIP_AUTH = process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === 'true';
+
+const DEV_MOCK_USER = {
+  id: '00000000-0000-0000-0000-000000000000',
+  email: 'dev@local.test',
+  app_metadata: {},
+  user_metadata: { full_name: '개발자' },
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+} as any;
+
+if (DEV_SKIP_AUTH && _supabaseBrowser) {
+  const originalGetUser = _supabaseBrowser.auth.getUser.bind(_supabaseBrowser.auth);
+  _supabaseBrowser.auth.getUser = async (...args: any[]) => {
+    const result = await originalGetUser(...args);
+    if (!result.data.user) {
+      return { data: { user: DEV_MOCK_USER }, error: null } as any;
+    }
+    return result;
+  };
+}
+
+export const supabaseBrowser = _supabaseBrowser;
 
 /**
  * Database Types (generated from schema)

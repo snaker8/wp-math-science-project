@@ -366,9 +366,28 @@ export async function POST(
 
     // 6. figureSvg 결정: 항상 코드 기반 SVG 사용 (AI SVG는 부정확하므로 무시)
     let legacySvg: string | undefined;
-    if (interpreted.rendering?.type === 'geometry') {
-      // ★ AI SVG(rendering.svg) 무시 → 코드 기반 SVG만 사용
-      legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
+    const renderingType = interpreted.rendering?.type || interpreted.figureType;
+    console.log(`[generate-figure] renderingType=${renderingType}, hasSvg=${!!(interpreted.rendering as any)?.svg}`);
+    if (renderingType === 'geometry' && interpreted.rendering) {
+      const geoRendering = interpreted.rendering as Record<string, unknown>;
+      const vertices = (geoRendering.vertices as Array<{ label?: string }>) || [];
+      const hasAutoLabels = vertices.some(v => /_tl|_tr|_bl|_br|Top_|Bot_|Left_|Right_/.test(v.label || ''));
+      console.log(`[generate-figure] geometry 체크: svg=${typeof geoRendering.svg === 'string' ? (geoRendering.svg as string).length + '자' : 'none'}, autoLabels=${hasAutoLabels}, labels=${vertices.map(v => v.label).join(',')}`);
+
+      if (geoRendering.svg && typeof geoRendering.svg === 'string') {
+        // ★ AI SVG가 있으면 우선 사용 (전개도 등 복잡한 도형)
+        legacySvg = geoRendering.svg;
+        console.log(`[generate-figure] AI SVG 사용: ${(geoRendering.svg as string).length}자`);
+      } else if (hasAutoLabels) {
+        // ★ 자동생성 라벨(Top_tl 등) 감지 → 원본 크롭 사용 (AI 실패)
+        console.warn(`[generate-figure] 자동생성 라벨 감지 → AI 도형 스킵, 원본 크롭 유지`);
+        legacySvg = undefined;
+        // figureData도 저장하지 않음
+        interpreted.figureType = 'photo' as any;
+      } else {
+        // ★ 정상 vertices → 코드 기반 SVG
+        legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
+      }
     }
 
     // 7. DB 저장 (figureData + figureSvg)

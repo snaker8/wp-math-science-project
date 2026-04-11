@@ -176,12 +176,15 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { title, bookGroupId } = body;
+    const { title, bookGroupId, subject, examType, grade } = body;
 
     const updateData: Record<string, any> = {};
 
     if (title !== undefined) updateData.title = title.trim();
     if (bookGroupId !== undefined) updateData.book_group_id = bookGroupId; // null allowed (move to unclassified)
+    if (subject !== undefined) updateData.subject = subject;
+    if (examType !== undefined) updateData.exam_type = examType;
+    if (grade !== undefined) updateData.grade = grade;
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(

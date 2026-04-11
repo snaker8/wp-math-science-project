@@ -24,12 +24,15 @@ interface InlineDesmosGraphProps {
   xRange?: [number, number];
   yRange?: [number, number];
   points?: { x: number; y: number; label?: string }[];
+  /** ★ 점 사이 선분 연결 [["A","B"], ["B","C"]] */
+  segments?: [string, string][];
+  /** ★ 빗금/채움 영역 {vertices: ["A","B","C","D"], color: "gray"} */
+  shadedRegions?: { vertices: string[]; color?: string }[];
   width?: number;
   height?: number;
   className?: string;
-  showExpressions?: boolean; // 수식 목록 표시 여부
-  darkMode?: boolean; // 다크 테마 여부 (기본: false)
-  /** ★ Desmos 전체 상태 (편집 후 저장된 상태 복원용) */
+  showExpressions?: boolean;
+  darkMode?: boolean;
   desmosState?: unknown;
 }
 
@@ -92,6 +95,8 @@ export function InlineDesmosGraph({
   xRange = [-10, 10],
   yRange = [-10, 10],
   points = [],
+  segments = [],
+  shadedRegions = [],
   width = 350,
   height = 250,
   className = '',
@@ -183,6 +188,49 @@ export function InlineDesmosGraph({
           calculator.setExpression(ptExpr as Parameters<DesmosCalcInstance['setExpression']>[0]);
         } catch (ptErr) {
           console.warn(`[DesmosGraph] Failed to add point[${i}]:`, pt, ptErr);
+        }
+      });
+
+      // ★ 점 좌표 맵 (segments/shadedRegions에서 라벨로 좌표 조회)
+      const pointMap = new Map<string, { x: number; y: number }>();
+      points.forEach(pt => {
+        if (pt.label) pointMap.set(pt.label, { x: pt.x, y: pt.y });
+      });
+
+      // ★ segments → Desmos 선분 (두 점을 잇는 polygon)
+      segments.forEach((seg, i) => {
+        const [from, to] = seg;
+        const p1 = pointMap.get(from);
+        const p2 = pointMap.get(to);
+        if (p1 && p2) {
+          try {
+            calculator.setExpression({
+              id: `seg-${i}`,
+              latex: `\\operatorname{polygon}\\left((${p1.x},${p1.y}),(${p2.x},${p2.y})\\right)`,
+              color: '#555555',
+            } as Parameters<DesmosCalcInstance['setExpression']>[0]);
+          } catch (segErr) {
+            console.warn(`[DesmosGraph] Failed to add segment[${i}]:`, segErr);
+          }
+        }
+      });
+
+      // ★ shadedRegions → Desmos 채움 polygon
+      shadedRegions.forEach((region, i) => {
+        const coords = region.vertices
+          .map(label => pointMap.get(label))
+          .filter(Boolean) as { x: number; y: number }[];
+        if (coords.length >= 3) {
+          const polyLatex = coords.map(c => `(${c.x},${c.y})`).join(',');
+          try {
+            calculator.setExpression({
+              id: `region-${i}`,
+              latex: `\\operatorname{polygon}\\left(${polyLatex}\\right)`,
+              color: region.color || '#cccccc',
+            } as Parameters<DesmosCalcInstance['setExpression']>[0]);
+          } catch (regErr) {
+            console.warn(`[DesmosGraph] Failed to add region[${i}]:`, regErr);
+          }
         }
       });
 

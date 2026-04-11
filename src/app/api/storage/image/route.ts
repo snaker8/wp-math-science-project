@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 경로 검증 (source-files 버킷 내의 이미지만 허용)
-  if (!path.startsWith('problem-crops/') && !path.startsWith('exam-pages/')) {
+  if (!path.startsWith('problem-crops/') && !path.startsWith('exam-pages/') && !path.startsWith('diagram-uploads/')) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 403 });
   }
 

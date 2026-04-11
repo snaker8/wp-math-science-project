@@ -1,7 +1,57 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Search, Loader2, Check, Image as ImageIcon, RefreshCw, Upload } from 'lucide-react';
+import { X, Search, Loader2, Check, Image as ImageIcon, RefreshCw, Upload, Code2 } from 'lucide-react';
+
+// ============================================================================
+// SVG → PNG 변환 유틸리티 (클라이언트 사이드 Canvas 렌더링)
+// ============================================================================
+async function svgToPngBlob(svgText: string, scaleFactor = 2): Promise<Blob> {
+  // SVG에 명시적 width/height 없으면 viewBox에서 추출
+  let processed = svgText;
+  if (!/<svg[^>]*\bwidth\s*=/i.test(processed)) {
+    const vbMatch = processed.match(/viewBox\s*=\s*["']([^"']+)["']/i);
+    if (vbMatch) {
+      const parts = vbMatch[1].trim().split(/[\s,]+/);
+      if (parts.length >= 4) {
+        processed = processed.replace(/<svg/i, `<svg width="${parts[2]}" height="${parts[3]}"`);
+      }
+    } else {
+      processed = processed.replace(/<svg/i, '<svg width="600" height="400"');
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([processed], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || 600;
+      const h = img.naturalHeight || 400;
+      const canvas = document.createElement('canvas');
+      canvas.width = w * scaleFactor;
+      canvas.height = h * scaleFactor;
+      const ctx = canvas.getContext('2d')!;
+      ctx.scale(scaleFactor, scaleFactor);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (pngBlob) => {
+          URL.revokeObjectURL(url);
+          if (pngBlob) resolve(pngBlob);
+          else reject(new Error('PNG 변환 실패'));
+        },
+        'image/png',
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('SVG 렌더링 실패 — 파일을 확인해주세요'));
+    };
+    img.src = url;
+  });
+}
 
 interface DiagramImage {
   id: string;
@@ -20,10 +70,16 @@ interface DiagramImage {
   unit_name?: string;
 }
 
+/** onSelect에 전달되는 추가 메타데이터 (SVG 교정 학습용) */
+export interface DiagramSelectMeta {
+  svgSource?: string;                  // SVG 원본 코드 (paste/file upload)
+  correctionType: 'svg_paste' | 'svg_file_upload' | 'image_upload' | 'diagram_db';
+}
+
 interface DiagramBrowserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (imageUrl: string) => void;
+  onSelect: (imageUrl: string, meta?: DiagramSelectMeta) => void;
   currentImageUrl?: string;
   problemNumber?: number;
 }
@@ -35,7 +91,7 @@ export function DiagramBrowserModal({
   currentImageUrl,
   problemNumber,
 }: DiagramBrowserModalProps) {
-  const [activeTab, setActiveTab] = useState<'browse' | 'upload'>('browse');
+  const [activeTab, setActiveTab] = useState<'browse' | 'upload' | 'svg-paste'>('browse');
   const [diagrams, setDiagrams] = useState<DiagramImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -49,6 +105,12 @@ export function DiagramBrowserModal({
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSvgFile, setIsSvgFile] = useState(false);
+  const [svgCode, setSvgCode] = useState<string | null>(null);
+  const [svgError, setSvgError] = useState<string | null>(null);
+  // SVG 코드 붙여넣기 탭 상태
+  const [svgPasteCode, setSvgPasteCode] = useState('');
+  const [svgPastePreview, setSvgPastePreview] = useState<string | null>(null);
 
   const fetchDiagrams = useCallback(async () => {
     setLoading(true);
@@ -99,26 +161,62 @@ export function DiagramBrowserModal({
     const selected = diagrams.find(d => d.id === selectedId);
     if (selected) {
       const url = getImageUrl(selected);
-      if (url) onSelect(url);
+      if (url) onSelect(url, { correctionType: 'diagram_db' });
     }
   };
 
-  // 파일 선택 시 미리보기
+  // 파일 선택 시 미리보기 (이미지 + SVG 코드 파일 지원)
   const handleFileSelect = (file: File) => {
     setUploadFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => setUploadPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
+    setSvgError(null);
+
+    const isSvg = file.name.toLowerCase().endsWith('.svg') || file.type === 'image/svg+xml';
+    setIsSvgFile(isSvg);
+
+    if (isSvg) {
+      const textReader = new FileReader();
+      textReader.onload = (e) => {
+        const code = e.target?.result as string;
+        setSvgCode(code);
+        // data URL 미리보기
+        try {
+          const b64 = btoa(unescape(encodeURIComponent(code)));
+          setUploadPreview(`data:image/svg+xml;base64,${b64}`);
+        } catch {
+          setSvgError('SVG 인코딩 실패');
+        }
+      };
+      textReader.readAsText(file);
+    } else {
+      setSvgCode(null);
+      const reader = new FileReader();
+      reader.onload = (e) => setUploadPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   // 업로드 + Supabase 저장 + 도식 교체
+  // SVG인 경우: Canvas로 PNG 렌더링 → PNG를 메인 이미지로 업로드 + SVG 원본도 별도 저장
   const handleUploadAndReplace = async () => {
     if (!uploadFile) return;
     setIsUploading(true);
+    setSvgError(null);
     try {
       const formData = new FormData();
-      formData.append('file', uploadFile);
       if (problemNumber) formData.append('problemNumber', String(problemNumber));
+
+      if (isSvgFile && svgCode) {
+        // ── SVG → PNG 변환 후 업로드 ──
+        const pngBlob = await svgToPngBlob(svgCode, 2);
+        const pngName = uploadFile.name.replace(/\.svg$/i, '.png');
+        const pngFile = new File([pngBlob], pngName, { type: 'image/png' });
+        formData.append('file', pngFile);
+        // SVG 원본 코드도 함께 전송 (서버에서 별도 자산으로 저장)
+        formData.append('svgSource', svgCode);
+        formData.append('svgFileName', uploadFile.name);
+      } else {
+        formData.append('file', uploadFile);
+      }
 
       const res = await fetch('/api/diagram-images/upload', {
         method: 'POST',
@@ -129,10 +227,66 @@ export function DiagramBrowserModal({
       const data = await res.json();
 
       if (data.publicUrl) {
-        onSelect(data.publicUrl);
+        onSelect(data.publicUrl, {
+          correctionType: isSvgFile ? 'svg_file_upload' : 'image_upload',
+          svgSource: isSvgFile ? svgCode ?? undefined : undefined,
+        });
       }
     } catch (err) {
-      alert('이미지 업로드 실패: ' + (err instanceof Error ? err.message : ''));
+      const msg = err instanceof Error ? err.message : '알 수 없는 오류';
+      setSvgError(isSvgFile ? `SVG 변환/업로드 실패: ${msg}` : `이미지 업로드 실패: ${msg}`);
+      alert(isSvgFile ? `SVG 변환/업로드 실패: ${msg}` : `이미지 업로드 실패: ${msg}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // ── SVG 코드 붙여넣기 → 미리보기 갱신 ──
+  const handleSvgPasteChange = useCallback((code: string) => {
+    setSvgPasteCode(code);
+    setSvgError(null);
+    const trimmed = code.trim();
+    if (!trimmed || !trimmed.includes('<svg')) {
+      setSvgPastePreview(null);
+      return;
+    }
+    try {
+      const b64 = btoa(unescape(encodeURIComponent(trimmed)));
+      setSvgPastePreview(`data:image/svg+xml;base64,${b64}`);
+    } catch {
+      setSvgPastePreview(null);
+      setSvgError('SVG 인코딩 실패 — 코드를 확인해주세요');
+    }
+  }, []);
+
+  // ── SVG 코드 붙여넣기 → 업로드 ──
+  const handleSvgPasteUpload = async () => {
+    const trimmed = svgPasteCode.trim();
+    if (!trimmed || !trimmed.includes('<svg')) return;
+    setIsUploading(true);
+    setSvgError(null);
+    try {
+      const pngBlob = await svgToPngBlob(trimmed, 2);
+      const pngFile = new File([pngBlob], `svg-paste-${Date.now()}.png`, { type: 'image/png' });
+
+      const formData = new FormData();
+      formData.append('file', pngFile);
+      if (problemNumber) formData.append('problemNumber', String(problemNumber));
+      formData.append('svgSource', trimmed);
+      formData.append('svgFileName', `paste-${Date.now()}.svg`);
+
+      const res = await fetch('/api/diagram-images/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('업로드 실패');
+      const data = await res.json();
+      if (data.publicUrl) {
+        onSelect(data.publicUrl, { correctionType: 'svg_paste', svgSource: trimmed });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '알 수 없는 오류';
+      setSvgError(`SVG 변환/업로드 실패: ${msg}`);
     } finally {
       setIsUploading(false);
     }
@@ -173,6 +327,15 @@ export function DiagramBrowserModal({
             >
               직접 업로드
             </button>
+            <button
+              onClick={() => setActiveTab('svg-paste')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                activeTab === 'svg-paste' ? 'bg-violet-500/15 text-violet-400' : 'text-content-muted hover:text-content-secondary'
+              }`}
+            >
+              <Code2 size={13} />
+              SVG 코드
+            </button>
           </div>
         </div>
 
@@ -188,24 +351,51 @@ export function DiagramBrowserModal({
               <input
                 id="diagram-upload-input"
                 type="file"
-                accept="image/*"
+                accept="image/*,.svg"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
                 className="hidden"
               />
               {uploadPreview ? (
                 <div className="space-y-4">
+                  {/* SVG 파일인 경우 배지 표시 */}
+                  {isSvgFile && (
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Code2 size={14} className="text-violet-400" />
+                      <span className="text-xs font-medium text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full">
+                        SVG 코드 → PNG 변환 후 저장됩니다
+                      </span>
+                    </div>
+                  )}
                   <img src={uploadPreview} alt="미리보기" className="mx-auto max-h-64 rounded-lg border border-subtle object-contain bg-white" />
                   <p className="text-sm text-content-secondary">{uploadFile?.name}</p>
-                  <p className="text-xs text-content-muted">다른 이미지를 선택하려면 클릭하세요</p>
+                  <p className="text-xs text-content-muted">다른 파일을 선택하려면 클릭하세요</p>
                 </div>
               ) : (
                 <div>
                   <Upload size={40} className="mx-auto text-content-muted mb-3" />
-                  <p className="text-sm text-content-secondary">이미지를 드래그하거나 클릭하여 선택</p>
-                  <p className="text-xs text-content-muted mt-1">PNG, JPG 지원 — 서버에 자동 저장됩니다</p>
+                  <p className="text-sm text-content-secondary">이미지 또는 SVG 파일을 드래그하거나 클릭하여 선택</p>
+                  <p className="text-xs text-content-muted mt-1">PNG, JPG, <span className="text-violet-400 font-medium">SVG</span> 지원 — SVG는 PNG로 렌더링 후 저장됩니다</p>
                 </div>
               )}
             </div>
+
+            {/* SVG 에러 메시지 */}
+            {svgError && (
+              <p className="mt-2 text-xs text-red-400">{svgError}</p>
+            )}
+
+            {/* SVG 코드 미리보기 (접기/펼치기) */}
+            {isSvgFile && svgCode && (
+              <details className="mt-3 border border-subtle rounded-lg overflow-hidden">
+                <summary className="px-3 py-2 text-xs text-content-muted cursor-pointer hover:bg-surface-raised flex items-center gap-1.5">
+                  <Code2 size={12} className="text-violet-400" />
+                  SVG 소스 코드 ({(svgCode.length / 1024).toFixed(1)} KB)
+                </summary>
+                <pre className="px-3 py-2 text-[10px] text-content-tertiary bg-surface-raised max-h-32 overflow-auto font-mono whitespace-pre-wrap break-all">
+                  {svgCode.slice(0, 3000)}{svgCode.length > 3000 ? '\n... (이하 생략)' : ''}
+                </pre>
+              </details>
+            )}
 
             {uploadPreview && (
               <div className="flex justify-end mt-4">
@@ -215,7 +405,72 @@ export function DiagramBrowserModal({
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white font-medium text-sm hover:bg-teal-500 disabled:opacity-50 transition-colors"
                 >
                   {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  {isUploading ? '업로드 중...' : '이미지 교체'}
+                  {isUploading ? (isSvgFile ? 'SVG → PNG 변환 중...' : '업로드 중...') : '이미지 교체'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SVG 코드 붙여넣기 탭 ── */}
+        {activeTab === 'svg-paste' && (
+          <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4">
+            <div className="flex gap-4 min-h-0 flex-1">
+              {/* 좌: 코드 입력 */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <label className="text-xs text-content-muted mb-1.5 flex items-center gap-1.5">
+                  <Code2 size={12} className="text-violet-400" />
+                  SVG 코드 붙여넣기
+                </label>
+                <textarea
+                  value={svgPasteCode}
+                  onChange={(e) => handleSvgPasteChange(e.target.value)}
+                  placeholder={'<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">\n  <circle cx="100" cy="100" r="80" fill="none" stroke="black" />\n</svg>'}
+                  spellCheck={false}
+                  className="flex-1 min-h-[220px] p-3 rounded-lg bg-surface-raised border border-subtle text-xs font-mono text-content-primary placeholder:text-content-muted/40 resize-none outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30 leading-relaxed"
+                />
+                <p className="text-[10px] text-content-muted mt-1">
+                  {svgPasteCode.trim().length > 0
+                    ? `${(svgPasteCode.length / 1024).toFixed(1)} KB`
+                    : 'SVG 코드를 붙여넣으면 오른쪽에 미리보기가 표시됩니다'}
+                </p>
+              </div>
+
+              {/* 우: 미리보기 */}
+              <div className="w-[280px] flex-shrink-0 flex flex-col">
+                <label className="text-xs text-content-muted mb-1.5">미리보기</label>
+                <div className="flex-1 min-h-[220px] rounded-lg border border-subtle bg-white flex items-center justify-center p-3 overflow-hidden">
+                  {svgPastePreview ? (
+                    <img
+                      src={svgPastePreview}
+                      alt="SVG 미리보기"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center text-content-muted/40">
+                      <Code2 size={32} className="mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">SVG 미리보기</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* SVG 에러 */}
+            {svgError && (
+              <p className="text-xs text-red-400">{svgError}</p>
+            )}
+
+            {/* 교체 버튼 */}
+            {svgPastePreview && (
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSvgPasteUpload}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white font-medium text-sm hover:bg-violet-500 disabled:opacity-50 transition-colors"
+                >
+                  {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {isUploading ? 'SVG → PNG 변환 중...' : 'SVG 이미지 교체'}
                 </button>
               </div>
             )}

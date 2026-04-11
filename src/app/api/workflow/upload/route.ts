@@ -1381,6 +1381,17 @@ async function saveProblemsToDB(
       if (/수[학]?1/.test(t)) return '수학1';
       return '공통수학1';
     };
+    // ★ 시험유형/학년 감지 (direct save와 동일 로직)
+    const detectExamTypeAuto = (t: string) => /모의고사|모의|평가원/.test(t) ? '모의고사' : '학교기출';
+    const detectGradeAuto = (t: string) => {
+      if (/중1|1학년.*중/.test(t)) return '중1';
+      if (/중2|2학년.*중/.test(t)) return '중2';
+      if (/중3|3학년.*중|중등/.test(t)) return '중3';
+      if (/고3|3학년/.test(t)) return '고3';
+      if (/고2|2학년/.test(t)) return '고2';
+      return '고1';
+    };
+
     const examInsertData: Record<string, any> = {
       title: fileTitle,
       description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
@@ -1390,11 +1401,48 @@ async function saveProblemsToDB(
       total_points: results.length * 4,
       time_limit_minutes: 50,
       subject: detectSubjectAuto(fileTitle),
+      exam_type: detectExamTypeAuto(fileTitle),
+      grade: detectGradeAuto(fileTitle),
     };
 
-    // 북그룹 ID가 있으면 설정
+    // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
+    } else {
+      // ★ 과목 기반 자동 폴더 배치: book_groups에서 과목명 매칭
+      const detectedSubject = examInsertData.subject || '';
+      if (detectedSubject) {
+        const subjectFolderMap: Record<string, string> = {
+          '공통수학1': '공통수학1 기출', '공통수학2': '공통수학2 기출',
+          '수학I': '대수 기출', '수학1': '대수 기출', '대수': '대수 기출',
+          '수학II': '미적분1 기출', '수학2': '미적분1 기출', '미적분1': '미적분1 기출',
+          '미적분': '미적분1 기출', '미적분2': '미적분1 기출',
+          '확률과통계': '확률과 통계 기출', '확률과 통계': '확률과 통계 기출',
+          '기하': '기하 기출',
+        };
+        // 중학교 과목
+        if (/중1/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중1 기출';
+        if (/중2/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중2 기출';
+        if (/중3/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중3 기출';
+
+        const targetFolderName = subjectFolderMap[detectedSubject];
+        if (targetFolderName) {
+          try {
+            const { data: matchedGroup } = await supabase
+              .from('book_groups')
+              .select('id')
+              .eq('name', targetFolderName)
+              .limit(1)
+              .single();
+            if (matchedGroup?.id) {
+              examInsertData.book_group_id = matchedGroup.id;
+              console.log(`[DB] 자동 폴더 배치: "${detectedSubject}" → "${targetFolderName}"`);
+            }
+          } catch (e) {
+            console.warn(`[DB] 자동 폴더 매칭 실패:`, e);
+          }
+        }
+      }
     }
 
     console.log(`[DB] Inserting exam with data:`, JSON.stringify(examInsertData, null, 2));

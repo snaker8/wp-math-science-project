@@ -40,6 +40,7 @@ interface DesmosCalculator {
   setState: (state: unknown) => void;
   setMathBounds: (bounds: { left: number; right: number; bottom: number; top: number }) => void;
   graphpaperBounds: { left: number; right: number; bottom: number; top: number };
+  pixelsToMath: (pixel: { x: number; y: number }) => { x: number; y: number };
   screenshot: (opts?: { width?: number; height?: number; targetPixelRatio?: number }) => string;
   destroy: () => void;
   observeEvent: (event: string, callback: () => void) => void;
@@ -52,6 +53,8 @@ interface GraphEditData {
   xRange?: [number, number];
   yRange?: [number, number];
   points?: Array<{ x: number; y: number; label?: string }>;
+  segments?: Array<[string, string]>;
+  shadedRegions?: Array<{ vertices: string[]; color?: string }>;
   /** ★ Desmos 전체 상태 (이전 편집 복원용) */
   desmosState?: unknown;
 }
@@ -84,9 +87,114 @@ const GraphModal: React.FC<GraphModalProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showProjections, setShowProjections] = useState(true);
+  const [drawMode, setDrawMode] = useState<'none' | 'segment' | 'fill'>('none');
+  const [clickedCoords, setClickedCoords] = useState<{ x: number; y: number }[]>([]);
+  const [pointStyle, setPointStyle] = useState<'both' | 'label' | 'dot'>('both');
   const containerRef = useRef<HTMLDivElement>(null);
   const calculatorRef = useRef<DesmosCalculator | null>(null);
   const pointCountRef = useRef(0);
+  const segCountRef = useRef(0);
+  const regionCountRef = useRef(0);
+
+  // ★ 그래프 클릭 핸들러 — Desmos pixelsToMath API 사용
+  const handleGraphClick = useCallback((e: React.MouseEvent) => {
+    if (drawMode === 'none' || !containerRef.current || !calculatorRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const pixelX = e.clientX - rect.left;
+    const pixelY = e.clientY - rect.top;
+
+    let coord: { x: number; y: number };
+    try {
+      // Desmos 네이티브 좌표 변환
+      const mathCoord = calculatorRef.current.pixelsToMath({ x: pixelX, y: pixelY });
+      coord = { x: Math.round(mathCoord.x * 100) / 100, y: Math.round(mathCoord.y * 100) / 100 };
+    } catch {
+      // fallback: 수동 변환
+      const bounds = calculatorRef.current.graphpaperBounds;
+      if (!bounds) return;
+      const relX = pixelX / rect.width;
+      const relY = pixelY / rect.height;
+      coord = {
+        x: Math.round((bounds.left + relX * (bounds.right - bounds.left)) * 100) / 100,
+        y: Math.round((bounds.top - relY * (bounds.top - bounds.bottom)) * 100) / 100,
+      };
+    }
+
+    console.log(`[GraphModal] 클릭 좌표: (${coord.x}, ${coord.y})`);
+
+    setClickedCoords(prev => {
+      const next = [...prev, coord];
+
+      if (drawMode === 'segment' && next.length === 2) {
+        segCountRef.current++;
+        calculatorRef.current?.setExpression({
+          id: `user-seg-${segCountRef.current}`,
+          latex: `\\operatorname{polygon}\\left((${next[0].x},${next[0].y}),(${next[1].x},${next[1].y})\\right)`,
+          color: '#555555',
+        });
+        return []; // 리셋, 연속 그리기 가능
+      }
+
+      return next;
+    });
+  }, [drawMode]);
+
+  // ★ 채우기 완료
+  const finishFill = useCallback(() => {
+    if (clickedCoords.length >= 3 && calculatorRef.current) {
+      regionCountRef.current++;
+      const polyLatex = clickedCoords.map(c => `(${c.x},${c.y})`).join(',');
+      calculatorRef.current.setExpression({
+        id: `user-region-${regionCountRef.current}`,
+        latex: `\\operatorname{polygon}\\left(${polyLatex}\\right)`,
+        color: '#fbbf24',
+      });
+    }
+    setClickedCoords([]);
+  }, [clickedCoords]);
+
+  // ★ 점 표시 모드 변경
+  const cyclePointStyle = useCallback(() => {
+    const next = pointStyle === 'both' ? 'label' : pointStyle === 'label' ? 'dot' : 'both';
+    setPointStyle(next);
+    if (!calculatorRef.current) return;
+    const count = pointCountRef.current;
+    for (let i = 0; i < count; i++) {
+      try {
+        calculatorRef.current.setExpression({
+          id: `point-${i}`,
+          pointSize: next === 'label' ? 0 : 10,
+          pointOpacity: next === 'label' ? 0 : 1,
+          showLabel: next !== 'dot',
+        } as any);
+      } catch { /* ignore */ }
+    }
+  }, [pointStyle]);
+
+  // ★ 점 목록 추출 (라벨 기반 — 기존 데이터 호환용)
+  const getPointsFromDesmos = useCallback((): Array<{ label: string; x: number; y: number }> => {
+    if (!calculatorRef.current) return [];
+    const state = calculatorRef.current.getState();
+    const pts: Array<{ label: string; x: number; y: number }> = [];
+    const varValues = new Map<string, number>();
+    for (const e of (state.expressions?.list || [])) {
+      const match = (e as { latex?: string }).latex?.match(/^([xy]_\{?\d+\}?)\s*=\s*(-?[\d.]+)$/);
+      if (match) varValues.set(match[1], parseFloat(match[2]));
+    }
+    for (const e of (state.expressions?.list || [])) {
+      const latex = (e as { latex?: string }).latex || '';
+      const ptMatch = latex.match(/^([A-Z])\s*=\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)$/);
+      if (ptMatch) {
+        let x = parseFloat(ptMatch[2]);
+        let y = parseFloat(ptMatch[3]);
+        if (isNaN(x)) x = varValues.get(ptMatch[2]) ?? 0;
+        if (isNaN(y)) y = varValues.get(ptMatch[3]) ?? 0;
+        pts.push({ label: ptMatch[1], x, y });
+      }
+    }
+    return pts;
+  }, []);
 
   // 계산기 초기화
   const initializeCalculator = useCallback(() => {
@@ -154,8 +262,12 @@ const GraphModal: React.FC<GraphModalProps> = ({
             latex: `${label}=(${xVar}, ${yVar})`,
             color: '#c74440',
             dragMode: 2,
-            pointSize: 12,
-          });
+            pointSize: 10,
+            showLabel: true,
+            label: label,
+            labelOrientation: 'above',
+            labelSize: 'medium',
+          } as any);
 
           // x축으로 수직 점선 (점 → x축)
           calculator.setExpression({
@@ -180,6 +292,40 @@ const GraphModal: React.FC<GraphModalProps> = ({
           });
         });
       }
+    }
+
+    // ★ segments → polygon 선분
+    if (initialGraphData.segments && initialGraphData.points) {
+      const ptMap = new Map<string, { x: number; y: number }>();
+      initialGraphData.points.forEach(p => { if (p.label) ptMap.set(p.label, { x: p.x, y: p.y }); });
+      initialGraphData.segments.forEach((seg, i) => {
+        const p1 = ptMap.get(seg[0]);
+        const p2 = ptMap.get(seg[1]);
+        if (p1 && p2) {
+          calculator.setExpression({
+            id: `seg-${i}`,
+            latex: `\\operatorname{polygon}\\left((${p1.x},${p1.y}),(${p2.x},${p2.y})\\right)`,
+            color: '#555555',
+          });
+        }
+      });
+    }
+
+    // ★ shadedRegions → polygon 채움
+    if (initialGraphData.shadedRegions && initialGraphData.points) {
+      const ptMap = new Map<string, { x: number; y: number }>();
+      initialGraphData.points.forEach(p => { if (p.label) ptMap.set(p.label, { x: p.x, y: p.y }); });
+      initialGraphData.shadedRegions.forEach((region, i) => {
+        const coords = region.vertices.map(v => ptMap.get(v)).filter(Boolean) as { x: number; y: number }[];
+        if (coords.length >= 3) {
+          const polyLatex = coords.map(c => `(${c.x},${c.y})`).join(',');
+          calculator.setExpression({
+            id: `region-${i}`,
+            latex: `\\operatorname{polygon}\\left(${polyLatex}\\right)`,
+            color: region.color || '#cccccc',
+          });
+        }
+      });
     }
 
     // 뷰포트 설정
@@ -345,16 +491,69 @@ const GraphModal: React.FC<GraphModalProps> = ({
               미지수(a, b 등)를 포함한 수식 입력 → 슬라이더로 조절
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {pointCountRef.current > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* ★ 선분 연결 — 그래프에서 두 점 클릭 */}
+            <button
+              onClick={() => { setDrawMode(drawMode === 'segment' ? 'none' : 'segment'); setClickedCoords([]); }}
+              className={`btn-reset ${drawMode === 'segment' ? 'btn-active' : ''}`}
+              title="그래프에서 두 점을 클릭하여 선분 연결"
+              style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+            >
+              선분 연결
+            </button>
+            {/* ★ 도형 채우기 — 그래프에서 점 여러개 클릭 후 채우기 */}
+            <button
+              onClick={() => { setDrawMode(drawMode === 'fill' ? 'none' : 'fill'); setClickedCoords([]); }}
+              className={`btn-reset ${drawMode === 'fill' ? 'btn-active' : ''}`}
+              title="그래프에서 꼭짓점을 클릭하여 도형 채우기"
+              style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+            >
+              도형 채우기
+            </button>
+            {/* ★ 상태 표시 */}
+            {drawMode !== 'none' && (
+              <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 500 }}>
+                {drawMode === 'segment'
+                  ? `그래프 클릭 (${clickedCoords.length}/2)`
+                  : `꼭짓점 클릭 (${clickedCoords.length}개)`}
+              </span>
+            )}
+            {drawMode === 'fill' && clickedCoords.length >= 3 && (
               <button
-                onClick={toggleProjections}
-                className={`btn-reset ${showProjections ? 'btn-active' : ''}`}
-                title="축 투영선 ON/OFF"
-                style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                onClick={finishFill}
+                style={{ fontSize: '12px', padding: '4px 10px', background: '#22c55e', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
               >
-                투영선 {showProjections ? 'ON' : 'OFF'}
+                채우기 완료
               </button>
+            )}
+            {drawMode !== 'none' && (
+              <button
+                onClick={() => { setDrawMode('none'); setClickedCoords([]); }}
+                className="btn-reset"
+                style={{ fontSize: '11px', padding: '2px 8px', color: '#ef4444' }}
+              >
+                취소
+              </button>
+            )}
+            {drawMode === 'none' && pointCountRef.current > 0 && (
+              <>
+                <button
+                  onClick={cyclePointStyle}
+                  className="btn-reset"
+                  title="점 표시 모드 전환: 점+라벨 / 라벨만 / 점만"
+                  style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  {pointStyle === 'both' ? '점+라벨' : pointStyle === 'label' ? '라벨만' : '점만'}
+                </button>
+                <button
+                  onClick={toggleProjections}
+                  className={`btn-reset ${showProjections ? 'btn-active' : ''}`}
+                  title="축 투영선 ON/OFF"
+                  style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  투영선 {showProjections ? 'ON' : 'OFF'}
+                </button>
+              </>
             )}
             <button onClick={handleReset} className="btn-reset" title="초기 상태로 리셋">
               <RotateCcw size={16} />
@@ -366,7 +565,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
         </div>
 
         {/* Desmos 전체 영역 — 네이티브 UI가 수식 패널 + 그래프를 모두 제공 */}
-        <div className="graph-modal-body">
+        <div className="graph-modal-body" style={{ position: 'relative' }}>
           {isLoading && (
             <div className="graph-loading">
               <div className="loading-spinner" />
@@ -378,6 +577,19 @@ const GraphModal: React.FC<GraphModalProps> = ({
             className="desmos-container"
             style={{ opacity: isLoading ? 0 : 1 }}
           />
+          {/* ★ 선분/채우기 모드: 클릭 캡처 오버레이 */}
+          {drawMode !== 'none' && (
+            <div
+              onClick={handleGraphClick}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                cursor: 'crosshair',
+                zIndex: 10,
+                background: 'rgba(0,0,0,0.01)', // 투명하지만 클릭 가능
+              }}
+            />
+          )}
         </div>
 
         {/* 푸터 */}

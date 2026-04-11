@@ -13,7 +13,7 @@ import { join } from 'path';
 
 // 그래프 분석 결과 타입
 export interface GraphData {
-  type: 'function' | 'geometry' | 'coordinate' | 'none';
+  type: 'function' | 'geometry' | 'coordinate' | 'sketch' | 'none';
   expressions?: string[];     // Desmos 수식 ["y=x^2", "y=2x+1"]
   xRange?: [number, number];
   yRange?: [number, number];
@@ -21,6 +21,8 @@ export interface GraphData {
   description?: string;       // 폴백용 텍스트 설명
   // 이미지 내 그래프 영역 위치 (0~1 비율, 크롭용)
   imageBbox?: { top: number; left: number; bottom: number; right: number };
+  // ★ sketch 타입: Gemini가 보이는 대로 생성한 SVG
+  svg?: string;
 }
 
 // ============================================================================
@@ -291,24 +293,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 0. 낙서 제거 전처리 (base64 방식 — FormData 호환 문제 해결)
-    let cleanedBase64 = imageBase64;
-    try {
-      const cleanRes = await fetch('http://localhost:8200/clean-handwriting-base64', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: imageBase64, aggressiveness: 0.5 }),
-      });
-      if (cleanRes.ok) {
-        const cleanData = await cleanRes.json();
-        if (cleanData.cleaned && cleanData.image_base64 && cleanData.removed_ratio > 0.001) {
-          cleanedBase64 = cleanData.image_base64;
-          console.log(`[Reanalyze] 낙서 제거: ${(cleanData.removed_ratio * 100).toFixed(1)}% 제거`);
-        }
-      }
-    } catch {
-      console.log('[Reanalyze] 낙서 제거 건너뜀 (image-pipeline 미실행)');
-    }
+    // ★ 낙서 제거 비활성화 (OpenCV 방식이 인쇄체까지 삭제하는 문제)
+    const cleanedBase64 = imageBase64;
 
     // 1. Mathpix OCR + Vision 그래프 분석 병렬 실행
     console.log('[Reanalyze] Sending crop image to Mathpix OCR...');
@@ -365,8 +351,10 @@ export async function POST(request: NextRequest) {
     // ★ OCR 한글 오타 자동 교정 (GPT-4o-mini)
     const correctedText = await correctOcrTypos(rawOcrText);
 
+    // ★ \displaystyle 제거 (KaTeX 인라인 렌더링 깨짐 방지)
+    const noDisplayStyle = correctedText.replace(/\\displaystyle\s*/g, '');
     // ★ 전각 괄호 → 반각 괄호 정규화 (Mathpix/GPT가 （1）형식으로 출력하는 경우)
-    const normalizedParens = correctedText.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
+    const normalizedParens = noDisplayStyle.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
     // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (Mathpix 원문자 오변환 교정)
     const ocrText = normalizeChoiceParens(normalizedParens);
 
@@ -376,13 +364,23 @@ export async function POST(request: NextRequest) {
     console.log(`[Reanalyze] OCR 원문(처음 500자):\n${ocrText.substring(0, 500)}`);
     console.log(`[Reanalyze] 추출된 선택지 (${choices.length}개):`, JSON.stringify(choices));
 
-    // 3. 고급 분석: customPrompt가 있으면 GPT-4o로 추가 정제
+    // 3. GPT-4o Vision 정제
+    //    - customPrompt 있으면: 사용자 요구사항 + 이미지 직접 인식
+    //    - confidence < 0.5이면: OCR 결과 불량 → 자동으로 이미지 재인식
     let refinedText = ocrText;
+    const needsVisionFix = confidence < 0.5 || ocrText.includes('\\displaystyle');
     if (customPrompt && customPrompt.trim()) {
       try {
-        refinedText = await refineWithGPT(ocrText, customPrompt);
+        refinedText = await refineWithGPT(ocrText, customPrompt, imageBase64);
       } catch (err) {
         console.warn('[Reanalyze] GPT refinement failed, using raw OCR:', err);
+      }
+    } else if (needsVisionFix) {
+      try {
+        console.log(`[Reanalyze] OCR 품질 불량 (confidence=${confidence.toFixed(2)}) → GPT-4o Vision 자동 교정`);
+        refinedText = await refineWithGPT(ocrText, '수식을 정확하게 다시 읽어주세요', imageBase64);
+      } catch (err) {
+        console.warn('[Reanalyze] Vision auto-fix failed, using raw OCR:', err);
       }
     }
 
@@ -688,67 +686,64 @@ async function analyzeGraphWithVision(imageBase64: string): Promise<GraphData | 
     ? imageBase64.split(',')[1]
     : imageBase64;
 
-  const prompt = `당신은 수학 시험지의 그래프/도형을 분석하여 Desmos 그래핑 계산기용 수식으로 변환하는 전문가입니다.
+  const prompt = `당신은 수학 시험지의 그래프/도형을 분석하는 전문가입니다.
 
-이미지에서 그래프를 찾아 Desmos가 렌더링할 수 있는 정확한 수식을 추출하세요.
+이미지에서 그래프/도형을 찾아 적절한 방식으로 변환하세요.
 
-■ 응답 형식 (JSON만, 다른 텍스트 없이):
+■ 핵심: type 선택 기준
+1. "function": 단순 함수 그래프 (y=x², y=sin(x) 등) → Desmos로 정확히 그릴 수 있는 것
+2. "sketch": 개념적 그림 (빗금 영역, 라벨 점, 함수+도형 조합 등) → 수식으로 정확히 그리면 원본과 완전 다른 모양이 되는 것
+3. "geometry": 순수 기하 도형 (삼각형, 원 등 함수 그래프 없이)
+4. "coordinate": 좌표 평면에 점/벡터만
+5. "none": 그래프/도형 없음
+
+★ 판단 핵심: 함수를 수학적으로 정확히 플로팅하면 원본 그림과 비슷한가?
+- 비슷하면 → "function" (Desmos 사용)
+- 완전 다르면 → "sketch" (SVG로 보이는 대로 그리기)
+예: y=2^{x+2}-3 과 y=log_2(x+2)-3 위에 점 A,B,C,D + 빗금 영역 → "sketch"
+예: y=x^2-4x+3 포물선 하나 → "function"
+
+■ type="function" 응답:
 {
   "type": "function",
   "expressions": ["y=x^2", "y=2x+1"],
-  "xRange": [-5, 5],
-  "yRange": [-3, 7],
+  "xRange": [-5, 5], "yRange": [-3, 7],
   "points": [{"x": 1, "y": 1, "label": "A"}],
   "description": "이차함수와 직선의 교점",
   "imageBbox": {"top": 0.3, "left": 0.05, "bottom": 0.75, "right": 0.95}
 }
 
-■ imageBbox (매우 중요):
-- 이미지 전체 크기 대비 그래프/도형 영역의 위치를 0~1 비율로 반환
-- top: 그래프 상단 시작 (0=이미지 맨 위, 1=맨 아래)
-- left: 그래프 좌측 시작
-- bottom: 그래프 하단 끝
-- right: 그래프 우측 끝
-- 그래프만 포함하고, 그래프 위아래의 텍스트는 제외하세요
-- 그래프가 없으면(type: "none") imageBbox는 생략
+■ type="sketch" 응답 (★ 중요: 보이는 대로 SVG 생성):
+{
+  "type": "sketch",
+  "svg": "<svg viewBox='0 0 300 250' xmlns='http://www.w3.org/2000/svg'>...</svg>",
+  "description": "두 곡선 y=2^{x+2}-3, y=log_2(x+2)-3의 교점과 사각형 ADBC",
+  "imageBbox": {"top": 0.3, "left": 0.05, "bottom": 0.75, "right": 0.95}
+}
 
-■ type 값:
-- "function": 함수 그래프 + 도형이 함께 있거나, 직선/곡선 위에 점/꼭지점이 있는 문제
-- "geometry": 순수 기하 도형만 (함수 그래프 없이 도형만 있는 경우)
-- "coordinate": 좌표 평면에 점/벡터만 있는 경우
-- "none": 그래프/도형이 없는 경우
+■ SVG 작성 규칙 (type="sketch"):
+1. viewBox는 300x250 기준
+2. 좌표축: 가운데에 x축, y축 그리기 (화살표 포함)
+3. 곡선: <path> 베지어 커브로 이미지에 보이는 모양 그대로 그리기
+4. 점: <circle r="3"> + <text> 라벨 (A, B, C, D, O 등)
+5. 빗금 영역: <pattern>으로 해칭, <path>로 영역 채우기
+6. 수식 라벨: <text font-style="italic"> 로 y=f(x) 형태 표기
+7. 색상: 검정 선(#000), 얇은 회색 보조선(#ccc)
+8. 선 두께: stroke-width="1.5" (곡선), "1" (축)
+9. 원본 이미지의 비율과 배치를 최대한 따라 그리기
 
-■ 핵심 판단 기준:
-- 이차함수 그래프 위에 직사각형 꼭지점 A,B,C,D가 있으면 → type: "function"
-- expressions에 함수 수식과 함께 꼭지점 좌표를 points에 넣으세요
+■ Desmos 수식 규칙 (type="function"):
+1. 변수는 x, y만. 매개변수(a,b,c)는 구체적 숫자로 대입
+2. 수식 형식: y=x^2, y=\\sin(x), y=\\frac{1}{x}
+3. 절대값: \\left|x\\right|
+4. polygon: polygon((x1,y1),(x2,y2),...)
+5. \\text{}, \\displaystyle, 한글 사용 금지
 
-■ Desmos 수식 작성 규칙 (매우 중요):
-1. expressions 배열의 각 수식은 Desmos가 직접 렌더링하는 수식입니다
-2. 변수는 x, y만 사용. a, b, c 같은 매개변수는 구체적 숫자로 대입하세요
-   - 잘못된 예: "y=-2ax+4" (a가 정의되지 않음)
-   - 올바른 예: "y=-4x+4" (a=2를 대입)
-3. 이미지에서 구체적 수치를 읽을 수 없는 매개변수가 있으면, 그래프의 모양을 보고 추정하세요
-4. 수식 형식: y=x^2, y=\\sin(x), y=\\frac{1}{x}, x^2+y^2=9
-5. 절대값: \\left|x\\right| (|x| 사용 금지)
-6. 부등식: y\\ge x^2, y\\le 2x+1
-7. 분수: \\frac{a}{b}
-8. 제곱근: \\sqrt{x}
-9. \\text{}, \\textbf{}, \\displaystyle 등 텍스트 명령 사용 금지
-10. \\rightarrow 등 화살표 사용 금지
-11. 한글 포함 금지
-12. 직사각형/선분은 polygon 또는 선분 수식으로: polygon((x1,y1),(x2,y2),(x3,y3),(x4,y4))
-13. 꼭지점 A,B,C,D 등 알파벳 표시는 points 배열에 label과 함께 넣으세요
+■ imageBbox: 이미지 내 그래프 영역 위치 (0~1 비율)
+■ description: 한국어 설명
+■ 그래프 없으면: {"type": "none"}
 
-■ 범위 설정:
-- xRange, yRange는 그래프의 주요 특징(교점, 극값, 절편)이 모두 보이도록 설정
-- 기본값: [-10, 10] 대신 그래프에 맞는 적절한 범위 사용
-
-■ description:
-- 한국어로 그래프 설명 (이 필드만 한국어 허용)
-
-■ 그래프가 없으면: {"type": "none"}
-
-이 수학 문제 이미지에서 그래프가 있으면 Desmos 수식으로 변환해주세요. 매개변수(a,b,c)는 반드시 구체적 숫자로 대입하세요. JSON으로만 응답하세요.`;
+JSON으로만 응답하세요.`;
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -775,7 +770,7 @@ async function analyzeGraphWithVision(imageBase64: string): Promise<GraphData | 
     const parsed = JSON.parse(jsonStr) as GraphData;
 
     // 유효성 검증
-    if (!parsed.type || !['function', 'geometry', 'coordinate', 'none'].includes(parsed.type)) {
+    if (!parsed.type || !['function', 'geometry', 'coordinate', 'sketch', 'none'].includes(parsed.type)) {
       return { type: 'none' };
     }
 
@@ -872,12 +867,39 @@ async function correctOcrTypos(ocrText: string): Promise<string> {
 /**
  * GPT로 OCR 결과 정제 (고급 분석)
  */
-async function refineWithGPT(ocrText: string, customPrompt: string): Promise<string> {
+async function refineWithGPT(ocrText: string, customPrompt: string, imageBase64?: string): Promise<string> {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (!OPENAI_API_KEY) {
     console.warn('[Reanalyze] No OpenAI API key, skipping GPT refinement');
     return ocrText;
   }
+
+  // ★ 이미지가 있으면 GPT-4o Vision으로 직접 수식 인식
+  const userContent: any[] = [];
+
+  if (imageBase64) {
+    userContent.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:image/png;base64,${imageBase64}`,
+        detail: 'high',
+      },
+    });
+  }
+
+  userContent.push({
+    type: 'text',
+    text: `OCR 원본 텍스트 (참고용):
+${ocrText}
+
+${customPrompt ? `수정 요구사항:\n${customPrompt}\n\n` : ''}이미지를 직접 보고 수학 문제의 수식을 정확하게 LaTeX로 변환해주세요.
+OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단하세요.
+수식은 $...$ (인라인) 또는 $$...$$ (디스플레이) 형식으로 작성하세요.
+선택지가 있으면 ①②③④⑤ 형식으로 유지하세요.
+수정된 전체 텍스트만 반환하세요. 설명 없이 텍스트만 출력하세요.`,
+  });
+
+  console.log(`[RefineGPT] Vision ${imageBase64 ? '활성' : '비활성'}, prompt: ${customPrompt?.substring(0, 50) || '(없음)'}`);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -886,24 +908,17 @@ async function refineWithGPT(ocrText: string, customPrompt: string): Promise<str
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: 'gpt-4o',  // ★ Vision 필요하므로 gpt-4o 사용
       messages: [
         {
           role: 'system',
-          content: `당신은 수학 문제 OCR 결과를 정제하는 전문가입니다.
-주어진 OCR 텍스트를 사용자 요구사항에 맞게 수정해주세요.
-수식은 반드시 $...$ (인라인) 또는 $$...$$ (디스플레이) 형식으로 유지하세요.
-수정된 텍스트만 반환하세요. 설명 없이 텍스트만 출력하세요.`,
+          content: `당신은 수학 문제 이미지를 읽고 정확한 LaTeX를 생성하는 전문가입니다.
+이미지에 보이는 수식을 정확하게 변환하세요. OCR 결과는 참고용이며 틀릴 수 있습니다.
+반드시 이미지를 기준으로 판단하세요.`,
         },
         {
           role: 'user',
-          content: `OCR 원본 텍스트:
-${ocrText}
-
-수정 요구사항:
-${customPrompt}
-
-위 요구사항에 맞게 OCR 텍스트를 수정해주세요. 수정된 텍스트만 반환하세요.`,
+          content: userContent,
         },
       ],
       temperature: 0.1,
@@ -916,5 +931,7 @@ ${customPrompt}
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content?.trim() || ocrText;
+  const result = data.choices[0]?.message?.content?.trim() || ocrText;
+  console.log(`[RefineGPT] 결과: ${result.substring(0, 200)}`);
+  return result;
 }
