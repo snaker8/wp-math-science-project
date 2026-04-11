@@ -474,8 +474,10 @@ function buildQuestionResult(
     })
     .join('\n');
 
+  // ★ <보기> ㄱ/ㄴ/ㄷ 오인식 교정
+  const fixedConsonants = fixKoreanConsonantChoices(rawContentMmd);
   // ★ \displaystyle 제거 (KaTeX 인라인 렌더링 깨짐 방지)
-  const noDisplayStyle = rawContentMmd.replace(/\\displaystyle\s*/g, '');
+  const noDisplayStyle = fixedConsonants.replace(/\\displaystyle\s*/g, '');
   // ★ 전각 괄호 → 반각 정규화 (Mathpix가 （1）형식으로 출력하는 경우)
   const halfWidthMmd = noDisplayStyle.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
   // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (content_latex에도 원문자 반영)
@@ -541,6 +543,43 @@ function parseChoicesFromText(text: string): string[] {
  *   - (1)~(3) 3개 이하 → 서술형 소문제 가능성 → 변환 안 함
  *   - "구하시오", "[N점]" 등 포함 → 소문제 → 변환 안 함
  */
+
+/**
+ * <보기> ㄱ/ㄴ/ㄷ 오인식 교정
+ * Mathpix가 한국어 자음을 다른 문자로 잘못 인식하는 패턴 수정
+ */
+function fixKoreanConsonantChoices(text: string): string {
+  const hasBogiPattern = /보기|<\s*보기\s*>|〈\s*보기\s*〉/.test(text);
+  const hasConsonantChoice = /[①②③④⑤(]\s*[ㄱㄴㄷ]/.test(text);
+  const hasMisrecognized = /[①②③④⑤(]\s*(?:¬|⁻¹|(?:^|\s)D(?:\s|,|$))/.test(text) ||
+    /¬\s*[.,]?\s*[ㄱ-ㅎa-zA-Z]/.test(text) ||
+    /[ㄱㄴ]\s*[.,]\s*[CD]/.test(text);
+  if (!hasBogiPattern && !hasConsonantChoice && !hasMisrecognized) return text;
+
+  let result = text;
+  // ¬ → ㄱ
+  result = result.replace(/¬(?=\s*[.]\s*)/g, 'ㄱ');
+  result = result.replace(/¬(?=\s*[ㄴㄷ,])/g, 'ㄱ');
+  result = result.replace(/(?<!\$[^$]*)¬(?![^$]*\$)/g, 'ㄱ');
+  // ⁻¹ → ㄱ (선택지 맥락)
+  result = result.replace(/(?:[①②③④⑤]\s*|[,(]\s*)⁻¹/g, (m) => m.replace('⁻¹', 'ㄱ'));
+  result = result.replace(/⁻¹(?=\s*[,]?\s*[ㄴㄷCD])/g, 'ㄱ');
+  // D → ㄷ
+  result = result.replace(/(?<=^|\n)\s*D\s*$/gm, (m) => m.replace('D', 'ㄷ'));
+  result = result.replace(/(?<=[①②③④⑤]\s*)D(?=\s*$|\s*,)/gm, 'ㄷ');
+  // C → ㄷ (ㄱ/ㄴ과 함께)
+  result = result.replace(/([ㄱㄴ]\s*,\s*)C(?!\w)/g, '$1ㄷ');
+  result = result.replace(/C(?=\s*,\s*[ㄱㄴ])/g, 'ㄷ');
+  // L → ㄴ (ㄱ/ㄷ과 함께)
+  result = result.replace(/([ㄱㄷ]\s*,\s*)L(?!\w)/g, '$1ㄴ');
+  result = result.replace(/L(?=\s*,\s*[ㄱㄷ])/g, 'ㄴ');
+  // ㄱ./ㄴ./ㄷ. 패턴 복원
+  result = result.replace(/¬\s*\./g, 'ㄱ.');
+  result = result.replace(/(?<=\n|^)\s*D\s*\./gm, 'ㄷ.');
+  result = result.replace(/(?<=\n|^)\s*L\s*\./gm, 'ㄴ.');
+  return result;
+}
+
 function normalizeChoiceParensForCloudFlow(text: string): string {
   const NUMBER_TO_CIRCLED: Record<string, string> = {
     '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',

@@ -368,9 +368,24 @@ function ChoicesEditor({
                   onChange={(e) => handleChoiceChange(i, e.target.value)}
                   className="flex-1 rounded-lg border border bg-surface-raised px-2.5 py-1.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
                   placeholder={`선택지 ${i + 1}`} />
+                {/* 마지막 선택지에 삭제 버튼 (2개 이상일 때) */}
+                {i === choices.length - 1 && choices.length > 2 && (
+                  <button type="button" onClick={() => onChange(choices.slice(0, -1))}
+                    className="text-content-tertiary hover:text-red-400 transition-colors flex-shrink-0 p-0.5"
+                    title="선택지 삭제">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
+          {/* 선택지 추가 버튼 */}
+          {choices.length < 5 && (
+            <button type="button" onClick={() => onChange([...choices, ''])}
+              className="w-full py-1.5 rounded-lg border border-dashed border-zinc-600 text-xs text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors">
+              + 선택지 추가 ({choices.length}/5)
+            </button>
+          )}
 
           {/* 정답 선택 */}
           <div className="flex items-center gap-3 pt-1 border-t border-subtle">

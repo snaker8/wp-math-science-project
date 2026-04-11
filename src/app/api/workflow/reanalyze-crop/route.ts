@@ -351,8 +351,11 @@ export async function POST(request: NextRequest) {
     // ★ OCR 한글 오타 자동 교정 (GPT-4o-mini)
     const correctedText = await correctOcrTypos(rawOcrText);
 
+    // ★ <보기> ㄱ/ㄴ/ㄷ 오인식 교정 (Mathpix/GPT 공통 문제)
+    const fixedConsonants = fixKoreanConsonantChoices(correctedText);
+
     // ★ \displaystyle 제거 (KaTeX 인라인 렌더링 깨짐 방지)
-    const noDisplayStyle = correctedText.replace(/\\displaystyle\s*/g, '');
+    const noDisplayStyle = fixedConsonants.replace(/\\displaystyle\s*/g, '');
     // ★ 전각 괄호 → 반각 괄호 정규화 (Mathpix/GPT가 （1）형식으로 출력하는 경우)
     const normalizedParens = noDisplayStyle.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
     // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (Mathpix 원문자 오변환 교정)
@@ -813,6 +816,72 @@ JSON으로만 응답하세요.`;
 }
 
 /**
+ * <보기> ㄱ/ㄴ/ㄷ 오인식 교정
+ * Mathpix/GPT Vision이 한국어 자음(ㄱ,ㄴ,ㄷ)을 다른 문자로 잘못 인식하는 패턴 수정
+ * - ¬ → ㄱ (논리 NOT 기호로 오인식)
+ * - ⁻¹ → ㄱ (위첨자로 오인식)
+ * - C/c → ㄷ (선택지 맥락에서)
+ * - D → ㄷ (선택지 맥락에서, 단독)
+ * - L → ㄴ (선택지 맥락에서)
+ */
+function fixKoreanConsonantChoices(text: string): string {
+  // <보기> 또는 ㄱ/ㄴ/ㄷ 선택지가 있는 문제인지 감지
+  const hasBogiPattern = /보기|<\s*보기\s*>|〈\s*보기\s*〉/.test(text);
+  const hasConsonantChoice = /[①②③④⑤(]\s*[ㄱㄴㄷ]/.test(text);
+  // ¬ 또는 ⁻¹ 가 선택지 근처에 나타나면 오인식 가능성 높음
+  const hasMisrecognized = /[①②③④⑤(]\s*(?:¬|⁻¹|(?:^|\s)D(?:\s|,|$))/.test(text) ||
+    /¬\s*[.,]?\s*[ㄱ-ㅎa-zA-Z]/.test(text) ||
+    /ㄱ\s*[.,]\s*[CD]/.test(text) ||  // ㄱ, C(=ㄷ) 패턴
+    /ㄴ\s*[.,]\s*[CD]/.test(text);    // ㄴ, C(=ㄷ) 패턴
+
+  if (!hasBogiPattern && !hasConsonantChoice && !hasMisrecognized) {
+    return text;
+  }
+
+  console.log('[FixConsonants] <보기> ㄱ/ㄴ/ㄷ 오인식 교정 시작');
+
+  let result = text;
+
+  // 1. ¬ → ㄱ (수식 내부가 아닌 경우만)
+  //    수식($...$) 밖에서 ¬가 나오면 ㄱ으로 교체
+  result = result.replace(/(?<!\$[^$]*)¬(?![^$]*\$)/g, 'ㄱ');
+  // 간단한 접근: ¬ 뒤에 . 또는 공백+텍스트/ㄴ/ㄷ가 오면 ㄱ
+  result = result.replace(/¬(?=\s*[.]\s*)/g, 'ㄱ');
+  result = result.replace(/¬(?=\s*[ㄴㄷ,])/g, 'ㄱ');
+
+  // 2. ⁻¹ → ㄱ (선택지 맥락에서)
+  //    ⁻¹이 선택지 번호 뒤나 쉼표 앞뒤에 나오면 ㄱ
+  result = result.replace(/(?:[①②③④⑤]\s*|[,(]\s*)⁻¹/g, (match) => match.replace('⁻¹', 'ㄱ'));
+  result = result.replace(/⁻¹(?=\s*[,]?\s*[ㄴㄷCD])/g, 'ㄱ');
+
+  // 3. 단독 D → ㄷ (선택지 맥락: 줄 시작이나 선택지 번호 뒤)
+  //    수식이 아닌 위치에서 D가 단독으로 나오면
+  result = result.replace(/(?<=^|\n)\s*D\s*$/gm, (match) => match.replace('D', 'ㄷ'));
+  result = result.replace(/(?<=[①②③④⑤]\s*)D(?=\s*$|\s*,)/gm, 'ㄷ');
+
+  // 4. 선택지에서 C → ㄷ (ㄱ/ㄴ과 함께 나올 때)
+  //    "ㄱ, C" → "ㄱ, ㄷ" / "ㄴ, C" → "ㄴ, ㄷ"
+  result = result.replace(/([ㄱㄴ]\s*,\s*)C(?!\w)/g, '$1ㄷ');
+  result = result.replace(/C(?=\s*,\s*[ㄱㄴ])/g, 'ㄷ');
+
+  // 5. 선택지에서 단독 L → ㄴ (ㄱ/ㄷ과 함께 나올 때)
+  result = result.replace(/([ㄱㄷ]\s*,\s*)L(?!\w)/g, '$1ㄴ');
+  result = result.replace(/L(?=\s*,\s*[ㄱㄷ])/g, 'ㄴ');
+
+  // 6. <보기> 내용에서 "ㄱ." "ㄴ." "ㄷ." 패턴 복원
+  //    ¬. → ㄱ. / D. → ㄷ. / L. → ㄴ.
+  result = result.replace(/¬\s*\./g, 'ㄱ.');
+  result = result.replace(/(?<=\n|^)\s*D\s*\./gm, 'ㄷ.');
+  result = result.replace(/(?<=\n|^)\s*L\s*\./gm, 'ㄴ.');
+
+  if (result !== text) {
+    console.log('[FixConsonants] 교정 완료');
+  }
+
+  return result;
+}
+
+/**
  * OCR 한글 오타 자동 교정 (gpt-4o-mini, 8초 타임아웃)
  * Mathpix가 한글을 잘못 인식하는 경우(블→를, 브→를 등)를 수정
  */
@@ -912,9 +981,17 @@ OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단
       messages: [
         {
           role: 'system',
-          content: `당신은 수학 문제 이미지를 읽고 정확한 LaTeX를 생성하는 전문가입니다.
+          content: `당신은 한국 수학 시험지 이미지를 읽고 정확한 LaTeX를 생성하는 전문가입니다.
 이미지에 보이는 수식을 정확하게 변환하세요. OCR 결과는 참고용이며 틀릴 수 있습니다.
-반드시 이미지를 기준으로 판단하세요.`,
+반드시 이미지를 기준으로 판단하세요.
+
+★ 중요 — <보기> 문제 인식 규칙:
+- 한국 수학 시험지의 <보기>에는 ㄱ, ㄴ, ㄷ (한국어 자음)이 항목 라벨로 사용됩니다.
+- ㄱ을 ¬(논리 NOT)이나 ⁻¹(위첨자)로 잘못 읽지 마세요. 반드시 "ㄱ"으로 표기하세요.
+- ㄷ을 C나 D로 잘못 읽지 마세요. 반드시 "ㄷ"으로 표기하세요.
+- ㄴ을 L이나 니은 이외의 문자로 잘못 읽지 마세요. 반드시 "ㄴ"으로 표기하세요.
+- 선택지: ① ㄴ  ② ㄷ  ③ ㄱ, ㄴ  ④ ㄱ, ㄷ  ⑤ ㄴ, ㄷ 형식이 일반적입니다.
+- <보기> 내용은 "ㄱ. [수식]", "ㄴ. [수식]", "ㄷ. [수식]" 형식입니다.`,
         },
         {
           role: 'user',

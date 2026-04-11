@@ -1206,6 +1206,9 @@ function ProblemDetailPanel({
   const [isEditingNumber, setIsEditingNumber] = useState(false);
   const [editNumberValue, setEditNumberValue] = useState('');
   const numberInputRef = React.useRef<HTMLInputElement>(null);
+  const [isEditingScore, setIsEditingScore] = useState(false);
+  const [editScoreValue, setEditScoreValue] = useState('');
+  const scoreInputRef = React.useRef<HTMLInputElement>(null);
 
   // ── 크롭 이미지 드래그 선택 상태 ──
   const [isCropDragging, setIsCropDragging] = useState(false);
@@ -1477,10 +1480,69 @@ function ProblemDetailPanel({
               <div className="flex items-center gap-1">
                 <Pencil className="h-3 w-3 text-emerald-500" />
                 <span className="text-xs font-medium text-gray-700">문제 번호</span>
-                {problem.score != null && (
-                  <span className="ml-2 text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                {/* 배점 인라인 수정 */}
+                {isEditingScore ? (
+                  <div className="ml-2 flex items-center gap-1">
+                    <input
+                      ref={scoreInputRef}
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={editScoreValue}
+                      onChange={(e) => setEditScoreValue(e.target.value)}
+                      onBlur={() => {
+                        const val = parseFloat(editScoreValue);
+                        if (!isNaN(val) && val > 0) {
+                          onSave({ score: val });
+                        } else if (editScoreValue === '' || editScoreValue === '0') {
+                          onSave({ score: undefined });
+                        }
+                        setIsEditingScore(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = parseFloat(editScoreValue);
+                          if (!isNaN(val) && val > 0) {
+                            onSave({ score: val });
+                          } else if (editScoreValue === '' || editScoreValue === '0') {
+                            onSave({ score: undefined });
+                          }
+                          setIsEditingScore(false);
+                        } else if (e.key === 'Escape') {
+                          setIsEditingScore(false);
+                        }
+                      }}
+                      className="w-14 h-5 rounded border border-blue-300 bg-white px-1.5 text-xs text-blue-700 text-center font-medium focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      autoFocus
+                    />
+                    <span className="text-xs text-blue-500">점</span>
+                  </div>
+                ) : problem.score != null ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditScoreValue(String(problem.score ?? ''));
+                      setIsEditingScore(true);
+                      setTimeout(() => scoreInputRef.current?.select(), 50);
+                    }}
+                    className="ml-2 text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded hover:bg-blue-100 transition-colors cursor-pointer"
+                    title="클릭해서 배점 수정"
+                  >
                     {problem.score}점
-                  </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditScoreValue('');
+                      setIsEditingScore(true);
+                      setTimeout(() => scoreInputRef.current?.focus(), 50);
+                    }}
+                    className="ml-2 text-[10px] text-gray-400 border border-dashed border-gray-300 px-1.5 py-0.5 rounded hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer"
+                    title="배점 입력"
+                  >
+                    + 배점
+                  </button>
                 )}
               </div>
               <span className="text-[10px] text-gray-400">클릭해서 번호를 수정하세요</span>
@@ -3965,7 +4027,7 @@ export default function AnalyzeJobPage() {
       {/* ======== Main 3-Panel Layout ======== */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- 좌측: 페이지 썸네일 --- */}
-        <div className="w-52 flex-shrink-0 border-r border-zinc-800/50">
+        <div className="w-44 flex-shrink-0 border-r border-zinc-800/50">
           <PageThumbnailList
             pages={activeJobData?.pages || jobData.pages}
             currentPage={currentPage}
@@ -3997,8 +4059,8 @@ export default function AnalyzeJobPage() {
           onManualCropDetected={handleManualCropDetected}
         />
 
-        {/* --- 우측: 문제 상세 패널 --- */}
-        <div className="w-[420px] flex-shrink-0 border-l border-zinc-800/50">
+        {/* --- 우측: 문제 상세 패널 (문제 선택 시 확장) --- */}
+        <div className={`flex-shrink-0 border-l border-zinc-800/50 transition-all duration-300 ${selectedProblem ? 'w-[400px]' : 'w-[200px]'}`}>
           <ProblemDetailPanel
             problem={selectedProblem}
             pdfUrl={jobData.pdfUrl}

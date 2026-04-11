@@ -34,6 +34,7 @@ export interface AnalyzedProblemData {
   status: 'analyzing' | 'completed' | 'error' | 'edited';
   pageIndex: number;
   bbox?: { x: number; y: number; w: number; h: number };
+  score?: number;
 }
 
 interface AnalyzeProblemEditModalProps {
@@ -494,6 +495,21 @@ function ChoicesEditor({
               />
             ))}
           </div>
+          {/* 선택지 추가/삭제 */}
+          <div className="flex items-center gap-2">
+            {choices.length < 5 && (
+              <button type="button" onClick={() => onChange([...choices, ''])}
+                className="flex-1 py-1 rounded-lg border border-dashed border-gray-300 text-xs text-gray-400 hover:text-emerald-500 hover:border-emerald-400 transition-colors">
+                + 선택지 추가 ({choices.length}/5)
+              </button>
+            )}
+            {choices.length > 2 && (
+              <button type="button" onClick={() => onChange(choices.slice(0, -1))}
+                className="px-3 py-1 rounded-lg border border-dashed border-gray-300 text-xs text-gray-400 hover:text-red-500 hover:border-red-400 transition-colors">
+                마지막 삭제
+              </button>
+            )}
+          </div>
           <p className="text-[10px] text-gray-400">수식은 <code className="bg-gray-100 px-1 rounded text-gray-600">$...$</code> 로 감싸세요 (예: <code className="bg-gray-100 px-1 rounded text-gray-600">$x^2+1$</code>)</p>
 
           {/* 정답 선택 */}
@@ -718,6 +734,9 @@ export default function AnalyzeProblemEditModal({
   // === 메타데이터 ===
   const [difficulty, setDifficulty] = useState(problem.difficulty);
   const [problemNumber, setProblemNumber] = useState(problem.number);
+  const [problemScore, setProblemScore] = useState<string>(
+    (problem as any).score != null ? String((problem as any).score) : ''
+  );
 
   // === UI ===
   const [showLatexModal, setShowLatexModal] = useState(false);
@@ -928,6 +947,7 @@ export default function AnalyzeProblemEditModal({
       return stripped;
     });
 
+    const parsedScore = parseFloat(problemScore);
     const updated: Partial<AnalyzedProblemData> = {
       content,
       solution,
@@ -935,11 +955,12 @@ export default function AnalyzeProblemEditModal({
       answer: answerType === 'objective' ? correctAnswer : subjectiveAnswer,
       difficulty: difficulty as 1 | 2 | 3 | 4 | 5,
       number: problemNumber,
+      score: !isNaN(parsedScore) && parsedScore > 0 ? parsedScore : undefined,
       status: 'edited',
     };
 
     onSave(updated);
-  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, onSave]);
+  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, onSave]);
 
   return (
     <>
@@ -1112,16 +1133,34 @@ export default function AnalyzeProblemEditModal({
 
               {/* 메타 정보 (양쪽 탭 공통) */}
               <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-                {/* 문제 번호 */}
+                {/* 문제 번호 + 배점 */}
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium text-gray-500">문제 번호</span>
-                  <input
-                    type="number"
-                    value={problemNumber}
-                    onChange={(e) => setProblemNumber(parseInt(e.target.value, 10) || 1)}
-                    className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 text-center font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                    min={1}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={problemNumber}
+                      onChange={(e) => setProblemNumber(parseInt(e.target.value, 10) || 1)}
+                      className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 text-center font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                      min={1}
+                    />
+                  </div>
+                </div>
+                {/* 배점 */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-gray-500">배점</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={problemScore}
+                      onChange={(e) => setProblemScore(e.target.value)}
+                      placeholder="미입력"
+                      className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 text-center font-bold focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder:text-gray-300 placeholder:font-normal placeholder:text-xs"
+                    />
+                    <span className="text-xs text-gray-400">점</span>
+                  </div>
                 </div>
 
                 {/* 난이도 */}
