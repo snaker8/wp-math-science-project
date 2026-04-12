@@ -31,7 +31,8 @@ import type {
   ExpandedMathType,
   CognitiveDomain,
 } from '@/types/expanded-types';
-import { useTypeTree, useTypeDetail, useExpandedTypesSearch } from '@/hooks/useExpandedTypes';
+import { useTypeTree, useTypeDetail, useExpandedTypesSearch, useMathsecrTree } from '@/hooks/useExpandedTypes';
+import type { MathsecrNode } from '@/hooks/useExpandedTypes';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import {
   CURRICULUM_GRADES,
@@ -140,7 +141,68 @@ function summarizeStandard(content: string): string {
 }
 
 // ============================================================================
-// TypeTreeView — 세부유형 DB 기반 트리
+// ★ MathsecrTreeView — 수학비서 유형 트리 (MS 코드 기반, 문제 매칭 가능)
+// ============================================================================
+
+function MathsecrTreeView({
+  tree,
+  selectedTypeCode,
+  onSelectType,
+}: {
+  tree: MathsecrNode[];
+  selectedTypeCode: string | null;
+  onSelectType: (code: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggle = (code: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  };
+
+  const renderNode = (node: MathsecrNode, depth: number = 0): React.ReactNode => {
+    const isLeaf = node.children.length === 0;
+    const isExpanded = expanded.has(node.code);
+    const isSelected = selectedTypeCode === node.code;
+    const hasProblems = node.problemCount > 0;
+
+    return (
+      <div key={node.code}>
+        <button
+          type="button"
+          onClick={() => isLeaf ? onSelectType(node.code) : toggle(node.code)}
+          className={`w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+            isSelected
+              ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+              : 'hover:bg-surface-raised text-content-secondary'
+          }`}
+          style={{ paddingLeft: `${8 + depth * 14}px` }}
+        >
+          {!isLeaf ? (
+            isExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />
+          ) : (
+            <Hash className="h-3 w-3 shrink-0 text-content-muted" />
+          )}
+          <span className="flex-1 truncate">{node.name}</span>
+          {hasProblems && (
+            <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{node.problemCount}</span>
+          )}
+        </button>
+        {isExpanded && node.children.length > 0 && (
+          <div>{node.children.map(child => renderNode(child, depth + 1))}</div>
+        )}
+      </div>
+    );
+  };
+
+  return <div className="space-y-0.5">{tree.map(node => renderNode(node, 0))}</div>;
+}
+
+// ============================================================================
+// TypeTreeView — 세부유형 DB 기반 트리 (레거시)
 // ============================================================================
 
 function TypeTreeView({
@@ -646,6 +708,13 @@ export default function SkillsPage() {
   const { tree, totalTypes, totalStandards, loading } = useTypeTree(treeFilters);
   const { type: selectedTypeDetail, problems, loading: detailLoading } = useTypeDetail(selectedTypeCode);
 
+  // ★ 수학비서 트리 (MS 코드 — 문제 매칭 가능)
+  const subjectCodeMap: Record<string, string> = {
+    '중학교': '', '고등학교': '', '초등학교': '', 'all': '',
+  };
+  const msSubject = subjectCodeMap[schoolFilter] ?? '';
+  const { tree: msTree, totalTypes: msTotalTypes, loading: msLoading } = useMathsecrTree(msSubject || undefined);
+
   // 교과과정 모드 학년 목록 필터링
   const curriculumGrades = useMemo(() => {
     if (schoolFilter === 'all') return CURRICULUM_GRADES;
@@ -747,10 +816,7 @@ export default function SkillsPage() {
             {viewMode === 'type' && (
               <div className="flex items-center gap-2 text-xs text-content-tertiary">
                 <span className="rounded-md bg-surface-raised px-2 py-1">
-                  <span className="font-semibold text-content-primary">{totalTypes}</span> 유형
-                </span>
-                <span className="rounded-md bg-surface-raised px-2 py-1">
-                  <span className="font-semibold text-content-primary">{totalStandards}</span> 성취기준
+                  <span className="font-semibold text-content-primary">{msTotalTypes}</span> 유형
                 </span>
               </div>
             )}
@@ -819,8 +885,8 @@ export default function SkillsPage() {
               <div className="flex items-center justify-between border-b border-subtle px-3 py-2 flex-shrink-0">
                 {viewMode === 'type' ? (
                   <>
-                    <span className="text-xs font-medium text-content-secondary">교과과정 (세부유형)</span>
-                    <span className="text-xs text-content-muted">{totalTypes}개 유형</span>
+                    <span className="text-xs font-medium text-content-secondary">수학비서 유형 트리</span>
+                    <span className="text-xs text-content-muted">{msTotalTypes}개 유형</span>
                   </>
                 ) : (
                   <>
@@ -831,13 +897,13 @@ export default function SkillsPage() {
               </div>
               <div className="flex-1 overflow-auto p-2">
                 {viewMode === 'type' ? (
-                  loading ? (
+                  msLoading ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="h-5 w-5 animate-spin text-content-tertiary" />
                     </div>
-                  ) : filteredTree.length > 0 ? (
-                    <TypeTreeView
-                      tree={filteredTree}
+                  ) : msTree.length > 0 ? (
+                    <MathsecrTreeView
+                      tree={msTree}
                       selectedTypeCode={selectedTypeCode}
                       onSelectType={setSelectedTypeCode}
                     />

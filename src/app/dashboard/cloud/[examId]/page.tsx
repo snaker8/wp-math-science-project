@@ -2938,6 +2938,7 @@ export default function CloudExamDetailPage() {
         <AnswerMatchModal
           isOpen={showAnswerMatchModal}
           examId={examId}
+          problems={problems.map(p => ({ id: p.id, number: p.number, answer: p.answer }))}
           onClose={() => setShowAnswerMatchModal(false)}
           onApplied={() => refetchProblems()}
         />

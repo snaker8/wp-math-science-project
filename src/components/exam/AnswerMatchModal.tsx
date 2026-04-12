@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { X, Upload, Loader2, Check, AlertTriangle, FileText } from 'lucide-react';
+import { X, Upload, Loader2, Check, AlertTriangle, FileText, ClipboardPaste } from 'lucide-react';
 
 interface MatchResult {
   problemNumber: number;
@@ -24,20 +24,29 @@ interface MatchResponse {
   rawTextPreview: string;
 }
 
+interface ProblemInfo {
+  id: string;
+  number: number;
+  answer: string;
+}
+
 interface AnswerMatchModalProps {
   isOpen: boolean;
   examId: string;
+  problems?: ProblemInfo[];
   onClose: () => void;
   onApplied: () => void;
 }
 
-export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerMatchModalProps) {
+export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied }: AnswerMatchModalProps) {
+  const [mode, setMode] = useState<'file' | 'text'>('text'); // ★ 기본값 텍스트 입력
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedMatches, setSelectedMatches] = useState<Set<number>>(new Set());
+  const [pasteText, setPasteText] = useState('');
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -58,6 +67,97 @@ export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerM
     }
   }, []);
 
+  // ★ 텍스트 붙여넣기 파싱 (답 추출기 형식)
+  const handleTextParse = () => {
+    if (!pasteText.trim() || !problems || problems.length === 0) {
+      setError('텍스트를 붙여넣거나 문제가 없습니다');
+      return;
+    }
+
+    const lines = pasteText.trim().split('\n').filter(l => l.trim());
+    const parsed: Array<{ type: 'shortAnswer' | 'narrative'; answer: string }> = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // 형식 1: shortAnswer\t3 또는 narrative\tπ/3 (탭 또는 공백 2개 이상)
+      const extractorMatch = trimmed.match(/^(shortAnswer|narrative)[\t\s]{1,}(.+)/);
+      if (extractorMatch) {
+        parsed.push({
+          type: extractorMatch[1] as 'shortAnswer' | 'narrative',
+          answer: extractorMatch[2].trim(),
+        });
+        continue;
+      }
+
+      // 형식 2: 1. 3 또는 1) 3
+      const numMatch = trimmed.match(/^\d+[.)]\s*(.+)/);
+      if (numMatch) {
+        const ans = numMatch[1].trim();
+        const isNum = /^\d+$/.test(ans);
+        parsed.push({
+          type: isNum ? 'shortAnswer' : 'narrative',
+          answer: ans,
+        });
+        continue;
+      }
+
+      // 형식 3: 단순 숫자
+      if (/^\d+$/.test(trimmed)) {
+        parsed.push({ type: 'shortAnswer', answer: trimmed });
+        continue;
+      }
+
+      // 기타: narrative로 처리
+      if (trimmed) {
+        parsed.push({ type: 'narrative', answer: trimmed });
+      }
+    }
+
+    if (parsed.length === 0) {
+      setError('파싱된 답이 없습니다');
+      return;
+    }
+
+    // 문제 목록과 매칭 — parsed 개수가 더 많으면 parsed 기준으로 생성
+    const sortedProblems = [...problems].sort((a, b) => a.number - b.number);
+    const maxLen = Math.max(sortedProblems.length, parsed.length);
+    const matches: MatchResult[] = [];
+
+    for (let i = 0; i < maxLen; i++) {
+      const p = sortedProblems[i];
+      const parsedAnswer = parsed[i];
+      const newAnswer = parsedAnswer?.answer || '';
+      const currentAnswer = p ? String(p.answer || '') : '';
+      matches.push({
+        problemNumber: p?.number || (i + 1),
+        problemId: p?.id || '',
+        currentAnswer,
+        newAnswer,
+        currentSolution: '',
+        newSolution: '',
+        hasChange: !!p && !!newAnswer && newAnswer !== currentAnswer,
+      });
+    }
+
+    const changedCount = matches.filter(m => m.hasChange).length;
+
+    setMatchResult({
+      examId,
+      detectedType: 'text_paste',
+      totalProblems: sortedProblems.length,
+      parsedAnswers: parsed.length,
+      parsedSolutions: 0,
+      changedCount,
+      matches,
+      rawTextPreview: pasteText.slice(0, 200),
+    });
+
+    const changed = new Set(matches.filter(m => m.hasChange).map(m => m.problemNumber));
+    setSelectedMatches(changed);
+    setError(null);
+  };
+
   // 업로드 + OCR + 파싱 + 매칭 미리보기
   const handleUpload = async () => {
     if (!file) return;
@@ -77,7 +177,6 @@ export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerM
       if (!res.ok) throw new Error(data.error || '매칭 실패');
 
       setMatchResult(data);
-      // 변경이 있는 항목 전체 선택
       const changed = new Set(data.matches.filter((m: MatchResult) => m.hasChange).map((m: MatchResult) => m.problemNumber));
       setSelectedMatches(changed);
     } catch (err) {
@@ -111,7 +210,7 @@ export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerM
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '적용 실패');
 
-      alert(`${data.updatedCount}개 문제에 빠른답/해설이 적용되었습니다.`);
+      alert(`${data.updatedCount}개 문제에 답이 적용되었습니다.`);
       onApplied();
       onClose();
     } catch (err) {
@@ -146,60 +245,116 @@ export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerM
       <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-subtle bg-surface-card shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-subtle">
-          <h2 className="text-sm font-bold text-content-primary">빠른답 / 해설 업로드</h2>
+          <h2 className="text-sm font-bold text-content-primary">빠른답 / 해설</h2>
           <button onClick={onClose} className="p-1 text-content-muted hover:text-content-secondary">
             <X size={18} />
           </button>
         </div>
 
+        {/* ★ 탭 선택 */}
+        {!matchResult && (
+          <div className="flex border-b border-subtle">
+            <button
+              onClick={() => { setMode('text'); setError(null); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+                mode === 'text'
+                  ? 'text-emerald-400 border-b-2 border-emerald-500 bg-emerald-500/5'
+                  : 'text-content-muted hover:text-content-secondary'
+              }`}
+            >
+              <ClipboardPaste size={14} />
+              텍스트 붙여넣기
+            </button>
+            <button
+              onClick={() => { setMode('file'); setError(null); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+                mode === 'file'
+                  ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5'
+                  : 'text-content-muted hover:text-content-secondary'
+              }`}
+            >
+              <Upload size={14} />
+              이미지 업로드
+            </button>
+          </div>
+        )}
+
         {/* Body */}
         <div className="flex-1 overflow-auto p-5 space-y-4">
-          {/* 파일 선택 */}
-          {!matchResult && (
-            <div
-              onDrop={handleDrop}
-              onDragOver={e => e.preventDefault()}
-              className="border-2 border-dashed border-subtle rounded-xl p-8 text-center hover:border-indigo-500/50 transition-colors cursor-pointer"
-              onClick={() => document.getElementById('answer-file-input')?.click()}
-            >
-              <input
-                id="answer-file-input"
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              {file ? (
-                <div className="flex items-center justify-center gap-3">
-                  <FileText size={24} className="text-indigo-400" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-content-primary">{file.name}</p>
-                    <p className="text-xs text-content-muted">{(file.size / 1024).toFixed(0)} KB</p>
-                  </div>
+
+          {/* ★ 텍스트 붙여넣기 모드 */}
+          {mode === 'text' && !matchResult && (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-content-secondary font-medium">답 추출기 결과 붙여넣기</span>
+                  <span className="text-[10px] text-content-muted">shortAnswer/narrative 또는 1. 3 형식</span>
                 </div>
-              ) : (
-                <div>
-                  <Upload size={32} className="mx-auto text-content-muted mb-2" />
-                  <p className="text-sm text-content-secondary">빠른답 또는 해설 파일을 드롭하세요</p>
-                  <p className="text-xs text-content-muted mt-1">PDF, PNG, JPG 지원</p>
-                </div>
-              )}
-            </div>
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder={`shortAnswer\t3\nshortAnswer\t2\nshortAnswer\t4\nnarrative\tπ/3, π/2\n\n또는\n\n1. 3\n2. 2\n3. 4`}
+                  className="w-full h-48 rounded-lg border border-subtle bg-surface-raised px-3 py-2.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                  autoFocus
+                />
+              </div>
+              <button
+                onClick={handleTextParse}
+                disabled={!pasteText.trim()}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
+              >
+                <Check size={16} /> 파싱 + 미리보기
+              </button>
+            </>
           )}
 
-          {/* 업로드 버튼 */}
-          {file && !matchResult && (
-            <button
-              onClick={handleUpload}
-              disabled={isUploading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
-            >
-              {isUploading ? (
-                <><Loader2 size={16} className="animate-spin" /> OCR + 매칭 분석 중...</>
-              ) : (
-                <><Upload size={16} /> 분석 시작</>
+          {/* 파일 업로드 모드 */}
+          {mode === 'file' && !matchResult && (
+            <>
+              <div
+                onDrop={handleDrop}
+                onDragOver={e => e.preventDefault()}
+                className="border-2 border-dashed border-subtle rounded-xl p-8 text-center hover:border-indigo-500/50 transition-colors cursor-pointer"
+                onClick={() => document.getElementById('answer-file-input')?.click()}
+              >
+                <input
+                  id="answer-file-input"
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                {file ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <FileText size={24} className="text-indigo-400" />
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-content-primary">{file.name}</p>
+                      <p className="text-xs text-content-muted">{(file.size / 1024).toFixed(0)} KB</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload size={32} className="mx-auto text-content-muted mb-2" />
+                    <p className="text-sm text-content-secondary">빠른답 또는 해설 파일을 드롭하세요</p>
+                    <p className="text-xs text-content-muted mt-1">PDF, PNG, JPG 지원</p>
+                  </div>
+                )}
+              </div>
+
+              {file && (
+                <button
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <><Loader2 size={16} className="animate-spin" /> OCR + 매칭 분석 중...</>
+                  ) : (
+                    <><Upload size={16} /> 분석 시작</>
+                  )}
+                </button>
               )}
-            </button>
+            </>
           )}
 
           {/* 에러 */}
@@ -215,11 +370,14 @@ export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerM
             <>
               {/* 요약 */}
               <div className="flex items-center gap-4 text-xs">
-                <span className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 font-medium">
-                  감지: {matchResult.detectedType === 'quick_answer' ? '빠른답' : matchResult.detectedType === 'solution' ? '해설' : matchResult.detectedType === 'mixed' ? '빠른답+해설' : '미확인'}
+                <span className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 font-medium">
+                  {matchResult.detectedType === 'text_paste' ? '텍스트 입력' :
+                   matchResult.detectedType === 'quick_answer' ? '빠른답' :
+                   matchResult.detectedType === 'solution' ? '해설' :
+                   matchResult.detectedType === 'mixed' ? '빠른답+해설' : '미확인'}
                 </span>
                 <span className="text-content-muted">
-                  빠른답 {matchResult.parsedAnswers}개 · 해설 {matchResult.parsedSolutions}개 · 변경 {matchResult.changedCount}개
+                  답 {matchResult.parsedAnswers}개 · 변경 {matchResult.changedCount}개
                 </span>
                 <button onClick={toggleAll} className="ml-auto text-blue-400 hover:text-blue-300 font-medium">
                   {selectedMatches.size > 0 ? '전체 해제' : '전체 선택'}
@@ -279,10 +437,10 @@ export function AnswerMatchModal({ isOpen, examId, onClose, onApplied }: AnswerM
               {/* 적용 버튼 */}
               <div className="flex items-center justify-between">
                 <button
-                  onClick={() => { setMatchResult(null); setFile(null); }}
+                  onClick={() => { setMatchResult(null); setFile(null); setPasteText(''); }}
                   className="text-xs text-content-muted hover:text-content-secondary"
                 >
-                  다시 업로드
+                  다시 입력
                 </button>
                 <button
                   onClick={handleApply}

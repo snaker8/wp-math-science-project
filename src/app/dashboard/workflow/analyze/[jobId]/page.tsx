@@ -2100,9 +2100,11 @@ export default function AnalyzeJobPage() {
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
   const blocksDetectedRef = useRef<Set<number>>(new Set()); // 이미 블록 감지된 페이지 추적
   const isPreloadingRef = useRef(false); // 동시 실행 차단
+  const ocrBboxDoneRef = useRef(false); // Mathpix OCR bbox 감지 완료 여부
 
   // ★ 이미지 삽입 모드 (표/그래프 영역을 PDF에서 크롭하여 content에 삽입)
   const [insertImageMode, setInsertImageMode] = useState(false);
+  const [isOcrBboxLoading, setIsOcrBboxLoading] = useState(false);
 
   // detectionMode, columnMode, cropSensitivity 변경 시 기존 감지 결과 초기화 → 재감지 트리거
   useEffect(() => {
@@ -2113,6 +2115,105 @@ export default function AnalyzeJobPage() {
     setSelectedProblemId(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detectionMode, columnMode, cropSensitivity]);
+
+  // ★ Mathpix OCR → groupLinesIntoQuestions bbox 자동 감지
+  // jobId가 있으면 즉시 서버에서 OCR 실행 → bbox 반환 → autoCropProblems 자동 채움
+  // GPT-4o Vision "AI 자동 감지" 버튼 클릭 없이 자동 실행
+  useEffect(() => {
+    if (!jobId || ocrBboxDoneRef.current) return;
+    ocrBboxDoneRef.current = true;
+
+    let cancelled = false;
+    setIsOcrBboxLoading(true);
+
+    (async () => {
+      try {
+        console.log('[OcrBbox] Mathpix OCR bbox 자동 감지 시작...');
+        const res = await fetch('/api/workflow/detect-from-ocr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId }),
+        });
+
+        if (!res.ok || cancelled) return;
+
+        const data = await res.json() as {
+          success: boolean;
+          questions: Array<{
+            questionNumber: number;
+            pageIndex: number;
+            bbox: { x: number; y: number; w: number; h: number };
+            contentMmd: string;
+            choices: string[];
+            hasFigure: boolean;
+            figureBbox: { x: number; y: number; w: number; h: number } | null;
+          }>;
+          count: number;
+        };
+
+        if (!data.success || !data.questions || data.questions.length === 0) {
+          console.log('[OcrBbox] 감지된 문제 없음 — 수동 모드 유지');
+          return;
+        }
+
+        console.log(`[OcrBbox] ${data.count}개 문제 bbox 수신 — autoCropProblems 채움`);
+
+        // 페이지별로 그룹화
+        const byPage = new Map<number, typeof data.questions>();
+        for (const q of data.questions) {
+          if (!byPage.has(q.pageIndex)) byPage.set(q.pageIndex, []);
+          byPage.get(q.pageIndex)!.push(q);
+        }
+
+        // autoCropProblems 직접 세팅 (handleBlocksDetected 우회)
+        const newProblems = new Map<number, AnalyzedProblem[]>();
+        for (const [pageIdx, qs] of byPage.entries()) {
+          // 문제 번호 순으로 정렬
+          const sorted = [...qs].sort((a, b) => a.questionNumber - b.questionNumber);
+          newProblems.set(pageIdx, sorted.map(q => ({
+            id: `ocr-p${q.pageIndex}-q${q.questionNumber}`,
+            number: q.questionNumber,
+            content: q.contentMmd || '',
+            choices: q.choices || [],
+            answer: '',
+            solution: '',
+            difficulty: 3 as const,
+            typeCode: '',
+            typeName: '',
+            confidence: 0,
+            status: 'pending' as const,
+            pageIndex: q.pageIndex,
+            bbox: q.bbox,
+          })));
+          // 이 페이지는 감지 완료로 표시 → GPT-4o Vision useEffect 스킵 방지
+          blocksDetectedRef.current.add(pageIdx);
+        }
+
+        if (cancelled) return;
+
+        setAutoCropProblems(newProblems);
+        setUseAutoCropMode(true);
+
+        // 첫 번째 문제 자동 선택
+        const firstPage = [...newProblems.keys()].sort((a, b) => a - b)[0];
+        if (firstPage !== undefined) {
+          const firstProblem = newProblems.get(firstPage)?.[0];
+          if (firstProblem) setSelectedProblemId(firstProblem.id);
+        }
+
+        console.log('[OcrBbox] bbox 자동 감지 완료 ✓');
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[OcrBbox] OCR bbox 감지 실패 — 수동 모드 유지:', err);
+        }
+      } finally {
+        if (!cancelled) setIsOcrBboxLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
 
   // PDF 페이지 수 가져오기 (캐시된 PDF 문서 사용)
   useEffect(() => {

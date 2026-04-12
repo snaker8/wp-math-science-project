@@ -505,6 +505,9 @@ function normalizeChoiceParens(text: string): string {
     const dollarCount = (before.match(/(?<![\\])\$/g) || []).length;
     const isInMath = dollarCount % 2 === 1 || /\\\(\s*$/.test(before);
     if (!isInMath) {
+      // ★ 함수 인수 보호: f(1), Q(2), R(1) 등 영문자 바로 뒤 (N)은 제외
+      const charBefore = m.index > 0 ? text[m.index - 1] : '';
+      if (/[a-zA-Z]/.test(charBefore)) continue;
       matches.push({ index: m.index, num: m[1], len: m[0].length });
     }
   }

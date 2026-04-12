@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   FolderOpen,
   FileText,
@@ -378,6 +379,7 @@ function PrintMenu({
 // ============================================================================
 
 export default function ExamManagementPage() {
+  const router = useRouter();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>('all');
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'exam' | 'answer' | 'solution'>('exam');
@@ -964,7 +966,9 @@ export default function ExamManagementPage() {
               {/* 액션 바 */}
               <div className="flex items-center justify-between border-b border-subtle px-4 py-2 flex-shrink-0 overflow-visible relative z-50">
                 <div className="flex items-center gap-1.5">
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
+                  <button type="button"
+                    onClick={() => { if (selectedExamId) router.push(`/dashboard/cloud/${selectedExamId}`); }}
+                    className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
                     <Pencil className="h-3.5 w-3.5" />
                     시험지 수정
                   </button>

@@ -240,6 +240,15 @@ async def clean_handwriting_base64(req: dict):
     if not image_base64:
         raise HTTPException(status_code=400, detail="image_base64 필요")
 
+    # data:image/...;base64, 프리픽스 제거
+    if "," in image_base64:
+        image_base64 = image_base64.split(",", 1)[1]
+
+    # base64 패딩 보정
+    missing_padding = len(image_base64) % 4
+    if missing_padding:
+        image_base64 += "=" * (4 - missing_padding)
+
     img_bytes = base64.b64decode(image_base64)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:

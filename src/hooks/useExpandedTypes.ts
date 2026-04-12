@@ -199,3 +199,55 @@ export function useExpandedTypesSearch(params: {
 
   return { results, count, loading };
 }
+
+// ============================================================================
+// ★ 수학비서(mathsecr) 트리 훅
+// ============================================================================
+
+export interface MathsecrNode {
+  code: string;
+  name: string;
+  fullPath: string;
+  depth: number;
+  problemCount: number;
+  children: MathsecrNode[];
+}
+
+interface UseMathsecrTreeResult {
+  tree: MathsecrNode[];
+  totalTypes: number;
+  totalWithProblems: number;
+  loading: boolean;
+  error: string | null;
+}
+
+export function useMathsecrTree(subject?: string): UseMathsecrTreeResult {
+  const [tree, setTree] = useState<MathsecrNode[]>([]);
+  const [totalTypes, setTotalTypes] = useState(0);
+  const [totalWithProblems, setTotalWithProblems] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    const params = new URLSearchParams();
+    if (subject && subject !== '전체') params.set('subject', subject);
+
+    fetch(`/api/mathsecr-types?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch mathsecr tree');
+        return res.json();
+      })
+      .then(json => {
+        setTree(json.tree || []);
+        setTotalTypes(json.totalTypes || 0);
+        setTotalWithProblems(json.totalWithProblems || 0);
+      })
+      .catch(e => setError(e instanceof Error ? e.message : 'Unknown error'))
+      .finally(() => setLoading(false));
+  }, [subject]);
+
+  return { tree, totalTypes, totalWithProblems, loading, error };
+}

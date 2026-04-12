@@ -387,6 +387,40 @@ function groupLinesIntoQuestions(
   return results;
 }
 
+// ============================================================================
+// OCR bbox 감지 (analyze 페이지 자동 감지용 — GPT-4o Vision 대체)
+// ============================================================================
+
+export type OcrBboxQuestion = {
+  questionNumber: number;
+  pageIndex: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  contentMmd: string;
+  choices: string[];
+  hasFigure: boolean;
+  figureBbox: { x: number; y: number; w: number; h: number } | null;
+};
+
+/**
+ * Mathpix OCR 실행 → groupLinesIntoQuestions → 문제별 bbox 반환
+ * analyze 페이지에서 GPT-4o Vision 호출 없이 즉시 bbox 감지할 때 사용
+ */
+export async function runOcrBboxDetection(
+  fileBuffer: ArrayBuffer,
+  fileName: string,
+  onProgress?: (progress: number) => void
+): Promise<OcrBboxQuestion[]> {
+  const ocrResult = await processDocument(fileBuffer, fileName, onProgress);
+  const hasLineData = ocrResult.pages.some(p => p.lineData && p.lineData.length > 0);
+  if (!hasLineData) {
+    console.log('[OcrBbox] lines.json 데이터 없음 — bbox 감지 불가');
+    return [];
+  }
+  const questions = groupLinesIntoQuestions(ocrResult.pages);
+  console.log(`[OcrBbox] ${questions.length}개 문제 bbox 감지 완료`);
+  return questions;
+}
+
 /**
  * 문제 그룹에서 bbox와 콘텐츠 생성
  */
@@ -599,8 +633,8 @@ function normalizeChoiceParensForCloudFlow(text: string): string {
   // 이미 ①②③ 가 있으면 변환 불필요
   if (/[①②③④⑤]/.test(text)) return text;
 
-  // (1)~(5) 위치 수집
-  const parenMatches = [...text.matchAll(/\(([1-5])\)/g)];
+  // (1)~(5) 위치 수집 — ★ 함수 인수 제외: f(1), Q(2), R(1) 등 영문자 바로 뒤는 매칭 안 함
+  const parenMatches = [...text.matchAll(/(?<![a-zA-Z])\(([1-5])\)/g)];
   if (parenMatches.length < 4) return text; // 4개 미만이면 소문제일 수 있음
 
   // 번호 검증: (1)(2)(3)(4) 최소 포함
@@ -630,8 +664,8 @@ function normalizeChoiceParensForCloudFlow(text: string): string {
     }
   }
 
-  // 안전하게 변환
-  return text.replace(/\(([1-5])\)/g, (full, num) => {
+  // 안전하게 변환 — ★ 영문자 바로 뒤 (N)은 함수 인수이므로 제외
+  return text.replace(/(?<![a-zA-Z])\(([1-5])\)/g, (full, num) => {
     return NUMBER_TO_CIRCLED[num] || full;
   });
 }
@@ -798,18 +832,26 @@ const CLASSIFICATION_PROMPT = `당신은 "다사람수학"의 AI 수학 교육 �
 |------|------|----------|
 | 고1 | 공통수학1 | 다항식, 방정식과 부등식, 경우의 수 |
 | 고1 | 공통수학2 | 도형의 방정식, 집합과 명제, 함수 |
-| 고2 | 수학I | 지수·로그함수, 삼각함수, 수열 |
-| 고2 | 수학II | 함수의 극한과 연속, 미분, 적분 |
+| 고2 | 대수 (=수1=수학I) | 지수·로그함수, 삼각함수, 수열 |
+| 고2 | 미적분1 (=수2=수학II) | 함수의 극한과 연속, 미분, 적분 |
 | 고2 | 확률과 통계 | 순열과 조합, 확률, 통계 |
-| 고3 | 미적분 | 수열의 극한, 미분법, 적분법 |
+| 고3 | 미적분2 (=미적분) | 수열의 극한, 미분법, 적분법 |
 | 고3 | 기하 | 이차곡선, 벡터, 공간좌표 |
-| 진로 | 대수 | 행렬, 일차변환, 벡터공간 (2022 개정 신설) |
-| 진로 | 실용 통계 | 자료 분석, 통계적 추론 |
-| 진로 | 미적분II | 편미분, 중적분 (2022 개정 신설) |
 
 ★ 분류 시 반드시 위 과목 체계에 맞춰 subject를 정하세요.
+★ subject 출력은 수학비서 공식명 사용:
+  - 수학I = 수1 → "대수"
+  - 수학II = 수2 → "미적분1"
+  - 확률과통계 = 확통 → "확률과 통계"
+  - 미적분 → "미적분2"
 ★ "고1 모의고사" 또는 "공통수학" 문제는 공통수학1 또는 공통수학2로 분류하세요.
-★ 수학I/수학II/확률과통계는 고2 과목입니다. 고1로 분류하지 마세요.
+
+■ 흔한 분류 실수 (반드시 주의)
+- n³, n², 2024³ 같은 정수 거듭제곱 계산 → 다항식/인수분해 (공통수학1). 지수함수 아님!
+- a³-b³, a³+b³ 인수분해 공식 활용 → 인수분해 활용 (공통수학1)
+- 2^x, 3^x, (1/4)^x 같은 변수 지수 → 지수함수 (대수/수1)
+- log₂x, ln x → 로그함수 (대수/수1)
+- sin, cos, tan → 삼각함수 (대수/수1)
 
 ■ 난이도 채점 (6항목, 총점 3~16점 → 5등급)
 | 항목 | 1점 | 2점 | 3점 |

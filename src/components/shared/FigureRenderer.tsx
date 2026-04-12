@@ -208,16 +208,13 @@ export function FigureRenderer({
               alt="편집된 그래프"
               style={{ width: maxWidth, height: 'auto', display: 'block' }}
             />
-            {/* ★ 원본 annotations 오버레이 (수식, 라벨) */}
+            {/* ★ 원본 annotations 오버레이 (수식 → KaTeX 렌더링) */}
             {graphRendering?.annotations && graphRendering.annotations.length > 0 && (
-              <div className="absolute top-2 right-3 text-right" style={{ fontFamily: "'Times New Roman', Georgia, serif", fontStyle: 'italic', fontSize: '13px', color: '#1f2937', lineHeight: 1.5 }}>
+              <div className="absolute top-2 right-3 text-right" style={{ fontSize: '14px', lineHeight: 1.6 }}>
                 {graphRendering.annotations.map((anno, i) => (
-                  <div key={i} dangerouslySetInnerHTML={{ __html: anno
-                    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<sup>$1</sup>&frasl;<sub>$2</sub>')
-                    .replace(/\\log/g, 'log')
-                    .replace(/\\[a-zA-Z]+/g, '')
-                    .replace(/[{}]/g, '')
-                  }} />
+                  <div key={i} className="text-gray-800">
+                    <MathRenderer latex={anno.startsWith('$') ? anno : `$${anno}$`} />
+                  </div>
                 ))}
               </div>
             )}
