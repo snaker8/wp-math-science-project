@@ -223,6 +223,29 @@ export function FigureRenderer({
             )}
             {/* points 라벨은 스크린샷에 포함되므로 오버레이 불필요 */}
           </div>
+        ) : isGraph && savedDesmosState ? (
+          /* ★ desmosState가 있으면 Desmos로 렌더링 (수식 목록 포함) */
+          (() => {
+            const exprs = graphRendering?.expressions?.map(e => e.latex) || [];
+            const graphWidth = Math.min(maxWidth, 350);
+            const graphHeight = Math.round(graphWidth * 0.72);
+            return (
+              <Suspense fallback={<div style={{ width: graphWidth, height: graphHeight }} className="bg-zinc-800/50 rounded-lg animate-pulse" />}>
+                <InlineDesmosGraph
+                  expressions={exprs}
+                  xRange={graphRendering?.xRange}
+                  yRange={graphRendering?.yRange}
+                  points={graphRendering?.points}
+                  segments={graphRendering?.segments}
+                  shadedRegions={graphRendering?.shadedRegions}
+                  width={graphWidth}
+                  height={graphHeight}
+                  darkMode={darkMode}
+                  desmosState={savedDesmosState}
+                />
+              </Suspense>
+            );
+          })()
         ) : (
           <TypedFigureRenderer
             figureType={figureData.figureType}
