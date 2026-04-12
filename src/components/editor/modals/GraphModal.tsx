@@ -417,13 +417,38 @@ const GraphModal: React.FC<GraphModalProps> = ({
   const handleSave = async () => {
     if (!calculatorRef.current) return;
 
-    // ★ Desmos screenshot — 라벨 포함 옵션
-    const imageDataUrl = calculatorRef.current.screenshot({
-      width: 600,
-      height: 480,
-      targetPixelRatio: 2,
-      preserveAxisLabels: true,
-    } as any);
+    // ★ Desmos screenshot + 점 라벨 합성
+    const baseImage = calculatorRef.current.screenshot({ width: 600, height: 480, targetPixelRatio: 2 });
+    let imageDataUrl = baseImage;
+
+    // 점 라벨(A, B, C, D 등)을 스크린샷 위에 그리기
+    const graphOuter = containerRef.current?.querySelector('.dcg-graph-outer') as HTMLElement;
+    const labelEls = containerRef.current?.querySelectorAll('.dcg-label') as NodeListOf<HTMLElement> | undefined;
+    if (labelEls && labelEls.length > 0 && graphOuter) {
+      try {
+        const graphRect = graphOuter.getBoundingClientRect();
+        const img = new Image();
+        await new Promise<void>(r => { img.onload = () => r(); img.src = baseImage; });
+        const cvs = document.createElement('canvas');
+        cvs.width = img.width; cvs.height = img.height;
+        const ctx = cvs.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const sx = cvs.width / graphRect.width;
+        const sy = cvs.height / graphRect.height;
+        ctx.font = 'bold 22px "Times New Roman", serif';
+        ctx.fillStyle = '#222222';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        labelEls.forEach(el => {
+          const r = el.getBoundingClientRect();
+          const x = (r.left + r.width / 2 - graphRect.left) * sx;
+          const y = (r.top + r.height / 2 - graphRect.top) * sy;
+          const text = el.textContent?.trim() || '';
+          if (text) ctx.fillText(text, x, y);
+        });
+        imageDataUrl = cvs.toDataURL('image/png');
+      } catch { /* fallback: 라벨 없는 스크린샷 사용 */ }
+    }
 
     // 현재 수식 상태 추출 — 투영선/변수/포인트 보조 표현식 제외
     const HELPER_PREFIX = ['px-', 'py-', 'dashV-', 'dashH-', 'point-'];
