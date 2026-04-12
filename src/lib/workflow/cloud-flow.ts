@@ -478,8 +478,19 @@ function buildQuestionResult(
   const fixedConsonants = fixKoreanConsonantChoices(rawContentMmd);
   // ★ \displaystyle 제거 (KaTeX 인라인 렌더링 깨짐 방지)
   const noDisplayStyle = fixedConsonants.replace(/\\displaystyle\s*/g, '');
+  // ★ \lbrace → \left\{, \rbrace → \right\} (KaTeX 호환)
+  const noLbrace = noDisplayStyle
+    .replace(/\\lbrace/g, '\\left\\{')
+    .replace(/\\rbrace/g, '\\right\\}');
+  // ★ \(...\) → $...$ 변환 (렌더링 안정성)
+  const dollarDelim = noLbrace
+    .replace(/\\left\(/g, '\uE001')
+    .replace(/\\right\)/g, '\uE002')
+    .replace(/\\\((.+?)\\\)/gs, (_, inner: string) => `$${inner.trim()}$`)
+    .replace(/\uE001/g, '\\left(')
+    .replace(/\uE002/g, '\\right)');
   // ★ 전각 괄호 → 반각 정규화 (Mathpix가 （1）형식으로 출력하는 경우)
-  const halfWidthMmd = noDisplayStyle.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
+  const halfWidthMmd = dollarDelim.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
   // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (content_latex에도 원문자 반영)
   const contentMmd = normalizeChoiceParensForCloudFlow(halfWidthMmd);
 
