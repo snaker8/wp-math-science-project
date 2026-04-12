@@ -57,6 +57,35 @@ interface FigureRendererProps {
     yRange: [number, number];
     imageDataUrl: string;
   }) => void;
+  /** ★ 문제 본문 (그래프에 함수식 자동 표시용) */
+  problemContent?: string;
+}
+
+/**
+ * 문제 본문에서 함수식 추출 (y=..., f(x)=... 등)
+ * 미지수 포함 여부도 판별
+ */
+function extractFunctionExprsFromContent(content: string): { latex: string; hasUnknowns: boolean }[] {
+  if (!content) return [];
+  const results: { latex: string; hasUnknowns: boolean }[] = [];
+  const seen = new Set<string>();
+  const mathMatches = content.match(/\$([^$]+)\$|\\\((.+?)\\\)/g) || [];
+  for (const m of mathMatches) {
+    const inner = m.replace(/^\$|\$$/g, '').replace(/^\\\(|\\\)$/g, '').trim();
+    // 쉼표로 구분된 여러 함수 분리: "y=..., y=..." → 개별 처리
+    const parts = inner.split(/,\s*(?=[yYfg]\s*[=(])/).map(p => p.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (/^[yY]\s*=/.test(part) || /^[fg]\s*\(\s*[xX]\s*\)\s*=/.test(part)) {
+        // 정규화 후 중복 제거
+        const normalized = part.replace(/\s+/g, ' ');
+        if (seen.has(normalized)) continue;
+        seen.add(normalized);
+        const hasUnknowns = /(?<![a-zA-Z])[abcdkmnpqrst](?![a-zA-Z({])/.test(part);
+        results.push({ latex: part, hasUnknowns });
+      }
+    }
+  }
+  return results;
 }
 
 // ============================================================================
@@ -75,6 +104,7 @@ export function FigureRenderer({
   editable = false,
   problemId,
   onGraphEdited,
+  problemContent,
 }: FigureRendererProps) {
   const [graphEditOpen, setGraphEditOpen] = useState(false);
 
@@ -178,6 +208,7 @@ export function FigureRenderer({
               yRange: data.yRange,
               desmosState: data.desmosState,
               editedImageDataUrl: data.imageDataUrl,
+              pointLabels: (data as any).pointLabels || [],
             },
           }),
         });
@@ -227,81 +258,8 @@ export function FigureRenderer({
               alt="편집된 그래프"
               style={{ width: maxWidth, height: 'auto', display: 'block' }}
             />
-            {/* ★ 원본 annotations 오버레이 (수식 → KaTeX 렌더링) */}
-            {graphRendering?.annotations && graphRendering.annotations.length > 0 && (
-              <div className="absolute top-2 right-3 text-right" style={{ fontSize: '14px', lineHeight: 1.6 }}>
-                {graphRendering.annotations.map((anno, i) => (
-                  <div key={i} className="text-gray-800">
-                    <MathRenderer latex={anno.startsWith('$') ? anno : `$${anno}$`} />
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* points 라벨은 스크린샷에 포함되므로 오버레이 불필요 */}
+            {/* 점 라벨 — Desmos 스크린샷에 포함됨 */}
           </div>
-        )}
-        {/* ★ 편집된 스크린샷 아래 함수식 목록 (expressions 또는 desmosState에서 추출) */}
-        {isGraph && (figureData.rendering as Record<string, unknown>)?.editedImageDataUrl && (() => {
-          let exprs = graphRendering?.expressions?.map(e => e.latex) || [];
-          if (exprs.length === 0 && savedDesmosState) {
-            const stateExprs = (savedDesmosState as any)?.expressions?.list || [];
-            exprs = stateExprs
-              .filter((e: any) => {
-                const l = (e.latex || '').trim();
-                if (!l) return false;
-                if (/^[a-wz](_\{?\d+\}?)?\s*=\s*-?[\d.]+$/.test(l)) return false;
-                if (/^\([\d.\-]+,\s*[\d.\-]+\)$/.test(l)) return false;
-                return /[=<>]|\\frac|\\sqrt|\\log|\\sin|\\cos|\\tan|\\ln/.test(l);
-              })
-              .map((e: any) => e.latex);
-          }
-          if (exprs.length === 0) return null;
-          return (
-            <div className={`mt-1.5 p-2 rounded border ${darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'}`}>
-              {exprs.map((expr: string, i: number) => {
-                const COLORS = ['#2d70b3', '#388c46', '#fa7e19', '#c74440', '#6042a6', '#000000'];
-                let html = '';
-                try {
-                  const katex = require('katex');
-                  html = katex.renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true });
-                } catch { /* */ }
-                return (
-                  <div key={i} className="flex items-center gap-1.5 py-0.5">
-                    <span className="w-2.5 h-0.5 rounded flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    {html ? (
-                      <span className="text-[12px]" dangerouslySetInnerHTML={{ __html: html }} />
-                    ) : (
-                      <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-        {!(isGraph && (figureData.rendering as Record<string, unknown>)?.editedImageDataUrl) && (isGraph && savedDesmosState ? (
-          /* ★ desmosState가 있으면 Desmos로 렌더링 (수식 목록 포함) */
-          (() => {
-            const exprs = graphRendering?.expressions?.map(e => e.latex) || [];
-            const graphWidth = Math.min(maxWidth, 350);
-            const graphHeight = Math.round(graphWidth * 0.72);
-            return (
-              <Suspense fallback={<div style={{ width: graphWidth, height: graphHeight }} className="bg-zinc-800/50 rounded-lg animate-pulse" />}>
-                <InlineDesmosGraph
-                  expressions={exprs}
-                  xRange={graphRendering?.xRange}
-                  yRange={graphRendering?.yRange}
-                  points={graphRendering?.points}
-                  segments={graphRendering?.segments}
-                  shadedRegions={graphRendering?.shadedRegions}
-                  width={graphWidth}
-                  height={graphHeight}
-                  darkMode={darkMode}
-                  desmosState={savedDesmosState}
-                />
-              </Suspense>
-            );
-          })()
         ) : (
           <TypedFigureRenderer
             figureType={figureData.figureType}
@@ -310,6 +268,52 @@ export function FigureRenderer({
             maxWidth={maxWidth}
           />
         )}
+        {/* ★ 미지수 있을 때만 함수식 오버레이 (답 노출 방지) + 점근선 */}
+        {isGraph && (() => {
+          const contentExprs = extractFunctionExprsFromContent(problemContent || '');
+          const anyHasUnknowns = contentExprs.some(e => e.hasUnknowns);
+          // ★ 미지수 없으면 오버레이 안 함 (사용자가 Desmos에서 라벨 직접 추가)
+          if (!anyHasUnknowns) return null;
+          const seen = new Set<string>();
+          const uniqueExprs = contentExprs.filter(e => {
+            if (seen.has(e.latex)) return false;
+            seen.add(e.latex);
+            return true;
+          });
+          // 점근선 (y=숫자, x=숫자)
+          const asymptotes: string[] = [];
+          const allMath = (problemContent || '').match(/\$([^$]+)\$|\\\((.+?)\\\)/g) || [];
+          for (const m of allMath) {
+            const inner = m.replace(/^\$|\$$/g, '').replace(/^\\\(|\\\)$/g, '').trim();
+            if (/^[xy]\s*=\s*-?\s*\d+/.test(inner) && !seen.has(inner)) {
+              seen.add(inner);
+              asymptotes.push(inner);
+            }
+          }
+          if (uniqueExprs.length === 0 && asymptotes.length === 0) return null;
+          return (
+            <>
+              {uniqueExprs.length > 0 && (
+                <div className="absolute top-1 left-[35%] z-[5] space-y-0.5">
+                  {uniqueExprs.map((e, i) => {
+                    let html = '';
+                    try { html = require('katex').renderToString(e.latex, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
+                    return <div key={i}>{html ? <span className="text-[12px] text-gray-900" dangerouslySetInnerHTML={{ __html: html }} /> : <span className="text-[11px] text-gray-700">{e.latex}</span>}</div>;
+                  })}
+                </div>
+              )}
+              {asymptotes.length > 0 && (
+                <div className="absolute bottom-3 left-3 z-[5]">
+                  {asymptotes.map((expr, i) => {
+                    let html = '';
+                    try { html = require('katex').renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
+                    return <div key={i}>{html ? <span className="text-[11px] text-gray-500 italic" dangerouslySetInnerHTML={{ __html: html }} /> : <span className="text-[10px] text-gray-500 italic">{expr}</span>}</div>;
+                  })}
+                </div>
+              )}
+            </>
+          );
+        })()}
         {/* ★ 그래프 편집 버튼 — hover 시 표시 */}
         {editable && isGraph && graphRendering && (
           <>

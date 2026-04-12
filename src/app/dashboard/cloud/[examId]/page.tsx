@@ -380,13 +380,13 @@ function FigureMarkerRenderer({
               <div className="flex flex-col items-center">
                 <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                 <div className="border border-emerald-500/30 rounded p-1">
-                  <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={200} darkMode editable problemId={problem.id} />
+                  <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={200} darkMode editable problemId={problem.id} problemContent={problem.content} />
                 </div>
               </div>
             </div>
           ) : (
             <div key={i} className="my-2 flex justify-center">
-              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={300} darkMode editable problemId={problem.id} />
+              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
             </div>
           );
         }
@@ -796,13 +796,13 @@ function ProblemCardView({
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                           <div className="border border-emerald-500/30 rounded p-1">
-                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} />
+                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} problemContent={problem.content} />
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-2 flex justify-center">
-                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} />
+                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
                       </div>
                     )
                   )}

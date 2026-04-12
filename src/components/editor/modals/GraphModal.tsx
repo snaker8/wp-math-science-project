@@ -414,14 +414,16 @@ const GraphModal: React.FC<GraphModalProps> = ({
   };
 
   // 스크린샷 캡처 및 저장
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!calculatorRef.current) return;
 
+    // ★ Desmos screenshot — 라벨 포함 옵션
     const imageDataUrl = calculatorRef.current.screenshot({
       width: 600,
       height: 480,
       targetPixelRatio: 2,
-    });
+      preserveAxisLabels: true,
+    } as any);
 
     // 현재 수식 상태 추출 — 투영선/변수/포인트 보조 표현식 제외
     const HELPER_PREFIX = ['px-', 'py-', 'dashV-', 'dashH-', 'point-'];
@@ -459,6 +461,49 @@ const GraphModal: React.FC<GraphModalProps> = ({
         hidden: false,
       }));
 
+    // ★ 포인트 라벨 추출 (A, B, C, D 등 — 좌표 기반 오버레이용)
+    const pointLabels: Array<{ label: string; x: number; y: number }> = [];
+    for (const e of allExprs) {
+      if (e.label && e.latex) {
+        // A=(x_2, y_2) 형식에서 실제 좌표 추출
+        const coordMatch = e.latex.match(/=\s*\(\s*([^,]+),\s*([^)]+)\)/);
+        if (coordMatch) {
+          // 변수 참조가 아닌 실제 숫자인지 확인
+          const xVal = parseFloat(coordMatch[1]);
+          const yVal = parseFloat(coordMatch[2]);
+          if (!isNaN(xVal) && !isNaN(yVal)) {
+            pointLabels.push({ label: e.label, x: xVal, y: yVal });
+          }
+        }
+      }
+    }
+    // 변수 참조 포인트: desmosState에서 변수값 해석
+    if (pointLabels.length === 0) {
+      const varValues: Record<string, number> = {};
+      for (const e of allExprs) {
+        const varMatch = (e.latex || '').match(/^([a-z]_?\{?\d*\}?)\s*=\s*(-?[\d.]+)$/);
+        if (varMatch) varValues[varMatch[1]] = parseFloat(varMatch[2]);
+      }
+      for (const e of allExprs) {
+        if (e.label && e.latex) {
+          const coordMatch = e.latex.match(/=\s*\(\s*([^,]+),\s*([^)]+)\)/);
+          if (coordMatch) {
+            const resolveVar = (v: string) => {
+              const trimmed = v.trim();
+              const num = parseFloat(trimmed);
+              if (!isNaN(num)) return num;
+              return varValues[trimmed] ?? NaN;
+            };
+            const xVal = resolveVar(coordMatch[1]);
+            const yVal = resolveVar(coordMatch[2]);
+            if (!isNaN(xVal) && !isNaN(yVal)) {
+              pointLabels.push({ label: e.label, x: xVal, y: yVal });
+            }
+          }
+        }
+      }
+    }
+    console.log('[GraphModal] 포인트 라벨:', pointLabels);
     console.log('[GraphModal] 저장할 수식:', validExprs.map(e => e.latex));
 
     onInsert(imageDataUrl, validExprs);
@@ -469,8 +514,9 @@ const GraphModal: React.FC<GraphModalProps> = ({
         xRange: [bounds.left, bounds.right],
         yRange: [bounds.bottom, bounds.top],
         imageDataUrl,
-        desmosState: state, // ★ Desmos 전체 상태 저장
-      });
+        desmosState: state,
+        pointLabels, // ★ 포인트 라벨 좌표 저장
+      } as any);
     }
 
     onClose();
@@ -509,6 +555,32 @@ const GraphModal: React.FC<GraphModalProps> = ({
               style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
             >
               도형 채우기
+            </button>
+            {/* ★ 라벨 추가 — 그래프에 텍스트 라벨 배치 */}
+            <button
+              onClick={() => {
+                const text = prompt('라벨 텍스트 입력 (예: y=2^{x+2}-3)');
+                if (!text || !calculatorRef.current) return;
+                const bounds = calculatorRef.current.graphpaperBounds || { left: -10, right: 10, bottom: -10, top: 10 };
+                const cx = (bounds.left + bounds.right) / 2;
+                const cy = (bounds.top + bounds.bottom * 0.3 + bounds.top * 0.7);
+                const id = `label-${Date.now()}`;
+                calculatorRef.current.setExpression({
+                  id,
+                  latex: `(${cx.toFixed(2)}, ${cy.toFixed(2)})`,
+                  color: '#333333',
+                  pointSize: 0,
+                  label: text,
+                  showLabel: true,
+                  labelSize: '2',
+                  dragMode: 'xy' as any,
+                });
+              }}
+              className="btn-reset"
+              title="그래프에 텍스트 라벨 추가 (드래그로 위치 조정)"
+              style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+            >
+              라벨 추가
             </button>
             {/* ★ 상태 표시 */}
             {drawMode !== 'none' && (
