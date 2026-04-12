@@ -107,6 +107,11 @@ export function FigureRenderer({
   problemContent,
 }: FigureRendererProps) {
   const [graphEditOpen, setGraphEditOpen] = useState(false);
+  // ★ 함수식 오버레이 토글 (DB에 저장됨)
+  const savedOverlaySetting = (figureData?.rendering as any)?.showExprOverlay;
+  const [showExprOverlay, setShowExprOverlay] = useState<boolean>(
+    savedOverlaySetting !== undefined ? savedOverlaySetting : true // 기본: 표시
+  );
 
   // DEBUG: figureData 상태 확인 + 품질 로깅
   if (figureData && figureData.rendering) {
@@ -268,12 +273,9 @@ export function FigureRenderer({
             maxWidth={maxWidth}
           />
         )}
-        {/* ★ 미지수 있을 때만 함수식 오버레이 (답 노출 방지) + 점근선 */}
-        {isGraph && (() => {
+        {/* ★ 함수식 오버레이 (토글 가능) + 점근선 */}
+        {isGraph && showExprOverlay && (() => {
           const contentExprs = extractFunctionExprsFromContent(problemContent || '');
-          const anyHasUnknowns = contentExprs.some(e => e.hasUnknowns);
-          // ★ 미지수 없으면 오버레이 안 함 (사용자가 Desmos에서 라벨 직접 추가)
-          if (!anyHasUnknowns) return null;
           const seen = new Set<string>();
           const uniqueExprs = contentExprs.filter(e => {
             if (seen.has(e.latex)) return false;
@@ -314,9 +316,40 @@ export function FigureRenderer({
             </>
           );
         })()}
-        {/* ★ 그래프 편집 버튼 — hover 시 표시 */}
+        {/* ★ 그래프 편집 버튼 + 함수식 토글 — hover 시 표시 */}
         {editable && isGraph && graphRendering && (
           <>
+            {/* 함수식 표시 토글 */}
+            <button
+              onClick={async () => {
+                const newVal = !showExprOverlay;
+                setShowExprOverlay(newVal);
+                // DB 저장
+                if (problemId) {
+                  try {
+                    const origRendering = figureData?.rendering as Record<string, unknown> | undefined;
+                    await fetch(`/api/problems/${problemId}/update-figure`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        figureType: figureData?.figureType || 'graph',
+                        rendering: { ...(origRendering || {}), showExprOverlay: newVal },
+                      }),
+                    });
+                  } catch { /* ignore */ }
+                }
+              }}
+              className={`absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity
+                rounded-lg px-2 py-1 text-[10px] font-medium shadow-lg z-10 ${
+                showExprOverlay
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-gray-500 hover:bg-gray-600 text-white'
+              }`}
+              title={showExprOverlay ? '함수식 숨기기' : '함수식 표시'}
+            >
+              f(x) {showExprOverlay ? 'ON' : 'OFF'}
+            </button>
+            {/* 수정 버튼 */}
             <button
               onClick={() => setGraphEditOpen(true)}
               className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity
