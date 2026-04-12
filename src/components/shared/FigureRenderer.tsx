@@ -107,11 +107,35 @@ export function FigureRenderer({
   problemContent,
 }: FigureRendererProps) {
   const [graphEditOpen, setGraphEditOpen] = useState(false);
-  // ★ 함수식 오버레이 토글 (DB에 저장됨)
-  const savedOverlaySetting = (figureData?.rendering as any)?.showExprOverlay;
+  // ★ 함수식 오버레이 설정
+  const rendering = figureData?.rendering as Record<string, unknown> | undefined;
+  const savedOverlaySetting = rendering?.showExprOverlay;
   const [showExprOverlay, setShowExprOverlay] = useState<boolean>(
-    savedOverlaySetting !== undefined ? savedOverlaySetting : true // 기본: 표시
+    savedOverlaySetting !== undefined ? !!savedOverlaySetting : true
   );
+  // ★ 커스텀 라벨 (사용자 추가/편집, DB 저장)
+  const savedLabels = (rendering?.exprLabels || []) as Array<{ latex: string; position: string }>;
+  const [exprLabels, setExprLabels] = useState(savedLabels);
+  const [editingLabels, setEditingLabels] = useState(false);
+  const [labelInput, setLabelInput] = useState('');
+  // ★ 라벨 위치 (top-right, top-left, bottom-left, bottom-right)
+  const savedPosition = (rendering?.exprLabelPosition || 'top-right') as string;
+  const [labelPosition, setLabelPosition] = useState(savedPosition);
+
+  // DB 저장 헬퍼
+  const saveExprSettings = useCallback(async (labels: typeof exprLabels, show: boolean, pos: string) => {
+    if (!problemId || !figureData) return;
+    try {
+      await fetch(`/api/problems/${problemId}/update-figure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          figureType: figureData.figureType || 'graph',
+          rendering: { ...(rendering || {}), exprLabels: labels, showExprOverlay: show, exprLabelPosition: pos },
+        }),
+      });
+    } catch { /* ignore */ }
+  }, [problemId, figureData, rendering]);
 
   // DEBUG: figureData 상태 확인 + 품질 로깅
   if (figureData && figureData.rendering) {
@@ -273,82 +297,132 @@ export function FigureRenderer({
             maxWidth={maxWidth}
           />
         )}
-        {/* ★ 함수식 오버레이 (토글 가능) + 점근선 */}
+        {/* ★ 함수식 오버레이 (토글 + 편집 가능) */}
         {isGraph && showExprOverlay && (() => {
-          const contentExprs = extractFunctionExprsFromContent(problemContent || '');
-          const seen = new Set<string>();
-          const uniqueExprs = contentExprs.filter(e => {
-            if (seen.has(e.latex)) return false;
-            seen.add(e.latex);
-            return true;
-          });
-          // 점근선 (y=숫자, x=숫자)
-          const asymptotes: string[] = [];
-          const allMath = (problemContent || '').match(/\$([^$]+)\$|\\\((.+?)\\\)/g) || [];
-          for (const m of allMath) {
-            const inner = m.replace(/^\$|\$$/g, '').replace(/^\\\(|\\\)$/g, '').trim();
-            if (/^[xy]\s*=\s*-?\s*\d+/.test(inner) && !seen.has(inner)) {
-              seen.add(inner);
-              asymptotes.push(inner);
+          // 커스텀 라벨이 있으면 사용, 없으면 문제 본문에서 자동 추출
+          let displayLabels = exprLabels.length > 0 ? exprLabels.map(l => l.latex) : [];
+          if (displayLabels.length === 0) {
+            const contentExprs = extractFunctionExprsFromContent(problemContent || '');
+            const seen = new Set<string>();
+            displayLabels = contentExprs.filter(e => { if (seen.has(e.latex)) return false; seen.add(e.latex); return true; }).map(e => e.latex);
+            // 점근선
+            const allMath = (problemContent || '').match(/\$([^$]+)\$|\\\((.+?)\\\)/g) || [];
+            for (const m of allMath) {
+              const inner = m.replace(/^\$|\$$/g, '').replace(/^\\\(|\\\)$/g, '').trim();
+              if (/^[xy]\s*=\s*-?\s*\d+/.test(inner) && !seen.has(inner)) { seen.add(inner); displayLabels.push(inner); }
             }
           }
-          if (uniqueExprs.length === 0 && asymptotes.length === 0) return null;
+          if (displayLabels.length === 0 && !editingLabels) return null;
+
+          // 위치 클래스
+          const posClass: Record<string, string> = {
+            'top-right': 'top-1 right-12',
+            'top-left': 'top-1 left-2',
+            'bottom-right': 'bottom-3 right-12',
+            'bottom-left': 'bottom-3 left-2',
+          };
+          const posStyle = posClass[labelPosition] || posClass['top-right'];
+
           return (
-            <>
-              {uniqueExprs.length > 0 && (
-                <div className="absolute top-1 left-[35%] z-[5] space-y-0.5">
-                  {uniqueExprs.map((e, i) => {
-                    let html = '';
-                    try { html = require('katex').renderToString(e.latex, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
-                    return <div key={i}>{html ? <span className="text-[12px] text-gray-900" dangerouslySetInnerHTML={{ __html: html }} /> : <span className="text-[11px] text-gray-700">{e.latex}</span>}</div>;
-                  })}
+            <div className={`absolute ${posStyle} z-[5]`}>
+              {/* 수식 목록 */}
+              {displayLabels.map((expr, i) => {
+                let html = '';
+                try { html = require('katex').renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
+                return (
+                  <div key={i} className="flex items-center gap-1 group/label">
+                    {html ? (
+                      <span className="text-[12px] text-gray-900" dangerouslySetInnerHTML={{ __html: html }} />
+                    ) : (
+                      <span className="text-[11px] text-gray-700">{expr}</span>
+                    )}
+                    {editingLabels && (
+                      <button onClick={() => {
+                        // 자동 추출된 식이면 커스텀으로 전환 후 삭제
+                        if (exprLabels.length === 0) {
+                          // 처음 삭제 시: 현재 표시 목록을 커스텀으로 전환
+                          const customized = displayLabels.filter((_, j) => j !== i).map(l => ({ latex: l, position: labelPosition }));
+                          setExprLabels(customized);
+                          saveExprSettings(customized, showExprOverlay, labelPosition);
+                        } else {
+                          const updated = exprLabels.filter((_, j) => j !== i);
+                          setExprLabels(updated);
+                          saveExprSettings(updated, showExprOverlay, labelPosition);
+                        }
+                      }} className="text-red-400 hover:text-red-600 text-[10px] font-bold ml-1 opacity-0 group-hover/label:opacity-100">✕</button>
+                    )}
+                  </div>
+                );
+              })}
+              {/* 편집 모드 UI */}
+              {editingLabels && (
+                <div className="mt-1 space-y-1">
+                  <div className="flex gap-1">
+                    <input
+                      value={labelInput}
+                      onChange={e => setLabelInput(e.target.value)}
+                      placeholder="y=x^2+1"
+                      className="w-28 text-[10px] px-1.5 py-0.5 rounded border border-gray-300 bg-white text-gray-800"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && labelInput.trim()) {
+                          const updated = [...exprLabels, { latex: labelInput.trim(), position: labelPosition }];
+                          setExprLabels(updated);
+                          setLabelInput('');
+                          saveExprSettings(updated, showExprOverlay, labelPosition);
+                        }
+                      }}
+                    />
+                    <button onClick={() => {
+                      if (!labelInput.trim()) return;
+                      const updated = [...exprLabels, { latex: labelInput.trim(), position: labelPosition }];
+                      setExprLabels(updated);
+                      setLabelInput('');
+                      saveExprSettings(updated, showExprOverlay, labelPosition);
+                    }} className="text-[10px] px-1.5 py-0.5 bg-emerald-500 text-white rounded">+</button>
+                  </div>
+                  {/* 위치 선택 */}
+                  <div className="flex gap-1">
+                    {(['top-right', 'top-left', 'bottom-right', 'bottom-left'] as const).map(pos => (
+                      <button key={pos} onClick={() => { setLabelPosition(pos); saveExprSettings(exprLabels, showExprOverlay, pos); }}
+                        className={`text-[8px] px-1 py-0.5 rounded ${labelPosition === pos ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                        {pos === 'top-right' ? '↗' : pos === 'top-left' ? '↖' : pos === 'bottom-right' ? '↘' : '↙'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-              {asymptotes.length > 0 && (
-                <div className="absolute bottom-3 left-3 z-[5]">
-                  {asymptotes.map((expr, i) => {
-                    let html = '';
-                    try { html = require('katex').renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
-                    return <div key={i}>{html ? <span className="text-[11px] text-gray-500 italic" dangerouslySetInnerHTML={{ __html: html }} /> : <span className="text-[10px] text-gray-500 italic">{expr}</span>}</div>;
-                  })}
-                </div>
-              )}
-            </>
+            </div>
           );
         })()}
         {/* ★ 그래프 편집 버튼 + 함수식 토글 — hover 시 표시 */}
         {editable && isGraph && graphRendering && (
           <>
-            {/* 함수식 표시 토글 */}
-            <button
-              onClick={async () => {
-                const newVal = !showExprOverlay;
-                setShowExprOverlay(newVal);
-                // DB 저장
-                if (problemId) {
-                  try {
-                    const origRendering = figureData?.rendering as Record<string, unknown> | undefined;
-                    await fetch(`/api/problems/${problemId}/update-figure`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        figureType: figureData?.figureType || 'graph',
-                        rendering: { ...(origRendering || {}), showExprOverlay: newVal },
-                      }),
-                    });
-                  } catch { /* ignore */ }
-                }
-              }}
-              className={`absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity
-                rounded-lg px-2 py-1 text-[10px] font-medium shadow-lg z-10 ${
-                showExprOverlay
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  : 'bg-gray-500 hover:bg-gray-600 text-white'
-              }`}
-              title={showExprOverlay ? '함수식 숨기기' : '함수식 표시'}
-            >
-              f(x) {showExprOverlay ? 'ON' : 'OFF'}
-            </button>
+            {/* 함수식 편집/토글 버튼 */}
+            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-1">
+              <button
+                onClick={() => setEditingLabels(!editingLabels)}
+                className={`rounded-lg px-2 py-1 text-[10px] font-medium shadow-lg ${
+                  editingLabels ? 'bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+                title="함수식 편집"
+              >
+                f(x) {editingLabels ? '편집중' : '편집'}
+              </button>
+              <button
+                onClick={async () => {
+                  const newVal = !showExprOverlay;
+                  setShowExprOverlay(newVal);
+                  setEditingLabels(false);
+                  saveExprSettings(exprLabels, newVal, labelPosition);
+                }}
+                className={`rounded-lg px-1.5 py-1 text-[10px] font-medium shadow-lg ${
+                  showExprOverlay ? 'bg-emerald-600 text-white' : 'bg-gray-500 text-white'
+                }`}
+                title={showExprOverlay ? '숨기기' : '표시'}
+              >
+                {showExprOverlay ? '👁' : '👁‍🗨'}
+              </button>
+            </div>
             {/* 수정 버튼 */}
             <button
               onClick={() => setGraphEditOpen(true)}
