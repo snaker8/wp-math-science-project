@@ -1661,12 +1661,28 @@ function SolutionView({
           disabled={isGeneratingBatch}
           onClick={async () => {
             const unsolved = problems.filter(p => !p.solution || p.solution.trim().length < 30);
-            const targetProblems = unsolved.length > 0 ? unsolved : problems;
-            const isRegenerate = unsolved.length === 0;
-            const msg = isRegenerate
-              ? `모든 문제에 해설이 있습니다.\n전체 ${problems.length}문제를 재생성하시겠습니까?`
-              : `${unsolved.length}문제의 해설을 AI로 생성합니다.\n(풀이 생성 + 교차 검산)\n\n진행하시겠습니까?`;
-            if (!confirm(msg)) return;
+            const unsolvedCount = unsolved.length;
+            const totalCount = problems.length;
+
+            let targetProblems: typeof problems;
+            if (unsolvedCount === 0) {
+              if (!confirm(`모든 문제에 해설이 있습니다.\n전체 ${totalCount}문제를 재생성하시겠습니까?`)) return;
+              targetProblems = problems;
+            } else if (unsolvedCount === totalCount) {
+              if (!confirm(`${totalCount}문제의 해설을 AI로 생성합니다.\n(풀이 생성 + 교차 검산)\n\n진행하시겠습니까?`)) return;
+              targetProblems = problems;
+            } else {
+              const choice = prompt(
+                `해설 생성 범위를 선택하세요:\n\n` +
+                `1) 미완성만 (${unsolvedCount}문제)\n` +
+                `2) 전체 재생성 (${totalCount}문제)\n\n` +
+                `번호를 입력하세요 (1 또는 2):`,
+                '1'
+              );
+              if (!choice) return;
+              targetProblems = choice.trim() === '2' ? problems : unsolved;
+            }
+
             setIsGeneratingBatch(true);
             setBatchProgress({ current: 0, total: targetProblems.length });
             let success = 0;
