@@ -28,6 +28,11 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                 .trim();
             const processedContent = block ? stripped : `\\displaystyle ${stripped}`;
 
+            // ★ 디버그: 긴 수식 렌더링 추적
+            if (stripped.length > 50) {
+                console.log('[MathRenderer] 긴 수식:', stripped.substring(0, 100), '| 길이:', stripped.length);
+            }
+
             return katex.renderToString(processedContent, {
                 throwOnError: false,
                 displayMode: block,
