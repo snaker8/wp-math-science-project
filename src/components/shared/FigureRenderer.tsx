@@ -144,6 +144,27 @@ export function FigureRenderer({
           })
           .map(e => ({ latex: e.latex, color: e.color || '#888888', style: 'solid' }));
 
+        // ★ 최종 expressions: 원본 + 사용자 추가. 비어있으면 desmosState에서 추출
+        let finalExpressions = [...origExpressions, ...userAddedExprs];
+        if (finalExpressions.length === 0 && data.desmosState) {
+          // desmosState에서 유효한 수식 추출 (함수, 방정식 등)
+          const stateExprs = (data.desmosState as any)?.expressions?.list || [];
+          finalExpressions = stateExprs
+            .filter((e: any) => {
+              const latex = (e.latex || '').trim();
+              if (!latex) return false;
+              // 슬라이더/변수 대입 제외 (x, y 제외)
+              if (/^[a-wz](_\{?\d+\}?)?\s*=\s*-?[\d.]+$/.test(latex)) return false;
+              // 포인트 제외
+              if (/^\([\d.\-]+,\s*[\d.\-]+\)$/.test(latex)) return false;
+              // 투영선 제외
+              if (/^\(\s*[xyt]/.test(latex) && /,\s*[xyt]/.test(latex)) return false;
+              // 함수/방정식만 (y=..., f(x)=..., x=..., 부등식 등)
+              return /[=<>]|\\frac|\\sqrt|\\log|\\sin|\\cos|\\tan|\\ln/.test(latex);
+            })
+            .map((e: any) => ({ latex: e.latex, color: e.color || '#2d70b3', style: 'solid' }));
+        }
+
         const res = await fetch(`/api/problems/${problemId}/update-figure`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -152,11 +173,9 @@ export function FigureRenderer({
             rendering: {
               ...(origRendering || {}),
               type: 'graph',
-              // 원본 수식 + 사용자 추가 수식 합치기
-              expressions: [...origExpressions, ...userAddedExprs],
+              expressions: finalExpressions,
               xRange: data.xRange,
               yRange: data.yRange,
-              // Desmos 전체 상태 + 스크린샷 저장
               desmosState: data.desmosState,
               editedImageDataUrl: data.imageDataUrl,
             },
@@ -220,7 +239,47 @@ export function FigureRenderer({
             )}
             {/* points 라벨은 스크린샷에 포함되므로 오버레이 불필요 */}
           </div>
-        ) : isGraph && savedDesmosState ? (
+        )}
+        {/* ★ 편집된 스크린샷 아래 함수식 목록 (expressions 또는 desmosState에서 추출) */}
+        {isGraph && (figureData.rendering as Record<string, unknown>)?.editedImageDataUrl && (() => {
+          let exprs = graphRendering?.expressions?.map(e => e.latex) || [];
+          if (exprs.length === 0 && savedDesmosState) {
+            const stateExprs = (savedDesmosState as any)?.expressions?.list || [];
+            exprs = stateExprs
+              .filter((e: any) => {
+                const l = (e.latex || '').trim();
+                if (!l) return false;
+                if (/^[a-wz](_\{?\d+\}?)?\s*=\s*-?[\d.]+$/.test(l)) return false;
+                if (/^\([\d.\-]+,\s*[\d.\-]+\)$/.test(l)) return false;
+                return /[=<>]|\\frac|\\sqrt|\\log|\\sin|\\cos|\\tan|\\ln/.test(l);
+              })
+              .map((e: any) => e.latex);
+          }
+          if (exprs.length === 0) return null;
+          return (
+            <div className={`mt-1.5 p-2 rounded border ${darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'}`}>
+              {exprs.map((expr: string, i: number) => {
+                const COLORS = ['#2d70b3', '#388c46', '#fa7e19', '#c74440', '#6042a6', '#000000'];
+                let html = '';
+                try {
+                  const katex = require('katex');
+                  html = katex.renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true });
+                } catch { /* */ }
+                return (
+                  <div key={i} className="flex items-center gap-1.5 py-0.5">
+                    <span className="w-2.5 h-0.5 rounded flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    {html ? (
+                      <span className="text-[12px]" dangerouslySetInnerHTML={{ __html: html }} />
+                    ) : (
+                      <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+        {!(isGraph && (figureData.rendering as Record<string, unknown>)?.editedImageDataUrl) && (isGraph && savedDesmosState ? (
           /* ★ desmosState가 있으면 Desmos로 렌더링 (수식 목록 포함) */
           (() => {
             const exprs = graphRendering?.expressions?.map(e => e.latex) || [];

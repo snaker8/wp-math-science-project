@@ -396,35 +396,38 @@ export function InlineDesmosGraph({
         />
       </div>
 
-      {/* ★ 함수식 목록 (KaTeX 렌더링, 항상 표시) */}
-      {expressions.length > 0 && (
-        <div className={`mt-1.5 p-2 rounded border ${
-          darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'
-        }`}>
-          {expressions.map((rawExpr, i) => {
-            const expr = sanitizeExpression(rawExpr);
-            let html = '';
-            try {
-              html = katex.renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true });
-            } catch {
-              html = '';
-            }
-            return (
-              <div key={i} className="flex items-center gap-1.5 py-0.5">
-                <span
-                  className="w-2.5 h-0.5 rounded flex-shrink-0"
-                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                />
-                {html ? (
-                  <span className="text-[12px]" dangerouslySetInnerHTML={{ __html: html }} />
-                ) : (
-                  <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* ★ 함수식 목록 (KaTeX 렌더링) — props expressions 우선, 없으면 Desmos에서 추출된 addedExprs */}
+      {(() => {
+        const displayExprs = expressions.length > 0 ? expressions.map(e => sanitizeExpression(e)) : addedExprs;
+        if (displayExprs.length === 0) return null;
+        return (
+          <div className={`mt-1.5 p-2 rounded border ${
+            darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'
+          }`}>
+            {displayExprs.map((expr, i) => {
+              let html = '';
+              try {
+                html = katex.renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true });
+              } catch {
+                html = '';
+              }
+              return (
+                <div key={i} className="flex items-center gap-1.5 py-0.5">
+                  <span
+                    className="w-2.5 h-0.5 rounded flex-shrink-0"
+                    style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                  />
+                  {html ? (
+                    <span className="text-[12px]" dangerouslySetInnerHTML={{ __html: html }} />
+                  ) : (
+                    <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }
