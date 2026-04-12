@@ -5,8 +5,9 @@
 // GPT-4o Vision이 추출한 수식을 Desmos로 렌더링
 // ============================================================================
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import katex from 'katex';
 
 // Desmos calculator 인스턴스 타입
 interface DesmosCalcInstance {
@@ -108,7 +109,7 @@ export function InlineDesmosGraph({
   const calculatorRef = useRef<DesmosCalcInstance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showExprs, setShowExprs] = useState(showExpressions);
+  const [showExprs, setShowExprs] = useState(true);  // ★ 기본 펼침 (학생이 함수식 바로 확인)
   const [addedExprs, setAddedExprs] = useState<string[]>([]);
   const initCalledRef = useRef(false);
 
@@ -395,31 +396,33 @@ export function InlineDesmosGraph({
         />
       </div>
 
-      {/* 수식 목록 토글 */}
-      {addedExprs.length > 0 && (
-        <button
-          onClick={() => setShowExprs(!showExprs)}
-          className={`mt-1 flex items-center gap-1 text-[10px] transition-colors ${
-            darkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          {showExprs ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          수식 {addedExprs.length}개 {showExprs ? '접기' : '보기'}
-        </button>
-      )}
-      {showExprs && addedExprs.length > 0 && (
-        <div className={`mt-1 p-2 rounded border ${
+      {/* ★ 함수식 목록 (KaTeX 렌더링, 항상 표시) */}
+      {expressions.length > 0 && (
+        <div className={`mt-1.5 p-2 rounded border ${
           darkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'
         }`}>
-          {addedExprs.map((expr, i) => (
-            <div key={i} className="flex items-center gap-1.5 py-0.5">
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: COLORS[i % COLORS.length] }}
-              />
-              <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
-            </div>
-          ))}
+          {expressions.map((rawExpr, i) => {
+            const expr = sanitizeExpression(rawExpr);
+            let html = '';
+            try {
+              html = katex.renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true });
+            } catch {
+              html = '';
+            }
+            return (
+              <div key={i} className="flex items-center gap-1.5 py-0.5">
+                <span
+                  className="w-2.5 h-0.5 rounded flex-shrink-0"
+                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                />
+                {html ? (
+                  <span className="text-[12px]" dangerouslySetInnerHTML={{ __html: html }} />
+                ) : (
+                  <span className={`text-[11px] font-mono ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{expr}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
