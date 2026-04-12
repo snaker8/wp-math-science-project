@@ -708,7 +708,15 @@ function preprocessMathpixContent(text: string): string {
     }
   );
   // 고아 \left\{ (매칭 \right 없음) → \lbrace
-  result = result.replace(/\\left\s*\\?\{/g, '\\lbrace');
+  // ★ $...$ 안의 \left\{는 KaTeX가 처리하므로 변환 안 함
+  // $ 밖의 bare LaTeX에서만 적용 (짝이 없는 경우)
+  result = result.replace(/\\left\s*\\?\{/g, (match, offset) => {
+    const before = result.substring(0, offset);
+    const dollarCount = (before.match(/(?<!\$)\$(?!\$)/g) || []).length;
+    // 홀수면 $ 안쪽 → 변환 안 함
+    if (dollarCount % 2 === 1) return match;
+    return '\\lbrace';
+  });
   // 고아 \right. → 제거
   result = result.replace(/\\right\s*\./g, '');
   // $$ 만 남은 빈 블록 제거
