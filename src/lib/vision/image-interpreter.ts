@@ -701,61 +701,63 @@ export async function interpretImage(
     }
 
     // ================================================================
-    // ★★★ 2단계: AI SVG 생성 — 코드 렌더러가 못 그리는 경우에만
-    // geometry는 1단계 좌표로 코드 렌더러가 그리는 게 더 정확함
-    // table/diagram 또는 geometry인데 좌표 데이터가 부족한 경우만 AI SVG
+    // ★★★ 2단계: Opus 직접 SVG 생성
+    // graph → 기존 유지 (Desmos 렌더링에 structured JSON 필요)
+    // geometry/table/diagram → Opus에 이미지만 주고 바로 SVG 생성
+    //   (Gemini JSON을 전달하면 오히려 방해됨 — 사용자 검증 완료)
     // ================================================================
-    // ★ 코드 렌더러 사용 조건: 직선만으로 그릴 수 있는 geometry
-    const geo = result.rendering?.type === 'geometry' ? result.rendering as GeometryRendering : null;
-    const hasCirclesOrArcs = geo?.circles?.length > 0 ||
-      /호|부채꼴|원|반원|arc|circle|sector/i.test(result.description || '');
-    // ★ 전개도 감지: 코드 렌더러로 그릴 수 없음 → 2단계 AI SVG 강제
-    // (1) 명시적 키워드
+
+    // ★ 전개도 감지 로직 (Opus 프롬프트 분기에 사용)
     const hasNetKeyword = /전개도|net\s*diagram/i.test(result.description || '') ||
       /전개도/i.test(context || '');
-    // (2) 시각적 패턴: 점선 사각형이 실선 사각형을 감싸는 구조 (변형 전후 비교 도형)
-    //     → dashedSegments에 vertices에 없는 점이 포함된 경우 (코드 렌더러가 못 그림)
     const geoForNet = result.rendering?.type === 'geometry' ? result.rendering as GeometryRendering : null;
     const hasMissingDashedVerts = geoForNet?.dashedSegments?.some(([a, b]) =>
       !geoForNet.vertices?.some(v => v.label === a) || !geoForNet.vertices?.some(v => v.label === b)
     ) || false;
-    // (3) 문제 텍스트에서 "줄이고/늘렸을/줄인/늘린" 패턴 (도형 변형 문제)
     const hasTransformPattern = /줄이고|늘렸을|줄인|늘린|줄이면|늘리면/.test(context || '');
-    // (4) description에서 점선+실선 겹침 패턴
     const hasOverlapPattern = /점선|dashed.*solid|실선.*점선|원래.*도형|변형/.test(result.description || '');
     const isNetDiagram = hasNetKeyword || hasMissingDashedVerts || (hasTransformPattern && hasOverlapPattern);
-    if (isNetDiagram && !hasNetKeyword) {
-      console.log(`[Vision] ★ 전개도 시각적 감지: missingDashedVerts=${hasMissingDashedVerts}, transformText=${hasTransformPattern}, overlapDesc=${hasOverlapPattern}`);
-    }
-    const hasGoodCoordinates = result.figureType === 'geometry' && geo &&
-      geo.vertices?.length >= 3 && geo.segments?.length >= 2 && !hasCirclesOrArcs && !isNetDiagram;
 
-    const needsAiSvg = !hasGoodCoordinates &&
-      (result.figureType === 'geometry' || result.figureType === 'table' || result.figureType === 'diagram') &&
+    // ★★★ graph가 아닌 모든 타입: Opus 직접 SVG 생성 (Gemini JSON 전달하지 않음)
+    const shouldDirectSvg = result.figureType !== 'graph' &&
+      result.figureType !== 'photo' &&
       result.confidence >= 0.3;
 
-    if (hasGoodCoordinates) {
-      console.log(`[Vision] ★ 코드 렌더러 사용 (vertices: ${(result.rendering as GeometryRendering).vertices.length}, segments: ${(result.rendering as GeometryRendering).segments?.length || 0})`);
-    }
-
-    if (needsAiSvg) {
-      console.log(`[Vision] ★★ 2단계: ${result.figureType} → AI SVG 생성 (좌표 데이터 부족)`);
+    if (shouldDirectSvg) {
+      console.log(`[Vision] ★★★ Opus 직접 SVG 생성: ${result.figureType} (Gemini JSON 스킵, 이미지만 전달)`);
+      if (isNetDiagram) {
+        console.log(`[Vision] → 전개도 감지됨: keyword=${hasNetKeyword}, missingVerts=${hasMissingDashedVerts}, transform=${hasTransformPattern}`);
+      }
       try {
-        const svgResult = await generateSvgStep2(imageUrl, result, context);
+        const svgResult = await generateSvgDirect(imageUrl, result.figureType, isNetDiagram, context);
         if (svgResult) {
-          // rendering.svg에 저장 → figure-renderer.ts가 SVG 우선 사용
           if (result.rendering) {
             (result.rendering as unknown as Record<string, unknown>).svg = svgResult;
           } else {
-            // rendering이 없으면 생성
             result.rendering = { type: 'geometry', svg: svgResult, vertices: [], segments: [] } as any;
           }
-          console.log(`[Vision] ★★ 2단계 SVG 저장 완료 (${result.figureType})! (${svgResult.length}자)`);
+          console.log(`[Vision] ★★★ Opus 직접 SVG 완료! (${svgResult.length}자)`);
         }
       } catch (svgErr) {
-        console.warn(`[Vision] 2단계 SVG 생성 실패 (프로그래밍 SVG 폴백 사용):`, svgErr);
-        // 실패해도 1단계 결과(구조 데이터)는 유지
+        console.warn(`[Vision] Opus 직접 SVG 실패, generateSvgStep2 폴백:`, svgErr);
+        // 폴백: 기존 2단계 (Gemini JSON 포함)
+        try {
+          const fallbackSvg = await generateSvgStep2(imageUrl, result, context);
+          if (fallbackSvg) {
+            if (result.rendering) {
+              (result.rendering as unknown as Record<string, unknown>).svg = fallbackSvg;
+            } else {
+              result.rendering = { type: 'geometry', svg: fallbackSvg, vertices: [], segments: [] } as any;
+            }
+            console.log(`[Vision] 폴백 SVG 완료 (${fallbackSvg.length}자)`);
+          }
+        } catch (fallbackErr) {
+          console.warn(`[Vision] 폴백도 실패:`, fallbackErr);
+        }
       }
+    } else if (result.figureType === 'graph') {
+      // graph는 기존 로직 유지 (Desmos 렌더링용 structured data 필요)
+      console.log(`[Vision] graph 타입 → 기존 코드 렌더러/Desmos 유지`);
     }
 
     return result;
@@ -1571,6 +1573,88 @@ function buildSectorSvg(geo: GeometryRendering): string | null {
  * ★ 모델 우선순위: Claude Sonnet (지시사항 준수 최고) → GPT-4o → Gemini
  * 도형 문제는 시험지당 3~4개뿐이라 비용 부담 적음
  */
+
+// ============================================================================
+// ★★★ Opus 직접 SVG 생성 — Gemini JSON 없이 이미지만으로 SVG 생성
+// 사용자 검증: Opus에 이미지만 주면 복원 퀄리티가 압도적으로 좋음
+// ============================================================================
+async function generateSvgDirect(
+  imageUrl: string,
+  figureType: string,
+  isNetDiagram: boolean,
+  context?: string,
+): Promise<string | null> {
+  // Claude Opus 키 확인
+  if (!ANTHROPIC_API_KEY) {
+    console.warn('[Vision/Direct] Anthropic API key 없음 — 직접 SVG 생성 불가');
+    return null;
+  }
+
+  const systemPrompt = isNetDiagram ? NET_DIAGRAM_SVG_PROMPT : SVG_GENERATION_PROMPT;
+
+  // ★ Gemini JSON을 전달하지 않음 — 이미지 + 문제 텍스트만
+  const figureTypeKo: Record<string, string> = {
+    geometry: '기하 도형 (삼각형, 사각형, 원 등)',
+    table: '표 (값, 조립제법 등)',
+    diagram: '다이어그램 (벤다이어그램, 트리 등)',
+    number_line: '수직선',
+  };
+
+  let userMessage = `이 수학 문제의 ${figureTypeKo[figureType] || figureType} 이미지를 보고 정확히 같은 SVG를 그려주세요.\n`;
+  userMessage += `★ 이미지를 직접 보고 그려주세요. 원본의 비율, 점선 위치, 라벨, 음영을 정확히 재현하세요.\n`;
+
+  if (isNetDiagram) {
+    userMessage += `★★ 이 도형은 전개도/변형 도형입니다. 점선과 실선의 구분, 각 면의 라벨을 정확히 표현하세요.\n`;
+    if (context) {
+      const shortCtx = context.length > 500 ? context.slice(0, 500) + '...' : context;
+      userMessage += `문제 문맥: "${shortCtx}"\n`;
+    }
+  } else if (context) {
+    const shortCtx = context.length > 400 ? context.slice(0, 400) + '...' : context;
+    userMessage += `문제 문맥 (참고): "${shortCtx}"\n`;
+  }
+
+  userMessage += `\nSVG 코드만 출력하세요. 설명 없이 <svg...>로 시작하세요.`;
+
+  // ★ 교정 이력 few-shot 주입
+  try {
+    const corrections = await fetchCorrectionExamples({ figureType, limit: 3 });
+    if (corrections.length > 0) {
+      const block = buildCorrectionPromptBlock(corrections);
+      userMessage += block;
+      console.log(`[Vision/Direct] 교정 사례 ${corrections.length}건 few-shot 주입`);
+    }
+  } catch {
+    // 교정 조회 실패해도 무시
+  }
+
+  console.log(`[Vision/Direct] Opus 직접 호출: ${CLAUDE_MODEL}, 전개도=${isNetDiagram}`);
+
+  try {
+    const rawResponse = await callClaudeVision(
+      imageUrl,
+      systemPrompt,
+      userMessage,
+      2, // retries
+      isNetDiagram ? 4000 : 3000, // max tokens
+    );
+
+    // SVG 추출
+    const svgMatch = rawResponse.match(/<svg[\s\S]*?<\/svg>/i);
+    if (!svgMatch) {
+      console.warn(`[Vision/Direct] Opus 응답에서 SVG 추출 실패 (응답 ${rawResponse.length}자)`);
+      return null;
+    }
+
+    const svg = svgMatch[0];
+    console.log(`[Vision/Direct] ✅ Opus SVG 생성 성공: ${svg.length}자`);
+    return svg;
+  } catch (err) {
+    console.error(`[Vision/Direct] Opus 호출 실패:`, err);
+    return null;
+  }
+}
+
 async function generateSvgStep2(
   imageUrl: string,
   parsed: InterpretedFigure,
