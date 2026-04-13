@@ -619,7 +619,10 @@ function ProblemCardView({
                         correctionType: 'use_original',
                         correctedImageUrl: originalUrl,
                       }),
-                    }).catch(() => {});
+                    }).then(r => {
+                      if (r.ok) console.log('[figure-corrections] ✅ 원본사용 교정 기록 저장');
+                      else console.error('[figure-corrections] ❌ 원본사용 교정 실패:', r.status);
+                    }).catch(err => console.error('[figure-corrections] ❌ API 호출 실패:', err));
                     window.dispatchEvent(new CustomEvent('problems-updated'));
                   } catch (err) {
                     console.error('[OriginalCrop] Error:', err);
@@ -1976,17 +1979,27 @@ export default function CloudExamDetailPage() {
         console.log(`[DiagramReplace] Problem #${diagramBrowserProblem.number} 도식 교체 완료`);
         refetchProblems();
 
-        // ★ 교정 이력 자동 기록 (자동 학습용 — fire & forget)
-        fetch('/api/figure-corrections', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            problemId: diagramBrowserProblem.id,
-            correctionType: meta?.correctionType || 'diagram_db',
-            correctedImageUrl: imageUrl,
-            correctedSvgSource: meta?.svgSource || null,
-          }),
-        }).catch(err => console.warn('[figure-corrections] 기록 실패 (무시):', err));
+        // ★ 교정 이력 자동 기록 (자동 학습용)
+        try {
+          const corrRes = await fetch('/api/figure-corrections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              problemId: diagramBrowserProblem.id,
+              correctionType: meta?.correctionType || 'diagram_db',
+              correctedImageUrl: imageUrl,
+              correctedSvgSource: meta?.svgSource || null,
+            }),
+          });
+          if (corrRes.ok) {
+            console.log(`[figure-corrections] ✅ 교정 기록 저장 성공 (${meta?.correctionType || 'diagram_db'})`);
+          } else {
+            const errData = await corrRes.json().catch(() => ({}));
+            console.error(`[figure-corrections] ❌ 교정 기록 저장 실패: ${corrRes.status}`, errData);
+          }
+        } catch (corrErr) {
+          console.error('[figure-corrections] ❌ 교정 기록 API 호출 실패:', corrErr);
+        }
       } else {
         const err = await patchRes.json().catch(() => ({}));
         alert(`도식 교체 실패: ${err.error || patchRes.status}`);
