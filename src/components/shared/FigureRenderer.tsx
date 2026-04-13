@@ -464,11 +464,13 @@ export function FigureRenderer({
 
   // 2. figureSvg (사용자 교체 SVG 또는 AI 직접 생성 SVG)
   if (figureSvg) {
+    // ★ SVG 태그에 overflow="visible" 자동 삽입 (viewBox 밖 라벨 잘림 방지)
+    const safeSvg = figureSvg.replace(/<svg\b/i, '<svg overflow="visible"');
     return (
       <div
         className={`figure-svg-container ${className}`}
         style={{ maxWidth: '100%', overflow: 'visible' }}
-        dangerouslySetInnerHTML={{ __html: figureSvg }}
+        dangerouslySetInnerHTML={{ __html: safeSvg }}
       />
     );
   }
