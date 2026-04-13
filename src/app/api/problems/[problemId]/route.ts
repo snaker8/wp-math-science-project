@@ -7,6 +7,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
+// ============================================================================
+// GET /api/problems/[problemId] - 문제 단일 조회
+// ============================================================================
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ problemId: string }> }
+) {
+  const { problemId } = await params;
+
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('problems')
+    .select('id, content_latex, solution_latex, answer_json, images, ai_analysis, source_name, source_year')
+    .eq('id', problemId)
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(data);
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
