@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
+export const dynamic = 'force-dynamic';
+
 // ── POST: 교정 기록 저장 ──
 export async function POST(request: NextRequest) {
   if (!supabaseAdmin) {
