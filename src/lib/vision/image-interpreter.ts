@@ -297,6 +297,7 @@ CRITICAL OUTPUT RULES:
 - No explanations, no markdown, just raw SVG
 - Keep it SIMPLE and CLEAN — like a professional digital textbook figure
 - ★★★ The ORIGINAL IMAGE is the ground truth. Always match the image, not just the text description.
+- ★★ SQUARE ROOT SYMBOLS (√): Use Unicode "√" character. Ensure text elements with √ have enough vertical space — use dy="-2" or larger font-size to prevent top clipping. Never clip the top of √ with background rects or viewBox.
 
 ★ NET DIAGRAMS (전개도): Draw each face as a separate rectangle in cross shape. Fold lines = stroke-dasharray="4,3". Fill 85% of viewBox.
 
