@@ -487,6 +487,15 @@ function ProblemCardView({
     // ★ \begin{table}...\end{table} 래퍼 제거 (KaTeX 미지원, tabular만 남김)
     .replace(/\\begin\{table\}[\s\S]*?(?=\\begin\{tabular\})/gi, '')
     .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}')
+    // ★ \begin{aligned}...\end{aligned} → 줄별 $...$ 변환 (KaTeX display mode 실패 방지)
+    .replace(/\$\$\s*\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*\$\$/gi, (_match, inner) => {
+      return inner
+        .split('\\\\')
+        .map((line: string) => line.replace(/&/g, '').trim())
+        .filter((line: string) => line.length > 0)
+        .map((line: string) => `$${line}$`)
+        .join('\n');
+    })
     .trim();
 
   const contentParts = splitContentByFigureMarker(cleanContent);
