@@ -462,12 +462,12 @@ export function FigureRenderer({
     );
   }
 
-  // 2. 레거시 figureSvg fallback
+  // 2. figureSvg (사용자 교체 SVG 또는 AI 직접 생성 SVG)
   if (figureSvg) {
     return (
       <div
         className={`figure-svg-container ${className}`}
-        style={{ maxWidth }}
+        style={{ maxWidth: '100%', overflow: 'visible' }}
         dangerouslySetInnerHTML={{ __html: figureSvg }}
       />
     );
@@ -792,7 +792,7 @@ function UpscaledImageWithFallback({
       return (
         <div
           className={`figure-svg-container ${className}`}
-          style={{ maxWidth }}
+          style={{ maxWidth: '100%', overflow: 'visible' }}
           dangerouslySetInnerHTML={{ __html: figureSvg }}
         />
       );
