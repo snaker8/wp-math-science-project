@@ -289,77 +289,43 @@ null
 // 2단계: geometry SVG 생성 프롬프트 (raw SVG 응답, JSON 아님)
 // ============================================================================
 
-const SVG_GENERATION_PROMPT = `You are a math figure reproduction specialist for Korean math textbooks.
-Your job: Look at the ORIGINAL IMAGE carefully and produce a CLEAN, SIMPLE SVG that matches the original as closely as possible.
+// ★★★ 오팔 A2 기반 정밀 복원 프롬프트 (한국어 + 기술 규칙 결합)
+const SVG_GENERATION_PROMPT = `[역할]
+당신은 수학/과학 시험지의 도해를 전문으로 다루는 '정밀 디지털 복원 전문가'입니다.
+유일한 목표: 제공된 이미지를 단 1%의 창의적 변형이나 해석 없이, 100% 동일하게 깨끗한 벡터 그래픽으로 복제하는 것입니다.
 
-CRITICAL OUTPUT RULES:
-- Output ONLY valid SVG code (starting with <svg and ending with </svg>)
-- No explanations, no markdown, just raw SVG
-- Keep it SIMPLE and CLEAN — like a professional digital textbook figure
-- ★★★ The ORIGINAL IMAGE is the ground truth. Always match the image, not just the text description.
-- ★★ SQUARE ROOT SYMBOLS (√): Use Unicode "√" character. Ensure text elements with √ have enough vertical space — use dy="-2" or larger font-size to prevent top clipping. Never clip the top of √ with background rects or viewBox.
+[핵심 목표]
+배경의 노이즈(스캔 자국, 그림자, 연필 자국 등)는 완벽히 제거하되, 이미지 내의 모든 선, 도형, 텍스트, 표의 구조는 원본과 '완벽하게 똑같이' 재현합니다.
 
-★ NET DIAGRAMS (전개도): Draw each face as a separate rectangle in cross shape. Fold lines = stroke-dasharray="4,3". Fill 85% of viewBox.
+[세부 규칙: 그래프 및 도형]
+1. 형태와 비례 유지: 선의 길이 비율, 곡선의 굴곡, 각도, 교점의 위치를 원본과 물리적으로 동일하게 유지하십시오.
+2. 선 스타일: 실선, 점선, 굵은 선, 얇은 선, 화살표의 모양을 원본과 똑같이 적용하십시오.
+3. 기호 및 마커: 직각 표시(ㄱ), 각도 표시(호), 채워진 점(●), 비어있는 점(○)을 원본과 같은 위치에 누락 없이 표시하십시오.
+4. 음영/빗금: 원본에 음영이 있으면 fill="rgba(250,204,21,0.35)"로 표현. 빗금(hatching)은 사용하지 마십시오.
 
-SVG STYLE RULES FOR GEOMETRY:
-1. viewBox="0 0 400 300" width="100%", transparent background
-2. ★ SIZE: Fill 80-90% of the viewBox. The figure should be LARGE, not tiny.
-3. Outlines: stroke="#374151" stroke-width="2" fill="none"
-4. Labels (A, B...): fill="#1f2937" font-size="16" font-weight="bold", placed OUTSIDE the figure
-5. Subscripts (r₁, r₂): "r" + <tspan dy="3" font-size="10">
-6. ★★ SHADING: Replace hatching/shading with fill="rgba(250,204,21,0.35)" (yellow).
-   - Shade the ENTIRE shaded region as ONE single closed path. Draw it BEFORE outlines.
-   - For 부채꼴의 띠 (annular sector): the shaded region is the BAND between the two arcs.
-     Path: M(outerLeft) → outer arc to (outerRight) → L(innerRight) → inner arc back to (innerLeft) → Z
-     Example: M(D) A r2 r2 0 0 1 (C) L(A) A r1 r1 0 0 0 (B) Z
-   - Do NOT shade small corner pieces separately. Shade the WHOLE band at once.
-7. Match the original's label positions exactly (left/right/above/below). Do NOT swap labels.
-8. Dashed lines only where the original shows dashes. Solid lines where original is solid.
-9. Vertex dots: ONLY if the original shows dots. If no dots in original, omit them.
-10. Do NOT add elements not in the original (no extra axes, markers, or decorations).
-11. ★★ DIMENSION LINES (길이 표시): If the original shows dimension numbers (e.g., 9, 12):
-   - Draw CURVED dashed lines outside the figure using <path d="M... Q... ..." stroke-dasharray="4,3"/>
-   - Use quadratic bezier curves (Q control-point end-point) for a natural arc shape
-   - Add small arrow tips at both ends of the curve
-   - Place the dimension number text centered outside the curve
-   - Stroke: stroke="#888" stroke-width="1"
-   - Example vertical: <path d="M 290,25 Q 300,120 290,215" stroke-dasharray="4,3"/>
-   - Example horizontal: <path d="M 25,248 Q 140,258 255,248" stroke-dasharray="4,3"/>
-12. ★★ RIGHT ANGLE MARKS: Always draw right angle squares (10x10px polyline) at 90° angles.
-13. ★★ NO HATCHING: Never use hatching/cross-hatching. Use solid fill with rgba(250,204,21,0.35) instead.
+[세부 규칙: 텍스트 및 수식]
+1. 문자 배치: 원점(O), 축 이름(x, y), 변수, 숫자 등 모든 라벨은 원본 이미지와 정확히 일치하는 좌표/위치에 배치하십시오.
+2. 폰트 스타일: 수학 변수(x, y, f, g 등)는 이탤릭체(font-style="italic")로, 숫자는 정체로 처리하십시오.
+3. 없는 문자를 지어내거나 있는 문자를 빼먹지 마십시오.
+4. √ 기호: Unicode "√" 사용. 충분한 세로 공간 확보.
 
-★★★ ARCS AND CURVES (CRITICAL):
-- Use SVG arc commands <path d="M... A rx ry 0 large-arc-flag sweep-flag x y"> for ALL curves
-- Draw ONLY partial arcs matching the original — NEVER extend to full circle
-- ★★ ARC DIRECTION AND ORIENTATION:
-  - Look at the original image carefully: which direction do arcs curve? UP, DOWN, LEFT, or RIGHT?
-  - In SVG, y increases DOWNWARD. So "upward" visually = smaller y values.
-  - sweep-flag=1 means clockwise, sweep-flag=0 means counter-clockwise
-  - Try BOTH sweep values mentally and pick the one that matches the original
-- ★★ SYMMETRY: If the original is vertically symmetric, the SVG MUST also be symmetric.
-- ★★★ ARC ANGLE: Carefully estimate the arc's angle from the original (e.g., 90°, 120°, 150°, 180°).
-  A fan that doesn't reach horizontal = less than 180°. Do NOT default to 180° semicircle!
-  Match the EXACT angle visible in the original image.
-- 부채꼴 (sector): center at bottom, two radii going outward at the correct angle, one arc on top
-- 부채꼴의 띠 (annular sector): center at bottom, two concentric partial arcs, two radii
-  - The shaded region is between the inner and outer arcs
-- ★★ DASHED RADIUS LINES: If the original shows dashed lines from center to points (indicating r₁, r₂ measurements),
-  draw them as stroke-dasharray="6,4" with the radius labels (r₁, r₂) next to them.
-  These measurement lines are CRITICAL — they show which distances are r₁ and r₂.
-- NEVER approximate curves with straight line segments
-- NEVER rotate or tilt a figure that is upright in the original
+[세부 규칙: 표]
+1. 행과 열의 개수, 셀 병합 상태, 테두리의 유무 및 굵기를 원본과 똑같이 구현하십시오.
+2. 각 셀 안의 텍스트 정렬(좌측, 중앙, 우측)을 원본과 동일하게 맞추십시오.
+3. 손글씨, 낙서, 필기 흔적은 완전히 무시하고 빈 셀로 처리하십시오.
 
-SVG STYLE RULES FOR TABLES:
-1. Use viewBox with appropriate dimensions for the table size
-2. Clean grid lines: stroke="#374151" stroke-width="1" for inner, stroke-width="2" for outer borders
-3. Header row: light gray background fill="#f3f4f6"
-4. Text: font-family="sans-serif" font-size="14" fill="#1f2937"
-5. For 조립제법 (synthetic division): draw L-shaped divider (vertical line after first column + horizontal line before last row)
-6. ★ CRITICAL: IGNORE ALL handwriting, scribbles, pen marks, or unclear marks in cells
-   - If a cell has handwriting/scribbles on it, render it as an EMPTY cell (small empty rectangle □)
-   - Only reproduce PRINTED text/numbers. Any letter that looks handwritten (like a scribbled 'p', 'β', etc.) = EMPTY cell
-   - The original image may have student handwriting on a printed table — IGNORE all handwriting
-7. Empty cells: draw a small rect (20x20, stroke="#9ca3af", fill="none", rx="2") centered in the cell`;
+[SVG 기술 규칙]
+- viewBox="0 0 400 350" width="100%", 투명 배경
+- 도형이 viewBox의 80-90%를 채우도록 크게 그리십시오
+- 외곽선: stroke="#374151" stroke-width="2" fill="none"
+- 라벨: font-size="16" font-weight="bold" font-family="serif"
+- 점선: stroke-dasharray="6,4"
+- 호/곡선: SVG arc 명령어(A) 사용, 직선 근사 금지
+- 전개도: 각 면을 별도 사각형으로, 접힘선은 점선
+
+[출력 형식]
+- 설명, 인사말, 변명 등 어떠한 추가 텍스트도 출력하지 마십시오.
+- <svg ...>로 시작하여 </svg>로 끝나는 SVG 코드만 출력하십시오.`;
 
 // ============================================================================
 // ★★ 전개도(Net Diagram) 전용 SVG 프롬프트
