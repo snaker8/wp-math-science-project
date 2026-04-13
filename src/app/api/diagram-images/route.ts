@@ -43,25 +43,59 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Number(sp.get('limit') || 50), 2000);
   const offset = Number(sp.get('offset') || 0);
 
-  // ★ index.json 직접 읽기 (파이프라인 서버 불필요)
-  let allImages = await loadIndex();
+  // ★ 1) index.json 로컬 파일 읽기
+  let localImages = await loadIndex();
+
+  // ★ 2) diagram_images 테이블에서 사용자 업로드 이미지 조회 (DB 검색)
+  let dbImages: any[] = [];
+  if (supabaseAdmin) {
+    try {
+      let dbQuery = supabaseAdmin
+        .from('diagram_images')
+        .select('id, filename, storage_path, public_url, source_name, subject, diagram_type, unit_name, unit_code, tags, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (subject) dbQuery = dbQuery.ilike('subject', `%${subject}%`);
+      if (source) dbQuery = dbQuery.ilike('source_name', `%${source}%`);
+      if (diagramType) dbQuery = dbQuery.ilike('diagram_type', `%${diagramType}%`);
+
+      const { data } = await dbQuery;
+      dbImages = (data || []).map((img: any) => ({
+        ...img,
+        storage_path: img.storage_path || '',
+        public_url: img.public_url,
+        source_name: img.source_name || '업로드',
+        diagram_type: img.diagram_type || 'uploaded',
+        _from_db: true,
+      }));
+    } catch (err) {
+      console.warn('[diagram-images] DB 조회 실패 (무시):', err);
+    }
+  }
+
+  // ★ 3) 로컬 + DB 합치기 (DB 업로드 이미지가 먼저 보이도록)
+  let allImages = [...dbImages, ...localImages];
 
   if (allImages.length > 0) {
-    // 필터링
+    // 필터링 (DB 이미지는 이미 필터링됨, 로컬만 추가 필터)
     let filtered = allImages;
     if (subject) {
       filtered = filtered.filter((img: any) => {
+        if (img._from_db) return true; // DB는 이미 필터됨
         const imgSubject = img.subject || (img.tags?.science_subject) || '';
         return imgSubject.toLowerCase().includes(subject.toLowerCase());
       });
     }
     if (source) {
-      filtered = filtered.filter((img: any) =>
-        (img.source_name || img.source || '').includes(source)
-      );
+      filtered = filtered.filter((img: any) => {
+        if (img._from_db) return true;
+        return (img.source_name || img.source || '').includes(source);
+      });
     }
     if (diagramType) {
       filtered = filtered.filter((img: any) => {
+        if (img._from_db) return true;
         const dt = img.diagram_type || (img.tags?.diagram_type) || '';
         return dt.includes(diagramType);
       });
@@ -84,7 +118,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ images, total, source: 'local-index' });
+    return NextResponse.json({ images, total, source: dbImages.length > 0 ? 'local+db' : 'local-index' });
   }
 
   // 폴백: 파이프라인 서버 시도 (index.json이 없을 때만)
