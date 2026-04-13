@@ -464,12 +464,21 @@ export function FigureRenderer({
 
   // 2. figureSvg (사용자 교체 SVG 또는 AI 직접 생성 SVG)
   if (figureSvg) {
-    // ★ SVG 태그에 overflow="visible" 자동 삽입 (viewBox 밖 라벨 잘림 방지)
-    const safeSvg = figureSvg.replace(/<svg\b/i, '<svg overflow="visible"');
+    // ★ SVG를 미리보기와 동일하게 렌더링:
+    // 1) overflow="visible" 주입 (viewBox 밖 라벨 표시)
+    // 2) height="100%" 제거 (viewBox 비율로 자동 계산, 세로 찌그러짐 방지)
+    // 3) width가 없으면 100% 추가
+    let safeSvg = figureSvg
+      .replace(/<svg\b/i, '<svg overflow="visible"')
+      .replace(/\bheight\s*=\s*["']100%["']/i, '');
+    // width가 없으면 추가
+    if (!/<svg[^>]*\bwidth\s*=/i.test(safeSvg)) {
+      safeSvg = safeSvg.replace(/<svg\b/i, '<svg width="100%"');
+    }
     return (
       <div
         className={`figure-svg-container ${className}`}
-        style={{ maxWidth: '100%', overflow: 'visible' }}
+        style={{ maxWidth, overflow: 'visible', padding: '8px' }}
         dangerouslySetInnerHTML={{ __html: safeSvg }}
       />
     );
