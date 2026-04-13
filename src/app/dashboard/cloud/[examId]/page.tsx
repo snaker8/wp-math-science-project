@@ -1957,13 +1957,19 @@ export default function CloudExamDetailPage() {
       const updatedAi: Record<string, unknown> = {
         ...existingAi,
         hasFigure: true,
-        figureSource: 'diagram_db',
+        figureSource: meta?.svgSource ? 'ai_generated' : 'diagram_db',
       };
-      // ★ 첫 번째 이미지(index 0) 교체 시만 upscaledCropUrl 업데이트 + AI 도형 제거
+      // ★ 첫 번째 이미지(index 0) 교체 시만 upscaledCropUrl 업데이트
       if (diagramReplaceIndex <= 0) {
         updatedAi.upscaledCropUrl = imageUrl;
         delete updatedAi.figureData;
-        delete updatedAi.figureSvg;
+        // ★ SVG 코드가 있으면 figureSvg에 저장 (SVG 렌더링 우선)
+        if (meta?.svgSource) {
+          updatedAi.figureSvg = meta.svgSource;
+          console.log(`[DiagramReplace] ★ SVG 코드 저장 (${meta.svgSource.length}자)`);
+        } else {
+          delete updatedAi.figureSvg;
+        }
       }
 
       const patchRes = await fetch(`/api/problems/${diagramBrowserProblem.id}`, {
