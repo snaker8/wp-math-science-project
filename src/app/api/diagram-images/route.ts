@@ -167,19 +167,43 @@ export async function DELETE(request: NextRequest) {
   const sourceName = sp.get('source');
 
   try {
+    // ★ 1) diagram_images 테이블에서 삭제 (DB 업로드 이미지)
+    if (imageId && supabaseAdmin) {
+      const { error: dbErr } = await supabaseAdmin
+        .from('diagram_images')
+        .delete()
+        .eq('id', imageId);
+      if (!dbErr) {
+        console.log(`[diagram-images] DB 삭제 완료: ${imageId}`);
+      }
+    }
+    if (sourceName && supabaseAdmin) {
+      const { error: dbErr } = await supabaseAdmin
+        .from('diagram_images')
+        .delete()
+        .ilike('source_name', `%${sourceName}%`);
+      if (!dbErr) {
+        console.log(`[diagram-images] DB 소스별 삭제 완료: ${sourceName}`);
+      }
+    }
+
+    // ★ 2) 파이프라인 서버에서도 삭제 시도 (로컬 index.json)
     if (imageId) {
-      const res = await fetch(`${PIPELINE_URL}/db/image/${imageId}`, { method: 'DELETE' });
-      if (!res.ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      // 캐시 무효화
+      try {
+        const res = await fetch(`${PIPELINE_URL}/db/image/${imageId}`, { method: 'DELETE' });
+        if (res.ok) console.log(`[diagram-images] 파이프라인 삭제 완료: ${imageId}`);
+      } catch { /* 파이프라인 서버 안 돌아도 OK */ }
       cachedIndex = null;
-      return NextResponse.json(await res.json());
+      return NextResponse.json({ success: true, deleted: imageId });
     }
 
     if (sourceName) {
-      const res = await fetch(`${PIPELINE_URL}/db/source/${encodeURIComponent(sourceName)}`, { method: 'DELETE' });
-      if (!res.ok) return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
+      try {
+        const res = await fetch(`${PIPELINE_URL}/db/source/${encodeURIComponent(sourceName)}`, { method: 'DELETE' });
+        if (res.ok) console.log(`[diagram-images] 파이프라인 소스 삭제: ${sourceName}`);
+      } catch { /* 파이프라인 서버 안 돌아도 OK */ }
       cachedIndex = null;
-      return NextResponse.json(await res.json());
+      return NextResponse.json({ success: true, deleted: sourceName });
     }
 
     return NextResponse.json({ error: 'id or source required' }, { status: 400 });
