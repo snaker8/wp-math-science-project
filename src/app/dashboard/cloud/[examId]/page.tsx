@@ -70,6 +70,8 @@ interface ProblemData {
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
   choices: string[];
+  /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
+  choiceHeaders?: string[];
   answer: number | string;
   solution: string;
   year: string;
@@ -824,6 +826,17 @@ function ProblemCardView({
                 </>
               )}
             </div>
+
+            {/* ★ 표 형식 선택지 헤더 (ㄱ, ㄴ, ㄷ, ㄹ 등) */}
+            {problem.choiceHeaders && problem.choiceHeaders.length > 0 && (
+              <div className="mt-2 flex pl-8 gap-x-5">
+                {problem.choiceHeaders.map((h, i) => (
+                  <span key={i} className="text-sm font-bold text-blue-400 min-w-[3em] text-center">
+                    {h}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* 선택지/소문제 — 유형+길이에 따라 레이아웃 자동 전환 */}
             {problem.choices.length > 0 && (() => {

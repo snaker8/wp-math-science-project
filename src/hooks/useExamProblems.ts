@@ -15,6 +15,8 @@ export interface ExamProblemData {
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
   choices: string[];
+  /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
+  choiceHeaders?: string[];
   answer: number | string;
   solution: string;
   year: string;
@@ -205,6 +207,8 @@ function toExamProblemData(
   // ★ 1순위: answer_json.choices (자산화 시 별도 저장된 선택지)
   const answerJson = problem.answer_json || {};
   const dbChoices: string[] = Array.isArray(answerJson.choices) ? answerJson.choices : [];
+  // ★ 표 형식 선택지 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"])
+  const choiceHeaders: string[] | undefined = Array.isArray(answerJson.choiceHeaders) ? answerJson.choiceHeaders : undefined;
 
   // ★ 2순위: content_latex에서 추출 (fallback)
   const { content, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
@@ -266,6 +270,7 @@ function toExamProblemData(
     cognitiveDomain: classification?.cognitive_domain || 'UNDERSTANDING',
     content,
     choices,
+    choiceHeaders,
     answer: extractAnswerNumber(answerJson),
     solution: problem.solution_latex || '',
     year: displayYear,
