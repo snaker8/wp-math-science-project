@@ -1959,15 +1959,17 @@ export default function CloudExamDetailPage() {
         hasFigure: true,
         figureSource: meta?.svgSource ? 'ai_generated' : 'diagram_db',
       };
-      // ★ 첫 번째 이미지(index 0) 교체 시만 upscaledCropUrl 업데이트
+      // ★ 첫 번째 이미지(index 0) 교체 시
       if (diagramReplaceIndex <= 0) {
-        updatedAi.upscaledCropUrl = imageUrl;
         delete updatedAi.figureData;
-        // ★ SVG 코드가 있으면 figureSvg에 저장 (SVG 렌더링 우선)
         if (meta?.svgSource) {
+          // ★ SVG 코드: figureSvg에 저장 + upscaledCropUrl 삭제 (SVG가 최우선)
           updatedAi.figureSvg = meta.svgSource;
-          console.log(`[DiagramReplace] ★ SVG 코드 저장 (${meta.svgSource.length}자)`);
+          delete updatedAi.upscaledCropUrl;
+          console.log(`[DiagramReplace] ★ SVG 코드 저장 (${meta.svgSource.length}자), upscaledCropUrl 삭제`);
         } else {
+          // 이미지 교체: upscaledCropUrl 설정
+          updatedAi.upscaledCropUrl = imageUrl;
           delete updatedAi.figureSvg;
         }
       }
