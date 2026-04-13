@@ -44,42 +44,9 @@
 .katex .base {
   vertical-align: baseline;
 }
-/* ★ 루트 기호 상단 잘림 방지 */
-.katex .sqrt > .root {
-  overflow: visible !important;
-}
+/* ★ 루트 기호 상단 잘림 방지 — 최소한의 수정 */
 .katex .sqrt {
-  padding-top: 0.15em;
-  overflow: visible !important;
-}
-.katex .vlist-t,
-.katex .vlist-t2,
-.katex .vlist-r,
-.katex .vlist {
-  overflow: visible !important;
-}
-/* ★ 루트 기호 포함 수식 전체 컨테이너 */
-.katex-html {
-  overflow: visible !important;
-}
-.katex .mord.sqrt {
-  overflow: visible !important;
-}
-/* ★ 수식 포함하는 부모 요소들 — 루트 잘림 방지 */
-.math-content,
-.math-content * {
-  overflow: visible !important;
-}
-/* ★ 인라인 수식 줄간격 확보 */
-.katex .sqrt .sqrt-sign {
-  position: relative;
-  top: -0.05em;
-}
-/* ★ 루트 포함된 줄은 최소 줄간격 보장 */
-.katex:has(.sqrt) {
-  line-height: 1.8 !important;
-  padding-top: 0.1em;
-  padding-bottom: 0.05em;
+  padding-top: 2px;
 }
 
 /* ── Custom Scrollbar — 항상 보이는 스타일 ── */

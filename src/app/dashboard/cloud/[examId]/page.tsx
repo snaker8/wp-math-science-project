@@ -844,11 +844,11 @@ function ProblemCardView({
               // 짧은 보기: 가로 나열
               if (maxLen <= 12) {
                 return (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 pl-4 overflow-visible">
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[13px] text-content-secondary overflow-visible">
+                      <div key={i} className="flex items-center gap-1 text-[13px] text-content-secondary">
                         <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-content-secondary overflow-visible" />
+                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                       </div>
                     ))}
                   </div>
@@ -857,11 +857,11 @@ function ProblemCardView({
               // 중간 길이: 2열 그리드
               if (maxLen <= 30) {
                 return (
-                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 pl-4 overflow-visible">
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-start gap-1 text-[13px] text-content-secondary overflow-visible">
+                      <div key={i} className="flex items-start gap-1 text-[13px] text-content-secondary">
                         <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-content-secondary overflow-visible" />
+                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                       </div>
                     ))}
                   </div>
@@ -869,11 +869,11 @@ function ProblemCardView({
               }
               // 긴 수식: 1열 세로 배치
               return (
-                <div className="mt-2 space-y-2 pl-4 overflow-visible">
+                <div className="mt-2 space-y-1.5 pl-4">
                   {processed.map((c, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary overflow-visible">
+                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
                       <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                      <MixedContentRenderer content={c.stripped} className="text-content-secondary overflow-visible" />
+                      <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                     </div>
                   ))}
                 </div>
