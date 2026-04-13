@@ -251,8 +251,25 @@ export function FigureRenderer({
     }
   }, [problemId, onGraphEdited, figureData]);
 
-  // ★ 0. 업스케일된 크롭 이미지 — 단, figureSvg가 있으면 SVG 우선 (사용자가 교체한 SVG)
-  if ((upscaledCropUrl || figureSource === 'upscaled_crop') && !figureSvg) {
+  // ★★★ 0. figureSvg 최우선 (사용자 교체 SVG / AI 직접 생성 SVG)
+  if (figureSvg) {
+    let safeSvg = figureSvg
+      .replace(/<svg\b/i, '<svg overflow="visible"')
+      .replace(/\bheight\s*=\s*["']100%["']/i, '');
+    if (!/<svg[^>]*\bwidth\s*=/i.test(safeSvg)) {
+      safeSvg = safeSvg.replace(/<svg\b/i, '<svg width="100%"');
+    }
+    return (
+      <div
+        className={`figure-svg-container ${className}`}
+        style={{ maxWidth, overflow: 'visible', padding: '8px' }}
+        dangerouslySetInnerHTML={{ __html: safeSvg }}
+      />
+    );
+  }
+
+  // 1. 업스케일된 크롭 이미지
+  if (upscaledCropUrl || figureSource === 'upscaled_crop') {
     const url = upscaledCropUrl || cropImageUrl;
     if (url) {
       return (
@@ -462,27 +479,7 @@ export function FigureRenderer({
     );
   }
 
-  // 2. figureSvg (사용자 교체 SVG 또는 AI 직접 생성 SVG)
-  if (figureSvg) {
-    // ★ SVG를 미리보기와 동일하게 렌더링:
-    // 1) overflow="visible" 주입 (viewBox 밖 라벨 표시)
-    // 2) height="100%" 제거 (viewBox 비율로 자동 계산, 세로 찌그러짐 방지)
-    // 3) width가 없으면 100% 추가
-    let safeSvg = figureSvg
-      .replace(/<svg\b/i, '<svg overflow="visible"')
-      .replace(/\bheight\s*=\s*["']100%["']/i, '');
-    // width가 없으면 추가
-    if (!/<svg[^>]*\bwidth\s*=/i.test(safeSvg)) {
-      safeSvg = safeSvg.replace(/<svg\b/i, '<svg width="100%"');
-    }
-    return (
-      <div
-        className={`figure-svg-container ${className}`}
-        style={{ maxWidth, overflow: 'visible', padding: '8px' }}
-        dangerouslySetInnerHTML={{ __html: safeSvg }}
-      />
-    );
-  }
+  // (figureSvg는 위에서 최우선 처리됨)
 
   // 3. 크롭 이미지 fallback (원본)
   if (cropImageUrl) {
