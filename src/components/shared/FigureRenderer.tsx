@@ -251,9 +251,8 @@ export function FigureRenderer({
     }
   }, [problemId, onGraphEdited, figureData]);
 
-  // ★ 0. 업스케일된 크롭 이미지 (최우선 — 원본이 쓸만할 때 AI 생성 없이 사용)
-  // UpscaledImage 컴포넌트로 분리하여 로드 실패 시 자동 폴백 처리
-  if (upscaledCropUrl || figureSource === 'upscaled_crop') {
+  // ★ 0. 업스케일된 크롭 이미지 — 단, figureSvg가 있으면 SVG 우선 (사용자가 교체한 SVG)
+  if ((upscaledCropUrl || figureSource === 'upscaled_crop') && !figureSvg) {
     const url = upscaledCropUrl || cropImageUrl;
     if (url) {
       return (
