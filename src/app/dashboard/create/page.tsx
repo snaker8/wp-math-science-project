@@ -410,9 +410,9 @@ function ManualSearchPanel({
       const params = new URLSearchParams();
       if (query) params.set('q', query);
       if (difficulty) params.set('difficulty', difficulty);
-      // typeCode: 선택된 MS prefix 중 첫 번째 사용, 없으면 과목 코드
+      // ★ 선택된 typeCode 전체를 쉼표 구분으로 전달 (OR 검색)
       const tc = selectedTypeCodes.length > 0
-        ? selectedTypeCodes[0]
+        ? selectedTypeCodes.join(',')
         : subjectCode ? `MS${subjectCode}` : '';
       if (tc) params.set('typeCode', tc);
       params.set('limit', '30');

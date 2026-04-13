@@ -412,6 +412,9 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     // Unicode 위첨자 매핑 (가장 안정적)
     const supMap: Record<string, string> = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', 'n': 'ⁿ' };
     const subMap: Record<string, string> = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+    // ★ \sqrt{x} → √x (루트 기호)
+    result = result.replace(/\\sqrt\{([^}]+)\}/g, '√$1');
+    result = result.replace(/\\sqrt\s*(\d+)/g, '√$1');
     // ^{...} → Unicode 위첨자
     result = result.replace(/\^{([^}]+)}/g, (_, s) => s.split('').map((c: string) => supMap[c] || c).join(''));
     // ^단일문자 → Unicode 위첨자
@@ -427,8 +430,16 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     // ★ 그리스 문자: \alpha → α, a → α (길이 라벨용)
     result = result.replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\gamma/g, 'γ');
     result = result.replace(/\\delta/g, 'δ').replace(/\\theta/g, 'θ').replace(/\\pi/g, 'π');
+    // ★ LaTeX 명령어 잔여물 제거
+    result = result.replace(/\\/g, '');
     return result;
   }
+
+  // ★ 치수선 화살표 마커 정의
+  svg += `<defs>`;
+  svg += `<marker id="dim-arrow-start" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="8,0 0,3 8,6" fill="${colors.length}"/></marker>`;
+  svg += `<marker id="dim-arrow-end" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto"><polygon points="0,0 8,3 0,6" fill="${colors.length}"/></marker>`;
+  svg += `</defs>`;
 
   for (const len of lengths) {
     // 축 라벨은 이미 직접 그렸으므로 스킵
@@ -436,20 +447,35 @@ export function generateGeometrySVG(rendering: GeometryRendering, darkMode = fal
     const from = vertexMap.get(len.from);
     const to = vertexMap.get(len.to);
     if (from && to) {
-      const mx = (toSvgX(from.x) + toSvgX(to.x)) / 2;
-      const my = (toSvgY(from.y) + toSvgY(to.y)) / 2;
+      const fx = toSvgX(from.x), fy = toSvgY(from.y);
+      const tx = toSvgX(to.x), ty = toSvgY(to.y);
+      const mx = (fx + tx) / 2;
+      const my = (fy + ty) / 2;
       const cx = toSvgX(centroidX);
       const cy = toSvgY(centroidY);
       const dx = mx - cx;
       const dy = my - cy;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const offsetLen = 28; // ★ 선분에서 더 떨어지게 (22→28)
+      const offsetLen = 28;
       const ox = mx + (dx / dist) * offsetLen;
       const oy = my + (dy / dist) * offsetLen;
-      // 라벨 텍스트 너비 추정 (수식 길이에 따라)
-      const labelW = Math.max(32, len.value.length * 8);
-      svg += `<rect x="${ox - labelW/2}" y="${oy - 8}" width="${labelW}" height="16" fill="white" opacity="0.85" rx="2"/>`;
-      svg += `<text x="${ox}" y="${oy}" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="bold" font-family="serif" font-style="italic" fill="${colors.label}">${mathToSvgText(len.value)}</text>`;
+
+      // ★ 치수선: 점선 + 양쪽 화살표 (두꺼운 실선 대신)
+      const dimDx = tx - fx, dimDy = ty - fy;
+      const dimDist = Math.sqrt(dimDx * dimDx + dimDy * dimDy) || 1;
+      const dimNx = (dx / dist) * offsetLen; // 치수선 오프셋 방향
+      const dimNy = (dy / dist) * offsetLen;
+      const d1x = fx + dimNx, d1y = fy + dimNy;
+      const d2x = tx + dimNx, d2y = ty + dimNy;
+      svg += `<line x1="${d1x}" y1="${d1y}" x2="${d2x}" y2="${d2y}" stroke="${colors.length}" stroke-width="1.2" stroke-dasharray="4,3" marker-start="url(#dim-arrow-start)" marker-end="url(#dim-arrow-end)"/>`;
+
+      // 라벨 텍스트 (배경 rect 높이 확대: √ 기호 잘림 방지)
+      const labelText = mathToSvgText(len.value);
+      const hasSqrt = labelText.includes('√');
+      const labelW = Math.max(40, labelText.length * 9);
+      const labelH = hasSqrt ? 22 : 18;
+      svg += `<rect x="${ox - labelW/2}" y="${oy - labelH/2}" width="${labelW}" height="${labelH}" fill="white" opacity="0.9" rx="2"/>`;
+      svg += `<text x="${ox}" y="${oy + 1}" text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="bold" font-family="serif" font-style="italic" fill="${colors.label}">${labelText}</text>`;
     }
   }
 

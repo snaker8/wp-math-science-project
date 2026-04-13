@@ -710,8 +710,23 @@ export async function interpretImage(
     const hasCirclesOrArcs = geo?.circles?.length > 0 ||
       /호|부채꼴|원|반원|arc|circle|sector/i.test(result.description || '');
     // ★ 전개도 감지: 코드 렌더러로 그릴 수 없음 → 2단계 AI SVG 강제
-    const isNetDiagram = /전개도|net\s*diagram/i.test(result.description || '') ||
+    // (1) 명시적 키워드
+    const hasNetKeyword = /전개도|net\s*diagram/i.test(result.description || '') ||
       /전개도/i.test(context || '');
+    // (2) 시각적 패턴: 점선 사각형이 실선 사각형을 감싸는 구조 (변형 전후 비교 도형)
+    //     → dashedSegments에 vertices에 없는 점이 포함된 경우 (코드 렌더러가 못 그림)
+    const geoForNet = result.rendering?.type === 'geometry' ? result.rendering as GeometryRendering : null;
+    const hasMissingDashedVerts = geoForNet?.dashedSegments?.some(([a, b]) =>
+      !geoForNet.vertices?.some(v => v.label === a) || !geoForNet.vertices?.some(v => v.label === b)
+    ) || false;
+    // (3) 문제 텍스트에서 "줄이고/늘렸을/줄인/늘린" 패턴 (도형 변형 문제)
+    const hasTransformPattern = /줄이고|늘렸을|줄인|늘린|줄이면|늘리면/.test(context || '');
+    // (4) description에서 점선+실선 겹침 패턴
+    const hasOverlapPattern = /점선|dashed.*solid|실선.*점선|원래.*도형|변형/.test(result.description || '');
+    const isNetDiagram = hasNetKeyword || hasMissingDashedVerts || (hasTransformPattern && hasOverlapPattern);
+    if (isNetDiagram && !hasNetKeyword) {
+      console.log(`[Vision] ★ 전개도 시각적 감지: missingDashedVerts=${hasMissingDashedVerts}, transformText=${hasTransformPattern}, overlapDesc=${hasOverlapPattern}`);
+    }
     const hasGoodCoordinates = result.figureType === 'geometry' && geo &&
       geo.vertices?.length >= 3 && geo.segments?.length >= 2 && !hasCirclesOrArcs && !isNetDiagram;
 
@@ -1573,8 +1588,15 @@ async function generateSvgStep2(
   }
 
   // ★ 전개도 감지 → 전용 프롬프트 (면 개수/위치를 구체적으로 분석)
-  const isNetDiagram = /전개도|net\s*diagram/i.test(parsed.description || '') ||
+  const hasNetKw = /전개도|net\s*diagram/i.test(parsed.description || '') ||
     /전개도/i.test(context || '');
+  const geoForNet2 = parsed.rendering?.type === 'geometry' ? parsed.rendering as GeometryRendering : null;
+  const hasMissingDashed2 = geoForNet2?.dashedSegments?.some(([a, b]) =>
+    !geoForNet2.vertices?.some(v => v.label === a) || !geoForNet2.vertices?.some(v => v.label === b)
+  ) || false;
+  const hasTransform2 = /줄이고|늘렸을|줄인|늘린|줄이면|늘리면/.test(context || '');
+  const hasOverlap2 = /점선|dashed.*solid|실선.*점선|원래.*도형|변형/.test(parsed.description || '');
+  const isNetDiagram = hasNetKw || hasMissingDashed2 || (hasTransform2 && hasOverlap2);
   // ★ autoLabels 감지: Gemini 데이터가 엉터리 → 단순 프롬프트
   const geoCheck = parsed.rendering?.type === 'geometry' ? parsed.rendering as GeometryRendering : null;
   const hasAutoLabelsForSvg = geoCheck?.vertices?.some(v => /Top|Bot|Left|Right|Far|_tl|_tr|_bl|_br/.test(v.label || ''));

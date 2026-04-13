@@ -844,11 +844,11 @@ function ProblemCardView({
               // 짧은 보기: 가로 나열
               if (maxLen <= 12) {
                 return (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 pl-4 overflow-visible">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[13px] text-content-secondary">
+                      <div key={i} className="flex items-center gap-1 text-[13px] text-content-secondary overflow-visible">
                         <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
+                        <MixedContentRenderer content={c.stripped} className="text-content-secondary overflow-visible" />
                       </div>
                     ))}
                   </div>
@@ -857,11 +857,11 @@ function ProblemCardView({
               // 중간 길이: 2열 그리드
               if (maxLen <= 30) {
                 return (
-                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 pl-4 overflow-visible">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-start gap-1 text-[13px] text-content-secondary">
+                      <div key={i} className="flex items-start gap-1 text-[13px] text-content-secondary overflow-visible">
                         <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
+                        <MixedContentRenderer content={c.stripped} className="text-content-secondary overflow-visible" />
                       </div>
                     ))}
                   </div>
@@ -869,11 +869,11 @@ function ProblemCardView({
               }
               // 긴 수식: 1열 세로 배치
               return (
-                <div className="mt-2 space-y-1.5 pl-4">
+                <div className="mt-2 space-y-2 pl-4 overflow-visible">
                   {processed.map((c, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
+                    <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary overflow-visible">
                       <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                      <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
+                      <MixedContentRenderer content={c.stripped} className="text-content-secondary overflow-visible" />
                     </div>
                   ))}
                 </div>
@@ -2065,7 +2065,11 @@ export default function CloudExamDetailPage() {
       }
 
       if (data.noFigure) {
-        alert(`문제 ${problem.number}: AI가 도형을 감지하지 못했습니다.`);
+        if (data.keepExisting) {
+          alert(`문제 ${problem.number}: AI 재생성 실패 (기존 도형 유지). 다시 시도해 주세요.`);
+        } else {
+          alert(`문제 ${problem.number}: AI가 도형을 감지하지 못했습니다.`);
+        }
         return false;
       }
 
@@ -2140,8 +2144,13 @@ export default function CloudExamDetailPage() {
   }, [refetchProblems]);
 
   // ★ GraphModal에서 수정 저장 후 자동 refetch (FigureRenderer가 이벤트 발행)
+  // ★ AI 도형 생성 중이면 refetch를 지연 (경쟁 상태 방지)
   useEffect(() => {
     const handler = () => {
+      if (generatingFigures.size > 0) {
+        console.log('[problems-updated] AI 도형 생성 중 → refetch 스킵');
+        return;
+      }
       console.log('[graph-edited] 그래프 수정 감지 → refetch');
       refetchProblems();
     };
@@ -2151,7 +2160,7 @@ export default function CloudExamDetailPage() {
       window.removeEventListener('graph-edited', handler);
       window.removeEventListener('problems-updated', handler);
     };
-  }, [refetchProblems]);
+  }, [refetchProblems, generatingFigures]);
 
   // ★ AI 도형 삭제 (figureData/figureSvg 제거, 크롭 이미지 유지)
   const handleDeleteFigure = useCallback(async (problem: ProblemData) => {

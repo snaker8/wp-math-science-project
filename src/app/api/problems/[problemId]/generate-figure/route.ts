@@ -348,18 +348,26 @@ export async function POST(
     if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
       console.log(`[generate-figure] Problem ${problemId}: No figure detected (${interpreted.figureType}, confidence: ${interpreted.confidence}). content 일부: ${(problem.content_latex || '').substring(0, 100)}`);
 
+      // ★ 기존 figureData/figureSvg가 있으면 hasFigure를 false로 덮어쓰지 않음
+      // (재생성 시도 실패로 기존 AI 결과까지 삭제되는 버그 방지)
       const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
-      await supabaseAdmin
-        .from('problems')
-        .update({
-          ai_analysis: { ...currentAnalysis, hasFigure: false },
-        })
-        .eq('id', problemId);
+      const hasExistingFigure = !!(currentAnalysis.figureData || currentAnalysis.figureSvg || currentAnalysis.upscaledCropUrl);
+      if (!hasExistingFigure) {
+        await supabaseAdmin
+          .from('problems')
+          .update({
+            ai_analysis: { ...currentAnalysis, hasFigure: false },
+          })
+          .eq('id', problemId);
+      }
 
       return NextResponse.json({
         success: true,
         noFigure: true,
-        message: 'No figure detected in this problem',
+        message: hasExistingFigure
+          ? 'AI regeneration failed, keeping existing figure'
+          : 'No figure detected in this problem',
+        keepExisting: hasExistingFigure,
         problemId,
       });
     }

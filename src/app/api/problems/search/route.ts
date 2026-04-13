@@ -1,4 +1,6 @@
 // GET /api/problems/search — 문제은행 검색
+// ★ 2단계 쿼리: 1) classifications에서 problem_id 조회, 2) problems 조회
+//   PostgREST !inner + ilike 필터 조합의 호환성 이슈를 방지
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
@@ -11,13 +13,48 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q') || '';
-  const typeCode = searchParams.get('typeCode') || '';
+  // ★ 다중 typeCode 지원: 쉼표 구분
+  const typeCodeParam = searchParams.get('typeCode') || '';
+  const typeCodes = typeCodeParam.split(',').filter(Boolean);
   const difficulty = searchParams.get('difficulty') || '';
   const excludeExamId = searchParams.get('excludeExamId') || '';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
   try {
-    // 1. 기본 쿼리: problems + classifications 조인
+    // ★ 1단계: classifications에서 조건에 맞는 problem_id 목록 먼저 조회
+    let matchedProblemIds: string[] | null = null;
+
+    if (typeCodes.length > 0 || difficulty) {
+      let classQuery = supabaseAdmin
+        .from('classifications')
+        .select('problem_id, type_code, difficulty, cognitive_domain');
+
+      // typeCode 필터: OR LIKE 패턴
+      if (typeCodes.length > 0) {
+        const orFilters = typeCodes.map(tc => `type_code.like.${tc}%`).join(',');
+        classQuery = classQuery.or(orFilters);
+      }
+
+      // 난이도 필터
+      if (difficulty) {
+        classQuery = classQuery.eq('difficulty', parseInt(difficulty));
+      }
+
+      const { data: classRows, error: classErr } = await classQuery.limit(2000);
+
+      if (classErr) {
+        console.error('[API/problems/search] Classifications query error:', classErr.message);
+        return NextResponse.json({ error: classErr.message }, { status: 500 });
+      }
+
+      matchedProblemIds = [...new Set((classRows || []).map((r: any) => r.problem_id))];
+
+      if (matchedProblemIds.length === 0) {
+        return NextResponse.json({ problems: [] });
+      }
+    }
+
+    // ★ 2단계: problems 조회 (+ classifications 조인으로 메타데이터 포함)
     let query = supabaseAdmin
       .from('problems')
       .select(`
@@ -27,19 +64,14 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    // 2. 키워드 검색
+    // problem_id 필터 (1단계 결과)
+    if (matchedProblemIds) {
+      query = query.in('id', matchedProblemIds.slice(0, limit * 3));
+    }
+
+    // 키워드 검색
     if (q) {
       query = query.ilike('content_latex', `%${q}%`);
-    }
-
-    // 3. 유형코드 필터
-    if (typeCode) {
-      query = query.ilike('classifications.type_code', `%${typeCode}%`);
-    }
-
-    // 4. 난이도 필터
-    if (difficulty) {
-      query = query.eq('classifications.difficulty', parseInt(difficulty));
     }
 
     const { data: problems, error } = await query;

@@ -44,6 +44,16 @@
 .katex .base {
   vertical-align: baseline;
 }
+/* ★ 루트 기호 상단 잘림 방지 */
+.katex .sqrt > .root {
+  overflow: visible;
+}
+.katex .sqrt {
+  padding-top: 0.1em;
+}
+.katex .vlist-t {
+  overflow: visible;
+}
 
 /* ── Custom Scrollbar — 항상 보이는 스타일 ── */
 ::-webkit-scrollbar {
