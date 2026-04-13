@@ -37,7 +37,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 // 비전 분석: Gemini Flash-Lite 고정
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
-const CLAUDE_MODEL = 'claude-opus-4-20250514'; // ★ Opus: 복잡한 도형 복원 정확도 최고
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Sonnet: 비용 효율 + 교정 학습으로 정확도 향상
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 // ★ Flash-Lite: JSON 안정 + 그래프 정상 인식 (확정)
 // ❌ gemini-2.5-pro: JSON 잘림 (2026.04)
