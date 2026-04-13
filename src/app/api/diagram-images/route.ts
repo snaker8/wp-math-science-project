@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { supabaseAdmin } from '@/lib/supabase/server';
 
 const INDEX_PATH = path.join(process.cwd(), 'image-pipeline', 'dasaram_diagram_db', 'index.json');
 const PIPELINE_URL = process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://localhost:8200';
