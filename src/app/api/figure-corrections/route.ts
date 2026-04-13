@@ -35,34 +35,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'problemId, correctionType 필수' }, { status: 400 });
     }
 
-    // ── 문제 정보 자동 조회 (서버에서 채움) ──
+    // ── 문제 정보 자동 조회 (서버에서 채움, 실패해도 교정 기록은 저장) ──
     const { data: problem } = await supabaseAdmin
       .from('problems')
       .select('id, content_latex, subject, ai_analysis, images')
       .eq('id', problemId)
       .single();
 
-    if (!problem) {
-      return NextResponse.json({ error: '문제를 찾을 수 없습니다' }, { status: 404 });
-    }
-
-    const ai = (problem.ai_analysis || {}) as Record<string, unknown>;
+    // ★ 문제를 못 찾아도 교정 기록은 저장 (problemId만으로 충분)
+    const ai = (problem?.ai_analysis || {}) as Record<string, unknown>;
     const figureData = ai.figureData as Record<string, unknown> | undefined;
-
-    // 교정 전 원본 정보 추출
     const originalFigureSource = (ai.figureSource as string) || 'none';
     const originalSvg = (ai.figureSvg as string) || null;
     const originalImageUrl = (ai.upscaledCropUrl as string) || null;
     const figureType = (figureData?.figureType as string) || (ai.figureType as string) || null;
     const mathsecrTypeCode = (ai.typeCode as string) || (ai.expandedTypeCode as string) || null;
 
+    if (!problem) {
+      console.warn(`[figure-corrections] 문제 ${problemId} 미발견 — 교정 기록만 저장`);
+    }
+
     // ── 저장 ──
     const { data: correction, error: insertErr } = await supabaseAdmin
       .from('figure_corrections')
       .insert({
-        problem_id: problemId,
-        problem_content: problem.content_latex?.slice(0, 2000) || null,
-        problem_subject: problem.subject || null,
+        problem_id: problem ? problemId : null,
+        problem_content: problem?.content_latex?.slice(0, 2000) || null,
+        problem_subject: problem?.subject || null,
         mathsecr_type_code: mathsecrTypeCode,
         figure_type: figureType,
         original_figure_source: originalFigureSource,
