@@ -484,6 +484,9 @@ function ProblemCardView({
     // ★ \lbrace → \left\{ , \rbrace → \right\} (KaTeX 호환)
     .replace(/\\lbrace/g, '\\left\\{')
     .replace(/\\rbrace/g, '\\right\\}')
+    // ★ \begin{table}...\end{table} 래퍼 제거 (KaTeX 미지원, tabular만 남김)
+    .replace(/\\begin\{table\}[\s\S]*?(?=\\begin\{tabular\})/gi, '')
+    .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}')
     .trim();
 
   const contentParts = splitContentByFigureMarker(cleanContent);
