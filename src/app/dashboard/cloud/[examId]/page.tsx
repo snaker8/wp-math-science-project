@@ -1401,12 +1401,14 @@ function ExamPaperView({
             overflow: visible !important;
             page-break-after: auto;
             page-break-inside: auto;
-            padding-top: 12mm !important;
-            padding-bottom: 12mm !important;
+            padding: 15mm 15mm 20mm 15mm !important;
           }
+          /* 해설지 각 문제 블록: 페이지 넘김 시 여백 확보 */
           #exam-print-root .exam-page.solution-page .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
+            margin-bottom: 8mm;
+            padding-top: 2mm;
           }
         }
         @page { size: A4 portrait; margin: 0; }
