@@ -675,11 +675,11 @@ export async function interpretImage(
     // ================================================================
     // ★★★ 2단계: Claude 직접 SVG 생성
     // graph → 기존 유지 (Desmos 렌더링에 structured JSON 필요)
-    // geometry/table/diagram → Opus에 이미지만 주고 바로 SVG 생성
+    // geometry/table/diagram → Claude에 이미지만 주고 바로 SVG 생성
     //   (Gemini JSON을 전달하면 오히려 방해됨 — 사용자 검증 완료)
     // ================================================================
 
-    // ★ 전개도 감지 로직 (Opus 프롬프트 분기에 사용)
+    // ★ 전개도 감지 로직 (프롬프트 분기에 사용)
     const hasNetKeyword = /전개도|net\s*diagram/i.test(result.description || '') ||
       /전개도/i.test(context || '');
     const geoForNet = result.rendering?.type === 'geometry' ? result.rendering as GeometryRendering : null;
@@ -1548,7 +1548,7 @@ function buildSectorSvg(geo: GeometryRendering): string | null {
 
 // ============================================================================
 // ★★★ Claude 직접 SVG 생성 — Gemini JSON 없이 이미지만으로 SVG 생성
-// 사용자 검증: Opus에 이미지만 주면 복원 퀄리티가 압도적으로 좋음
+// Gemini JSON 없이 이미지만으로 SVG 직접 생성
 // ============================================================================
 async function generateSvgDirect(
   imageUrl: string,
@@ -1556,7 +1556,7 @@ async function generateSvgDirect(
   isNetDiagram: boolean,
   context?: string,
 ): Promise<string | null> {
-  // Claude Opus 키 확인
+  // Anthropic API 키 확인
   if (!ANTHROPIC_API_KEY) {
     console.warn('[Vision/Direct] Anthropic API key 없음 — 직접 SVG 생성 불가');
     return null;
@@ -1614,15 +1614,15 @@ async function generateSvgDirect(
     // SVG 추출
     const svgMatch = rawResponse.match(/<svg[\s\S]*?<\/svg>/i);
     if (!svgMatch) {
-      console.warn(`[Vision/Direct] Opus 응답에서 SVG 추출 실패 (응답 ${rawResponse.length}자)`);
+      console.warn(`[Vision/Direct] Claude 응답에서 SVG 추출 실패 (응답 ${rawResponse.length}자)`);
       return null;
     }
 
     const svg = svgMatch[0];
-    console.log(`[Vision/Direct] ✅ Opus SVG 생성 성공: ${svg.length}자`);
+    console.log(`[Vision/Direct] ✅ Sonnet SVG 생성 성공: ${svg.length}자`);
     return svg;
   } catch (err) {
-    console.error(`[Vision/Direct] Opus 호출 실패:`, err);
+    console.error(`[Vision/Direct] Claude 호출 실패:`, err);
     return null;
   }
 }

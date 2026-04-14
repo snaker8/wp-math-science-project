@@ -373,7 +373,7 @@ export async function POST(
     }
 
     // 6. figureSvg 결정
-    // ★ Opus 직접 SVG가 있으면 최우선 사용 (코드 렌더러보다 정확)
+    // ★ Claude 직접 SVG가 있으면 최우선 사용 (코드 렌더러보다 정확)
     let legacySvg: string | undefined;
     const renderingType = interpreted.rendering?.type || interpreted.figureType;
     const directSvg = (interpreted.rendering as any)?.svg;
@@ -382,7 +382,7 @@ export async function POST(
     if (directSvg && typeof directSvg === 'string') {
       // ★★★ Opus 직접 생성 SVG → 최우선 사용
       legacySvg = directSvg;
-      console.log(`[generate-figure] ★ Opus 직접 SVG 사용: ${directSvg.length}자`);
+      console.log(`[generate-figure] ★ Claude 직접 SVG 사용: ${directSvg.length}자`);
     } else if (renderingType === 'geometry' && interpreted.rendering) {
       const geoRendering = interpreted.rendering as Record<string, unknown>;
       const vertices = (geoRendering.vertices as Array<{ label?: string }>) || [];
