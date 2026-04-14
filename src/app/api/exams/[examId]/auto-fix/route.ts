@@ -186,7 +186,7 @@ export async function POST(
 
         try {
           const useGemini = !!GOOGLE_AI_KEY;
-          const modelName = useGemini ? 'gemini-2.5-pro-preview-06-05' : 'gpt-4o';
+          const modelName = useGemini ? 'gemini-2.5-pro' : 'gpt-4o';
 
           const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
