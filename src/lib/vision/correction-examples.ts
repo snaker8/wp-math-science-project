@@ -17,7 +17,7 @@ export interface CorrectionExample {
 
 /**
  * 주어진 도형 타입/문제 유형에 맞는 교정 사례를 조회
- * SVG 코드가 있는 교정만 반환 (few-shot에 활용 가능한 것만)
+ * SVG 코드 또는 이미지 URL이 있는 교정을 반환 (few-shot + 참고 이미지 활용)
  */
 export async function fetchCorrectionExamples(opts: {
   figureType?: string;
@@ -29,10 +29,11 @@ export async function fetchCorrectionExamples(opts: {
   try {
     const limit = opts.limit || 3;
 
+    // ★ SVG 또는 이미지가 있는 교정 모두 가져오기 (이미지 교정도 참고 자료로 활용)
     let query = supabaseAdmin
       .from('figure_corrections')
       .select('id, problem_content, figure_type, original_svg, corrected_svg_source, corrected_image_url, correction_type')
-      .not('corrected_svg_source', 'is', null)
+      .or('corrected_svg_source.not.is.null,corrected_image_url.not.is.null')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -94,6 +95,12 @@ export function buildCorrectionPromptBlock(examples: CorrectionExample[]): strin
         ? ex.corrected_svg_source.slice(0, 3000) + '\n<!-- ... truncated -->'
         : ex.corrected_svg_source;
       parts.push(`[사용��가 제공한 올바른 SVG]:\n${svg}`);
+    }
+
+    // ★ 이미지 교정: SVG 없이 이미지만 교체한 경우 → 참고 이미지로 활용
+    if (!ex.corrected_svg_source && ex.corrected_image_url) {
+      parts.push(`[사용자가 교체한 고품질 참고 이미지]: ${ex.corrected_image_url}`);
+      parts.push(`→ 이 이미지의 스타일과 정확도를 참고하여 SVG를 생성하세요.`);
     }
 
     return parts.join('\n');
