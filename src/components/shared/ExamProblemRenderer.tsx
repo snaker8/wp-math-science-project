@@ -14,6 +14,8 @@ export interface ExamRenderProblem {
   number: number;
   content: string;
   choices: string[];
+  /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
+  choiceHeaders?: string[];
   figureData?: InterpretedFigure;
   figureSvg?: string;
   upscaledCropUrl?: string;
@@ -148,39 +150,48 @@ export function ExamProblemRenderer({
     }));
     const maxLen = Math.max(...items.map(c => c.content.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length + 2));
 
+    // ★ 표 형식 선택지 헤더
+    const headerRow = problem.choiceHeaders && problem.choiceHeaders.length > 0 ? (
+      <div className="mt-1.5 flex pl-6 gap-x-5 mb-0.5">
+        {problem.choiceHeaders.map((h, i) => (
+          <span key={i} className="text-[12px] font-bold text-gray-500 min-w-[3em] text-center">{h}</span>
+        ))}
+      </div>
+    ) : null;
+
     if (maxLen <= 12) {
       return (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <>{headerRow}<div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
           {items.map((it, ci) => (
             <div key={ci} className="flex items-center gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
               <MixedContentRenderer content={it.content} className="text-gray-700" />
             </div>
           ))}
-        </div>
+        </div></>
       );
     }
     if (maxLen <= 30) {
       return (
-        <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
+        <>{headerRow}<div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
           {items.map((it, ci) => (
             <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
               <MixedContentRenderer content={it.content} className="text-gray-700" />
             </div>
           ))}
-        </div>
+        </div></>
       );
     }
     return (
-      <div className="mt-2.5 space-y-1.5">
+      <>{headerRow}<div className="mt-2.5 space-y-1.5">
         {items.map((it, ci) => (
           <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
             <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
             <MixedContentRenderer content={it.content} className="text-gray-700" />
           </div>
         ))}
-      </div>
+      </div></>
     );
   };
 
