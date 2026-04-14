@@ -867,7 +867,11 @@ function ProblemCardView({
               // 객관식 보기 — 항상 ①②③④⑤ 사용
               const processed = problem.choices.map((choice, i) => {
                 const circled = ['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`;
-                const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
+                let stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
+                // ★ \begin{array}...\end{array} → 줄별 분리 (KaTeX 인라인 렌더링 실패 방지)
+                stripped = stripped.replace(/\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?/gi, (_m, inner) => {
+                  return inner.split('\\\\').map((l: string) => `$${l.replace(/&/g, '').trim()}$`).filter((l: string) => l !== '$$').join(' ');
+                });
                 return { circled, stripped };
               });
               const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
