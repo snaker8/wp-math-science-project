@@ -66,7 +66,7 @@ function stripChoiceAnalysis(s: string): string {
 interface ProblemData {
   id: string;
   number: number;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: number; // 수학비서 기준 1~10
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
   choices: string[];
@@ -90,20 +90,24 @@ interface ProblemData {
   figureSource?: 'upscaled_crop' | 'ai_generated';
 }
 
-type DifficultyKey = 1 | 2 | 3 | 4 | 5;
+type DifficultyKey = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 type DomainKey = 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING' | 'UNASSIGNED';
 
 // ============================================================================
-// Constants
+// Constants — 수학비서 난이도 기준 (1~10)
 // ============================================================================
 
-const DIFFICULTY_CONFIG: Record<DifficultyKey, { label: string; border: string; bg: string; text: string }> = {
-  1: { label: '최하', border: 'border-zinc-500', bg: 'bg-surface-raised', text: 'text-content-secondary' },
-  2: { label: '하', border: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-400' },
-  3: { label: '중', border: 'border-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400' },
-  4: { label: '상', border: 'border-red-500', bg: 'bg-red-500/10', text: 'text-red-400' },
-  5: { label: '최상', border: 'border-red-700', bg: 'bg-red-700/10', text: 'text-red-300' },
-};
+// 수학비서: 쉬움(1~2)=yellow, 보통(3~4)=green, 어려움(5~6)=red, 매우어려움(7~10)=black
+function getDifficultyConfig(level: number): { label: string; border: string; bg: string; text: string } {
+  if (level <= 2) return { label: `쉬움${level}`, border: 'border-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-400' };
+  if (level <= 4) return { label: `보통${level}`, border: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-400' };
+  if (level <= 6) return { label: `어려움${level}`, border: 'border-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400' };
+  return { label: `매우어려움${level}`, border: 'border-red-600', bg: 'bg-red-600/10', text: 'text-red-400' };
+}
+
+const DIFFICULTY_CONFIG: Record<number, { label: string; border: string; bg: string; text: string }> = Object.fromEntries(
+  Array.from({ length: 10 }, (_, i) => [i + 1, getDifficultyConfig(i + 1)])
+);
 
 const DOMAIN_CONFIG: Record<string, { label: string; border: string; bg: string; text: string }> = {
   CALCULATION: { label: '계산', border: 'border-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
@@ -156,7 +160,7 @@ function generateMockProblems(): ProblemData[] {
 // Sub-Components
 // ============================================================================
 
-function DifficultyBadge({ level }: { level: DifficultyKey }) {
+function DifficultyBadge({ level }: { level: number }) {
   const cfg = DIFFICULTY_CONFIG[level];
   return (
     <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${cfg.border} ${cfg.bg} ${cfg.text}`}>
@@ -1846,15 +1850,14 @@ function SolutionView({
 }
 
 /** 라이트 테마용 난이도 배지 (해설지에서 사용) */
-function DifficultyBadgeLight({ level }: { level: DifficultyKey }) {
-  const config: Record<DifficultyKey, { label: string; classes: string }> = {
-    1: { label: '최하', classes: 'bg-gray-100 text-gray-500 border-gray-300' },
-    2: { label: '하', classes: 'bg-blue-50 text-blue-600 border-blue-200' },
-    3: { label: '중', classes: 'bg-amber-50 text-amber-600 border-amber-200' },
-    4: { label: '상', classes: 'bg-red-50 text-red-600 border-red-200' },
-    5: { label: '최상', classes: 'bg-red-100 text-red-700 border-red-300' },
-  };
-  const cfg = config[level];
+function DifficultyBadgeLight({ level }: { level: number }) {
+  function getLightCfg(lv: number): { label: string; classes: string } {
+    if (lv <= 2) return { label: `쉬움${lv}`, classes: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
+    if (lv <= 4) return { label: `보통${lv}`, classes: 'bg-blue-50 text-blue-600 border-blue-200' };
+    if (lv <= 6) return { label: `어려움${lv}`, classes: 'bg-amber-50 text-amber-600 border-amber-200' };
+    return { label: `매우어려움${lv}`, classes: 'bg-red-100 text-red-700 border-red-300' };
+  }
+  const cfg = getLightCfg(level);
   return (
     <span className={`inline-flex items-center rounded border px-1 py-0.5 text-[10px] font-bold ${cfg.classes}`}>
       {cfg.label}

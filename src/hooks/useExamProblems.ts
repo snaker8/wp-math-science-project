@@ -11,7 +11,7 @@ import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 export interface ExamProblemData {
   id: string;
   number: number;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: number; // 수학비서 기준 1~10
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
   choices: string[];
@@ -267,7 +267,7 @@ function toExamProblemData(
     id: problem.id,
     number: problem.source_number ?? row.sequence_number ?? row.order_index ?? (index + 1),
     difficulty: classification
-      ? (parseInt(classification.difficulty, 10) as 1 | 2 | 3 | 4 | 5)
+      ? Math.min(10, Math.max(1, parseInt(classification.difficulty, 10) || 3))
       : 3,
     cognitiveDomain: classification?.cognitive_domain || 'UNDERSTANDING',
     content,
