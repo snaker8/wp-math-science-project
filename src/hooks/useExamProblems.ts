@@ -18,6 +18,8 @@ export interface ExamProblemData {
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
   answer: number | string;
+  /** ★ 원본 answer_json 전체 (수정 모달에서 보존용) */
+  answerJson?: Record<string, unknown>;
   solution: string;
   year: string;
   typeCode: string;
@@ -272,6 +274,7 @@ function toExamProblemData(
     choices,
     choiceHeaders,
     answer: extractAnswerNumber(answerJson),
+    answerJson: answerJson as Record<string, unknown>,
     solution: problem.solution_latex || '',
     year: displayYear,
     typeCode,

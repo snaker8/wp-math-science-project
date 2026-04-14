@@ -73,6 +73,8 @@ interface ProblemData {
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
   answer: number | string;
+  /** ★ 원본 answer_json 전체 */
+  answerJson?: Record<string, unknown>;
   solution: string;
   year: string;
   typeCode: string;
@@ -1879,6 +1881,7 @@ export default function CloudExamDetailPage() {
       choices: p.choices,
       choiceHeaders: p.choiceHeaders,
       answer: p.answer,
+      answerJson: p.answerJson,
       solution: p.solution,
       year: p.year,
       typeCode: p.typeCode,
@@ -3015,7 +3018,7 @@ export default function CloudExamDetailPage() {
           problemId={editModalProblem.id}
           initialContent={editModalProblem.content}
           initialSolution={editModalProblem.solution || ''}
-          initialAnswer={{ correct_answer: editModalProblem.answer }}
+          initialAnswer={editModalProblem.answerJson || { correct_answer: editModalProblem.answer }}
           initialChoices={editModalProblem.choices}
           initialDifficulty={editModalProblem.difficulty}
           initialCognitiveDomain={editModalProblem.cognitiveDomain}
