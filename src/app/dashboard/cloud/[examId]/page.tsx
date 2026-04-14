@@ -37,6 +37,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
@@ -483,28 +484,8 @@ function ProblemCardView({
   const showOriginal = globalViewMode === 'original' && !!cropImage;
   const hasFigureContent = problem.upscaledCropUrl || problem.figureData || problem.figureSvg || cropImage;
 
-  // ★ 클린 모드: 콘텐츠 내 마크다운 이미지 참조 → [도형] 마커로 변환
-  // 이미지는 figure_crop 배열에서 순서대로 매칭하여 렌더링됨
-  const cleanContent = problem.content
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '[도형]')
-    // ★ \displaystyle 제거
-    .replace(/\\displaystyle\s*/g, '')
-    // ★ \lbrace → \left\{ , \rbrace → \right\} (KaTeX 호환)
-    .replace(/\\lbrace/g, '\\left\\{')
-    .replace(/\\rbrace/g, '\\right\\}')
-    // ★ \begin{table}...\end{table} 래퍼 제거 (KaTeX 미지원, tabular만 남김)
-    .replace(/\\begin\{table\}[\s\S]*?(?=\\begin\{tabular\})/gi, '')
-    .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}')
-    // ★ \begin{aligned}...\end{aligned} → 줄별 $...$ 변환 (KaTeX display mode 실패 방지)
-    .replace(/\$\$\s*\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*\$\$/gi, (_match, inner) => {
-      return inner
-        .split('\\\\')
-        .map((line: string) => line.replace(/&/g, '').trim())
-        .filter((line: string) => line.length > 0)
-        .map((line: string) => `$${line}$`)
-        .join('\n');
-    })
-    .trim();
+  // ★ 클린 모드: LaTeX 전처리 (공통 유틸 사용)
+  const cleanContent = cleanLatexContent(problem.content);
 
   const contentParts = splitContentByFigureMarker(cleanContent);
   const hasFigureMarker = contentParts.some(p => p.type === 'figure');
@@ -871,11 +852,7 @@ function ProblemCardView({
               // 객관식 보기 — 항상 ①②③④⑤ 사용
               const processed = problem.choices.map((choice, i) => {
                 const circled = ['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`;
-                let stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
-                // ★ \begin{array}...\end{array} → 줄별 분리 (KaTeX 인라인 렌더링 실패 방지)
-                stripped = stripped.replace(/\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?/gi, (_m, inner) => {
-                  return inner.split('\\\\').map((l: string) => `$${l.replace(/&/g, '').trim()}$`).filter((l: string) => l !== '$$').join(' ');
-                });
+                const stripped = cleanChoiceText(choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, ''));
                 return { circled, stripped };
               });
               const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));

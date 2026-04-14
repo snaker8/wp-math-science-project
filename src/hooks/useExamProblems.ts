@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
+import { cleanLatexContent } from '@/lib/utils/clean-latex';
 // Note: supabaseBrowser는 useCreateExam, useExamList에서 여전히 사용
 
 // ============================================================================
@@ -213,7 +214,9 @@ function toExamProblemData(
   const choiceHeaders: string[] | undefined = Array.isArray(answerJson.choiceHeaders) ? answerJson.choiceHeaders : undefined;
 
   // ★ 2순위: content_latex에서 추출 (fallback)
-  const { content, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
+  const { content: rawContent, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
+  // ★ LaTeX 정리 (공통 유틸 — 모든 페이지에 자동 적용)
+  const content = cleanLatexContent(rawContent);
 
   // DB에 저장된 선택지가 있으면 우선 사용
   const choices = dbChoices.length > 0 ? dbChoices : extractedChoices;
