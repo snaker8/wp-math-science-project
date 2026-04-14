@@ -673,7 +673,7 @@ export async function interpretImage(
     }
 
     // ================================================================
-    // ★★★ 2단계: Opus 직접 SVG 생성
+    // ★★★ 2단계: Claude 직접 SVG 생성
     // graph → 기존 유지 (Desmos 렌더링에 structured JSON 필요)
     // geometry/table/diagram → Opus에 이미지만 주고 바로 SVG 생성
     //   (Gemini JSON을 전달하면 오히려 방해됨 — 사용자 검증 완료)
@@ -690,13 +690,13 @@ export async function interpretImage(
     const hasOverlapPattern = /점선|dashed.*solid|실선.*점선|원래.*도형|변형/.test(result.description || '');
     const isNetDiagram = hasNetKeyword || hasMissingDashedVerts || (hasTransformPattern && hasOverlapPattern);
 
-    // ★★★ graph가 아닌 모든 타입: Opus 직접 SVG 생성 (Gemini JSON 전달하지 않음)
+    // ★★★ graph가 아닌 모든 타입: Claude 직접 SVG 생성 (Gemini JSON 전달하지 않음)
     const shouldDirectSvg = result.figureType !== 'graph' &&
       result.figureType !== 'photo' &&
       result.confidence >= 0.3;
 
     if (shouldDirectSvg) {
-      console.log(`[Vision] ★★★ Opus 직접 SVG 생성: ${result.figureType} (Gemini JSON 스킵, 이미지만 전달)`);
+      console.log(`[Vision] ★★★ Claude 직접 SVG 생성: ${result.figureType} (Gemini JSON 스킵, 이미지만 전달)`);
       if (isNetDiagram) {
         console.log(`[Vision] → 전개도 감지됨: keyword=${hasNetKeyword}, missingVerts=${hasMissingDashedVerts}, transform=${hasTransformPattern}`);
       }
@@ -708,10 +708,10 @@ export async function interpretImage(
           } else {
             result.rendering = { type: 'geometry', svg: svgResult, vertices: [], segments: [] } as any;
           }
-          console.log(`[Vision] ★★★ Opus 직접 SVG 완료! (${svgResult.length}자)`);
+          console.log(`[Vision] ★★★ Claude 직접 SVG 완료! (${svgResult.length}자)`);
         }
       } catch (svgErr) {
-        console.warn(`[Vision] Opus 직접 SVG 실패, generateSvgStep2 폴백:`, svgErr);
+        console.warn(`[Vision] Claude 직접 SVG 실패, generateSvgStep2 폴백:`, svgErr);
         // 폴백: 기존 2단계 (Gemini JSON 포함)
         try {
           const fallbackSvg = await generateSvgStep2(imageUrl, result, context);
@@ -1547,7 +1547,7 @@ function buildSectorSvg(geo: GeometryRendering): string | null {
  */
 
 // ============================================================================
-// ★★★ Opus 직접 SVG 생성 — Gemini JSON 없이 이미지만으로 SVG 생성
+// ★★★ Claude 직접 SVG 생성 — Gemini JSON 없이 이미지만으로 SVG 생성
 // 사용자 검증: Opus에 이미지만 주면 복원 퀄리티가 압도적으로 좋음
 // ============================================================================
 async function generateSvgDirect(
@@ -1600,7 +1600,7 @@ async function generateSvgDirect(
     // 교정 조회 실패해도 무시
   }
 
-  console.log(`[Vision/Direct] Opus 직접 호출: ${CLAUDE_MODEL}, 전개도=${isNetDiagram}`);
+  console.log(`[Vision/Direct] Claude 직접 호출: ${CLAUDE_MODEL}, 전개도=${isNetDiagram}`);
 
   try {
     const rawResponse = await callClaudeVision(
