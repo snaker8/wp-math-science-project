@@ -192,7 +192,14 @@ export async function POST(
 반드시 해당 과목 범위 내에서 분류하세요.
 
 ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
-난이도 1~10
+■ 난이도 (1~5, 반드시 문제 내용 기반으로 정확히 판정):
+1=최하: 개념·정의만 알면 바로 풀림 (단순 용어, 기본 계산)
+2=하: 공식 1개 적용, 1~2단계 풀이
+3=중: 2개 이상 개념 연결, 자료 해석 필요, 3~4단계 풀이
+4=상: 복합 조건, 서술형, 여러 개념 융합, 합답형(ㄱㄴㄷ)
+5=최상: 고난도 추론, 증명, 복합 서술형
+
+★ 서술형/서논술형은 최소 3 이상. 배점 3~4점은 최소 3 이상.
 
 JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":3,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
