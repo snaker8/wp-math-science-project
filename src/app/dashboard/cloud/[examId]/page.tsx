@@ -1877,6 +1877,7 @@ export default function CloudExamDetailPage() {
       cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
       content: p.content,
       choices: p.choices,
+      choiceHeaders: p.choiceHeaders,
       answer: p.answer,
       solution: p.solution,
       year: p.year,
