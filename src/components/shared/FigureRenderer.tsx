@@ -262,7 +262,7 @@ export function FigureRenderer({
     return (
       <div
         className={`figure-svg-container ${className}`}
-        style={{ maxWidth, overflow: 'visible', padding: '8px' }}
+        style={{ maxWidth, overflow: 'visible', padding: '8px', background: 'white', borderRadius: '8px' }}
         dangerouslySetInnerHTML={{ __html: safeSvg }}
       />
     );
