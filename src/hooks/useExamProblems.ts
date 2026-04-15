@@ -122,8 +122,17 @@ function extractChoicesFromLatex(latex: string): { content: string; choices: str
     return { content: mainContent, choices };
   }
 
-  // 2차: (1)~(5) 패턴 시도 → 소문제인지 선택지인지 판별
-  const firstNumberedIdx = latex.indexOf('(1)');
+  // 2차: (1)~(5) 패턴은 ★ 항상 서술형 소문제로 간주한다 ★
+  //   - 객관식 보기는 반드시 ①②③④⑤ 원문자로만 표기되도록 OCR/정규화 단계에서 처리됨
+  //   - (1)(2)... 는 본문에 그대로 두고 분리하지 않음 → 모달/화면 모두 서술형으로 인식
+  //   - 흡수/객관식오인식 사고를 원천 차단
+  if (latex.indexOf('(1)') !== -1) {
+    mainContent = mainContent.replace(/\n{3,}/g, '\n\n').trim();
+    return { content: mainContent, choices: [] };
+  }
+
+  // (객관식 (1)(2)... 분리 로직은 더 이상 사용하지 않음 — 위 if문이 모든 (1) 케이스를 잡음)
+  const firstNumberedIdx = -1; // 도달 불가, 아래 블록 dead code
   if (firstNumberedIdx !== -1) {
     const remaining = latex.substring(firstNumberedIdx);
 
@@ -240,8 +249,8 @@ function toExamProblemData(
       typeName = aiClass.typeName;
     }
   }
-  // 3순위: typeCode 표시
-  if (!typeName) typeName = typeCode;
+  // 3순위: typeName 없으면 빈 문자열 유지 (typeCode와 중복 표시 방지)
+  // UI에서 typeCode만 표시, typeName이 있을 때만 ". typeName" 추가
 
   // source_name에서 학교명/연도 파싱
   const sourceName = problem.source_name || '';
@@ -310,41 +319,18 @@ function deduplicateProblems(problems: ExamProblemData[]): ExamProblemData[] {
   for (const problem of problems) {
     const key = normalize(problem.content);
     if (key.length < 10) {
-      // 너무 짧은 콘텐츠 (선택지만 있는 경우) - 별도 처리
-      // 이전 문제에 선택지가 없으면 이 항목의 선택지를 병합
-      if (problem.choices.length > 0 && result.length > 0) {
-        const lastProblem = result[result.length - 1];
-        if (lastProblem.choices.length === 0) {
-          result[result.length - 1] = {
-            ...lastProblem,
-            choices: problem.choices,
-          };
-          continue;
-        }
-      }
+      // ★ 짧은 콘텐츠 흡수 로직 제거 (2026-04-15)
+      //   이전 문제로 흡수하면 서술형 (1)(2)가 객관식 선택지로 잘못 합쳐지는 사고가 발생.
+      //   짧은 content 라도 항상 별도 카드로 푸시.
       result.push(problem);
       continue;
     }
 
-    const existing = seen.get(key);
-    if (existing) {
-      // 중복 발견 - 더 완전한 데이터로 병합
-      const existingIdx = result.findIndex(p => p.id === existing.id);
-      if (existingIdx !== -1) {
-        const merged = { ...existing };
-        // 선택지가 없는 기존 항목에 선택지 추가
-        if (merged.choices.length === 0 && problem.choices.length > 0) {
-          merged.choices = problem.choices;
-        }
-        // 풀이가 없는 기존 항목에 풀이 추가
-        if (!merged.solution && problem.solution) {
-          merged.solution = problem.solution;
-        }
-        result[existingIdx] = merged;
-      }
-      continue;
-    }
-
+    // ★ 중복 흡수 로직 제거 (2026-04-15)
+    //   normalize 의 substring(0,100) 이 같은 도입어로 시작하는 다른 문제들의 key 를 같게 만들어
+    //   34/35 번처럼 다른 문제가 흡수돼서 카드가 안 보이는 사고가 발생함.
+    //   시중교재 자산화에서는 비슷한 도입어로 시작하는 문제가 흔하므로 흡수 자체가 위험.
+    //   key 충돌이 있어도 항상 별도 카드로 push.
     seen.set(key, problem);
     result.push(problem);
   }

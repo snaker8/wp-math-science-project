@@ -225,8 +225,14 @@ function extractChoices(text: string): { body: string; choices: string[] } {
     return { body, choices };
   }
 
-  // 2차: (1)~(5) 패턴 시도 → 소문제인지 선택지인지 판별
-  const firstNumberedIdx = text.indexOf('(1)');
+  // 2차: (1)~(5) 패턴은 ★ 항상 서술형 소문제로 간주 ★
+  //   객관식 보기는 ①②③④⑤ 원문자만 인정. (1)(2)... 는 무조건 본문 유지.
+  if (text.indexOf('(1)') !== -1) {
+    return { body: text, choices: [] };
+  }
+
+  // (이하 dead code — 위 if문이 모든 (1) 케이스를 잡아냄)
+  const firstNumberedIdx = -1;
   if (firstNumberedIdx !== -1) {
     const remaining = text.substring(firstNumberedIdx);
 

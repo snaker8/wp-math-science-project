@@ -619,10 +619,21 @@ export function ProblemEditModal({
 
   const [choices, setChoices] = useState<string[]>(parsedChoices);
   const [answerType, setAnswerType] = useState<AnswerType>(() => {
+    // ★ 1순위: answer_json.type 명시값 (short_answer = 서술형)
+    const explicitType = (initialAnswer as Record<string, unknown> | undefined)?.type;
+    if (explicitType === 'short_answer' || explicitType === 'subjective') return 'subjective';
+    if (explicitType === 'multiple_choice' || explicitType === 'objective') return 'objective';
+
+    // ★ 2순위: 선택지가 없으면 무조건 서술형 (객관식은 항상 선택지가 있음)
+    if (!initialChoices || initialChoices.length === 0) return 'subjective';
+
+    // ★ 3순위: 정답이 1~5 숫자면 객관식
     const ans = initialAnswer?.correct_answer || initialAnswer?.finalAnswer;
     if (typeof ans === 'number' && ans >= 1 && ans <= 5) return 'objective';
     if (typeof ans === 'string' && /^\d$/.test(ans) && Number(ans) >= 1 && Number(ans) <= 5) return 'objective';
-    return ans ? 'subjective' : 'objective';
+
+    // 그 외엔 서술형 기본값 (이전엔 객관식이 기본이라 서술형 문제가 객관식으로 잘못 표시됐음)
+    return 'subjective';
   });
   const [correctAnswer, setCorrectAnswer] = useState<number>(() => {
     const ans = initialAnswer?.correct_answer || initialAnswer?.finalAnswer;

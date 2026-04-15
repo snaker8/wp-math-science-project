@@ -908,7 +908,7 @@ function ProblemCardView({
           )}
           {problem.typeCode && (
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-              {problem.typeCode}. {problem.typeName}
+              {problem.typeCode}{problem.typeName && problem.typeName !== problem.typeCode ? `. ${problem.typeName}` : ''}
             </span>
           )}
           {problem.year && (
@@ -922,7 +922,7 @@ function ProblemCardView({
       {/* 유형 footer (편집 가능 영역) */}
       {problem.typeCode && (
         <div className="flex items-center justify-between px-4 py-1.5 border-t border-subtle bg-surface-card/60">
-          <span className="text-[11px] text-content-tertiary">유형: {problem.typeCode}. {problem.typeName}</span>
+          <span className="text-[11px] text-content-tertiary">유형: {problem.typeCode}{problem.typeName && problem.typeName !== problem.typeCode ? `. ${problem.typeName}` : ''}</span>
           <button type="button" className="p-0.5 text-content-muted hover:text-content-secondary" title="유형 변경">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -2496,18 +2496,25 @@ export default function CloudExamDetailPage() {
             </button>
             <button
               type="button"
-              onClick={async () => {
-                if (!confirm('전체 문제를 강제 재분류합니다. 진행할까요?')) return;
-                try {
-                  const res = await fetch(`/api/exams/${examId}/auto-fix?force=1`, { method: 'POST' });
-                  if (!res.ok) throw new Error('자동매핑 실패');
-                  const data = await res.json();
-                  const fixCount = data.fixedProblems || data.results?.filter((f: any) => f.fixes?.length > 0).length || 0;
-                  alert(`자동매핑 완료: ${fixCount}개 문제 수정됨`);
-                  window.location.reload();
-                } catch (e) {
-                  alert('자동매핑 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
-                }
+              onClick={() => {
+                if (!confirm('전체 문제를 강제 재분류합니다. 백그라운드에서 진행되며 완료 시 알림이 뜹니다. 진행할까요?')) return;
+                // ★ 백그라운드 실행 — await 하지 않음. 사용자가 다른 작업 가능.
+                (async () => {
+                  try {
+                    const res = await fetch(`/api/exams/${examId}/auto-fix?force=1`, { method: 'POST' });
+                    if (!res.ok) {
+                      alert('자동매핑 실패: HTTP ' + res.status);
+                      return;
+                    }
+                    const data = await res.json();
+                    const fixCount = data.fixedProblems || data.results?.filter((f: any) => f.fixes?.length > 0).length || 0;
+                    alert(`✅ 자동매핑 완료: ${fixCount}개 문제 수정됨. 새로고침하면 반영됩니다.`);
+                  } catch (e) {
+                    alert('자동매핑 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
+                  }
+                })();
+                // 즉시 시작 알림 (백그라운드 진행 중)
+                alert('🔄 자동매핑이 백그라운드에서 시작되었습니다.\n완료까지 1~3분 정도 걸립니다. 다른 작업 하셔도 됩니다.');
               }}
               className="flex items-center gap-1.5 rounded-lg border bg-surface-card px-3 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors"
             >

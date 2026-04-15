@@ -186,7 +186,8 @@ export async function POST(
 
         try {
           const useGemini = !!GOOGLE_AI_KEY;
-          const modelName = useGemini ? 'gemini-2.5-pro' : 'gpt-4o';
+          // ★ Flash 사용 (Pro는 thinking 모드로 빈 응답 이슈, Flash는 안정적이고 분류 작업엔 충분)
+          const modelName = useGemini ? 'gemini-3-flash-preview' : 'gpt-4o';
 
           const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
@@ -208,7 +209,7 @@ ${content.slice(0, 1500)}`;
           let rawContent = '{}';
 
           if (useGemini) {
-            // ★ Gemini 네이티브 SDK — JSON 잘림 없음
+            // ★ Gemini 네이티브 SDK — thinking 모드 토큰 부족 방지로 maxOutputTokens 8000
             const { GoogleGenerativeAI } = await import('@google/generative-ai');
             const genAI = new GoogleGenerativeAI(GOOGLE_AI_KEY);
             const model = genAI.getGenerativeModel({
@@ -216,7 +217,7 @@ ${content.slice(0, 1500)}`;
               systemInstruction: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.',
               generationConfig: {
                 temperature: 0.1,
-                maxOutputTokens: 2000,
+                maxOutputTokens: 8000,
                 responseMimeType: 'application/json',
               },
             });
@@ -241,6 +242,30 @@ ${content.slice(0, 1500)}`;
               }
             }
             if (lastError) throw lastError;
+
+            // ★ Gemini 응답이 비거나 너무 짧으면 GPT-4o 로 폴백
+            if (!rawContent || rawContent.trim().length < 10) {
+              console.warn(`[auto-fix] #${seqNum} Gemini empty response → GPT-4o fallback`);
+              if (OPENAI_API_KEY) {
+                const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+                  body: JSON.stringify({
+                    model: 'gpt-4o',
+                    messages: [
+                      { role: 'system', content: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.' },
+                      { role: 'user', content: userPrompt },
+                    ],
+                    temperature: 0.1, max_tokens: 2000, response_format: { type: 'json_object' }
+                  }),
+                });
+                if (gptRes.ok) {
+                  const gptData = await gptRes.json();
+                  rawContent = gptData.choices?.[0]?.message?.content || '{}';
+                  console.log(`[auto-fix] #${seqNum} GPT-4o fallback success`);
+                }
+              }
+            }
           } else {
             // GPT fallback
             let gptRes: Response | null = null;

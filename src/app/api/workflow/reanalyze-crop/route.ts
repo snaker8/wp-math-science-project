@@ -188,80 +188,39 @@ JSON만 응답하세요.`;
 }
 
 /**
- * GPT-4o로 문제 분류 + 풀이 생성
+ * 박스 단위 문제 분류 + 해설 생성
+ * ★ 메인 업로드 경로(cloud-flow.ts)와 동일한 체계로 통일:
+ *   - 수학비서 MS 코드 (1,139개가 아닌 22,785개 mathsecr_types)
+ *   - 난이도 1~10 스케일 (4등급)
+ *   - Sonnet 해설
+ * ★ analyzeProblemWithLLM 을 재사용 — 별도 프롬프트/모델 유지 금지
  */
 async function classifyProblemWithGPT(
   ocrText: string,
-  problemNumber?: number
+  problemNumber?: number,
+  subject?: string,
+  gradeHint?: string
 ): Promise<Record<string, unknown> | null> {
-  if (!OPENAI_API_KEY || !ocrText.trim()) return null;
-
-  const prompt = buildClassificationPrompt(ocrText, problemNumber);
-
-  const classificationModel = 'gpt-4o-mini'; // 429 방지를 위해 mini 사용
-  const systemMsg = '당신은 한국 교육과정(2015/2022 개정) 수학 전문가입니다. 1,139개 세부유형과 난이도 기준표에 따라 문제를 분류합니다. 반드시 유효한 JSON으로만 응답하세요.';
-
-  const makeRequest = () => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000); // 20초 타임아웃
-    return fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: classificationModel,
-        messages: [
-          { role: 'system', content: systemMsg },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 2000,
-        response_format: { type: 'json_object' },
-      }),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
-  };
-
-  // 최대 2회 시도 (빠른 백오프)
-  const delays = [0, 3000];
-  for (let attempt = 0; attempt < delays.length; attempt++) {
-    if (delays[attempt] > 0) {
-      console.warn(`[Classification] Rate limited, retrying after ${delays[attempt]/1000}s... (attempt ${attempt + 1}/${delays.length})`);
-      await new Promise(r => setTimeout(r, delays[attempt]));
+  if (!ocrText.trim()) return null;
+  try {
+    const { analyzeProblemWithLLM } = await import('@/lib/workflow/cloud-flow');
+    const result = await analyzeProblemWithLLM(
+      ocrText,
+      [],            // mathExpressions (OCR 본문에 포함됨)
+      'PROBLEM',
+      undefined,     // onProgress
+      {},            // referenceTexts
+      subject,
+      gradeHint,
+    );
+    if (problemNumber !== undefined) {
+      console.log(`[Reanalyze] 문제 ${problemNumber}번: analyzeProblemWithLLM 완료 (수학비서 체계)`);
     }
-
-    let response: Response;
-    try {
-      response = await makeRequest();
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.warn(`[Classification] Timeout (20s) on attempt ${attempt + 1}`);
-        continue;
-      }
-      throw err;
-    }
-
-    if (response.ok) {
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content?.trim();
-      if (!content) return null;
-      try {
-        return JSON.parse(content);
-      } catch {
-        console.warn('[Classification] Failed to parse response:', content.substring(0, 200));
-        return null;
-      }
-    }
-
-    if (response.status !== 429) {
-      throw new Error(`Classification API error: ${response.status}`);
-    }
+    return result as unknown as Record<string, unknown>;
+  } catch (err) {
+    console.error('[Classification] analyzeProblemWithLLM error:', err);
+    return null;
   }
-
-  console.warn('[Classification] Exhausted all retries (429)');
-  return null; // 실패해도 null 반환 (에러 throw 대신)
 }
 
 /**
