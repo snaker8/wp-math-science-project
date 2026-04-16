@@ -431,10 +431,10 @@ export default function ExamManagementPage() {
     }
   }, [selectedExamId]);
 
-  // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
+  // PDF 다운로드 → 클라우드 페이지에서 처리
   const handleDownloadPdf = useCallback(() => {
-    setShowPrintModal(true);
-  }, []);
+    handleGoToCloudPrint();
+  }, [handleGoToCloudPrint]);
 
   // DB hooks
   const { exams: dbExams, isLoading: examsLoading, refetch: refetchExams } = useExamList();
