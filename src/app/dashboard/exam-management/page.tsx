@@ -399,6 +399,7 @@ export default function ExamManagementPage() {
   const [examTypeFilter, setExamTypeFilter] = useState('전체');
   const [gradeFilter, setGradeFilter] = useState('전체');
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
   const printRef = useRef<HTMLDivElement>(null);
 
   // ★ 시험지 헤더 편집 필드
@@ -422,19 +423,69 @@ export default function ExamManagementPage() {
   const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
 
-  // togglePrintSection 제거 — 출력은 클라우드 페이지에서 처리
+  const togglePrintSection = useCallback((key: 'exam' | 'answer' | 'solution') => {
+    setPrintSections(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
-  // 출력 → 클라우드 페이지로 이동 (클라우드 페이지의 인쇄가 더 정확)
-  const handleGoToCloudPrint = useCallback(() => {
-    if (selectedExamId) {
-      window.open(`/dashboard/cloud/${selectedExamId}?view=exam`, '_blank');
+  // 출력 모달
+  const [showPrintModal, setShowPrintModal] = useState(false);
+
+  // 출력 실행 — DOM 복제 방식 (클라우드 페이지와 동일)
+  const executePrint = useCallback(() => {
+    setShowPrintModal(false);
+    const printRoot = document.createElement('div');
+    printRoot.id = 'exam-print-root';
+
+    // 시험지 섹션 (페이지별)
+    if (printSections.exam) {
+      const examPages = document.querySelectorAll('.print-section-exam-page');
+      examPages.forEach((page, idx) => {
+        const clone = page.cloneNode(true) as HTMLElement;
+        clone.classList.add('exam-page');
+        // ★ 시험지 마지막 페이지 표시 (빈 페이지 방지)
+        if (idx === examPages.length - 1) {
+          clone.classList.add('exam-last-page');
+        }
+        printRoot.appendChild(clone);
+      });
     }
-  }, [selectedExamId]);
 
-  // PDF 다운로드 → 클라우드 페이지에서 처리
+    // 빠른정답 섹션
+    if (printSections.answer) {
+      const answerSection = document.querySelector('.print-section-answer');
+      if (answerSection) {
+        const clone = answerSection.cloneNode(true) as HTMLElement;
+        clone.classList.add('exam-page');
+        clone.style.pageBreakBefore = 'always';
+        printRoot.appendChild(clone);
+      }
+    }
+
+    // 해설지 섹션 (여러 페이지로 자연 흐름)
+    if (printSections.solution) {
+      const solutionSection = document.querySelector('.print-section-solution');
+      if (solutionSection) {
+        const clone = solutionSection.cloneNode(true) as HTMLElement;
+        clone.classList.add('exam-page', 'solution-page');
+        clone.style.pageBreakBefore = 'always';
+        printRoot.appendChild(clone);
+      }
+    }
+
+    if (printRoot.children.length === 0) return;
+
+    document.body.appendChild(printRoot);
+    // ★ 이미지 로딩 대기 후 인쇄 (figure_crop 등)
+    setTimeout(() => {
+      window.print();
+      document.body.removeChild(printRoot);
+    }, 500);
+  }, [printSections]);
+
+  // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
   const handleDownloadPdf = useCallback(() => {
-    handleGoToCloudPrint();
-  }, [handleGoToCloudPrint]);
+    setShowPrintModal(true);
+  }, []);
 
   // DB hooks
   const { exams: dbExams, isLoading: examsLoading, refetch: refetchExams } = useExamList();
@@ -956,7 +1007,7 @@ export default function ExamManagementPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleGoToCloudPrint}
+                    onClick={() => setShowPrintModal(true)}
                     className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors"
                   >
                     <Printer className="h-3.5 w-3.5" />
@@ -1398,7 +1449,7 @@ export default function ExamManagementPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleGoToCloudPrint}
+                  onClick={() => setShowPrintModal(true)}
                   className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
                 >
                   <Printer className="h-4 w-4" />
@@ -1419,7 +1470,15 @@ export default function ExamManagementPage() {
       <style dangerouslySetInnerHTML={{ __html: `
         #exam-print-root { display: none; }
         #exam-print-root .katex { font-size: 1.05em !important; }
-        .print-source-sections { display: none; }
+        /* ★ display:none → off-screen: CSS columns 레이아웃 계산을 위해 렌더링 유지 */
+        .print-source-sections {
+          position: fixed;
+          left: -9999px;
+          top: 0;
+          width: 794px;
+          z-index: -1;
+          pointer-events: none;
+        }
         @media print {
           body > *:not(#exam-print-root) { display: none !important; }
           #exam-print-root { display: block !important; }
@@ -1617,7 +1676,51 @@ export default function ExamManagementPage() {
         </div>
       )}
 
-      {/* 출력은 클라우드 페이지로 리다이렉트 (handleGoToCloudPrint) */}
+      {/* ======== 출력 모달 (fixed — overflow-hidden 우회) ======== */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" onClick={() => setShowPrintModal(false)}>
+          <div className="w-72 rounded-xl border border-zinc-600 bg-zinc-800 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-zinc-700">
+              <span className="text-sm font-bold text-white">출력할 항목 선택</span>
+            </div>
+            <div className="p-3 space-y-1.5">
+              {([
+                { key: 'exam' as const, label: '시험지' },
+                { key: 'answer' as const, label: '빠른정답' },
+                { key: 'solution' as const, label: '해설지' },
+              ]).map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-700 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={printSections[key]}
+                    onChange={() => togglePrintSection(key)}
+                    className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
+                  />
+                  <span className="text-sm text-white">{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="px-3 pb-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="flex-1 rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={executePrint}
+                disabled={!printSections.exam && !printSections.answer && !printSections.solution}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-500 px-3 py-2 text-sm font-bold text-white transition-colors"
+              >
+                <Printer className="h-4 w-4" />
+                출력하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
