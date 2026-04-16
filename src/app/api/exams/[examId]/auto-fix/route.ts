@@ -481,6 +481,57 @@ ${content.slice(0, 1500)}`;
         }
       }
 
+      // ─── FIX 4.5: LaTeX 콘텐츠 정규화 (DB 직접 수정, 렌더링 clean과 분리) ───
+      const fixLatex = (raw: string): { fixed: string; changes: string[] } => {
+        const changes: string[] = [];
+        let fixed = raw;
+
+        // \displaystyle 제거
+        if (/\\displaystyle/.test(fixed)) {
+          fixed = fixed.replace(/\\displaystyle\s*/g, '');
+          changes.push('\\displaystyle 제거');
+        }
+
+        // \hline 제거 (수식 밖에서 KaTeX 에러)
+        if (/\\hline/.test(fixed)) {
+          fixed = fixed.replace(/\\hline\s*/g, '');
+          changes.push('\\hline 제거');
+        }
+
+        // array/aligned 블록을 줄별 $...$ 인라인화 (멀티라인 $$ 렌더링 깨짐 방지)
+        const arrayPattern = /\$?\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?\$?/g;
+        if (arrayPattern.test(fixed)) {
+          arrayPattern.lastIndex = 0;
+          fixed = fixed.replace(arrayPattern, (_m: string, inner: string) => {
+            return inner
+              .split('\\\\')
+              .map((l: string) => l.replace(/&/g, '').trim())
+              .filter((l: string) => l.length > 0)
+              .map((l: string) => `$${l}$`)
+              .join('\n');
+          });
+          changes.push('array 블록 인라인화');
+        }
+
+        return { fixed, changes };
+      };
+
+      const contentBefore = (updates.content_latex as string) || content;
+      const { fixed: contentFixed, changes: contentChanges } = fixLatex(contentBefore);
+      if (contentFixed !== contentBefore) {
+        updates.content_latex = contentFixed;
+        result.fixes.push(`LaTeX 정규화: ${contentChanges.join(', ')}`);
+      }
+
+      const solBefore = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
+      if (solBefore) {
+        const { fixed: solFixed, changes: solChanges } = fixLatex(solBefore);
+        if (solFixed !== solBefore) {
+          updates.solution_latex = solFixed;
+          result.fixes.push(`해설 LaTeX 정규화: ${solChanges.join(', ')}`);
+        }
+      }
+
       // ─── FIX 5: figure_crop URL 프록시 변환 확인 ───
       const images = (problem.images as Array<{ url: string; type: string; label: string }>) || [];
       const brokenFigures = images.filter(img =>
