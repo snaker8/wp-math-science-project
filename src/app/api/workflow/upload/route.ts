@@ -11,6 +11,7 @@ import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { processUploadJob, getStatusLabel, convertedPdfStore } from '@/lib/workflow/cloud-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
+import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -883,34 +884,8 @@ async function saveEditedProblemsDirect(
   // ★ Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   let examId: string | null = null;
   try {
-    // 파일명에서 과목/유형/학년 자동 추출
+    // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
     const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
-    const detectSubject = (t: string) => {
-      if (/공통과학1/.test(t)) return '공통과학1';
-      if (/공통과학2/.test(t)) return '공통과학2';
-      if (/물리/.test(t)) return '물리학1';
-      if (/화학/.test(t)) return '화학1';
-      if (/생명|생물/.test(t)) return '생명과학1';
-      if (/지구/.test(t)) return '지구과학1';
-      if (/과학/.test(t)) return '공통과학1';
-      if (/공통수학1/.test(t)) return '공통수학1';
-      if (/공통수학2/.test(t)) return '공통수학2';
-      if (/미적분/.test(t)) return '미적분';
-      if (/확률과통계|확통/.test(t)) return '확률과통계';
-      if (/기하/.test(t)) return '기하';
-      if (/수[학]?2/.test(t)) return '수학2';
-      if (/수[학]?1/.test(t)) return '수학1';
-      return '공통수학1';
-    };
-    const detectExamType = (t: string) => /모의고사|모의|평가원/.test(t) ? '모의고사' : '학교기출';
-    const detectGrade = (t: string) => {
-      if (/중1|1학년.*중/.test(t)) return '중1';
-      if (/중2|2학년.*중/.test(t)) return '중2';
-      if (/중3|3학년.*중|중등/.test(t)) return '중3';
-      if (/고3|3학년/.test(t)) return '고3';
-      if (/고2|2학년/.test(t)) return '고2';
-      return '고1';
-    };
 
     const examInsertData: Record<string, any> = {
       title: fileTitle,
@@ -920,9 +895,9 @@ async function saveEditedProblemsDirect(
       institute_id: instituteId,
       total_points: editedProblems.length * 4,
       time_limit_minutes: 50,
-      subject: detectSubject(fileTitle),
-      exam_type: detectExamType(fileTitle),
-      grade: detectGrade(fileTitle),
+      subject: detectSubjectFromTitle(fileTitle),
+      exam_type: detectExamTypeFromTitle(fileTitle),
+      grade: detectGradeFromTitle(fileTitle),
     };
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
@@ -1369,35 +1344,8 @@ async function saveProblemsToDB(
       return;
     }
 
-    // schema.sql 기준 컬럼만 사용
+    // schema.sql 기준 컬럼만 사용 (공통 유틸 사용)
     const fileTitle = job.fileName.replace(/\.[^/.]+$/, "");
-    const detectSubjectAuto = (t: string) => {
-      if (/공통과학1/.test(t)) return '공통과학1';
-      if (/공통과학2/.test(t)) return '공통과학2';
-      if (/물리/.test(t)) return '물리학1';
-      if (/화학/.test(t)) return '화학1';
-      if (/생명|생물/.test(t)) return '생명과학1';
-      if (/지구/.test(t)) return '지구과학1';
-      if (/과학/.test(t)) return '공통과학1';
-      if (/공통수학1/.test(t)) return '공통수학1';
-      if (/공통수학2/.test(t)) return '공통수학2';
-      if (/미적분/.test(t)) return '미적분';
-      if (/확률과통계|확통/.test(t)) return '확률과통계';
-      if (/기하/.test(t)) return '기하';
-      if (/수[학]?2/.test(t)) return '수학2';
-      if (/수[학]?1/.test(t)) return '수학1';
-      return '공통수학1';
-    };
-    // ★ 시험유형/학년 감지 (direct save와 동일 로직)
-    const detectExamTypeAuto = (t: string) => /모의고사|모의|평가원/.test(t) ? '모의고사' : '학교기출';
-    const detectGradeAuto = (t: string) => {
-      if (/중1|1학년.*중/.test(t)) return '중1';
-      if (/중2|2학년.*중/.test(t)) return '중2';
-      if (/중3|3학년.*중|중등/.test(t)) return '중3';
-      if (/고3|3학년/.test(t)) return '고3';
-      if (/고2|2학년/.test(t)) return '고2';
-      return '고1';
-    };
 
     const examInsertData: Record<string, any> = {
       title: fileTitle,
@@ -1407,9 +1355,9 @@ async function saveProblemsToDB(
       institute_id: instituteId,
       total_points: results.length * 4,
       time_limit_minutes: 50,
-      subject: detectSubjectAuto(fileTitle),
-      exam_type: detectExamTypeAuto(fileTitle),
-      grade: detectGradeAuto(fileTitle),
+      subject: detectSubjectFromTitle(fileTitle),
+      exam_type: detectExamTypeFromTitle(fileTitle),
+      grade: detectGradeFromTitle(fileTitle),
     };
 
     // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치
