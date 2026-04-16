@@ -430,20 +430,23 @@ export default function ExamManagementPage() {
   // 출력 모달
   const [showPrintModal, setShowPrintModal] = useState(false);
 
-  // 출력 실행 — DOM 복제 방식 (클라우드 페이지와 동일)
+  // 출력 실행 — 미리보기 DOM 직접 복제 (클라우드 페이지와 동일 방식)
   const executePrint = useCallback(() => {
     setShowPrintModal(false);
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
 
-    // 시험지 섹션 (페이지별)
+    // ★ 시험지: 미리보기 페이지를 직접 복제 (간격/레이아웃 그대로)
     if (printSections.exam) {
-      const examPages = document.querySelectorAll('.print-section-exam-page');
-      examPages.forEach((page, idx) => {
+      const previewPages = document.querySelectorAll('.preview-exam-page');
+      previewPages.forEach((page, idx) => {
         const clone = page.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page');
-        // ★ 시험지 마지막 페이지 표시 (빈 페이지 방지)
-        if (idx === examPages.length - 1) {
+        // 페이지 구분선 UI 제거 (인쇄에 불필요)
+        clone.querySelectorAll('.page-divider-ui').forEach(el => el.remove());
+        // A4 인쇄 스타일 적용
+        clone.className = 'exam-page';
+        clone.style.cssText = 'background:white; padding:15mm; box-sizing:border-box; font-family:Pretendard,Noto Sans KR,sans-serif;';
+        if (idx === previewPages.length - 1) {
           clone.classList.add('exam-last-page');
         }
         printRoot.appendChild(clone);
@@ -461,7 +464,7 @@ export default function ExamManagementPage() {
       }
     }
 
-    // 해설지 섹션 (여러 페이지로 자연 흐름)
+    // 해설지 섹션
     if (printSections.solution) {
       const solutionSection = document.querySelector('.print-section-solution');
       if (solutionSection) {
@@ -475,7 +478,6 @@ export default function ExamManagementPage() {
     if (printRoot.children.length === 0) return;
 
     document.body.appendChild(printRoot);
-    // ★ 이미지 로딩 대기 후 인쇄 (figure_crop 등)
     setTimeout(() => {
       window.print();
       document.body.removeChild(printRoot);
@@ -1229,9 +1231,9 @@ export default function ExamManagementPage() {
                           const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
 
                           return (
-                          <div key={pageIdx}>
+                          <div key={pageIdx} className="preview-exam-page">
                             {pageIdx > 0 && (
-                              <div className="border-t-2 border-dashed border-gray-300 my-2 relative">
+                              <div className="border-t-2 border-dashed border-gray-300 my-2 relative page-divider-ui">
                                 <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] text-gray-400 font-medium">
                                   {pageIdx + 1}페이지
                                 </span>
