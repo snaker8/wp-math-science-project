@@ -3,6 +3,7 @@
 import React from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
+import { cleanLatexContent } from '@/lib/utils/clean-latex';
 import type { InterpretedFigure } from '@/types/ocr';
 
 // ============================================================================
@@ -88,13 +89,14 @@ export function ExamProblemRenderer({
   const hasFigureCrops = figureCrops.length > 0;
   const hasFigureSource = hasAiFigure || hasFigureCrops;
 
-  // content 정리: 문제번호 중복 제거 + 점수 제거 + ![이미지] → [도형]
+  // content 정리: 문제번호 중복 제거 + 점수 제거 + ![이미지] → [도형] + LaTeX 정규화
   const rawContent = problem.content || '';
-  const cleanContent = rawContent
-    .replace(/^\s*\d+\.\s*/, '')
-    .replace(/\[\s*\d+(\.\d+)?\s*점\s*\]/g, '')
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '[도형]')
-    .trim();
+  const cleanContent = cleanLatexContent(
+    rawContent
+      .replace(/^\s*\d+\.\s*/, '')
+      .replace(/\[\s*\d+(\.\d+)?\s*점\s*\]/g, '')
+      .trim()
+  );
 
   const parts = splitByFigureMarker(cleanContent);
   const hasFigureInContent = parts.some(p => p.type === 'figure');
