@@ -33,20 +33,37 @@ export function cleanLatexContent(content: string): string {
       `$\\begin{cases} ${dfrac(eq1)} \\\\ ${dfrac(eq2)} \\end{cases}$`
   );
 
-  return result
-    // \begin{table}...\end{table} 래퍼 제거 (KaTeX 미지원, tabular만 남김)
+  // \begin{table}...\end{table} 래퍼 제거
+  result = result
     .replace(/\\begin\{table\}[\s\S]*?(?=\\begin\{tabular\})/gi, '')
-    .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}')
-    // \begin{aligned}...\end{aligned} → 줄별 $...$ 변환
-    .replace(/\$\$\s*\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*\$\$/gi, (_match, inner) => {
-      return inner
-        .split('\\\\')
-        .map((line: string) => line.replace(/&/g, '').trim())
-        .filter((line: string) => line.length > 0)
-        .map((line: string) => `$${line}$`)
-        .join('\n');
-    })
-    .trim();
+    .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}');
+
+  // ─── tabular → HTML table 변환 (KaTeX는 tabular 미지원) ───
+  result = result.replace(
+    /\\begin\{tabular\}(?:\{[^}]*\})?([\s\S]*?)\\end\{tabular\}/gi,
+    (_m, inner: string) => {
+      const rows = inner.split(/\\\\/).map(r => r.trim()).filter(r => r.length > 0);
+      const htmlRows = rows.map((row, rowIdx) => {
+        const cells = row.split('&').map(c => c.trim());
+        const tag = rowIdx === 0 ? 'th' : 'td';
+        const cellsHtml = cells.map(c => `<${tag} style="padding:4px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${c}</${tag}>`).join('');
+        return `<tr>${cellsHtml}</tr>`;
+      });
+      return `<table style="border-collapse:collapse;margin:8px 0;font-size:14px;">${htmlRows.join('')}</table>`;
+    }
+  );
+
+  // \begin{aligned}...\end{aligned} → 줄별 $...$ 변환
+  result = result.replace(/\$\$\s*\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*\$\$/gi, (_match, inner) => {
+    return inner
+      .split('\\\\')
+      .map((line: string) => line.replace(/&/g, '').trim())
+      .filter((line: string) => line.length > 0)
+      .map((line: string) => `$${line}$`)
+      .join('\n');
+  });
+
+  return result.trim();
 }
 
 /**
