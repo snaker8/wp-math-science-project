@@ -773,13 +773,14 @@ export function ProblemEditModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
+        const msg = data.error || `저장 실패 (HTTP ${res.status})`;
+        throw new Error(msg);
       }
       onSaved();
       onClose();
     } catch (err) {
       console.error('[ProblemEdit] Save error:', err);
-      setError(err instanceof Error ? err.message : '저장 실패');
+      setError(err instanceof Error ? err.message : String(err) || '저장 실패');
     } finally {
       setIsSaving(false);
     }

@@ -64,18 +64,27 @@ export async function PATCH(
 
     let problem = null;
     if (Object.keys(updateData).length > 0) {
+      // .single() 대신 .maybeSingle() 사용 → 0행 업데이트 시 null 반환 (에러 아님)
       const { data, error } = await supabaseAdmin
         .from('problems')
         .update(updateData)
         .eq('id', problemId)
         .select('id, content_latex, solution_latex, answer_json')
-        .single();
+        .maybeSingle();
 
       if (error) {
-        console.error('[API/problems] Update error:', error.message);
+        console.error('[API/problems] Update error:', error.code, error.message);
         return NextResponse.json(
-          { error: 'Failed to update problem', detail: error.message },
+          { error: error.message, detail: error.details || error.hint || '' },
           { status: 500 }
+        );
+      }
+      if (!data) {
+        // 해당 ID의 문제가 DB에 없음 (삭제됐거나 잘못된 ID)
+        console.warn('[API/problems] Problem not found:', problemId);
+        return NextResponse.json(
+          { error: `문제를 찾을 수 없습니다 (ID: ${problemId.slice(0, 8)}...). 페이지를 새로고침하세요.` },
+          { status: 404 }
         );
       }
       problem = data;
