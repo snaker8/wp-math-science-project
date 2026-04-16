@@ -42,15 +42,8 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
     } catch { /* ignore */ }
   }
 
-  // ★ 전처리 전 tabular 블록 보호 (내부 $...$가 preprocessMathpixContent에서 꼬이는 것 방지)
-  const tabularSafe: string[] = [];
-  const contentWithSafeTabular = content.replace(
-    /\\begin\{tabular\}(?:\{[^}]*\})?[\s\S]*?\\end\{tabular\}/gi,
-    (m) => { const idx = tabularSafe.length; tabularSafe.push(m); return `__TABULAR_SAFE_${idx}__`; }
-  );
-
   // 전처리: Mathpix 특유 포맷 정규화
-  let normalized = preprocessMathpixContent(contentWithSafeTabular)
+  let normalized = preprocessMathpixContent(content)
     // ★ $ 밖의 \displaystyle 수식 블록 → $$...$$ 로 감싸기 (KaTeX 렌더링)
     .replace(/(?<!\$)\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
     .replace(/(?<!\$)\\\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
@@ -62,9 +55,6 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
     .replace(/([^\n])\s+(ㄷ\s*[.)])/g, '$1\n$2')
     .replace(/([^\n])\s+(ㄹ\s*[.)])/g, '$1\n$2')
     .replace(/([^\n])\s+(ㅁ\s*[.)])/g, '$1\n$2');
-
-  // ★ tabular 블록 복원
-  normalized = normalized.replace(/__TABULAR_SAFE_(\d+)__/g, (_, idx) => tabularSafe[parseInt(idx, 10)] || '');
 
   // "수식:" 섹션 분리 (보조 수식 블록)
   const mathSectionIndex = normalized.indexOf('\n\n수식:\n');
