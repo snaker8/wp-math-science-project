@@ -399,7 +399,6 @@ export default function ExamManagementPage() {
   const [examTypeFilter, setExamTypeFilter] = useState('전체');
   const [gradeFilter, setGradeFilter] = useState('전체');
   const [showPrintMenu, setShowPrintMenu] = useState(false);
-  const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
   const printRef = useRef<HTMLDivElement>(null);
 
   // ★ 시험지 헤더 편집 필드
@@ -423,9 +422,7 @@ export default function ExamManagementPage() {
   const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
 
-  const togglePrintSection = useCallback((key: 'exam' | 'answer' | 'solution') => {
-    setPrintSections(prev => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  // togglePrintSection 제거 — 출력은 클라우드 페이지에서 처리
 
   // 출력 → 클라우드 페이지로 이동 (클라우드 페이지의 인쇄가 더 정확)
   const handleGoToCloudPrint = useCallback(() => {
@@ -1620,51 +1617,7 @@ export default function ExamManagementPage() {
         </div>
       )}
 
-      {/* ======== 출력 모달 (fixed — overflow-hidden 우회) ======== */}
-      {showPrintModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" onClick={() => setShowPrintModal(false)}>
-          <div className="w-72 rounded-xl border border-zinc-600 bg-zinc-800 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-zinc-700">
-              <span className="text-sm font-bold text-white">출력할 항목 선택</span>
-            </div>
-            <div className="p-3 space-y-1.5">
-              {([
-                { key: 'exam' as const, label: '시험지' },
-                { key: 'answer' as const, label: '빠른정답' },
-                { key: 'solution' as const, label: '해설지' },
-              ]).map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-700 cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={printSections[key]}
-                    onChange={() => togglePrintSection(key)}
-                    className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
-                  />
-                  <span className="text-sm text-white">{label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="px-3 pb-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPrintModal(false)}
-                className="flex-1 rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={executePrint}
-                disabled={!printSections.exam && !printSections.answer && !printSections.solution}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-500 px-3 py-2 text-sm font-bold text-white transition-colors"
-              >
-                <Printer className="h-4 w-4" />
-                출력하기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 출력은 클라우드 페이지로 리다이렉트 (handleGoToCloudPrint) */}
     </div>
   );
 }
