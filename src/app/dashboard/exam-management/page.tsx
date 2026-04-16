@@ -836,8 +836,8 @@ export default function ExamManagementPage() {
       // 사용 가능 높이 = 컬럼 수 × 페이지 높이 - 전체 문제 높이
       const availableSpace = colMult * maxH - totalH;
       const numProblems = pageProblems.length;
-      // 문제 간 간격을 균등 분배 (최소 8px)
-      const autoGap = numProblems > 0 ? Math.max(8, Math.floor(availableSpace / numProblems)) : 20;
+      // 문제 간 간격을 균등 분배 (최소 8px, 최대 60px — 과도한 빈 공간 방지)
+      const autoGap = numProblems > 0 ? Math.min(60, Math.max(8, Math.floor(availableSpace / numProblems))) : 20;
       return autoGap;
     });
   }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H]);
