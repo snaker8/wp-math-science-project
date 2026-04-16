@@ -427,60 +427,12 @@ export default function ExamManagementPage() {
     setPrintSections(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // 출력 모달
-  const [showPrintModal, setShowPrintModal] = useState(false);
-
-  // 출력 실행 — DOM 복제 방식 (클라우드 페이지와 동일)
-  const executePrint = useCallback(() => {
-    setShowPrintModal(false);
-    const printRoot = document.createElement('div');
-    printRoot.id = 'exam-print-root';
-
-    // 시험지 섹션 (페이지별)
-    if (printSections.exam) {
-      const examPages = document.querySelectorAll('.print-section-exam-page');
-      examPages.forEach((page, idx) => {
-        const clone = page.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page');
-        // ★ 시험지 마지막 페이지 표시 (빈 페이지 방지)
-        if (idx === examPages.length - 1) {
-          clone.classList.add('exam-last-page');
-        }
-        printRoot.appendChild(clone);
-      });
+  // 출력 → 클라우드 페이지로 이동 (클라우드 페이지의 인쇄가 더 정확)
+  const handleGoToCloudPrint = useCallback(() => {
+    if (selectedExamId) {
+      window.open(`/dashboard/cloud/${selectedExamId}?view=exam`, '_blank');
     }
-
-    // 빠른정답 섹션
-    if (printSections.answer) {
-      const answerSection = document.querySelector('.print-section-answer');
-      if (answerSection) {
-        const clone = answerSection.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page');
-        clone.style.pageBreakBefore = 'always';
-        printRoot.appendChild(clone);
-      }
-    }
-
-    // 해설지 섹션 (여러 페이지로 자연 흐름)
-    if (printSections.solution) {
-      const solutionSection = document.querySelector('.print-section-solution');
-      if (solutionSection) {
-        const clone = solutionSection.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page', 'solution-page');
-        clone.style.pageBreakBefore = 'always';
-        printRoot.appendChild(clone);
-      }
-    }
-
-    if (printRoot.children.length === 0) return;
-
-    document.body.appendChild(printRoot);
-    // ★ 이미지 로딩 대기 후 인쇄 (figure_crop 등)
-    setTimeout(() => {
-      window.print();
-      document.body.removeChild(printRoot);
-    }, 500);
-  }, [printSections]);
+  }, [selectedExamId]);
 
   // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
   const handleDownloadPdf = useCallback(() => {
@@ -1007,7 +959,7 @@ export default function ExamManagementPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowPrintModal(true)}
+                    onClick={handleGoToCloudPrint}
                     className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors"
                   >
                     <Printer className="h-3.5 w-3.5" />
@@ -1449,7 +1401,7 @@ export default function ExamManagementPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowPrintModal(true)}
+                  onClick={handleGoToCloudPrint}
                   className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
                 >
                   <Printer className="h-4 w-4" />
