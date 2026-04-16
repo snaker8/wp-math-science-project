@@ -771,15 +771,48 @@ export default function ExamManagementPage() {
     }
   }, [problems, measured]);
 
-  // 페이지당 문제 수에 따른 페이지 분할
+  // 페이지당 문제 수에 따른 페이지 분할 (클라우드 페이지와 동일 로직)
   const pages = useMemo(() => {
-    if (!perPagePreset) return [problems]; // 자동: 전체를 한 그룹
-    const result: ExamProblem[][] = [];
-    for (let i = 0; i < problems.length; i += perPagePreset) {
-      result.push(problems.slice(i, i + perPagePreset));
+    // 프리셋 모드: 지정된 문제 수로 강제 분할
+    if (perPagePreset) {
+      const result: ExamProblem[][] = [];
+      for (let i = 0; i < problems.length; i += perPagePreset) {
+        result.push(problems.slice(i, i + perPagePreset));
+      }
+      return result.length > 0 ? result : [[]];
     }
+
+    // 자동 모드: 측정된 높이 기반 분할
+    if (!measured || problemHeights.length === 0) {
+      // 폴백: 대략 분할
+      const perPage = columns === 2 ? 10 : 5;
+      const result: ExamProblem[][] = [];
+      for (let i = 0; i < problems.length; i += perPage) {
+        result.push(problems.slice(i, i + perPage));
+      }
+      return result.length > 0 ? result : [[]];
+    }
+
+    const colMult = columns === 2 ? 2 : 1;
+    const result: ExamProblem[][] = [];
+    let currentPage: ExamProblem[] = [];
+    let usedH = 0;
+
+    for (let i = 0; i < problems.length; i++) {
+      const h = (problemHeights[i] + gap) / colMult;
+      const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
+
+      if (currentPage.length > 0 && usedH + h > maxH) {
+        result.push(currentPage);
+        currentPage = [];
+        usedH = 0;
+      }
+      currentPage.push(problems[i]);
+      usedH += h;
+    }
+    if (currentPage.length > 0) result.push(currentPage);
     return result.length > 0 ? result : [[]];
-  }, [problems, perPagePreset]);
+  }, [problems, problemHeights, measured, columns, gap, perPagePreset, FIRST_CONTENT_H, CONTENT_H]);
 
   const totalPages = pages.length;
 
@@ -1496,6 +1529,8 @@ export default function ExamManagementPage() {
               key={`print-page-${pageIdx}`}
               className={`print-section-exam-page exam-page ${pageIdx === pages.length - 1 ? 'exam-last-page' : ''}`}
               style={{
+                width: '794px',
+                minHeight: '1123px',
                 background: 'white',
                 padding: '15mm',
                 boxSizing: 'border-box',
