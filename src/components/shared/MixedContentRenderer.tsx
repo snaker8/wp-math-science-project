@@ -1086,12 +1086,15 @@ function parseMixedContent(text: string): ContentElement[] {
         return match; // KaTeX가 처리하도록 그대로 둠
       }
       // $...$나 $$...$$ 내부의 array도 KaTeX가 처리해야 함
-      // offset 앞에 열린 $ 가 있고 닫히지 않았으면 수식 내부
-      const textBefore = fullText.substring(0, offset);
-      const dollarCount = (textBefore.match(/(?<!\$)\$(?!\$)/g) || []).length;
-      const doubleDollarCount = (textBefore.match(/\$\$/g) || []).length;
-      if (dollarCount % 2 === 1 || doubleDollarCount % 2 === 1) {
-        return match; // 수식 내부 → 추출 안 함
+      // ★ tabular는 항상 추출 (tabular 내부에 $...$가 있어 $ 카운팅이 꼬이므로)
+      // array만 수식 내부 체크 (cases/piecewise 함수 등)
+      if (/\\begin\{array\}/i.test(match)) {
+        const textBefore = fullText.substring(0, offset);
+        const dollarCount = (textBefore.match(/(?<!\$)\$(?!\$)/g) || []).length;
+        const doubleDollarCount = (textBefore.match(/\$\$/g) || []).length;
+        if (dollarCount % 2 === 1 || doubleDollarCount % 2 === 1) {
+          return match; // array가 수식 내부 → 추출 안 함
+        }
       }
       const tableEl = parseTabularBlock(match);
       const idx = tabularBlocks.length;
