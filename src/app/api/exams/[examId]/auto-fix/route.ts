@@ -460,6 +460,21 @@ ${content.slice(0, 1500)}`;
         }
       }
 
+      // ─── FIX 2.5: 깨진 tabular/LaTeX가 choices에 들어간 경우 제거 ───
+      // 선택지에 &, \\, \end{tabular} 등 LaTeX 표 문법이 섞여 있으면 깨진 것
+      const currentChoices = ((updates.answer_json as Record<string, unknown>)?.choices as string[]) || choices;
+      if (currentChoices.length > 0) {
+        const brokenCount = currentChoices.filter(c =>
+          /\\\\|\\end\{|\\begin\{|&\s*\$|&\s*&/.test(c)
+        ).length;
+        // 과반수 이상이 깨졌으면 전체 choices 제거
+        if (brokenCount > currentChoices.length / 2) {
+          const updatedAj = { ...(updates.answer_json as Record<string, unknown> || answerJson), choices: [] };
+          updates.answer_json = updatedAj;
+          result.fixes.push(`깨진 선택지 ${currentChoices.length}개 제거 (tabular 잔여)`);
+        }
+      }
+
       // ─── FIX 3: content에서 문제 번호 중복 제거 ───
       const contentToFix = (updates.content_latex as string) || content;
       const numPrefix = new RegExp(`^${seqNum}\\.\\s*${seqNum}\\.`);
