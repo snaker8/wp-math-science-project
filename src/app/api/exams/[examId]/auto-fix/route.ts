@@ -507,7 +507,9 @@ ${content.slice(0, 1500)}`;
         if (pairedSystemPattern.test(fixed)) {
           pairedSystemPattern.lastIndex = 0;
           fixed = fixed.replace(pairedSystemPattern, (_m: string, eq1: string, eq2: string, eq3: string, eq4: string) => {
-            return `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$, $\\begin{cases} ${eq3.trim()} \\\\ ${eq4.trim()} \\end{cases}$`;
+            // cases 내부 \frac → \dfrac (인라인 모드에서 분수 크기 유지)
+            const d = (s: string) => s.trim().replace(/\\frac\b/g, '\\dfrac');
+            return `$\\begin{cases} ${d(eq1)} \\\\ ${d(eq2)} \\end{cases}$, $\\begin{cases} ${d(eq3)} \\\\ ${d(eq4)} \\end{cases}$`;
           });
           changes.push('쌍 연립방정식 괄호 수정');
         }
@@ -517,7 +519,8 @@ ${content.slice(0, 1500)}`;
         if (singleSystemPattern.test(fixed)) {
           singleSystemPattern.lastIndex = 0;
           fixed = fixed.replace(singleSystemPattern, (_m: string, eq1: string, eq2: string) => {
-            return `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$`;
+            const d = (s: string) => s.trim().replace(/\\frac\b/g, '\\dfrac');
+            return `$\\begin{cases} ${d(eq1)} \\\\ ${d(eq2)} \\end{cases}$`;
           });
           changes.push('연립방정식 괄호 수정');
         }

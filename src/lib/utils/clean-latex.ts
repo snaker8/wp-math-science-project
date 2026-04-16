@@ -19,17 +19,18 @@ export function cleanLatexContent(content: string): string {
   // 수정: $\begin{cases} eq1 \\ eq2 \end{cases}$
 
   // (a) 쌍 연립방정식: $\left\{$eq1$\n$eq2$,\left\{$eq3$\n$eq4$\right.\right.$
+  const dfrac = (s: string) => s.trim().replace(/\\frac\b/g, '\\dfrac');
   result = result.replace(
     /\$\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\s*,\s*\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\\right\.\\right\.\$/g,
     (_m, eq1: string, eq2: string, eq3: string, eq4: string) =>
-      `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$, $\\begin{cases} ${eq3.trim()} \\\\ ${eq4.trim()} \\end{cases}$`
+      `$\\begin{cases} ${dfrac(eq1)} \\\\ ${dfrac(eq2)} \\end{cases}$, $\\begin{cases} ${dfrac(eq3)} \\\\ ${dfrac(eq4)} \\end{cases}$`
   );
 
   // (b) 단일 연립방정식: $\left\{$eq1$\n$eq2$\right.$
   result = result.replace(
     /\$\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\\right\.\$/g,
     (_m, eq1: string, eq2: string) =>
-      `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$`
+      `$\\begin{cases} ${dfrac(eq1)} \\\\ ${dfrac(eq2)} \\end{cases}$`
   );
 
   return result

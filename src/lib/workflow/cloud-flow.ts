@@ -345,6 +345,15 @@ function groupLinesIntoQuestions(
           continue;
         }
 
+        // ★ 소문항 분리 방지: 시험 문제 번호는 항상 순차 증가 (1→2→...→30)
+        // 새 번호가 현재 문제 번호보다 작으면 소문항/하위 항목으로 간주
+        // 예: 15번 문제 진행 중 "2)" 라인 → qNum=2 < 15 → 소문항
+        if (currentQuestion && qNum < currentQuestion.number) {
+          console.log(`[Cloud Flow] 소문항 감지: "${lineText.substring(0, 40)}..." (qNum=${qNum} < current=${currentQuestion.number}) → 현재 문제에 포함`);
+          currentQuestion.lines.push(line);
+          continue;
+        }
+
         matchedNumbers.push(qNum);
 
         // 이전 문제 저장
