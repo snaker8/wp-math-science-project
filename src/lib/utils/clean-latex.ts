@@ -38,20 +38,7 @@ export function cleanLatexContent(content: string): string {
     .replace(/\\begin\{table\}[\s\S]*?(?=\\begin\{tabular\})/gi, '')
     .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}');
 
-  // ─── tabular → HTML table 변환 (KaTeX는 tabular 미지원) ───
-  result = result.replace(
-    /\\begin\{tabular\}(?:\{[^}]*\})?([\s\S]*?)\\end\{tabular\}/gi,
-    (_m, inner: string) => {
-      const rows = inner.split(/\\\\/).map(r => r.trim()).filter(r => r.length > 0);
-      const htmlRows = rows.map((row, rowIdx) => {
-        const cells = row.split('&').map(c => c.trim());
-        const tag = rowIdx === 0 ? 'th' : 'td';
-        const cellsHtml = cells.map(c => `<${tag} style="padding:4px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${c}</${tag}>`).join('');
-        return `<tr>${cellsHtml}</tr>`;
-      });
-      return `<table style="border-collapse:collapse;margin:8px 0;font-size:14px;">${htmlRows.join('')}</table>`;
-    }
-  );
+  // tabular는 MixedContentRenderer가 자체 파싱하므로 여기서 변환하지 않음
 
   // \begin{aligned}...\end{aligned} → 줄별 $...$ 변환
   result = result.replace(/\$\$\s*\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*\$\$/gi, (_match, inner) => {
