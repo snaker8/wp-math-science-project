@@ -5,14 +5,34 @@
  */
 
 export function cleanLatexContent(content: string): string {
-  return content
+  let result = content
     // 마크다운 이미지 → [도형] 마커
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '[도형]')
     // \displaystyle 제거
     .replace(/\\displaystyle\s*/g, '')
     // \lbrace → \left\{ , \rbrace → \right\} (KaTeX 호환)
     .replace(/\\lbrace/g, '\\left\\{')
-    .replace(/\\rbrace/g, '\\right\\}')
+    .replace(/\\rbrace/g, '\\right\\}');
+
+  // ─── 연립방정식 괄호 패턴 수정 ───
+  // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX에서 $ 구분자 꼬임
+  // 수정: $\begin{cases} eq1 \\ eq2 \end{cases}$
+
+  // (a) 쌍 연립방정식: $\left\{$eq1$\n$eq2$,\left\{$eq3$\n$eq4$\right.\right.$
+  result = result.replace(
+    /\$\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\s*,\s*\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\\right\.\\right\.\$/g,
+    (_m, eq1: string, eq2: string, eq3: string, eq4: string) =>
+      `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$, $\\begin{cases} ${eq3.trim()} \\\\ ${eq4.trim()} \\end{cases}$`
+  );
+
+  // (b) 단일 연립방정식: $\left\{$eq1$\n$eq2$\right.$
+  result = result.replace(
+    /\$\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\\right\.\$/g,
+    (_m, eq1: string, eq2: string) =>
+      `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$`
+  );
+
+  return result
     // \begin{table}...\end{table} 래퍼 제거 (KaTeX 미지원, tabular만 남김)
     .replace(/\\begin\{table\}[\s\S]*?(?=\\begin\{tabular\})/gi, '')
     .replace(/\\end\{tabular\}[\s\S]*?\\end\{table\}/gi, '\\end{tabular}')

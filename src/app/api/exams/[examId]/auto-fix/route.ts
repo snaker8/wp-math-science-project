@@ -498,6 +498,30 @@ ${content.slice(0, 1500)}`;
           changes.push('\\hline 제거');
         }
 
+        // ─── 연립방정식 괄호 패턴 수정 ───
+        // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX 렌더링 깨짐
+        // 수정: $\begin{cases} eq1 \\ eq2 \end{cases}$
+
+        // (a) 쌍 연립방정식: $\left\{$eq1$\n$eq2$,\left\{$eq3$\n$eq4$\right.\right.$
+        const pairedSystemPattern = /\$\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\s*,\s*\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\\right\.\\right\.\$/g;
+        if (pairedSystemPattern.test(fixed)) {
+          pairedSystemPattern.lastIndex = 0;
+          fixed = fixed.replace(pairedSystemPattern, (_m: string, eq1: string, eq2: string, eq3: string, eq4: string) => {
+            return `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$, $\\begin{cases} ${eq3.trim()} \\\\ ${eq4.trim()} \\end{cases}$`;
+          });
+          changes.push('쌍 연립방정식 괄호 수정');
+        }
+
+        // (b) 단일 연립방정식: $\left\{$eq1$\n$eq2$\right.$
+        const singleSystemPattern = /\$\\left\\\{\$([^$]*)\$(?:\\n|\n)\$([^$]*)\$\\right\.\$/g;
+        if (singleSystemPattern.test(fixed)) {
+          singleSystemPattern.lastIndex = 0;
+          fixed = fixed.replace(singleSystemPattern, (_m: string, eq1: string, eq2: string) => {
+            return `$\\begin{cases} ${eq1.trim()} \\\\ ${eq2.trim()} \\end{cases}$`;
+          });
+          changes.push('연립방정식 괄호 수정');
+        }
+
         // array/aligned 블록을 줄별 $...$ 인라인화 (멀티라인 $$ 렌더링 깨짐 방지)
         const arrayPattern = /\$?\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?\$?/g;
         if (arrayPattern.test(fixed)) {
