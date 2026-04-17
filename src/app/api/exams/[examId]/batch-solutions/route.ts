@@ -1,14 +1,20 @@
 // ============================================================================
-// 일괄 해설 생성 API (백그라운드)
-// POST /api/exams/[examId]/batch-solutions
-// - 문제 ID 목록을 받아 서버 사이드에서 순차 생성
-// - 클라이언트에 즉시 응답 → 백그라운드에서 계속 처리
+// 일괄 해설 생성 API (백그라운드) — 실제 진행 상황 추적
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
-export const maxDuration = 300; // 5분 타임아웃
+export const maxDuration = 300;
+
+// ★ 서버 메모리에 진행 상태 저장 (examId별)
+const jobState = new Map<string, {
+  total: number;
+  done: number;
+  failed: number;
+  startedAt: number;
+  isRunning: boolean;
+}>();
 
 export async function POST(
   request: NextRequest,
@@ -28,16 +34,26 @@ export async function POST(
       return NextResponse.json({ error: 'No problem IDs provided' }, { status: 400 });
     }
 
-    // 시험 상태를 IN_PROGRESS로 업데이트 (해설 생성 중)
+    // ★ 메모리에 새 작업 상태 초기화 (기존 해설 여부와 무관)
+    jobState.set(examId, {
+      total: problemIds.length,
+      done: 0,
+      failed: 0,
+      startedAt: Date.now(),
+      isRunning: true,
+    });
+
+    // 시험 상태 IN_PROGRESS로 업데이트
     await supabaseAdmin
       .from('exams')
       .update({ status: 'IN_PROGRESS' })
       .eq('id', examId);
 
-    // ★ 백그라운드에서 처리 시작 (응답은 즉시 반환)
     const baseUrl = request.nextUrl.origin;
     processInBackground(examId, problemIds, baseUrl).catch(err => {
       console.error('[batch-solutions] Background error:', err);
+      const state = jobState.get(examId);
+      if (state) state.isRunning = false;
     });
 
     return NextResponse.json({
@@ -51,55 +67,53 @@ export async function POST(
   }
 }
 
-// ★ 진행 상황 조회
+// ★ 진행 상황 조회 — 메모리 상태 우선, 없으면 DB 상태
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
   const { examId } = await params;
 
+  const state = jobState.get(examId);
+  if (state) {
+    return NextResponse.json({
+      status: state.isRunning ? 'IN_PROGRESS' : 'COMPLETED',
+      total: state.total,
+      done: state.done,
+      failed: state.failed,
+      isRunning: state.isRunning,
+    });
+  }
+
+  // 메모리에 작업 상태 없음 — DB 상태만 반환 (이전 실행 결과)
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
-
   const { data: exam } = await supabaseAdmin
     .from('exams')
     .select('status')
     .eq('id', examId)
     .single();
 
-  // 해설 미완성 문제 수 카운트
-  const { data: problems } = await supabaseAdmin
-    .from('exam_problems')
-    .select('problem_id, problems!inner(solution_latex)')
-    .eq('exam_id', examId);
-
-  const total = problems?.length || 0;
-  const done = problems?.filter((p: any) =>
-    p.problems?.solution_latex && p.problems.solution_latex.trim().length > 30
-  ).length || 0;
-
   return NextResponse.json({
     status: exam?.status || 'unknown',
-    total,
-    done,
-    isRunning: exam?.status === 'IN_PROGRESS',
+    total: 0,
+    done: 0,
+    isRunning: false,
   });
 }
 
 // ============================================================================
-// 백그라운드 처리 함수
+// 백그라운드 처리
 // ============================================================================
 
 async function processInBackground(examId: string, problemIds: string[], baseUrl: string) {
-  console.log(`[batch-solutions] Starting background generation for ${problemIds.length} problems`);
-
-  let success = 0;
-  let failed = 0;
+  console.log(`[batch-solutions] 시작: ${problemIds.length}문제`);
+  const state = jobState.get(examId);
+  if (!state) return;
 
   for (const problemId of problemIds) {
     try {
-      // 개별 해설 생성 API 호출
       const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,19 +121,21 @@ async function processInBackground(examId: string, problemIds: string[], baseUrl
       });
 
       if (res.ok) {
-        success++;
-        console.log(`[batch-solutions] ✅ ${problemId} (${success + failed}/${problemIds.length})`);
+        state.done++;
+        console.log(`[batch-solutions] ✅ ${state.done + state.failed}/${state.total} — ${problemId}`);
       } else {
-        failed++;
-        console.log(`[batch-solutions] ❌ ${problemId}: ${res.status}`);
+        state.failed++;
+        console.log(`[batch-solutions] ❌ ${state.done + state.failed}/${state.total} — ${problemId}: ${res.status}`);
       }
     } catch (err) {
-      failed++;
+      state.failed++;
       console.log(`[batch-solutions] ❌ ${problemId}: ${err}`);
     }
   }
 
-  // 완료 후 시험 상태 복원
+  state.isRunning = false;
+
+  // 시험 상태 복원
   if (supabaseAdmin) {
     await supabaseAdmin
       .from('exams')
@@ -127,5 +143,11 @@ async function processInBackground(examId: string, problemIds: string[], baseUrl
       .eq('id', examId);
   }
 
-  console.log(`[batch-solutions] Done: ${success} success, ${failed} failed out of ${problemIds.length}`);
+  console.log(`[batch-solutions] 완료: ${state.done} 성공 / ${state.failed} 실패 / 총 ${state.total}`);
+
+  // ★ 10분 후 메모리에서 제거 (다음 작업 위해)
+  setTimeout(() => {
+    const current = jobState.get(examId);
+    if (current && !current.isRunning) jobState.delete(examId);
+  }, 600000);
 }

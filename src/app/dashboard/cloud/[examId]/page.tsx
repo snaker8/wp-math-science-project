@@ -2476,13 +2476,15 @@ export default function CloudExamDetailPage() {
     return counts;
   }, [problems]);
 
-  // Filtered problems
+  // Filtered problems (번호 순 정렬)
   const filteredProblems = useMemo(() => {
-    return problems.filter((p) => {
-      if (activeDifficulty !== null && p.difficulty !== activeDifficulty) return false;
-      if (activeDomain !== null && activeDomain !== 'UNASSIGNED' && p.cognitiveDomain !== activeDomain) return false;
-      return true;
-    });
+    return problems
+      .filter((p) => {
+        if (activeDifficulty !== null && p.difficulty !== activeDifficulty) return false;
+        if (activeDomain !== null && activeDomain !== 'UNASSIGNED' && p.cognitiveDomain !== activeDomain) return false;
+        return true;
+      })
+      .sort((a, b) => (a.number || 0) - (b.number || 0));
   }, [problems, activeDifficulty, activeDomain]);
 
   // ★ 전체 선택

@@ -541,28 +541,59 @@ JSON:
     if (geminiKey && solution.finalAnswer) {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(geminiKey);
+      // ★ Gemini 2.0 Flash (수학 추론 강함, Vision 지원)
       const verifyModel = genAI.getGenerativeModel({
-        model: 'gemini-3-flash-preview',
-        generationConfig: { temperature: 0.0, maxOutputTokens: 800 },
+        model: 'gemini-2.0-flash',
+        generationConfig: { temperature: 0.0, maxOutputTokens: 1000 },
       });
 
-      // Gemini 검산 함수 (정답 + 간단 풀이)
+      // ★ Gemini용 이미지 데이터 준비 (inlineData base64)
+      const geminiImageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+      if (images.length > 0) {
+        for (const img of images.slice(0, 3)) {
+          try {
+            const imgRes = await fetch(img.url);
+            if (imgRes.ok) {
+              const arrayBuffer = await imgRes.arrayBuffer();
+              const base64 = Buffer.from(arrayBuffer).toString('base64');
+              const contentType = imgRes.headers.get('content-type') || 'image/png';
+              geminiImageParts.push({
+                inlineData: { mimeType: contentType, data: base64 },
+              });
+            }
+          } catch (e) {
+            console.warn(`[generate-solution] Gemini 이미지 로드 실패:`, e);
+          }
+        }
+      }
+
+      // Gemini 검산 함수 (이미지 포함, 수학 풀이 능력 활용)
       const geminiSolve = async (): Promise<{ answer: string; reasoning: string }> => {
         try {
-          const verifyPrompt = `다음 수학 문제를 풀어 정답을 구하세요. JSON으로만 응답:
+          const verifyPrompt = `다음 한국 수학 문제를 정확히 풀어 정답을 구하세요.
+- 객관식이면 finalAnswer는 반드시 ①~⑤ 중 하나
+- 서술형/단답형이면 최종 수치/식 (예: "3", "\\\\frac{1}{2}", "a=2, b=1")
+- JSON으로만 응답
 
 문제:
 ${problemText}${choicesSection}
 
-JSON 형식: { "finalAnswer": "최종 정답", "reasoning": "1~2줄 핵심 풀이" }`;
-          const r = await verifyModel.generateContent(verifyPrompt);
+JSON 형식: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
+
+          // 이미지가 있으면 content parts 배열로 전달
+          const contentParts: any[] = geminiImageParts.length > 0
+            ? [...geminiImageParts, { text: verifyPrompt }]
+            : [verifyPrompt];
+
+          const r = await verifyModel.generateContent(contentParts);
           const t = r.response.text()?.trim().replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim() || '';
           const parsed = parseJsonResponse(t);
           return {
             answer: String(parsed?.finalAnswer || '').trim(),
             reasoning: String(parsed?.reasoning || '').trim(),
           };
-        } catch {
+        } catch (e) {
+          console.error('[generate-solution] Gemini 검산 실패:', e);
           return { answer: '', reasoning: '' };
         }
       };
