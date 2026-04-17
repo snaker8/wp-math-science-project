@@ -638,12 +638,13 @@ export default function ExamManagementPage() {
     return groupExams.find((e) => e.id === selectedExamId);
   }, [selectedExamId, groupExams]);
 
+  // ★ 마지막 저장 값 추적 (불필요한 DB 호출 방지) — ref로 관리해서 재렌더 유발 X
+  const lastSavedMetaRef = useRef<{ subject: string; examType: string; grade: string } | null>(null);
+
   // ★ 시험지 선택 시 헤더 편집 필드 자동 기입
   useEffect(() => {
     if (selectedExam) {
-      // title에서 학원명/시험지명/과목/학년 등 자동 파싱
       const title = selectedExam.title || '';
-      // 학원명: "경남고1" → "경남고"
       const schoolMatch = title.match(/([가-힣]{1,6}(?:고|중|초|학원))\d*/);
       const institute = schoolMatch ? schoolMatch[1] : '';
       const subject = selectedExam.subject || '공통수학1';
@@ -657,7 +658,6 @@ export default function ExamManagementPage() {
       setEditGrade(grade);
       setEditTeacher('');
 
-      // ★ 통합 헤더 meta도 동기화
       setUnifiedMeta({
         ...DEFAULT_EXAM_META,
         schoolName: institute,
@@ -666,10 +666,14 @@ export default function ExamManagementPage() {
         grade,
         teacher: '',
       });
+
+      // ★ 마지막 저장 추적 초기화 (이미 DB에 저장된 값)
+      lastSavedMetaRef.current = { subject, examType, grade };
     }
   }, [selectedExam]);
 
-  // ★ 시험지 메타 수정 핸들러
+  // ★ 시험지 메타 수정 핸들러 — DB 저장만, UI는 이미 로컬 state가 반영
+  // (refetchExams 제거: 전체 리스트 재조회 → 불필요한 재렌더 연쇄 방지)
   const handleExamMetaChange = useCallback(async (field: string, value: string) => {
     if (!selectedExamId) return;
     try {
@@ -678,15 +682,14 @@ export default function ExamManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value }),
       });
-      if (res.ok) {
-        refetchExams();
-      } else {
+      if (!res.ok) {
         console.error('[ExamMeta] Update failed:', await res.text());
       }
+      // ★ refetchExams() 제거 — 로컬 state만으로 UI 반영됨
     } catch (err) {
       console.error('[ExamMeta] Error:', err);
     }
-  }, [selectedExamId, refetchExams]);
+  }, [selectedExamId]);
 
   // ★ EditableExamHeader 핸들러들 — useCallback으로 memoize (성능)
   const handleTemplateChange = useCallback((id: string, meta: ExamMeta) => {
@@ -710,26 +713,24 @@ export default function ExamManagementPage() {
     []
   );
 
-  // ★ 메타 변경 시 600ms 디바운스로 DB 저장 (타이핑 끝난 후)
+  // ★ 메타 변경 시 800ms 디바운스로 DB 저장
   useEffect(() => {
     if (!selectedExamId || !unifiedMeta) return;
     const timer = setTimeout(() => {
-      // 주요 필드만 DB 업데이트
+      const last = lastSavedMetaRef.current;
       const updates: Record<string, string> = {};
-      if (unifiedMeta.subject && unifiedMeta.subject !== editSubject) updates.subject = unifiedMeta.subject;
-      if (unifiedMeta.examType && unifiedMeta.examType !== editExamType) updates.examType = unifiedMeta.examType;
-      if (unifiedMeta.grade && unifiedMeta.grade !== editGrade) updates.grade = unifiedMeta.grade;
+      if (unifiedMeta.subject && unifiedMeta.subject !== last?.subject) updates.subject = unifiedMeta.subject;
+      if (unifiedMeta.examType && unifiedMeta.examType !== last?.examType) updates.examType = unifiedMeta.examType;
+      if (unifiedMeta.grade && unifiedMeta.grade !== last?.grade) updates.grade = unifiedMeta.grade;
       Object.entries(updates).forEach(([k, v]) => handleExamMetaChange(k, v));
-      // 레거시 필드 상태 동기화
-      if (unifiedMeta.schoolName !== editInstitute) setEditInstitute(unifiedMeta.schoolName);
-      if (unifiedMeta.teacher !== editTeacher) setEditTeacher(unifiedMeta.teacher);
-      if (unifiedMeta.subject !== editSubject) setEditSubject(unifiedMeta.subject);
-      if (unifiedMeta.examType !== editExamType) setEditExamType(unifiedMeta.examType);
-      if (unifiedMeta.grade !== editGrade) setEditGrade(unifiedMeta.grade);
-    }, 600);
+      lastSavedMetaRef.current = {
+        subject: unifiedMeta.subject,
+        examType: unifiedMeta.examType,
+        grade: unifiedMeta.grade,
+      };
+    }, 800);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unifiedMeta, selectedExamId]);
+  }, [unifiedMeta, selectedExamId, handleExamMetaChange]);
 
   // ★ 시험지 제목도 디바운스 저장
   useEffect(() => {

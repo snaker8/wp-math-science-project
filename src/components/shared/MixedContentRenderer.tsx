@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { MathRenderer } from './MathRenderer';
 
 interface MixedContentRendererProps {
@@ -23,24 +23,10 @@ interface MixedContentRendererProps {
  * - \begin{...}...\end{...} → 디스플레이 수식 블록
  * - <보기>, (가), (나) 등 → 구조적 텍스트 처리
  */
-export function MixedContentRenderer({ content, className, onMathClick }: MixedContentRendererProps) {
+function MixedContentRendererInner({ content, className, onMathClick }: MixedContentRendererProps) {
   if (!content) return <span className={className}>(문제 내용 없음)</span>;
-  // ★ OCR 교정 패턴 자동 로깅
-  if (content.includes('displaystyle') || content.includes('\\lbrace') || content.includes('\\rbrace')) {
-    console.log('[MCR] OCR 교정 필요:', content.substring(0, 200));
-    try {
-      const { logRenderingErrorDedup } = require('@/lib/error-logger');
-      const patterns: string[] = [];
-      if (content.includes('displaystyle')) patterns.push('displaystyle');
-      if (content.includes('\\lbrace')) patterns.push('lbrace');
-      if (content.includes('\\rbrace')) patterns.push('rbrace');
-      logRenderingErrorDedup({
-        errorType: 'ocr',
-        errorDetail: `OCR 교정 패턴: ${patterns.join(', ')}`,
-        rawInput: content.substring(0, 500),
-      });
-    } catch { /* ignore */ }
-  }
+  // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
+  // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
 
   // 전처리: Mathpix 특유 포맷 정규화
   let normalized = preprocessMathpixContent(content)
@@ -350,6 +336,15 @@ export function MixedContentRenderer({ content, className, onMathClick }: MixedC
     </div>
   );
 }
+
+// ★ 메모이제이션 — content 동일하면 리렌더 skip (KaTeX 재파싱 비용 높음)
+export const MixedContentRenderer = memo(MixedContentRendererInner, (prev, next) => {
+  return (
+    prev.content === next.content &&
+    prev.className === next.className &&
+    prev.onMathClick === next.onMathClick
+  );
+});
 
 /**
  * 텍스트 세그먼트: 줄바꿈 + 마크다운 볼드(**bold**) + 한글 스타일링

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { cleanLatexContent } from '@/lib/utils/clean-latex';
@@ -72,7 +72,7 @@ function splitByFigureMarker(content: string): Array<{ type: 'text' | 'figure'; 
  * - figure_crop / AI SVG / upscaled crop 모두 지원
  * - float 모드 (우측/좌측 배치) 지원
  */
-export function ExamProblemRenderer({
+function ExamProblemRendererInner({
   problem,
   gap = 20,
   textSize = '14px',
@@ -297,3 +297,11 @@ export function ExamProblemRenderer({
     </div>
   );
 }
+
+// ★ 메모이제이션 — problem이 동일하면 리렌더 skip (성능 크게 개선)
+export const ExamProblemRenderer = memo(ExamProblemRendererInner, (prev, next) => {
+  return (
+    prev.problem === next.problem &&
+    prev.gap === next.gap
+  );
+});

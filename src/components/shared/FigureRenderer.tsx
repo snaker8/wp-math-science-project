@@ -137,27 +137,7 @@ export function FigureRenderer({
     } catch { /* ignore */ }
   }, [problemId, figureData, rendering]);
 
-  // 도형 품질 자동 로깅 (confidence 낮거나 임의 라벨 감지)
-  if (figureData && figureData.rendering) {
-    const r = figureData.rendering as unknown as Record<string, unknown>;
-    const confidence = (figureData as Record<string, unknown>).confidence as number;
-    const vertices = (r.vertices as Array<{ label?: string }>) || [];
-    const hasAutoLabels = vertices.some(v => /_tl|_tr|_bl|_br|Top_|Bot_|Left_|Right_/.test(v.label || ''));
-    if (confidence < 0.5 || hasAutoLabels) {
-      try {
-        const { logRenderingErrorDedup } = require('@/lib/error-logger');
-        logRenderingErrorDedup({
-          problemId,
-          errorType: 'figure',
-          errorDetail: hasAutoLabels
-            ? `자동생성 라벨 감지: ${vertices.map(v => v.label).join(',')}`
-            : `낮은 confidence: ${confidence}`,
-          rawInput: (figureData as Record<string, unknown>).description as string,
-          metadata: { confidence, figureType: figureData.figureType, vertexCount: vertices.length },
-        });
-      } catch { /* ignore */ }
-    }
-  }
+  // ★ 도형 품질 자동 로깅 제거 — 매 렌더마다 require() 호출되어 성능 저하 주범
 
   // ★ 그래프 편집 핸들러 — DB 업데이트
   const handleGraphSave = useCallback(async (data: {
