@@ -30,6 +30,8 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
+import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
+import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { downloadExamDocx } from '@/lib/export/docx-generator';
 import type { DocxProblem } from '@/lib/export/docx-generator';
 // HWPX는 /api/export/hwpx API로 서버사이드 생성
@@ -51,9 +53,11 @@ interface ExamProblem {
   number: number;
   content: string;
   choices: string[];
+  choiceHeaders?: string[];
+  choiceLayout?: number;
   answer: number | string;
   solution: string;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: number;
   hasFigure?: boolean;
   figureSvg?: string;
   figureData?: InterpretedFigure;
@@ -77,12 +81,34 @@ function useBookGroups() {
         const res = await fetch('/api/book-groups');
         if (res.ok) {
           const data = await res.json();
-          const dbGroups: ExamGroup[] = (data.groups || []).map((g: any) => ({
-            id: g.id,
-            name: g.name,
-            children: [],
-          }));
-          setGroups([{ id: 'all', name: '전체', children: [] }, ...dbGroups]);
+          const rawGroups = data.groups || [];
+
+          // ★ 트리 빌드: parent_id 기반으로 부모-자식 구조 생성
+          const groupMap = new Map<string, ExamGroup>();
+          rawGroups.forEach((g: any) => {
+            groupMap.set(g.id, { id: g.id, name: g.name, children: [] });
+          });
+          const roots: ExamGroup[] = [];
+          rawGroups.forEach((g: any) => {
+            const node = groupMap.get(g.id);
+            if (!node) return;
+            if (g.parent_id && groupMap.has(g.parent_id)) {
+              const parent = groupMap.get(g.parent_id);
+              if (parent) parent.children = [...(parent.children || []), node];
+            } else {
+              roots.push(node);
+            }
+          });
+
+          // 정렬: 부모명 기준 (고1 → 고2 → 중1 → 중2 → 중3 → 기하)
+          const gradeOrder: Record<string, number> = {
+            '고1': 1, '고2': 2, '고3': 3,
+            '중1': 10, '중2': 11, '중3': 12, '중1 기출': 10, '중2 기출': 11, '중3 기출': 12,
+            '기하 기출': 20, '기하': 20,
+          };
+          roots.sort((a, b) => (gradeOrder[a.name] || 99) - (gradeOrder[b.name] || 99));
+
+          setGroups([{ id: 'all', name: '전체', children: [] }, ...roots]);
         }
       } catch (err) {
         console.error('[ExamManagement] Failed to fetch book groups:', err);
@@ -402,13 +428,17 @@ export default function ExamManagementPage() {
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
   const printRef = useRef<HTMLDivElement>(null);
 
-  // ★ 시험지 헤더 편집 필드
+  // ★ 시험지 헤더 편집 필드 (레거시 — EditableExamHeader로 대체 예정)
   const [editInstitute, setEditInstitute] = useState('');  // 학원명
   const [editExamTitle, setEditExamTitle] = useState('');   // 시험지명
   const [editSubject, setEditSubject] = useState('');       // 과목
   const [editExamType, setEditExamType] = useState('');     // 시험유형
   const [editGrade, setEditGrade] = useState('');           // 학년
   const [editTeacher, setEditTeacher] = useState('');       // 담당
+
+  // ★ 시험지 템플릿 (클라우드 페이지와 동일)
+  const [templateId, setTemplateId] = useState('simple');
+  const [unifiedMeta, setUnifiedMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
 
   // === 자동 간격 측정 ===
   const measureRef = useRef<HTMLDivElement>(null);
@@ -430,24 +460,45 @@ export default function ExamManagementPage() {
   // 출력 모달
   const [showPrintModal, setShowPrintModal] = useState(false);
 
-  // 출력 실행 — 미리보기 DOM 직접 복제 (클라우드 페이지와 동일 방식)
+  // 출력 실행 — 클라우드 페이지와 완전 동일 방식 (원본 className/style 유지)
   const executePrint = useCallback(() => {
     setShowPrintModal(false);
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
 
-    // ★ 시험지: 미리보기 페이지를 직접 복제 (간격/레이아웃 그대로)
+    // ★ 시험지: 미리보기 페이지를 **원본 스타일 그대로** 복제
     if (printSections.exam) {
       const previewPages = document.querySelectorAll('.preview-exam-page');
+      // ★ 헤더(학원명/시험명/담당/과목/유형/학년) 복제 준비 — 첫 페이지 상단에 삽입
+      const metaHeader = document.querySelector('.exam-meta-header');
       previewPages.forEach((page, idx) => {
         const clone = page.cloneNode(true) as HTMLElement;
-        // 페이지 구분선 UI 제거 (인쇄에 불필요)
+        // UI 전용 요소만 제거 (페이지 구분선 — 인쇄 불필요)
         clone.querySelectorAll('.page-divider-ui').forEach(el => el.remove());
-        // A4 인쇄 스타일 적용
-        clone.className = 'exam-page';
-        clone.style.cssText = 'background:white; padding:15mm; box-sizing:border-box; font-family:Pretendard,Noto Sans KR,sans-serif;';
+        // ★ 기존 className 유지 + exam-page 클래스만 추가 (클라우드 페이지와 동일)
+        clone.classList.add('exam-page');
         if (idx === previewPages.length - 1) {
           clone.classList.add('exam-last-page');
+        }
+        // ★ 첫 페이지: 헤더 테이블 복제해서 맨 위에 삽입
+        if (idx === 0 && metaHeader) {
+          const headerClone = metaHeader.cloneNode(true) as HTMLElement;
+          // input/select를 static text로 변환 (인쇄 시 깔끔하게 표시)
+          headerClone.querySelectorAll('input').forEach((input) => {
+            const span = document.createElement('span');
+            span.textContent = (input as HTMLInputElement).value || (input as HTMLInputElement).placeholder || '';
+            span.style.cssText = 'padding: 2px 6px; font-weight: bold; color: #111; font-size: 14px;';
+            input.replaceWith(span);
+          });
+          headerClone.querySelectorAll('select').forEach((select) => {
+            const span = document.createElement('span');
+            const selectedOption = (select as HTMLSelectElement).options[(select as HTMLSelectElement).selectedIndex];
+            span.textContent = selectedOption?.textContent || '';
+            span.style.cssText = 'padding: 2px 6px; font-weight: bold; color: #111; font-size: 14px;';
+            select.replaceWith(span);
+          });
+          headerClone.style.marginBottom = '12px';
+          clone.insertBefore(headerClone, clone.firstChild);
         }
         printRoot.appendChild(clone);
       });
@@ -455,33 +506,38 @@ export default function ExamManagementPage() {
 
     // 빠른정답 섹션
     if (printSections.answer) {
-      const answerSection = document.querySelector('.print-section-answer');
+      const answerSection = document.querySelector('.print-section-answer') || document.querySelector('.quick-answer-print');
       if (answerSection) {
         const clone = answerSection.cloneNode(true) as HTMLElement;
         clone.classList.add('exam-page');
-        clone.style.pageBreakBefore = 'always';
         printRoot.appendChild(clone);
       }
     }
 
     // 해설지 섹션
     if (printSections.solution) {
-      const solutionSection = document.querySelector('.print-section-solution');
-      if (solutionSection) {
-        const clone = solutionSection.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page', 'solution-page');
-        clone.style.pageBreakBefore = 'always';
-        printRoot.appendChild(clone);
+      const solutionPages = document.querySelectorAll('.solution-page');
+      if (solutionPages.length > 0) {
+        solutionPages.forEach(page => {
+          const clone = page.cloneNode(true) as HTMLElement;
+          clone.classList.add('exam-page');
+          printRoot.appendChild(clone);
+        });
+      } else {
+        const solutionSection = document.querySelector('.print-section-solution');
+        if (solutionSection) {
+          const clone = solutionSection.cloneNode(true) as HTMLElement;
+          clone.classList.add('exam-page');
+          printRoot.appendChild(clone);
+        }
       }
     }
 
     if (printRoot.children.length === 0) return;
 
     document.body.appendChild(printRoot);
-    setTimeout(() => {
-      window.print();
-      document.body.removeChild(printRoot);
-    }, 500);
+    window.print();
+    document.body.removeChild(printRoot);
   }, [printSections]);
 
   // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
@@ -501,6 +557,8 @@ export default function ExamManagementPage() {
       number: p.number,
       content: p.content,
       choices: p.choices,
+      choiceHeaders: p.choiceHeaders,
+      choiceLayout: p.choiceLayout,
       answer: p.answer,
       solution: p.solution,
       difficulty: p.difficulty,
@@ -537,11 +595,32 @@ export default function ExamManagementPage() {
     });
   }, [dbExams, subjectCategory, subjectFilter, examTypeFilter, gradeFilter]);
 
-  // 선택된 시험지 목록 (그룹 필터링)
+  // 선택된 시험지 목록 (그룹 필터링 — 자식 그룹 포함)
   const groupExams = useMemo(() => {
     if (selectedGroupId === 'all' || !selectedGroupId) return examList;
-    return examList.filter((e: any) => (e.bookGroupId || e.book_group_id) === selectedGroupId);
-  }, [selectedGroupId, examList]);
+    // 선택한 그룹 + 자식 그룹 ID 수집 (재귀)
+    const collectIds = (nodes: ExamGroup[], targetId: string): string[] => {
+      for (const n of nodes) {
+        if (n.id === targetId) {
+          const ids: string[] = [n.id];
+          const walk = (g: ExamGroup) => {
+            (g.children || []).forEach(c => { ids.push(c.id); walk(c); });
+          };
+          walk(n);
+          return ids;
+        }
+        const childResult = collectIds(n.children || [], targetId);
+        if (childResult.length > 0) return childResult;
+      }
+      return [];
+    };
+    const targetIds = new Set(collectIds(bookGroups, selectedGroupId));
+    if (targetIds.size === 0) return [];
+    return examList.filter((e: any) => {
+      const gid = e.bookGroupId || e.book_group_id;
+      return gid && targetIds.has(gid);
+    });
+  }, [selectedGroupId, examList, bookGroups]);
 
   // 필터 변경 시 선택 초기화
   useEffect(() => {
@@ -566,12 +645,27 @@ export default function ExamManagementPage() {
       const title = selectedExam.title || '';
       // 학원명: "경남고1" → "경남고"
       const schoolMatch = title.match(/([가-힣]{1,6}(?:고|중|초|학원))\d*/);
-      setEditInstitute(schoolMatch ? schoolMatch[1] : '');
+      const institute = schoolMatch ? schoolMatch[1] : '';
+      const subject = selectedExam.subject || '공통수학1';
+      const examType = selectedExam.examType || '학교기출';
+      const grade = selectedExam.grade || '고1';
+
+      setEditInstitute(institute);
       setEditExamTitle(title);
-      setEditSubject(selectedExam.subject || '공통수학1');
-      setEditExamType(selectedExam.examType || '학교기출');
-      setEditGrade(selectedExam.grade || '고1');
+      setEditSubject(subject);
+      setEditExamType(examType);
+      setEditGrade(grade);
       setEditTeacher('');
+
+      // ★ 통합 헤더 meta도 동기화
+      setUnifiedMeta({
+        ...DEFAULT_EXAM_META,
+        schoolName: institute,
+        subject,
+        examType,
+        grade,
+        teacher: '',
+      });
     }
   }, [selectedExam]);
 
@@ -593,6 +687,60 @@ export default function ExamManagementPage() {
       console.error('[ExamMeta] Error:', err);
     }
   }, [selectedExamId, refetchExams]);
+
+  // ★ EditableExamHeader 핸들러들 — useCallback으로 memoize (성능)
+  const handleTemplateChange = useCallback((id: string, meta: ExamMeta) => {
+    setTemplateId(id);
+    setUnifiedMeta(meta);
+  }, []);
+
+  const handleMetaChange = useCallback((meta: ExamMeta) => {
+    setUnifiedMeta(meta);
+    // 레거시 필드 동기화는 React가 처리 (re-render로 반영됨)
+    // DB 업데이트는 debounce: 타이핑 중에는 저장 X, 완료 후에만
+  }, []);
+
+  const handleTitleChange = useCallback((title: string) => {
+    setEditExamTitle(title);
+  }, []);
+
+  // ★ 과목 옵션을 useMemo로 — 매번 새 배열 생성 방지
+  const unifiedSubjectOptions = useMemo(
+    () => [...SUBJECT_CATEGORIES['수학'].filter(s => s !== '전체'), ...SUBJECT_CATEGORIES['과학'].filter(s => s !== '전체')],
+    []
+  );
+
+  // ★ 메타 변경 시 600ms 디바운스로 DB 저장 (타이핑 끝난 후)
+  useEffect(() => {
+    if (!selectedExamId || !unifiedMeta) return;
+    const timer = setTimeout(() => {
+      // 주요 필드만 DB 업데이트
+      const updates: Record<string, string> = {};
+      if (unifiedMeta.subject && unifiedMeta.subject !== editSubject) updates.subject = unifiedMeta.subject;
+      if (unifiedMeta.examType && unifiedMeta.examType !== editExamType) updates.examType = unifiedMeta.examType;
+      if (unifiedMeta.grade && unifiedMeta.grade !== editGrade) updates.grade = unifiedMeta.grade;
+      Object.entries(updates).forEach(([k, v]) => handleExamMetaChange(k, v));
+      // 레거시 필드 상태 동기화
+      if (unifiedMeta.schoolName !== editInstitute) setEditInstitute(unifiedMeta.schoolName);
+      if (unifiedMeta.teacher !== editTeacher) setEditTeacher(unifiedMeta.teacher);
+      if (unifiedMeta.subject !== editSubject) setEditSubject(unifiedMeta.subject);
+      if (unifiedMeta.examType !== editExamType) setEditExamType(unifiedMeta.examType);
+      if (unifiedMeta.grade !== editGrade) setEditGrade(unifiedMeta.grade);
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unifiedMeta, selectedExamId]);
+
+  // ★ 시험지 제목도 디바운스 저장
+  useEffect(() => {
+    if (!selectedExamId || !editExamTitle || !selectedExam) return;
+    if (editExamTitle === selectedExam.title) return;
+    const timer = setTimeout(() => {
+      handleExamMetaChange('title', editExamTitle);
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editExamTitle, selectedExamId]);
 
   // ★ 시험지 삭제 핸들러
   const [isDeleting, setIsDeleting] = useState(false);
@@ -838,8 +986,8 @@ export default function ExamManagementPage() {
       // 사용 가능 높이 = 컬럼 수 × 페이지 높이 - 전체 문제 높이
       const availableSpace = colMult * maxH - totalH;
       const numProblems = pageProblems.length;
-      // 문제 간 간격을 균등 분배 (최소 8px, 최대 60px — 과도한 빈 공간 방지)
-      const autoGap = numProblems > 0 ? Math.min(60, Math.max(8, Math.floor(availableSpace / numProblems))) : 20;
+      // 문제 간 간격을 균등 분배 (클라우드 페이지와 동일: 최소 8px, 상한 없음)
+      const autoGap = numProblems > 0 ? Math.max(8, Math.floor(availableSpace / numProblems)) : 20;
       return autoGap;
     });
   }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H]);
@@ -1123,86 +1271,17 @@ export default function ExamManagementPage() {
                 {/* 시험지 뷰 */}
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-4 bg-surface-raised/30">
                   <div className="w-full max-w-[800px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-                    {/* 헤더 테이블 — 편집 가능 */}
-                    <div className="border-b-2 border-gray-800 p-0">
-                      <table className="w-full border-collapse text-black">
-                        <tbody>
-                          {/* 1행: 학원명 + 시험지명 */}
-                          <tr>
-                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학원명</td>
-                            <td className="border border-gray-400 px-1 py-1">
-                              <input
-                                type="text"
-                                value={editInstitute}
-                                onChange={(e) => setEditInstitute(e.target.value)}
-                                placeholder="학원명"
-                                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-                              />
-                            </td>
-                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시험명</td>
-                            <td className="border border-gray-400 px-1 py-1" colSpan={2}>
-                              <input
-                                type="text"
-                                value={editExamTitle}
-                                onChange={(e) => setEditExamTitle(e.target.value)}
-                                onBlur={() => editExamTitle !== selectedExam.title && handleExamMetaChange('title', editExamTitle)}
-                                placeholder="시험지명"
-                                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-                              />
-                            </td>
-                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">담당</td>
-                            <td className="border border-gray-400 px-1 py-1 w-20">
-                              <input
-                                type="text"
-                                value={editTeacher}
-                                onChange={(e) => setEditTeacher(e.target.value)}
-                                placeholder="선생님"
-                                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-                              />
-                            </td>
-                          </tr>
-                          {/* 2행: 과목 + 시험유형 + 학년 */}
-                          <tr>
-                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">과목</td>
-                            <td className="border border-gray-400 px-1 py-1">
-                              <select
-                                value={editSubject}
-                                onChange={(e) => { setEditSubject(e.target.value); handleExamMetaChange('subject', e.target.value); }}
-                                className="w-full px-1 py-0.5 text-xs font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
-                              >
-                                {[...SUBJECT_CATEGORIES['수학'].filter(s => s !== '전체'), ...SUBJECT_CATEGORIES['과학'].filter(s => s !== '전체')].map((s) => (
-                                  <option key={s} value={s}>{s}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-                            <td className="border border-gray-400 px-1 py-1">
-                              <select
-                                value={editExamType}
-                                onChange={(e) => { setEditExamType(e.target.value); handleExamMetaChange('examType', e.target.value); }}
-                                className="w-full px-1 py-0.5 text-xs font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
-                              >
-                                {['학교기출', '모의고사', '자체제작', '교재', '기타'].map((t) => (
-                                  <option key={t} value={t}>{t}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
-                            <td className="border border-gray-400 px-1 py-1" colSpan={2}>
-                              <select
-                                value={editGrade}
-                                onChange={(e) => { setEditGrade(e.target.value); handleExamMetaChange('grade', e.target.value); }}
-                                className="w-full px-1 py-0.5 text-xs font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
-                              >
-                                {['중1', '중2', '중3', '고1', '고2', '고3'].map((g) => (
-                                  <option key={g} value={g}>{g}</option>
-                                ))}
-                              </select>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                    {/* ★ 통합 헤더 — 클라우드/시험지관리 공통 (템플릿 + 인라인 편집) */}
+                    <EditableExamHeader
+                      templateId={templateId}
+                      meta={unifiedMeta}
+                      examTitle={editExamTitle || selectedExam.title}
+                      editable={true}
+                      onTemplateChange={handleTemplateChange}
+                      onMetaChange={handleMetaChange}
+                      onExamTitleChange={handleTitleChange}
+                      subjectOptions={unifiedSubjectOptions}
+                    />
 
                     {/* Content based on tab */}
                     {activeTab === 'exam' && (
@@ -1231,7 +1310,21 @@ export default function ExamManagementPage() {
                           const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
 
                           return (
-                          <div key={pageIdx} className="preview-exam-page">
+                          <div
+                            key={pageIdx}
+                            className="preview-exam-page exam-page bg-white"
+                            style={{
+                              width: '794px',
+                              minHeight: `${A4_H}px`,
+                              padding: '15mm',
+                              marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
+                              boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+                              borderRadius: '4px',
+                              position: 'relative',
+                              boxSizing: 'border-box',
+                              fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+                            }}
+                          >
                             {pageIdx > 0 && (
                               <div className="border-t-2 border-dashed border-gray-300 my-2 relative page-divider-ui">
                                 <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] text-gray-400 font-medium">

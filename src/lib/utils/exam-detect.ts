@@ -25,6 +25,9 @@ export function detectSubjectFromTitle(title: string): string {
   if (/과학/.test(t)) return '공통과학1';
 
   // ── 고등 수학 (명시적 과목명) ──
+  // ★ 수학(상)/수학(하) — 2015 개정 (공통수학1/2와 별개 과목)
+  if (/수학\s*\(\s*상\s*\)|수[학]?상/.test(t)) return '수학(상)';
+  if (/수학\s*\(\s*하\s*\)|수[학]?하/.test(t)) return '수학(하)';
   if (/공통수학1/.test(t)) return '공통수학1';
   if (/공통수학2/.test(t)) return '공통수학2';
   if (/미적분/.test(t)) return '미적분';
@@ -32,7 +35,6 @@ export function detectSubjectFromTitle(title: string): string {
   if (/기하/.test(t)) return '기하';
   if (/수학?\s*[IⅠ](?!I)|수[학]?\s*1(?!\d)/.test(t)) return '수학I';
   if (/수학?\s*[IⅡ]{2}|수[학]?\s*2(?!\d)/.test(t)) return '수학II';
-  if (/수학\s*\(\s*[상하]\s*\)/.test(t)) return '공통수학1';
 
   // ── 중학교: 제목에서 학년+학기 추출 ──
   // 패턴1: "중 2-1", "중2-1", "중학교 2학년 1학기"

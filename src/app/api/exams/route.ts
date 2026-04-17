@@ -66,23 +66,28 @@ export async function GET(request: NextRequest) {
       if (/생명|생물/.test(t)) return '생명과학1';
       if (/지구/.test(t)) return '지구과학1';
       if (/과학/.test(t)) return '공통과학1';
+      // ★ 수학(상)/수학(하) — 2015 개정 (공통수학1/2와 별개)
+      if (/수학\s*\(\s*상\s*\)|수[학]?\s*상(?![수학각대])/.test(t)) return '수학(상)';
+      if (/수학\s*\(\s*하\s*\)|수[학]?\s*하(?![수학다대])/.test(t)) return '수학(하)';
       if (/공통수학1/.test(t)) return '공통수학1';
       if (/공통수학2/.test(t)) return '공통수학2';
       if (/미적분/.test(t)) return '미적분';
       if (/확률과통계|확통/.test(t)) return '확률과통계';
       if (/기하/.test(t)) return '기하';
-      if (/중1/.test(t)) return '중1';
-      if (/중2/.test(t)) return '중2';
-      if (/중3/.test(t)) return '중3';
+      // ★ 중학교 학년 — "중1", "중 1-1", "중1-1", "XX중 3-1", "XX중3-1" 모두 매칭
+      if (/중\s*1(?:[- ]|\s|$)/.test(t) || /\b1-[12]\b/.test(t) && /중/.test(t)) return '중1';
+      if (/중\s*2(?:[- ]|\s|$)/.test(t) || /\b2-[12]\b/.test(t) && /중/.test(t)) return '중2';
+      if (/중\s*3(?:[- ]|\s|$)/.test(t) || /\b3-[12]\b/.test(t) && /중/.test(t)) return '중3';
       if (/수[학]?2/.test(t)) return '수학2';
       if (/수[학]?1/.test(t)) return '수학1';
       return '공통수학1';
     };
     const detectExamTypeFromTitle = (t: string) => /모의고사|모의|평가원/.test(t) ? '모의고사' : '학교기출';
     const detectGradeFromTitle = (t: string) => {
-      if (/중1|1학년.*중/.test(t)) return '중1';
-      if (/중2|2학년.*중/.test(t)) return '중2';
-      if (/중3|3학년.*중|중등/.test(t)) return '중3';
+      // ★ 중학교 학년 — 학교명 뒤 "X-1" 학기 패턴도 포함
+      if (/중\s*1(?:[- ]|\s|$)/.test(t) || (/중/.test(t) && /\b1-[12]\b/.test(t))) return '중1';
+      if (/중\s*2(?:[- ]|\s|$)/.test(t) || (/중/.test(t) && /\b2-[12]\b/.test(t))) return '중2';
+      if (/중\s*3(?:[- ]|\s|$)/.test(t) || (/중/.test(t) && /\b3-[12]\b/.test(t)) || /중등/.test(t)) return '중3';
       if (/고3|3학년/.test(t)) return '고3';
       if (/고2|2학년/.test(t)) return '고2';
       return '고1';
@@ -90,6 +95,9 @@ export async function GET(request: NextRequest) {
 
     // 과목→폴더명 매핑
     const subjectFolderMap: Record<string, string> = {
+      // ★ 2015 개정 (수학상/하) — 공통수학1/2와 별개
+      '수학(상)': '수학(상) 기출', '수학(하)': '수학(하) 기출',
+      // 2022 개정
       '공통수학1': '공통수학1 기출', '공통수학2': '공통수학2 기출',
       '수학I': '대수 기출', '수학1': '대수 기출', '대수': '대수 기출',
       '수학II': '미적분1 기출', '수학2': '미적분1 기출', '미적분1': '미적분1 기출',
@@ -99,7 +107,8 @@ export async function GET(request: NextRequest) {
       '중1': '중1 기출', '중2': '중2 기출', '중3': '중3 기출',
     };
 
-    // 보정 필요한 시험지 수집 (book_group_id 없거나 subject 없는 것)
+    // 보정 필요한 시험지 수집 (book_group_id 없거나 subject/exam_type/grade 없는 것만)
+    // ★ 이미 book_group_id가 설정된 경우는 사용자 선택 존중 — 재분류 안 함
     const examsNeedFix = (exams || []).filter((e: any) =>
       e.title && (!e.book_group_id || !e.subject || !e.exam_type || !e.grade)
     );

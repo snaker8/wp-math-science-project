@@ -42,41 +42,83 @@ export function parseQuickAnswers(ocrText: string): ParsedAnswer[] {
   const text = ocrText.trim();
   if (!text) return answers;
 
-  // 방법 1: "N.답" 또는 "N)답" 패턴 (가장 일반적)
-  // 1.③ 2.④ 3.38 4.18 또는 1)③ 2)④ 등
-  const inlinePattern = /(\d{1,2})\s*[.)]\s*([①②③④⑤]|\d+(?:\.\d+)?)/g;
-  let match;
+  // ★ 방법 1: 줄 단위 파싱 — "N. 답" 또는 "N) 답" 형태
+  // 답에 수식, 좌표, 공백, LaTeX 모두 허용
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const m = line.match(/^(\d{1,2})\s*[.)]\s*(.+)$/);
+    if (!m) continue;
+    const num = parseInt(m[1]);
+    const rawAnswer = m[2].trim();
+    if (num < 1 || num > 50 || !rawAnswer) continue;
+    // markdown 구분자 스킵 (| -- | -- |)
+    if (/^[-=|\s]+$/.test(rawAnswer)) continue;
 
-  while ((match = inlinePattern.exec(text)) !== null) {
-    const num = parseInt(match[1]);
-    const rawAnswer = match[2].trim();
-
-    if (num < 1 || num > 50) continue;
-
-    // 원형 숫자면 choice, 아니면 numeric
-    if (CIRCLED_PATTERN.test(rawAnswer)) {
+    const soleCircled = /^[①②③④⑤]\s*$/.test(rawAnswer);
+    if (soleCircled) {
       answers.push({
         problemNumber: num,
-        answer: CIRCLED_TO_NUM[rawAnswer] || rawAnswer,
+        answer: CIRCLED_TO_NUM[rawAnswer.trim()] || rawAnswer,
         answerType: 'choice',
       });
     } else {
       answers.push({
         problemNumber: num,
-        answer: rawAnswer,
-        answerType: 'numeric',
+        answer: extractAnswer(rawAnswer),
+        answerType: detectAnswerType(rawAnswer),
       });
     }
   }
 
   if (answers.length >= 3) return deduplicateAnswers(answers);
 
-  // 방법 2: 줄별 파싱 — 다양한 형태
-  const lines = text.split('\n').filter(l => l.trim());
-  for (const line of lines) {
+  // 방법 2: "N. ..." 위치로 분할해서 각 답 추출 (한 줄에 여러 답이 있거나 복잡한 서술형)
+  // 번호 패턴으로 텍스트를 분할 → 각 구간 = 한 문제의 답
+  const numPattern = /(?:^|\s|\n)(\d{1,2})\s*[.)]\s+/g;
+  const numPositions: Array<{ num: number; answerStart: number; matchStart: number }> = [];
+  let nm;
+  while ((nm = numPattern.exec(text)) !== null) {
+    const n = parseInt(nm[1]);
+    if (n < 1 || n > 50) continue;
+    // 이전 번호보다 큰 번호만 (순서대로)
+    const last = numPositions.length > 0 ? numPositions[numPositions.length - 1].num : 0;
+    if (n <= last) continue;
+    numPositions.push({ num: n, answerStart: nm.index + nm[0].length, matchStart: nm.index });
+  }
+  for (let i = 0; i < numPositions.length; i++) {
+    const cur = numPositions[i];
+    const next = numPositions[i + 1];
+    let answerText = text.substring(cur.answerStart, next ? next.matchStart : text.length).trim();
+    // 마크다운 표 잔해 제거
+    answerText = answerText.replace(/^\|+|\|+$/g, '').trim();
+    if (!answerText) continue;
+    if (/^[-=|\s]+$/.test(answerText)) continue;
+    if (answers.some(a => a.problemNumber === cur.num)) continue;
+
+    const soleCircled = /^[①②③④⑤]\s*$/.test(answerText);
+    if (soleCircled) {
+      answers.push({
+        problemNumber: cur.num,
+        answer: CIRCLED_TO_NUM[answerText.trim()] || answerText,
+        answerType: 'choice',
+      });
+    } else {
+      answers.push({
+        problemNumber: cur.num,
+        answer: extractAnswer(answerText),
+        answerType: detectAnswerType(answerText),
+      });
+    }
+  }
+
+  if (answers.length >= 3) return deduplicateAnswers(answers);
+
+  // 방법 3: 줄별 파싱 — 다양한 형태 (공백/테이블/탭 구분)
+  const altLines = text.split('\n').filter(l => l.trim());
+  for (const line of altLines) {
     const trimmed = line.trim();
 
-    // 2a. "번호  답" 형태 (공백 2개 이상 구분)
+    // 3a. "번호  답" 형태 (공백 2개 이상 구분)
     const spaceMatch = trimmed.match(/^(\d{1,2})\s{2,}(.+)$/);
     if (spaceMatch) {
       const num = parseInt(spaceMatch[1]);
@@ -184,6 +226,8 @@ export function detectContentType(ocrText: string): 'quick_answer' | 'solution' 
   // 빠른답 특징: 짧은 텍스트, 원형 숫자 많음, "N.답" 패턴 밀집
   const circledCount = (text.match(/[①②③④⑤]/g) || []).length;
   const inlineAnswerCount = (text.match(/\d{1,2}\s*[.)]\s*[①②③④⑤\d]/g) || []).length;
+  // ★ 서술형 답 포함: "N. 뭐든지" 형태 (내용 제한 없음)
+  const anyAnswerLineCount = (text.match(/(?:^|\n)\s*\d{1,2}\s*[.)]\s*\S/g) || []).length;
   const totalLength = text.length;
 
   // 해설 특징: 긴 텍스트, "풀이", "개념", "따라서" 등 키워드
@@ -202,6 +246,8 @@ export function detectContentType(ocrText: string): 'quick_answer' | 'solution' 
   if (inlineAnswerCount >= 5 && totalLength < 500) return 'quick_answer';
   if (solutionKeywordCount >= 3 && totalLength > 500) return 'solution';
   if (circledCount >= 5 && totalLength / circledCount < 30) return 'quick_answer';
+  // ★ 서술형 답 포함 시나리오: "N. ..." 줄이 5개 이상이면 quick_answer로 처리
+  if (anyAnswerLineCount >= 5 && solutionKeywordCount < 3) return 'quick_answer';
 
   // 혼합 판단
   if (inlineAnswerCount >= 3 && solutionKeywordCount >= 2) return 'mixed';
@@ -245,17 +291,32 @@ export function parseAnswerDocument(ocrText: string): ParseResult {
 /** 답 텍스트에서 핵심 답만 추출 */
 function extractAnswer(raw: string): string {
   let s = raw.trim();
-  // 원형 숫자 → 번호
-  if (CIRCLED_PATTERN.test(s)) return CIRCLED_TO_NUM[s.match(/[①②③④⑤]/)?.[0] || ''] || s;
-  // LaTeX 정리
-  s = s.replace(/\$/g, '').replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2').trim();
+  // 단독 원형 숫자 → 번호만 반환 (객관식)
+  if (/^[①②③④⑤]\s*$/.test(s)) {
+    return CIRCLED_TO_NUM[s.trim()] || s;
+  }
+  // ★ LaTeX 수식이 있으면 그대로 보존 (서술형 답 수식 처리)
+  const hasLatex = /\\[a-zA-Z]+|[\^_{}]|\\frac|\\sqrt|\\dfrac/.test(s);
+  if (hasLatex) {
+    // $ 래퍼 제거하되 내부 LaTeX는 보존
+    s = s.replace(/^\$+|\$+$/g, '').trim();
+    return s;
+  }
+  // 단순 답: $ 제거 + 앞뒤 공백만 정리
+  s = s.replace(/^\$+|\$+$/g, '').trim();
+  // 후행 구두점/특수문자 제거 (마침표, 쉼표 등은 답 경계일 수 있으므로 앞뒤만)
+  s = s.replace(/^[,;\s]+|[,;\s]+$/g, '');
   return s;
 }
 
 /** 답 유형 감지 */
 function detectAnswerType(raw: string): 'choice' | 'numeric' | 'text' {
-  if (CIRCLED_PATTERN.test(raw)) return 'choice';
-  if (/^\d+([.,]\d+)?$/.test(raw.trim())) return 'numeric';
+  const s = raw.trim();
+  // 단독 원형 숫자만 choice
+  if (/^[①②③④⑤]\s*$/.test(s)) return 'choice';
+  // 순수 숫자 (정수/소수/분수)
+  if (/^-?\d+([.,]\d+)?$/.test(s)) return 'numeric';
+  // LaTeX 수식 또는 복합 답 → text (서술형)
   return 'text';
 }
 

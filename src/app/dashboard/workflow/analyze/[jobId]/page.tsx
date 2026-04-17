@@ -639,6 +639,71 @@ function PdfViewerWithBoxes({
   }, [selectedProblemId, onDeleteProblem]);
 
   // ── 수동 드래그-크롭 핸들러 ──
+  // ★ 자동 스크롤용 ref/state
+  const autoScrollRef = useRef<number | null>(null);
+  const lastMousePosRef = useRef<{ clientX: number; clientY: number } | null>(null);
+
+  // ★ 자동 스크롤 루프 — 컨테이너 가장자리 근처로 드래그 시 자동 스크롤
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current !== null) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+  }, []);
+
+  const startAutoScrollIfNeeded = useCallback(() => {
+    const container = containerRef.current;
+    const lastPos = lastMousePosRef.current;
+    if (!container || !lastPos) {
+      stopAutoScroll();
+      return;
+    }
+    const containerRect = container.getBoundingClientRect();
+    const EDGE = 60;       // 가장자리 감지 영역 (px)
+    const MAX_SPEED = 18;  // 최대 스크롤 속도 (px/frame)
+
+    // 세로 스크롤 속도 계산 (위/아래 가장자리)
+    let dy = 0;
+    const distFromTop = lastPos.clientY - containerRect.top;
+    const distFromBottom = containerRect.bottom - lastPos.clientY;
+    if (distFromTop < EDGE && distFromTop >= 0) {
+      dy = -Math.ceil(((EDGE - distFromTop) / EDGE) * MAX_SPEED);
+    } else if (distFromBottom < EDGE && distFromBottom >= 0) {
+      dy = Math.ceil(((EDGE - distFromBottom) / EDGE) * MAX_SPEED);
+    }
+
+    // 가로 스크롤도 함께 (좌/우 가장자리)
+    let dx = 0;
+    const distFromLeft = lastPos.clientX - containerRect.left;
+    const distFromRight = containerRect.right - lastPos.clientX;
+    if (distFromLeft < EDGE && distFromLeft >= 0) {
+      dx = -Math.ceil(((EDGE - distFromLeft) / EDGE) * MAX_SPEED);
+    } else if (distFromRight < EDGE && distFromRight >= 0) {
+      dx = Math.ceil(((EDGE - distFromRight) / EDGE) * MAX_SPEED);
+    }
+
+    if (dy !== 0 || dx !== 0) {
+      container.scrollBy(dx, dy);
+      // ★ 스크롤 후 dragRect도 따라서 확장 (스크롤로 캔버스가 움직였으므로)
+      if (isDragSelecting && dragStart) {
+        const inner = container.querySelector('.relative.inline-block') as HTMLElement | null;
+        if (inner) {
+          const innerRect = inner.getBoundingClientRect();
+          const currentX = lastPos.clientX - innerRect.left;
+          const currentY = lastPos.clientY - innerRect.top;
+          const x = Math.min(dragStart.x, currentX);
+          const y = Math.min(dragStart.y, currentY);
+          const w = Math.abs(currentX - dragStart.x);
+          const h = Math.abs(currentY - dragStart.y);
+          setDragRect({ x, y, w, h });
+        }
+      }
+      autoScrollRef.current = requestAnimationFrame(startAutoScrollIfNeeded);
+    } else {
+      stopAutoScroll();
+    }
+  }, [isDragSelecting, dragStart, stopAutoScroll]);
+
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
     // DraggableBbox 위에서는 시작 안함 (bbox는 stopPropagation 호출)
     const target = e.target as HTMLElement;
@@ -666,9 +731,17 @@ function PdfViewerWithBoxes({
     const h = Math.abs(currentY - dragStart.y);
 
     setDragRect({ x, y, w, h });
-  }, [isDragSelecting, dragStart]);
+
+    // ★ 마우스 위치 저장 + 가장자리 근처면 자동 스크롤 시작
+    lastMousePosRef.current = { clientX: e.clientX, clientY: e.clientY };
+    if (autoScrollRef.current === null) {
+      autoScrollRef.current = requestAnimationFrame(startAutoScrollIfNeeded);
+    }
+  }, [isDragSelecting, dragStart, startAutoScrollIfNeeded]);
 
   const handleCanvasMouseUp = useCallback(() => {
+    stopAutoScroll(); // ★ 자동 스크롤 중지
+    lastMousePosRef.current = null;
     if (!isDragSelecting || !dragRect) {
       setIsDragSelecting(false);
       setDragStart(null);
@@ -716,12 +789,47 @@ function PdfViewerWithBoxes({
   }, [isDragSelecting, dragRect, canvasSize, canvasRef, pageNumber, onManualCropDetected]);
 
   const handleCanvasMouseLeave = useCallback(() => {
-    if (isDragSelecting) {
-      setIsDragSelecting(false);
-      setDragStart(null);
-      setDragRect(null);
-    }
-  }, [isDragSelecting]);
+    // ★ 드래그 중에는 캔버스 영역을 벗어나도 취소하지 않음 (자동 스크롤 위해)
+    // 드래그 종료는 document mouseup 리스너에서 처리
+  }, []);
+
+  // ★ 드래그 중 document 레벨 mousemove/mouseup 리스너 — 캔버스 밖에서도 드래그 추적
+  useEffect(() => {
+    if (!isDragSelecting) return;
+
+    const handleDocMouseMove = (e: MouseEvent) => {
+      lastMousePosRef.current = { clientX: e.clientX, clientY: e.clientY };
+      // dragRect 갱신
+      const container = containerRef.current;
+      if (!container || !dragStart) return;
+      const inner = container.querySelector('.relative.inline-block') as HTMLElement | null;
+      if (!inner) return;
+      const innerRect = inner.getBoundingClientRect();
+      const currentX = e.clientX - innerRect.left;
+      const currentY = e.clientY - innerRect.top;
+      const x = Math.min(dragStart.x, currentX);
+      const y = Math.min(dragStart.y, currentY);
+      const w = Math.abs(currentX - dragStart.x);
+      const h = Math.abs(currentY - dragStart.y);
+      setDragRect({ x, y, w, h });
+      // 자동 스크롤 시작 (이미 시작 중이면 중복 안 됨)
+      if (autoScrollRef.current === null) {
+        autoScrollRef.current = requestAnimationFrame(startAutoScrollIfNeeded);
+      }
+    };
+
+    const handleDocMouseUp = () => {
+      handleCanvasMouseUp();
+    };
+
+    document.addEventListener('mousemove', handleDocMouseMove);
+    document.addEventListener('mouseup', handleDocMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleDocMouseMove);
+      document.removeEventListener('mouseup', handleDocMouseUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDragSelecting, dragStart]);
 
   // PDF 페이지 렌더링 (캐시된 PDF 문서 사용)
   useEffect(() => {

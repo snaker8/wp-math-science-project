@@ -877,7 +877,7 @@ export default function CloudPage() {
   const handleSelect = useCallback((id: string, name: string) => {
     setSelectedId(id);
     setSelectedName(name);
-    setSearchQuery('');
+    // 검색어는 유지 (북그룹 변경해도 검색 상태 보존)
   }, []);
 
   // --- Count total book groups ---
@@ -1033,7 +1033,21 @@ export default function CloudPage() {
   const filteredExams = useMemo(() => {
     let result = exams;
     if (searchQuery) {
-      result = result.filter((e) => e.fileName.toLowerCase().includes(searchQuery.toLowerCase()));
+      // ★ 검색 시 전체 시험지에서 검색 (북그룹 필터 무시) + 공백 제거 + 대소문자 무시
+      const q = searchQuery.toLowerCase().replace(/\s+/g, '');
+      const searchSource = subjectFilteredExams.map((exam, idx) => ({
+        id: exam.id,
+        order: idx + 1,
+        fileName: exam.fileName || exam.title,
+        hasImage: exam.hasImage,
+        problemCount: exam.problemCount,
+        bookGroupId: exam.bookGroupId,
+        createdAt: exam.createdAt,
+      }));
+      result = searchSource.filter((e) => {
+        const name = (e.fileName || '').toLowerCase().replace(/\s+/g, '');
+        return name.includes(q);
+      });
     }
     result = [...result].sort((a, b) => {
       let cmp = 0;
@@ -1043,7 +1057,7 @@ export default function CloudPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [exams, searchQuery, sortField, sortDir]);
+  }, [exams, searchQuery, sortField, sortDir, subjectFilteredExams]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {

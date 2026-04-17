@@ -94,7 +94,7 @@ export async function POST(
 
       const newAnswer = matchedAnswer?.answer || '';
       const newSolution = matchedSolution?.solutionLatex || '';
-      const hasChange = (newAnswer && newAnswer !== currentAnswer) || (newSolution && newSolution !== currentSolution);
+      const hasChange = Boolean((newAnswer && newAnswer !== currentAnswer) || (newSolution && newSolution !== currentSolution));
 
       matches.push({
         problemNumber: seqNum,

@@ -17,6 +17,8 @@ export interface ExamRenderProblem {
   choices: string[];
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
+  /** ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) */
+  choiceLayout?: number;
   figureData?: InterpretedFigure;
   figureSvg?: string;
   upscaledCropUrl?: string;
@@ -125,6 +127,47 @@ export function ExamProblemRenderer({
   const renderChoices = () => {
     if (problem.choices.length === 0) return null;
 
+    const headers = problem.choiceHeaders;
+    const hasTableHeaders = headers && headers.length > 0;
+
+    // ★ 표 형식 선택지: choiceHeaders가 있으면 테이블로 렌더링
+    if (hasTableHeaders) {
+      const colCount = headers.length;
+      return (
+        <div className="mt-2 overflow-x-auto">
+          <table className="border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className="px-1.5 py-0.5" />
+                {headers.map((h, i) => (
+                  <th key={i} className="px-3 py-0.5 text-center font-bold text-gray-500 border-b border-gray-300 whitespace-nowrap text-[12px]">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {problem.choices.map((choice, ci) => {
+                const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
+                const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
+                const cells = stripped.split('|').map(s => s.trim());
+                return (
+                  <tr key={ci}>
+                    <td className="px-1.5 py-0.5 text-gray-500 whitespace-nowrap">{prefix}</td>
+                    {Array.from({ length: colCount }, (_, j) => (
+                      <td key={j} className="px-3 py-0.5 text-center text-gray-700 whitespace-nowrap">
+                        <MixedContentRenderer content={cells[j] || ''} className="text-gray-700" />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
     // 서술형 문제 감지
     const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
     const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
@@ -152,48 +195,40 @@ export function ExamProblemRenderer({
     }));
     const maxLen = Math.max(...items.map(c => c.content.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length + 2));
 
-    // ★ 표 형식 선택지 헤더
-    const headerRow = problem.choiceHeaders && problem.choiceHeaders.length > 0 ? (
-      <div className="mt-1.5 flex pl-6 gap-x-5 mb-0.5">
-        {problem.choiceHeaders.map((h, i) => (
-          <span key={i} className="text-[12px] font-bold text-gray-500 min-w-[3em] text-center">{h}</span>
-        ))}
-      </div>
-    ) : null;
+    // ★ 저장된 choiceLayout 우선 적용 (1=1열, 2=2열, 3=3열, 5=가로)
+    const savedLayout = problem.choiceLayout;
+    let gridClass = 'mt-2.5 space-y-1.5'; // 기본: 1열
+    let isInline = false;
+    if (savedLayout) {
+      if (savedLayout === 5) { isInline = true; }
+      else if (savedLayout === 3) { gridClass = 'mt-2.5 grid grid-cols-3 gap-x-4 gap-y-2'; }
+      else if (savedLayout === 2) { gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2'; }
+    } else {
+      if (maxLen <= 12) isInline = true;
+      else if (maxLen <= 30) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2';
+    }
 
-    if (maxLen <= 12) {
+    if (isInline) {
       return (
-        <>{headerRow}<div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
           {items.map((it, ci) => (
             <div key={ci} className="flex items-center gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
               <MixedContentRenderer content={it.content} className="text-gray-700" />
             </div>
           ))}
-        </div></>
-      );
-    }
-    if (maxLen <= 30) {
-      return (
-        <>{headerRow}<div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2">
-          {items.map((it, ci) => (
-            <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
-              <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
-              <MixedContentRenderer content={it.content} className="text-gray-700" />
-            </div>
-          ))}
-        </div></>
+        </div>
       );
     }
     return (
-      <>{headerRow}<div className="mt-2.5 space-y-1.5">
+      <div className={gridClass}>
         {items.map((it, ci) => (
           <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
             <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
             <MixedContentRenderer content={it.content} className="text-gray-700" />
           </div>
         ))}
-      </div></>
+      </div>
     );
   };
 

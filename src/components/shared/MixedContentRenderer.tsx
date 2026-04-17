@@ -614,8 +614,11 @@ function preprocessMathpixContent(text: string): string {
   result = result.replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`);
 
   // 1-3. 고립된 $ + \begin 정리 — $$도 처리
-  result = result.replace(/\${1,2}\\begin\{/g, '\\begin{');
-  result = result.replace(/\\end\{([^}]+)\}\s*\${1,2}/g, '\\end{$1}');
+  // ★ cases 환경은 $/$$ 안에서 KaTeX가 직접 렌더링하므로 제외
+  result = result.replace(/\$\$\\begin\{(?!cases)/g, '\\begin{');  // $$ 먼저
+  result = result.replace(/\$\\begin\{(?!cases)/g, '\\begin{');    // $ 다음
+  result = result.replace(/\\end\{(?!cases)([^}]+)\}\s*\$\$/g, '\\end{$1}');  // $$ 먼저
+  result = result.replace(/\\end\{(?!cases)([^}]+)\}\s*\$/g, '\\end{$1}');    // $ 다음
 
   // 1-3b. ★ \displaystyle \begin{cases} $ ... \end{cases} 패턴 정리
   // Mathpix가 \displaystyle + $ 를 섞어서 출력하는 경우
@@ -696,9 +699,15 @@ function preprocessMathpixContent(text: string): string {
     (_match, inner) => `\\begin{cases}${inner}\\end{cases}`
   );
   // \left\{...\right. (array 없이) → \begin{cases}...\end{cases}
+  // ★ $/$$ 내부의 \left\{...\right. 은 KaTeX가 처리하므로 건드리지 않음
   result = result.replace(
     /\\left\s*\\?\{([\s\S]*?)\\right\s*\./g,
-    (_match, inner) => {
+    (_match, inner, offset) => {
+      const before = result.substring(0, offset);
+      const ddCount = (before.match(/\$\$/g) || []).length;
+      if (ddCount % 2 === 1) return _match; // $$ 안 → 그대로
+      const sdCount = (before.replace(/\$\$/g, '').match(/\$/g) || []).length;
+      if (sdCount % 2 === 1) return _match; // $ 안 → 그대로
       // 내부에 \\ (행 구분) 또는 & (열 구분)가 있으면 cases로 변환
       if (/\\\\|&/.test(inner)) {
         return `\\begin{cases}${inner}\\end{cases}`;
@@ -708,19 +717,39 @@ function preprocessMathpixContent(text: string): string {
     }
   );
   // 고아 \left\{ (매칭 \right 없음) → \lbrace
-  // ★ $...$ 안의 \left\{는 KaTeX가 처리하므로 변환 안 함
-  // $ 밖의 bare LaTeX에서만 적용 (짝이 없는 경우)
-  result = result.replace(/\\left\s*\\?\{/g, (match, offset) => {
-    const before = result.substring(0, offset);
-    const dollarCount = (before.match(/(?<!\$)\$(?!\$)/g) || []).length;
-    // 홀수면 $ 안쪽 → 변환 안 함
-    if (dollarCount % 2 === 1) return match;
-    return '\\lbrace';
-  });
-  // 고아 \right. → 제거
-  result = result.replace(/\\right\s*\./g, '');
-  // $$ 만 남은 빈 블록 제거
-  result = result.replace(/\$\s*\$/g, '');
+  // ★ 매칭되는 \right\} 또는 \right.이 뒤에 있으면 변환하지 않음 (정상 LaTeX 보호)
+  // ★ $/$$ 안의 \left\{도 변환하지 않음
+  {
+    const snapshot = result; // 현재 문자열 스냅샷
+    result = result.replace(/\\left\s*\\?\{/g, (match, offset) => {
+      // 1) $/$$ 내부 체크
+      const before = snapshot.substring(0, offset);
+      const stripped = before.replace(/\$\$/g, '\x00\x00'); // $$ → placeholder
+      const ddCount = (before.match(/\$\$/g) || []).length;
+      if (ddCount % 2 === 1) return match; // $$ 내부
+      const sdCount = (stripped.match(/\$/g) || []).length;
+      if (sdCount % 2 === 1) return match; // $ 내부
+      // 2) 뒤에 매칭되는 \right\} 또는 \right. 가 있는지 확인
+      const after = snapshot.substring(offset + match.length);
+      if (/\\right\s*[\\}.]/.test(after)) return match; // 매칭 \right 있음 → 보존
+      return '\\lbrace';
+    });
+  }
+  // 고아 \right. → 제거 (★ $/$$ 안에서는 KaTeX가 처리하므로 제거하지 않음)
+  {
+    const snapshot = result;
+    result = result.replace(/\\right\s*\./g, (match, offset) => {
+      const before = snapshot.substring(0, offset);
+      const ddCount = (before.match(/\$\$/g) || []).length;
+      if (ddCount % 2 === 1) return match;
+      const sdCount = (before.replace(/\$\$/g, '').match(/\$/g) || []).length;
+      if (sdCount % 2 === 1) return match;
+      return '';
+    });
+  }
+  // $$ 만 남은 빈 블록 제거 (★ $$는 display math 구분자이므로 보존!)
+  result = result.replace(/\$\s+\$/g, '');           // $ (공백) $ → 제거
+  result = result.replace(/\$\$\s+\$\$/g, '');       // $$ (공백) $$ → 제거
 
   // 2-5. <보기> 태그 분리 복구
   // "것을 <에서" 또는 "것을 < 에서" → "것을 〈보기〉 에서"

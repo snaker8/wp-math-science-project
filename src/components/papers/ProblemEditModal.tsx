@@ -646,7 +646,10 @@ export function ProblemEditModal({
     if (typeof ans === 'string' && !/^\d$/.test(ans)) return ans;
     return '';
   });
-  const [choiceLayout, setChoiceLayout] = useState(2);
+  const [choiceLayout, setChoiceLayout] = useState(() => {
+    const saved = initialAnswer?.choiceLayout;
+    return typeof saved === 'number' && [1, 2, 3, 5].includes(saved) ? saved : 2;
+  });
   const [isMultipleAnswer, setIsMultipleAnswer] = useState(false);
 
   // 태그 정보
@@ -765,6 +768,8 @@ export function ProblemEditModal({
             correct_answer: finalAnswer,
             finalAnswer: finalAnswer,
             choices: formattedChoices,
+            type: answerType === 'objective' ? 'multiple_choice' : 'short_answer',
+            choiceLayout: choiceLayout,
           },
           difficulty,
           type_code: typeCode || undefined,

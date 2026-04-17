@@ -74,11 +74,19 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       return;
     }
 
-    const lines = pasteText.trim().split('\n').filter(l => l.trim());
-    const parsed: Array<{ type: 'shortAnswer' | 'narrative'; answer: string }> = [];
+    // ★ 빈 줄도 보존 (빈 줄 = 해당 문제 답 없음 / 건너뛰기)
+    // 단, 맨 앞/뒤의 빈 줄만 trim
+    const lines = pasteText.replace(/^\n+|\n+$/g, '').split('\n');
+    const parsed: Array<{ type: 'shortAnswer' | 'narrative' | 'empty'; answer: string }> = [];
 
     for (const line of lines) {
       const trimmed = line.trim();
+
+      // ★ 빈 줄 = 건너뛰기 (해당 번호는 답 변경 없음)
+      if (!trimmed) {
+        parsed.push({ type: 'empty', answer: '' });
+        continue;
+      }
 
       // 형식 1: shortAnswer\t3 또는 narrative\tπ/3 (탭 또는 공백 2개 이상)
       const extractorMatch = trimmed.match(/^(shortAnswer|narrative)[\t\s]{1,}(.+)/);
@@ -90,28 +98,27 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
         continue;
       }
 
-      // 형식 2: 1. 3 또는 1) 3
+      // 형식 2: 1. 3 또는 1) 3 또는 1. a=2,b=1,c=8
       const numMatch = trimmed.match(/^\d+[.)]\s*(.+)/);
       if (numMatch) {
         const ans = numMatch[1].trim();
-        const isNum = /^\d+$/.test(ans);
+        const isPureNum = /^-?\d+(?:[.,]\d+)?$/.test(ans);
         parsed.push({
-          type: isNum ? 'shortAnswer' : 'narrative',
-          answer: ans,
+          type: isPureNum ? 'shortAnswer' : 'narrative',
+          answer: ans, // ★ LaTeX/수식/좌표 그대로 보존
         });
         continue;
       }
 
-      // 형식 3: 단순 숫자
-      if (/^\d+$/.test(trimmed)) {
+      // 형식 3: 단순 숫자 (정수/음수/소수)
+      if (/^-?\d+(?:[.,]\d+)?$/.test(trimmed)) {
         parsed.push({ type: 'shortAnswer', answer: trimmed });
         continue;
       }
 
-      // 기타: narrative로 처리
-      if (trimmed) {
-        parsed.push({ type: 'narrative', answer: trimmed });
-      }
+      // 기타: 수식/좌표/LaTeX 등 → narrative로 원본 그대로 보존
+      // 예: "a=2,b=1,c=8", "-4,-1,4", "\frac{3}{2}", "(x,y)=(2,3)"
+      parsed.push({ type: 'narrative', answer: trimmed });
     }
 
     if (parsed.length === 0) {
@@ -129,6 +136,8 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       const parsedAnswer = parsed[i];
       const newAnswer = parsedAnswer?.answer || '';
       const currentAnswer = p ? String(p.answer || '') : '';
+      // ★ empty 타입이면 답 변경 없음 (빈 줄로 건너뛰기)
+      const isEmpty = parsedAnswer?.type === 'empty';
       matches.push({
         problemNumber: p?.number || (i + 1),
         problemId: p?.id || '',
@@ -136,7 +145,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
         newAnswer,
         currentSolution: '',
         newSolution: '',
-        hasChange: !!p && !!newAnswer && newAnswer !== currentAnswer,
+        hasChange: !!p && !isEmpty && !!newAnswer && newAnswer !== currentAnswer,
       });
     }
 
@@ -168,18 +177,30 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       const formData = new FormData();
       formData.append('file', file);
 
+      console.log('[AnswerMatch] Uploading:', file.name, file.size, 'bytes');
       const res = await fetch(`/api/exams/${examId}/match-answers`, {
         method: 'POST',
         body: formData,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '매칭 실패');
+      let data: any;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`응답 파싱 실패 (${res.status}): ${text.substring(0, 200)}`);
+      }
+
+      console.log('[AnswerMatch] Response:', res.status, data);
+
+      if (!res.ok) throw new Error(data?.error || `매칭 실패 (${res.status})`);
+      if (!data.matches) throw new Error('매칭 데이터가 없습니다. OCR 결과: ' + (data.rawTextPreview || '(비어 있음)'));
 
       setMatchResult(data);
       const changed = new Set(data.matches.filter((m: MatchResult) => m.hasChange).map((m: MatchResult) => m.problemNumber));
       setSelectedMatches(changed);
     } catch (err) {
+      console.error('[AnswerMatch] Error:', err);
       setError(err instanceof Error ? err.message : '알 수 없는 오류');
     } finally {
       setIsUploading(false);

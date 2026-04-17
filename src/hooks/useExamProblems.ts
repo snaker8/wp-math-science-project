@@ -18,6 +18,8 @@ export interface ExamProblemData {
   choices: string[];
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
+  /** ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) */
+  choiceLayout?: number;
   answer: number | string;
   /** ★ 원본 answer_json 전체 (수정 모달에서 보존용) */
   answerJson?: Record<string, unknown>;
@@ -221,6 +223,8 @@ function toExamProblemData(
   const dbChoices: string[] = Array.isArray(answerJson.choices) ? answerJson.choices : [];
   // ★ 표 형식 선택지 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"])
   const choiceHeaders: string[] | undefined = Array.isArray(answerJson.choiceHeaders) ? answerJson.choiceHeaders : undefined;
+  // ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로)
+  const choiceLayout: number | undefined = typeof answerJson.choiceLayout === 'number' ? answerJson.choiceLayout : undefined;
 
   // ★ 2순위: content_latex에서 추출 (fallback)
   const { content: rawContent, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
@@ -286,6 +290,7 @@ function toExamProblemData(
     content,
     choices,
     choiceHeaders,
+    choiceLayout,
     answer: extractAnswerNumber(answerJson),
     answerJson: answerJson as Record<string, unknown>,
     solution: problem.solution_latex || '',

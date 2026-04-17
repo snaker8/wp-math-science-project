@@ -37,6 +37,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { MathRenderer } from '@/components/shared/MathRenderer';
 import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
@@ -48,6 +49,7 @@ import dynamic from 'next/dynamic';
 const AddProblemsModal = dynamic(() => import('@/components/papers/AddProblemsModal'), { ssr: false });
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
+import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
 import { AnswerMatchModal } from '@/components/exam/AnswerMatchModal';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
@@ -73,6 +75,8 @@ interface ProblemData {
   choices: string[];
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
+  /** ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) */
+  choiceLayout?: number;
   answer: number | string;
   /** ★ 원본 answer_json 전체 */
   answerJson?: Record<string, unknown>;
@@ -814,19 +818,50 @@ function ProblemCardView({
               )}
             </div>
 
-            {/* ★ 표 형식 선택지 헤더 (ㄱ, ㄴ, ㄷ, ㄹ 등) */}
-            {problem.choiceHeaders && problem.choiceHeaders.length > 0 && (
-              <div className="mt-2 flex pl-8 gap-x-5">
-                {problem.choiceHeaders.map((h, i) => (
-                  <span key={i} className="text-sm font-bold text-blue-400 min-w-[3em] text-center">
-                    {h}
-                  </span>
-                ))}
-              </div>
-            )}
-
             {/* 선택지/소문제 — 유형+길이에 따라 레이아웃 자동 전환 */}
             {problem.choices.length > 0 && (() => {
+              const headers = problem.choiceHeaders;
+              const hasTableHeaders = headers && headers.length > 0;
+
+              // ★ 표 형식 선택지: choiceHeaders가 있으면 테이블로 렌더링
+              if (hasTableHeaders) {
+                const colCount = headers.length;
+                return (
+                  <div className="mt-2 pl-2 overflow-x-auto">
+                    <table className="border-collapse text-[13px]">
+                      <thead>
+                        <tr>
+                          <th className="px-2 py-1" />
+                          {headers.map((h, i) => (
+                            <th key={i} className="px-3 py-1 text-center font-bold text-blue-400 border-b border-blue-500/20 whitespace-nowrap">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {problem.choices.map((choice, i) => {
+                          const circled = ['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`;
+                          const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
+                          // | 구분자로 셀 분리
+                          const cells = stripped.split('|').map(s => s.trim());
+                          return (
+                            <tr key={i}>
+                              <td className="px-2 py-0.5 text-content-tertiary whitespace-nowrap">{circled}</td>
+                              {Array.from({ length: colCount }, (_, ci) => (
+                                <td key={ci} className="px-3 py-0.5 text-center text-content-secondary whitespace-nowrap">
+                                  <MixedContentRenderer content={cells[ci] || ''} className="text-content-secondary" />
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              }
+
               // ★ 소문제 판별: (1) 형식이거나 "구하시오/[N점]" 포함
               const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이과정|\[\s*\d+\s*점\s*\]/;
               const hasParenPrefix = problem.choices.some(c => /^\(\d+\)/.test(c));
@@ -856,8 +891,24 @@ function ProblemCardView({
                 return { circled, stripped };
               });
               const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
-              // 짧은 보기: 가로 나열
-              if (maxLen <= 12) {
+
+              // ★ 저장된 choiceLayout 우선 적용 (1=1열, 2=2열, 3=3열, 5=가로)
+              const savedLayout = problem.choiceLayout ?? (problem.answerJson as { choiceLayout?: number })?.choiceLayout;
+
+              // 레이아웃 결정: savedLayout이 있으면 무조건 우선, 없으면 maxLen 자동감지
+              let gridClass = 'mt-2 space-y-1.5 pl-4'; // 기본: 1열
+              let isInline = false;
+              if (savedLayout) {
+                if (savedLayout === 5) { isInline = true; }
+                else if (savedLayout === 3) { gridClass = 'mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 pl-4'; }
+                else if (savedLayout === 2) { gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4'; }
+                // savedLayout === 1 → 기본 1열
+              } else {
+                if (maxLen <= 12) isInline = true;
+                else if (maxLen <= 30) gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4';
+              }
+
+              if (isInline) {
                 return (
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
                     {processed.map((c, i) => (
@@ -869,22 +920,8 @@ function ProblemCardView({
                   </div>
                 );
               }
-              // 중간 길이: 2열 그리드
-              if (maxLen <= 30) {
-                return (
-                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4">
-                    {processed.map((c, i) => (
-                      <div key={i} className="flex items-start gap-1 text-[13px] text-content-secondary">
-                        <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                        <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
-                      </div>
-                    ))}
-                  </div>
-                );
-              }
-              // 긴 수식: 1열 세로 배치
               return (
-                <div className="mt-2 space-y-1.5 pl-4">
+                <div className={gridClass}>
                   {processed.map((c, i) => (
                     <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
                       <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
@@ -1307,7 +1344,14 @@ function ExamPaperView({
             {/* 헤더 — 첫 페이지만 */}
             {pageIdx === 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <ExamPaperHeader templateId={templateId} meta={examMeta} examTitle={examTitle} />
+                <EditableExamHeader
+                  templateId={templateId}
+                  meta={examMeta}
+                  examTitle={examTitle}
+                  editable={true}
+                  onTemplateChange={(id, meta) => { setTemplateId(id); setExamMeta(meta); }}
+                  onMetaChange={(meta) => setExamMeta(meta)}
+                />
               </div>
             )}
 
@@ -1475,9 +1519,18 @@ function QuickAnswerView({
 
               const formatAnswer = (ans: number | string | undefined): React.ReactNode => {
                 if (ans === undefined || ans === '-') return '-';
+                // 숫자 1~5 → 원형숫자
                 if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
-                const str = String(ans);
-                const hasMath = /\$|\\frac|\^|[a-zA-Z].*[=+\-*/]/.test(str);
+                const str = String(ans).trim();
+                // ★ 문자열 "1"~"5" (순수 단일 숫자) → 원형숫자 자동 변환 (객관식)
+                if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
+                // ★ 이미 원형숫자
+                if (/^[①②③④⑤]$/.test(str)) return str;
+                // ★ "①" + 부가 설명 (예: "② 3" 또는 "① x=2")
+                const circledPrefix = str.match(/^([①②③④⑤])/);
+                if (circledPrefix) return circledPrefix[1];
+                // 수식 포함
+                const hasMath = /\$|\\frac|\\sqrt|\\dfrac|\^|_\{|[a-zA-Z].*[=+\-*/]/.test(str);
                 if (hasMath) {
                   return <MixedContentRenderer content={str} className="text-blue-700" />;
                 }
@@ -1516,15 +1569,19 @@ function QuickAnswerView({
 function SolutionView({
   problems,
   examTitle,
+  examId,
   templateId,
   examMeta,
   onOpenTemplateModal,
+  refetchProblems,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  examId: string;
   templateId: string;
   examMeta: ExamMeta;
   onOpenTemplateModal: () => void;
+  refetchProblems: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
@@ -1672,7 +1729,7 @@ function SolutionView({
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
-        {/* ★ 일괄 해설 생성 버튼 */}
+        {/* ★ 일괄 해설 생성 버튼 (백그라운드) */}
         <button
           type="button"
           disabled={isGeneratingBatch}
@@ -1686,7 +1743,7 @@ function SolutionView({
               if (!confirm(`모든 문제에 해설이 있습니다.\n전체 ${totalCount}문제를 재생성하시겠습니까?`)) return;
               targetProblems = problems;
             } else if (unsolvedCount === totalCount) {
-              if (!confirm(`${totalCount}문제의 해설을 AI로 생성합니다.\n(풀이 생성 + 교차 검산)\n\n진행하시겠습니까?`)) return;
+              if (!confirm(`${totalCount}문제의 해설을 AI로 생성합니다.\n(풀이 생성 + 교차 검산)\n\n백그라운드에서 진행되며, 다른 페이지로 이동해도 계속됩니다.`)) return;
               targetProblems = problems;
             } else {
               const choice = prompt(
@@ -1700,23 +1757,42 @@ function SolutionView({
               targetProblems = choice.trim() === '2' ? problems : unsolved;
             }
 
-            setIsGeneratingBatch(true);
-            setBatchProgress({ current: 0, total: targetProblems.length });
-            let success = 0;
-            for (let i = 0; i < targetProblems.length; i++) {
-              try {
-                const res = await fetch(`/api/problems/${targetProblems[i].id}/generate-solution`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ choices: targetProblems[i].choices || [] }),
-                });
-                if (res.ok) success++;
-              } catch { /* skip */ }
-              setBatchProgress({ current: i + 1, total: targetProblems.length });
+            // ★ 서버 사이드 백그라운드 처리 — 즉시 응답, 서버에서 순차 생성
+            try {
+              setIsGeneratingBatch(true);
+              setBatchProgress({ current: 0, total: targetProblems.length });
+              const res = await fetch(`/api/exams/${examId}/batch-solutions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ problemIds: targetProblems.map(p => p.id) }),
+              });
+              if (res.ok) {
+                // 백그라운드 시작됨 — 폴링으로 진행 상황 추적
+                const pollInterval = setInterval(async () => {
+                  try {
+                    const statusRes = await fetch(`/api/exams/${examId}/batch-solutions`);
+                    if (statusRes.ok) {
+                      const status = await statusRes.json();
+                      setBatchProgress({ current: status.done, total: status.total });
+                      if (!status.isRunning) {
+                        clearInterval(pollInterval);
+                        setIsGeneratingBatch(false);
+                        refetchProblems();
+                      }
+                    }
+                  } catch { /* ignore polling errors */ }
+                }, 5000); // 5초마다 폴링
+              } else {
+                const errText = await res.text().catch(() => '');
+                console.error('[batch-solutions] 실패:', res.status, errText);
+                setIsGeneratingBatch(false);
+                alert(`해설 생성 시작 실패 (${res.status}): ${errText.substring(0, 200)}`);
+              }
+            } catch (err) {
+              console.error('[batch-solutions] 요청 에러:', err);
+              setIsGeneratingBatch(false);
+              alert(`해설 생성 요청 실패: ${String(err)}`);
             }
-            setIsGeneratingBatch(false);
-            alert(`완료: ${success}/${targetProblems.length}문제 해설 생성`);
-            window.location.reload();
           }}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
             isGeneratingBatch
@@ -1726,7 +1802,7 @@ function SolutionView({
         >
           <Wand2 className="h-3.5 w-3.5" />
           {isGeneratingBatch
-            ? `생성 중 ${batchProgress.current}/${batchProgress.total}...`
+            ? `서버에서 생성 중 ${batchProgress.current}/${batchProgress.total}...`
             : `일괄 해설 생성 (${problems.filter(p => !p.solution || p.solution.trim().length < 30).length}/${problems.length}문제)`
           }
         </button>
@@ -1866,6 +1942,7 @@ export default function CloudExamDetailPage() {
       content: p.content,
       choices: p.choices,
       choiceHeaders: p.choiceHeaders,
+      choiceLayout: p.choiceLayout,
       answer: p.answer,
       answerJson: p.answerJson,
       solution: p.solution,
@@ -2868,9 +2945,11 @@ export default function CloudExamDetailPage() {
         <SolutionView
           problems={filteredProblems}
           examTitle={examTitle}
+          examId={examId}
           templateId={templateId}
           examMeta={examMeta}
           onOpenTemplateModal={() => setShowTemplateModal(true)}
+          refetchProblems={refetchProblems}
         />
       )}
 
@@ -2886,9 +2965,11 @@ export default function CloudExamDetailPage() {
           <SolutionView
             problems={filteredProblems}
             examTitle={examTitle}
+            examId={examId}
             templateId={templateId}
             examMeta={examMeta}
             onOpenTemplateModal={() => {}}
+            refetchProblems={refetchProblems}
           />
         </div>
       )}

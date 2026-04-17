@@ -137,15 +137,9 @@ export function FigureRenderer({
     } catch { /* ignore */ }
   }, [problemId, figureData, rendering]);
 
-  // DEBUG: figureData 상태 확인 + 품질 로깅
+  // 도형 품질 자동 로깅 (confidence 낮거나 임의 라벨 감지)
   if (figureData && figureData.rendering) {
     const r = figureData.rendering as unknown as Record<string, unknown>;
-    console.log('[FigureRenderer] figureType:', figureData.figureType,
-      'hasSvg:', !!r.svg,
-      'svgLen:', typeof r.svg === 'string' ? r.svg.length : 0,
-      'vertices:', (r.vertices as unknown[])?.length || 0);
-
-    // ★ 도형 품질 자동 로깅 (confidence 낮거나 임의 라벨 감지)
     const confidence = (figureData as Record<string, unknown>).confidence as number;
     const vertices = (r.vertices as Array<{ label?: string }>) || [];
     const hasAutoLabels = vertices.some(v => /_tl|_tr|_bl|_br|Top_|Bot_|Left_|Right_/.test(v.label || ''));
