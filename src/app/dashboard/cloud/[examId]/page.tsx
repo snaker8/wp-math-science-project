@@ -983,12 +983,16 @@ function ExamPaperView({
   templateId,
   examMeta,
   onOpenTemplateModal,
+  onTemplateChange,
+  onMetaChange,
 }: {
   problems: ProblemData[];
   examTitle: string;
   templateId: string;
   examMeta: ExamMeta;
   onOpenTemplateModal: () => void;
+  onTemplateChange?: (id: string, meta: ExamMeta) => void;
+  onMetaChange?: (meta: ExamMeta) => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
@@ -1349,8 +1353,8 @@ function ExamPaperView({
                   meta={examMeta}
                   examTitle={examTitle}
                   editable={true}
-                  onTemplateChange={(id, meta) => { setTemplateId(id); setExamMeta(meta); }}
-                  onMetaChange={(meta) => setExamMeta(meta)}
+                  onTemplateChange={onTemplateChange}
+                  onMetaChange={onMetaChange}
                 />
               </div>
             )}
@@ -2929,6 +2933,8 @@ export default function CloudExamDetailPage() {
           templateId={templateId}
           examMeta={examMeta}
           onOpenTemplateModal={() => setShowTemplateModal(true)}
+          onTemplateChange={(id, meta) => { setTemplateId(id); setExamMeta(meta); }}
+          onMetaChange={setExamMeta}
         />
       )}
 
