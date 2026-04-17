@@ -185,7 +185,22 @@ function EditableFormView({
   onTitleChange?: (title: string) => void;
   subjectOptions?: string[];
 }) {
+  // ★ 텍스트 입력 — 로컬 상태로 버퍼링 (타이핑 중 부모 재렌더 방지)
   const [localTitle, setLocalTitle] = useState(examTitle);
+  const [localSchool, setLocalSchool] = useState(meta.schoolName);
+  const [localTeacher, setLocalTeacher] = useState(meta.teacher);
+  const [localTime, setLocalTime] = useState(meta.timeLimit);
+  const [localDate, setLocalDate] = useState(meta.date);
+  const [localScore, setLocalScore] = useState(meta.totalScore);
+
+  // meta prop 바뀌면 로컬도 동기화 (시험지 교체 시)
+  React.useEffect(() => { setLocalTitle(examTitle); }, [examTitle]);
+  React.useEffect(() => { setLocalSchool(meta.schoolName); }, [meta.schoolName]);
+  React.useEffect(() => { setLocalTeacher(meta.teacher); }, [meta.teacher]);
+  React.useEffect(() => { setLocalTime(meta.timeLimit); }, [meta.timeLimit]);
+  React.useEffect(() => { setLocalDate(meta.date); }, [meta.date]);
+  React.useEffect(() => { setLocalScore(meta.totalScore); }, [meta.totalScore]);
+
   const subjects = subjectOptions && subjectOptions.length > 0 ? subjectOptions : ['공통수학1', '공통수학2', '수학(상)', '수학(하)', '미적분', '확률과통계', '기하', '수학I', '수학II', '중1 수학', '중2 수학', '중3 수학'];
 
   return (
@@ -198,8 +213,9 @@ function EditableFormView({
             <td className="border border-gray-400 px-1 py-1">
               <input
                 type="text"
-                value={meta.schoolName}
-                onChange={(e) => onMetaChange('schoolName', e.target.value)}
+                value={localSchool}
+                onChange={(e) => setLocalSchool(e.target.value)}
+                onBlur={() => { if (localSchool !== meta.schoolName) onMetaChange('schoolName', localSchool); }}
                 placeholder="학원/학교명"
                 className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
               />
@@ -219,8 +235,9 @@ function EditableFormView({
             <td className="border border-gray-400 px-1 py-1 w-20">
               <input
                 type="text"
-                value={meta.teacher}
-                onChange={(e) => onMetaChange('teacher', e.target.value)}
+                value={localTeacher}
+                onChange={(e) => setLocalTeacher(e.target.value)}
+                onBlur={() => { if (localTeacher !== meta.teacher) onMetaChange('teacher', localTeacher); }}
                 placeholder="선생님"
                 className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
               />
@@ -271,8 +288,9 @@ function EditableFormView({
             <td className="border border-gray-400 px-1 py-1">
               <input
                 type="text"
-                value={meta.timeLimit}
-                onChange={(e) => onMetaChange('timeLimit', e.target.value)}
+                value={localTime}
+                onChange={(e) => setLocalTime(e.target.value)}
+                onBlur={() => { if (localTime !== meta.timeLimit) onMetaChange('timeLimit', localTime); }}
                 placeholder="50분"
                 className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
               />
@@ -281,8 +299,9 @@ function EditableFormView({
             <td className="border border-gray-400 px-1 py-1">
               <input
                 type="text"
-                value={meta.date}
-                onChange={(e) => onMetaChange('date', e.target.value)}
+                value={localDate}
+                onChange={(e) => setLocalDate(e.target.value)}
+                onBlur={() => { if (localDate !== meta.date) onMetaChange('date', localDate); }}
                 placeholder="YYYY-MM-DD"
                 className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
               />
@@ -291,8 +310,9 @@ function EditableFormView({
             <td className="border border-gray-400 px-1 py-1" colSpan={3}>
               <input
                 type="text"
-                value={meta.totalScore}
-                onChange={(e) => onMetaChange('totalScore', e.target.value)}
+                value={localScore}
+                onChange={(e) => setLocalScore(e.target.value)}
+                onBlur={() => { if (localScore !== meta.totalScore) onMetaChange('totalScore', localScore); }}
                 placeholder="100"
                 className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
               />

@@ -638,7 +638,7 @@ export default function ExamManagementPage() {
     return groupExams.find((e) => e.id === selectedExamId);
   }, [selectedExamId, groupExams]);
 
-  // ★ 마지막 저장 값 추적 (불필요한 DB 호출 방지) — ref로 관리해서 재렌더 유발 X
+  // ★ 마지막 저장 값 추적 (불필요한 DB 호출 방지)
   const lastSavedMetaRef = useRef<{ subject: string; examType: string; grade: string } | null>(null);
 
   // ★ 시험지 선택 시 헤더 편집 필드 자동 기입
@@ -650,24 +650,16 @@ export default function ExamManagementPage() {
       const subject = selectedExam.subject || '공통수학1';
       const examType = selectedExam.examType || '학교기출';
       const grade = selectedExam.grade || '고1';
-
       setEditInstitute(institute);
       setEditExamTitle(title);
       setEditSubject(subject);
       setEditExamType(examType);
       setEditGrade(grade);
       setEditTeacher('');
-
       setUnifiedMeta({
         ...DEFAULT_EXAM_META,
-        schoolName: institute,
-        subject,
-        examType,
-        grade,
-        teacher: '',
+        schoolName: institute, subject, examType, grade, teacher: '',
       });
-
-      // ★ 마지막 저장 추적 초기화 (이미 DB에 저장된 값)
       lastSavedMetaRef.current = { subject, examType, grade };
     }
   }, [selectedExam]);
@@ -691,7 +683,13 @@ export default function ExamManagementPage() {
     }
   }, [selectedExamId]);
 
-  // ★ EditableExamHeader 핸들러들 — useCallback으로 memoize (성능)
+  // ★ 과목 옵션을 useMemo로 — 매번 새 배열 생성 방지
+  const unifiedSubjectOptions = useMemo(
+    () => [...SUBJECT_CATEGORIES['수학'].filter(s => s !== '전체'), ...SUBJECT_CATEGORIES['과학'].filter(s => s !== '전체')],
+    []
+  );
+
+  // ★ EditableExamHeader 핸들러 — memoize
   const handleTemplateChange = useCallback((id: string, meta: ExamMeta) => {
     setTemplateId(id);
     setUnifiedMeta(meta);
@@ -699,46 +697,29 @@ export default function ExamManagementPage() {
 
   const handleMetaChange = useCallback((meta: ExamMeta) => {
     setUnifiedMeta(meta);
-    // 레거시 필드 동기화는 React가 처리 (re-render로 반영됨)
-    // DB 업데이트는 debounce: 타이핑 중에는 저장 X, 완료 후에만
   }, []);
 
   const handleTitleChange = useCallback((title: string) => {
     setEditExamTitle(title);
   }, []);
 
-  // ★ 과목 옵션을 useMemo로 — 매번 새 배열 생성 방지
-  const unifiedSubjectOptions = useMemo(
-    () => [...SUBJECT_CATEGORIES['수학'].filter(s => s !== '전체'), ...SUBJECT_CATEGORIES['과학'].filter(s => s !== '전체')],
-    []
-  );
-
-  // ★ 메타 변경 시 800ms 디바운스로 DB 저장
+  // ★ 메타 변경 800ms 디바운스 DB 저장
   useEffect(() => {
     if (!selectedExamId || !unifiedMeta) return;
     const timer = setTimeout(() => {
       const last = lastSavedMetaRef.current;
-      const updates: Record<string, string> = {};
-      if (unifiedMeta.subject && unifiedMeta.subject !== last?.subject) updates.subject = unifiedMeta.subject;
-      if (unifiedMeta.examType && unifiedMeta.examType !== last?.examType) updates.examType = unifiedMeta.examType;
-      if (unifiedMeta.grade && unifiedMeta.grade !== last?.grade) updates.grade = unifiedMeta.grade;
-      Object.entries(updates).forEach(([k, v]) => handleExamMetaChange(k, v));
-      lastSavedMetaRef.current = {
-        subject: unifiedMeta.subject,
-        examType: unifiedMeta.examType,
-        grade: unifiedMeta.grade,
-      };
+      if (unifiedMeta.subject && unifiedMeta.subject !== last?.subject) handleExamMetaChange('subject', unifiedMeta.subject);
+      if (unifiedMeta.examType && unifiedMeta.examType !== last?.examType) handleExamMetaChange('examType', unifiedMeta.examType);
+      if (unifiedMeta.grade && unifiedMeta.grade !== last?.grade) handleExamMetaChange('grade', unifiedMeta.grade);
+      lastSavedMetaRef.current = { subject: unifiedMeta.subject, examType: unifiedMeta.examType, grade: unifiedMeta.grade };
     }, 800);
     return () => clearTimeout(timer);
   }, [unifiedMeta, selectedExamId, handleExamMetaChange]);
 
-  // ★ 시험지 제목도 디바운스 저장
   useEffect(() => {
     if (!selectedExamId || !editExamTitle || !selectedExam) return;
     if (editExamTitle === selectedExam.title) return;
-    const timer = setTimeout(() => {
-      handleExamMetaChange('title', editExamTitle);
-    }, 800);
+    const timer = setTimeout(() => handleExamMetaChange('title', editExamTitle), 800);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editExamTitle, selectedExamId]);
@@ -1272,7 +1253,7 @@ export default function ExamManagementPage() {
                 {/* 시험지 뷰 */}
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-4 bg-surface-raised/30">
                   <div className="w-full max-w-[800px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-                    {/* ★ 통합 헤더 — 클라우드/시험지관리 공통 (템플릿 + 인라인 편집) */}
+                    {/* ★ 통합 헤더 (클라우드/시험지관리 공통) */}
                     <EditableExamHeader
                       templateId={templateId}
                       meta={unifiedMeta}
