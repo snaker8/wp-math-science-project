@@ -444,6 +444,10 @@ export default function ExamManagementPage() {
   const measureRef = useRef<HTMLDivElement>(null);
   const [problemHeights, setProblemHeights] = useState<number[]>([]);
   const [measured, setMeasured] = useState(false);
+  // ★ 측정 높이 캐시 — 시험지 재선택 시 300ms 대기 없이 즉시 분할 복원 (세션 지속)
+  //   - Key: problem.id + ':' + columns (컬럼 수가 문제 폭→높이에 영향)
+  //   - 내용 수정 시에도 문제 id는 불변이지만 updated_at을 키에 포함해 자동 무효화 (없으면 id만)
+  const heightCacheRef = useRef<Map<string, number>>(new Map());
 
   // A4 상수 (px 기준, 96dpi)
   const A4_H = 1123;
@@ -881,27 +885,108 @@ export default function ExamManagementPage() {
     return bookGroups.find((g) => g.id === selectedGroupId)?.name || '전체';
   }, [selectedGroupId]);
 
-  // === 설정 변경 시 재측정 ===
-  useEffect(() => {
-    setMeasured(false);
-    setProblemHeights([]);
-  }, [problems, columns]);
+  // === 캐시 키 — 문제 내용/레이아웃 변경 시 자동 무효화 ===
+  //   id + columns + 주요 필드 길이 조합으로 수정 감지 (updated_at 없어도 충분히 견고)
+  const cacheKeyFor = useCallback(
+    (p: ExamProblem) => {
+      const contentLen = p.content?.length ?? 0;
+      const choicesLen = Array.isArray(p.choices) ? p.choices.join('').length : 0;
+      const solutionLen = p.solution?.length ?? 0;
+      const figLen = typeof p.figureSvg === 'string' ? p.figureSvg.length : 0;
+      return `${p.id}:${columns}:${contentLen}:${choicesLen}:${solutionLen}:${figLen}`;
+    },
+    [columns]
+  );
 
-  // === 문제 높이 측정 (KaTeX 렌더 후) ===
-  useLayoutEffect(() => {
-    if (measureRef.current && !measured && problems.length > 0) {
-      const timer = setTimeout(() => {
-        if (!measureRef.current) return;
-        const els = measureRef.current.querySelectorAll('[data-problem-idx]');
-        const heights = Array.from(els).map(el => el.getBoundingClientRect().height);
-        if (heights.length === problems.length) {
-          setProblemHeights(heights);
-          setMeasured(true);
-        }
-      }, 300); // KaTeX 렌더링 대기
-      return () => clearTimeout(timer);
+  // === 모든 문제가 캐시에 있으면 즉시 반환 (없으면 null → 측정 필요) ===
+  const cachedHeights = useMemo<number[] | null>(() => {
+    if (problems.length === 0) return null;
+    const cache = heightCacheRef.current;
+    const heights: number[] = [];
+    for (const p of problems) {
+      const h = cache.get(cacheKeyFor(p));
+      if (h === undefined) return null; // 하나라도 없으면 재측정
+      heights.push(h);
     }
-  }, [problems, measured]);
+    return heights;
+  }, [problems, cacheKeyFor]);
+
+  // === 캐시 히트: 즉시 반영. 미스: measured 리셋 → 측정 효과 발동 ===
+  useEffect(() => {
+    if (cachedHeights) {
+      setProblemHeights(cachedHeights);
+      setMeasured(true);
+    } else {
+      setMeasured(false);
+      setProblemHeights([]);
+    }
+  }, [cachedHeights]);
+
+  // === 문제 높이 측정 — document.fonts.ready + double rAF ===
+  //   setTimeout(300) 대신 정확한 타이밍: 폰트 로드 완료 + 두 번의 페인트 커밋 후 측정
+  useLayoutEffect(() => {
+    if (!measureRef.current || measured || problems.length === 0) return;
+
+    let cancelled = false;
+
+    const measure = async () => {
+      try {
+        // C: 폰트 로드 완료 대기 (KaTeX math font 포함) — 500ms 상한
+        const fontsReady = (document as unknown as { fonts?: { ready: Promise<unknown> } }).fonts?.ready;
+        if (fontsReady) {
+          await Promise.race([
+            fontsReady,
+            new Promise<void>((resolve) => setTimeout(resolve, 500)),
+          ]);
+        }
+        // 두 번의 rAF — React commit + 브라우저 paint 보장
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        );
+      } catch {
+        // 예외 발생 시 짧은 fallback 대기
+        await new Promise<void>((resolve) => setTimeout(resolve, 150));
+      }
+
+      if (cancelled || !measureRef.current) return;
+
+      const els = measureRef.current.querySelectorAll('[data-problem-idx]');
+      const heights = Array.from(els).map((el) => (el as HTMLElement).getBoundingClientRect().height);
+      if (heights.length !== problems.length) return;
+      // 0 높이 감지 — KaTeX 미완성 가능성. 한 번 더 대기
+      if (heights.some((h) => h === 0)) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 120));
+        if (cancelled || !measureRef.current) return;
+        const els2 = measureRef.current.querySelectorAll('[data-problem-idx]');
+        const heights2 = Array.from(els2).map((el) => (el as HTMLElement).getBoundingClientRect().height);
+        if (heights2.length !== problems.length) return;
+        if (heights2.some((h) => h === 0)) return; // 여전히 실패 → 포기
+        heights.splice(0, heights.length, ...heights2);
+      }
+
+      // A: 캐시에 저장
+      const cache = heightCacheRef.current;
+      problems.forEach((p, i) => cache.set(cacheKeyFor(p), heights[i]));
+      // 메모리 누수 방지 — 1000개 초과 시 오래된 키 제거 (Map은 insertion order 유지)
+      if (cache.size > 1000) {
+        const toDelete = cache.size - 1000;
+        const iter = cache.keys();
+        for (let j = 0; j < toDelete; j++) {
+          const { value: k, done } = iter.next();
+          if (done || k === undefined) break;
+          cache.delete(k);
+        }
+      }
+
+      setProblemHeights(heights);
+      setMeasured(true);
+    };
+
+    measure();
+    return () => {
+      cancelled = true;
+    };
+  }, [problems, measured, cacheKeyFor]);
 
   // 페이지당 문제 수에 따른 페이지 분할 (클라우드 페이지와 동일 로직)
   const pages = useMemo(() => {
