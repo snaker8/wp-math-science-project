@@ -3,6 +3,17 @@
 import React, { memo } from 'react';
 import { MathRenderer } from './MathRenderer';
 
+// ★ 표 셀용 수식 정제 — 짝 안 맞는 $ / \displaystyle 으로 인한 KaTeX 렌더 실패 방지
+//   셀 내용은 MathRenderer가 math 모드로 감싸므로 내부 $ 는 불필요하며 오히려 파싱 에러 유발
+//   \displaystyle 는 좁은 셀에서 레이아웃 깨짐 — 제거해도 의미 손실 없음
+function sanitizeMathCell(raw: string): string {
+  return raw
+    .replace(/^\$+|\$+$/g, '')       // 시작/끝 $ 제거
+    .replace(/\$/g, '')               // 내부 $ 도 제거 (짝 안 맞는 경우 방어)
+    .replace(/\\displaystyle\s*/g, '') // \displaystyle 제거
+    .trim();
+}
+
 interface MixedContentRendererProps {
   content: string;
   className?: string;
@@ -207,7 +218,7 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
                         const trimmed = cell.trim();
                         if (!trimmed) return <span key={ci} className="text-gray-300">□</span>;
                         return /[\\^_{}$]/.test(trimmed) ? (
-                          <MathRenderer key={ci} content={trimmed.replace(/^\$+|\$+$/g, '').trim()} />
+                          <MathRenderer key={ci} content={sanitizeMathCell(trimmed)} />
                         ) : (
                           <span key={ci}>{trimmed}</span>
                         );
@@ -233,7 +244,7 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
                           <div key={ci} className="px-3 py-1 text-center text-sm min-w-[2.5rem]">
                             {trimmed ? (
                               /[\\^_{}$]/.test(trimmed) ? (
-                                <MathRenderer content={trimmed.replace(/^\$+|\$+$/g, '').trim()} />
+                                <MathRenderer content={sanitizeMathCell(trimmed)} />
                               ) : (
                                 <span>{trimmed}</span>
                               )
@@ -278,7 +289,7 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
                       >
                         {cell.trim() ? (
                           /[\\^_{}$]/.test(cell) ? (
-                            <MathRenderer content={cell.replace(/^\$+|\$+$/g, '').trim()} />
+                            <MathRenderer content={sanitizeMathCell(cell)} />
                           ) : (
                             <span>{cell.trim()}</span>
                           )
