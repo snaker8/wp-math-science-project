@@ -1,3 +1,5 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -106,6 +108,12 @@
   /* shadcn 컴포넌트는 자체적으로 border-border 클래스 사용 — 글로벌 리셋 제거 (기존 테마 보존) */
   html {
     @apply font-sans;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
