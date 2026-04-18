@@ -1370,8 +1370,11 @@ export default function ExamManagementPage() {
                             </div>
                           );
 
-                          // 프리셋 + 2단: 수동 좌우 분할 (CSS columns overflow 방지)
-                          const useManualColumns = perPagePreset && columns === 2;
+                          // 2단: 항상 flex 수동 좌우 분할
+                          //   - CSS columns:2의 'balance' 모드는 좌우 높이를 맞추려고
+                          //     문제 사이에 큰 빈 공간을 삽입해 '치우친' 레이아웃 유발
+                          //   - flex 분할은 위→아래 순서대로 꽉 채우므로 중간 빈 공간 없음
+                          const useManualColumns = columns === 2;
                           const half = Math.ceil(pageProblems.length / 2);
                           const leftProblems = useManualColumns ? pageProblems.slice(0, half) : pageProblems;
                           const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
@@ -1414,14 +1417,8 @@ export default function ExamManagementPage() {
                           </div>
                         </div>
                       ) : (
-                        /* 자동 모드: CSS columns */
-                        <div
-                          className={`px-10 py-8 ${columns === 2 ? 'columns-2' : ''}`}
-                          style={{
-                            columnGap: columns === 2 ? '28px' : undefined,
-                            columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined,
-                          }}
-                        >
+                        /* 1단 모드 */
+                        <div className="px-10 py-8">
                           {pageProblems.map((problem, probIdx) =>
                             renderProblem(problem, globalStartIdx + probIdx)
                           )}

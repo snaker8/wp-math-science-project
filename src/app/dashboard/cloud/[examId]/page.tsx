@@ -1359,24 +1359,50 @@ function ExamPaperView({
               </div>
             )}
 
-            {/* 문제 영역 */}
-            <div
-              style={{
-                columns: columns === 2 ? 2 : 1,
-                columnGap: `${COLUMN_GAP}px`,
-                columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined,
-              }}
-            >
-              {pageProblems.map((problem) => (
-                <div
-                  key={problem.id}
-                  className="break-inside-avoid"
-                  style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
-                >
-                  {renderProblem(problem)}
-                </div>
-              ))}
-            </div>
+            {/* 문제 영역 — 2단은 flex 수동 분할 (CSS columns balance 치우침 방지) */}
+            {columns === 2 ? (
+              (() => {
+                const half = Math.ceil(pageProblems.length / 2);
+                return (
+                  <div style={{ display: 'flex', gap: `${COLUMN_GAP}px` }}>
+                    <div style={{ flex: 1, borderRight: '1px solid #e5e5e5', paddingRight: `${COLUMN_GAP / 2}px` }}>
+                      {pageProblems.slice(0, half).map((problem) => (
+                        <div
+                          key={problem.id}
+                          className="break-inside-avoid"
+                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                        >
+                          {renderProblem(problem)}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {pageProblems.slice(half).map((problem) => (
+                        <div
+                          key={problem.id}
+                          className="break-inside-avoid"
+                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                        >
+                          {renderProblem(problem)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div>
+                {pageProblems.map((problem) => (
+                  <div
+                    key={problem.id}
+                    className="break-inside-avoid"
+                    style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                  >
+                    {renderProblem(problem)}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* 페이지 번호 */}
             <div style={{
@@ -1863,24 +1889,50 @@ function SolutionView({
               </div>
             )}
 
-            {/* 해설 영역 */}
-            <div
-              style={{
-                columns: columns === 2 ? 2 : 1,
-                columnGap: `${COLUMN_GAP}px`,
-                columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined,
-              }}
-            >
-              {pageProblems.map((problem) => (
-                <div
-                  key={problem.id}
-                  className="break-inside-avoid"
-                  style={{ marginBottom: `${gap}px` }}
-                >
-                  {renderSolution(problem)}
-                </div>
-              ))}
-            </div>
+            {/* 해설 영역 — 2단은 flex 수동 분할 */}
+            {columns === 2 ? (
+              (() => {
+                const half = Math.ceil(pageProblems.length / 2);
+                return (
+                  <div style={{ display: 'flex', gap: `${COLUMN_GAP}px` }}>
+                    <div style={{ flex: 1, borderRight: '1px solid #e5e5e5', paddingRight: `${COLUMN_GAP / 2}px` }}>
+                      {pageProblems.slice(0, half).map((problem) => (
+                        <div
+                          key={problem.id}
+                          className="break-inside-avoid"
+                          style={{ marginBottom: `${gap}px` }}
+                        >
+                          {renderSolution(problem)}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {pageProblems.slice(half).map((problem) => (
+                        <div
+                          key={problem.id}
+                          className="break-inside-avoid"
+                          style={{ marginBottom: `${gap}px` }}
+                        >
+                          {renderSolution(problem)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div>
+                {pageProblems.map((problem) => (
+                  <div
+                    key={problem.id}
+                    className="break-inside-avoid"
+                    style={{ marginBottom: `${gap}px` }}
+                  >
+                    {renderSolution(problem)}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* 페이지 번호 */}
             <div style={{
