@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-5';
+const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 export async function POST(
   request: NextRequest,
@@ -323,7 +323,7 @@ ${problemText}${choicesSection}${imageContext}${levelInstruction}${userAnswerHin
 5. ★★★ finalAnswer 규칙 (반드시 준수):
    ${isObjective
      ? '- 객관식 문제이므로 **반드시 ①, ②, ③, ④, ⑤ 중 하나만** 작성.\n   - 선택지 중 정답의 **번호**를 작성 (선택지 값이 아님).\n   - 예: 정답이 3번 선택지 "9"이면 → finalAnswer: "③" (✅) / "9" (❌) / "③ 9" (❌).\n   - 반드시 원형숫자 한 글자만. 부가 설명 금지.\n   - ❌ "(가)", "(나)", "(다)", "1", "2", "가", "나" 등 기타 형식 절대 금지.\n   - 선택지에 (가)(나)(다) 라벨이 있어도 정답은 무조건 ①②③④⑤ 중 하나로 작성.'
-     : '- 서술형/단답형이므로 최종 수치/식 정확히 제시.\n   - 예: "3", "\\\\frac{1}{2}", "a=2, b=1", "(-1, 3)" 등'}
+     : '- 서술형/단답형이므로 **대입·계산이 완료된 최종 수치/식**만 제시.\n   - ❌ 일반화된 파라미터 형태 절대 금지 (예: "x^2 - (a-2)x + (b-1) = 0", "y = ax + b", "α+β의 값")\n   - ✅ 구체적 수치/식 (예: "x^2 + 4x + 1 = 0", "3", "a=2, b=1", "(-1, 3)")\n   - 풀이 마지막의 "∴" 또는 "따라서" 뒤에 나오는 최종 결론값을 그대로 옮길 것.\n   - finalAnswer에 변수 a, b, k, α, β 등 미지수가 남아있으면 틀린 것임.'}
    - 빈 문자열 불가.
 ${hasImages ? `6. 그래프/도형: 문제 조건에서 수학적 관계 파악하여 풀이. "볼 수 없다" 금지.` : ''}
 
