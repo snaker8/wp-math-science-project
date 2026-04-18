@@ -269,15 +269,15 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
           <table className="border-collapse mx-auto text-sm">
             <tbody>
               {el.rows.map((row, ri) => (
-                <tr
-                  key={ri}
-                  className={el.hasHlines[ri] ? 'border-t-2 border-gray-500' : ''}
-                >
+                <tr key={ri}>
                   {row.map((cell, ci) => {
                     // 세로줄: verticalLines에 해당 열 인덱스가 있으면 왼쪽에 border
                     const hasLeftBorder = vLines.includes(ci);
                     // ★ 마지막 열 오른쪽 border: vLines에 열 개수(ci+1)가 있으면
                     const hasRightBorder = ci === row.length - 1 && vLines.includes(ci + 1);
+                    // ★ 윗줄: hasHlines[ri]가 true면 이 행 위에 경계선
+                    //   (border-collapse 상태에서는 <tr> 경계가 렌더 안 되므로 <td>에 적용)
+                    const topBorder = el.hasHlines[ri] ? 'border-t-2 border-t-gray-500' : '';
                     // ★ 마지막 행 밑줄: trailing \hline은 hasHlines[rows.length]에 저장됨
                     const bottomBorder = ri === el.rows.length - 1 && el.hasHlines[el.rows.length] ? 'border-b-2 border-b-gray-500' : '';
                     const leftBorder = hasLeftBorder ? 'border-l-2 border-l-gray-500' : '';
@@ -285,7 +285,7 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
                     return (
                       <td
                         key={ci}
-                        className={`px-3 py-1.5 text-center ${bottomBorder} ${leftBorder} ${rightBorder}`}
+                        className={`px-3 py-1.5 text-center ${topBorder} ${bottomBorder} ${leftBorder} ${rightBorder}`}
                       >
                         {cell.trim() ? (
                           /[\\^_{}$]/.test(cell) ? (
