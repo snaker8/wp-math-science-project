@@ -147,21 +147,26 @@ function StaticFormView({
             <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학기</td>
             <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900">{meta.semester || ''}</td>
             <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 whitespace-nowrap" style={{ minWidth: '90px' }}>{meta.examType || ''}</td>
+            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 whitespace-nowrap" style={{ minWidth: '120px' }}>{meta.examType || ''}</td>
             <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
             <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 w-20">{meta.grade || ''}</td>
           </tr>
-          {/* 3행: 시간 + 일시 + 총점 (모두 비어있으면 행 자체 생략) */}
-          {(meta.timeLimit || meta.date || (meta.totalScore && meta.totalScore !== '100')) && (
-            <tr>
-              <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시간</td>
-              <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900">{meta.timeLimit || ''}</td>
-              <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">일시</td>
-              <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900">{meta.date || ''}</td>
-              <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">총점</td>
-              <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900" colSpan={3}>{meta.totalScore || ''}</td>
-            </tr>
-          )}
+          {/* 3행: 시간 + 일시 + 총점 — 인쇄 시 항상 표시, 화면에선 값 있을 때만 */}
+          {(() => {
+            const hasAnyValue = Boolean(meta.timeLimit || meta.date || (meta.totalScore && meta.totalScore !== '100'));
+            // 값 있으면 항상 표시, 없으면 인쇄 전용으로만 표시 (화면에선 숨김)
+            const trClass = hasAnyValue ? '' : 'hidden print:table-row';
+            return (
+              <tr className={trClass}>
+                <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시간</td>
+                <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900">{meta.timeLimit || ''}</td>
+                <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">일시</td>
+                <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900">{meta.date || ''}</td>
+                <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">총점</td>
+                <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900" colSpan={3}>{meta.totalScore || ''}</td>
+              </tr>
+            );
+          })()}
         </tbody>
       </table>
     </div>
@@ -264,7 +269,7 @@ function EditableFormView({
               />
             </td>
             <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-            <td className="border border-gray-400 px-1 py-1 whitespace-nowrap" style={{ minWidth: '90px' }}>
+            <td className="border border-gray-400 px-1 py-1 whitespace-nowrap" style={{ minWidth: '120px' }}>
               <DropdownSelect
                 value={meta.examType}
                 onChange={(v) => onMetaChange('examType', v)}
@@ -391,7 +396,7 @@ function DropdownSelect({
       <select
         value={value || ''}
         onChange={(e) => handleSelect(e.target.value)}
-        className="w-full appearance-none px-1.5 py-0.5 pr-5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
+        className="w-full appearance-none px-1.5 py-0.5 pr-4 text-sm font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
       >
         {!value && <option value="">{placeholder || '-'}</option>}
         {extendedOptions.map((opt) => (
