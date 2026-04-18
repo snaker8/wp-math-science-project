@@ -541,11 +541,19 @@ JSON:
     if (geminiKey && solution.finalAnswer) {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(geminiKey);
-      // ★ Gemini 2.0 Flash (수학 추론 강함, Vision 지원)
-      const verifyModel = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
-        generationConfig: { temperature: 0.0, maxOutputTokens: 1000 },
-      });
+      // ★ Gemini 검증 모델 (Flash 3.x 우선, 실패 시 자동 fallback)
+      // - gemini-3.1-flash-lite-preview: Vision + JSON 안정 (image-interpreter 검증됨)
+      // - gemini-3-flash-preview: 종합 비전 최강 but JSON 잘림 이슈 (2026.04)
+      // - gemini-2.5-flash: 안정적 fallback
+      // - gemini-2.0-flash: 최후 fallback (수학 추론 충분)
+      const envModel = process.env.GEMINI_VERIFY_MODEL || process.env.GEMINI_MODEL;
+      const MODEL_CHAIN = envModel
+        ? [envModel, 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash', 'gemini-2.0-flash']
+        : ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+      // 중복 제거
+      const modelChain = Array.from(new Set(MODEL_CHAIN));
+      let activeVerifyModelName: string | null = null;
+      let verifyModel: ReturnType<typeof genAI.getGenerativeModel> | null = null;
 
       // ★ Gemini용 이미지 데이터 준비 (inlineData base64)
       const geminiImageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
@@ -568,9 +576,9 @@ JSON:
       }
 
       // Gemini 검산 함수 (이미지 포함, 수학 풀이 능력 활용)
+      // ★ 모델 체인을 순회하며 첫 성공한 모델을 재사용 (404/quota 등 자동 fallback)
       const geminiSolve = async (): Promise<{ answer: string; reasoning: string }> => {
-        try {
-          const verifyPrompt = `다음 한국 수학 문제를 정확히 풀어 정답을 구하세요.
+        const verifyPrompt = `다음 한국 수학 문제를 정확히 풀어 정답을 구하세요.
 - 객관식이면 finalAnswer는 반드시 ①~⑤ 중 하나
 - 서술형/단답형이면 최종 수치/식 (예: "3", "\\\\frac{1}{2}", "a=2, b=1")
 - JSON으로만 응답
@@ -580,22 +588,48 @@ ${problemText}${choicesSection}
 
 JSON 형식: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
 
-          // 이미지가 있으면 content parts 배열로 전달
-          const contentParts: any[] = geminiImageParts.length > 0
-            ? [...geminiImageParts, { text: verifyPrompt }]
-            : [verifyPrompt];
+        const contentParts: any[] = geminiImageParts.length > 0
+          ? [...geminiImageParts, { text: verifyPrompt }]
+          : [verifyPrompt];
 
-          const r = await verifyModel.generateContent(contentParts);
-          const t = r.response.text()?.trim().replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim() || '';
-          const parsed = parseJsonResponse(t);
-          return {
-            answer: String(parsed?.finalAnswer || '').trim(),
-            reasoning: String(parsed?.reasoning || '').trim(),
-          };
-        } catch (e) {
-          console.error('[generate-solution] Gemini 검산 실패:', e);
-          return { answer: '', reasoning: '' };
+        // 이미 성공한 모델이 있으면 그것만 시도, 없으면 체인 순회
+        const candidates = activeVerifyModelName ? [activeVerifyModelName] : modelChain;
+
+        for (const modelName of candidates) {
+          try {
+            const mdl = verifyModel && activeVerifyModelName === modelName
+              ? verifyModel
+              : genAI.getGenerativeModel({
+                  model: modelName,
+                  generationConfig: { temperature: 0.0, maxOutputTokens: 1500 },
+                });
+
+            const r = await mdl.generateContent(contentParts);
+            const t = r.response.text()?.trim().replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim() || '';
+            const parsed = parseJsonResponse(t);
+            const answer = String(parsed?.finalAnswer || '').trim();
+            const reasoning = String(parsed?.reasoning || '').trim();
+
+            // 파싱 성공 (최소 answer 존재) → 이 모델을 고정
+            if (answer) {
+              if (activeVerifyModelName !== modelName) {
+                console.log(`[generate-solution] ★ Gemini 검증 모델 확정: ${modelName}`);
+                activeVerifyModelName = modelName;
+                verifyModel = mdl;
+              }
+              return { answer, reasoning };
+            }
+            // 답이 비었으면 다음 모델 시도 (JSON 파싱 실패 가능성)
+            console.warn(`[generate-solution] Gemini(${modelName}) 빈 답 — 다음 모델 시도`);
+          } catch (e: any) {
+            const msg = e?.message || String(e);
+            console.warn(`[generate-solution] Gemini(${modelName}) 실패: ${msg.slice(0, 200)}`);
+            // 404/not found/unsupported 등은 다음 모델로 폴백
+            continue;
+          }
         }
+        console.error('[generate-solution] Gemini 검산: 모든 모델 실패');
+        return { answer: '', reasoning: '' };
       };
 
       // Sonnet 재생성 함수 (검증 실패 피드백 포함)
