@@ -1798,20 +1798,47 @@ function SolutionView({
               });
               if (res.ok) {
                 // 백그라운드 시작됨 — 폴링으로 진행 상황 추적
-                const pollInterval = setInterval(async () => {
+                // ★ 개선사항:
+                //   - 첫 폴링 즉시 실행 (5초 대기 없이 바로 상태 확인)
+                //   - 간격 2초로 단축 (반응성)
+                //   - 연속 폴링 에러 카운트 (일시적 네트워크 문제로 UI 리셋 방지)
+                //   - 서버에서 isRunning=false 확인이 2번 연속일 때만 완료 처리
+                let pollErrors = 0;
+                let idleCount = 0;
+                const poll = async () => {
                   try {
                     const statusRes = await fetch(`/api/exams/${examId}/batch-solutions`);
                     if (statusRes.ok) {
                       const status = await statusRes.json();
+                      pollErrors = 0;
                       setBatchProgress({ current: status.done, total: status.total });
                       if (!status.isRunning) {
-                        clearInterval(pollInterval);
-                        setIsGeneratingBatch(false);
-                        refetchProblems();
+                        idleCount++;
+                        // 2회 연속 idle → 확정적으로 완료
+                        if (idleCount >= 2) {
+                          clearInterval(pollInterval);
+                          setIsGeneratingBatch(false);
+                          refetchProblems();
+                        }
+                      } else {
+                        idleCount = 0;
                       }
+                    } else {
+                      pollErrors++;
                     }
-                  } catch { /* ignore polling errors */ }
-                }, 5000); // 5초마다 폴링
+                  } catch {
+                    pollErrors++;
+                  }
+                  // 연속 5회 이상 에러 시 폴링 중단
+                  if (pollErrors >= 5) {
+                    clearInterval(pollInterval);
+                    setIsGeneratingBatch(false);
+                    console.warn('[batch-solutions] 폴링 연속 실패 — 중단');
+                  }
+                };
+                // 즉시 1회 실행 (5초 기다림 제거)
+                poll();
+                const pollInterval = setInterval(poll, 2000);
               } else {
                 const errText = await res.text().catch(() => '');
                 console.error('[batch-solutions] 실패:', res.status, errText);
