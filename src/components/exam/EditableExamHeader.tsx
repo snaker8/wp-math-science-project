@@ -147,7 +147,7 @@ function StaticFormView({
             <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학기</td>
             <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900">{meta.semester || ''}</td>
             <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900">{meta.examType || ''}</td>
+            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 whitespace-nowrap" style={{ minWidth: '90px' }}>{meta.examType || ''}</td>
             <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
             <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 w-20">{meta.grade || ''}</td>
           </tr>
@@ -264,7 +264,7 @@ function EditableFormView({
               />
             </td>
             <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-            <td className="border border-gray-400 px-1 py-1">
+            <td className="border border-gray-400 px-1 py-1 whitespace-nowrap" style={{ minWidth: '90px' }}>
               <DropdownSelect
                 value={meta.examType}
                 onChange={(v) => onMetaChange('examType', v)}
@@ -304,7 +304,7 @@ function EditableFormView({
                 value={localDate}
                 onChange={(e) => setLocalDate(e.target.value)}
                 onBlur={() => { if (localDate !== meta.date) onMetaChange('date', localDate); }}
-                placeholder="YYYY-MM-DD"
+                placeholder=""
                 className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
               />
             </td>
