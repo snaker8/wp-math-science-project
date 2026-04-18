@@ -270,6 +270,8 @@ function EditableFormView({
                 onChange={(v) => onMetaChange('examType', v)}
                 options={EXAM_TYPE_OPTIONS as unknown as string[]}
                 placeholder="시험유형"
+                allowCustom
+                customTrigger="기타"
               />
             </td>
             <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
@@ -333,20 +335,62 @@ function DropdownSelect({
   onChange,
   options,
   placeholder,
+  allowCustom = false,
+  customTrigger = '기타',
 }: {
   value: string;
   onChange: (v: string) => void;
   options: string[];
   placeholder?: string;
+  allowCustom?: boolean;
+  customTrigger?: string;
 }) {
-  // ★ 현재 값이 옵션에 없으면 추가 (DB값이 리스트와 다를 때 대비)
-  const hasCurrentValue = options.some((o) => o === value);
-  const extendedOptions = hasCurrentValue || !value ? options : [value, ...options];
+  const isListed = options.some((o) => o === value);
+  // allowCustom 모드 + 저장된 값이 리스트에 없으면 자동으로 직접입력 상태로 시작
+  const [customMode, setCustomMode] = useState<boolean>(
+    allowCustom ? !!value && !isListed : false
+  );
+
+  const handleSelect = (v: string) => {
+    if (allowCustom && v === customTrigger) {
+      setCustomMode(true);
+      onChange('');
+    } else {
+      setCustomMode(false);
+      onChange(v);
+    }
+  };
+
+  if (customMode) {
+    return (
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="직접 입력"
+          className="w-full px-1.5 py-0.5 pr-5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none hover:bg-yellow-50/50 placeholder-gray-400"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={() => { setCustomMode(false); onChange(''); }}
+          className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 hover:text-gray-700"
+          title="목록에서 선택"
+        >
+          ↩
+        </button>
+      </div>
+    );
+  }
+
+  // 기존 동작: 저장된 값이 리스트에 없으면 옵션 앞에 추가
+  const extendedOptions = isListed || !value ? options : [value, ...options];
   return (
     <div className="relative">
       <select
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleSelect(e.target.value)}
         className="w-full appearance-none px-1.5 py-0.5 pr-5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:bg-yellow-50/50"
       >
         {!value && <option value="">{placeholder || '-'}</option>}

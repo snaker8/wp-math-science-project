@@ -55,6 +55,7 @@ export interface ExamTemplate {
 export const EXAM_TYPE_OPTIONS = [
   '중간고사',
   '기말고사',
+  '학교 기출',
   '단원평가',
   '모의고사',
   '수행평가',

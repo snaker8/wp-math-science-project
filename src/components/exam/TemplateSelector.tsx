@@ -105,8 +105,8 @@ export function TemplateSelector({
                 {/* 학기 */}
                 <SelectField label="학기" value={editMeta.semester} onChange={(v) => updateField('semester', v)} options={SEMESTER_OPTIONS as unknown as string[]} placeholder="선택" />
 
-                {/* 시험유형 */}
-                <SelectField label="시험유형" value={editMeta.examType} onChange={(v) => updateField('examType', v)} options={EXAM_TYPE_OPTIONS as unknown as string[]} placeholder="선택" />
+                {/* 시험유형 (기타 선택 시 직접 입력) */}
+                <SelectField label="시험유형" value={editMeta.examType} onChange={(v) => updateField('examType', v)} options={EXAM_TYPE_OPTIONS as unknown as string[]} placeholder="선택" allowCustom customTrigger="기타" />
 
                 {/* 과목 */}
                 <InputField label="과목" value={editMeta.subject} onChange={(v) => updateField('subject', v)} placeholder="공통수학1" />
@@ -225,26 +225,66 @@ function SelectField({
   onChange,
   options,
   placeholder,
+  allowCustom = false,
+  customTrigger = '기타',
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
   placeholder?: string;
+  allowCustom?: boolean;
+  customTrigger?: string;
 }) {
+  const isListed = options.includes(value);
+  const [customMode, setCustomMode] = useState<boolean>(
+    allowCustom ? !!value && !isListed : false
+  );
+
+  const handleSelect = (v: string) => {
+    if (allowCustom && v === customTrigger) {
+      setCustomMode(true);
+      onChange('');
+    } else {
+      setCustomMode(false);
+      onChange(v);
+    }
+  };
+
   return (
     <div>
       <label className="block text-xs font-medium text-zinc-400 mb-1">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
-      >
-        <option value="">{placeholder || '선택'}</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
+      {customMode ? (
+        <div className="flex gap-1">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="직접 입력"
+            className="flex-1 px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={() => { setCustomMode(false); onChange(''); }}
+            className="px-2 text-xs text-zinc-400 hover:text-white bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700"
+            title="목록에서 선택"
+          >
+            ↩
+          </button>
+        </div>
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => handleSelect(e.target.value)}
+          className="w-full px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
+        >
+          <option value="">{placeholder || '선택'}</option>
+          {options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
