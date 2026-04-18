@@ -484,48 +484,72 @@ JSON:
 
     // ★ 객관식 finalAnswer 정규화 — 무조건 ①~⑤ 원형숫자로 변환
     if (isObjective && solution.finalAnswer) {
-      const ans = String(solution.finalAnswer).trim();
+      const originalAns = String(solution.finalAnswer).trim();
       const CIRCLED = ['①','②','③','④','⑤'];
 
-      // 이미 원형숫자 한 글자면 OK
-      if (CIRCLED.includes(ans)) {
-        solution.finalAnswer = ans;
-      } else {
-        // "① xxx" 형태 → 원형숫자만 추출
-        const prefixMatch = ans.match(/^([①②③④⑤])/);
+      // ★ 부가설명 괄호 전부 제거 후 재검사
+      //   "2 (2번)" → "2", "4 (정답 번호: 4)" → "4", "③ xxx" → "③", "10 (1)" → "10"
+      const parenStripped = originalAns.replace(/\s*[\(（][^)）]*[\)）]\s*/g, '').trim();
+
+      // 변환 시도 후보 (원본, 괄호 제거본)
+      const tryCandidates = parenStripped && parenStripped !== originalAns
+        ? [originalAns, parenStripped]
+        : [originalAns];
+
+      let normalized: string | null = null;
+
+      for (const candidate of tryCandidates) {
+        if (!candidate) continue;
+
+        // 1. 이미 원형숫자 한 글자
+        if (CIRCLED.includes(candidate)) {
+          normalized = candidate;
+          break;
+        }
+        // 2. 원형숫자 prefix ("① xxx")
+        const prefixMatch = candidate.match(/^([①②③④⑤])/);
         if (prefixMatch) {
-          solution.finalAnswer = prefixMatch[1];
+          normalized = prefixMatch[1];
+          break;
+        }
+        // 3. 순수 숫자 1~5
+        if (/^[1-5]$/.test(candidate)) {
+          normalized = CIRCLED[parseInt(candidate) - 1];
+          break;
+        }
+        // 4. "1번" / "1 번" 형식
+        const numMatch = candidate.match(/^([1-5])\s*번?$/);
+        if (numMatch) {
+          normalized = CIRCLED[parseInt(numMatch[1]) - 1];
+          break;
+        }
+      }
+
+      if (!normalized) {
+        // 5. 값만 제공된 경우 → choices와 비교해서 번호 찾기
+        const choicesStripped = choicesForPrompt.map(c =>
+          c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim()
+        );
+        const ansNormalized = normalizeAnswer(originalAns);
+        const matchIdx = choicesStripped.findIndex(c => normalizeAnswer(c) === ansNormalized);
+        if (matchIdx >= 0) {
+          normalized = CIRCLED[matchIdx];
+          console.log(`[generate-solution] ★ 객관식 값 → 번호 변환: "${originalAns}" → "${normalized}"`);
+        }
+      }
+
+      if (normalized) {
+        if (normalized !== originalAns) {
+          console.log(`[generate-solution] ★ 객관식 정규화: "${originalAns}" → "${normalized}"`);
+        }
+        solution.finalAnswer = normalized;
+      } else {
+        // 변환 실패 — 사용자 입력 정답이 있으면 우선 사용
+        if (userEnteredAnswer && /^[①②③④⑤]$/.test(userEnteredAnswer)) {
+          console.log(`[generate-solution] ★ 변환 실패 → 사용자 정답 "${userEnteredAnswer}" 사용`);
+          solution.finalAnswer = userEnteredAnswer;
         } else {
-          // 순수 숫자 1~5 → 원형숫자
-          if (/^[1-5]$/.test(ans)) {
-            solution.finalAnswer = CIRCLED[parseInt(ans) - 1];
-          } else {
-            // "1번" 형식 → 원형숫자
-            const numMatch = ans.match(/^([1-5])\s*번?$/);
-            if (numMatch) {
-              solution.finalAnswer = CIRCLED[parseInt(numMatch[1]) - 1];
-            } else {
-              // 값만 제공된 경우 → choices와 비교해서 번호 찾기 (강화된 normalize)
-              const choicesStripped = choicesForPrompt.map(c =>
-                c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim()
-              );
-              // ★ normalizeAnswer 사용 (\frac/\dfrac/공백/중괄호 등 통일)
-              const ansNormalized = normalizeAnswer(ans);
-              const matchIdx = choicesStripped.findIndex(c => normalizeAnswer(c) === ansNormalized);
-              if (matchIdx >= 0) {
-                solution.finalAnswer = CIRCLED[matchIdx];
-                console.log(`[generate-solution] ★ 객관식 값 → 번호 변환: "${ans}" → "${CIRCLED[matchIdx]}"`);
-              } else {
-                // 변환 실패 — 사용자 입력 정답이 있으면 그걸 우선 사용
-                if (userEnteredAnswer && /^[①②③④⑤]$/.test(userEnteredAnswer)) {
-                  console.log(`[generate-solution] ★ 변환 실패 → 사용자 정답 "${userEnteredAnswer}" 사용`);
-                  solution.finalAnswer = userEnteredAnswer;
-                } else {
-                  console.warn(`[generate-solution] ⚠️ 객관식 답 원형숫자 변환 실패: "${ans}" (choices: ${choicesStripped.join(' | ')})`);
-                }
-              }
-            }
-          }
+          console.warn(`[generate-solution] ⚠️ 객관식 답 원형숫자 변환 실패: "${originalAns}" (choices: ${choicesForPrompt.slice(0, 3).join(' | ')}...)`);
         }
       }
     }

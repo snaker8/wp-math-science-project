@@ -283,12 +283,41 @@ function stripChoiceAnalysis(text: string): string {
   return text.replace(/\[선택지\s*검증\][\s\S]*$/m, '').trim();
 }
 
+// ★ AI가 남긴 verbose 객관식 답 패턴을 원형숫자로 보정
+//   "2 (2번)" → "②" / "4 (정답 번호: 4)" → "④" / "3번" → "③"
+//   애매한 케이스("10 (1)" 같은 서술형+부분번호)는 원본 유지
+function normalizeObjectiveAnswerDisplay(raw: string): string {
+  const str = raw.trim();
+  if (!str) return str;
+  const CIRCLED = ['①','②','③','④','⑤'];
+  // 이미 원형숫자
+  if (/^[①②③④⑤]$/.test(str)) return str;
+  // "N (N번)" — 괄호 안 번호가 앞 숫자와 같음
+  const sameMatch = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
+  if (sameMatch && sameMatch[1] === sameMatch[2]) {
+    return CIRCLED[parseInt(sameMatch[1]) - 1];
+  }
+  // "N (정답 번호: N)" / "N (정답: N)"
+  const verboseMatch = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
+  if (verboseMatch && verboseMatch[1] === verboseMatch[2]) {
+    return CIRCLED[parseInt(verboseMatch[1]) - 1];
+  }
+  // "N번" 단일 (N은 1~5)
+  const banMatch = str.match(/^\s*([1-5])\s*번\s*$/);
+  if (banMatch) return CIRCLED[parseInt(banMatch[1]) - 1];
+  // "(N번)" 또는 "(N)번"
+  const parenBanMatch = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
+  if (parenBanMatch) return CIRCLED[parseInt(parenBanMatch[1]) - 1];
+  return str;
+}
+
 function AnswerDisplay({ answer, className = '', compact = false }: { answer: number | string; className?: string; compact?: boolean }) {
   // 1) 객관식 번호 (1~5)
   if (typeof answer === 'number' && answer >= 1 && answer <= 5) {
     return <span className={className}>{CIRCLED[answer]}</span>;
   }
-  const str = String(answer);
+  // ★ 표시 전 verbose 객관식 패턴 보정
+  const str = normalizeObjectiveAnswerDisplay(String(answer));
   if (str === '-') return <span className={className}>-</span>;
   // 2) 순수 숫자(정수)는 그대로 표시
   if (/^-?\d+$/.test(str)) {

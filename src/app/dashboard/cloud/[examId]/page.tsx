@@ -1559,6 +1559,13 @@ function QuickAnswerView({
                 // ★ "①" + 부가 설명 (예: "② 3" 또는 "① x=2")
                 const circledPrefix = str.match(/^([①②③④⑤])/);
                 if (circledPrefix) return circledPrefix[1];
+                // ★ verbose 객관식 패턴 보정 — "2 (2번)" / "4 (정답 번호: 4)" / "3번"
+                const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
+                if (sameParen && sameParen[1] === sameParen[2]) return circledNumbers[parseInt(sameParen[1])];
+                const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
+                if (verboseParen && verboseParen[1] === verboseParen[2]) return circledNumbers[parseInt(verboseParen[1])];
+                const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
+                if (banOnly) return circledNumbers[parseInt(banOnly[1])];
                 // 수식 포함
                 const hasMath = /\$|\\frac|\\sqrt|\\dfrac|\^|_\{|[a-zA-Z].*[=+\-*/]/.test(str);
                 if (hasMath) {
@@ -1687,7 +1694,22 @@ function SolutionView({
   const formatSolAnswer = (ans: number | string | undefined): React.ReactNode => {
     if (ans === undefined || ans === '-') return '-';
     if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
-    const str = String(ans);
+    const str = String(ans).trim();
+    // ★ 이미 원형숫자
+    if (/^[①②③④⑤]$/.test(str)) return str;
+    // ★ 순수 숫자 1~5
+    if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
+    // ★ 원형숫자 prefix
+    const circledPrefix = str.match(/^([①②③④⑤])/);
+    if (circledPrefix) return circledPrefix[1];
+    // ★ verbose 객관식 패턴 — "2 (2번)" / "4 (정답 번호: 4)" / "3번"
+    const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
+    if (sameParen && sameParen[1] === sameParen[2]) return circledNumbers[parseInt(sameParen[1])];
+    const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
+    if (verboseParen && verboseParen[1] === verboseParen[2]) return circledNumbers[parseInt(verboseParen[1])];
+    const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
+    if (banOnly) return circledNumbers[parseInt(banOnly[1])];
+    // 수식 포함
     const hasMath = /\$|\\frac|\^|[a-zA-Z].*[=+\-*/]/.test(str);
     if (hasMath) return <MixedContentRenderer content={str} className="text-blue-700" />;
     return str;
