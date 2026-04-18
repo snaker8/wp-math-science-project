@@ -530,183 +530,69 @@ JSON:
       }
     }
 
-    // 3. 검증+재생성 루프 (Sonnet 풀이 ↔ Gemini 검산 → 불일치 시 Sonnet 재시도)
-    // ★ 핵심 원리:
-    //   - Gemini Flash는 검산용으로만 사용 (수학 추론은 Sonnet이 더 강함)
-    //   - 불일치 시 Sonnet에게 "당신 답이 틀렸을 수 있다"고 알려주고 재생성
-    //   - 최대 3번 시도, 그래도 안 맞으면 needs_review 플래그
+    // 3. Sonnet 자체 검산 (독립 재풀이 → 1차 답과 일치 확인)
+    // ★ 설계:
+    //   - Gemini/GPT-4o 검증자는 정확도 부족으로 오탐 다수 → 불필요한 Sonnet 재시도 유발
+    //   - Sonnet이 수학 추론에 가장 강하므로 Sonnet을 '독립 검산자'로 한 번 더 호출
+    //   - 일치: verified=true, 불일치: mismatchFlag=true (사람 검토용 플래그만)
+    //   - 재시도 루프 없음 — 같은 모델 반복 시도는 오히려 원본 답을 훼손할 수 있음
     let verification = { verified: false, verifyAnswer: '', sonnetAnswer: solution.finalAnswer || '', mismatchFlag: true, attempts: 1 };
-    const geminiKey = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY;
 
-    if (geminiKey && solution.finalAnswer) {
-      const { GoogleGenerativeAI } = await import('@google/generative-ai');
-      const genAI = new GoogleGenerativeAI(geminiKey);
-      // ★ Gemini 검증 모델 (Flash 3.x 우선, 실패 시 자동 fallback)
-      // - gemini-3.1-flash-lite-preview: Vision + JSON 안정 (image-interpreter 검증됨)
-      // - gemini-3-flash-preview: 종합 비전 최강 but JSON 잘림 이슈 (2026.04)
-      // - gemini-2.5-flash: 안정적 fallback
-      // - gemini-2.0-flash: 최후 fallback (수학 추론 충분)
-      const envModel = process.env.GEMINI_VERIFY_MODEL || process.env.GEMINI_MODEL;
-      const MODEL_CHAIN = envModel
-        ? [envModel, 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash', 'gemini-2.0-flash']
-        : ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-      // 중복 제거
-      const modelChain = Array.from(new Set(MODEL_CHAIN));
-      let activeVerifyModelName: string | null = null;
-      let verifyModel: ReturnType<typeof genAI.getGenerativeModel> | null = null;
+    if (solution.finalAnswer) {
+      // Sonnet 독립 검산 (다른 프롬프트 스타일 + temperature 다변화)
+      const verifyPrompt = `당신은 독립 검산자입니다. 다음 한국 수학 문제를 처음부터 본인의 풀이로 정답을 구하세요.
+(다른 사람의 풀이는 참고하지 말고 본인이 직접 풀이 과정을 수립해 답을 도출)
 
-      // ★ Gemini용 이미지 데이터 준비 (inlineData base64)
-      const geminiImageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
-      if (images.length > 0) {
-        for (const img of images.slice(0, 3)) {
-          try {
-            const imgRes = await fetch(img.url);
-            if (imgRes.ok) {
-              const arrayBuffer = await imgRes.arrayBuffer();
-              const base64 = Buffer.from(arrayBuffer).toString('base64');
-              const contentType = imgRes.headers.get('content-type') || 'image/png';
-              geminiImageParts.push({
-                inlineData: { mimeType: contentType, data: base64 },
-              });
-            }
-          } catch (e) {
-            console.warn(`[generate-solution] Gemini 이미지 로드 실패:`, e);
-          }
-        }
-      }
-
-      // Gemini 검산 함수 (이미지 포함, 수학 풀이 능력 활용)
-      // ★ 모델 체인을 순회하며 첫 성공한 모델을 재사용 (404/quota 등 자동 fallback)
-      const geminiSolve = async (): Promise<{ answer: string; reasoning: string }> => {
-        const verifyPrompt = `다음 한국 수학 문제를 정확히 풀어 정답을 구하세요.
 - 객관식이면 finalAnswer는 반드시 ①~⑤ 중 하나
 - 서술형/단답형이면 최종 수치/식 (예: "3", "\\\\frac{1}{2}", "a=2, b=1")
-- JSON으로만 응답
+- JSON만 응답 (설명 금지)
 
 문제:
 ${problemText}${choicesSection}
 
-JSON 형식: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
+JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
 
-        const contentParts: any[] = geminiImageParts.length > 0
-          ? [...geminiImageParts, { text: verifyPrompt }]
-          : [verifyPrompt];
+      try {
+        const userContentVerify = images.length > 0
+          ? [...((userContent as any[]).slice(0, -1)), { type: 'text', text: verifyPrompt }]
+          : verifyPrompt;
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: ANTHROPIC_MODEL,
+            max_tokens: 1500,
+            system: '당신은 한국 수학 문제의 독립 검산자입니다. 정확한 풀이와 정답만 JSON으로 응답하세요.',
+            messages: [{ role: 'user', content: userContentVerify }],
+            temperature: 0.3,
+          }),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          const text = data.content?.find((c: { type: string }) => c.type === 'text')?.text || '';
+          const parsed = parseJsonResponse(text);
+          const verifyAnswer = String(parsed?.finalAnswer || '').trim();
+          const sonnetAnswer = String(solution.finalAnswer || '').trim();
+          const match = !!verifyAnswer && normalizeAnswer(verifyAnswer) === normalizeAnswer(sonnetAnswer);
 
-        // 이미 성공한 모델이 있으면 그것만 시도, 없으면 체인 순회
-        const candidates = activeVerifyModelName ? [activeVerifyModelName] : modelChain;
+          console.log(`[generate-solution] Sonnet 자체 검산: ${match ? '✅ MATCH' : '⚠️ MISMATCH'} — Primary: "${sonnetAnswer}" vs Verify: "${verifyAnswer}"`);
 
-        for (const modelName of candidates) {
-          try {
-            const mdl = verifyModel && activeVerifyModelName === modelName
-              ? verifyModel
-              : genAI.getGenerativeModel({
-                  model: modelName,
-                  generationConfig: { temperature: 0.0, maxOutputTokens: 1500 },
-                });
-
-            const r = await mdl.generateContent(contentParts);
-            const t = r.response.text()?.trim().replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim() || '';
-            const parsed = parseJsonResponse(t);
-            const answer = String(parsed?.finalAnswer || '').trim();
-            const reasoning = String(parsed?.reasoning || '').trim();
-
-            // 파싱 성공 (최소 answer 존재) → 이 모델을 고정
-            if (answer) {
-              if (activeVerifyModelName !== modelName) {
-                console.log(`[generate-solution] ★ Gemini 검증 모델 확정: ${modelName}`);
-                activeVerifyModelName = modelName;
-                verifyModel = mdl;
-              }
-              return { answer, reasoning };
-            }
-            // 답이 비었으면 다음 모델 시도 (JSON 파싱 실패 가능성)
-            console.warn(`[generate-solution] Gemini(${modelName}) 빈 답 — 다음 모델 시도`);
-          } catch (e: any) {
-            const msg = e?.message || String(e);
-            console.warn(`[generate-solution] Gemini(${modelName}) 실패: ${msg.slice(0, 200)}`);
-            // 404/not found/unsupported 등은 다음 모델로 폴백
-            continue;
-          }
-        }
-        console.error('[generate-solution] Gemini 검산: 모든 모델 실패');
-        return { answer: '', reasoning: '' };
-      };
-
-      // Sonnet 재생성 함수 (검증 실패 피드백 포함)
-      const sonnetRegenerate = async (prevAnswer: string, geminiAnswer: string, geminiReasoning: string): Promise<any> => {
-        const retryPrompt = `${solutionPrompt}
-
-★★★ 재시도 요청 ★★★
-이전 시도에서 답을 "${prevAnswer}"로 풀었으나, 독립 검산 결과 다른 답 "${geminiAnswer}"이 나왔습니다.
-독립 검산의 핵심 풀이: ${geminiReasoning || '(없음)'}
-
-→ 처음부터 다시 검토하세요:
-1. 문제 조건을 다시 정확히 읽기
-2. 풀이 전략을 재선택 (이전과 같으면 단계별 계산을 재검토)
-3. 최종 답을 다시 도출
-4. 두 답 중 어느 것이 맞는지 결정 (반드시 풀이로 검증)
-
-답이 진짜 맞다면 같은 답을 다시 제출, 틀렸다면 정정한 답을 제출하세요.`;
-        try {
-          const userContentRetry = images.length > 0
-            ? [...((userContent as any[]).slice(0, -1)), { type: 'text', text: retryPrompt }]
-            : retryPrompt;
-          const r = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': ANTHROPIC_API_KEY,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: ANTHROPIC_MODEL,
-              max_tokens: 8000,
-              system: systemPrompt,
-              messages: [{ role: 'user', content: userContentRetry }],
-              temperature: 0.3, // 약간 높여 다른 접근 시도
-            }),
-          });
-          if (r.ok) {
-            const data = await r.json();
-            const text = data.content?.find((c: { type: string }) => c.type === 'text')?.text || '';
-            return parseJsonResponse(text);
-          }
-        } catch (e) {
-          console.error('[generate-solution] Sonnet retry failed:', e);
-        }
-        return null;
-      };
-
-      // ★ 검증 루프 (최대 3회)
-      const MAX_ATTEMPTS = 3;
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const { answer: geminiAnswer, reasoning: geminiReasoning } = await geminiSolve();
-        const sonnetAnswer = String(solution.finalAnswer || '').trim();
-        const match = normalizeAnswer(geminiAnswer) === normalizeAnswer(sonnetAnswer);
-
-        console.log(`[generate-solution] Attempt ${attempt}/${MAX_ATTEMPTS}: ${match ? '✅ MATCH' : '⚠️ MISMATCH'} — Sonnet: "${sonnetAnswer}" vs Gemini: "${geminiAnswer}"`);
-
-        verification = {
-          verified: match,
-          verifyAnswer: geminiAnswer,
-          sonnetAnswer,
-          mismatchFlag: !match,
-          attempts: attempt,
-        };
-
-        if (match) break; // 일치 → 종료
-        if (attempt === MAX_ATTEMPTS) break; // 마지막 시도 → 더 이상 재생성 안 함
-        if (!geminiAnswer) break; // Gemini 답 없으면 검증 불가
-
-        // Sonnet 재생성
-        console.log(`[generate-solution] 재생성 요청 (Sonnet에게 피드백)`);
-        const newSolution = await sonnetRegenerate(sonnetAnswer, geminiAnswer, geminiReasoning);
-        if (newSolution?.finalAnswer) {
-          solution = newSolution;
-          usedModel = `claude-sonnet (retry ${attempt})`;
+          verification = {
+            verified: match,
+            verifyAnswer,
+            sonnetAnswer,
+            mismatchFlag: !match,
+            attempts: 1,
+          };
         } else {
-          break; // 재생성 실패 → 종료
+          console.warn(`[generate-solution] Sonnet 검산 HTTP ${r.status}`);
         }
+      } catch (e) {
+        console.warn('[generate-solution] Sonnet 자체 검산 실패:', e);
       }
     }
 
