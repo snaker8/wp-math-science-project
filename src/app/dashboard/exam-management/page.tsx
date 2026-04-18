@@ -1608,76 +1608,7 @@ export default function ExamManagementPage() {
       `}} />
       {selectedExam && problems.length > 0 && (
         <div className="print-source-sections">
-          {/* 시험지 섹션 — 페이지별 렌더링 (원래 방식 복원) */}
-          {pages.map((pageProblems, pageIdx) => (
-            <div
-              key={`print-page-${pageIdx}`}
-              className={`print-section-exam-page exam-page ${pageIdx === pages.length - 1 ? 'exam-last-page' : ''}`}
-              style={{
-                width: '794px',
-                minHeight: '1123px',
-                background: 'white',
-                padding: '15mm',
-                boxSizing: 'border-box',
-                fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
-              }}
-            >
-              {pageIdx === 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <div className="border-b-2 border-gray-800">
-                    <table className="w-full border-collapse text-black">
-                      <tbody>
-                        <tr>
-                          <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학원명</td>
-                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold">{editInstitute || ''}</td>
-                          <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시험명</td>
-                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold" colSpan={2}>{editExamTitle || selectedExam.title}</td>
-                          <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">담당</td>
-                          <td className="border border-gray-400 px-3 py-2 text-sm font-bold w-20">{editTeacher || ''}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">과목</td>
-                          <td className="border border-gray-400 px-3 py-1.5 text-xs font-bold">{editSubject || selectedExam.subject}</td>
-                          <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-                          <td className="border border-gray-400 px-3 py-1.5 text-xs font-bold">{editExamType || selectedExam.examType}</td>
-                          <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
-                          <td className="border border-gray-400 px-3 py-1.5 text-xs font-bold" colSpan={2}>{editGrade || selectedExam.grade}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-              {(() => {
-                // ★ 인쇄용 문제 렌더러 — 공통 컴포넌트 사용
-                const renderPrintProblem = (problem: ExamProblem) => (
-                  <div key={problem.id} className="break-inside-avoid" style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}>
-                    <ExamProblemRenderer problem={problem} />
-                  </div>
-                );
-
-                const usePrintManualCols = perPagePreset && columns === 2;
-                const printHalf = Math.ceil(pageProblems.length / 2);
-                if (usePrintManualCols) {
-                  return (
-                    <div style={{ display: 'flex', gap: '28px' }}>
-                      <div style={{ flex: 1, borderRight: '1px solid #e5e5e5', paddingRight: '14px' }}>
-                        {pageProblems.slice(0, printHalf).map(renderPrintProblem)}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        {pageProblems.slice(printHalf).map(renderPrintProblem)}
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div style={{ columns: columns === 2 ? 2 : 1, columnGap: '28px', columnRule: columns === 2 ? '1px solid #e5e5e5' : undefined }}>
-                    {pageProblems.map(renderPrintProblem)}
-                  </div>
-                );
-              })()}
-            </div>
-          ))}
+          {/* ★ 시험지(exam) 섹션은 executePrint()에서 .preview-exam-page를 직접 복제하므로 off-screen 렌더 제거 (성능 개선) */}
 
           {/* 빠른정답 섹션 */}
           <div className="print-section-answer bg-white p-8">
