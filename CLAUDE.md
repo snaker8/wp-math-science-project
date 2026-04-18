@@ -143,3 +143,12 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
   - 출제 플로우: 유형기준 탭 → 단원·유형·난이도 필터 → 문제 검색 → 선택 → 시험지 편성 → PDF/한글 다운
 - **수작** (suzag) — UI/UX 참조
 - 참조 사이트 디자인: 라이트 테마 (warm 색상), 우리: 다크 테마 (zinc/black)
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

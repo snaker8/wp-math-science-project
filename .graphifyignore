@@ -1,0 +1,56 @@
+# Graphify scan 제외 목록 — 노이즈 방지
+
+# 빌드/의존성
+node_modules
+.next
+out
+build
+dist
+coverage
+
+# 압축된 외부 라이브러리 (pdf.worker 등이 쿼리 오염)
+public/pdf.worker.min.mjs
+public/pdf.worker*.mjs
+public/pdf.worker*.js
+*.min.js
+*.min.mjs
+
+# Graphify 자체 출력 (self-reference 방지)
+graphify-out
+
+# 로그/캐시/임시
+*.log
+.cache
+.parcel-cache
+tmp
+temp
+
+# DB 시드/스크립트 (매 쿼리마다 거대 JSON 노드가 매칭됨)
+curriculum_data
+scripts/expansion-v4-*.ts
+scripts/seed-*.ts
+
+# 이미지/폰트/바이너리
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.pdf
+*.zip
+*.tar
+*.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE/에이전트 메타
+.vscode
+.idea
+.agents
