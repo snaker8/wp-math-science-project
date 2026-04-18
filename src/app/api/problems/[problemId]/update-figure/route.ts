@@ -50,7 +50,7 @@ export async function POST(
       description: (currentFigureData.description as string) || '사용자 수정 그래프',
     };
 
-    const updatedAnalysis = {
+    const updatedAnalysis: Record<string, unknown> = {
       ...currentAnalysis,
       hasFigure: true,
       figureData: updatedFigureData,
@@ -58,6 +58,12 @@ export async function POST(
       figureEditedAt: new Date().toISOString(),
       figureEditedBy: 'user', // 나중에 auth user id로 교체 가능
     };
+    // ★ 편집한 figureData가 우선 렌더되도록 상위 fallback 소스 제거
+    //   FigureRenderer 우선순위: figureSvg → upscaledCropUrl → figureData
+    //   둘이 남아 있으면 사용자 편집이 반영 안 되고 옛 이미지가 계속 표시됨
+    delete updatedAnalysis.figureSvg;
+    delete updatedAnalysis.upscaledCropUrl;
+    delete updatedAnalysis.upscaleInfo;
 
     // 3. DB 저장
     const { error: updateError } = await supabaseAdmin
