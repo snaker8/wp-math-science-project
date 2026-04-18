@@ -1,11 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-
 import 'katex/dist/katex.min.css';
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: '과사람 수학 문제은행',
@@ -18,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" className={cn("font-sans", geist.variable)}>
+    <html lang="ko">
       <body>{children}</body>
     </html>
   );

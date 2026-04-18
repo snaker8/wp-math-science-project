@@ -37,6 +37,9 @@ import type { DocxProblem } from '@/lib/export/docx-generator';
 // HWPX는 /api/export/hwpx API로 서버사이드 생성
 import { useExamList, useExamProblems } from '@/hooks/useExamProblems';
 import type { InterpretedFigure } from '@/types/ocr';
+// ★ shadcn/ui components (Phase 2 점진 도입)
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 // ============================================================================
 // Types
@@ -1312,44 +1315,24 @@ export default function ExamManagementPage() {
                   </div>
                 </div>
 
-                {/* 탭 */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('exam')}
-                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                      activeTab === 'exam'
-                        ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
-                    }`}
-                  >
-                    <ScrollText className="h-3.5 w-3.5" />
-                    시험지
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('answer')}
-                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                      activeTab === 'answer'
-                        ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
-                    }`}
-                  >
-                    <CheckSquare className="h-3.5 w-3.5" />
-                    빠른정답
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('solution')}
-                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                      activeTab === 'solution'
-                        ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
-                    }`}
-                  >
-                    <BookOpenCheck className="h-3.5 w-3.5" />
-                    해설지
-                  </button>
+                {/* 탭 — shadcn Tabs + 삭제 버튼 */}
+                <div className="flex items-center gap-2">
+                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'exam' | 'answer' | 'solution')}>
+                    <TabsList className="bg-zinc-900/50 border border-white/5 h-auto p-1">
+                      <TabsTrigger value="exam" className="gap-1.5 text-xs data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-400">
+                        <ScrollText className="h-3.5 w-3.5" />
+                        시험지
+                      </TabsTrigger>
+                      <TabsTrigger value="answer" className="gap-1.5 text-xs data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-400">
+                        <CheckSquare className="h-3.5 w-3.5" />
+                        빠른정답
+                      </TabsTrigger>
+                      <TabsTrigger value="solution" className="gap-1.5 text-xs data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-400">
+                        <BookOpenCheck className="h-3.5 w-3.5" />
+                        해설지
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                   <button
                     type="button"
                     onClick={handleDeleteExam}
