@@ -67,13 +67,15 @@ export async function POST(
   }
 }
 
-// ★ 진행 상황 조회 — 메모리 상태 우선, 없으면 DB 상태
+// ★ 진행 상황 조회 — 메모리 우선, 없으면 DB + 실제 해설 완성 카운트로 추정
+//   (Next.js dev 재시작/Vercel serverless에서도 진행률 보이도록 DB 기반 fallback)
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
   const { examId } = await params;
 
+  // 1) 메모리에 작업 상태 있으면 가장 정확 — 그대로 반환
   const state = jobState.get(examId);
   if (state) {
     return NextResponse.json({
@@ -82,24 +84,92 @@ export async function GET(
       done: state.done,
       failed: state.failed,
       isRunning: state.isRunning,
+      source: 'memory',
     });
   }
 
-  // 메모리에 작업 상태 없음 — DB 상태만 반환 (이전 실행 결과)
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
+
+  // 2) DB에서 시험지 상태 + 업데이트 시각(배치 시작 추정점)
   const { data: exam } = await supabaseAdmin
     .from('exams')
-    .select('status')
+    .select('status, updated_at')
     .eq('id', examId)
     .single();
 
+  const { data: eps } = await supabaseAdmin
+    .from('exam_problems')
+    .select('problem_id')
+    .eq('exam_id', examId);
+  const problemIds = (eps || []).map((r: { problem_id: string }) => r.problem_id);
+  const total = problemIds.length;
+
+  const examStatus = exam?.status || 'unknown';
+  const isRunning = examStatus === 'IN_PROGRESS';
+  const batchStartedAt = exam?.updated_at as string | undefined;
+
+  // 3) 진행률 계산
+  //    - IN_PROGRESS 일 땐 "배치 시작 이후에 업데이트된 문제"만 done 으로 카운트
+  //      (기존에 해설 있던 문제가 시작 시점부터 done 으로 세어지는 문제 방지)
+  //    - 그 외엔 단순히 해설 보유 문제 수
+  let done = 0;
+  let lastProblemUpdate: string | null = null;
+  if (total > 0) {
+    if (isRunning && batchStartedAt) {
+      const { data: rows } = await supabaseAdmin
+        .from('problems')
+        .select('id, updated_at, solution_latex')
+        .in('id', problemIds)
+        .gt('updated_at', batchStartedAt);
+      for (const row of rows || []) {
+        const r = row as { solution_latex: string | null; updated_at: string };
+        if (r.solution_latex && r.solution_latex.trim().length > 30) done++;
+        if (!lastProblemUpdate || r.updated_at > lastProblemUpdate) lastProblemUpdate = r.updated_at;
+      }
+    } else {
+      const { data: done_rows } = await supabaseAdmin
+        .from('problems')
+        .select('id, solution_latex')
+        .in('id', problemIds);
+      for (const row of done_rows || []) {
+        const sol = (row as { solution_latex: string | null }).solution_latex;
+        if (sol && sol.trim().length > 30) done++;
+      }
+    }
+  }
+
+  // 4) 멈춘 배치 자동 복구 — IN_PROGRESS 상태인데 2분 이상 문제 업데이트 없으면 고아 작업으로 간주
+  //    (dev 서버 재시작 등으로 백그라운드 루프가 죽어 status 만 고착되는 케이스)
+  let finalStatus = examStatus;
+  let finalRunning = isRunning;
+  if (isRunning && lastProblemUpdate) {
+    const sinceMs = Date.now() - new Date(lastProblemUpdate).getTime();
+    if (sinceMs > 120_000) {
+      await supabaseAdmin.from('exams').update({ status: 'COMPLETED' }).eq('id', examId);
+      finalStatus = 'COMPLETED';
+      finalRunning = false;
+    }
+  } else if (isRunning && !lastProblemUpdate && batchStartedAt) {
+    // 배치 시작 후 한 건도 업데이트 없는데 2분 경과 — 마찬가지로 죽은 작업
+    const sinceMs = Date.now() - new Date(batchStartedAt).getTime();
+    if (sinceMs > 120_000) {
+      await supabaseAdmin.from('exams').update({ status: 'COMPLETED' }).eq('id', examId);
+      finalStatus = 'COMPLETED';
+      finalRunning = false;
+    }
+  }
+
   return NextResponse.json({
-    status: exam?.status || 'unknown',
-    total: 0,
-    done: 0,
-    isRunning: false,
+    status: finalStatus,
+    total,
+    done,
+    failed: 0,
+    isRunning: finalRunning,
+    source: finalRunning ? 'db-inferred' : 'db',
+    batchStartedAt,
+    lastProblemUpdate,
   });
 }
 

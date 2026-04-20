@@ -277,6 +277,20 @@ export function parseAnswerDocument(ocrText: string): ParseResult {
     solutions = parseSolutions(ocrText);
   }
 
+  // ★ 해설지만 있고 빠른답이 없는 경우(또는 일부 누락) — 각 해설 상단에서 정답 추출해 보충
+  //   학원 해설지는 "정답 ②", "답: 3", "**①**" 형태로 상단/말미에 정답을 명시하는 경우가 많음
+  if (solutions.length > 0) {
+    const existingNums = new Set(answers.map(a => a.problemNumber));
+    for (const sol of solutions) {
+      if (existingNums.has(sol.problemNumber)) continue;
+      const extracted = extractFinalAnswerFromSolution(sol.solutionLatex);
+      if (extracted) {
+        answers.push({ ...extracted, problemNumber: sol.problemNumber });
+      }
+    }
+    answers.sort((a, b) => a.problemNumber - b.problemNumber);
+  }
+
   return {
     answers,
     solutions,
@@ -286,6 +300,48 @@ export function parseAnswerDocument(ocrText: string): ParseResult {
       : solutions.length > 0 ? 'solution'
       : 'unknown',
   };
+}
+
+/**
+ * 해설 텍스트에서 최종 정답만 추출 (빠른답 자동 도출용)
+ * 흔한 해설지 패턴을 순차 매칭
+ */
+function extractFinalAnswerFromSolution(solutionText: string): Omit<ParsedAnswer, 'problemNumber'> | null {
+  if (!solutionText) return null;
+  const s = solutionText.trim();
+  if (s.length < 2) return null;
+
+  const top = s.slice(0, 300);
+
+  // 1. "정답: ②" / "정답 ③" / "정답 : 3번"
+  const labelCircled = s.match(/정\s*답[:：]?\s*([①②③④⑤])/);
+  if (labelCircled) return { answer: CIRCLED_TO_NUM[labelCircled[1]] || labelCircled[1], answerType: 'choice' };
+  const labelNum = s.match(/정\s*답[:：]?\s*([1-5])\s*번?(?![0-9])/);
+  if (labelNum) return { answer: labelNum[1], answerType: 'choice' };
+
+  // 2. "답: ②" / "답 ③번"
+  const ansCircled = s.match(/(?:^|\n|\s)답[:：]?\s*([①②③④⑤])/);
+  if (ansCircled) return { answer: CIRCLED_TO_NUM[ansCircled[1]] || ansCircled[1], answerType: 'choice' };
+  const ansNum = s.match(/(?:^|\n|\s)답[:：]?\s*([1-5])\s*번(?![0-9])/);
+  if (ansNum) return { answer: ansNum[1], answerType: 'choice' };
+
+  // 3. 해설 상단(첫 300자) — **①** / \textbf{①} / 단독 원형 숫자
+  const topCircled = top.match(/(?:\*\*|\\textbf\{)?\s*([①②③④⑤])\s*(?:\*\*|\})?/);
+  if (topCircled) return { answer: CIRCLED_TO_NUM[topCircled[1]] || topCircled[1], answerType: 'choice' };
+
+  // 4. "따라서/그러므로/∴ 답은 ②" / "... = 3" 말미 패턴
+  const endCircled = s.match(/(?:따라서|그러므로|∴)[^.\n]*?(?:답은|정답은)[^.\n]*?([①②③④⑤])/);
+  if (endCircled) return { answer: CIRCLED_TO_NUM[endCircled[1]] || endCircled[1], answerType: 'choice' };
+
+  // 5. 주관식 — 해설 끝부분 "= 숫자" 패턴 (마지막 등호 이후 값)
+  const numericTail = s.match(/=\s*(-?\d+(?:\s*\/\s*\d+)?(?:\.\d+)?)\s*(?:이다|입니다|\.|\s*$)/);
+  if (numericTail) return { answer: numericTail[1].replace(/\s+/g, ''), answerType: 'numeric' };
+
+  // 6. "답은 숫자" (마지막에 정수 단독)
+  const finalNum = s.match(/(?:답은|정답은|최종\s*답은?)\s*(-?\d+(?:\.\d+)?)/);
+  if (finalNum) return { answer: finalNum[1], answerType: 'numeric' };
+
+  return null;
 }
 
 /** 답 텍스트에서 핵심 답만 추출 */

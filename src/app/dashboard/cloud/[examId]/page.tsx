@@ -1373,37 +1373,30 @@ function ExamPaperView({
               </div>
             )}
 
-            {/* 문제 영역 — 2단은 flex 수동 분할 (CSS columns balance 치우침 방지) */}
+            {/* 문제 영역 — 2단은 CSS column-count로 네이티브 균형 */}
             {columns === 2 ? (
-              (() => {
-                const half = Math.ceil(pageProblems.length / 2);
-                return (
-                  <div style={{ display: 'flex', gap: `${COLUMN_GAP}px` }}>
-                    <div style={{ flex: 1, borderRight: '1px solid #e5e5e5', paddingRight: `${COLUMN_GAP / 2}px` }}>
-                      {pageProblems.slice(0, half).map((problem) => (
-                        <div
-                          key={problem.id}
-                          className="break-inside-avoid"
-                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
-                        >
-                          {renderProblem(problem)}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      {pageProblems.slice(half).map((problem) => (
-                        <div
-                          key={problem.id}
-                          className="break-inside-avoid"
-                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
-                        >
-                          {renderProblem(problem)}
-                        </div>
-                      ))}
-                    </div>
+              <div
+                style={{
+                  columnCount: 2,
+                  columnGap: `${COLUMN_GAP}px`,
+                  columnFill: 'balance',
+                  columnRule: '1px solid #e5e5e5',
+                }}
+              >
+                {pageProblems.map((problem) => (
+                  <div
+                    key={problem.id}
+                    className="break-inside-avoid"
+                    style={{
+                      marginBottom: `${getEffectiveGap(pageIdx)}px`,
+                      breakInside: 'avoid',
+                      pageBreakInside: 'avoid',
+                    }}
+                  >
+                    {renderProblem(problem)}
                   </div>
-                );
-              })()
+                ))}
+              </div>
             ) : (
               <div>
                 {pageProblems.map((problem) => (
@@ -1439,6 +1432,23 @@ function ExamPaperView({
         /* ── 시험지 KaTeX 미세 보정 ── */
         .exam-page .katex {
           font-size: 1.05em !important;
+        }
+        /* ★ CSS columns 내부 overflow 방어 (화면 뷰) */
+        .exam-page .katex-display {
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          margin: 0.3em 0;
+        }
+        .exam-page .katex-display > .katex {
+          max-width: 100%;
+        }
+        .exam-page table {
+          max-width: 100%;
+        }
+        .exam-page img {
+          max-width: 100%;
+          height: auto;
         }
 
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */
@@ -1480,6 +1490,23 @@ function ExamPaperView({
           #exam-print-root .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
+          }
+          /* ★ CSS columns 내부에서 display math / 표가 컬럼 너비 초과하지 않도록 보정 */
+          #exam-print-root .katex-display {
+            max-width: 100%;
+            overflow: hidden;
+            margin: 0.3em 0;
+          }
+          #exam-print-root .katex-display > .katex {
+            max-width: 100%;
+          }
+          #exam-print-root table {
+            max-width: 100%;
+            table-layout: auto;
+          }
+          #exam-print-root img {
+            max-width: 100%;
+            height: auto;
           }
           /* 해설지: 자연스러운 페이지 흐름 + 상하 여백 확보 */
           #exam-print-root .exam-page.solution-page {
@@ -1561,26 +1588,38 @@ function QuickAnswerView({
               const leftP = problems.find((p) => p.number === leftNum);
               const rightP = problems.find((p) => p.number === rightNum);
 
-              const formatAnswer = (ans: number | string | undefined): React.ReactNode => {
-                if (ans === undefined || ans === '-') return '-';
-                // 숫자 1~5 → 원형숫자
-                if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
+              const formatAnswer = (p?: ProblemData): React.ReactNode => {
+                if (!p || p.answer === undefined || p.answer === '-') return '-';
+                const ans = p.answer;
+                const isMC = (p.choices?.length ?? 0) >= 2;
+
+                // 숫자 1~5 → 원형숫자 (객관식)
+                if (typeof ans === 'number' && ans >= 1 && ans <= 5 && isMC) return circledNumbers[ans];
                 const str = String(ans).trim();
-                // ★ 문자열 "1"~"5" (순수 단일 숫자) → 원형숫자 자동 변환 (객관식)
-                if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
-                // ★ 이미 원형숫자
-                if (/^[①②③④⑤]$/.test(str)) return str;
-                // ★ "①" + 부가 설명 (예: "② 3" 또는 "① x=2")
-                const circledPrefix = str.match(/^([①②③④⑤])/);
-                if (circledPrefix) return circledPrefix[1];
-                // ★ verbose 객관식 패턴 보정 — "2 (2번)" / "4 (정답 번호: 4)" / "3번"
-                const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
-                if (sameParen && sameParen[1] === sameParen[2]) return circledNumbers[parseInt(sameParen[1])];
-                const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
-                if (verboseParen && verboseParen[1] === verboseParen[2]) return circledNumbers[parseInt(verboseParen[1])];
-                const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
-                if (banOnly) return circledNumbers[parseInt(banOnly[1])];
-                // 수식 포함
+                // ★ 객관식일 때만 원형숫자/번호 변환 시도
+                if (isMC) {
+                  if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
+                  if (/^[①②③④⑤]$/.test(str)) return str;
+                  const circledPrefix = str.match(/^([①②③④⑤])/);
+                  if (circledPrefix) return circledPrefix[1];
+                  const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
+                  if (sameParen && sameParen[1] === sameParen[2]) return circledNumbers[parseInt(sameParen[1])];
+                  const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
+                  if (verboseParen && verboseParen[1] === verboseParen[2]) return circledNumbers[parseInt(verboseParen[1])];
+                  const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
+                  if (banOnly) return circledNumbers[parseInt(banOnly[1])];
+                }
+
+                // ★ 서술형/단답형 판별 — 선택지 없고 답이 길거나 한글 포함이면 "서술형답" 표기
+                if (!isMC) {
+                  const hasLongKorean = /[가-힣]{2,}/.test(str);
+                  const tooLong = str.length > 20;
+                  if (hasLongKorean || tooLong) {
+                    return <span className="text-gray-500 text-sm italic font-normal">서술형답</span>;
+                  }
+                }
+
+                // 수식 포함 → LaTeX 렌더
                 const hasMath = /\$|\\frac|\\sqrt|\\dfrac|\^|_\{|[a-zA-Z].*[=+\-*/]/.test(str);
                 if (hasMath) {
                   return <MixedContentRenderer content={str} className="text-blue-700" />;
@@ -1594,13 +1633,13 @@ function QuickAnswerView({
                     {leftNum}
                   </td>
                   <td className="border border-gray-400 py-3 text-center text-base font-bold text-blue-700">
-                    {formatAnswer(leftP?.answer)}
+                    {formatAnswer(leftP)}
                   </td>
                   <td className="border border-gray-400 py-3 text-center text-sm font-semibold text-gray-800">
                     {rightNum <= problems.length ? rightNum : ''}
                   </td>
                   <td className="border border-gray-400 py-3 text-center text-base font-bold text-blue-700">
-                    {rightNum <= problems.length ? formatAnswer(rightP?.answer) : ''}
+                    {rightNum <= problems.length ? formatAnswer(rightP) : ''}
                   </td>
                 </tr>
               );
@@ -1638,7 +1677,78 @@ function SolutionView({
   const [gap, setGap] = useState(20);
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
+
+  // ★ 공용 폴링 시작자 — 버튼 클릭/재진입 모두에서 사용
+  const startBatchPolling = useCallback(() => {
+    if (pollIntervalRef.current) return; // 이미 폴링 중
+    let pollErrors = 0;
+    let idleCount = 0;
+    const poll = async () => {
+      try {
+        const statusRes = await fetch(`/api/exams/${examId}/batch-solutions`);
+        if (statusRes.ok) {
+          const status = await statusRes.json();
+          pollErrors = 0;
+          setBatchProgress({ current: status.done, total: status.total });
+          if (!status.isRunning) {
+            idleCount++;
+            if (idleCount >= 2) {
+              if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+              }
+              setIsGeneratingBatch(false);
+              refetchProblems();
+            }
+          } else {
+            idleCount = 0;
+          }
+        } else {
+          pollErrors++;
+        }
+      } catch {
+        pollErrors++;
+      }
+      if (pollErrors >= 5 && pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setIsGeneratingBatch(false);
+        console.warn('[batch-solutions] 폴링 연속 실패 — 중단');
+      }
+    };
+    poll();
+    pollIntervalRef.current = setInterval(poll, 2000);
+  }, [examId, refetchProblems]);
+
+  // ★ SolutionView 진입 시 서버에 진행 중인 배치가 있는지 조회 → 있으면 상태 복구 + 폴링 재개
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const r = await fetch(`/api/exams/${examId}/batch-solutions`);
+        if (!r.ok) return;
+        const s = await r.json();
+        if (cancelled) return;
+        if (s.isRunning) {
+          setIsGeneratingBatch(true);
+          setBatchProgress({ current: s.done || 0, total: s.total || 0 });
+          startBatchPolling();
+        }
+      } catch {
+        // 네트워크 에러 무시
+      }
+    };
+    check();
+    return () => {
+      cancelled = true;
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [examId, startBatchPolling]);
 
   // ── 측정 기반 A4 페이지 분할 (시험지와 동일 방식) ──
   const measureRef = useRef<HTMLDivElement>(null);
@@ -1833,48 +1943,9 @@ function SolutionView({
                 body: JSON.stringify({ problemIds: targetProblems.map(p => p.id) }),
               });
               if (res.ok) {
-                // 백그라운드 시작됨 — 폴링으로 진행 상황 추적
-                // ★ 개선사항:
-                //   - 첫 폴링 즉시 실행 (5초 대기 없이 바로 상태 확인)
-                //   - 간격 2초로 단축 (반응성)
-                //   - 연속 폴링 에러 카운트 (일시적 네트워크 문제로 UI 리셋 방지)
-                //   - 서버에서 isRunning=false 확인이 2번 연속일 때만 완료 처리
-                let pollErrors = 0;
-                let idleCount = 0;
-                const poll = async () => {
-                  try {
-                    const statusRes = await fetch(`/api/exams/${examId}/batch-solutions`);
-                    if (statusRes.ok) {
-                      const status = await statusRes.json();
-                      pollErrors = 0;
-                      setBatchProgress({ current: status.done, total: status.total });
-                      if (!status.isRunning) {
-                        idleCount++;
-                        // 2회 연속 idle → 확정적으로 완료
-                        if (idleCount >= 2) {
-                          clearInterval(pollInterval);
-                          setIsGeneratingBatch(false);
-                          refetchProblems();
-                        }
-                      } else {
-                        idleCount = 0;
-                      }
-                    } else {
-                      pollErrors++;
-                    }
-                  } catch {
-                    pollErrors++;
-                  }
-                  // 연속 5회 이상 에러 시 폴링 중단
-                  if (pollErrors >= 5) {
-                    clearInterval(pollInterval);
-                    setIsGeneratingBatch(false);
-                    console.warn('[batch-solutions] 폴링 연속 실패 — 중단');
-                  }
-                };
-                // 즉시 1회 실행 (5초 기다림 제거)
-                poll();
-                const pollInterval = setInterval(poll, 2000);
+                // 백그라운드 시작됨 — 공용 폴링 헬퍼로 진행 상황 추적
+                // (탭 재진입/페이지 복귀 시에도 startBatchPolling이 자동 재개)
+                startBatchPolling();
               } else {
                 const errText = await res.text().catch(() => '');
                 console.error('[batch-solutions] 실패:', res.status, errText);
@@ -1952,37 +2023,30 @@ function SolutionView({
               </div>
             )}
 
-            {/* 해설 영역 — 2단은 flex 수동 분할 */}
+            {/* 해설 영역 — 2단은 CSS column-count로 네이티브 균형 */}
             {columns === 2 ? (
-              (() => {
-                const half = Math.ceil(pageProblems.length / 2);
-                return (
-                  <div style={{ display: 'flex', gap: `${COLUMN_GAP}px` }}>
-                    <div style={{ flex: 1, borderRight: '1px solid #e5e5e5', paddingRight: `${COLUMN_GAP / 2}px` }}>
-                      {pageProblems.slice(0, half).map((problem) => (
-                        <div
-                          key={problem.id}
-                          className="break-inside-avoid"
-                          style={{ marginBottom: `${gap}px` }}
-                        >
-                          {renderSolution(problem)}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      {pageProblems.slice(half).map((problem) => (
-                        <div
-                          key={problem.id}
-                          className="break-inside-avoid"
-                          style={{ marginBottom: `${gap}px` }}
-                        >
-                          {renderSolution(problem)}
-                        </div>
-                      ))}
-                    </div>
+              <div
+                style={{
+                  columnCount: 2,
+                  columnGap: `${COLUMN_GAP}px`,
+                  columnFill: 'balance',
+                  columnRule: '1px solid #e5e5e5',
+                }}
+              >
+                {pageProblems.map((problem) => (
+                  <div
+                    key={problem.id}
+                    className="break-inside-avoid"
+                    style={{
+                      marginBottom: `${gap}px`,
+                      breakInside: 'avoid',
+                      pageBreakInside: 'avoid',
+                    }}
+                  >
+                    {renderSolution(problem)}
                   </div>
-                );
-              })()
+                ))}
+              </div>
             ) : (
               <div>
                 {pageProblems.map((problem) => (

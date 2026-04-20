@@ -46,7 +46,9 @@ export function detectSubjectFromTitle(title: string): string {
     let semester = 0;
 
     // "2-1" 패턴 (학년-학기)
-    const dashMatch = t.match(/(\d)\s*-\s*([12])/);
+    // ★ 경계 필수 — "26-2-1"처럼 연도 포함 파일명에서 "6-2"가 "학년6-학기2"로 오매칭되는 버그 방지
+    //   앞뒤에 숫자가 오면 안 되고, 학년은 반드시 1~3
+    const dashMatch = t.match(/(?<![0-9])([1-3])\s*-\s*([12])(?![0-9])/);
     if (dashMatch) {
       grade = parseInt(dashMatch[1]);
       semester = parseInt(dashMatch[2]);
@@ -95,15 +97,15 @@ export function detectGradeFromTitle(title: string): string {
 
   // 중학교
   if (/중\s*1|1학년.*중학/.test(t)) return '중1';
-  const midMatch = t.match(/중\s*(\d)|(\d)\s*-\s*\d.*중|(\d)학년.*중학/);
+  const midMatch = t.match(/중\s*([1-3])|(?<![0-9])([1-3])\s*-\s*[12](?![0-9]).*중|([1-3])학년.*중학/);
   if (midMatch) {
     const g = midMatch[1] || midMatch[2] || midMatch[3];
     if (g && parseInt(g) >= 1 && parseInt(g) <= 3) return `중${g}`;
   }
-  // "2-1" 패턴 + 중학교 맥락
+  // "2-1" 패턴 + 중학교 맥락 — 연도 숫자(26-2) 오매칭 방지 위해 숫자 경계 강제
   const isMiddle = /중학교|[가-힣]중(?!\d*학년.*고)|중\d/.test(t);
   if (isMiddle) {
-    const dashMatch = t.match(/(\d)\s*-\s*[12]/);
+    const dashMatch = t.match(/(?<![0-9])([1-3])\s*-\s*[12](?![0-9])/);
     if (dashMatch) return `중${dashMatch[1]}`;
   }
 

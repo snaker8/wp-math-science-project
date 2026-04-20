@@ -725,6 +725,9 @@ export function ProblemEditModal({
       }
 
       console.log(`[ProblemEditModal] Solution generated with ${data.usedModel}, verified: ${data.verification?.verified}`);
+      if (data.sonnetError) {
+        console.warn(`[ProblemEditModal] ⚠️ Sonnet 실패 원인: ${data.sonnetError}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '해설 생성 중 오류');
     } finally {
@@ -770,6 +773,10 @@ export function ProblemEditModal({
             choices: formattedChoices,
             type: answerType === 'objective' ? 'multiple_choice' : 'short_answer',
             choiceLayout: choiceLayout,
+            // ★ 사용자가 모달에서 직접 저장 — 재생성 시 이 답/해설을 보존(덮어쓰지 않음)
+            answer_user_edited: true,
+            solution_user_edited: true,
+            user_edited_at: new Date().toISOString(),
           },
           difficulty,
           type_code: typeCode || undefined,

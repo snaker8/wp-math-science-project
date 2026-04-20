@@ -323,7 +323,7 @@ ${problemText}${choicesSection}${imageContext}${levelInstruction}${userAnswerHin
 4. 수식: $...$로 인라인.
 5. ★★★ finalAnswer 규칙 (반드시 준수):
    ${isObjective
-     ? '- 객관식 문제이므로 **반드시 ①, ②, ③, ④, ⑤ 중 하나만** 작성.\n   - 선택지 중 정답의 **번호**를 작성 (선택지 값이 아님).\n   - 예: 정답이 3번 선택지 "9"이면 → finalAnswer: "③" (✅) / "9" (❌) / "③ 9" (❌).\n   - 반드시 원형숫자 한 글자만. 부가 설명 금지.\n   - ❌ "(가)", "(나)", "(다)", "1", "2", "가", "나" 등 기타 형식 절대 금지.\n   - 선택지에 (가)(나)(다) 라벨이 있어도 정답은 무조건 ①②③④⑤ 중 하나로 작성.'
+     ? '- 객관식 문제이므로 **반드시 ①, ②, ③, ④, ⑤ 중 하나만** 작성.\n   - 선택지 중 정답의 **번호**를 작성 (선택지 값이 아님).\n   - 예: 정답이 3번 선택지 "9"이면 → finalAnswer: "③" (✅) / "9" (❌) / "③ 9" (❌).\n   - 반드시 원형숫자 한 글자만. 부가 설명 금지.\n   - ❌ "(가)", "(나)", "(다)", "1", "2", "가", "나" 등 기타 형식 절대 금지.\n   - 선택지에 (가)(나)(다) 라벨이 있어도 정답은 무조건 ①②③④⑤ 중 하나로 작성.\n\n   ★★★ [최종 대조 절대 규칙] finalAnswer 결정 전 반드시 수행 ★★★\n   (A) 당신이 계산한 값(예: 순환마디 "132", 넓이 "12π")을 한 글자씩 또박또박 적어라.\n   (B) 정답 후보 선택지에 **원문으로 적힌 값**(예: "213", "12π")을 한 글자씩 또박또박 적어라.\n   (C) (A)와 (B)가 **문자·순서까지 완전히 동일**한지 확인하라. "132" vs "213"은 다른 값이다.\n   (D) 다르면 그 선택지는 오답이다. 모든 선택지를 다시 (A)~(C) 방식으로 스캔하여 **문자·순서까지 일치**하는 선택지만 정답이다.\n   (E) 일치 선택지가 0개면 해설 중 자신의 계산이 틀렸다는 뜻 — 처음부터 재계산.\n   ★ "비슷하다", "같은 숫자 조합이다"는 금지 — 순서가 다르면 다른 값이다.'
      : '- 서술형/단답형이므로 **대입·계산이 완료된 최종 수치/식**만 제시.\n   - ❌ 일반화된 파라미터 형태 절대 금지 (예: "x^2 - (a-2)x + (b-1) = 0", "y = ax + b", "α+β의 값")\n   - ✅ 구체적 수치/식 (예: "x^2 + 4x + 1 = 0", "3", "a=2, b=1", "(-1, 3)")\n   - 풀이 마지막의 "∴" 또는 "따라서" 뒤에 나오는 최종 결론값을 그대로 옮길 것.\n   - finalAnswer에 변수 a, b, k, α, β 등 미지수가 남아있으면 틀린 것임.'}
    - 빈 문자열 불가.
 ${hasImages ? `6. 그래프/도형: 문제 조건에서 수학적 관계 파악하여 풀이. "볼 수 없다" 금지.` : ''}
@@ -345,12 +345,28 @@ JSON:
   "steps": [
     { "stepNumber": 1, "description": "간결한 풀이 (1~2문장)", "latex": "" }
   ],
+  ${isObjective ? `"computed_value": "본 문제의 계산 결과값 — 선택지 번호가 아닌 실제 수치/식. 예: 순환마디 문제면 \\"132\\". (후처리 검증용)",
+  "per_choice_check": [
+    { "index": 1, "expected": "당신이 직접 계산한 ①의 실제 값", "stated": "선택지 ① 원문에 적힌 값", "match": "expected===stated 이면 true, 아니면 false" },
+    { "index": 2, "expected": "...", "stated": "...", "match": "..." },
+    { "index": 3, "expected": "...", "stated": "...", "match": "..." },
+    { "index": 4, "expected": "...", "stated": "...", "match": "..." },
+    { "index": 5, "expected": "...", "stated": "...", "match": "..." }
+  ],
+  ` : ''}
   "finalAnswer": "정답",
   "tip": "핵심 팁 (1줄, 선택)"
-}`;
+}
+
+${isObjective ? `★ per_choice_check 필수 작성 규칙:
+- 각 선택지 원문에서 제시된 값(stated)을 그대로 옮겨 적고, 당신이 독립 계산한 값(expected)과 문자 단위로 비교해 match를 판정.
+- "비슷하다"가 아니라 "문자·순서 완전 일치"만 true. "132" vs "213"은 false.
+- match: true 가 정확히 한 개여야 함. finalAnswer는 그 선택지 번호와 반드시 일치.
+- match: true가 0개면 자기 계산이 틀린 것 → 처음부터 재계산.` : ''}`;
 
     let solution: any = null;
     let usedModel = '';
+    let sonnetErrorInfo = '';
     // ★ 검증 루프에서 재사용하기 위해 스코프 외부로 선언
     let userContent: any;
     let systemPrompt: string = '';
@@ -394,35 +410,117 @@ JSON:
           ? `당신은 한국 "${subject}" 과목 시중 교재(수학의 정석, 쎈, 마플, RPM 등)의 해설지를 집필하는 전문가입니다. 반드시 ${subject} 교육과정 범위 내의 개념만 사용하여 풀이하세요. 상위 과정 개념 사용을 금지합니다. 학생이 혼자 읽고 완전히 이해할 수 있도록 교재 해설지처럼 명확하고 체계적으로 작성합니다. 반드시 유효한 JSON으로만 응답하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.`
           : '당신은 한국 수학 시중 교재(수학의 정석, 쎈, 마플, RPM 등)의 해설지를 집필하는 전문가입니다. 학생이 혼자 읽고 완전히 이해할 수 있도록 교재 해설지처럼 명확하고 체계적으로 작성합니다. 반드시 유효한 JSON으로만 응답하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.';
 
+        // ★ extended thinking: output-128k beta 헤더로 상한 확장 → thinking + response 여유 확보
+        //   budget 6000 + 응답 6000 여유 = max 12000
+        //   도형/이미지 있는 어려운 문제에서 thinking이 budget 초과해 response 토큰 잠식하는 사고 방지
+        const THINKING_BUDGET = 6000;
+        const MAX_TOKENS = 12000;
+
         const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': ANTHROPIC_API_KEY,
             'anthropic-version': '2023-06-01',
+            // ★ thinking 결과로 output이 8192 초과 가능성 대비 128k 출력 허용
+            'anthropic-beta': 'output-128k-2025-02-19',
           },
           body: JSON.stringify({
             model: ANTHROPIC_MODEL,
-            max_tokens: 8000,
+            max_tokens: MAX_TOKENS,
             system: systemPrompt,
             messages: [{ role: 'user', content: userContent }],
-            temperature: 0.2,
+            thinking: { type: 'enabled', budget_tokens: THINKING_BUDGET },
+            temperature: 1, // thinking 활성 시 API 요구사항
           }),
         });
 
         if (claudeRes.ok) {
           const claudeData = await claudeRes.json();
-          const textBlock = claudeData.content?.find((c: { type: string }) => c.type === 'text');
+          const contentArr = Array.isArray(claudeData.content) ? claudeData.content : [];
+          const thinkingBlock = contentArr.find((c: { type: string }) => c.type === 'thinking');
+          const textBlock = contentArr.find((c: { type: string }) => c.type === 'text');
           const rawText = textBlock?.text || '';
+          console.log(`[generate-solution] Sonnet 응답: thinking=${!!thinkingBlock} (${thinkingBlock?.thinking?.length || 0}자), text=${rawText.length}자`);
           solution = parseJsonResponse(rawText);
           if (solution) {
-            usedModel = 'claude-sonnet';
+            usedModel = thinkingBlock ? 'claude-sonnet-thinking' : 'claude-sonnet';
           } else {
             console.error('[generate-solution] Claude Sonnet JSON 파싱 실패. rawText:', rawText.substring(0, 500));
+            // ★ thinking이 budget 다 잡아먹어 text가 비어 나온 케이스 — thinking 끄고 재시도 (GPT-4o 폴백 전)
+            if (thinkingBlock && rawText.trim().length === 0) {
+              console.log('[generate-solution] thinking 토큰 초과로 text 비어 반환 — plain Sonnet 재시도');
+              try {
+                const retry = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': ANTHROPIC_API_KEY,
+                    'anthropic-version': '2023-06-01',
+                  },
+                  body: JSON.stringify({
+                    model: ANTHROPIC_MODEL,
+                    max_tokens: 4000,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: userContent }],
+                    temperature: 0.2,
+                  }),
+                });
+                if (retry.ok) {
+                  const data = await retry.json();
+                  const tb = Array.isArray(data.content) ? data.content.find((c: { type: string }) => c.type === 'text') : null;
+                  const rt = tb?.text || '';
+                  solution = parseJsonResponse(rt);
+                  if (solution) {
+                    usedModel = 'claude-sonnet';
+                    console.log('[generate-solution] ✅ plain Sonnet 재시도 성공');
+                  }
+                }
+              } catch (e) {
+                console.error('[generate-solution] plain Sonnet 재시도 실패:', e);
+              }
+            }
           }
         } else {
           const errText = await claudeRes.text().catch(() => '');
-          console.error(`[generate-solution] Claude Sonnet API 오류 (${claudeRes.status}):`, errText.substring(0, 500));
+          sonnetErrorInfo = `Sonnet-thinking ${claudeRes.status}: ${errText.substring(0, 300)}`;
+          console.error(`[generate-solution] Claude Sonnet-thinking API 오류 (${claudeRes.status}):`, errText.substring(0, 800));
+          // ★ thinking 조합이 뭐든 에러나면 무조건 plain Sonnet 재시도 (GPT-4o로 바로 떨어지기 전에)
+          console.log('[generate-solution] plain Sonnet으로 재시도 중...');
+          try {
+            const retry = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model: ANTHROPIC_MODEL,
+                max_tokens: 4000,
+                system: systemPrompt,
+                messages: [{ role: 'user', content: userContent }],
+                temperature: 0.2,
+              }),
+            });
+            if (retry.ok) {
+              const data = await retry.json();
+              const textBlock = Array.isArray(data.content) ? data.content.find((c: { type: string }) => c.type === 'text') : null;
+              const rawText = textBlock?.text || '';
+              solution = parseJsonResponse(rawText);
+              if (solution) {
+                usedModel = 'claude-sonnet';
+                console.log('[generate-solution] ✅ plain Sonnet 재시도 성공');
+              }
+            } else {
+              const retryErr = await retry.text().catch(() => '');
+              sonnetErrorInfo += ` | plain-retry ${retry.status}: ${retryErr.substring(0, 200)}`;
+              console.error(`[generate-solution] plain Sonnet 재시도도 실패 (${retry.status}):`, retryErr.substring(0, 500));
+            }
+          } catch (e) {
+            console.error('[generate-solution] plain Sonnet 재시도 예외:', e);
+            sonnetErrorInfo += ` | retry exception: ${String(e).substring(0, 200)}`;
+          }
         }
       } catch (e) {
         console.error('[generate-solution] Claude Sonnet failed:', e);
@@ -473,6 +571,7 @@ JSON:
           const rawText = gptData.choices?.[0]?.message?.content || '';
           solution = parseJsonResponse(rawText);
           usedModel = 'gpt-4o';
+          console.warn('[generate-solution] ⚠️ GPT-4o 폴백 사용 (Sonnet 실패)');
         }
       } catch (e) {
         console.error('[generate-solution] GPT-4o fallback failed:', e);
@@ -482,6 +581,7 @@ JSON:
     if (!solution) {
       return NextResponse.json({ error: 'All AI models failed to generate solution' }, { status: 500 });
     }
+    console.log(`[generate-solution] ✅ 최종 사용 모델: ${usedModel} (problem ${problemId})`);
 
     // ★ 객관식 finalAnswer 정규화 — 무조건 ①~⑤ 원형숫자로 변환
     if (isObjective && solution.finalAnswer) {
@@ -553,6 +653,71 @@ JSON:
           console.warn(`[generate-solution] ⚠️ 객관식 답 원형숫자 변환 실패: "${originalAns}" (choices: ${choicesForPrompt.slice(0, 3).join(' | ')}...)`);
         }
       }
+
+      // ★★★ [최우선] per_choice_check 기반 교정 — AI가 선택지별로 직접 대조한 결과 활용
+      //   match=true 가 정확히 하나면 그 번호로 강제 교정 (finalAnswer가 다르게 나와도)
+      const perChoiceCheck = Array.isArray(solution.per_choice_check) ? solution.per_choice_check : null;
+      let perChoiceCorrected = false;
+      if (perChoiceCheck && perChoiceCheck.length > 0) {
+        const trueMatches = perChoiceCheck.filter((c: any) => c && (c.match === true || c.match === 'true'));
+        if (trueMatches.length === 1) {
+          const idx = Number(trueMatches[0].index);
+          if (idx >= 1 && idx <= 5) {
+            const correctLetter = CIRCLED[idx - 1];
+            if (correctLetter !== solution.finalAnswer) {
+              console.warn(`[generate-solution] ★★ per_choice_check 교정: AI finalAnswer="${solution.finalAnswer}" → match=true인 "${correctLetter}" (expected="${trueMatches[0].expected}" === stated="${trueMatches[0].stated}")`);
+              solution.finalAnswer = correctLetter;
+            } else {
+              console.log(`[generate-solution] per_choice_check OK: ${correctLetter} (expected="${trueMatches[0].expected}")`);
+            }
+            perChoiceCorrected = true;
+          }
+        } else if (trueMatches.length === 0) {
+          console.warn(`[generate-solution] ⚠️ per_choice_check 전부 false — AI 계산이 틀렸다는 뜻. finalAnswer 신뢰성 낮음`);
+        } else {
+          console.warn(`[generate-solution] ⚠️ per_choice_check에 match=true가 ${trueMatches.length}개 — 모호. AI finalAnswer 그대로 유지`);
+        }
+      }
+
+      // ★ per_choice_check로 교정 안 됐으면 computed_value 기반 2차 방어선
+      //   예: 해설에선 "순환마디 132" 계산해놓고 finalAnswer는 ④("213")으로 찍는 케이스
+      //   computed_value 필드의 값과 각 선택지 원문 값을 정규화 비교해 진짜 맞는 번호로 교정
+      const computedValue = String(solution.computed_value || '').trim();
+      if (!perChoiceCorrected && computedValue && /^[①②③④⑤]$/.test(String(solution.finalAnswer || ''))) {
+        const normalizeForCompare = (v: string): string => {
+          return v
+            .replace(/\s+/g, '')
+            .replace(/\$+/g, '')
+            .replace(/\\,|\\;|\\quad/g, '')
+            .replace(/\\text\{[^}]*\}/g, '')
+            .replace(/\\ldots|\\dots|…|\.\.\./g, '')
+            .replace(/\\mathrm\{([^}]*)\}/g, '$1')
+            .replace(/[{}]/g, '')
+            .toLowerCase();
+        };
+        const extractChoiceValue = (raw: string): string => {
+          let s = raw.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
+          // 표 형식 "$식$ | 값" → 파이프 뒤쪽 값
+          if (s.includes('|')) {
+            const parts = s.split('|').map(p => p.trim()).filter(Boolean);
+            if (parts.length > 0) s = parts[parts.length - 1];
+          }
+          return s;
+        };
+        const targetNorm = normalizeForCompare(computedValue);
+        const matchIdx = choicesForPrompt.findIndex(c => {
+          const cv = normalizeForCompare(extractChoiceValue(c));
+          return !!targetNorm && cv === targetNorm;
+        });
+        const aiPickedIdx = CIRCLED.indexOf(String(solution.finalAnswer));
+        if (matchIdx >= 0 && matchIdx !== aiPickedIdx) {
+          const corrected = CIRCLED[matchIdx];
+          console.warn(`[generate-solution] ★★ 교차검증 교정: computed_value="${computedValue}" — AI는 "${solution.finalAnswer}"(${choicesForPrompt[aiPickedIdx] || '??'}) 골랐으나 선택지 텍스트 매칭은 "${corrected}"(${choicesForPrompt[matchIdx]}) → 자동 교정`);
+          solution.finalAnswer = corrected;
+        } else if (matchIdx < 0 && computedValue) {
+          console.log(`[generate-solution] computed_value="${computedValue}"가 어느 선택지와도 정확 매칭 안 됨 — AI 선택 "${solution.finalAnswer}" 그대로 유지 (수식 정규화 실패 가능성)`);
+        }
+      }
     }
 
     // 3. Sonnet 자체 검산 (독립 재풀이 → 1차 답과 일치 확인)
@@ -587,13 +752,16 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             'Content-Type': 'application/json',
             'x-api-key': ANTHROPIC_API_KEY,
             'anthropic-version': '2023-06-01',
+            'anthropic-beta': 'output-128k-2025-02-19',
           },
           body: JSON.stringify({
             model: ANTHROPIC_MODEL,
-            max_tokens: 1500,
+            // 검산도 thinking — budget 3000 + output 2500 < 8192
+            max_tokens: 6000,
             system: '당신은 한국 수학 문제의 독립 검산자입니다. 정확한 풀이와 정답만 JSON으로 응답하세요.',
             messages: [{ role: 'user', content: userContentVerify }],
-            temperature: 0.3,
+            thinking: { type: 'enabled', budget_tokens: 3000 },
+            temperature: 1,
           }),
         });
         if (r.ok) {
@@ -625,11 +793,34 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
     const solutionText = formatSolutionText(solution);
 
     // 5. DB 업데이트
-    // ★ 사용자가 이미 입력한 정답이 있으면 보존 (덮어쓰지 않음)
-    // AI가 다른 답을 내놓으면 AI 답은 verification에만 쓰고 DB의 정답은 유지
-    const finalAnswerToSave = userEnteredAnswer && userEnteredAnswer.length > 0
-      ? userEnteredAnswer  // 사용자 정답 우선 (신뢰)
-      : solution.finalAnswer;
+    // ★ 객관식: 해설의 결론(①~⑤)이 정규화돼 있으면 AI 답을 우선 채택
+    //   사유: userEnteredAnswer가 OCR 초기 파싱 산물인 경우가 많아 "2"·"5" 같은 계산 중간값·숫자만 잘못 저장되는 사고 빈발
+    //   해설 본문("∴ 정답: ④")이 올바르므로 그 결론을 DB 정답과 일치시키는 것이 사용자 기대에 부합
+    // ★ 주관식: 기존처럼 사용자 정답(신뢰 가능) > AI 답 순으로 사용
+    // ★ 사용자 직접 편집 플래그 확인
+    //   - answer_user_edited/solution_user_edited 가 true면 모달에서 직접 저장한 값 → 재생성으로 덮지 않음
+    //   - 플래그 없으면 OCR 초기값/이전 AI 결과 → 새 AI 결과로 교체
+    const answerUserEdited = (problem.answer_json as Record<string, any>)?.answer_user_edited === true;
+    const solutionUserEdited = (problem.answer_json as Record<string, any>)?.solution_user_edited === true;
+
+    let finalAnswerToSave: string;
+    if (answerUserEdited && userEnteredAnswer) {
+      // 사용자 직접 입력 보존
+      finalAnswerToSave = userEnteredAnswer;
+      console.log(`[generate-solution] ★ 사용자 편집 정답 보존: "${finalAnswerToSave}" (AI가 제안한 "${solution.finalAnswer}" 는 무시)`);
+    } else if (isObjective && solution.finalAnswer && /^[①②③④⑤]$/.test(String(solution.finalAnswer).trim())) {
+      // 객관식 + 사용자 편집 없음 → AI 결과로 교체
+      finalAnswerToSave = String(solution.finalAnswer).trim();
+      if (userEnteredAnswer && userEnteredAnswer !== finalAnswerToSave) {
+        console.log(`[generate-solution] ★ 객관식 정답 덮어쓰기: OCR/기존 "${userEnteredAnswer}" → 해설 결론 "${finalAnswerToSave}"`);
+      }
+    } else {
+      // 주관식 + 사용자 편집 없음 → AI 결과로 교체 (기존엔 OCR 값 보존했으나 사용자 요청에 따라 변경)
+      finalAnswerToSave = solution.finalAnswer || userEnteredAnswer || '';
+      if (userEnteredAnswer && userEnteredAnswer !== finalAnswerToSave) {
+        console.log(`[generate-solution] ★ 주관식 정답 덮어쓰기: OCR/기존 "${userEnteredAnswer}" → AI "${finalAnswerToSave}"`);
+      }
+    }
 
     const updatedAnswerJson = {
       ...(problem.answer_json as Record<string, any> || {}),
@@ -637,12 +828,17 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
       correct_answer: finalAnswerToSave,
     };
 
+    // ★ 해설: 사용자가 직접 편집한 해설은 보존
+    const updateFields: Record<string, any> = { answer_json: updatedAnswerJson };
+    if (solutionUserEdited) {
+      console.log(`[generate-solution] ★ 사용자 편집 해설 보존 (solution_latex 유지)`);
+    } else {
+      updateFields.solution_latex = solutionText;
+    }
+
     await supabaseAdmin
       .from('problems')
-      .update({
-        solution_latex: solutionText,
-        answer_json: updatedAnswerJson,
-      })
+      .update(updateFields)
       .eq('id', problemId);
 
     return NextResponse.json({
@@ -653,6 +849,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
       steps: solution.steps,
       verification,
       usedModel,
+      sonnetError: sonnetErrorInfo || undefined,
     });
   } catch (error) {
     console.error('[generate-solution] Error:', error);

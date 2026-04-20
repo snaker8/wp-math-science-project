@@ -35,6 +35,13 @@ const DOMAIN_LABELS: Record<string, string> = {
 
 const DOMAIN_ORDER = ['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING'];
 
+const SUBJECT_CODE_NAMES: Record<string, string> = {
+  '01': '중1-1', '02': '중1-2', '03': '중2-1', '04': '중2-2',
+  '05': '중3-1', '06': '중3-2',
+  '07': '공통수학1', '08': '공통수학2', '09': '대수',
+  '10': '미적분1', '11': '확률과 통계', '12': '미적분2', '13': '기하',
+};
+
 // MS07-04-01-02 → "공통수학1 > 방정식과 부등식" 같은 단원명 (대단원만)
 function parseTypeCodeToUnit(typeCode: string): { subjectCode: string; unitCode: string; display: string } {
   // MS07-04-01-02 또는 MS07-04 (단축)
@@ -42,15 +49,12 @@ function parseTypeCodeToUnit(typeCode: string): { subjectCode: string; unitCode:
   if (!m) return { subjectCode: '', unitCode: '', display: '미분류' };
   const subjectCode = m[1];
   const unitCode = m[2];
+  // ★ 알 수 없는 과목 코드(01~13 외)는 AI 환각으로 간주해 미분류 처리
+  if (!SUBJECT_CODE_NAMES[subjectCode]) {
+    return { subjectCode: '', unitCode: '', display: '미분류' };
+  }
   return { subjectCode, unitCode, display: `${subjectCode}-${unitCode}` };
 }
-
-const SUBJECT_CODE_NAMES: Record<string, string> = {
-  '01': '중1-1', '02': '중1-2', '03': '중2-1', '04': '중2-2',
-  '05': '중3-1', '06': '중3-2',
-  '07': '공통수학1', '08': '공통수학2', '09': '대수',
-  '10': '미적분1', '11': '확률과 통계', '12': '미적분2', '13': '기하',
-};
 
 export default function ExamAnalysisPage() {
   const params = useParams();
@@ -168,27 +172,102 @@ export default function ExamAnalysisPage() {
   }, [stats.avgDifficulty]);
 
   const handleCopyReportText = async () => {
-    const lines = [
-      `[${exam?.title || '시험지'}] 유형 분석 리포트`,
-      `총 문항: ${stats.total}문항 (${stats.totalPoints}점)`,
-      `평균 난이도: ${stats.avgDifficulty.toFixed(1)} (${avgDifficultyLabel})`,
-      `고유 유형 수: ${stats.uniqueTypeCount}개`,
-      `\n## 난이도 분포`,
-      ...Object.entries(stats.diffDist)
-        .filter(([, v]) => v > 0)
-        .map(([k, v]) => `난이도 ${k}: ${v}문항`),
-      `\n## 인지영역 분포`,
-      ...DOMAIN_ORDER.map((d) => `${DOMAIN_LABELS[d]}: ${stats.domDist[d]}문항`),
-      `\n## 단원별 분포`,
-      ...unitEntries.map(([k, v]) => {
-        const unitName = unitNameMap[k] || k;
-        const subjCode = k.split('-')[0];
-        const subjName = SUBJECT_CODE_NAMES[subjCode] || subjCode;
-        return `${subjName} > ${unitName}: ${v}문항`;
-      }),
-    ];
+    // 한글/CJK 글자는 2칸, ASCII는 1칸으로 계산 — 모노스페이스/비모노스페이스 모두 적당히 정렬
+    const charWidth = (s: string): number =>
+      [...s].reduce((w, c) => {
+        const code = c.codePointAt(0) || 0;
+        // CJK 범위: 한글, 한자, 일본어 + 전각 기호
+        if ((code >= 0x1100 && code <= 0x115F) || (code >= 0x2E80 && code <= 0x9FFF) ||
+            (code >= 0xAC00 && code <= 0xD7AF) || (code >= 0xFF00 && code <= 0xFF60)) return w + 2;
+        return w + 1;
+      }, 0);
+    const padR = (s: string, width: number): string => s + ' '.repeat(Math.max(0, width - charWidth(s)));
+    const padL = (s: string, width: number): string => ' '.repeat(Math.max(0, width - charWidth(s))) + s;
+
+    const title = exam?.title || '시험지';
+    const lines: string[] = [];
+    const hr = '━'.repeat(50);
+    const sep = '─'.repeat(50);
+
+    lines.push(hr);
+    lines.push('  과사람 유형 분석 리포트');
+    lines.push(hr);
+    lines.push(`  시험지       : ${title}`);
+    lines.push(`  총 문항      : ${stats.total}문항 (${stats.totalPoints}점)`);
+    lines.push(`  평균 난이도  : ${stats.avgDifficulty.toFixed(1)} (${avgDifficultyLabel})`);
+    lines.push(`  고유 유형 수 : ${stats.uniqueTypeCount}개`);
+    lines.push(`  과목 범위    : ${stats.subjectsInExam.map((c) => SUBJECT_CODE_NAMES[c] || c).join(' / ') || '-'}`);
+    lines.push(`  미분류       : ${unclassifiedCount}문항`);
+    lines.push('');
+
+    // 난이도 분포
+    lines.push('▶ 난이도 분포');
+    lines.push(sep);
+    Object.entries(stats.diffDist).forEach(([k, v]) => {
+      const pct = stats.total > 0 ? `${((v / stats.total) * 100).toFixed(0)}%` : '0%';
+      lines.push(`  난이도 ${padL(k, 2)} : ${padL(`${v}문항`, 7)}  (${padL(pct, 4)})`);
+    });
+    lines.push('');
+
+    // 인지영역 분포
+    lines.push('▶ 인지영역 분포');
+    lines.push(sep);
+    const domainLabelWidth = Math.max(...DOMAIN_ORDER.map((d) => charWidth(DOMAIN_LABELS[d])));
+    DOMAIN_ORDER.forEach((d) => {
+      const c = stats.domDist[d] || 0;
+      const pct = stats.total > 0 ? `${((c / stats.total) * 100).toFixed(0)}%` : '0%';
+      lines.push(`  ${padR(DOMAIN_LABELS[d], domainLabelWidth)} : ${padL(`${c}문항`, 7)}  (${padL(pct, 4)})`);
+    });
+    lines.push('');
+
+    // 단원별 분포
+    lines.push('▶ 단원별 분포 (대단원 기준)');
+    lines.push(sep);
+    const unitRows = unitEntries.map(([k, v]) => {
+      const unitName = unitNameMap[k] || k;
+      const subjCode = k.split('-')[0];
+      const subjName = SUBJECT_CODE_NAMES[subjCode] || subjCode;
+      const pct = stats.total > 0 ? `${((v / stats.total) * 100).toFixed(0)}%` : '0%';
+      return { subjName, unitName, v, pct };
+    });
+    const maxSubjW = unitRows.length > 0 ? Math.max(...unitRows.map(r => charWidth(r.subjName))) : 0;
+    const maxUnitW = unitRows.length > 0 ? Math.max(...unitRows.map(r => charWidth(r.unitName))) : 0;
+    unitRows.forEach((r) => {
+      lines.push(`  ${padR(r.subjName, maxSubjW)}  ${padR(r.unitName, maxUnitW)} : ${padL(`${r.v}문항`, 7)}  (${padL(r.pct, 4)})`);
+    });
+    if (unclassifiedCount > 0) {
+      const pct = stats.total > 0 ? `${((unclassifiedCount / stats.total) * 100).toFixed(0)}%` : '0%';
+      lines.push(`  ${padR('', maxSubjW)}  ${padR('미분류', maxUnitW)} : ${padL(`${unclassifiedCount}문항`, 7)}  (${padL(pct, 4)})`);
+    }
+    lines.push('');
+
+    // 문제별 상세 — 문제 내용/해설 텍스트는 제외, 메타정보만
+    lines.push('▶ 문제별 상세');
+    lines.push(sep);
+    const tableRows = problems.map((p) => ({
+      num: String(p.number),
+      code: p.typeCode || '-',
+      name: (p as any).typeName || '-',
+      diff: p.difficulty > 0 ? String(p.difficulty) : '-',
+      dom: DOMAIN_LABELS[p.cognitiveDomain] || p.cognitiveDomain,
+      ans: String(p.answer ?? '-'),
+    }));
+    const wNum = Math.max(2, ...tableRows.map(r => charWidth(r.num)));
+    const wCode = Math.max(charWidth('유형코드'), ...tableRows.map(r => charWidth(r.code)));
+    const wName = Math.max(charWidth('유형명'), ...tableRows.map(r => charWidth(r.name)));
+    const wDiff = Math.max(charWidth('난이도'), ...tableRows.map(r => charWidth(r.diff)));
+    const wDom = Math.max(charWidth('인지영역'), ...tableRows.map(r => charWidth(r.dom)));
+    const wAns = Math.max(charWidth('정답'), ...tableRows.map(r => charWidth(r.ans)));
+    // 헤더
+    lines.push(`  ${padL('#', wNum)}  ${padR('유형코드', wCode)}  ${padR('유형명', wName)}  ${padR('난이도', wDiff)}  ${padR('인지영역', wDom)}  ${padL('정답', wAns)}`);
+    lines.push(`  ${'-'.repeat(wNum)}  ${'-'.repeat(wCode)}  ${'-'.repeat(wName)}  ${'-'.repeat(wDiff)}  ${'-'.repeat(wDom)}  ${'-'.repeat(wAns)}`);
+    tableRows.forEach((r) => {
+      lines.push(`  ${padL(r.num, wNum)}  ${padR(r.code, wCode)}  ${padR(r.name, wName)}  ${padL(r.diff, wDiff)}  ${padR(r.dom, wDom)}  ${padL(r.ans, wAns)}`);
+    });
+
+    const text = lines.join('\n');
     try {
-      await navigator.clipboard.writeText(lines.join('\n'));
+      await navigator.clipboard.writeText(text);
       alert('분석 데이터가 클립보드에 복사되었습니다');
     } catch {
       alert('클립보드 복사에 실패했습니다');
