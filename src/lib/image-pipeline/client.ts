@@ -14,6 +14,11 @@ import type {
 const PIPELINE_URL =
   process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://127.0.0.1:8200';
 
+// 로컬 PIPELINE_URL 여부 감지 — 로컬이면 file-path 방식(빠름), 원격이면 FormData 업로드
+const PIPELINE_IS_LOCAL = /(^127\.0\.0\.1|^localhost|^0\.0\.0\.0)/i.test(
+  (process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://127.0.0.1:8200').replace(/^https?:\/\//, '')
+);
+
 /** Buffer → Blob 변환 헬퍼 */
 function toBlob(buf: Buffer): Blob {
   const arr = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -54,8 +59,9 @@ export async function extractImages(
   const buf = Buffer.isBuffer(file) ? file : null;
   const fileName = options.fileName || 'upload.pdf';
 
-  // 대용량 Buffer(1MB 이상): 임시 파일 저장 후 경로만 전달 (Node.js fetch 대용량 FormData 버그 우회)
-  if (buf && buf.length > 1_000_000) {
+  // 대용량 Buffer(1MB 이상) + **로컬 파이프라인**: 임시 파일 저장 후 경로만 전달 (빠름)
+  // 원격 파이프라인(Railway 등): 파일시스템 공유 불가 → FormData 업로드로 fallback
+  if (buf && buf.length > 1_000_000 && PIPELINE_IS_LOCAL) {
     const fs = await import('fs');
     const os = await import('os');
     const path = await import('path');
@@ -83,7 +89,7 @@ export async function extractImages(
       const url = new URL(`${PIPELINE_URL}/extract-local`);
       const res: { status: number; body: string } = await new Promise((resolve, reject) => {
         const req = http.request({
-          hostname: '127.0.0.1',
+          hostname: url.hostname || '127.0.0.1',
           port: Number(url.port) || 8200,
           path: url.pathname,
           method: 'POST',
@@ -269,8 +275,8 @@ export async function checkHealth(): Promise<boolean> {
     const url = new URL(`${PIPELINE_URL}/health`);
     return new Promise((resolve) => {
       const req = http.request({
-        hostname: '127.0.0.1',
-        port: Number(url.port) || 8200,
+        hostname: url.hostname || '127.0.0.1',
+        port: Number(url.port) || (url.protocol === 'https:' ? 443 : 8200),
         path: '/health',
         method: 'GET',
         timeout: 15000,

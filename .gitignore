@@ -43,3 +43,20 @@ nul
 
 # Graphify knowledge graph output
 graphify-out/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# 로컬 도식 이미지 (3.1GB) — Supabase Storage로 이관됨
+image-pipeline/dasaram_diagram_db/images/
+image-pipeline/dasaram_diagram_db/metadata/
+image-pipeline/dasaram_diagram_db/upload_checkpoint.json
+
+# 교재 해설 데이터 (크기/라이선스)
+curriculum_data/textbook_solutions/
+
+# 업로드/추출 임시 파일
+image-pipeline/dasaram_diagram_db/*.tmp
+image-pipeline/*.log

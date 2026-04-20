@@ -119,7 +119,8 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
   - `src/lib/workflow/cloud-flow.ts` — CLASSIFICATION_PROMPT에 {MATHSECR_TYPES} 동적 주입
   - `src/app/api/exams/[examId]/auto-fix/route.ts` — 수학비서 유형 테이블 기반 재분류
   - `src/app/api/problems/[problemId]/reanalyze/route.ts` — 수학비서 코드 사용
-  - typeCode 형식: `MS07-01-03-02` (MS + 과목코드 + 대단원 + 중단원 + 소단원)
+  - typeCode 형식: `MS07-01-03-02-05` (MS + 과목코드 + 대단원 + 중단원 + 소단원 + 세부유형, 5-세그먼트)
+  - 일부 노드는 세부유형이 없어 4-세그먼트 `MS07-01-03-02`로 끝남 → 파서는 양쪽 다 처리해야 함
 - **로그인 복구 + 도식 추출 수정** (2026-04-08~09)
   - `@supabase/ssr` 0.1.0→0.10.0 업데이트
   - `src/lib/supabase/middleware.ts` — getAuthUser 버그 수정

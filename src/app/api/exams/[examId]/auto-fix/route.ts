@@ -181,8 +181,8 @@ export async function POST(
           console.warn('[auto-fix] mathsecr-prompt load failed:', e);
         }
 
-        // 예제 코드에 실제 resolvedCode 반영
-        const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02` : 'MS07-01-03-02';
+        // 예제 코드에 실제 resolvedCode 반영 (5-세그먼트 세부유형 레벨)
+        const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02-05` : 'MS07-01-03-02-05';
 
         try {
           const useGemini = !!GOOGLE_AI_KEY;
@@ -201,7 +201,7 @@ ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode�
 ★ 같은 유형이라도 문제마다 난이도가 다릅니다. 문제 내용을 보고 정확히 판정하세요.
 ★ 서술형/서논술형은 최소 5 이상. 합답형(ㄱㄴㄷ)은 최소 5 이상.
 
-JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":4,"cognitiveDomain":"CALCULATION","confidence":0.9}}
+JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원 > 세부유형","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":4,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
 문제:
 ${content.slice(0, 1500)}`;

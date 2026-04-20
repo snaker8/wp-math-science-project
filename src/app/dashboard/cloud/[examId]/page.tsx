@@ -35,7 +35,21 @@ import {
   Wand2,
   PlusCircle,
   FileText,
+  Search,
+  Folder,
+  Shapes as ShapesIcon,
+  Zap,
+  BookOpen,
+  Filter,
+  SlidersHorizontal,
+  Download,
+  ListChecks,
+  MoreHorizontal,
+  BarChart2,
+  Square,
+  CircleDot,
 } from 'lucide-react';
+import './cloud-exam-editor.css';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
@@ -2638,25 +2652,114 @@ export default function CloudExamDetailPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
-      {/* ======== Header ======== */}
-      <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/cloud')}
-            className="p-1 rounded-lg text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <h1 className="text-base font-bold text-content-primary truncate max-w-[500px]">
-            {examTitle}
-          </h1>
-        </div>
+    <div className="ce-shell">
+      <div className="ce-body-grid">
+        {/* ═══════ LEFT SIDEBAR — 문제 pill 리스트 ═══════ */}
+        <aside className="ce-sidebar">
+          <div className="ce-sb-h">
+            <div className="ce-sb-search">
+              <Search className="ic" />
+              <input placeholder="문제 검색…" />
+            </div>
+            <button
+              type="button"
+              className="ce-sb-add"
+              onClick={() => setShowAddProblemsModal(true)}
+            >
+              <PlusCircle className="h-3 w-3" />
+              새 문제 추가
+            </button>
+          </div>
 
-        <div className="flex items-center gap-2">
-          {/* 기능 버튼들 */}
-          <div className="flex items-center gap-1.5">
+          <div className="ce-sb-tabs">
+            <button className="ce-sb-tab active">
+              전체 <span className="count">{problems.length}</span>
+            </button>
+            <button className="ce-sb-tab">
+              이슈 <span className="count">{validationIssues.length}</span>
+            </button>
+            <button className="ce-sb-tab">
+              선택 <span className="count">{selectedProblems.size}</span>
+            </button>
+          </div>
+
+          <div className="ce-sb-sections">
+            {filteredProblems.map((p) => {
+              const isActive = selectedProblems.has(p.id);
+              const hasIssue = validationIssues.some((v) => v.problemNum === p.number);
+              const diffColors = ['#3b82f6', '#34d399', '#fbbf24', '#f97316', '#fb7185'];
+              // 난이도 1~10 → 5단계 매핑
+              const diffLevel = Math.min(5, Math.max(1, Math.ceil(p.difficulty / 2)));
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`ce-pill ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    const el = document.getElementById(`problem-card-${p.id}`);
+                    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                  }}
+                >
+                  <div className="ce-pill-row">
+                    <span className="ce-pill-num">{String(p.number).padStart(2, '0')}</span>
+                    <span className="ce-pill-mini-diff">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <span
+                          key={i}
+                          style={{
+                            background: i <= diffLevel ? diffColors[diffLevel - 1] : 'var(--chrome-border)',
+                          }}
+                        />
+                      ))}
+                    </span>
+                    {p.hasFigure ? (
+                      <ShapesIcon className="ce-pill-ic has" />
+                    ) : (
+                      <CircleDot className="ce-pill-ic" />
+                    )}
+                    <span className="ce-pill-spacer" />
+                    {hasIssue && <span className="ce-pill-issue" title="이슈" />}
+                  </div>
+                  <div className="ce-pill-preview">
+                    {(p.content || '').replace(/<[^>]*>/g, '').slice(0, 40)}…
+                  </div>
+                </button>
+              );
+            })}
+            {filteredProblems.length === 0 && (
+              <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: 12, color: 'var(--chrome-fg-4)' }}>
+                해당 항목이 없습니다
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* ═══════ MAIN ═══════ */}
+        <main className="ce-main">
+          {/* SUBBAR */}
+          <div className="ce-subbar">
+            <div className="ce-breadcrumb">
+              <button type="button" onClick={() => router.push('/dashboard/cloud')}>
+                <ArrowLeft className="inline h-3 w-3 mr-1" />
+                시험지 목록
+              </button>
+              <span className="sep">/</span>
+              <span>과사람 클라우드</span>
+              <span className="sep">/</span>
+              <span style={{ color: 'var(--chrome-fg-2)' }}>{examTitle}</span>
+            </div>
+            <div className="ce-sub-main">
+              <input
+                className="ce-exam-title"
+                value={examTitle}
+                readOnly
+                spellCheck={false}
+              />
+              <span className="ce-exam-meta-chip">{problems.length}문항</span>
+
+              <div className="ce-sub-actions">
+                {/* 기능 버튼들 (원본 색 코딩 유지) */}
+                <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => {
@@ -2712,6 +2815,14 @@ export default function CloudExamDetailPage() {
             >
               <BarChart3 className="h-4 w-4" />
               <span>통계 보기</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(`/dashboard/exam-analysis/${examId}`)}
+              className="flex items-center gap-1.5 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-400 hover:bg-indigo-500/20 transition-colors"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span>유형 분석</span>
             </button>
             <button
               type="button"
@@ -2784,12 +2895,13 @@ export default function CloudExamDetailPage() {
           </div>
 
           {/* 문항 수 + 더보기 */}
-          <span className="text-sm text-content-secondary ml-2">{problems.length} 문항</span>
-          <button type="button" className="p-2 text-content-secondary hover:text-content-primary">
+          <span className="text-sm text-chrome-fg-3 ml-2">{problems.length} 문항</span>
+          <button type="button" className="p-2 text-chrome-fg-3 hover:text-chrome-fg-1">
             <MoreVertical className="h-5 w-5" />
           </button>
-        </div>
-      </div>
+                </div>
+              </div>
+            </div>
 
       {/* ======== 자동 검증 배너 ======== */}
       {validationIssues.length > 0 && (
@@ -3245,6 +3357,151 @@ export default function CloudExamDetailPage() {
           setExamMeta(meta);
         }}
       />
+        </main>
+
+        {/* ═══════ RIGHT PANEL — 필터/뷰/AI 도구 ═══════ */}
+        <aside className="ce-rpanel">
+          <div className="ce-rp-inner">
+            {/* 필터 섹션 */}
+            <div className="ce-rp-section">
+              <div className="ce-rp-h"><Filter />필터</div>
+              <div className="ce-subhead">난이도</div>
+              {([5, 4, 3, 2, 1] as DifficultyKey[]).map((d) => (
+                <label key={d} className="ce-chk-row">
+                  <input
+                    type="checkbox"
+                    checked={activeDifficulty === null || activeDifficulty === d}
+                    onChange={() => toggleDifficulty(d)}
+                  />
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    style={{
+                      background: `${DIFFICULTY_CONFIG[d].border}`.replace('border-', '').replace('/30', ''),
+                    }}
+                  >
+                    {DIFFICULTY_CONFIG[d].label}
+                  </span>
+                  <span className="count">{difficultyCounts[d]}</span>
+                </label>
+              ))}
+              <div className="ce-subhead" style={{ marginTop: 10 }}>인지영역</div>
+              {(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING', 'UNASSIGNED'] as DomainKey[]).map((d) => (
+                <label key={d} className="ce-chk-row">
+                  <input
+                    type="checkbox"
+                    checked={activeDomain === null || activeDomain === d}
+                    onChange={() => toggleDomain(d)}
+                  />
+                  <span className="text-[11px]">{DOMAIN_CONFIG[d].label}</span>
+                  <span className="count">
+                    {d === 'UNASSIGNED' ? domainCounts.UNASSIGNED : domainCounts[d as Exclude<DomainKey, 'UNASSIGNED'>]}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {/* 뷰 옵션 */}
+            <div className="ce-rp-section">
+              <div className="ce-rp-h"><SlidersHorizontal />뷰 옵션</div>
+              <div className="ce-toggle-row">
+                <span>클린 렌더</span>
+                <button
+                  type="button"
+                  className={`ce-toggle ${renderMode === 'clean' ? 'on' : ''}`}
+                  onClick={() => setRenderMode(renderMode === 'clean' ? 'original' : 'clean')}
+                />
+              </div>
+            </div>
+
+            {/* AI 도구 */}
+            <div className="ce-rp-section">
+              <div className="ce-rp-h"><Sparkles />AI 도구</div>
+              <button
+                type="button"
+                className="ce-ai-tool"
+                onClick={async () => {
+                  const targets = problems.filter(
+                    (p) =>
+                      p.hasFigure &&
+                      p.images?.some((img) => img.type === 'crop') &&
+                      !p.upscaledCropUrl &&
+                      !p.figureData &&
+                      !p.figureSvg
+                  );
+                  if (targets.length === 0) {
+                    alert('업스케일할 문제가 없습니다');
+                    return;
+                  }
+                  if (!confirm(`${targets.length}개 문제의 도형을 업스케일합니다. 진행하시겠습니까?`)) return;
+                  let success = 0;
+                  for (const p of targets) {
+                    const ok = await handleUpscaleFigure(p);
+                    if (ok) success++;
+                  }
+                  if (success > 0) refetchProblems();
+                  alert(`완료: ${success}/${targets.length}개 업스케일 성공`);
+                }}
+                disabled={generatingFigures.size > 0}
+              >
+                <div className="ce-ai-tool-h">
+                  <div className="ce-ai-tool-ic indigo"><Zap /></div>
+                  <div className="ce-ai-tool-title">도형 일괄 업스케일</div>
+                </div>
+                <div className="ce-ai-tool-sub">저해상도 원본을 고해상도로 재생성합니다</div>
+              </button>
+              <button
+                type="button"
+                className="ce-ai-tool"
+                onClick={async () => {
+                  const targets = problems.filter(
+                    (p) =>
+                      p.hasFigure &&
+                      (p.upscaledCropUrl || p.images?.some((img) => img.type === 'crop')) &&
+                      !p.figureData &&
+                      !p.figureSvg
+                  );
+                  if (targets.length === 0) {
+                    alert('AI 도형 생성할 문제가 없습니다');
+                    return;
+                  }
+                  if (!confirm(`${targets.length}개 문제에 AI Vision으로 도형을 생성합니다.\n잘못된 도형이 생성될 수 있습니다. 진행하시겠습니까?`)) return;
+                  let generated = 0;
+                  for (const p of targets) {
+                    const ok = await handleGenerateAIFigure(p);
+                    if (ok) generated++;
+                  }
+                  alert(`완료: ${generated}개 AI 도형 생성`);
+                }}
+                disabled={generatingFigures.size > 0}
+              >
+                <div className="ce-ai-tool-h">
+                  <div className="ce-ai-tool-ic orange"><Shapes /></div>
+                  <div className="ce-ai-tool-title">AI 도형 일괄 생성</div>
+                </div>
+                <div className="ce-ai-tool-sub">원본이 없는 문항에 AI로 도형을 새로 생성합니다</div>
+              </button>
+              <button
+                type="button"
+                className="ce-ai-tool"
+                onClick={() => setShowAnswerMatchModal(true)}
+              >
+                <div className="ce-ai-tool-h">
+                  <div className="ce-ai-tool-ic teal"><BookOpen /></div>
+                  <div className="ce-ai-tool-title">빠른답/해설 일괄 매칭</div>
+                </div>
+                <div className="ce-ai-tool-sub">정답 PDF에서 정답과 해설을 자동 매칭합니다</div>
+              </button>
+            </div>
+          </div>
+          <div className="ce-rp-cta">
+            <button type="button" className="ce-fbtn primary">
+              <Download className="h-3.5 w-3.5" />
+              내보내기 (PDF / HWP)
+            </button>
+          </div>
+        </aside>
+
+      </div>
     </div>
   );
 }

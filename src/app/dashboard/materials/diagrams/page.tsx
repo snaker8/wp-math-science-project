@@ -152,9 +152,10 @@ export default function DiagramGalleryPage() {
     }
   }, [subjectFilter]);
 
-  // health 통계 + 처리 상태 + 태깅 상태 확인 (로컬 서버 직접 — 실패해도 무시)
+  // health 통계 + 처리 상태 + 태깅 상태 확인 (원격/로컬 모두 지원 — 실패해도 무시)
   const fetchStats = useCallback(() => {
-    fetch('http://localhost:8200/health')
+    const pipelineUrl = process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://localhost:8200';
+    fetch(`${pipelineUrl}/health`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.db_stats) setLocalStats(data.db_stats);

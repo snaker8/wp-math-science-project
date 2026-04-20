@@ -82,15 +82,23 @@ export function buildTypeTable(subjectCode: string): string {
   if (!subject) return '';
 
   const lines: string[] = [];
-  lines.push(`| 코드 | 대단원 | 중단원 | 소단원 |`);
-  lines.push(`|------|--------|--------|--------|`);
+  lines.push(`| 코드 | 대단원 | 중단원 | 소단원 | 세부유형 |`);
+  lines.push(`|------|--------|--------|--------|----------|`);
 
-  // 대단원(L1) → 중단원(L2) → 소단원(L3)
+  // 대단원(L1) → 중단원(L2) → 소단원(L3) → 세부유형(L4)
   for (const l1 of subject.ch || []) {
     for (const l2 of l1.ch || []) {
       for (const l3 of l2.ch || []) {
-        const code = `MS${subjectCode}-${l1.c}-${l2.c}-${l3.c}`;
-        lines.push(`| ${code} | ${l1.t} | ${l2.t} | ${l3.t} |`);
+        // 세부유형(L4)이 있으면 L4까지 노출, 없으면 L3를 leaf로 표시
+        if (l3.ch && l3.ch.length > 0) {
+          for (const l4 of l3.ch) {
+            const code = `MS${subjectCode}-${l1.c}-${l2.c}-${l3.c}-${l4.c}`;
+            lines.push(`| ${code} | ${l1.t} | ${l2.t} | ${l3.t} | ${l4.t} |`);
+          }
+        } else {
+          const code = `MS${subjectCode}-${l1.c}-${l2.c}-${l3.c}`;
+          lines.push(`| ${code} | ${l1.t} | ${l2.t} | ${l3.t} | — |`);
+        }
       }
     }
   }
@@ -115,7 +123,8 @@ typeCode는 반드시 아래 목록에 있는 코드 중 하나여야 합니다.
 ${typeTable}
 
 ★ typeCode는 반드시 "MS${subjectCode}-" 로 시작하는 위 코드 중 하나를 선택하세요.
-★ typeName에는 "대단원 > 중단원 > 소단원" 형태로 기재하세요.
+★ 가능한 가장 구체적인 레벨(세부유형이 있으면 5-세그먼트 코드)을 선택하세요.
+★ typeName에는 "대단원 > 중단원 > 소단원 > 세부유형" 형태로 기재하세요. 세부유형이 "—"인 경우엔 "대단원 > 중단원 > 소단원"만 적으세요.
 `;
 }
 
@@ -143,6 +152,6 @@ export function buildSubjectOnlyPrompt(): string {
 | 13 | 기하 | 고3 | 이차곡선, 벡터, 공간좌표 |
 
 ★ subject 필드에 위 과목명을 정확히 기재하세요.
-★ typeCode는 "MS{과목코드}-{대단원}-{중단원}-{소단원}" 형식입니다.
+★ typeCode는 "MS{과목코드}-{대단원}-{중단원}-{소단원}-{세부유형}" 형식입니다 (세부유형이 없는 일부 단원은 4-세그먼트).
 `;
 }

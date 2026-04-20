@@ -3,6 +3,7 @@
 // ============================================================================
 // PDF 문제 분석 페이지 - 참조 사이트 스타일
 // 좌: 페이지 썸네일 (PDF.js) | 중앙: PDF 이미지 + 바운딩 박스 | 우: 문제 상세
+// Chrome 디자인 시스템 적용 (Claude Design 번들 IRj4OEAcy9MBPI2CLsG2dg)
 // ============================================================================
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -22,7 +23,9 @@ import {
   Play,
   ImagePlus,
   Merge,
+  Keyboard,
 } from 'lucide-react';
+import './pdf-analyze.css';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import AnalyzeProblemEditModal from '@/components/workflow/AnalyzeProblemEditModal';
 import type { AnalyzedProblemData } from '@/components/workflow/AnalyzeProblemEditModal';
@@ -3934,34 +3937,32 @@ export default function AnalyzeJobPage() {
   const pendingCount = autoCropAllProblems.filter(p => p.status === 'pending').length;
   const completedCount = autoCropAllProblems.filter(p => p.status === 'completed' || p.status === 'edited').length;
 
+  const pipelineProgress = jobData.progress || 0;
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
-      {/* ======== Header ======== */}
-      <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-2.5 flex-shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="aze-shell">
+      {/* ======== SUBBAR (Chrome 다크) ======== */}
+      <div className="aze-subbar">
+        <div className="aze-crumbs">
           <button
             type="button"
+            className="aze-crumb-back"
+            aria-label="뒤로"
             onClick={() => router.push('/dashboard/cloud')}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider flex items-center gap-2">
-              {jobData.subjectArea === 'science' ? (
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]">
-                  과학
-                </span>
-              ) : (
-                <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold text-[10px]">
-                  수학
-                </span>
-              )}
-              문제 분석
-            </div>
-            <h1 className="text-sm font-bold text-white truncate max-w-[400px]">
+          <div className="aze-crumb-path">
+            <span>문제 분석</span>
+            <span className="sep">/</span>
+            <span className="aze-crumb-file" title={jobData.fileName}>
               {jobData.fileName}
-            </h1>
+            </span>
+            <span className={`aze-subject-chip ${jobData.subjectArea === 'science' ? 'science' : 'math'}`}>
+              {jobData.subjectArea === 'science' ? '과학' : '수학'}
+            </span>
+            <span className="aze-crumb-pages">
+              {totalPdfPages ? `${totalPdfPages}p` : ''}
+            </span>
           </div>
         </div>
 
@@ -4233,10 +4234,10 @@ export default function AnalyzeJobPage() {
         </span>
       </div>
 
-      {/* ======== Main 3-Panel Layout ======== */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ======== Main 3-Panel Layout (Chrome 디자인) ======== */}
+      <div className="aze-body">
         {/* --- 좌측: 페이지 썸네일 --- */}
-        <div className="w-44 flex-shrink-0 border-r border-zinc-800/50">
+        <div className="aze-sidebar">
           <PageThumbnailList
             pages={activeJobData?.pages || jobData.pages}
             currentPage={currentPage}
@@ -4268,8 +4269,8 @@ export default function AnalyzeJobPage() {
           onManualCropDetected={handleManualCropDetected}
         />
 
-        {/* --- 우측: 문제 상세 패널 (문제 선택 시 확장) --- */}
-        <div className={`flex-shrink-0 border-l border-zinc-800/50 transition-all duration-300 ${selectedProblem ? 'w-[400px]' : 'w-[200px]'}`}>
+        {/* --- 우측: 문제 상세 패널 (Chrome 디자인) --- */}
+        <div className="aze-inspector">
           <ProblemDetailPanel
             problem={selectedProblem}
             pdfUrl={jobData.pdfUrl}

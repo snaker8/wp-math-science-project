@@ -29,7 +29,7 @@ import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } f
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o 기본 (분류 전담)
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';  // ★ Claude Sonnet (풀이 생성 전담)
+const ANTHROPIC_MODEL = 'claude-sonnet-4-6';  // ★ Claude Sonnet 4.6 (풀이 생성 전담) — Anthropic 공식 alias
 
 // 다사람수학 교육과정 성취기준 체계 (505개 = 2022 개정 319개 + 2015 개정 186개)
 export const MATH_CURRICULUM_SYSTEM = {
@@ -576,6 +576,23 @@ function parseChoicesFromText(text: string): string[] {
     }
   }
 
+  // ★ 혼합 처리: ①②③④까지만 추출되고 ⑤가 누락된 경우
+  //   — 4번째 선택지 내부에 `(5) ...` 같은 패턴이 남아있을 수 있음
+  //   — 이 경우 4번 내용을 잘라 5번 선택지로 분리
+  if (parts.length === 4) {
+    const last = parts[3];
+    // (5) 또는 5) 패턴을 마지막 선택지에서 찾아 분리
+    const fifthMatch = last.match(/^([\s\S]*?)\s*(?:\(5\)|5\))\s*([\s\S]+)$/);
+    if (fifthMatch) {
+      const fourthContent = fifthMatch[1].trim();
+      const fifthContent = fifthMatch[2].trim();
+      if (fourthContent && fifthContent) {
+        parts[3] = fourthContent;
+        parts.push(fifthContent);
+      }
+    }
+  }
+
   // 원형 숫자 분할이 안 된 경우 번호 기반 시도
   if (parts.length === 0) {
     const numbered = normalizedText.match(/[1-5]\s*\)\s*([^1-5)]+)/g);
@@ -639,11 +656,36 @@ function normalizeChoiceParensForCloudFlow(text: string): string {
     '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
   };
 
-  // 이미 ①②③ 가 있으면 변환 불필요
-  if (/[①②③④⑤]/.test(text)) return text;
+  // ★ 원형숫자가 5개 다 있으면 완성 상태 → 변환 불필요
+  // ★ 혼합 상태 (①②③④ 다음에 (5))는 Mathpix 오인식으로 간주 → 정규화 진행
+  const circledCount = (text.match(/[①②③④⑤]/g) || []).length;
+  if (circledCount >= 5) return text;
+
+  // ★ 혼합 상태 감지: 원형숫자 + (N) 둘 다 있고 번호가 겹치지 않으면 정규화 후보
+  const existingCircled = new Set<string>();
+  if (circledCount > 0) {
+    for (const m of text.matchAll(/[①②③④⑤]/g)) existingCircled.add(m[0]);
+  }
 
   // (1)~(5) 위치 수집 — ★ 함수 인수 제외: f(1), Q(2), R(1) 등 영문자 바로 뒤는 매칭 안 함
   const parenMatches = [...text.matchAll(/(?<![a-zA-Z])\(([1-5])\)/g)];
+
+  // 혼합 상태에서는: 원형 + (N)을 합쳐서 총 4~5개여야 정규화 대상
+  if (circledCount > 0) {
+    const mergedCount = circledCount + parenMatches.length;
+    if (mergedCount < 4 || parenMatches.length === 0) return text;
+    // 번호 겹침 체크: 같은 번호가 두 표기로 있으면 혼합이 아님
+    for (const pm of parenMatches) {
+      const asCircled = NUMBER_TO_CIRCLED[pm[1]];
+      if (existingCircled.has(asCircled)) return text;
+    }
+    // 여기까지 오면 원형숫자 + (N) 조합으로 5개 구성 → 변환
+    return text.replace(/(?<![a-zA-Z])\(([1-5])\)/g, (full, num) => {
+      return NUMBER_TO_CIRCLED[num] || full;
+    });
+  }
+
+  // 이하: 기존 로직 — 원형숫자 0개인 경우
   if (parenMatches.length < 4) return text; // 4개 미만이면 소문제일 수 있음
 
   // 번호 검증: (1)(2)(3)(4) 최소 포함
@@ -878,8 +920,8 @@ const CLASSIFICATION_PROMPT = `당신은 "다사람수학"의 AI 수학 교육 �
 {
   "classification": {
     "achievementCode": "[12수학01-02]",
-    "typeCode": "MS07-01-03-02 (수학비서 유형 코드, 아래 테이블에서 선택)",
-    "typeName": "대단원 > 중단원 > 소단원",
+    "typeCode": "MS07-01-03-02-05 (수학비서 유형 코드, 아래 테이블에서 선택. 가능하면 5-세그먼트 세부유형 레벨)",
+    "typeName": "대단원 > 중단원 > 소단원 > 세부유형",
     "subject": "과목명 (공통수학1, 공통수학2, 대수, 미적분1, 확률과 통계, 미적분2, 기하 등)",
     "chapter": "대단원명",
     "section": "중단원명",

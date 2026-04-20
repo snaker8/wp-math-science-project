@@ -25,7 +25,23 @@ import {
   Sparkles,
   Loader2,
   RefreshCw,
+  Send,
+  Search,
+  Clock,
+  Folder,
+  AlertTriangle,
+  Check,
+  Wand2,
+  ArrowRight,
+  MoveVertical,
+  File as FileIcon,
+  Cloud,
+  Minus,
+  Shuffle,
+  Replace,
+  BarChart3,
 } from 'lucide-react';
+import './exam-management.css';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
@@ -1100,35 +1116,48 @@ export default function ExamManagementPage() {
   }, [perPagePreset, pageAutoGaps, gap]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
-      {/* ======== Header ======== */}
-      <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-base font-bold text-content-primary">시험지 관리</h1>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="flex items-center rounded-lg border border overflow-hidden">
-              {(['수학', '과학'] as const).map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => {
-                    setSubjectCategory(cat);
-                    setSubjectFilter(SUBJECT_CATEGORIES[cat][0]);
-                  }}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                    subjectCategory === cat
-                      ? 'bg-cyan-500/10 text-cyan-400'
-                      : 'text-content-tertiary hover:text-content-secondary'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+    <div className="em-shell h-full w-full overflow-hidden">
+      {/* ======== LEFT SIDEBAR — 시험지 그룹 트리 + 시험지 목록 ======== */}
+      <aside className="em-sidebar">
+        <div className="em-side-h">
+          <h2>
+            <FolderOpen className="h-3.5 w-3.5" />
+            시험지 저장소
+            <span className="em-side-h-count">{examList.length}</span>
+          </h2>
+          <button className="em-new-btn" title="새 시험지">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* 과목 카테고리 & 필터 */}
+        <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--em-border-sub)' }}>
+          <div className="flex items-center gap-1 mb-2 p-0.5 rounded-lg" style={{ background: 'var(--em-bg-raised)', border: '1px solid var(--em-border-sub)' }}>
+            {(['수학', '과학'] as const).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => {
+                  setSubjectCategory(cat);
+                  setSubjectFilter(SUBJECT_CATEGORIES[cat][0]);
+                }}
+                className="flex-1 px-2 py-1 text-[11px] font-medium rounded-md transition-colors"
+                style={{
+                  background: subjectCategory === cat ? 'var(--em-bg-chrome)' : 'transparent',
+                  color: subjectCategory === cat ? 'var(--em-fg-1)' : 'var(--em-fg-3)',
+                  boxShadow: subjectCategory === cat ? '0 1px 2px rgba(0,0,0,.3)' : 'none',
+                }}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-1">
             <select
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
-              className="rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised cursor-pointer outline-none"
+              className="em-select text-[11px]"
+              style={{ padding: '4px 18px 4px 6px' }}
             >
               {SUBJECT_CATEGORIES[subjectCategory].map((subj) => (
                 <option key={subj} value={subj}>{subj}</option>
@@ -1137,7 +1166,8 @@ export default function ExamManagementPage() {
             <select
               value={examTypeFilter}
               onChange={(e) => setExamTypeFilter(e.target.value)}
-              className="rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised cursor-pointer outline-none"
+              className="em-select text-[11px]"
+              style={{ padding: '4px 18px 4px 6px' }}
             >
               {EXAM_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -1146,7 +1176,8 @@ export default function ExamManagementPage() {
             <select
               value={gradeFilter}
               onChange={(e) => setGradeFilter(e.target.value)}
-              className="rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised cursor-pointer outline-none"
+              className="em-select text-[11px]"
+              style={{ padding: '4px 18px 4px 6px' }}
             >
               {GRADES.map((g) => (
                 <option key={g} value={g}>{g}</option>
@@ -1154,488 +1185,609 @@ export default function ExamManagementPage() {
             </select>
           </div>
         </div>
-      </div>
 
-      {/* ======== Main 3-Panel Layout ======== */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* --- 좌측: 시험지 그룹 트리 --- */}
-        <div className="w-40 flex-shrink-0 border-r border-subtle flex flex-col">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-subtle">
-            <span className="text-xs font-bold text-content-secondary">
-              시험지 그룹 <span className="text-cyan-400">{bookGroups.length - 1}개</span>
-            </span>
-            <button
-              type="button"
-              className="flex items-center gap-1 text-[10px] text-content-tertiary hover:text-cyan-400 transition-colors"
-            >
-              <Plus className="h-3 w-3" />
-              최상위 그룹 추가
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-            {bookGroups.map((group) => (
-              <GroupTreeItem
-                key={group.id}
-                group={group}
-                selectedGroupId={selectedGroupId}
-                onSelect={setSelectedGroupId}
-              />
-            ))}
-          </div>
+        <div className="em-side-search">
+          <Search className="em-search-ic" />
+          <input
+            type="text"
+            placeholder="시험지·유형·날짜 검색"
+          />
         </div>
 
-        {/* --- 중앙: 시험지 목록 --- */}
-        <div className="w-56 flex-shrink-0 border-r border-subtle flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle">
-            <div className="flex items-center gap-2">
-              <FolderOpen className="h-4 w-4 text-cyan-400" />
-              <span className="text-sm font-bold text-content-primary">{selectedGroupName}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="flex items-center gap-1 text-xs text-content-tertiary hover:text-cyan-400 transition-colors"
-              >
-                <Plus className="h-3 w-3" />
-                시험지 생성
-              </button>
-              <span className="text-xs text-content-muted">{examsLoading ? '...' : `${groupExams.length}개`}</span>
-            </div>
-          </div>
+        <div className="em-side-body">
+          {bookGroups.filter(g => g.id !== 'all').map((group) => {
+            const groupExamsList = examList.filter((e: any) => {
+              const gid = e.bookGroupId || e.book_group_id;
+              if (!gid) return false;
+              const collectIds = (node: ExamGroup): string[] => {
+                const ids = [node.id];
+                (node.children || []).forEach(c => ids.push(...collectIds(c)));
+                return ids;
+              };
+              return collectIds(group).includes(gid);
+            });
+            const isOpen = selectedGroupId === group.id || selectedGroupId === 'all';
+            return (
+              <div key={group.id} style={{ marginBottom: 4 }}>
+                <button
+                  type="button"
+                  className={`em-folder ${isOpen ? 'open' : ''}`}
+                  onClick={() => setSelectedGroupId(selectedGroupId === group.id ? 'all' : group.id)}
+                >
+                  <ChevronRight className="chevron" />
+                  <FolderOpen className="folder-ic" />
+                  <span>{group.name}</span>
+                  <span className="em-folder-count">{groupExamsList.length}</span>
+                </button>
+                {isOpen && groupExamsList.length > 0 && (
+                  <div className="em-exam-list">
+                    {groupExamsList.map((exam: any) => (
+                      <button
+                        key={exam.id}
+                        type="button"
+                        className={`em-exam-pill ${selectedExamId === exam.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedExamId(exam.id)}
+                      >
+                        <div className="em-exam-pill-title">{exam.title}</div>
+                        <div className="em-exam-pill-sub">
+                          <span>{exam.subject || '수학'}</span>
+                          <span className="dot"></span>
+                          <span>{exam.examType || '학교기출'}</span>
+                          <span className="dot"></span>
+                          <span>{exam.grade || ''}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
-          <div className="px-3 py-2 border-b border-subtle">
-            <span className="text-[10px] text-content-tertiary uppercase">시험지명</span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {groupExams.map((exam) => (
-              <button
-                key={exam.id}
-                type="button"
-                onClick={() => setSelectedExamId(exam.id)}
-                className={`w-full flex items-start gap-2 px-3 py-2.5 text-left border-b border-subtle transition-colors ${
-                  selectedExamId === exam.id
-                    ? 'bg-cyan-500/5 border-l-2 border-l-cyan-500'
-                    : 'hover:bg-surface-card border-l-2 border-l-transparent'
-                }`}
-              >
-                <FileText className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
-                  selectedExamId === exam.id ? 'text-cyan-400' : 'text-content-muted'
-                }`} />
-                <span className={`text-sm leading-snug ${
-                  selectedExamId === exam.id ? 'text-cyan-300 font-medium' : 'text-content-secondary'
-                }`}>
-                  {exam.title}
-                </span>
-              </button>
-            ))}
+          <div className="em-cloud-footer">
+            <div className="head">
+              <Cloud className="h-3 w-3" />
+              과사람 클라우드
+            </div>
+            <div className="sub">다른 캠퍼스 시험지 열람 가능</div>
           </div>
         </div>
+      </aside>
 
-        {/* --- 우측: 시험지 뷰어 --- */}
-        <div className="flex-1 flex flex-col min-h-0">
+      {/* ======== SUBBAR — 편집 가능한 제목 + 액션 + 페이지당 ======== */}
+      <div className="em-subbar">
+        <div className="em-breadcrumb">
+          <Folder className="h-2.5 w-2.5" />
+          <span>{selectedGroupName || '전체'}</span>
+          <ChevronRight className="h-2.5 w-2.5" />
+        </div>
+        <div className="em-title-edit">
           {selectedExam ? (
             <>
-              {/* 로딩 오버레이 */}
+              <input
+                className="em-title-input"
+                value={editExamTitle || selectedExam.title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                spellCheck={false}
+              />
+              <div className="em-subbar-meta">
+                <Clock className="h-2.5 w-2.5" />
+                <span>{problems.length}문항</span>
+              </div>
+            </>
+          ) : (
+            <span style={{ color: 'var(--em-fg-4)', fontSize: 13, padding: '0 10px' }}>시험지를 선택하세요</span>
+          )}
+        </div>
+
+        <div className="em-subbar-actions">
+          <div className="em-ppp">
+            <span className="em-ppp-label">페이지당</span>
+            {[
+              { value: null, label: '자동' },
+              { value: 4, label: '4' },
+              { value: 6, label: '6' },
+              { value: 8, label: '8' },
+            ].map(({ value, label }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setPerPagePreset(value)}
+                className={perPagePreset === value ? 'active' : ''}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="em-subbar-divider" />
+
+          <button
+            type="button"
+            className="em-action-btn"
+            title="PDF 다운로드"
+            onClick={handleDownloadPdf}
+          >
+            <Download />
+          </button>
+          <button
+            type="button"
+            className="em-action-btn"
+            title="한글 다운로드"
+            onClick={handleDownloadHwpx}
+            disabled={isDownloadingHwpx}
+          >
+            {isDownloadingHwpx ? <Loader2 className="animate-spin" /> : <FileDown />}
+          </button>
+          <button
+            type="button"
+            className="em-action-btn"
+            title="시험지 수정"
+            onClick={() => { if (selectedExamId) router.push(`/dashboard/cloud/${selectedExamId}`); }}
+          >
+            <Pencil />
+          </button>
+          <button
+            type="button"
+            className="em-action-btn"
+            title="유형 분석"
+            onClick={() => { if (selectedExamId) router.push(`/dashboard/exam-analysis/${selectedExamId}`); }}
+            style={{ color: 'var(--brand-indigo-400)' }}
+          >
+            <BarChart3 />
+          </button>
+          <button type="button" className="em-action-btn" title="유사 시험지 만들기">
+            <Copy />
+          </button>
+          <button type="button" className="em-action-btn" title="배포">
+            <Send />
+          </button>
+          <button
+            type="button"
+            className="em-action-btn danger"
+            title="삭제"
+            onClick={handleDeleteExam}
+            disabled={isDeleting}
+          >
+            <Trash2 />
+          </button>
+
+          <button
+            type="button"
+            className="em-subbar-print"
+            onClick={() => setShowPrintModal(true)}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            인쇄
+          </button>
+        </div>
+      </div>
+
+      {/* ======== TABS ROW ======== */}
+      <div className="em-tabs-row">
+        {[
+          { id: 'exam' as const, label: '시험지', icon: ScrollText, count: problems.length },
+          { id: 'answer' as const, label: '빠른정답', icon: CheckSquare, count: 1 },
+          { id: 'solution' as const, label: '해설지', icon: BookOpenCheck, count: problems.filter(p => p.solution).length, warn: problems.filter(p => !p.solution).length > 0 },
+        ].map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              className={`em-tab ${activeTab === t.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(t.id)}
+            >
+              <Icon />
+              {t.label}
+              <span className="em-tab-count">{t.count}</span>
+              {(t as any).warn && <span className="em-tab-warning-dot" />}
+            </button>
+          );
+        })}
+
+        <div className="em-tabs-right">
+          {isGeneratingBatch && (
+            <span style={{ fontFamily: 'var(--em-font-mono)', fontSize: 11, color: 'var(--em-indigo-300)' }}>
+              {batchProgress.current}/{batchProgress.total}
+            </span>
+          )}
+        </div>
+
+        {isGeneratingBatch && batchProgress.total > 0 && (
+          <div className="em-ai-progress">
+            <div
+              className="em-ai-progress-bar"
+              style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ======== MAIN AREA — A4 preview ======== */}
+      <main className="em-main">
+        {selectedExam ? (
+          <>
+            {isGeneratingBatch && (
+              <div className="em-ai-progress-text">
+                <span className="dot-spin" />
+                <span>AI 해설 생성중</span>
+                <span style={{ marginLeft: 'auto', color: '#fff' }}>
+                  <b>{batchProgress.current}</b>
+                  <span style={{ opacity: 0.5 }}> / {batchProgress.total}</span>
+                </span>
+              </div>
+            )}
+
+            <div className="em-paper-wrap em-view">
+              <div className="em-paper-bar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span>A4 · {columns}단 레이아웃</span>
+                  <span>·</span>
+                  <span>{problems.length}문항</span>
+                  {problems.filter(p => !p.solution).length > 0 && (
+                    <span className="em-issue-badge">
+                      <AlertTriangle />
+                      해설 미완성 {problems.filter(p => !p.solution).length}건
+                    </span>
+                  )}
+                </div>
+                <div className="zoom">
+                  <button><Minus /></button>
+                  <span>100%</span>
+                  <button><Plus /></button>
+                </div>
+              </div>
+
               {problemsLoading && (
-                <div className="flex items-center justify-center py-8 border-b border-subtle">
+                <div className="flex items-center justify-center py-8">
                   <div className="flex items-center gap-2 text-content-secondary text-sm">
                     <div className="h-4 w-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
                     문제를 불러오는 중...
                   </div>
                 </div>
               )}
-              {/* 액션 바 */}
-              <div className="flex items-center justify-between border-b border-subtle px-4 py-2 flex-shrink-0 overflow-visible relative z-50">
-                <div className="flex items-center gap-1.5">
-                  <button type="button"
-                    onClick={() => { if (selectedExamId) router.push(`/dashboard/cloud/${selectedExamId}`); }}
-                    className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
-                    <Pencil className="h-3.5 w-3.5" />
-                    시험지 수정
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPrintModal(true)}
-                    className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors"
-                  >
-                    <Printer className="h-3.5 w-3.5" />
-                    출력
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadHwpx}
-                    disabled={isDownloadingHwpx}
-                    className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors disabled:opacity-50"
-                  >
-                    {isDownloadingHwpx ? (
-                      <div className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <FileDown className="h-3.5 w-3.5" />
-                    )}
-                    {isDownloadingHwpx ? 'HWP 생성 중...' : '한글 다운로드'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    PDF 다운로드
-                  </button>
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
-                    <Share2 className="h-3.5 w-3.5" />
-                    시험지 배포
-                  </button>
-                  <button type="button" className="flex items-center gap-1 rounded-lg border border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-raised transition-colors">
-                    <Copy className="h-3.5 w-3.5" />
-                    유사 시험지 만들기
-                  </button>
-                  {/* 페이지당 문제 수 프리셋 */}
-                  <div className="ml-2 flex items-center gap-0.5 rounded-lg border border overflow-hidden">
-                    {[
-                      { value: null, label: '자동' },
-                      { value: 4, label: '4문제' },
-                      { value: 6, label: '6문제' },
-                      { value: 8, label: '8문제' },
-                    ].map(({ value, label }) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => setPerPagePreset(value)}
-                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                          perPagePreset === value
-                            ? 'bg-cyan-500/10 text-cyan-400'
-                            : 'text-content-tertiary hover:text-content-secondary'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* 탭 — shadcn Tabs + 삭제 버튼 */}
-                <div className="flex items-center gap-2">
-                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'exam' | 'answer' | 'solution')}>
-                    <TabsList className="bg-zinc-900/50 border border-white/5 h-auto p-1">
-                      <TabsTrigger value="exam" className="gap-1.5 text-xs data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-400">
-                        <ScrollText className="h-3.5 w-3.5" />
-                        시험지
-                      </TabsTrigger>
-                      <TabsTrigger value="answer" className="gap-1.5 text-xs data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-400">
-                        <CheckSquare className="h-3.5 w-3.5" />
-                        빠른정답
-                      </TabsTrigger>
-                      <TabsTrigger value="solution" className="gap-1.5 text-xs data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-400">
-                        <BookOpenCheck className="h-3.5 w-3.5" />
-                        해설지
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                  <button
-                    type="button"
-                    onClick={handleDeleteExam}
-                    disabled={isDeleting}
-                    className="p-1.5 text-content-tertiary hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 disabled:opacity-50"
-                    title="삭제"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+              <div className="w-full bg-white rounded-lg shadow-2xl shadow-black/50">
+                <EditableExamHeader
+                  templateId={templateId}
+                  meta={unifiedMeta}
+                  examTitle={editExamTitle || selectedExam.title}
+                  editable={true}
+                  onTemplateChange={handleTemplateChange}
+                  onMetaChange={handleMetaChange}
+                  onExamTitleChange={handleTitleChange}
+                  subjectOptions={unifiedSubjectOptions}
+                />
 
-              {/* 뷰어 영역 */}
-              <div className="flex flex-1 overflow-hidden">
-                {/* 시험지 뷰 */}
-                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex justify-center py-4 bg-surface-raised/30">
-                  <div className="w-full max-w-[800px] bg-white rounded-lg shadow-2xl shadow-black/50 mx-4">
-                    {/* ★ 통합 헤더 (클라우드/시험지관리 공통) */}
-                    <EditableExamHeader
-                      templateId={templateId}
-                      meta={unifiedMeta}
-                      examTitle={editExamTitle || selectedExam.title}
-                      editable={true}
-                      onTemplateChange={handleTemplateChange}
-                      onMetaChange={handleMetaChange}
-                      onExamTitleChange={handleTitleChange}
-                      subjectOptions={unifiedSubjectOptions}
-                    />
+                {activeTab === 'exam' && (
+                  <div ref={measureRef}>
+                    {pages.map((pageProblems, pageIdx) => {
+                      let globalStartIdx = 0;
+                      for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].length;
 
-                    {/* Content based on tab */}
-                    {activeTab === 'exam' && (
-                      <div ref={measureRef}>
-                        {pages.map((pageProblems, pageIdx) => {
-                          // 현재 페이지의 첫 문제 글로벌 인덱스 계산
-                          let globalStartIdx = 0;
-                          for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].length;
-
-                          // ★ 문제 렌더 헬퍼 — 공통 컴포넌트 사용
-                          const renderProblem = (problem: ExamProblem, idx: number) => (
-                            <div
-                              key={problem.id}
-                              data-problem-idx={idx}
-                              className="break-inside-avoid"
-                              style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
-                            >
-                              <ExamProblemRenderer problem={problem} />
-                            </div>
-                          );
-
-                          // 2단: 항상 flex 수동 좌우 분할
-                          //   - CSS columns:2의 'balance' 모드는 좌우 높이를 맞추려고
-                          //     문제 사이에 큰 빈 공간을 삽입해 '치우친' 레이아웃 유발
-                          //   - flex 분할은 위→아래 순서대로 꽉 채우므로 중간 빈 공간 없음
-                          const useManualColumns = columns === 2;
-                          const half = Math.ceil(pageProblems.length / 2);
-                          const leftProblems = useManualColumns ? pageProblems.slice(0, half) : pageProblems;
-                          const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
-
-                          return (
-                          <div
-                            key={pageIdx}
-                            className="preview-exam-page exam-page bg-white"
-                            style={{
-                              width: '794px',
-                              minHeight: `${A4_H}px`,
-                              padding: '15mm',
-                              marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
-                              boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
-                              borderRadius: '4px',
-                              position: 'relative',
-                              boxSizing: 'border-box',
-                              fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
-                            }}
-                          >
-                            {pageIdx > 0 && (
-                              <div className="border-t-2 border-dashed border-gray-300 my-2 relative page-divider-ui">
-                                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] text-gray-400 font-medium">
-                                  {pageIdx + 1}페이지
-                                </span>
-                              </div>
-                            )}
-                      {useManualColumns ? (
-                        /* 프리셋 2단: flex로 좌우 분할 */
-                        <div className="px-10 py-8 flex gap-7">
-                          <div className="flex-1 border-r border-gray-200 pr-3.5">
-                            {leftProblems.map((problem, probIdx) =>
-                              renderProblem(problem, globalStartIdx + probIdx)
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            {rightProblems.map((problem, probIdx) =>
-                              renderProblem(problem, globalStartIdx + half + probIdx)
-                            )}
-                          </div>
+                      const renderProblem = (problem: ExamProblem, idx: number) => (
+                        <div
+                          key={problem.id}
+                          data-problem-idx={idx}
+                          className="break-inside-avoid"
+                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                        >
+                          <ExamProblemRenderer problem={problem} />
                         </div>
-                      ) : (
-                        /* 1단 모드 */
-                        <div className="px-10 py-8">
-                          {pageProblems.map((problem, probIdx) =>
-                            renderProblem(problem, globalStartIdx + probIdx)
+                      );
+
+                      const useManualColumns = columns === 2;
+                      const half = Math.ceil(pageProblems.length / 2);
+                      const leftProblems = useManualColumns ? pageProblems.slice(0, half) : pageProblems;
+                      const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
+
+                      return (
+                        <div
+                          key={pageIdx}
+                          className="preview-exam-page exam-page bg-white"
+                          style={{
+                            width: '794px',
+                            minHeight: `${A4_H}px`,
+                            padding: '15mm',
+                            marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
+                            boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+                            borderRadius: '4px',
+                            position: 'relative',
+                            boxSizing: 'border-box',
+                            fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+                          }}
+                        >
+                          {pageIdx > 0 && (
+                            <div className="border-t-2 border-dashed border-gray-300 my-2 relative page-divider-ui">
+                              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] text-gray-400 font-medium">
+                                {pageIdx + 1}페이지
+                              </span>
+                            </div>
+                          )}
+                          {useManualColumns ? (
+                            <div className="px-10 py-8 flex gap-7">
+                              <div className="flex-1 border-r border-gray-200 pr-3.5">
+                                {leftProblems.map((problem, probIdx) =>
+                                  renderProblem(problem, globalStartIdx + probIdx)
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                {rightProblems.map((problem, probIdx) =>
+                                  renderProblem(problem, globalStartIdx + half + probIdx)
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="px-10 py-8">
+                              {pageProblems.map((problem, probIdx) =>
+                                renderProblem(problem, globalStartIdx + probIdx)
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                          </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {activeTab === 'answer' && (
+                  <div className="px-10 py-8">
+                    <div className="text-center mb-5">
+                      <h2 className="text-lg font-bold text-gray-900">{selectedExam.title}</h2>
+                      <p className="text-sm text-gray-500 mt-1">빠른 정답</p>
+                    </div>
+                    <table className="w-full max-w-2xl mx-auto border-collapse border-2 border-gray-800" style={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '42%' }} />
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '42%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">문항</th>
+                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
+                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">문항</th>
+                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
+                          const leftNum = rowIdx + 1;
+                          const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
+                          const leftP = problems.find((p) => p.number === leftNum);
+                          const rightP = problems.find((p) => p.number === rightNum);
+                          const rowBg = rowIdx % 2 === 1 ? 'bg-blue-50/40' : '';
+                          return (
+                            <tr key={rowIdx} className={rowBg}>
+                              <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-900">{leftNum}</td>
+                              <td className="border border-gray-300 px-2 py-2 text-center text-base font-bold text-blue-600 overflow-hidden">
+                                {leftP ? <AnswerDisplay answer={leftP.answer} className="text-blue-600" compact /> : '-'}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-900">
+                                {rightNum <= problems.length ? rightNum : ''}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-2 text-center text-base font-bold text-blue-600 overflow-hidden">
+                                {rightP ? <AnswerDisplay answer={rightP.answer} className="text-blue-600" compact /> : ''}
+                              </td>
+                            </tr>
                           );
                         })}
-                      </div>
-                    )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-                    {activeTab === 'answer' && (
-                      <div className="px-10 py-8">
-                        <div className="text-center mb-5">
-                          <h2 className="text-lg font-bold text-gray-900">{selectedExam.title}</h2>
-                          <p className="text-sm text-gray-500 mt-1">빠른 정답</p>
-                        </div>
-                        <table className="w-full max-w-2xl mx-auto border-collapse border-2 border-gray-800" style={{ tableLayout: 'fixed' }}>
-                          <colgroup>
-                            <col style={{ width: '8%' }} />
-                            <col style={{ width: '42%' }} />
-                            <col style={{ width: '8%' }} />
-                            <col style={{ width: '42%' }} />
-                          </colgroup>
-                          <thead>
-                            <tr>
-                              <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">문항</th>
-                              <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
-                              <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">문항</th>
-                              <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
-                              const leftNum = rowIdx + 1;
-                              const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
-                              const leftP = problems.find((p) => p.number === leftNum);
-                              const rightP = problems.find((p) => p.number === rightNum);
-                              const rowBg = rowIdx % 2 === 1 ? 'bg-blue-50/40' : '';
-                              return (
-                                <tr key={rowIdx} className={rowBg}>
-                                  <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-900">{leftNum}</td>
-                                  <td className="border border-gray-300 px-2 py-2 text-center text-base font-bold text-blue-600 overflow-hidden">
-                                    {leftP ? <AnswerDisplay answer={leftP.answer} className="text-blue-600" compact /> : '-'}
-                                  </td>
-                                  <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-900">
-                                    {rightNum <= problems.length ? rightNum : ''}
-                                  </td>
-                                  <td className="border border-gray-300 px-2 py-2 text-center text-base font-bold text-blue-600 overflow-hidden">
-                                    {rightP ? <AnswerDisplay answer={rightP.answer} className="text-blue-600" compact /> : ''}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {activeTab === 'solution' && (
+                {activeTab === 'solution' && (
+                  <div
+                    className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
+                    style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
+                  >
+                    {problems.map((problem) => (
                       <div
-                        className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
-                        style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
+                        key={problem.id}
+                        className="break-inside-avoid"
+                        style={{ marginBottom: `${gap}px` }}
                       >
-                        {/* 일괄 해설 생성 버튼 */}
-                        <div className="mb-5 flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleBatchGenerateSolutions(false)}
-                            disabled={isGeneratingBatch || problems.length === 0}
-                            className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-2 text-xs font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isGeneratingBatch ? (
-                              <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                해설 생성 중... ({batchProgress.current}/{batchProgress.total}{batchProgress.failed > 0 ? `, 실패 ${batchProgress.failed}` : ''})
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="h-3.5 w-3.5" />
-                                AI 해설 생성 (미완성)
-                              </>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleBatchGenerateSolutions(true)}
-                            disabled={isGeneratingBatch || problems.length === 0}
-                            className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            전체 재생성
-                          </button>
-                          {isGeneratingBatch && (
-                            <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-cyan-500 transition-all duration-300"
-                                style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
-                              />
-                            </div>
-                          )}
+                        <div className="flex items-center gap-2.5 mb-2">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold flex-shrink-0">
+                            {problem.number}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-1 text-xs font-bold text-blue-700">
+                            정답 <AnswerDisplay answer={problem.answer} className="text-blue-700" />
+                          </span>
                         </div>
-                        {problems.map((problem) => (
-                          <div
-                            key={problem.id}
-                            className="break-inside-avoid"
-                            style={{ marginBottom: `${gap}px` }}
-                          >
-                            <div className="flex items-center gap-2.5 mb-2">
-                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold flex-shrink-0">
-                                {problem.number}
-                              </span>
-                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-1 text-xs font-bold text-blue-700">
-                                정답 <AnswerDisplay answer={problem.answer} className="text-blue-700" />
-                              </span>
-                            </div>
-                            <div className="ml-3 pl-4 border-l-2 border-blue-200 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                              <MixedContentRenderer content={stripChoiceAnalysis(problem.solution)} className="text-gray-700" />
-                            </div>
-                            <div className="mt-3 border-b border-dashed border-gray-300" />
-                          </div>
-                        ))}
+                        <div className="ml-3 pl-4 border-l-2 border-blue-200 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          <MixedContentRenderer content={stripChoiceAnalysis(problem.solution)} className="text-gray-700" />
+                        </div>
+                        <div className="mt-3 border-b border-dashed border-gray-300" />
                       </div>
-                    )}
+                    ))}
                   </div>
-                </div>
-
-                {/* 페이지 맵 (우측) */}
-                <div className="w-14 flex-shrink-0 border-l border-subtle flex flex-col items-center py-3">
-                  <PageMap
-                    totalPages={totalPages}
-                    currentPage={currentPage}
-                    onPageSelect={setCurrentPage}
-                  />
-                </div>
+                )}
               </div>
-
-              {/* 하단 컨트롤 바 */}
-              <div className="flex items-center justify-between border-t border-subtle px-4 py-2 flex-shrink-0 bg-surface-raised/50">
-                <div className="flex items-center gap-3">
-                  {/* 1단/2단 전환 */}
-                  <div className="flex items-center gap-1 rounded-lg border border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setColumns(1)}
-                      className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
-                        columns === 1
-                          ? 'bg-cyan-500/10 text-cyan-400'
-                          : 'text-content-tertiary hover:text-content-secondary'
-                      }`}
-                    >
-                      <AlignJustify className="h-3.5 w-3.5" />
-                      1단
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setColumns(2)}
-                      className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
-                        columns === 2
-                          ? 'bg-cyan-500/10 text-cyan-400'
-                          : 'text-content-tertiary hover:text-content-secondary'
-                      }`}
-                    >
-                      <Columns2 className="h-3.5 w-3.5" />
-                      2단
-                    </button>
-                  </div>
-
-                  {/* 간격 슬라이더 (자동모드가 아닐 때만) */}
-                  <div className="flex items-center gap-2">
-                    {perPagePreset ? (
-                      <span className="text-xs text-cyan-400">간격: 자동</span>
-                    ) : (
-                      <>
-                        <span className="text-xs text-content-tertiary">gap : {gap}</span>
-                        <input
-                          type="range"
-                          min={8}
-                          max={48}
-                          value={gap}
-                          onChange={(e) => setGap(Number(e.target.value))}
-                          className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPrintModal(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-                >
-                  <Printer className="h-4 w-4" />
-                  출력
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-content-tertiary">
-              <FileText className="h-12 w-12 text-zinc-700 mb-3" />
-              <p className="text-sm">시험지를 선택해주세요</p>
             </div>
-          )}
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center" style={{ color: 'var(--em-fg-4)', paddingTop: 80 }}>
+            <FileText className="h-12 w-12 mb-3" style={{ color: 'var(--em-bg-raised)' }} />
+            <p className="text-sm">시험지를 선택해주세요</p>
+          </div>
+        )}
+      </main>
+
+      {/* ======== RIGHT OPTIONS PANEL ======== */}
+      <aside className="em-options">
+        <div className="em-opts-group">
+          <h4><Columns2 />레이아웃</h4>
+          <div className="em-col-toggle">
+            <button
+              type="button"
+              className={`em-col-btn ${columns === 1 ? 'active' : ''}`}
+              onClick={() => setColumns(1)}
+            >
+              <div className="em-col-vis">
+                <div className="em-col-vis-line" />
+                <div className="em-col-vis-line short" />
+                <div className="em-col-vis-line gap" />
+                <div className="em-col-vis-line" />
+                <div className="em-col-vis-line short" />
+                <div className="em-col-vis-line gap" />
+                <div className="em-col-vis-line" />
+              </div>
+              <span className="em-col-label">1단</span>
+            </button>
+            <button
+              type="button"
+              className={`em-col-btn ${columns === 2 ? 'active' : ''}`}
+              onClick={() => setColumns(2)}
+            >
+              <div className="em-col-vis">
+                <div className="em-col-vis-cols">
+                  <div className="em-col-vis-col">
+                    <div className="em-col-vis-line" />
+                    <div className="em-col-vis-line short" />
+                    <div className="em-col-vis-line" />
+                    <div className="em-col-vis-line short" />
+                  </div>
+                  <div className="em-col-vis-col">
+                    <div className="em-col-vis-line" />
+                    <div className="em-col-vis-line short" />
+                    <div className="em-col-vis-line" />
+                    <div className="em-col-vis-line short" />
+                  </div>
+                </div>
+              </div>
+              <span className="em-col-label">2단</span>
+            </button>
+          </div>
         </div>
-      </div>
+
+        <div className="em-opts-group">
+          <h4><MoveVertical />문제 간격</h4>
+          <div className="em-slider-row">
+            <span>세로 여백</span>
+            <span className="em-slider-val">
+              {perPagePreset ? '자동' : `${gap}px`}
+            </span>
+          </div>
+          <input
+            type="range"
+            className="em-slider"
+            min={8} max={48} step={2}
+            value={gap}
+            onChange={(e) => setGap(Number(e.target.value))}
+            disabled={!!perPagePreset}
+          />
+          <div className="em-slider-ticks">
+            <span>좁게</span>
+            <span>기본</span>
+            <span>넓게</span>
+          </div>
+        </div>
+
+        <div className="em-opts-group">
+          <h4><FileIcon />용지</h4>
+          <select className="em-select">
+            <option value="A4">A4 (210 × 297mm)</option>
+          </select>
+        </div>
+
+        <div className="em-opts-group">
+          <h4><Printer />출력 옵션</h4>
+          {[
+            { id: 'exam' as const, label: '시험지', sub: 'A4 · 본지' },
+            { id: 'answer' as const, label: '빠른정답', sub: 'Answer key' },
+            { id: 'solution' as const, label: '해설지', sub: '상세 풀이' },
+          ].map((item) => {
+            const on = printSections[item.id];
+            return (
+              <div
+                key={item.id}
+                className={`em-check-row ${on ? 'on' : ''}`}
+                onClick={() => togglePrintSection(item.id)}
+              >
+                <div className="em-cbox">
+                  {on && <Check />}
+                </div>
+                <div className="em-check-row-label">
+                  <span className="main">{item.label}</span>
+                  <span className="sub">{item.sub}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="em-opts-group">
+          <h4><Sparkles />AI 보조</h4>
+          <button
+            type="button"
+            className="em-ai-btn"
+            onClick={() => handleBatchGenerateSolutions(false)}
+            disabled={isGeneratingBatch || problems.length === 0}
+          >
+            {isGeneratingBatch ? <Loader2 className="animate-spin" /> : <Wand2 />}
+            <div className="col">
+              <span>{isGeneratingBatch ? 'AI 해설 생성중' : '일괄 해설 생성'}</span>
+              <span className="sub">
+                {isGeneratingBatch
+                  ? `${batchProgress.current}/${batchProgress.total}${batchProgress.failed > 0 ? ` · 실패 ${batchProgress.failed}` : ''}`
+                  : `미완성 ${problems.filter(p => !p.solution).length}건`}
+              </span>
+            </div>
+          </button>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
+            <button
+              type="button"
+              className="em-preset-btn"
+              onClick={() => handleBatchGenerateSolutions(true)}
+              disabled={isGeneratingBatch || problems.length === 0}
+            >
+              <RefreshCw />
+              <span>해설 전체 재생성</span>
+              <span className="sub">Force</span>
+            </button>
+            <button type="button" className="em-preset-btn">
+              <Shuffle />
+              <span>문제 순서 자동 정렬</span>
+              <span className="sub">난이도순</span>
+            </button>
+            <button type="button" className="em-preset-btn">
+              <Replace />
+              <span>유사 문제로 변형</span>
+              <span className="sub">쌍둥이</span>
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="em-print-cta"
+          onClick={() => setShowPrintModal(true)}
+        >
+          <div className="em-print-cta-head">
+            <Printer />
+            <span>인쇄 준비 완료</span>
+          </div>
+          <div className="em-print-cta-main">
+            <span>지금 인쇄하기</span>
+            <ArrowRight />
+          </div>
+          <div className="em-print-cta-sub">
+            {Object.entries(printSections).filter(([, v]) => v).map(([k], i, arr) => (
+              <React.Fragment key={k}>
+                <span>{k === 'exam' ? '시험지' : k === 'answer' ? '빠른정답' : '해설지'}</span>
+                {i < arr.length - 1 && <span className="dot">·</span>}
+              </React.Fragment>
+            ))}
+            <span className="dot">·</span>
+            <span>A4 {columns}단</span>
+          </div>
+        </button>
+      </aside>
+
 
       {/* ======== 인쇄 전용 영역 (화면에 숨김, handlePrint에서 DOM 복제) ======== */}
       <style dangerouslySetInnerHTML={{ __html: `

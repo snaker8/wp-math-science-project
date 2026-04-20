@@ -37,7 +37,10 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 // 비전 분석: Gemini Flash-Lite 고정
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
 const GPT_MODEL = 'gpt-4o';
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Sonnet: 비용 효율 + 교정 학습으로 정확도 향상
+const CLAUDE_MODEL = 'claude-sonnet-4-6'; // ★ Sonnet 4.6 최신 alias (extended thinking 지원)
+// 도형 생성 정확도를 위해 extended thinking 활성화 (아래 callClaudeVision 참고)
+const CLAUDE_THINKING_ENABLED = process.env.CLAUDE_FIGURE_THINKING !== 'false'; // 기본 on, env로 끌 수 있음
+const CLAUDE_THINKING_BUDGET = parseInt(process.env.CLAUDE_FIGURE_THINKING_BUDGET || '4000', 10);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 // ★ Flash-Lite: JSON 안정 + 그래프 정상 인식 (확정)
 // ❌ gemini-2.5-pro: JSON 잘림 (2026.04)
@@ -1896,10 +1899,11 @@ async function callClaudeVision(
   // SVG 생성 모드인지 감지 (SVG_GENERATION_PROMPT 사용 시)
   const isSvgMode = systemPrompt.includes('SVG') && !systemPrompt.includes('"figureType"');
 
-  const body = {
+  // ★ Extended thinking 활성화 시: max_tokens에 thinking budget 포함 필요 + temperature=1 강제
+  const baseMaxTokens = isSvgMode ? 8000 : 4000;
+  const bodyBase: Record<string, unknown> = {
     model: CLAUDE_MODEL,
-    max_tokens: isSvgMode ? 8000 : 4000,
-    temperature: 0, // ★ 안정적인 결과를 위해 temperature 0
+    max_tokens: CLAUDE_THINKING_ENABLED ? baseMaxTokens + CLAUDE_THINKING_BUDGET : baseMaxTokens,
     system: systemPrompt,
     messages: [
       {
@@ -1917,6 +1921,13 @@ async function callClaudeVision(
       },
     ],
   };
+  if (CLAUDE_THINKING_ENABLED) {
+    bodyBase.temperature = 1; // ★ Extended thinking 활성 시 temperature=1 필수 (API 제약)
+    bodyBase.thinking = { type: 'enabled', budget_tokens: CLAUDE_THINKING_BUDGET };
+  } else {
+    bodyBase.temperature = 0; // ★ 기본: 안정적인 결과
+  }
+  const body = bodyBase;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {

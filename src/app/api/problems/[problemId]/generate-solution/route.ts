@@ -9,6 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+// ★ Anthropic 공식 alias 사용 (Sonnet 4.6부터 date suffix 없는 alias 유효)
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 export async function POST(

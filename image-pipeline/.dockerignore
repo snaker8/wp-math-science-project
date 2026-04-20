@@ -1,0 +1,24 @@
+# 3.1GB 로컬 이미지 DB 제외 — Supabase Storage 사용
+dasaram_diagram_db/images/
+dasaram_diagram_db/metadata/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# 로컬 환경
+.env
+.env.local
+.venv/
+venv/
+
+# 업로드 체크포인트 (런타임에 재생성)
+dasaram_diagram_db/upload_checkpoint.json
+
+# 로그
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

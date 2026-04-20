@@ -58,9 +58,51 @@ const config: Config = {
           DEFAULT: 'var(--card)',
           foreground: 'var(--card-foreground)',
         },
+        // ── Chrome 디자인 시스템 (시험지 관리 리디자인 → 전역 토큰) ──
+        chrome: {
+          bg: 'var(--chrome-bg)',
+          surface: 'var(--chrome-surface)',
+          card: 'var(--chrome-card)',
+          raised: 'var(--chrome-raised)',
+          input: 'var(--chrome-input)',
+        },
+        'chrome-border': {
+          DEFAULT: 'var(--chrome-border)',
+          sub: 'var(--chrome-border-sub)',
+          str: 'var(--chrome-border-str)',
+        },
+        'chrome-fg': {
+          1: 'var(--chrome-fg-1)',
+          2: 'var(--chrome-fg-2)',
+          3: 'var(--chrome-fg-3)',
+          4: 'var(--chrome-fg-4)',
+        },
+        brand: {
+          'indigo-300': 'var(--brand-indigo-300)',
+          'indigo-400': 'var(--brand-indigo-400)',
+          'indigo-500': 'var(--brand-indigo-500)',
+          'indigo-600': 'var(--brand-indigo-600)',
+          'cyan-400': 'var(--brand-cyan-400)',
+        },
+        paper: {
+          DEFAULT: 'var(--paper)',
+          border: 'var(--paper-border)',
+        },
+        ink: {
+          1: 'var(--ink-1)',
+          2: 'var(--ink-2)',
+          3: 'var(--ink-3)',
+          4: 'var(--ink-4)',
+        },
         // 기존 색상 유지 (뱃지/상태 표시용)
         black: "#000000",
         white: "#ffffff",
+      },
+      transitionTimingFunction: {
+        'out-expo': 'var(--ease-out-expo)',
+      },
+      transitionDuration: {
+        'fast': 'var(--dur-fast)',
       },
       borderRadius: {
         lg: 'var(--radius)',
