@@ -13,6 +13,8 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '100mb',
     },
+    // ★ useSearchParams() Suspense 없이 허용 (프리렌더 에러 회피)
+    missingSuspenseWithCSRBailout: false,
   },
   // ★ 프로덕션 빌드 시 ESLint/TS 체크 건너뛰기 (배포용 빠른 빌드)
   eslint: {
