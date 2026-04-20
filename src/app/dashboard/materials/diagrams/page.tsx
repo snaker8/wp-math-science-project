@@ -1,5 +1,8 @@
 'use client';
 
+// ★ Vercel 빌드 시 정적 export 방지 (이미지 파이프라인 런타임 연결 필요)
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {

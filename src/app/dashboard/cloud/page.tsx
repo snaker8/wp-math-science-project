@@ -1,5 +1,8 @@
 'use client';
 
+// ★ Vercel 빌드 시 정적 export 방지 (Supabase 런타임 쿼리 필요)
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
