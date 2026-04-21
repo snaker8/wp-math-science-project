@@ -1399,7 +1399,6 @@ export default function CloudPage() {
               <div className="flex items-center justify-between border-b border-subtle px-6 py-4">
                 <div>
                   <h2 className="text-lg font-bold text-content-primary">자료 업로드</h2>
-                  <p className="text-xs text-content-tertiary mt-0.5">PDF/이미지를 업로드하면 OCR + GPT-4o가 자동으로 분석합니다.</p>
                 </div>
                 <button
                   type="button"
