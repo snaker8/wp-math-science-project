@@ -87,6 +87,8 @@ const GraphModal: React.FC<GraphModalProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showProjections, setShowProjections] = useState(true);
+  // ★ Desmos 라벨/텍스트 크기 (기본 16, 12~32 범위)
+  const [fontSize, setFontSize] = useState<number>(16);
   const [drawMode, setDrawMode] = useState<'none' | 'segment' | 'fill'>('none');
   const [clickedCoords, setClickedCoords] = useState<{ x: number; y: number }[]>([]);
   const [pointStyle, setPointStyle] = useState<'both' | 'label' | 'dot'>('both');
@@ -212,6 +214,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
       keypad: true,        // ★ 수학 키패드 활성화 (터치/마우스)
       border: false,
       lockViewport: false,  // 자유롭게 줌/패닝
+      fontSize,            // ★ 라벨/텍스트 기본 크기
     });
 
     calculatorRef.current = calculator;
@@ -581,6 +584,21 @@ const GraphModal: React.FC<GraphModalProps> = ({
             >
               도형 채우기
             </button>
+            {/* ★ 글자 크기 조절 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#6b7280' }}>글자</span>
+              <button
+                onClick={() => setFontSize(s => Math.max(12, s - 2))}
+                style={{ fontSize: '14px', padding: '0 6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#374151' }}
+                title="글자 크기 줄이기"
+              >−</button>
+              <span style={{ fontSize: '12px', color: '#111827', minWidth: '22px', textAlign: 'center' }}>{fontSize}</span>
+              <button
+                onClick={() => setFontSize(s => Math.min(32, s + 2))}
+                style={{ fontSize: '14px', padding: '0 6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#374151' }}
+                title="글자 크기 키우기"
+              >+</button>
+            </div>
             {/* ★ 라벨 추가 — 그래프에 텍스트 라벨 배치 */}
             <button
               onClick={() => {

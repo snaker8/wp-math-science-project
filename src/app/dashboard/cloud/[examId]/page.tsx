@@ -1145,46 +1145,35 @@ function ExamPaperView({
     return gap;
   };
 
-  // 출력 — DOM 복제 방식 (KaTeX 수식 호환)
+  // 출력 — body.print-active 토글 + 섹션 data-attr로 인쇄 대상 제어
+  // (cloneNode(true)는 KaTeX inline HTML을 복제하지만 일부 스타일/폰트 로딩 타이밍 이슈로
+  //  수식이 깨지는 경우가 있어 원본 DOM을 그대로 인쇄하도록 변경)
   const handlePrint = useCallback(() => {
     setShowPrintMenu(false);
-    const printRoot = document.createElement('div');
-    printRoot.id = 'exam-print-root';
+    document.body.setAttribute('data-print-exam', printSections.exam ? '1' : '0');
+    document.body.setAttribute('data-print-answer', printSections.answer ? '1' : '0');
+    document.body.setAttribute('data-print-solution', printSections.solution ? '1' : '0');
+    document.body.classList.add('print-active');
 
-    // 1. 시험지 섹션
-    if (printSections.exam) {
-      const pages = document.querySelectorAll('.exam-page');
-      pages.forEach(page => {
-        printRoot.appendChild(page.cloneNode(true));
-      });
+    const cleanup = () => {
+      document.body.classList.remove('print-active');
+      document.body.removeAttribute('data-print-exam');
+      document.body.removeAttribute('data-print-answer');
+      document.body.removeAttribute('data-print-solution');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+
+    // afterprint가 일부 브라우저에서 누락될 수 있어 백업 타이머
+    setTimeout(cleanup, 60000);
+
+    // 폰트(KaTeX 포함) 로드 완료 후 인쇄 (최초 로드 시 수식 깨짐 방지)
+    const runPrint = () => { try { window.print(); } catch { cleanup(); } };
+    if ((document as any).fonts?.ready) {
+      (document as any).fonts.ready.then(runPrint).catch(runPrint);
+    } else {
+      runPrint();
     }
-
-    // 2. 빠른정답 섹션
-    if (printSections.answer) {
-      const answerEl = document.querySelector('.quick-answer-print');
-      if (answerEl) {
-        const clone = answerEl.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page');
-        clone.style.cssText = 'background:white; padding:15mm; box-sizing:border-box;';
-        printRoot.appendChild(clone);
-      }
-    }
-
-    // 3. 해설지 섹션
-    if (printSections.solution) {
-      const solutionPages = document.querySelectorAll('.solution-page');
-      solutionPages.forEach(page => {
-        const clone = page.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page');
-        printRoot.appendChild(clone);
-      });
-    }
-
-    if (printRoot.children.length === 0) return;
-
-    document.body.appendChild(printRoot);
-    window.print();
-    document.body.removeChild(printRoot);
   }, [printSections]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
@@ -1497,8 +1486,32 @@ function ExamPaperView({
 
         @media print {
           /* 기존 앱 전체 숨김, 복제된 인쇄 루트만 표시 */
-          body > *:not(#exam-print-root) { display: none !important; }
-          #exam-print-root {
+          /* ★ 원본 DOM 인쇄 방식: body.print-active 시 exam-print-container 외 모두 숨김 */
+          body.print-active > *:not(.exam-print-container):not(style):not(script) {
+            display: none !important;
+          }
+          body.print-active .exam-print-container {
+            display: block !important;
+            overflow: visible !important;
+            height: auto !important;
+          }
+          /* 시험지 제어바 숨김 */
+          body.print-active .exam-controls { display: none !important; }
+          /* 인쇄 섹션 선택적 노출 */
+          body.print-active[data-print-exam="0"] .exam-page:not(.solution-page) { display: none !important; }
+          body.print-active[data-print-answer="0"] .quick-answer-print { display: none !important; }
+          body.print-active[data-print-answer="1"] .quick-answer-print {
+            position: static !important; left: auto !important; top: auto !important;
+            display: block !important;
+          }
+          body.print-active[data-print-solution="0"] .solution-page { display: none !important; }
+          body.print-active[data-print-solution="1"] .solution-page {
+            position: static !important; left: auto !important; top: auto !important;
+            display: block !important;
+          }
+          /* 숨겨진 QuickAnswer/Solution 래퍼 위치 해제 */
+          body.print-active [aria-hidden="true"] {
+            position: static !important; left: auto !important; top: auto !important;
             display: block !important;
           }
           html, body {
@@ -1509,7 +1522,7 @@ function ExamPaperView({
             overflow: visible !important;
           }
           /* 각 A4 페이지 */
-          #exam-print-root .exam-page {
+          body.print-active .exam-page {
             width: 210mm !important;
             height: 297mm !important;
             min-height: 297mm !important;
@@ -1523,31 +1536,22 @@ function ExamPaperView({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          #exam-print-root .exam-page:last-child { page-break-after: auto; }
-          /* 인쇄 시 간격은 화면 설정 그대로 반영 (인라인 스타일 유지) */
-          #exam-print-root .break-inside-avoid {
+          body.print-active .exam-page:last-child { page-break-after: auto; }
+          body.print-active .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
           }
-          /* ★ CSS columns 내부에서 display math / 표가 컬럼 너비 초과하지 않도록 보정 */
-          #exam-print-root .katex-display {
+          /* KaTeX 보호 */
+          body.print-active .katex-display {
             max-width: 100%;
             overflow: hidden;
             margin: 0.3em 0;
           }
-          #exam-print-root .katex-display > .katex {
-            max-width: 100%;
-          }
-          #exam-print-root table {
-            max-width: 100%;
-            table-layout: auto;
-          }
-          #exam-print-root img {
-            max-width: 100%;
-            height: auto;
-          }
-          /* 해설지: 자연스러운 페이지 흐름 + 상하 여백 확보 */
-          #exam-print-root .exam-page.solution-page {
+          body.print-active .katex-display > .katex { max-width: 100%; }
+          body.print-active table { max-width: 100%; table-layout: auto; }
+          body.print-active img { max-width: 100%; height: auto; }
+          /* 해설지 자연 흐름 */
+          body.print-active .exam-page.solution-page {
             height: auto !important;
             min-height: auto !important;
             max-height: none !important;
@@ -1556,8 +1560,7 @@ function ExamPaperView({
             page-break-inside: auto;
             padding: 15mm 15mm 20mm 15mm !important;
           }
-          /* 해설지 각 문제 블록: 페이지 넘김 시 여백 확보 */
-          #exam-print-root .exam-page.solution-page .break-inside-avoid {
+          body.print-active .exam-page.solution-page .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
             margin-bottom: 8mm;
