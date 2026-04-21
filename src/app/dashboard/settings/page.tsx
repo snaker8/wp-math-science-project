@@ -1,23 +1,142 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Cpu, Shield, Activity, Save, RefreshCw, AlertCircle, CheckCircle2, Server, Database, MoreHorizontal } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
-import { teacherList, systemLogs } from '@/lib/mock-data';
+import {
+  Settings, Cpu, Shield, Activity, Save, RefreshCw,
+  Server, Database, MoreHorizontal, Users, UserCheck, UserPlus,
+  BookOpen, FileText, Search as SearchIcon, AlertCircle,
+} from 'lucide-react';
 
-// --- Types & Interfaces ---
 type Tab = 'general' | 'ai-engine' | 'permissions' | 'logs';
 
+type Role = 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT';
+
+interface AdminUser {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  role: Role;
+  instituteId: string | null;
+  isAcademyAdmin: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+interface SystemStats {
+  scope: 'platform' | 'institute';
+  users: {
+    total: number;
+    teachers: number;
+    students: number;
+    parents: number;
+    newThisWeek: number;
+    activeLast24h: number;
+  };
+  content: { problems: number; exams: number };
+  generatedAt: string;
+}
+
+const ROLE_LABEL: Record<Role, string> = {
+  ADMIN: '플랫폼 관리자',
+  TEACHER: '강사',
+  TUTOR: '보조강사',
+  STUDENT: '학생',
+  PARENT: '학부모',
+};
+
+const ROLE_COLOR: Record<Role, string> = {
+  ADMIN: 'bg-purple-500/20 text-purple-300',
+  TEACHER: 'bg-indigo-500/20 text-indigo-300',
+  TUTOR: 'bg-sky-500/20 text-sky-300',
+  STUDENT: 'bg-emerald-500/20 text-emerald-300',
+  PARENT: 'bg-amber-500/20 text-amber-300',
+};
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return '방금 전';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`;
+  const days = Math.floor(diff / 86_400_000);
+  if (days < 30) return `${days}일 전`;
+  return new Date(iso).toLocaleDateString('ko-KR');
+}
+
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('ai-engine');
+  const [activeTab, setActiveTab] = useState<Tab>('permissions');
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // AI Engine State
+  // AI Engine state (UI 프로토타입 — 아직 DB 미연동)
   const [variationStrength, setVariationStrength] = useState(50);
   const [difficultySensitivity, setDifficultySensitivity] = useState(75);
   const [ocrPrecision, setOcrPrecision] = useState(90);
+
+  // Real data
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [userTotal, setUserTotal] = useState(0);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<Role | 'ALL'>('ALL');
+  const [searchQ, setSearchQ] = useState('');
+
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const params = new URLSearchParams();
+      if (roleFilter !== 'ALL') params.set('role', roleFilter);
+      if (searchQ.trim()) params.set('q', searchQ.trim());
+      const res = await fetch(`/api/admin/users?${params.toString()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const j = await res.json();
+      setUsers(j.users ?? []);
+      setUserTotal(j.total ?? 0);
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [roleFilter, searchQ]);
+
+  const fetchStats = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(null);
+    try {
+      const res = await fetch('/api/admin/system-stats', { cache: 'no-store' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      setStats(await res.json());
+    } catch (e) {
+      setStatsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'permissions') fetchUsers();
+    if (activeTab === 'logs') fetchStats();
+  }, [activeTab, fetchUsers, fetchStats]);
+
+  // 검색어 디바운스
+  useEffect(() => {
+    if (activeTab !== 'permissions') return;
+    const t = setTimeout(fetchUsers, 300);
+    return () => clearTimeout(t);
+  }, [searchQ, roleFilter, activeTab, fetchUsers]);
 
   const handleSave = () => {
     setIsSaving(true);
@@ -34,12 +153,10 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-surface-base text-content-primary p-6 md:p-10 pb-24 relative overflow-hidden font-sans">
-      {/* Background Grid */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03]"
         style={{ backgroundImage: 'linear-gradient(#6366f1 1px, transparent 1px), linear-gradient(90deg, #6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }}
       />
 
-      {/* Header */}
       <header className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
         <div>
           <div className="flex items-center gap-2 text-indigo-400 mb-1">
@@ -50,7 +167,6 @@ export default function SettingsPage() {
           <p className="text-content-tertiary mt-1">플랫폼의 핵심 파라미터와 접근 권한을 관리하는 엔지니어링 워크스페이스입니다.</p>
         </div>
 
-        {/* Save Status - Mobile/Desktop */}
         {hasChanges && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -68,7 +184,6 @@ export default function SettingsPage() {
         )}
       </header>
 
-      {/* Tab Navigation */}
       <nav className="flex items-center gap-8 border-b border-white/10 mb-8 z-10 relative overflow-x-auto no-scrollbar">
         {[
           { id: 'general', label: 'General', icon: Settings },
@@ -79,8 +194,7 @@ export default function SettingsPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as Tab)}
-            className={`pb-4 flex items-center gap-2 relative transition-colors ${activeTab === tab.id ? 'text-content-primary' : 'text-content-tertiary hover:text-content-secondary'
-              }`}
+            className={`pb-4 flex items-center gap-2 relative transition-colors ${activeTab === tab.id ? 'text-content-primary' : 'text-content-tertiary hover:text-content-secondary'}`}
           >
             <tab.icon size={18} />
             <span className="font-semibold">{tab.label}</span>
@@ -94,10 +208,9 @@ export default function SettingsPage() {
         ))}
       </nav>
 
-      {/* Content Area */}
       <main className="z-10 relative min-h-[500px]">
         <AnimatePresence mode="wait">
-          {/* --- AI Engine Tab --- */}
+          {/* --- AI Engine Tab (UI 프로토타입) --- */}
           {activeTab === 'ai-engine' && (
             <motion.div
               key="ai-engine"
@@ -107,7 +220,13 @@ export default function SettingsPage() {
               transition={{ duration: 0.2 }}
               className="grid grid-cols-1 lg:grid-cols-12 gap-8"
             >
-              {/* Sliders Panel */}
+              <div className="lg:col-span-12 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-sm text-amber-200 flex gap-3 items-start">
+                <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-semibold">UI 프로토타입:</strong> 아래 슬라이더는 아직 실제 AI 파이프라인에 저장·적용되지 않습니다. (추후 <code className="bg-black/30 px-1 rounded">system_settings</code> 테이블 연동 예정)
+                </div>
+              </div>
+
               <div className="lg:col-span-4 space-y-8">
                 <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
                   <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
@@ -116,7 +235,6 @@ export default function SettingsPage() {
                   </h3>
 
                   <div className="space-y-8">
-                    {/* Slider 1 */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-medium text-content-secondary">유사 문제 변형 강도</label>
@@ -128,12 +246,9 @@ export default function SettingsPage() {
                         onChange={(e) => handleSettingChange(setVariationStrength, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <p className="text-xs text-content-tertiary leading-relaxed">
-                        값이 높을수록 원본 문제의 구조를 더 과감하게 변형합니다. (30~60% 권장)
-                      </p>
+                      <p className="text-xs text-content-tertiary leading-relaxed">값이 높을수록 원본 문제의 구조를 더 과감하게 변형합니다. (30~60% 권장)</p>
                     </div>
 
-                    {/* Slider 2 */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-medium text-content-secondary">난이도 자동 조절 민감도</label>
@@ -145,12 +260,9 @@ export default function SettingsPage() {
                         onChange={(e) => handleSettingChange(setDifficultySensitivity, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <p className="text-xs text-content-tertiary leading-relaxed">
-                        학생의 오답률에 따라 난이도를 얼마나 빠르게 조정할지 결정합니다.
-                      </p>
+                      <p className="text-xs text-content-tertiary leading-relaxed">학생의 오답률에 따라 난이도를 얼마나 빠르게 조정할지 결정합니다.</p>
                     </div>
 
-                    {/* Slider 3 */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-medium text-content-secondary">OCR 인식 정밀도 (Latency Trade-off)</label>
@@ -162,39 +274,26 @@ export default function SettingsPage() {
                         onChange={(e) => handleSettingChange(setOcrPrecision, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <p className="text-xs text-content-tertiary leading-relaxed">
-                        정밀도를 높이면 처리 속도가 늦어질 수 있습니다. (서술형 문제 권장: 90%+)
-                      </p>
+                      <p className="text-xs text-content-tertiary leading-relaxed">정밀도를 높이면 처리 속도가 늦어질 수 있습니다. (서술형 문제 권장: 90%+)</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Live Preview Panel */}
               <div className="lg:col-span-8">
                 <div className="bg-surface-card border border-indigo-500/20 rounded-2xl p-1 relative overflow-hidden h-full min-h-[400px]">
-                  {/* Grid Background */}
                   <div className="absolute inset-0 bg-[linear-gradient(rgba(99,102,241,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.03)_1px,transparent_1px)] bg-[size:20px_20px]" />
-
                   <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-xs font-bold text-indigo-300 uppercase">Live Simulation</span>
+                    <span className="text-xs font-bold text-indigo-300 uppercase">Preview (Mock)</span>
                   </div>
-
                   <div className="h-full flex items-center justify-center p-8 relative z-10">
                     <div className="grid grid-cols-2 gap-8 w-full max-w-2xl">
-                      {/* Original Problem */}
                       <div className="bg-surface-base/50 border border-white/10 p-6 rounded-xl backdrop-blur-md">
                         <p className="text-xs text-content-tertiary mb-4 font-mono">INPUT_SOURCE</p>
-                        <div className="font-serif text-content-secondary text-lg">
-                          f(x) = x² + 2x + 1
-                        </div>
-                        <div className="mt-4 text-sm text-content-tertiary">
-                          Find the derivative f&apos;(x).
-                        </div>
+                        <div className="font-serif text-content-secondary text-lg">f(x) = x² + 2x + 1</div>
+                        <div className="mt-4 text-sm text-content-tertiary">Find the derivative f&apos;(x).</div>
                       </div>
-
-                      {/* Generated Variation */}
                       <motion.div
                         className="bg-indigo-950/20 border border-indigo-500/30 p-6 rounded-xl backdrop-blur-md relative"
                         animate={{
@@ -203,12 +302,10 @@ export default function SettingsPage() {
                         }}
                         transition={{ duration: 0.5 }}
                       >
-                        <div className="absolute -top-3 -right-3 bg-indigo-600 text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
-                          VARIATION: {variationStrength}%
-                        </div>
+                        <div className="absolute -top-3 -right-3 bg-indigo-600 text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">VARIATION: {variationStrength}%</div>
                         <p className="text-xs text-indigo-400 mb-4 font-mono">OUTPUT_TARGET</p>
                         <motion.div
-                          key={variationStrength} // Re-render text on change
+                          key={variationStrength}
                           initial={{ opacity: 0.5, filter: 'blur(2px)' }}
                           animate={{ opacity: 1, filter: 'blur(0px)' }}
                           className="font-serif text-content-primary text-lg"
@@ -223,8 +320,6 @@ export default function SettingsPage() {
                       </motion.div>
                     </div>
                   </div>
-
-                  {/* Tech Lines */}
                   <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
                   <div className="absolute top-0 right-10 w-[1px] h-full bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent" />
                 </div>
@@ -232,7 +327,7 @@ export default function SettingsPage() {
             </motion.div>
           )}
 
-          {/* --- Permissions Tab --- */}
+          {/* --- Permissions Tab (실제 데이터) --- */}
           {activeTab === 'permissions' && (
             <motion.div
               key="permissions"
@@ -240,66 +335,116 @@ export default function SettingsPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
-              className="bg-surface-card/50 border border-white/10 rounded-2xl overflow-hidden"
+              className="space-y-6"
             >
-              <div className="p-6 border-b border-white/10 flex justify-between items-center">
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Shield size={20} className="text-emerald-400" />
-                  Access Control Lists (ACL)
-                </h3>
-                <button className="bg-white/5 hover:bg-white/10 text-xs px-3 py-2 rounded-lg transition-colors border border-white/10">
-                  + Add New User
-                </button>
+              {/* 필터 바 */}
+              <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(['ALL', 'ADMIN', 'TEACHER', 'TUTOR', 'STUDENT', 'PARENT'] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setRoleFilter(r)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
+                        roleFilter === r
+                          ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-200'
+                          : 'bg-white/5 border-white/10 text-content-tertiary hover:text-content-secondary'
+                      }`}
+                    >
+                      {r === 'ALL' ? '전체' : ROLE_LABEL[r]}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 min-w-[260px]">
+                  <SearchIcon size={16} className="text-content-tertiary" />
+                  <input
+                    value={searchQ}
+                    onChange={(e) => setSearchQ(e.target.value)}
+                    placeholder="이름 또는 이메일로 검색..."
+                    className="bg-transparent outline-none text-sm flex-1 placeholder:text-content-tertiary"
+                  />
+                  <button
+                    onClick={fetchUsers}
+                    className="text-content-tertiary hover:text-content-primary"
+                    title="새로고침"
+                  >
+                    <RefreshCw size={14} className={usersLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-white/5 text-content-secondary uppercase text-xs font-bold tracking-wider">
-                    <tr>
-                      <th className="px-6 py-4">Name / ID</th>
-                      <th className="px-6 py-4">Role</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Last Active</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {teacherList.map((teacher, idx) => (
-                      <tr key={idx} className="group hover:bg-white/[0.02] transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-content-primary">{teacher.name}</div>
-                          <div className="text-xs text-content-tertiary">{teacher.email}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${teacher.role === 'Director' ? 'bg-purple-500/20 text-purple-400' :
-                              teacher.role === 'Tutor' ? 'bg-indigo-500/20 text-indigo-400' :
-                                'bg-zinc-500/20 text-content-secondary'
-                            }`}>
-                            {teacher.role.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${teacher.status === 'Active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                            <span className="text-content-secondary">{teacher.status}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 font-mono text-content-tertiary">
-                          {teacher.lastActive}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button className="text-content-tertiary hover:text-content-primary transition-colors">
-                            <MoreHorizontal size={18} />
-                          </button>
-                        </td>
+
+              {/* 목록 카드 */}
+              <div className="bg-surface-card/50 border border-white/10 rounded-2xl overflow-hidden">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Shield size={20} className="text-emerald-400" />
+                    가입자 목록
+                    <span className="text-sm font-normal text-content-tertiary">({userTotal}명)</span>
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  {usersError && (
+                    <div className="p-4 bg-red-500/10 border-b border-red-500/30 text-red-300 text-sm flex items-center gap-2">
+                      <AlertCircle size={16} /> {usersError}
+                    </div>
+                  )}
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-white/5 text-content-secondary uppercase text-xs font-bold tracking-wider">
+                      <tr>
+                        <th className="px-6 py-4">이름 / 이메일</th>
+                        <th className="px-6 py-4">역할</th>
+                        <th className="px-6 py-4">전화</th>
+                        <th className="px-6 py-4">가입일</th>
+                        <th className="px-6 py-4">최근 로그인</th>
+                        <th className="px-6 py-4 text-right">액션</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {usersLoading && users.length === 0 ? (
+                        <tr><td colSpan={6} className="px-6 py-10 text-center text-content-tertiary">로딩 중...</td></tr>
+                      ) : users.length === 0 ? (
+                        <tr><td colSpan={6} className="px-6 py-10 text-center text-content-tertiary">등록된 사용자가 없습니다.</td></tr>
+                      ) : (
+                        users.map((u) => (
+                          <tr key={u.id} className="group hover:bg-white/[0.02] transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="font-medium text-content-primary flex items-center gap-2">
+                                {u.fullName}
+                                {u.isAcademyAdmin && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">학원관리자</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-content-tertiary">{u.email}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${ROLE_COLOR[u.role]}`}>
+                                {ROLE_LABEL[u.role]}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-mono text-content-tertiary text-xs">
+                              {u.phone || '—'}
+                            </td>
+                            <td className="px-6 py-4 text-content-tertiary text-xs">
+                              {new Date(u.createdAt).toLocaleDateString('ko-KR')}
+                            </td>
+                            <td className="px-6 py-4 text-content-tertiary text-xs">
+                              {formatRelative(u.lastLoginAt)}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <button className="text-content-tertiary hover:text-content-primary transition-colors">
+                                <MoreHorizontal size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* --- Logs Tab --- */}
+          {/* --- Logs / Stats Tab (실제 데이터) --- */}
           {activeTab === 'logs' && (
             <motion.div
               key="logs"
@@ -307,60 +452,81 @@ export default function SettingsPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6"
+              className="space-y-6"
             >
-              <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <Server size={20} className="text-blue-400" />
-                    <h3 className="font-bold">API Server Health</h3>
-                  </div>
-                  <span className="text-emerald-400 text-sm font-bold animate-pulse">● Operational</span>
-                </div>
-                <div className="h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={systemLogs}>
-                      <Line type="monotone" dataKey="latency" stroke="#60a5fa" strokeWidth={2} dot={false} isAnimationActive={true} />
-                      <RechartsTooltip
-                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px' }}
-                        itemStyle={{ fontSize: '12px' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 flex justify-between text-xs text-content-tertiary font-mono">
-                  <span>Latency (ms)</span>
-                  <span>Last 30 min</span>
-                </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Activity size={20} className="text-emerald-400" />
+                  플랫폼 현황
+                  {stats && (
+                    <span className="text-xs font-normal text-content-tertiary">
+                      ({stats.scope === 'platform' ? '전체 플랫폼' : '본인 학원'} · {new Date(stats.generatedAt).toLocaleTimeString('ko-KR')} 기준)
+                    </span>
+                  )}
+                </h3>
+                <button
+                  onClick={fetchStats}
+                  className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <RefreshCw size={14} className={statsLoading ? 'animate-spin' : ''} /> 새로고침
+                </button>
               </div>
 
-              <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <Database size={20} className="text-purple-400" />
-                    <h3 className="font-bold">Database Connections</h3>
+              {statsError && (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm flex items-center gap-2">
+                  <AlertCircle size={16} /> {statsError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { icon: Users, label: '전체 사용자', value: stats?.users.total, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                  { icon: UserCheck, label: '강사', value: stats?.users.teachers, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+                  { icon: Users, label: '학생', value: stats?.users.students, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { icon: Users, label: '학부모', value: stats?.users.parents, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+                  { icon: UserPlus, label: '신규 가입 (7일)', value: stats?.users.newThisWeek, color: 'text-pink-400', bg: 'bg-pink-500/10' },
+                  { icon: Activity, label: '활성 (24시간)', value: stats?.users.activeLast24h, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { icon: BookOpen, label: '문제 (문제은행)', value: stats?.content.problems, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+                  { icon: FileText, label: '시험지', value: stats?.content.exams, color: 'text-sky-400', bg: 'bg-sky-500/10' },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-surface-card/50 border border-white/10 rounded-2xl p-5">
+                    <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center mb-3`}>
+                      <stat.icon size={20} className={stat.color} />
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {statsLoading && stat.value === undefined ? '—' : (stat.value ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-content-tertiary mt-1">{stat.label}</div>
                   </div>
-                  <span className="text-content-tertiary text-sm">Active: 42</span>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Server size={18} className="text-blue-400" />
+                    <h4 className="font-bold text-sm">API Server</h4>
+                    <span className="text-emerald-400 text-xs font-bold ml-auto">● Operational</span>
+                  </div>
+                  <p className="text-xs text-content-tertiary leading-relaxed">
+                    실시간 지표(레이턴시/요청수)는 Vercel 대시보드에서 확인하세요. 별도 메트릭 수집을 연동하면 이 영역에 차트가 표시됩니다.
+                  </p>
                 </div>
-                <div className="h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={systemLogs}>
-                      <Line type="step" dataKey="status" stroke="#a855f7" strokeWidth={2} dot={false} isAnimationActive={true} />
-                      <RechartsTooltip
-                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px' }}
-                        itemStyle={{ fontSize: '12px' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 flex justify-between text-xs text-content-tertiary font-mono">
-                  <span>Pool Utilization (%)</span>
-                  <span>Last 30 min</span>
+                <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Database size={18} className="text-purple-400" />
+                    <h4 className="font-bold text-sm">Database</h4>
+                    <span className="text-emerald-400 text-xs font-bold ml-auto">● Supabase</span>
+                  </div>
+                  <p className="text-xs text-content-tertiary leading-relaxed">
+                    Connection Pool 지표는 Supabase 프로젝트 → Database → Reports에서 확인할 수 있습니다.
+                  </p>
                 </div>
               </div>
             </motion.div>
           )}
-          {/* --- General Tab (Placeholder) --- */}
+
+          {/* --- General Tab --- */}
           {activeTab === 'general' && (
             <motion.div
               key="general"
@@ -370,7 +536,7 @@ export default function SettingsPage() {
             >
               <Settings size={48} className="mb-4 opacity-20" />
               <p>General Environment Settings</p>
-              <p className="text-xs mt-2">Theme, Localization, and Organization Info</p>
+              <p className="text-xs mt-2">Theme, Localization, and Organization Info (구현 예정)</p>
             </motion.div>
           )}
         </AnimatePresence>
