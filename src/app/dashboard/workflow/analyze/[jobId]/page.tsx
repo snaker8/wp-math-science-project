@@ -2228,101 +2228,88 @@ export default function AnalyzeJobPage() {
   }, [detectionMode, columnMode, cropSensitivity]);
 
   // ★ Mathpix OCR → groupLinesIntoQuestions bbox 자동 감지
-  // jobId가 있으면 즉시 서버에서 OCR 실행 → bbox 반환 → autoCropProblems 자동 채움
-  // GPT-4o Vision "AI 자동 감지" 버튼 클릭 없이 자동 실행
-  useEffect(() => {
+  // jobId가 있으면 서버에서 OCR 실행 → bbox 반환 → autoCropProblems 채움
+  // ★ 자동 시작 비활성화됨 (사용자 요청: 수동 모드).
+  //   "OCR 자동 감지" 버튼(아래 UI에 추가)이나 향후 수동 트리거로 실행 가능.
+  const runMathpixOcrBboxDetection = useCallback(async () => {
     if (!jobId || ocrBboxDoneRef.current) return;
     ocrBboxDoneRef.current = true;
 
-    let cancelled = false;
     setIsOcrBboxLoading(true);
 
-    (async () => {
-      try {
-        console.log('[OcrBbox] Mathpix OCR bbox 자동 감지 시작...');
-        const res = await fetch('/api/workflow/detect-from-ocr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId }),
-        });
+    try {
+      console.log('[OcrBbox] Mathpix OCR bbox 감지 시작 (수동 트리거)...');
+      const res = await fetch('/api/workflow/detect-from-ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
 
-        if (!res.ok || cancelled) return;
+      if (!res.ok) return;
 
-        const data = await res.json() as {
-          success: boolean;
-          questions: Array<{
-            questionNumber: number;
-            pageIndex: number;
-            bbox: { x: number; y: number; w: number; h: number };
-            contentMmd: string;
-            choices: string[];
-            hasFigure: boolean;
-            figureBbox: { x: number; y: number; w: number; h: number } | null;
-          }>;
-          count: number;
-        };
+      const data = await res.json() as {
+        success: boolean;
+        questions: Array<{
+          questionNumber: number;
+          pageIndex: number;
+          bbox: { x: number; y: number; w: number; h: number };
+          contentMmd: string;
+          choices: string[];
+          hasFigure: boolean;
+          figureBbox: { x: number; y: number; w: number; h: number } | null;
+        }>;
+        count: number;
+      };
 
-        if (!data.success || !data.questions || data.questions.length === 0) {
-          console.log('[OcrBbox] 감지된 문제 없음 — 수동 모드 유지');
-          return;
-        }
-
-        console.log(`[OcrBbox] ${data.count}개 문제 bbox 수신 — autoCropProblems 채움`);
-
-        // 페이지별로 그룹화
-        const byPage = new Map<number, typeof data.questions>();
-        for (const q of data.questions) {
-          if (!byPage.has(q.pageIndex)) byPage.set(q.pageIndex, []);
-          byPage.get(q.pageIndex)!.push(q);
-        }
-
-        // autoCropProblems 직접 세팅 (handleBlocksDetected 우회)
-        const newProblems = new Map<number, AnalyzedProblem[]>();
-        for (const [pageIdx, qs] of byPage.entries()) {
-          // 문제 번호 순으로 정렬
-          const sorted = [...qs].sort((a, b) => a.questionNumber - b.questionNumber);
-          newProblems.set(pageIdx, sorted.map(q => ({
-            id: `ocr-p${q.pageIndex}-q${q.questionNumber}`,
-            number: q.questionNumber,
-            content: q.contentMmd || '',
-            choices: q.choices || [],
-            answer: '',
-            solution: '',
-            difficulty: 3 as const,
-            typeCode: '',
-            typeName: '',
-            confidence: 0,
-            status: 'pending' as const,
-            pageIndex: q.pageIndex,
-            bbox: q.bbox,
-          })));
-          // 이 페이지는 감지 완료로 표시 → GPT-4o Vision useEffect 스킵 방지
-          blocksDetectedRef.current.add(pageIdx);
-        }
-
-        if (cancelled) return;
-
-        setAutoCropProblems(newProblems);
-        setUseAutoCropMode(true);
-
-        // 첫 번째 문제 자동 선택
-        const firstPage = [...newProblems.keys()].sort((a, b) => a - b)[0];
-        if (firstPage !== undefined) {
-          const firstProblem = newProblems.get(firstPage)?.[0];
-          if (firstProblem) setSelectedProblemId(firstProblem.id);
-        }
-
-        console.log('[OcrBbox] bbox 자동 감지 완료 ✓');
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('[OcrBbox] OCR bbox 감지 실패 — 수동 모드 유지:', err);
-        }
-      } finally {
-        if (!cancelled) setIsOcrBboxLoading(false);
+      if (!data.success || !data.questions || data.questions.length === 0) {
+        console.log('[OcrBbox] 감지된 문제 없음 — 수동 모드 유지');
+        return;
       }
-    })();
 
-    return () => { cancelled = true; };
+      console.log(`[OcrBbox] ${data.count}개 문제 bbox 수신 — autoCropProblems 채움`);
+
+      const byPage = new Map<number, typeof data.questions>();
+      for (const q of data.questions) {
+        if (!byPage.has(q.pageIndex)) byPage.set(q.pageIndex, []);
+        byPage.get(q.pageIndex)!.push(q);
+      }
+
+      const newProblems = new Map<number, AnalyzedProblem[]>();
+      for (const [pageIdx, qs] of byPage.entries()) {
+        const sorted = [...qs].sort((a, b) => a.questionNumber - b.questionNumber);
+        newProblems.set(pageIdx, sorted.map(q => ({
+          id: `ocr-p${q.pageIndex}-q${q.questionNumber}`,
+          number: q.questionNumber,
+          content: q.contentMmd || '',
+          choices: q.choices || [],
+          answer: '',
+          solution: '',
+          difficulty: 3 as const,
+          typeCode: '',
+          typeName: '',
+          confidence: 0,
+          status: 'pending' as const,
+          pageIndex: q.pageIndex,
+          bbox: q.bbox,
+        })));
+        blocksDetectedRef.current.add(pageIdx);
+      }
+
+      setAutoCropProblems(newProblems);
+      setUseAutoCropMode(true);
+
+      const firstPage = [...newProblems.keys()].sort((a, b) => a - b)[0];
+      if (firstPage !== undefined) {
+        const firstProblem = newProblems.get(firstPage)?.[0];
+        if (firstProblem) setSelectedProblemId(firstProblem.id);
+      }
+
+      console.log('[OcrBbox] bbox 감지 완료 ✓');
+    } catch (err) {
+      console.warn('[OcrBbox] OCR bbox 감지 실패 — 수동 모드 유지:', err);
+    } finally {
+      setIsOcrBboxLoading(false);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
@@ -4045,6 +4032,15 @@ export default function AnalyzeJobPage() {
                 title="픽셀 분석으로 모든 페이지의 문제를 자동 감지합니다"
               >
                 자동 감지
+              </button>
+              <button
+                type="button"
+                onClick={() => { ocrBboxDoneRef.current = false; runMathpixOcrBboxDetection(); }}
+                disabled={isOcrBboxLoading}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                title="Mathpix OCR로 문제 번호/bbox를 일괄 감지합니다"
+              >
+                {isOcrBboxLoading ? 'OCR 처리 중...' : 'OCR 감지'}
               </button>
             </div>
           )}
