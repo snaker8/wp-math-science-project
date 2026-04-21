@@ -540,20 +540,10 @@ ${content.slice(0, 1500)}`;
           changes.push('연립방정식 괄호 수정');
         }
 
-        // array/aligned 블록을 줄별 $...$ 인라인화 (멀티라인 $$ 렌더링 깨짐 방지)
-        const arrayPattern = /\$?\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?\$?/g;
-        if (arrayPattern.test(fixed)) {
-          arrayPattern.lastIndex = 0;
-          fixed = fixed.replace(arrayPattern, (_m: string, inner: string) => {
-            return inner
-              .split('\\\\')
-              .map((l: string) => l.replace(/&/g, '').trim())
-              .filter((l: string) => l.length > 0)
-              .map((l: string) => `$${l}$`)
-              .join('\n');
-          });
-          changes.push('array 블록 인라인화');
-        }
+        // ★ array/aligned 블록 인라인화 — 너무 공격적이어서 <보기> 박스 같은 정상 표를 파괴함.
+        //   (예: \begin{array}{|c|}\hline\text{<보기>}\\\pi...\end{array} → $\text{<보기>}$\n$\pi...$ 로 쪼개져 버림)
+        //   KaTeX는 최신 버전에서 \begin{array}를 정상 렌더링하므로 이 변환은 제거.
+        //   만약 특정 패턴에서 렌더 깨짐이 재발하면 MixedContentRenderer 측에서 처리.
 
         return { fixed, changes };
       };
