@@ -863,6 +863,23 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
       console.log(`[generate-solution] 🧠 Opus fallback 발동 (${reasons}) — ${ANTHROPIC_OPUS_MODEL}`);
 
       try {
+        // ★ Opus는 품질만 취하고 thinking은 끈다 (비용·속도 절감)
+        //   Opus 기본 성능만으로도 Sonnet + thinking 수준 이상 기대 가능
+        //   비용: thinking 켤 때 ~$0.80/호출 → 끄면 ~$0.15/호출, 속도 1~3분 → 10~30초
+        //   되돌리려면 OPUS_USE_THINKING=1 env 설정
+        const opusUseThinking = process.env.OPUS_USE_THINKING === '1';
+        const opusBody: Record<string, unknown> = {
+          model: ANTHROPIC_OPUS_MODEL,
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userContent }],
+          temperature: 0.3,
+        };
+        if (opusUseThinking) {
+          opusBody.max_tokens = 16000;
+          opusBody.thinking = { type: 'enabled', budget_tokens: 8000 };
+          opusBody.temperature = 1;
+        }
         const opusRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -871,14 +888,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             'anthropic-version': '2023-06-01',
             'anthropic-beta': 'output-128k-2025-02-19',
           },
-          body: JSON.stringify({
-            model: ANTHROPIC_OPUS_MODEL,
-            max_tokens: 16000,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: userContent }],
-            thinking: { type: 'enabled', budget_tokens: 8000 }, // Opus는 더 많은 thinking 예산
-            temperature: 1,
-          }),
+          body: JSON.stringify(opusBody),
         });
 
         if (opusRes.ok) {
