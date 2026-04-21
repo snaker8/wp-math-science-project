@@ -169,14 +169,77 @@ export default function CloudFlowUploader({
     setJobs((prev) => [tempJob, ...prev]);
 
     try {
-      const formData = new FormData();
-      formData.append('file', problemFile); // Main Problem File
+      // ★ Vercel Hobby 플랜 4.5MB body 제한 우회:
+      // 1) 서명 URL 발급 → 2) Storage 직접 업로드 → 3) 경로만 서버에 전달
+      const directUpload = async (file: File, suffix: '' | 'answer' | 'quick', jobId?: string): Promise<{ storagePath: string; jobId: string }> => {
+        const urlRes = await fetch('/api/workflow/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: file.name, suffix, jobId }),
+        });
+        if (!urlRes.ok) {
+          const err = await urlRes.json().catch(() => ({ error: '서명 URL 발급 실패' }));
+          throw new Error(err.error || `서명 URL 발급 실패 (${urlRes.status})`);
+        }
+        const { signedUrl, storagePath, jobId: returnedJobId } = await urlRes.json();
 
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === tempJob.id ? { ...j, currentStep: `Storage 업로드 중 (${suffix || 'problem'})...` } : j
+          )
+        );
+
+        const uploadRes = await fetch(signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        });
+        if (!uploadRes.ok) {
+          throw new Error(`Storage 업로드 실패 (${uploadRes.status})`);
+        }
+        return { storagePath, jobId: returnedJobId };
+      };
+
+      setJobs((prev) =>
+        prev.map((j) => (j.id === tempJob.id ? { ...j, currentStep: 'Storage 업로드 준비...' } : j))
+      );
+
+      // 1. 메인 파일 업로드 (jobId도 반환받아 보조파일과 공유)
+      const { storagePath: problemStoragePath, jobId: uploadJobId } = await directUpload(problemFile, '');
+
+      // 2. 보조 파일 (같은 jobId로 명명)
+      let answerStoragePath: string | null = null;
+      let quickAnswerStoragePath: string | null = null;
       if (pendingFiles.ANSWER) {
-        formData.append('answerFile', pendingFiles.ANSWER);
+        const res = await directUpload(pendingFiles.ANSWER, 'answer', uploadJobId);
+        answerStoragePath = res.storagePath;
       }
       if (pendingFiles.QUICK_ANSWER) {
-        formData.append('quickAnswerFile', pendingFiles.QUICK_ANSWER);
+        const res = await directUpload(pendingFiles.QUICK_ANSWER, 'quick', uploadJobId);
+        quickAnswerStoragePath = res.storagePath;
+      }
+
+      setJobs((prev) =>
+        prev.map((j) => (j.id === tempJob.id ? { ...j, currentStep: '서버 분석 요청 중...' } : j))
+      );
+
+      // 3. 서버엔 경로와 메타데이터만 전달 (본문 크기 <1KB)
+      const formData = new FormData();
+      formData.append('uploadJobId', uploadJobId);
+      formData.append('storagePath', problemStoragePath);
+      formData.append('fileName', problemFile.name);
+      formData.append('fileSize', String(problemFile.size));
+      formData.append('fileMimeType', problemFile.type || 'application/pdf');
+
+      if (answerStoragePath && pendingFiles.ANSWER) {
+        formData.append('answerStoragePath', answerStoragePath);
+        formData.append('answerFileName', pendingFiles.ANSWER.name);
+        formData.append('answerFileMimeType', pendingFiles.ANSWER.type || 'application/pdf');
+      }
+      if (quickAnswerStoragePath && pendingFiles.QUICK_ANSWER) {
+        formData.append('quickAnswerStoragePath', quickAnswerStoragePath);
+        formData.append('quickAnswerFileName', pendingFiles.QUICK_ANSWER.name);
+        formData.append('quickAnswerFileMimeType', pendingFiles.QUICK_ANSWER.type || 'application/pdf');
       }
 
       formData.append('instituteId', instituteId);

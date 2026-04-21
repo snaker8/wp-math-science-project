@@ -65,9 +65,21 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
+
+    // 업로드 방식 판별: legacy(File bytes in body) vs direct(Storage에 미리 업로드 후 경로 전달)
     const file = formData.get('file') as File | null;
     const answerFile = formData.get('answerFile') as File | null;
     const quickAnswerFile = formData.get('quickAnswerFile') as File | null;
+
+    const directStoragePath = formData.get('storagePath') as string | null;
+    const directFileName = formData.get('fileName') as string | null;
+    const directFileSize = formData.get('fileSize') as string | null;
+    const directFileMime = formData.get('fileMimeType') as string | null;
+    const directAnswerPath = formData.get('answerStoragePath') as string | null;
+    const directAnswerName = formData.get('answerFileName') as string | null;
+    const directQuickPath = formData.get('quickAnswerStoragePath') as string | null;
+    const directQuickName = formData.get('quickAnswerFileName') as string | null;
+    const uploadJobIdHint = formData.get('uploadJobId') as string | null;
 
     const instituteId = formData.get('instituteId') as string;
     const formUserId = formData.get('userId') as string;
@@ -81,15 +93,38 @@ export async function POST(request: NextRequest) {
     const curriculumVersion = (formData.get('curriculumVersion') as '2015' | '2022') || '2022';
     const scienceMode = (formData.get('scienceMode') as 'diagrams_only' | 'full') || 'full';
 
-    if (!file) {
+    // ── 파일 정보 + 버퍼 확보 (direct 또는 legacy) ──
+    let mainFileName: string;
+    let mainFileSize: number;
+    let mainFileMime: string;
+    let fetchMainBuffer: () => Promise<ArrayBuffer>;
+
+    if (directStoragePath && directFileName) {
+      // direct mode: Storage에서 다운로드하여 버퍼 확보
+      mainFileName = directFileName;
+      mainFileSize = directFileSize ? Number(directFileSize) : 0;
+      mainFileMime = directFileMime || 'application/pdf';
+      fetchMainBuffer = async () => {
+        if (!supabaseAdmin) throw new Error('Storage not configured (service role key missing)');
+        const { data, error } = await supabaseAdmin.storage.from('source-files').download(directStoragePath);
+        if (error || !data) throw new Error(`Storage 다운로드 실패: ${error?.message || 'unknown'}`);
+        return await data.arrayBuffer();
+      };
+    } else if (file) {
+      // legacy mode: FormData body에서 직접
+      mainFileName = file.name;
+      mainFileSize = file.size;
+      mainFileMime = file.type;
+      fetchMainBuffer = () => file.arrayBuffer();
+    } else {
       return NextResponse.json(
-        { error: 'File is required' },
+        { error: 'file or storagePath required' },
         { status: 400 }
       );
     }
 
     // 파일 유형 검증
-    const fileType = getFileType(file.name);
+    const fileType = getFileType(mainFileName);
     if (!fileType) {
       return NextResponse.json(
         { error: 'Unsupported file type. Only PDF, images, and HWP are allowed.' },
@@ -100,11 +135,11 @@ export async function POST(request: NextRequest) {
     // ★ 과학 도식 추출만 모드: Storage/Job 생성 없이 이미지 파이프라인만 실행
     const isDiagramsOnly = subjectArea === 'science' && scienceMode === 'diagrams_only';
     if (isDiagramsOnly) {
-      const fileBuffer = await file.arrayBuffer();
-      const tempJobId = crypto.randomUUID();
+      const fileBuffer = await fetchMainBuffer();
+      const tempJobId = uploadJobIdHint || crypto.randomUUID();
 
       // 파이프라인 동기 실행 (Next.js가 응답 후 백그라운드 작업을 중단하므로 await 필수)
-      await runScienceImagePipeline(tempJobId, fileBuffer, file.name, scienceSubject);
+      await runScienceImagePipeline(tempJobId, fileBuffer, mainFileName, scienceSubject);
       const pipelineResult = imagePipelineResults.get(tempJobId);
 
       return NextResponse.json({
@@ -114,7 +149,7 @@ export async function POST(request: NextRequest) {
         message: '도식 이미지 추출이 완료되었습니다.',
         job: {
           id: tempJobId,
-          fileName: file.name,
+          fileName: mainFileName,
           status: pipelineResult?.status === 'done' ? 'COMPLETED' : 'FAILED',
           progress: 100,
         },
@@ -128,14 +163,14 @@ export async function POST(request: NextRequest) {
     const effectiveUserId = userId !== 'anonymous' ? userId : (formUserId || 'anonymous');
 
     const job: UploadJob = {
-      id: crypto.randomUUID(),
+      id: uploadJobIdHint || crypto.randomUUID(),
       userId: effectiveUserId,
       instituteId: instituteId || 'default',
-      fileName: file.name,
-      fileSize: file.size,
+      fileName: mainFileName,
+      fileSize: mainFileSize,
       fileType,
       documentType,
-      storagePath: '', // Storage에 업로드 후 설정
+      storagePath: directStoragePath || '', // direct 모드면 이미 알고 있음
       status: 'PENDING',
       progress: 0,
       currentStep: '대기 중',
@@ -153,20 +188,43 @@ export async function POST(request: NextRequest) {
     // Job 저장
     jobStore.set(job.id, job);
 
-    // 파일 버퍼 먼저 읽기 (한 번만 읽어서 재사용)
-    const fileBuffer = await file.arrayBuffer();
-    const answerBuffer = answerFile ? await answerFile.arrayBuffer() : undefined;
-    const quickAnswerBuffer = quickAnswerFile ? await quickAnswerFile.arrayBuffer() : undefined;
+    // 파일 버퍼 확보 (direct 모드면 Storage 다운로드, legacy면 FormData에서)
+    const fileBuffer = await fetchMainBuffer();
 
-    // Storage 업로드 (Supabase Storage 또는 로컬) - 버퍼 직접 전달
-    const storagePath = await uploadToStorage(fileBuffer, file.name, file.type, job.id, supabase);
-    job.storagePath = storagePath;
+    // 보조 파일 버퍼 (direct 또는 legacy)
+    const downloadFromStorage = async (path: string): Promise<ArrayBuffer> => {
+      if (!supabaseAdmin) throw new Error('Storage not configured');
+      const { data, error } = await supabaseAdmin.storage.from('source-files').download(path);
+      if (error || !data) throw new Error(`Storage 다운로드 실패 (${path}): ${error?.message}`);
+      return await data.arrayBuffer();
+    };
 
-    // 보조 파일 업로드 (선택사항)
-    if (answerFile && answerBuffer) {
+    let answerBuffer: ArrayBuffer | undefined;
+    if (answerFile) {
+      answerBuffer = await answerFile.arrayBuffer();
+    } else if (directAnswerPath) {
+      answerBuffer = await downloadFromStorage(directAnswerPath);
+    }
+
+    let quickAnswerBuffer: ArrayBuffer | undefined;
+    if (quickAnswerFile) {
+      quickAnswerBuffer = await quickAnswerFile.arrayBuffer();
+    } else if (directQuickPath) {
+      quickAnswerBuffer = await downloadFromStorage(directQuickPath);
+    }
+
+    // Storage 업로드 — direct mode는 이미 클라이언트가 업로드 완료, legacy만 서버 업로드
+    if (directStoragePath) {
+      job.storagePath = directStoragePath;
+    } else {
+      const storagePath = await uploadToStorage(fileBuffer, mainFileName, mainFileMime, job.id, supabase);
+      job.storagePath = storagePath;
+    }
+
+    if (answerFile && answerBuffer && !directAnswerPath) {
       await uploadToStorage(answerBuffer, answerFile.name, answerFile.type, job.id, supabase, 'answer');
     }
-    if (quickAnswerFile && quickAnswerBuffer) {
+    if (quickAnswerFile && quickAnswerBuffer && !directQuickPath) {
       await uploadToStorage(quickAnswerBuffer, quickAnswerFile.name, quickAnswerFile.type, job.id, supabase, 'quick');
     }
 
@@ -194,7 +252,7 @@ export async function POST(request: NextRequest) {
 
     // ★ 과학 문제 자산화 모드: 이미지 파이프라인도 병렬 실행
     if (subjectArea === 'science') {
-      runScienceImagePipeline(job.id, fileBuffer, file.name, scienceSubject).catch(console.error);
+      runScienceImagePipeline(job.id, fileBuffer, mainFileName, scienceSubject).catch(console.error);
     }
 
     return NextResponse.json({
