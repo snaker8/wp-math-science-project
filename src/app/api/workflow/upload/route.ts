@@ -483,13 +483,22 @@ export async function PUT(request: NextRequest) {
         let fileName = encodedName;
         try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
         const storagePath = `uploads/${mainFile.name}`;
-        // 요청 body에 유저 힌트가 있으면 활용
-        const userIdHint = body.userId as string | undefined;
+        // ★ 쿠키 세션에서 실제 로그인 유저 ID 조회 (exams.created_by NOT NULL 대응)
+        let sessionUserId: string | null = null;
+        try {
+          const supa = await createSupabaseServerClient();
+          if (supa) {
+            const { data: { user } } = await supa.auth.getUser();
+            sessionUserId = user?.id ?? null;
+          }
+        } catch { /* 비로그인 허용 */ }
+
+        const userIdHint = (body.userId as string | undefined) || sessionUserId || 'anonymous';
         const instituteIdHint = body.instituteId as string | undefined;
         const subjectAreaHint = (body.subjectArea as 'math' | 'science' | undefined) || 'math';
         job = {
           id: jobId,
-          userId: userIdHint || 'anonymous',
+          userId: userIdHint,
           instituteId: instituteIdHint || 'default',
           fileName,
           fileSize: mainFile.metadata?.size ?? 0,
@@ -1069,8 +1078,6 @@ async function saveEditedProblemsDirect(
       subject: detectSubjectFromTitle(fileTitle),
       exam_type: detectExamTypeFromTitle(fileTitle),
       grade: detectGradeFromTitle(fileTitle),
-      // ★ 서버리스 환경에서 jobId↔examId 매핑을 DB에 영속화 (metadata 컬럼이 없으면 무시됨)
-      metadata: { job_id: jobId, source_file_name: job.fileName },
     };
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
