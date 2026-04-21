@@ -607,6 +607,7 @@ export default function ExamManagementPage() {
     return dbProblems.map((p) => ({
       id: p.id,
       number: p.number,
+      points: p.points,  // ★ 배점 — 시험지 출력에 [N점] 배지 표시
       content: p.content,
       choices: p.choices,
       choiceHeaders: p.choiceHeaders,

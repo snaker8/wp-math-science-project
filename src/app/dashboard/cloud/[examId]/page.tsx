@@ -2208,6 +2208,7 @@ export default function CloudExamDetailPage() {
     return dbProblems.map((p) => ({
       id: p.id,
       number: p.number,
+      points: p.points,  // ★ 배점 (자동 분배/수동 지정값) — ExamProblemRenderer가 [N점] 배지로 표시
       difficulty: p.difficulty,
       cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
       content: p.content,
