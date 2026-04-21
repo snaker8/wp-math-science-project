@@ -1689,6 +1689,39 @@ function ProblemDetailPanel({
           </div>
         )}
 
+        {/* ===== OCR 불완전 경고 배지 (서술형·멀티라인 깨짐 감지, 수동 확인용) ===== */}
+        {problem.content && problem.status !== 'pending' && problem.status !== 'error' && (() => {
+          const t = (problem.content || '').trim();
+          if (!t) return null;
+          const beginCount = (t.match(/\\begin\{/g) || []).length;
+          const endCount = (t.match(/\\end\{/g) || []).length;
+          const startsWithEnd = /^\s*\\end\{/.test(t);
+          const hasOrphanEnd = endCount > beginCount;
+          const hasSeosulKeyword = /서답형|서술형|구하시오|구하여라|\[\s*(?:총\s*)?\d+\s*점\s*\]/.test(t);
+          const suspiciouslyShort = t.length < 80 && hasSeosulKeyword;
+          const isBroken = startsWithEnd || hasOrphanEnd || suspiciouslyShort;
+          if (!isBroken) return null;
+          return (
+            <div className="mx-5 mb-3 flex items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-300 px-3 py-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                <span className="text-xs text-amber-800 font-semibold truncate">
+                  OCR 불완전 가능성 — 서술형·멀티라인 수식이 잘렸을 수 있습니다
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onReanalyze}
+                disabled={isReanalyzing}
+                className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isReanalyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                재OCR
+              </button>
+            </div>
+          );
+        })()}
+
         {/* ===== 자산화된 문제: OCR 텍스트 + 원본 이미지 + 선택지 ===== */}
         {problem.content && problem.status !== 'pending' && (() => {
           // OCR 텍스트 전처리
