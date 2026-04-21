@@ -1836,8 +1836,7 @@ export default function CloudPage() {
                           placeholder="파일명으로 검색..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="h-8 w-48 rounded-lg border bg-surface-raised/50 pl-8 pr-3 text-xs placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                          style={{ color: '#f1f5f9' }}
+                          className="h-8 w-48 rounded-lg border border-white/10 bg-zinc-900/80 pl-8 pr-3 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                         />
                       </div>
                       {/* Sort */}
