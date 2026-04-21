@@ -114,7 +114,10 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // 1. Supabase Auth로 회원가입
+      // Supabase Auth로 회원가입
+      // ★ public.users 테이블은 on_auth_user_created 트리거가 자동 생성
+      //   (auth.users INSERT → handle_new_auth_user() → public.users INSERT)
+      //   raw_user_meta_data의 role/full_name/phone/grade를 그대로 읽음
       const { data: authData, error: authError } = await supabaseBrowser.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -129,49 +132,54 @@ export default function SignUpPage() {
       });
 
       if (authError) {
-        // 한국어 에러 메시지 변환
-        if (authError.message.includes('already registered')) {
+        const msg = authError.message.toLowerCase();
+        if (msg.includes('already registered') || msg.includes('user already')) {
           throw new Error('이미 가입된 이메일입니다. 로그인을 시도해주세요.');
         }
-        throw authError;
+        if (msg.includes('password')) {
+          throw new Error('비밀번호 규칙을 확인해주세요 (최소 8자).');
+        }
+        if (msg.includes('email') && msg.includes('invalid')) {
+          throw new Error('이메일 형식이 올바르지 않습니다.');
+        }
+        if (msg.includes('database') || msg.includes('saving')) {
+          throw new Error('서버 저장 오류입니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.');
+        }
+        // 원본 에러 메시지 그대로 노출 (디버깅 도움)
+        throw new Error(`회원가입 실패: ${authError.message}`);
       }
 
       if (!authData.user) {
-        throw new Error('회원가입 중 오류가 발생했습니다');
+        throw new Error('회원가입 중 오류가 발생했습니다. 다시 시도해주세요.');
       }
 
-      // 2. users 테이블에 직접 저장
-      const { error: userError } = await supabaseBrowser.from('users').insert({
-        id: authData.user.id,
-        email: formData.email,
-        full_name: formData.fullName,
-        phone: formData.phone || null,
-        role: selectedRole,
-        grade: selectedRole === 'STUDENT' && formData.grade ? parseInt(formData.grade) : null,
-        institute_id: null,
-        avatar_url: null,
-        parent_id: null,
-        preferences: {},
-        last_login_at: null,
-        deleted_at: null,
-      });
+      // ★ 안전 장치: 트리거가 실패했을 경우 대비 upsert로 한 번 더 시도
+      //   트리거가 성공했으면 on conflict로 no-op, 실패했으면 이제라도 저장됨
+      const { error: upsertError } = await supabaseBrowser
+        .from('users')
+        .upsert(
+          {
+            id: authData.user.id,
+            email: formData.email,
+            full_name: formData.fullName,
+            phone: formData.phone || null,
+            role: selectedRole,
+            grade: selectedRole === 'STUDENT' && formData.grade ? parseInt(formData.grade) : null,
+            preferences: {},
+          },
+          { onConflict: 'id', ignoreDuplicates: true }
+        );
 
-      if (userError) {
-        console.error('User insert error:', userError);
-        // RLS 에러 등은 무시하고 진행 (auth trigger로 생성될 수 있음)
-        if (!userError.message.includes('duplicate')) {
-          console.warn('[Auth] User profile insert failed, but auth user was created');
-        }
+      if (upsertError) {
+        console.warn('[Signup] users upsert 경고 (트리거가 이미 처리했을 가능성):', upsertError.message);
       }
 
       // 성공 화면 표시
       setStep(3);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('회원가입 중 오류가 발생했습니다');
-      }
+      const msg = err instanceof Error ? err.message : '회원가입 중 오류가 발생했습니다';
+      console.error('[Signup] 실패:', err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
