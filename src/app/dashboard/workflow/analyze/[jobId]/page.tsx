@@ -4340,15 +4340,23 @@ export default function AnalyzeJobPage() {
                     body: JSON.stringify(body),
                   });
                   if (!res.ok) {
-                    console.error('[Modal Save] API 저장 실패');
-                    alert('저장에 실패했습니다.');
-                    return;
+                    // ★ 404 = DB에 해당 문제가 없음 (자산화 전 or stale ID)
+                    //   이 경우엔 로컬 편집 상태로만 유지하고 조용히 통과
+                    if (res.status === 404) {
+                      console.warn(`[Modal Save] 문제가 DB에 없음 (ID: ${editingProblem.problemId?.slice(0, 8)}...). 자산화 시 저장됩니다. 로컬 상태만 갱신.`);
+                    } else {
+                      const errData = await res.json().catch(() => ({}));
+                      console.error('[Modal Save] API 저장 실패:', res.status, errData);
+                      alert(`저장에 실패했습니다. (${res.status}${errData.error ? `: ${errData.error}` : ''})`);
+                      return;
+                    }
+                  } else {
+                    console.log(`[Modal Save] 문제 ${editingProblem.number}번 저장 완료: difficulty=${updated.difficulty}, typeCode=${updated.typeCode}`);
                   }
-                  console.log(`[Modal Save] 문제 ${editingProblem.number}번 저장 완료: difficulty=${updated.difficulty}, typeCode=${updated.typeCode}`);
                 }
               } catch (err) {
                 console.error('[Modal Save] API 호출 실패:', err);
-                alert('저장에 실패했습니다.');
+                alert(`저장에 실패했습니다: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
                 return;
               }
             }
@@ -4395,11 +4403,12 @@ export default function AnalyzeJobPage() {
             if (editingProblem.problemId) {
               try {
                 const res = await fetch(`/api/problems/${editingProblem.problemId}`, { method: 'DELETE' });
-                if (!res.ok) {
+                if (!res.ok && res.status !== 404) {
                   alert('문제 삭제에 실패했습니다.');
                   return;
                 }
-                console.log(`[Delete] 모달에서 DB 삭제 완료: ${editingProblem.problemId}`);
+                // 404도 정상 처리 (이미 없으면 OK)
+                console.log(`[Delete] 모달에서 DB 삭제 완료: ${editingProblem.problemId} (status: ${res.status})`);
               } catch (err) {
                 console.error('[Delete] 모달 삭제 API 실패:', err);
                 alert('문제 삭제에 실패했습니다.');
