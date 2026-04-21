@@ -187,7 +187,7 @@
 /* ─── Body grid ─── */
 .aze-body {
   display: grid;
-  grid-template-columns: 240px 1fr 420px;
+  grid-template-columns: 200px 1fr 420px;
   min-height: 0;
   border-top: 1px solid var(--chrome-border);
 }
