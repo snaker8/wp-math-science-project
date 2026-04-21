@@ -154,6 +154,19 @@
   padding-top: 2px;
 }
 
+/* ★ 긴 수식에서 나타나는 가로 스크롤바 시각적 숨김
+   (content 스크롤은 동작하되 시커먼 바 노출 안 함) */
+.katex-display,
+.katex-html {
+  scrollbar-width: none;
+}
+.katex-display::-webkit-scrollbar,
+.katex-html::-webkit-scrollbar {
+  display: none !important;
+  height: 0 !important;
+  width: 0 !important;
+}
+
 /* ── Custom Scrollbar — 항상 보이는 스타일 ── */
 ::-webkit-scrollbar {
   width: 10px;
