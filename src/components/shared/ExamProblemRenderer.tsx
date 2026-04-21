@@ -277,9 +277,10 @@ function ExamProblemRendererInner({
       return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
     }
     badgeInserted = true;
+    // before에 inline prop → MCR wrapper가 <span display:contents>로 렌더 → 뱃지가 같은 줄에 표시
     return (
       <React.Fragment key={key}>
-        <MixedContentRenderer content={before} className="text-gray-800" />
+        <MixedContentRenderer content={before} className="text-gray-800" inline />
         {pointsBadge}
         {after && <MixedContentRenderer content={after} className="text-gray-800" />}
       </React.Fragment>

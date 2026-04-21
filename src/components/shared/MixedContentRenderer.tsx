@@ -19,6 +19,8 @@ interface MixedContentRendererProps {
   className?: string;
   /** 수식 클릭 시 호출 — (원본 LaTeX, display 여부) */
   onMathClick?: (latex: string, isDisplay: boolean) => void;
+  /** true면 wrapper를 <span style={{display:'contents'}}>로 렌더 — 뱃지 같은 인라인 요소 뒤에 올 때 줄바꿈 방지 */
+  inline?: boolean;
 }
 
 /**
@@ -34,7 +36,7 @@ interface MixedContentRendererProps {
  * - \begin{...}...\end{...} → 디스플레이 수식 블록
  * - <보기>, (가), (나) 등 → 구조적 텍스트 처리
  */
-function MixedContentRendererInner({ content, className, onMathClick }: MixedContentRendererProps) {
+function MixedContentRendererInner({ content, className, onMathClick, inline }: MixedContentRendererProps) {
   if (!content) return <span className={className}>(문제 내용 없음)</span>;
   // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
   // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
@@ -320,8 +322,10 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
     );
   };
 
+  const Wrapper: React.ElementType = inline ? 'span' : 'div';
+  const wrapperStyle = inline ? { display: 'contents' as const } : undefined;
   return (
-    <div className={className}>
+    <Wrapper className={className} style={wrapperStyle}>
       {elements.map((el, i) => {
         // 조건 박스 placeholder 감지: __CONDITION_BOX_N__ 패턴
         if (el.type === 'text') {
@@ -344,7 +348,7 @@ function MixedContentRendererInner({ content, className, onMathClick }: MixedCon
         }
         return renderElement(el, i);
       })}
-    </div>
+    </Wrapper>
   );
 }
 
@@ -353,7 +357,8 @@ export const MixedContentRenderer = memo(MixedContentRendererInner, (prev, next)
   return (
     prev.content === next.content &&
     prev.className === next.className &&
-    prev.onMathClick === next.onMathClick
+    prev.onMathClick === next.onMathClick &&
+    prev.inline === next.inline
   );
 });
 
