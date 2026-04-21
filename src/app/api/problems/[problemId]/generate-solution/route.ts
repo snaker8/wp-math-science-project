@@ -11,6 +11,12 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 // ★ Anthropic 공식 alias 사용 (Sonnet 4.6부터 date suffix 없는 alias 유효)
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+// ★ 어려운 문제 / Sonnet 검산 불일치 시 fallback 모델
+const ANTHROPIC_OPUS_MODEL = process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1';
+// Sonnet thinking 최대 대기 시간(ms). 이 이상 걸리면 Opus로 넘어감
+const SONNET_TIMEOUT_MS = Number(process.env.SONNET_TIMEOUT_MS || 90_000);
+// 난이도가 이 이상이면 처음부터 Opus 사용 (수학비서 기준 1~10 중 8)
+const OPUS_DIFFICULTY_THRESHOLD = Number(process.env.OPUS_DIFFICULTY_THRESHOLD || 8);
 
 export async function POST(
   request: NextRequest,
@@ -381,6 +387,9 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
     // ★ 검증 루프에서 재사용하기 위해 스코프 외부로 선언
     let userContent: any;
     let systemPrompt: string = '';
+    // ★ Opus fallback 트리거 추적
+    let sonnetTimedOut = false;
+    const difficultyLevel = parseInt(String(classification?.difficulty || '3'), 10) || 3;
 
     // Sonnet 시도 (이미지 있으면 Vision 모드)
     if (ANTHROPIC_API_KEY) {
@@ -427,24 +436,44 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
         const THINKING_BUDGET = 6000;
         const MAX_TOKENS = 12000;
 
-        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-            // ★ thinking 결과로 output이 8192 초과 가능성 대비 128k 출력 허용
-            'anthropic-beta': 'output-128k-2025-02-19',
-          },
-          body: JSON.stringify({
-            model: ANTHROPIC_MODEL,
-            max_tokens: MAX_TOKENS,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: userContent }],
-            thinking: { type: 'enabled', budget_tokens: THINKING_BUDGET },
-            temperature: 1, // thinking 활성 시 API 요구사항
-          }),
-        });
+        // ★ Sonnet thinking 타임아웃 (기본 90초) — 초과 시 abort하고 Opus로 fallback
+        const sonnetController = new AbortController();
+        const sonnetTimer = setTimeout(() => {
+          sonnetTimedOut = true;
+          sonnetController.abort();
+        }, SONNET_TIMEOUT_MS);
+
+        let claudeRes: Response;
+        try {
+          claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+              // ★ thinking 결과로 output이 8192 초과 가능성 대비 128k 출력 허용
+              'anthropic-beta': 'output-128k-2025-02-19',
+            },
+            body: JSON.stringify({
+              model: ANTHROPIC_MODEL,
+              max_tokens: MAX_TOKENS,
+              system: systemPrompt,
+              messages: [{ role: 'user', content: userContent }],
+              thinking: { type: 'enabled', budget_tokens: THINKING_BUDGET },
+              temperature: 1, // thinking 활성 시 API 요구사항
+            }),
+            signal: sonnetController.signal,
+          });
+        } catch (abortErr: any) {
+          clearTimeout(sonnetTimer);
+          if (sonnetTimedOut) {
+            console.warn(`[generate-solution] ⏱ Sonnet thinking 타임아웃(${SONNET_TIMEOUT_MS}ms) — Opus로 폴백`);
+            sonnetErrorInfo = `Sonnet timeout after ${SONNET_TIMEOUT_MS}ms`;
+            throw abortErr; // 아래 catch에서 Opus 시도
+          }
+          throw abortErr;
+        }
+        clearTimeout(sonnetTimer);
 
         if (claudeRes.ok) {
           const claudeData = await claudeRes.json();
@@ -808,6 +837,75 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
         }
       } catch (e) {
         console.warn('[generate-solution] Sonnet 자체 검산 실패:', e);
+      }
+    }
+
+    // ============================================================================
+    // 3.5 ★ Opus fallback — 다음 3가지 명확한 기준 OR 조건으로 발동
+    //   (1) Sonnet thinking 타임아웃 (sonnetTimedOut === true)
+    //   (2) Sonnet 자체 검산 불일치 (verification.mismatchFlag === true)
+    //   (3) 난이도가 OPUS_DIFFICULTY_THRESHOLD(기본 8) 이상
+    //   → Opus thinking으로 재풀이. 결과 있으면 solution 교체.
+    // ============================================================================
+    const shouldTryOpus =
+      ANTHROPIC_API_KEY && solution && (
+        sonnetTimedOut ||
+        verification.mismatchFlag ||
+        difficultyLevel >= OPUS_DIFFICULTY_THRESHOLD
+      );
+
+    if (shouldTryOpus) {
+      const reasons = [
+        sonnetTimedOut && 'Sonnet 타임아웃',
+        verification.mismatchFlag && 'Sonnet 검산 불일치',
+        difficultyLevel >= OPUS_DIFFICULTY_THRESHOLD && `난이도 ${difficultyLevel}≥${OPUS_DIFFICULTY_THRESHOLD}`,
+      ].filter(Boolean).join(', ');
+      console.log(`[generate-solution] 🧠 Opus fallback 발동 (${reasons}) — ${ANTHROPIC_OPUS_MODEL}`);
+
+      try {
+        const opusRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'anthropic-beta': 'output-128k-2025-02-19',
+          },
+          body: JSON.stringify({
+            model: ANTHROPIC_OPUS_MODEL,
+            max_tokens: 16000,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userContent }],
+            thinking: { type: 'enabled', budget_tokens: 8000 }, // Opus는 더 많은 thinking 예산
+            temperature: 1,
+          }),
+        });
+
+        if (opusRes.ok) {
+          const opusData = await opusRes.json();
+          const opusText = (opusData.content || []).find((c: { type: string }) => c.type === 'text')?.text || '';
+          const opusSolution = parseJsonResponse(opusText);
+          if (opusSolution && (opusSolution.finalAnswer || (Array.isArray(opusSolution.steps) && opusSolution.steps.length > 0))) {
+            console.warn(`[generate-solution] ✅ Opus 해설 채택 — finalAnswer="${opusSolution.finalAnswer}" (이전 Sonnet="${solution.finalAnswer}")`);
+            solution = opusSolution;
+            usedModel = 'claude-opus-thinking';
+            // 검증 플래그도 재설정 (Opus 결과 기준)
+            verification = {
+              verified: true,
+              verifyAnswer: String(opusSolution.finalAnswer || ''),
+              sonnetAnswer: String(opusSolution.finalAnswer || ''),
+              mismatchFlag: false,
+              attempts: (verification.attempts || 1) + 1,
+            };
+          } else {
+            console.warn('[generate-solution] Opus 응답 비어있음 — Sonnet 결과 유지');
+          }
+        } else {
+          const errTxt = await opusRes.text().catch(() => '');
+          console.warn(`[generate-solution] Opus ${opusRes.status}: ${errTxt.substring(0, 200)}`);
+        }
+      } catch (opusErr) {
+        console.warn('[generate-solution] Opus 호출 실패 — Sonnet 결과 유지:', opusErr);
       }
     }
 
