@@ -50,15 +50,22 @@ export async function POST(
       .eq('id', examId);
 
     const baseUrl = request.nextUrl.origin;
-    processInBackground(examId, problemIds, baseUrl).catch(err => {
-      console.error('[batch-solutions] Background error:', err);
+    // ★ Vercel 서버리스: fire-and-forget 금지 (함수 종료 시 중단됨)
+    //   await로 동기 처리 — maxDuration=300초 한도 내에서 완료
+    try {
+      await processInBackground(examId, problemIds, baseUrl);
+    } catch (err) {
+      console.error('[batch-solutions] Process error:', err);
       const state = jobState.get(examId);
       if (state) state.isRunning = false;
-    });
+    }
 
+    const finalState = jobState.get(examId);
     return NextResponse.json({
-      message: 'started',
+      message: 'completed',
       total: problemIds.length,
+      done: finalState?.done ?? 0,
+      failed: finalState?.failed ?? 0,
     });
 
   } catch (err) {
@@ -178,29 +185,36 @@ export async function GET(
 // ============================================================================
 
 async function processInBackground(examId: string, problemIds: string[], baseUrl: string) {
-  console.log(`[batch-solutions] 시작: ${problemIds.length}문제`);
+  console.log(`[batch-solutions] 시작: ${problemIds.length}문제 (동시 5개)`);
   const state = jobState.get(examId);
   if (!state) return;
 
-  for (const problemId of problemIds) {
+  // ★ 동시 실행 개수 제한 (OpenAI rate limit + Vercel 메모리 고려)
+  const CONCURRENCY = 5;
+  const processOne = async (problemId: string) => {
     try {
       const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
-
       if (res.ok) {
         state.done++;
-        console.log(`[batch-solutions] ✅ ${state.done + state.failed}/${state.total} — ${problemId}`);
+        console.log(`[batch-solutions] ✅ ${state.done + state.failed}/${state.total} — ${problemId.slice(0, 8)}`);
       } else {
         state.failed++;
-        console.log(`[batch-solutions] ❌ ${state.done + state.failed}/${state.total} — ${problemId}: ${res.status}`);
+        console.log(`[batch-solutions] ❌ ${state.done + state.failed}/${state.total} — ${problemId.slice(0, 8)}: ${res.status}`);
       }
     } catch (err) {
       state.failed++;
-      console.log(`[batch-solutions] ❌ ${problemId}: ${err}`);
+      console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${err}`);
     }
+  };
+
+  // 청크 단위 병렬 처리
+  for (let i = 0; i < problemIds.length; i += CONCURRENCY) {
+    const chunk = problemIds.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map(processOne));
   }
 
   state.isRunning = false;
