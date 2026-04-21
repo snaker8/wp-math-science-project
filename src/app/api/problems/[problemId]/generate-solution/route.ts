@@ -115,6 +115,17 @@ export async function POST(
     if (section) curriculumParts.push(`중단원: ${section}`);
     if (typeName) curriculumParts.push(`유형: ${typeName}`);
     if (typeCode) curriculumParts.push(`유형코드: ${typeCode}`);
+    // ★ 중학교 표기 규칙 — 중학교 과정은 음수 지수를 배우지 않으므로 분수 형태로 표기해야 학생이 이해 가능
+    const isMiddleSchool = /중\d|중학/.test(subject || '') || /^0[1-6]$/.test(String(typeCode || '').slice(2, 4));
+    if (isMiddleSchool) {
+      curriculumParts.push(
+        `[중학교 표기 규칙 — 엄수]`,
+        `- 음수 지수 금지. b^{-4} 같은 형태로 적지 말 것.`,
+        `- 지수가 음수가 되는 결과는 반드시 분수 형태로: b^{-4} → \\frac{1}{b^4}, a^{-2} → \\frac{1}{a^2}`,
+        `- 분모에 변수를 두고 양의 지수로 쓰는 것이 중학교 표기법`,
+        `- 최종 finalAnswer 와 풀이 중간식 모두 이 규칙 준수`,
+      );
+    }
     const curriculumContext = curriculumParts.length > 0
       ? `\n\n[교육과정 정보]\n${curriculumParts.join('\n')}`
       : '';

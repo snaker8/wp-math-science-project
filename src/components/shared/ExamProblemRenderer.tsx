@@ -13,6 +13,8 @@ import type { InterpretedFigure } from '@/types/ocr';
 export interface ExamRenderProblem {
   id: string;
   number: number;
+  /** ★ 시험지에 적용된 배점 — 있으면 "[N점]" 배지로 표시 */
+  points?: number;
   content: string;
   choices: string[];
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
@@ -291,6 +293,11 @@ function ExamProblemRendererInner({
       <div className="flex-1 min-w-0">
         <div className="text-gray-800 whitespace-pre-line" style={{ fontSize: textSize, lineHeight }}>
           {renderContentWithFigures()}
+          {typeof problem.points === 'number' && problem.points > 0 && (
+            <span className="ml-1 text-gray-500 font-medium" style={{ fontSize: `calc(${textSize} - 1px)` }}>
+              [{problem.points}점]
+            </span>
+          )}
         </div>
         {renderChoices()}
       </div>

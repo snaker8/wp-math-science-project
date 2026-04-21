@@ -1090,13 +1090,15 @@ async function saveEditedProblemsDirect(
       if (problem?.id) savedProblemIds.push(problem.id);
       console.log(`[Direct Save] 문제 ${edited.number}번 저장 완료 (ID: ${problem?.id})`);
 
-      // ★ Exam-Problem 연결
+      // ★ Exam-Problem 연결 — 원본 [N점] 자동 추출
       if (examId && problem) {
+        const ptsMatch = (contentLatex || '').match(/\[\s*(?:총\s*)?(\d+)\s*점\s*\]/);
+        const extractedPoints = ptsMatch ? Math.min(20, Math.max(1, parseInt(ptsMatch[1], 10))) : 4;
         const { error: epError } = await supabase.from('exam_problems').insert({
           exam_id: examId,
           problem_id: problem.id,
           sequence_number: savedCount,
-          points: 4,
+          points: extractedPoints,
         });
         if (epError) {
           console.error(`[Direct Save] exam_problems 연결 실패 (문제 ${edited.number}번):`, epError.message, epError.details);

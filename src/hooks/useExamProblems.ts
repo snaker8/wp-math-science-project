@@ -12,6 +12,8 @@ import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
 export interface ExamProblemData {
   id: string;
   number: number;
+  /** ★ 시험지에 적용된 배점 (exam_problems.points) — 원본 OCR에서 추출됐거나 자동 분배·수동 지정됨 */
+  points?: number;
   difficulty: number; // 수학비서 기준 1~10
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
@@ -283,6 +285,7 @@ function toExamProblemData(
   return {
     id: problem.id,
     number: problem.source_number ?? row.sequence_number ?? row.order_index ?? (index + 1),
+    points: typeof row.points === 'number' ? row.points : undefined,
     difficulty: classification
       ? Math.min(10, Math.max(1, parseInt(classification.difficulty, 10) || 3))
       : 3,

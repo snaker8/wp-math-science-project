@@ -83,6 +83,8 @@ function stripChoiceAnalysis(s: string): string {
 interface ProblemData {
   id: string;
   number: number;
+  /** ★ 시험지에 적용된 배점 */
+  points?: number;
   difficulty: number; // 수학비서 기준 1~10
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
@@ -994,19 +996,23 @@ function ProblemCardView({
 function ExamPaperView({
   problems,
   examTitle,
+  examId,
   templateId,
   examMeta,
   onOpenTemplateModal,
   onTemplateChange,
   onMetaChange,
+  refetchProblems,
 }: {
   problems: ProblemData[];
   examTitle: string;
+  examId: string;
   templateId: string;
   examMeta: ExamMeta;
   onOpenTemplateModal: () => void;
   onTemplateChange?: (id: string, meta: ExamMeta) => void;
   onMetaChange?: (meta: ExamMeta) => void;
+  refetchProblems?: () => void;
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
@@ -1263,6 +1269,38 @@ function ExamPaperView({
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              const input = prompt('총점을 입력하세요 (기본 100)', '100');
+              if (!input) return;
+              const total = parseInt(input, 10);
+              if (!Number.isFinite(total) || total < problems.length || total > 1000) {
+                alert(`유효하지 않은 총점. 문제 수(${problems.length}) 이상, 1000 이하`);
+                return;
+              }
+              try {
+                const res = await fetch(`/api/exams/${examId}/distribute-points`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ total }),
+                });
+                if (!res.ok) {
+                  const t = await res.text().catch(() => '');
+                  alert(`배점 분배 실패: ${res.status} ${t.substring(0, 200)}`);
+                  return;
+                }
+                const data = await res.json();
+                alert(`배점 분배 완료: ${data.count}문제, 총 ${total}점`);
+                refetchProblems?.();
+              } catch (e) {
+                alert(`오류: ${String(e)}`);
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+          >
+            <BarChart3 className="h-4 w-4" />
+            배점 자동 분배
+          </button>
           <button
             type="button"
             onClick={onOpenTemplateModal}
@@ -1610,13 +1648,25 @@ function QuickAnswerView({
                   if (banOnly) return circledNumbers[parseInt(banOnly[1])];
                 }
 
-                // ★ 서술형/단답형 판별 — 선택지 없고 답이 길거나 한글 포함이면 "서술형답" 표기
+                // ★ 단답형·서술형 모두 "값"만 수식으로 렌더 — 학생 채점 가능한 형태
+                //   빠른정답은 수식 LaTeX 그대로 노출돼선 안 되고 KaTeX로 정식 렌더돼야 함
                 if (!isMC) {
-                  const hasLongKorean = /[가-힣]{2,}/.test(str);
-                  const tooLong = str.length > 20;
-                  if (hasLongKorean || tooLong) {
-                    return <span className="text-gray-500 text-sm italic font-normal">서술형답</span>;
+                  let display = str;
+                  const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
+                  const conclusion = str.match(/(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/);
+                  if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
+                    display = tailEq[1].trim();
+                  } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
+                    display = conclusion[1].trim();
                   }
+                  // ★ $ 래핑 없으면 수식 기호 탐지해 자동 래핑 (KaTeX 렌더링 보장)
+                  //   예: "b^{-4}" → "$b^{-4}$", "6x^5y^8" → "$6x^5y^8$", "x=5" → "$x=5$"
+                  const hasDollar = /\$/.test(display);
+                  const looksLikeMath = /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
+                  if (!hasDollar && looksLikeMath) {
+                    display = `$${display}$`;
+                  }
+                  return <MixedContentRenderer content={display} className="text-blue-700" />;
                 }
 
                 // 수식 포함 → LaTeX 렌더
@@ -1905,6 +1955,39 @@ function SolutionView({
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
         </div>
+        {/* ★ 배점 자동 분배 — 난이도 기반 100점 분배 */}
+        <button
+          type="button"
+          onClick={async () => {
+            const input = prompt('총점을 입력하세요 (기본 100)', '100');
+            if (!input) return;
+            const total = parseInt(input, 10);
+            if (!Number.isFinite(total) || total < problems.length || total > 1000) {
+              alert(`유효하지 않은 총점. 문제 수(${problems.length}) 이상, 1000 이하`);
+              return;
+            }
+            try {
+              const res = await fetch(`/api/exams/${examId}/distribute-points`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ total }),
+              });
+              if (!res.ok) {
+                const t = await res.text().catch(() => '');
+                alert(`배점 분배 실패: ${res.status} ${t.substring(0, 200)}`);
+                return;
+              }
+              const data = await res.json();
+              alert(`배점 분배 완료: ${data.count}문제, 총 ${total}점`);
+              refetchProblems();
+            } catch (e) {
+              alert(`오류: ${String(e)}`);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          배점 자동 분배
+        </button>
         {/* ★ 일괄 해설 생성 버튼 (백그라운드) */}
         <button
           type="button"
@@ -2718,86 +2801,6 @@ export default function CloudExamDetailPage() {
   return (
     <div className="ce-shell">
       <div className="ce-body-grid">
-        {/* ═══════ LEFT SIDEBAR — 문제 pill 리스트 ═══════ */}
-        <aside className="ce-sidebar">
-          <div className="ce-sb-h">
-            <div className="ce-sb-search">
-              <Search className="ic" />
-              <input placeholder="문제 검색…" />
-            </div>
-            <button
-              type="button"
-              className="ce-sb-add"
-              onClick={() => setShowAddProblemsModal(true)}
-            >
-              <PlusCircle className="h-3 w-3" />
-              새 문제 추가
-            </button>
-          </div>
-
-          <div className="ce-sb-tabs">
-            <button className="ce-sb-tab active">
-              전체 <span className="count">{problems.length}</span>
-            </button>
-            <button className="ce-sb-tab">
-              이슈 <span className="count">{validationIssues.length}</span>
-            </button>
-            <button className="ce-sb-tab">
-              선택 <span className="count">{selectedProblems.size}</span>
-            </button>
-          </div>
-
-          <div className="ce-sb-sections">
-            {filteredProblems.map((p) => {
-              const isActive = selectedProblems.has(p.id);
-              const hasIssue = validationIssues.some((v) => v.problemNum === p.number);
-              const diffColors = ['#3b82f6', '#34d399', '#fbbf24', '#f97316', '#fb7185'];
-              // 난이도 1~10 → 5단계 매핑
-              const diffLevel = Math.min(5, Math.max(1, Math.ceil(p.difficulty / 2)));
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`ce-pill ${isActive ? 'active' : ''}`}
-                  onClick={() => {
-                    const el = document.getElementById(`problem-card-${p.id}`);
-                    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                  }}
-                >
-                  <div className="ce-pill-row">
-                    <span className="ce-pill-num">{String(p.number).padStart(2, '0')}</span>
-                    <span className="ce-pill-mini-diff">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <span
-                          key={i}
-                          style={{
-                            background: i <= diffLevel ? diffColors[diffLevel - 1] : 'var(--chrome-border)',
-                          }}
-                        />
-                      ))}
-                    </span>
-                    {p.hasFigure ? (
-                      <ShapesIcon className="ce-pill-ic has" />
-                    ) : (
-                      <CircleDot className="ce-pill-ic" />
-                    )}
-                    <span className="ce-pill-spacer" />
-                    {hasIssue && <span className="ce-pill-issue" title="이슈" />}
-                  </div>
-                  <div className="ce-pill-preview">
-                    {(p.content || '').replace(/<[^>]*>/g, '').slice(0, 40)}…
-                  </div>
-                </button>
-              );
-            })}
-            {filteredProblems.length === 0 && (
-              <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: 12, color: 'var(--chrome-fg-4)' }}>
-                해당 항목이 없습니다
-              </div>
-            )}
-          </div>
-        </aside>
-
         {/* ═══════ MAIN ═══════ */}
         <main className="ce-main">
           {/* SUBBAR */}
@@ -3209,11 +3212,13 @@ export default function CloudExamDetailPage() {
         <ExamPaperView
           problems={filteredProblems}
           examTitle={examTitle}
+          examId={examId}
           templateId={templateId}
           examMeta={examMeta}
           onOpenTemplateModal={() => setShowTemplateModal(true)}
           onTemplateChange={(id, meta) => { setTemplateId(id); setExamMeta(meta); }}
           onMetaChange={setExamMeta}
+          refetchProblems={refetchProblems}
         />
       )}
 
@@ -3423,148 +3428,7 @@ export default function CloudExamDetailPage() {
       />
         </main>
 
-        {/* ═══════ RIGHT PANEL — 필터/뷰/AI 도구 ═══════ */}
-        <aside className="ce-rpanel">
-          <div className="ce-rp-inner">
-            {/* 필터 섹션 */}
-            <div className="ce-rp-section">
-              <div className="ce-rp-h"><Filter />필터</div>
-              <div className="ce-subhead">난이도</div>
-              {([5, 4, 3, 2, 1] as DifficultyKey[]).map((d) => (
-                <label key={d} className="ce-chk-row">
-                  <input
-                    type="checkbox"
-                    checked={activeDifficulty === null || activeDifficulty === d}
-                    onChange={() => toggleDifficulty(d)}
-                  />
-                  <span
-                    className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                    style={{
-                      background: `${DIFFICULTY_CONFIG[d].border}`.replace('border-', '').replace('/30', ''),
-                    }}
-                  >
-                    {DIFFICULTY_CONFIG[d].label}
-                  </span>
-                  <span className="count">{difficultyCounts[d]}</span>
-                </label>
-              ))}
-              <div className="ce-subhead" style={{ marginTop: 10 }}>인지영역</div>
-              {(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING', 'UNASSIGNED'] as DomainKey[]).map((d) => (
-                <label key={d} className="ce-chk-row">
-                  <input
-                    type="checkbox"
-                    checked={activeDomain === null || activeDomain === d}
-                    onChange={() => toggleDomain(d)}
-                  />
-                  <span className="text-[11px]">{DOMAIN_CONFIG[d].label}</span>
-                  <span className="count">
-                    {d === 'UNASSIGNED' ? domainCounts.UNASSIGNED : domainCounts[d as Exclude<DomainKey, 'UNASSIGNED'>]}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            {/* 뷰 옵션 */}
-            <div className="ce-rp-section">
-              <div className="ce-rp-h"><SlidersHorizontal />뷰 옵션</div>
-              <div className="ce-toggle-row">
-                <span>클린 렌더</span>
-                <button
-                  type="button"
-                  className={`ce-toggle ${renderMode === 'clean' ? 'on' : ''}`}
-                  onClick={() => setRenderMode(renderMode === 'clean' ? 'original' : 'clean')}
-                />
-              </div>
-            </div>
-
-            {/* AI 도구 */}
-            <div className="ce-rp-section">
-              <div className="ce-rp-h"><Sparkles />AI 도구</div>
-              <button
-                type="button"
-                className="ce-ai-tool"
-                onClick={async () => {
-                  const targets = problems.filter(
-                    (p) =>
-                      p.hasFigure &&
-                      p.images?.some((img) => img.type === 'crop') &&
-                      !p.upscaledCropUrl &&
-                      !p.figureData &&
-                      !p.figureSvg
-                  );
-                  if (targets.length === 0) {
-                    alert('업스케일할 문제가 없습니다');
-                    return;
-                  }
-                  if (!confirm(`${targets.length}개 문제의 도형을 업스케일합니다. 진행하시겠습니까?`)) return;
-                  let success = 0;
-                  for (const p of targets) {
-                    const ok = await handleUpscaleFigure(p);
-                    if (ok) success++;
-                  }
-                  if (success > 0) refetchProblems();
-                  alert(`완료: ${success}/${targets.length}개 업스케일 성공`);
-                }}
-                disabled={generatingFigures.size > 0}
-              >
-                <div className="ce-ai-tool-h">
-                  <div className="ce-ai-tool-ic indigo"><Zap /></div>
-                  <div className="ce-ai-tool-title">도형 일괄 업스케일</div>
-                </div>
-                <div className="ce-ai-tool-sub">저해상도 원본을 고해상도로 재생성합니다</div>
-              </button>
-              <button
-                type="button"
-                className="ce-ai-tool"
-                onClick={async () => {
-                  const targets = problems.filter(
-                    (p) =>
-                      p.hasFigure &&
-                      (p.upscaledCropUrl || p.images?.some((img) => img.type === 'crop')) &&
-                      !p.figureData &&
-                      !p.figureSvg
-                  );
-                  if (targets.length === 0) {
-                    alert('AI 도형 생성할 문제가 없습니다');
-                    return;
-                  }
-                  if (!confirm(`${targets.length}개 문제에 AI Vision으로 도형을 생성합니다.\n잘못된 도형이 생성될 수 있습니다. 진행하시겠습니까?`)) return;
-                  let generated = 0;
-                  for (const p of targets) {
-                    const ok = await handleGenerateAIFigure(p);
-                    if (ok) generated++;
-                  }
-                  alert(`완료: ${generated}개 AI 도형 생성`);
-                }}
-                disabled={generatingFigures.size > 0}
-              >
-                <div className="ce-ai-tool-h">
-                  <div className="ce-ai-tool-ic orange"><Shapes /></div>
-                  <div className="ce-ai-tool-title">AI 도형 일괄 생성</div>
-                </div>
-                <div className="ce-ai-tool-sub">원본이 없는 문항에 AI로 도형을 새로 생성합니다</div>
-              </button>
-              <button
-                type="button"
-                className="ce-ai-tool"
-                onClick={() => setShowAnswerMatchModal(true)}
-              >
-                <div className="ce-ai-tool-h">
-                  <div className="ce-ai-tool-ic teal"><BookOpen /></div>
-                  <div className="ce-ai-tool-title">빠른답/해설 일괄 매칭</div>
-                </div>
-                <div className="ce-ai-tool-sub">정답 PDF에서 정답과 해설을 자동 매칭합니다</div>
-              </button>
-            </div>
-          </div>
-          <div className="ce-rp-cta">
-            <button type="button" className="ce-fbtn primary">
-              <Download className="h-3.5 w-3.5" />
-              내보내기 (PDF / HWP)
-            </button>
-          </div>
-        </aside>
-
+        {/* RIGHT PANEL 제거됨 — 서브바와 완전 중복 (필터/뷰옵션/내보내기 모두 서브바에 존재) */}
       </div>
     </div>
   );
