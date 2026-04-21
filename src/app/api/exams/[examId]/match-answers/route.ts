@@ -167,19 +167,26 @@ export async function PUT(
 
       const updates: Record<string, unknown> = {};
 
-      // 빠른답 업데이트
+      // 빠른답 업데이트 — 수동 업로드이므로 보호 플래그 설정
+      const answerJson = (problem.answer_json || {}) as Record<string, unknown>;
+      const mergedAj: Record<string, unknown> = { ...answerJson };
+
       if (match.newAnswer) {
-        const answerJson = (problem.answer_json || {}) as Record<string, unknown>;
-        updates.answer_json = {
-          ...answerJson,
-          finalAnswer: match.newAnswer,
-          correct_answer: match.newAnswer,
-        };
+        mergedAj.finalAnswer = match.newAnswer;
+        mergedAj.correct_answer = match.newAnswer;
+        mergedAj.answer_user_edited = true;    // ★ 일괄 재생성이 안 건드리도록
+        mergedAj.uploaded_at = new Date().toISOString();
       }
 
-      // 해설 업데이트
+      // 해설 업데이트 — 수동 업로드이므로 보호 플래그 설정
       if (match.newSolution) {
         updates.solution_latex = match.newSolution;
+        mergedAj.solution_user_edited = true;  // ★ 일괄 재생성이 안 건드리도록
+        mergedAj.uploaded_at = new Date().toISOString();
+      }
+
+      if (match.newAnswer || match.newSolution) {
+        updates.answer_json = mergedAj;
       }
 
       if (Object.keys(updates).length > 0) {

@@ -74,8 +74,25 @@ export async function POST(
     const chunk = problemIds.slice(startIndex, endIndex);
     const baseUrl = request.nextUrl.origin;
 
-    // 이 청크 5개를 병렬로 처리
-    await Promise.all(chunk.map(async (problemId) => {
+    // ★ 수동 업로드된 빠른답/해설만 스킵 (match-answers 모달로 PDF 올린 경우)
+    //   편집 모달 수정은 플래그 안 찍으므로 재생성 대상임
+    const { data: existingProblems } = await supabaseAdmin
+      .from('problems')
+      .select('id, answer_json')
+      .in('id', chunk);
+    const skipIds = new Set<string>();
+    for (const p of existingProblems || []) {
+      const aj = ((p as any).answer_json || {}) as Record<string, any>;
+      if (aj.solution_user_edited === true) {
+        skipIds.add((p as any).id);
+        if (state) state.done++;
+        console.log(`[batch-solutions] ⏭ skip ${(p as any).id.slice(0, 8)}: 수동 업로드 해설`);
+      }
+    }
+    const toProcess = chunk.filter((id) => !skipIds.has(id));
+
+    // 청크 병렬 처리 (수동 업로드 제외)
+    await Promise.all(toProcess.map(async (problemId) => {
       try {
         const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
           method: 'POST',
