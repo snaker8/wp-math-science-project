@@ -347,6 +347,17 @@ const GraphModal: React.FC<GraphModalProps> = ({
     }, 100);
   }, [initialGraphData]);
 
+  // ★ fontSize 변경 시 Desmos에 즉시 반영
+  useEffect(() => {
+    const calc = calculatorRef.current;
+    if (!calc) return;
+    try {
+      calc.updateSettings({ fontSize });
+    } catch (err) {
+      console.warn('[GraphModal] fontSize 업데이트 실패:', err);
+    }
+  }, [fontSize]);
+
   // Desmos API 로드
   useEffect(() => {
     if (!isOpen) return;
