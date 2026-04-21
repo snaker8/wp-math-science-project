@@ -300,9 +300,46 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ jobs });
   }
 
-  const job = jobStore.get(jobId);
+  let job = jobStore.get(jobId);
+
+  // ★ Vercel 서버리스: jobStore 미발견 시 Storage에서 복원 (최소 정보)
+  if (!job && supabaseAdmin) {
+    console.log(`[Upload API] jobStore miss → Storage 복원 시도: ${jobId}`);
+    const { data: files } = await supabaseAdmin.storage
+      .from('source-files')
+      .list('uploads', { search: jobId });
+
+    const mainFile = files?.find((f) => {
+      if (!f.name.startsWith(jobId + '_')) return false;
+      const rest = f.name.slice(jobId.length + 1);
+      return !rest.startsWith('answer_') && !rest.startsWith('quick_');
+    });
+
+    if (mainFile) {
+      const fileName = mainFile.name.slice(jobId.length + 1);
+      const storagePath = `uploads/${mainFile.name}`;
+      job = {
+        id: jobId,
+        userId: 'unknown',
+        instituteId: 'default',
+        fileName,
+        fileSize: mainFile.metadata?.size ?? 0,
+        fileType: getFileType(fileName) || 'PDF',
+        documentType: 'PROBLEM',
+        storagePath,
+        status: 'COMPLETED' as ProcessingStatus, // Storage에 있으면 최소한 업로드는 완료
+        progress: 100,
+        currentStep: '파일 업로드 완료 (백그라운드 처리 결과는 별도 저장소에서 조회)',
+        createdAt: mainFile.created_at || new Date().toISOString(),
+        updatedAt: mainFile.updated_at || new Date().toISOString(),
+      };
+      // 서버리스에서는 jobStore에 넣어도 다음 요청에 유지 안 되지만, 같은 요청 내에서 활용
+      jobStore.set(jobId, job);
+    }
+  }
+
   if (!job) {
-    console.warn(`[Upload API] Job not found: ${jobId}. Store has ${jobStore.size} jobs: [${Array.from(jobStore.keys()).join(', ')}]`);
+    console.warn(`[Upload API] Job not found: ${jobId}. Store has ${jobStore.size} jobs.`);
     return NextResponse.json(
       { error: 'Job not found' },
       { status: 404 }
