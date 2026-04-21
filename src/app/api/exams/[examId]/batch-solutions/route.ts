@@ -27,6 +27,9 @@ function cleanupStaleJobs() {
   }
 }
 
+// 한 청크에서 병렬 처리할 해설 개수
+const CHUNK_SIZE = 5;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
@@ -40,6 +43,9 @@ export async function POST(
 
     const body = await request.json();
     const problemIds: string[] = body.problemIds || [];
+    // ★ 청크 연쇄용 커서. 없으면 0 (최초 호출 = 사용자가 버튼 클릭)
+    const startIndex: number = typeof body.startIndex === 'number' ? body.startIndex : 0;
+    const isFirstCall = startIndex === 0;
 
     if (problemIds.length === 0) {
       return NextResponse.json({ error: 'No problem IDs provided' }, { status: 400 });
@@ -48,38 +54,81 @@ export async function POST(
     // ★ stale entries 청소
     cleanupStaleJobs();
 
-    // ★ 메모리에 새 작업 상태 초기화 (기존 해설 여부와 무관)
-    jobState.set(examId, {
-      total: problemIds.length,
-      done: 0,
-      failed: 0,
-      startedAt: Date.now(),
-      isRunning: true,
-    });
-
-    // 시험 상태 IN_PROGRESS로 업데이트
-    await supabaseAdmin
-      .from('exams')
-      .update({ status: 'IN_PROGRESS' })
-      .eq('id', examId);
-
-    const baseUrl = request.nextUrl.origin;
-    // ★ Vercel 서버리스: fire-and-forget 금지 (함수 종료 시 중단됨)
-    //   await로 동기 처리 — maxDuration=300초 한도 내에서 완료
-    try {
-      await processInBackground(examId, problemIds, baseUrl);
-    } catch (err) {
-      console.error('[batch-solutions] Process error:', err);
-      const state = jobState.get(examId);
-      if (state) state.isRunning = false;
+    if (isFirstCall) {
+      jobState.set(examId, {
+        total: problemIds.length,
+        done: 0,
+        failed: 0,
+        startedAt: Date.now(),
+        isRunning: true,
+      });
+      // 시험 상태 IN_PROGRESS로 업데이트 (GET 폴링이 이걸 보고 진행률 계산)
+      await supabaseAdmin
+        .from('exams')
+        .update({ status: 'IN_PROGRESS' })
+        .eq('id', examId);
     }
 
-    const finalState = jobState.get(examId);
+    const state = jobState.get(examId);
+    const endIndex = Math.min(startIndex + CHUNK_SIZE, problemIds.length);
+    const chunk = problemIds.slice(startIndex, endIndex);
+    const baseUrl = request.nextUrl.origin;
+
+    // 이 청크 5개를 병렬로 처리
+    await Promise.all(chunk.map(async (problemId) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (res.ok) {
+          if (state) state.done++;
+          console.log(`[batch-solutions] ✅ ${problemId.slice(0, 8)} (${startIndex}-${endIndex}/${problemIds.length})`);
+        } else {
+          if (state) state.failed++;
+          console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${res.status}`);
+        }
+      } catch (err) {
+        if (state) state.failed++;
+        console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${err}`);
+      }
+    }));
+
+    // 다음 청크가 남았으면 fire-and-forget으로 자기 자신에게 POST → 독립 서버리스 호출 발사
+    const hasMore = endIndex < problemIds.length;
+    if (hasMore) {
+      // ★ 주의: await 금지. fetch 호출만 발사하고 바로 응답 반환.
+      //   Vercel edge가 이 fetch를 받아 새 서버리스 인스턴스를 띄우므로
+      //   현재 함수가 종료돼도 다음 청크는 독립적으로 계속 진행됨.
+      fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problemIds, startIndex: endIndex }),
+        // keepalive: true로 짧은 함수가 종료돼도 요청은 유지됨
+        keepalive: true,
+      }).catch((err) => console.error('[batch-solutions] chain fetch error:', err));
+
+      // fetch가 TCP 연결까지 만들 시간을 살짝 줌 (50ms는 인스턴스 종료 전 request dispatch 보장)
+      await new Promise((r) => setTimeout(r, 50));
+    } else {
+      // 마지막 청크 완료 → 상태 정리
+      if (state) state.isRunning = false;
+      await supabaseAdmin
+        .from('exams')
+        .update({ status: 'COMPLETED' })
+        .eq('id', examId);
+      console.log(`[batch-solutions] 전체 완료: done=${state?.done}, failed=${state?.failed}`);
+    }
+
     return NextResponse.json({
-      message: 'completed',
+      message: isFirstCall ? 'started' : 'chunk-done',
+      startIndex,
+      endIndex,
       total: problemIds.length,
-      done: finalState?.done ?? 0,
-      failed: finalState?.failed ?? 0,
+      chained: hasMore,
+      done: state?.done ?? 0,
+      failed: state?.failed ?? 0,
     });
 
   } catch (err) {
@@ -201,54 +250,4 @@ export async function GET(
 // 백그라운드 처리
 // ============================================================================
 
-async function processInBackground(examId: string, problemIds: string[], baseUrl: string) {
-  console.log(`[batch-solutions] 시작: ${problemIds.length}문제 (동시 5개)`);
-  const state = jobState.get(examId);
-  if (!state) return;
-
-  // ★ 동시 실행 개수 제한 (OpenAI rate limit + Vercel 메모리 고려)
-  const CONCURRENCY = 5;
-  const processOne = async (problemId: string) => {
-    try {
-      const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (res.ok) {
-        state.done++;
-        console.log(`[batch-solutions] ✅ ${state.done + state.failed}/${state.total} — ${problemId.slice(0, 8)}`);
-      } else {
-        state.failed++;
-        console.log(`[batch-solutions] ❌ ${state.done + state.failed}/${state.total} — ${problemId.slice(0, 8)}: ${res.status}`);
-      }
-    } catch (err) {
-      state.failed++;
-      console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${err}`);
-    }
-  };
-
-  // 청크 단위 병렬 처리
-  for (let i = 0; i < problemIds.length; i += CONCURRENCY) {
-    const chunk = problemIds.slice(i, i + CONCURRENCY);
-    await Promise.all(chunk.map(processOne));
-  }
-
-  state.isRunning = false;
-
-  // 시험 상태 복원
-  if (supabaseAdmin) {
-    await supabaseAdmin
-      .from('exams')
-      .update({ status: 'COMPLETED' })
-      .eq('id', examId);
-  }
-
-  console.log(`[batch-solutions] 완료: ${state.done} 성공 / ${state.failed} 실패 / 총 ${state.total}`);
-
-  // ★ 10분 후 메모리에서 제거 (다음 작업 위해)
-  setTimeout(() => {
-    const current = jobState.get(examId);
-    if (current && !current.isRunning) jobState.delete(examId);
-  }, 600000);
-}
+// (이전 processInBackground는 청크 연쇄 방식으로 POST 핸들러에 인라인화되어 제거됨)
