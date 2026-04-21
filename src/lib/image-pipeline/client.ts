@@ -271,12 +271,14 @@ export async function retagAll(
  */
 export async function checkHealth(): Promise<boolean> {
   try {
-    const http = await import('http');
     const url = new URL(`${PIPELINE_URL}/health`);
+    const isHttps = url.protocol === 'https:';
+    // ★ 프로토콜에 맞는 모듈 사용 (이전에는 http만 써서 HTTPS 원격 파이프라인 헬스체크 항상 실패)
+    const lib = isHttps ? await import('https') : await import('http');
     return new Promise((resolve) => {
-      const req = http.request({
+      const req = lib.request({
         hostname: url.hostname || '127.0.0.1',
-        port: Number(url.port) || (url.protocol === 'https:' ? 443 : 8200),
+        port: Number(url.port) || (isHttps ? 443 : 8200),
         path: '/health',
         method: 'GET',
         timeout: 15000,
@@ -284,7 +286,10 @@ export async function checkHealth(): Promise<boolean> {
         res.resume(); // drain response
         resolve(res.statusCode === 200);
       });
-      req.on('error', () => resolve(false));
+      req.on('error', (err) => {
+        console.warn('[image-pipeline] health check 실패:', err.message);
+        resolve(false);
+      });
       req.on('timeout', () => { req.destroy(); resolve(false); });
       req.end();
     });
