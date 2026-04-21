@@ -5,10 +5,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { parseAnswerDocument } from '@/lib/ocr/answer-parser';
+import { parseAnswerDocument, type ParsedAnswer } from '@/lib/ocr/answer-parser';
 
 const MATHPIX_APP_ID = process.env.MATHPIX_APP_ID || '';
 const MATHPIX_APP_KEY = process.env.MATHPIX_APP_KEY || '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
 export const maxDuration = 120;
 
@@ -56,18 +57,33 @@ export async function POST(
 
     const problemMap = new Map((problems || []).map(p => [p.id, p]));
 
-    // 2. Mathpix OCR
-    console.log(`[match-answers] OCR 시작: ${file.name} (${file.size} bytes)`);
-    const ocrText = await ocrFile(file);
+    // 2. OCR / Vision 추출
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+    console.log(`[match-answers] 추출 시작: ${file.name} (${file.size} bytes, isPdf=${isPdf})`);
 
-    if (!ocrText || ocrText.trim().length < 10) {
-      return NextResponse.json({ error: 'OCR 결과가 비어있습니다.' }, { status: 400 });
+    let parseResult;
+    if (!isPdf) {
+      // 이미지 → GPT-4o Vision (Mathpix보다 빠른답 이미지를 훨씬 잘 읽음)
+      const visionAnswers = await extractAnswersWithGPT4V(file);
+      if (visionAnswers.length === 0) {
+        return NextResponse.json({ error: '이미지에서 답을 찾지 못했습니다. 빠른답 이미지인지 확인해주세요.' }, { status: 400 });
+      }
+      console.log(`[match-answers] GPT-4V 추출 완료: ${visionAnswers.length}개 답`);
+      parseResult = {
+        answers: visionAnswers,
+        solutions: [],
+        rawText: visionAnswers.map(a => `${a.problemNumber}. ${a.answer}`).join('\n'),
+        detectedType: 'quick_answer' as const,
+      };
+    } else {
+      // PDF → Mathpix OCR → 파서
+      const ocrText = await ocrPdf(file);
+      if (!ocrText || ocrText.trim().length < 10) {
+        return NextResponse.json({ error: 'OCR 결과가 비어있습니다.' }, { status: 400 });
+      }
+      console.log(`[match-answers] Mathpix OCR 완료: ${ocrText.length}자`);
+      parseResult = parseAnswerDocument(ocrText);
     }
-
-    console.log(`[match-answers] OCR 완료: ${ocrText.length}자`);
-
-    // 3. 파싱
-    const parseResult = parseAnswerDocument(ocrText);
     console.log(`[match-answers] 파싱 결과: type=${parseResult.detectedType}, answers=${parseResult.answers.length}, solutions=${parseResult.solutions.length}`);
 
     // 4. 매칭 미리보기 생성
@@ -117,7 +133,7 @@ export async function POST(
       parsedSolutions: parseResult.solutions.length,
       changedCount,
       matches,
-      rawTextPreview: ocrText.slice(0, 500),
+      rawTextPreview: parseResult.rawText.slice(0, 500),
     });
 
   } catch (error) {
@@ -216,80 +232,123 @@ export async function PUT(
 }
 
 // ============================================================================
-// Mathpix OCR (PDF/이미지 → 텍스트)
+// GPT-4o Vision — 이미지에서 빠른답 직접 추출 (Mathpix보다 정확)
 // ============================================================================
 
-async function ocrFile(file: File): Promise<string> {
+async function extractAnswersWithGPT4V(file: File): Promise<ParsedAnswer[]> {
+  if (!OPENAI_API_KEY) throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const base64 = buffer.toString('base64');
+  const mimeType = file.type || 'image/jpeg';
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 1500,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType};base64,${base64}`,
+                detail: 'high',
+              },
+            },
+            {
+              type: 'text',
+              text: `이 이미지는 수학 시험의 빠른답(정답표)입니다.
+각 문제 번호와 정답을 추출해서 아래 형식으로만 출력해주세요 (설명 없이):
+1. 답
+2. 답
+3. 답
+
+규칙:
+- 객관식 원형 숫자(①②③④⑤)는 숫자(1,2,3,4,5)로 변환
+- 주관식 수식은 LaTeX 형식으로 (예: \\frac{1}{2}, \\sqrt{3})
+- 없는 번호는 건너뛰기
+- 번호 순서대로 출력`,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`GPT-4o Vision API 실패: ${res.status} — ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const rawText: string = data.choices?.[0]?.message?.content || '';
+  if (!rawText) throw new Error('GPT-4o Vision 응답이 비어있습니다');
+
+  // "N. 답" 형식으로 파싱
+  const answers: ParsedAnswer[] = [];
+  for (const line of rawText.split('\n').map((l: string) => l.trim()).filter(Boolean)) {
+    const m = line.match(/^(\d{1,2})\s*[.)]\s*(.+)$/);
+    if (!m) continue;
+    const num = parseInt(m[1]);
+    const ans = m[2].trim();
+    if (num < 1 || num > 50 || !ans) continue;
+    const answerType: ParsedAnswer['answerType'] =
+      /^[1-5]$/.test(ans) ? 'choice' :
+      /^-?\d+(?:[.,]\d+)?$/.test(ans) ? 'numeric' : 'text';
+    answers.push({ problemNumber: num, answer: ans, answerType });
+  }
+
+  return answers;
+}
+
+// ============================================================================
+// Mathpix OCR — PDF 전용
+// ============================================================================
+
+async function ocrPdf(file: File): Promise<string> {
   if (!MATHPIX_APP_ID || !MATHPIX_APP_KEY) {
     throw new Error('Mathpix API 키가 설정되지 않았습니다.');
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  const formData = new FormData();
+  formData.append('file', new Blob([buffer], { type: 'application/pdf' }), file.name);
+  formData.append('options_json', JSON.stringify({
+    conversion_formats: { text: true },
+    math_inline_delimiters: ['$', '$'],
+    math_display_delimiters: ['$$', '$$'],
+  }));
 
-  if (isPdf) {
-    // PDF → Mathpix PDF API
-    const formData = new FormData();
-    formData.append('file', new Blob([buffer], { type: 'application/pdf' }), file.name);
-    formData.append('options_json', JSON.stringify({
-      conversion_formats: { text: true },
-      math_inline_delimiters: ['$', '$'],
-      math_display_delimiters: ['$$', '$$'],
-    }));
+  const res = await fetch('https://api.mathpix.com/v3/pdf', {
+    method: 'POST',
+    headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
+    body: formData as any,
+  });
 
-    const res = await fetch('https://api.mathpix.com/v3/pdf', {
-      method: 'POST',
-      headers: {
-        'app_id': MATHPIX_APP_ID,
-        'app_key': MATHPIX_APP_KEY,
-      },
-      body: formData as any,
+  if (!res.ok) throw new Error(`Mathpix PDF API 실패: ${res.status}`);
+  const data = await res.json();
+  const pdfId = data.pdf_id;
+
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const statusRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}`, {
+      headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
     });
-
-    if (!res.ok) throw new Error(`Mathpix PDF API 실패: ${res.status}`);
-    const data = await res.json();
-    const pdfId = data.pdf_id;
-
-    // PDF 처리 완료 대기 (최대 60초)
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const statusRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}`, {
+    const statusData = await statusRes.json();
+    if (statusData.status === 'completed') {
+      const textRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}.mmd`, {
         headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
       });
-      const statusData = await statusRes.json();
-      if (statusData.status === 'completed') {
-        // 텍스트 결과 가져오기
-        const textRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}.mmd`, {
-          headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
-        });
-        return await textRes.text();
-      }
-      if (statusData.status === 'error') throw new Error('Mathpix PDF 처리 실패');
+      return await textRes.text();
     }
-    throw new Error('Mathpix PDF 처리 타임아웃');
-
-  } else {
-    // 이미지 → Mathpix Image API
-    const base64 = buffer.toString('base64');
-    const mimeType = file.type || 'image/png';
-
-    const res = await fetch('https://api.mathpix.com/v3/text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'app_id': MATHPIX_APP_ID,
-        'app_key': MATHPIX_APP_KEY,
-      },
-      body: JSON.stringify({
-        src: `data:${mimeType};base64,${base64}`,
-        formats: ['text'],
-        math_inline_delimiters: ['$', '$'],
-        math_display_delimiters: ['$$', '$$'],
-      }),
-    });
-
-    if (!res.ok) throw new Error(`Mathpix Image API 실패: ${res.status}`);
-    const data = await res.json();
-    return data.text || '';
+    if (statusData.status === 'error') throw new Error('Mathpix PDF 처리 실패');
   }
+  throw new Error('Mathpix PDF 처리 타임아웃');
 }
