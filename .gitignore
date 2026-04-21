@@ -60,3 +60,4 @@ curriculum_data/textbook_solutions/
 # 업로드/추출 임시 파일
 image-pipeline/dasaram_diagram_db/*.tmp
 image-pipeline/*.log
+.vercel
