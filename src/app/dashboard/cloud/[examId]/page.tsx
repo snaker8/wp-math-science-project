@@ -1485,17 +1485,28 @@ function ExamPaperView({
         }
 
         @media print {
-          /* 기존 앱 전체 숨김, 복제된 인쇄 루트만 표시 */
-          /* ★ 원본 DOM 인쇄 방식: body.print-active 시 exam-print-container 외 모두 숨김 */
-          body.print-active > *:not(.exam-print-container):not(style):not(script) {
-            display: none !important;
+          /* ★ 원본 DOM 인쇄 — React 트리 깊숙이 있는 exam-print-container를 전면 부상
+             1) 모든 요소 visibility:hidden → 레이아웃은 유지하되 보이지 않음
+             2) exam-print-container와 그 자손만 visibility:visible
+             3) exam-print-container를 fixed position으로 페이지 전체에 겹쳐서 표시 */
+          body.print-active * {
+            visibility: hidden !important;
+          }
+          body.print-active .exam-print-container,
+          body.print-active .exam-print-container * {
+            visibility: visible !important;
           }
           body.print-active .exam-print-container {
-            display: block !important;
-            overflow: visible !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
             height: auto !important;
+            overflow: visible !important;
+            z-index: 2147483647;
+            background: white;
           }
-          /* 시험지 제어바 숨김 */
+          /* 시험지 제어바 숨김 (visibility hidden으로는 공간이 남으니 display:none) */
           body.print-active .exam-controls { display: none !important; }
           /* 인쇄 섹션 선택적 노출 */
           body.print-active[data-print-exam="0"] .exam-page:not(.solution-page) { display: none !important; }
@@ -1509,7 +1520,7 @@ function ExamPaperView({
             position: static !important; left: auto !important; top: auto !important;
             display: block !important;
           }
-          /* 숨겨진 QuickAnswer/Solution 래퍼 위치 해제 */
+          /* 숨겨진 QuickAnswer/Solution 래퍼 위치 해제 (원래 off-screen 위치 제거) */
           body.print-active [aria-hidden="true"] {
             position: static !important; left: auto !important; top: auto !important;
             display: block !important;
