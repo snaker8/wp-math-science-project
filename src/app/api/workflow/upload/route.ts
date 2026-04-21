@@ -240,30 +240,52 @@ export async function POST(request: NextRequest) {
 
     fileBufferStore.set(job.id, buffers);
 
-    // ★ HWP 파일: autoClassify 여부와 무관하게 PDF 변환 실행 (미리보기용)
+    // ★ Vercel 서버리스 대응: fire-and-forget 금지 (함수 종료 후 중단됨)
+    // 모든 처리를 동기식으로 await → maxDuration=300초 한도 내 완료
+
+    // HWP → PDF 변환 (미리보기용)
     if (fileType === 'HWP') {
-      convertHWPInBackground(job.id, buffers.problem, job).catch(console.error);
+      try {
+        await convertHWPInBackground(job.id, buffers.problem, job);
+      } catch (err) {
+        console.error('[Upload] HWP 변환 실패:', err);
+      }
     }
 
-    // 백그라운드 처리 시작 (non-blocking)
+    // 자동 분류 + 해설 생성 (OCR → GPT → Supabase 저장)
+    let classifyCompleted = false;
+    let autoSavedExamId: string | null = null;
     if (autoClassify) {
-      processJobInBackground(job.id, buffers).catch(console.error);
+      try {
+        await processJobInBackground(job.id, buffers);
+        classifyCompleted = true;
+        autoSavedExamId = autoSavedExams.get(job.id) || null;
+      } catch (err) {
+        console.error('[Upload] 자동 분류 실패:', err);
+        // 파일은 Storage에 올라가 있으므로 분석 페이지에서 수동 처리 가능
+      }
     }
 
-    // ★ 과학 문제 자산화 모드: 이미지 파이프라인도 병렬 실행
+    // 과학 도식 이미지 파이프라인
     if (subjectArea === 'science') {
-      runScienceImagePipeline(job.id, fileBuffer, mainFileName, scienceSubject).catch(console.error);
+      try {
+        await runScienceImagePipeline(job.id, fileBuffer, mainFileName, scienceSubject);
+      } catch (err) {
+        console.error('[Upload] 과학 이미지 파이프라인 실패:', err);
+      }
     }
 
     return NextResponse.json({
       success: true,
       jobId: job.id,
-      message: '업로드가 시작되었습니다.',
+      message: classifyCompleted ? '업로드 및 자동 분류 완료' : '업로드 완료',
+      classifyCompleted,
+      autoSavedExamId,
       job: {
         id: job.id,
         fileName: job.fileName,
-        status: job.status,
-        progress: job.progress,
+        status: classifyCompleted ? 'COMPLETED' : job.status,
+        progress: classifyCompleted ? 100 : job.progress,
       },
     });
   } catch (error) {
@@ -993,6 +1015,8 @@ async function saveEditedProblemsDirect(
       subject: detectSubjectFromTitle(fileTitle),
       exam_type: detectExamTypeFromTitle(fileTitle),
       grade: detectGradeFromTitle(fileTitle),
+      // ★ 서버리스 환경에서 jobId↔examId 매핑을 DB에 영속화 (metadata 컬럼이 없으면 무시됨)
+      metadata: { job_id: jobId, source_file_name: job.fileName },
     };
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
