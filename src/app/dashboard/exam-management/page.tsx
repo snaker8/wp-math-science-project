@@ -1506,20 +1506,22 @@ export default function ExamManagementPage() {
                             </div>
                           )}
                           {useManualColumns ? (
-                            <div className="px-10 py-8 flex gap-7">
-                              <div className="flex-1 border-r border-gray-200 pr-3.5">
+                            // ★ 외부 padding:15mm(57px)만으로 A4 표준 여백 충분.
+                            //   기존 px-10(40px) 중복 패딩을 제거해 본문 폭을 확보.
+                            <div className="py-2 flex gap-4">
+                              <div className="flex-1 min-w-0 border-r border-gray-200 pr-3">
                                 {leftProblems.map((problem, probIdx) =>
                                   renderProblem(problem, globalStartIdx + probIdx)
                                 )}
                               </div>
-                              <div className="flex-1">
+                              <div className="flex-1 min-w-0 pl-1">
                                 {rightProblems.map((problem, probIdx) =>
                                   renderProblem(problem, globalStartIdx + half + probIdx)
                                 )}
                               </div>
                             </div>
                           ) : (
-                            <div className="px-10 py-8">
+                            <div className="py-2">
                               {pageProblems.map((problem, probIdx) =>
                                 renderProblem(problem, globalStartIdx + probIdx)
                               )}
