@@ -2884,7 +2884,14 @@ export default function AnalyzeJobPage() {
       const res = await fetch('/api/workflow/upload', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, editedProblems, bookGroupId: effectiveBookGroupId, pageImages }),
+        body: JSON.stringify({
+          jobId,
+          editedProblems,
+          bookGroupId: effectiveBookGroupId,
+          pageImages,
+          // ★ 원본 한글 파일명 전달 (Storage 복원 경로의 sanitized 이름 대체)
+          fileName: jobData.fileName,
+        }),
       });
 
       if (res.ok) {

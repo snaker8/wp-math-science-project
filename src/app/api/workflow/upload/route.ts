@@ -420,9 +420,9 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobId, bookGroupId, editedProblems, pageImages } = body;
+    const { jobId, bookGroupId, editedProblems, pageImages, fileName: clientFileName } = body;
 
-    console.log(`[Upload PUT] ★ bookGroupId 수신: "${bookGroupId}" (type: ${typeof bookGroupId})`);
+    console.log(`[Upload PUT] ★ bookGroupId 수신: "${bookGroupId}" (type: ${typeof bookGroupId}), clientFileName: "${clientFileName}"`);
 
     // ★ YOLO 학습 데이터: 페이지 이미지
     //   - 클라이언트에서 이미 Storage에 업로드된 경우 → storagePath 사용
@@ -551,6 +551,16 @@ export async function PUT(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // ★ 클라이언트가 원본 파일명을 보냈으면 우선 적용 (Storage 복원 경로의 sanitized 이름 대체)
+    if (clientFileName && typeof clientFileName === 'string' && clientFileName.trim()) {
+      if (job.fileName !== clientFileName) {
+        console.log(`[Upload PUT] 파일명 override: "${job.fileName}" → "${clientFileName}"`);
+        job.fileName = clientFileName;
+        jobStore.set(jobId, job);
+      }
+    }
+
     console.log(`[Upload PUT] job.bookGroupId: "${job.bookGroupId}" → 최종: "${bookGroupId || job.bookGroupId || null}"`);
 
     // ★ 이미 자동 자산화된 경우 처리 — 단, 여러 조건 검증 후 진짜 스킵
@@ -737,12 +747,11 @@ async function uploadToStorage(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   suffix: string = '' // suffix for auxiliary files
 ): Promise<string> {
-  // ★ Storage 경로는 ASCII-safe 유지 (Supabase signed URL + PUT 이중 인코딩 400 회피)
+  // ★ Storage 경로: 한글 등 non-ASCII는 URL-encode로 보존 (나중에 decodeURIComponent로 원복 가능)
+  //   공백·슬래시 등 경로에 민감한 문자는 자동 이스케이프됨
   const ext = fileName.match(/\.[a-zA-Z0-9]+$/)?.[0] || '';
-  const safeName = fileName
-    .replace(new RegExp(ext.replace('.', '\\.') + '$'), '')
-    .replace(/[^a-zA-Z0-9.-]/g, '_')
-    .slice(0, 40) + ext;
+  const base = fileName.replace(new RegExp(ext.replace('.', '\\.') + '$'), '');
+  const safeName = encodeURIComponent(base).slice(0, 180) + ext;
   const storageFileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
   const storagePath = `uploads/${storageFileName}`;
 
