@@ -88,7 +88,13 @@ const GraphModal: React.FC<GraphModalProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [showProjections, setShowProjections] = useState(true);
   // ★ Desmos 라벨/텍스트 크기 (기본 16, 12~32 범위)
-  const [fontSize, setFontSize] = useState<number>(16);
+  //   저장된 그래프가 fontSize를 갖고 있으면 초기값으로 사용 (재오픈 시 유지)
+  const [fontSize, setFontSize] = useState<number>(() => {
+    const saved = (initialGraphData as { fontSize?: number } | undefined)?.fontSize;
+    return typeof saved === 'number' && saved >= 12 && saved <= 32 ? saved : 16;
+  });
+  // ★ 초기화 이후 사용자가 실제로 변경했는지 추적 — mount 시 덮어쓰기 방지
+  const userChangedFontSizeRef = useRef(false);
   const [drawMode, setDrawMode] = useState<'none' | 'segment' | 'fill'>('none');
   const [clickedCoords, setClickedCoords] = useState<{ x: number; y: number }[]>([]);
   const [pointStyle, setPointStyle] = useState<'both' | 'label' | 'dot'>('both');
@@ -347,10 +353,12 @@ const GraphModal: React.FC<GraphModalProps> = ({
     }, 100);
   }, [initialGraphData]);
 
-  // ★ fontSize 변경 시 Desmos에 즉시 반영
+  // ★ fontSize 변경 시 Desmos에 즉시 반영 (사용자가 +/- 누른 경우만)
   useEffect(() => {
     const calc = calculatorRef.current;
     if (!calc) return;
+    // mount 시 또는 저장된 값으로 초기화할 때는 setState/생성자가 이미 처리 → 스킵
+    if (!userChangedFontSizeRef.current) return;
     try {
       calc.updateSettings({ fontSize });
     } catch (err) {
@@ -555,6 +563,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
         imageDataUrl,
         desmosState: state,
         pointLabels, // ★ 포인트 라벨 좌표 저장
+        fontSize,    // ★ 현재 글자 크기 저장 (재오픈 시 복원)
       } as any);
     }
 
@@ -599,13 +608,13 @@ const GraphModal: React.FC<GraphModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
               <span style={{ fontSize: '11px', color: '#6b7280' }}>글자</span>
               <button
-                onClick={() => setFontSize(s => Math.max(12, s - 2))}
+                onClick={() => { userChangedFontSizeRef.current = true; setFontSize(s => Math.max(12, s - 2)); }}
                 style={{ fontSize: '14px', padding: '0 6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#374151' }}
                 title="글자 크기 줄이기"
               >−</button>
               <span style={{ fontSize: '12px', color: '#111827', minWidth: '22px', textAlign: 'center' }}>{fontSize}</span>
               <button
-                onClick={() => setFontSize(s => Math.min(32, s + 2))}
+                onClick={() => { userChangedFontSizeRef.current = true; setFontSize(s => Math.min(32, s + 2)); }}
                 style={{ fontSize: '14px', padding: '0 6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#374151' }}
                 title="글자 크기 키우기"
               >+</button>
