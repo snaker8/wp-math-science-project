@@ -2861,7 +2861,8 @@ export default function CloudExamDetailPage() {
                     }
                     const data = await res.json();
                     const fixCount = data.fixedProblems || data.results?.filter((f: any) => f.fixes?.length > 0).length || 0;
-                    alert(`✅ 자동매핑 완료: ${fixCount}개 문제 수정됨. 새로고침하면 반영됩니다.`);
+                    alert(`✅ 자동매핑 완료: ${fixCount}개 문제 수정됨. 화면을 새로고침합니다.`);
+                    window.location.reload();
                   } catch (e) {
                     alert('자동매핑 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
                   }
