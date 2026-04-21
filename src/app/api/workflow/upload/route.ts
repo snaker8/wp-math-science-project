@@ -459,13 +459,57 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
     }
 
-    const job = jobStore.get(jobId);
+    let job = jobStore.get(jobId);
+
+    // ★ Vercel 서버리스: jobStore 미발견 시 Storage에서 복원
+    if (!job && supabaseAdmin) {
+      console.log(`[Upload PUT] jobStore miss → Storage 복원 시도: ${jobId}`);
+      const { data: files } = await supabaseAdmin.storage
+        .from('source-files')
+        .list('uploads', { search: jobId });
+
+      const mainFile = files?.find((f) => {
+        if (!f.name.startsWith(jobId + '_')) return false;
+        const rest = f.name.slice(jobId.length + 1);
+        return !rest.startsWith('answer_') && !rest.startsWith('quick_');
+      });
+
+      if (mainFile) {
+        const fileName = mainFile.name.slice(jobId.length + 1);
+        const storagePath = `uploads/${mainFile.name}`;
+        // 요청 body에 유저 힌트가 있으면 활용
+        const userIdHint = body.userId as string | undefined;
+        const instituteIdHint = body.instituteId as string | undefined;
+        const subjectAreaHint = (body.subjectArea as 'math' | 'science' | undefined) || 'math';
+        job = {
+          id: jobId,
+          userId: userIdHint || 'anonymous',
+          instituteId: instituteIdHint || 'default',
+          fileName,
+          fileSize: mainFile.metadata?.size ?? 0,
+          fileType: getFileType(fileName) || 'PDF',
+          documentType: 'PROBLEM',
+          storagePath,
+          status: 'COMPLETED' as ProcessingStatus,
+          progress: 100,
+          currentStep: 'Storage에서 복원됨',
+          autoClassify: false,
+          generateSolutions: false,
+          bookGroupId: bookGroupId || undefined,
+          subjectArea: subjectAreaHint,
+          createdAt: mainFile.created_at || new Date().toISOString(),
+          updatedAt: mainFile.updated_at || new Date().toISOString(),
+        };
+        jobStore.set(jobId, job);
+        console.log(`[Upload PUT] Storage 복원 성공: ${fileName}`);
+      }
+    }
+
     if (!job) {
-      // ★ Job이 메모리에서 사라진 경우 (서버 재시작 등)
-      // 이미 자동 자산화된 examId가 있으면 성공으로 반환
+      // Storage에서도 못 찾음 — 이미 자동 자산화된 examId 확인
       const autoExamId = autoSavedExams.get(jobId);
       if (autoExamId) {
-        console.log(`[Upload PUT] Job not in memory but auto-saved exam exists: ${autoExamId}`);
+        console.log(`[Upload PUT] Job not found but auto-saved exam exists: ${autoExamId}`);
         return NextResponse.json({
           success: true,
           message: '이미 자동 자산화가 완료되었습니다.',
@@ -473,7 +517,10 @@ export async function PUT(request: NextRequest) {
           alreadySaved: true,
         });
       }
-      return NextResponse.json({ error: 'Job not found. 서버가 재시작되어 작업 데이터가 사라졌습니다. 파일을 다시 업로드해주세요.' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Job not found. 파일이 Storage에도 없습니다. 파일을 다시 업로드해주세요.' },
+        { status: 404 }
+      );
     }
     console.log(`[Upload PUT] job.bookGroupId: "${job.bookGroupId}" → 최종: "${bookGroupId || job.bookGroupId || null}"`);
 
