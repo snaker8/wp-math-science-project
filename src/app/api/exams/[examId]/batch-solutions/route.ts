@@ -16,6 +16,17 @@ const jobState = new Map<string, {
   isRunning: boolean;
 }>();
 
+// ★ 메모리 누수 방지: 10분 이상 된 완료 작업은 접근 시 자동 청소
+const STALE_TTL_MS = 10 * 60 * 1000;
+function cleanupStaleJobs() {
+  const now = Date.now();
+  for (const [id, s] of jobState.entries()) {
+    if (!s.isRunning && now - s.startedAt > STALE_TTL_MS) {
+      jobState.delete(id);
+    }
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
@@ -33,6 +44,9 @@ export async function POST(
     if (problemIds.length === 0) {
       return NextResponse.json({ error: 'No problem IDs provided' }, { status: 400 });
     }
+
+    // ★ stale entries 청소
+    cleanupStaleJobs();
 
     // ★ 메모리에 새 작업 상태 초기화 (기존 해설 여부와 무관)
     jobState.set(examId, {
@@ -81,6 +95,9 @@ export async function GET(
   { params }: { params: Promise<{ examId: string }> }
 ) {
   const { examId } = await params;
+
+  // ★ stale 청소
+  cleanupStaleJobs();
 
   // 1) 메모리에 작업 상태 있으면 가장 정확 — 그대로 반환
   const state = jobState.get(examId);

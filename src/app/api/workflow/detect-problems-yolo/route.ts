@@ -5,6 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+// ★ Vercel 서버리스 타임아웃: YOLO(10초) + GPT-4o 폴백(20~30초) 가능
+export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
+
 const YOLO_SERVER_URL = process.env.YOLO_SERVER_URL || 'http://localhost:8100';
 const YOLO_CONFIDENCE = parseFloat(process.env.YOLO_CONFIDENCE_THRESHOLD || '0.25');
 const YOLO_TIMEOUT = parseInt(process.env.YOLO_TIMEOUT_MS || '10000');

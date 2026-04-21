@@ -23,6 +23,12 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // ★ 서버 함수에 포함될 런타임 리소스 명시 (process.cwd() 접근 파일)
+  // Next.js 트레이서가 자동 감지 실패할 수 있으므로 보장
+  outputFileTracingIncludes: {
+    '/api/workflow/reanalyze-crop': ['./curriculum_data/expanded_math_types_unified.json'],
+    '/api/workflow/upload': ['./curriculum_data/expanded_math_types_unified.json'],
+  },
 };
 
 module.exports = nextConfig;

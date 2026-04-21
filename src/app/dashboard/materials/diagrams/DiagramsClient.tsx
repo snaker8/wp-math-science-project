@@ -194,15 +194,53 @@ export default function DiagramGalleryPage() {
       });
   }, [tagging, extracting]);
 
-  // 초기 로드 + 폴링 (추출 중이면 2초, 아니면 10초)
+  // 초기 로드 + 폴링 (추출 중이면 2초, 아니면 10초, 탭 비활성이면 일시정지)
   useEffect(() => {
     fetchImages();
     fetchStats();
-    const interval = setInterval(() => {
-      fetchImages();
-      fetchStats();
-    }, (extracting || tagging) ? 2000 : 10000);
-    return () => clearInterval(interval);
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(() => {
+        // ★ 탭 숨김 상태면 폴링 스킵 (백그라운드 탭 리소스 낭비 방지)
+        if (typeof document !== 'undefined' && document.hidden) return;
+        fetchImages();
+        fetchStats();
+      }, (extracting || tagging) ? 2000 : 10000);
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    startPolling();
+
+    // ★ 탭 전환 감지: 복귀 시 즉시 1회 fetch + 폴링 재개
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchImages();
+        fetchStats();
+        startPolling();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    return () => {
+      stopPolling();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
   }, [fetchImages, fetchStats, extracting, tagging]);
 
   // 과목 필터 + 과학 세부 과목 필터

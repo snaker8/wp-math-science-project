@@ -1,12 +1,19 @@
 // ============================================================================
-// POST /api/debug/repair-links - 기존 문제들을 exam에 다시 연결
+// POST /api/debug/repair-links - 기존 문제들을 exam에 다시 연결 (ADMIN 전용)
 // exam_problems 테이블이 비어있을 때 사용
 // ============================================================================
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth/guard';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
+  // ★ ADMIN 전용 가드 (기존: 누구나 POST 가능 → DB 무단 변경 위험)
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'supabaseAdmin not configured' }, { status: 503 });
   }

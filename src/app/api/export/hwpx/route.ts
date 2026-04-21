@@ -13,7 +13,22 @@ import os from 'os';
 
 const execFileAsync = promisify(execFile);
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
+  // ★ Vercel 서버리스에서는 Python + HWP COM + 로컬 파일 쓰기 불가
+  //   (HWP COM은 Windows 전용, Vercel은 Linux 컨테이너)
+  if (process.env.VERCEL === '1') {
+    return NextResponse.json(
+      {
+        error: 'HWPX_EXPORT_UNAVAILABLE',
+        message: 'HWPX 내보내기는 로컬 Windows 환경에서만 지원됩니다 (HWP COM 필요).',
+      },
+      { status: 501 }
+    );
+  }
+
   let inputPath = '';
   let outputPath = '';
 

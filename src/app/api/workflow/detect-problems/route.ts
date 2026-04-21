@@ -5,6 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+// ★ Vercel 서버리스 타임아웃: GPT-4o Vision이 20~30초 소요 → 기본 60초로는 빠듯
+export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 interface DetectedProblem {

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuth, requireEditor } from '@/lib/auth/guard';
 
 // Next.js 14 Data Cache 비활성화
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  // ★ 로그인 필수 (학생도 자기 시험지는 조회 가능해야 함)
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
+
   const { examId } = await params;
 
   if (!supabaseAdmin) {
@@ -158,13 +163,17 @@ export async function GET(
 }
 
 // ============================================================================
-// PATCH /api/exams/[examId] - 시험지 수정 (제목 변경, 북그룹 이동)
+// PATCH /api/exams/[examId] - 시험지 수정 (ADMIN/TEACHER/TUTOR)
 // ============================================================================
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  // ★ 편집자 role 전용
+  const guard = await requireEditor();
+  if (!guard.ok) return guard.response;
+
   const { examId } = await params;
 
   if (!supabaseAdmin) {
@@ -227,6 +236,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  // ★ 편집자 role 전용 (학생이 남 시험지 지우는 것 방지)
+  const guard = await requireEditor();
+  if (!guard.ok) return guard.response;
+
   const { examId } = await params;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -245,7 +258,8 @@ export async function DELETE(
 
   try {
     console.log(`[API/exams] DELETE 요청: examId="${examId}" (len=${examId.length})`);
-    console.log(`[API/exams] supabaseUrl="${supabaseUrl.substring(0, 30)}...", key="${serviceKey.substring(0, 15)}..."`);
+    // ★ 보안: 서비스 키 일부 노출 제거. supabaseUrl은 공개 호스트명이라 OK
+    console.log(`[API/exams] supabaseUrl host="${new URL(supabaseUrl).host}"`);
 
     // 1) raw HTTP SELECT로 존재 확인 (cache: 'no-store'로 Next.js Data Cache 우회)
     const listRes = await fetch(

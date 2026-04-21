@@ -1,11 +1,18 @@
 // ============================================================================
-// GET /api/debug/db-check - DB 상태 확인 (디버깅용)
+// GET /api/debug/db-check - DB 상태 확인 (ADMIN 전용)
 // ============================================================================
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth/guard';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  // ★ ADMIN 전용 가드 (기존: 누구나 접근 가능 → 정보 유출 위험)
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   if (!supabaseAdmin) {
     return NextResponse.json({
       error: 'supabaseAdmin is null - check SUPABASE_SERVICE_ROLE_KEY',

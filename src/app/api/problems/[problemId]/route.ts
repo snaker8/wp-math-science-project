@@ -6,15 +6,20 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuth, requireEditor } from '@/lib/auth/guard';
 
 // ============================================================================
-// GET /api/problems/[problemId] - 문제 단일 조회
+// GET /api/problems/[problemId] - 문제 단일 조회 (로그인 필수)
 // ============================================================================
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
+  // ★ 로그인 필수 (민감 정보 아니지만 무단 스크래핑 방지)
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
+
   const { problemId } = await params;
 
   if (!supabaseAdmin) {
@@ -38,6 +43,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
+  // ★ ADMIN/TEACHER/TUTOR만 문제 수정 허용 (학생/학부모 차단)
+  const guard = await requireEditor();
+  if (!guard.ok) return guard.response;
+
   const { problemId } = await params;
 
   if (!supabaseAdmin) {
@@ -145,13 +154,17 @@ export async function PATCH(
 }
 
 // ============================================================================
-// DELETE /api/problems/[problemId] - 문제 삭제
+// DELETE /api/problems/[problemId] - 문제 삭제 (ADMIN/TEACHER/TUTOR)
 // ============================================================================
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
+  // ★ 편집자 role 전용 (학생/학부모가 남 문제 지우는 것 방지)
+  const guard = await requireEditor();
+  if (!guard.ok) return guard.response;
+
   const { problemId } = await params;
 
   if (!supabaseAdmin) {

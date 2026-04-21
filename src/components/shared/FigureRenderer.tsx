@@ -16,6 +16,7 @@ import type {
 } from '@/types/ocr';
 import { MathRenderer } from './MathRenderer';
 import { generateGeometrySVG, generateTableSVG, generateGraphSVG } from '@/lib/vision/figure-renderer';
+import { sanitizeSvg } from '@/lib/utils/sanitize-svg';
 
 // Desmos는 실제 graph 타입이 있을 때만 로드 (성능 최적화)
 const InlineDesmosGraph = lazy(() =>
@@ -227,7 +228,10 @@ export function FigureRenderer({
 
   // ★★★ 0. figureSvg 최우선 (사용자 교체 SVG / AI 직접 생성 SVG)
   if (figureSvg) {
-    let safeSvg = figureSvg
+    // 1) 보안: DOMPurify로 script/외부 리소스/on* 핸들러 제거
+    let safeSvg = sanitizeSvg(figureSvg);
+    // 2) 표시 속성 보정 (기존 로직 유지)
+    safeSvg = safeSvg
       .replace(/<svg\b/i, '<svg overflow="visible"')
       .replace(/\bheight\s*=\s*["']100%["']/i, '');
     if (!/<svg[^>]*\bwidth\s*=/i.test(safeSvg)) {
@@ -535,7 +539,7 @@ function GraphFigure({
     return (
       <div
         className="figure-graph-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
-        dangerouslySetInnerHTML={{ __html: svgResult }}
+        dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgResult) }}
       />
     );
   }
@@ -611,7 +615,7 @@ function GeometryFigure({
     return (
       <div
         className="figure-geometry-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
-        dangerouslySetInnerHTML={{ __html: svgResult }}
+        dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgResult) }}
       />
     );
   }
@@ -650,7 +654,7 @@ function TableFigure({
     return (
       <div
         className="figure-table-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
-        dangerouslySetInnerHTML={{ __html: svgResult }}
+        dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgResult) }}
       />
     );
   }
@@ -769,13 +773,13 @@ function UpscaledImageWithFallback({
         </div>
       );
     }
-    // figureSvg 폴백
+    // figureSvg 폴백 (★ sanitize 필수)
     if (figureSvg) {
       return (
         <div
           className={`figure-svg-container ${className}`}
           style={{ maxWidth: '100%', overflow: 'visible' }}
-          dangerouslySetInnerHTML={{ __html: figureSvg }}
+          dangerouslySetInnerHTML={{ __html: sanitizeSvg(figureSvg) }}
         />
       );
     }

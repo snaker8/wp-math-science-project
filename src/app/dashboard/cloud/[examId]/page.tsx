@@ -1739,6 +1739,8 @@ function SolutionView({
     let pollErrors = 0;
     let idleCount = 0;
     const poll = async () => {
+      // ★ 탭 숨김 상태면 스킵 (리소스 절약)
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const statusRes = await fetch(`/api/exams/${examId}/batch-solutions`);
         if (statusRes.ok) {
