@@ -52,6 +52,7 @@ import {
 import './cloud-exam-editor.css';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
+import { trackBatchSolution } from '@/components/BatchSolutionNotifier';
 import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
@@ -1783,6 +1784,8 @@ function SolutionView({
           setIsGeneratingBatch(true);
           setBatchProgress({ current: s.done || 0, total: s.total || 0 });
           startBatchPolling();
+          // 진행 중인 배치 발견 시 전역 Notifier에도 자동 등록
+          trackBatchSolution(examId, examTitle);
         }
       } catch {
         // 네트워크 에러 무시
@@ -2027,6 +2030,8 @@ function SolutionView({
                 // 백그라운드 시작됨 — 공용 폴링 헬퍼로 진행 상황 추적
                 // (탭 재진입/페이지 복귀 시에도 startBatchPolling이 자동 재개)
                 startBatchPolling();
+                // 전역 Notifier에 등록 → 다른 페이지/탭에서도 진행·완료 추적
+                trackBatchSolution(examId, examTitle);
               } else {
                 const errText = await res.text().catch(() => '');
                 console.error('[batch-solutions] 실패:', res.status, errText);

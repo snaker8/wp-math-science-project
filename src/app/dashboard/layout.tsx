@@ -1,6 +1,7 @@
 'use client';
 
 import { TopNav } from '@/components/layout/TopNav';
+import { BatchSolutionNotifier } from '@/components/BatchSolutionNotifier';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 
@@ -28,6 +29,7 @@ export default function DashboardLayout({
           </motion.div>
         </AnimatePresence>
       </main>
+      <BatchSolutionNotifier />
     </div>
   );
 }
