@@ -4033,15 +4033,6 @@ export default function AnalyzeJobPage() {
               >
                 자동 감지
               </button>
-              <button
-                type="button"
-                onClick={() => { ocrBboxDoneRef.current = false; runMathpixOcrBboxDetection(); }}
-                disabled={isOcrBboxLoading}
-                className="px-2.5 py-1 rounded-lg text-xs font-medium border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
-                title="Mathpix OCR로 문제 번호/bbox를 일괄 감지합니다"
-              >
-                {isOcrBboxLoading ? 'OCR 처리 중...' : 'OCR 감지'}
-              </button>
             </div>
           )}
 
