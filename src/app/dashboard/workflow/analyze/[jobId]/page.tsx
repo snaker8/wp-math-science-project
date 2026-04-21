@@ -2762,26 +2762,25 @@ export default function AnalyzeJobPage() {
     if (!jobData || isSavingAll) return;
 
     setIsSavingAll(true);
-    // 클라이언트 → Storage 직접 업로드 (Vercel 4.5MB body 제한 회피)
+    // 서버 프록시 경유 업로드 (service role로 RLS 우회, 본문도 한 번에 1장)
     const uploadBase64ToStorage = async (
       base64: string,
       storagePath: string,
       contentType = 'image/jpeg',
     ): Promise<string | null> => {
-      if (!supabaseBrowser) return null;
       try {
-        const pure = base64.replace(/^data:image\/\w+;base64,/, '');
-        const bin = atob(pure);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const { data, error } = await supabaseBrowser.storage
-          .from('source-files')
-          .upload(storagePath, bytes, { contentType, upsert: true });
-        if (error) {
-          console.warn('[Storage upload]', storagePath, error.message);
+        const res = await fetch('/api/storage/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64, path: storagePath, contentType }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          console.warn('[Storage upload]', storagePath, res.status, txt.slice(0, 150));
           return null;
         }
-        return data.path;
+        const data = await res.json();
+        return data.path || null;
       } catch (e) {
         console.warn('[Storage upload] 예외', storagePath, e);
         return null;
