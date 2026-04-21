@@ -15,8 +15,9 @@ const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const ANTHROPIC_OPUS_MODEL = process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1';
 // Sonnet thinking 최대 대기 시간(ms). 이 이상 걸리면 Opus로 넘어감
 const SONNET_TIMEOUT_MS = Number(process.env.SONNET_TIMEOUT_MS || 90_000);
-// 난이도가 이 이상이면 처음부터 Opus 사용 (수학비서 기준 1~10 중 8)
-const OPUS_DIFFICULTY_THRESHOLD = Number(process.env.OPUS_DIFFICULTY_THRESHOLD || 8);
+// 난이도가 이 이상이면 처음부터 Opus 사용 (수학비서 기준 1~10 중 10 = 사실상 비활성)
+// 분류 정확도가 개선되기 전까지는 난이도 기반 Opus 자동 발동을 끔 (False Positive 다수)
+const OPUS_DIFFICULTY_THRESHOLD = Number(process.env.OPUS_DIFFICULTY_THRESHOLD || 10);
 
 export async function POST(
   request: NextRequest,
@@ -1053,9 +1054,11 @@ function normalizeAnswer(ans: string): string {
     .replace(/\\quad/g, '')
     .replace(/\\,/g, '')
     .replace(/\\ /g, '')
-    // ★ \frac{a}{b} → a/b (분수 표기 통일) — 재귀로 중첩 분수도 처리
-    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
-    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)') // 한 번 더 (중첩)
+    // ★ \frac{a}{b} → a/b (단순 항은 괄호 없이, 복합식만 괄호로 감쌈)
+    //   단순 분수(3/5, x/y)는 괄호 없이 비교해야 Sonnet 답(3/5 직접)과 매칭됨
+    .replace(/\\frac\{(-?\w+)\}\{(-?\w+)\}/g, '$1/$2')        // 단순: 3/5, x/y
+    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')   // 복잡식: (a+b)/(c+d)
+    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')   // 한 번 더 (중첩)
     // ★ \sqrt{a} → sqrt(a)
     .replace(/\\sqrt\{([^{}]+)\}/g, 'sqrt($1)')
     // ★ 단일 문자 지수/첨자 중괄호 제거: x^{2} → x^2, a_{1} → a_1
