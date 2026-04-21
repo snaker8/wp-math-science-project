@@ -681,8 +681,12 @@ async function uploadToStorage(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   suffix: string = '' // suffix for auxiliary files
 ): Promise<string> {
-  // ★ URL-safe encoding으로 한글/공백 보존 (복원 시 decodeURIComponent)
-  const safeName = encodeURIComponent(fileName);
+  // ★ Storage 경로는 ASCII-safe 유지 (Supabase signed URL + PUT 이중 인코딩 400 회피)
+  const ext = fileName.match(/\.[a-zA-Z0-9]+$/)?.[0] || '';
+  const safeName = fileName
+    .replace(new RegExp(ext.replace('.', '\\.') + '$'), '')
+    .replace(/[^a-zA-Z0-9.-]/g, '_')
+    .slice(0, 40) + ext;
   const storageFileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
   const storagePath = `uploads/${storageFileName}`;
 

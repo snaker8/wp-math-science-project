@@ -1485,25 +1485,37 @@ function ExamPaperView({
         }
 
         @media print {
-          /* ★ 원본 DOM 인쇄 — React 트리 깊숙이 있는 exam-print-container를 전면 부상
-             1) 모든 요소 visibility:hidden → 레이아웃은 유지하되 보이지 않음
-             2) exam-print-container와 그 자손만 visibility:visible
-             3) exam-print-container를 fixed position으로 페이지 전체에 겹쳐서 표시 */
-          body.print-active * {
-            visibility: hidden !important;
+          /* ★ 원본 DOM 인쇄 — 레이아웃 왜곡 방지 위해 ancestor 체인을 중화시킴
+             1) html/body 리셋
+             2) exam-print-container의 모든 ancestor(사이드바/헤더 포함)를
+                display:contents로 만들어 레이아웃 상 존재하지 않는 것처럼 처리
+             3) 기존 형제 요소들(사이드바 등)은 display:none
+             4) CSS columns/flex 등 내부 레이아웃은 원본 그대로 유지 */
+          body.print-active #__next,
+          body.print-active #__next > *,
+          body.print-active #__next > * > * {
+            display: contents !important;
           }
-          body.print-active .exam-print-container,
-          body.print-active .exam-print-container * {
-            visibility: visible !important;
+          /* 사이드바/탭/필터 등 인쇄 불필요 영역 — exam-print-container 밖의 직접 자식들 숨김 */
+          body.print-active .ce-sidebar,
+          body.print-active .ce-rpanel,
+          body.print-active .ce-tabs-row,
+          body.print-active .ce-subbar,
+          body.print-active .ce-filter-bar,
+          body.print-active .ce-bulk-bar,
+          body.print-active nav,
+          body.print-active header:not(.exam-print-container *) {
+            display: none !important;
           }
           body.print-active .exam-print-container {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
+            display: block !important;
+            position: static !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: auto !important;
+            max-width: none !important;
             height: auto !important;
             overflow: visible !important;
-            z-index: 2147483647;
             background: white;
           }
           /* 시험지 제어바 숨김 (visibility hidden으로는 공간이 남으니 display:none) */

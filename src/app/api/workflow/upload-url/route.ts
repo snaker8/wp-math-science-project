@@ -27,8 +27,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'fileName required' }, { status: 400 });
     }
 
-    // ★ URL-safe encoding으로 한글/공백 보존 (복원 시 decodeURIComponent로 원복 가능)
-    const safeName = encodeURIComponent(fileName);
+    // ★ Storage 경로는 ASCII-safe로 유지 (Supabase 서명 URL + PUT이 %-encoded path 이중 인코딩 시 400 반환)
+    //   한글/공백 → _. 원본 파일명은 클라이언트가 FormData의 fileName으로 별도 전달하여 DB에 저장.
+    //   확장자는 보존.
+    const ext = fileName.match(/\.[a-zA-Z0-9]+$/)?.[0] || '';
+    const safeName = fileName
+      .replace(new RegExp(ext.replace('.', '\\.') + '$'), '')  // 확장자 제거
+      .replace(/[^a-zA-Z0-9.-]/g, '_')                         // 한글/공백/특수 → _
+      .slice(0, 40)                                             // 너무 긴 이름 방지
+      + ext;
     const jobId = jobIdHint || crypto.randomUUID();
     const storageFileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
     const storagePath = `uploads/${storageFileName}`;
