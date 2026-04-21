@@ -9,7 +9,7 @@ import { parseAnswerDocument, type ParsedAnswer } from '@/lib/ocr/answer-parser'
 
 const MATHPIX_APP_ID = process.env.MATHPIX_APP_ID || '';
 const MATHPIX_APP_KEY = process.env.MATHPIX_APP_KEY || '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const GEMINI_API_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
 
 export const maxDuration = 120;
 
@@ -63,12 +63,12 @@ export async function POST(
 
     let parseResult;
     if (!isPdf) {
-      // 이미지 → GPT-4o Vision (Mathpix보다 빠른답 이미지를 훨씬 잘 읽음)
-      const visionAnswers = await extractAnswersWithGPT4V(file);
+      // 이미지 → Gemini 2.5 Flash Vision (Mathpix보다 빠른답 이미지를 훨씬 잘 읽음)
+      const visionAnswers = await extractAnswersWithGemini(file);
       if (visionAnswers.length === 0) {
         return NextResponse.json({ error: '이미지에서 답을 찾지 못했습니다. 빠른답 이미지인지 확인해주세요.' }, { status: 400 });
       }
-      console.log(`[match-answers] GPT-4V 추출 완료: ${visionAnswers.length}개 답`);
+      console.log(`[match-answers] Gemini Vision 추출 완료: ${visionAnswers.length}개 답`);
       parseResult = {
         answers: visionAnswers,
         solutions: [],
@@ -232,76 +232,75 @@ export async function PUT(
 }
 
 // ============================================================================
-// GPT-4o Vision — 이미지에서 빠른답 직접 추출 (Mathpix보다 정확)
+// Gemini Vision — 이미지에서 빠른답 직접 추출 (Mathpix보다 정확)
+// 사용자의 답추출기(ClassIn Maker)와 동일 모델/프롬프트 사용
 // ============================================================================
 
-async function extractAnswersWithGPT4V(file: File): Promise<ParsedAnswer[]> {
-  if (!OPENAI_API_KEY) throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+const CIRCLED_TO_DIGIT: Record<string, string> = {
+  '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5',
+};
+
+async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
+  if (!GEMINI_API_KEY) throw new Error('Gemini API 키가 설정되지 않았습니다.');
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString('base64');
   const mimeType = file.type || 'image/jpeg';
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      max_tokens: 1500,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64}`,
-                detail: 'high',
-              },
-            },
-            {
-              type: 'text',
-              text: `이 이미지는 수학 시험의 빠른답(정답표)입니다.
-각 문제 번호와 정답을 추출해서 아래 형식으로만 출력해주세요 (설명 없이):
-1. 답
-2. 답
-3. 답
+  const prompt = `이 이미지에서 정답표(정답지)를 찾아서 텍스트로 추출해줘. 문제 번호와 정답을 각 줄에 하나씩 나열해. 형식은 '문제번호. 정답' (예: 1. ①, 2. 5, 3. -1, 4. 1/2, 5. 해설참조) 형태로 해줘.
 
-규칙:
-- 객관식 원형 숫자(①②③④⑤)는 숫자(1,2,3,4,5)로 변환
-- 주관식 수식은 LaTeX 형식으로 (예: \\frac{1}{2}, \\sqrt{3})
-- 없는 번호는 건너뛰기
-- 번호 순서대로 출력`,
-            },
-          ],
-        },
-      ],
+[중요 원칙]
+1. 객관식 정답이 원문자(①, ②, ③, ④, ⑤)로 되어 있다면 반드시 해당 특수문자를 그대로 사용해. 절대 (1)이나 1로 바꾸지 마.
+2. '해설참조', '별도첨부' 같이 텍스트로 된 정답도 절대 생략하지 말고 그대로 적어.
+3. 수식은 LaTeX 포맷($...$)을 절대 쓰지 마. 대신 유니코드 기호(√, ³, ², /, π 등)를 사용하여 사람이 바로 읽을 수 있는 텍스트로 변환해.
+4. 불필요한 말(인사, 설명)은 생략하고 데이터만 줘.`;
+
+  // gemini-3-flash-preview: 비전 최강(MMMU-Pro 81.2%), 답추출기보다 인식률 ↑
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3-flash-preview';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inlineData: { data: base64, mimeType } },
+        ],
+      }],
     }),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`GPT-4o Vision API 실패: ${res.status} — ${errText.slice(0, 200)}`);
+    throw new Error(`Gemini Vision API 실패: ${res.status} — ${errText.slice(0, 200)}`);
   }
 
   const data = await res.json();
-  const rawText: string = data.choices?.[0]?.message?.content || '';
-  if (!rawText) throw new Error('GPT-4o Vision 응답이 비어있습니다');
+  const rawText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
 
-  // "N. 답" 형식으로 파싱
+  // "N. 답" 형식 파싱 (원문자 → 숫자로 변환해 매칭에 사용)
   const answers: ParsedAnswer[] = [];
   for (const line of rawText.split('\n').map((l: string) => l.trim()).filter(Boolean)) {
     const m = line.match(/^(\d{1,2})\s*[.)]\s*(.+)$/);
     if (!m) continue;
     const num = parseInt(m[1]);
-    const ans = m[2].trim();
+    let ans = m[2].trim();
     if (num < 1 || num > 50 || !ans) continue;
-    const answerType: ParsedAnswer['answerType'] =
-      /^[1-5]$/.test(ans) ? 'choice' :
-      /^-?\d+(?:[.,]\d+)?$/.test(ans) ? 'numeric' : 'text';
+
+    // 단독 원문자 → 숫자 변환
+    let answerType: ParsedAnswer['answerType'] = 'text';
+    if (/^[①②③④⑤]\s*$/.test(ans)) {
+      ans = CIRCLED_TO_DIGIT[ans.trim()] || ans;
+      answerType = 'choice';
+    } else if (/^[1-5]$/.test(ans)) {
+      answerType = 'choice';
+    } else if (/^-?\d+(?:[.,]\d+)?$/.test(ans)) {
+      answerType = 'numeric';
+    }
+
     answers.push({ problemNumber: num, answer: ans, answerType });
   }
 
