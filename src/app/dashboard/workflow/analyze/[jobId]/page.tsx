@@ -878,9 +878,10 @@ function PdfViewerWithBoxes({
         containerWidth = Math.max(containerWidth, 400);
         containerHeight = Math.max(containerHeight, 600);
 
-        // 가로폭 꽉 채우기 우선 (세로가 넘치면 스크롤) — 매쓰플랫 스타일
+        // 가로·세로 모두 고려하되 세로 제약을 25% 여유로 풀어 약간만 확대
         const scale = Math.min(
           containerWidth / viewport.width,
+          (containerHeight * 1.25) / viewport.height,
           2.5
         );
 
