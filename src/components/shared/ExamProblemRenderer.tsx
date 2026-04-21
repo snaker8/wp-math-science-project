@@ -234,6 +234,58 @@ function ExamProblemRendererInner({
     );
   };
 
+  // ★ 배점 배지 — '?' 바로 뒤에 배치 (사용자 요청: ? 뒤에 배점)
+  //   content 내부 '?' 없으면 content 끝에 표시
+  const hasPoints = typeof problem.points === 'number' && problem.points > 0;
+  const pointsBadge = hasPoints ? (
+    <span className="ml-1 text-gray-500 font-medium" style={{ fontSize: `calc(${textSize} - 1px)` }}>
+      [{problem.points}점]
+    </span>
+  ) : null;
+
+  /**
+   * 텍스트에서 첫 번째 '?'를 찾아 그 직후에 배지를 삽입한다.
+   * $$...$$ 수식 내부의 '?'는 무시 (보통 문제문 '?'는 수식 밖)
+   * @returns [beforeWithQ, afterQ, found]
+   */
+  const splitAtFirstQuestionMark = (text: string): [string, string, boolean] => {
+    let inDollar = false;
+    let inSingleDollar = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+      // $$ (block math) 진입/종료
+      if (ch === '$' && next === '$') { inDollar = !inDollar; i++; continue; }
+      // 단일 $ 진입/종료 (블록 모드 아닐 때만)
+      if (ch === '$' && !inDollar) { inSingleDollar = !inSingleDollar; continue; }
+      // 수식 밖의 '?'만 매칭
+      if (ch === '?' && !inDollar && !inSingleDollar) {
+        return [text.slice(0, i + 1), text.slice(i + 1), true];
+      }
+    }
+    return [text, '', false];
+  };
+
+  /** 배지가 이미 삽입됐는지 추적 (첫 번째 텍스트 파트에만 삽입) */
+  let badgeInserted = false;
+  const renderTextWithBadge = (text: string, key: string) => {
+    if (!hasPoints || badgeInserted) {
+      return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
+    }
+    const [before, after, found] = splitAtFirstQuestionMark(text);
+    if (!found) {
+      return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
+    }
+    badgeInserted = true;
+    return (
+      <React.Fragment key={key}>
+        <MixedContentRenderer content={before} className="text-gray-800" />
+        {pointsBadge}
+        {after && <MixedContentRenderer content={after} className="text-gray-800" />}
+      </React.Fragment>
+    );
+  };
+
   // content + 인라인 도형 렌더링
   const renderContentWithFigures = () => {
     if (hasFigureInContent && hasFigureSource) {
@@ -247,12 +299,12 @@ function ExamProblemRendererInner({
         const wPct = floatPart.widthPercent || 40;
         return (
           <>
-            {before.map((p, pi) => p.type === 'text' ? <MixedContentRenderer key={`b-${pi}`} content={p.text} className="text-gray-800" /> : null)}
+            {before.map((p, pi) => p.type === 'text' ? renderTextWithBadge(p.text, `b-${pi}`) : null)}
             <div>
               <div className={`${side} mb-2`} style={{ width: `${wPct}%`, maxWidth: `${maxFigureWidth}px` }}>
                 {renderFigure(0)}
               </div>
-              {after.map((p, pi) => p.type === 'text' ? <MixedContentRenderer key={`a-${pi}`} content={p.text} className="text-gray-800" /> : null)}
+              {after.map((p, pi) => p.type === 'text' ? renderTextWithBadge(p.text, `a-${pi}`) : null)}
               <div style={{ clear: 'both' }} />
             </div>
           </>
@@ -263,7 +315,7 @@ function ExamProblemRendererInner({
       let figCounter = 0;
       return parts.map((part, pi) =>
         part.type === 'text' ? (
-          <MixedContentRenderer key={pi} content={part.text} className="text-gray-800" />
+          renderTextWithBadge(part.text, String(pi))
         ) : (
           <div key={pi} className="my-2 flex justify-center">
             {renderFigure(figCounter++)}
@@ -275,7 +327,7 @@ function ExamProblemRendererInner({
     // 마커 없으면 기본: content 뒤에 도형
     return (
       <>
-        <MixedContentRenderer content={cleanContent} className="text-gray-800" />
+        {renderTextWithBadge(cleanContent, 'main')}
         {hasFigureSource && (
           <div className="mt-2 flex justify-center">
             {renderFigure(0)}
@@ -293,11 +345,8 @@ function ExamProblemRendererInner({
       <div className="flex-1 min-w-0">
         <div className="text-gray-800 whitespace-pre-line" style={{ fontSize: textSize, lineHeight }}>
           {renderContentWithFigures()}
-          {typeof problem.points === 'number' && problem.points > 0 && (
-            <span className="ml-1 text-gray-500 font-medium" style={{ fontSize: `calc(${textSize} - 1px)` }}>
-              [{problem.points}점]
-            </span>
-          )}
+          {/* '?' 없는 경우 fallback: 콘텐츠 끝에 표시 */}
+          {hasPoints && !badgeInserted && pointsBadge}
         </div>
         {renderChoices()}
       </div>
