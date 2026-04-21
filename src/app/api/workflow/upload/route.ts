@@ -554,15 +554,39 @@ export async function PUT(request: NextRequest) {
     console.log(`[Upload PUT] job.bookGroupId: "${job.bookGroupId}" → 최종: "${bookGroupId || job.bookGroupId || null}"`);
 
     // ★ 이미 자동 자산화된 경우, 성공 응답 반환
+    // 단, editedProblems가 기존 저장분보다 많으면 덮어쓰기 (사용자가 문제 추가/수정한 경우)
     const existingExamId = autoSavedExams.get(jobId);
     if (existingExamId) {
-      console.log(`[Upload PUT] 이미 자동 자산화 완료: examId=${existingExamId}`);
-      return NextResponse.json({
-        success: true,
-        message: '이미 자동 자산화가 완료되었습니다.',
-        examId: existingExamId,
-        alreadySaved: true,
-      });
+      let shouldSkip = true;
+      if (editedProblems && Array.isArray(editedProblems) && editedProblems.length > 0) {
+        // 기존 exam의 문제 수 조회 후 비교
+        if (supabaseAdmin) {
+          try {
+            const { count: existingCount } = await supabaseAdmin
+              .from('exam_problems')
+              .select('*', { count: 'exact', head: true })
+              .eq('exam_id', existingExamId);
+            const existing = existingCount ?? 0;
+            if (editedProblems.length > existing) {
+              console.log(`[Upload PUT] editedProblems(${editedProblems.length}) > existing(${existing}) → 재저장 진행`);
+              shouldSkip = false;
+              // ★ 캐시 무효화 후 계속 진행 (기존 exam은 남겨두고 새 exam 생성)
+              autoSavedExams.delete(jobId);
+            }
+          } catch (e) {
+            console.warn('[Upload PUT] existing exam 조회 실패 — 기존 로직 유지:', e);
+          }
+        }
+      }
+      if (shouldSkip) {
+        console.log(`[Upload PUT] 이미 자동 자산화 완료: examId=${existingExamId}`);
+        return NextResponse.json({
+          success: true,
+          message: '이미 자동 자산화가 완료되었습니다.',
+          examId: existingExamId,
+          alreadySaved: true,
+        });
+      }
     }
 
     const results = jobResults.get(jobId);
