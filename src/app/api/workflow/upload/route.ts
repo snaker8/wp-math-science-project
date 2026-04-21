@@ -12,6 +12,7 @@ import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/wor
 import { processUploadJob, getStatusLabel, convertedPdfStore } from '@/lib/workflow/cloud-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
+import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -1082,41 +1083,17 @@ async function saveEditedProblemsDirect(
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
     } else {
-      // ★ 과목 기반 자동 폴더 배치: book_groups에서 과목명 매칭
+      // ★ 과목 기반 자동 폴더 배치 (fuzzy 매칭 — 폴더 rename에도 견고)
       const detectedSubject = examInsertData.subject || '';
       if (detectedSubject) {
-        const subjectFolderMap: Record<string, string> = {
-          '공통수학1': '공통수학1 기출', '공통수학2': '공통수학2 기출',
-          // 수1 ≠ 대수 (별도 폴더)
-          '수1': '수1 기출', '수학I': '수1 기출', '수학1': '수1 기출',
-          '대수': '대수 기출',
-          // 수2 ≠ 미적분1 (별도 폴더)
-          '수2': '수2 기출', '수학II': '수2 기출', '수학2': '수2 기출',
-          '미적분1': '미적분1 기출',
-          // 확통
-          '확통': '확통 기출', '확률과통계': '확통 기출', '확률과 통계': '확통 기출',
-          // 미적분 = 미적분2
-          '미적분': '미적분 기출', '미적분2': '미적분 기출',
-          '기하': '기하 기출',
-          '수학(상)': '수학(상) 기출', '수학(하)': '수학(하) 기출',
-        };
-        // 중학교 과목
-        if (/중1/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중1 기출';
-        if (/중2/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중2 기출';
-        if (/중3/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중3 기출';
-
-        const targetFolderName = subjectFolderMap[detectedSubject];
-        if (targetFolderName) {
-          const { data: matchedGroup } = await supabase
-            .from('book_groups')
-            .select('id')
-            .eq('name', targetFolderName)
-            .limit(1)
-            .single();
-          if (matchedGroup?.id) {
-            examInsertData.book_group_id = matchedGroup.id;
-            console.log(`[Direct Save] 자동 폴더 배치: "${detectedSubject}" → "${targetFolderName}"`);
+        try {
+          const folder = await findAutoFolderForSubject(supabase, detectedSubject);
+          if (folder) {
+            examInsertData.book_group_id = folder.id;
+            console.log(`[Direct Save] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
           }
+        } catch (e) {
+          console.warn('[Direct Save] 자동 폴더 매칭 실패:', e);
         }
       }
     }
@@ -1542,49 +1519,20 @@ async function saveProblemsToDB(
       grade: detectGradeFromTitle(fileTitle),
     };
 
-    // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치
+    // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치 (fuzzy 매칭)
     if (bookGroupId) {
       examInsertData.book_group_id = bookGroupId;
     } else {
-      // ★ 과목 기반 자동 폴더 배치: book_groups에서 과목명 매칭
       const detectedSubject = examInsertData.subject || '';
       if (detectedSubject) {
-        const subjectFolderMap: Record<string, string> = {
-          '공통수학1': '공통수학1 기출', '공통수학2': '공통수학2 기출',
-          // 수1 ≠ 대수 (별도 폴더)
-          '수1': '수1 기출', '수학I': '수1 기출', '수학1': '수1 기출',
-          '대수': '대수 기출',
-          // 수2 ≠ 미적분1 (별도 폴더)
-          '수2': '수2 기출', '수학II': '수2 기출', '수학2': '수2 기출',
-          '미적분1': '미적분1 기출',
-          // 확통
-          '확통': '확통 기출', '확률과통계': '확통 기출', '확률과 통계': '확통 기출',
-          // 미적분 = 미적분2
-          '미적분': '미적분 기출', '미적분2': '미적분 기출',
-          '기하': '기하 기출',
-          '수학(상)': '수학(상) 기출', '수학(하)': '수학(하) 기출',
-        };
-        // 중학교 과목
-        if (/중1/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중1 기출';
-        if (/중2/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중2 기출';
-        if (/중3/.test(detectedSubject)) subjectFolderMap[detectedSubject] = '중3 기출';
-
-        const targetFolderName = subjectFolderMap[detectedSubject];
-        if (targetFolderName) {
-          try {
-            const { data: matchedGroup } = await supabase
-              .from('book_groups')
-              .select('id')
-              .eq('name', targetFolderName)
-              .limit(1)
-              .single();
-            if (matchedGroup?.id) {
-              examInsertData.book_group_id = matchedGroup.id;
-              console.log(`[DB] 자동 폴더 배치: "${detectedSubject}" → "${targetFolderName}"`);
-            }
-          } catch (e) {
-            console.warn(`[DB] 자동 폴더 매칭 실패:`, e);
+        try {
+          const folder = await findAutoFolderForSubject(supabase, detectedSubject);
+          if (folder) {
+            examInsertData.book_group_id = folder.id;
+            console.log(`[DB] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
           }
+        } catch (e) {
+          console.warn('[DB] 자동 폴더 매칭 실패:', e);
         }
       }
     }
