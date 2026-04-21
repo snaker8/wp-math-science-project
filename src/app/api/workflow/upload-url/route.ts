@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'fileName required' }, { status: 400 });
     }
 
-    const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    // ★ URL-safe encoding으로 한글/공백 보존 (복원 시 decodeURIComponent로 원복 가능)
+    const safeName = encodeURIComponent(fileName);
     const jobId = jobIdHint || crypto.randomUUID();
     const storageFileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
     const storagePath = `uploads/${storageFileName}`;

@@ -48,11 +48,17 @@ async function resolveJobFromStorage(jobId: string): Promise<{ storagePath: stri
     return null;
   }
 
-  // 파일명 복원: uploads/{jobId}_{safeName} → safeName
-  const safeName = mainFile.name.slice(jobId.length + 1);
+  // 파일명 복원: uploads/{jobId}_{encodedName} → decode로 한글 원복
+  const encodedName = mainFile.name.slice(jobId.length + 1);
+  let fileName = encodedName;
+  try {
+    fileName = decodeURIComponent(encodedName);
+  } catch {
+    // 구버전 파일 (언더스코어 치환된 것) — decoded 실패 시 그대로 사용
+  }
   return {
     storagePath: `uploads/${mainFile.name}`,
-    fileName: safeName,
+    fileName,
   };
 }
 

@@ -338,7 +338,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (mainFile) {
-      const fileName = mainFile.name.slice(jobId.length + 1);
+      // ★ 한글 파일명 복원: encodeURIComponent로 저장됐으니 decode
+      const encodedName = mainFile.name.slice(jobId.length + 1);
+      let fileName = encodedName;
+      try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
       const storagePath = `uploads/${mainFile.name}`;
       job = {
         id: jobId,
@@ -475,7 +478,10 @@ export async function PUT(request: NextRequest) {
       });
 
       if (mainFile) {
-        const fileName = mainFile.name.slice(jobId.length + 1);
+        // ★ 한글 파일명 복원
+        const encodedName = mainFile.name.slice(jobId.length + 1);
+        let fileName = encodedName;
+        try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
         const storagePath = `uploads/${mainFile.name}`;
         // 요청 body에 유저 힌트가 있으면 활용
         const userIdHint = body.userId as string | undefined;
@@ -665,7 +671,8 @@ async function uploadToStorage(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   suffix: string = '' // suffix for auxiliary files
 ): Promise<string> {
-  const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  // ★ URL-safe encoding으로 한글/공백 보존 (복원 시 decodeURIComponent)
+  const safeName = encodeURIComponent(fileName);
   const storageFileName = suffix ? `${jobId}_${suffix}_${safeName}` : `${jobId}_${safeName}`;
   const storagePath = `uploads/${storageFileName}`;
 
