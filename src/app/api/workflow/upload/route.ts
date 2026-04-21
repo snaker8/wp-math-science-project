@@ -424,12 +424,25 @@ export async function PUT(request: NextRequest) {
 
     console.log(`[Upload PUT] ★ bookGroupId 수신: "${bookGroupId}" (type: ${typeof bookGroupId})`);
 
-    // ★ YOLO 학습 데이터: 페이지 이미지를 Supabase Storage에 업로드
+    // ★ YOLO 학습 데이터: 페이지 이미지
+    //   - 클라이언트에서 이미 Storage에 업로드된 경우 → storagePath 사용
+    //   - legacy base64 경로 → 서버에서 업로드
     const pageImagePathMap = new Map<number, { path: string; width: number; height: number }>();
-    if (pageImages && Array.isArray(pageImages) && pageImages.length > 0 && supabaseAdmin) {
-      console.log(`[Upload PUT] YOLO 학습용 페이지 이미지 ${pageImages.length}개 업로드 시작`);
+    if (pageImages && Array.isArray(pageImages) && pageImages.length > 0) {
+      console.log(`[Upload PUT] 페이지 이미지 ${pageImages.length}개 처리 시작`);
       for (const pageImg of pageImages) {
         try {
+          // 1) 이미 Storage에 업로드된 경우 (권장 경로)
+          if (pageImg.storagePath) {
+            pageImagePathMap.set(pageImg.pageNumber, {
+              path: pageImg.storagePath,
+              width: pageImg.width || 0,
+              height: pageImg.height || 0,
+            });
+            continue;
+          }
+          // 2) legacy: base64 수신 → 서버 업로드
+          if (!supabaseAdmin) continue;
           const base64Data = (pageImg.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '');
           if (!base64Data) continue;
           const buffer = Buffer.from(base64Data, 'base64');
@@ -456,7 +469,7 @@ export async function PUT(request: NextRequest) {
           console.warn(`[Upload PUT] 페이지 ${pageImg.pageNumber} 이미지 처리 오류:`, imgErr);
         }
       }
-      console.log(`[Upload PUT] 페이지 이미지 업로드 완료: ${pageImagePathMap.size}/${pageImages.length}개`);
+      console.log(`[Upload PUT] 페이지 이미지 매핑 완료: ${pageImagePathMap.size}/${pageImages.length}개`);
     }
 
     if (!jobId) {
@@ -571,8 +584,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // ★ 수정된 문제 데이터(난이도 등)를 results에 오버라이드
-    // cropImageBase64를 번호별로 매핑
+    // cropImageBase64를 번호별로 매핑 (legacy) / cropImagePath (권장)
     const cropImageMap = new Map<number, string>();
+    const cropPathMap = new Map<number, string>();
     if (editedProblems && Array.isArray(editedProblems) && editedProblems.length > 0) {
       for (const edited of editedProblems) {
         const result = results.find(r => r.problemNumber === edited.number);
@@ -584,15 +598,24 @@ export async function PUT(request: NextRequest) {
           if (edited.choices) result.choices = edited.choices;
           console.log(`[Upload PUT] 문제 ${edited.number}번 수정 적용: difficulty=${edited.difficulty}, typeCode=${edited.typeCode}`);
         }
-        // ★ 크롭 이미지 저장 (번호별)
-        if (edited.cropImageBase64) {
+        // ★ 크롭 이미지: 업로드된 path 우선
+        if (edited.cropImagePath) {
+          cropPathMap.set(edited.number, edited.cropImagePath);
+        } else if (edited.cropImageBase64) {
           cropImageMap.set(edited.number, edited.cropImageBase64);
         }
       }
     }
 
-    // ★ 크롭 이미지를 Supabase Storage에 업로드
+    // ★ 크롭 이미지를 Supabase Storage에 업로드 (legacy base64만)
     const imageUrlMap = new Map<number, string>();
+    // 이미 업로드된 path → public URL 변환
+    if (cropPathMap.size > 0 && supabaseAdmin) {
+      for (const [num, path] of cropPathMap.entries()) {
+        const { data: urlData } = supabaseAdmin.storage.from('source-files').getPublicUrl(path);
+        if (urlData?.publicUrl) imageUrlMap.set(num, urlData.publicUrl);
+      }
+    }
     if (cropImageMap.size > 0) {
       const storageClient = supabaseAdmin;
       if (storageClient) {
@@ -970,6 +993,7 @@ async function saveEditedProblemsDirect(
     typeCode?: string;
     cognitiveDomain?: string;
     cropImageBase64?: string;
+    cropImagePath?: string;
     bbox?: { x: number; y: number; w: number; h: number };
     pageIndex?: number;
   }>,
@@ -981,9 +1005,17 @@ async function saveEditedProblemsDirect(
     return NextResponse.json({ error: 'Supabase Admin not configured' }, { status: 500 });
   }
 
-  // ★ 크롭 이미지를 Supabase Storage에 업로드
+  // ★ 크롭 이미지를 Supabase Storage에 업로드 / 이미 업로드된 path는 public URL만 생성
   const imageUrlMap = new Map<number, string>();
   for (const edited of editedProblems) {
+    // 1) 클라이언트에서 이미 업로드한 경우 — public URL만 생성
+    if (edited.cropImagePath) {
+      const { data: urlData } = supabase.storage
+        .from('source-files')
+        .getPublicUrl(edited.cropImagePath);
+      if (urlData?.publicUrl) imageUrlMap.set(edited.number, urlData.publicUrl);
+      continue;
+    }
     if (edited.cropImageBase64) {
       try {
         const base64Data = edited.cropImageBase64.replace(/^data:image\/\w+;base64,/, '');
@@ -1142,7 +1174,7 @@ async function saveEditedProblemsDirect(
   const savedProblemIds: string[] = []; // ★ 저장된 문제 ID 수집 (appendTo용)
 
   for (const edited of editedProblems) {
-    if (!edited.content && !edited.cropImageBase64) continue; // 빈 문제 스킵
+    if (!edited.content && !edited.cropImageBase64 && !edited.cropImagePath) continue; // 빈 문제 스킵
 
     try {
       const cropImageUrl = imageUrlMap.get(edited.number);

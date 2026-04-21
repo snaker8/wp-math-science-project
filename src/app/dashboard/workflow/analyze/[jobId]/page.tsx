@@ -26,6 +26,7 @@ import {
   Keyboard,
 } from 'lucide-react';
 import './pdf-analyze.css';
+import { supabaseBrowser } from '@/lib/supabase/client';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import AnalyzeProblemEditModal from '@/components/workflow/AnalyzeProblemEditModal';
 import type { AnalyzedProblemData } from '@/components/workflow/AnalyzeProblemEditModal';
@@ -2728,9 +2729,34 @@ export default function AnalyzeJobPage() {
     if (!jobData || isSavingAll) return;
 
     setIsSavingAll(true);
+    // 클라이언트 → Storage 직접 업로드 (Vercel 4.5MB body 제한 회피)
+    const uploadBase64ToStorage = async (
+      base64: string,
+      storagePath: string,
+      contentType = 'image/jpeg',
+    ): Promise<string | null> => {
+      if (!supabaseBrowser) return null;
+      try {
+        const pure = base64.replace(/^data:image\/\w+;base64,/, '');
+        const bin = atob(pure);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const { data, error } = await supabaseBrowser.storage
+          .from('source-files')
+          .upload(storagePath, bytes, { contentType, upsert: true });
+        if (error) {
+          console.warn('[Storage upload]', storagePath, error.message);
+          return null;
+        }
+        return data.path;
+      } catch (e) {
+        console.warn('[Storage upload] 예외', storagePath, e);
+        return null;
+      }
+    };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
-      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImageBase64?: string; solution?: string; choices?: string[]; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number }> = [];
+      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
@@ -2745,6 +2771,13 @@ export default function AnalyzeJobPage() {
                 cropImage = await getCropImageBase64(p) || undefined;
               } catch { /* 무시 */ }
             }
+            // 크롭 이미지를 Storage로 직접 업로드 (Vercel 413 회피)
+            let cropImagePath: string | undefined;
+            if (cropImage) {
+              const path = `problem-crops/${jobId}/problem-${globalProblemNumber}.png`;
+              const uploaded = await uploadBase64ToStorage(cropImage, path, 'image/png');
+              if (uploaded) cropImagePath = uploaded;
+            }
             editedProblems.push({
               number: globalProblemNumber, // ★ 전역 순번 사용 (p.number는 페이지별로 리셋되어 크롭 파일 충돌)
               difficulty: p.difficulty,
@@ -2754,7 +2787,10 @@ export default function AnalyzeJobPage() {
               answer: p.answer,
               solution: p.solution,
               choices: p.choices,
-              cropImageBase64: cropImage,
+              // cropImagePath 업로드 성공 시 base64는 생략 (body 크기 절감)
+              ...(cropImagePath
+                ? { cropImagePath }
+                : (cropImage ? { cropImageBase64: cropImage } : {})),
               bbox: p.bbox,       // ★ YOLO 학습 데이터용 bbox
               pageIndex: p.pageIndex, // ★ 페이지 인덱스 (0-based)
             });
@@ -2762,8 +2798,9 @@ export default function AnalyzeJobPage() {
         }
       }
 
-      // ★ YOLO 학습 데이터: 문제가 있는 페이지들의 이미지 캡처
-      const pageImages: Array<{ pageNumber: number; imageBase64: string; width: number; height: number }> = [];
+      // ★ YOLO 학습 데이터: 문제가 있는 페이지들의 이미지 캡처 + Storage 직접 업로드
+      // (Vercel serverless body 4.5MB 제한 회피를 위해 base64를 PUT 본문에 싣지 않음)
+      const pageImages: Array<{ pageNumber: number; storagePath?: string; imageBase64?: string; width: number; height: number }> = [];
       if (pagesWithProblems.size > 0) {
         try {
           const pdfJs = await import('pdfjs-dist');
@@ -2776,7 +2813,8 @@ export default function AnalyzeJobPage() {
               try {
                 const pageNum = pageIdx + 1; // 1-based
                 const page = await pdf.getPage(pageNum);
-                const viewport = page.getViewport({ scale: 2.0 });
+                // scale 2.0 → 1.5 + JPEG(0.85)로 크기 축소 (YOLO 학습에는 충분)
+                const viewport = page.getViewport({ scale: 1.5 });
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = viewport.width;
                 offCanvas.height = viewport.height;
@@ -2785,9 +2823,12 @@ export default function AnalyzeJobPage() {
                   ctx.fillStyle = '#ffffff';
                   ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
                   await page.render({ canvasContext: ctx, viewport }).promise;
+                  const dataUrl = offCanvas.toDataURL('image/jpeg', 0.85);
+                  const storagePath = `page-images/${jobId}/page-${pageNum}.jpg`;
+                  const uploadedPath = await uploadBase64ToStorage(dataUrl, storagePath, 'image/jpeg');
                   pageImages.push({
                     pageNumber: pageNum,
-                    imageBase64: offCanvas.toDataURL('image/png'),
+                    ...(uploadedPath ? { storagePath: uploadedPath } : { imageBase64: dataUrl }),
                     width: viewport.width,
                     height: viewport.height,
                   });
@@ -2819,12 +2860,21 @@ export default function AnalyzeJobPage() {
         setSavedProblemCount(data.problemCount || 0);
         // 이미 자동 자산화된 경우에도 성공으로 처리
       } else {
-        const err = await res.json();
-        alert(`❌ 자산화 실패: ${err.error || err.message}`);
+        // 서버가 JSON이 아닐 수도 있으므로 안전 파싱
+        const raw = await res.text().catch(() => '');
+        let parsed: { error?: string; message?: string } = {};
+        try { parsed = JSON.parse(raw); } catch { /* non-JSON body */ }
+        const hint = res.status === 413
+          ? '(이미지 크기 초과 — 문제 수/페이지 수 과다)'
+          : res.status === 401
+            ? '(로그인 세션 만료)'
+            : '';
+        alert(`❌ 자산화 실패 [${res.status}] ${hint}\n${parsed.error || parsed.message || raw.slice(0, 200) || '응답 본문 없음'}`);
       }
     } catch (err) {
       console.error('Save all error:', err);
-      alert('❌ 자산화 중 오류가 발생했습니다.');
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`❌ 자산화 중 오류가 발생했습니다.\n원인: ${msg}`);
     } finally {
       setIsSavingAll(false);
     }
