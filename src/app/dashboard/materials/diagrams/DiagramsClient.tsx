@@ -129,7 +129,7 @@ export default function DiagramGalleryPage() {
     try {
       const params = new URLSearchParams();
       if (subjectFilter !== 'all') params.set('subject', subjectFilter);
-      params.set('limit', '2000');
+      params.set('limit', '20000');
 
       const res = await fetch(`/api/diagram-images?${params}`);
       if (res.ok) {

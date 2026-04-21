@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   const subject = sp.get('subject');
   const source = sp.get('source');
   const diagramType = sp.get('diagram_type');
-  const limit = Math.min(Number(sp.get('limit') || 50), 2000);
+  const limit = Math.min(Number(sp.get('limit') || 50), 20000);
   const offset = Number(sp.get('offset') || 0);
 
   // ★ 1) index.json 로컬 파일 읽기
