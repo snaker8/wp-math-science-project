@@ -243,7 +243,21 @@ async function classifyProblemWithGPT(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageBase64, customPrompt, analyzeGraph = true, fullAnalysis = false, problemNumber, problemId } = body;
+    const { imageBase64, customPrompt, analyzeGraph = true, fullAnalysis = false, problemNumber, problemId, fileName } = body;
+
+    // ★ fileName에서 과목/학년 자동 감지 (2차 auto-fix와 동일한 로직)
+    //   이전엔 classifyProblemWithGPT에 subject/grade 안 넘겨서 Gemini가 typeTable 없이 hallucinate.
+    let detectedSubject: string | undefined;
+    let detectedGrade: string | undefined;
+    if (fileName) {
+      try {
+        const { detectSubjectFromTitle, detectGradeFromTitle } = await import('@/lib/workflow/title-detect');
+        const titleNoExt = fileName.replace(/\.[^/.]+$/, '');
+        detectedSubject = detectSubjectFromTitle(titleNoExt) || undefined;
+        detectedGrade = detectGradeFromTitle(titleNoExt) || undefined;
+        console.log(`[Reanalyze] fileName="${fileName}" → subject="${detectedSubject}", grade="${detectedGrade}"`);
+      } catch { /* ignore */ }
+    }
 
     if (!imageBase64) {
       return NextResponse.json(
@@ -364,7 +378,7 @@ export async function POST(request: NextRequest) {
     if (fullAnalysis) {
       try {
         console.log(`[Reanalyze] 문제 ${problemNumber || '?'}번 GPT 분류 시작...`);
-        classification = await classifyProblemWithGPT(refinedText, problemNumber);
+        classification = await classifyProblemWithGPT(refinedText, problemNumber, detectedSubject, detectedGrade);
         if (classification) {
           console.log(`[Reanalyze] 분류 완료: ${(classification.classification as Record<string, unknown>)?.typeName || '?'}, 난이도=${(classification.classification as Record<string, unknown>)?.difficulty || '?'}`);
         }

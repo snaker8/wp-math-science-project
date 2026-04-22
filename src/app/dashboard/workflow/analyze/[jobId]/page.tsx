@@ -2890,7 +2890,7 @@ export default function AnalyzeJobPage() {
           bookGroupId: effectiveBookGroupId,
           pageImages,
           // ★ 원본 한글 파일명 전달 (Storage 복원 경로의 sanitized 이름 대체)
-          fileName: jobData.fileName,
+          fileName: jobData?.fileName,
         }),
       });
 
@@ -2963,7 +2963,7 @@ export default function AnalyzeJobPage() {
 
     return {
       id: jobData.id,
-      fileName: jobData.fileName,
+      fileName: jobData?.fileName,
       status: jobData.status,
       progress: jobData.progress,
       currentStep: jobData.currentStep,
@@ -3592,6 +3592,7 @@ export default function AnalyzeJobPage() {
             imageBase64,
             fullAnalysis: true,
             problemNumber: problem.number,
+            fileName: jobData?.fileName,
           }),
         });
 
@@ -3732,6 +3733,7 @@ export default function AnalyzeJobPage() {
           imageBase64,
           fullAnalysis: true,
           problemNumber: problem.number,
+          fileName: jobData?.fileName,
         }),
       });
 
@@ -3962,6 +3964,7 @@ export default function AnalyzeJobPage() {
           customPrompt: customPrompt || undefined,
           fullAnalysis: true,  // ★ 풀이/분류 포함
           problemNumber: selectedProblem.number,
+          fileName: jobData?.fileName,
         }),
       });
 
