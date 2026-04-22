@@ -2078,15 +2078,20 @@ export async function processUploadJob(
       // Step 4: 505개 성취기준 분류 + 해설 매칭
       callbacks.onStatusChange('CLASSIFYING', `문제 ${i + 1}/${questionsToAnalyze.length} - 유형 분류 및 해설 매칭...`);
 
-      // ★ 과목 감지: job.subjectArea 또는 파일명에서 과학 여부 판별
+      // ★ 과목 감지: auto-fix와 동일 로직(title-detect) 사용하여 구체적 값 획득
+      //   ("수학" 같은 generic 대신 "공통수학1", "수학II" 등으로 resolveSubjectCode 매칭 확실)
+      const { detectSubjectFromTitle, detectGradeFromTitle } = await import('./title-detect');
+      const titleSubject = detectSubjectFromTitle(job.fileName || '');
+      const titleGrade = detectGradeFromTitle(job.fileName || '');
+
       const jobSubject = job.subjectArea === 'science'
         ? (job.scienceSubject || '과학')
-        : (job.subjectArea === 'math' ? '수학' : undefined);
+        : (job.subjectArea === 'math' ? (titleSubject || '수학') : undefined);
       // 파일명 기반 fallback
       const detectedSubject = jobSubject || (isScienceSubject(job.fileName) ? '과학' : undefined);
 
-      // ★ 학년 힌트: 파일명에서 학년 감지 → 분류 프롬프트에 강제 주입
-      const gradeHint = detectGradeFromFileName(job.fileName);
+      // ★ 학년 힌트: 구체적 학년이 있으면 그것, 없으면 기존 함수로 fallback
+      const gradeHint = titleGrade || detectGradeFromFileName(job.fileName);
       console.log(`[processUploadJob] subject="${detectedSubject}", gradeHint="${gradeHint}"`);
 
       const analysis = await analyzeProblemWithLLM(
