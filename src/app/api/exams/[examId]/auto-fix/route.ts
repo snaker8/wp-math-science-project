@@ -731,8 +731,10 @@ function detectSubjectFromTitle(title: string): string {
   if (/확률.*통계|확통/.test(title)) return '확률과통계';
   if (/기하/.test(title)) return '기하';
   // 구 수학I = 대수(09), 구 수학II = 미적분1(10)
-  if (/수학[1IⅠ](?!\d)/.test(title) || /수[1IⅠ]\b/.test(title)) return '수학I';
-  if (/수학[2IⅡ](?!\d)/.test(title) || /수[2IⅡ]\b/.test(title)) return '수학II';
+  // ★ 수학II 먼저 체크 — "수학II"의 첫 I가 [1IⅠ]에 매칭돼서 수학I로 오분류되는 버그 방지
+  //    Ⅱ(\u2161 단일문자), II(I 두 개), 2 모두 처리
+  if (/수학(?:Ⅱ|II|2)(?!\d)/.test(title) || /수(?:Ⅱ|II|2)\b/.test(title)) return '수학II';
+  if (/수학(?:Ⅰ|I|1)(?!\d|I|Ⅰ)/.test(title) || /수(?:Ⅰ|I|1)\b(?!I|Ⅰ)/.test(title)) return '수학I';
 
   // 과학
   if (/과학|물리|화학|생명|생물|지구/.test(title)) {

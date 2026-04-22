@@ -146,6 +146,10 @@
 .katex {
   font-size: 1em !important;
 }
+/* ★ 디스플레이 수식($$...$$, cases 블록 등)은 본문보다 크게 — 분수/중괄호 가독성 */
+.katex-display > .katex {
+  font-size: 1.25em !important;
+}
 .katex .base {
   vertical-align: baseline;
 }
