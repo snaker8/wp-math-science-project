@@ -110,8 +110,10 @@ ${content.slice(0, 1500)}`;
   let modelUsed = '';
 
   // ─── 1차: Gemini (있으면) ───
+  //   gemini-3-flash-preview는 preview 할당량이 엄격해 Tier 1 유료여도 429 발생.
+  //   gemini-2.5-flash는 stable 모델이라 Tier 1 본 한도(1000 RPM) 적용.
   if (GOOGLE_AI_KEY) {
-    modelUsed = 'gemini-3-flash-preview';
+    modelUsed = process.env.CLASSIFY_GEMINI_MODEL || 'gemini-2.5-flash';
     try {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(GOOGLE_AI_KEY);
