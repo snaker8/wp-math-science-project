@@ -90,7 +90,13 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
   const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
 
-${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
+${mathsecrTypeTable ? `★★★ 유형 코드는 반드시 아래 테이블의 "| 코드 |" 컬럼에 있는 값 그대로 하나를 선택하세요.
+★★★ 테이블에 없는 코드를 새로 만들거나 조합하면 절대 안 됩니다.
+★★★ 비슷한 패턴을 만들어내지 말고, 테이블의 정확한 문자열을 복사하세요.
+
+${mathsecrTypeTable}
+★ typeName도 선택한 코드의 "| 대단원 | 중단원 | 소단원 | 세부유형 |" 값을 " > "로 이어 그대로 사용.
+` : ''}
 ■ 난이도 (수학비서 기준, 1~10):
 ● 쉬움(1~2): 개념·정의만 알면 바로 풀림. 단순 용어, 기본 계산, 공식 직접 대입.
 ● 보통(3~4): 공식 1~2개 적용, 2~3단계 풀이. 기본 응용.
@@ -255,30 +261,34 @@ ${content.slice(0, 1500)}`;
     return null;
   }
 
-  // ★ typeName이 비어있거나 typeCode와 동일하면 mathsecr_types DB에서 full_path 조회 (카드 표시용)
-  //   @/lib/supabase/server는 next/headers에 의존하므로 여기서 직접 admin client 생성
+  // ★ mathsecr_types DB에서 코드 검증 + typeName 백필
+  //   AI가 테이블에 없는 코드를 hallucinate하는 경우를 걸러냄 (없으면 null 반환)
   let typeName = String(cls.typeName || '');
-  if (!typeName || typeName === typeCode) {
-    try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-      if (supabaseUrl && serviceKey) {
-        const { createClient } = await import('@supabase/supabase-js');
-        const sb = createClient(supabaseUrl, serviceKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
-        const { data: msType } = await sb
-          .from('mathsecr_types')
-          .select('full_path')
-          .eq('code', typeCode)
-          .limit(1)
-          .single();
-        if (msType?.full_path) {
-          typeName = msType.full_path as string;
-          console.log(`[${label}] typeName 백필: ${typeCode} → "${typeName}"`);
-        }
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (supabaseUrl && serviceKey) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: msType } = await sb
+        .from('mathsecr_types')
+        .select('full_path')
+        .eq('code', typeCode)
+        .limit(1)
+        .maybeSingle();
+      if (msType?.full_path) {
+        typeName = msType.full_path as string;
+        console.log(`[${label}] ✅ 코드 유효 + typeName: ${typeCode} → "${typeName}"`);
+      } else {
+        // ★ DB에 없는 코드 = AI hallucination. 분류 결과 버리고 null 반환 → GPT 원래 결과 유지.
+        console.warn(`[${label}] ✖ AI가 존재하지 않는 코드 생성: ${typeCode} — 분류 결과 버림`);
+        return null;
       }
-    } catch { /* ignore */ }
+    }
+  } catch (err) {
+    console.warn(`[${label}] 코드 검증 실패 (조회 에러 - 결과 유지):`, err);
   }
 
   return {
