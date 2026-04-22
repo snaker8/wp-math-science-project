@@ -64,9 +64,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 문제 정보 자동 조회 (서버에서 채움, 실패해도 교정 기록은 저장) ──
+    // ★ problems 테이블엔 'subject' 컬럼 없음 (이전엔 잘못 select하여 쿼리 자체 실패 → ai_analysis도 못 가져옴)
     const { data: problem } = await supabaseAdmin
       .from('problems')
-      .select('id, content_latex, subject, ai_analysis, images')
+      .select('id, content_latex, ai_analysis, images')
       .eq('id', problemId)
       .single();
 
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
       .insert({
         problem_id: problem ? problemId : null,
         problem_content: problem?.content_latex?.slice(0, 2000) || null,
-        problem_subject: problem?.subject || null,
+        problem_subject: null, // problems 테이블에 subject 컬럼 없음 — figure-corrections 자체 검색에는 미사용
         mathsecr_type_code: mathsecrTypeCode,
         figure_type: figureType,
         original_figure_source: originalFigureSource,
