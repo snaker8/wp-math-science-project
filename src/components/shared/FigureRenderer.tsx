@@ -237,6 +237,20 @@ export function FigureRenderer({
     if (!/<svg[^>]*\bwidth\s*=/i.test(safeSvg)) {
       safeSvg = safeSvg.replace(/<svg\b/i, '<svg width="100%"');
     }
+    // 3) ★ 폰트 크기 보정 — 시험지 본문 가독성에 맞게 키움
+    //    18 미만 → 20, 그 이상 → ×1.25 (최대 32 cap)
+    const upscaleFont = (raw: string): string => {
+      const n = parseFloat(raw);
+      if (isNaN(n) || n <= 0) return raw;
+      if (n < 18) return '20';
+      return String(Math.min(32, Math.round(n * 1.25)));
+    };
+    // <text font-size="16"> 또는 <g font-size="16"> 등 속성
+    safeSvg = safeSvg.replace(/\bfont-size\s*=\s*["'](\d+(?:\.\d+)?)(px|pt)?["']/gi,
+      (_m, num, unit) => `font-size="${upscaleFont(num)}${unit || ''}"`);
+    // style="font-size: 16px" 인라인
+    safeSvg = safeSvg.replace(/font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt|em)?/gi,
+      (_m, num, unit) => `font-size:${upscaleFont(num)}${unit || 'px'}`);
     return (
       <div
         className={`figure-svg-container ${className}`}
