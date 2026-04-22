@@ -978,7 +978,7 @@ export function ProblemEditModal({
           </div>
 
           {/* 우: 추가 정보 */}
-          <div className="w-[280px] flex-shrink-0 border-l border-subtle overflow-y-auto p-3 space-y-3">
+          <div className="w-[400px] flex-shrink-0 border-l border-subtle overflow-y-auto p-3 space-y-3">
             <TagManagementPanel
               difficulty={difficulty} onDifficultyChange={setDifficulty}
               cognitiveDomain={cognitiveDomain} onCognitiveDomainChange={setCognitiveDomain}
