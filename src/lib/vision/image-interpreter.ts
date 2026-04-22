@@ -693,9 +693,11 @@ export async function interpretImage(
     const hasOverlapPattern = /점선|dashed.*solid|실선.*점선|원래.*도형|변형/.test(result.description || '');
     const isNetDiagram = hasNetKeyword || hasMissingDashedVerts || (hasTransformPattern && hasOverlapPattern);
 
-    // ★★★ graph가 아닌 모든 타입: Claude 직접 SVG 생성 (Gemini JSON 전달하지 않음)
-    const shouldDirectSvg = result.figureType !== 'graph' &&
-      result.figureType !== 'photo' &&
+    // ★★★ graph 포함 모든 타입: Claude 직접 SVG 생성 (보고 그대로 그리기)
+    //    이전엔 graph 제외였지만 함수식 없는 piecewise·시각 그래프(y=f(x) 류)는
+    //    expressions 파이프라인이 무용 → 직접 SVG가 정답.
+    //    함수식 명시된 그래프(y=x²+1 등)도 Sonnet이 충분히 그림.
+    const shouldDirectSvg = result.figureType !== 'photo' &&
       result.confidence >= 0.3;
 
     if (shouldDirectSvg) {
