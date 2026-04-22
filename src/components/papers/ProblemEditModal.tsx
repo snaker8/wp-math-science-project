@@ -427,12 +427,14 @@ function TagManagementPanel({
   cognitiveDomain, onCognitiveDomainChange,
   typeCode, typeName, onTypeCodeChange, onTypeNameChange,
   onGenerateSolution, isGenerating,
+  cropImageUrl,
 }: {
   difficulty: number; onDifficultyChange: (d: number) => void;
   cognitiveDomain: string; onCognitiveDomainChange: (d: string) => void;
   typeCode: string; typeName: string;
   onTypeCodeChange: (v: string) => void; onTypeNameChange: (v: string) => void;
   onGenerateSolution: () => void; isGenerating: boolean;
+  cropImageUrl?: string;
 }) {
   const domains = [
     { key: 'CALCULATION', label: '계산' },
@@ -526,8 +528,12 @@ function TagManagementPanel({
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </summary>
-          <div className="mt-2 rounded-lg border border bg-surface-raised p-4 text-center">
-            <p className="text-xs text-content-muted">원본 이미지 없음</p>
+          <div className="mt-2 rounded-lg border border bg-surface-raised p-2 text-center">
+            {cropImageUrl ? (
+              <img src={cropImageUrl} alt="문제 원본" className="max-w-full rounded" />
+            ) : (
+              <p className="text-xs text-content-muted py-4">원본 이미지 없음</p>
+            )}
           </div>
         </details>
 
@@ -980,6 +986,7 @@ export function ProblemEditModal({
               onTypeCodeChange={setTypeCode} onTypeNameChange={setTypeName}
               onGenerateSolution={handleGenerateSolution}
               isGenerating={isGeneratingSolution}
+              cropImageUrl={cropImageUrl}
             />
           </div>
         </div>
