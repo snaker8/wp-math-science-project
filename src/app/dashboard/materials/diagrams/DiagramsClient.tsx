@@ -153,9 +153,9 @@ export default function DiagramGalleryPage() {
   }, [subjectFilter]);
 
   // health 통계 + 처리 상태 + 태깅 상태 확인 (원격/로컬 모두 지원 — 실패해도 무시)
+  // ★ Vercel→Railway CORS 차단 회피: Next.js API 프록시 경유
   const fetchStats = useCallback(() => {
-    const pipelineUrl = process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://localhost:8200';
-    fetch(`${pipelineUrl}/health`)
+    fetch('/api/image-pipeline/health')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.db_stats) setLocalStats(data.db_stats);
