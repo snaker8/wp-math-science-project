@@ -696,10 +696,11 @@ function preprocessMathpixContent(text: string): string {
   // 2-3. 선택지 (1)(2)(3)(4)(5) → ①②③④⑤ 정규화
   result = normalizeChoiceParensForRender(result);
 
-  // 2-4a. $\begin{env}...\end{env}$ (멀티라인 단일$) → $$...$$ (디스플레이 수식으로 승격)
-  // KaTeX는 $...$에서 멀티라인 환경을 처리 못하므로 $$...$$로 변환
+  // 2-4a. $...\begin{env}...\end{env}...$ (멀티라인 환경 포함 단일$) → $$...$$ (디스플레이로 승격)
+  // KaTeX는 $...$에서 멀티라인 환경을 처리 못하고, 디스플레이여야 분수·중괄호가 크게 보임
+  // ★ 이전엔 $\begin{cases}...\end{cases}$ (정확히 begin/end만 감싼) 케이스만 매칭 → "f(x) = \begin{cases}..." 같이 앞뒤 텍스트 있으면 누락
   result = result.replace(
-    /\$\s*(\\begin\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[\s\S]*?\\end\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\})\s*\$/g,
+    /\$([^$\n]*?\\begin\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[\s\S]*?\\end\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[^$\n]*?)\$/g,
     (_m, inner) => `$$${inner}$$`
   );
 
