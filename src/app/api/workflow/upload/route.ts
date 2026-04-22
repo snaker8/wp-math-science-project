@@ -267,6 +267,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ★ 자동 분류 성공 시 해설도 자동 생성 시작 (fire-and-forget)
+    if (autoSavedExamId) {
+      triggerAutoSolutionGeneration(autoSavedExamId, request.nextUrl.origin);
+    }
+
     // 과학 도식 이미지 파이프라인
     if (subjectArea === 'science') {
       try {
@@ -615,7 +620,7 @@ export async function PUT(request: NextRequest) {
     if ((!results || results.length === 0) && editedProblems && editedProblems.length > 0) {
       const acBookGroupId = bookGroupId || job.bookGroupId || null;
       console.log(`[Upload PUT] AutoCrop 모드: ${editedProblems.length}개 문제 직접 저장, bookGroupId="${acBookGroupId}"`);
-      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap);
+      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap, request.nextUrl.origin);
     }
 
     if (job.status !== 'COMPLETED') {
@@ -1042,6 +1047,33 @@ async function processJobInBackground(
 }
 
 /**
+ * ★ 자산화 완료 후 자동 해설 생성 트리거 (fire-and-forget).
+ *   batch-solutions에게 모든 문제 ID 넘겨서 Sonnet 해설 생성 시작.
+ *   사용자가 "일괄 해설 생성" 버튼 안 눌러도 자동 시작됨.
+ *   실패해도 자산화 자체는 성공으로 처리 (해설은 사용자가 수동 재시도 가능).
+ */
+async function triggerAutoSolutionGeneration(examId: string, origin: string): Promise<void> {
+  try {
+    if (!supabaseAdmin) return;
+    const { data: eps } = await supabaseAdmin
+      .from('exam_problems')
+      .select('problem_id')
+      .eq('exam_id', examId);
+    const problemIds = (eps || []).map((r: { problem_id: string }) => r.problem_id);
+    if (problemIds.length === 0) return;
+    fetch(`${origin}/api/exams/${examId}/batch-solutions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds }),
+      keepalive: true,
+    }).catch((err) => console.error('[auto-solution-trigger] fetch 실패:', err));
+    console.log(`[auto-solution-trigger] ${problemIds.length}개 문제 해설 자동 생성 시작: exam=${examId.slice(0, 8)}`);
+  } catch (err) {
+    console.error('[auto-solution-trigger] error:', err);
+  }
+}
+
+/**
  * AutoCrop 모드: editedProblems 기반으로 직접 DB에 저장
  * jobResults에 결과가 없는 경우 (수동 분석 모드)
  */
@@ -1063,7 +1095,8 @@ async function saveEditedProblemsDirect(
     pageIndex?: number;
   }>,
   bookGroupId: string | null,
-  pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map()
+  pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
+  requestOrigin: string = ''
 ) {
   const supabase = supabaseAdmin;
   if (!supabase) {
@@ -1411,6 +1444,11 @@ async function saveEditedProblemsDirect(
       error: `자산화 실패: 저장된 문제가 0개입니다.${!examId ? ' (시험지 생성도 실패)' : ''}`,
       examId: examId,
     }, { status: 500 });
+  }
+
+  // ★ 자산화 완료 즉시 해설 생성 자동 시작 (fire-and-forget)
+  if (examId && requestOrigin) {
+    triggerAutoSolutionGeneration(examId, requestOrigin);
   }
 
   return NextResponse.json({
