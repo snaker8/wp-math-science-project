@@ -102,9 +102,11 @@ export async function POST(
       .in('problem_id', problemIds);
     const classMap = new Map((allClassifications || []).map(c => [c.problem_id, c]));
 
-    // 3. 각 문제별 자동 수정 — 5개씩 병렬 처리 (Vercel 5분 한도 회피)
+    // 3. 각 문제별 자동 수정 — 2개씩 병렬 처리
+    //    Gemini 무료 티어 15 RPM 한도 안에서 동작 → 429 없이 일관된 처리
+    //    이전 5 병렬은 순간 RPM 초과로 재시도·폴백 대량 발생 → 오히려 느림
     const results: FixResult[] = [];
-    const CHUNK_SIZE = 5;
+    const CHUNK_SIZE = 2;
 
     const processProblem = async (problem: typeof problems[number]) => {
       const seqNum = seqMap.get(problem.id) || 0;
@@ -158,161 +160,29 @@ export async function POST(
 
       console.log(`[auto-fix] #${seqNum}: typeCode=${existingTypeCode}, needsReclassify=${needsReclassify}, subject=${clsSubject}, chapter=${clsChapter}`);
 
-      if (needsReclassify && OPENAI_API_KEY && content.trim()) {
-        // 수학비서 체계 기반 재분류 — 복합 과목 지원
-        let mathsecrTypeTable = '';
-        let resolvedCode = '';
+      if (needsReclassify && (OPENAI_API_KEY || GOOGLE_AI_KEY) && content.trim()) {
         try {
-          const { resolveSubjectCode, buildTypeTable } = await import('@/lib/workflow/mathsecr-prompt');
-          resolvedCode = resolveSubjectCode(examGrade, examSubject) || '';
-          if (resolvedCode) {
-            mathsecrTypeTable = buildTypeTable(resolvedCode);
-
-            // ★ 복합 과목: 이전 교육과정 시험지는 여러 과목 범위가 섞임
-            const COMBINED_SUBJECTS: Record<string, string[]> = {
-              '07': ['08'],       // 공통수학1 → +공통수학2 (2015 수학(상) = 다항식+방정식+좌표+집합)
-              '08': ['07'],       // 공통수학2 → +공통수학1 (2015 수학(하) 범위 혼재)
-              '09': ['10', '11'], // 대수(구 수학I) → +미적분1, 확통
-              '10': ['09'],       // 미적분1(구 수학II) → +대수 (같은 학년 범위)
-            };
-            const extras = COMBINED_SUBJECTS[resolvedCode] || [];
-            for (const extra of extras) {
-              mathsecrTypeTable += '\n\n' + buildTypeTable(extra);
-            }
+          // ★ 공용 분류 모듈 호출 (Gemini Flash → GPT-4o 폴백 로직 모두 포함)
+          const { classifyProblem } = await import('@/lib/workflow/classify');
+          const classifyResult = await classifyProblem({
+            content,
+            examSubject,
+            examGrade,
+            logLabel: `auto-fix #${seqNum}`,
+          });
+          if (!classifyResult) {
+            throw new Error('classifyProblem 반환값 없음');
           }
-        } catch (e) {
-          console.warn('[auto-fix] mathsecr-prompt load failed:', e);
-        }
-
-        // 예제 코드에 실제 resolvedCode 반영 (5-세그먼트 세부유형 레벨)
-        const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02-05` : 'MS07-01-03-02-05';
-
-        try {
-          const useGemini = !!GOOGLE_AI_KEY;
-          // ★ Flash 사용 (Pro는 thinking 모드로 빈 응답 이슈, Flash는 안정적이고 분류 작업엔 충분)
-          const modelName = useGemini ? 'gemini-3-flash-preview' : 'gpt-4o';
-
-          const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
-반드시 해당 과목 범위 내에서 분류하세요.
-
-${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
-■ 난이도 (수학비서 기준, 1~10):
-● 쉬움(1~2): 개념·정의만 알면 바로 풀림. 단순 용어, 기본 계산, 공식 직접 대입.
-● 보통(3~4): 공식 1~2개 적용, 2~3단계 풀이. 기본 응용.
-● 어려움(5~6): 2개 이상 개념 연결, 복합 조건, 자료 해석, 서술형.
-● 매우어려움(7~10): 고난도 추론, 복합 서술형, 여러 개념 융합, 함정/오개념 포함.
-★ 같은 유형이라도 문제마다 난이도가 다릅니다. 문제 내용을 보고 정확히 판정하세요.
-★ 서술형/서논술형은 최소 5 이상. 합답형(ㄱㄴㄷ)은 최소 5 이상.
-
-JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원 > 세부유형","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":4,"cognitiveDomain":"CALCULATION","confidence":0.9}}
-
-문제:
-${content.slice(0, 1500)}`;
-
-          let rawContent = '{}';
-
-          if (useGemini) {
-            // ★ Gemini 네이티브 SDK — thinking 모드 토큰 부족 방지로 maxOutputTokens 8000
-            const { GoogleGenerativeAI } = await import('@google/generative-ai');
-            const genAI = new GoogleGenerativeAI(GOOGLE_AI_KEY);
-            const model = genAI.getGenerativeModel({
-              model: modelName,
-              systemInstruction: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.',
-              generationConfig: {
-                temperature: 0.1,
-                maxOutputTokens: 8000,
-                responseMimeType: 'application/json',
-              },
-            });
-
-            let lastError: Error | null = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              try {
-                const result = await model.generateContent(userPrompt);
-                rawContent = result.response.text().trim();
-                rawContent = rawContent.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
-                lastError = null;
-                break;
-              } catch (e) {
-                lastError = e instanceof Error ? e : new Error(String(e));
-                if (lastError.message.includes('429') || lastError.message.includes('503')) {
-                  const waitSec = Math.min(15 * (attempt + 1), 30);
-                  console.log(`[auto-fix] #${seqNum} rate limited, waiting ${waitSec}s`);
-                  await new Promise(r => setTimeout(r, waitSec * 1000));
-                  continue;
-                }
-                break;
-              }
-            }
-            if (lastError) throw lastError;
-
-            // ★ Gemini 응답이 비거나 너무 짧으면 GPT-4o 로 폴백
-            if (!rawContent || rawContent.trim().length < 10) {
-              console.warn(`[auto-fix] #${seqNum} Gemini empty response → GPT-4o fallback`);
-              if (OPENAI_API_KEY) {
-                const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-                  body: JSON.stringify({
-                    model: 'gpt-4o',
-                    messages: [
-                      { role: 'system', content: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.' },
-                      { role: 'user', content: userPrompt },
-                    ],
-                    temperature: 0.1, max_tokens: 2000, response_format: { type: 'json_object' }
-                  }),
-                });
-                if (gptRes.ok) {
-                  const gptData = await gptRes.json();
-                  rawContent = gptData.choices?.[0]?.message?.content || '{}';
-                  console.log(`[auto-fix] #${seqNum} GPT-4o fallback success`);
-                }
-              }
-            }
-          } else {
-            // GPT fallback
-            let gptRes: Response | null = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-                body: JSON.stringify({
-                  model: 'gpt-4.1-mini',
-                  messages: [
-                    { role: 'system', content: '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.' },
-                    { role: 'user', content: userPrompt },
-                  ],
-                  temperature: 0.1, max_tokens: 2000, response_format: { type: 'json_object' }
-                })
-              });
-              if (gptRes && gptRes.status !== 429) break;
-              const waitSec = Math.min(15 * (attempt + 1), 30);
-              await new Promise(r => setTimeout(r, waitSec * 1000));
-            }
-            if (gptRes && gptRes.ok) {
-              const gptData = await gptRes.json();
-              rawContent = gptData.choices?.[0]?.message?.content || '{}';
-            }
-          }
-
-          console.log(`[auto-fix] #${seqNum} [${modelName}] response: ${rawContent.slice(0, 200)}`);
-
-          // JSON 파싱
-          let reclassified: Record<string, unknown>;
-          try {
-            reclassified = JSON.parse(rawContent);
-          } catch {
-            const tcMatch = rawContent.match(/"typeCode"\s*:\s*"(MS[\d-]+)"/);
-            const tnMatch = rawContent.match(/"typeName"\s*:\s*"([^"]+)"/);
-            const diffMatch = rawContent.match(/"difficulty"\s*:\s*(\d+)/);
-            if (tcMatch) {
-              console.log(`[auto-fix] #${seqNum} JSON 부분 추출: ${tcMatch[1]}`);
-              reclassified = { classification: { typeCode: tcMatch[1], typeName: tnMatch?.[1] || '', difficulty: parseInt(diffMatch?.[1] || '3') } };
-            } else {
-              throw new Error('JSON 파싱 실패');
-            }
-          }
-          const newCls = (reclassified.classification || {}) as Record<string, unknown>;
+          const newCls: Record<string, unknown> = {
+            typeCode: classifyResult.typeCode,
+            typeName: classifyResult.typeName,
+            subject: classifyResult.subject,
+            chapter: classifyResult.chapter,
+            section: classifyResult.section,
+            difficulty: classifyResult.difficulty,
+            cognitiveDomain: classifyResult.cognitiveDomain,
+            confidence: classifyResult.confidence,
+          };
 
             // ★ typeName이 비어있으면 mathsecr_types에서 조회
             if (newCls.typeCode && (!newCls.typeName || newCls.typeName === newCls.typeCode)) {
@@ -349,11 +219,11 @@ ${content.slice(0, 1500)}`;
               'COMPREHENSION': 'UNDERSTANDING',
               'KNOWLEDGE': 'UNDERSTANDING',
             };
-            const rawCognitive = newCls.cognitiveDomain || 'CALCULATION';
+            const rawCognitive = classifyResult.cognitiveDomain || 'CALCULATION';
             const mappedCognitive = VALID_COGNITIVE.has(rawCognitive) ? rawCognitive : (COGNITIVE_MAP[rawCognitive] || 'CALCULATION');
 
             // ★ difficulty 1~10 → 1~5 매핑
-            const rawDiff = parseInt(newCls.difficulty) || 3;
+            const rawDiff = classifyResult.difficulty || 3;
             const mappedDiff = Math.max(1, Math.min(5, Math.ceil(rawDiff / 2)));
 
             // ★ classifications 테이블도 함께 업데이트
