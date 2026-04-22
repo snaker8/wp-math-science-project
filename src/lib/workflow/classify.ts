@@ -255,9 +255,29 @@ ${content.slice(0, 1500)}`;
     return null;
   }
 
+  // ★ typeName이 비어있거나 typeCode와 동일하면 mathsecr_types DB에서 full_path 조회 (카드 표시용)
+  let typeName = String(cls.typeName || '');
+  if (!typeName || typeName === typeCode) {
+    try {
+      const { supabaseAdmin } = await import('@/lib/supabase/server');
+      if (supabaseAdmin) {
+        const { data: msType } = await supabaseAdmin
+          .from('mathsecr_types')
+          .select('full_path')
+          .eq('code', typeCode)
+          .limit(1)
+          .single();
+        if (msType?.full_path) {
+          typeName = msType.full_path;
+          console.log(`[${label}] typeName 백필: ${typeCode} → "${typeName}"`);
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
   return {
     typeCode,
-    typeName: String(cls.typeName || ''),
+    typeName,
     subject: String(cls.subject || examSubject || ''),
     chapter: String(cls.chapter || ''),
     section: String(cls.section || ''),
