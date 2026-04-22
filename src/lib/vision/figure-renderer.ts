@@ -641,6 +641,14 @@ function latexToJsFunction(latex: string): ((x: number) => number) | null {
     // 6. |x| → Math.abs(x)
     js = js.replace(/\\left\|([^|]+)\\right\|/g, 'Math.abs($1)');
     js = js.replace(/\|([^|]+)\|/g, 'Math.abs($1)');
+    // ★ AI가 함수 표기로 abs/min/max/floor/ceil 반환하는 케이스 처리
+    //   예: y=abs(x)+1 → 이전엔 unknown variable로 파싱 실패 → 빈 그래프
+    js = js.replace(/\babs\s*\(/g, 'Math.abs(');
+    js = js.replace(/\bmin\s*\(/g, 'Math.min(');
+    js = js.replace(/\bmax\s*\(/g, 'Math.max(');
+    js = js.replace(/\bfloor\s*\(/g, 'Math.floor(');
+    js = js.replace(/\bceil\s*\(/g, 'Math.ceil(');
+    js = js.replace(/\bexp\s*\(/g, 'Math.exp(');
 
     // 7. \left, \right 제거 (괄호만 남김)
     js = js.replace(/\\left/g, '');
