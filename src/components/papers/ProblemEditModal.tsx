@@ -442,9 +442,18 @@ function TagManagementPanel({
     { key: 'PROBLEM_SOLVING', label: '해결' },
     { key: 'UNASSIGNED', label: '미지정' },
   ];
+  // ★ 수학비서 10단계 — 카드 표시(쉬움1~매우어려움10)와 동일
   const difficulties = [
-    { key: 5, label: '최상' }, { key: 4, label: '상' }, { key: 3, label: '중' },
-    { key: 2, label: '하' }, { key: 1, label: '최하' },
+    { key: 1, label: '쉬움1', cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' },
+    { key: 2, label: '쉬움2', cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' },
+    { key: 3, label: '보통3', cls: 'border-blue-500/30 bg-blue-500/10 text-blue-400' },
+    { key: 4, label: '보통4', cls: 'border-blue-500/30 bg-blue-500/10 text-blue-400' },
+    { key: 5, label: '어려움5', cls: 'border-amber-500/30 bg-amber-500/10 text-amber-400' },
+    { key: 6, label: '어려움6', cls: 'border-amber-500/30 bg-amber-500/10 text-amber-400' },
+    { key: 7, label: '매우어려움7', cls: 'border-red-600/30 bg-red-600/10 text-red-400' },
+    { key: 8, label: '매우어려움8', cls: 'border-red-600/30 bg-red-600/10 text-red-400' },
+    { key: 9, label: '매우어려움9', cls: 'border-red-600/30 bg-red-600/10 text-red-400' },
+    { key: 10, label: '매우어려움10', cls: 'border-red-600/30 bg-red-600/10 text-red-400' },
   ];
 
   return (
@@ -466,14 +475,16 @@ function TagManagementPanel({
           </div>
         </div>
 
-        {/* 난이도 */}
+        {/* 난이도 — 수학비서 10단계 */}
         <div>
-          <label className="block text-[11px] font-medium text-content-tertiary mb-1.5">난이도 지정</label>
-          <div className="flex flex-wrap gap-1">
+          <label className="block text-[11px] font-medium text-content-tertiary mb-1.5">난이도 지정 (1~10)</label>
+          <div className="grid grid-cols-5 gap-1">
             {difficulties.map((d) => (
               <button key={d.key} type="button" onClick={() => onDifficultyChange(d.key)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  difficulty === d.key ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary hover:border-zinc-500'
+                className={`px-1.5 py-1 rounded-md text-[10px] font-medium transition-colors border ${
+                  difficulty === d.key
+                    ? `${d.cls} ring-1 ring-current`
+                    : 'text-content-tertiary border hover:text-content-secondary hover:border-zinc-500'
                 }`}>{d.label}</button>
             ))}
           </div>
@@ -901,7 +912,7 @@ export function ProblemEditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-surface-base/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 flex flex-col h-[92vh] w-[95vw] max-w-[1400px] overflow-hidden rounded-2xl border border bg-surface-raised shadow-2xl">
+      <div className="relative z-10 flex flex-col h-[min(92vh,92dvh)] max-h-[900px] w-[95vw] max-w-[1400px] overflow-hidden rounded-2xl border border bg-surface-raised shadow-2xl">
         {/* ======== 헤더 ======== */}
         <div className="flex items-center justify-between border-b border-subtle px-5 py-3 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -923,8 +934,8 @@ export function ProblemEditModal({
           </div>
         )}
 
-        {/* ======== 메인: 3열 — 최소 높이 보장 ======== */}
-        <div className="flex flex-1 min-h-[300px] overflow-hidden">
+        {/* ======== 메인: 3열 — min-h 제거하여 작은 모니터에서 저장 버튼 가려지지 않도록 ======== */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* 좌: 문제 에디터 */}
           <div className="flex-1 flex flex-col p-3 min-w-0 overflow-hidden">
             <EditorPanel
