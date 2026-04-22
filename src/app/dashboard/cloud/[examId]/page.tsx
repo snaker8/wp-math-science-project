@@ -2701,6 +2701,7 @@ export default function CloudExamDetailPage() {
   const [showAddProblemsModal, setShowAddProblemsModal] = useState(false);
   const [showAnswerMatchModal, setShowAnswerMatchModal] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
+  const [isAutoMapping, setIsAutoMapping] = useState(false);
 
   const toggleSelectProblem = useCallback((id: string) => {
     setSelectedProblems((prev) => {
@@ -2854,14 +2855,18 @@ export default function CloudExamDetailPage() {
             </button>
             <button
               type="button"
+              disabled={isAutoMapping}
               onClick={() => {
+                if (isAutoMapping) return;
                 if (!confirm('전체 문제를 강제 재분류합니다. 백그라운드에서 진행되며 완료 시 알림이 뜹니다. 진행할까요?')) return;
+                setIsAutoMapping(true);
                 // ★ 백그라운드 실행 — await 하지 않음. 사용자가 다른 작업 가능.
                 (async () => {
                   try {
                     const res = await fetch(`/api/exams/${examId}/auto-fix?force=1`, { method: 'POST' });
                     if (!res.ok) {
                       alert('자동매핑 실패: HTTP ' + res.status);
+                      setIsAutoMapping(false);
                       return;
                     }
                     const data = await res.json();
@@ -2870,15 +2875,24 @@ export default function CloudExamDetailPage() {
                     window.location.reload();
                   } catch (e) {
                     alert('자동매핑 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
+                    setIsAutoMapping(false);
                   }
                 })();
                 // 즉시 시작 알림 (백그라운드 진행 중)
                 alert('🔄 자동매핑이 백그라운드에서 시작되었습니다.\n완료까지 1~3분 정도 걸립니다. 다른 작업 하셔도 됩니다.');
               }}
-              className="flex items-center gap-1.5 rounded-lg border bg-surface-card px-3 py-2 text-sm font-medium text-content-secondary hover:bg-surface-raised transition-colors"
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                isAutoMapping
+                  ? 'bg-violet-500/10 border-violet-500/40 text-violet-300 cursor-wait'
+                  : 'bg-surface-card text-content-secondary hover:bg-surface-raised'
+              }`}
             >
-              <Sparkles className="h-4 w-4" />
-              <span>유형 자동매핑</span>
+              {isAutoMapping ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              <span>{isAutoMapping ? '자동매핑 중…' : '유형 자동매핑'}</span>
             </button>
             <button
               type="button"
