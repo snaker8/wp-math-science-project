@@ -2857,29 +2857,48 @@ export default function CloudExamDetailPage() {
               type="button"
               disabled={isAutoMapping}
               onClick={() => {
-                if (isAutoMapping) return;
-                if (!confirm('전체 문제를 강제 재분류합니다. 백그라운드에서 진행되며 완료 시 알림이 뜹니다. 진행할까요?')) return;
+                console.log('[AutoMap] click fired, isAutoMapping=', isAutoMapping);
+                if (isAutoMapping) {
+                  console.log('[AutoMap] 이미 진행 중 — 무시');
+                  return;
+                }
+                let confirmed = true;
+                try {
+                  confirmed = confirm('전체 문제를 강제 재분류합니다. 백그라운드에서 진행되며 완료 시 알림이 뜹니다. 진행할까요?');
+                } catch (confErr) {
+                  console.warn('[AutoMap] confirm() 차단됨 — 그대로 진행:', confErr);
+                }
+                if (!confirmed) {
+                  console.log('[AutoMap] 사용자 취소');
+                  return;
+                }
+                console.log('[AutoMap] 시작:', examId);
                 setIsAutoMapping(true);
                 // ★ 백그라운드 실행 — await 하지 않음. 사용자가 다른 작업 가능.
                 (async () => {
                   try {
                     const res = await fetch(`/api/exams/${examId}/auto-fix?force=1`, { method: 'POST' });
+                    console.log('[AutoMap] 응답:', res.status);
                     if (!res.ok) {
                       alert('자동매핑 실패: HTTP ' + res.status);
                       setIsAutoMapping(false);
                       return;
                     }
                     const data = await res.json();
+                    console.log('[AutoMap] 데이터:', data);
                     const fixCount = data.fixedProblems || data.results?.filter((f: any) => f.fixes?.length > 0).length || 0;
                     alert(`✅ 자동매핑 완료: ${fixCount}개 문제 수정됨. 화면을 새로고침합니다.`);
                     window.location.reload();
                   } catch (e) {
+                    console.error('[AutoMap] 오류:', e);
                     alert('자동매핑 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
                     setIsAutoMapping(false);
                   }
                 })();
                 // 즉시 시작 알림 (백그라운드 진행 중)
-                alert('🔄 자동매핑이 백그라운드에서 시작되었습니다.\n완료까지 1~3분 정도 걸립니다. 다른 작업 하셔도 됩니다.');
+                try {
+                  alert('🔄 자동매핑이 백그라운드에서 시작되었습니다.\n완료까지 1~3분 정도 걸립니다. 다른 작업 하셔도 됩니다.');
+                } catch { /* alert 차단 무시 */ }
               }}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                 isAutoMapping
