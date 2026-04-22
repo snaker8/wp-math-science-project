@@ -1332,6 +1332,47 @@ export async function analyzeProblemWithLLM(
     // 응답 파싱
     const analysis = parseAnalysisResponse(response);
 
+    // ★ 1b: USE_UNIFIED_CLASSIFIER=true 일 때, 수학 분류만 classify.ts (Gemini+GPT)로 강화.
+    //    해설은 기존 GPT 응답 유지. 과학은 전용 분류라 영향 없음.
+    //    feature flag로 토글 가능 — 문제 생기면 env 내리면 즉시 원상.
+    if (!isScience && process.env.USE_UNIFIED_CLASSIFIER === 'true') {
+      try {
+        const { classifyProblem } = await import('./classify');
+        const upgrade = await classifyProblem({
+          content: fullProblemText,
+          examSubject: subject || '',
+          examGrade: gradeHint || '',
+          logLabel: 'cloud-flow-1차',
+        });
+        if (upgrade && upgrade.typeCode) {
+          // 기존 분류가 있으면 보강, 없으면 신규. confidence 더 높은 쪽 우선.
+          const existing = analysis.classification || {} as Record<string, unknown>;
+          const existingConf = typeof (existing.confidence as number) === 'number' ? (existing.confidence as number) : 0.5;
+          const shouldOverride = upgrade.confidence >= existingConf || !existing.typeCode;
+          if (shouldOverride) {
+            // difficulty 1~10 → 1~5 매핑 (타입 호환)
+            const mappedDiff = Math.max(1, Math.min(5, Math.ceil(upgrade.difficulty / 2))) as 1 | 2 | 3 | 4 | 5;
+            const validCognitive = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
+            const cogn = (validCognitive.has(upgrade.cognitiveDomain) ? upgrade.cognitiveDomain : 'CALCULATION') as 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
+            analysis.classification = {
+              ...existing,
+              typeCode: upgrade.typeCode,
+              typeName: upgrade.typeName || existing.typeName,
+              subject: upgrade.subject || existing.subject,
+              chapter: upgrade.chapter || existing.chapter,
+              section: upgrade.section || existing.section,
+              difficulty: mappedDiff,
+              cognitiveDomain: cogn,
+              confidence: upgrade.confidence,
+            };
+            console.log(`[cloud-flow] 1차 분류 강화(classify.ts): ${upgrade.model} → ${upgrade.typeCode} (conf=${upgrade.confidence})`);
+          }
+        }
+      } catch (e) {
+        console.warn('[cloud-flow] classify.ts 분류 강화 실패 (기존 결과 유지):', e);
+      }
+    }
+
     if (onProgress) onProgress(90);
 
     return analysis;
