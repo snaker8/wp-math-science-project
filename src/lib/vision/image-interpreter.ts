@@ -843,6 +843,12 @@ function postProcessResult(
           console.warn(`[Vision] ★ 비정상 expression 제거 (base64 포함)`);
           return false;
         }
+        // ★ 정의 없는 일반 함수명 (y=f(x), y=g(x) 등) → 렌더 불가, points/segments로 그려야 함
+        //   AI가 piecewise linear 그래프를 함수식으로 잡으려 한 케이스 — 제거하면 점·선분만으로 렌더
+        if (/^y\s*=\s*[a-z]\s*\(\s*x\s*\)\s*$/i.test(ltx.trim())) {
+          console.warn(`[Vision] ★ 비정상 expression 제거 (정의 없는 함수명):`, ltx);
+          return false;
+        }
         return true;
       });
       if (graphRendering.expressions.length < before) {
