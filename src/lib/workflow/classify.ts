@@ -260,6 +260,19 @@ ${content.slice(0, 1500)}`;
     return null;
   }
 
+  // ★ 과목 prefix 검증 — examSubject와 맞는 subjectCode로 시작하는지.
+  //   예: 공통수학1 시험지면 MS07, MS08(COMBINED) 만 허용
+  //   Gemini가 다른 과목(MS02 중1-2 등) 코드 생성하면 거부 → null 반환
+  if (resolvedCode) {
+    const allowed = new Set([resolvedCode, ...(COMBINED_SUBJECTS[resolvedCode] || [])]);
+    const codeSubjectMatch = typeCode.match(/^MS(\d{2})/);
+    const codeSubject = codeSubjectMatch?.[1] || '';
+    if (codeSubject && !allowed.has(codeSubject)) {
+      console.warn(`[${label}] ✖ 과목 prefix 불일치: 기대=[${[...allowed].join(',')}] 받음=${codeSubject} (${typeCode}) — 분류 결과 거부`);
+      return null;
+    }
+  }
+
   // ★ typeName은 항상 mathsecr_types DB의 full_path로 덮어씀 (AI 환각 방지)
   //   AI가 코드는 맞춰도 typeName을 잘못 생성하는 경우 다수 발견됨.
   //   DB에서 코드 유효성 검증 + 정확한 full_path 사용.
