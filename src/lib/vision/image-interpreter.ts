@@ -693,11 +693,30 @@ export async function interpretImage(
     const hasOverlapPattern = /점선|dashed.*solid|실선.*점선|원래.*도형|변형/.test(result.description || '');
     const isNetDiagram = hasNetKeyword || hasMissingDashedVerts || (hasTransformPattern && hasOverlapPattern);
 
-    // ★★★ graph가 아닌 모든 타입: Claude 직접 SVG 생성 (Gemini JSON 전달하지 않음)
-    //    graph는 Desmos 렌더링이 더 정확 — 함수식 + piecewise(cases) + points/segments 모두 Desmos가 처리
-    const shouldDirectSvg = result.figureType !== 'graph' &&
-      result.figureType !== 'photo' &&
-      result.confidence >= 0.3;
+    // ★★★ 라우팅 정책:
+    //   - photo: 처리 안 함
+    //   - graph + 함수식 명확: Desmos (정확한 수학 렌더링)
+    //   - graph + 시각/piecewise/다중 plot: 직접 SVG (오팔 프롬프트)
+    //   - geometry/table/etc: 직접 SVG
+    const isVisualGraph = result.figureType === 'graph' && (() => {
+      const gr = result.rendering as GraphRendering | null;
+      if (!gr) return true; // expressions 자체가 없으면 시각 케이스
+      // 사용 가능한 expression 있는지 (정의 없는 y=f(x) 류 제외)
+      const usableExpr = (gr.expressions || []).find(e => {
+        const ltx = (e.latex || '').trim();
+        if (!ltx) return false;
+        if (/^y\s*=\s*[a-z]\s*\(\s*x\s*\)\s*$/i.test(ltx)) return false; // y=f(x)
+        return true;
+      });
+      const desc = result.description || '';
+      // 다중 plot 감지: 설명에 두 함수/두 그래프 언급
+      const isMultiPlot = /두\s*(개의)?\s*그래프|좌측.{0,30}우측|왼쪽.{0,30}오른쪽|y\s*=\s*f\(x\)[^=]*y\s*=\s*g\(x\)/i.test(desc);
+      return !usableExpr || isMultiPlot;
+    })();
+
+    const shouldDirectSvg = result.figureType !== 'photo' &&
+      result.confidence >= 0.3 &&
+      (result.figureType !== 'graph' || isVisualGraph);
 
     if (shouldDirectSvg) {
       console.log(`[Vision] ★★★ Claude 직접 SVG 생성: ${result.figureType} (Gemini JSON 스킵, 이미지만 전달)`);
