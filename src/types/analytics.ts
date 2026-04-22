@@ -112,7 +112,7 @@ export interface AnalyticsFilter {
 
 // 난이도×인지영역 매트릭스 셀
 export interface DifficultyMatrixCell {
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10; // 수학비서 1~10
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   totalAttempts: number;
   correctRate: number;

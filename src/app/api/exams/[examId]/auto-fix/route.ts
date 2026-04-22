@@ -222,9 +222,9 @@ export async function POST(
             const rawCognitive = classifyResult.cognitiveDomain || 'CALCULATION';
             const mappedCognitive = VALID_COGNITIVE.has(rawCognitive) ? rawCognitive : (COGNITIVE_MAP[rawCognitive] || 'CALCULATION');
 
-            // ★ difficulty 1~10 → 1~5 매핑
+            // ★ difficulty 1~10 그대로 저장 (수학비서 스케일)
             const rawDiff = classifyResult.difficulty || 3;
-            const mappedDiff = Math.max(1, Math.min(5, Math.ceil(rawDiff / 2)));
+            const mappedDiff = Math.max(1, Math.min(10, rawDiff));
 
             // ★ classifications 테이블도 함께 업데이트
             const classUpdateData: Record<string, unknown> = {

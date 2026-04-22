@@ -90,7 +90,7 @@ export interface TypeClassification {
   chapter: string; // 대단원
   section: string; // 중단원
   subSection?: string; // 소단원
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10; // 수학비서 1~10 스케일
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   confidence: number; // AI 신뢰도 0-1
   prerequisites: string[]; // 선수 유형 코드들

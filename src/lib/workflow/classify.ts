@@ -85,7 +85,8 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
     console.warn(`[${label}] mathsecr-prompt load 실패:`, e);
   }
 
-  const exampleCode = resolvedCode ? `MS${resolvedCode}-01-03-02-05` : 'MS07-01-03-02-05';
+  // ★ 예시 코드를 명백히 placeholder로 → Gemini가 그대로 복사하지 못하게 (이전: 실제 유효 코드라 Gemini가 복붙)
+  const examplePlaceholder = 'MS??-??-??-??-??';
 
   const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
@@ -99,7 +100,11 @@ ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode�
 ★ 같은 유형이라도 문제마다 난이도가 다릅니다. 문제 내용을 보고 정확히 판정하세요.
 ★ 서술형/서논술형은 최소 5 이상. 합답형(ㄱㄴㄷ)은 최소 5 이상.
 
-JSON: {"classification":{"typeCode":"${exampleCode}","typeName":"대단원 > 중단원 > 소단원 > 세부유형","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":4,"cognitiveDomain":"CALCULATION","confidence":0.9}}
+★★★ typeCode는 반드시 위 테이블에 있는 "| 코드 |" 컬럼 값 그대로 하나를 선택.
+    아래 JSON은 형식 예시일 뿐, ${examplePlaceholder}를 그대로 복사하면 안 됨.
+    실제 문제에 맞는 코드를 테이블에서 찾아 그 자리에 넣으세요.
+
+JSON: {"classification":{"typeCode":"${examplePlaceholder}","typeName":"대단원 > 중단원 > 소단원 > 세부유형","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":4,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
 문제:
 ${content.slice(0, 1500)}`;
@@ -255,31 +260,32 @@ ${content.slice(0, 1500)}`;
     return null;
   }
 
-  // ★ typeName이 비어있거나 typeCode와 동일하면 mathsecr_types DB에서 full_path 조회 (카드 표시용)
-  //   @/lib/supabase/server는 next/headers에 의존하므로 여기서 직접 admin client 생성
+  // ★ typeName은 항상 mathsecr_types DB의 full_path로 덮어씀 (AI 환각 방지)
+  //   AI가 코드는 맞춰도 typeName을 잘못 생성하는 경우 다수 발견됨.
+  //   DB에서 코드 유효성 검증 + 정확한 full_path 사용.
   let typeName = String(cls.typeName || '');
-  if (!typeName || typeName === typeCode) {
-    try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-      if (supabaseUrl && serviceKey) {
-        const { createClient } = await import('@supabase/supabase-js');
-        const sb = createClient(supabaseUrl, serviceKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
-        const { data: msType } = await sb
-          .from('mathsecr_types')
-          .select('full_path')
-          .eq('code', typeCode)
-          .limit(1)
-          .single();
-        if (msType?.full_path) {
-          typeName = msType.full_path as string;
-          console.log(`[${label}] typeName 백필: ${typeCode} → "${typeName}"`);
-        }
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (supabaseUrl && serviceKey) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: msType } = await sb
+        .from('mathsecr_types')
+        .select('full_path')
+        .eq('code', typeCode)
+        .limit(1)
+        .maybeSingle();
+      if (msType?.full_path) {
+        typeName = msType.full_path as string;
+        console.log(`[${label}] typeName DB 검증 완료: ${typeCode} → "${typeName}"`);
+      } else {
+        console.warn(`[${label}] ⚠ typeCode가 DB에 없음: ${typeCode} (AI typeName 유지)`);
       }
-    } catch { /* ignore */ }
-  }
+    }
+  } catch { /* ignore */ }
 
   return {
     typeCode,

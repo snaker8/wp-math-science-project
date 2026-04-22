@@ -1349,8 +1349,9 @@ export async function analyzeProblemWithLLM(
           const existingConf = typeof (existing.confidence as number) === 'number' ? (existing.confidence as number) : 0.5;
           const shouldOverride = upgrade.confidence >= existingConf || !existing.typeCode;
           if (shouldOverride) {
-            // difficulty 1~10 → 1~5 매핑 (타입 호환)
-            const mappedDiff = Math.max(1, Math.min(5, Math.ceil(upgrade.difficulty / 2))) as 1 | 2 | 3 | 4 | 5;
+            // ★ difficulty 1~10 그대로 저장 (수학비서 스케일)
+            const clamped = Math.max(1, Math.min(10, upgrade.difficulty));
+            const diffInt = clamped as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
             const validCognitive = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
             const cogn = (validCognitive.has(upgrade.cognitiveDomain) ? upgrade.cognitiveDomain : 'CALCULATION') as 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
             analysis.classification = {
@@ -1360,7 +1361,7 @@ export async function analyzeProblemWithLLM(
               subject: upgrade.subject || existing.subject,
               chapter: upgrade.chapter || existing.chapter,
               section: upgrade.section || existing.section,
-              difficulty: mappedDiff,
+              difficulty: diffInt,
               cognitiveDomain: cogn,
               confidence: upgrade.confidence,
             };
