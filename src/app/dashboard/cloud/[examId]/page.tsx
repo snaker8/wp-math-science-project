@@ -532,6 +532,13 @@ function ProblemCardView({
               원본 있음
             </span>
           )}
+          {/* ★ 해설 미완성 배지 — 일괄 해설 생성에서 '미완성만 재처리'로 걸러냄 */}
+          {!problem.solution?.trim() && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20"
+              title="AI 해설이 아직 생성되지 않음">
+              해설 없음
+            </span>
+          )}
           {problem.hasFigure && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
               problem.upscaledCropUrl || problem.figureData || problem.figureSvg

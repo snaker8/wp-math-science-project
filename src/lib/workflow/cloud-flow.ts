@@ -1332,10 +1332,9 @@ export async function analyzeProblemWithLLM(
     // 응답 파싱
     const analysis = parseAnalysisResponse(response);
 
-    // ★ 1b: USE_UNIFIED_CLASSIFIER=true 일 때, 수학 분류만 classify.ts (Gemini+GPT)로 강화.
-    //    해설은 기존 GPT 응답 유지. 과학은 전용 분류라 영향 없음.
-    //    feature flag로 토글 가능 — 문제 생기면 env 내리면 즉시 원상.
-    if (!isScience && process.env.USE_UNIFIED_CLASSIFIER === 'true') {
+    // ★ 1차 분류는 classify.ts(Gemini+GPT)로 강화, 1차 GPT 해설은 제거(해설은 batch-solutions에서 Sonnet으로)
+    //    과학은 전용 분류이므로 영향 없음 (isScience 분기)
+    if (!isScience) {
       try {
         const { classifyProblem } = await import('./classify');
         const upgrade = await classifyProblem({
