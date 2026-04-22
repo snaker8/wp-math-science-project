@@ -1088,6 +1088,7 @@ async function saveEditedProblemsDirect(
     solution?: string;
     difficulty?: number;
     typeCode?: string;
+    typeName?: string;
     cognitiveDomain?: string;
     cropImageBase64?: string;
     cropImagePath?: string;
@@ -1346,6 +1347,7 @@ async function saveEditedProblemsDirect(
           ai_analysis: {
             classification: {
               typeCode: edited.typeCode || '',
+              typeName: edited.typeName || '',
               difficulty: edited.difficulty || 3,
               cognitiveDomain: edited.cognitiveDomain || 'CALCULATION',
             },

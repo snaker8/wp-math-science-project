@@ -2815,6 +2815,7 @@ export default function AnalyzeJobPage() {
               number: globalProblemNumber, // ★ 전역 순번 사용 (p.number는 페이지별로 리셋되어 크롭 파일 충돌)
               difficulty: p.difficulty,
               typeCode: p.typeCode,
+              typeName: p.typeName, // ★ 카드 표시용 단원 경로
               cognitiveDomain: p.cognitiveDomain,
               content: p.content,
               answer: p.answer,
