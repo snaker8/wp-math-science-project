@@ -1371,6 +1371,14 @@ export async function analyzeProblemWithLLM(
       } catch (e) {
         console.warn('[cloud-flow] classify.ts 분류 강화 실패 (기존 결과 유지):', e);
       }
+
+      // ★ 1차 GPT 해설 제거 — batch-solutions(Claude Sonnet)에서 한 번만 생성.
+      //    지금까지 GPT 해설 + 사용자 요청 시 Sonnet 해설로 2번 생성되던 낭비 제거.
+      if (analysis.solution) {
+        console.log(`[cloud-flow] 1차 GPT 해설 제거 — batch-solutions에서 Claude Sonnet으로 생성`);
+        // undefined로 두면 DB 저장 단계에서 빈 값으로 처리됨
+        (analysis as unknown as Record<string, unknown>).solution = undefined;
+      }
     }
 
     if (onProgress) onProgress(90);
