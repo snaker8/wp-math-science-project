@@ -48,10 +48,12 @@ export async function POST(
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
+  // ★ 클로저(arrow function) 안에서는 위 null 체크가 좁혀지지 않으므로 단정 캡처
+  const sb = supabaseAdmin;
 
   try {
     // 1. 시험지 정보 조회
-    const { data: exam } = await supabaseAdmin
+    const { data: exam } = await sb
       .from('exams')
       .select('id, title, subject, grade')
       .eq('id', examId)
@@ -71,7 +73,7 @@ export async function POST(
     console.log(`[auto-fix] exam="${exam.title}" → subject="${examSubject}", grade="${examGrade}"`);
 
     // 2. 시험지의 모든 문제 조회
-    const { data: examProblems } = await supabaseAdmin
+    const { data: examProblems } = await sb
       .from('exam_problems')
       .select('problem_id, sequence_number')
       .eq('exam_id', examId)
@@ -84,7 +86,7 @@ export async function POST(
     const problemIds = examProblems.map(ep => ep.problem_id);
     const seqMap = new Map(examProblems.map(ep => [ep.problem_id, ep.sequence_number]));
 
-    const { data: problems } = await supabaseAdmin
+    const { data: problems } = await sb
       .from('problems')
       .select('id, source_number, content_latex, answer_json, ai_analysis, images, solution_latex')
       .in('id', problemIds);
@@ -94,16 +96,17 @@ export async function POST(
     }
 
     // ★ 기존 classifications 일괄 조회
-    const { data: allClassifications } = await supabaseAdmin
+    const { data: allClassifications } = await sb
       .from('classifications')
       .select('id, problem_id, type_code, expanded_type_code, difficulty, cognitive_domain')
       .in('problem_id', problemIds);
     const classMap = new Map((allClassifications || []).map(c => [c.problem_id, c]));
 
-    // 3. 각 문제별 자동 수정
+    // 3. 각 문제별 자동 수정 — 5개씩 병렬 처리 (Vercel 5분 한도 회피)
     const results: FixResult[] = [];
+    const CHUNK_SIZE = 5;
 
-    for (const problem of problems) {
+    const processProblem = async (problem: typeof problems[number]) => {
       const seqNum = seqMap.get(problem.id) || 0;
       const result: FixResult = {
         problemId: problem.id,
@@ -314,7 +317,7 @@ ${content.slice(0, 1500)}`;
             // ★ typeName이 비어있으면 mathsecr_types에서 조회
             if (newCls.typeCode && (!newCls.typeName || newCls.typeName === newCls.typeCode)) {
               try {
-                const { data: msType } = await supabaseAdmin
+                const { data: msType } = await sb
                   .from('mathsecr_types')
                   .select('full_path')
                   .eq('code', newCls.typeCode)
@@ -368,7 +371,7 @@ ${content.slice(0, 1500)}`;
 
             if (existingCls) {
               // 1) 첫 번째 행만 업데이트
-              const { error: clsErr } = await supabaseAdmin
+              const { error: clsErr } = await sb
                 .from('classifications')
                 .update(classUpdateData)
                 .eq('id', existingCls.id);
@@ -376,14 +379,14 @@ ${content.slice(0, 1500)}`;
               else console.log(`[auto-fix] #${seqNum} → ${newCls.typeCode}`);
 
               // 2) 같은 problem_id의 중복 행 삭제 (첫 번째만 남김)
-              await supabaseAdmin
+              await sb
                 .from('classifications')
                 .delete()
                 .eq('problem_id', problem.id)
                 .neq('id', existingCls.id);
             } else {
               // ★ 분류 행이 없으면 INSERT
-              await supabaseAdmin
+              await sb
                 .from('classifications')
                 .insert({
                   problem_id: problem.id,
@@ -406,7 +409,7 @@ ${content.slice(0, 1500)}`;
 
           // classifications 테이블에도 최소한 difficulty/cognitive_domain 업데이트
           if (existingCls) {
-            await supabaseAdmin
+            await sb
               .from('classifications')
               .update({
                 difficulty: String(ai.difficulty || 3),
@@ -414,7 +417,7 @@ ${content.slice(0, 1500)}`;
               })
               .eq('id', existingCls.id);
           } else {
-            await supabaseAdmin
+            await sb
               .from('classifications')
               .insert({
                 problem_id: problem.id,
@@ -595,7 +598,7 @@ ${content.slice(0, 1500)}`;
             existingCls.difficulty !== difficulty ||
             existingCls.cognitive_domain !== cognitiveDomain;
           if (needsSync) {
-            await supabaseAdmin
+            await sb
               .from('classifications')
               .update({ difficulty, cognitive_domain: cognitiveDomain })
               .eq('id', existingCls.id);
@@ -603,7 +606,7 @@ ${content.slice(0, 1500)}`;
           }
         } else {
           // ★ 분류 행이 없으면 INSERT
-          await supabaseAdmin
+          await sb
             .from('classifications')
             .insert({
               problem_id: problem.id,
@@ -623,7 +626,7 @@ ${content.slice(0, 1500)}`;
       }
 
       if (Object.keys(updates).length > 0) {
-        const { error: updateErr } = await supabaseAdmin
+        const { error: updateErr } = await sb
           .from('problems')
           .update(updates)
           .eq('id', problem.id);
@@ -636,6 +639,14 @@ ${content.slice(0, 1500)}`;
       if (result.fixes.length > 0 || result.errors.length > 0) {
         results.push(result);
       }
+    };
+
+    // 5개씩 청크 병렬 실행 (Gemini rate limit + Supabase 동시성 균형)
+    for (let i = 0; i < problems.length; i += CHUNK_SIZE) {
+      const chunk = problems.slice(i, i + CHUNK_SIZE);
+      await Promise.all(chunk.map(p => processProblem(p).catch(err => {
+        console.error(`[auto-fix] 문제 ${seqMap.get(p.id)}번 처리 실패:`, err);
+      })));
     }
 
     // 4. 시험지 과목/학년도 업데이트
@@ -647,7 +658,7 @@ ${content.slice(0, 1500)}`;
       examUpdates.grade = examGrade;
     }
     if (Object.keys(examUpdates).length > 0) {
-      await supabaseAdmin
+      await sb
         .from('exams')
         .update(examUpdates)
         .eq('id', examId);
