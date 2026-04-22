@@ -61,13 +61,17 @@ function loadTree(): TreeNode[] {
 }
 
 /**
- * gradeHint(예: "고1 수학", "공통수학1")로부터 과목 코드를 추출
+ * gradeHint(예: "고1 수학")와 subject(예: "수학II")로부터 과목 코드를 추출
+ * ★ subject가 더 구체적이므로 먼저 시도. 실패 시 gradeHint 시도.
+ *   이전엔 gradeHint 우선이었는데 "고1" 같은 값은 SUBJECT_CODE_MAP에
+ *   매칭되지 않아 null 반환 → typeTable 비어 Gemini가 임의 코드 생성하던 버그.
  */
 export function resolveSubjectCode(gradeHint?: string, subject?: string): string | null {
-  const hint = gradeHint || subject || '';
-  // 직접 매핑
-  for (const [key, code] of Object.entries(SUBJECT_CODE_MAP)) {
-    if (hint.includes(key)) return code;
+  for (const hint of [subject, gradeHint]) {
+    if (!hint) continue;
+    for (const [key, code] of Object.entries(SUBJECT_CODE_MAP)) {
+      if (hint.includes(key)) return code;
+    }
   }
   return null;
 }
