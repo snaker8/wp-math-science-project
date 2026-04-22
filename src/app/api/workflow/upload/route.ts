@@ -631,15 +631,38 @@ export async function PUT(request: NextRequest) {
     const cropImageMap = new Map<number, string>();
     const cropPathMap = new Map<number, string>();
     if (editedProblems && Array.isArray(editedProblems) && editedProblems.length > 0) {
-      for (const edited of editedProblems) {
-        const result = results.find(r => r.problemNumber === edited.number);
+      for (let i = 0; i < editedProblems.length; i++) {
+        const edited = editedProblems[i];
+        // ★ 1차: problemNumber로 매칭 (정상 케이스)
+        let result = results.find(r => r.problemNumber === edited.number);
+        let matchedBy: 'number' | 'index' | 'none' = result ? 'number' : 'none';
+        // ★ 2차: 번호 매칭 실패 시 인덱스 기반 폴백 (silent drop 방지)
+        if (!result && results[i]) {
+          result = results[i];
+          matchedBy = 'index';
+          console.warn(`[Upload PUT] ⚠ 문제 ${edited.number}번 problemNumber 매칭 실패 → 인덱스 ${i} 폴백 (server=${result.problemNumber})`);
+        }
         if (result) {
           if (edited.difficulty !== undefined) result.classification.difficulty = edited.difficulty as 1|2|3|4|5;
           if (edited.typeCode !== undefined) result.classification.typeCode = edited.typeCode;
           if (edited.cognitiveDomain !== undefined) result.classification.cognitiveDomain = edited.cognitiveDomain as 'CALCULATION'|'UNDERSTANDING'|'INFERENCE'|'PROBLEM_SOLVING';
-          if (edited.content !== undefined) result.originalText = edited.content;
+          // ★ 빈 문자열 덮어쓰기 차단 — 정상 OCR 본문이 비워지는 것 방지
+          if (edited.content !== undefined) {
+            const trimmed = (edited.content || '').trim();
+            const serverHasContent = !!(result.originalText && result.originalText.trim().length > 0);
+            if (trimmed.length > 0) {
+              result.originalText = edited.content;
+            } else if (serverHasContent) {
+              console.warn(`[Upload PUT] ⚠ 문제 ${edited.number}번 edited.content 빈값 — 서버 원본 유지(${(result.originalText || '').length}자)`);
+            } else {
+              // 양쪽 다 비어있으면 그대로 빈 값
+              result.originalText = edited.content;
+            }
+          }
           if (edited.choices) result.choices = edited.choices;
-          console.log(`[Upload PUT] 문제 ${edited.number}번 수정 적용: difficulty=${edited.difficulty}, typeCode=${edited.typeCode}`);
+          console.log(`[Upload PUT] 문제 ${edited.number}번 수정 적용 (matched by ${matchedBy}): difficulty=${edited.difficulty}, typeCode=${edited.typeCode}, contentLen=${(edited.content || '').length}`);
+        } else {
+          console.error(`[Upload PUT] ✖ 문제 ${edited.number}번 매칭 완전 실패 — 인덱스 폴백도 불가 (results.length=${results.length})`);
         }
         // ★ 크롭 이미지: 업로드된 path 우선
         if (edited.cropImagePath) {
