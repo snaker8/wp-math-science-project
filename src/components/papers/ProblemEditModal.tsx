@@ -327,8 +327,8 @@ function ChoicesEditor({
 
   return (
     <div className="rounded-xl border border/60 bg-surface-card/80 overflow-hidden">
-      {/* 정답 유형 헤더 */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-surface-raised/50 border-b border/50">
+      {/* 정답 유형 헤더 — 컴팩트 */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-raised/50 border-b border/50">
         <span className="text-xs font-bold text-content-secondary">정답 유형</span>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => onAnswerTypeChange('objective')}
@@ -343,7 +343,7 @@ function ChoicesEditor({
       </div>
 
       {answerType === 'objective' ? (
-        <div className="p-4 space-y-3">
+        <div className="px-3 py-2 space-y-1.5">
           {/* 레이아웃 옵션 */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 ml-auto">
@@ -356,17 +356,17 @@ function ChoicesEditor({
             </div>
           </div>
 
-          {/* 선택지 입력 */}
-          <div className={`grid gap-2 ${
+          {/* 선택지 입력 — 컴팩트화 */}
+          <div className={`grid gap-1 ${
             choiceLayout === 1 ? 'grid-cols-1' : choiceLayout === 2 ? 'grid-cols-2' : choiceLayout === 3 ? 'grid-cols-3' : 'grid-cols-5'
           }`}>
             {choices.map((choice, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <span className="text-sm text-content-tertiary w-5 text-center flex-shrink-0">{circledNumbers[i]}</span>
+              <div key={i} className="flex items-center gap-1">
+                <span className="text-xs text-content-tertiary w-4 text-center flex-shrink-0">{circledNumbers[i]}</span>
                 <input type="text"
                   value={choice.replace(/^[①②③④⑤]\s*/, '')}
                   onChange={(e) => handleChoiceChange(i, e.target.value)}
-                  className="flex-1 rounded-lg border border bg-surface-raised px-2.5 py-1.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
+                  className="flex-1 rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
                   placeholder={`선택지 ${i + 1}`} />
                 {/* 마지막 선택지에 삭제 버튼 (2개 이상일 때) */}
                 {i === choices.length - 1 && choices.length > 2 && (
@@ -379,39 +379,38 @@ function ChoicesEditor({
               </div>
             ))}
           </div>
-          {/* 선택지 추가 버튼 */}
-          {choices.length < 5 && (
-            <button type="button" onClick={() => onChange([...choices, ''])}
-              className="w-full py-1.5 rounded-lg border border-dashed border-zinc-600 text-xs text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors">
-              + 선택지 추가 ({choices.length}/5)
-            </button>
-          )}
-
-          {/* 정답 선택 */}
-          <div className="flex items-center gap-3 pt-1 border-t border-subtle">
+          {/* 정답 선택 + 선택지 추가 — 한 줄로 통합 */}
+          <div className="flex items-center gap-2 pt-1 border-t border-subtle">
             <span className="text-xs font-medium text-content-secondary">정답 :</span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               {circledNumbers.map((num, i) => (
                 <button key={i} type="button" onClick={() => onCorrectAnswerChange(i + 1)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                     correctAnswer === i + 1
                       ? 'bg-red-500 text-content-primary ring-2 ring-red-400/50 shadow-lg shadow-red-500/20'
                       : 'bg-surface-raised text-content-tertiary border border hover:border-zinc-500 hover:text-content-secondary'
                   }`}>{num}</button>
               ))}
             </div>
-            <label className="flex items-center gap-1.5 ml-auto text-xs text-content-tertiary cursor-pointer">
+            {/* 선택지 추가 — 같은 줄로 통합 */}
+            {choices.length < 5 && (
+              <button type="button" onClick={() => onChange([...choices, ''])}
+                className="ml-2 px-2 py-0.5 rounded-md border border-dashed border-zinc-600 text-[10px] text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors">
+                + 추가 ({choices.length}/5)
+              </button>
+            )}
+            <label className="flex items-center gap-1 ml-auto text-[11px] text-content-tertiary cursor-pointer">
               <input type="checkbox" checked={isMultipleAnswer} onChange={(e) => onMultipleAnswerChange(e.target.checked)}
-                className="w-3.5 h-3.5 accent-cyan-500 rounded" />
+                className="w-3 h-3 accent-cyan-500 rounded" />
               복수정답
             </label>
           </div>
         </div>
       ) : (
-        <div className="p-4">
-          <label className="block text-xs font-medium text-content-secondary mb-2">주관식 정답</label>
+        <div className="px-3 py-2">
+          <label className="block text-xs font-medium text-content-secondary mb-1.5">주관식 정답</label>
           <input type="text" value={subjectiveAnswer} onChange={(e) => onSubjectiveAnswerChange(e.target.value)}
-            className="w-full rounded-lg border border bg-surface-raised px-3 py-2.5 text-lg text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full rounded-md border border bg-surface-raised px-2.5 py-1.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
             placeholder="정답을 입력하세요" />
         </div>
       )}
@@ -985,8 +984,8 @@ export function ProblemEditModal({
           </div>
         </div>
 
-        {/* ======== 하단: 선택지 ======== */}
-        <div className="border-t border-subtle px-5 py-3 flex-shrink-0">
+        {/* ======== 하단: 선택지 — 컴팩트, 위 수정 영역이 더 넓게 ======== */}
+        <div className="border-t border-subtle px-3 py-2 flex-shrink-0">
           <ChoicesEditor
             choices={choices} onChange={setChoices}
             correctAnswer={correctAnswer} onCorrectAnswerChange={setCorrectAnswer}
