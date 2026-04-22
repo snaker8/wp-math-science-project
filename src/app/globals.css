@@ -146,9 +146,10 @@
 .katex {
   font-size: 1em !important;
 }
-/* ★ 디스플레이 수식($$...$$, cases 블록 등)은 본문보다 크게 — 분수/중괄호 가독성 */
-.katex-display > .katex {
-  font-size: 1.25em !important;
+/* ★ cases/mtable 내부 분수만 키움 — 중괄호 안 분수가 textstyle로 작게 보이는 가독성 문제만 해결
+   (디스플레이 수식 전체를 키우면 다른 식이 비정상적으로 커지는 회귀 발생 → 좁은 스코프) */
+.katex .mtable .mfrac {
+  font-size: 1.2em;
 }
 .katex .base {
   vertical-align: baseline;
