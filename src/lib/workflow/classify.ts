@@ -256,19 +256,25 @@ ${content.slice(0, 1500)}`;
   }
 
   // ★ typeName이 비어있거나 typeCode와 동일하면 mathsecr_types DB에서 full_path 조회 (카드 표시용)
+  //   @/lib/supabase/server는 next/headers에 의존하므로 여기서 직접 admin client 생성
   let typeName = String(cls.typeName || '');
   if (!typeName || typeName === typeCode) {
     try {
-      const { supabaseAdmin } = await import('@/lib/supabase/server');
-      if (supabaseAdmin) {
-        const { data: msType } = await supabaseAdmin
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+      if (supabaseUrl && serviceKey) {
+        const { createClient } = await import('@supabase/supabase-js');
+        const sb = createClient(supabaseUrl, serviceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { data: msType } = await sb
           .from('mathsecr_types')
           .select('full_path')
           .eq('code', typeCode)
           .limit(1)
           .single();
         if (msType?.full_path) {
-          typeName = msType.full_path;
+          typeName = msType.full_path as string;
           console.log(`[${label}] typeName 백필: ${typeCode} → "${typeName}"`);
         }
       }
