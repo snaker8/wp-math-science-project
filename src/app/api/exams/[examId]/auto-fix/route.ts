@@ -437,6 +437,29 @@ export async function POST(
         }
       }
 
+      // ─── FIX 4.6: LaTeX 렌더 수정 (src/lib/latex/renderRepair.ts) ───
+      // ★ 이 패스는 "자동수정(유형매핑)"과는 별개 개념으로, KaTeX 렌더 실패 교정만 담당.
+      //   분할된 구간정의함수 병합 등, 기존 fixLatex 가 못 잡는 케이스 보완.
+      try {
+        const { repairLatexRender } = await import('@/lib/latex/renderRepair');
+        const c2Before = (updates.content_latex as string) || content;
+        const c2 = repairLatexRender(c2Before);
+        if (c2.changes.length > 0 && c2.fixed !== c2Before) {
+          updates.content_latex = c2.fixed;
+          result.fixes.push(`렌더 수정: ${c2.changes.join(', ')}`);
+        }
+        const s2Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
+        if (s2Before) {
+          const s2 = repairLatexRender(s2Before);
+          if (s2.changes.length > 0 && s2.fixed !== s2Before) {
+            updates.solution_latex = s2.fixed;
+            result.fixes.push(`해설 렌더 수정: ${s2.changes.join(', ')}`);
+          }
+        }
+      } catch (e) {
+        console.error(`[auto-fix] #${seqNum} renderRepair error:`, e instanceof Error ? e.message : e);
+      }
+
       // ─── FIX 5: figure_crop URL 프록시 변환 확인 ───
       const images = (problem.images as Array<{ url: string; type: string; label: string }>) || [];
       const brokenFigures = images.filter(img =>
