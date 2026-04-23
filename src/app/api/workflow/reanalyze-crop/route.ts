@@ -348,9 +348,15 @@ export async function POST(request: NextRequest) {
     const ocrText = normalizeChoiceParens(normalizedParens);
 
     // 2. 선택지 추출
-    const choices = extractChoicesFromOCR(ocrText);
+    const rawChoices = extractChoicesFromOCR(ocrText);
+    // ★ 오염 방어 후처리: Mathpix가 문제 본문 수식 조각을 선택지로 잘못 흡수한 경우 복구
+    const choices = cleanPollutedChoices(rawChoices);
     // ★ 디버그: 실제 OCR 원문과 추출된 선택지 로그
     console.log(`[Reanalyze] OCR 원문(처음 500자):\n${ocrText.substring(0, 500)}`);
+    if (choices.length !== rawChoices.length) {
+      console.log(`[Reanalyze] 선택지 오염 복구: ${rawChoices.length}개 → ${choices.length}개 (앞 ${rawChoices.length - choices.length}개 제거)`);
+      console.log(`[Reanalyze] 제거된 조각:`, JSON.stringify(rawChoices.slice(0, rawChoices.length - choices.length)));
+    }
     console.log(`[Reanalyze] 추출된 선택지 (${choices.length}개):`, JSON.stringify(choices));
 
     // 3. GPT-4o Vision 정제
@@ -534,6 +540,57 @@ function normalizeChoiceParens(text: string): string {
 
   console.log('[NormalizeChoices] (N) → ⓝ 변환 완료');
   return result;
+}
+
+/**
+ * 선택지 오염 방어 — Mathpix가 문제 본문 끝 조각을 ①로 잘못 흡수한 경우 복구
+ *   재현: "...f(1)}{x-1}의 값은? [4.3점] ① 6 ② 7 ③ 8 ④ 9 ⑤ 10"
+ *   → OCR이 '}{x-1}$의 값은? [4.3점]'을 ①로 흡수, 실제 선택지는 ②부터 밀림
+ *   검사: 앞쪽에 본문 조각 패턴 감지 + 뒤에 깨끗한 5개 이상 있으면 앞 부분 제거
+ */
+const CHOICE_POLLUTION_PATTERNS = [
+  // 시작 기준 — 수식 연산자·닫는 괄호 조각
+  /^\s*[+\-×÷]\s*[A-Za-z(\\$]/,
+  /^\s*[+\-]\s*\\[A-Za-z]/,
+  /^\s*[\]\}\)]/,
+  /^\s*\\[a-zA-Z]+\s*[\]\}]/,
+  /^\s*\$\s*[가-힣]/,
+  // 본문 키워드 — 어디든 포함되면 본문 조각
+  /의\s*값/,
+  /구하시오|구하여라|구하면|구해\s*보시오/,
+  /\(\s*단\s*[,.]/,
+  /\\\(\s*단\s*[,.]/,
+  /이때|따라서|그러면/,
+  // 배점·점수 표기
+  /\[\s*[\d.]+\s*점\s*\]/,
+  /\(\s*총\s*\d+\s*점/,
+  // 물음표 종결
+  /\?\s*$/,
+  /\?\s*\[[\d.]+점/,
+];
+
+function isChoicePolluted(content: string): boolean {
+  return CHOICE_POLLUTION_PATTERNS.some(p => p.test(content));
+}
+
+function cleanPollutedChoices(choices: string[]): string[] {
+  if (choices.length <= 5) {
+    // 이미 5개 이하면 그대로 (오염돼도 자를 여유 없음 — 그냥 수동 교정)
+    return choices;
+  }
+  // 앞쪽부터 검사해서 첫 'clean' 인덱스 찾기
+  let firstCleanIdx = -1;
+  for (let i = 0; i < choices.length; i++) {
+    if (!isChoicePolluted(choices[i])) {
+      firstCleanIdx = i;
+      break;
+    }
+  }
+  // 앞쪽 오염 제거 후 남은 5개 이상이면 그 뒤 5개 채택
+  if (firstCleanIdx > 0 && choices.length - firstCleanIdx >= 5) {
+    return choices.slice(firstCleanIdx, firstCleanIdx + 5);
+  }
+  return choices;
 }
 
 /**
