@@ -48,6 +48,33 @@ const CIRCLED_TO_NUMBER: Record<string, string> = {
 };
 
 /**
+ * 라벨을 원형 숫자로 복원 (오인식된 선택지를 문제 본문으로 되돌릴 때)
+ */
+const LABEL_TO_CIRCLED: Record<string, string> = {
+  '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
+};
+
+/**
+ * 선택지 오염 감지 패턴
+ *   Mathpix OCR이 문제 본문 끝의 수식 조각을 선택지로 잘못 분류하는 경우 감지.
+ *   예: "P(1) + Q(3) + R(4)의 값은? (단, ...)" 에서 "+Q", "+R", "의 값은?", "(단,"이
+ *        각각 ①,②,③으로 붙어 들어감. 실제 선택지 18/54/173/198/222는 ④⑤부터 시작.
+ */
+const CHOICE_POLLUTION_PATTERNS = [
+  /^\s*[+\-×÷]\s*[A-Za-z(\\$]/,                 // "+Q(", "-R(", "×f(", "÷g(" 등 수식 연산자 조각
+  /^\s*의\s*값/,                                // "의 값은?", "의 값을..."
+  /\?\s*$/,                                     // "값은?" 처럼 물음표로 끝남
+  /^\s*\(?\s*단\s*[,.]/,                        // "(단,", "단,"
+  /^\s*\\\(\s*단\s*[,.]/,                        // LaTeX 변환된 "\(단,"
+  /^\s*구하/,                                   // "구하시오", "구하여라"
+  /^\s*[+\-]\s*\\[A-Za-z]/,                     // "+\frac{...}", "-\sqrt{...}"
+];
+
+function isPollutedChoice(content: string): boolean {
+  return CHOICE_POLLUTION_PATTERNS.some(p => p.test(content));
+}
+
+/**
  * QuestionParser 클래스
  */
 export class QuestionParser {
@@ -366,9 +393,44 @@ export class QuestionParser {
     }
 
     // 첫 번째 원형 숫자 이전을 문제 본문으로
-    const questionText = uniquePositions.length > 0
+    let questionText = uniquePositions.length > 0
       ? text.substring(0, uniquePositions[0].index).trim()
       : text;
+
+    // ★ 선택지 오염 방어: 앞쪽 선택지가 수식 조각·본문 키워드이면 문제 본문으로 되돌림.
+    //   Mathpix가 "P(1)+Q(3)+R(4)의 값은? (단,...)" 같은 문장을 ①+Q, ②+R, ③의 값은? 으로
+    //   오인식하는 케이스 대응. 뒤쪽에 깔끔한 선택지 5개가 남아있으면 그것만 채택.
+    if (choices.length > 0) {
+      let firstCleanIdx = -1;
+      for (let i = 0; i < choices.length; i++) {
+        if (!isPollutedChoice(choices[i].content_latex)) {
+          firstCleanIdx = i;
+          break;
+        }
+      }
+      const cleanRemaining = firstCleanIdx >= 0 ? choices.length - firstCleanIdx : 0;
+
+      // 조건: 앞쪽에 오염된 선택지 있고(firstCleanIdx > 0), 뒤에 5개 이상 깔끔히 남아있어야 복구
+      if (firstCleanIdx > 0 && cleanRemaining >= 5) {
+        const polluted = choices.slice(0, firstCleanIdx);
+        const clean = choices.slice(firstCleanIdx);
+
+        // 오염된 선택지를 본문 뒤에 복원 (원형 숫자 라벨 복원)
+        const restoredFragment = polluted
+          .map(c => `${LABEL_TO_CIRCLED[c.label] ?? c.label} ${c.content_latex}`)
+          .join(' ');
+        questionText = `${questionText} ${restoredFragment}`.trim();
+
+        // 뒤의 깔끔한 5개를 ①~⑤로 라벨 재할당
+        const finalChoices: ParsedChoice[] = clean.slice(0, 5).map((c, i) => ({
+          ...c,
+          label: String(i + 1),
+        }));
+
+        console.log(`[QuestionParser] 선택지 오염 감지 → 앞쪽 ${firstCleanIdx}개 본문 복귀 (남은 ${finalChoices.length}개가 진짜 보기)`);
+        return { questionText, choices: finalChoices };
+      }
+    }
 
     return { questionText, choices };
   }
