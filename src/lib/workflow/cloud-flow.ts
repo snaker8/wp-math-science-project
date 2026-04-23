@@ -21,6 +21,7 @@ import {
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { parseQuestions, getQuestionParser } from '@/lib/ocr/question-parser';
 import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } from '@/types/ocr';
+import { cachedSystem } from '@/lib/claude/cache';
 
 // ============================================================================
 // Configuration
@@ -1512,7 +1513,7 @@ async function callClaude(prompt: string, options: CallClaudeOptions = {}): Prom
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
         max_tokens: maxTokens,
-        system: systemMessage,
+        system: cachedSystem(systemMessage),
         messages: [
           { role: 'user', content: prompt },
         ],

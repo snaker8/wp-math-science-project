@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { cachedSystem } from '@/lib/claude/cache';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
@@ -458,7 +459,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
             body: JSON.stringify({
               model: ANTHROPIC_MODEL,
               max_tokens: MAX_TOKENS,
-              system: systemPrompt,
+              system: cachedSystem(systemPrompt),
               messages: [{ role: 'user', content: userContent }],
               thinking: { type: 'enabled', budget_tokens: THINKING_BUDGET },
               temperature: 1, // thinking 활성 시 API 요구사항
@@ -502,7 +503,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
                   body: JSON.stringify({
                     model: ANTHROPIC_MODEL,
                     max_tokens: 4000,
-                    system: systemPrompt,
+                    system: cachedSystem(systemPrompt),
                     messages: [{ role: 'user', content: userContent }],
                     temperature: 0.2,
                   }),
@@ -539,7 +540,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
               body: JSON.stringify({
                 model: ANTHROPIC_MODEL,
                 max_tokens: 4000,
-                system: systemPrompt,
+                system: cachedSystem(systemPrompt),
                 messages: [{ role: 'user', content: userContent }],
                 temperature: 0.2,
               }),
@@ -810,7 +811,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             model: ANTHROPIC_MODEL,
             // 검산도 thinking — budget 3000 + output 2500 < 8192
             max_tokens: 6000,
-            system: '당신은 한국 수학 문제의 독립 검산자입니다. 정확한 풀이와 정답만 JSON으로 응답하세요.',
+            system: cachedSystem('당신은 한국 수학 문제의 독립 검산자입니다. 정확한 풀이와 정답만 JSON으로 응답하세요.'),
             messages: [{ role: 'user', content: userContentVerify }],
             thinking: { type: 'enabled', budget_tokens: 3000 },
             temperature: 1,
@@ -872,7 +873,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
         const opusBody: Record<string, unknown> = {
           model: ANTHROPIC_OPUS_MODEL,
           max_tokens: 4000,
-          system: systemPrompt,
+          system: cachedSystem(systemPrompt),
           messages: [{ role: 'user', content: userContent }],
           temperature: 0.3,
         };

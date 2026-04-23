@@ -23,6 +23,7 @@ import {
   fetchCorrectionExamples,
   buildCorrectionPromptBlock,
 } from './correction-examples';
+import { cachedSystem } from '@/lib/claude/cache';
 
 // ============================================================================
 // Configuration
@@ -1930,7 +1931,7 @@ async function callClaudeVision(
   const bodyBase: Record<string, unknown> = {
     model: CLAUDE_MODEL,
     max_tokens: CLAUDE_THINKING_ENABLED ? baseMaxTokens + CLAUDE_THINKING_BUDGET : baseMaxTokens,
-    system: systemPrompt,
+    system: cachedSystem(systemPrompt),
     messages: [
       {
         role: 'user',
