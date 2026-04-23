@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
+import RenderRepairPanel from '@/components/papers/RenderRepairPanel';
 import dynamic from 'next/dynamic';
 
 // GraphModal은 Desmos API 사용하므로 dynamic import
@@ -982,6 +983,13 @@ export function ProblemEditModal({
               onOpenLatex={() => openLatexModal('content')}
               onOpenGraph={() => openGraphModal('content')}
             />
+            {/* ★ 렌더 수정 제안 — KaTeX 에러 유발 패턴/학습 규칙 자동 감지 */}
+            <RenderRepairPanel
+              value={content}
+              label="문제"
+              onApply={setContent}
+              source="content"
+            />
             {cropImageUrl && (
               <button
                 type="button"
@@ -1004,6 +1012,13 @@ export function ProblemEditModal({
               textareaRef={solutionRef}
               onOpenLatex={() => openLatexModal('solution')}
               onOpenGraph={() => openGraphModal('solution')}
+            />
+            {/* ★ 해설 렌더 수정 제안 */}
+            <RenderRepairPanel
+              value={solution}
+              label="해설"
+              onApply={setSolution}
+              source="solution"
             />
           </div>
 
