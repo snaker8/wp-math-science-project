@@ -823,7 +823,9 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
           const parsed = parseJsonResponse(text);
           const verifyAnswer = String(parsed?.finalAnswer || '').trim();
           const sonnetAnswer = String(solution.finalAnswer || '').trim();
-          const match = !!verifyAnswer && normalizeAnswer(verifyAnswer) === normalizeAnswer(sonnetAnswer);
+          // 느슨한 매칭 사용: 엄격 정규화 + 끝숫자/등호뒤 값 비교로 표현 차이 흡수
+          // (예: "$m^2+n^2=32$" vs "32", "개수는 134이다" vs "134" 같은 케이스)
+          const match = !!verifyAnswer && answersMatch(verifyAnswer, sonnetAnswer);
 
           console.log(`[generate-solution] Sonnet 자체 검산: ${match ? '✅ MATCH' : '⚠️ MISMATCH'} — Primary: "${sonnetAnswer}" vs Verify: "${verifyAnswer}"`);
 
@@ -1030,6 +1032,56 @@ function parseJsonResponse(text: string): any {
       return null;
     }
   }
+}
+
+/**
+ * 답변에서 "최종 핵심 값"만 추출 — 느슨한 매칭용
+ *   예: "$m^2 + n^2 = 32$" → "32" (등호 뒤 값)
+ *       "조건을 만족시키는... 개수는 **134**이다." → "134" (마지막 숫자)
+ *       "134" → "134"
+ */
+function extractCoreAnswer(ans: string): string | null {
+  if (!ans) return null;
+  let s = ans.trim();
+  // LaTeX 래퍼·강조 마커 제거
+  s = s.replace(/\$+/g, '').replace(/\*+/g, '');
+
+  // 1) 등호 뒤 마지막 값 — "x = 5", "m^2 + n^2 = 32"
+  const eqMatches = s.match(/=\s*([^=]+?)\s*(?:이다|임을|입니다|$)/);
+  if (eqMatches && eqMatches[1]) {
+    const tail = eqMatches[1].trim();
+    // 등호 뒤가 숫자 하나면 그대로
+    const tailNum = tail.match(/^-?\d+(?:\.\d+)?(?:\/\d+)?$/);
+    if (tailNum) return tailNum[0];
+  }
+
+  // 2) 문장 끝 마지막 숫자 (정수·소수·분수·음수)
+  const numMatches = s.match(/-?\d+(?:\.\d+)?(?:\/\d+)?/g);
+  if (numMatches && numMatches.length > 0) {
+    return numMatches[numMatches.length - 1];
+  }
+
+  return null;
+}
+
+/**
+ * 두 답변이 "실질적으로 같은가" 판정 — 엄격 정규화 + 느슨한 코어값 매칭 조합.
+ *   Sonnet primary("$m^2 + n^2 = 32$")와 verify("32") 같은 표현 차이를 흡수.
+ */
+function answersMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  // 1) 엄격 정규화 후 동일
+  if (normalizeAnswer(a) === normalizeAnswer(b)) return true;
+  // 2) 코어 값 추출 후 동일
+  const coreA = extractCoreAnswer(a);
+  const coreB = extractCoreAnswer(b);
+  if (coreA && coreB && coreA === coreB) return true;
+  // 3) 한쪽이 숫자만이고 다른 쪽 코어 값이 같으면 매칭
+  const pureNumA = a.trim().match(/^-?\d+(?:\.\d+)?(?:\/\d+)?$/);
+  const pureNumB = b.trim().match(/^-?\d+(?:\.\d+)?(?:\/\d+)?$/);
+  if (pureNumA && coreB === pureNumA[0]) return true;
+  if (pureNumB && coreA === pureNumB[0]) return true;
+  return false;
 }
 
 function normalizeAnswer(ans: string): string {
