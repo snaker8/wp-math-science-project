@@ -131,6 +131,10 @@ ${content.slice(0, 1500)}`;
       let lastError: Error | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
+          // ★ Prefill trick: assistant 응답 시작을 JSON으로 강제 —
+          //   Claude가 "문제를 분석합니다..." 같은 설명 텍스트 쓰고 max_tokens에서 잘리는 현상 방지.
+          //   Anthropic 공식 권장 기법. 응답은 prefill 뒤에서 시작하므로 완전한 JSON 재구성 시 prefix 합쳐야 함.
+          const prefill = '{"classification":{"typeCode":"';
           const cr = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -140,9 +144,12 @@ ${content.slice(0, 1500)}`;
             },
             body: JSON.stringify({
               model: CLAUDE_CLASSIFY_MODEL,
-              max_tokens: 1000,
+              max_tokens: 1500,  // 긴 typeName·설명 여유 확보
               system: cachedSystem(claudeSystemText),
-              messages: [{ role: 'user', content: userPrompt }],
+              messages: [
+                { role: 'user', content: userPrompt },
+                { role: 'assistant', content: prefill },
+              ],
               temperature: 0.1,
             }),
           });
@@ -160,7 +167,9 @@ ${content.slice(0, 1500)}`;
           const cd = await cr.json();
           const tb = Array.isArray(cd.content) ? cd.content.find((c: { type: string }) => c.type === 'text') : null;
           const rt = (tb?.text || '').trim();
-          rawContent = rt.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
+          // ★ prefill을 앞에 이어붙여 완전한 JSON 재구성
+          const combined = (prefill + rt).trim();
+          rawContent = combined.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
           // 캐시 사용 로깅 (usage.cache_read_input_tokens 존재 시)
           const usage = cd.usage || {};
           if (usage.cache_read_input_tokens) {
@@ -343,6 +352,10 @@ ${content.slice(0, 1500)}`;
   //   AI가 코드는 맞춰도 typeName을 잘못 생성하는 경우 다수 발견됨.
   //   DB에서 코드 유효성 검증 + 정확한 full_path 사용.
   let typeName = String(cls.typeName || '');
+  // DB full_path로 subject/chapter/section 자동 파싱 — AI 응답이 잘려도 메타데이터 보장
+  let dbSubject = '';
+  let dbChapter = '';
+  let dbSection = '';
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -353,12 +366,15 @@ ${content.slice(0, 1500)}`;
       });
       const { data: msType } = await sb
         .from('mathsecr_types')
-        .select('full_path')
+        .select('full_path, subject_name, level1_name, level2_name')
         .eq('code', typeCode)
         .limit(1)
         .maybeSingle();
       if (msType?.full_path) {
         typeName = msType.full_path as string;
+        dbSubject = String(msType.subject_name || '');
+        dbChapter = String(msType.level1_name || '');  // 대단원
+        dbSection = String(msType.level2_name || '');  // 중단원
         console.log(`[${label}] typeName DB 검증 완료: ${typeCode} → "${typeName}"`);
       } else {
         console.warn(`[${label}] ⚠ typeCode가 DB에 없음: ${typeCode} (AI typeName 유지)`);
@@ -369,7 +385,8 @@ ${content.slice(0, 1500)}`;
   return {
     typeCode,
     typeName,
-    subject: String(cls.subject || examSubject || ''),
+    // AI 응답에서 못 받은 필드는 DB에서 파싱한 값으로 채움 (auto-fix 불필요 재트리거 방지)
+    subject: String(cls.subject || dbSubject || examSubject || ''),
     chapter: String(cls.chapter || ''),
     section: String(cls.section || ''),
     difficulty: parseInt(String(cls.difficulty || '3')) || 3,
