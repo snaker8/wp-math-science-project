@@ -95,6 +95,30 @@ export async function POST(
       return NextResponse.json({ message: '문제 조회 실패', fixes: [] });
     }
 
+    // ─── 렌더 수정 학습 규칙 로드 (confidence ≥ 0.7) ───
+    //    매 요청당 한 번만 조회해서 아래 루프에서 재사용.
+    //    조회 실패하면 빈 배열 → 학습 적용만 건너뛰고 나머지 로직 정상 진행.
+    let learnedRules: Array<{ original: string; corrected: string; confidence: number; id: string }> = [];
+    try {
+      const { data: rulesData } = await sb
+        .from('latex_render_corrections')
+        .select('id, original_fragment, corrected_fragment, confidence, status')
+        .in('status', ['auto_applied', 'learning'])
+        .gte('confidence', 0.7)
+        .order('confidence', { ascending: false })
+        .limit(200);
+      if (rulesData) {
+        learnedRules = rulesData.map(r => ({
+          id: r.id,
+          original: r.original_fragment,
+          corrected: r.corrected_fragment,
+          confidence: r.confidence,
+        }));
+      }
+    } catch (e) {
+      console.warn('[auto-fix] learnedRules load failed:', e instanceof Error ? e.message : e);
+    }
+
     // ★ 기존 classifications 일괄 조회
     const { data: allClassifications } = await sb
       .from('classifications')
@@ -440,8 +464,11 @@ export async function POST(
       // ─── FIX 4.6: LaTeX 렌더 수정 (src/lib/latex/renderRepair.ts) ───
       // ★ 이 패스는 "자동수정(유형매핑)"과는 별개 개념으로, KaTeX 렌더 실패 교정만 담당.
       //   분할된 구간정의함수 병합 등, 기존 fixLatex 가 못 잡는 케이스 보완.
+      //   + 학습된 사용자 수정 규칙도 여기서 함께 적용.
       try {
-        const { repairLatexRender } = await import('@/lib/latex/renderRepair');
+        const { repairLatexRender, applyLearnedRules } = await import('@/lib/latex/renderRepair');
+
+        // (1) 하드코딩 렌더 수정 규칙
         const c2Before = (updates.content_latex as string) || content;
         const c2 = repairLatexRender(c2Before);
         if (c2.changes.length > 0 && c2.fixed !== c2Before) {
@@ -454,6 +481,24 @@ export async function POST(
           if (s2.changes.length > 0 && s2.fixed !== s2Before) {
             updates.solution_latex = s2.fixed;
             result.fixes.push(`해설 렌더 수정: ${s2.changes.join(', ')}`);
+          }
+        }
+
+        // (2) 학습 규칙 — 과거 수동 수정에서 쌓인 (original → corrected) 패턴
+        if (learnedRules.length > 0) {
+          const c3Before = (updates.content_latex as string) || c2.fixed || content;
+          const c3 = applyLearnedRules(c3Before, learnedRules);
+          if (c3.changes.length > 0 && c3.fixed !== c3Before) {
+            updates.content_latex = c3.fixed;
+            result.fixes.push(`학습 규칙: ${c3.changes.join(', ')}`);
+          }
+          const s3Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
+          if (s3Before) {
+            const s3 = applyLearnedRules(s3Before, learnedRules);
+            if (s3.changes.length > 0 && s3.fixed !== s3Before) {
+              updates.solution_latex = s3.fixed;
+              result.fixes.push(`해설 학습 규칙: ${s3.changes.join(', ')}`);
+            }
           }
         }
       } catch (e) {

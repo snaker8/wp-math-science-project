@@ -128,6 +128,47 @@ export function repairLatexRender(input: string): LatexRepairResult {
 }
 
 /**
+ * 학습된 규칙 타입 — DB 에서 로드된 (original → corrected) 쌍.
+ */
+export interface LearnedRule {
+  id?: string;
+  original: string;
+  corrected: string;
+  confidence: number;
+}
+
+/**
+ * 학습된 규칙을 콘텐츠에 적용.
+ *  - confidence ≥ 0.7 규칙만 사용
+ *  - original 길이 8자 미만은 스킵 (노이즈 방지)
+ *  - 정확한 문자열 매칭만 사용 (정규식 아님). 오발동 위험 최소화.
+ *
+ * 반환값의 changes 에는 적용된 규칙 개수만 기록.
+ */
+export function applyLearnedRules(input: string, rules: LearnedRule[]): LatexRepairResult {
+  if (!input || !rules || rules.length === 0) {
+    return { fixed: input || '', changes: [] };
+  }
+
+  let fixed = input;
+  let applied = 0;
+  for (const rule of rules) {
+    if (!rule || !rule.original || !rule.corrected) continue;
+    if (rule.confidence < 0.7) continue;
+    if (rule.original.length < 8) continue;
+    if (rule.original === rule.corrected) continue;
+    if (fixed.includes(rule.original)) {
+      fixed = fixed.split(rule.original).join(rule.corrected);
+      applied++;
+    }
+  }
+
+  const changes: string[] = [];
+  if (applied > 0) changes.push(`학습 규칙 ${applied}건 적용`);
+  return { fixed, changes };
+}
+
+/**
  * 문제/해설 콘텐츠 양쪽 모두에 적용.
  * 변경이 있으면 각각 changes 누적해서 반환.
  */
