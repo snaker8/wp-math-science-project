@@ -67,9 +67,12 @@ function loadTree(): TreeNode[] {
  *   매칭되지 않아 null 반환 → typeTable 비어 Gemini가 임의 코드 생성하던 버그.
  */
 export function resolveSubjectCode(gradeHint?: string, subject?: string): string | null {
+  // ★ 긴 key부터 매칭 — "수학II".includes("수학I")이 true라 "수학I"가 먼저 매치되던 버그 수정.
+  //   '수학II'(4) vs '수학I'(3) 같이 prefix 관계인 key들에서 긴 것이 우선돼야 정확.
+  const sortedEntries = Object.entries(SUBJECT_CODE_MAP).sort((a, b) => b[0].length - a[0].length);
   for (const hint of [subject, gradeHint]) {
     if (!hint) continue;
-    for (const [key, code] of Object.entries(SUBJECT_CODE_MAP)) {
+    for (const [key, code] of sortedEntries) {
       if (hint.includes(key)) return code;
     }
   }
