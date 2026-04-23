@@ -21,6 +21,7 @@ import {
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { parseQuestions, getQuestionParser } from '@/lib/ocr/question-parser';
 import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } from '@/types/ocr';
+import { cachedSystem } from '@/lib/claude/cache';
 
 // ============================================================================
 // Configuration
@@ -1296,6 +1297,54 @@ export async function analyzeProblemWithLLM(
     if (documentType === 'QUICK_ANSWER') prompt = QUICK_ANSWER_PROMPT;
     console.log(`[analyzeProblemWithLLM] subject="${subject}", isScience=${isScience}, docType=${documentType}`);
 
+    // ★ 수학(비과학) + 일반 문제 + Anthropic 키 있음 → Claude classify.ts로 직행 (GPT-4o 1차 호출 스킵)
+    //    과거엔 GPT-4o 1차 분류 → Claude 2차 override였으나, Claude가 거의 항상 이기고 GPT solution은 버려짐.
+    //    → GPT-4o 호출 자체가 낭비. 과학·해설·빠른정답 분기는 종전대로 GPT 필요.
+    if (!isScience && documentType === 'PROBLEM' && ANTHROPIC_API_KEY) {
+      try {
+        const { classifyProblem } = await import('./classify');
+        const claudeResult = await classifyProblem({
+          content: fullProblemText,
+          examSubject: subject || '',
+          examGrade: gradeHint || '',
+          logLabel: 'cloud-flow-primary',
+        });
+        if (claudeResult && claudeResult.typeCode) {
+          const clamped = Math.max(1, Math.min(10, claudeResult.difficulty));
+          const diffInt = clamped as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+          const validCognitive = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
+          const cogn = (validCognitive.has(claudeResult.cognitiveDomain) ? claudeResult.cognitiveDomain : 'CALCULATION') as 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
+
+          console.log(`[cloud-flow] ✓ Claude classify 직행 성공 — GPT-4o 1차 호출 스킵 (${claudeResult.typeCode}, conf=${claudeResult.confidence})`);
+          if (onProgress) onProgress(90);
+
+          return {
+            problemId: '',
+            classification: {
+              typeCode: claudeResult.typeCode,
+              typeName: claudeResult.typeName,
+              subject: claudeResult.subject || subject || '',
+              chapter: claudeResult.chapter,
+              section: claudeResult.section,
+              difficulty: diffInt,
+              cognitiveDomain: cogn,
+              confidence: claudeResult.confidence,
+              prerequisites: [],
+            },
+            // 해설은 batch-solutions(Claude Sonnet)에서 생성 — 여기선 빈 기본값
+            solution: { approach: '', steps: [], finalAnswer: '' },
+            similarTypes: [],
+            keywordsTags: [],
+            estimatedTimeMinutes: 3,
+            analyzedAt: new Date().toISOString(),
+          };
+        }
+        console.warn('[cloud-flow] Claude classify 결과 없음 → GPT-4o 폴백');
+      } catch (e) {
+        console.warn('[cloud-flow] Claude classify 실패 → GPT-4o 폴백:', e);
+      }
+    }
+
     // ★ 수학비서 유형 테이블 동적 주입 — 분류 정확도 대폭 향상
     let mathsecrSection = '';
     if (!isScience) {
@@ -1323,9 +1372,18 @@ export async function analyzeProblemWithLLM(
       ? '당신은 한국 고등학교 과학 교육과정(통합과학, 물리학, 화학, 생명과학, 지구과학) 전문가이자 수능/모의고사 과학 출제위원급 전문가입니다. 문제의 과목, 단원, 난이도를 정확히 분류하고 상세한 풀이를 제공합니다. 반드시 유효한 JSON으로만 응답하세요. 설명 텍스트 없이 JSON만 출력하세요. 키 이름은 영문 camelCase를 사용하세요. LaTeX 수식은 반드시 이중 백슬래시(\\\\)를 사용하세요.'
       : undefined;
 
-    const response = await callOpenAI(finalPrompt, {
-      systemMessage: scienceSystemMsg,
-    });
+    // ★ 기본 LLM을 Claude Sonnet으로 (한국어 분류 정확도 우위 + 프롬프트 캐싱 적용).
+    //    ANTHROPIC_API_KEY 없으면 기존 GPT-4o 폴백.
+    //    과학·해설·빠른정답 모두 같은 경로 사용 — SCIENCE_CLASSIFICATION_PROMPT도 Claude에서 작동.
+    const response = ANTHROPIC_API_KEY
+      ? await callClaude(finalPrompt, {
+          systemMessage: scienceSystemMsg || DEFAULT_SYSTEM_MESSAGE,
+          temperature: 0.1,
+          maxTokens: 4000,
+        })
+      : await callOpenAI(finalPrompt, {
+          systemMessage: scienceSystemMsg,
+        });
 
     if (onProgress) onProgress(75);
 
@@ -1512,7 +1570,7 @@ async function callClaude(prompt: string, options: CallClaudeOptions = {}): Prom
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
         max_tokens: maxTokens,
-        system: systemMessage,
+        system: cachedSystem(systemMessage),
         messages: [
           { role: 'user', content: prompt },
         ],

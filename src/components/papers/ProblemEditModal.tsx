@@ -530,7 +530,7 @@ function TagManagementPanel({
           </summary>
           <div className="mt-2 rounded-lg border border bg-surface-raised p-2 text-center">
             {cropImageUrl ? (
-              <img src={cropImageUrl} alt="문제 원본" className="max-w-full rounded" />
+              <img src={cropImageUrl} alt="문제 원본" className="w-full h-auto rounded" />
             ) : (
               <p className="text-xs text-content-muted py-4">원본 이미지 없음</p>
             )}
@@ -978,7 +978,7 @@ export function ProblemEditModal({
           </div>
 
           {/* 우: 추가 정보 */}
-          <div className="w-[280px] flex-shrink-0 border-l border-subtle overflow-y-auto p-3 space-y-3">
+          <div className="w-[400px] flex-shrink-0 border-l border-subtle overflow-y-auto p-3 space-y-3">
             <TagManagementPanel
               difficulty={difficulty} onDifficultyChange={setDifficulty}
               cognitiveDomain={cognitiveDomain} onCognitiveDomainChange={setCognitiveDomain}

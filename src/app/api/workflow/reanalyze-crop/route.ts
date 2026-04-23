@@ -230,7 +230,7 @@ async function classifyProblemWithGPT(
  *   imageBase64: string  — bbox 영역의 PNG 크롭 이미지 (data:image/png;base64,...)
  *   customPrompt?: string — 고급 분석 요구사항 (선택)
  *   analyzeGraph?: boolean — 그래프/도형 Vision 분석 여부 (기본 true)
- *   fullAnalysis?: boolean — GPT 분류/풀이 포함 여부 (기본 false)
+ *   fullAnalysis?: boolean — AI 분류/풀이 포함 여부 (기본 false, Claude Sonnet 우선 + GPT-4o 폴백)
  *   problemNumber?: number — 문제 번호 (선택)
  *
  * Response:
@@ -238,7 +238,7 @@ async function classifyProblemWithGPT(
  *   choices: string[] — 감지된 선택지
  *   confidence: number
  *   graphData?: GraphData — 그래프/도형 분석 결과 (있을 때만)
- *   classification?: object — GPT 분류/풀이 결과 (fullAnalysis=true일 때)
+ *   classification?: object — AI 분류/풀이 결과 (fullAnalysis=true일 때)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -373,11 +373,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. fullAnalysis가 true이면 GPT-4o로 문제 분류 + 풀이 생성
+    // 4. fullAnalysis가 true이면 Claude Sonnet(분류 기본) 또는 GPT-4o(폴백)로 문제 분류 + 풀이
     let classification: Record<string, unknown> | null = null;
     if (fullAnalysis) {
       try {
-        console.log(`[Reanalyze] 문제 ${problemNumber || '?'}번 GPT 분류 시작...`);
+        console.log(`[Reanalyze] 문제 ${problemNumber || '?'}번 AI 분류 시작...`);
         classification = await classifyProblemWithGPT(refinedText, problemNumber, detectedSubject, detectedGrade);
         if (classification) {
           console.log(`[Reanalyze] 분류 완료: ${(classification.classification as Record<string, unknown>)?.typeName || '?'}, 난이도=${(classification.classification as Record<string, unknown>)?.difficulty || '?'}`);

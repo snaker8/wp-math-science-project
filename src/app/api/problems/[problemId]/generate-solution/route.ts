@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { cachedSystem } from '@/lib/claude/cache';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
@@ -458,7 +459,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
             body: JSON.stringify({
               model: ANTHROPIC_MODEL,
               max_tokens: MAX_TOKENS,
-              system: systemPrompt,
+              system: cachedSystem(systemPrompt),
               messages: [{ role: 'user', content: userContent }],
               thinking: { type: 'enabled', budget_tokens: THINKING_BUDGET },
               temperature: 1, // thinking 활성 시 API 요구사항
@@ -502,7 +503,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
                   body: JSON.stringify({
                     model: ANTHROPIC_MODEL,
                     max_tokens: 4000,
-                    system: systemPrompt,
+                    system: cachedSystem(systemPrompt),
                     messages: [{ role: 'user', content: userContent }],
                     temperature: 0.2,
                   }),
@@ -539,7 +540,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
               body: JSON.stringify({
                 model: ANTHROPIC_MODEL,
                 max_tokens: 4000,
-                system: systemPrompt,
+                system: cachedSystem(systemPrompt),
                 messages: [{ role: 'user', content: userContent }],
                 temperature: 0.2,
               }),
@@ -810,7 +811,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             model: ANTHROPIC_MODEL,
             // 검산도 thinking — budget 3000 + output 2500 < 8192
             max_tokens: 6000,
-            system: '당신은 한국 수학 문제의 독립 검산자입니다. 정확한 풀이와 정답만 JSON으로 응답하세요.',
+            system: cachedSystem('당신은 한국 수학 문제의 독립 검산자입니다. 정확한 풀이와 정답만 JSON으로 응답하세요.'),
             messages: [{ role: 'user', content: userContentVerify }],
             thinking: { type: 'enabled', budget_tokens: 3000 },
             temperature: 1,
@@ -822,7 +823,9 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
           const parsed = parseJsonResponse(text);
           const verifyAnswer = String(parsed?.finalAnswer || '').trim();
           const sonnetAnswer = String(solution.finalAnswer || '').trim();
-          const match = !!verifyAnswer && normalizeAnswer(verifyAnswer) === normalizeAnswer(sonnetAnswer);
+          // 느슨한 매칭 사용: 엄격 정규화 + 끝숫자/등호뒤 값 비교로 표현 차이 흡수
+          // (예: "$m^2+n^2=32$" vs "32", "개수는 134이다" vs "134" 같은 케이스)
+          const match = !!verifyAnswer && answersMatch(verifyAnswer, sonnetAnswer);
 
           console.log(`[generate-solution] Sonnet 자체 검산: ${match ? '✅ MATCH' : '⚠️ MISMATCH'} — Primary: "${sonnetAnswer}" vs Verify: "${verifyAnswer}"`);
 
@@ -872,7 +875,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
         const opusBody: Record<string, unknown> = {
           model: ANTHROPIC_OPUS_MODEL,
           max_tokens: 4000,
-          system: systemPrompt,
+          system: cachedSystem(systemPrompt),
           messages: [{ role: 'user', content: userContent }],
           temperature: 0.3,
         };
@@ -1029,6 +1032,56 @@ function parseJsonResponse(text: string): any {
       return null;
     }
   }
+}
+
+/**
+ * 답변에서 "최종 핵심 값"만 추출 — 느슨한 매칭용
+ *   예: "$m^2 + n^2 = 32$" → "32" (등호 뒤 값)
+ *       "조건을 만족시키는... 개수는 **134**이다." → "134" (마지막 숫자)
+ *       "134" → "134"
+ */
+function extractCoreAnswer(ans: string): string | null {
+  if (!ans) return null;
+  let s = ans.trim();
+  // LaTeX 래퍼·강조 마커 제거
+  s = s.replace(/\$+/g, '').replace(/\*+/g, '');
+
+  // 1) 등호 뒤 마지막 값 — "x = 5", "m^2 + n^2 = 32"
+  const eqMatches = s.match(/=\s*([^=]+?)\s*(?:이다|임을|입니다|$)/);
+  if (eqMatches && eqMatches[1]) {
+    const tail = eqMatches[1].trim();
+    // 등호 뒤가 숫자 하나면 그대로
+    const tailNum = tail.match(/^-?\d+(?:\.\d+)?(?:\/\d+)?$/);
+    if (tailNum) return tailNum[0];
+  }
+
+  // 2) 문장 끝 마지막 숫자 (정수·소수·분수·음수)
+  const numMatches = s.match(/-?\d+(?:\.\d+)?(?:\/\d+)?/g);
+  if (numMatches && numMatches.length > 0) {
+    return numMatches[numMatches.length - 1];
+  }
+
+  return null;
+}
+
+/**
+ * 두 답변이 "실질적으로 같은가" 판정 — 엄격 정규화 + 느슨한 코어값 매칭 조합.
+ *   Sonnet primary("$m^2 + n^2 = 32$")와 verify("32") 같은 표현 차이를 흡수.
+ */
+function answersMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  // 1) 엄격 정규화 후 동일
+  if (normalizeAnswer(a) === normalizeAnswer(b)) return true;
+  // 2) 코어 값 추출 후 동일
+  const coreA = extractCoreAnswer(a);
+  const coreB = extractCoreAnswer(b);
+  if (coreA && coreB && coreA === coreB) return true;
+  // 3) 한쪽이 숫자만이고 다른 쪽 코어 값이 같으면 매칭
+  const pureNumA = a.trim().match(/^-?\d+(?:\.\d+)?(?:\/\d+)?$/);
+  const pureNumB = b.trim().match(/^-?\d+(?:\.\d+)?(?:\/\d+)?$/);
+  if (pureNumA && coreB === pureNumA[0]) return true;
+  if (pureNumB && coreA === pureNumB[0]) return true;
+  return false;
 }
 
 function normalizeAnswer(ans: string): string {

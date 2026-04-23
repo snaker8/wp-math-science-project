@@ -103,3 +103,30 @@ export async function POST(
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
   }
 }
+
+// ============================================================================
+// DELETE /api/exams/[examId]/distribute-points
+//   배점 초기화 — exam_problems.points → null, exams.total_points → null
+// ============================================================================
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> }
+) {
+  const { examId } = await params;
+  if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+
+  try {
+    const { error: epErr, count } = await supabaseAdmin
+      .from('exam_problems')
+      .update({ points: null }, { count: 'exact' })
+      .eq('exam_id', examId);
+    if (epErr) throw epErr;
+
+    await supabaseAdmin.from('exams').update({ total_points: null }).eq('id', examId);
+
+    return NextResponse.json({ examId, cleared: count ?? 0 });
+  } catch (err) {
+    console.error('[distribute-points DELETE] Error:', err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  }
+}

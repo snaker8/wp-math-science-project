@@ -1319,6 +1319,30 @@ function ExamPaperView({
           </button>
           <button
             type="button"
+            onClick={async () => {
+              if (!confirm('배점을 모두 지우시겠습니까?')) return;
+              try {
+                const res = await fetch(`/api/exams/${examId}/distribute-points`, { method: 'DELETE' });
+                if (!res.ok) {
+                  const t = await res.text().catch(() => '');
+                  alert(`배점 초기화 실패: ${res.status} ${t.substring(0, 200)}`);
+                  return;
+                }
+                const data = await res.json();
+                alert(`배점 초기화 완료: ${data.cleared}문제`);
+                refetchProblems?.();
+              } catch (e) {
+                alert(`오류: ${String(e)}`);
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-400 hover:bg-rose-500/20 transition-colors"
+            title="모든 문제의 배점을 지웁니다"
+          >
+            <Trash2 className="h-4 w-4" />
+            배점 초기화
+          </button>
+          <button
+            type="button"
             onClick={onOpenTemplateModal}
             className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
           >
@@ -1995,6 +2019,31 @@ function SolutionView({
         >
           <BarChart3 className="h-3.5 w-3.5" />
           배점 자동 분배
+        </button>
+        {/* ★ 배점 초기화 — points → null 일괄 */}
+        <button
+          type="button"
+          onClick={async () => {
+            if (!confirm('배점을 모두 지우시겠습니까?')) return;
+            try {
+              const res = await fetch(`/api/exams/${examId}/distribute-points`, { method: 'DELETE' });
+              if (!res.ok) {
+                const t = await res.text().catch(() => '');
+                alert(`배점 초기화 실패: ${res.status} ${t.substring(0, 200)}`);
+                return;
+              }
+              const data = await res.json();
+              alert(`배점 초기화 완료: ${data.cleared}문제`);
+              refetchProblems();
+            } catch (e) {
+              alert(`오류: ${String(e)}`);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"
+          title="모든 문제의 배점을 지웁니다"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          배점 초기화
         </button>
         {/* ★ 일괄 해설 생성 버튼 (백그라운드) */}
         <button

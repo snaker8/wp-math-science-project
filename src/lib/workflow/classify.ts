@@ -15,6 +15,7 @@
 // ============================================================================
 
 import { resolveSubjectCode, buildTypeTable } from './mathsecr-prompt';
+import { cachedSystem } from '@/lib/claude/cache';
 
 // ─── 복합 과목: 이전 교육과정 시험지는 여러 과목 범위가 섞임 ───
 const COMBINED_SUBJECTS: Record<string, string[]> = {
@@ -63,8 +64,13 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
   const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+  // 분류 공급자 우선순위: 'anthropic'(기본) | 'gemini' | 'openai'
+  // Claude Sonnet 4.6은 한국어 분류 정확도가 가장 높음. Gemini/GPT는 fallback.
+  const CLASSIFY_PROVIDER = (process.env.CLASSIFY_PROVIDER || 'anthropic').toLowerCase();
+  const CLAUDE_CLASSIFY_MODEL = process.env.CLAUDE_CLASSIFY_MODEL || 'claude-sonnet-4-6';
 
-  if (!OPENAI_API_KEY && !GOOGLE_AI_KEY) {
+  if (!OPENAI_API_KEY && !GOOGLE_AI_KEY && !ANTHROPIC_API_KEY) {
     console.warn(`[${label}] API 키 모두 없음 — 분류 스킵`);
     return null;
   }
@@ -114,10 +120,72 @@ ${content.slice(0, 1500)}`;
   let rawContent = '{}';
   let modelUsed = '';
 
-  // ─── 1차: Gemini (있으면) ───
+  // ─── 1차 (기본): Claude Sonnet 4.6 ───
+  //   CLASSIFY_PROVIDER=anthropic (기본). 프롬프트 캐싱으로 시스템+분류트리 반복분 90% 할인.
+  //   한국어 분류 정확도가 Gemini/GPT보다 우수.
+  if (CLASSIFY_PROVIDER === 'anthropic' && ANTHROPIC_API_KEY) {
+    modelUsed = CLAUDE_CLASSIFY_MODEL;
+    try {
+      // 수학비서 분류 트리는 프롬프트의 가장 큰 부분 — 시스템에 같이 두고 캐싱
+      const claudeSystemText = `${systemPrompt}\n\n${mathsecrTypeTable ? `참조 유형 테이블:\n${mathsecrTypeTable}` : ''}`;
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const cr = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+              model: CLAUDE_CLASSIFY_MODEL,
+              max_tokens: 1000,
+              system: cachedSystem(claudeSystemText),
+              messages: [{ role: 'user', content: userPrompt }],
+              temperature: 0.1,
+            }),
+          });
+          if (!cr.ok) {
+            const errText = await cr.text().catch(() => '');
+            lastError = new Error(`Claude ${cr.status}: ${errText.substring(0, 200)}`);
+            if ((cr.status === 429 || cr.status === 529) && attempt < 2) {
+              const waitSec = Math.min(10 * (attempt + 1), 30);
+              console.log(`[${label}] Claude rate-limited/overloaded, ${waitSec}s 대기`);
+              await new Promise(r => setTimeout(r, waitSec * 1000));
+              continue;
+            }
+            break;
+          }
+          const cd = await cr.json();
+          const tb = Array.isArray(cd.content) ? cd.content.find((c: { type: string }) => c.type === 'text') : null;
+          const rt = (tb?.text || '').trim();
+          rawContent = rt.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
+          // 캐시 사용 로깅 (usage.cache_read_input_tokens 존재 시)
+          const usage = cd.usage || {};
+          if (usage.cache_read_input_tokens) {
+            console.log(`[${label}] Claude cache hit: read=${usage.cache_read_input_tokens}, create=${usage.cache_creation_input_tokens || 0}`);
+          }
+          lastError = null;
+          break;
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          break;
+        }
+      }
+      if (lastError) {
+        console.warn(`[${label}] Claude 분류 실패 → Gemini/GPT 폴백: ${lastError.message}`);
+        rawContent = '{}';
+      }
+    } catch (err) {
+      console.warn(`[${label}] Claude 호출 전체 실패:`, err);
+    }
+  }
+
+  // ─── 2차 (폴백): Gemini ───
   //   gemini-3-flash-preview는 preview 할당량이 엄격해 Tier 1 유료여도 429 발생.
   //   gemini-2.5-flash는 stable 모델이라 Tier 1 본 한도(1000 RPM) 적용.
-  if (GOOGLE_AI_KEY) {
+  if ((!rawContent || rawContent.trim() === '{}' || rawContent.trim().length < 10) && GOOGLE_AI_KEY) {
     modelUsed = process.env.CLASSIFY_GEMINI_MODEL || 'gemini-2.5-flash';
     try {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
@@ -187,14 +255,12 @@ ${content.slice(0, 1500)}`;
         return null;
       }
     }
-  } else if (OPENAI_API_KEY) {
-    // Gemini 키 없음 → 바로 GPT-4.1-mini
-    modelUsed = 'gpt-4.1-mini';
   }
 
-  // ─── 2차: rawContent가 여전히 비었으면 GPT-4.1-mini 마지막 시도 ───
+  // ─── 3차 (최종 폴백): Claude도 Gemini도 실패/부재 시 GPT-4.1-mini ───
   if ((!rawContent || rawContent.trim() === '{}' || rawContent.trim().length < 10) && OPENAI_API_KEY) {
-    if (!modelUsed || modelUsed === 'gemini-3-flash-preview') {
+    // Claude/Gemini가 실패해서 여기 왔으면 modelUsed도 실제 사용 모델로 바꿈
+    if (modelUsed !== 'gpt-4o') {
       modelUsed = 'gpt-4.1-mini';
     }
     let gptRes: Response | null = null;
