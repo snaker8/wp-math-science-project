@@ -111,6 +111,64 @@ export function buildTypeTable(subjectCode: string): string {
 }
 
 /**
+ * 1단계 분류용: 대단원(L1) + 중단원(L2)만 나열
+ * 2단계 분류 구조에서 첫 호출에 사용.
+ * 일반적으로 한 과목당 3~10K 토큰 수준 (기존 251K의 1/25~1/50).
+ * 캐시 만료돼도 write 비용 미미.
+ */
+export function buildL1L2Table(subjectCode: string): string {
+  const tree = loadTree();
+  const subject = tree.find(s => s.c === subjectCode);
+  if (!subject) return '';
+
+  const lines: string[] = [];
+  lines.push(`| 1단계코드 | 대단원 | 중단원 |`);
+  lines.push(`|-----------|--------|--------|`);
+
+  for (const l1 of subject.ch || []) {
+    for (const l2 of l1.ch || []) {
+      const code = `MS${subjectCode}-${l1.c}-${l2.c}`;
+      lines.push(`| ${code} | ${l1.t} | ${l2.t} |`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * 2단계 분류용: 특정 (L1, L2) 하위의 소단원(L3) + 세부유형(L4)만 나열
+ * 1단계에서 결정된 대단원·중단원 범위만 상세 전달.
+ * 일반적으로 한 (L1, L2)당 3~15K 토큰 수준.
+ */
+export function buildL3L4Table(subjectCode: string, l1Code: string, l2Code: string): string {
+  const tree = loadTree();
+  const subject = tree.find(s => s.c === subjectCode);
+  if (!subject) return '';
+  const l1 = (subject.ch || []).find(x => x.c === l1Code);
+  if (!l1) return '';
+  const l2 = (l1.ch || []).find(x => x.c === l2Code);
+  if (!l2) return '';
+
+  const lines: string[] = [];
+  lines.push(`| 최종코드 | 소단원 | 세부유형 |`);
+  lines.push(`|----------|--------|----------|`);
+
+  for (const l3 of l2.ch || []) {
+    if (l3.ch && l3.ch.length > 0) {
+      for (const l4 of l3.ch) {
+        const code = `MS${subjectCode}-${l1Code}-${l2Code}-${l3.c}-${l4.c}`;
+        lines.push(`| ${code} | ${l3.t} | ${l4.t} |`);
+      }
+    } else {
+      const code = `MS${subjectCode}-${l1Code}-${l2Code}-${l3.c}`;
+      lines.push(`| ${code} | ${l3.t} | — |`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * 분류 프롬프트에 주입할 수학비서 유형 체계 텍스트 생성
  */
 export function buildMathsecrPromptSection(subjectCode: string): string {

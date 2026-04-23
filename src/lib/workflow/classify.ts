@@ -14,7 +14,7 @@
 //   - 에러 로깅 문맥
 // ============================================================================
 
-import { resolveSubjectCode, buildTypeTable } from './mathsecr-prompt';
+import { resolveSubjectCode, buildTypeTable, buildL1L2Table, buildL3L4Table } from './mathsecr-prompt';
 import { cachedSystem } from '@/lib/claude/cache';
 
 // ─── 복합 과목: 이전 교육과정 시험지는 여러 과목 범위가 섞임 ───
@@ -120,74 +120,33 @@ ${content.slice(0, 1500)}`;
   let rawContent = '{}';
   let modelUsed = '';
 
-  // ─── 1차 (기본): Claude Sonnet 4.6 ───
-  //   CLASSIFY_PROVIDER=anthropic (기본). 프롬프트 캐싱으로 시스템+분류트리 반복분 90% 할인.
-  //   한국어 분류 정확도가 Gemini/GPT보다 우수.
-  if (CLASSIFY_PROVIDER === 'anthropic' && ANTHROPIC_API_KEY) {
+  // ─── 1차 (기본): Claude Sonnet 4.6 — 2단계 분류 ───
+  //   문제: 기존 단일 호출은 mathsecr 전체 트리(한 과목당 251K 토큰)를 매번 전송.
+  //        캐시 5분 만료 + 자산화 중 OCR/Vision으로 배치 간격 5분 초과 → cache write 반복 → 비용 폭발.
+  //   해결: 2단계로 분할 호출.
+  //     1단계: L1(대단원) + L2(중단원)만 프롬프트에 (5~10K 토큰) → Claude가 L1·L2 결정
+  //     2단계: 결정된 L1·L2 하위의 L3(소단원) + L4(세부유형)만 (3~15K 토큰) → 최종 typeCode 결정
+  //   효과: 호출당 토큰 251K → 10~20K (95% 감소). 캐시 만료돼도 cache write 비용 미미.
+  //   정확도: 좁은 범위에 집중 → 기존 대비 유지 또는 향상.
+  if (CLASSIFY_PROVIDER === 'anthropic' && ANTHROPIC_API_KEY && resolvedCode) {
     modelUsed = CLAUDE_CLASSIFY_MODEL;
     try {
-      // 수학비서 분류 트리는 프롬프트의 가장 큰 부분 — 시스템에 같이 두고 캐싱
-      const claudeSystemText = `${systemPrompt}\n\n${mathsecrTypeTable ? `참조 유형 테이블:\n${mathsecrTypeTable}` : ''}`;
-      let lastError: Error | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          // ★ Prefill trick: assistant 응답 시작을 JSON으로 강제 —
-          //   Claude가 "문제를 분석합니다..." 같은 설명 텍스트 쓰고 max_tokens에서 잘리는 현상 방지.
-          //   Anthropic 공식 권장 기법. 응답은 prefill 뒤에서 시작하므로 완전한 JSON 재구성 시 prefix 합쳐야 함.
-          const prefill = '{"classification":{"typeCode":"';
-          const cr = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': ANTHROPIC_API_KEY,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: CLAUDE_CLASSIFY_MODEL,
-              max_tokens: 1500,  // 긴 typeName·설명 여유 확보
-              system: cachedSystem(claudeSystemText),
-              messages: [
-                { role: 'user', content: userPrompt },
-                { role: 'assistant', content: prefill },
-              ],
-              temperature: 0.1,
-            }),
-          });
-          if (!cr.ok) {
-            const errText = await cr.text().catch(() => '');
-            lastError = new Error(`Claude ${cr.status}: ${errText.substring(0, 200)}`);
-            if ((cr.status === 429 || cr.status === 529) && attempt < 2) {
-              const waitSec = Math.min(10 * (attempt + 1), 30);
-              console.log(`[${label}] Claude rate-limited/overloaded, ${waitSec}s 대기`);
-              await new Promise(r => setTimeout(r, waitSec * 1000));
-              continue;
-            }
-            break;
-          }
-          const cd = await cr.json();
-          const tb = Array.isArray(cd.content) ? cd.content.find((c: { type: string }) => c.type === 'text') : null;
-          const rt = (tb?.text || '').trim();
-          // ★ prefill을 앞에 이어붙여 완전한 JSON 재구성
-          const combined = (prefill + rt).trim();
-          rawContent = combined.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
-          // 캐시 사용 로깅 (usage.cache_read_input_tokens 존재 시)
-          const usage = cd.usage || {};
-          if (usage.cache_read_input_tokens) {
-            console.log(`[${label}] Claude cache hit: read=${usage.cache_read_input_tokens}, create=${usage.cache_creation_input_tokens || 0}`);
-          }
-          lastError = null;
-          break;
-        } catch (e) {
-          lastError = e instanceof Error ? e : new Error(String(e));
-          break;
-        }
-      }
-      if (lastError) {
-        console.warn(`[${label}] Claude 분류 실패 → Gemini/GPT 폴백: ${lastError.message}`);
-        rawContent = '{}';
+      const twoStageResult = await classifyWithClaudeTwoStage({
+        apiKey: ANTHROPIC_API_KEY,
+        model: CLAUDE_CLASSIFY_MODEL,
+        subjectCode: resolvedCode,
+        examSubject,
+        examGrade,
+        content,
+        label,
+      });
+      if (twoStageResult) {
+        rawContent = JSON.stringify({ classification: twoStageResult });
+      } else {
+        console.warn(`[${label}] Claude 2단계 분류 결과 없음 → Gemini/GPT 폴백`);
       }
     } catch (err) {
-      console.warn(`[${label}] Claude 호출 전체 실패:`, err);
+      console.warn(`[${label}] Claude 2단계 분류 실패 → Gemini/GPT 폴백:`, err);
     }
   }
 
@@ -393,5 +352,231 @@ ${content.slice(0, 1500)}`;
     cognitiveDomain: String(cls.cognitiveDomain || 'CALCULATION'),
     confidence: typeof cls.confidence === 'number' ? cls.confidence : parseFloat(String(cls.confidence || '0.5')) || 0.5,
     model: modelUsed,
+  };
+}
+
+// ============================================================================
+// 2단계 Claude 분류 헬퍼 — mathsecr 트리 축소 버전
+// Stage 1: 대단원(L1) + 중단원(L2) 선택 (5~10K 토큰)
+// Stage 2: 1단계 결정 하위의 소단원(L3) + 세부유형(L4) 선택 (3~15K 토큰)
+// ============================================================================
+
+async function classifyWithClaudeTwoStage(params: {
+  apiKey: string;
+  model: string;
+  subjectCode: string;
+  examSubject: string;
+  examGrade: string;
+  content: string;
+  label: string;
+}): Promise<Record<string, unknown> | null> {
+  const { apiKey, model, subjectCode, examSubject, examGrade, content, label } = params;
+
+  // ── Stage 1: L1 + L2 선택 ──
+  const l1l2Table = buildL1L2Table(subjectCode);
+  if (!l1l2Table) {
+    console.warn(`[${label}] L1L2 테이블이 비어 있음 — 2단계 분류 불가`);
+    return null;
+  }
+
+  const stage1System = `한국 수학 교육과정 전문가. 수학비서 분류 체계에서 가장 적합한 대단원·중단원을 선택합니다.
+반드시 아래 테이블의 "1단계코드" 컬럼 값 중 하나를 그대로 JSON으로만 응답. 설명 텍스트 금지.
+
+참조 테이블 (MS${subjectCode} = ${examSubject}):
+${l1l2Table}`;
+  const stage1User = `학년: ${examGrade}
+문제:
+${content.slice(0, 1500)}
+
+위 문제에 가장 적합한 "1단계코드" (대단원+중단원)를 고르세요.
+JSON: {"stage1Code":"MS${subjectCode}-??-??"}`;
+
+  const stage1Raw = await callClaudeOnce({
+    apiKey, model, systemPrompt: stage1System, userPrompt: stage1User,
+    label: `${label}:stage1`, maxTokens: 100,
+  });
+  if (!stage1Raw) return null;
+
+  const stage1Code = extractStage1Code(stage1Raw, subjectCode);
+  if (!stage1Code) {
+    console.warn(`[${label}] Stage 1 코드 추출 실패. 원문: ${stage1Raw.substring(0, 200)}`);
+    return null;
+  }
+  console.log(`[${label}] ✓ Stage 1: ${stage1Code}`);
+
+  const m = stage1Code.match(/^MS(\d{2})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const [, subj, l1, l2] = m;
+
+  // ── Stage 2: L3 + L4 선택 ──
+  const l3l4Table = buildL3L4Table(subj, l1, l2);
+  if (!l3l4Table) {
+    // L3 이하가 없는 경우 stage1Code가 leaf — 그대로 반환
+    console.warn(`[${label}] L3L4 테이블 비어있음 (${stage1Code}는 leaf로 간주)`);
+    return {
+      typeCode: stage1Code,
+      typeName: '',
+      subject: examSubject,
+      chapter: '',
+      section: '',
+      difficulty: 3,
+      cognitiveDomain: 'CALCULATION',
+      confidence: 0.6,
+    };
+  }
+
+  const stage2System = `한국 수학 교육과정 전문가. 이미 결정된 범위(${stage1Code}) 하위에서 최종 소단원·세부유형을 선택합니다.
+반드시 아래 테이블의 "최종코드" 값 중 하나를 그대로 JSON으로만 응답. 설명 텍스트 금지.
+
+참조 테이블 (${stage1Code} 하위):
+${l3l4Table}
+
+★ 난이도 (수학비서 1~10):
+- 1~2 개념/정의 직접, 3~4 기본 응용, 5~6 복합 2개념 연결, 7~10 고난도 추론/복합 서술
+- 서술형·합답형(ㄱㄴㄷ)은 최소 5 이상`;
+  const stage2User = `문제:
+${content.slice(0, 1500)}
+
+위 문제의 최종 typeCode(소단원+세부유형)와 난이도·인지영역을 JSON으로 응답:
+{"typeCode":"${stage1Code}-??-??","difficulty":5,"cognitiveDomain":"CALCULATION","confidence":0.9}
+
+cognitiveDomain은 CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING 중 하나.`;
+
+  const stage2Raw = await callClaudeOnce({
+    apiKey, model, systemPrompt: stage2System, userPrompt: stage2User,
+    label: `${label}:stage2`, maxTokens: 200,
+  });
+  if (!stage2Raw) return null;
+
+  const result = parseStage2Response(stage2Raw, stage1Code, examSubject);
+  if (result) {
+    console.log(`[${label}] ✓ Stage 2: ${result.typeCode} (diff=${result.difficulty}, conf=${result.confidence})`);
+  }
+  return result;
+}
+
+/** Claude 단일 호출 (2단계 각 stage 공통)
+ *  ★ Sonnet 4.6은 assistant prefill 미지원 — user 메시지로 끝내야 함.
+ *    대신 user 프롬프트 말미에 "JSON만 출력" 강제 지시 추가.
+ */
+async function callClaudeOnce(params: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  label: string;
+  maxTokens: number;
+}): Promise<string | null> {
+  const { apiKey, model, systemPrompt, userPrompt, label, maxTokens } = params;
+  const strictUser = `${userPrompt}\n\n⚠️ 중요: 응답은 반드시 JSON 객체 하나만. 설명·주석·코드블록 마커 금지. 첫 글자는 { 로 시작.`;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const cr = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          system: cachedSystem(systemPrompt),
+          messages: [
+            { role: 'user', content: strictUser },
+          ],
+          temperature: 0.1,
+        }),
+      });
+      if (!cr.ok) {
+        if ((cr.status === 429 || cr.status === 529) && attempt < 2) {
+          const waitSec = Math.min(10 * (attempt + 1), 30);
+          console.log(`[${label}] Claude rate-limited/overloaded, ${waitSec}s 대기`);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+          continue;
+        }
+        const errText = await cr.text().catch(() => '');
+        console.warn(`[${label}] Claude ${cr.status}: ${errText.substring(0, 200)}`);
+        return null;
+      }
+      const cd = await cr.json();
+      const tb = Array.isArray(cd.content) ? cd.content.find((c: { type: string }) => c.type === 'text') : null;
+      const rt = (tb?.text || '').trim();
+      const usage = cd.usage || {};
+      if (usage.cache_read_input_tokens || usage.cache_creation_input_tokens) {
+        console.log(`[${label}] usage: in=${usage.input_tokens || 0}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}, out=${usage.output_tokens || 0}`);
+      }
+      return rt.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/, '').trim();
+    } catch (e) {
+      console.warn(`[${label}] Claude 호출 예외:`, e);
+      return null;
+    }
+  }
+  return null;
+}
+
+function extractStage1Code(raw: string, subjectCode: string): string | null {
+  // 1) JSON 파싱
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.stage1Code === 'string' && /^MS\d{2}-\d{2}-\d{2}$/.test(parsed.stage1Code)) {
+      return parsed.stage1Code;
+    }
+  } catch { /* ignore */ }
+  // 2) 정규식 폴백
+  const re = new RegExp(`MS${subjectCode}-\\d{2}-\\d{2}`);
+  const m = raw.match(re);
+  return m ? m[0] : null;
+}
+
+function parseStage2Response(raw: string, stage1Code: string, examSubject: string): Record<string, unknown> | null {
+  const validCognitive = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
+
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // 부분 추출
+    const tcMatch = raw.match(new RegExp(`"typeCode"\\s*:\\s*"(${stage1Code.replace(/-/g, '\\-')}-\\d{2}(?:-\\d{2})?)"`));
+    const diffMatch = raw.match(/"difficulty"\s*:\s*(\d+)/);
+    const cogMatch = raw.match(/"cognitiveDomain"\s*:\s*"([A-Z_]+)"/);
+    const confMatch = raw.match(/"confidence"\s*:\s*(\d*\.?\d+)/);
+    if (!tcMatch) {
+      // 코드 자체가 없으면 정규식으로 MS...-XX-XX 찾기
+      const altMatch = raw.match(new RegExp(`${stage1Code}-\\d{2}(?:-\\d{2})?`));
+      if (!altMatch) return null;
+      parsed = {
+        typeCode: altMatch[0],
+        difficulty: diffMatch ? parseInt(diffMatch[1]) : 3,
+        cognitiveDomain: cogMatch?.[1] || 'CALCULATION',
+        confidence: confMatch ? parseFloat(confMatch[1]) : 0.7,
+      };
+    } else {
+      parsed = {
+        typeCode: tcMatch[1],
+        difficulty: diffMatch ? parseInt(diffMatch[1]) : 3,
+        cognitiveDomain: cogMatch?.[1] || 'CALCULATION',
+        confidence: confMatch ? parseFloat(confMatch[1]) : 0.7,
+      };
+    }
+  }
+
+  const typeCode = String(parsed.typeCode || '');
+  if (!typeCode.startsWith(stage1Code + '-')) {
+    console.warn(`[stage2] typeCode가 stage1Code 하위가 아님: ${typeCode} (expected prefix ${stage1Code})`);
+    return null;
+  }
+
+  const cog = String(parsed.cognitiveDomain || 'CALCULATION');
+  return {
+    typeCode,
+    typeName: '',  // DB에서 full_path로 덮어씀 (classifyProblem 후단)
+    subject: examSubject,
+    chapter: '',   // DB에서 덮어씀
+    section: '',   // DB에서 덮어씀
+    difficulty: typeof parsed.difficulty === 'number' ? parsed.difficulty : parseInt(String(parsed.difficulty || '3')) || 3,
+    cognitiveDomain: validCognitive.has(cog) ? cog : 'CALCULATION',
+    confidence: typeof parsed.confidence === 'number' ? parsed.confidence : parseFloat(String(parsed.confidence || '0.85')) || 0.85,
   };
 }
