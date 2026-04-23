@@ -763,13 +763,19 @@ export default function AnalyzeProblemEditModal({
   const activeValue = activeTab === 'content' ? content : solution;
   const activeSetter = activeTab === 'content' ? setContent : setSolution;
 
-  // === 난이도 상수 (5등급: 상/중상/중/중하/하) ===
+  // === 난이도 상수 (수학비서 1~10 스케일) ===
+  // 1~2 쉬움 · 3~4 보통 · 5~6 응용 · 7~8 고난도 · 9~10 최상
   const difficulties = [
-    { key: 5, label: '상', color: 'text-red-600 border-red-200 bg-red-50' },
-    { key: 4, label: '중상', color: 'text-orange-600 border-orange-200 bg-orange-50' },
-    { key: 3, label: '중', color: 'text-amber-600 border-amber-200 bg-amber-50' },
-    { key: 2, label: '중하', color: 'text-blue-600 border-blue-200 bg-blue-50' },
-    { key: 1, label: '하', color: 'text-gray-500 border-gray-200 bg-gray-50' },
+    { key: 1,  label: '1',  color: 'text-gray-500 border-gray-200 bg-gray-50' },
+    { key: 2,  label: '2',  color: 'text-gray-500 border-gray-200 bg-gray-50' },
+    { key: 3,  label: '3',  color: 'text-blue-600 border-blue-200 bg-blue-50' },
+    { key: 4,  label: '4',  color: 'text-blue-600 border-blue-200 bg-blue-50' },
+    { key: 5,  label: '5',  color: 'text-amber-600 border-amber-200 bg-amber-50' },
+    { key: 6,  label: '6',  color: 'text-amber-600 border-amber-200 bg-amber-50' },
+    { key: 7,  label: '7',  color: 'text-orange-600 border-orange-200 bg-orange-50' },
+    { key: 8,  label: '8',  color: 'text-orange-600 border-orange-200 bg-orange-50' },
+    { key: 9,  label: '9',  color: 'text-red-600 border-red-200 bg-red-50' },
+    { key: 10, label: '10', color: 'text-red-700 border-red-200 bg-red-50' },
   ];
 
   // === ESC 키 ===
@@ -1168,7 +1174,7 @@ export default function AnalyzeProblemEditModal({
                   <span className="block text-[11px] font-medium text-gray-500 mb-1.5">난이도</span>
                   <div className="flex flex-wrap gap-1">
                     {difficulties.map((d) => (
-                      <button key={d.key} type="button" onClick={() => setDifficulty(d.key as 1 | 2 | 3 | 4 | 5)}
+                      <button key={d.key} type="button" onClick={() => setDifficulty(d.key as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10)}
                         className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                           difficulty === d.key
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-300'
