@@ -23,5 +23,5 @@
     "target": "ES2020"
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "supabase"]
+  "exclude": ["node_modules", "supabase", "개별맞춤학생프로젝트"]
 }

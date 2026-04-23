@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Search, ChevronDown, Menu, Printer, Send, Sparkles, AlertCircle } from 'lucide-react';
+import { Search, ChevronDown, Menu, Printer, Send, Sparkles, AlertCircle, ClipboardList } from 'lucide-react';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip } from 'recharts';
 import { motion } from 'framer-motion';
 
@@ -171,7 +171,14 @@ function PrescriptionContent() {
               <ClinicCard>
                 <h3 className="font-bold text-gray-400 text-sm mb-4 uppercase tracking-wider">Quick Actions</h3>
                 <div className="space-y-3">
-                  <ActionButton icon={Printer} label="맞춤형 학습지 출력" primary />
+                  <Link
+                    href="/dashboard/prescription/entry"
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-indigo-600 text-content-primary hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all"
+                  >
+                    <ClipboardList size={18} />
+                    <span>진단 결과 입력</span>
+                  </Link>
+                  <ActionButton icon={Printer} label="맞춤형 학습지 출력" />
                   <ActionButton icon={Send} label="학부모 리포트 전송" />
                 </div>
               </ClinicCard>

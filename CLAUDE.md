@@ -130,6 +130,20 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - **과학 과목 코드 2022 개정** — PHY1/PHY2 → PHY, PHY_ME 등
 - **UI 수정** — 보기 박스 헤더 제거, f(1) 선택지 오인식 수정, 업로드 팝업 리사이징
 
+- **학생 진단(diagnostics) 시스템 통합** (2026-04-23, 진행 중, 수학비서 기반 v2)
+  - `supabase/migrations/20260423_001_diagnostics_schema.sql` — 별도 `diagnostics` 스키마: sessions / items / student_node_status / prerequisites / lesson_plans 5개 테이블. items·status·prereqs·plans 모두 `mathsecr_code TEXT` 컬럼으로 `public.mathsecr_types.code` 참조 (소프트 FK)
+  - 별도 `curriculum_nodes` 테이블 없음 — **수학비서 22,785행이 단원 마스터 역할**
+  - 히트맵 뷰 `v_student_mathsecr_heatmap` — 학생 × 과목(학년·학기) × 대단원(level1) 집계
+  - 트리거 `trg_refresh_status_on_item` — items INSERT/UPDATE/DELETE 시 student_node_status 자동 갱신 (α≥80 / β 60~79 / γ<60)
+  - 재귀 함수 `trace_weakness_chain(student_id, root_code)` — prerequisites 테이블 따라 최대 depth 5까지 선수 체인 탐색. 테이블 초기엔 비어있음 (수동 큐레이션 대상)
+  - `src/app/dashboard/prescription/entry/page.tsx` — 담임 진단 결과 입력 폼. **수학비서 계층 드롭다운(과목→대단원→중단원→소단원→세부유형)**. 깊게 선택할수록 정밀. 25/8/11/7문항 기본값
+  - `src/app/dashboard/prescription/lib/queries.ts` — `supabaseBrowser.schema('diagnostics')`로 diagnostics 스키마 접근, `public` 스키마로 mathsecr_types 직접 조회
+  - 세션 타입 코드: `BS`=광역스캔(1회차), `DD`=정밀진단(2회차), `PT`=선수추적(3회차), `SC`=재원생 스팟체크
+  - 오답 원인 5종 태그: 개념 / 유형 / 계산 / 문장제 / 시간
+  - `.claude/commands/bs-scan.md`, `dd-dive.md`, `pt-trace.md` — 매쓰플랫 자동화 슬래시 커맨드 (Claude for Chrome 필요)
+  - 참조 폴더 `개별맞춤학생프로젝트/` — 웹 챗 설계 원본(curriculum_nodes 58 버전), git 추적 제외 대상
+  - 다음 단계: Phase 2에서 `/dashboard/prescription/page.tsx` 하이브리드 재구성 (수학비서 대단원 히트맵 + 단원 리스트 + 진단 이력 주입)
+
 ### 다음 할 일 (우선순위)
 - ★ **시험지 출제 기능** — 문제은행에서 단원/유형/난이도 필터 → 문제 선택 → 시험지 생성 → PDF 출력
   - 수학비서 참조: 유형기준 탭(단원·유형 트리 + 난이도 1~10 필터), 시험지 목록(난이도 분포 표시)
