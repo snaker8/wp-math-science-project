@@ -72,7 +72,7 @@ interface AnalyzedProblem {
   choices: string[];
   answer: number | string;
   solution: string;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10; // 수학비서 1~10 스케일
   typeCode: string;
   typeName: string;
   confidence: number;

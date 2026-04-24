@@ -20,7 +20,7 @@ import { useCreateExam } from '@/hooks/useExamProblems';
 interface SelectedProblem {
   id: string;
   number: number;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   cognitiveDomain: string;
   content: string;
   choices: string[];
