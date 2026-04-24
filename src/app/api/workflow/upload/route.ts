@@ -1116,6 +1116,7 @@ async function saveEditedProblemsDirect(
     typeCode?: string;
     typeName?: string;
     cognitiveDomain?: string;
+    score?: number;        // ★ 1차 OCR 추출 원 배점
     cropImageBase64?: string;
     cropImagePath?: string;
     bbox?: { x: number; y: number; w: number; h: number };
@@ -1409,10 +1410,18 @@ async function saveEditedProblemsDirect(
       if (problem?.id) savedProblemIds.push(problem.id);
       console.log(`[Direct Save] 문제 ${edited.number}번 저장 완료 (ID: ${problem?.id})`);
 
-      // ★ Exam-Problem 연결 — 원본 [N점] 자동 추출
+      // ★ Exam-Problem 연결 — 우선순위:
+      //   1) edited.score (1차 OCR/분석 페이지에서 뽑은 원 배점)
+      //   2) contentLatex 안의 [N점] 정규식 재추출
+      //   3) 기본 4
       if (examId && problem) {
-        const ptsMatch = (contentLatex || '').match(/\[\s*(?:총\s*)?(\d+)\s*점\s*\]/);
-        const extractedPoints = ptsMatch ? Math.min(20, Math.max(1, parseInt(ptsMatch[1], 10))) : 4;
+        let extractedPoints = 4;
+        if (typeof edited.score === 'number' && Number.isFinite(edited.score) && edited.score > 0) {
+          extractedPoints = Math.min(100, Math.max(0, Math.round(edited.score * 10) / 10));
+        } else {
+          const ptsMatch = (contentLatex || '').match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
+          if (ptsMatch) extractedPoints = Math.min(100, Math.max(0, parseFloat(ptsMatch[1])));
+        }
         const { error: epError } = await supabase.from('exam_problems').insert({
           exam_id: examId,
           problem_id: problem.id,
@@ -1877,13 +1886,16 @@ async function saveProblemsToDB(
 
         savedCount++;
 
-        // Exam-Problem 연결
+        // Exam-Problem 연결 — content에서 [N점] 추출, 없으면 4
         if (examId) {
+          const contentForPts = result.contentWithMath || '';
+          const ptsMatch = contentForPts.match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
+          const autoPoints = ptsMatch ? Math.min(100, Math.max(0, parseFloat(ptsMatch[1]))) : 4;
           const { error: epError } = await supabase.from('exam_problems').insert({
             exam_id: examId,
             problem_id: problem.id,
             sequence_number: savedCount,
-            points: 4,
+            points: autoPoints,
           });
           if (epError) {
             console.error(`[DB] exam_problems 연결 실패 (문제 #${savedCount}, problem ${problem.id}):`, epError.message, epError.details);

@@ -2828,6 +2828,7 @@ export default function AnalyzeJobPage() {
               answer: p.answer,
               solution: p.solution,
               choices: p.choices,
+              score: p.score, // ★ 1차 OCR에서 추출한 원 배점
               // cropImagePath 업로드 성공 시 base64는 생략 (body 크기 절감)
               ...(cropImagePath
                 ? { cropImagePath }

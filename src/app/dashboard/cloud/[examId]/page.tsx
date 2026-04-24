@@ -809,55 +809,106 @@ function ProblemCardView({
           <>
             <div className="mb-2">
               <span className="text-sm font-bold text-content-primary mr-2">{problem.number}.</span>
-              {/* ★ 배점 배지 (인라인 편집) — 모든 문제에 표시 */}
-              {isEditingPoints ? (
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="100"
-                  value={pointsDraft}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => setPointsDraft(e.target.value)}
-                  onBlur={async () => {
-                    setIsEditingPoints(false);
-                    const next = parseFloat(pointsDraft);
-                    if (!Number.isFinite(next) || next === (problem.points ?? 0)) return;
-                    try { await onUpdatePoints?.(problem.id, next); } catch {}
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
-                    if (e.key === 'Escape') { setIsEditingPoints(false); setPointsDraft(String(problem.points ?? '')); }
-                  }}
-                  className="inline-block w-14 mr-2 px-1.5 py-0.5 text-xs rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 outline-none focus:ring-1 focus:ring-amber-500"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setIsEditingPoints(true); }}
-                  title="배점 수정"
-                  className="inline-flex items-center mr-2 px-1.5 py-0.5 text-xs font-semibold rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
-                >
-                  [{typeof problem.points === 'number' ? problem.points : '-'}점]
-                </button>
-              )}
-              {hasFigureMarker ? (
-                /* 도형 마커가 있는 경우: 텍스트/도형 분할 렌더링 */
-                <FigureMarkerRenderer
-                  contentParts={contentParts}
-                  problem={problem}
-                  cropImage={cropImage}
-                  showFigureCompare={showFigureCompare}
-                  getProxiedImageUrl={getProxiedImageUrl}
-                />
-              ) : (
-                /* 일반 콘텐츠 렌더링 */
-                <>
-                  <MixedContentRenderer
-                    content={cleanContent}
-                    className="inline text-sm text-content-secondary leading-relaxed"
+              {(() => {
+                // ★ 배점 배지 — '?' 바로 뒤에 삽입. 없으면 content 끝에.
+                const pointsBadge = isEditingPoints ? (
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="100"
+                    value={pointsDraft}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setPointsDraft(e.target.value)}
+                    onBlur={async () => {
+                      setIsEditingPoints(false);
+                      const next = parseFloat(pointsDraft);
+                      if (!Number.isFinite(next) || next === (problem.points ?? 0)) return;
+                      try { await onUpdatePoints?.(problem.id, next); } catch {}
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
+                      if (e.key === 'Escape') { setIsEditingPoints(false); setPointsDraft(String(problem.points ?? '')); }
+                    }}
+                    className="inline-block w-14 ml-1 px-1.5 py-0.5 text-xs rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 outline-none focus:ring-1 focus:ring-amber-500"
                   />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setIsEditingPoints(true); }}
+                    title="배점 수정"
+                    className="inline-flex items-center ml-1 px-1.5 py-0.5 text-xs font-semibold rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                  >
+                    [{typeof problem.points === 'number' ? problem.points : '-'}점]
+                  </button>
+                );
+
+                // content 내부 첫 '?' 위치 찾기 ($...$ 수식 외부만)
+                const splitAtQuestion = (text: string): [string, string, boolean] => {
+                  let inBlock = false;
+                  let inInline = false;
+                  for (let i = 0; i < text.length; i++) {
+                    const ch = text[i];
+                    const next = text[i + 1];
+                    if (ch === '$' && next === '$') { inBlock = !inBlock; i++; continue; }
+                    if (ch === '$' && !inBlock) { inInline = !inInline; continue; }
+                    if (ch === '?' && !inBlock && !inInline) {
+                      return [text.slice(0, i + 1), text.slice(i + 1), true];
+                    }
+                  }
+                  return [text, '', false];
+                };
+
+                if (hasFigureMarker) {
+                  // 도형 마커 있는 경우: 기존 렌더링 유지 + 끝에 배지
+                  return (
+                    <>
+                      <FigureMarkerRenderer
+                        contentParts={contentParts}
+                        problem={problem}
+                        cropImage={cropImage}
+                        showFigureCompare={showFigureCompare}
+                        getProxiedImageUrl={getProxiedImageUrl}
+                      />
+                      {pointsBadge}
+                    </>
+                  );
+                }
+
+                const [before, after, foundQ] = splitAtQuestion(cleanContent);
+                if (!foundQ) {
+                  // '?' 없음 — content 전체 뒤에 배지
+                  return (
+                    <>
+                      <MixedContentRenderer
+                        content={cleanContent}
+                        className="inline text-sm text-content-secondary leading-relaxed"
+                      />
+                      {pointsBadge}
+                    </>
+                  );
+                }
+
+                return (
+                  <>
+                    <MixedContentRenderer
+                      content={before}
+                      className="inline text-sm text-content-secondary leading-relaxed"
+                      inline
+                    />
+                    {pointsBadge}
+                    {after && (
+                      <MixedContentRenderer
+                        content={after}
+                        className="inline text-sm text-content-secondary leading-relaxed"
+                      />
+                    )}
+                  </>
+                );
+              })()}
+              {!hasFigureMarker && (
+                <>
                   {/* AI 도형 또는 업스케일 이미지가 있지만 마커가 없는 경우 → 하단에 표시 */}
                   {(problem.figureData || problem.figureSvg || problem.upscaledCropUrl) && (
                     showFigureCompare && cropImage ? (
