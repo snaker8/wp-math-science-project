@@ -26,7 +26,7 @@ export interface AnalyzedProblemData {
   choices: string[];
   answer: number | string;
   solution: string;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10; // 수학비서 1~10 스케일
   typeCode: string;
   typeName: string;
   cognitiveDomain?: string;
@@ -959,7 +959,7 @@ export default function AnalyzeProblemEditModal({
       solution,
       choices: formattedChoices,
       answer: answerType === 'objective' ? correctAnswer : subjectiveAnswer,
-      difficulty: difficulty as 1 | 2 | 3 | 4 | 5,
+      difficulty: difficulty as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10,
       number: problemNumber,
       score: !isNaN(parsedScore) && parsedScore > 0 ? parsedScore : undefined,
       status: 'edited',

@@ -129,8 +129,18 @@ export function detectGradeFromTitle(title: string): string {
 
   // 과목명으로 학년 추론 (명시적 학년 없을 때)
   if (/공통수학|수학\s*\(상\)|수학\s*\(하\)/.test(title)) return '고1';
-  if (/수학[1IⅠ](?!\d)|대수|확률.*통계|확통/.test(title)) return '고2';
-  if (/수학[2IⅡ](?!\d)|미적분|기하/.test(title)) return '고3';
+
+  // ★ 고2: 수학I, 수학II, 대수, 확률과통계 — 모두 고2 소속 (축약형 "수1"/"수2" 포함)
+  //   "수2" 단독 표기가 "수학[2IⅡ]" 정규식에 안 잡혀 exam.grade 기본값이 쓰이던 버그 수정.
+  if (
+    /수학(?:Ⅰ|I|1|Ⅱ|II|2)(?!\d)/.test(title) ||
+    /(?<!수학)수(?:Ⅰ|I|1|Ⅱ|II|2)(?=\s|$|학기|\d|중간|기말|-)/.test(title) ||
+    /대수(?!학)/.test(title) ||
+    /확률\s*(?:과|와)?\s*통계|확통/.test(title)
+  ) return '고2';
+
+  // 고3: 미적분, 기하 (선택 과목)
+  if (/미적분[12]?|기하(?!학)/.test(title)) return '고3';
 
   return '';
 }
