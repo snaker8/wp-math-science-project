@@ -1,8 +1,51 @@
 // POST /api/exams/[examId]/problems — 기존 시험지에 문제 추가
+// PATCH /api/exams/[examId]/problems — 특정 문제의 배점 수정 (body: { problemId, points })
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
+
+// ============================================================================
+// PATCH — 특정 문제 배점 수정
+// ============================================================================
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> }
+) {
+  const { examId } = await params;
+
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+
+  try {
+    const body = await request.json();
+    const problemId: string | undefined = body.problemId;
+    const points: unknown = body.points;
+
+    if (!problemId || typeof points !== 'number' || !Number.isFinite(points)) {
+      return NextResponse.json({ error: 'problemId, points(number) 필요' }, { status: 400 });
+    }
+
+    const clamped = Math.max(0, Math.min(100, Math.round(points * 10) / 10));
+
+    const { error } = await supabaseAdmin
+      .from('exam_problems')
+      .update({ points: clamped })
+      .eq('exam_id', examId)
+      .eq('problem_id', problemId);
+
+    if (error) {
+      console.error('[API/exams/problems PATCH] error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, examId, problemId, points: clamped });
+  } catch (err: any) {
+    console.error('[API/exams/problems PATCH] Error:', err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
 
 export async function POST(
   request: NextRequest,

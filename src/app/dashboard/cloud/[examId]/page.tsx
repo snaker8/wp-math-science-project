@@ -472,6 +472,7 @@ function ProblemCardView({
   onDeleteFigure,
   onReplaceDiagram,
   onUpdateContent,
+  onUpdatePoints,
   isSelectionMode,
   isSelected,
   onToggleSelect,
@@ -488,6 +489,7 @@ function ProblemCardView({
   onDeleteFigure?: (p: ProblemData) => void;
   onReplaceDiagram?: (p: ProblemData, figureIndex?: number) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
+  onUpdatePoints?: (problemId: string, points: number) => Promise<void>;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -497,6 +499,12 @@ function ProblemCardView({
 }) {
   const [isEditingPosition, setIsEditingPosition] = useState(false);
   const [showFigureCompare, setShowFigureCompare] = useState(false);
+  // ★ 배점 인라인 편집
+  const [isEditingPoints, setIsEditingPoints] = useState(false);
+  const [pointsDraft, setPointsDraft] = useState<string>(String(problem.points ?? ''));
+  useEffect(() => {
+    setPointsDraft(String(problem.points ?? ''));
+  }, [problem.points]);
   const figureCropImage = problem.images?.find(img => img.type === 'figure_crop');
   const cropImage = figureCropImage || problem.images?.find(img => img.type === 'crop');
   if (problem.hasFigure) {
@@ -801,6 +809,39 @@ function ProblemCardView({
           <>
             <div className="mb-2">
               <span className="text-sm font-bold text-content-primary mr-2">{problem.number}.</span>
+              {/* ★ 배점 배지 (인라인 편집) — 모든 문제에 표시 */}
+              {isEditingPoints ? (
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  value={pointsDraft}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setPointsDraft(e.target.value)}
+                  onBlur={async () => {
+                    setIsEditingPoints(false);
+                    const next = parseFloat(pointsDraft);
+                    if (!Number.isFinite(next) || next === (problem.points ?? 0)) return;
+                    try { await onUpdatePoints?.(problem.id, next); } catch {}
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
+                    if (e.key === 'Escape') { setIsEditingPoints(false); setPointsDraft(String(problem.points ?? '')); }
+                  }}
+                  className="inline-block w-14 mr-2 px-1.5 py-0.5 text-xs rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setIsEditingPoints(true); }}
+                  title="배점 수정"
+                  className="inline-flex items-center mr-2 px-1.5 py-0.5 text-xs font-semibold rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                >
+                  [{typeof problem.points === 'number' ? problem.points : '-'}점]
+                </button>
+              )}
               {hasFigureMarker ? (
                 /* 도형 마커가 있는 경우: 텍스트/도형 분할 렌더링 */
                 <FigureMarkerRenderer
@@ -2665,6 +2706,26 @@ export default function CloudExamDetailPage() {
     }
   }, [refetchProblems]);
 
+  // ★ 문제 배점 수정 — exam_problems.points
+  const handleUpdatePoints = useCallback(async (problemId: string, points: number) => {
+    try {
+      const res = await fetch(`/api/exams/${examId}/problems`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problemId, points }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('[updatePoints] Failed:', data.error);
+        alert(`배점 수정 실패: ${data.error || res.status}`);
+        return;
+      }
+      refetchProblems();
+    } catch (err) {
+      console.error('[updatePoints] Error:', err);
+    }
+  }, [examId, refetchProblems]);
+
   // ★ GraphModal에서 수정 저장 후 자동 refetch (FigureRenderer가 이벤트 발행)
   // ★ AI 도형 생성 중이면 refetch를 지연 (경쟁 상태 방지)
   useEffect(() => {
@@ -3495,6 +3556,7 @@ export default function CloudExamDetailPage() {
                         onDeleteFigure={handleDeleteFigure}
                         onReplaceDiagram={handleReplaceDiagram}
                         onUpdateContent={handleUpdateContent}
+                        onUpdatePoints={handleUpdatePoints}
                         isSelectionMode={isSelectionMode}
                         isSelected={selectedProblems.has(problem.id)}
                         onToggleSelect={toggleSelectProblem}
