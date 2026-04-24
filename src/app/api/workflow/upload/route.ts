@@ -1090,6 +1090,9 @@ async function triggerAutoSolutionGeneration(examId: string, origin: string): Pr
       body: JSON.stringify({ problemIds }),
       keepalive: true,
     }).catch((err) => console.error('[auto-solution-trigger] fetch 실패:', err));
+    // ★ Vercel 서버리스: fetch가 TCP dispatch 끝나기 전 함수 종료되면 요청 소실됨
+    //   batch-solutions 내부 체인 트리거와 동일하게 100ms 대기로 dispatch 보장
+    await new Promise((r) => setTimeout(r, 100));
     console.log(`[auto-solution-trigger] ${problemIds.length}개 문제 해설 자동 생성 시작: exam=${examId.slice(0, 8)}`);
   } catch (err) {
     console.error('[auto-solution-trigger] error:', err);
