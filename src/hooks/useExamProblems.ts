@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
 // Note: supabaseBrowser는 useCreateExam, useExamList에서 여전히 사용
@@ -355,6 +355,14 @@ export function useExamProblems(examId: string | null) {
   const [examInfo, setExamInfo] = useState<ExamInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // ★ 초기 로드 시에만 스피너 표시. refetch 는 백그라운드에서 조용히 갱신되어
+  //   카드 리스트가 사라졌다 다시 나타나는 "새로고침" 느낌을 없앤다.
+  const hasLoadedOnceRef = useRef(false);
+
+  // examId 바뀌면 초기 로드 상태로 리셋 (다른 시험지 열 때 스피너 정상 표시)
+  useEffect(() => {
+    hasLoadedOnceRef.current = false;
+  }, [examId]);
 
   const fetchProblems = useCallback(async () => {
     if (!examId) {
@@ -364,7 +372,10 @@ export function useExamProblems(examId: string | null) {
       return;
     }
 
-    setIsLoading(true);
+    // 최초 1회만 로딩 스피너. 이후 refetch 는 silent.
+    if (!hasLoadedOnceRef.current) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -418,6 +429,7 @@ export function useExamProblems(examId: string | null) {
       setError(err instanceof Error ? err.message : 'Failed to load problems');
     } finally {
       setIsLoading(false);
+      hasLoadedOnceRef.current = true;
     }
   }, [examId]);
 
