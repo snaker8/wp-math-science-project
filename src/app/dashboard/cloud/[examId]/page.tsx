@@ -3213,10 +3213,35 @@ export default function CloudExamDetailPage() {
             </button>
           </div>
 
-          {/* 문항 수 + 더보기 */}
+          {/* 문항 수 + 제목 편집 */}
           <span className="text-sm text-chrome-fg-3 ml-2">{problems.length} 문항</span>
-          <button type="button" className="p-2 text-chrome-fg-3 hover:text-chrome-fg-1">
-            <MoreVertical className="h-5 w-5" />
+          <button
+            type="button"
+            title="시험지 이름 수정"
+            onClick={async () => {
+              const newTitle = prompt('시험지 이름을 입력하세요', examTitle);
+              if (!newTitle || !newTitle.trim() || newTitle.trim() === examTitle) return;
+              try {
+                const res = await fetch(`/api/exams/${examId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: newTitle.trim(), syncProblemSources: true }),
+                });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  alert(`이름 변경 실패: ${err.error || res.status}`);
+                  return;
+                }
+                const data = await res.json();
+                alert(`이름 변경 완료 — 문제 ${data.syncedProblems || 0}개 태그도 동기화됨`);
+                refetchProblems();
+              } catch (err) {
+                alert(`이름 변경 요청 실패: ${String(err)}`);
+              }
+            }}
+            className="p-2 text-chrome-fg-3 hover:text-chrome-fg-1"
+          >
+            <Pencil className="h-5 w-5" />
           </button>
                 </div>
               </div>
