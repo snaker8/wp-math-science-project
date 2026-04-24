@@ -223,7 +223,10 @@ export function DiagramBrowserModal({
         body: formData,
       });
 
-      if (!res.ok) throw new Error('업로드 실패');
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(`업로드 실패 (${res.status}): ${detail.slice(0, 200) || '응답 없음'}`);
+      }
       const data = await res.json();
 
       if (data.publicUrl) {
@@ -279,7 +282,10 @@ export function DiagramBrowserModal({
         method: 'POST',
         body: formData,
       });
-      if (!res.ok) throw new Error('업로드 실패');
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(`업로드 실패 (${res.status}): ${detail.slice(0, 200) || '응답 없음'}`);
+      }
       const data = await res.json();
       if (data.publicUrl) {
         onSelect(data.publicUrl, { correctionType: 'svg_paste', svgSource: trimmed });
