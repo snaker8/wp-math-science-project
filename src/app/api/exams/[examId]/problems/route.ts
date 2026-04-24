@@ -6,7 +6,9 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 export const dynamic = 'force-dynamic';
 
 // ============================================================================
-// PATCH — 특정 문제 배점 수정
+// PATCH — 단건: 특정 문제 배점 수정 / 액션: content_latex에서 [N점] 일괄 복원
+//   body: { problemId, points } — 단건 수정
+//   body: { action: 'restore-from-content' } — 시험지 전체 content에서 [N점] 재추출
 // ============================================================================
 export async function PATCH(
   request: NextRequest,
@@ -20,6 +22,41 @@ export async function PATCH(
 
   try {
     const body = await request.json();
+
+    // ---- 액션: 원 배점 복원 ----
+    if (body.action === 'restore-from-content') {
+      const { data: eps, error: epErr } = await supabaseAdmin
+        .from('exam_problems')
+        .select('problem_id')
+        .eq('exam_id', examId);
+      if (epErr) throw epErr;
+      const ids = (eps || []).map((r: { problem_id: string }) => r.problem_id);
+      if (ids.length === 0) return NextResponse.json({ success: true, updated: 0, total: 0 });
+
+      const { data: problems, error: pErr } = await supabaseAdmin
+        .from('problems')
+        .select('id, content_latex')
+        .in('id', ids);
+      if (pErr) throw pErr;
+
+      let updated = 0;
+      const rescanRegex = /\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/;
+      for (const p of problems || []) {
+        const content = (p as any).content_latex || '';
+        const m = content.match(rescanRegex);
+        if (!m) continue;
+        const pts = Math.min(100, Math.max(0, parseFloat(m[1])));
+        const { error: updErr } = await supabaseAdmin
+          .from('exam_problems')
+          .update({ points: pts })
+          .eq('exam_id', examId)
+          .eq('problem_id', (p as any).id);
+        if (!updErr) updated++;
+      }
+      return NextResponse.json({ success: true, updated, total: ids.length });
+    }
+
+    // ---- 단건 수정 ----
     const problemId: string | undefined = body.problemId;
     const points: unknown = body.points;
 
