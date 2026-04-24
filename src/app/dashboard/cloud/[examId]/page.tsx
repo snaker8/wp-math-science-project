@@ -3163,7 +3163,7 @@ export default function CloudExamDetailPage() {
         <button
           type="button"
           onClick={async () => {
-            if (!confirm('자동수정을 실행합니다.\n- 과목/학년 불일치 수정\n- 서술형 소문제 복원\n- 점수 표기 정리\n\n진행하시겠습니까?')) return;
+            if (!confirm('자동수정을 실행합니다.\n- 과목/학년 불일치 수정\n- 서술형 소문제 복원\n- 점수 표기 정리\n- LaTeX 렌더 수정 (구간정의함수 등)\n- 학습된 수정 규칙 자동 적용\n\n진행하시겠습니까?')) return;
             try {
               const res = await fetch(`/api/exams/${examId}/auto-fix?mode=fix`, { method: 'POST' });
               const data = await res.json();
