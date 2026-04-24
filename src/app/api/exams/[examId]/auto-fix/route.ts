@@ -95,6 +95,30 @@ export async function POST(
       return NextResponse.json({ message: '문제 조회 실패', fixes: [] });
     }
 
+    // ─── 렌더 수정 학습 규칙 로드 (confidence ≥ 0.7) ───
+    //    매 요청당 한 번만 조회해서 아래 루프에서 재사용.
+    //    조회 실패하면 빈 배열 → 학습 적용만 건너뛰고 나머지 로직 정상 진행.
+    let learnedRules: Array<{ original: string; corrected: string; confidence: number; id: string }> = [];
+    try {
+      const { data: rulesData } = await sb
+        .from('latex_render_corrections')
+        .select('id, original_fragment, corrected_fragment, confidence, status')
+        .in('status', ['auto_applied', 'learning'])
+        .gte('confidence', 0.7)
+        .order('confidence', { ascending: false })
+        .limit(200);
+      if (rulesData) {
+        learnedRules = rulesData.map(r => ({
+          id: r.id,
+          original: r.original_fragment,
+          corrected: r.corrected_fragment,
+          confidence: r.confidence,
+        }));
+      }
+    } catch (e) {
+      console.warn('[auto-fix] learnedRules load failed:', e instanceof Error ? e.message : e);
+    }
+
     // ★ 기존 classifications 일괄 조회
     const { data: allClassifications } = await sb
       .from('classifications')
@@ -435,6 +459,67 @@ export async function POST(
           updates.solution_latex = solFixed;
           result.fixes.push(`해설 LaTeX 정규화: ${solChanges.join(', ')}`);
         }
+      }
+
+      // ─── FIX 4.6: LaTeX 렌더 수정 (src/lib/latex/renderRepair.ts) ───
+      // ★ 이 패스는 "자동수정(유형매핑)"과는 별개 개념으로, KaTeX 렌더 실패 교정만 담당.
+      //   로그 프리픽스도 [render-repair] 로 분리해서 유형매핑 로그와 섞이지 않게 한다.
+      console.log(`[render-repair] #${seqNum} enter FIX4.6 contentLen=${((updates.content_latex as string) || content || '').length}`);
+      try {
+        const { repairLatexRender, applyLearnedRules } = await import('@/lib/latex/renderRepair');
+
+        // (1) 하드코딩 렌더 수정 규칙
+        const c2Before = (updates.content_latex as string) || content;
+        const c2 = repairLatexRender(c2Before);
+        // 진단: 의심 키워드 정리 (다양한 split 형태 커버)
+        const markers: string[] = [];
+        if (/\\left\s*\\?\{/.test(c2Before))  markers.push('\\left\\{');
+        if (/\\right\s*\./.test(c2Before))    markers.push('\\right.');
+        if (/\\lbrace/.test(c2Before))         markers.push('\\lbrace');
+        if (/\\rbrace/.test(c2Before))         markers.push('\\rbrace');
+        if (/\\begin\{array\}/.test(c2Before)) markers.push('array');
+        if (/\\begin\{cases\}/.test(c2Before)) markers.push('cases');
+        if (/\\displaystyle/.test(c2Before))   markers.push('displaystyle');
+        console.log(`[render-repair] #${seqNum} markers=[${markers.join(',') || 'none'}] changes=[${c2.changes.join(',') || 'none'}]`);
+        if (c2.changes.length > 0 && c2.fixed !== c2Before) {
+          updates.content_latex = c2.fixed;
+          result.fixes.push(`렌더 수정: ${c2.changes.join(', ')}`);
+          console.log(`[render-repair] #${seqNum} applied:`, c2.changes.join(', '));
+        } else if (seqNum === 10 || markers.length > 0) {
+          // #10 은 무조건, 나머지는 markers 있을 때만 content 앞 600자 출력
+          const snippet = c2Before.length > 600 ? c2Before.slice(0, 600) + '…' : c2Before;
+          console.log(`[render-repair] #${seqNum} content_latex:\n${snippet}`);
+        }
+        const s2Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
+        if (s2Before) {
+          const s2 = repairLatexRender(s2Before);
+          if (s2.changes.length > 0 && s2.fixed !== s2Before) {
+            updates.solution_latex = s2.fixed;
+            result.fixes.push(`해설 렌더 수정: ${s2.changes.join(', ')}`);
+            console.log(`[render-repair] #${seqNum} solution applied:`, s2.changes.join(', '));
+          }
+        }
+
+        // (2) 학습 규칙 — 과거 수동 수정에서 쌓인 (original → corrected) 패턴
+        if (learnedRules.length > 0) {
+          const c3Before = (updates.content_latex as string) || c2.fixed || content;
+          const c3 = applyLearnedRules(c3Before, learnedRules);
+          if (c3.changes.length > 0 && c3.fixed !== c3Before) {
+            updates.content_latex = c3.fixed;
+            result.fixes.push(`학습 규칙: ${c3.changes.join(', ')}`);
+            console.log(`[render-repair] #${seqNum} learned applied:`, c3.changes.join(', '));
+          }
+          const s3Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
+          if (s3Before) {
+            const s3 = applyLearnedRules(s3Before, learnedRules);
+            if (s3.changes.length > 0 && s3.fixed !== s3Before) {
+              updates.solution_latex = s3.fixed;
+              result.fixes.push(`해설 학습 규칙: ${s3.changes.join(', ')}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[render-repair] #${seqNum} error:`, e instanceof Error ? e.message : e);
       }
 
       // ─── FIX 5: figure_crop URL 프록시 변환 확인 ───

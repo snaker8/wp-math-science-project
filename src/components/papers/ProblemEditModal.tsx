@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
+import RenderRepairPanel from '@/components/papers/RenderRepairPanel';
 import dynamic from 'next/dynamic';
 
 // GraphModal은 Desmos API 사용하므로 dynamic import
@@ -804,6 +805,36 @@ export function ProblemEditModal({
         const msg = data.error || `저장 실패 (HTTP ${res.status})`;
         throw new Error(msg);
       }
+
+      // ★ 렌더 수정 학습 — (원본, 수정본) 쌍을 fire-and-forget 으로 저장.
+      //   저장 흐름을 막지 않기 위해 await 하지 않고 실패해도 조용히 무시.
+      try {
+        if (initialContent && content && initialContent !== content) {
+          fetch('/api/latex-corrections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              problem_id: problemId,
+              source: 'content',
+              original: initialContent,
+              corrected: content,
+            }),
+          }).catch(() => { /* ignore */ });
+        }
+        if (initialSolution && solution && initialSolution !== solution) {
+          fetch('/api/latex-corrections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              problem_id: problemId,
+              source: 'solution',
+              original: initialSolution,
+              corrected: solution,
+            }),
+          }).catch(() => { /* ignore */ });
+        }
+      } catch { /* 학습 저장 실패는 무시 */ }
+
       onSaved();
       onClose();
     } catch (err) {
@@ -812,7 +843,7 @@ export function ProblemEditModal({
     } finally {
       setIsSaving(false);
     }
-  }, [problemId, content, solution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, onSaved, onClose]);
+  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, onSaved, onClose]);
 
   // ★ AI 재분석: 분류 재실행
   const handleReanalyze = useCallback(async () => {
@@ -952,6 +983,13 @@ export function ProblemEditModal({
               onOpenLatex={() => openLatexModal('content')}
               onOpenGraph={() => openGraphModal('content')}
             />
+            {/* ★ 렌더 수정 제안 — KaTeX 에러 유발 패턴/학습 규칙 자동 감지 */}
+            <RenderRepairPanel
+              value={content}
+              label="문제"
+              onApply={setContent}
+              source="content"
+            />
             {cropImageUrl && (
               <button
                 type="button"
@@ -974,6 +1012,13 @@ export function ProblemEditModal({
               textareaRef={solutionRef}
               onOpenLatex={() => openLatexModal('solution')}
               onOpenGraph={() => openGraphModal('solution')}
+            />
+            {/* ★ 해설 렌더 수정 제안 */}
+            <RenderRepairPanel
+              value={solution}
+              label="해설"
+              onApply={setSolution}
+              source="solution"
             />
           </div>
 
