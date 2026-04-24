@@ -269,6 +269,11 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
           { inlineData: { data: base64, mimeType } },
         ],
       }],
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0,
+        thinkingConfig: { thinkingLevel: 'low' },
+      },
     }),
   });
 
@@ -281,9 +286,17 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
   const rawText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
 
+  // 멀티라인 답 병합: "17. (1)12\n(2)-2/3\n(3)-4" → "17. (1)12 (2)-2/3 (3)-4"
+  const mergedLines: string[] = [];
+  for (const raw of rawText.split('\n').map((l: string) => l.trim())) {
+    if (!raw) continue;
+    if (/^\d{1,2}\s*[.)]/.test(raw)) mergedLines.push(raw);
+    else if (mergedLines.length > 0) mergedLines[mergedLines.length - 1] += ' ' + raw;
+  }
+
   // "N. 답" 형식 파싱 (원문자 → 숫자로 변환해 매칭에 사용)
   const answers: ParsedAnswer[] = [];
-  for (const line of rawText.split('\n').map((l: string) => l.trim()).filter(Boolean)) {
+  for (const line of mergedLines) {
     const m = line.match(/^(\d{1,2})\s*[.)]\s*(.+)$/);
     if (!m) continue;
     const num = parseInt(m[1]);
