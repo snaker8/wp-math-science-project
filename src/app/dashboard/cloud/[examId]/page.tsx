@@ -980,17 +980,7 @@ function ProblemCardView({
         </div>
       </div>
 
-      {/* 유형 footer (편집 가능 영역) */}
-      {problem.typeCode && (
-        <div className="flex items-center justify-between px-4 py-1.5 border-t border-subtle bg-surface-card/60">
-          <span className="text-[11px] text-content-tertiary">유형: {problem.typeCode}{problem.typeName && problem.typeName !== problem.typeCode ? `. ${problem.typeName}` : ''}</span>
-          <button type="button" className="p-0.5 text-content-muted hover:text-content-secondary" title="유형 변경">
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </button>
-        </div>
-      )}
+      {/* 유형 footer 제거 — 상단 amber 태그(970~974)와 중복 */}
     </div>
   );
 }
@@ -3219,13 +3209,15 @@ export default function CloudExamDetailPage() {
             type="button"
             title="시험지 이름 수정"
             onClick={async () => {
-              const newTitle = prompt('시험지 이름을 입력하세요', examTitle);
-              if (!newTitle || !newTitle.trim() || newTitle.trim() === examTitle) return;
+              const newTitle = prompt('시험지 이름을 입력하세요 (같은 이름 입력 시 태그 동기화만 수행)', examTitle);
+              if (!newTitle || !newTitle.trim()) return;
+              const trimmed = newTitle.trim();
               try {
                 const res = await fetch(`/api/exams/${examId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ title: newTitle.trim(), syncProblemSources: true }),
+                  // title 동일하더라도 PATCH 실행 + syncProblemSources=true로 태그 강제 동기화
+                  body: JSON.stringify({ title: trimmed, syncProblemSources: true }),
                 });
                 if (!res.ok) {
                   const err = await res.json().catch(() => ({}));
