@@ -464,6 +464,7 @@ export async function POST(
       // ─── FIX 4.6: LaTeX 렌더 수정 (src/lib/latex/renderRepair.ts) ───
       // ★ 이 패스는 "자동수정(유형매핑)"과는 별개 개념으로, KaTeX 렌더 실패 교정만 담당.
       //   로그 프리픽스도 [render-repair] 로 분리해서 유형매핑 로그와 섞이지 않게 한다.
+      console.log(`[render-repair] #${seqNum} enter FIX4.6 contentLen=${((updates.content_latex as string) || content || '').length}`);
       try {
         const { repairLatexRender, applyLearnedRules } = await import('@/lib/latex/renderRepair');
 
@@ -479,14 +480,15 @@ export async function POST(
         if (/\\begin\{array\}/.test(c2Before)) markers.push('array');
         if (/\\begin\{cases\}/.test(c2Before)) markers.push('cases');
         if (/\\displaystyle/.test(c2Before))   markers.push('displaystyle');
+        console.log(`[render-repair] #${seqNum} markers=[${markers.join(',') || 'none'}] changes=[${c2.changes.join(',') || 'none'}]`);
         if (c2.changes.length > 0 && c2.fixed !== c2Before) {
           updates.content_latex = c2.fixed;
           result.fixes.push(`렌더 수정: ${c2.changes.join(', ')}`);
           console.log(`[render-repair] #${seqNum} applied:`, c2.changes.join(', '));
-        } else if (markers.length > 0) {
-          // 의심 패턴이 있는데도 규칙이 발동 안 했을 때 진단용 로그
+        } else if (seqNum === 10 || markers.length > 0) {
+          // #10 은 무조건, 나머지는 markers 있을 때만 content 앞 600자 출력
           const snippet = c2Before.length > 600 ? c2Before.slice(0, 600) + '…' : c2Before;
-          console.log(`[render-repair] #${seqNum} no-match. markers=[${markers.join(',')}] content_latex:\n${snippet}`);
+          console.log(`[render-repair] #${seqNum} content_latex:\n${snippet}`);
         }
         const s2Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
         if (s2Before) {
