@@ -59,14 +59,16 @@ export async function POST(
 
     // 2. OCR / Vision 추출
     const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-    console.log(`[match-answers] 추출 시작: ${file.name} (${file.size} bytes, isPdf=${isPdf})`);
+    // 짧은 PDF(≤200KB)는 빠른답 단일 페이지로 간주 — Gemini로 직행 (Mathpix보다 10배 빠름)
+    const isShortPdf = isPdf && file.size <= 200 * 1024;
+    console.log(`[match-answers] 추출 시작: ${file.name} (${file.size} bytes, isPdf=${isPdf}, isShortPdf=${isShortPdf})`);
 
     let parseResult;
-    if (!isPdf) {
-      // 이미지 → Gemini 2.5 Flash Vision (Mathpix보다 빠른답 이미지를 훨씬 잘 읽음)
+    if (!isPdf || isShortPdf) {
+      // 이미지 또는 짧은 PDF → Gemini Vision (PDF inlineData 직접 지원)
       const visionAnswers = await extractAnswersWithGemini(file);
       if (visionAnswers.length === 0) {
-        return NextResponse.json({ error: '이미지에서 답을 찾지 못했습니다. 빠른답 이미지인지 확인해주세요.' }, { status: 400 });
+        return NextResponse.json({ error: '파일에서 답을 찾지 못했습니다. 빠른답 이미지/PDF인지 확인해주세요.' }, { status: 400 });
       }
       console.log(`[match-answers] Gemini Vision 추출 완료: ${visionAnswers.length}개 답`);
       parseResult = {
@@ -76,7 +78,7 @@ export async function POST(
         detectedType: 'quick_answer' as const,
       };
     } else {
-      // PDF → Mathpix OCR → 파서
+      // 긴 PDF(해설지) → Mathpix OCR → 파서 (빠른답/해설 섹션 자동 분리)
       const ocrText = await ocrPdf(file);
       if (!ocrText || ocrText.trim().length < 10) {
         return NextResponse.json({ error: 'OCR 결과가 비어있습니다.' }, { status: 400 });
@@ -245,9 +247,11 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString('base64');
-  const mimeType = file.type || 'image/jpeg';
+  // 확장자로 PDF 감지 (file.type 비어있는 브라우저 대응)
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  const mimeType = isPdf ? 'application/pdf' : (file.type || 'image/jpeg');
 
-  const prompt = `이 이미지에서 정답표(정답지)를 찾아서 텍스트로 추출해줘. 문제 번호와 정답을 각 줄에 하나씩 나열해. 형식은 '문제번호. 정답' (예: 1. ①, 2. 5, 3. -1, 4. 1/2, 5. 해설참조) 형태로 해줘.
+  const prompt = `이 파일에서 정답표(정답지)를 찾아서 텍스트로 추출해줘. 문제 번호와 정답을 각 줄에 하나씩 나열해. 형식은 '문제번호. 정답' (예: 1. ①, 2. 5, 3. -1, 4. 1/2, 5. 해설참조) 형태로 해줘. 마지막 문항까지 빠짐없이 모두 추출해.
 
 [중요 원칙]
 1. 객관식 정답이 원문자(①, ②, ③, ④, ⑤)로 되어 있다면 반드시 해당 특수문자를 그대로 사용해. 절대 (1)이나 1로 바꾸지 마.
@@ -348,7 +352,7 @@ async function ocrPdf(file: File): Promise<string> {
   const data = await res.json();
   const pdfId = data.pdf_id;
 
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 55; i++) {
     await new Promise(r => setTimeout(r, 2000));
     const statusRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}`, {
       headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
