@@ -463,17 +463,22 @@ export async function POST(
 
       // ─── FIX 4.6: LaTeX 렌더 수정 (src/lib/latex/renderRepair.ts) ───
       // ★ 이 패스는 "자동수정(유형매핑)"과는 별개 개념으로, KaTeX 렌더 실패 교정만 담당.
-      //   분할된 구간정의함수 병합 등, 기존 fixLatex 가 못 잡는 케이스 보완.
-      //   + 학습된 사용자 수정 규칙도 여기서 함께 적용.
+      //   로그 프리픽스도 [render-repair] 로 분리해서 유형매핑 로그와 섞이지 않게 한다.
       try {
         const { repairLatexRender, applyLearnedRules } = await import('@/lib/latex/renderRepair');
 
         // (1) 하드코딩 렌더 수정 규칙
         const c2Before = (updates.content_latex as string) || content;
         const c2 = repairLatexRender(c2Before);
+        const hasSplitMarker = /\\left\s*\\?\{|\\right\s*\./.test(c2Before);
         if (c2.changes.length > 0 && c2.fixed !== c2Before) {
           updates.content_latex = c2.fixed;
           result.fixes.push(`렌더 수정: ${c2.changes.join(', ')}`);
+          console.log(`[render-repair] #${seqNum} applied:`, c2.changes.join(', '));
+        } else if (hasSplitMarker) {
+          // 의심 패턴이 있는데도 규칙이 발동 안 했을 때 진단용 로그 (최대 400자)
+          const snippet = c2Before.length > 400 ? c2Before.slice(0, 400) + '…' : c2Before;
+          console.log(`[render-repair] #${seqNum} no-match but has split markers. content_latex head:\n${snippet}`);
         }
         const s2Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
         if (s2Before) {
@@ -481,6 +486,7 @@ export async function POST(
           if (s2.changes.length > 0 && s2.fixed !== s2Before) {
             updates.solution_latex = s2.fixed;
             result.fixes.push(`해설 렌더 수정: ${s2.changes.join(', ')}`);
+            console.log(`[render-repair] #${seqNum} solution applied:`, s2.changes.join(', '));
           }
         }
 
@@ -491,6 +497,7 @@ export async function POST(
           if (c3.changes.length > 0 && c3.fixed !== c3Before) {
             updates.content_latex = c3.fixed;
             result.fixes.push(`학습 규칙: ${c3.changes.join(', ')}`);
+            console.log(`[render-repair] #${seqNum} learned applied:`, c3.changes.join(', '));
           }
           const s3Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
           if (s3Before) {
@@ -502,7 +509,7 @@ export async function POST(
           }
         }
       } catch (e) {
-        console.error(`[auto-fix] #${seqNum} renderRepair error:`, e instanceof Error ? e.message : e);
+        console.error(`[render-repair] #${seqNum} error:`, e instanceof Error ? e.message : e);
       }
 
       // ─── FIX 5: figure_crop URL 프록시 변환 확인 ───
