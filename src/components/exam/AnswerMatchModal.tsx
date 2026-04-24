@@ -39,7 +39,7 @@ interface AnswerMatchModalProps {
 }
 
 export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied }: AnswerMatchModalProps) {
-  const [mode, setMode] = useState<'file' | 'text'>('text'); // ★ 기본값 텍스트 입력
+  const [mode, setMode] = useState<'text' | 'quick' | 'solution'>('text'); // ★ 기본값 텍스트 입력
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
@@ -184,9 +184,11 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
     try {
       const formData = new FormData();
       for (const f of files) formData.append('file', f);
+      const docType = mode === 'solution' ? 'solution' : 'quick_answer';
+      formData.append('docType', docType);
 
       const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
-      console.log(`[AnswerMatch] Uploading: ${files.length}개 파일, 총 ${totalBytes} bytes`, files.map(f => f.name));
+      console.log(`[AnswerMatch] Uploading (${docType}): ${files.length}개 파일, 총 ${totalBytes} bytes`, files.map(f => f.name));
       const res = await fetch(`/api/exams/${examId}/match-answers`, {
         method: 'POST',
         body: formData,
@@ -296,15 +298,26 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               텍스트 붙여넣기
             </button>
             <button
-              onClick={() => { setMode('file'); setError(null); }}
+              onClick={() => { setMode('quick'); setError(null); }}
               className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
-                mode === 'file'
+                mode === 'quick'
                   ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5'
                   : 'text-content-muted hover:text-content-secondary'
               }`}
             >
               <Upload size={14} />
-              이미지 업로드
+              빠른답 업로드
+            </button>
+            <button
+              onClick={() => { setMode('solution'); setError(null); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+                mode === 'solution'
+                  ? 'text-amber-400 border-b-2 border-amber-500 bg-amber-500/5'
+                  : 'text-content-muted hover:text-content-secondary'
+              }`}
+            >
+              <FileText size={14} />
+              해설 업로드
             </button>
           </div>
         )}
@@ -338,13 +351,15 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
             </>
           )}
 
-          {/* 파일 업로드 모드 */}
-          {mode === 'file' && !matchResult && (
+          {/* 파일 업로드 모드 (빠른답 / 해설) */}
+          {(mode === 'quick' || mode === 'solution') && !matchResult && (
             <>
               <div
                 onDrop={handleDrop}
                 onDragOver={e => e.preventDefault()}
-                className="border-2 border-dashed border-subtle rounded-xl p-6 text-center hover:border-indigo-500/50 transition-colors cursor-pointer"
+                className={`border-2 border-dashed border-subtle rounded-xl p-6 text-center transition-colors cursor-pointer ${
+                  mode === 'solution' ? 'hover:border-amber-500/50' : 'hover:border-indigo-500/50'
+                }`}
                 onClick={() => document.getElementById('answer-file-input')?.click()}
               >
                 <input
@@ -356,7 +371,9 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                   className="hidden"
                 />
                 <Upload size={32} className="mx-auto text-content-muted mb-2" />
-                <p className="text-sm text-content-secondary">빠른답 또는 해설 파일을 드롭하세요</p>
+                <p className="text-sm text-content-secondary">
+                  {mode === 'solution' ? '해설지 파일을 드롭하세요 (Mathpix OCR)' : '빠른답 파일을 드롭하세요 (Gemini Vision)'}
+                </p>
                 <p className="text-xs text-content-muted mt-1">PDF, PNG, JPG · 여러 장 선택 가능 (최대 {MAX_FILES}개)</p>
               </div>
 
@@ -364,7 +381,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                 <div className="space-y-1.5 max-h-52 overflow-auto rounded-lg border border-subtle bg-surface-raised/50 p-2">
                   {files.map((f, idx) => (
                     <div key={`${f.name}-${idx}`} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-raised">
-                      <FileText size={14} className="text-indigo-400 shrink-0" />
+                      <FileText size={14} className={`shrink-0 ${mode === 'solution' ? 'text-amber-400' : 'text-indigo-400'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-content-primary truncate">{f.name}</p>
                         <p className="text-[10px] text-content-muted">{(f.size / 1024).toFixed(0)} KB</p>
@@ -385,10 +402,14 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                 <button
                   onClick={handleUpload}
                   disabled={isUploading}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-white font-medium text-sm transition-colors disabled:opacity-50 ${
+                    mode === 'solution'
+                      ? 'bg-amber-600 hover:bg-amber-500'
+                      : 'bg-indigo-600 hover:bg-indigo-500'
+                  }`}
                 >
                   {isUploading ? (
-                    <><Loader2 size={16} className="animate-spin" /> OCR + 매칭 분석 중 ({files.length}장)...</>
+                    <><Loader2 size={16} className="animate-spin" /> {mode === 'solution' ? 'Mathpix OCR + 해설 파싱' : 'OCR + 매칭 분석'} 중 ({files.length}장)...</>
                   ) : (
                     <><Upload size={16} /> {files.length}개 파일 분석 시작</>
                   )}

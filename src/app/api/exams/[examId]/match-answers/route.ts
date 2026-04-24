@@ -33,6 +33,8 @@ export async function POST(
     const uploadedFiles = (formData.getAll('file') as File[])
       .filter((f): f is File => !!f && typeof f.name === 'string')
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    // 'solution' 선택 시 파일 크기·형식 무관 Mathpix로 강제 (해설 블록 추출 필요)
+    const docType = (formData.get('docType') as string) === 'solution' ? 'solution' : 'quick_answer';
 
     if (uploadedFiles.length === 0) {
       return NextResponse.json({ error: '파일이 필요합니다.' }, { status: 400 });
@@ -76,16 +78,19 @@ export async function POST(
     for (const file of uploadedFiles) {
       const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
       // 짧은 PDF(≤200KB)는 빠른답 단일 페이지로 간주 — Gemini로 직행 (Mathpix보다 10배 빠름)
+      // 단 docType=solution일 때는 크기 무관 Mathpix로 강제 (해설 블록 추출 필요)
       const isShortPdf = isPdf && file.size <= 200 * 1024;
-      console.log(`[match-answers] 추출: ${file.name} (${file.size} bytes, isPdf=${isPdf}, isShortPdf=${isShortPdf})`);
+      const useGemini = docType === 'quick_answer' && (!isPdf || isShortPdf);
+      console.log(`[match-answers] 추출: ${file.name} (${file.size} bytes, docType=${docType}, useGemini=${useGemini})`);
 
-      if (!isPdf || isShortPdf) {
+      if (useGemini) {
         const visionAnswers = await extractAnswersWithGemini(file);
         console.log(`[match-answers]   Gemini: ${visionAnswers.length}개 답`);
         for (const a of visionAnswers) answerMap.set(a.problemNumber, a);
         rawTextParts.push(`--- ${file.name} ---\n` + visionAnswers.map(a => `${a.problemNumber}. ${a.answer}`).join('\n'));
       } else {
-        const ocrText = await ocrPdf(file);
+        // PDF → /v3/pdf (async polling), 이미지 → /v3/text (sync)
+        const ocrText = isPdf ? await ocrPdf(file) : await ocrImage(file);
         if (ocrText && ocrText.trim().length >= 10) {
           console.log(`[match-answers]   Mathpix: ${ocrText.length}자`);
           mathpixMergedText += (mathpixMergedText ? '\n\n' : '') + ocrText;
@@ -399,4 +404,35 @@ async function ocrPdf(file: File): Promise<string> {
     if (statusData.status === 'error') throw new Error('Mathpix PDF 처리 실패');
   }
   throw new Error('Mathpix PDF 처리 타임아웃');
+}
+
+// ============================================================================
+// Mathpix OCR — 이미지 전용 (해설 이미지가 여러 장으로 들어올 때)
+// /v3/text는 동기 호출이라 polling 불필요
+// ============================================================================
+
+async function ocrImage(file: File): Promise<string> {
+  if (!MATHPIX_APP_ID || !MATHPIX_APP_KEY) {
+    throw new Error('Mathpix API 키가 설정되지 않았습니다.');
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const mimeType = file.type || 'image/jpeg';
+  const formData = new FormData();
+  formData.append('file', new Blob([buffer], { type: mimeType }), file.name);
+  formData.append('options_json', JSON.stringify({
+    formats: ['text'],
+    math_inline_delimiters: ['$', '$'],
+    math_display_delimiters: ['$$', '$$'],
+  }));
+
+  const res = await fetch('https://api.mathpix.com/v3/text', {
+    method: 'POST',
+    headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
+    body: formData as any,
+  });
+
+  if (!res.ok) throw new Error(`Mathpix 이미지 OCR 실패: ${res.status}`);
+  const data = await res.json();
+  return (data.text as string) || '';
 }
