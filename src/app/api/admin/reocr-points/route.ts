@@ -30,7 +30,6 @@ async function mathpixPdf(buffer: Buffer, fileName: string): Promise<string> {
   const form = new FormData();
   form.append('file', new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }), fileName);
   form.append('options_json', JSON.stringify({
-    conversion_formats: { text: true },
     math_inline_delimiters: ['$', '$'],
     math_display_delimiters: ['$$', '$$'],
   }));
