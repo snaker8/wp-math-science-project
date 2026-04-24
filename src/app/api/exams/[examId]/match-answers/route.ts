@@ -11,7 +11,7 @@ const MATHPIX_APP_ID = process.env.MATHPIX_APP_ID || '';
 const MATHPIX_APP_KEY = process.env.MATHPIX_APP_KEY || '';
 const GEMINI_API_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // ============================================================================
 // POST: 파일 업로드 → OCR → 파싱 → 매칭 미리보기
@@ -65,36 +65,58 @@ export async function POST(
 
     const problemMap = new Map((problems || []).map(p => [p.id, p]));
 
-    // 2. 파일별 OCR / Vision 추출 → 결과 병합
+    // 2. 파일별 OCR / Vision 병렬 추출 → 결과 병합
     //    - Gemini 경로(이미지/짧은 PDF): ParsedAnswer[] 직접 누적
-    //    - Mathpix 경로(긴 PDF): OCR 텍스트 누적 후 마지막에 parseAnswerDocument 한 번 호출
+    //    - Mathpix 경로(긴 PDF/이미지): OCR 텍스트 누적 후 마지막에 parseAnswerDocument 한 번 호출
     const answerMap = new Map<number, import('@/lib/ocr/answer-parser').ParsedAnswer>();
     const solutionMap = new Map<number, import('@/lib/ocr/answer-parser').ParsedSolution>();
     const rawTextParts: string[] = [];
     let hasMathpixText = false;
-    let mathpixMergedText = '';
     let mathpixDetectedType: 'quick_answer' | 'solution' | 'mixed' | 'unknown' = 'unknown';
 
-    for (const file of uploadedFiles) {
+    type FileResult =
+      | { file: string; kind: 'gemini'; answers: import('@/lib/ocr/answer-parser').ParsedAnswer[] }
+      | { file: string; kind: 'mathpix'; text: string };
+
+    const tasks = uploadedFiles.map(async (file): Promise<FileResult> => {
       const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-      // 짧은 PDF(≤200KB)는 빠른답 단일 페이지로 간주 — Gemini로 직행 (Mathpix보다 10배 빠름)
-      // 단 docType=solution일 때는 크기 무관 Mathpix로 강제 (해설 블록 추출 필요)
       const isShortPdf = isPdf && file.size <= 200 * 1024;
       const useGemini = docType === 'quick_answer' && (!isPdf || isShortPdf);
-      console.log(`[match-answers] 추출: ${file.name} (${file.size} bytes, docType=${docType}, useGemini=${useGemini})`);
+      console.log(`[match-answers] 추출 시작: ${file.name} (${file.size} bytes, docType=${docType}, useGemini=${useGemini})`);
 
       if (useGemini) {
-        const visionAnswers = await extractAnswersWithGemini(file);
-        console.log(`[match-answers]   Gemini: ${visionAnswers.length}개 답`);
-        for (const a of visionAnswers) answerMap.set(a.problemNumber, a);
-        rawTextParts.push(`--- ${file.name} ---\n` + visionAnswers.map(a => `${a.problemNumber}. ${a.answer}`).join('\n'));
+        const answers = await extractAnswersWithGemini(file);
+        console.log(`[match-answers]   Gemini ${file.name}: ${answers.length}개 답`);
+        return { file: file.name, kind: 'gemini', answers };
       } else {
-        // PDF → /v3/pdf (async polling), 이미지 → /v3/text (sync)
-        const ocrText = isPdf ? await ocrPdf(file) : await ocrImage(file);
-        if (ocrText && ocrText.trim().length >= 10) {
-          console.log(`[match-answers]   Mathpix: ${ocrText.length}자`);
-          mathpixMergedText += (mathpixMergedText ? '\n\n' : '') + ocrText;
-          rawTextParts.push(`--- ${file.name} ---\n` + ocrText.slice(0, 200));
+        const text = isPdf ? await ocrPdf(file) : await ocrImage(file);
+        console.log(`[match-answers]   Mathpix ${file.name}: ${text.length}자`);
+        return { file: file.name, kind: 'mathpix', text };
+      }
+    });
+
+    const settled = await Promise.allSettled(tasks);
+
+    // 실패·성공 분리, 일부 실패해도 나머지는 살림
+    const failed: string[] = [];
+    let mathpixMergedText = '';
+    for (let i = 0; i < settled.length; i++) {
+      const r = settled[i];
+      const fileName = uploadedFiles[i].name;
+      if (r.status === 'rejected') {
+        const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        console.error(`[match-answers]   실패 ${fileName}: ${msg}`);
+        failed.push(`${fileName} (${msg})`);
+        continue;
+      }
+      const v = r.value;
+      if (v.kind === 'gemini') {
+        for (const a of v.answers) answerMap.set(a.problemNumber, a);
+        rawTextParts.push(`--- ${v.file} ---\n` + v.answers.map(a => `${a.problemNumber}. ${a.answer}`).join('\n'));
+      } else {
+        if (v.text && v.text.trim().length >= 10) {
+          mathpixMergedText += (mathpixMergedText ? '\n\n' : '') + v.text;
+          rawTextParts.push(`--- ${v.file} ---\n` + v.text.slice(0, 200));
           hasMathpixText = true;
         }
       }
@@ -109,7 +131,8 @@ export async function POST(
     }
 
     if (answerMap.size === 0 && solutionMap.size === 0) {
-      return NextResponse.json({ error: '파일에서 답/해설을 찾지 못했습니다. 빠른답·해설 파일인지 확인해주세요.' }, { status: 400 });
+      const failMsg = failed.length > 0 ? ` (실패: ${failed.join(', ')})` : '';
+      return NextResponse.json({ error: `파일에서 답/해설을 찾지 못했습니다.${failMsg}` }, { status: 400 });
     }
 
     // detectedType 결정: Gemini만 돌았으면 quick_answer, Mathpix 결과가 있으면 그 판정 사용
