@@ -2759,44 +2759,54 @@ export default function CloudExamDetailPage() {
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
   const [isAutoMapping, setIsAutoMapping] = useState(false);
 
-  // ★ 펼쳐보기 카드 드래그앤드롭 재정렬
+  // ★ 펼쳐보기 카드 드래그앤드롭 재정렬 (optimistic UI)
   const [draggedProblemId, setDraggedProblemId] = useState<string | null>(null);
   const [dragOverProblemId, setDragOverProblemId] = useState<string | null>(null);
   const [isReordering, setIsReordering] = useState(false);
+  // 드롭 즉시 반영될 낙관적 순서 (id 배열). API 성공+refetch 후 null 로 해제.
+  const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
 
   const handleReorderDrop = useCallback(async (draggedId: string, targetId: string) => {
     if (!draggedId || !targetId || draggedId === targetId) return;
-    // 현재 순서 (problems 는 DB 원본, filteredProblems 와 다를 수 있음)
+    // 현재 표시 순서(낙관적 순서 우선, 아니면 DB 번호 순)
     const allSorted = [...problems].sort((a, b) => (a.number || 0) - (b.number || 0));
-    const fromIdx = allSorted.findIndex(p => p.id === draggedId);
-    const toIdx = allSorted.findIndex(p => p.id === targetId);
+    const baseIds = optimisticOrder ?? allSorted.map(p => p.id);
+    const fromIdx = baseIds.indexOf(draggedId);
+    const toIdx = baseIds.indexOf(targetId);
     if (fromIdx < 0 || toIdx < 0) return;
-    const reordered = [...allSorted];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    const orderedProblemIds = reordered.map(p => p.id);
+    const reorderedIds = [...baseIds];
+    const [moved] = reorderedIds.splice(fromIdx, 1);
+    reorderedIds.splice(toIdx, 0, moved);
 
+    // ★ 즉시 UI 반영 — API 응답 기다리지 않음
+    setOptimisticOrder(reorderedIds);
+    setDraggedProblemId(null);
+    setDragOverProblemId(null);
     setIsReordering(true);
+
     try {
       const res = await fetch(`/api/exams/${examId}/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedProblemIds }),
+        body: JSON.stringify({ orderedProblemIds: reorderedIds }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // 롤백
+        setOptimisticOrder(null);
         alert('순서 변경 실패: ' + (data.error || `HTTP ${res.status}`));
         return;
       }
-      refetchProblems();
+      // DB 동기화 후 낙관적 상태 해제
+      await refetchProblems();
+      setOptimisticOrder(null);
     } catch (err) {
+      setOptimisticOrder(null);
       alert('순서 변경 실패: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsReordering(false);
-      setDraggedProblemId(null);
-      setDragOverProblemId(null);
     }
-  }, [problems, examId, refetchProblems]);
+  }, [problems, optimisticOrder, examId, refetchProblems]);
 
   const toggleSelectProblem = useCallback((id: string) => {
     setSelectedProblems((prev) => {
@@ -2840,14 +2850,30 @@ export default function CloudExamDetailPage() {
 
   // Filtered problems (번호 순 정렬)
   const filteredProblems = useMemo(() => {
-    return problems
-      .filter((p) => {
-        if (activeDifficulty !== null && p.difficulty !== activeDifficulty) return false;
-        if (activeDomain !== null && activeDomain !== 'UNASSIGNED' && p.cognitiveDomain !== activeDomain) return false;
-        return true;
-      })
-      .sort((a, b) => (a.number || 0) - (b.number || 0));
-  }, [problems, activeDifficulty, activeDomain]);
+    const filtered = problems.filter((p) => {
+      if (activeDifficulty !== null && p.difficulty !== activeDifficulty) return false;
+      if (activeDomain !== null && activeDomain !== 'UNASSIGNED' && p.cognitiveDomain !== activeDomain) return false;
+      return true;
+    });
+
+    // ★ 드래그 직후 낙관적 순서가 있으면 그 순서대로 정렬 + 번호 1..N 로 재부여
+    //   (API/refetch 완료 전에도 즉시 새 순서 + 새 번호 보이도록)
+    if (optimisticOrder) {
+      const idToProblem = new Map(filtered.map(p => [p.id, p]));
+      const ordered: typeof filtered = [];
+      let seq = 1;
+      for (const id of optimisticOrder) {
+        const p = idToProblem.get(id);
+        if (p) {
+          ordered.push({ ...p, number: seq });
+          seq++;
+        }
+      }
+      return ordered;
+    }
+
+    return filtered.sort((a, b) => (a.number || 0) - (b.number || 0));
+  }, [problems, activeDifficulty, activeDomain, optimisticOrder]);
 
   // ★ 전체 선택
   const selectAll = useCallback(() => {

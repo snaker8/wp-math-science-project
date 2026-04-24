@@ -68,28 +68,27 @@ export async function PATCH(
   // 2) 2-phase 업데이트 — sequence_number UNIQUE 제약 회피
   //    Phase A: 모든 행을 큰 오프셋으로 이동 (10000+)
   //    Phase B: 새 순서대로 1부터 부여
+  //    각 페이즈 안에서 쿼리를 병렬화하여 총 round-trip 을 2회 수준으로 단축.
   const OFFSET = 10000;
   const errors: string[] = [];
 
-  // Phase A
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await sb
-      .from('exam_problems')
+  const runA = orderedIds.map((id, i) =>
+    sb.from('exam_problems')
       .update({ sequence_number: OFFSET + i })
       .eq('exam_id', examId)
-      .eq('problem_id', orderedIds[i]);
-    if (error) errors.push(`A/${i}:${error.message}`);
-  }
+      .eq('problem_id', id)
+      .then(({ error }) => { if (error) errors.push(`A/${i}:${error.message}`); }),
+  );
+  await Promise.all(runA);
 
-  // Phase B
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await sb
-      .from('exam_problems')
+  const runB = orderedIds.map((id, i) =>
+    sb.from('exam_problems')
       .update({ sequence_number: i + 1 })
       .eq('exam_id', examId)
-      .eq('problem_id', orderedIds[i]);
-    if (error) errors.push(`B/${i}:${error.message}`);
-  }
+      .eq('problem_id', id)
+      .then(({ error }) => { if (error) errors.push(`B/${i}:${error.message}`); }),
+  );
+  await Promise.all(runB);
 
   if (errors.length > 0) {
     console.error('[reorder] update errors:', errors);
