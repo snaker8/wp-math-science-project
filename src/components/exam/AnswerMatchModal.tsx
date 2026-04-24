@@ -40,7 +40,7 @@ interface AnswerMatchModalProps {
 
 export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied }: AnswerMatchModalProps) {
   const [mode, setMode] = useState<'file' | 'text'>('text'); // ★ 기본값 텍스트 입력
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
@@ -48,24 +48,32 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
   const [selectedMatches, setSelectedMatches] = useState<Set<number>>(new Set());
   const [pasteText, setPasteText] = useState('');
 
+  const MAX_FILES = 10;
+
+  // 파일 이름 오름차순 정렬 (page-001, page-002, ... 순서 보장)
+  const sortFiles = (arr: File[]) =>
+    [...arr].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-      setFile(f);
-      setMatchResult(null);
-      setError(null);
-    }
+    const picked = Array.from(e.target.files || []);
+    if (picked.length === 0) return;
+    setFiles(prev => sortFiles([...prev, ...picked].slice(0, MAX_FILES)));
+    setMatchResult(null);
+    setError(null);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f) {
-      setFile(f);
-      setMatchResult(null);
-      setError(null);
-    }
+    const dropped = Array.from(e.dataTransfer.files || []);
+    if (dropped.length === 0) return;
+    setFiles(prev => sortFiles([...prev, ...dropped].slice(0, MAX_FILES)));
+    setMatchResult(null);
+    setError(null);
   }, []);
+
+  const removeFile = (idx: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== idx));
+  };
 
   // ★ 텍스트 붙여넣기 파싱 (답 추출기 형식)
   const handleTextParse = () => {
@@ -169,15 +177,16 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
 
   // 업로드 + OCR + 파싱 + 매칭 미리보기
   const handleUpload = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setIsUploading(true);
     setError(null);
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      for (const f of files) formData.append('file', f);
 
-      console.log('[AnswerMatch] Uploading:', file.name, file.size, 'bytes');
+      const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+      console.log(`[AnswerMatch] Uploading: ${files.length}개 파일, 총 ${totalBytes} bytes`, files.map(f => f.name));
       const res = await fetch(`/api/exams/${examId}/match-answers`, {
         method: 'POST',
         body: formData,
@@ -197,7 +206,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       if (!data.matches) throw new Error('매칭 데이터가 없습니다. OCR 결과: ' + (data.rawTextPreview || '(비어 있음)'));
 
       setMatchResult(data);
-      const changed = new Set(data.matches.filter((m: MatchResult) => m.hasChange).map((m: MatchResult) => m.problemNumber));
+      const changed = new Set<number>(data.matches.filter((m: MatchResult) => m.hasChange).map((m: MatchResult) => m.problemNumber));
       setSelectedMatches(changed);
     } catch (err) {
       console.error('[AnswerMatch] Error:', err);
@@ -335,43 +344,53 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               <div
                 onDrop={handleDrop}
                 onDragOver={e => e.preventDefault()}
-                className="border-2 border-dashed border-subtle rounded-xl p-8 text-center hover:border-indigo-500/50 transition-colors cursor-pointer"
+                className="border-2 border-dashed border-subtle rounded-xl p-6 text-center hover:border-indigo-500/50 transition-colors cursor-pointer"
                 onClick={() => document.getElementById('answer-file-input')?.click()}
               >
                 <input
                   id="answer-file-input"
                   type="file"
                   accept=".pdf,.png,.jpg,.jpeg"
+                  multiple
                   onChange={handleFileSelect}
                   className="hidden"
                 />
-                {file ? (
-                  <div className="flex items-center justify-center gap-3">
-                    <FileText size={24} className="text-indigo-400" />
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-content-primary">{file.name}</p>
-                      <p className="text-xs text-content-muted">{(file.size / 1024).toFixed(0)} KB</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <Upload size={32} className="mx-auto text-content-muted mb-2" />
-                    <p className="text-sm text-content-secondary">빠른답 또는 해설 파일을 드롭하세요</p>
-                    <p className="text-xs text-content-muted mt-1">PDF, PNG, JPG 지원</p>
-                  </div>
-                )}
+                <Upload size={32} className="mx-auto text-content-muted mb-2" />
+                <p className="text-sm text-content-secondary">빠른답 또는 해설 파일을 드롭하세요</p>
+                <p className="text-xs text-content-muted mt-1">PDF, PNG, JPG · 여러 장 선택 가능 (최대 {MAX_FILES}개)</p>
               </div>
 
-              {file && (
+              {files.length > 0 && (
+                <div className="space-y-1.5 max-h-52 overflow-auto rounded-lg border border-subtle bg-surface-raised/50 p-2">
+                  {files.map((f, idx) => (
+                    <div key={`${f.name}-${idx}`} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-raised">
+                      <FileText size={14} className="text-indigo-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-content-primary truncate">{f.name}</p>
+                        <p className="text-[10px] text-content-muted">{(f.size / 1024).toFixed(0)} KB</p>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                        className="p-1 text-content-muted hover:text-red-400"
+                        aria-label="파일 제거"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {files.length > 0 && (
                 <button
                   onClick={handleUpload}
                   disabled={isUploading}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
                 >
                   {isUploading ? (
-                    <><Loader2 size={16} className="animate-spin" /> OCR + 매칭 분석 중...</>
+                    <><Loader2 size={16} className="animate-spin" /> OCR + 매칭 분석 중 ({files.length}장)...</>
                   ) : (
-                    <><Upload size={16} /> 분석 시작</>
+                    <><Upload size={16} /> {files.length}개 파일 분석 시작</>
                   )}
                 </button>
               )}
@@ -458,7 +477,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               {/* 적용 버튼 */}
               <div className="flex items-center justify-between">
                 <button
-                  onClick={() => { setMatchResult(null); setFile(null); setPasteText(''); }}
+                  onClick={() => { setMatchResult(null); setFiles([]); setPasteText(''); }}
                   className="text-xs text-content-muted hover:text-content-secondary"
                 >
                   다시 입력
