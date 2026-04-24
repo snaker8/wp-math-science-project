@@ -639,13 +639,26 @@ function preprocessMathpixContent(text: string): string {
   );
 
   // 1-4. bare \begin{...}...\end{...} → $$...$$
-  result = result.replace(
-    /(?<!\$)(?:\\displaystyle\s*)?\\begin\{(aligned|align|gather|cases|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|equation|equation\*)\}([\s\S]*?)\\end\{\1\}(?!\$)/g,
-    (match, envName) => {
-      if (envName === 'array' && /&/.test(match)) return match;
-      return `$$${match}$$`;
-    }
-  );
+  // ★ 버그 수정: `$ ... \left\{ \begin{array}... \end{array} \right. ... $` 같이
+  //   이미 $...$ 블록 내부에 있는 환경이 단일문자 룩비하인드 `(?<!\$)` 만으론
+  //   보호되지 않아 중복 래핑되던 문제. 오프셋 기준 $-balance 로 정확히 판정.
+  {
+    const snapshot = result;
+    result = result.replace(
+      /(?:\\displaystyle\s*)?\\begin\{(aligned|align|gather|cases|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|equation|equation\*)\}([\s\S]*?)\\end\{\1\}/g,
+      (match, envName, _inner, offset) => {
+        if (typeof offset !== 'number') return match;
+        // offset 위치가 $-블록 내부인지 판정
+        const before = snapshot.substring(0, offset);
+        const ddCount = (before.match(/\$\$/g) || []).length;
+        if (ddCount % 2 === 1) return match; // $$ 안 → 그대로
+        const sdCount = (before.replace(/\$\$/g, '').match(/\$/g) || []).length;
+        if (sdCount % 2 === 1) return match; // $ 안 → 그대로
+        if (envName === 'array' && /&/.test(match)) return match;
+        return `$$${match}$$`;
+      }
+    );
+  }
 
   // 1-5. bare \textbf{...} → **...**
   result = result.replace(/(?<!\$)\\textbf\{([^}]*)\}(?!\$)/g, '**$1**');
