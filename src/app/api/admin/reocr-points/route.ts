@@ -16,10 +16,14 @@ export const maxDuration = 300;
 const MATHPIX_APP_ID = process.env.MATHPIX_APP_ID || '';
 const MATHPIX_APP_KEY = process.env.MATHPIX_APP_KEY || '';
 
-// 점수 패턴: [N점] 또는 (N점) 괄호 형태만 인정 (false positive 방지)
+// 점수 패턴 우선순위:
+//   1) [N점] 닫힌 대괄호 (가장 확실)
+//   2) (N점) 괄호
+//   3) [N점 닫기 누락 — OCR 오인식 흔한 케이스
 const POINT_PATTERNS = [
   /\[\s*(\d{1,2}(?:\.\d)?)\s*[점졈졍정]\s*\]/,
   /\(\s*(\d{1,2}(?:\.\d)?)\s*[점졈]\s*\)/,
+  /\[\s*(\d{1,2}(?:\.\d)?)\s*[점졈졍정]/,
 ];
 
 function extractPoints(text: string): number | null {
