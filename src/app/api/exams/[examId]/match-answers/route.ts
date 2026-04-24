@@ -363,6 +363,9 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
 
   const data = await res.json();
   const rawText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const finishReason: string = data.candidates?.[0]?.finishReason || 'unknown';
+  const usage = data.usageMetadata || {};
+  console.log(`[match-answers]   [answer] finishReason=${finishReason}, tokens: in=${usage.promptTokenCount} out=${usage.candidatesTokenCount} thinking=${usage.thoughtsTokenCount ?? 0}`);
   if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
 
   // 멀티라인 답 병합: "17. (1)12\n(2)-2/3\n(3)-4" → "17. (1)12 (2)-2/3 (3)-4"
@@ -450,9 +453,9 @@ async function extractSolutionsWithGemini(
         ],
       }],
       generationConfig: {
-        maxOutputTokens: 32768,
+        maxOutputTokens: 65536,
         temperature: 0,
-        thinkingConfig: { thinkingLevel: 'low' },
+        thinkingConfig: { thinkingLevel: 'medium' },
       },
     }),
   });
@@ -464,6 +467,12 @@ async function extractSolutionsWithGemini(
 
   const data = await res.json();
   const rawText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const finishReason: string = data.candidates?.[0]?.finishReason || 'unknown';
+  const usage = data.usageMetadata || {};
+  console.log(`[match-answers]   [solution] finishReason=${finishReason}, tokens: in=${usage.promptTokenCount} out=${usage.candidatesTokenCount} thinking=${usage.thoughtsTokenCount ?? 0}`);
+  if (finishReason === 'MAX_TOKENS') {
+    console.warn(`[match-answers]   [solution] ⚠️ 응답이 maxOutputTokens에서 잘림 (${file.name}) — 마지막 해설이 미완성일 가능성`);
+  }
   if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
 
   // "--- 문제 N ---" 블록 단위로 쪼개서 파싱
@@ -534,22 +543,34 @@ async function ocrPdf(file: File): Promise<string> {
   if (!res.ok) throw new Error(`Mathpix PDF API 실패: ${res.status}`);
   const data = await res.json();
   const pdfId = data.pdf_id;
+  if (!pdfId) {
+    // pdf_id 없으면 POST 바디에 에러 메시지가 들어있는 경우가 많음
+    throw new Error(`Mathpix POST 응답에 pdf_id 없음: ${JSON.stringify(data).slice(0, 200)}`);
+  }
+  console.log(`[ocrPdf] ${file.name}: pdf_id=${pdfId} — 폴링 시작`);
 
+  let lastStatus = '';
   for (let i = 0; i < 55; i++) {
     await new Promise(r => setTimeout(r, 2000));
     const statusRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}`, {
       headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
     });
     const statusData = await statusRes.json();
+    if (statusData.status !== lastStatus) {
+      console.log(`[ocrPdf] ${file.name}: status=${statusData.status} (i=${i}, ${JSON.stringify(statusData).slice(0, 200)})`);
+      lastStatus = statusData.status;
+    }
     if (statusData.status === 'completed') {
       const textRes = await fetch(`https://api.mathpix.com/v3/pdf/${pdfId}.mmd`, {
         headers: { 'app_id': MATHPIX_APP_ID, 'app_key': MATHPIX_APP_KEY },
       });
       return await textRes.text();
     }
-    if (statusData.status === 'error') throw new Error('Mathpix PDF 처리 실패');
+    if (statusData.status === 'error') {
+      throw new Error(`Mathpix PDF 처리 실패: ${statusData.error_info?.message || 'unknown'}`);
+    }
   }
-  throw new Error('Mathpix PDF 처리 타임아웃');
+  throw new Error(`Mathpix PDF 처리 타임아웃 (마지막 상태: ${lastStatus})`);
 }
 
 // ============================================================================
