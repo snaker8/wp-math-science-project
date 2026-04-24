@@ -1,9 +1,59 @@
-// POST /api/exams/[examId]/problems — 기존 시험지에 문제 추가
-// PATCH /api/exams/[examId]/problems — 특정 문제의 배점 수정 (body: { problemId, points })
+// POST   /api/exams/[examId]/problems — 기존 시험지에 문제 추가
+// PATCH  /api/exams/[examId]/problems — 배점 수정 (단건 or restore-from-content)
+// GET    /api/exams/[examId]/problems — 문제 목록 + 배점 정보 + content 미리보기 (진단용)
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
+
+// ============================================================================
+// GET — 진단용 간단 조회
+// ============================================================================
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> }
+) {
+  const { examId } = await params;
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+
+  const { data: eps, error: epErr } = await supabaseAdmin
+    .from('exam_problems')
+    .select('problem_id, sequence_number, points')
+    .eq('exam_id', examId)
+    .order('sequence_number', { ascending: true });
+  if (epErr) return NextResponse.json({ error: epErr.message }, { status: 500 });
+
+  const pIds = (eps || []).map((r: any) => r.problem_id);
+  if (pIds.length === 0) return NextResponse.json({ problems: [] });
+
+  const { data: problems } = await supabaseAdmin
+    .from('problems')
+    .select('id, content_latex')
+    .in('id', pIds);
+
+  const byId = new Map((problems || []).map((p: any) => [p.id, p]));
+  const rescanRegex = /\[\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*\]/;
+  const plainRegex = /(\d+(?:\.\d+)?)\s*[점졈]/;
+
+  const result = (eps || []).map((r: any) => {
+    const p = byId.get(r.problem_id) as any;
+    const c = p?.content_latex || '';
+    const bracket = c.match(rescanRegex);
+    const plain = c.match(plainRegex);
+    return {
+      number: r.sequence_number,
+      problemId: r.problem_id,
+      points: r.points,
+      bracketMatch: bracket?.[0] || null,
+      plainMatch: plain?.[0] || null,
+      contentTail: c.slice(-120),
+    };
+  });
+
+  return NextResponse.json({ examId, total: result.length, problems: result });
+}
 
 // ============================================================================
 // PATCH — 단건: 특정 문제 배점 수정 / 액션: content_latex에서 [N점] 일괄 복원
