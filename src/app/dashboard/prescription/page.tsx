@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Search, Menu, Printer, Send, Sparkles, AlertCircle, ClipboardList,
-  ChevronRight, Loader2, Calendar, TrendingDown, Activity,
+  ChevronRight, Loader2, Calendar, TrendingDown, Activity, QrCode,
 } from 'lucide-react';
+import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip,
 } from 'recharts';
@@ -164,6 +165,9 @@ function PrescriptionContent() {
   const [errorProfile, setErrorProfile] = useState<Array<{ error_cause: ErrorCause; cnt: number; pct: number }>>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
+
+  // QR 세션 생성 모달
+  const [showCreateSessions, setShowCreateSessions] = useState(false);
 
   useEffect(() => {
     if (!student?.id) {
@@ -450,12 +454,20 @@ function PrescriptionContent() {
                   <ClinicCard>
                     <h3 className="font-bold text-gray-400 text-sm mb-4 uppercase tracking-wider">Quick Actions</h3>
                     <div className="space-y-3">
-                      <Link
-                        href={`/dashboard/prescription/entry${student ? `?studentId=${student.id}` : ''}`}
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateSessions(true)}
                         className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-indigo-600 text-content-primary hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all"
                       >
+                        <QrCode size={18} />
+                        <span>QR 채점 세션 생성</span>
+                      </button>
+                      <Link
+                        href={`/dashboard/prescription/entry${student ? `?studentId=${student.id}` : ''}`}
+                        className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-white/5 text-content-primary border border-white/10 hover:bg-white/10 transition-all"
+                      >
                         <ClipboardList size={18} />
-                        <span>진단 결과 입력</span>
+                        <span>진단 결과 수동 입력</span>
                       </Link>
                       <ActionButton icon={Printer} label="맞춤형 학습지 출력" disabled />
                       <ActionButton icon={Send} label="학부모 리포트 전송" disabled />
@@ -675,6 +687,20 @@ function PrescriptionContent() {
           )}
         </div>
       </main>
+
+      {/* QR 채점 세션 일괄 생성 모달 */}
+      <CreateSessionsModal
+        isOpen={showCreateSessions}
+        onClose={() => setShowCreateSessions(false)}
+        students={students}
+        defaultStudentId={student?.id || null}
+        onCreated={() => {
+          // 세션 생성 후 진단 이력 재조회
+          if (student?.id) {
+            getStudentSessions(student.id).then(setSessions).catch(() => {});
+          }
+        }}
+      />
     </div>
   );
 }
