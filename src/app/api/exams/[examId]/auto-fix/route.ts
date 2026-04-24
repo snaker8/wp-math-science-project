@@ -470,15 +470,23 @@ export async function POST(
         // (1) 하드코딩 렌더 수정 규칙
         const c2Before = (updates.content_latex as string) || content;
         const c2 = repairLatexRender(c2Before);
-        const hasSplitMarker = /\\left\s*\\?\{|\\right\s*\./.test(c2Before);
+        // 진단: 의심 키워드 정리 (다양한 split 형태 커버)
+        const markers: string[] = [];
+        if (/\\left\s*\\?\{/.test(c2Before))  markers.push('\\left\\{');
+        if (/\\right\s*\./.test(c2Before))    markers.push('\\right.');
+        if (/\\lbrace/.test(c2Before))         markers.push('\\lbrace');
+        if (/\\rbrace/.test(c2Before))         markers.push('\\rbrace');
+        if (/\\begin\{array\}/.test(c2Before)) markers.push('array');
+        if (/\\begin\{cases\}/.test(c2Before)) markers.push('cases');
+        if (/\\displaystyle/.test(c2Before))   markers.push('displaystyle');
         if (c2.changes.length > 0 && c2.fixed !== c2Before) {
           updates.content_latex = c2.fixed;
           result.fixes.push(`렌더 수정: ${c2.changes.join(', ')}`);
           console.log(`[render-repair] #${seqNum} applied:`, c2.changes.join(', '));
-        } else if (hasSplitMarker) {
-          // 의심 패턴이 있는데도 규칙이 발동 안 했을 때 진단용 로그 (최대 400자)
-          const snippet = c2Before.length > 400 ? c2Before.slice(0, 400) + '…' : c2Before;
-          console.log(`[render-repair] #${seqNum} no-match but has split markers. content_latex head:\n${snippet}`);
+        } else if (markers.length > 0) {
+          // 의심 패턴이 있는데도 규칙이 발동 안 했을 때 진단용 로그
+          const snippet = c2Before.length > 600 ? c2Before.slice(0, 600) + '…' : c2Before;
+          console.log(`[render-repair] #${seqNum} no-match. markers=[${markers.join(',')}] content_latex:\n${snippet}`);
         }
         const s2Before = (updates.solution_latex as string) || (problem.solution_latex as string) || '';
         if (s2Before) {
