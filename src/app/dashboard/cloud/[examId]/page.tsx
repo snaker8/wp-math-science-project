@@ -2759,6 +2759,45 @@ export default function CloudExamDetailPage() {
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
   const [isAutoMapping, setIsAutoMapping] = useState(false);
 
+  // ★ 펼쳐보기 카드 드래그앤드롭 재정렬
+  const [draggedProblemId, setDraggedProblemId] = useState<string | null>(null);
+  const [dragOverProblemId, setDragOverProblemId] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
+
+  const handleReorderDrop = useCallback(async (draggedId: string, targetId: string) => {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    // 현재 순서 (problems 는 DB 원본, filteredProblems 와 다를 수 있음)
+    const allSorted = [...problems].sort((a, b) => (a.number || 0) - (b.number || 0));
+    const fromIdx = allSorted.findIndex(p => p.id === draggedId);
+    const toIdx = allSorted.findIndex(p => p.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const reordered = [...allSorted];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    const orderedProblemIds = reordered.map(p => p.id);
+
+    setIsReordering(true);
+    try {
+      const res = await fetch(`/api/exams/${examId}/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedProblemIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert('순서 변경 실패: ' + (data.error || `HTTP ${res.status}`));
+        return;
+      }
+      refetchProblems();
+    } catch (err) {
+      alert('순서 변경 실패: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsReordering(false);
+      setDraggedProblemId(null);
+      setDragOverProblemId(null);
+    }
+  }, [problems, examId, refetchProblems]);
+
   const toggleSelectProblem = useCallback((id: string) => {
     setSelectedProblems((prev) => {
       const next = new Set(prev);
@@ -3258,28 +3297,80 @@ export default function CloudExamDetailPage() {
               <p className="text-sm">문제 로딩 중...</p>
             </div>
           ) : filteredProblems.length > 0 ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProblems.map((problem) => (
-                <ProblemCardView
-                  key={problem.id}
-                  problem={problem}
-                  onTwinGenerate={setTwinModalProblem}
-                  onEdit={setEditModalProblem}
-                  onRescan={handleRescanProblem}
-                  onGenerateFigure={handleUpscaleFigure}
-                  onGenerateAIFigure={handleGenerateAIFigure}
-                  onDeleteFigure={handleDeleteFigure}
-                  onReplaceDiagram={handleReplaceDiagram}
-                  onUpdateContent={handleUpdateContent}
-                  isSelectionMode={isSelectionMode}
-                  isSelected={selectedProblems.has(problem.id)}
-                  onToggleSelect={toggleSelectProblem}
-                  viewMode={renderMode}
-                  isGeneratingFigure={generatingFigures.has(problem.id)}
-                  isRescanning={rescanningId === problem.id}
-                />
-              ))}
-            </div>
+            <>
+              {/* ★ 드래그앤드롭 안내 — 필터 활성 시 경고 */}
+              {(activeDifficulty !== null || activeDomain !== null) && (
+                <div className="mb-3 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                  필터가 적용된 상태에서는 순서 변경이 불가능합니다. 필터를 해제해 주세요.
+                </div>
+              )}
+              {isReordering && (
+                <div className="mb-3 text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-3 py-2">
+                  순서 변경 중…
+                </div>
+              )}
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredProblems.map((problem) => {
+                  const canDrag = activeDifficulty === null && activeDomain === null && !isSelectionMode && !isReordering;
+                  const isDragOver = dragOverProblemId === problem.id && draggedProblemId !== problem.id;
+                  return (
+                    <div
+                      key={problem.id}
+                      draggable={canDrag}
+                      onDragStart={(e) => {
+                        if (!canDrag) return;
+                        setDraggedProblemId(problem.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        // drag image 는 브라우저 기본 사용
+                      }}
+                      onDragEnd={() => {
+                        setDraggedProblemId(null);
+                        setDragOverProblemId(null);
+                      }}
+                      onDragOver={(e) => {
+                        if (!canDrag || !draggedProblemId) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverProblemId !== problem.id) setDragOverProblemId(problem.id);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverProblemId === problem.id) setDragOverProblemId(null);
+                      }}
+                      onDrop={(e) => {
+                        if (!canDrag) return;
+                        e.preventDefault();
+                        const dragged = draggedProblemId;
+                        if (dragged && dragged !== problem.id) {
+                          void handleReorderDrop(dragged, problem.id);
+                        }
+                      }}
+                      className={`transition-all ${
+                        isDragOver ? 'ring-2 ring-cyan-500 scale-[1.01]' : ''
+                      } ${draggedProblemId === problem.id ? 'opacity-40' : ''}`}
+                      style={{ cursor: canDrag ? 'grab' : undefined }}
+                    >
+                      <ProblemCardView
+                        problem={problem}
+                        onTwinGenerate={setTwinModalProblem}
+                        onEdit={setEditModalProblem}
+                        onRescan={handleRescanProblem}
+                        onGenerateFigure={handleUpscaleFigure}
+                        onGenerateAIFigure={handleGenerateAIFigure}
+                        onDeleteFigure={handleDeleteFigure}
+                        onReplaceDiagram={handleReplaceDiagram}
+                        onUpdateContent={handleUpdateContent}
+                        isSelectionMode={isSelectionMode}
+                        isSelected={selectedProblems.has(problem.id)}
+                        onToggleSelect={toggleSelectProblem}
+                        viewMode={renderMode}
+                        isGeneratingFigure={generatingFigures.has(problem.id)}
+                        isRescanning={rescanningId === problem.id}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           ) : problems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-content-tertiary">
               <AlertCircle className="h-10 w-10 mb-3 text-content-muted" />
