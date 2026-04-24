@@ -25,7 +25,28 @@ export async function POST() {
     return NextResponse.json({ error: 'Supabase admin not configured' }, { status: 500 });
   }
 
-  const rescanRegex = /\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/;
+  // 배점 추출 우선순위:
+  //   1) [N점] · [총N점] 브래킷 (가장 확실)
+  //   2) (N점) 괄호
+  //   3) content 꼬리 쪽의 독립 'N점' (마지막 200자 내, '구하시오·적으시오·쓰시오' 등 closing 키워드 근처)
+  //   4) content 마지막 공백/줄바꿈 뒤의 'N점'
+  const extractPoints = (raw: string): number | null => {
+    const text = raw || '';
+    // 1. 브래킷
+    const m1 = text.match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*[점졈졍]\s*\]/);
+    if (m1) return parseFloat(m1[1]);
+    // 2. 괄호
+    const m2 = text.match(/\(\s*(\d+(?:\.\d+)?)\s*[점졈]\s*\)/);
+    if (m2) return parseFloat(m2[1]);
+    // 3. 꼬리(뒤 200자) 범위 안의 숫자+점 (closing 키워드 뒤에만)
+    const tail = text.slice(-200);
+    const m3 = tail.match(/(?:구하시오|구하여라|적으시오|쓰시오|답하시오|서술하시오|완성하시오|풀이\s*과정)[^.]*?\.?\s*[^가-힣0-9]?\s*(\d+(?:\.\d+)?)\s*[점졈]/);
+    if (m3) return parseFloat(m3[1]);
+    // 4. content 끝 단독 'N점'
+    const m4 = text.match(/(\d+(?:\.\d+)?)\s*[점졈]\s*$/);
+    if (m4) return parseFloat(m4[1]);
+    return null;
+  };
 
   // 1. 모든 문제 content_latex 로드 (페이징 처리: 1000 단위)
   const pointsByProblem = new Map<string, number>();
@@ -44,11 +65,10 @@ export async function POST() {
     }
     if (!problems || problems.length === 0) break;
     for (const p of problems) {
-      const content = (p as any).content_latex || '';
-      const m = content.match(rescanRegex);
-      if (m) {
-        const pts = Math.min(100, Math.max(0, parseFloat(m[1])));
-        pointsByProblem.set((p as any).id, pts);
+      const raw = (p as any).content_latex || '';
+      const pts = extractPoints(raw);
+      if (pts !== null && pts > 0) {
+        pointsByProblem.set((p as any).id, Math.min(100, Math.max(0, pts)));
       }
     }
     if (problems.length < PAGE) break;
