@@ -75,20 +75,27 @@ export async function POST(
     let mathpixDetectedType: 'quick_answer' | 'solution' | 'mixed' | 'unknown' = 'unknown';
 
     type FileResult =
-      | { file: string; kind: 'gemini'; answers: import('@/lib/ocr/answer-parser').ParsedAnswer[] }
+      | { file: string; kind: 'gemini-answer'; answers: import('@/lib/ocr/answer-parser').ParsedAnswer[] }
+      | { file: string; kind: 'gemini-solution'; answers: import('@/lib/ocr/answer-parser').ParsedAnswer[]; solutions: import('@/lib/ocr/answer-parser').ParsedSolution[] }
       | { file: string; kind: 'mathpix'; text: string };
 
     const tasks = uploadedFiles.map(async (file): Promise<FileResult> => {
       const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
       const isShortPdf = isPdf && file.size <= 200 * 1024;
-      const useGemini = docType === 'quick_answer' && (!isPdf || isShortPdf);
-      console.log(`[match-answers] 추출 시작: ${file.name} (${file.size} bytes, docType=${docType}, useGemini=${useGemini})`);
+      console.log(`[match-answers] 추출 시작: ${file.name} (${file.size} bytes, docType=${docType})`);
 
-      if (useGemini) {
+      if (docType === 'solution') {
+        // 해설: Gemini Vision으로 답+해설 동시 추출 (Mathpix 타임아웃 회피)
+        const { answers, solutions } = await extractSolutionsWithGemini(file);
+        console.log(`[match-answers]   Gemini(solution) ${file.name}: 답 ${answers.length}개, 해설 ${solutions.length}개`);
+        return { file: file.name, kind: 'gemini-solution', answers, solutions };
+      } else if (!isPdf || isShortPdf) {
+        // 빠른답 + 짧은 PDF/이미지: Gemini 답 추출
         const answers = await extractAnswersWithGemini(file);
-        console.log(`[match-answers]   Gemini ${file.name}: ${answers.length}개 답`);
-        return { file: file.name, kind: 'gemini', answers };
+        console.log(`[match-answers]   Gemini(answer) ${file.name}: ${answers.length}개 답`);
+        return { file: file.name, kind: 'gemini-answer', answers };
       } else {
+        // 빠른답 + 긴 PDF: Mathpix (기존 경로)
         const text = isPdf ? await ocrPdf(file) : await ocrImage(file);
         console.log(`[match-answers]   Mathpix ${file.name}: ${text.length}자`);
         return { file: file.name, kind: 'mathpix', text };
@@ -110,9 +117,13 @@ export async function POST(
         continue;
       }
       const v = r.value;
-      if (v.kind === 'gemini') {
+      if (v.kind === 'gemini-answer') {
         for (const a of v.answers) answerMap.set(a.problemNumber, a);
         rawTextParts.push(`--- ${v.file} ---\n` + v.answers.map(a => `${a.problemNumber}. ${a.answer}`).join('\n'));
+      } else if (v.kind === 'gemini-solution') {
+        for (const a of v.answers) answerMap.set(a.problemNumber, a);
+        for (const s of v.solutions) solutionMap.set(s.problemNumber, s);
+        rawTextParts.push(`--- ${v.file} ---\n답: ${v.answers.length}개 / 해설: ${v.solutions.length}개`);
       } else {
         if (v.text && v.text.trim().length >= 10) {
           mathpixMergedText += (mathpixMergedText ? '\n\n' : '') + v.text;
@@ -135,9 +146,13 @@ export async function POST(
       return NextResponse.json({ error: `파일에서 답/해설을 찾지 못했습니다.${failMsg}` }, { status: 400 });
     }
 
-    // detectedType 결정: Gemini만 돌았으면 quick_answer, Mathpix 결과가 있으면 그 판정 사용
+    // detectedType 결정: 해설 모드이거나 solutionMap이 차있으면 solution/mixed, 그 외 quick_answer
     const detectedType: 'quick_answer' | 'solution' | 'mixed' | 'unknown' =
-      hasMathpixText ? mathpixDetectedType : 'quick_answer';
+      hasMathpixText
+        ? mathpixDetectedType
+        : docType === 'solution' || solutionMap.size > 0
+          ? (answerMap.size > 0 ? 'mixed' : 'solution')
+          : 'quick_answer';
 
     const parseResult = {
       answers: Array.from(answerMap.values()).sort((a, b) => a.problemNumber - b.problemNumber),
@@ -382,6 +397,114 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
   }
 
   return answers;
+}
+
+// ============================================================================
+// Gemini Vision — 해설지에서 문제별 답+해설 동시 추출
+// Mathpix 타임아웃 회피용, 구조화된 출력 후 파싱
+// ============================================================================
+
+async function extractSolutionsWithGemini(
+  file: File
+): Promise<{ answers: ParsedAnswer[]; solutions: { problemNumber: number; solutionLatex: string }[] }> {
+  if (!GEMINI_API_KEY) throw new Error('Gemini API 키가 설정되지 않았습니다.');
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const base64 = buffer.toString('base64');
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  const mimeType = isPdf ? 'application/pdf' : (file.type || 'image/jpeg');
+
+  const prompt = `이 파일은 수학 시험의 해설지야. 각 문제의 답과 해설을 추출해서 아래 형식으로 출력해.
+
+[출력 형식]
+--- 문제 1 ---
+답: ③
+해설: (해설 원문을 그대로 옮겨. 수식은 LaTeX 문법 $...$ 또는 $$...$$ 사용)
+
+--- 문제 2 ---
+답: -17
+해설: ...
+
+(빈 줄로 구분)
+
+[중요 원칙]
+1. 문서에 있는 해설을 요약하거나 재구성하지 말고 **원문 그대로** 옮겨.
+2. 객관식 답은 원문자(①②③④⑤) 그대로 유지. (1), 1 로 변환 금지.
+3. 수식은 LaTeX 보존 (분수, 극한, 적분, 제곱근 등).
+4. 문제 번호는 1~50 범위. 범위 밖은 제외.
+5. 해설이 없는 문제는 "해설: 없음"으로 표기.
+6. 불필요한 인사나 설명 생략, 위 형식만 출력.
+7. 모든 문제를 **빠짐없이** 추출. 중간에 멈추지 말 것.`;
+
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3-flash-preview';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inlineData: { data: base64, mimeType } },
+        ],
+      }],
+      generationConfig: {
+        maxOutputTokens: 32768,
+        temperature: 0,
+        thinkingConfig: { thinkingLevel: 'low' },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini Vision API 실패: ${res.status} — ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const rawText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
+
+  // "--- 문제 N ---" 블록 단위로 쪼개서 파싱
+  const answers: ParsedAnswer[] = [];
+  const solutions: { problemNumber: number; solutionLatex: string }[] = [];
+
+  // 블록 분리: "--- 문제 N ---" 패턴 기준
+  const blocks = rawText.split(/^---\s*문제\s*(\d{1,2})\s*---\s*$/m);
+  // split 결과: [before, num1, body1, num2, body2, ...]
+  for (let i = 1; i < blocks.length; i += 2) {
+    const num = parseInt(blocks[i]);
+    const body = blocks[i + 1] || '';
+    if (!num || num < 1 || num > 50) continue;
+
+    // 답 추출
+    const ansMatch = body.match(/답\s*[:：]\s*([^\n]+)/);
+    if (ansMatch) {
+      let ans = ansMatch[1].trim();
+      let answerType: ParsedAnswer['answerType'] = 'text';
+      if (/^[①②③④⑤]\s*$/.test(ans)) {
+        ans = CIRCLED_TO_DIGIT[ans.trim()] || ans;
+        answerType = 'choice';
+      } else if (/^[1-5]$/.test(ans)) {
+        answerType = 'choice';
+      } else if (/^-?\d+(?:[.,]\d+)?$/.test(ans)) {
+        answerType = 'numeric';
+      }
+      if (ans) answers.push({ problemNumber: num, answer: ans, answerType });
+    }
+
+    // 해설 추출 (답 라인 다음부터 블록 끝까지)
+    const solMatch = body.match(/해설\s*[:：]\s*([\s\S]+?)(?=\n---|\s*$)/);
+    if (solMatch) {
+      const sol = solMatch[1].trim();
+      if (sol && sol !== '없음') {
+        solutions.push({ problemNumber: num, solutionLatex: sol });
+      }
+    }
+  }
+
+  return { answers, solutions };
 }
 
 // ============================================================================
