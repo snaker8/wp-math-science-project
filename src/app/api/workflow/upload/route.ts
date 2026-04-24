@@ -344,10 +344,22 @@ export async function GET(request: NextRequest) {
     });
 
     if (mainFile) {
-      // ★ 한글 파일명 복원: encodeURIComponent로 저장됐으니 decode
+      // ★ 한글 파일명 복원 우선순위: sidecar 메타 > decodeURIComponent > raw name
+      //   (upload-url이 현재는 '_' 치환이라 decode 무의미, 메타에서 원본 복구)
       const encodedName = mainFile.name.slice(jobId.length + 1);
       let fileName = encodedName;
-      try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+      try {
+        const { data: metaData } = await supabaseAdmin.storage
+          .from('source-files')
+          .download(`uploads/${jobId}.meta.json`);
+        if (metaData) {
+          const meta = JSON.parse(await metaData.text());
+          if (meta.originalFilename) fileName = meta.originalFilename;
+        }
+      } catch { /* 메타 없으면 fallback */ }
+      if (fileName === encodedName) {
+        try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+      }
       const storagePath = `uploads/${mainFile.name}`;
       job = {
         id: jobId,
@@ -497,10 +509,21 @@ export async function PUT(request: NextRequest) {
       });
 
       if (mainFile) {
-        // ★ 한글 파일명 복원
+        // ★ 한글 파일명 복원 우선순위: sidecar 메타 > decodeURIComponent > raw name
         const encodedName = mainFile.name.slice(jobId.length + 1);
         let fileName = encodedName;
-        try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+        try {
+          const { data: metaData } = await supabaseAdmin.storage
+            .from('source-files')
+            .download(`uploads/${jobId}.meta.json`);
+          if (metaData) {
+            const meta = JSON.parse(await metaData.text());
+            if (meta.originalFilename) fileName = meta.originalFilename;
+          }
+        } catch { /* 메타 없으면 fallback */ }
+        if (fileName === encodedName) {
+          try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+        }
         const storagePath = `uploads/${mainFile.name}`;
         // ★ 쿠키 세션에서 실제 로그인 유저 ID 조회 (exams.created_by NOT NULL 대응)
         let sessionUserId: string | null = null;
