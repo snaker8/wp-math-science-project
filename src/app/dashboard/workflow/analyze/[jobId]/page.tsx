@@ -142,12 +142,19 @@ interface JobData {
 // Constants
 // ============================================================================
 
+// ★ 수학비서 1~10 스케일 (편집 모달과 동일 체계)
+//   1~2 쉬움 · 3~4 보통 · 5~6 응용 · 7~8 고난도 · 9~10 최상
 const DIFFICULTY_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: '하', color: 'text-zinc-400 border-zinc-500 bg-zinc-800' },
-  2: { label: '중하', color: 'text-blue-400 border-blue-500 bg-blue-500/10' },
-  3: { label: '중', color: 'text-amber-400 border-amber-500 bg-amber-500/10' },
-  4: { label: '중상', color: 'text-red-400 border-red-500 bg-red-500/10' },
-  5: { label: '상', color: 'text-red-300 border-red-700 bg-red-700/10' },
+  1:  { label: '1 쉬움',   color: 'text-zinc-400 border-zinc-500 bg-zinc-800' },
+  2:  { label: '2 쉬움',   color: 'text-zinc-400 border-zinc-500 bg-zinc-800' },
+  3:  { label: '3 보통',   color: 'text-blue-400 border-blue-500 bg-blue-500/10' },
+  4:  { label: '4 보통',   color: 'text-blue-400 border-blue-500 bg-blue-500/10' },
+  5:  { label: '5 응용',   color: 'text-amber-400 border-amber-500 bg-amber-500/10' },
+  6:  { label: '6 응용',   color: 'text-amber-400 border-amber-500 bg-amber-500/10' },
+  7:  { label: '7 고난도', color: 'text-orange-400 border-orange-500 bg-orange-500/10' },
+  8:  { label: '8 고난도', color: 'text-orange-400 border-orange-500 bg-orange-500/10' },
+  9:  { label: '9 최상',   color: 'text-red-400 border-red-500 bg-red-500/10' },
+  10: { label: '10 최상',  color: 'text-red-300 border-red-700 bg-red-700/10' },
 };
 
 // 수학 시험지의 문제 위치: 픽셀 감지 블록 > 서버 bbox > 2단 배치 추정
@@ -1837,7 +1844,7 @@ function ProblemDetailPanel({
                   </span>
                 )}
                 <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                  난이도: {problem.difficultyLabel || diffCfg.label}
+                  난이도: {diffCfg.label}
                 </span>
               </div>
               {(problem.subject || problem.chapter) && (
