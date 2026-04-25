@@ -1206,60 +1206,251 @@ function ProblemCropPreview({
 // ============================================================================
 
 function AdvancedAnalysisModal({
-  onSubmit,
+  initialText,
+  imageBase64,
+  onApply,
   onCancel,
 }: {
-  onSubmit: (prompt: string) => void;
+  /** 1차 분석 결과로 시작 */
+  initialText: string;
+  /** 옵션: 크롭 이미지 (base64). 있으면 시각 컨텍스트로 활용. */
+  imageBase64?: string;
+  /** 최종 적용 시 호출 (수정된 텍스트) */
+  onApply: (finalText: string) => void;
   onCancel: () => void;
 }) {
-  const [customPrompt, setCustomPrompt] = useState('');
+  const [currentText, setCurrentText] = useState(initialText);
+  const [draftPrompt, setDraftPrompt] = useState('');
+  // ★ 기본은 Claude Sonnet 4.6 — 이 정도 텍스트 편집은 Sonnet 으로 충분하고 비용 효율적.
+  //   Opus 는 정확도 약간 ↑이지만 토큰 비용이 5배 가량 높아 추천 안 함.
+  const [model, setModel] = useState<'gpt-4o' | 'claude-sonnet' | 'claude-opus'>('claude-sonnet');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<Array<{
+    prompt: string;
+    before: string;
+    after: string;
+    model: string;
+    durationMs: number;
+  }>>([]);
 
   const presets = [
-    '객관식 options 의 수식을 정확히 읽어서 입력해줘',
-    '객관식 options 에 있는 ㄱ, ㄴ, ㄷ, ㄹ, ㅁ 글자를 정확히 입력해줘',
-    '선분을 나타내는 수식의 경우, 수식의 알파벳 위에 정확히 \\overline 태그를 넣어서',
-    '객관식 options 를 <보기> 로 착각하지 말아줘.',
-    '학생이 낙서한 것들은 읽지 말고 프린트된 시험지의 글자만 읽어줘.',
+    '객관식 options 의 수식을 정확히 읽어줘',
+    'ㄱ, ㄴ, ㄷ 자음 글자를 정확히 표기해줘',
+    '선분 수식에 \\overline 태그 넣어줘',
+    '학생 낙서 무시하고 인쇄된 글자만 읽어줘',
   ];
 
+  const submitInstruction = async () => {
+    const prompt = draftPrompt.trim();
+    if (!prompt || isProcessing) return;
+    setIsProcessing(true);
+    setError(null);
+    const before = currentText;
+    const t0 = Date.now();
+    try {
+      const res = await fetch('/api/workflow/reanalyze-crop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: imageBase64 || undefined,
+          currentText: before,
+          customPrompt: prompt,
+          model,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const after = (data.ocrText as string) || before;
+      setCurrentText(after);
+      setHistory(prev => [...prev, { prompt, before, after, model, durationMs: Date.now() - t0 }]);
+      setDraftPrompt('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRevert = () => {
+    setCurrentText(initialText);
+    setHistory([]);
+  };
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const last = history[history.length - 1];
+    setCurrentText(last.before);
+    setHistory(prev => prev.slice(0, -1));
+  };
+
+  const isModified = currentText !== initialText;
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-[480px] rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-800">
-          <h3 className="text-sm font-bold text-white">고급 분석 요구 사항</h3>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-3xl h-[88vh] rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="text-sm font-bold text-white">고급 분석 — 채팅형 수정</h3>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              현재 분석 결과를 보면서 지시하면 즉시 반영됩니다. 여러 번 반복 가능.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-zinc-500 mr-1">모델:</span>
+            {(['gpt-4o', 'claude-sonnet', 'claude-opus'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModel(m)}
+                className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
+                  model === m
+                    ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                    : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                }`}
+                title={
+                  m === 'gpt-4o' ? '빠름 · 저렴'
+                    : m === 'claude-sonnet' ? '★ 추천 — 텍스트 편집에 충분 · 합리적 비용'
+                    : '최고 정확도 · 비용 ↑↑ (필요 시만)'
+                }
+              >
+                {m === 'gpt-4o' ? 'GPT-4o' : m === 'claude-sonnet' ? 'Sonnet ★' : 'Opus ⚠'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="p-5 space-y-2.5">
-          {presets.map((preset, i) => (
+        {/* 현재 분석 결과 미리보기 */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                현재 분석 결과
+              </span>
+              {isModified && (
+                <span className="text-[10px] text-amber-400 font-semibold">● 수정됨</span>
+              )}
+            </div>
+            <div className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 max-h-64 overflow-y-auto">
+              <pre className="whitespace-pre-wrap break-words text-xs text-zinc-200 font-mono leading-relaxed">
+                {currentText || '(비어있음)'}
+              </pre>
+            </div>
+          </div>
+
+          {/* 대화 이력 */}
+          {history.length > 0 && (
+            <div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                수정 이력 ({history.length})
+              </div>
+              <div className="space-y-1.5">
+                {history.map((h, i) => (
+                  <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[11px]">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-cyan-400 font-semibold">#{i + 1}</span>
+                      <span className="text-zinc-500">·</span>
+                      <span className="text-zinc-400">{h.model}</span>
+                      <span className="text-zinc-500">·</span>
+                      <span className="text-zinc-500">{(h.durationMs / 1000).toFixed(1)}s</span>
+                    </div>
+                    <div className="text-zinc-300 break-words">{h.prompt}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* 프리셋 + 입력 */}
+        <div className="border-t border-zinc-800 p-4 space-y-2 flex-shrink-0">
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((preset, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setDraftPrompt(prev => prev ? `${prev}\n${preset}` : preset)}
+                className="text-[10px] rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-zinc-400 transition-colors"
+              >
+                + {preset.slice(0, 22)}{preset.length > 22 ? '…' : ''}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <textarea
+              value={draftPrompt}
+              onChange={(e) => setDraftPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  submitInstruction();
+                }
+              }}
+              disabled={isProcessing}
+              rows={2}
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none disabled:opacity-50"
+              placeholder="예) 분모를 x+1로 바꿔줘 / ㄱ선택지 삭제해줘 / ⌘+Enter 로 전송"
+            />
             <button
-              key={i}
               type="button"
-              onClick={() => setCustomPrompt(prev => prev ? `${prev}\n${preset}` : preset)}
-              className="w-full text-left rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2.5 text-xs text-zinc-300 transition-colors"
+              onClick={submitInstruction}
+              disabled={isProcessing || !draftPrompt.trim()}
+              className="self-stretch px-5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
             >
-              {preset}
+              {isProcessing ? '...' : '분석'}
             </button>
-          ))}
-
-          <textarea
-            value={customPrompt}
-            onChange={(e) => setCustomPrompt(e.target.value)}
-            className="w-full h-20 mt-3 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none"
-            placeholder="분석에 필요한 요구 사항을 입력해주세요."
-          />
+          </div>
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-zinc-800">
-          <button type="button" onClick={onCancel}
-            className="px-4 py-2 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
-            취소
-          </button>
-          <button type="button"
-            onClick={() => onSubmit(customPrompt)}
-            disabled={!customPrompt.trim()}
-            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors disabled:opacity-40">
-            확인
-          </button>
+        {/* Footer */}
+        <div className="flex justify-between items-center gap-2 px-5 py-3 border-t border-zinc-800 flex-shrink-0">
+          <div className="flex gap-2">
+            {history.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
+                >
+                  ↶ 한 단계 되돌리기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRevert}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
+                >
+                  원본으로
+                </button>
+              </>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isProcessing}
+              className="px-4 py-2 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50"
+            >
+              닫기
+            </button>
+            <button
+              type="button"
+              onClick={() => onApply(currentText)}
+              disabled={isProcessing || !isModified}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
+            >
+              최종 적용
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1911,12 +2102,14 @@ function ProblemDetailPanel({
         )}
       </div>
 
-      {/* 고급 분석 모달 */}
-      {showAdvancedModal && (
+      {/* 고급 분석 모달 — 채팅형 반복 수정 */}
+      {showAdvancedModal && problem && (
         <AdvancedAnalysisModal
-          onSubmit={(prompt) => {
+          initialText={problem.content || ''}
+          onApply={(finalText) => {
+            // 최종 텍스트를 problem.content 에 반영해 저장
+            onSave({ content: finalText });
             setShowAdvancedModal(false);
-            onAdvancedAnalyze(prompt);
           }}
           onCancel={() => setShowAdvancedModal(false)}
         />

@@ -243,7 +243,47 @@ async function classifyProblemWithGPT(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageBase64, customPrompt, analyzeGraph = true, fullAnalysis = false, problemNumber, problemId, fileName } = body;
+    const {
+      imageBase64,
+      customPrompt,
+      analyzeGraph = true,
+      fullAnalysis = false,
+      problemNumber,
+      problemId,
+      fileName,
+      // ★ 채팅형 반복 수정 모드 — currentText 가 있으면 Mathpix OCR 스킵하고
+      //    LLM 으로 currentText 에 customPrompt 적용
+      currentText,
+      // ★ 모델 선택 — 'gpt-4o' (default, 빠름) | 'claude-opus' (정확) | 'claude-sonnet'
+      model = 'gpt-4o',
+    } = body;
+
+    // ─── 채팅형 편집 모드 (Mathpix OCR 스킵) ───
+    if (currentText && customPrompt && customPrompt.trim()) {
+      console.log(`[Reanalyze] chat-edit mode: model=${model}, prompt=${customPrompt.substring(0, 80)}`);
+      try {
+        let editedText: string;
+        if (model === 'claude-opus' || model === 'claude-sonnet') {
+          editedText = await refineWithClaude(currentText, customPrompt, imageBase64, model);
+        } else {
+          editedText = await refineWithGPT(currentText, customPrompt, imageBase64);
+        }
+        // 선택지 재추출 (수정 후 ① 위치가 바뀌었을 수 있음)
+        const rawChoices = extractChoicesFromOCR(editedText);
+        const choices = cleanPollutedChoices(rawChoices);
+        return NextResponse.json({
+          ocrText: editedText,
+          rawOcrText: currentText,
+          choices,
+          confidence: 1.0,
+          model,
+          mode: 'chat-edit',
+        });
+      } catch (e) {
+        console.error('[Reanalyze] chat-edit failed:', e);
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'chat-edit failed' }, { status: 500 });
+      }
+    }
 
     // ★ fileName에서 과목/학년 자동 감지 (2차 auto-fix와 동일한 로직)
     //   이전엔 classifyProblemWithGPT에 subject/grade 안 넘겨서 Gemini가 typeTable 없이 hallucinate.
@@ -1092,5 +1132,88 @@ OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단
   const data = await response.json();
   const result = data.choices[0]?.message?.content?.trim() || ocrText;
   console.log(`[RefineGPT] 결과 (앞 200자): ${result.substring(0, 200)}`);
+  return result;
+}
+
+/**
+ * Claude 로 OCR/현재 텍스트 정제 (고급 분석 — 사용자 지시 모드)
+ *
+ * 채팅형 반복 수정에서 사용. GPT-4o 보다 정확도가 높고 더 긴 컨텍스트 처리.
+ * model: 'claude-opus' → claude-opus-4-7  / 'claude-sonnet' → claude-sonnet-4-6
+ */
+async function refineWithClaude(
+  currentText: string,
+  customPrompt: string,
+  imageBase64: string | undefined,
+  modelKey: string,
+): Promise<string> {
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) {
+    console.warn('[Reanalyze] No ANTHROPIC_API_KEY, falling back to GPT');
+    return refineWithGPT(currentText, customPrompt, imageBase64);
+  }
+
+  const model = modelKey === 'claude-opus' ? 'claude-opus-4-7'
+    : modelKey === 'claude-sonnet' ? 'claude-sonnet-4-6'
+    : 'claude-sonnet-4-6';
+
+  const systemPrompt = `당신은 한국 수학 시험지 텍스트를 사용자 지시에 따라 정확히 수정하는 전문가입니다.
+
+★ 절대 규칙:
+1. 사용자 지시를 최우선으로 따른다. 지시한 부분만 수정, 나머지는 현재 텍스트 그대로 보존.
+2. 수식은 $...$ (인라인) 또는 $$...$$ (디스플레이) LaTeX 형식 유지.
+3. 선택지가 있으면 ①②③④⑤ 형식 유지.
+4. 출력은 수정된 전체 텍스트만. 설명·주석·코드블록 마커·앞뒤 인사 금지.
+5. 첫 글자부터 마지막까지 본문 그대로. 시작에 "수정된 텍스트:" 같은 라벨 금지.
+
+★ <보기> 라벨: ㄱ, ㄴ, ㄷ (한국어 자음). ¬·C·D·L 로 변환 금지.`;
+
+  const userContent: Array<Record<string, unknown>> = [];
+  if (imageBase64) {
+    userContent.push({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
+    });
+  }
+  userContent.push({
+    type: 'text',
+    text: `현재 텍스트:
+${currentText}
+
+═══════════════════════════════════════
+사용자 수정 지시 (★ 이걸 그대로 적용하세요):
+${customPrompt}
+═══════════════════════════════════════
+
+위 지시에 따라 현재 텍스트를 수정한 결과만 출력하세요.`,
+  });
+
+  console.log(`[RefineClaude] model=${model}, vision=${!!imageBase64}, prompt=${customPrompt.substring(0, 80)}`);
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 3000,
+      temperature: 0.2,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`Claude API error: ${response.status} ${errText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const tb = Array.isArray(data.content) ? data.content.find((c: { type: string }) => c.type === 'text') : null;
+  const result = (tb?.text || '').trim() || currentText;
+  console.log(`[RefineClaude] 결과 (앞 200자): ${result.substring(0, 200)}`);
   return result;
 }
