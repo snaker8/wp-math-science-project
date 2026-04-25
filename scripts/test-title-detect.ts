@@ -23,6 +23,11 @@ const cases: Array<{ title: string; subject?: string; grade?: string }> = [
   { title: '[2026][2-1-M]',              subject: '중2-1 수학', grade: '중2' },
   { title: '사직중 3학년 기말',           subject: '중3-1 수학', grade: '중3' },
 
+  // ★ "26-3-1-M 해강중" → 6-3 오매치 버그 회귀 케이스
+  { title: '26-3-1-M 해강중 수학',       subject: '중3-1 수학', grade: '중3' },
+  { title: '25-2-2-M 부산중 기말',       subject: '중2-2 수학', grade: '중2' },
+  { title: '2025-3-1-M ○○중',           subject: '중3-1 수학', grade: '중3' },
+
   // 엣지 — "수" 뒤에 1/2가 아닌 글자
   { title: '고수 특강',                   grade: '' },  // 고수 = 학년 불명
 ];
