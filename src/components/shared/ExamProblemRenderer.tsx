@@ -268,23 +268,33 @@ function ExamProblemRendererInner({
 
   /** 배지가 이미 삽입됐는지 추적 (첫 번째 텍스트 파트에만 삽입) */
   let badgeInserted = false;
-  const renderTextWithBadge = (text: string, key: string) => {
+  const renderTextWithBadge = (text: string, key: string, isLastText = false) => {
     if (!hasPoints || badgeInserted) {
       return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
     }
     const [before, after, found] = splitAtFirstQuestionMark(text);
-    if (!found) {
-      return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
+    if (found) {
+      badgeInserted = true;
+      // before에 inline prop → MCR wrapper가 <span display:contents>로 렌더 → 뱃지가 같은 줄에 표시
+      return (
+        <React.Fragment key={key}>
+          <MixedContentRenderer content={before} className="text-gray-800" inline />
+          {pointsBadge}
+          {after && <MixedContentRenderer content={after} className="text-gray-800" />}
+        </React.Fragment>
+      );
     }
-    badgeInserted = true;
-    // before에 inline prop → MCR wrapper가 <span display:contents>로 렌더 → 뱃지가 같은 줄에 표시
-    return (
-      <React.Fragment key={key}>
-        <MixedContentRenderer content={before} className="text-gray-800" inline />
-        {pointsBadge}
-        {after && <MixedContentRenderer content={after} className="text-gray-800" />}
-      </React.Fragment>
-    );
+    // '?' 없음 — 마지막 텍스트 파트면 끝에 붙여 그림 아래로 떨어지지 않게 한다
+    if (isLastText) {
+      badgeInserted = true;
+      return (
+        <React.Fragment key={key}>
+          <MixedContentRenderer content={text} className="text-gray-800" inline />
+          {pointsBadge}
+        </React.Fragment>
+      );
+    }
+    return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
   };
 
   // content + 인라인 도형 렌더링
@@ -298,14 +308,28 @@ function ExamProblemRendererInner({
         const after = parts.slice(fIdx + 1);
         const side = floatPart.floatMode === 'left' ? 'float-left mr-3' : 'float-right ml-3';
         const wPct = floatPart.widthPercent || 40;
+        // 마지막 텍스트 파트의 인덱스 (after 가 비어있으면 before 의 마지막)
+        const lastTextInAfter = [...after].reverse().findIndex(p => p.type === 'text');
+        const lastTextInAfterIdx = lastTextInAfter >= 0 ? after.length - 1 - lastTextInAfter : -1;
+        const lastTextInBefore = [...before].reverse().findIndex(p => p.type === 'text');
+        const lastTextInBeforeIdx = lastTextInBefore >= 0 ? before.length - 1 - lastTextInBefore : -1;
+        const useAfterAsLast = lastTextInAfterIdx >= 0;
         return (
           <>
-            {before.map((p, pi) => p.type === 'text' ? renderTextWithBadge(p.text, `b-${pi}`) : null)}
+            {before.map((p, pi) =>
+              p.type === 'text'
+                ? renderTextWithBadge(p.text, `b-${pi}`, !useAfterAsLast && pi === lastTextInBeforeIdx)
+                : null
+            )}
             <div>
               <div className={`${side} mb-2`} style={{ width: `${wPct}%`, maxWidth: `${maxFigureWidth}px` }}>
                 {renderFigure(0)}
               </div>
-              {after.map((p, pi) => p.type === 'text' ? renderTextWithBadge(p.text, `a-${pi}`) : null)}
+              {after.map((p, pi) =>
+                p.type === 'text'
+                  ? renderTextWithBadge(p.text, `a-${pi}`, useAfterAsLast && pi === lastTextInAfterIdx)
+                  : null
+              )}
               <div style={{ clear: 'both' }} />
             </div>
           </>
@@ -314,9 +338,11 @@ function ExamProblemRendererInner({
 
       // 일반 인라인 모드
       let figCounter = 0;
+      const lastText = [...parts].reverse().findIndex(p => p.type === 'text');
+      const lastTextIdx = lastText >= 0 ? parts.length - 1 - lastText : -1;
       return parts.map((part, pi) =>
         part.type === 'text' ? (
-          renderTextWithBadge(part.text, String(pi))
+          renderTextWithBadge(part.text, String(pi), pi === lastTextIdx)
         ) : (
           <div key={pi} className="my-2 flex justify-center">
             {renderFigure(figCounter++)}
@@ -325,10 +351,10 @@ function ExamProblemRendererInner({
       );
     }
 
-    // 마커 없으면 기본: content 뒤에 도형
+    // 마커 없으면 기본: content 뒤에 도형 — 단일 텍스트라 곧 마지막
     return (
       <>
-        {renderTextWithBadge(cleanContent, 'main')}
+        {renderTextWithBadge(cleanContent, 'main', true)}
         {hasFigureSource && (
           <div className="mt-2 flex justify-center">
             {renderFigure(0)}
