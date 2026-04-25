@@ -992,6 +992,13 @@ async function correctOcrTypos(ocrText: string): Promise<string> {
 
 /**
  * GPT로 OCR 결과 정제 (고급 분석)
+ *
+ * ★ 두 가지 모드:
+ *   1. 자동 정제 (customPrompt 비어있거나 자동 트리거):
+ *      이미지를 source of truth 로 두고 OCR 결과를 정확하게 다시 변환
+ *   2. 사용자 지시 모드 (customPrompt 제공):
+ *      사용자의 수정 지시를 최우선으로 적용. 이미지는 참고만.
+ *      예) "이 식의 분모를 x+1 로 바꿔줘", "ㄱ선택지 빼줘" 등
  */
 async function refineWithGPT(ocrText: string, customPrompt: string, imageBase64?: string): Promise<string> {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -1000,45 +1007,21 @@ async function refineWithGPT(ocrText: string, customPrompt: string, imageBase64?
     return ocrText;
   }
 
-  // ★ 이미지가 있으면 GPT-4o Vision으로 직접 수식 인식
-  const userContent: any[] = [];
+  const hasUserDirective = !!(customPrompt && customPrompt.trim());
 
-  if (imageBase64) {
-    userContent.push({
-      type: 'image_url',
-      image_url: {
-        url: `data:image/png;base64,${imageBase64}`,
-        detail: 'high',
-      },
-    });
-  }
+  // ─── 분기: 사용자 지시 모드 vs 자동 정제 모드 ───
+  const systemPrompt = hasUserDirective
+    ? `당신은 한국 수학 시험지의 OCR 결과를 사용자의 명시적 지시에 따라 수정하는 어시스턴트입니다.
 
-  userContent.push({
-    type: 'text',
-    text: `OCR 원본 텍스트 (참고용):
-${ocrText}
+★ 절대 규칙:
+1. 사용자 지시(수정 요구사항)를 최우선으로 따릅니다. 이미지나 OCR과 충돌하면 사용자 지시를 우선합니다.
+2. 사용자 지시가 가리킨 부분만 정확히 수정하고, 나머지는 OCR 결과를 그대로 보존합니다.
+3. 수식은 $...$ (인라인) 또는 $$...$$ (디스플레이) LaTeX 형식.
+4. 선택지가 있으면 ①②③④⑤ 형식 유지.
+5. 출력은 수정된 전체 텍스트만. 설명·주석·코드블록 마커 금지.
 
-${customPrompt ? `수정 요구사항:\n${customPrompt}\n\n` : ''}이미지를 직접 보고 수학 문제의 수식을 정확하게 LaTeX로 변환해주세요.
-OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단하세요.
-수식은 $...$ (인라인) 또는 $$...$$ (디스플레이) 형식으로 작성하세요.
-선택지가 있으면 ①②③④⑤ 형식으로 유지하세요.
-수정된 전체 텍스트만 반환하세요. 설명 없이 텍스트만 출력하세요.`,
-  });
-
-  console.log(`[RefineGPT] Vision ${imageBase64 ? '활성' : '비활성'}, prompt: ${customPrompt?.substring(0, 50) || '(없음)'}`);
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',  // ★ Vision 필요하므로 gpt-4o 사용
-      messages: [
-        {
-          role: 'system',
-          content: `당신은 한국 수학 시험지 이미지를 읽고 정확한 LaTeX를 생성하는 전문가입니다.
+★ <보기> 라벨: ㄱ, ㄴ, ㄷ (한국어 자음). ¬·C·D·L 로 변환 금지.`
+    : `당신은 한국 수학 시험지 이미지를 읽고 정확한 LaTeX를 생성하는 전문가입니다.
 이미지에 보이는 수식을 정확하게 변환하세요. OCR 결과는 참고용이며 틀릴 수 있습니다.
 반드시 이미지를 기준으로 판단하세요.
 
@@ -1048,15 +1031,57 @@ OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단
 - ㄷ을 C나 D로 잘못 읽지 마세요. 반드시 "ㄷ"으로 표기하세요.
 - ㄴ을 L이나 니은 이외의 문자로 잘못 읽지 마세요. 반드시 "ㄴ"으로 표기하세요.
 - 선택지: ① ㄴ  ② ㄷ  ③ ㄱ, ㄴ  ④ ㄱ, ㄷ  ⑤ ㄴ, ㄷ 형식이 일반적입니다.
-- <보기> 내용은 "ㄱ. [수식]", "ㄴ. [수식]", "ㄷ. [수식]" 형식입니다.`,
-        },
-        {
-          role: 'user',
-          content: userContent,
-        },
+- <보기> 내용은 "ㄱ. [수식]", "ㄴ. [수식]", "ㄷ. [수식]" 형식입니다.`;
+
+  const userContent: any[] = [];
+  if (imageBase64) {
+    userContent.push({
+      type: 'image_url',
+      image_url: { url: `data:image/png;base64,${imageBase64}`, detail: 'high' },
+    });
+  }
+
+  const userText = hasUserDirective
+    ? `현재 OCR 결과:
+${ocrText}
+
+═══════════════════════════════════════
+사용자 수정 지시 (★ 이걸 그대로 적용하세요):
+${customPrompt}
+═══════════════════════════════════════
+
+위 지시에 따라 현재 OCR 결과를 수정한 전체 텍스트를 출력하세요.
+- 지시한 부분만 수정. 나머지는 OCR 그대로 유지.
+- 이미지는 참고만. 사용자 지시가 우선.
+- LaTeX 형식 유지 ($...$, $$...$$).
+- 출력은 수정된 텍스트만. 설명 없이.`
+    : `OCR 원본 텍스트 (참고용):
+${ocrText}
+
+이미지를 직접 보고 수학 문제의 수식을 정확하게 LaTeX로 변환해주세요.
+OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단하세요.
+수식은 $...$ (인라인) 또는 $$...$$ (디스플레이) 형식으로 작성하세요.
+선택지가 있으면 ①②③④⑤ 형식으로 유지하세요.
+수정된 전체 텍스트만 반환하세요. 설명 없이 텍스트만 출력하세요.`;
+
+  userContent.push({ type: 'text', text: userText });
+
+  console.log(`[RefineGPT] mode=${hasUserDirective ? 'user-directive' : 'auto-refine'}, vision=${!!imageBase64}, prompt=${customPrompt?.substring(0, 80) || '(없음)'}`);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
       ],
-      temperature: 0.1,
-      max_tokens: 2000,
+      temperature: hasUserDirective ? 0.2 : 0.1,
+      max_tokens: 2500,
     }),
   });
 
@@ -1066,6 +1091,6 @@ OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단
 
   const data = await response.json();
   const result = data.choices[0]?.message?.content?.trim() || ocrText;
-  console.log(`[RefineGPT] 결과: ${result.substring(0, 200)}`);
+  console.log(`[RefineGPT] 결과 (앞 200자): ${result.substring(0, 200)}`);
   return result;
 }
