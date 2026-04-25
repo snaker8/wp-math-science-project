@@ -16,25 +16,46 @@ export const maxDuration = 300;
 const MATHPIX_APP_ID = process.env.MATHPIX_APP_ID || '';
 const MATHPIX_APP_KEY = process.env.MATHPIX_APP_KEY || '';
 
-// 점수 패턴 우선순위:
-//   1) [N점] 닫힌 대괄호 (가장 확실)
-//   2) (N점) 괄호
-//   3) [N점 닫기 누락 — OCR 오인식 흔한 케이스
-const POINT_PATTERNS = [
-  /\[\s*(\d{1,2}(?:\.\d)?)\s*[점졈졍정]\s*\]/,
-  /\(\s*(\d{1,2}(?:\.\d)?)\s*[점졈]\s*\)/,
-  /\[\s*(\d{1,2}(?:\.\d)?)\s*[점졈졍정]/,
+// 점수 패턴 우선순위 (느슨순):
+//   소수점 자릿수 무제한, 괄호 종류 다양화, ',' 소수점 / '·' 가운뎃점 / 공백 허용
+//   닫는 괄호 누락 OCR 케이스 fallback 포함
+const NUM = '(\\d{1,2}(?:[.,·]\\d{1,2})?)';
+const POINT_CHAR = '[점졈졍정]';
+const POINT_PATTERNS: RegExp[] = [
+  // 1) [4.3점], [ 4.3 점 ]
+  new RegExp(`\\[\\s*${NUM}\\s*${POINT_CHAR}\\s*\\]`),
+  // 2) (4.3점)
+  new RegExp(`\\(\\s*${NUM}\\s*${POINT_CHAR}\\s*\\)`),
+  // 3) 〔4점〕, ［4점］ (전각 대괄호)
+  new RegExp(`[〔［]\\s*${NUM}\\s*${POINT_CHAR}\\s*[〕］]`),
+  // 4) 닫기 누락: [4점 (...
+  new RegExp(`\\[\\s*${NUM}\\s*${POINT_CHAR}`),
+  // 5) (4점 누락
+  new RegExp(`\\(\\s*${NUM}\\s*${POINT_CHAR}`),
 ];
 
-function extractPoints(text: string): number | null {
+function extractPoints(text: string): { value: number | null; matched: string | null } {
   for (const pat of POINT_PATTERNS) {
     const m = text.match(pat);
     if (m) {
-      const v = parseFloat(m[1]);
-      if (Number.isFinite(v) && v > 0 && v <= 50) return v;
+      // ',' 소수점 / '·' 가운뎃점 → '.' 정규화
+      const numStr = m[1].replace(/[,·]/g, '.');
+      const v = parseFloat(numStr);
+      if (Number.isFinite(v) && v > 0 && v <= 50) {
+        return { value: v, matched: m[0] };
+      }
     }
   }
-  return null;
+  return { value: null, matched: null };
+}
+
+// 진단용: text에서 '점' 주변 ±40자 컨텍스트 추출 (없으면 tail)
+function pointContext(text: string): string {
+  const idx = text.search(/[점졈졍정]/);
+  if (idx < 0) return text.slice(-100).replace(/\s+/g, ' ');
+  const start = Math.max(0, idx - 40);
+  const end = Math.min(text.length, idx + 30);
+  return text.slice(start, end).replace(/\s+/g, ' ');
 }
 
 // Mathpix /v3/text — 이미지 단건 OCR (sync, 빠름, $0.004/요청)
@@ -83,8 +104,10 @@ async function processExam(examId: string): Promise<{
   status: 'success' | 'skip' | 'error';
   reason?: string;
   updated?: number;
+  viaContent?: number;
+  viaOcr?: number;
   total?: number;
-  diag?: Array<{ num: number; matched: number | null; tail?: string }>;
+  diag?: Array<{ num: number; matched: number | null; src?: string; tail?: string }>;
 }> {
   if (!supabaseAdmin) throw new Error('Supabase not configured');
 
@@ -107,32 +130,58 @@ async function processExam(examId: string): Promise<{
   const pIds = (eps as any[]).map(r => r.problem_id);
   const { data: problems } = await supabaseAdmin
     .from('problems')
-    .select('id, images')
+    .select('id, images, content_latex')
     .in('id', pIds);
   const byId = new Map((problems || []).map((p: any) => [p.id, p]));
 
   let updated = 0;
-  const diag: Array<{ num: number; matched: number | null; tail?: string }> = [];
+  let viaContent = 0;
+  let viaOcr = 0;
+  const diag: Array<{ num: number; matched: number | null; src?: string; tail?: string }> = [];
 
   for (const ep of eps as any[]) {
     const seq = ep.sequence_number;
     const problem = byId.get(ep.problem_id);
     if (!problem) { diag.push({ num: seq, matched: null, tail: '(problem not found)' }); continue; }
+
+    // ─── 1단계: content_latex regex 먼저 (DB에 [N점] 살아있으면 즉시 매칭, OCR 비용 0) ───
+    const contentLatex: string = problem.content_latex || '';
+    const contentResult = extractPoints(contentLatex);
+    if (contentResult.value !== null) {
+      const clamped = Math.min(100, Math.max(0, Math.round(contentResult.value * 10) / 10));
+      const { error: updErr } = await supabaseAdmin
+        .from('exam_problems')
+        .update({ points: clamped })
+        .eq('exam_id', examId)
+        .eq('problem_id', ep.problem_id);
+      if (!updErr) { updated++; viaContent++; }
+      diag.push({ num: seq, matched: contentResult.value, src: 'content', tail: `matched="${contentResult.matched}"` });
+      continue;
+    }
+
+    // ─── 2단계: crop OCR fallback ───
     const cropUrl = findCropUrl(problem.images || []);
-    if (!cropUrl) { diag.push({ num: seq, matched: null, tail: '(no crop)' }); continue; }
+    if (!cropUrl) { diag.push({ num: seq, matched: null, src: 'none', tail: '(no crop)' }); continue; }
 
     const parsed = parseStorageUrl(cropUrl);
-    if (!parsed) { diag.push({ num: seq, matched: null, tail: '(invalid url)' }); continue; }
+    if (!parsed) { diag.push({ num: seq, matched: null, src: 'none', tail: '(invalid url)' }); continue; }
 
     try {
       const { data: blob, error: dlErr } = await supabaseAdmin.storage
         .from(parsed.bucket).download(parsed.path);
-      if (dlErr || !blob) { diag.push({ num: seq, matched: null, tail: `(download: ${dlErr?.message})` }); continue; }
+      if (dlErr || !blob) { diag.push({ num: seq, matched: null, src: 'ocr', tail: `(download: ${dlErr?.message})` }); continue; }
       const buf = Buffer.from(await blob.arrayBuffer());
       const mime = blob.type || 'image/png';
       const ocr = await mathpixImage(buf, mime);
-      const pts = extractPoints(ocr);
-      diag.push({ num: seq, matched: pts, tail: ocr.slice(-80).replace(/\s+/g, ' ') });
+      const { value: pts, matched } = extractPoints(ocr);
+      diag.push({
+        num: seq,
+        matched: pts,
+        src: 'ocr',
+        tail: matched
+          ? `matched="${matched}"`
+          : `no-match | context: "${pointContext(ocr)}"`,
+      });
       if (pts === null) continue;
       const clamped = Math.min(100, Math.max(0, Math.round(pts * 10) / 10));
       const { error: updErr } = await supabaseAdmin
@@ -140,13 +189,13 @@ async function processExam(examId: string): Promise<{
         .update({ points: clamped })
         .eq('exam_id', examId)
         .eq('problem_id', ep.problem_id);
-      if (!updErr) updated++;
+      if (!updErr) { updated++; viaOcr++; }
     } catch (err) {
-      diag.push({ num: seq, matched: null, tail: `(err: ${err instanceof Error ? err.message : String(err)})` });
+      diag.push({ num: seq, matched: null, src: 'ocr', tail: `(err: ${err instanceof Error ? err.message : String(err)})` });
     }
   }
 
-  return { examId, title: exam.title, status: 'success', updated, total: eps.length, diag };
+  return { examId, title: exam.title, status: 'success', updated, viaContent, viaOcr, total: eps.length, diag };
 }
 
 export async function POST(request: NextRequest) {

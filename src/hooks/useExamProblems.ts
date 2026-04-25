@@ -285,7 +285,8 @@ function toExamProblemData(
   return {
     id: problem.id,
     number: problem.source_number ?? row.sequence_number ?? row.order_index ?? (index + 1),
-    points: typeof row.points === 'number' ? row.points : undefined,
+    // ★ NUMERIC(4,2) 컬럼은 supabase-js가 string으로 반환할 수 있어 Number() 변환
+    points: row.points != null ? Number(row.points) : undefined,
     difficulty: classification
       ? Math.min(10, Math.max(1, parseInt(classification.difficulty, 10) || 3))
       : 3,
@@ -516,12 +517,12 @@ export function useCreateExam() {
         throw examError || new Error('Failed to create exam');
       }
 
-      // 2. exam_problems 테이블에 문제 연결
+      // 2. exam_problems 테이블에 문제 연결 — points는 null로, 사용자가 자동배점/수동
       const examProblems = params.problemIds.map((problemId, idx) => ({
         exam_id: examData.id,
         problem_id: problemId,
         sequence_number: idx + 1,
-        points: 4,
+        points: null,
       }));
 
       const { error: linkError } = await supabaseBrowser

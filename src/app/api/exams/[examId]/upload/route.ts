@@ -132,7 +132,7 @@ export async function POST(
         exam_id: examId,
         problem_id: problemId,
         sequence_number: startSeq + idx,
-        points: 4,
+        points: null,
       }));
 
       await supabaseAdmin.from('exam_problems').insert(rows);

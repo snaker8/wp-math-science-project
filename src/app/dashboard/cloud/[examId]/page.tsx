@@ -489,7 +489,7 @@ function ProblemCardView({
   onDeleteFigure?: (p: ProblemData) => void;
   onReplaceDiagram?: (p: ProblemData, figureIndex?: number) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
-  onUpdatePoints?: (problemId: string, points: number) => Promise<void>;
+  onUpdatePoints?: (problemId: string, points: number | null) => Promise<void>;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -823,8 +823,16 @@ function ProblemCardView({
                     onChange={(e) => setPointsDraft(e.target.value)}
                     onBlur={async () => {
                       setIsEditingPoints(false);
-                      const next = parseFloat(pointsDraft);
-                      if (!Number.isFinite(next) || next === (problem.points ?? 0)) return;
+                      const trimmed = pointsDraft.trim();
+                      // 빈 입력 → NULL 저장 (배점 미지정으로)
+                      if (trimmed === '') {
+                        if (problem.points != null) {
+                          try { await onUpdatePoints?.(problem.id, null); } catch {}
+                        }
+                        return;
+                      }
+                      const next = parseFloat(trimmed);
+                      if (!Number.isFinite(next) || next === problem.points) return;
                       try { await onUpdatePoints?.(problem.id, next); } catch {}
                     }}
                     onKeyDown={(e) => {
@@ -2757,8 +2765,8 @@ export default function CloudExamDetailPage() {
     }
   }, [refetchProblems]);
 
-  // ★ 문제 배점 수정 — exam_problems.points
-  const handleUpdatePoints = useCallback(async (problemId: string, points: number) => {
+  // ★ 문제 배점 수정 — exam_problems.points (null 보내면 NULL 저장)
+  const handleUpdatePoints = useCallback(async (problemId: string, points: number | null) => {
     try {
       const res = await fetch(`/api/exams/${examId}/problems`, {
         method: 'PATCH',
