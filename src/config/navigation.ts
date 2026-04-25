@@ -154,9 +154,17 @@ export const tutorNavItems: NavItem[] = [
   {
     href: '/dashboard/prescription',
     icon: Stethoscope,
-    label: 'AI처방/CLINIC',
-    description: '오답 분석 및 처방',
+    label: 'AI처방 · 진단 대시보드',
+    description: '학생별 단원 히트맵·취약점·약점 추적',
     activeColor: 'bg-orange-500/10 text-orange-500',
+    group: 'tutor',
+  },
+  {
+    href: '/dashboard/prescription/entry',
+    icon: ClipboardCheck,
+    label: '진단 결과 입력',
+    description: '시험·진단지 채점 결과 수동 입력',
+    activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'tutor',
   },
   {
@@ -287,10 +295,11 @@ export const topNavGroups: NavGroup[] = [
     label: 'AI분석',
     icon: Sparkles,
     children: [
-      tutorNavItems[3], // AI처방/CLINIC
-      tutorNavItems[4], // AI 오토큐레이션
-      tutorNavItems[5], // 클리닉시험지
-      tutorNavItems[6], // 성적분석
+      tutorNavItems[3], // AI처방 · 진단 대시보드
+      tutorNavItems[4], // 진단 결과 입력 (신규)
+      tutorNavItems[5], // AI 오토큐레이션
+      tutorNavItems[6], // 클리닉시험지
+      tutorNavItems[7], // 성적분석
     ],
   },
 ];
