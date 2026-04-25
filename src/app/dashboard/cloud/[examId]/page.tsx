@@ -297,13 +297,50 @@ function FigureMarkerRenderer({
   cropImage,
   showFigureCompare,
   getProxiedImageUrl: proxyUrl,
+  pointsBadge,
 }: {
   contentParts: Array<{ type: 'text' | 'figure'; text: string; floatMode?: 'right' | 'left'; widthPercent?: number }>;
   problem: ProblemData;
   cropImage?: { url: string; type: string } | undefined;
   showFigureCompare: boolean;
   getProxiedImageUrl: (url: string) => string;
+  pointsBadge?: React.ReactNode;
 }) {
+  // ★ 텍스트의 첫 '?' 뒤에 배지 인라인 삽입용 헬퍼
+  //   $...$ 수식 외부의 '?' 만 매칭
+  const splitAtQuestion = (text: string): [string, string, boolean] => {
+    let inBlock = false;
+    let inInline = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+      if (ch === '$' && next === '$') { inBlock = !inBlock; i++; continue; }
+      if (ch === '$' && !inBlock) { inInline = !inInline; continue; }
+      if (ch === '?' && !inBlock && !inInline) {
+        return [text.slice(0, i + 1), text.slice(i + 1), true];
+      }
+    }
+    return [text, '', false];
+  };
+  let badgeInserted = false;
+  // 텍스트 파트를 렌더하면서 첫 '?' 뒤에 pointsBadge 인라인 주입
+  const renderTextWithBadge = (text: string, key: string, className: string) => {
+    if (!pointsBadge || badgeInserted) {
+      return <MixedContentRenderer key={key} content={text} className={className} />;
+    }
+    const [before, after, found] = splitAtQuestion(text);
+    if (!found) {
+      return <MixedContentRenderer key={key} content={text} className={className} />;
+    }
+    badgeInserted = true;
+    return (
+      <React.Fragment key={key}>
+        <MixedContentRenderer content={before} className={className} inline />
+        {pointsBadge}
+        {after && <MixedContentRenderer content={after} className={className} inline />}
+      </React.Fragment>
+    );
+  };
   const hasFigureSource = problem.figureData || problem.figureSvg || problem.upscaledCropUrl;
   const proxiedCrop = cropImage?.url ? proxyUrl(cropImage.url) : undefined;
 
@@ -323,13 +360,9 @@ function FigureMarkerRenderer({
       <div className="inline">
         {/* 플로트 전 텍스트 */}
         {beforeParts.map((part, i) =>
-          part.type === 'text' ? (
-            <MixedContentRenderer
-              key={`pre-${i}`}
-              content={part.text}
-              className="inline text-sm text-content-secondary leading-relaxed"
-            />
-          ) : null
+          part.type === 'text'
+            ? renderTextWithBadge(part.text, `pre-${i}`, 'inline text-sm text-content-secondary leading-relaxed')
+            : null
         )}
         {/* 플로트 이미지 + 이후 텍스트가 감싸는 영역 */}
         <div>
@@ -363,13 +396,9 @@ function FigureMarkerRenderer({
             )}
           </div>
           {afterParts.map((part, i) =>
-            part.type === 'text' ? (
-              <MixedContentRenderer
-                key={`post-${i}`}
-                content={part.text}
-                className="text-sm text-content-secondary leading-relaxed"
-              />
-            ) : null
+            part.type === 'text'
+              ? renderTextWithBadge(part.text, `post-${i}`, 'text-sm text-content-secondary leading-relaxed')
+              : null
           )}
           <div style={{ clear: 'both' }} />
         </div>
@@ -386,13 +415,7 @@ function FigureMarkerRenderer({
     <div className="inline">
       {contentParts.map((part, i) => {
         if (part.type === 'text') {
-          return (
-            <MixedContentRenderer
-              key={i}
-              content={part.text}
-              className="inline text-sm text-content-secondary leading-relaxed"
-            />
-          );
+          return renderTextWithBadge(part.text, String(i), 'inline text-sm text-content-secondary leading-relaxed');
         }
 
         // figure 파트 — figureCounter로 순서 매칭
@@ -869,18 +892,17 @@ function ProblemCardView({
                 };
 
                 if (hasFigureMarker) {
-                  // 도형 마커 있는 경우: 기존 렌더링 유지 + 끝에 배지
+                  // 도형 마커 있는 경우: FigureMarkerRenderer가 첫 텍스트 파트의 '?' 뒤에 배지 인라인 삽입
+                  // (도형 위치와 무관하게 질문 끝에 배치 → 이미지 밑으로 안 떨어짐)
                   return (
-                    <>
-                      <FigureMarkerRenderer
-                        contentParts={contentParts}
-                        problem={problem}
-                        cropImage={cropImage}
-                        showFigureCompare={showFigureCompare}
-                        getProxiedImageUrl={getProxiedImageUrl}
-                      />
-                      {pointsBadge}
-                    </>
+                    <FigureMarkerRenderer
+                      contentParts={contentParts}
+                      problem={problem}
+                      cropImage={cropImage}
+                      showFigureCompare={showFigureCompare}
+                      getProxiedImageUrl={getProxiedImageUrl}
+                      pointsBadge={pointsBadge}
+                    />
                   );
                 }
 
