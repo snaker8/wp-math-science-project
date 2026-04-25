@@ -122,7 +122,18 @@ export async function POST(
         rawTextParts.push(`--- ${v.file} ---\n` + v.answers.map(a => `${a.problemNumber}. ${a.answer}`).join('\n'));
       } else if (v.kind === 'gemini-solution') {
         for (const a of v.answers) answerMap.set(a.problemNumber, a);
-        for (const s of v.solutions) solutionMap.set(s.problemNumber, s);
+        // 해설은 페이지 경계를 가로지르는 경우가 있어 병합 — 같은 문제번호면 텍스트 이어붙임
+        for (const s of v.solutions) {
+          const existing = solutionMap.get(s.problemNumber);
+          if (existing && existing.solutionLatex && s.solutionLatex) {
+            solutionMap.set(s.problemNumber, {
+              problemNumber: s.problemNumber,
+              solutionLatex: existing.solutionLatex + '\n' + s.solutionLatex,
+            });
+          } else {
+            solutionMap.set(s.problemNumber, s);
+          }
+        }
         rawTextParts.push(`--- ${v.file} ---\n답: ${v.answers.length}개 / 해설: ${v.solutions.length}개`);
       } else {
         if (v.text && v.text.trim().length >= 10) {
@@ -194,8 +205,9 @@ export async function POST(
         problemId,
         currentAnswer,
         newAnswer,
-        currentSolution: currentSolution.slice(0, 100),
-        newSolution: newSolution.slice(0, 100),
+        // ★ slice 금지 — 이 값이 그대로 PUT으로 되돌아가 DB 저장됨
+        currentSolution,
+        newSolution,
         hasChange,
       });
     }
@@ -455,7 +467,6 @@ async function extractSolutionsWithGemini(
       generationConfig: {
         maxOutputTokens: 65536,
         temperature: 0,
-        thinkingConfig: { thinkingLevel: 'medium' },
       },
     }),
   });
@@ -469,9 +480,9 @@ async function extractSolutionsWithGemini(
   const rawText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const finishReason: string = data.candidates?.[0]?.finishReason || 'unknown';
   const usage = data.usageMetadata || {};
-  console.log(`[match-answers]   [solution] finishReason=${finishReason}, tokens: in=${usage.promptTokenCount} out=${usage.candidatesTokenCount} thinking=${usage.thoughtsTokenCount ?? 0}`);
+  console.log(`[match-answers]   [solution ${file.name}] finishReason=${finishReason}, tokens: in=${usage.promptTokenCount} out=${usage.candidatesTokenCount} thinking=${usage.thoughtsTokenCount ?? 0}`);
   if (finishReason === 'MAX_TOKENS') {
-    console.warn(`[match-answers]   [solution] ⚠️ 응답이 maxOutputTokens에서 잘림 (${file.name}) — 마지막 해설이 미완성일 가능성`);
+    console.warn(`[match-answers]   [solution ${file.name}] ⚠️ maxOutputTokens 도달, 마지막 해설 미완성 가능`);
   }
   if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
 

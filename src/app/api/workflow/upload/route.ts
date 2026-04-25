@@ -344,10 +344,22 @@ export async function GET(request: NextRequest) {
     });
 
     if (mainFile) {
-      // ★ 한글 파일명 복원: encodeURIComponent로 저장됐으니 decode
+      // ★ 한글 파일명 복원 우선순위: sidecar 메타 > decodeURIComponent > raw name
+      //   (upload-url이 현재는 '_' 치환이라 decode 무의미, 메타에서 원본 복구)
       const encodedName = mainFile.name.slice(jobId.length + 1);
       let fileName = encodedName;
-      try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+      try {
+        const { data: metaData } = await supabaseAdmin.storage
+          .from('source-files')
+          .download(`uploads/${jobId}.meta.json`);
+        if (metaData) {
+          const meta = JSON.parse(await metaData.text());
+          if (meta.originalFilename) fileName = meta.originalFilename;
+        }
+      } catch { /* 메타 없으면 fallback */ }
+      if (fileName === encodedName) {
+        try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+      }
       const storagePath = `uploads/${mainFile.name}`;
       job = {
         id: jobId,
@@ -497,10 +509,21 @@ export async function PUT(request: NextRequest) {
       });
 
       if (mainFile) {
-        // ★ 한글 파일명 복원
+        // ★ 한글 파일명 복원 우선순위: sidecar 메타 > decodeURIComponent > raw name
         const encodedName = mainFile.name.slice(jobId.length + 1);
         let fileName = encodedName;
-        try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+        try {
+          const { data: metaData } = await supabaseAdmin.storage
+            .from('source-files')
+            .download(`uploads/${jobId}.meta.json`);
+          if (metaData) {
+            const meta = JSON.parse(await metaData.text());
+            if (meta.originalFilename) fileName = meta.originalFilename;
+          }
+        } catch { /* 메타 없으면 fallback */ }
+        if (fileName === encodedName) {
+          try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
+        }
         const storagePath = `uploads/${mainFile.name}`;
         // ★ 쿠키 세션에서 실제 로그인 유저 ID 조회 (exams.created_by NOT NULL 대응)
         let sessionUserId: string | null = null;
@@ -1067,6 +1090,9 @@ async function triggerAutoSolutionGeneration(examId: string, origin: string): Pr
       body: JSON.stringify({ problemIds }),
       keepalive: true,
     }).catch((err) => console.error('[auto-solution-trigger] fetch 실패:', err));
+    // ★ Vercel 서버리스: fetch가 TCP dispatch 끝나기 전 함수 종료되면 요청 소실됨
+    //   batch-solutions 내부 체인 트리거와 동일하게 100ms 대기로 dispatch 보장
+    await new Promise((r) => setTimeout(r, 100));
     console.log(`[auto-solution-trigger] ${problemIds.length}개 문제 해설 자동 생성 시작: exam=${examId.slice(0, 8)}`);
   } catch (err) {
     console.error('[auto-solution-trigger] error:', err);
@@ -1090,6 +1116,7 @@ async function saveEditedProblemsDirect(
     typeCode?: string;
     typeName?: string;
     cognitiveDomain?: string;
+    score?: number;        // ★ 1차 OCR 추출 원 배점
     cropImageBase64?: string;
     cropImagePath?: string;
     bbox?: { x: number; y: number; w: number; h: number };
@@ -1383,10 +1410,18 @@ async function saveEditedProblemsDirect(
       if (problem?.id) savedProblemIds.push(problem.id);
       console.log(`[Direct Save] 문제 ${edited.number}번 저장 완료 (ID: ${problem?.id})`);
 
-      // ★ Exam-Problem 연결 — 원본 [N점] 자동 추출
+      // ★ Exam-Problem 연결 — 우선순위:
+      //   1) edited.score (1차 OCR/분석 페이지에서 뽑은 원 배점)
+      //   2) contentLatex 안의 [N점] 정규식 재추출
+      //   3) null (사용자가 자동배점 또는 수동 입력)
       if (examId && problem) {
-        const ptsMatch = (contentLatex || '').match(/\[\s*(?:총\s*)?(\d+)\s*점\s*\]/);
-        const extractedPoints = ptsMatch ? Math.min(20, Math.max(1, parseInt(ptsMatch[1], 10))) : 4;
+        let extractedPoints: number | null = null;
+        if (typeof edited.score === 'number' && Number.isFinite(edited.score) && edited.score > 0) {
+          extractedPoints = Math.min(100, Math.max(0, Math.round(edited.score * 10) / 10));
+        } else {
+          const ptsMatch = (contentLatex || '').match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
+          if (ptsMatch) extractedPoints = Math.min(100, Math.max(0, parseFloat(ptsMatch[1])));
+        }
         const { error: epError } = await supabase.from('exam_problems').insert({
           exam_id: examId,
           problem_id: problem.id,
@@ -1635,7 +1670,7 @@ async function saveProblemsToDB(
           exam_id: job.appendToExamId,
           problem_id: toAdd[i],
           sequence_number: startSeq + i,
-          points: 4,
+          points: null,
         });
       }
 
@@ -1851,13 +1886,16 @@ async function saveProblemsToDB(
 
         savedCount++;
 
-        // Exam-Problem 연결
+        // Exam-Problem 연결 — content에서 [N점] 추출, 없으면 null (사용자가 채움)
         if (examId) {
+          const contentForPts = result.contentWithMath || '';
+          const ptsMatch = contentForPts.match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
+          const autoPoints: number | null = ptsMatch ? Math.min(100, Math.max(0, parseFloat(ptsMatch[1]))) : null;
           const { error: epError } = await supabase.from('exam_problems').insert({
             exam_id: examId,
             problem_id: problem.id,
             sequence_number: savedCount,
-            points: 4,
+            points: autoPoints,
           });
           if (epError) {
             console.error(`[DB] exam_problems 연결 실패 (문제 #${savedCount}, problem ${problem.id}):`, epError.message, epError.details);

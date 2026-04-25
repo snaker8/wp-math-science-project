@@ -28,7 +28,13 @@ function cleanupStaleJobs() {
 }
 
 // 한 청크에서 병렬 처리할 해설 개수
-const CHUNK_SIZE = 5;
+// ★ Vercel 508 Loop Detected·Anthropic 529 Overloaded 누적 완화 위해 5 → 3
+const CHUNK_SIZE = 3;
+
+// 일시적 실패(5xx, 508, 529 등)일 때 재시도 (1회만)
+function isRetriableStatus(status: number): boolean {
+  return status === 508 || status === 429 || status === 503 || status === 529;
+}
 
 export async function POST(
   request: NextRequest,
@@ -93,22 +99,33 @@ export async function POST(
 
     // 청크 병렬 처리 (수동 업로드 제외)
     await Promise.all(toProcess.map(async (problemId) => {
-      try {
-        const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        if (res.ok) {
-          if (state) state.done++;
-          console.log(`[batch-solutions] ✅ ${problemId.slice(0, 8)} (${startIndex}-${endIndex}/${problemIds.length})`);
-        } else {
-          if (state) state.failed++;
-          console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${res.status}`);
+      const tryOnce = async (): Promise<{ ok: boolean; status: number }> => {
+        try {
+          const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          return { ok: res.ok, status: res.status };
+        } catch {
+          return { ok: false, status: 0 };
         }
-      } catch (err) {
+      };
+
+      let result = await tryOnce();
+      // 일시적 오류면 10초 지터 후 1회 재시도 (508 Loop Detected, 529 Overloaded 등)
+      if (!result.ok && isRetriableStatus(result.status)) {
+        console.log(`[batch-solutions] ⏳ ${problemId.slice(0, 8)}: ${result.status} → 10초 후 재시도`);
+        await new Promise((r) => setTimeout(r, 10000 + Math.random() * 2000));
+        result = await tryOnce();
+      }
+
+      if (result.ok) {
+        if (state) state.done++;
+        console.log(`[batch-solutions] ✅ ${problemId.slice(0, 8)} (${startIndex}-${endIndex}/${problemIds.length})`);
+      } else {
         if (state) state.failed++;
-        console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${err}`);
+        console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${result.status}`);
       }
     }));
 

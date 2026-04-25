@@ -49,6 +49,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // ★ 원본 파일명 보존용 sidecar 메타 — 메인 업로드(suffix='')일 때만
+    //   Vercel 콜드스타트로 jobStore 유실 시 Storage에서 원본 한글 파일명 복원 가능
+    if (!suffix) {
+      try {
+        const metaPath = `uploads/${jobId}.meta.json`;
+        const metaBody = JSON.stringify({ originalFilename: fileName, createdAt: new Date().toISOString() });
+        await supabaseAdmin.storage
+          .from('source-files')
+          .upload(metaPath, new Blob([metaBody], { type: 'application/json' }), { upsert: true });
+      } catch (metaErr) {
+        // 메타 저장 실패는 비치명적 — 업로드 계속 진행
+        console.warn('[upload-url] meta sidecar 저장 실패:', metaErr instanceof Error ? metaErr.message : metaErr);
+      }
+    }
+
     return NextResponse.json({
       signedUrl: data.signedUrl,
       token: data.token,

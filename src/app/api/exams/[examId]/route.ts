@@ -185,7 +185,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { title, bookGroupId, subject, examType, grade } = body;
+    const { title, bookGroupId, subject, examType, grade, syncProblemSources } = body;
 
     const updateData: Record<string, any> = {};
 
@@ -217,7 +217,29 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ exam });
+    // ★ syncProblemSources: true + title 수정 시 해당 시험지의 모든 문제
+    //   source_name을 새 title과 동기화 (카드 태그까지 즉시 반영)
+    let syncedProblems = 0;
+    if (syncProblemSources && title !== undefined && exam.title) {
+      const { data: eps } = await supabaseAdmin
+        .from('exam_problems')
+        .select('problem_id')
+        .eq('exam_id', examId);
+      const problemIds = (eps || []).map((r: { problem_id: string }) => r.problem_id);
+      if (problemIds.length > 0) {
+        const { error: syncErr, count } = await supabaseAdmin
+          .from('problems')
+          .update({ source_name: exam.title }, { count: 'exact' })
+          .in('id', problemIds);
+        if (syncErr) {
+          console.error('[API/exams] Sync problem sources error:', syncErr.message);
+        } else {
+          syncedProblems = count || problemIds.length;
+        }
+      }
+    }
+
+    return NextResponse.json({ exam, syncedProblems });
   } catch (err) {
     console.error('[API/exams] Patch unexpected error:', err);
     return NextResponse.json(

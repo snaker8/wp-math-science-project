@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         exam_id: exam.id,
         problem_id: pid,
         sequence_number: idx + 1,
-        points: 4,
+        points: null,
       }));
 
       const { error: linkError } = await supabaseAdmin.from('exam_problems').insert(linkPayload);
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
       exam_id: exam.id,
       problem_id: pid,
       sequence_number: idx + 1,
-      points: 4,
+      points: null,
     }));
 
     const { error: linkError } = await supabaseAdmin.from('exam_problems').insert(linkPayload);

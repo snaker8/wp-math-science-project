@@ -472,6 +472,7 @@ function ProblemCardView({
   onDeleteFigure,
   onReplaceDiagram,
   onUpdateContent,
+  onUpdatePoints,
   isSelectionMode,
   isSelected,
   onToggleSelect,
@@ -488,6 +489,7 @@ function ProblemCardView({
   onDeleteFigure?: (p: ProblemData) => void;
   onReplaceDiagram?: (p: ProblemData, figureIndex?: number) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
+  onUpdatePoints?: (problemId: string, points: number | null) => Promise<void>;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -497,6 +499,12 @@ function ProblemCardView({
 }) {
   const [isEditingPosition, setIsEditingPosition] = useState(false);
   const [showFigureCompare, setShowFigureCompare] = useState(false);
+  // ★ 배점 인라인 편집
+  const [isEditingPoints, setIsEditingPoints] = useState(false);
+  const [pointsDraft, setPointsDraft] = useState<string>(String(problem.points ?? ''));
+  useEffect(() => {
+    setPointsDraft(String(problem.points ?? ''));
+  }, [problem.points]);
   const figureCropImage = problem.images?.find(img => img.type === 'figure_crop');
   const cropImage = figureCropImage || problem.images?.find(img => img.type === 'crop');
   if (problem.hasFigure) {
@@ -801,22 +809,114 @@ function ProblemCardView({
           <>
             <div className="mb-2">
               <span className="text-sm font-bold text-content-primary mr-2">{problem.number}.</span>
-              {hasFigureMarker ? (
-                /* 도형 마커가 있는 경우: 텍스트/도형 분할 렌더링 */
-                <FigureMarkerRenderer
-                  contentParts={contentParts}
-                  problem={problem}
-                  cropImage={cropImage}
-                  showFigureCompare={showFigureCompare}
-                  getProxiedImageUrl={getProxiedImageUrl}
-                />
-              ) : (
-                /* 일반 콘텐츠 렌더링 */
-                <>
-                  <MixedContentRenderer
-                    content={cleanContent}
-                    className="inline text-sm text-content-secondary leading-relaxed"
+              {(() => {
+                // ★ 배점 배지 — '?' 바로 뒤에 삽입. 없으면 content 끝에.
+                const pointsBadge = isEditingPoints ? (
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="100"
+                    value={pointsDraft}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setPointsDraft(e.target.value)}
+                    onBlur={async () => {
+                      setIsEditingPoints(false);
+                      const trimmed = pointsDraft.trim();
+                      // 빈 입력 → NULL 저장 (배점 미지정으로)
+                      if (trimmed === '') {
+                        if (problem.points != null) {
+                          try { await onUpdatePoints?.(problem.id, null); } catch {}
+                        }
+                        return;
+                      }
+                      const next = parseFloat(trimmed);
+                      if (!Number.isFinite(next) || next === problem.points) return;
+                      try { await onUpdatePoints?.(problem.id, next); } catch {}
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
+                      if (e.key === 'Escape') { setIsEditingPoints(false); setPointsDraft(String(problem.points ?? '')); }
+                    }}
+                    className="inline-block w-14 ml-1 px-1.5 py-0.5 text-xs rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 outline-none focus:ring-1 focus:ring-amber-500"
                   />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setIsEditingPoints(true); }}
+                    title="배점 수정"
+                    className="inline-flex items-center ml-1 px-1.5 py-0.5 text-xs font-semibold rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                  >
+                    [{typeof problem.points === 'number' ? problem.points : '-'}점]
+                  </button>
+                );
+
+                // content 내부 첫 '?' 위치 찾기 ($...$ 수식 외부만)
+                const splitAtQuestion = (text: string): [string, string, boolean] => {
+                  let inBlock = false;
+                  let inInline = false;
+                  for (let i = 0; i < text.length; i++) {
+                    const ch = text[i];
+                    const next = text[i + 1];
+                    if (ch === '$' && next === '$') { inBlock = !inBlock; i++; continue; }
+                    if (ch === '$' && !inBlock) { inInline = !inInline; continue; }
+                    if (ch === '?' && !inBlock && !inInline) {
+                      return [text.slice(0, i + 1), text.slice(i + 1), true];
+                    }
+                  }
+                  return [text, '', false];
+                };
+
+                if (hasFigureMarker) {
+                  // 도형 마커 있는 경우: 기존 렌더링 유지 + 끝에 배지
+                  return (
+                    <>
+                      <FigureMarkerRenderer
+                        contentParts={contentParts}
+                        problem={problem}
+                        cropImage={cropImage}
+                        showFigureCompare={showFigureCompare}
+                        getProxiedImageUrl={getProxiedImageUrl}
+                      />
+                      {pointsBadge}
+                    </>
+                  );
+                }
+
+                const [before, after, foundQ] = splitAtQuestion(cleanContent);
+                if (!foundQ) {
+                  // '?' 없음 — content 전체 뒤에 배지
+                  return (
+                    <>
+                      <MixedContentRenderer
+                        content={cleanContent}
+                        className="inline text-sm text-content-secondary leading-relaxed"
+                      />
+                      {pointsBadge}
+                    </>
+                  );
+                }
+
+                return (
+                  <>
+                    <MixedContentRenderer
+                      content={before}
+                      className="inline text-sm text-content-secondary leading-relaxed"
+                      inline
+                    />
+                    {pointsBadge}
+                    {after && (
+                      <MixedContentRenderer
+                        content={after}
+                        className="inline text-sm text-content-secondary leading-relaxed"
+                      />
+                    )}
+                  </>
+                );
+              })()}
+              {!hasFigureMarker && (
+                <>
                   {/* AI 도형 또는 업스케일 이미지가 있지만 마커가 없는 경우 → 하단에 표시 */}
                   {(problem.figureData || problem.figureSvg || problem.upscaledCropUrl) && (
                     showFigureCompare && cropImage ? (
@@ -980,17 +1080,7 @@ function ProblemCardView({
         </div>
       </div>
 
-      {/* 유형 footer (편집 가능 영역) */}
-      {problem.typeCode && (
-        <div className="flex items-center justify-between px-4 py-1.5 border-t border-subtle bg-surface-card/60">
-          <span className="text-[11px] text-content-tertiary">유형: {problem.typeCode}{problem.typeName && problem.typeName !== problem.typeCode ? `. ${problem.typeName}` : ''}</span>
-          <button type="button" className="p-0.5 text-content-muted hover:text-content-secondary" title="유형 변경">
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </button>
-        </div>
-      )}
+      {/* 유형 footer 제거 — 상단 amber 태그(970~974)와 중복 */}
     </div>
   );
 }
@@ -1755,6 +1845,8 @@ function SolutionView({
   const [gap, setGap] = useState(20);
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [showBatchSolutionModal, setShowBatchSolutionModal] = useState(false);
+  const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
@@ -2045,60 +2137,17 @@ function SolutionView({
           <Trash2 className="h-3.5 w-3.5" />
           배점 초기화
         </button>
-        {/* ★ 일괄 해설 생성 버튼 (백그라운드) */}
+        {/* ★ 해설 생성 버튼 — 클릭 시 선택 모달 오픈 */}
         <button
           type="button"
           disabled={isGeneratingBatch}
-          onClick={async () => {
-            const unsolved = problems.filter(p => !p.solution || p.solution.trim().length < 30);
-            const unsolvedCount = unsolved.length;
-            const totalCount = problems.length;
-
-            let targetProblems: typeof problems;
-            if (unsolvedCount === 0) {
-              if (!confirm(`모든 문제에 해설이 있습니다.\n전체 ${totalCount}문제를 재생성하시겠습니까?`)) return;
-              targetProblems = problems;
-            } else if (unsolvedCount === totalCount) {
-              if (!confirm(`${totalCount}문제의 해설을 AI로 생성합니다.\n(풀이 생성 + 교차 검산)\n\n백그라운드에서 진행되며, 다른 페이지로 이동해도 계속됩니다.`)) return;
-              targetProblems = problems;
-            } else {
-              const choice = prompt(
-                `해설 생성 범위를 선택하세요:\n\n` +
-                `1) 미완성만 (${unsolvedCount}문제)\n` +
-                `2) 전체 재생성 (${totalCount}문제)\n\n` +
-                `번호를 입력하세요 (1 또는 2):`,
-                '1'
-              );
-              if (!choice) return;
-              targetProblems = choice.trim() === '2' ? problems : unsolved;
-            }
-
-            // ★ 서버 사이드 백그라운드 처리 — 즉시 응답, 서버에서 순차 생성
-            try {
-              setIsGeneratingBatch(true);
-              setBatchProgress({ current: 0, total: targetProblems.length });
-              const res = await fetch(`/api/exams/${examId}/batch-solutions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ problemIds: targetProblems.map(p => p.id) }),
-              });
-              if (res.ok) {
-                // 백그라운드 시작됨 — 공용 폴링 헬퍼로 진행 상황 추적
-                // (탭 재진입/페이지 복귀 시에도 startBatchPolling이 자동 재개)
-                startBatchPolling();
-                // 전역 Notifier에 등록 → 다른 페이지/탭에서도 진행·완료 추적
-                trackBatchSolution(examId, examTitle);
-              } else {
-                const errText = await res.text().catch(() => '');
-                console.error('[batch-solutions] 실패:', res.status, errText);
-                setIsGeneratingBatch(false);
-                alert(`해설 생성 시작 실패 (${res.status}): ${errText.substring(0, 200)}`);
-              }
-            } catch (err) {
-              console.error('[batch-solutions] 요청 에러:', err);
-              setIsGeneratingBatch(false);
-              alert(`해설 생성 요청 실패: ${String(err)}`);
-            }
+          onClick={() => {
+            // 모달 열 때 기본값: 미완성 문제 선택
+            const unsolvedIds = problems
+              .filter(p => !p.solution || p.solution.trim().length < 30)
+              .map(p => p.id);
+            setSelectedForBatch(new Set(unsolvedIds));
+            setShowBatchSolutionModal(true);
           }}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
             isGeneratingBatch
@@ -2109,10 +2158,144 @@ function SolutionView({
           <Wand2 className="h-3.5 w-3.5" />
           {isGeneratingBatch
             ? `서버에서 생성 중 ${batchProgress.current}/${batchProgress.total}...`
-            : `일괄 해설 생성 (${problems.filter(p => !p.solution || p.solution.trim().length < 30).length}/${problems.length}문제)`
+            : `해설 생성 (${problems.filter(p => !p.solution || p.solution.trim().length < 30).length}/${problems.length}문제 미완)`
           }
         </button>
       </div>
+
+      {/* ★ 해설 생성 선택 모달 */}
+      {showBatchSolutionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-subtle bg-surface-card shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-subtle">
+              <h2 className="text-sm font-bold text-content-primary">해설 생성 — 문제 선택</h2>
+              <button
+                onClick={() => setShowBatchSolutionModal(false)}
+                className="p-1 text-content-muted hover:text-content-secondary"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* 빠른 선택 버튼 */}
+            <div className="flex items-center gap-2 px-5 py-2.5 border-b border-subtle text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  const unsolvedIds = problems
+                    .filter(p => !p.solution || p.solution.trim().length < 30)
+                    .map(p => p.id);
+                  setSelectedForBatch(new Set(unsolvedIds));
+                }}
+                className="px-2.5 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+              >
+                미완성만 ({problems.filter(p => !p.solution || p.solution.trim().length < 30).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedForBatch(new Set(problems.map(p => p.id)))}
+                className="px-2.5 py-1 rounded bg-surface-raised border border-subtle text-content-secondary hover:bg-surface-card"
+              >
+                전체 ({problems.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedForBatch(new Set())}
+                className="px-2.5 py-1 rounded bg-surface-raised border border-subtle text-content-muted hover:bg-surface-card"
+              >
+                선택 해제
+              </button>
+              <span className="ml-auto text-content-muted">
+                선택 <span className="text-content-primary font-semibold">{selectedForBatch.size}</span>개
+              </span>
+            </div>
+
+            {/* 문제 리스트 (체크박스) */}
+            <div className="flex-1 overflow-auto px-3 py-2">
+              <div className="grid grid-cols-5 gap-1.5">
+                {problems.map(p => {
+                  const hasSol = p.solution && p.solution.trim().length >= 30;
+                  const checked = selectedForBatch.has(p.id);
+                  return (
+                    <label
+                      key={p.id}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded border cursor-pointer text-xs transition-colors ${
+                        checked
+                          ? 'bg-cyan-500/10 border-cyan-500/50'
+                          : 'bg-surface-raised/50 border-subtle hover:bg-surface-raised'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          setSelectedForBatch(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(p.id);
+                            else next.delete(p.id);
+                            return next;
+                          });
+                        }}
+                        className="shrink-0"
+                      />
+                      <span className="font-semibold text-content-primary">#{p.number}</span>
+                      <span className={hasSol ? 'text-emerald-400' : 'text-amber-400'}>
+                        {hasSol ? '있음' : '없음'}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 실행 버튼 */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-subtle">
+              <button
+                type="button"
+                onClick={() => setShowBatchSolutionModal(false)}
+                className="px-4 py-2 rounded-lg text-xs text-content-secondary hover:text-content-primary"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={selectedForBatch.size === 0}
+                onClick={async () => {
+                  const targetIds = problems.filter(p => selectedForBatch.has(p.id)).map(p => p.id);
+                  setShowBatchSolutionModal(false);
+
+                  try {
+                    setIsGeneratingBatch(true);
+                    setBatchProgress({ current: 0, total: targetIds.length });
+                    const res = await fetch(`/api/exams/${examId}/batch-solutions`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ problemIds: targetIds }),
+                    });
+                    if (res.ok) {
+                      startBatchPolling();
+                      trackBatchSolution(examId, examTitle);
+                    } else {
+                      const errText = await res.text().catch(() => '');
+                      console.error('[batch-solutions] 실패:', res.status, errText);
+                      setIsGeneratingBatch(false);
+                      alert(`해설 생성 시작 실패 (${res.status}): ${errText.substring(0, 200)}`);
+                    }
+                  } catch (err) {
+                    console.error('[batch-solutions] 요청 에러:', err);
+                    setIsGeneratingBatch(false);
+                    alert(`해설 생성 요청 실패: ${String(err)}`);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                선택한 {selectedForBatch.size}개 해설 생성
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 숨겨진 측정 영역 */}
       <div
@@ -2581,6 +2764,26 @@ export default function CloudExamDetailPage() {
       console.error('[updateContent] Error:', err);
     }
   }, [refetchProblems]);
+
+  // ★ 문제 배점 수정 — exam_problems.points (null 보내면 NULL 저장)
+  const handleUpdatePoints = useCallback(async (problemId: string, points: number | null) => {
+    try {
+      const res = await fetch(`/api/exams/${examId}/problems`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problemId, points }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('[updatePoints] Failed:', data.error);
+        alert(`배점 수정 실패: ${data.error || res.status}`);
+        return;
+      }
+      refetchProblems();
+    } catch (err) {
+      console.error('[updatePoints] Error:', err);
+    }
+  }, [examId, refetchProblems]);
 
   // ★ GraphModal에서 수정 저장 후 자동 refetch (FigureRenderer가 이벤트 발행)
   // ★ AI 도형 생성 중이면 refetch를 지연 (경쟁 상태 방지)
@@ -3120,10 +3323,37 @@ export default function CloudExamDetailPage() {
             </button>
           </div>
 
-          {/* 문항 수 + 더보기 */}
+          {/* 문항 수 + 제목 편집 */}
           <span className="text-sm text-chrome-fg-3 ml-2">{problems.length} 문항</span>
-          <button type="button" className="p-2 text-chrome-fg-3 hover:text-chrome-fg-1">
-            <MoreVertical className="h-5 w-5" />
+          <button
+            type="button"
+            title="시험지 이름 수정"
+            onClick={async () => {
+              const newTitle = prompt('시험지 이름을 입력하세요 (같은 이름 입력 시 태그 동기화만 수행)', examTitle);
+              if (!newTitle || !newTitle.trim()) return;
+              const trimmed = newTitle.trim();
+              try {
+                const res = await fetch(`/api/exams/${examId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  // title 동일하더라도 PATCH 실행 + syncProblemSources=true로 태그 강제 동기화
+                  body: JSON.stringify({ title: trimmed, syncProblemSources: true }),
+                });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  alert(`이름 변경 실패: ${err.error || res.status}`);
+                  return;
+                }
+                const data = await res.json();
+                alert(`이름 변경 완료 — 문제 ${data.syncedProblems || 0}개 태그도 동기화됨`);
+                refetchProblems();
+              } catch (err) {
+                alert(`이름 변경 요청 실패: ${String(err)}`);
+              }
+            }}
+            className="p-2 text-chrome-fg-3 hover:text-chrome-fg-1"
+          >
+            <Pencil className="h-5 w-5" />
           </button>
                 </div>
               </div>
@@ -3385,6 +3615,7 @@ export default function CloudExamDetailPage() {
                         onDeleteFigure={handleDeleteFigure}
                         onReplaceDiagram={handleReplaceDiagram}
                         onUpdateContent={handleUpdateContent}
+                        onUpdatePoints={handleUpdatePoints}
                         isSelectionMode={isSelectionMode}
                         isSelected={selectedProblems.has(problem.id)}
                         onToggleSelect={toggleSelectProblem}
