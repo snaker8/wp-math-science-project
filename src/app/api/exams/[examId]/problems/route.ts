@@ -109,16 +109,21 @@ export async function PATCH(
     // ---- 단건 수정 ----
     const problemId: string | undefined = body.problemId;
     const points: unknown = body.points;
+    // points: number → 저장, null → NULL로 (배점 미지정)
+    const isNumber = typeof points === 'number' && Number.isFinite(points);
+    const isNullClear = points === null;
 
-    if (!problemId || typeof points !== 'number' || !Number.isFinite(points)) {
-      return NextResponse.json({ error: 'problemId, points(number) 필요' }, { status: 400 });
+    if (!problemId || (!isNumber && !isNullClear)) {
+      return NextResponse.json({ error: 'problemId, points(number 또는 null) 필요' }, { status: 400 });
     }
 
-    const clamped = Math.max(0, Math.min(100, Math.round(points * 10) / 10));
+    const value: number | null = isNumber
+      ? Math.max(0, Math.min(100, Math.round((points as number) * 10) / 10))
+      : null;
 
     const { error } = await supabaseAdmin
       .from('exam_problems')
-      .update({ points: clamped })
+      .update({ points: value })
       .eq('exam_id', examId)
       .eq('problem_id', problemId);
 
@@ -127,7 +132,7 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, examId, problemId, points: clamped });
+    return NextResponse.json({ success: true, examId, problemId, points: value });
   } catch (err: any) {
     console.error('[API/exams/problems PATCH] Error:', err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -187,12 +192,12 @@ export async function POST(
       return NextResponse.json({ success: true, added: 0, message: '모든 문제가 이미 추가되어 있습니다' });
     }
 
-    // 4. exam_problems에 INSERT
+    // 4. exam_problems에 INSERT — points는 null로 두고 사용자가 [N점] 추출/수동 입력하게
     const rows = newIds.map((problemId: string, idx: number) => ({
       exam_id: examId,
       problem_id: problemId,
       sequence_number: startSeq + idx,
-      points: 4,
+      points: null,
     }));
 
     const { error: insertErr } = await supabaseAdmin

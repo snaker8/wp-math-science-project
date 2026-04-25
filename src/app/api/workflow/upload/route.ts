@@ -1413,9 +1413,9 @@ async function saveEditedProblemsDirect(
       // ★ Exam-Problem 연결 — 우선순위:
       //   1) edited.score (1차 OCR/분석 페이지에서 뽑은 원 배점)
       //   2) contentLatex 안의 [N점] 정규식 재추출
-      //   3) 기본 4
+      //   3) null (사용자가 자동배점 또는 수동 입력)
       if (examId && problem) {
-        let extractedPoints = 4;
+        let extractedPoints: number | null = null;
         if (typeof edited.score === 'number' && Number.isFinite(edited.score) && edited.score > 0) {
           extractedPoints = Math.min(100, Math.max(0, Math.round(edited.score * 10) / 10));
         } else {
@@ -1670,7 +1670,7 @@ async function saveProblemsToDB(
           exam_id: job.appendToExamId,
           problem_id: toAdd[i],
           sequence_number: startSeq + i,
-          points: 4,
+          points: null,
         });
       }
 
@@ -1886,11 +1886,11 @@ async function saveProblemsToDB(
 
         savedCount++;
 
-        // Exam-Problem 연결 — content에서 [N점] 추출, 없으면 4
+        // Exam-Problem 연결 — content에서 [N점] 추출, 없으면 null (사용자가 채움)
         if (examId) {
           const contentForPts = result.contentWithMath || '';
           const ptsMatch = contentForPts.match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
-          const autoPoints = ptsMatch ? Math.min(100, Math.max(0, parseFloat(ptsMatch[1]))) : 4;
+          const autoPoints: number | null = ptsMatch ? Math.min(100, Math.max(0, parseFloat(ptsMatch[1]))) : null;
           const { error: epError } = await supabase.from('exam_problems').insert({
             exam_id: examId,
             problem_id: problem.id,
