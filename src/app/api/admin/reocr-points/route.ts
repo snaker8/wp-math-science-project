@@ -104,8 +104,10 @@ async function processExam(examId: string): Promise<{
   status: 'success' | 'skip' | 'error';
   reason?: string;
   updated?: number;
+  viaContent?: number;
+  viaOcr?: number;
   total?: number;
-  diag?: Array<{ num: number; matched: number | null; tail?: string }>;
+  diag?: Array<{ num: number; matched: number | null; src?: string; tail?: string }>;
 }> {
   if (!supabaseAdmin) throw new Error('Supabase not configured');
 
@@ -128,27 +130,46 @@ async function processExam(examId: string): Promise<{
   const pIds = (eps as any[]).map(r => r.problem_id);
   const { data: problems } = await supabaseAdmin
     .from('problems')
-    .select('id, images')
+    .select('id, images, content_latex')
     .in('id', pIds);
   const byId = new Map((problems || []).map((p: any) => [p.id, p]));
 
   let updated = 0;
-  const diag: Array<{ num: number; matched: number | null; tail?: string }> = [];
+  let viaContent = 0;
+  let viaOcr = 0;
+  const diag: Array<{ num: number; matched: number | null; src?: string; tail?: string }> = [];
 
   for (const ep of eps as any[]) {
     const seq = ep.sequence_number;
     const problem = byId.get(ep.problem_id);
     if (!problem) { diag.push({ num: seq, matched: null, tail: '(problem not found)' }); continue; }
+
+    // ─── 1단계: content_latex regex 먼저 (DB에 [N점] 살아있으면 즉시 매칭, OCR 비용 0) ───
+    const contentLatex: string = problem.content_latex || '';
+    const contentResult = extractPoints(contentLatex);
+    if (contentResult.value !== null) {
+      const clamped = Math.min(100, Math.max(0, Math.round(contentResult.value * 10) / 10));
+      const { error: updErr } = await supabaseAdmin
+        .from('exam_problems')
+        .update({ points: clamped })
+        .eq('exam_id', examId)
+        .eq('problem_id', ep.problem_id);
+      if (!updErr) { updated++; viaContent++; }
+      diag.push({ num: seq, matched: contentResult.value, src: 'content', tail: `matched="${contentResult.matched}"` });
+      continue;
+    }
+
+    // ─── 2단계: crop OCR fallback ───
     const cropUrl = findCropUrl(problem.images || []);
-    if (!cropUrl) { diag.push({ num: seq, matched: null, tail: '(no crop)' }); continue; }
+    if (!cropUrl) { diag.push({ num: seq, matched: null, src: 'none', tail: '(no crop)' }); continue; }
 
     const parsed = parseStorageUrl(cropUrl);
-    if (!parsed) { diag.push({ num: seq, matched: null, tail: '(invalid url)' }); continue; }
+    if (!parsed) { diag.push({ num: seq, matched: null, src: 'none', tail: '(invalid url)' }); continue; }
 
     try {
       const { data: blob, error: dlErr } = await supabaseAdmin.storage
         .from(parsed.bucket).download(parsed.path);
-      if (dlErr || !blob) { diag.push({ num: seq, matched: null, tail: `(download: ${dlErr?.message})` }); continue; }
+      if (dlErr || !blob) { diag.push({ num: seq, matched: null, src: 'ocr', tail: `(download: ${dlErr?.message})` }); continue; }
       const buf = Buffer.from(await blob.arrayBuffer());
       const mime = blob.type || 'image/png';
       const ocr = await mathpixImage(buf, mime);
@@ -156,9 +177,10 @@ async function processExam(examId: string): Promise<{
       diag.push({
         num: seq,
         matched: pts,
+        src: 'ocr',
         tail: matched
-          ? `matched="${matched}" near="${pointContext(ocr)}"`
-          : `no-match | 점-context: "${pointContext(ocr)}"`,
+          ? `matched="${matched}"`
+          : `no-match | context: "${pointContext(ocr)}"`,
       });
       if (pts === null) continue;
       const clamped = Math.min(100, Math.max(0, Math.round(pts * 10) / 10));
@@ -167,13 +189,13 @@ async function processExam(examId: string): Promise<{
         .update({ points: clamped })
         .eq('exam_id', examId)
         .eq('problem_id', ep.problem_id);
-      if (!updErr) updated++;
+      if (!updErr) { updated++; viaOcr++; }
     } catch (err) {
-      diag.push({ num: seq, matched: null, tail: `(err: ${err instanceof Error ? err.message : String(err)})` });
+      diag.push({ num: seq, matched: null, src: 'ocr', tail: `(err: ${err instanceof Error ? err.message : String(err)})` });
     }
   }
 
-  return { examId, title: exam.title, status: 'success', updated, total: eps.length, diag };
+  return { examId, title: exam.title, status: 'success', updated, viaContent, viaOcr, total: eps.length, diag };
 }
 
 export async function POST(request: NextRequest) {
