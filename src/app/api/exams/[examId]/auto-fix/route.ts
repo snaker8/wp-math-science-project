@@ -206,6 +206,11 @@ export async function POST(
             difficulty: classifyResult.difficulty,
             cognitiveDomain: classifyResult.cognitiveDomain,
             confidence: classifyResult.confidence,
+            // ★ provider/model/verified 메타 — 분류 추적성 (어떤 모델이 어떻게 결과 냈는지)
+            provider: classifyResult.provider,
+            model: classifyResult.model,
+            verified: classifyResult.verified,
+            classifiedAt: new Date().toISOString(),
           };
 
             // ★ typeName이 비어있으면 mathsecr_types에서 조회

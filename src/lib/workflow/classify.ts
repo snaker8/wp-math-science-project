@@ -47,6 +47,10 @@ export interface ClassifyResult {
   confidence: number;      // AI 자기평가 (0~1)
   /** 실제 분류를 낸 모델 (gemini-3-flash-preview | gpt-4o | gpt-4.1-mini) */
   model: string;
+  /** 분류 제공자 식별 — anthropic | gemini | openai */
+  provider: 'anthropic' | 'gemini' | 'openai' | 'unknown';
+  /** typeCode 가 mathsecr_types DB 에 실제 존재했는지 (orphan 추적용) */
+  verified: boolean;
 }
 
 /**
@@ -315,6 +319,7 @@ ${content.slice(0, 1500)}`;
   let dbSubject = '';
   let dbChapter = '';
   let dbSection = '';
+  let verified = false;
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -334,12 +339,27 @@ ${content.slice(0, 1500)}`;
         dbSubject = String(msType.subject_name || '');
         dbChapter = String(msType.level1_name || '');  // 대단원
         dbSection = String(msType.level2_name || '');  // 중단원
+        verified = true;
         console.log(`[${label}] typeName DB 검증 완료: ${typeCode} → "${typeName}"`);
       } else {
-        console.warn(`[${label}] ⚠ typeCode가 DB에 없음: ${typeCode} (AI typeName 유지)`);
+        // ★ orphan typeCode — AI 가 mathsecr_types 에 없는 코드를 만들어냄.
+        //   DB 오염 방지를 위해 분류 결과 거부 → 호출자가 폴백/재시도 처리.
+        console.warn(`[${label}] ✖ orphan typeCode 거부: ${typeCode} (mathsecr_types 에 없음)`);
+        return null;
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.warn(`[${label}] mathsecr_types 검증 실패:`, e instanceof Error ? e.message : e);
+    // 검증 자체 실패면 verified=false 로 통과 (네트워크/DB 일시 장애 시 분류는 살림)
+  }
+
+  // provider 추론 — model 문자열에서 회사 식별
+  const lowerModel = modelUsed.toLowerCase();
+  const provider: ClassifyResult['provider'] =
+    lowerModel.includes('claude') || lowerModel.includes('sonnet') || lowerModel.includes('opus') || lowerModel.includes('haiku') ? 'anthropic' :
+    lowerModel.includes('gemini') ? 'gemini' :
+    lowerModel.includes('gpt') ? 'openai' :
+    'unknown';
 
   return {
     typeCode,
@@ -352,6 +372,8 @@ ${content.slice(0, 1500)}`;
     cognitiveDomain: String(cls.cognitiveDomain || 'CALCULATION'),
     confidence: typeof cls.confidence === 'number' ? cls.confidence : parseFloat(String(cls.confidence || '0.5')) || 0.5,
     model: modelUsed,
+    provider,
+    verified,
   };
 }
 

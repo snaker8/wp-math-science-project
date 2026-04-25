@@ -22,16 +22,19 @@ export function detectSubjectFromTitle(title: string): string {
   const isMiddleSchool = !hasHighSchool && MIDDLE_SCHOOL_PATTERN.test(title);
 
   // ★ 중등 — [2026][2-1-M] 패턴 (각각 별개 괄호)
-  const bracketMatch = title.match(/\[\d{4}\]\s*\[(\d)-(\d)-?([ME])?\]/);
+  //   학년 1~3, 학기 1~2 로 제한
+  const bracketMatch = title.match(/\[\d{4}\]\s*\[([1-3])-([12])-?([ME])?\]/);
   if (bracketMatch) {
     const grade = bracketMatch[1];
     const semester = bracketMatch[2];
     return `중${grade}-${semester} 수학`;
   }
 
-  // 중등 — [2-1-M] 또는 [3-1-M] 패턴, "중" 글자 포함
-  const midMatch = title.match(/\[?(\d)-(\d)-?[ME]?\]?/);
-  if (midMatch && (isMiddleSchool || /중/.test(title) || parseInt(midMatch[1]) <= 3)) {
+  // ★ 중등 — "[2-1-M]", "26-3-1-M", "3-1-M" 패턴
+  //   기존 (\d)-(\d) 는 "26-3-1" 같은 문자열에서 "6-3" 을 먼저 잡는 버그
+  //   → 학년은 [1-3], 학기는 [12] 로 제한 + 좌우 비-숫자 경계로 격리
+  const midMatch = title.match(/(?<!\d)([1-3])-([12])(?:-?[ME])?(?!\d)/);
+  if (midMatch && (isMiddleSchool || /중/.test(title))) {
     const grade = midMatch[1];
     const semester = midMatch[2];
     return `중${grade}-${semester} 수학`;
@@ -39,7 +42,7 @@ export function detectSubjectFromTitle(title: string): string {
 
   // 중등 — "중2-1", "중3", "중학" 등 직접 패턴
   if (/중[23]?-?[12]/.test(title) || /중학/.test(title) || /중\]/.test(title)) {
-    const match = title.match(/(\d)-(\d)/);
+    const match = title.match(/(?<!\d)([1-3])-([12])(?!\d)/);
     if (match) return `중${match[1]}-${match[2]} 수학`;
     return '중등 수학';
   }
@@ -93,15 +96,16 @@ export function detectGradeFromTitle(title: string): string {
   const hasHighSchool = /고등학교|고등/.test(title);
   const isMiddleSchool = !hasHighSchool && MIDDLE_SCHOOL_PATTERN.test(title);
 
-  // ★ [2026][2-1-M] 패턴
-  const bracketMatch = title.match(/\[\d{4}\]\s*\[(\d)-(\d)-?([ME])?\]/);
+  // ★ [2026][2-1-M] 패턴 (학년 1~3, 학기 1~2 제한)
+  const bracketMatch = title.match(/\[\d{4}\]\s*\[([1-3])-([12])-?([ME])?\]/);
   if (bracketMatch) {
     return `중${bracketMatch[1]}`;
   }
 
-  // [2-1-M] 패턴 + "중" 글자
-  const midMatch = title.match(/\[?(\d)-(\d)-?[ME]?\]?/);
-  if (midMatch && (isMiddleSchool || /중/.test(title) || parseInt(midMatch[1]) <= 3)) {
+  // ★ [2-1-M], "26-3-1-M" 등 — "26"의 6-3 매치 버그 차단
+  //   학년 [1-3] · 학기 [12] · 좌우 비-숫자 경계
+  const midMatch = title.match(/(?<!\d)([1-3])-([12])(?:-?[ME])?(?!\d)/);
+  if (midMatch && (isMiddleSchool || /중/.test(title))) {
     return `중${midMatch[1]}`;
   }
 
