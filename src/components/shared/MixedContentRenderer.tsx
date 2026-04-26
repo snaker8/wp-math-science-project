@@ -712,8 +712,11 @@ function preprocessMathpixContent(text: string): string {
   // 2-4a. $...\begin{env}...\end{env}...$ (멀티라인 환경 포함 단일$) → $$...$$ (디스플레이로 승격)
   // KaTeX는 $...$에서 멀티라인 환경을 처리 못하고, 디스플레이여야 분수·중괄호가 크게 보임
   // ★ 이전엔 $\begin{cases}...\end{cases}$ (정확히 begin/end만 감싼) 케이스만 매칭 → "f(x) = \begin{cases}..." 같이 앞뒤 텍스트 있으면 누락
+  // ★ 버그 수정: lookbehind/lookahead `(?<!\$)` `(?!\$)` 추가. 이미 $$..$$로 감싸진 환경의
+  //   안쪽 $..$ (실제론 $$의 두 번째 $와 다음 $$의 첫 $) 까지 매칭해서 $$$..$$$ 로 만들던
+  //   버그 (신곡중 13번 array 가 $$$로 깨져 KaTeX 렌더 실패하던 원인).
   result = result.replace(
-    /\$([^$\n]*?\\begin\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[\s\S]*?\\end\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[^$\n]*?)\$/g,
+    /(?<!\$)\$([^$\n]*?\\begin\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[\s\S]*?\\end\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[^$\n]*?)\$(?!\$)/g,
     (_m, inner) => `$$${inner}$$`
   );
 
