@@ -528,15 +528,9 @@ export async function POST(
       }
 
       // ─── FIX 5: figure_crop URL 프록시 변환 확인 ───
-      const images = (problem.images as Array<{ url: string; type: string; label: string }>) || [];
-      const brokenFigures = images.filter(img =>
-        img.type === 'figure_crop' &&
-        img.url.includes('/storage/v1/object/public/') &&
-        !img.url.startsWith('/api/')
-      );
-      if (brokenFigures.length > 0) {
-        result.fixes.push(`figure_crop ${brokenFigures.length}개 프록시 필요 (렌더링 시 자동 처리)`);
-      }
+      // ★ 렌더링 시점에 getProxiedImageUrl 이 변환하므로 DB 수정 불필요.
+      //   매번 "수정됨"으로 카운트되면 자동수정이 작동 안 하는 것처럼 보여 노이즈만 됨 → 제거.
+      //   (이전 동작: brokenFigures 있으면 result.fixes 에 푸시만 하고 DB 안 건드림)
 
       // ─── FIX 6: 빈 source_number 채우기 ───
       if (!problem.source_number && seqNum > 0) {
@@ -550,23 +544,42 @@ export async function POST(
       if (!alreadyHandledByFix1 && (aiChanged || examSubject)) {
         const newClsData = (ai.classification as Record<string, unknown>) || {};
         const difficulty = String(newClsData.difficulty || ai.difficulty || 3);
-        const cognitiveDomain = (newClsData.cognitiveDomain as string) || (ai.cognitiveDomain as string) || 'CALCULATION';
+        // ★ 버그 수정: ai_analysis 의 cognitiveDomain 이 'APPLICATION' / 'ANALYSIS' 같은
+        //   비표준 값일 수 있음 → DB enum (CALCULATION/UNDERSTANDING/INFERENCE/PROBLEM_SOLVING)
+        //   에 맞게 매핑 후 비교/저장. 매핑 안 하면 UPDATE 가 enum 위반으로 silent fail 하면서
+        //   result.fixes 에는 "동기화됨" 으로 들어가 매 실행마다 같은 메시지 반복 (자동수정이
+        //   동작 안 하는 것처럼 보임).
+        const VALID_COGNITIVE = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
+        const COGNITIVE_MAP: Record<string, string> = {
+          ANALYSIS: 'INFERENCE',
+          REASONING: 'INFERENCE',
+          APPLICATION: 'PROBLEM_SOLVING',
+          COMPREHENSION: 'UNDERSTANDING',
+          KNOWLEDGE: 'UNDERSTANDING',
+        };
+        const rawDomain = (newClsData.cognitiveDomain as string) || (ai.cognitiveDomain as string) || 'CALCULATION';
+        const cognitiveDomain = VALID_COGNITIVE.has(rawDomain)
+          ? rawDomain
+          : (COGNITIVE_MAP[rawDomain] || 'CALCULATION');
 
         if (existingCls) {
-          // 기존 코드가 있으면 difficulty/cognitiveDomain만 동기화
           const needsSync =
             existingCls.difficulty !== difficulty ||
             existingCls.cognitive_domain !== cognitiveDomain;
           if (needsSync) {
-            await sb
+            const { error: syncErr } = await sb
               .from('classifications')
               .update({ difficulty, cognitive_domain: cognitiveDomain })
               .eq('id', existingCls.id);
-            result.fixes.push(`classifications 동기화: diff=${difficulty}, domain=${cognitiveDomain}`);
+            if (syncErr) {
+              // ★ enum/타입 위반 등 silent fail 방지: 실패 시 result.errors 에 기록
+              result.errors.push(`classifications 동기화 실패 (#${seqNum}): ${syncErr.message}`);
+            } else {
+              result.fixes.push(`classifications 동기화: diff=${difficulty}, domain=${cognitiveDomain}`);
+            }
           }
         } else {
-          // ★ 분류 행이 없으면 INSERT
-          await sb
+          const { error: insErr } = await sb
             .from('classifications')
             .insert({
               problem_id: problem.id,
@@ -576,7 +589,11 @@ export async function POST(
               ai_confidence: 0.5,
               is_verified: false,
             });
-          result.fixes.push('classifications 행 생성');
+          if (insErr) {
+            result.errors.push(`classifications INSERT 실패 (#${seqNum}): ${insErr.message}`);
+          } else {
+            result.fixes.push('classifications 행 생성');
+          }
         }
       }
 
