@@ -17,6 +17,10 @@ export interface MathpixRequestOptions {
   };
   include_line_data?: boolean;
   include_word_data?: boolean;
+  // ★ KaTeX 호환 출력: $...$ 인라인, $$...$$ 디스플레이
+  math_inline_delimiters?: [string, string];
+  math_display_delimiters?: [string, string];
+  rm_spaces?: boolean;
 }
 
 /**

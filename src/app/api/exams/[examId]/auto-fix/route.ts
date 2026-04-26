@@ -429,23 +429,8 @@ export async function POST(
           changes.push('\\hline 제거');
         }
 
-        // ★ 빈 수식 블록 제거 — `$ $`, `$$  $$`, `$\displaystyle$` 등
-        //   ($$...$$ 경계 침범 방지를 위해 lookaround 로 보호)
-        const emptyBefore = fixed;
-        fixed = fixed
-          .replace(/\$\$\s+\$\$/g, '')
-          .replace(/(?<!\$)\$\s+\$(?!\$)/g, '');
-        if (fixed !== emptyBefore) {
-          changes.push('빈 수식 블록 제거');
-        }
-
-        // ★ 라인 끝 단독 \\ (LaTeX 줄바꿈) — 본문(수식 밖) 에 떨어진 케이스 정리
-        //   $...$ 내부의 \\ 는 보호 (cases/array 줄바꿈 의미)
-        const danglingBefore = fixed;
-        fixed = fixed.replace(/^\s*\\\\\s*$/gm, '');
-        if (fixed !== danglingBefore) {
-          changes.push('수식 밖 단독 \\\\ 제거');
-        }
+        // ★ 빈 수식 블록 / 단독 \\ 등은 DB 에 직접 쓰지 않고 렌더 시점만 처리.
+        //   (preprocessMathpixContent / renderRepair 에 이미 동일 로직 있음. DB 변형은 위험.)
 
         // ─── 연립방정식 괄호 패턴 수정 ───
         // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX 렌더링 깨짐

@@ -41,6 +41,11 @@ export class MathpixClient {
       },
       include_line_data: true,
       include_word_data: false,
+      // ★ Mathpix 기본 출력은 \(..\) / \[..\] (AMS) — KaTeX 호환 위해 $/$$ 로 직접 출력 받음.
+      //   PDF batch (processPDFBatch) 와 동일한 옵션으로 통일. downstream 변환 단계 제거.
+      math_inline_delimiters: ['$', '$'],
+      math_display_delimiters: ['$$', '$$'],
+      rm_spaces: true,
       ...options,
     };
 
