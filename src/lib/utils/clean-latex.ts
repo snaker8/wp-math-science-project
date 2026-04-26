@@ -18,14 +18,10 @@ export function cleanLatexContent(content: string): string {
   //   downstream MixedContentRenderer 도 같은 변환을 하지만 splitAtQuestion 등
   //   `$$` 기준으로 동작하는 호출자가 있어서 진입 시점에 통일.
   //   (예: 신곡중 13번 `\[\begin{array}{l}...\end{array}\]` 가 빨간 raw 로 표시되던 버그)
+  //   ※ 단일 $ 안의 환경 자동 승격은 위험 — clean-latex 가 만든 `$\begin{cases}...\end{cases}$`
+  //     같은 정상 콘텐츠를 깨뜨릴 수 있어 추가하지 않는다. 필요한 경우 MixedContentRenderer
+  //     phase 1-4 ($-balance 기반 판정)에서 처리.
   result = result.replace(/\\\[([\s\S]+?)\\\]/g, (_m, inner: string) => `$$${inner.trim()}$$`);
-
-  // ★ 보호 누락 방어: 단일 $ 안에 `\begin{array|aligned|cases|matrix...}` 가 있으면
-  //   display 모드 ($$)로 승격. KaTeX 인라인 모드는 array 환경 다중행 처리 불가.
-  result = result.replace(
-    /(?<!\$)\$([^$\n]*?\\begin\{(?:array|aligned|cases|matrix|pmatrix|bmatrix|gather|align|equation\*?)\}[\s\S]*?\\end\{(?:array|aligned|cases|matrix|pmatrix|bmatrix|gather|align|equation\*?)\}[^$\n]*?)\$(?!\$)/g,
-    (_m, inner: string) => `$$${inner.trim()}$$`
-  );
 
   // ─── 연립방정식 괄호 패턴 수정 ───
   // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX에서 $ 구분자 꼬임
