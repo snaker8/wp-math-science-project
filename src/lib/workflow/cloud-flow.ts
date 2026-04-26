@@ -1303,8 +1303,11 @@ export async function analyzeProblemWithLLM(
     if (!isScience && documentType === 'PROBLEM' && ANTHROPIC_API_KEY) {
       try {
         const { classifyProblem } = await import('./classify');
+        // ★ 2차 분류(auto-fix)와 동일하게 본문(problemText)만 전달.
+        //   기존엔 fullProblemText (problemText + "\n\n수식: ...") 를 넘겨서 같은 정보가
+        //   두 번 들어가 난이도 추정이 흔들렸음 → content_latex 와 동일한 단일 텍스트로 통일.
         const claudeResult = await classifyProblem({
-          content: fullProblemText,
+          content: problemText,
           examSubject: subject || '',
           examGrade: gradeHint || '',
           logLabel: 'cloud-flow-primary',
@@ -1395,8 +1398,9 @@ export async function analyzeProblemWithLLM(
     if (!isScience) {
       try {
         const { classifyProblem } = await import('./classify');
+        // ★ 동일 이유로 problemText 만 전달 (auto-fix 와 입력 통일 → 난이도 결과도 통일)
         const upgrade = await classifyProblem({
-          content: fullProblemText,
+          content: problemText,
           examSubject: subject || '',
           examGrade: gradeHint || '',
           logLabel: 'cloud-flow-1차',

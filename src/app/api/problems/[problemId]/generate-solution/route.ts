@@ -8,6 +8,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { cachedSystem } from '@/lib/claude/cache';
 
+// ★ Vercel 함수 시간 제한: 기본 60s 로는 Sonnet thinking(최대 90s) + Gemini 검증 +
+//   Opus 폴백까지 한 번에 못 끝내고 502/504 로 잘림 → 서답형/장문 문제에서 매번 실패.
+//   batch-solutions(maxDuration=300)와 동일하게 5분으로 맞춤.
+export const maxDuration = 300;
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 // ★ Anthropic 공식 alias 사용 (Sonnet 4.6부터 date suffix 없는 alias 유효)
