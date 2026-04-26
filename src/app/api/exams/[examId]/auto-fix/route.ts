@@ -403,6 +403,20 @@ export async function POST(
         const changes: string[] = [];
         let fixed = raw;
 
+        // ★ \[ ... \] (display math 표준 구분자) → $$ ... $$
+        //   Mathpix/AMS 표준이지만 일부 렌더 path 가 $$ 만 인식하므로 진입 시점 통일.
+        //   (예: 신곡중 13번 `\[\begin{array}{l}...\end{array}\]` 빨간 raw 표시 케이스)
+        if (/\\\[[\s\S]*?\\\]/.test(fixed)) {
+          fixed = fixed.replace(/\\\[([\s\S]+?)\\\]/g, (_m, inner: string) => `$$${inner.trim()}$$`);
+          changes.push('\\[..\\] → $$..$$ 변환');
+        }
+
+        // ★ Mathpix 인라인 잔여 \( ... \) → $ ... $
+        if (/\\\([\s\S]*?\\\)/.test(fixed)) {
+          fixed = fixed.replace(/\\\(([^\n]+?)\\\)/g, (_m, inner: string) => `$${inner.trim()}$`);
+          changes.push('\\(..\\) → $..$ 변환');
+        }
+
         // \displaystyle 제거
         if (/\\displaystyle/.test(fixed)) {
           fixed = fixed.replace(/\\displaystyle\s*/g, '');
@@ -413,6 +427,24 @@ export async function POST(
         if (/\\hline/.test(fixed)) {
           fixed = fixed.replace(/\\hline\s*/g, '');
           changes.push('\\hline 제거');
+        }
+
+        // ★ 빈 수식 블록 제거 — `$ $`, `$$  $$`, `$\displaystyle$` 등
+        //   ($$...$$ 경계 침범 방지를 위해 lookaround 로 보호)
+        const emptyBefore = fixed;
+        fixed = fixed
+          .replace(/\$\$\s+\$\$/g, '')
+          .replace(/(?<!\$)\$\s+\$(?!\$)/g, '');
+        if (fixed !== emptyBefore) {
+          changes.push('빈 수식 블록 제거');
+        }
+
+        // ★ 라인 끝 단독 \\ (LaTeX 줄바꿈) — 본문(수식 밖) 에 떨어진 케이스 정리
+        //   $...$ 내부의 \\ 는 보호 (cases/array 줄바꿈 의미)
+        const danglingBefore = fixed;
+        fixed = fixed.replace(/^\s*\\\\\s*$/gm, '');
+        if (fixed !== danglingBefore) {
+          changes.push('수식 밖 단독 \\\\ 제거');
         }
 
         // ─── 연립방정식 괄호 패턴 수정 ───
@@ -540,8 +572,11 @@ export async function POST(
 
       // ─── FIX 7: classifications 테이블 동기화 (FIX 1에서 안 다뤄진 경우) ───
       // FIX 1에서 이미 처리된 경우 건너뛰기 (needsReclassify가 true였고 GPT 호출 성공한 경우)
+      // ─── FIX 7: classifications 테이블 동기화 ───
+      // ★ mode=fix 일 땐 분류 관련 모든 작업 skip — 유형 매핑은 별도 "유형 자동매핑" 버튼이 담당.
+      //   이전엔 mode=fix 에서도 FIX 7 이 돌면서 "이름태그 수정완료" 만 뜨던 원인.
       const alreadyHandledByFix1 = needsReclassify && OPENAI_API_KEY && content.trim();
-      if (!alreadyHandledByFix1 && (aiChanged || examSubject)) {
+      if (mode !== 'fix' && !alreadyHandledByFix1 && (aiChanged || examSubject)) {
         const newClsData = (ai.classification as Record<string, unknown>) || {};
         const difficulty = String(newClsData.difficulty || ai.difficulty || 3);
         // ★ 버그 수정: ai_analysis 의 cognitiveDomain 이 'APPLICATION' / 'ANALYSIS' 같은
