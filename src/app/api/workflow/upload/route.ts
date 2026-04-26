@@ -1419,7 +1419,8 @@ async function saveEditedProblemsDirect(
         if (typeof edited.score === 'number' && Number.isFinite(edited.score) && edited.score > 0) {
           extractedPoints = Math.min(100, Math.max(0, Math.round(edited.score * 10) / 10));
         } else {
-          const ptsMatch = (contentLatex || '').match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
+          // ★ [N점] / (N점) 둘 다 매칭 — 동해중 PDF 같은 소괄호 표기도 흔함
+          const ptsMatch = (contentLatex || '').match(/[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*[\])]/);
           if (ptsMatch) extractedPoints = Math.min(100, Math.max(0, parseFloat(ptsMatch[1])));
         }
         const { error: epError } = await supabase.from('exam_problems').insert({
@@ -1886,10 +1887,11 @@ async function saveProblemsToDB(
 
         savedCount++;
 
-        // Exam-Problem 연결 — content에서 [N점] 추출, 없으면 null (사용자가 채움)
+        // Exam-Problem 연결 — content에서 [N점] 또는 (N점) 추출, 없으면 null (사용자가 채움)
+        // ★ 정규식 대괄호/소괄호 모두 매칭. 동해중 PDF처럼 (3점)/(4점) 소괄호 표기도 흔함.
         if (examId) {
           const contentForPts = result.contentWithMath || '';
-          const ptsMatch = contentForPts.match(/\[\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*\]/);
+          const ptsMatch = contentForPts.match(/[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*[\])]/);
           const autoPoints: number | null = ptsMatch ? Math.min(100, Math.max(0, parseFloat(ptsMatch[1]))) : null;
           const { error: epError } = await supabase.from('exam_problems').insert({
             exam_id: examId,

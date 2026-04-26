@@ -1212,21 +1212,43 @@ function ProblemCropPreview({
 // Advanced Analysis Modal (고급 분석 요구사항 입력)
 // ============================================================================
 
+/**
+ * 본문 + 선택지 배열을 ①②③④⑤ 마커로 합쳐 단일 편집 텍스트 생성.
+ * 선택지가 비어있으면 본문만 반환.
+ */
+function buildMergedContentChoices(content: string, choices: string[]): string {
+  const trimmed = (content || '').trimEnd();
+  if (!Array.isArray(choices) || choices.length === 0) return trimmed;
+  const markers = ['①', '②', '③', '④', '⑤'];
+  const lines = choices.map((c, i) => `${markers[i] ?? `(${i + 1})`} ${(c || '').trim()}`);
+  return `${trimmed}\n\n${lines.join('\n')}`;
+}
+
 function AdvancedAnalysisModal({
-  initialText,
+  initialContent,
+  initialChoices,
   imageBase64,
   onApply,
   onCancel,
 }: {
-  /** 1차 분석 결과로 시작 */
-  initialText: string;
+  /** 1차 분석 결과 본문 (선택지 제외) */
+  initialContent: string;
+  /** 1차 분석 결과 선택지 — 본문과 합쳐서 함께 편집 */
+  initialChoices: string[];
   /** 옵션: 크롭 이미지 (base64). 있으면 시각 컨텍스트로 활용. */
   imageBase64?: string;
-  /** 최종 적용 시 호출 (수정된 텍스트) */
-  onApply: (finalText: string) => void;
+  /** 최종 적용 시 호출 — 본문 + 선택지 분리해서 반환 */
+  onApply: (finalContent: string, finalChoices: string[]) => void;
   onCancel: () => void;
 }) {
-  const [currentText, setCurrentText] = useState(initialText);
+  // ★ 본문 + 선택지를 ①②③④⑤ 마커로 합쳐서 단일 편집 텍스트로 구성
+  //   고급 분석 LLM이 본문과 선택지를 모두 보고 일관되게 수정할 수 있게 함
+  const initialMerged = useMemo(
+    () => buildMergedContentChoices(initialContent, initialChoices),
+    [initialContent, initialChoices]
+  );
+  const [currentText, setCurrentText] = useState(initialMerged);
+  const [currentChoices, setCurrentChoices] = useState<string[]>(initialChoices);
   const [draftPrompt, setDraftPrompt] = useState('');
   // ★ 기본은 Claude Sonnet 4.6 — 이 정도 텍스트 편집은 Sonnet 으로 충분하고 비용 효율적.
   //   Opus 는 정확도 약간 ↑이지만 토큰 비용이 5배 가량 높아 추천 안 함.
@@ -1272,6 +1294,10 @@ function AdvancedAnalysisModal({
       }
       const after = (data.ocrText as string) || before;
       setCurrentText(after);
+      // ★ API가 편집된 텍스트에서 ①②③④⑤를 다시 추출해 반환 — 선택지도 함께 갱신
+      if (Array.isArray(data.choices) && data.choices.length > 0) {
+        setCurrentChoices(data.choices as string[]);
+      }
       setHistory(prev => [...prev, { prompt, before, after, model, durationMs: Date.now() - t0 }]);
       setDraftPrompt('');
     } catch (e) {
@@ -1282,7 +1308,8 @@ function AdvancedAnalysisModal({
   };
 
   const handleRevert = () => {
-    setCurrentText(initialText);
+    setCurrentText(initialMerged);
+    setCurrentChoices(initialChoices);
     setHistory([]);
   };
 
@@ -1293,7 +1320,13 @@ function AdvancedAnalysisModal({
     setHistory(prev => prev.slice(0, -1));
   };
 
-  const isModified = currentText !== initialText;
+  const handleApply = () => {
+    // ★ 편집된 단일 텍스트를 본문 / 선택지로 다시 분리
+    const { content: splitContent } = removeChoicesFromContent(currentText);
+    onApply(splitContent, currentChoices);
+  };
+
+  const isModified = currentText !== initialMerged;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -1451,7 +1484,7 @@ function AdvancedAnalysisModal({
             </button>
             <button
               type="button"
-              onClick={() => onApply(currentText)}
+              onClick={handleApply}
               disabled={isProcessing || !isModified}
               className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
             >
@@ -2109,13 +2142,14 @@ function ProblemDetailPanel({
         )}
       </div>
 
-      {/* 고급 분석 모달 — 채팅형 반복 수정 */}
+      {/* 고급 분석 모달 — 채팅형 반복 수정 (본문 + 선택지 통합 편집) */}
       {showAdvancedModal && problem && (
         <AdvancedAnalysisModal
-          initialText={problem.content || ''}
-          onApply={(finalText) => {
-            // 최종 텍스트를 problem.content 에 반영해 저장
-            onSave({ content: finalText });
+          initialContent={problem.content || ''}
+          initialChoices={problem.choices || []}
+          imageBase64={problem.cropImageBase64}
+          onApply={(finalContent, finalChoices) => {
+            onSave({ content: finalContent, choices: finalChoices });
             setShowAdvancedModal(false);
           }}
           onCancel={() => setShowAdvancedModal(false)}
@@ -2866,7 +2900,7 @@ export default function AnalyzeJobPage() {
         }
 
         const data = await res.json();
-        const { job, results, pdfUrl, savedToDb, imagePipeline } = data;
+        const { job, results, pdfUrl, savedToDb, imagePipeline, examId: autoExamId } = data;
         // 이미지 파이프라인 결과를 job 객체에 주입 (buildJobData에서 사용)
         if (imagePipeline) job._imagePipeline = imagePipeline;
 
@@ -2896,6 +2930,8 @@ export default function AnalyzeJobPage() {
         // 서버에서 이미 자산화 완료된 경우 (자동 자산화)
         if (savedToDb) {
           setIsSaved(true);
+          // ★ 자동 자산화로 만들어진 examId도 보존 (수동 자산화 경로와 동일하게 "확인하기" 시 직행)
+          if (autoExamId) setSavedExamId(autoExamId);
         }
 
         setJobData(prev => {
@@ -2959,6 +2995,8 @@ export default function AnalyzeJobPage() {
 
   // 자산화: 분석 결과를 DB에 저장
   const [savedProblemCount, setSavedProblemCount] = useState(0);
+  // ★ 자산화 후 받은 examId — "클라우드에서 확인하기" 시 해당 시험지로 직행하기 위해 보관
+  const [savedExamId, setSavedExamId] = useState<string | null>(null);
   const handleSaveAll = useCallback(async () => {
     if (!jobData || isSavingAll) return;
 
@@ -3100,6 +3138,8 @@ export default function AnalyzeJobPage() {
         const data = await res.json();
         setIsSaved(true);
         setSavedProblemCount(data.problemCount || 0);
+        // ★ 자산화로 만든 examId 보존 → "확인하기" 시 해당 시험지로 직행
+        if (data.examId) setSavedExamId(data.examId);
         // 이미 자동 자산화된 경우에도 성공으로 처리
       } else {
         // 서버가 JSON이 아닐 수도 있으므로 안전 파싱
@@ -4461,8 +4501,9 @@ export default function AnalyzeJobPage() {
             isSaved ? (
               <button
                 type="button"
-                onClick={() => router.push('/dashboard/cloud')}
+                onClick={() => router.push(savedExamId ? `/dashboard/cloud/${savedExamId}` : '/dashboard/cloud')}
                 className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                title={savedExamId ? '방금 자산화한 시험지로 이동' : '클라우드 목록으로 이동'}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
                 클라우드에서 확인하기 →
