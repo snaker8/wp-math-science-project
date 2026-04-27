@@ -58,13 +58,26 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { content_latex, solution_latex, answer_json, images, ai_analysis, difficulty, type_code, cognitive_domain, source_number, sequence_number } = body;
+    const { content_latex, solution_latex, answer_json, answer_json_patch, images, ai_analysis, difficulty, type_code, cognitive_domain, source_number, sequence_number } = body;
 
     // problems 테이블 업데이트
     const updateData: Record<string, any> = {};
     if (content_latex !== undefined) updateData.content_latex = content_latex;
     if (solution_latex !== undefined) updateData.solution_latex = solution_latex;
     if (answer_json !== undefined) updateData.answer_json = answer_json;
+
+    // ★ answer_json_patch — 기존 answer_json 의 일부 필드만 머지 (전체 덮어쓰기 방지)
+    //   서술형 소문제 답·배점 인라인 저장에서 사용 (subQuestions 만 갱신).
+    //   answer_json 전체 PATCH 와 충돌 시 전체가 우선.
+    if (answer_json_patch !== undefined && answer_json === undefined) {
+      const { data: existing } = await supabaseAdmin
+        .from('problems')
+        .select('answer_json')
+        .eq('id', problemId)
+        .maybeSingle();
+      const merged = { ...((existing?.answer_json as Record<string, unknown>) || {}), ...answer_json_patch };
+      updateData.answer_json = merged;
+    }
     if (images !== undefined) updateData.images = images;
     if (ai_analysis !== undefined) updateData.ai_analysis = ai_analysis;
     // 문제 번호 (source_number 또는 sequence_number → source_number로 저장)

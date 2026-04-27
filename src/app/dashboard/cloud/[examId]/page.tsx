@@ -485,6 +485,130 @@ function FigureMarkerRenderer({
   );
 }
 
+// ============================================================================
+// 서술형 소문제 파서·테이블
+// 본문에서 [서·논술형 N-M] 또는 [서•논술형 N-M] 패턴을 찾아 sub-question 목록 반환
+// ============================================================================
+
+interface SubQuestion {
+  number: string;       // "1-1", "2-1" 등
+  text: string;         // 소문제 본문 (다음 [서·논술형] 까지 또는 끝)
+  answer: string;       // 사용자 입력 답
+  points: number | null; // 사용자 입력 배점
+}
+
+function parseSubQuestions(
+  content: string,
+  saved: Array<{ number: string; answer: string; points: number | null }>
+): SubQuestion[] {
+  // [서·논술형 1-1] / [서•논술형 1-2] / [서.논술형 1-3] 모두 매칭 (구분점 변형)
+  const re = /\[\s*서\s*[·•.]\s*논술형\s*(\d+\s*-\s*\d+)\s*\]/g;
+  const matches: { number: string; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const num = m[1].replace(/\s+/g, '');
+    matches.push({ number: num, index: m.index });
+  }
+  if (matches.length === 0) return [];
+
+  return matches.map((mt, i) => {
+    const start = mt.index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : content.length;
+    const text = content.substring(start, end).replace(/^\[[^\]]+\]\s*/, '').trim();
+    const savedItem = saved.find(s => s.number === mt.number);
+    return {
+      number: mt.number,
+      text,
+      answer: savedItem?.answer || '',
+      points: savedItem?.points ?? null,
+    };
+  });
+}
+
+function SubQuestionTable({
+  problemId,
+  subQuestions,
+  onSaved,
+}: {
+  problemId: string;
+  subQuestions: SubQuestion[];
+  onSaved?: () => void;
+}) {
+  const [items, setItems] = React.useState(subQuestions);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => { setItems(subQuestions); }, [subQuestions.length]);
+
+  const persist = useCallback(async (next: SubQuestion[]) => {
+    try {
+      await fetch(`/api/problems/${problemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answer_json_patch: {
+            subQuestions: next.map(it => ({
+              number: it.number,
+              answer: it.answer,
+              points: it.points,
+            })),
+          },
+        }),
+      });
+      onSaved?.();
+    } catch (e) {
+      console.warn('[SubQuestion] save failed:', e);
+    }
+  }, [problemId, onSaved]);
+
+  const update = (idx: number, patch: Partial<SubQuestion>) => {
+    setItems(prev => {
+      const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => persist(next), 600);
+      return next;
+    });
+  };
+
+  const totalPoints = items.reduce((s, it) => s + (it.points || 0), 0);
+
+  return (
+    <div className="mt-3 border border-amber-500/30 rounded-md bg-amber-500/5">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-amber-500/20 text-[11px] font-semibold text-amber-400">
+        <span>소문제별 답·배점</span>
+        <span className="text-amber-300">합계: {totalPoints}점</span>
+      </div>
+      <div className="divide-y divide-amber-500/10">
+        {items.map((it, idx) => (
+          <div key={it.number} className="flex items-center gap-2 px-3 py-1.5">
+            <span className="text-[11px] font-bold text-cyan-400 w-10 flex-shrink-0">{it.number}</span>
+            <input
+              type="text"
+              placeholder="답"
+              value={it.answer}
+              onChange={(e) => update(idx, { answer: e.target.value })}
+              className="flex-1 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500"
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              placeholder="점수"
+              value={it.points ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                update(idx, { points: v === '' ? null : Number(v) });
+              }}
+              className="w-16 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 text-right"
+            />
+            <span className="text-[11px] text-zinc-500">점</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProblemCardView({
   problem,
   onTwinGenerate,
@@ -1079,6 +1203,20 @@ function ProblemCardView({
             })()}
           </>
         )}
+
+        {/* ★ 서술형 소문제 답·배점 입력 (본문에 [서·논술형 N-M] 패턴 있을 때만) */}
+        {(() => {
+          const savedSubs = (problem.answerJson as { subQuestions?: Array<{ number: string; answer: string; points: number | null }> })?.subQuestions || [];
+          const subs = parseSubQuestions(problem.content || '', savedSubs);
+          if (subs.length === 0) return null;
+          return (
+            <SubQuestionTable
+              problemId={problem.id}
+              subQuestions={subs}
+              onSaved={() => { /* 저장 후 silent — refetchProblems 호출 시 카드 깜빡임 방지 */ }}
+            />
+          );
+        })()}
       </div>
 
       {/* 카드 하단: 출처 + 유형코드.유형명 + 연도 (참조사이트 스타일) */}
