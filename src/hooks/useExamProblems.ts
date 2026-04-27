@@ -45,6 +45,7 @@ export interface ExamInfo {
   title: string;
   subject: string | null;
   grade: string | null;
+  examType: string | null;
   status: string;
   problemCount: number;
   createdAt: string;
@@ -399,6 +400,7 @@ export function useExamProblems(examId: string | null) {
           title: data.exam.title,
           subject: data.exam.subject || null,
           grade: data.exam.grade || null,
+          examType: data.exam.exam_type || null,
           status: data.exam.status,
           problemCount: data.problemCount || data.problems?.length || 0,
           createdAt: data.exam.created_at,

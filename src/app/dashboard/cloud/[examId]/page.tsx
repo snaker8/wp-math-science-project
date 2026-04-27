@@ -2531,6 +2531,66 @@ export default function CloudExamDetailPage() {
   const [examMeta, setExamMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
+  // ★ 시험지 로드 시 examMeta 를 DB 값으로 초기화 (subject/grade/examType)
+  //   기존엔 빈 DEFAULT_EXAM_META 로 시작해서 사용자 편집 전엔 헤더가 항상 비어있고,
+  //   인쇄 시 placeholder/기본값으로 떨어지던 버그.
+  //   학원/학교 이름은 시험지 title 에서 자동 추출 (예: "26 동해중 2-1 중간" → "동해중").
+  useEffect(() => {
+    if (!examInfo) return;
+    const title = examInfo.title || '';
+    const schoolMatch = title.match(/([가-힣]{1,6}(?:고|중|초|학원))\d*/);
+    const schoolName = schoolMatch ? schoolMatch[1] : '';
+    setExamMeta((prev) => ({
+      ...prev,
+      schoolName: prev.schoolName || schoolName,
+      subject: prev.subject || examInfo.subject || '',
+      grade: prev.grade || examInfo.grade || '',
+      examType: prev.examType || examInfo.examType || '',
+    }));
+  }, [examInfo]);
+
+  // ★ examMeta 변경 → DB 저장 (subject/grade/examType 만, debounced 800ms)
+  //   schoolName/teacher/timeLimit 등은 exams 테이블 컬럼이 아니라 페이지 로컬 메타
+  //   (시험지별 표시용). DB 컬럼 있는 3개만 PATCH.
+  const lastSavedExamMetaRef = useRef<{ subject: string; grade: string; examType: string } | null>(null);
+  useEffect(() => {
+    if (!examId || !examInfo) return;
+    const current = {
+      subject: examMeta.subject || '',
+      grade: examMeta.grade || '',
+      examType: examMeta.examType || '',
+    };
+    const last = lastSavedExamMetaRef.current;
+    // 처음엔 examInfo 와 같은 상태로 ref 초기화 (저장 안 함)
+    if (!last) {
+      lastSavedExamMetaRef.current = {
+        subject: examInfo.subject || '',
+        grade: examInfo.grade || '',
+        examType: examInfo.examType || '',
+      };
+      return;
+    }
+    if (last.subject === current.subject && last.grade === current.grade && last.examType === current.examType) return;
+    const timer = setTimeout(async () => {
+      try {
+        const updates: Record<string, string> = {};
+        if (current.subject !== last.subject) updates.subject = current.subject;
+        if (current.examType !== last.examType) updates.examType = current.examType;
+        if (current.grade !== last.grade) updates.grade = current.grade;
+        if (Object.keys(updates).length === 0) return;
+        await fetch(`/api/exams/${examId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        lastSavedExamMetaRef.current = current;
+      } catch (e) {
+        console.warn('[examMeta] PATCH save failed:', e);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [examMeta.subject, examMeta.grade, examMeta.examType, examId, examInfo]);
+
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
 
