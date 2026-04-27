@@ -277,7 +277,9 @@ function unicodeMathToLatex(text: string): string {
  */
 function SimpleAnswerMathRenderer({ content, className = '' }: { content: string; className?: string }) {
   const parts: React.ReactNode[] = [];
-  const regex = /\$([^$]+)\$/g;
+  // ★ $$..$$ display math 도 처리 + 단일 $..$ 도 lookbehind/lookahead 로 보호
+  //   ($$안쪽을 $..$로 잘못 매칭해 KaTeX 가 raw 표시되는 회귀 방지)
+  const regex = /\$\$([\s\S]+?)\$\$|(?<!\$)\$([^$\n]+)\$(?!\$)/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
   let key = 0;
@@ -286,7 +288,12 @@ function SimpleAnswerMathRenderer({ content, className = '' }: { content: string
     if (match.index > lastIdx) {
       parts.push(<span key={key++}>{content.substring(lastIdx, match.index)}</span>);
     }
-    parts.push(<MathRenderer key={key++} content={match[1]} />);
+    // match[1] = $$..$$ display math, match[2] = $..$ inline math
+    if (match[1] !== undefined) {
+      parts.push(<MathRenderer key={key++} content={match[1]} block />);
+    } else if (match[2] !== undefined) {
+      parts.push(<MathRenderer key={key++} content={match[2]} />);
+    }
     lastIdx = match.index + match[0].length;
   }
   if (lastIdx < content.length) {

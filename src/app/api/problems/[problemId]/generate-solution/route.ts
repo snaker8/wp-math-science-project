@@ -1171,7 +1171,8 @@ function sanitizeSolutionText(text: string): string {
   // 3) 빈 $ $ 제거
   s = s.replace(/\$\s+\$/g, '');
   // 4) $...$ 안에 한글만 있는 경우 → $ 제거 (KaTeX 실패 방지)
-  s = s.replace(/\$([^$]*?)\$/g, (match, inner) => {
+  // ★ lookbehind/lookahead 로 $$..$$ 안쪽 매칭 방지 ($$가 $$$로 늘어나지 않도록)
+  s = s.replace(/(?<!\$)\$([^$\n]*?)\$(?!\$)/g, (match, inner) => {
     // 한글이 있고 LaTeX 명령어가 없으면 $ 제거
     const hasKorean = /[가-힣]/.test(inner);
     const hasLatex = /\\[a-zA-Z]+|[\^_{}]/.test(inner);
