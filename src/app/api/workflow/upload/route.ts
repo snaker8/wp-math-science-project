@@ -1318,6 +1318,12 @@ async function saveEditedProblemsDirect(
       // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
       let contentLatex = edited.content || '(문제 내용 없음)';
 
+      // ★ 본문 (3점)/[3점] 등 배점 표기 제거 — 카드 헤더 배지와 중복 방지
+      //   배점은 exam_problems.points 로 별도 저장됨.
+      contentLatex = contentLatex
+        .replace(/[\[(]\s*\d+(?:\.\d+)?\s*점\s*[\])]/g, '')
+        .replace(/[ \t]{2,}/g, ' ');
+
       // ★ content_latex 내 base64 이미지 → Storage 업로드 + figure_crop 타입으로 분리
       const base64ImageRegex = /!\[이미지\]\(data:image\/png;base64,([A-Za-z0-9+/=]+)\)/g;
       let figureIdx = 0;
@@ -1420,7 +1426,9 @@ async function saveEditedProblemsDirect(
           extractedPoints = Math.min(100, Math.max(0, Math.round(edited.score * 10) / 10));
         } else {
           // ★ [N점] / (N점) 둘 다 매칭 — 동해중 PDF 같은 소괄호 표기도 흔함
-          const ptsMatch = (contentLatex || '').match(/[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*[\])]/);
+          //   contentLatex 는 본문 (N점) 이 stripping 된 상태이므로 raw edited.content 에서 추출.
+          const rawForPts = edited.content || contentLatex || '';
+          const ptsMatch = rawForPts.match(/[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*[\])]/);
           if (ptsMatch) extractedPoints = Math.min(100, Math.max(0, parseFloat(ptsMatch[1])));
         }
         const { error: epError } = await supabase.from('exam_problems').insert({
@@ -1791,6 +1799,12 @@ async function saveProblemsToDB(
       let contentWithMath = mathExprs.length > 0
         ? `${problemContent}\n\n수식:\n${mathExprs.map(m => `$${m}$`).join('\n')}`
         : problemContent;
+
+      // ★ 본문에 남은 (3점)/[3점]/(3.4점)/[3.4점] 제거 (배점은 exam_problems.points 로만 보존)
+      //   카드 헤더의 노란 배점 배지와 본문 (N점) 가 중복 노출되는 사고 방지.
+      contentWithMath = contentWithMath
+        .replace(/[\[(]\s*\d+(?:\.\d+)?\s*점\s*[\])]/g, '')
+        .replace(/[ \t]{2,}/g, ' ');
 
       // ★ 크롭 이미지 URL 조회 (문제 번호 기반)
       const problemNum = result.problemNumber || problemIndex;
