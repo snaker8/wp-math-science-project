@@ -35,6 +35,14 @@ const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 export default function TutorWorkflowPage() {
   const router = useRouter();
+
+  // ★ 미검증 자산화 경로 — 검증된 클라우드 페이지로 즉시 리다이렉트.
+  //   기존엔 exam 레코드 미생성·중복 자산화 사고가 반복돼서 (동해중·해운대중·신도중 등)
+  //   페이지 자체를 자산화 흐름에서 제외. 메뉴/직접 URL 진입 모두 차단.
+  useEffect(() => {
+    router.replace('/dashboard/cloud');
+  }, [router]);
+
   const [activePhase, setActivePhase] = useState<WorkflowPhase>('upload');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);

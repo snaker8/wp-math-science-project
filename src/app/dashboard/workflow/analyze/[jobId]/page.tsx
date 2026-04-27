@@ -3136,11 +3136,24 @@ export default function AnalyzeJobPage() {
 
       if (res.ok) {
         const data = await res.json();
+        const savedCount = data.problemCount || 0;
+        const expectedCount = editedProblems.length;
         setIsSaved(true);
-        setSavedProblemCount(data.problemCount || 0);
+        setSavedProblemCount(savedCount);
         // ★ 자산화로 만든 examId 보존 → "확인하기" 시 해당 시험지로 직행
         if (data.examId) setSavedExamId(data.examId);
-        // 이미 자동 자산화된 경우에도 성공으로 처리
+
+        // ★ 응답 명확화 — 부분 실패/누락 검증 후 사용자에게 명시.
+        //   기존엔 200 OK 면 무조건 성공으로 보여서 (a) exam 미생성 (b) problems 일부만
+        //   저장된 경우에도 사용자가 "성공으로 보임" → 다시 자산화 → 중복 사고로 이어짐.
+        if (!data.examId) {
+          alert(`⚠️ 자산화 부분 실패\n\nproblems 저장: ${savedCount}/${expectedCount}\nexam 레코드: ❌ 미생성\n\n같은 PDF 다시 업로드/자산화하면 중복 데이터가 쌓일 수 있습니다.\n관리자에게 문의하거나 클라우드 페이지에서 직접 확인하세요.`);
+        } else if (savedCount < expectedCount) {
+          alert(`⚠️ 자산화 부분 성공\n\n저장: ${savedCount}/${expectedCount}\n누락: ${expectedCount - savedCount}건\nexamId: ${data.examId.slice(0, 8)}…\n\n클라우드 페이지에서 누락 문제를 확인 후 개별 작업하세요.`);
+        } else {
+          // 정상 완료 — 별도 alert 없이 "확인하기" 버튼만 활성화 (기존 동작)
+          console.log(`[자산화] 정상 완료: ${savedCount}/${expectedCount}, examId=${data.examId}`);
+        }
       } else {
         // 서버가 JSON이 아닐 수도 있으므로 안전 파싱
         const raw = await res.text().catch(() => '');
