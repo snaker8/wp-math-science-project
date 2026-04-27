@@ -128,7 +128,10 @@ export const adminNavItems: NavItem[] = [
 // 튜터/수업 관련 메뉴
 export const tutorNavItems: NavItem[] = [
   {
-    href: '/tutor/workflow',
+    // ★ 검증된 자산화 경로(클라우드 페이지)로 통일 — 기존 /tutor/workflow 는
+    //   exam 레코드 미생성·중복 자산화 사고가 반복되어 라우팅만 유지하고
+    //   실제 기능은 /dashboard/cloud 로 보냄.
+    href: '/dashboard/cloud',
     icon: Upload,
     label: '문제 업로드',
     description: 'OCR → AI분류 → 채점',

@@ -24,7 +24,8 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 const NAV_ITEMS = [
   { href: '/tutor/dashboard', label: '대시보드', icon: LayoutDashboard },
-  { href: '/tutor/workflow', label: '문제 업로드', icon: Upload },
+  // ★ 검증된 자산화 경로로 통일 (사고 반복 방지)
+  { href: '/dashboard/cloud', label: '문제 업로드', icon: Upload },
   { href: '/tutor/problems', label: '문제 관리', icon: BookOpen },
   { href: '/tutor/classes', label: '반 관리', icon: Users },
   { href: '/tutor/students', label: '학생 관리', icon: GraduationCap },
