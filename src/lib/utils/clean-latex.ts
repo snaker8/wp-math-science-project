@@ -23,6 +23,13 @@ export function cleanLatexContent(content: string): string {
   //     phase 1-4 ($-balance 기반 판정)에서 처리.
   result = result.replace(/\\\[([\s\S]+?)\\\]/g, (_m, inner: string) => `$$${inner.trim()}$$`);
 
+  // ★ 본문 배점 표기 제거 (렌더링 시점만, DB 안 건드림)
+  //   카드 헤더에 노란색 배점 배지가 별도로 표시되므로 본문의 (3점)/(3.4점)/[3점] 은 중복.
+  //   - 자산화 1차에 추출된 score 가 [N점] 으로 본문에 들어간 케이스
+  //   - reocr-points 로 추출됐지만 본문 (N점) 가 그대로 남아있는 케이스
+  //   둘 다 카드 표시에서만 가린다. (수식 내부 의미 있는 [..] 는 영향 없음 — N점 형태만 매칭)
+  result = result.replace(/[\[(]\s*\d+(?:\.\d+)?\s*점\s*[\])]/g, '').replace(/[ \t]{2,}/g, ' ');
+
   // ─── 연립방정식 괄호 패턴 수정 ───
   // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX에서 $ 구분자 꼬임
   // 수정: $\begin{cases} eq1 \\ eq2 \end{cases}$
