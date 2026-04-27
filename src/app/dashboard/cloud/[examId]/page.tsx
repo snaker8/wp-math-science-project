@@ -499,30 +499,76 @@ interface SubQuestion {
 
 function parseSubQuestions(
   content: string,
+  choices: string[],
   saved: Array<{ number: string; answer: string; points: number | null }>
 ): SubQuestion[] {
-  // [서·논술형 1-1] / [서•논술형 1-2] / [서.논술형 1-3] 모두 매칭 (구분점 변형)
-  const re = /\[\s*서\s*[·•.]\s*논술형\s*(\d+\s*-\s*\d+)\s*\]/g;
-  const matches: { number: string; index: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    const num = m[1].replace(/\s+/g, '');
-    matches.push({ number: num, index: m.index });
-  }
-  if (matches.length === 0) return [];
+  // 통합 매칭 — 본문/선택지 모두에서 소문제 추출
+  const subKeyword = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오/;
 
-  return matches.map((mt, i) => {
-    const start = mt.index;
-    const end = i + 1 < matches.length ? matches[i + 1].index : content.length;
-    const text = content.substring(start, end).replace(/^\[[^\]]+\]\s*/, '').trim();
-    const savedItem = saved.find(s => s.number === mt.number);
-    return {
-      number: mt.number,
-      text,
-      answer: savedItem?.answer || '',
-      points: savedItem?.points ?? null,
-    };
-  });
+  // 1) [서·논술형 N-M] 패턴 (본문)
+  const reNested = /\[\s*서\s*[·•.]\s*논술형\s*(\d+\s*-\s*\d+)\s*\]/g;
+  const nested: { number: string; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = reNested.exec(content)) !== null) {
+    nested.push({ number: m[1].replace(/\s+/g, ''), index: m.index });
+  }
+  if (nested.length > 0) {
+    return nested.map((mt, i) => {
+      const start = mt.index;
+      const end = i + 1 < nested.length ? nested[i + 1].index : content.length;
+      const text = content.substring(start, end).replace(/^\[[^\]]+\]\s*/, '').trim();
+      const savedItem = saved.find(s => s.number === mt.number);
+      return {
+        number: mt.number,
+        text,
+        answer: savedItem?.answer || '',
+        points: savedItem?.points ?? null,
+      };
+    });
+  }
+
+  // 2) 본문에 (1) (2) (3) ... 가 연속 + 서술형 키워드 포함 → 소문제로 인식
+  const reParenBody = /\(([1-9])\)/g;
+  const parens: { number: string; index: number }[] = [];
+  while ((m = reParenBody.exec(content)) !== null) {
+    parens.push({ number: m[1], index: m.index });
+  }
+  // (1) (2) (3) 가 모두 있고 + 본문 어딘가에 서술형 키워드가 있으면 소문제
+  if (parens.length >= 2 && parens[0].number === '1' && subKeyword.test(content)) {
+    return parens.map((mt, i) => {
+      const start = mt.index;
+      const end = i + 1 < parens.length ? parens[i + 1].index : content.length;
+      const text = content.substring(start, end).replace(/^\(\d+\)\s*/, '').trim();
+      const savedItem = saved.find(s => s.number === mt.number);
+      return {
+        number: mt.number,
+        text,
+        answer: savedItem?.answer || '',
+        points: savedItem?.points ?? null,
+      };
+    });
+  }
+
+  // 3) choices 배열에 소문제가 들어있는 경우 (OCR 단계에서 분리된 케이스)
+  //    isSubProblem 판정과 동일 로직 (서술형 키워드 또는 (1) 접두 prefix)
+  if (choices.length >= 2) {
+    const looksLikeSub = choices.some(c => subKeyword.test(c)) || choices.every(c => /^\(\d+\)/.test(c));
+    if (looksLikeSub) {
+      return choices.map((c, i) => {
+        const num = (c.match(/^\((\d+)\)/)?.[1]) || `${i + 1}`;
+        const text = c.replace(/^\(\d+\)\s*/, '').trim();
+        const savedItem = saved.find(s => s.number === num);
+        return {
+          number: num,
+          text,
+          answer: savedItem?.answer || '',
+          points: savedItem?.points ?? null,
+        };
+      });
+    }
+  }
+
+  return [];
 }
 
 function SubQuestionTable({
@@ -1204,16 +1250,16 @@ function ProblemCardView({
           </>
         )}
 
-        {/* ★ 서술형 소문제 답·배점 입력 (본문에 [서·논술형 N-M] 패턴 있을 때만) */}
+        {/* ★ 서술형 소문제 답·배점 입력 — 본문/선택지 어디든 소문제 패턴 있으면 자동 표시 */}
         {(() => {
           const savedSubs = (problem.answerJson as { subQuestions?: Array<{ number: string; answer: string; points: number | null }> })?.subQuestions || [];
-          const subs = parseSubQuestions(problem.content || '', savedSubs);
+          const subs = parseSubQuestions(problem.content || '', problem.choices || [], savedSubs);
           if (subs.length === 0) return null;
           return (
             <SubQuestionTable
               problemId={problem.id}
               subQuestions={subs}
-              onSaved={() => { /* 저장 후 silent — refetchProblems 호출 시 카드 깜빡임 방지 */ }}
+              onSaved={() => { /* silent — refetch 안 해서 카드 깜빡임 방지 */ }}
             />
           );
         })()}
