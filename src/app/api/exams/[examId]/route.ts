@@ -32,9 +32,11 @@ export async function GET(
 
   try {
     // 1. 시험지 정보 조회 (schema.sql 기준 컬럼)
+    // ★ subject/exam_type/grade 도 포함 — 시험지 헤더(EditableExamHeader) 가 이 값으로
+    //   학원/과목/유형/학년을 채움. 빠뜨리면 출력 시 기본값으로 떨어져 사용자 편집이 무시됨.
     const { data: exam, error: examError } = await supabaseAdmin
       .from('exams')
-      .select('id, title, description, status, total_points, book_group_id, created_at')
+      .select('id, title, description, status, total_points, book_group_id, subject, exam_type, grade, created_at')
       .eq('id', examId)
       .single();
 

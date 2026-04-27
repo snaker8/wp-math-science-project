@@ -843,7 +843,9 @@ export function ProblemEditModal({
     } finally {
       setIsSaving(false);
     }
-  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, onSaved, onClose]);
+  // ★ choiceLayout / isMultipleAnswer 가 deps 에 빠져있어 사용자가 1줄/2줄/3줄 토글해도
+  //   handleSave 가 stale closure 의 옛 값을 저장해서 화면이 안 바뀌던 회귀.
+  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, onSaved, onClose]);
 
   // ★ AI 재분석: 분류 재실행
   const handleReanalyze = useCallback(async () => {

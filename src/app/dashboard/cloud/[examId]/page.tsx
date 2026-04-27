@@ -1136,6 +1136,9 @@ function ExamPaperView({
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
+  // ★ 좌우 여백 사용자 조절 (기본 38px ≈ 10mm — 기존 57px(15mm) 보다 줄여 컨텐츠 폭 확보)
+  //   슬라이더로 20~70px 사이에서 변경 가능. 표·긴 보기가 컬럼 폭을 침범하던 사고 완화.
+  const [pagePad, setPagePad] = useState(38);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
@@ -1183,7 +1186,8 @@ function ExamPaperView({
   // A4 상수
   const A4_W = 794;
   const A4_H = 1123;
-  const PAGE_PAD = 57; // ~15mm
+  // ★ pagePad state 사용 (사용자 조절 가능, 기본 38px ≈ 10mm)
+  const PAGE_PAD = pagePad;
   const FOOTER_H = 36;
   const HEADER_H = 130;
   const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
@@ -1391,6 +1395,20 @@ function ExamPaperView({
               <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
             </div>
           )}
+          {/* ★ 좌우 여백 슬라이더 — 표·긴 보기가 컬럼 폭 침범할 때 줄여서 컨텐츠 폭 확보 */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-content-tertiary">여백</span>
+            <input
+              type="range"
+              min={20}
+              max={70}
+              value={pagePad}
+              onChange={(e) => setPagePad(Number(e.target.value))}
+              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              title="페이지 좌우 여백 (px)"
+            />
+            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{pagePad}</span>
+          </div>
           {/* 프리셋 모드에서는 자동 간격 표시 */}
           {perPagePreset && pageAutoGaps && (
             <span className="text-xs text-emerald-400/70">자동 배치</span>
@@ -1540,7 +1558,7 @@ function ExamPaperView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: '15mm',
+              padding: `${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
@@ -2350,7 +2368,7 @@ function SolutionView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: '15mm',
+              padding: `${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
@@ -2530,6 +2548,66 @@ export default function CloudExamDetailPage() {
   const [templateId, setTemplateId] = useState('simple');
   const [examMeta, setExamMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  // ★ 시험지 로드 시 examMeta 를 DB 값으로 초기화 (subject/grade/examType)
+  //   기존엔 빈 DEFAULT_EXAM_META 로 시작해서 사용자 편집 전엔 헤더가 항상 비어있고,
+  //   인쇄 시 placeholder/기본값으로 떨어지던 버그.
+  //   학원/학교 이름은 시험지 title 에서 자동 추출 (예: "26 동해중 2-1 중간" → "동해중").
+  useEffect(() => {
+    if (!examInfo) return;
+    const title = examInfo.title || '';
+    const schoolMatch = title.match(/([가-힣]{1,6}(?:고|중|초|학원))\d*/);
+    const schoolName = schoolMatch ? schoolMatch[1] : '';
+    setExamMeta((prev) => ({
+      ...prev,
+      schoolName: prev.schoolName || schoolName,
+      subject: prev.subject || examInfo.subject || '',
+      grade: prev.grade || examInfo.grade || '',
+      examType: prev.examType || examInfo.examType || '',
+    }));
+  }, [examInfo]);
+
+  // ★ examMeta 변경 → DB 저장 (subject/grade/examType 만, debounced 800ms)
+  //   schoolName/teacher/timeLimit 등은 exams 테이블 컬럼이 아니라 페이지 로컬 메타
+  //   (시험지별 표시용). DB 컬럼 있는 3개만 PATCH.
+  const lastSavedExamMetaRef = useRef<{ subject: string; grade: string; examType: string } | null>(null);
+  useEffect(() => {
+    if (!examId || !examInfo) return;
+    const current = {
+      subject: examMeta.subject || '',
+      grade: examMeta.grade || '',
+      examType: examMeta.examType || '',
+    };
+    const last = lastSavedExamMetaRef.current;
+    // 처음엔 examInfo 와 같은 상태로 ref 초기화 (저장 안 함)
+    if (!last) {
+      lastSavedExamMetaRef.current = {
+        subject: examInfo.subject || '',
+        grade: examInfo.grade || '',
+        examType: examInfo.examType || '',
+      };
+      return;
+    }
+    if (last.subject === current.subject && last.grade === current.grade && last.examType === current.examType) return;
+    const timer = setTimeout(async () => {
+      try {
+        const updates: Record<string, string> = {};
+        if (current.subject !== last.subject) updates.subject = current.subject;
+        if (current.examType !== last.examType) updates.examType = current.examType;
+        if (current.grade !== last.grade) updates.grade = current.grade;
+        if (Object.keys(updates).length === 0) return;
+        await fetch(`/api/exams/${examId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        lastSavedExamMetaRef.current = current;
+      } catch (e) {
+        console.warn('[examMeta] PATCH save failed:', e);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [examMeta.subject, examMeta.grade, examMeta.examType, examId, examInfo]);
 
   // 도형 재생성 상태
   const [generatingFigures, setGeneratingFigures] = useState<Set<string>>(new Set());
