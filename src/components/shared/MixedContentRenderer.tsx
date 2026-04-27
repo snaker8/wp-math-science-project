@@ -266,9 +266,11 @@ function MixedContentRendererInner({ content, className, onMathClick, inline }: 
       }
 
       // ═══ 일반 표 렌더링 ═══
+      // ★ 표가 컨테이너(2단 컬럼 등) 폭을 초과해 다른 컬럼/페이지 영역을 침범하던 사고 방지.
+      //   max-w-full + overflow-x:auto 로 가로 스크롤 처리. 인쇄 시엔 보통 폭 안에 들어감.
       return (
-        <span key={i} className="block my-3">
-          <table className="border-collapse mx-auto text-sm">
+        <span key={i} className="block my-3 max-w-full overflow-x-auto">
+          <table className="border-collapse mx-auto text-sm" style={{ maxWidth: '100%' }}>
             <tbody>
               {el.rows.map((row, ri) => (
                 <tr key={ri}>

@@ -1136,6 +1136,9 @@ function ExamPaperView({
 }) {
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(20);
+  // ★ 좌우 여백 사용자 조절 (기본 38px ≈ 10mm — 기존 57px(15mm) 보다 줄여 컨텐츠 폭 확보)
+  //   슬라이더로 20~70px 사이에서 변경 가능. 표·긴 보기가 컬럼 폭을 침범하던 사고 완화.
+  const [pagePad, setPagePad] = useState(38);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
@@ -1183,7 +1186,8 @@ function ExamPaperView({
   // A4 상수
   const A4_W = 794;
   const A4_H = 1123;
-  const PAGE_PAD = 57; // ~15mm
+  // ★ pagePad state 사용 (사용자 조절 가능, 기본 38px ≈ 10mm)
+  const PAGE_PAD = pagePad;
   const FOOTER_H = 36;
   const HEADER_H = 130;
   const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
@@ -1391,6 +1395,20 @@ function ExamPaperView({
               <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
             </div>
           )}
+          {/* ★ 좌우 여백 슬라이더 — 표·긴 보기가 컬럼 폭 침범할 때 줄여서 컨텐츠 폭 확보 */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-content-tertiary">여백</span>
+            <input
+              type="range"
+              min={20}
+              max={70}
+              value={pagePad}
+              onChange={(e) => setPagePad(Number(e.target.value))}
+              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              title="페이지 좌우 여백 (px)"
+            />
+            <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{pagePad}</span>
+          </div>
           {/* 프리셋 모드에서는 자동 간격 표시 */}
           {perPagePreset && pageAutoGaps && (
             <span className="text-xs text-emerald-400/70">자동 배치</span>
@@ -1540,7 +1558,7 @@ function ExamPaperView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: '15mm',
+              padding: `${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
@@ -2350,7 +2368,7 @@ function SolutionView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: '15mm',
+              padding: `${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
