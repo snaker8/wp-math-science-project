@@ -1459,18 +1459,31 @@ async function saveEditedProblemsDirect(
 
       // ★ Exam-Problem 연결 — 우선순위:
       //   1) edited.score (1차 OCR/분석 페이지에서 뽑은 원 배점)
-      //   2) contentLatex 안의 [N점] 정규식 재추출
-      //   3) null (사용자가 자동배점 또는 수동 입력)
+      //   2) 본문 [총 N점] (서답형 묶음 헤더) — 있으면 그것을 대문제 진짜 배점으로 신뢰
+      //   3) 본문 [Ni점] / (Ni점) 모두 합산 (소문제별 점수 다수 표기된 케이스)
+      //   4) null (사용자가 카드에서 수동 입력)
+      //
+      // 이전엔 정규식 첫 매치만 잡아서 "[총 5점] ... [2점]" 본문이 2점으로 들어가는 사고 (신도중 2-1 [서·논술형 4]).
       if (examId && problem) {
         let extractedPoints: number | null = null;
         if (typeof edited.score === 'number' && Number.isFinite(edited.score) && edited.score > 0) {
           extractedPoints = Math.min(100, Math.max(0, Math.round(edited.score * 10) / 10));
         } else {
-          // ★ [N점] / (N점) 둘 다 매칭 — 동해중 PDF 같은 소괄호 표기도 흔함
           //   contentLatex 는 본문 (N점) 이 stripping 된 상태이므로 raw edited.content 에서 추출.
           const rawForPts = edited.content || contentLatex || '';
-          const ptsMatch = rawForPts.match(/[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*점\s*[\])]/);
-          if (ptsMatch) extractedPoints = Math.min(100, Math.max(0, parseFloat(ptsMatch[1])));
+          const totalMatch = rawForPts.match(/[\[(]\s*총\s*(\d+(?:\.\d+)?)\s*점\s*[\])]/);
+          if (totalMatch) {
+            extractedPoints = Math.min(100, Math.max(0, parseFloat(totalMatch[1])));
+          } else {
+            // 본문 안 모든 [N점] / (N점) 수집
+            const allMatches = Array.from(rawForPts.matchAll(/[\[(]\s*(\d+(?:\.\d+)?)\s*점\s*[\])]/g));
+            if (allMatches.length > 1) {
+              const sum = allMatches.reduce((s, mm) => s + parseFloat(mm[1]), 0);
+              extractedPoints = Math.min(100, Math.max(0, sum));
+            } else if (allMatches.length === 1) {
+              extractedPoints = Math.min(100, Math.max(0, parseFloat(allMatches[0][1])));
+            }
+          }
         }
         const { error: epError } = await supabase.from('exam_problems').insert({
           exam_id: examId,

@@ -505,8 +505,18 @@ function parseSubQuestions(
   // 통합 매칭 — 본문/선택지 모두에서 소문제 추출
   const subKeyword = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오/;
 
+  // ★ 본문 안에서 [N점] / (N점) 추출 헬퍼 — 소문제 본문 끝/내부에 표기된 배점을 자동 인식.
+  //   "그냥 배점 있으면 다 표기" 요구사항: 본문에 보이는 점수를 입력 박스 기본값으로 채워넣음.
+  //   사용자가 직접 입력한(saved) 값이 있으면 그것 우선, 없을 때만 자동 추출값.
+  const extractPointsFromText = (text: string): number | null => {
+    const mm = text.match(/[\[(]\s*(\d+(?:\.\d+)?)\s*점\s*[\])]/);
+    return mm ? parseFloat(mm[1]) : null;
+  };
+
   // 1) [서·논술형 N-M] 패턴 (본문)
-  const reNested = /\[\s*서\s*[·•.]\s*논술형\s*(\d+\s*-\s*\d+)\s*\]/g;
+  //    ★ 중점(·•.)은 optional — OCR 결과에 따라 "[서 논술형 4-3]" 처럼 공백만 있는 경우도 동일 패턴.
+  //      누락 사례: 신도중 2-1 [서 논술형 4-3] 이 4-1·4-2 와 함께 안 잡혀 입력 박스에서 사라지던 사고.
+  const reNested = /\[\s*서\s*[·•.]?\s*논술형\s*(\d+\s*-\s*\d+)\s*\]/g;
   const nested: { number: string; index: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = reNested.exec(content)) !== null) {
@@ -522,7 +532,7 @@ function parseSubQuestions(
         number: mt.number,
         text,
         answer: savedItem?.answer || '',
-        points: savedItem?.points ?? null,
+        points: savedItem?.points ?? extractPointsFromText(text),
       };
     });
   }
@@ -544,7 +554,7 @@ function parseSubQuestions(
         number: mt.number,
         text,
         answer: savedItem?.answer || '',
-        points: savedItem?.points ?? null,
+        points: savedItem?.points ?? extractPointsFromText(text),
       };
     });
   }
@@ -562,7 +572,7 @@ function parseSubQuestions(
           number: num,
           text,
           answer: savedItem?.answer || '',
-          points: savedItem?.points ?? null,
+          points: savedItem?.points ?? extractPointsFromText(text),
         };
       });
     }
@@ -575,10 +585,14 @@ function SubQuestionTable({
   problemId,
   subQuestions,
   onSaved,
+  onTotalPointsChange,
 }: {
   problemId: string;
   subQuestions: SubQuestion[];
   onSaved?: () => void;
+  // ★ 합계 점수가 변하면 호출 — 부모(ProblemCardView)가 exam_problems.points 로 반영.
+  //   소문제별 입력값(answer_json.subQuestions)만 저장하던 기존 동작을 카드 헤더 배점 배지/시험지 총점까지 연동.
+  onTotalPointsChange?: (total: number | null) => void | Promise<void>;
 }) {
   const [items, setItems] = React.useState(subQuestions);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -600,11 +614,17 @@ function SubQuestionTable({
           },
         }),
       });
+      // ★ 입력된 점수가 하나라도 있으면 합계, 전부 비어있으면 null (사용자 미입력으로 둠).
+      if (onTotalPointsChange) {
+        const hasAny = next.some(it => typeof it.points === 'number' && Number.isFinite(it.points));
+        const total = hasAny ? next.reduce((s, it) => s + (it.points || 0), 0) : null;
+        try { await onTotalPointsChange(total); } catch (e) { console.warn('[SubQuestion] points sync failed:', e); }
+      }
       onSaved?.();
     } catch (e) {
       console.warn('[SubQuestion] save failed:', e);
     }
-  }, [problemId, onSaved]);
+  }, [problemId, onSaved, onTotalPointsChange]);
 
   const update = (idx: number, patch: Partial<SubQuestion>) => {
     setItems(prev => {
@@ -1260,6 +1280,8 @@ function ProblemCardView({
               problemId={problem.id}
               subQuestions={subs}
               onSaved={() => { /* silent — refetch 안 해서 카드 깜빡임 방지 */ }}
+              // ★ 합계 → exam_problems.points 자동 반영. 카드 헤더 배점 배지/시험지 총점까지 즉시 동기화.
+              onTotalPointsChange={onUpdatePoints ? (total) => onUpdatePoints(problem.id, total) : undefined}
             />
           );
         })()}
