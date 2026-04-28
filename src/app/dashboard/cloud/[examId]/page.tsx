@@ -2521,28 +2521,55 @@ function SolutionView({
                 onClick={async () => {
                   const targetIds = problems.filter(p => selectedForBatch.has(p.id)).map(p => p.id);
                   setShowBatchSolutionModal(false);
+                  if (targetIds.length === 0) return;
 
-                  try {
-                    setIsGeneratingBatch(true);
-                    setBatchProgress({ current: 0, total: targetIds.length });
-                    const res = await fetch(`/api/exams/${examId}/batch-solutions`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ problemIds: targetIds }),
-                    });
-                    if (res.ok) {
-                      startBatchPolling();
-                      trackBatchSolution(examId, examTitle);
-                    } else {
-                      const errText = await res.text().catch(() => '');
-                      console.error('[batch-solutions] 실패:', res.status, errText);
-                      setIsGeneratingBatch(false);
-                      alert(`해설 생성 시작 실패 (${res.status}): ${errText.substring(0, 200)}`);
+                  // ★ 클라이언트 sequential 호출로 누락 0 보장.
+                  //   기존 server-side batch-solutions chain 은 Vercel fire-and-forget 미보장으로
+                  //   누락 사고 반복 (신도중 2-1 22·23번 도식교체 케이스 등). 카드 ✨ 단건 호출과
+                  //   동일 경로(generate-solution)를 브라우저에서 순차 호출 → 단건 timeout 격리.
+                  setIsGeneratingBatch(true);
+                  setBatchProgress({ current: 0, total: targetIds.length });
+                  trackBatchSolution(examId, examTitle);
+
+                  const callOne = async (pid: string): Promise<boolean> => {
+                    try {
+                      // 5분 abort — Vercel maxDuration=300s 와 맞춤
+                      const ctrl = new AbortController();
+                      const t = setTimeout(() => ctrl.abort(), 295_000);
+                      const res = await fetch(`/api/problems/${pid}/generate-solution`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: '{}',
+                        signal: ctrl.signal,
+                      });
+                      clearTimeout(t);
+                      return res.ok;
+                    } catch {
+                      return false;
                     }
-                  } catch (err) {
-                    console.error('[batch-solutions] 요청 에러:', err);
-                    setIsGeneratingBatch(false);
-                    alert(`해설 생성 요청 실패: ${String(err)}`);
+                  };
+
+                  let done = 0;
+                  let failed = 0;
+                  const failedIds: string[] = [];
+                  for (const pid of targetIds) {
+                    let ok = await callOne(pid);
+                    if (!ok) {
+                      // 6초 대기 후 1회 재시도 — Anthropic 529 / 일시 timeout 회복
+                      await new Promise(r => setTimeout(r, 6000));
+                      ok = await callOne(pid);
+                    }
+                    if (ok) done++; else { failed++; failedIds.push(pid); }
+                    setBatchProgress({ current: done + failed, total: targetIds.length });
+                    // 단건 사이 짧은 호흡 — Anthropic rate limit 부하 분산
+                    await new Promise(r => setTimeout(r, 300));
+                  }
+
+                  setIsGeneratingBatch(false);
+                  refetchProblems();
+                  if (failed > 0) {
+                    console.warn('[batch-client] 실패 problems:', failedIds);
+                    alert(`해설 생성 완료\n성공 ${done}건 / 실패 ${failed}건\n\n실패한 카드는 카드 우측 ✨ 버튼으로 개별 재시도해 주세요.`);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
