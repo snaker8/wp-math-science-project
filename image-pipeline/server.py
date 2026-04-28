@@ -34,6 +34,26 @@ from db_manager import DiagramDBManager
 from matcher import ImageMatcher
 from tagger import tag_single, tag_batch, submit_batch, get_batch_results
 
+# ★ YOLO 자동 영역 검출 (선택적 의존성)
+#   models/best.pt 가 있으면 자동 로드, 없으면 /detect-problems-yolo 호출 시 503
+_yolo_model = None
+_yolo_load_error: str | None = None
+try:
+    from ultralytics import YOLO  # type: ignore
+    _yolo_model_path = os.getenv("YOLO_MODEL_PATH", "./models/best.pt")
+    if os.path.exists(_yolo_model_path):
+        _yolo_model = YOLO(_yolo_model_path)
+        print(f"[YOLO] Loaded model: {_yolo_model_path}")
+    else:
+        _yolo_load_error = f"Model file not found: {_yolo_model_path}"
+        print(f"[YOLO] {_yolo_load_error}")
+except ImportError as e:
+    _yolo_load_error = f"ultralytics not installed: {e}"
+    print(f"[YOLO] {_yolo_load_error}")
+except Exception as e:
+    _yolo_load_error = f"YOLO init error: {e}"
+    print(f"[YOLO] {_yolo_load_error}")
+
 app = FastAPI(
     title="Dasaram Image Pipeline",
     description="HWP/PDF 도식 이미지 추출 → 보정 → DB 저장 파이프라인",
@@ -559,6 +579,84 @@ async def extract_images(
         raise HTTPException(status_code=500, detail=f"추출 오류: {str(e)}")
     finally:
         # 임시 파일 정리 (DB에 복사된 후)
+        try:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+
+@app.post("/detect-problems-yolo")
+async def detect_problems_yolo(
+    file: UploadFile = File(...),
+    imgsz: int = Form(1024),
+    conf: float = Form(0.25),
+):
+    """
+    YOLO 자동 문제 영역 검출.
+    이미지 1장 → bbox 리스트 (0~1 정규화 좌표).
+
+    응답:
+      {
+        "ok": true,
+        "imageWidth": 1190,
+        "imageHeight": 1682,
+        "detections": [
+          { "x": 0.05, "y": 0.28, "w": 0.43, "h": 0.10, "conf": 0.95, "classLabel": "problem" }
+        ]
+      }
+    """
+    if _yolo_model is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"YOLO model not loaded. {_yolo_load_error or 'unknown error'}",
+        )
+
+    tmp_dir = tempfile.mkdtemp(prefix="yolo_detect_")
+    tmp_file = os.path.join(tmp_dir, file.filename or "image.png")
+    try:
+        content = await file.read()
+        with open(tmp_file, "wb") as f:
+            f.write(content)
+
+        # PIL 로 원본 크기 읽기 (응답에 포함 — 클라이언트가 좌표 변환 시 사용)
+        from PIL import Image as PILImage
+        with PILImage.open(tmp_file) as im:
+            w0, h0 = im.size
+
+        results = _yolo_model.predict(tmp_file, imgsz=imgsz, conf=conf, verbose=False)
+        boxes = results[0].boxes
+        names = results[0].names  # {0: 'problem', ...}
+
+        detections = []
+        if boxes is not None and len(boxes) > 0:
+            # xywhn: 정규화 (0~1) 중심좌표+w/h
+            xywhn = boxes.xywhn.cpu().numpy()
+            confs = boxes.conf.cpu().numpy()
+            cls_ids = boxes.cls.cpu().numpy().astype(int)
+            for i in range(len(boxes)):
+                cx, cy, bw, bh = xywhn[i]
+                # YOLO 중심 좌표 → 좌상단 좌표 (우리 detection_annotations 형식과 동일)
+                x = float(cx) - float(bw) / 2.0
+                y = float(cy) - float(bh) / 2.0
+                detections.append({
+                    "x": max(0.0, x),
+                    "y": max(0.0, y),
+                    "w": float(bw),
+                    "h": float(bh),
+                    "conf": float(confs[i]),
+                    "classLabel": names.get(int(cls_ids[i]), "problem"),
+                })
+
+        return {
+            "ok": True,
+            "imageWidth": int(w0),
+            "imageHeight": int(h0),
+            "modelPath": _yolo_model_path if _yolo_model is not None else None,
+            "detections": detections,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"YOLO inference error: {e}")
+    finally:
         try:
             shutil.rmtree(tmp_dir, ignore_errors=True)
         except Exception:
