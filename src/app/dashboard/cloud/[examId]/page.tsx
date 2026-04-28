@@ -552,6 +552,36 @@ function parseSubQuestions(
     });
   }
 
+  // 1.5) 라인 시작 "N-M." 패턴 — 대괄호 헤더 없이 소문제만 본문에 나열된 케이스.
+  //      예: 동백중 2-1 [서논술형 5/6] 은 헤더가 [서논술형5] (단일) 이고
+  //          본문에 "5-1.", "5-2.", "5-3.", "5-4." 형식으로만 소문제 표기.
+  //      누락 사례: SubQuestionTable 자체가 안 떠서 사용자가 답·배점 입력 자체 못 함.
+  const reLineSub = /(?:^|\n)\s*(\d+\s*-\s*\d+)\s*[.．]\s*/g;
+  const lineSubs: { number: string; index: number; matchEnd: number }[] = [];
+  while ((m = reLineSub.exec(content)) !== null) {
+    lineSubs.push({ number: m[1].replace(/\s+/g, ''), index: m.index, matchEnd: m.index + m[0].length });
+  }
+  // 같은 대문제 번호로 시작하는 N-M 가 2개 이상이어야 진짜 소문제 (N=대문제, M=소문제 인덱스)
+  // 첫 N 만 추출해서 같은 N 그룹이 ≥ 2 인지 확인
+  if (lineSubs.length >= 2) {
+    const firstParent = lineSubs[0].number.split('-')[0];
+    const sameParent = lineSubs.filter(s => s.number.split('-')[0] === firstParent);
+    if (sameParent.length >= 2) {
+      return sameParent.map((mt, i) => {
+        const start = mt.matchEnd;
+        const end = i + 1 < sameParent.length ? sameParent[i + 1].index : content.length;
+        const text = content.substring(start, end).trim();
+        const savedItem = saved.find(s => s.number === mt.number);
+        return {
+          number: mt.number,
+          text,
+          answer: savedItem?.answer || '',
+          points: savedItem?.points ?? extractPointsFromText(text),
+        };
+      });
+    }
+  }
+
   // 2) 본문에 (1) (2) (3) ... 가 연속 + 서술형 키워드 포함 → 소문제로 인식
   const reParenBody = /\(([1-9])\)/g;
   const parens: { number: string; index: number }[] = [];
