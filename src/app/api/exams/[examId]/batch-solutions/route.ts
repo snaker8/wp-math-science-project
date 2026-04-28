@@ -166,6 +166,22 @@ export async function POST(
       }
     };
 
+    // ★ chain 신뢰성 강화 — 단건 처리 *전에* 다음 chain 을 미리 발사.
+    //   기존엔 처리 후 chain 발사라 단건 generate-solution 이 timeout/지연되면
+    //   batch-solutions 인스턴스도 함께 timeout → chain 못 띄우고 누락. 사고 반복.
+    //   처리 전 발사로 timeout 격리: 자기 자신은 단건 처리 중 죽어도 다음 인스턴스는 이미 생성됨.
+    const hasMore = endIndex < problemIds.length;
+    if (hasMore) {
+      fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problemIds, startIndex: endIndex, sweepMode }),
+        keepalive: true,
+      }).catch((err) => console.error('[batch-solutions] chain fetch error:', err));
+      // chain TCP 연결 시간 확보
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
     if (sweepMode) {
       // sweep 은 sequential — 누적 부하 회피
       for (const pid of toProcess) await tryOneProblem(pid);
@@ -173,24 +189,8 @@ export async function POST(
       await Promise.all(toProcess.map(tryOneProblem));
     }
 
-    // 다음 청크가 남았으면 fire-and-forget으로 자기 자신에게 POST → 독립 서버리스 호출 발사
-    const hasMore = endIndex < problemIds.length;
-    if (hasMore) {
-      // ★ 주의: await 금지. fetch 호출만 발사하고 바로 응답 반환.
-      //   Vercel edge가 이 fetch를 받아 새 서버리스 인스턴스를 띄우므로
-      //   현재 함수가 종료돼도 다음 청크는 독립적으로 계속 진행됨.
-      fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problemIds, startIndex: endIndex, sweepMode }),
-        // keepalive: true로 짧은 함수가 종료돼도 요청은 유지됨
-        keepalive: true,
-      }).catch((err) => console.error('[batch-solutions] chain fetch error:', err));
-
-      // fetch가 TCP 연결까지 만들 시간을 살짝 줌 (50ms는 인스턴스 종료 전 request dispatch 보장)
-      await new Promise((r) => setTimeout(r, 50));
-    } else {
-      // 마지막 청크 완료 → 누락 sweep 트리거 (메인 루프에서만 — sweep 모드면 종료)
+    // ★ 마지막 청크 + 메인 루프 → 누락 sweep 트리거 (sweep 모드면 종료)
+    if (!hasMore) {
       if (!sweepMode) {
         try {
           const { data: leftover } = await supabaseAdmin
