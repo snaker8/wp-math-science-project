@@ -306,11 +306,13 @@ function FigureMarkerRenderer({
   getProxiedImageUrl: (url: string) => string;
   pointsBadge?: React.ReactNode;
 }) {
-  // ★ 텍스트의 첫 '?' 뒤에 배지 인라인 삽입용 헬퍼
-  //   $...$ 수식 외부의 '?' 만 매칭
+  // ★ 텍스트의 첫 '?' / 첫 줄 끝 / 텍스트 끝 순으로 배지 자리 찾기 ($...$ 수식 외부만)
+  //   서답형 헤더가 ".으로 끝나고 [도형] 마커가 따로 있는 케이스 (신도중 [서·논술형 6·7])
+  //   처럼 '?'가 없으면 첫 \n 직전에, 그것도 없으면 마지막에 배지 박는다.
   const splitAtQuestion = (text: string): [string, string, boolean] => {
     let inBlock = false;
     let inInline = false;
+    let firstNewlineIdx = -1;
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
       const next = text[i + 1];
@@ -319,18 +321,31 @@ function FigureMarkerRenderer({
       if (ch === '?' && !inBlock && !inInline) {
         return [text.slice(0, i + 1), text.slice(i + 1), true];
       }
+      if (ch === '\n' && !inBlock && !inInline && firstNewlineIdx === -1) {
+        firstNewlineIdx = i;
+      }
+    }
+    if (firstNewlineIdx >= 0) {
+      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
     }
     return [text, '', false];
   };
   let badgeInserted = false;
-  // 텍스트 파트를 렌더하면서 첫 '?' 뒤에 pointsBadge 인라인 주입
+  // 텍스트 파트를 렌더하면서 배지 인라인 주입
   const renderTextWithBadge = (text: string, key: string, className: string) => {
     if (!pointsBadge || badgeInserted) {
       return <MixedContentRenderer key={key} content={text} className={className} />;
     }
     const [before, after, found] = splitAtQuestion(text);
     if (!found) {
-      return <MixedContentRenderer key={key} content={text} className={className} />;
+      // 자리 못 찾음 — 배지를 텍스트 끝에 강제 부착 (단일 라인 본문 폴백)
+      badgeInserted = true;
+      return (
+        <React.Fragment key={key}>
+          <MixedContentRenderer content={text} className={className} inline />
+          {pointsBadge}
+        </React.Fragment>
+      );
     }
     badgeInserted = true;
     return (
