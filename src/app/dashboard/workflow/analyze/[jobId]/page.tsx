@@ -2272,6 +2272,115 @@ function replaceTablePatternWithImage(
   };
 }
 
+// ★ figure(graph/table) bbox 가 problem bbox 안에 들어가는지 면적 비율로 판정
+function figureInsideProblem(
+  figure: { x: number; y: number; w: number; h: number },
+  problem: { x: number; y: number; w: number; h: number },
+  threshold = 0.7
+): boolean {
+  const ix1 = Math.max(figure.x, problem.x);
+  const iy1 = Math.max(figure.y, problem.y);
+  const ix2 = Math.min(figure.x + figure.w, problem.x + problem.w);
+  const iy2 = Math.min(figure.y + figure.h, problem.y + problem.h);
+  const iw = Math.max(0, ix2 - ix1);
+  const ih = Math.max(0, iy2 - iy1);
+  const intersection = iw * ih;
+  const figureArea = figure.w * figure.h;
+  if (figureArea <= 0) return false;
+  return intersection / figureArea >= threshold;
+}
+
+// ★ YOLO 가 검출한 figure(graph/table) 들을 매칭된 problem 의 insertedImages 로 자동 삽입
+async function autoCropFiguresForProblems(
+  pdf: any,
+  pageNum: number,
+  problems: AnalyzedProblem[],
+  figures: Array<{ x: number; y: number; w: number; h: number; class?: string }>
+): Promise<AnalyzedProblem[]> {
+  if (!figures || figures.length === 0) return problems;
+
+  const matchesByProblemIdx = new Map<number, typeof figures>();
+  for (const fig of figures) {
+    for (let i = 0; i < problems.length; i++) {
+      const p = problems[i];
+      if (!p.bbox) continue;
+      if (figureInsideProblem(fig, p.bbox)) {
+        if (!matchesByProblemIdx.has(i)) matchesByProblemIdx.set(i, []);
+        matchesByProblemIdx.get(i)!.push(fig);
+        break;
+      }
+    }
+  }
+
+  if (matchesByProblemIdx.size === 0) return problems;
+
+  let fullCanvas: HTMLCanvasElement;
+  try {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 4.0 });
+    fullCanvas = document.createElement('canvas');
+    fullCanvas.width = viewport.width;
+    fullCanvas.height = viewport.height;
+    const fullCtx = fullCanvas.getContext('2d');
+    if (!fullCtx) return problems;
+    fullCtx.fillStyle = '#ffffff';
+    fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
+    await page.render({ canvasContext: fullCtx, viewport }).promise;
+  } catch (err) {
+    console.warn(`[FigureAutoCrop] 페이지 ${pageNum} 4x 렌더 실패:`, err);
+    return problems;
+  }
+
+  const updated = problems.map((p, idx) => {
+    const matches = matchesByProblemIdx.get(idx);
+    if (!matches || !p.bbox) return p;
+
+    const newImages: InsertedImage[] = [];
+    let appendedContent = p.content || '';
+
+    for (const fig of matches) {
+      const sx = fig.x * fullCanvas.width;
+      const sy = fig.y * fullCanvas.height;
+      const sw = fig.w * fullCanvas.width;
+      const sh = fig.h * fullCanvas.height;
+
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = Math.max(1, Math.round(sw));
+      cropCanvas.height = Math.max(1, Math.round(sh));
+      const cropCtx = cropCanvas.getContext('2d');
+      if (!cropCtx) continue;
+      cropCtx.drawImage(fullCanvas, sx, sy, sw, sh, 0, 0, cropCanvas.width, cropCanvas.height);
+      const base64 = cropCanvas.toDataURL('image/png');
+
+      const cropRelativeRect = {
+        x: (fig.x - p.bbox.x) / p.bbox.w,
+        y: (fig.y - p.bbox.y) / p.bbox.h,
+        w: fig.w / p.bbox.w,
+        h: fig.h / p.bbox.h,
+      };
+
+      const imageMarkdown = `![이미지](${base64})`;
+      appendedContent = appendedContent ? `${appendedContent}\n\n${imageMarkdown}` : imageMarkdown;
+
+      newImages.push({
+        id: `auto-fig-p${pageNum}-${idx}-${newImages.length}-${Date.now()}`,
+        base64,
+        cropRelativeRect,
+        insertPosition: 'append',
+      });
+    }
+
+    return {
+      ...p,
+      content: appendedContent,
+      insertedImages: [...(p.insertedImages || []), ...newImages],
+    };
+  });
+
+  console.log(`[FigureAutoCrop] 페이지 ${pageNum}: ${matchesByProblemIdx.size}개 문제에 figure 자동 삽입 (총 ${figures.length}개 figure 중)`);
+  return updated;
+}
+
 // ★ 재분석 후 새 OCR 텍스트에 기존 삽입 이미지를 다시 적용
 function reapplyInsertedImages(ocrContent: string, insertedImages: InsertedImage[]): string {
   if (!insertedImages || insertedImages.length === 0) return ocrContent;
@@ -2651,9 +2760,10 @@ export default function AnalyzeJobPage() {
             if (cancelled) break;
 
             let blocks: { x: number; y: number; w: number; h: number }[];
+            let figures: Array<{ x: number; y: number; w: number; h: number; class?: string }> = [];
 
             if (detectionMode === 'ai') {
-              // ★ AI Vision 감지 — GPT-4o에 페이지 이미지 전송
+              // ★ AI Vision 감지 — YOLO 우선 (GPT-4o 폴백 내장)
               setAiDetectProgress(prev => new Map(prev).set(pageNum - 1, 'loading'));
               try {
                 const imageBase64 = offscreenCanvas.toDataURL('image/jpeg', 0.85);
@@ -2677,7 +2787,11 @@ export default function AnalyzeJobPage() {
                 if (res.ok) {
                   const data = await res.json();
                   const rawBlocks: CropRect[] = data.problems || [];
-                  console.log(`[AI Detect] 페이지 ${pageNum}: ${rawBlocks.length}개 문제 감지 (raw)`);
+                  // ★ YOLO 가 검출한 graph/table figure 들 (자동 크롭 대상)
+                  figures = (data.others || [])
+                    .filter((o: any) => o?.class === 'graph' || o?.class === 'table')
+                    .map((o: any) => ({ x: o.x, y: o.y, w: o.w, h: o.h, class: o.class }));
+                  console.log(`[AI Detect] 페이지 ${pageNum}: ${rawBlocks.length}개 문제 감지 (raw), ${figures.length}개 figure 감지 (source=${data.source || 'unknown'})`);
 
                   // ★ Hybrid: AI bbox를 픽셀 분석으로 정제
                   // AI가 문제 번호 기반으로 정확히 감지하므로 헤더 클리핑은 최소화
@@ -2729,15 +2843,25 @@ export default function AnalyzeJobPage() {
                 bbox: block,
               }));
 
+              // ★ YOLO 가 검출한 figure 가 있으면 problem 안쪽으로 매칭 → 4x 크롭 → insertedImages 자동 삽입
+              let problemsWithFigures: AnalyzedProblem[] = newProblems;
+              if (figures.length > 0) {
+                try {
+                  problemsWithFigures = await autoCropFiguresForProblems(pdf, pageNum, newProblems, figures);
+                } catch (figErr) {
+                  console.warn(`[FigureAutoCrop] 페이지 ${pageNum} 자동 figure 크롭 실패 (problem 만 유지):`, figErr);
+                }
+              }
+
               setAutoCropProblems(prev => {
                 const next = new Map(prev);
-                next.set(pageIndex, newProblems);
+                next.set(pageIndex, problemsWithFigures);
                 return next;
               });
 
               // 첫 번째 감지된 문제 자동 선택 (아직 선택된 문제가 없을 때)
-              if (newProblems.length > 0 && pageNum === currentPage) {
-                setSelectedProblemId(prev => prev || newProblems[0].id);
+              if (problemsWithFigures.length > 0 && pageNum === currentPage) {
+                setSelectedProblemId(prev => prev || problemsWithFigures[0].id);
               }
             }
           } catch (pageErr: any) {
