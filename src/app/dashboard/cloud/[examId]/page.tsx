@@ -1065,10 +1065,15 @@ function ProblemCardView({
                   </button>
                 );
 
-                // content 내부 첫 '?' 위치 찾기 ($...$ 수식 외부만)
+                // content 내부 첫 '?' / 첫 줄 끝 위치 찾기 ($...$ 수식 외부만)
+                //   1) '?' 우선 — 일반 객관식·단답 문제
+                //   2) 없으면 첫 줄 끝 (\n 직전) — 서답형 헤더 라인 ("[서·논술형 4] 식을 간단히 하시오.") 끝에 자연스럽게 배지 부착.
+                //      ★ 이전엔 "?"가 없으면 content 전체 끝에 박혀 [4-3] 마지막 라인 끝에 [N점] 배지가 붙는 사고.
+                //   3) 첫 줄도 없으면 content 끝 (single-line 본문)
                 const splitAtQuestion = (text: string): [string, string, boolean] => {
                   let inBlock = false;
                   let inInline = false;
+                  let firstNewlineIdx = -1;
                   for (let i = 0; i < text.length; i++) {
                     const ch = text[i];
                     const next = text[i + 1];
@@ -1077,6 +1082,13 @@ function ProblemCardView({
                     if (ch === '?' && !inBlock && !inInline) {
                       return [text.slice(0, i + 1), text.slice(i + 1), true];
                     }
+                    if (ch === '\n' && !inBlock && !inInline && firstNewlineIdx === -1) {
+                      firstNewlineIdx = i;
+                    }
+                  }
+                  // '?' 못 찾았으면 첫 줄 끝에 배치
+                  if (firstNewlineIdx >= 0) {
+                    return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
                   }
                   return [text, '', false];
                 };
