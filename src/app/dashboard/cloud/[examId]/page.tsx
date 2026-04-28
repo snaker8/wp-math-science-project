@@ -53,7 +53,7 @@ import './cloud-exam-editor.css';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { trackBatchSolution } from '@/components/BatchSolutionNotifier';
-import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
+import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
@@ -772,7 +772,10 @@ function ProblemCardView({
   const hasFigureContent = problem.upscaledCropUrl || problem.figureData || problem.figureSvg || cropImage;
 
   // ★ 클린 모드: LaTeX 전처리 (공통 유틸 사용)
-  const cleanContent = cleanLatexContent(problem.content);
+  // ★ 소문제별 배점(answer_json.subQuestions) 을 본문 "N-M." 라인 뒤에 인라인 주입.
+  //   사용자가 SubQuestionTable 에 입력한 점수가 화면에 즉시 반영되어야 시험지 출력에도 그대로 따라감.
+  const savedSubsForInject = (problem.answerJson as { subQuestions?: Array<{ number: string; answer: string; points: number | null }> })?.subQuestions || [];
+  const cleanContent = injectSubQuestionPoints(cleanLatexContent(problem.content), savedSubsForInject);
 
   const contentParts = splitContentByFigureMarker(cleanContent);
   const hasFigureMarker = contentParts.some(p => p.type === 'figure');

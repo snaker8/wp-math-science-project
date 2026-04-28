@@ -3,7 +3,7 @@
 import React, { memo } from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
-import { cleanLatexContent } from '@/lib/utils/clean-latex';
+import { cleanLatexContent, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
 import type { InterpretedFigure } from '@/types/ocr';
 
 // ============================================================================
@@ -27,6 +27,10 @@ export interface ExamRenderProblem {
   figureSource?: 'upscaled_crop' | 'ai_generated';
   images?: Array<{ url: string; type: string; label: string }>;
   hasFigure?: boolean;
+  /** ★ 서술형 소문제별 답·배점 — 본문 "N-M." 라인 뒤에 [N점] 인라인 주입용 */
+  subQuestions?: Array<{ number: string; answer?: string; points: number | null }>;
+  /** answerJson fallback (subQuestions 가 직접 안 채워진 경우 여기서 추출) */
+  answerJson?: Record<string, unknown> | null;
 }
 
 /**
@@ -95,11 +99,19 @@ function ExamProblemRendererInner({
 
   // content 정리: 문제번호 중복 제거 + 점수 제거 + ![이미지] → [도형] + LaTeX 정규화
   const rawContent = problem.content || '';
-  const cleanContent = cleanLatexContent(
-    rawContent
-      .replace(/^\s*\d+\.\s*/, '')
-      .replace(/\[\s*\d+(\.\d+)?\s*점\s*\]/g, '')
-      .trim()
+  // ★ subQuestions: 명시적 prop 우선, 없으면 answerJson 에서 추출
+  const subQs = problem.subQuestions
+    || (problem.answerJson && Array.isArray((problem.answerJson as Record<string, unknown>).subQuestions)
+        ? (problem.answerJson as { subQuestions: Array<{ number: string; answer?: string; points: number | null }> }).subQuestions
+        : undefined);
+  const cleanContent = injectSubQuestionPoints(
+    cleanLatexContent(
+      rawContent
+        .replace(/^\s*\d+\.\s*/, '')
+        .replace(/\[\s*\d+(\.\d+)?\s*점\s*\]/g, '')
+        .trim()
+    ),
+    subQs
   );
 
   const parts = splitByFigureMarker(cleanContent);
