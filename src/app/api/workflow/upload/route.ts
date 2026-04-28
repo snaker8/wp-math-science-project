@@ -1226,10 +1226,39 @@ async function saveEditedProblemsDirect(
 
   // ★ Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   let examId: string | null = null;
-  try {
-    // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
-    const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
+  // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
+  const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
 
+  // ★ DB 기반 중복 차단 — autoSavedExams in-memory 캐시는 콜드스타트/재배포에 휘발됨.
+  //   같은 institute_id + title + (book_group_id) 조합의 살아있는 exam 있으면 그것 재사용.
+  //   동일 파일을 두 번 자산화해 빈껍데기 중복 exam 생기던 사고 (신도중 2-1) 차단.
+  try {
+    let dupQuery = supabase
+      .from('exams')
+      .select('id, deleted_at')
+      .eq('title', fileTitle)
+      .is('deleted_at', null);
+    if (instituteId) dupQuery = dupQuery.eq('institute_id', instituteId);
+    if (bookGroupId) dupQuery = dupQuery.eq('book_group_id', bookGroupId);
+    const { data: dupRows } = await dupQuery
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (dupRows && dupRows.length > 0) {
+      const dupId = dupRows[0].id as string;
+      console.log(`[Direct Save] 같은 제목의 살아있는 exam 발견 → 재사용 (${dupId}) — 중복 자산화 차단`);
+      autoSavedExams.set(jobId, dupId);
+      return NextResponse.json({
+        success: true,
+        message: '같은 제목의 시험지가 이미 존재합니다. 중복 자산화를 차단했습니다.',
+        examId: dupId,
+        alreadySaved: true,
+      });
+    }
+  } catch (e) {
+    console.warn('[Direct Save] 중복 차단 조회 실패 (계속 진행):', e);
+  }
+
+  try {
     const examInsertData: Record<string, any> = {
       title: fileTitle,
       description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
@@ -1294,6 +1323,18 @@ async function saveEditedProblemsDirect(
     }
   } catch (err) {
     console.error('[Direct Save] Exam create exception:', err);
+  }
+
+  // ★ exam INSERT 실패 시 즉시 abort — problems 만 저장돼 orphan 되는 사고 차단.
+  //   이전엔 examId=null 인 채로 problems 22개를 저장하고 exam_problems 는 미생성 →
+  //   클라우드 페이지에서 시험지가 통째로 안 보이던 사고 (동백중 2-1).
+  if (!examId) {
+    return NextResponse.json({
+      success: false,
+      error: 'exam 레코드 생성 실패 — 자산화 중단. (problems 미저장으로 orphan 데이터 방지)',
+      problemCount: 0,
+      examId: null,
+    }, { status: 500 });
   }
 
   let savedCount = 0;
@@ -1691,6 +1732,29 @@ async function saveProblemsToDB(
     // schema.sql 기준 컬럼만 사용 (공통 유틸 사용)
     const fileTitle = job.fileName.replace(/\.[^/.]+$/, "");
 
+    // ★ DB 기반 중복 차단 — saveEditedProblemsDirect 와 동일 가드.
+    //   in-memory autoSavedExams 는 콜드스타트에 휘발되므로 DB 로 한 번 더 확인.
+    try {
+      let dupQuery = supabase
+        .from('exams')
+        .select('id, deleted_at')
+        .eq('title', fileTitle)
+        .is('deleted_at', null);
+      if (instituteId) dupQuery = dupQuery.eq('institute_id', instituteId);
+      if (bookGroupId) dupQuery = dupQuery.eq('book_group_id', bookGroupId);
+      const { data: dupRows } = await dupQuery
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (dupRows && dupRows.length > 0) {
+        const dupId = dupRows[0].id as string;
+        console.log(`[DB] 같은 제목의 살아있는 exam 발견 → 재사용 (${dupId}) — 중복 자산화 차단`);
+        autoSavedExams.set(jobId, dupId);
+        return; // saveProblemsToDB 는 void — 중복은 조용히 무시
+      }
+    } catch (e) {
+      console.warn('[DB] 중복 차단 조회 실패 (계속 진행):', e);
+    }
+
     const examInsertData: Record<string, any> = {
       title: fileTitle,
       description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
@@ -1781,6 +1845,13 @@ async function saveProblemsToDB(
     }
   } catch (err) {
     console.error('[DB] Error creating exam:', err);
+  }
+
+  // ★ exam INSERT 실패 시 즉시 abort — orphan problems 사고 차단 (동백중 2-1 패턴).
+  //   saveProblemsToDB 는 void 라 사용자 알림은 못 주지만, 최소한 orphan problems 는 안 만든다.
+  if (!examId) {
+    console.error('[DB] examId 미생성 — problems 저장 중단 (orphan 방지).');
+    return;
   }
 
   let savedCount = 0;
