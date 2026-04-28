@@ -954,11 +954,17 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
         console.log(`[generate-solution] ★ 객관식 정답 덮어쓰기: OCR/기존 "${userEnteredAnswer}" → 해설 결론 "${finalAnswerToSave}"`);
       }
     } else if (isObjective) {
-      // ★ 객관식인데 AI가 ①~⑤ 형식으로 답을 못 뽑은 경우 — 기존 정답을 "절대" 덮어쓰지 않음
-      //   (AI가 "0", "4", "Four" 등 엉뚱한 값 반환 시 기존 ④ 같은 유효 정답 보호)
+      // ★ 객관식인데 AI가 ①~⑤ 형식으로 답을 못 뽑은 경우 — 기존 정답을 "절대" 덮어쓰지 않음.
+      //   단, 기존 정답도 ①~⑤ 가 아니면 (예: "0", "5", "5번") 빈 값으로 저장.
+      //   사고: "0" 같은 잘못된 값이 한 번 DB 에 들어가면 재호출해도 영구 보존되던 케이스 차단.
+      //   사용자가 카드 인라인 입력으로 ①~⑤ 직접 넣을 때만 신뢰 — 모호한 값은 비워서 재입력 유도.
       const userIsValidCircled = userEnteredAnswer && /^[①②③④⑤]$/.test(userEnteredAnswer);
-      finalAnswerToSave = userIsValidCircled ? userEnteredAnswer : (userEnteredAnswer || '');
-      console.warn(`[generate-solution] ⚠ 객관식 AI 정답 무효("${solution.finalAnswer}") → 기존 유지: "${finalAnswerToSave}"`);
+      finalAnswerToSave = userIsValidCircled ? userEnteredAnswer : '';
+      if (userEnteredAnswer && !userIsValidCircled) {
+        console.warn(`[generate-solution] ⚠ 객관식 무효 정답 폐기: "${userEnteredAnswer}" → '' (카드에서 ①~⑤ 재입력 유도). AI도 무효: "${solution.finalAnswer}"`);
+      } else {
+        console.warn(`[generate-solution] ⚠ 객관식 AI 정답 무효("${solution.finalAnswer}") → 기존 유지: "${finalAnswerToSave}"`);
+      }
     } else {
       // 주관식 + 사용자 편집 없음 → AI 결과로 교체 (빈 값이면 기존 유지)
       const aiAns = String(solution.finalAnswer || '').trim();
