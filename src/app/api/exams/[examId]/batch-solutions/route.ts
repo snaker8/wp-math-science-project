@@ -28,8 +28,11 @@ function cleanupStaleJobs() {
 }
 
 // 한 청크에서 병렬 처리할 해설 개수
-// ★ Vercel 508 Loop Detected·Anthropic 529 Overloaded 누적 완화 위해 5 → 3
-const CHUNK_SIZE = 3;
+// ★ "안 끊기는 게 가장 중요" — 청크 병렬은 청크 안 단건 일부 실패 시 끊김 사고 빈발 (신도중
+//   26-3-1-M 23 중 12 미완 사고 등). chunk=1 단건 sequential 로 통일하면 chain 마다
+//   Vercel 인스턴스 새로 떠서 timeout 격리 + Anthropic rate limit 부하 분산. 속도는 느리지만
+//   안정성 우선 — 어차피 서버에서 백그라운드로 돌고 사용자는 알림 받음.
+const CHUNK_SIZE = 1;
 // ★ sweep 모드(누락 재시도) 청크 크기 — 단건 직렬 처리로 누적 부하 회피
 const SWEEP_CHUNK_SIZE = 1;
 
