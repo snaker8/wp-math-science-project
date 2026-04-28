@@ -40,15 +40,24 @@ export async function GET(request: NextRequest) {
 
     if (examIds.length > 0) {
       try {
-        const { data: counts } = await supabaseAdmin
-          .from('exam_problems')
-          .select('exam_id')
-          .in('exam_id', examIds);
-
-        if (counts) {
+        // ★ Supabase .select() 기본 limit 1000 초과 시 마지막 row 들이 잘려서
+        //   일부 exam 의 problemCount=0 으로 표시되던 사고 (동백중 2-1 22건이 보이지 않던 케이스).
+        //   exam_problems 가 1000+ rows 인 운영 환경에선 페이지네이션 필수.
+        const PAGE = 1000;
+        let from = 0;
+        for (;;) {
+          const { data: counts, error } = await supabaseAdmin
+            .from('exam_problems')
+            .select('exam_id')
+            .in('exam_id', examIds)
+            .range(from, from + PAGE - 1);
+          if (error) { console.warn('[API/exams] count page error:', error.message); break; }
+          if (!counts || counts.length === 0) break;
           for (const row of counts) {
             problemCountMap.set(row.exam_id, (problemCountMap.get(row.exam_id) || 0) + 1);
           }
+          if (counts.length < PAGE) break;
+          from += PAGE;
         }
       } catch {
         // exam_problems 테이블 접근 실패 시 무시 (문제 수 0으로 표시)
