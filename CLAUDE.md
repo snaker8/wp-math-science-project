@@ -86,6 +86,42 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 
 ---
 
+## ★ 안전 가드 — 다시 깨지면 안 되는 핵심 (2026-04-28 학습)
+> 모두 사용자가 같은 사고를 여러 번 만난 영역. 코드 변경 시 git log 로 해당 가드가 살아있는지 먼저 확인할 것.
+
+### 1. 자산화 안전 — exam INSERT 실패 시 problems 강행 금지
+- 위치: `src/app/api/workflow/upload/route.ts` saveEditedProblemsDirect / saveProblemsToDB
+- 가드: `examId` null 이면 즉시 abort (problems 루프 진입 X). orphan 차단.
+- 가드: exam INSERT 직전 `title + institute_id + book_group_id + deleted_at IS NULL` DB 중복 차단. in-memory `autoSavedExams` 만 의존 X.
+- 사고 이력: 신도중·동백중·동해중·해운대중 2-1/3-1 자산화 누락·중복 반복 (a8d5b57).
+
+### 2. 배점 추출 우선순위 — `[총 N점]` > `[Ni점]` 합 > 단일 > null
+- 위치: `saveEditedProblemsDirect.extractedPoints`, `parseSubQuestions`
+- 정규식: `[\[(]\s*총\s*(\d+(?:\.\d+)?)\s*점\s*[\])]` (총 우선) / `[\[(]\s*(\d+(?:\.\d+)?)\s*점\s*[\])]` (일반)
+- 첫 매치만 잡으면 "[총 5점] ... [2점]" 본문이 2점으로 들어가는 사고 (신도중 [서·논술형 4]).
+- clean-latex stripping 도 `[\[(]\s*(?:총\s*)?\d+...` 로 [총] optional 매치 → [총 N점]·[N점] 모두 본문 텍스트에서 제거.
+
+### 3. 객관식 답은 ①~⑤ 만 신뢰
+- 위치: `src/app/api/problems/[problemId]/generate-solution/route.ts` 객관식 fail 분기
+- 가드: `userIsValidCircled ? userEnteredAnswer : ''` — ①~⑤ 외 값("0", "5", "5번") 은 빈값으로 폐기.
+- 절대 `userEnteredAnswer || ''` 처럼 모호한 값 보존 X — 영구 박힘 사고 (102a39e).
+
+### 4. 카드 배점 배지 위치 폴백 3단
+- 위치: ProblemCardView splitAtQuestion + FigureMarkerRenderer splitAtQuestion (둘 다)
+- 순서: `?` → 첫 `\n` 직전(서답형 헤더 끝) → 텍스트 끝.
+- 두 함수 동시 패치 필수 — 한쪽만 고치면 도형 마커 카드(신도중 [서·논술형 6·7])에서 배지 안 보임 (0360d4c).
+
+### 5. Vercel fire-and-forget chain 신뢰 X
+- 사용자 트리거 일괄 작업(일괄해설 등)은 **클라이언트 sequential** 호출로 — `for-of` + AbortController(295s) + 1회 retry + 300ms 호흡.
+- server-side `fetch(... { keepalive: true })` chain 은 인스턴스 종료 시 끊김 (신도중 22·23번 sweep 실패 사고).
+- 클라이언트 단점: 페이지 떠나면 중단. 대신 누락 0 (2a31563).
+
+### 학습 저장 위치
+- DB: `figure_corrections` (도형 교정 diff), `latex_render_corrections` (LaTeX 수정 diff)
+- 메모리: `~/.claude/projects/.../memory/feedback_*.md` (5개 파일 인덱스 MEMORY.md 참조)
+
+---
+
 ## 현재 작업 상태
 
 ### 완료됨
