@@ -2669,7 +2669,7 @@ export default function AnalyzeJobPage() {
                   if (totalPrev > 0) expectedStartNumber = totalPrev + 1;
                 }
 
-                const res = await fetch('/api/workflow/detect-problems', {
+                const res = await fetch('/api/workflow/detect-problems-yolo', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ imageBase64, pageNumber: pageNum, expectedStartNumber }),
