@@ -30,10 +30,32 @@ function cleanupStaleJobs() {
 // 한 청크에서 병렬 처리할 해설 개수
 // ★ Vercel 508 Loop Detected·Anthropic 529 Overloaded 누적 완화 위해 5 → 3
 const CHUNK_SIZE = 3;
+// ★ sweep 모드(누락 재시도) 청크 크기 — 단건 직렬 처리로 누적 부하 회피
+const SWEEP_CHUNK_SIZE = 1;
 
-// 일시적 실패(5xx, 508, 529 등)일 때 재시도 (1회만)
+// 일시적 실패(5xx, 508, 529 등) 의 대기 시간(ms). 일반 실패도 짧게 대기 후 재시도.
+const RETRY_WAIT_RETRIABLE = 10000;
+const RETRY_WAIT_GENERIC = 5000;
 function isRetriableStatus(status: number): boolean {
   return status === 508 || status === 429 || status === 503 || status === 529;
+}
+
+// ★ 200 OK 응답이라도 실제로 solution_latex 가 저장됐는지 확인.
+//   AI 가 빈 finalAnswer / JSON 파싱 실패 등으로 endpoint 가 200 을 반환했지만
+//   DB 에는 빈 해설이 들어가는 케이스를 fail 로 처리해 재시도 대상에 포함.
+async function hasNonEmptySolution(problemId: string): Promise<boolean> {
+  if (!supabaseAdmin) return true; // DB 확인 불가하면 200 신뢰
+  try {
+    const { data } = await supabaseAdmin
+      .from('problems')
+      .select('solution_latex')
+      .eq('id', problemId)
+      .maybeSingle();
+    const sol = (data?.solution_latex || '').toString().trim();
+    return sol.length >= 50;
+  } catch {
+    return true;
+  }
 }
 
 export async function POST(
@@ -51,6 +73,9 @@ export async function POST(
     const problemIds: string[] = body.problemIds || [];
     // ★ 청크 연쇄용 커서. 없으면 0 (최초 호출 = 사용자가 버튼 클릭)
     const startIndex: number = typeof body.startIndex === 'number' ? body.startIndex : 0;
+    // ★ sweep 모드 — 메인 루프 종료 후 누락 problems 재시도용. 단건 sequential, retry 강화.
+    //   sweepMode 일 때는 sweep 을 추가로 트리거하지 않아 무한 루프 차단.
+    const sweepMode: boolean = body.sweepMode === true;
     const isFirstCall = startIndex === 0;
 
     if (problemIds.length === 0) {
@@ -60,7 +85,7 @@ export async function POST(
     // ★ stale entries 청소
     cleanupStaleJobs();
 
-    if (isFirstCall) {
+    if (isFirstCall && !sweepMode) {
       jobState.set(examId, {
         total: problemIds.length,
         done: 0,
@@ -76,7 +101,8 @@ export async function POST(
     }
 
     const state = jobState.get(examId);
-    const endIndex = Math.min(startIndex + CHUNK_SIZE, problemIds.length);
+    const chunkSize = sweepMode ? SWEEP_CHUNK_SIZE : CHUNK_SIZE;
+    const endIndex = Math.min(startIndex + chunkSize, problemIds.length);
     const chunk = problemIds.slice(startIndex, endIndex);
     const baseUrl = request.nextUrl.origin;
 
@@ -98,7 +124,8 @@ export async function POST(
     const toProcess = chunk.filter((id) => !skipIds.has(id));
 
     // 청크 병렬 처리 (수동 업로드 제외)
-    await Promise.all(toProcess.map(async (problemId) => {
+    //   ★ sweepMode 면 sequential — chunkSize 가 1 이라 사실상 단건.
+    const tryOneProblem = async (problemId: string) => {
       const tryOnce = async (): Promise<{ ok: boolean; status: number }> => {
         try {
           const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
@@ -106,28 +133,45 @@ export async function POST(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
           });
-          return { ok: res.ok, status: res.status };
+          if (!res.ok) return { ok: false, status: res.status };
+          // ★ 200 OK 라도 실제 DB 에 solution_latex 가 채워졌는지 확인.
+          //   AI 가 빈 응답을 200 으로 반환한 케이스를 fail 로 분류해 재시도/누락 추적에 포함.
+          const saved = await hasNonEmptySolution(problemId);
+          return saved ? { ok: true, status: 200 } : { ok: false, status: 200 };
         } catch {
           return { ok: false, status: 0 };
         }
       };
 
       let result = await tryOnce();
-      // 일시적 오류면 10초 지터 후 1회 재시도 (508 Loop Detected, 529 Overloaded 등)
-      if (!result.ok && isRetriableStatus(result.status)) {
-        console.log(`[batch-solutions] ⏳ ${problemId.slice(0, 8)}: ${result.status} → 10초 후 재시도`);
-        await new Promise((r) => setTimeout(r, 10000 + Math.random() * 2000));
+      // ★ retry 정책 강화 — 모든 fail 에 대해 1회 더 시도 (이전엔 5xx 한정).
+      //   timeout(0) / 4xx / 5xx 모두 포함. wait 시간만 status 로 차등.
+      //   sweepMode 면 한 번 더 추가 (총 3회) — 누락 끝까지 끌어올리기.
+      const maxAttempts = sweepMode ? 3 : 2;
+      let attempt = 1;
+      while (!result.ok && attempt < maxAttempts) {
+        const waitMs = isRetriableStatus(result.status) ? RETRY_WAIT_RETRIABLE : RETRY_WAIT_GENERIC;
+        console.log(`[batch-solutions${sweepMode ? '/sweep' : ''}] ⏳ ${problemId.slice(0, 8)}: ${result.status} → ${waitMs}ms 후 재시도 (${attempt + 1}/${maxAttempts})`);
+        await new Promise((r) => setTimeout(r, waitMs + Math.random() * 2000));
         result = await tryOnce();
+        attempt++;
       }
 
       if (result.ok) {
         if (state) state.done++;
-        console.log(`[batch-solutions] ✅ ${problemId.slice(0, 8)} (${startIndex}-${endIndex}/${problemIds.length})`);
+        console.log(`[batch-solutions${sweepMode ? '/sweep' : ''}] ✅ ${problemId.slice(0, 8)} (${startIndex}-${endIndex}/${problemIds.length})`);
       } else {
         if (state) state.failed++;
-        console.log(`[batch-solutions] ❌ ${problemId.slice(0, 8)}: ${result.status}`);
+        console.log(`[batch-solutions${sweepMode ? '/sweep' : ''}] ❌ ${problemId.slice(0, 8)}: ${result.status} (after ${attempt} attempts)`);
       }
-    }));
+    };
+
+    if (sweepMode) {
+      // sweep 은 sequential — 누적 부하 회피
+      for (const pid of toProcess) await tryOneProblem(pid);
+    } else {
+      await Promise.all(toProcess.map(tryOneProblem));
+    }
 
     // 다음 청크가 남았으면 fire-and-forget으로 자기 자신에게 POST → 독립 서버리스 호출 발사
     const hasMore = endIndex < problemIds.length;
@@ -138,7 +182,7 @@ export async function POST(
       fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problemIds, startIndex: endIndex }),
+        body: JSON.stringify({ problemIds, startIndex: endIndex, sweepMode }),
         // keepalive: true로 짧은 함수가 종료돼도 요청은 유지됨
         keepalive: true,
       }).catch((err) => console.error('[batch-solutions] chain fetch error:', err));
@@ -146,13 +190,62 @@ export async function POST(
       // fetch가 TCP 연결까지 만들 시간을 살짝 줌 (50ms는 인스턴스 종료 전 request dispatch 보장)
       await new Promise((r) => setTimeout(r, 50));
     } else {
-      // 마지막 청크 완료 → 상태 정리
+      // 마지막 청크 완료 → 누락 sweep 트리거 (메인 루프에서만 — sweep 모드면 종료)
+      if (!sweepMode) {
+        try {
+          const { data: leftover } = await supabaseAdmin
+            .from('problems')
+            .select('id, solution_latex, answer_json')
+            .in('id', problemIds);
+          // ★ 수동 업로드 해설(solution_user_edited)은 sweep 대상 제외.
+          //    50자 미만이면 빈 해설로 간주 — generate-solution 이 200 만 던지고 빈 응답 박은 케이스 잡기.
+          const missing = (leftover || [])
+            .filter((p: any) => {
+              const aj = (p.answer_json || {}) as Record<string, any>;
+              if (aj.solution_user_edited === true) return false;
+              const sol = (p.solution_latex || '').toString().trim();
+              return sol.length < 50;
+            })
+            .map((p: any) => p.id as string);
+          if (missing.length > 0) {
+            console.log(`[batch-solutions] 메인 완료 → sweep 시작: 누락 ${missing.length}건`);
+            // jobState 갱신 — sweep 도 진행률에 반영
+            const cur = jobState.get(examId);
+            if (cur) {
+              cur.isRunning = true;
+              cur.total = (cur.total || 0) + missing.length;
+            }
+            fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ problemIds: missing, sweepMode: true }),
+              keepalive: true,
+            }).catch((err) => console.error('[batch-solutions] sweep fetch error:', err));
+            await new Promise((r) => setTimeout(r, 50));
+            // 시험 상태는 sweep 끝난 후 COMPLETED — 여기선 IN_PROGRESS 유지
+            return NextResponse.json({
+              message: 'main-done-sweep-started',
+              startIndex,
+              endIndex,
+              total: problemIds.length,
+              chained: false,
+              sweepCount: missing.length,
+              done: state?.done ?? 0,
+              failed: state?.failed ?? 0,
+            });
+          }
+        } catch (e) {
+          console.warn('[batch-solutions] sweep 조회 실패 (계속):', e);
+        }
+      }
+
+      // sweep 도 끝났거나 누락 없음 → 상태 정리
       if (state) state.isRunning = false;
       await supabaseAdmin
         .from('exams')
         .update({ status: 'COMPLETED' })
         .eq('id', examId);
-      console.log(`[batch-solutions] 전체 완료: done=${state?.done}, failed=${state?.failed}`);
+      console.log(`[batch-solutions${sweepMode ? '/sweep' : ''}] 전체 완료: done=${state?.done}, failed=${state?.failed}`);
     }
 
     return NextResponse.json({
