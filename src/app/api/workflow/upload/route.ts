@@ -1170,12 +1170,29 @@ async function saveEditedProblemsDirect(
     }
   }
 
-  // ★ created_by: job.userId에서 가져옴 (supabaseAdmin.auth.getUser()는 서비스 키라 null)
+  // ★ created_by 우선순위 — job.userId(UUID) → 쿠키 세션의 인증 유저 → null
+  //   기존엔 job.userId 가 'anonymous' 같은 비-UUID 일 때 곧바로 null → exams.created_by
+  //   NOT NULL 위반으로 자산화 실패 사고 (Storage 복원 경로에서 userId hint 가 문자열로
+  //   박혀들어가는 케이스). 쿠키 세션에서 한 번 더 시도.
   const isValidUUID = (str: string): boolean => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     return uuidRegex.test(str);
   };
-  const createdBy = isValidUUID(job.userId) ? job.userId : null;
+  let createdBy: string | null = isValidUUID(job.userId) ? job.userId : null;
+  if (!createdBy) {
+    try {
+      const sessionSupa = await createSupabaseServerClient();
+      if (sessionSupa) {
+        const { data: { user } } = await sessionSupa.auth.getUser();
+        if (user?.id && isValidUUID(user.id)) {
+          createdBy = user.id;
+          console.log(`[Direct Save] job.userId 무효("${job.userId}") → 쿠키 세션 유저로 폴백: ${createdBy}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[Direct Save] 쿠키 세션 유저 조회 실패:', e);
+    }
+  }
 
   // ★ institute_id 조회 (saveProblemsToDB와 동일 로직)
   let instituteId: string | null = isValidUUID(job.instituteId) ? job.instituteId : null;
