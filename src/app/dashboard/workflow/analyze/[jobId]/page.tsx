@@ -4072,8 +4072,10 @@ export default function AnalyzeJobPage() {
           continue;
         }
 
-        // 2. Mathpix OCR + GPT-4o 통합 분석 API 호출
-        const res = await fetch('/api/workflow/reanalyze-crop', {
+        // 2. Mathpix OCR + GPT-4o 통합 분석 API + YOLO figure 검출 병렬 실행
+        //    둘 다 같은 imageBase64 사용 + 독립적 → Promise.all 로 max(둘) 시간만 소요
+        //    이전엔 순차 await 라 30문제 × 3~8s YOLO 추가 = 90~240s 지연 사고 (느려짐 보고).
+        const fetchPromise = fetch('/api/workflow/reanalyze-crop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4083,18 +4085,20 @@ export default function AnalyzeJobPage() {
             fileName: jobData?.fileName,
           }),
         });
+        const yoloPromise = detectFiguresFromProblemCropAfterAnalysis(
+          imageBase64,
+          problem,
+          problem.pageIndex + 1,
+        );
+
+        const res = await fetchPromise;
 
         if (res.ok) {
           const data = await res.json();
           console.log(`[BatchAnalyze] 문제 ${problem.number}: OCR ${data.ocrText?.length || 0}자, 분류: ${data.classification?.classification?.typeName || '없음'}`);
 
-          // ★ 분석 직후 problem 크롭에서 YOLO 한 번 더 → figure 자동 삽입
-          //    실패해도 분석 결과는 그대로 진행 (try/catch 격리)
-          const yoloFigures = await detectFiguresFromProblemCropAfterAnalysis(
-            imageBase64,
-            problem,
-            problem.pageIndex + 1,
-          );
+          // YOLO 결과 await — fetch 완료 시점에 보통 이미 끝나있어 추가 대기 거의 없음
+          const yoloFigures = await yoloPromise;
 
           // 분석 결과로 문제 업데이트
           setAutoCropProblems(prev => {
@@ -4215,7 +4219,8 @@ export default function AnalyzeJobPage() {
         return;
       }
 
-      const res = await fetch('/api/workflow/reanalyze-crop', {
+      // 단건 분석도 병렬: reanalyze-crop + YOLO figure 검출 동시 실행
+      const fetchPromise = fetch('/api/workflow/reanalyze-crop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4225,16 +4230,19 @@ export default function AnalyzeJobPage() {
           fileName: jobData?.fileName,
         }),
       });
+      const yoloPromise = detectFiguresFromProblemCropAfterAnalysis(
+        imageBase64,
+        problem,
+        problem.pageIndex + 1,
+      );
+
+      const res = await fetchPromise;
 
       if (res.ok) {
         const data = await res.json();
 
-        // ★ 분석 직후 problem 크롭에서 YOLO 한 번 더 → figure 자동 삽입
-        const yoloFigures = await detectFiguresFromProblemCropAfterAnalysis(
-          imageBase64,
-          problem,
-          problem.pageIndex + 1,
-        );
+        // YOLO 결과 await — fetch 보다 보통 빠르므로 추가 대기 거의 없음
+        const yoloFigures = await yoloPromise;
 
         setAutoCropProblems(prev => {
           const next = new Map(prev);
