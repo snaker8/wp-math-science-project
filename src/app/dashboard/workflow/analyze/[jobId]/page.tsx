@@ -4479,7 +4479,7 @@ export default function AnalyzeJobPage() {
             </div>
           )}
 
-          {/* 자동 감지 시작 버튼 (기본은 수동 모드, 버튼으로 자동 감지 활성화 가능) */}
+          {/* 자동 감지 시작 버튼 (AI 만 노출 — 픽셀 모드는 내부 폴백으로만 유지) */}
           {!useAutoCropMode && (
             <div className="flex items-center gap-1.5">
               <button
@@ -4489,56 +4489,17 @@ export default function AnalyzeJobPage() {
                   setUseAutoCropMode(true);
                 }}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                title="AI가 모든 페이지의 문제를 자동 감지합니다"
+                title="AI(YOLO)가 모든 페이지의 문제·도형을 자동 감지합니다"
               >
                 <Sparkles className="h-3 w-3" />
                 AI 자동 감지
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDetectionMode('pixel');
-                  setUseAutoCropMode(true);
-                }}
-                className="px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-600 text-zinc-400 hover:bg-zinc-800 transition-colors"
-                title="픽셀 분석으로 모든 페이지의 문제를 자동 감지합니다"
-              >
-                자동 감지
-              </button>
             </div>
           )}
 
-          {/* AI 감지 / 자동 감지 토글 + 중지 버튼 (자동 감지 모드일 때) */}
+          {/* 자동 감지 활성 시: 중지 · 초기화만 노출 (모드 토글·픽셀 슬라이더 제거됨, 픽셀은 내부 폴백 전용) */}
           {useAutoCropMode && (
             <div className="flex items-center gap-2">
-              {/* AI / 픽셀 모드 토글 */}
-              <div className="flex items-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setDetectionMode('ai')}
-                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${
-                    detectionMode === 'ai'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  <Sparkles className="h-3 w-3" />
-                  AI 감지
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDetectionMode('pixel')}
-                  className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${
-                    detectionMode === 'pixel'
-                      ? 'bg-zinc-700 text-white'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  자동 감지
-                </button>
-              </div>
-
-              {/* 자동 감지 중지 + 전체 초기화 */}
               <button
                 type="button"
                 onClick={() => {
@@ -4554,51 +4515,6 @@ export default function AnalyzeJobPage() {
               >
                 중지 · 초기화
               </button>
-
-              {/* 픽셀 모드에서만: 1단/2단 + 감도 슬라이더 */}
-              {detectionMode === 'pixel' && (
-                <>
-                  <div className="flex items-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setColumnMode(1)}
-                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                        columnMode === 1
-                          ? 'bg-zinc-700 text-white'
-                          : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      1단
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setColumnMode(2)}
-                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                        columnMode === 2
-                          ? 'bg-zinc-700 text-white'
-                          : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      2단
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500">세밀</span>
-                    <input
-                      type="range"
-                      min={5}
-                      max={40}
-                      step={1}
-                      value={cropSensitivity}
-                      onChange={(e) => setCropSensitivity(Number(e.target.value))}
-                      className="w-16 h-1 accent-cyan-500 cursor-pointer"
-                      title={`감도: ${cropSensitivity} (낮을수록 세밀하게 분리)`}
-                    />
-                    <span className="text-[10px] text-zinc-500">넓게</span>
-                    <span className="text-[10px] text-cyan-400 font-mono w-4 text-center">{cropSensitivity}</span>
-                  </div>
-                </>
-              )}
             </div>
           )}
 
