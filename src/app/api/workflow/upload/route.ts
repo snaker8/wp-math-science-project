@@ -436,8 +436,11 @@ export async function PUT(request: NextRequest) {
     //   - legacy base64 경로 → 서버에서 업로드
     const pageImagePathMap = new Map<number, { path: string; width: number; height: number }>();
     if (pageImages && Array.isArray(pageImages) && pageImages.length > 0) {
-      console.log(`[Upload PUT] 페이지 이미지 ${pageImages.length}개 처리 시작`);
-      for (const pageImg of pageImages) {
+      console.log(`[Upload PUT] 페이지 이미지 ${pageImages.length}개 처리 시작 (Promise.all 병렬)`);
+      // ★ Phase 3 최적화: for-of 직렬 → Promise.all 병렬 (페이지 N개 동시 업로드)
+      //   각 페이지는 의존성 없음. Map.set 은 JS 단일 스레드라 race 안전.
+      //   warn/error 는 try/catch 격리되어 한 페이지 실패가 다른 페이지 영향 X.
+      await Promise.all(pageImages.map(async (pageImg) => {
         try {
           // 1) 이미 Storage에 업로드된 경우 (권장 경로)
           if (pageImg.storagePath) {
@@ -446,12 +449,12 @@ export async function PUT(request: NextRequest) {
               width: pageImg.width || 0,
               height: pageImg.height || 0,
             });
-            continue;
+            return;
           }
           // 2) legacy: base64 수신 → 서버 업로드
-          if (!supabaseAdmin) continue;
+          if (!supabaseAdmin) return;
           const base64Data = (pageImg.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '');
-          if (!base64Data) continue;
+          if (!base64Data) return;
           const buffer = Buffer.from(base64Data, 'base64');
           const storagePath = `page-images/${jobId}/page-${pageImg.pageNumber}.png`;
 
@@ -470,12 +473,11 @@ export async function PUT(request: NextRequest) {
               width: pageImg.width || 0,
               height: pageImg.height || 0,
             });
-            console.log(`[Upload PUT] 페이지 ${pageImg.pageNumber} 이미지 업로드 완료: ${data.path}`);
           }
         } catch (imgErr) {
           console.warn(`[Upload PUT] 페이지 ${pageImg.pageNumber} 이미지 처리 오류:`, imgErr);
         }
-      }
+      }));
       console.log(`[Upload PUT] 페이지 이미지 매핑 완료: ${pageImagePathMap.size}/${pageImages.length}개`);
     }
 
