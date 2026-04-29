@@ -4096,10 +4096,6 @@ export default function AnalyzeJobPage() {
           // ★ 디버그: OCR 원문 전체 출력 (표 구조 확인) — 임시 alert로 확인
           console.log(`[BatchAnalyze] 문제 ${problem.number} OCR 원문:`, data.ocrText);
           console.log(`[BatchAnalyze] 문제 ${problem.number} 풀이:`, JSON.stringify(data.classification?.solution)?.substring(0, 500));
-          if (typeof window !== 'undefined') {
-            (window as any).__lastOcrDebug = { ocrText: data.ocrText, solution: data.classification?.solution, rawOcr: data.rawOcrText };
-            console.warn(`[★ OCR 디버그] window.__lastOcrDebug 에 저장됨. 콘솔에서 __lastOcrDebug.ocrText 입력하여 확인`);
-          }
 
           // ★ 분석 직후 problem 크롭에서 YOLO 한 번 더 → figure 자동 삽입
           //    실패해도 분석 결과는 그대로 진행 (try/catch 격리)
