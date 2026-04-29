@@ -2208,7 +2208,6 @@ function replaceTablePatternWithImage(
       choicesPart = content.substring(choicesIdx);
     }
 
-    console.log('[ReplaceTable] 전체 교체 모드 (면적:', (area * 100).toFixed(0) + '%)');
     return {
       newContent: imageMarkdown + (choicesPart ? '\n\n' + choicesPart : '\n'),
       replacedPattern: textPart,
@@ -2259,11 +2258,6 @@ function replaceTablePatternWithImage(
     content.substring(0, startIdx).trimEnd() +
     '\n\n' + imageMarkdown + '\n\n' +
     content.substring(endIdx).trimStart();
-
-  console.log('[ReplaceTable] 표 패턴 교체:', {
-    patternLength: largest.length,
-    kRemoved: !!kMatch,
-  });
 
   return {
     newContent,
@@ -4093,9 +4087,6 @@ export default function AnalyzeJobPage() {
         if (res.ok) {
           const data = await res.json();
           console.log(`[BatchAnalyze] 문제 ${problem.number}: OCR ${data.ocrText?.length || 0}자, 분류: ${data.classification?.classification?.typeName || '없음'}`);
-          // ★ 디버그: OCR 원문 전체 출력 (표 구조 확인) — 임시 alert로 확인
-          console.log(`[BatchAnalyze] 문제 ${problem.number} OCR 원문:`, data.ocrText);
-          console.log(`[BatchAnalyze] 문제 ${problem.number} 풀이:`, JSON.stringify(data.classification?.solution)?.substring(0, 500));
 
           // ★ 분석 직후 problem 크롭에서 YOLO 한 번 더 → figure 자동 삽입
           //    실패해도 분석 결과는 그대로 진행 (try/catch 격리)
@@ -4118,7 +4109,6 @@ export default function AnalyzeJobPage() {
               const existingImages = pageProbs[idx].insertedImages || [];
               const allImages = [...existingImages, ...yoloFigures];
               const finalContent = reapplyInsertedImages(extracted.content, allImages);
-              console.log(`[BatchAnalyze] 문제 ${problem.number} 추출 후:`, finalContent?.substring(0, 400));
 
               const cls = classification?.classification;
               pageProbs[idx] = {
