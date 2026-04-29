@@ -658,9 +658,10 @@ export function refineAiBboxes(
     let tight = getContentBoundsAbs(canvas, absRect, padding, 0.03);
 
     if (!tight) {
-      // 콘텐츠 없음 → 원본 AI bbox 유지 (사용자가 수동 조정 가능)
-      console.log(`[RefineAI] #${i + 1} 콘텐츠 없음, 원본 유지`);
-      refined.push(bbox);
+      // 콘텐츠 없음 → 빈 박스(답안카드/OMR/마지막 빈 페이지 등) 로 간주, 결과에서 제외
+      // ★ getContentBoundsAbs 임계값 0.03 (3% 검정 픽셀) 기준 — 진짜 빈 영역만 걸러짐
+      // 실제 그래프/도형은 라인이 충분히 진해서 통과함 (수학 시험지 기준)
+      console.log(`[RefineAI] #${i + 1} 콘텐츠 없음 → 필터링 (빈 박스 false-positive 차단)`);
       continue;
     }
 
