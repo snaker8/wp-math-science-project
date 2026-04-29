@@ -2582,18 +2582,25 @@ function removeChoicesFromContent(text: string): { content: string; score?: numb
   const lines = text.split('\n');
   let choiceStartIdx = -1;
 
+  // ★ CLAUDE.md 가드 — 서답형 소문제 보호:
+  //    한국 수학 시험지 객관식 선택지는 항상 5개. 서답형 소문제는 (1)(2)(3) 또는 (1)(2)(3)(4) 까지만.
+  //    또한 server 의 normalizeChoiceParens 가 이미 진짜 (1)~(5) 객관식을 ①~⑤ 로 변환했음.
+  //    따라서 여기서 (1) 또는 1) 만으로 잘라내면 서답형 소문제를 유실. 보수적으로 (1)~(5) 5개 모두 있을 때만 선택지로 간주.
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    // (1) 패턴으로 시작하는 줄 감지 — 뒤에 (2)도 있는지 확인
+    // (1) 패턴 — (1)(2)(3)(4)(5) 5개 모두 있을 때만 선택지로 처리
     if (/^\(1\)\s/.test(trimmed)) {
-      // 뒤에 (2)가 있는지 확인 (연속 3줄 이내)
       const remaining = lines.slice(i).join('\n');
-      if (/\(2\)/.test(remaining) && /\(3\)/.test(remaining)) {
+      const hasFullObjectiveSet =
+        /\(2\)/.test(remaining) && /\(3\)/.test(remaining) &&
+        /\(4\)/.test(remaining) && /\(5\)/.test(remaining);
+      if (hasFullObjectiveSet) {
         choiceStartIdx = i;
         break;
       }
+      // (1)(2)(3) 또는 (1)(2)(3)(4) 만 있으면 서답형 소문제 → 보존 (자르지 않음)
     }
-    // ① 패턴
+    // ① 패턴 — 객관식 마커 (이건 명확하므로 기존대로 ②③ 만 있어도 선택지)
     if (/^①\s/.test(trimmed)) {
       const remaining = lines.slice(i).join('\n');
       if (/②/.test(remaining) && /③/.test(remaining)) {
@@ -2601,10 +2608,13 @@ function removeChoicesFromContent(text: string): { content: string; score?: numb
         break;
       }
     }
-    // 1) 패턴
+    // 1) 패턴 — 마찬가지로 5개(1)~5)) 모두 있을 때만 선택지
     if (/^1\)\s/.test(trimmed)) {
       const remaining = lines.slice(i).join('\n');
-      if (/2\)/.test(remaining) && /3\)/.test(remaining)) {
+      const hasFullObjectiveSet =
+        /2\)/.test(remaining) && /3\)/.test(remaining) &&
+        /4\)/.test(remaining) && /5\)/.test(remaining);
+      if (hasFullObjectiveSet) {
         choiceStartIdx = i;
         break;
       }
