@@ -3428,10 +3428,12 @@ export default function CloudExamDetailPage() {
     router.push('/dashboard/cloud/create-exam');
   }, [problems, selectedProblems, examTitle, router]);
 
-  // Counts
+  // Counts — DifficultyKey 가 1~10 이라 모두 0 으로 초기화
   const difficultyCounts = useMemo(() => {
-    const counts: Record<DifficultyKey, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    problems.forEach((p) => { counts[p.difficulty]++; });
+    const counts: Record<DifficultyKey, number> = {
+      1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0,
+    };
+    problems.forEach((p) => { counts[p.difficulty as DifficultyKey]++; });
     return counts;
   }, [problems]);
 

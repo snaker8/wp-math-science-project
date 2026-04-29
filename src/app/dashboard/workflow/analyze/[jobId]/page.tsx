@@ -3248,7 +3248,7 @@ export default function AnalyzeJobPage() {
     };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
-      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number }> = [];
+      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {

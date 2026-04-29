@@ -27,7 +27,7 @@ interface MatchResponse {
 interface ProblemInfo {
   id: string;
   number: number;
-  answer: string;
+  answer: string | number;  // 객관식은 ①~⑤ 문자, 단답식은 number 도 가능
 }
 
 interface AnswerMatchModalProps {
