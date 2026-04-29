@@ -1249,113 +1249,154 @@ async function saveEditedProblemsDirect(
   let examId: string | null = null;
   // ★ 진단용 — 실제 DB 에러를 응답에 담아 alert 에서 즉시 원인 파악 가능하게.
   let examInsertError: { message: string; code?: string; details?: string; hint?: string } | null = null;
+  // ★ append 모드 시 기존 exam_problems 의 마지막 sequence_number — 그 다음부터 채번
+  let sequenceOffset = 0;
   // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
   const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
+
+  // ★ append 모드 — 기존 시험지에 문제 추가 (cloud "기존 시험지에 추가" 흐름)
+  //   여기서 examId 결정 + sequenceOffset 설정. 새 exam INSERT 와 중복 차단 모두 스킵.
+  //   기존엔 saveProblemsToDB 의 깨진 분기에서만 처리되어 autoCrop 모드(주 경로)에선 동작 X.
+  if (job.appendToExamId && isValidUUID(job.appendToExamId)) {
+    try {
+      const { data: existingExam } = await supabase
+        .from('exams')
+        .select('id')
+        .eq('id', job.appendToExamId)
+        .is('deleted_at', null)
+        .single();
+      if (existingExam) {
+        examId = existingExam.id;
+        // 기존 exam_problems 의 max sequence_number 조회
+        const { data: lastSeq } = await supabase
+          .from('exam_problems')
+          .select('sequence_number')
+          .eq('exam_id', examId)
+          .order('sequence_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        sequenceOffset = lastSeq?.sequence_number || 0;
+        const appendId = examId as string;  // 위에서 set 했지만 TS 가 narrow 못 함
+        autoSavedExams.set(jobId, appendId);
+        console.log(`[Direct Save] append 모드 — exam ${appendId.slice(0, 8)} 에 ${editedProblems.length}문제 추가, sequence ${sequenceOffset + 1} 부터`);
+      } else {
+        console.warn(`[Direct Save] appendToExamId(${job.appendToExamId}) 무효(존재 X 또는 삭제됨) — 새 exam 생성으로 폴백`);
+      }
+    } catch (e) {
+      console.warn('[Direct Save] append 모드 검증 실패 — 새 exam 생성으로 폴백:', e);
+    }
+  }
 
   // ★ DB 기반 중복 차단 — autoSavedExams in-memory 캐시는 콜드스타트/재배포에 휘발됨.
   //   같은 institute_id + title + (book_group_id) 조합의 살아있는 exam 있으면 그것 재사용.
   //   동일 파일을 두 번 자산화해 빈껍데기 중복 exam 생기던 사고 (신도중 2-1) 차단.
-  try {
-    let dupQuery = supabase
-      .from('exams')
-      .select('id, deleted_at')
-      .eq('title', fileTitle)
-      .is('deleted_at', null);
-    if (instituteId) dupQuery = dupQuery.eq('institute_id', instituteId);
-    if (bookGroupId) dupQuery = dupQuery.eq('book_group_id', bookGroupId);
-    const { data: dupRows } = await dupQuery
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (dupRows && dupRows.length > 0) {
-      const dupId = dupRows[0].id as string;
-      console.log(`[Direct Save] 같은 제목의 살아있는 exam 발견 → 재사용 (${dupId}) — 중복 자산화 차단`);
-      autoSavedExams.set(jobId, dupId);
-      return NextResponse.json({
-        success: true,
-        message: '같은 제목의 시험지가 이미 존재합니다. 중복 자산화를 차단했습니다.',
-        examId: dupId,
-        alreadySaved: true,
-      });
+  //   ★ append 모드일 땐 스킵 (의도적으로 기존 시험지에 추가하는 흐름)
+  if (!examId) {
+    try {
+      let dupQuery = supabase
+        .from('exams')
+        .select('id, deleted_at')
+        .eq('title', fileTitle)
+        .is('deleted_at', null);
+      if (instituteId) dupQuery = dupQuery.eq('institute_id', instituteId);
+      if (bookGroupId) dupQuery = dupQuery.eq('book_group_id', bookGroupId);
+      const { data: dupRows } = await dupQuery
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (dupRows && dupRows.length > 0) {
+        const dupId = dupRows[0].id as string;
+        console.log(`[Direct Save] 같은 제목의 살아있는 exam 발견 → 재사용 (${dupId}) — 중복 자산화 차단`);
+        autoSavedExams.set(jobId, dupId);
+        return NextResponse.json({
+          success: true,
+          message: '같은 제목의 시험지가 이미 존재합니다. 중복 자산화를 차단했습니다.',
+          examId: dupId,
+          alreadySaved: true,
+        });
+      }
+    } catch (e) {
+      console.warn('[Direct Save] 중복 차단 조회 실패 (계속 진행):', e);
     }
-  } catch (e) {
-    console.warn('[Direct Save] 중복 차단 조회 실패 (계속 진행):', e);
   }
 
-  try {
-    const examInsertData: Record<string, any> = {
-      title: fileTitle,
-      description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
-      status: 'DRAFT',
-      created_by: createdBy,
-      institute_id: instituteId,
-      total_points: editedProblems.length * 4,
-      time_limit_minutes: 50,
-      subject: detectSubjectFromTitle(fileTitle),
-      exam_type: detectExamTypeFromTitle(fileTitle),
-      grade: detectGradeFromTitle(fileTitle),
-    };
-    if (bookGroupId) {
-      examInsertData.book_group_id = bookGroupId;
-    } else {
-      // ★ 과목 기반 자동 폴더 배치 (fuzzy 매칭 — 폴더 rename에도 견고)
-      const detectedSubject = examInsertData.subject || '';
-      if (detectedSubject) {
-        try {
-          const folder = await findAutoFolderForSubject(supabase, detectedSubject);
-          if (folder) {
-            examInsertData.book_group_id = folder.id;
-            console.log(`[Direct Save] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
-          }
-        } catch (e) {
-          console.warn('[Direct Save] 자동 폴더 매칭 실패:', e);
-        }
-      }
-    }
-
-    console.log(`[Direct Save] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
-
-    let examResult = await supabase
-      .from('exams')
-      .insert(examInsertData)
-      .select('id')
-      .single();
-
-    // 컬럼 에러 시 최소 컬럼만으로 재시도 (book_group_id는 유지!)
-    if (examResult.error && examResult.error.message.includes('column')) {
-      console.warn(`[Direct Save] Retrying exam insert: ${examResult.error.message}`);
-      const retryData: Record<string, any> = {
-        title: examInsertData.title,
-        description: examInsertData.description,
-        status: examInsertData.status,
+  // ★ append 모드 (examId 이미 set 됨) 면 새 exam INSERT 스킵
+  if (!examId) {
+    try {
+      const examInsertData: Record<string, any> = {
+        title: fileTitle,
+        description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
+        status: 'DRAFT',
         created_by: createdBy,
         institute_id: instituteId,
+        total_points: editedProblems.length * 4,
+        time_limit_minutes: 50,
+        subject: detectSubjectFromTitle(fileTitle),
+        exam_type: detectExamTypeFromTitle(fileTitle),
+        grade: detectGradeFromTitle(fileTitle),
       };
-      if (bookGroupId) retryData.book_group_id = bookGroupId;  // ★ book_group_id 유지
-      examResult = await supabase
+      if (bookGroupId) {
+        examInsertData.book_group_id = bookGroupId;
+      } else {
+        // ★ 과목 기반 자동 폴더 배치 (fuzzy 매칭 — 폴더 rename에도 견고)
+        const detectedSubject = examInsertData.subject || '';
+        if (detectedSubject) {
+          try {
+            const folder = await findAutoFolderForSubject(supabase, detectedSubject);
+            if (folder) {
+              examInsertData.book_group_id = folder.id;
+              console.log(`[Direct Save] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
+            }
+          } catch (e) {
+            console.warn('[Direct Save] 자동 폴더 매칭 실패:', e);
+          }
+        }
+      }
+
+      console.log(`[Direct Save] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
+
+      let examResult = await supabase
         .from('exams')
-        .insert(retryData)
+        .insert(examInsertData)
         .select('id')
         .single();
-    }
 
-    if (examResult.error) {
-      console.error('[Direct Save] Exam create error:', examResult.error.message);
+      // 컬럼 에러 시 최소 컬럼만으로 재시도 (book_group_id는 유지!)
+      if (examResult.error && examResult.error.message.includes('column')) {
+        console.warn(`[Direct Save] Retrying exam insert: ${examResult.error.message}`);
+        const retryData: Record<string, any> = {
+          title: examInsertData.title,
+          description: examInsertData.description,
+          status: examInsertData.status,
+          created_by: createdBy,
+          institute_id: instituteId,
+        };
+        if (bookGroupId) retryData.book_group_id = bookGroupId;  // ★ book_group_id 유지
+        examResult = await supabase
+          .from('exams')
+          .insert(retryData)
+          .select('id')
+          .single();
+      }
+
+      if (examResult.error) {
+        console.error('[Direct Save] Exam create error:', examResult.error.message);
+        examInsertError = {
+          message: examResult.error.message,
+          code: (examResult.error as { code?: string }).code,
+          details: (examResult.error as { details?: string }).details,
+          hint: (examResult.error as { hint?: string }).hint,
+        };
+      } else {
+        examId = examResult.data.id;
+        console.log(`[Direct Save] Created exam: ${examId}`);
+      }
+    } catch (err) {
+      console.error('[Direct Save] Exam create exception:', err);
       examInsertError = {
-        message: examResult.error.message,
-        code: (examResult.error as { code?: string }).code,
-        details: (examResult.error as { details?: string }).details,
-        hint: (examResult.error as { hint?: string }).hint,
+        message: err instanceof Error ? err.message : String(err),
+        code: 'EXCEPTION',
       };
-    } else {
-      examId = examResult.data.id;
-      console.log(`[Direct Save] Created exam: ${examId}`);
     }
-  } catch (err) {
-    console.error('[Direct Save] Exam create exception:', err);
-    examInsertError = {
-      message: err instanceof Error ? err.message : String(err),
-      code: 'EXCEPTION',
-    };
   }
 
   // ★ exam INSERT 실패 시 즉시 abort — problems 만 저장돼 orphan 되는 사고 차단.
@@ -1527,7 +1568,8 @@ async function saveEditedProblemsDirect(
         const { error: epError } = await supabase.from('exam_problems').insert({
           exam_id: examId,
           problem_id: problem.id,
-          sequence_number: savedCount,
+          // ★ append 모드면 기존 max 다음부터, 아니면 1부터
+          sequence_number: sequenceOffset + savedCount,
           points: extractedPoints,
         });
         if (epError) {
@@ -1758,162 +1800,167 @@ async function saveProblemsToDB(
   // 1. Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   // 003_exams.sql 마이그레이션 스키마 기준 컬럼만 사용
   let examId: string | null = null;
+  // ★ append 모드 시 기존 max sequence_number — exam_problems INSERT 시 offset 으로 사용
+  let sequenceOffset = 0;
+
+  // ★ append 모드 — 기존 시험지에 문제 추가 (새 exam INSERT 스킵)
+  //   기존엔 problems 저장 전에 분기에서 savedProblemIds 사용해 ReferenceError + 미저장.
+  //   수정: examId 만 재사용하고 problems 저장은 아래 루프가 처리. exam_problems
+  //   sequence_number 는 sequenceOffset + savedCount 로 자동 채번.
+  if (job.appendToExamId && isValidUUID(job.appendToExamId)) {
+    try {
+      const { data: existingExam } = await supabase
+        .from('exams')
+        .select('id')
+        .eq('id', job.appendToExamId)
+        .is('deleted_at', null)
+        .single();
+      if (existingExam) {
+        examId = existingExam.id;
+        const { data: lastSeq } = await supabase
+          .from('exam_problems')
+          .select('sequence_number')
+          .eq('exam_id', examId)
+          .order('sequence_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        sequenceOffset = lastSeq?.sequence_number || 0;
+        autoSavedExams.set(jobId, examId as string);
+        console.log(`[DB] append 모드 — exam ${(examId as string).slice(0, 8)} 에 ${results.length}문제 추가, sequence ${sequenceOffset + 1} 부터`);
+      } else {
+        console.warn(`[DB] appendToExamId(${job.appendToExamId}) 무효 — 새 exam 생성으로 폴백`);
+      }
+    } catch (e) {
+      console.warn('[DB] append 모드 검증 실패 — 새 exam 생성으로 폴백:', e);
+    }
+  }
+
   try {
     const firstResult = results[0];
     const classification = firstResult?.classification;
 
-    // ★ appendToExamId가 있으면 기존 시험지에 병합 (새 시험지 생성 건너뜀)
-    if (job.appendToExamId) {
-      console.log(`[DB] appendToExamId=${job.appendToExamId} — 기존 시험지에 ${savedProblemIds.length}개 문제 병합`);
-
-      // 마지막 sequence_number 조회
-      const { data: lastSeqData } = await supabase
-        .from('exam_problems')
-        .select('sequence_number')
-        .eq('exam_id', job.appendToExamId)
-        .order('sequence_number', { ascending: false })
-        .limit(1)
-        .single();
-
-      const startSeq = (lastSeqData?.sequence_number || 0) + 1;
-
-      // 이미 연결된 문제 제외
-      const { data: existingEp } = await supabase
-        .from('exam_problems')
-        .select('problem_id')
-        .eq('exam_id', job.appendToExamId)
-        .in('problem_id', savedProblemIds);
-
-      const existingSet = new Set((existingEp || []).map((r: any) => r.problem_id));
-      const toAdd = savedProblemIds.filter(id => !existingSet.has(id));
-
-      for (let i = 0; i < toAdd.length; i++) {
-        await supabase.from('exam_problems').insert({
-          exam_id: job.appendToExamId,
-          problem_id: toAdd[i],
-          sequence_number: startSeq + i,
-          points: null,
-        });
-      }
-
-      autoSavedExams.set(jobId, job.appendToExamId);
-      console.log(`[DB] 기존 시험지에 ${toAdd.length}개 문제 병합 완료`);
-      return;
+    // append 모드면 새 exam INSERT 스킵 (examId 이미 set)
+    if (examId) {
+      console.log(`[DB] append 모드 — exam ${examId.slice(0, 8)} 재사용, 새 INSERT 스킵`);
     }
 
     // schema.sql 기준 컬럼만 사용 (공통 유틸 사용)
     const fileTitle = job.fileName.replace(/\.[^/.]+$/, "");
 
-    // ★ DB 기반 중복 차단 — saveEditedProblemsDirect 와 동일 가드.
-    //   in-memory autoSavedExams 는 콜드스타트에 휘발되므로 DB 로 한 번 더 확인.
-    try {
-      let dupQuery = supabase
-        .from('exams')
-        .select('id, deleted_at')
-        .eq('title', fileTitle)
-        .is('deleted_at', null);
-      if (instituteId) dupQuery = dupQuery.eq('institute_id', instituteId);
-      if (bookGroupId) dupQuery = dupQuery.eq('book_group_id', bookGroupId);
-      const { data: dupRows } = await dupQuery
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (dupRows && dupRows.length > 0) {
-        const dupId = dupRows[0].id as string;
-        console.log(`[DB] 같은 제목의 살아있는 exam 발견 → 재사용 (${dupId}) — 중복 자산화 차단`);
-        autoSavedExams.set(jobId, dupId);
-        return; // saveProblemsToDB 는 void — 중복은 조용히 무시
-      }
-    } catch (e) {
-      console.warn('[DB] 중복 차단 조회 실패 (계속 진행):', e);
-    }
-
-    const examInsertData: Record<string, any> = {
-      title: fileTitle,
-      description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
-      status: 'DRAFT',
-      created_by: createdBy,
-      institute_id: instituteId,
-      total_points: results.length * 4,
-      time_limit_minutes: 50,
-      subject: detectSubjectFromTitle(fileTitle),
-      exam_type: detectExamTypeFromTitle(fileTitle),
-      grade: detectGradeFromTitle(fileTitle),
-    };
-
-    // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치 (fuzzy 매칭)
-    if (bookGroupId) {
-      examInsertData.book_group_id = bookGroupId;
-    } else {
-      const detectedSubject = examInsertData.subject || '';
-      if (detectedSubject) {
-        try {
-          const folder = await findAutoFolderForSubject(supabase, detectedSubject);
-          if (folder) {
-            examInsertData.book_group_id = folder.id;
-            console.log(`[DB] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
-          }
-        } catch (e) {
-          console.warn('[DB] 자동 폴더 매칭 실패:', e);
+    // ★ DB 기반 중복 차단 — append 모드면 스킵 (의도적 추가)
+    if (!examId) {
+      try {
+        let dupQuery = supabase
+          .from('exams')
+          .select('id, deleted_at')
+          .eq('title', fileTitle)
+          .is('deleted_at', null);
+        if (instituteId) dupQuery = dupQuery.eq('institute_id', instituteId);
+        if (bookGroupId) dupQuery = dupQuery.eq('book_group_id', bookGroupId);
+        const { data: dupRows } = await dupQuery
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (dupRows && dupRows.length > 0) {
+          const dupId = dupRows[0].id as string;
+          console.log(`[DB] 같은 제목의 살아있는 exam 발견 → 재사용 (${dupId}) — 중복 자산화 차단`);
+          autoSavedExams.set(jobId, dupId);
+          return; // saveProblemsToDB 는 void — 중복은 조용히 무시
         }
+      } catch (e) {
+        console.warn('[DB] 중복 차단 조회 실패 (계속 진행):', e);
       }
     }
 
-    console.log(`[DB] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
-
-    let examResult = await supabase
-      .from('exams')
-      .insert(examInsertData)
-      .select('id')
-      .single();
-
-    // 컬럼 에러 시 (PostgREST 스키마 캐시 문제) 최소 컬럼만으로 재시도 (book_group_id는 유지!)
-    if (examResult.error && examResult.error.message.includes('column')) {
-      console.warn(`[DB] Retrying exam insert with minimal columns: ${examResult.error.message}`);
-      const retryData: Record<string, any> = {
-        title: examInsertData.title,
-        description: examInsertData.description,
-        status: examInsertData.status,
+    // ★ append 모드면 새 exam INSERT 스킵 (examId 이미 set)
+    if (!examId) {
+      const examInsertData: Record<string, any> = {
+        title: fileTitle,
+        description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
+        status: 'DRAFT',
         created_by: createdBy,
         institute_id: instituteId,
+        total_points: results.length * 4,
+        time_limit_minutes: 50,
+        subject: detectSubjectFromTitle(fileTitle),
+        exam_type: detectExamTypeFromTitle(fileTitle),
+        grade: detectGradeFromTitle(fileTitle),
       };
-      if (bookGroupId) retryData.book_group_id = bookGroupId;  // ★ book_group_id 유지
-      examResult = await supabase
+
+      // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치 (fuzzy 매칭)
+      if (bookGroupId) {
+        examInsertData.book_group_id = bookGroupId;
+      } else {
+        const detectedSubject = examInsertData.subject || '';
+        if (detectedSubject) {
+          try {
+            const folder = await findAutoFolderForSubject(supabase, detectedSubject);
+            if (folder) {
+              examInsertData.book_group_id = folder.id;
+              console.log(`[DB] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
+            }
+          } catch (e) {
+            console.warn('[DB] 자동 폴더 매칭 실패:', e);
+          }
+        }
+      }
+
+      console.log(`[DB] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
+
+      let examResult = await supabase
         .from('exams')
-        .insert(retryData)
+        .insert(examInsertData)
         .select('id')
         .single();
-    }
 
-    const { data: exam, error: examError } = examResult;
-
-    if (examError) {
-      console.error('[DB] Failed to create exam record:', examError.message);
-      // institute_id NOT NULL 에러 시 institute_id 없이 한번 더 시도 (003_exams.sql은 nullable)
-      if (examError.message.includes('institute_id') || examError.message.includes('not-null')) {
-        console.warn('[DB] Retrying without institute_id (nullable in migration)...');
-        const retryInsertData: Record<string, any> = {
+      // 컬럼 에러 시 (PostgREST 스키마 캐시 문제) 최소 컬럼만으로 재시도 (book_group_id는 유지!)
+      if (examResult.error && examResult.error.message.includes('column')) {
+        console.warn(`[DB] Retrying exam insert with minimal columns: ${examResult.error.message}`);
+        const retryData: Record<string, any> = {
           title: examInsertData.title,
           description: examInsertData.description,
           status: examInsertData.status,
           created_by: createdBy,
+          institute_id: instituteId,
         };
-        if (bookGroupId) retryInsertData.book_group_id = bookGroupId;  // ★ book_group_id 유지
-        const retryResult = await supabase
+        if (bookGroupId) retryData.book_group_id = bookGroupId;  // ★ book_group_id 유지
+        examResult = await supabase
           .from('exams')
-          .insert(retryInsertData)
+          .insert(retryData)
           .select('id')
           .single();
-
-        if (retryResult.data) {
-          examId = retryResult.data.id;
-          console.log(`[DB] Created exam record (no institute): ${examId}`);
-        } else {
-          console.error('[DB] Final retry also failed:', retryResult.error?.message);
-        }
       }
-    } else {
-      examId = exam.id;
-      console.log(`[DB] Created exam record: ${examId}`);
+
+      const { data: exam, error: examError } = examResult;
+
+      if (examError) {
+        console.error('[DB] Failed to create exam record:', examError.message);
+        // institute_id NOT NULL 에러 시 institute_id 없이 한번 더 시도 (003_exams.sql은 nullable)
+        if (examError.message.includes('institute_id') || examError.message.includes('not-null')) {
+          console.warn('[DB] Retrying without institute_id (nullable in migration)...');
+          const retryInsertData: Record<string, any> = {
+            title: examInsertData.title,
+            description: examInsertData.description,
+            status: examInsertData.status,
+            created_by: createdBy,
+          };
+          if (bookGroupId) retryInsertData.book_group_id = bookGroupId;  // ★ book_group_id 유지
+          const retryResult = await supabase
+            .from('exams')
+            .insert(retryInsertData)
+            .select('id')
+            .single();
+
+          if (retryResult.data) {
+            examId = retryResult.data.id;
+            console.log(`[DB] Created exam record (no institute): ${examId}`);
+          } else {
+            console.error('[DB] Final retry also failed:', retryResult.error?.message);
+          }
+        }
+      } else {
+        examId = exam.id;
+        console.log(`[DB] Created exam record: ${examId}`);
+      }
     }
   } catch (err) {
     console.error('[DB] Error creating exam:', err);
@@ -2053,7 +2100,8 @@ async function saveProblemsToDB(
           const { error: epError } = await supabase.from('exam_problems').insert({
             exam_id: examId,
             problem_id: problem.id,
-            sequence_number: savedCount,
+            // ★ append 모드면 기존 max 다음부터, 아니면 1부터
+            sequence_number: sequenceOffset + savedCount,
             points: autoPoints,
           });
           if (epError) {
