@@ -283,15 +283,15 @@ export function FigureRenderer({
   if (figureData && figureData.confidence >= 0.3 && figureData.figureType !== 'photo' && figureData.rendering) {
     const isGraph = figureData.rendering.type === 'graph';
     const graphRendering = isGraph ? figureData.rendering as GraphRendering : null;
-    const savedDesmosState = (figureData.rendering as Record<string, unknown>)?.desmosState;
+    const savedDesmosState = (figureData.rendering as unknown as Record<string, unknown>)?.desmosState;
 
     return (
       <div className={`relative group ${className}`} style={{ maxWidth }}>
         {/* ★ 편집된 스크린샷이 있으면 이미지 표시, 없으면 기존 렌더링 */}
-        {isGraph && (figureData.rendering as Record<string, unknown>)?.editedImageDataUrl ? (
+        {isGraph && (figureData.rendering as unknown as Record<string, unknown>)?.editedImageDataUrl ? (
           <div className={`relative rounded-lg overflow-hidden border ${darkMode ? 'border-zinc-700 bg-white' : 'border-gray-200'}`}>
             <img
-              src={(figureData.rendering as Record<string, unknown>).editedImageDataUrl as string}
+              src={(figureData.rendering as unknown as Record<string, unknown>).editedImageDataUrl as string}
               alt="편집된 그래프"
               style={{ width: maxWidth, height: 'auto', display: 'block' }}
             />

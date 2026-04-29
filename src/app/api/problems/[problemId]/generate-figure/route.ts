@@ -384,7 +384,9 @@ export async function POST(
       legacySvg = directSvg;
       console.log(`[generate-figure] ★ Claude 직접 SVG 사용: ${directSvg.length}자`);
     } else if (renderingType === 'geometry' && interpreted.rendering) {
-      const geoRendering = interpreted.rendering as Record<string, unknown>;
+      // ★ rendering 타입이 union (Graph|Geometry|Table|Diagram). 여기선 geometry 분기라
+      //   안전하게 unknown 거쳐 Record 캐스팅.
+      const geoRendering = interpreted.rendering as unknown as Record<string, unknown>;
       const vertices = (geoRendering.vertices as Array<{ label?: string }>) || [];
       const hasAutoLabels = vertices.some(v => /_tl|_tr|_bl|_br|Top_|Bot_|Left_|Right_/.test(v.label || ''));
       console.log(`[generate-figure] geometry 체크: autoLabels=${hasAutoLabels}, labels=${vertices.map(v => v.label).join(',')}`);
@@ -395,8 +397,8 @@ export async function POST(
         legacySvg = undefined;
         interpreted.figureType = 'photo' as any;
       } else {
-        // ★ 정상 vertices → 코드 기반 SVG (graph 타입에서만 도달)
-        legacySvg = generateGeometrySVG(interpreted.rendering) || undefined;
+        // ★ 정상 vertices → 코드 기반 SVG. union 이지만 geometry 분기라 안전 캐스팅.
+        legacySvg = generateGeometrySVG(interpreted.rendering as unknown as Parameters<typeof generateGeometrySVG>[0]) || undefined;
       }
     }
 
