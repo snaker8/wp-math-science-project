@@ -2405,7 +2405,9 @@ async function detectFiguresFromProblemCropAfterAnalysis(
     const res = await fetch('/api/workflow/detect-problems-yolo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: problemBase64, pageNumber: pageNum }),
+      // ★ figureOnly: problem 0건이어도 GPT-4o 폴백 X. graph/table 만 찾는 흐름이라
+      //   폴백 호출은 무용. 응답 시간 단축 + GPT-4o 비용 절감.
+      body: JSON.stringify({ imageBase64: problemBase64, pageNumber: pageNum, figureOnly: true }),
     });
     if (!res.ok) return [];
     const data = await res.json();

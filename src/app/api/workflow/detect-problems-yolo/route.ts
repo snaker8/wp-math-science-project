@@ -24,7 +24,7 @@ interface DetectedBbox {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { imageBase64, pageNumber, expectedStartNumber, forceGpt } = body;
+  const { imageBase64, pageNumber, expectedStartNumber, forceGpt, figureOnly } = body;
 
   if (!imageBase64) {
     return NextResponse.json({ error: 'imageBase64 required' }, { status: 400 });
@@ -34,6 +34,18 @@ export async function POST(request: NextRequest) {
   if (!forceGpt) {
     try {
       const yoloResult = await callYoloServer(imageBase64, pageNumber || 1);
+      // ★ figureOnly 모드 — problem 0건이어도 GPT-4o 폴백 X.
+      //   분석 후 problem 크롭에서 graph/table 만 찾는 흐름. 폴백은 problem detection 용이라
+      //   figure 검출엔 무용. 14회 헛 호출 막아 응답 시간 단축.
+      if (figureOnly && yoloResult) {
+        return NextResponse.json({
+          problems: yoloResult.problems,
+          others: yoloResult.others,
+          count: yoloResult.problems.length,
+          source: 'yolo',
+          inference_ms: yoloResult.inference_ms,
+        });
+      }
       if (yoloResult && yoloResult.problems.length > 0) {
         console.log(`[DetectYOLO] ${yoloResult.problems.length}개 문제 감지 (YOLO, page ${pageNumber})`);
         return NextResponse.json({
@@ -47,6 +59,16 @@ export async function POST(request: NextRequest) {
       console.log(`[DetectYOLO] YOLO 0건 → GPT-4o Vision 폴백`);
     } catch (err) {
       console.warn(`[DetectYOLO] YOLO 서버 오류 → GPT-4o Vision 폴백:`, err instanceof Error ? err.message : err);
+      // figureOnly 모드에선 YOLO 실패 시 빈 결과 반환 (GPT-4o 폴백 X)
+      if (figureOnly) {
+        return NextResponse.json({
+          problems: [],
+          others: [],
+          count: 0,
+          source: 'yolo-error',
+          inference_ms: 0,
+        });
+      }
     }
   }
 
