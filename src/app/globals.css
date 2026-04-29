@@ -149,9 +149,10 @@
 /* ★ cases/mtable 내부 분수만 — KaTeX 가 cases 안 분수를 textstyle (작게) 로 렌더해서
    가독성 떨어짐. mfrac 만 displaystyle 비슷한 크기로 키움.
    본문 텍스트 (x≠3, x=3 등) 는 그대로 → 분수만 크게.
-   1.2em 은 부족했다는 사용자 보고 → 1.4em 로 상향. */
+   ★ 1.4em 은 다른 곳 (matrix, align 등) 도 영향 → 사용자 보고. 1.2em 으로 revert.
+   추후 cases 만 정확히 타겟팅하는 더 좁은 셀렉터 검토 필요. */
 .katex .mtable .mfrac {
-  font-size: 1.4em;
+  font-size: 1.2em;
 }
 .katex .base {
   vertical-align: baseline;
