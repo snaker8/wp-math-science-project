@@ -2519,7 +2519,12 @@ function extractProblemContent(rawContent: string, fallbackTypeName?: string): {
       // ★ 0) [서답형/서술형/논술형 N] 또는 [서답형 N-M] 라벨은 문제 시작 — 보존 우선!
       //    헤더 패턴 #3/#4 (\[.+?\]\[.+?\]) 가 [서답형 1][8점] 같은 라인을 잘못 헤더로 분류하던 사고 차단.
       //    "[서답형1]" 본문 표시 누락 (사용자 보고: 미분계수 도함수 증명 문제) — 이 fix 로 보존.
-      if (/^\s*\[(?:서답형|서술형|논술형|서\s*·\s*논술형)\s*\d+(?:[-]\d+)?\s*\]/.test(trimmed)) {
+      //
+      //    지원 모든 표기 (시험지마다 다양):
+      //    [서답형 N] / <서답형 N> / 《서답형 N》 / 〈서답형 N〉 / 「서답형 N」 / (서답형 N)
+      //    서답형1 / 서술형 1 / 논술형 N (괄호 없는 형태도)
+      //    제외: "서답형 N문항" (헤더 안내) — \d+ 뒤 부정 lookahead (?!\s*문항) 로 차단.
+      if (/^\s*[\[<《〈「(]?\s*(?:서답형|서술형|논술형|서\s*·\s*논술형)\s*\d+(?:[-]\d+)?(?!\s*문항)/.test(trimmed)) {
         foundQuestionStart = true;
         cleanedLines.push(line);
         continue;
