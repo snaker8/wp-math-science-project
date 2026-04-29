@@ -3504,8 +3504,13 @@ export default function AnalyzeJobPage() {
           const finalAnswer = updated.answer ?? selectedProblem.answer;
           const circledNumbers = ['①', '②', '③', '④', '⑤'];
           const currentChoices = updated.choices ?? selectedProblem.choices ?? [];
+          // ★ choices prefix 정규화 — ① / (1) / 1) / 1. 모두 제거 후 ① 으로 통일
           const formattedChoices = currentChoices.map((c: string, i: number) => {
-            const stripped = c.replace(/^[①②③④⑤]\s*/, '');
+            const stripped = c
+              .replace(/^[①②③④⑤]\s*/, '')
+              .replace(/^\(\s*[1-5]\s*\)\s*/, '')
+              .replace(/^[1-5]\s*[).]\s*/, '')
+              .trim();
             return stripped ? `${circledNumbers[i]} ${stripped}` : '';
           }).filter(Boolean);
           body.answer_json = {

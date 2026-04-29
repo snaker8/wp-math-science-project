@@ -948,9 +948,15 @@ export default function AnalyzeProblemEditModal({
 
   // === 저장 ===
   const handleSave = useCallback(() => {
-    const formattedChoices = choices.map((c, i) => {
-      const stripped = c.replace(/^[①②③④⑤]\s*/, '');
-      return stripped;
+    // ★ choices prefix 정규화 — ①②③ / (1)(2)(3) / 1) 1. 등 모두 제거.
+    //   기존엔 ① 만 제거해서 사용자가 모달에서 편집 후 "(1) ..." 입력하면 prefix 그대로
+    //   저장 → 렌더링 시 (1) 으로 표시되는 사고 (사용자 보고).
+    const formattedChoices = choices.map((c) => {
+      return c
+        .replace(/^[①②③④⑤]\s*/, '')          // ① 제거
+        .replace(/^\(\s*[1-5]\s*\)\s*/, '')   // (1) 제거
+        .replace(/^[1-5]\s*[).]\s*/, '')      // 1) 또는 1. 제거
+        .trim();
     });
 
     const parsedScore = parseFloat(problemScore);

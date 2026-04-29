@@ -772,8 +772,13 @@ export function ProblemEditModal({
     try {
       const finalAnswer = answerType === 'objective' ? correctAnswer : subjectiveAnswer;
       const circledNumbers = ['①', '②', '③', '④', '⑤'];
+      // ★ choices prefix 정규화 — ①②③ / (1)(2)(3) / 1) 1. 등 모두 제거 후 ① 으로 통일
       const formattedChoices = choices.map((c, i) => {
-        const stripped = c.replace(/^[①②③④⑤]\s*/, '');
+        const stripped = c
+          .replace(/^[①②③④⑤]\s*/, '')          // ① 제거
+          .replace(/^\(\s*[1-5]\s*\)\s*/, '')   // (1) 제거
+          .replace(/^[1-5]\s*[).]\s*/, '')      // 1) 또는 1. 제거
+          .trim();
         return stripped ? `${circledNumbers[i]} ${stripped}` : '';
       }).filter(Boolean);
 
