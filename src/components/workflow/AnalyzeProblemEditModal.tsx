@@ -1044,10 +1044,12 @@ export default function AnalyzeProblemEditModal({
                       이미지 추가
                     </button>
                     <button type="button" onClick={() => {
+                      // ★ buggy 버튼: setEditContent/setEditChoices 미정의 (ReferenceError)
+                      //   실제 state 이름은 setContent/setChoices. 이 버튼 누르면 crash 했었음.
                       const map: Record<string, string> = { '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤' };
-                      setOcrText(prev => prev.replace(/\(([1-5])\)/g, (_, n) => map[n] || _));
-                      setEditContent(prev => prev.replace(/\(([1-5])\)/g, (_, n) => map[n] || _));
-                      setEditChoices(prev => prev.map(c => c.replace(/\(([1-5])\)/g, (_, n) => map[n] || _)));
+                      setOcrText((prev: string) => prev.replace(/\(([1-5])\)/g, (m: string, n: string) => map[n] || m));
+                      setContent((prev: string) => prev.replace(/\(([1-5])\)/g, (m: string, n: string) => map[n] || m));
+                      setChoices((prev: string[]) => prev.map((c: string) => c.replace(/\(([1-5])\)/g, (m: string, n: string) => map[n] || m)));
                     }}
                       className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-100 transition-colors shadow-sm">
                       ①②③ 변환
