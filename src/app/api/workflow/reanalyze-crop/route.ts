@@ -666,17 +666,26 @@ function extractChoicesFromOCR(text: string): string[] {
   }
 
   // 2. (1) (2) (3) (4) (5) 정방향 분리
-  // ★ 서술형 소문제 감지: "구하시오", "설명하시오" 등이 포함되면 선택지가 아닌 본문으로 유지
+  // ★ CLAUDE.md 가드 #2 — 한국 객관식은 항상 5지선다. 5개(1)~(5) 모두 있을 때만 choices 로 처리.
+  //    그 외엔 서답형 소문제 (1)(2)(3) 또는 (1)(2)(3)(4) 로 간주 → 빈 배열 반환.
+  //    추가 안전망: 키워드 검출 (구하시오/설명하시오 등)
   {
     const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오/;
     const parenRegex = /\(([1-5])\)/g;
-    const parenPositions: { idx: number; len: number }[] = [];
+    const parenPositions: { idx: number; len: number; num: number }[] = [];
     while ((m = parenRegex.exec(text)) !== null) {
-      parenPositions.push({ idx: m.index, len: m[0].length });
+      parenPositions.push({ idx: m.index, len: m[0].length, num: parseInt(m[1]) });
     }
 
     if (parenPositions.length >= 2) {
-      // 각 (N) 뒤 텍스트에서 서술형 키워드 확인
+      // ★ 5지선다 가드 — (1)~(5) 5개 모두 있어야 객관식. 그 외엔 서답형 소문제.
+      const nums = new Set(parenPositions.map(p => p.num));
+      const hasFullObjectiveSet = nums.has(1) && nums.has(2) && nums.has(3) && nums.has(4) && nums.has(5);
+      if (!hasFullObjectiveSet) {
+        return [];
+      }
+
+      // 각 (N) 뒤 텍스트에서 서술형 키워드 확인 (5개 다 있어도 서술형일 수 있어 추가 안전망)
       let hasSubProblem = false;
       for (let i = 0; i < parenPositions.length; i++) {
         const start = parenPositions[i].idx + parenPositions[i].len;
@@ -687,10 +696,7 @@ function extractChoicesFromOCR(text: string): string[] {
           break;
         }
       }
-
-      // 서술형 소문제면 choices로 분리하지 않음
       if (hasSubProblem) {
-        // choices 빈 배열 반환 → 본문에 (1)(2) 유지
         return [];
       }
 
@@ -706,14 +712,21 @@ function extractChoicesFromOCR(text: string): string[] {
   }
 
   // 3. 1) 2) 3) ... 정방향 분리
-  // ★ 서술형 감지 동일 적용
+  // ★ 동일 5지선다 가드 + 서술형 감지
   const numRegex = /(?:^|\s)([1-5])\s*\)/gm;
-  const numPositions: { idx: number; len: number }[] = [];
+  const numPositions: { idx: number; len: number; num: number }[] = [];
   while ((m = numRegex.exec(text)) !== null) {
-    numPositions.push({ idx: m.index, len: m[0].length });
+    numPositions.push({ idx: m.index, len: m[0].length, num: parseInt(m[1]) });
   }
 
   if (numPositions.length >= 2) {
+    // ★ 5지선다 가드 — 1)~5) 모두 있어야 객관식
+    const nums2 = new Set(numPositions.map(p => p.num));
+    const hasFullSet2 = nums2.has(1) && nums2.has(2) && nums2.has(3) && nums2.has(4) && nums2.has(5);
+    if (!hasFullSet2) {
+      return [];
+    }
+
     const subProblemKw2 = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오/;
     let hasSub2 = false;
     for (let i = 0; i < numPositions.length; i++) {
