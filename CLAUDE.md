@@ -121,6 +121,21 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - server-side `fetch(... { keepalive: true })` chain 은 인스턴스 종료 시 끊김 (신도중 22·23번 sweep 실패 사고).
 - 클라이언트 단점: 페이지 떠나면 중단. 대신 누락 0 (2a31563).
 
+### 6. exams.created_by NOT NULL 폴백 — 쿠키 세션 유저 필수
+- 위치: `src/app/api/workflow/upload/route.ts` `saveEditedProblemsDirect` + `saveProblemsToDB` 둘 다.
+- 가드: `job.userId` 가 UUID 가 아니면 (`'anonymous'` 같은 문자열 박힘) → `createSupabaseServerClient().auth.getUser()` 로 쿠키 세션 유저 폴백.
+- 비로그인이면 여전히 null → 후속 orphan 가드(#1)가 abort.
+- 사고 이력: Storage 복원 경로(line 538) 가 비로그인 시 'anonymous' hint 박아서 자산화 시 `null value in column "created_by"` (PG 23502) 로 실패 (b552a8e). 다중 배포 사이클 시 빈번.
+- **두 함수 동시 패치 필수** — 한쪽만 막으면 results 채워진 경로 통과 못 함.
+
+### 7. 배점 추출 클라이언트·서버 동기화 — 같은 우선순위 ([총 N점] > 합산 > 단일)
+- 위치 (서버): `saveEditedProblemsDirect.extractedPoints` (#2 가드 참고)
+- 위치 (클라): `src/app/dashboard/workflow/analyze/[jobId]/page.tsx` `removeChoicesFromContent`
+- 가드: 두 곳 모두 동일 우선순위 — `[총 N점]` > 다수 [Ni점] 합산 > 단일 [N점] > undefined.
+- 클라가 첫 매치만 잡으면 `score=3` 박힌 채 서버로 전송 → 서버는 client 값 우선이라 `[총 6점]` 검사 스킵 → 잘못된 배점.
+- 정규식 양쪽 통일: `[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]` (대괄호·소괄호 모두 + OCR 오타 점/졈/졍).
+- 사고 이력: 사직여중 중2-1 서답형 자산화 배점이 매번 첫 [3점] 으로 들어가 사용자가 수동 수정 (1ba79ff).
+
 ### 학습 저장 위치
 - DB: `figure_corrections` (도형 교정 diff), `latex_render_corrections` (LaTeX 수정 diff)
 - 메모리: `~/.claude/projects/.../memory/feedback_*.md` (5개 파일 인덱스 MEMORY.md 참조)
