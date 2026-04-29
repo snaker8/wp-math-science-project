@@ -2426,6 +2426,8 @@ async function detectFiguresFromProblemCropAfterAnalysis(
         if (gptRes.ok) {
           const gptData = await gptRes.json();
           const gptFigures = (gptData.figures || []) as Array<{ type?: string; x: number; y: number; w: number; h: number }>;
+          // ★ 디버그 — env 토글 상태 확인용
+          console.log(`[FigureAfterAnalyze] 문제 ${problem.number} GPT 응답: source=${gptData.source}, figures=${gptFigures.length}, error=${gptData.error || 'none'}`);
           figures = gptFigures.map((f) => ({
             x: f.x,
             y: f.y,
