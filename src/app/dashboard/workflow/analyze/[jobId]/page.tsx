@@ -2424,11 +2424,14 @@ async function detectFiguresFromProblemCropAfterAnalysis(
           const gptFigures = (gptData.figures || []) as Array<{ type?: string; x: number; y: number; w: number; h: number }>;
           // ★ 디버그 — env 토글 상태 확인용
           console.log(`[FigureAfterAnalyze] 문제 ${problem.number} GPT 응답: source=${gptData.source}, figures=${gptFigures.length}, error=${gptData.error || 'none'}`);
+          // ★ GPT-4o bbox 안전망 — 외곽 5% padding 추가 (그래프 끝 잘림 방지)
+          //   prompt 에서 "여유있게" 요청해도 GPT 가 타이트하게 잡는 케이스 보정.
+          const PADDING = 0.05;
           figures = gptFigures.map((f) => ({
-            x: f.x,
-            y: f.y,
-            w: f.w,
-            h: f.h,
+            x: Math.max(0, f.x - PADDING),
+            y: Math.max(0, f.y - PADDING),
+            w: Math.min(1 - Math.max(0, f.x - PADDING), f.w + PADDING * 2),
+            h: Math.min(1 - Math.max(0, f.y - PADDING), f.h + PADDING * 2),
             class: f.type === 'table' ? 'table' : 'graph',
           }));
           if (figures.length > 0) {
