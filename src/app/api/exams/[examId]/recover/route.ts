@@ -56,11 +56,11 @@ export async function POST(
           const appendedText = splitMatch[2];
 
           // (N) 패턴으로 분리
-          const subProblems = appendedText.split(/(?=\(\d+\)\s)/).filter(s => s.trim());
+          const subProblems = appendedText.split(/(?=\(\d+\)\s)/).filter((s: string) => s.trim());
 
           if (subProblems.length >= 2) {
             // choices로 복원 (번호 제거)
-            const restoredChoices = subProblems.map(s =>
+            const restoredChoices = subProblems.map((s: string) =>
               s.replace(/^\(\d+\)\s*/, '').trim()
             );
 
