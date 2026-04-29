@@ -678,7 +678,6 @@ export async function PUT(request: NextRequest) {
             }
           }
           if (edited.choices) result.choices = edited.choices;
-          console.log(`[Upload PUT] 문제 ${edited.number}번 수정 적용 (matched by ${matchedBy}): difficulty=${edited.difficulty}, typeCode=${edited.typeCode}, contentLen=${(edited.content || '').length}`);
         } else {
           console.error(`[Upload PUT] ✖ 문제 ${edited.number}번 매칭 완전 실패 — 인덱스 폴백도 불가 (results.length=${results.length})`);
         }
@@ -726,7 +725,6 @@ export async function PUT(request: NextRequest) {
                 .getPublicUrl(data.path);
               if (urlData?.publicUrl) {
                 imageUrlMap.set(num, urlData.publicUrl);
-                console.log(`[Upload PUT] 문제 ${num}번 이미지 업로드 완료: ${urlData.publicUrl}`);
               }
             }
           } catch (imgErr) {
@@ -1151,7 +1149,6 @@ async function saveEditedProblemsDirect(
             .getPublicUrl(data.path);
           if (urlData?.publicUrl) {
             imageUrlMap.set(edited.number, urlData.publicUrl);
-            console.log(`[Direct Save] 문제 ${edited.number}번 이미지 업로드 완료`);
           }
         }
       } catch (imgErr) {
@@ -1415,7 +1412,6 @@ async function saveEditedProblemsDirect(
               // base64를 Storage URL로 교체 (DB 용량 절감)
               contentLatex = contentLatex.replace(base64Match[0], `![이미지](${figUrlData.publicUrl})`);
               imagesArray.push({ url: figUrlData.publicUrl, type: 'figure_crop', label: `수동 삽입 도형${figureIdx > 0 ? ` ${figureIdx + 1}` : ''}` });
-              console.log(`[Direct Save] 문제 ${edited.number}번 figure_crop 업로드 완료: ${figUrlData.publicUrl}`);
             }
           }
           figureIdx++;
@@ -1482,7 +1478,6 @@ async function saveEditedProblemsDirect(
 
       savedCount++;
       if (problem?.id) savedProblemIds.push(problem.id);
-      console.log(`[Direct Save] 문제 ${edited.number}번 저장 완료 (ID: ${problem?.id})`);
 
       // ★ Exam-Problem 연결 — 우선순위:
       //   1) edited.score (1차 OCR/분석 페이지에서 뽑은 원 배점)
@@ -1520,8 +1515,6 @@ async function saveEditedProblemsDirect(
         });
         if (epError) {
           console.error(`[Direct Save] exam_problems 연결 실패 (문제 ${edited.number}번):`, epError.message, epError.details);
-        } else {
-          console.log(`[Direct Save] exam_problems 연결 완료 (문제 ${edited.number}번 → exam ${examId})`);
         }
       }
 
@@ -1549,7 +1542,6 @@ async function saveEditedProblemsDirect(
               problem_number: edited.number,
               detection_source: 'MANUAL',
             });
-            console.log(`[Direct Save] 문제 ${edited.number}번 YOLO 어노테이션 저장 완료`);
           } catch (annErr) {
             console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패 (무시):`, annErr);
           }
@@ -2043,8 +2035,6 @@ async function saveProblemsToDB(
           });
           if (epError) {
             console.error(`[DB] exam_problems 연결 실패 (문제 #${savedCount}, problem ${problem.id}):`, epError.message, epError.details);
-          } else {
-            console.log(`[DB] exam_problems 연결 완료 (문제 #${savedCount} → exam ${examId})`);
           }
         }
 
@@ -2079,7 +2069,6 @@ async function saveProblemsToDB(
                 problem_number: problemNum,
                 detection_source: editedBbox ? 'MANUAL' : 'MATHPIX',
               });
-              console.log(`[DB] 문제 ${problemNum}번 YOLO 어노테이션 저장`);
             } catch (annErr) {
               console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패 (무시):`, annErr);
             }
