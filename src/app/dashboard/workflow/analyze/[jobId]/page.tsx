@@ -2381,6 +2381,82 @@ async function autoCropFiguresForProblems(
   return updated;
 }
 
+// ★ base64 이미지를 캔버스로 디코드 (분석 후 figure 크롭용)
+async function loadImageToCanvas(base64: string): Promise<HTMLCanvasElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(null); return; }
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = () => resolve(null);
+    img.src = base64;
+  });
+}
+
+// ★ 분석 직후: problem 고화질 크롭(이미 reanalyze-crop 에 보낸 base64)을 YOLO 에 한 번 더 호출
+//    → graph/table 검출 → figure 크롭 → InsertedImage[] 반환
+//    페이지 레벨(2x)보다 problem 크롭(2.5x)이 figure 비율이 훨씬 커서 검출률 ↑
+async function detectFiguresFromProblemCropAfterAnalysis(
+  problemBase64: string,
+  problem: AnalyzedProblem,
+  pageNum: number
+): Promise<InsertedImage[]> {
+  try {
+    const res = await fetch('/api/workflow/detect-problems-yolo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: problemBase64, pageNumber: pageNum }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+
+    const figures: Array<{ x: number; y: number; w: number; h: number; class?: string }> =
+      (data.others || []).filter((o: any) => o?.class === 'graph' || o?.class === 'table');
+    if (figures.length === 0) {
+      console.log(`[FigureAfterAnalyze] 문제 ${problem.number}: figure 0개 (source=${data.source})`);
+      return [];
+    }
+
+    const problemCanvas = await loadImageToCanvas(problemBase64);
+    if (!problemCanvas) return [];
+
+    const newImages: InsertedImage[] = [];
+    for (const fig of figures) {
+      const fx = fig.x * problemCanvas.width;
+      const fy = fig.y * problemCanvas.height;
+      const fw = fig.w * problemCanvas.width;
+      const fh = fig.h * problemCanvas.height;
+
+      const figCanvas = document.createElement('canvas');
+      figCanvas.width = Math.max(1, Math.round(fw));
+      figCanvas.height = Math.max(1, Math.round(fh));
+      const figCtx = figCanvas.getContext('2d');
+      if (!figCtx) continue;
+      figCtx.drawImage(problemCanvas, fx, fy, fw, fh, 0, 0, figCanvas.width, figCanvas.height);
+      const base64 = figCanvas.toDataURL('image/png');
+
+      newImages.push({
+        id: `auto-fig-analyze-${problem.id}-${newImages.length}-${Date.now()}`,
+        base64,
+        cropRelativeRect: { x: fig.x, y: fig.y, w: fig.w, h: fig.h },
+        insertPosition: 'append',
+      });
+    }
+
+    console.log(`[FigureAfterAnalyze] 문제 ${problem.number}: ${newImages.length}개 figure 자동 삽입 (source=${data.source})`);
+    return newImages;
+  } catch (err) {
+    console.warn(`[FigureAfterAnalyze] 문제 ${problem.number} 실패:`, err);
+    return [];
+  }
+}
+
 // ★ 재분석 후 새 OCR 텍스트에 기존 삽입 이미지를 다시 적용
 function reapplyInsertedImages(ocrContent: string, insertedImages: InsertedImage[]): string {
   if (!insertedImages || insertedImages.length === 0) return ocrContent;
@@ -3986,6 +4062,14 @@ export default function AnalyzeJobPage() {
             console.warn(`[★ OCR 디버그] window.__lastOcrDebug 에 저장됨. 콘솔에서 __lastOcrDebug.ocrText 입력하여 확인`);
           }
 
+          // ★ 분석 직후 problem 크롭에서 YOLO 한 번 더 → figure 자동 삽입
+          //    실패해도 분석 결과는 그대로 진행 (try/catch 격리)
+          const yoloFigures = await detectFiguresFromProblemCropAfterAnalysis(
+            imageBase64,
+            problem,
+            problem.pageIndex + 1,
+          );
+
           // 분석 결과로 문제 업데이트
           setAutoCropProblems(prev => {
             const next = new Map(prev);
@@ -3995,16 +4079,17 @@ export default function AnalyzeJobPage() {
               const classification = data.classification;
               const rawContent = data.ocrText || '';
               const extracted = extractProblemContent(rawContent, classification?.classification?.typeName);
-              // ★ 기존 삽입 이미지 보존: 새 OCR 텍스트에 다시 적용
+              // ★ 기존 삽입 이미지 + 분석 후 YOLO 가 잡은 figure 합치기
               const existingImages = pageProbs[idx].insertedImages || [];
-              const finalContent = reapplyInsertedImages(extracted.content, existingImages);
+              const allImages = [...existingImages, ...yoloFigures];
+              const finalContent = reapplyInsertedImages(extracted.content, allImages);
               console.log(`[BatchAnalyze] 문제 ${problem.number} 추출 후:`, finalContent?.substring(0, 400));
 
               const cls = classification?.classification;
               pageProbs[idx] = {
                 ...pageProbs[idx],
                 content: finalContent,
-                insertedImages: existingImages,  // ★ 보존
+                insertedImages: allImages,  // ★ 보존 + YOLO figure 추가
                 score: extracted.score ?? pageProbs[idx].score,  // ★ 배점 보존
                 choices: data.choices || [],
                 confidence: cls?.confidence || data.confidence || 0.5,
@@ -4118,6 +4203,14 @@ export default function AnalyzeJobPage() {
 
       if (res.ok) {
         const data = await res.json();
+
+        // ★ 분석 직후 problem 크롭에서 YOLO 한 번 더 → figure 자동 삽입
+        const yoloFigures = await detectFiguresFromProblemCropAfterAnalysis(
+          imageBase64,
+          problem,
+          problem.pageIndex + 1,
+        );
+
         setAutoCropProblems(prev => {
           const next = new Map(prev);
           const pageProbs = [...(next.get(problem.pageIndex) || [])];
@@ -4126,14 +4219,15 @@ export default function AnalyzeJobPage() {
             const classification = data.classification;
             const rawContent = data.ocrText || '';
             const extracted = extractProblemContent(rawContent, classification?.classification?.typeName);
-            // ★ 기존 삽입 이미지 보존: 새 OCR 텍스트에 다시 적용
+            // ★ 기존 삽입 이미지 + 분석 후 YOLO 가 잡은 figure 합치기
             const existingImages = pageProbs[idx].insertedImages || [];
-            const finalContent = reapplyInsertedImages(extracted.content, existingImages);
+            const allImages = [...existingImages, ...yoloFigures];
+            const finalContent = reapplyInsertedImages(extracted.content, allImages);
 
             pageProbs[idx] = {
               ...pageProbs[idx],
               content: finalContent,
-              insertedImages: existingImages,  // ★ 보존
+              insertedImages: allImages,  // ★ 보존 + YOLO figure 추가
               score: extracted.score ?? pageProbs[idx].score,  // ★ 배점 보존
               choices: data.choices || [],
               confidence: data.confidence || 0.5,
