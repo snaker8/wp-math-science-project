@@ -529,7 +529,7 @@ export default function DashboardPage() {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: '문제 업로드', color: 'hover:border-indigo-500/50', icon: Upload, href: '/tutor/workflow' },
+                { label: '시험지 자산화', color: 'hover:border-indigo-500/50', icon: Upload, href: '/dashboard/cloud' },
                 { label: '시험지 마법사', color: 'hover:border-rose-500/50', icon: Wand2, href: '/dashboard/create' },
                 { label: '학생 상담', color: 'hover:border-amber-500/50', icon: MessageCircle, href: '/tutor/classes' },
                 { label: '오답 노트', color: 'hover:border-emerald-500/50', icon: BookX, href: '/dashboard/prescription' },

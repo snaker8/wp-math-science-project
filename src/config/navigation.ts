@@ -133,8 +133,8 @@ export const tutorNavItems: NavItem[] = [
     //   실제 기능은 /dashboard/cloud 로 보냄.
     href: '/dashboard/cloud',
     icon: Upload,
-    label: '문제 업로드',
-    description: 'OCR → AI분류 → 채점',
+    label: '시험지 자산화',
+    description: 'PDF → OCR → 클라우드 저장',
     activeColor: 'bg-sky-500/10 text-sky-500',
     group: 'tutor',
   },
