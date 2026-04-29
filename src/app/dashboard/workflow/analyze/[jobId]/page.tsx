@@ -2685,8 +2685,10 @@ export default function AnalyzeJobPage() {
   const [useAutoCropMode, setUseAutoCropMode] = useState(false); // AutoCrop 모드 on/off (기본 OFF → 수동 선택 우선)
   const [detectionMode, setDetectionMode] = useState<'ai' | 'pixel'>('ai'); // AI 감지 or 픽셀 감지
   const [aiDetectProgress, setAiDetectProgress] = useState<Map<number, 'loading' | 'done' | 'error'>>(new Map());
-  const [columnMode, setColumnMode] = useState<1 | 2>(2); // 1단/2단 모드 (기본 2단)
-  const [cropSensitivity, setCropSensitivity] = useState<number>(30); // 감도 (5~40, 수동 드래그와 동일)
+  // ★ 픽셀 자동감지 폴백 전용 상수 (UI 제거됨, setter 미사용 — 4a1ce88 참고)
+  //   값을 바꿀 일 있으면 useState 로 다시 변환하고 setter 추가.
+  const [columnMode] = useState<1 | 2>(2); // 1단/2단 모드 (기본 2단)
+  const [cropSensitivity] = useState<number>(30); // 감도 (5~40, 수동 드래그와 동일)
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
   const blocksDetectedRef = useRef<Set<number>>(new Set()); // 이미 블록 감지된 페이지 추적
   const isPreloadingRef = useRef(false); // 동시 실행 차단
