@@ -2405,17 +2405,45 @@ async function detectFiguresFromProblemCropAfterAnalysis(
     const res = await fetch('/api/workflow/detect-problems-yolo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // ★ figureOnly: problem 0건이어도 GPT-4o 폴백 X. graph/table 만 찾는 흐름이라
-      //   폴백 호출은 무용. 응답 시간 단축 + GPT-4o 비용 절감.
+      // ★ figureOnly: problem 0건이어도 GPT-4o 폴백 X.
       body: JSON.stringify({ imageBase64: problemBase64, pageNumber: pageNum, figureOnly: true }),
     });
     if (!res.ok) return [];
     const data = await res.json();
 
-    const figures: Array<{ x: number; y: number; w: number; h: number; class?: string }> =
+    let figures: Array<{ x: number; y: number; w: number; h: number; class?: string }> =
       (data.others || []).filter((o: any) => o?.class === 'graph' || o?.class === 'table');
+
+    // ★ YOLO 0건 → GPT-4o Vision 으로 figure 검출 폴백 (graph/table 학습 부족 보완)
+    //   per-problem 이미지라 GPT-4o 정확도 높을 가능성. YOLO 학습 누적 시 자연스럽게 호출 ↓
     if (figures.length === 0) {
-      console.log(`[FigureAfterAnalyze] 문제 ${problem.number}: figure 0개 (source=${data.source})`);
+      try {
+        const gptRes = await fetch('/api/workflow/detect-figures-gpt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: problemBase64 }),
+        });
+        if (gptRes.ok) {
+          const gptData = await gptRes.json();
+          const gptFigures = (gptData.figures || []) as Array<{ type?: string; x: number; y: number; w: number; h: number }>;
+          figures = gptFigures.map((f) => ({
+            x: f.x,
+            y: f.y,
+            w: f.w,
+            h: f.h,
+            class: f.type === 'table' ? 'table' : 'graph',
+          }));
+          if (figures.length > 0) {
+            console.log(`[FigureAfterAnalyze] 문제 ${problem.number}: YOLO 0건 → GPT-4o ${figures.length}개 figure`);
+          }
+        }
+      } catch (gptErr) {
+        console.warn(`[FigureAfterAnalyze] GPT 폴백 실패:`, gptErr);
+      }
+    }
+
+    if (figures.length === 0) {
+      console.log(`[FigureAfterAnalyze] 문제 ${problem.number}: figure 0개 (yolo + gpt 모두 0)`);
       return [];
     }
 
