@@ -36,14 +36,11 @@ const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000';
 export default function TutorWorkflowPage() {
   const router = useRouter();
 
-  // ★ 미검증 자산화 경로 — 검증된 클라우드 페이지로 즉시 리다이렉트.
-  //   기존엔 exam 레코드 미생성·중복 자산화 사고가 반복돼서 (동해중·해운대중·신도중 등)
-  //   페이지 자체를 자산화 흐름에서 제외. 메뉴/직접 URL 진입 모두 차단.
-  useEffect(() => {
-    router.replace('/dashboard/cloud');
-  }, [router]);
-
-  const [activePhase, setActivePhase] = useState<WorkflowPhase>('upload');
+  // ★ 자산화 진입 차단 — 자산화는 /dashboard/cloud 가 유일한 검증 경로.
+  //   이 페이지는 채점(grading) + 분석(analytics) 전용으로 사용.
+  //   upload phase 는 UI 에서 숨겨서 사용자가 실수로 진입할 수 없게 함.
+  //   (이전엔 무조건 redirect 했지만 채점 기능까지 막혀서 grading 으로 단계 전환)
+  const [activePhase, setActivePhase] = useState<WorkflowPhase>('grading');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
   const [uploadedProblems, setUploadedProblems] = useState<LLMAnalysisResult[]>([]);
@@ -227,8 +224,9 @@ export default function TutorWorkflowPage() {
     });
   }, []);
 
+  // ★ upload phase 는 메뉴에서 제거 — 자산화는 /dashboard/cloud 에서만.
+  //   import 와 phase 정의는 남겨둠 (legacy 코드, 추후 제거 가능)
   const phases = [
-    { id: 'upload' as WorkflowPhase, label: '업로드 & 자산화', icon: Upload },
     { id: 'grading' as WorkflowPhase, label: '4단계 채점', icon: CheckSquare },
     { id: 'analytics' as WorkflowPhase, label: '분석 & 클리닉', icon: BarChart3 },
   ];
@@ -288,32 +286,8 @@ export default function TutorWorkflowPage() {
 
       {/* 메인 콘텐츠 */}
       <main className="main-content">
-        {/* Phase 1: Cloud Flow (업로드 → 자산화) */}
-        {activePhase === 'upload' && (
-          <div className="phase-content">
-            <div className="phase-header">
-              <h2>1. Cloud Flow: 업로드 & 자산화</h2>
-              <p>PDF/이미지를 업로드하면 OCR + GPT-4o가 자동으로 유형 분류와 해설을 생성합니다.</p>
-            </div>
-            <CloudFlowUploader
-              instituteId="default"
-              userId={currentUserId}
-              onComplete={handleUploadComplete}
-            />
-            {uploadedProblems.length > 0 && (
-              <div className="upload-summary">
-                <h4>분석 완료</h4>
-                <p>{uploadedProblems.length}개 문제가 자산화되었습니다.</p>
-                <button
-                  className="next-phase-btn"
-                  onClick={() => setActivePhase('grading')}
-                >
-                  채점하러 가기 <ArrowRight size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Phase 1: 자산화 — 차단됨 (자산화는 /dashboard/cloud 에서만) */}
+        {/* activePhase === 'upload' 분기는 phases 배열에서 제거되어 도달 불가 */}
 
         {/* Phase 2: Deep Grading (4단계 채점) */}
         {activePhase === 'grading' && (
