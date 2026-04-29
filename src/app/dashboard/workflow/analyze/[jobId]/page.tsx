@@ -2516,6 +2516,14 @@ function extractProblemContent(rawContent: string, fallbackTypeName?: string): {
 
     // 아직 문제 시작점을 못 찾았으면 헤더 패턴 체크
     if (!foundQuestionStart) {
+      // ★ 0) [서답형/서술형/논술형 N] 또는 [서답형 N-M] 라벨은 문제 시작 — 보존 우선!
+      //    헤더 패턴 #3/#4 (\[.+?\]\[.+?\]) 가 [서답형 1][8점] 같은 라인을 잘못 헤더로 분류하던 사고 차단.
+      //    "[서답형1]" 본문 표시 누락 (사용자 보고: 미분계수 도함수 증명 문제) — 이 fix 로 보존.
+      if (/^\s*\[(?:서답형|서술형|논술형|서\s*·\s*논술형)\s*\d+(?:[-]\d+)?\s*\]/.test(trimmed)) {
+        foundQuestionStart = true;
+        cleanedLines.push(line);
+        continue;
+      }
       // 1) 헤더 패턴이면 즉시 스킵 (다른 체크보다 먼저!)
       if (HEADER_LINE_PATTERNS.some(p => p.test(trimmed))) {
         continue;
