@@ -981,7 +981,7 @@ async function processJobInBackground(
       // ★ 변환 실패 시 사용자에게 에러 표시 (쓰레기 데이터로 진행하지 않음)
       const failedJob = jobStore.get(jobId);
       if (failedJob) {
-        failedJob.status = 'ERROR';
+        failedJob.status = 'FAILED';
         failedJob.currentStep = `HWP→PDF 변환 실패: LibreOffice 오류. ${errMsg.includes('timeout') || errMsg.includes('SIGKILL') ? 'LibreOffice가 응답하지 않습니다. 서버를 재시작해 주세요.' : errMsg}`;
         failedJob.updatedAt = new Date().toISOString();
         jobStore.set(jobId, failedJob);
@@ -1639,6 +1639,12 @@ async function saveProblemsToDB(
   const job = jobStore.get(jobId);
   if (!job) return;
 
+  // ★ TS 에러 보강 — 아래 appendToExamId 분기가 problems 저장 전에 이 변수를 참조해
+  //   기존엔 ReferenceError 가능성 있던 코드 (사실상 사용자가 거의 안 만나던 dead 분기).
+  //   안전하게 빈 배열로 선언만 추가 — 분기 동작은 그대로 (toAdd=[] → no-op).
+  //   진짜 cloud "기존 시험지에 추가" 기능은 별도로 검증·수정 필요.
+  const savedProblemIds: string[] = [];
+
   // UUID 유효성 검사 함수
   const isValidUUID = (str: string): boolean => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -2088,7 +2094,10 @@ async function saveProblemsToDB(
     try {
       const subjectVotes: Record<string, number> = {};
       for (const r of results) {
-        const cls = r.classification?.subject || r.classification?.classification?.subject;
+        // ★ TypeClassification 의 subject 직접 + 일부 응답 형태에서 nested classification.subject
+        //   둘 다 처리하기 위해 any 캐스팅 (타입 안정성보다 호환성 우선)
+        const clsAny = r.classification as unknown as Record<string, unknown> | undefined;
+        const cls = (clsAny?.subject as string) || ((clsAny?.classification as Record<string, unknown>)?.subject as string);
         if (cls && typeof cls === 'string' && cls.length > 1) {
           subjectVotes[cls] = (subjectVotes[cls] || 0) + 1;
         }
@@ -2096,7 +2105,9 @@ async function saveProblemsToDB(
       const topSubject = Object.entries(subjectVotes).sort((a, b) => b[1] - a[1])[0];
       if (topSubject && topSubject[1] >= Math.ceil(results.length * 0.3)) {
         const detectedSubject = topSubject[0];
-        const currentSubject = detectSubjectAuto(fileTitle);
+        // ★ 함수명 typo 수정 (detectSubjectAuto → detectSubjectFromTitle, 다른 곳에서 import 됨)
+        //   fileTitle 도 try 블록 외부라 직접 인라인 계산
+        const currentSubject = detectSubjectFromTitle(job.fileName.replace(/\.[^/.]+$/, ''));
         // 파일명 감지와 GPT 분류가 다르면 GPT 결과로 보정
         if (detectedSubject !== currentSubject) {
           await supabase.from('exams').update({ subject: detectedSubject }).eq('id', examId);
