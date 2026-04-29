@@ -2626,13 +2626,28 @@ function removeChoicesFromContent(text: string): { content: string; score?: numb
     text = lines.slice(0, choiceStartIdx).join('\n').trim();
   }
 
-  // [배점] 추출 후 제거 (예: [3.4점], [4점], [3.4졈])
+  // ★ [배점] 추출 — CLAUDE.md 안전 가드 #2 우선순위:
+  //    [총 N점] > [Ni점] 합산 (다수일 때) > 단일 [N점] > undefined
+  //   기존엔 첫 매치만 잡아서 서답형에서 [총 6점] (1)..[3점] (2)..[3점] 본문이
+  //   첫 [3점] 만 잡아 3점으로 들어가던 사고. 서버 saveEditedProblemsDirect 의 우선순위와 동기화.
+  //   (\[(]\s*(?:총\s*)?\d+\s*[점졈졍]\s*[\]\)] 형식 — 대괄호·소괄호 양쪽 + 점/졈/졍 OCR 오타)
   let score: number | undefined;
-  const scoreMatch = text.match(/\[\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*\]/);
-  if (scoreMatch) {
-    score = parseFloat(scoreMatch[1]);
+  const totalMatch = text.match(/[\[(]\s*총\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]/);
+  if (totalMatch) {
+    score = parseFloat(totalMatch[1]);
+  } else {
+    const allMatches = Array.from(text.matchAll(/[\[(]\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]/g));
+    if (allMatches.length > 1) {
+      score = allMatches.reduce((s, mm) => s + parseFloat(mm[1]), 0);
+    } else if (allMatches.length === 1) {
+      score = parseFloat(allMatches[0][1]);
+    }
   }
-  text = text.replace(/\[\s*\d+(?:\.\d+)?\s*[점졈졍]\s*\]/g, '').trim();
+  // 모든 [총 N점] / [N점] / (N점) 패턴 본문에서 제거
+  text = text
+    .replace(/[\[(]\s*총\s*\d+(?:\.\d+)?\s*[점졈졍]\s*[\])]/g, '')
+    .replace(/[\[(]\s*\d+(?:\.\d+)?\s*[점졈졍]\s*[\])]/g, '')
+    .trim();
 
   return { content: text, score };
 }
