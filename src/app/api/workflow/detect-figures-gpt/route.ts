@@ -47,6 +47,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'imageBase64 required' }, { status: 400 });
   }
 
+  // ★ 안전 토글 — env DETECT_FIGURES_GPT_ENABLED='true' 일 때만 GPT 호출.
+  //   기본값 OFF → 정확도 검증 전엔 비용·오삽입 위험 없음.
+  //   Vercel Dashboard 에서 env 변수 설정만으로 활성화 가능 (재배포 불필요).
+  if (process.env.DETECT_FIGURES_GPT_ENABLED !== 'true') {
+    return NextResponse.json({ figures: [], source: 'disabled' });
+  }
+
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (!OPENAI_API_KEY) {
     return NextResponse.json({ figures: [], error: 'OPENAI_API_KEY not configured' });
