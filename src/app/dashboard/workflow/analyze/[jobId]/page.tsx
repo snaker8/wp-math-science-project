@@ -3280,7 +3280,7 @@ export default function AnalyzeJobPage() {
     };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
-      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number }> = [];
+      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }> }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
@@ -3302,6 +3302,14 @@ export default function AnalyzeJobPage() {
               const uploaded = await uploadBase64ToStorage(cropImage, path, 'image/png');
               if (uploaded) cropImagePath = uploaded;
             }
+            // ★ figure 학습 데이터 — insertedImages 의 좌표만 추출 (base64 X)
+            //   YOLO graph/table 클래스 학습 데이터 누적용. 매 자산화마다 graph 라벨 누적 → 추후 재학습.
+            const figureBboxes = (p.insertedImages || []).map(img => ({
+              x: img.cropRelativeRect.x,
+              y: img.cropRelativeRect.y,
+              w: img.cropRelativeRect.w,
+              h: img.cropRelativeRect.h,
+            }));
             editedProblems.push({
               number: globalProblemNumber, // ★ 전역 순번 사용 (p.number는 페이지별로 리셋되어 크롭 파일 충돌)
               difficulty: p.difficulty,
@@ -3317,8 +3325,9 @@ export default function AnalyzeJobPage() {
               ...(cropImagePath
                 ? { cropImagePath }
                 : (cropImage ? { cropImageBase64: cropImage } : {})),
-              bbox: p.bbox,       // ★ YOLO 학습 데이터용 bbox
+              bbox: p.bbox,       // ★ YOLO 학습 데이터용 bbox (problem 클래스)
               pageIndex: p.pageIndex, // ★ 페이지 인덱스 (0-based)
+              ...(figureBboxes.length > 0 ? { figureBboxes } : {}), // ★ graph 클래스 학습 데이터
             });
           }
         }

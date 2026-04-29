@@ -1119,6 +1119,8 @@ async function saveEditedProblemsDirect(
     cropImagePath?: string;
     bbox?: { x: number; y: number; w: number; h: number };
     pageIndex?: number;
+    // ★ figure 학습 데이터 — insertedImages 의 좌표만 (problem 크롭 0~1 기준)
+    figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>;
   }>,
   bookGroupId: string | null,
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
@@ -1585,7 +1587,8 @@ async function saveEditedProblemsDirect(
           try {
             // ★ 기존 레코드 삭제 후 insert (중복 방지)
             await supabase.from('detection_annotations').delete().eq('problem_id', problem.id);
-            await supabase.from('detection_annotations').insert({
+            // problem 클래스 (사용자 검수된 좌표)
+            const annotationsToInsert: Array<Record<string, unknown>> = [{
               problem_id: problem.id,
               exam_id: examId,
               job_id: jobId,
@@ -1600,7 +1603,31 @@ async function saveEditedProblemsDirect(
               class_label: 'problem',
               problem_number: edited.number,
               detection_source: 'MANUAL',
-            });
+            }];
+            // ★ graph 클래스 학습 데이터 — figureBboxes 좌표 (problem 크롭 0~1) → 페이지 좌표 변환
+            if (edited.figureBboxes && edited.figureBboxes.length > 0) {
+              for (const fig of edited.figureBboxes) {
+                if (fig.w <= 0 || fig.h <= 0) continue;
+                annotationsToInsert.push({
+                  problem_id: problem.id,
+                  exam_id: examId,
+                  job_id: jobId,
+                  page_number: pageNum,
+                  page_image_path: pageImgInfo.path,
+                  page_width: pageImgInfo.width,
+                  page_height: pageImgInfo.height,
+                  // ★ 좌표 변환: problem.bbox + fig * problem.bbox.size = 페이지 0~1 좌표
+                  bbox_x: edited.bbox.x + fig.x * edited.bbox.w,
+                  bbox_y: edited.bbox.y + fig.y * edited.bbox.h,
+                  bbox_w: fig.w * edited.bbox.w,
+                  bbox_h: fig.h * edited.bbox.h,
+                  class_label: 'graph',
+                  problem_number: edited.number,
+                  detection_source: 'MANUAL',
+                });
+              }
+            }
+            await supabase.from('detection_annotations').insert(annotationsToInsert);
           } catch (annErr) {
             console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패 (무시):`, annErr);
           }
