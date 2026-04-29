@@ -704,34 +704,42 @@ export async function PUT(request: NextRequest) {
     if (cropImageMap.size > 0) {
       const storageClient = supabaseAdmin;
       if (storageClient) {
-        for (const [num, base64] of cropImageMap.entries()) {
-          try {
-            // data:image/png;base64,... 에서 실제 base64 추출
-            const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
-            const buffer = Buffer.from(base64Data, 'base64');
-            const storagePath = `problem-crops/${jobId}/problem-${num}.png`;
+        // ★ Phase 3 최적화: for-of 직렬 → concurrency 5 chunk 병렬.
+        //   30개 문제 시 직렬 ~30초 → 5개 동시로 ~6초 (5x 단축).
+        //   Supabase Storage rate limit 회피용 concurrency 제한 (무한 병렬 X).
+        const CONCURRENCY = 5;
+        const cropEntries = Array.from(cropImageMap.entries());
+        for (let batchStart = 0; batchStart < cropEntries.length; batchStart += CONCURRENCY) {
+          const batch = cropEntries.slice(batchStart, batchStart + CONCURRENCY);
+          await Promise.all(batch.map(async ([num, base64]) => {
+            try {
+              // data:image/png;base64,... 에서 실제 base64 추출
+              const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+              const buffer = Buffer.from(base64Data, 'base64');
+              const storagePath = `problem-crops/${jobId}/problem-${num}.png`;
 
-            const { data, error } = await storageClient.storage
-              .from('source-files')
-              .upload(storagePath, buffer, {
-                contentType: 'image/png',
-                upsert: true,
-              });
-
-            if (error) {
-              console.error(`[Upload PUT] 문제 ${num}번 이미지 업로드 실패:`, error.message);
-            } else {
-              // Public URL 생성
-              const { data: urlData } = storageClient.storage
+              const { data, error } = await storageClient.storage
                 .from('source-files')
-                .getPublicUrl(data.path);
-              if (urlData?.publicUrl) {
-                imageUrlMap.set(num, urlData.publicUrl);
+                .upload(storagePath, buffer, {
+                  contentType: 'image/png',
+                  upsert: true,
+                });
+
+              if (error) {
+                console.error(`[Upload PUT] 문제 ${num}번 이미지 업로드 실패:`, error.message);
+              } else {
+                // Public URL 생성
+                const { data: urlData } = storageClient.storage
+                  .from('source-files')
+                  .getPublicUrl(data.path);
+                if (urlData?.publicUrl) {
+                  imageUrlMap.set(num, urlData.publicUrl);
+                }
               }
+            } catch (imgErr) {
+              console.error(`[Upload PUT] 문제 ${num}번 이미지 처리 오류:`, imgErr);
             }
-          } catch (imgErr) {
-            console.error(`[Upload PUT] 문제 ${num}번 이미지 처리 오류:`, imgErr);
-          }
+          }));
         }
       } else {
         console.warn('[Upload PUT] Supabase Admin 미설정, 이미지 업로드 스킵');
@@ -1122,41 +1130,48 @@ async function saveEditedProblemsDirect(
   }
 
   // ★ 크롭 이미지를 Supabase Storage에 업로드 / 이미 업로드된 path는 public URL만 생성
+  // ★ Phase 3 최적화: for-of 직렬 → concurrency 5 chunk 병렬.
+  //   30개 문제 시 직렬 ~30초 → 5개 동시로 ~6초. Supabase rate limit 회피.
+  //   Map.set 은 race-safe (단일 스레드).
   const imageUrlMap = new Map<number, string>();
-  for (const edited of editedProblems) {
-    // 1) 클라이언트에서 이미 업로드한 경우 — public URL만 생성
-    if (edited.cropImagePath) {
-      const { data: urlData } = supabase.storage
-        .from('source-files')
-        .getPublicUrl(edited.cropImagePath);
-      if (urlData?.publicUrl) imageUrlMap.set(edited.number, urlData.publicUrl);
-      continue;
-    }
-    if (edited.cropImageBase64) {
-      try {
-        const base64Data = edited.cropImageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        const storagePath = `problem-crops/${jobId}/problem-${edited.number}.png`;
-
-        const { data, error } = await supabase.storage
+  const CONCURRENCY_UPLOAD = 5;
+  for (let batchStart = 0; batchStart < editedProblems.length; batchStart += CONCURRENCY_UPLOAD) {
+    const batch = editedProblems.slice(batchStart, batchStart + CONCURRENCY_UPLOAD);
+    await Promise.all(batch.map(async (edited) => {
+      // 1) 클라이언트에서 이미 업로드한 경우 — public URL만 생성 (네트워크 호출 X, 매우 빠름)
+      if (edited.cropImagePath) {
+        const { data: urlData } = supabase.storage
           .from('source-files')
-          .upload(storagePath, buffer, {
-            contentType: 'image/png',
-            upsert: true,
-          });
-
-        if (!error && data) {
-          const { data: urlData } = supabase.storage
-            .from('source-files')
-            .getPublicUrl(data.path);
-          if (urlData?.publicUrl) {
-            imageUrlMap.set(edited.number, urlData.publicUrl);
-          }
-        }
-      } catch (imgErr) {
-        console.error(`[Direct Save] 문제 ${edited.number}번 이미지 오류:`, imgErr);
+          .getPublicUrl(edited.cropImagePath);
+        if (urlData?.publicUrl) imageUrlMap.set(edited.number, urlData.publicUrl);
+        return;
       }
-    }
+      if (edited.cropImageBase64) {
+        try {
+          const base64Data = edited.cropImageBase64.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const storagePath = `problem-crops/${jobId}/problem-${edited.number}.png`;
+
+          const { data, error } = await supabase.storage
+            .from('source-files')
+            .upload(storagePath, buffer, {
+              contentType: 'image/png',
+              upsert: true,
+            });
+
+          if (!error && data) {
+            const { data: urlData } = supabase.storage
+              .from('source-files')
+              .getPublicUrl(data.path);
+            if (urlData?.publicUrl) {
+              imageUrlMap.set(edited.number, urlData.publicUrl);
+            }
+          }
+        } catch (imgErr) {
+          console.error(`[Direct Save] 문제 ${edited.number}번 이미지 오류:`, imgErr);
+        }
+      }
+    }));
   }
 
   // ★ created_by 우선순위 — job.userId(UUID) → 쿠키 세션의 인증 유저 → null
