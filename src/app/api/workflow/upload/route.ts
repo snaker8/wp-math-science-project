@@ -2158,7 +2158,6 @@ async function saveProblemsToDB(
             const imgs: Array<{url: string; type: string}> = Array.isArray(savedProblem.images) ? savedProblem.images : [];
             const cropUrl = imgs.find(i => i.type === 'crop')?.url;
             if (!cropUrl) {
-              console.log(`[Figure] 문제 ${result.problemNumber}: 크롭 이미지 없음, 건너뜀`);
               continue;
             }
 
@@ -2194,12 +2193,10 @@ async function saveProblemsToDB(
             // ================================================================
             // ★ Step 1: 업스케일 우선 시도
             // ================================================================
-            console.log(`[Figure] 문제 ${result.problemNumber}: 업스케일 시도 중...`);
             const upscaleResult = await tryUpscaleCrop(rawBuffer);
 
             if (upscaleResult) {
               const { quality, upscaled } = upscaleResult;
-              console.log(`[Figure] 문제 ${result.problemNumber}: ✅ 업스케일 성공 (${quality.width}x${quality.height} → ${upscaled.width}x${upscaled.height})`);
 
               // 업스케일 이미지 Supabase Storage에 업로드
               const upscaledPath = `problem-crops/upscaled/${savedProblem.id}.png`;
@@ -2234,31 +2231,25 @@ async function saveProblemsToDB(
                   .eq('id', savedProblem.id);
 
                 upscaledCount++;
-                console.log(`[Figure] 문제 ${result.problemNumber}: 업스케일 저장 완료 → AI 스킵`);
                 continue; // ★ AI 생성 스킵
               } else {
                 console.warn(`[Figure] 문제 ${result.problemNumber}: 업스케일 업로드 실패, AI 폴백`);
               }
-            } else {
-              console.log(`[Figure] 문제 ${result.problemNumber}: 업스케일 불가 → AI Vision 폴백`);
             }
 
             // ================================================================
             // ★ Step 2: AI Vision 폴백 (업스케일 불가일 때만)
             // ================================================================
             if (!process.env.OPENAI_API_KEY) {
-              console.log(`[Figure] 문제 ${result.problemNumber}: OpenAI API 키 없음, AI 폴백 불가`);
               continue;
             }
 
-            console.log(`[Figure] 문제 ${result.problemNumber} AI Vision 해석 중...`);
             const imgBase64 = rawBuffer.toString('base64');
             const imgDataUri = `data:${imgType};base64,${imgBase64}`;
 
             const interpreted = await interpretImage(imgDataUri, result.contentMmd?.substring(0, 500));
 
             if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
-              console.log(`[Figure] 문제 ${result.problemNumber}: 도형 없음 (${interpreted.figureType})`);
               continue;
             }
 
@@ -2283,7 +2274,6 @@ async function saveProblemsToDB(
               .eq('id', savedProblem.id);
 
             aiGeneratedCount++;
-            console.log(`[Figure] 문제 ${result.problemNumber} AI 해석 완료: ${interpreted.figureType} (confidence: ${interpreted.confidence})`);
           } catch (figErr) {
             console.warn(`[Figure] 문제 ${result.problemNumber} 처리 실패 (무시):`, figErr);
           }
