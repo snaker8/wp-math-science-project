@@ -3020,6 +3020,64 @@ export default function AnalyzeJobPage() {
   const [isSavingAll, setIsSavingAll] = useState(false);
   const prevResultCountRef = useRef(0);
 
+  // ★ 자동 임시저장 (localStorage) — 분석/편집 데이터 손실 방지
+  //   브라우저 닫기·재부팅 후에도 같은 jobId 로 페이지 열면 복원됨.
+  //   base64 는 size 제한으로 제외 (텍스트·분류·답·점수 등 핵심 데이터만).
+  //   자산화 성공 후 자동 삭제.
+  const draftKey = jobId ? `draft_${jobId}` : null;
+  const draftLoadedRef = useRef(false);
+
+  // 자동 복원 — 페이지 로드 시 1회만
+  useEffect(() => {
+    if (!draftKey || draftLoadedRef.current) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) {
+        draftLoadedRef.current = true;
+        return;
+      }
+      const data = JSON.parse(raw) as Array<[number, AnalyzedProblem[]]>;
+      if (Array.isArray(data) && data.length > 0) {
+        const restored = new Map(data);
+        setAutoCropProblems(restored);
+        setUseAutoCropMode(true);
+        const totalProblems = data.reduce((sum, [, probs]) => sum + probs.length, 0);
+        console.log(`[Draft] 임시저장 복원: ${restored.size}페이지, ${totalProblems}문제`);
+      }
+      draftLoadedRef.current = true;
+    } catch (e) {
+      console.warn('[Draft] 복원 실패:', e);
+      draftLoadedRef.current = true;
+    }
+  }, [draftKey]);
+
+  // 자동 저장 — autoCropProblems 변경 시 debounced 2초
+  useEffect(() => {
+    if (!draftKey || !draftLoadedRef.current) return;
+    if (autoCropProblems.size === 0) return;
+    const timer = setTimeout(() => {
+      try {
+        // base64 제거하여 size 절감 (텍스트·메타만 유지)
+        const stripped = Array.from(autoCropProblems.entries()).map(([page, problems]) => [
+          page,
+          problems.map(p => ({
+            ...p,
+            cropImageBase64: undefined, // 큰 데이터 제거
+            insertedImages: (p.insertedImages || []).map(img => ({
+              ...img,
+              base64: '', // 비움 (복원 시 사용자 재삽입 필요)
+            })),
+          })),
+        ]) as Array<[number, AnalyzedProblem[]]>;
+        localStorage.setItem(draftKey, JSON.stringify(stripped));
+      } catch (e) {
+        // QuotaExceeded 등 — 조용히 실패 (분석 흐름 영향 X)
+        console.warn('[Draft] 저장 실패:', e instanceof Error ? e.message : e);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [autoCropProblems, draftKey]);
+
   // 결과를 JobData로 변환하는 헬퍼
   const buildJobData = useCallback((job: any, results: any[], pdfUrl: string | null, prevData: JobData | null): JobData => {
     const problems: AnalyzedProblem[] = [];
@@ -3404,6 +3462,14 @@ export default function AnalyzeJobPage() {
         setSavedProblemCount(savedCount);
         // ★ 자산화로 만든 examId 보존 → "확인하기" 시 해당 시험지로 직행
         if (data.examId) setSavedExamId(data.examId);
+
+        // ★ 자산화 성공 (examId 있고 일부라도 저장) → 임시저장 정리
+        if (data.examId && savedCount > 0 && draftKey) {
+          try {
+            localStorage.removeItem(draftKey);
+            console.log(`[Draft] 자산화 성공 → 임시저장 삭제`);
+          } catch { /* ignore */ }
+        }
 
         // ★ 응답 명확화 — 부분 실패/누락 검증 후 사용자에게 명시.
         //   기존엔 200 OK 면 무조건 성공으로 보여서 (a) exam 미생성 (b) problems 일부만
