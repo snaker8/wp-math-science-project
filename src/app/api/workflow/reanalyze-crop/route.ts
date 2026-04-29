@@ -310,7 +310,6 @@ export async function POST(request: NextRequest) {
     const cleanedBase64 = imageBase64;
 
     // 1. Mathpix OCR + Vision 그래프 분석 병렬 실행
-    console.log('[Reanalyze] Sending crop image to Mathpix OCR...');
     const mathpix = getMathpixClient();
 
     const ocrPromise = mathpix.processImage(cleanedBase64, {
@@ -391,13 +390,10 @@ export async function POST(request: NextRequest) {
     const rawChoices = extractChoicesFromOCR(ocrText);
     // ★ 오염 방어 후처리: Mathpix가 문제 본문 수식 조각을 선택지로 잘못 흡수한 경우 복구
     const choices = cleanPollutedChoices(rawChoices);
-    // ★ 디버그: 실제 OCR 원문과 추출된 선택지 로그
-    console.log(`[Reanalyze] OCR 원문(처음 500자):\n${ocrText.substring(0, 500)}`);
+    // 선택지 오염 복구 발생 시에만 한 줄 요약 (실제 데이터 dump 는 제거)
     if (choices.length !== rawChoices.length) {
       console.log(`[Reanalyze] 선택지 오염 복구: ${rawChoices.length}개 → ${choices.length}개 (앞 ${rawChoices.length - choices.length}개 제거)`);
-      console.log(`[Reanalyze] 제거된 조각:`, JSON.stringify(rawChoices.slice(0, rawChoices.length - choices.length)));
     }
-    console.log(`[Reanalyze] 추출된 선택지 (${choices.length}개):`, JSON.stringify(choices));
 
     // 3. GPT-4o Vision 정제
     //    - customPrompt 있으면: 사용자 요구사항 + 이미지 직접 인식
@@ -555,7 +551,6 @@ function normalizeChoiceParens(text: string): string {
     const content = text.substring(start, end).trim();
     // 내용이 100자 초과이거나 서술형 키워드 포함 → 소문제
     if (content.length > 100 || subQuestionKeywords.test(content)) {
-      console.log('[NormalizeChoices] 서술형 소문제 감지 — 변환 건너뜀');
       return text;
     }
   }
@@ -582,7 +577,6 @@ function normalizeChoiceParens(text: string): string {
     }
   }
 
-  console.log('[NormalizeChoices] (N) → ⓝ 변환 완료');
   return result;
 }
 
@@ -866,8 +860,6 @@ JSON으로만 응답하세요.`;
     const content = result.response.text()?.trim();
     if (!content) return null;
 
-    console.log('[GraphVision] Gemini response:', content.substring(0, 200));
-
   try {
     // JSON 파싱 (```json ... ``` 래핑 제거)
     const jsonStr = content.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
@@ -901,8 +893,6 @@ JSON으로만 응답하세요.`;
           if (!expr || expr.length === 0) return false;
           return true;
         });
-
-      console.log('[GraphVision] Cleaned expressions:', parsed.expressions);
     }
 
     return parsed;
@@ -939,8 +929,6 @@ function fixKoreanConsonantChoices(text: string): string {
     return text;
   }
 
-  console.log('[FixConsonants] <보기> ㄱ/ㄴ/ㄷ 오인식 교정 시작');
-
   let result = text;
 
   // 1. ¬ → ㄱ (수식 내부가 아닌 경우만)
@@ -974,10 +962,6 @@ function fixKoreanConsonantChoices(text: string): string {
   result = result.replace(/¬\s*\./g, 'ㄱ.');
   result = result.replace(/(?<=\n|^)\s*D\s*\./gm, 'ㄷ.');
   result = result.replace(/(?<=\n|^)\s*L\s*\./gm, 'ㄴ.');
-
-  if (result !== text) {
-    console.log('[FixConsonants] 교정 완료');
-  }
 
   return result;
 }
@@ -1024,7 +1008,6 @@ async function correctOcrTypos(ocrText: string): Promise<string> {
     const data = await response.json();
     const corrected = data.choices?.[0]?.message?.content?.trim();
     if (corrected && corrected.length > 0) {
-      console.log(`[OcrCorrect] 교정 완료: ${ocrText.length} → ${corrected.length}자`);
       return corrected;
     }
     return ocrText;
@@ -1141,7 +1124,6 @@ OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단
 
   const data = await response.json();
   const result = data.choices[0]?.message?.content?.trim() || ocrText;
-  console.log(`[RefineGPT] 결과 (앞 200자): ${result.substring(0, 200)}`);
   return result;
 }
 
@@ -1229,6 +1211,5 @@ ${customPrompt}
   const data = await response.json();
   const tb = Array.isArray(data.content) ? data.content.find((c: { type: string }) => c.type === 'text') : null;
   const result = (tb?.text || '').trim() || currentText;
-  console.log(`[RefineClaude] 결과 (앞 200자): ${result.substring(0, 200)}`);
   return result;
 }
