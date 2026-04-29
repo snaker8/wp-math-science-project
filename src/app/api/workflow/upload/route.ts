@@ -1663,7 +1663,24 @@ async function saveProblemsToDB(
     return uuidRegex.test(str);
   };
 
-  const createdBy = isValidUUID(job.userId) ? job.userId : null;
+  // ★ created_by 우선순위 — job.userId(UUID) → 쿠키 세션의 인증 유저 → null
+  //   saveEditedProblemsDirect 와 동일 폴백. Storage 복원 경로의 'anonymous' 문자열로
+  //   exams.created_by NOT NULL 위반되던 사고 차단.
+  let createdBy: string | null = isValidUUID(job.userId) ? job.userId : null;
+  if (!createdBy) {
+    try {
+      const sessionSupa = await createSupabaseServerClient();
+      if (sessionSupa) {
+        const { data: { user } } = await sessionSupa.auth.getUser();
+        if (user?.id && isValidUUID(user.id)) {
+          createdBy = user.id;
+          console.log(`[DB] job.userId 무효("${job.userId}") → 쿠키 세션 유저로 폴백: ${createdBy}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[DB] 쿠키 세션 유저 조회 실패:', e);
+    }
+  }
 
   // 사용자의 institute_id 조회 (users 테이블에서)
   let instituteId: string | null = isValidUUID(job.instituteId) ? job.instituteId : null;
