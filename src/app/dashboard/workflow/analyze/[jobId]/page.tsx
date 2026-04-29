@@ -1983,8 +1983,6 @@ function ProblemDetailPanel({
                 {problem.choices && problem.choices.length > 0 && (() => {
                   const subProblemPatterns = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|\[\s*\d+\s*점\s*\]/;
                   const isSubProblem = problem.choices.some(c => subProblemPatterns.test(c));
-                  // ★ 보기형 문제: 선택지에 ㄱ,ㄴ,ㄷ 조합이 있으면 (1) 형태 번호 사용
-                  const isBoggiType = problem.choices.some(c => /[ㄱㄴㄷㄹㅁ].*,\s*[ㄱㄴㄷㄹㅁ]/.test(c));
 
                   if (isSubProblem) {
                     return (
@@ -2020,10 +2018,8 @@ function ProblemDetailPanel({
                           choiceText = `$${choiceText.trim()}$`;
                         }
                         if (!choiceText) return null;
-                        // ★ 보기형(ㄱ,ㄴ 조합)은 (1) 형태, 일반 객관식은 ① 형태
-                        const numberLabel = isBoggiType
-                          ? `(${i + 1})`
-                          : (circledNumbers[i + 1] || `${i + 1}`);
+                        // ★ 모든 객관식은 ① 형태로 통일 (cloud 페이지 ProblemCardView 와 일관)
+                        const numberLabel = circledNumbers[i + 1] || `${i + 1}`;
                         return (
                           <div key={i} className={`flex items-start gap-2 py-1 px-2 rounded-md ${isCorrect ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
                             <span className={`flex-shrink-0 text-[15px] leading-[1.6] ${isCorrect ? 'text-emerald-600 font-bold' : 'text-gray-500'}`}>
