@@ -3367,14 +3367,26 @@ export default function AnalyzeJobPage() {
       } else {
         // 서버가 JSON이 아닐 수도 있으므로 안전 파싱
         const raw = await res.text().catch(() => '');
-        let parsed: { error?: string; message?: string } = {};
+        let parsed: {
+          error?: string;
+          message?: string;
+          detail?: { message?: string; code?: string; details?: string; hint?: string } | null;
+          diagnostic?: { title?: string; instituteId?: string | null; bookGroupId?: string | null; createdBy?: string };
+        } = {};
         try { parsed = JSON.parse(raw); } catch { /* non-JSON body */ }
         const hint = res.status === 413
           ? '(이미지 크기 초과 — 문제 수/페이지 수 과다)'
           : res.status === 401
             ? '(로그인 세션 만료)'
             : '';
-        alert(`❌ 자산화 실패 [${res.status}] ${hint}\n${parsed.error || parsed.message || raw.slice(0, 200) || '응답 본문 없음'}`);
+        // ★ 진단용 detail 이 있으면 alert 에 같이 표시 (DB 에러 메시지·코드)
+        const detailLine = parsed.detail?.message
+          ? `\n\n[DB 에러] ${parsed.detail.code || '?'} — ${parsed.detail.message}${parsed.detail.hint ? `\n[힌트] ${parsed.detail.hint}` : ''}${parsed.detail.details ? `\n[상세] ${parsed.detail.details}` : ''}`
+          : '';
+        const diagLine = parsed.diagnostic
+          ? `\n\n[진단] title=${parsed.diagnostic.title} institute=${parsed.diagnostic.instituteId?.slice(0, 8) || '없음'} bookGroup=${parsed.diagnostic.bookGroupId?.slice(0, 8) || '없음'}`
+          : '';
+        alert(`❌ 자산화 실패 [${res.status}] ${hint}\n${parsed.error || parsed.message || raw.slice(0, 200) || '응답 본문 없음'}${detailLine}${diagLine}`);
       }
     } catch (err) {
       console.error('Save all error:', err);

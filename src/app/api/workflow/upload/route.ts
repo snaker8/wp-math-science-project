@@ -1226,6 +1226,8 @@ async function saveEditedProblemsDirect(
 
   // ★ Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   let examId: string | null = null;
+  // ★ 진단용 — 실제 DB 에러를 응답에 담아 alert 에서 즉시 원인 파악 가능하게.
+  let examInsertError: { message: string; code?: string; details?: string; hint?: string } | null = null;
   // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
   const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
 
@@ -1317,12 +1319,22 @@ async function saveEditedProblemsDirect(
 
     if (examResult.error) {
       console.error('[Direct Save] Exam create error:', examResult.error.message);
+      examInsertError = {
+        message: examResult.error.message,
+        code: (examResult.error as { code?: string }).code,
+        details: (examResult.error as { details?: string }).details,
+        hint: (examResult.error as { hint?: string }).hint,
+      };
     } else {
       examId = examResult.data.id;
       console.log(`[Direct Save] Created exam: ${examId}`);
     }
   } catch (err) {
     console.error('[Direct Save] Exam create exception:', err);
+    examInsertError = {
+      message: err instanceof Error ? err.message : String(err),
+      code: 'EXCEPTION',
+    };
   }
 
   // ★ exam INSERT 실패 시 즉시 abort — problems 만 저장돼 orphan 되는 사고 차단.
@@ -1334,6 +1346,14 @@ async function saveEditedProblemsDirect(
       error: 'exam 레코드 생성 실패 — 자산화 중단. (problems 미저장으로 orphan 데이터 방지)',
       problemCount: 0,
       examId: null,
+      // ★ 진단용 — alert 에 실제 원인 표시
+      detail: examInsertError,
+      diagnostic: {
+        title: fileTitle,
+        instituteId,
+        bookGroupId: bookGroupId || null,
+        createdBy,
+      },
     }, { status: 500 });
   }
 
