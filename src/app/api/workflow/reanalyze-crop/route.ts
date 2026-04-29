@@ -453,7 +453,11 @@ export async function POST(request: NextRequest) {
     // ★ problemId가 있으면 이미지를 Storage에 저장
     if (problemId && supabaseAdmin) {
       try {
-        const imgBuffer = Buffer.from(imageBase64, 'base64');
+        // ★ 클라이언트가 data URL prefix 포함해서 보내므로 raw base64 만 추출 후 Buffer 변환
+        const rawBase64ForUpload = imageBase64.startsWith('data:')
+          ? imageBase64.split(',')[1] || ''
+          : imageBase64;
+        const imgBuffer = Buffer.from(rawBase64ForUpload, 'base64');
         const cropPath = `problem-crops/${problemId}.png`;
 
         const { error: uploadErr } = await supabaseAdmin.storage
@@ -1073,11 +1077,17 @@ async function refineWithGPT(ocrText: string, customPrompt: string, imageBase64?
 - 선택지: ① ㄴ  ② ㄷ  ③ ㄱ, ㄴ  ④ ㄱ, ㄷ  ⑤ ㄴ, ㄷ 형식이 일반적입니다.
 - <보기> 내용은 "ㄱ. [수식]", "ㄴ. [수식]", "ㄷ. [수식]" 형식입니다.`;
 
+  // ★ 클라이언트 canvas.toDataURL() 결과는 "data:image/png;base64,..." prefix 포함.
+  //    OpenAI image_url 은 data URL 형식을 직접 받으므로 prefix 가 있으면 그대로,
+  //    없으면 raw base64 라 가정하고 prefix 를 붙임.
   const userContent: any[] = [];
   if (imageBase64) {
+    const dataUrl = imageBase64.startsWith('data:')
+      ? imageBase64
+      : `data:image/png;base64,${imageBase64}`;
     userContent.push({
       type: 'image_url',
-      image_url: { url: `data:image/png;base64,${imageBase64}`, detail: 'high' },
+      image_url: { url: dataUrl, detail: 'high' },
     });
   }
 
@@ -1168,11 +1178,16 @@ async function refineWithClaude(
 
 ★ <보기> 라벨: ㄱ, ㄴ, ㄷ (한국어 자음). ¬·C·D·L 로 변환 금지.`;
 
+  // ★ Claude API 는 raw base64 만 받음 (data URL prefix 가 들어가면 invalid_request_error).
+  //    클라이언트가 보내는 base64 는 prefix 포함이므로 명시적으로 제거.
   const userContent: Array<Record<string, unknown>> = [];
   if (imageBase64) {
+    const rawBase64 = imageBase64.startsWith('data:')
+      ? imageBase64.split(',')[1] || ''
+      : imageBase64;
     userContent.push({
       type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
+      source: { type: 'base64', media_type: 'image/png', data: rawBase64 },
     });
   }
   userContent.push({
