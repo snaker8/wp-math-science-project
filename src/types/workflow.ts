@@ -87,6 +87,7 @@ export interface TypeClassification {
   typeCode: string; // e.g., "MA-HS1-ALG-01-003"
   typeName: string;
   subject: string; // 수학I, 수학II, 미적분, 확률과 통계, 기하
+  scienceSubject?: string; // 과학 과목 (PHY, CHE, BIO, EAR — math 외 트랙)
   chapter: string; // 대단원
   section: string; // 중단원
   subSection?: string; // 소단원

@@ -136,13 +136,13 @@ async function processHWPDocument(
   if (onProgress) onProgress(50);
 
   // 빈 OCR 결과 반환 (쓰레기 데이터로 문제를 만들지 않음)
+  // OCRResult 의 정의 필드만 사용 — totalPages/mathExpressions 는 OCRResult 외부 필드
   return {
     jobId,
     pages: [],
-    totalPages: 0,
-    mathExpressions: [],
     rawText: '',
     confidence: 0,
+    processedAt: new Date().toISOString(),
   };
 }
 
