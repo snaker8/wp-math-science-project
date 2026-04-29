@@ -391,16 +391,6 @@ export async function GET(request: NextRequest) {
 
   const results = jobResults.get(jobId);
 
-  // 디버그: results 내용 로그 (결과 있을 때만 — EMPTY는 처리 중 정상이므로 무시)
-  if (results && results.length > 0) {
-    const first = results[0];
-    console.log(`[Upload API GET] jobId=${jobId}, ${results.length}개 결과, 첫 문제 solution:`,
-      first.solution ? `steps=${first.solution.steps?.length || 0}` : 'NONE',
-      'choices:', first.choices?.length || 0,
-      'content:', first.contentWithMath?.substring(0, 50) || 'NONE'
-    );
-  }
-
   // PDF 파일 URL 생성 (서버 사이드 프록시를 통해 CORS 문제 회피)
   // ★ HWP 파일은 변환 완료 전까지 pdfUrl을 null로 반환 (PDF.js 422 에러 방지)
   let pdfUrl: string | null = null;
@@ -1308,7 +1298,7 @@ async function saveEditedProblemsDirect(
       }
     }
 
-    console.log(`[Direct Save] Creating exam:`, JSON.stringify(examInsertData, null, 2));
+    console.log(`[Direct Save] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
 
     let examResult = await supabase
       .from('exams')
@@ -1853,7 +1843,7 @@ async function saveProblemsToDB(
       }
     }
 
-    console.log(`[DB] Inserting exam with data:`, JSON.stringify(examInsertData, null, 2));
+    console.log(`[DB] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
 
     let examResult = await supabase
       .from('exams')
