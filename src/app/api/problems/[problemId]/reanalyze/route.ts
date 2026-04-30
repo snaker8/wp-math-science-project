@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 
 /** 과학 과목인지 판단 */
 function isScienceSubject(subject?: string): boolean {
@@ -15,22 +16,47 @@ function isScienceSubject(subject?: string): boolean {
   return /과학|물리|화학|생명|생물|지구|IS[12]|PHY|CHE|BIO|ESC|science/i.test(subject);
 }
 
-/** 문제가 속한 시험지의 과목 조회 */
-async function getExamSubject(problemId: string): Promise<string | null> {
-  if (!supabaseAdmin) return null;
+/** 문제가 속한 시험지의 과목·학년·제목 조회 (classify.ts에 학년/과목 컨텍스트 전달용) */
+async function getExamMeta(
+  problemId: string
+): Promise<{ subject: string | null; grade: string | null; title: string | null }> {
+  if (!supabaseAdmin) return { subject: null, grade: null, title: null };
   const { data: ep } = await supabaseAdmin
     .from('exam_problems')
     .select('exam_id')
     .eq('problem_id', problemId)
     .limit(1)
     .single();
-  if (!ep?.exam_id) return null;
+  if (!ep?.exam_id) return { subject: null, grade: null, title: null };
   const { data: exam } = await supabaseAdmin
     .from('exams')
-    .select('subject')
+    .select('subject, grade, title')
     .eq('id', ep.exam_id)
     .single();
-  return exam?.subject || null;
+  return {
+    subject: exam?.subject || null,
+    grade: exam?.grade || null,
+    title: exam?.title || null,
+  };
+}
+
+/** examMeta + title/subject 재감지로 effectiveSubject/effectiveGrade 산출 (PR #12 hotfix 패턴) */
+async function getEffectiveExamMeta(problemId: string): Promise<{
+  isScience: boolean;
+  effectiveSubject: string;
+  effectiveGrade: string;
+}> {
+  const examMeta = await getExamMeta(problemId);
+  const isScience = isScienceSubject(examMeta.subject || '');
+  const detectedGrade =
+    detectGradeFromTitle(examMeta.title || '') ||
+    detectGradeFromTitle(examMeta.subject || '');
+  const effectiveGrade = detectedGrade || examMeta.grade || '';
+  const detectedSubject =
+    detectSubjectFromTitle(examMeta.title || '') ||
+    detectSubjectFromTitle(examMeta.subject || '');
+  const effectiveSubject = detectedSubject || examMeta.subject || '';
+  return { isScience, effectiveSubject, effectiveGrade };
 }
 
 export async function POST(
@@ -71,15 +97,22 @@ export async function POST(
       .eq('problem_id', problemId)
       .single();
 
-    // ★ 시험지 과목 확인 (과학/수학 분류 분기용)
-    const examSubject = await getExamSubject(problemId);
-    const isScience = isScienceSubject(examSubject || '');
-    console.log(`[Reanalyze] problemId=${problemId}, examSubject="${examSubject}", isScience=${isScience}`);
+    // ★ 시험지 메타 — classify.ts에 학년/과목 컨텍스트 전달용
+    const { isScience, effectiveSubject, effectiveGrade } = await getEffectiveExamMeta(problemId);
+    console.log(
+      `[Reanalyze] problemId=${problemId}, subject="${effectiveSubject}", grade="${effectiveGrade}", isScience=${isScience}`
+    );
 
     // 3. 항상 분류만 재실행 (OCR 재실행 안 함 — content/이미지 보존)
     console.log(`[Reanalyze] 분류만 재실행 (content 유지)`);
     return await reanalyzeClassificationOnly(
-      problemId, problem, existingClassification, isAdvanced, isScience, examSubject
+      problemId,
+      problem,
+      existingClassification,
+      isAdvanced,
+      isScience,
+      effectiveSubject,
+      effectiveGrade
     );
   } catch (error) {
     console.error('[Reanalyze] Error:', error);
@@ -271,11 +304,38 @@ async function reanalyzeWithOCR(
     });
   } catch (err) {
     console.error('[Reanalyze] OCR 재실행 오류:', err);
-    // OCR 실패 시 분류만 시도
+    // OCR 실패 시 분류만 시도 — examMeta 다시 fetch해서 학년/과목 컨텍스트 보존
+    const { isScience, effectiveSubject, effectiveGrade } = await getEffectiveExamMeta(problemId);
     return await reanalyzeClassificationOnly(
-      problemId, problem, existingClassification, isAdvanced
+      problemId,
+      problem,
+      existingClassification,
+      isAdvanced,
+      isScience,
+      effectiveSubject,
+      effectiveGrade
     );
   }
+}
+
+/** mathsecr_types에서 typeCode로 typeName/chapter/section 조회 */
+async function lookupMathsecrName(typeCode: string): Promise<{
+  typeName: string;
+  chapter: string;
+  section: string;
+} | null> {
+  if (!supabaseAdmin || !typeCode || !typeCode.startsWith('MS')) return null;
+  const { data } = await supabaseAdmin
+    .from('mathsecr_types')
+    .select('full_path, level1_name, level2_name')
+    .eq('code', typeCode)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    typeName: data.full_path || '',
+    chapter: data.level1_name || '',
+    section: data.level2_name || '',
+  };
 }
 
 /**
@@ -287,8 +347,66 @@ async function reanalyzeClassificationOnly(
   existingClassification: any,
   isAdvanced: boolean,
   isScience: boolean = false,
-  examSubject: string | null = null
+  examSubject: string | null = null,
+  examGrade: string | null = null
 ) {
+  const contentText = problem.content_latex || '';
+
+  // ★ 수학(비과학) — classify.ts(Sonnet 4.6 2단계) 직행. 휴리스틱(log 보조값 등) 자동 적용.
+  //   기존엔 GPT-4o-mini가 옛 prompt로 호출돼 16번(상용로그) → 등비수열 오분류.
+  //   Sonnet 통일로 자산화(cloud-flow) 경로와 일관성 + Phase C-1a 휴리스틱 효과.
+  if (!isScience && contentText.trim()) {
+    try {
+      const { classifyProblem } = await import('@/lib/workflow/classify');
+      const claudeResult = await classifyProblem({
+        content: contentText,
+        examSubject: examSubject || '',
+        examGrade: examGrade || '',
+        logLabel: `reanalyze:${problemId.slice(0, 8)}`,
+      });
+      if (claudeResult && claudeResult.typeCode) {
+        const nameLookup = await lookupMathsecrName(claudeResult.typeCode);
+        const typeName = nameLookup?.typeName || claudeResult.typeName || '';
+        const chapter = nameLookup?.chapter || claudeResult.chapter || '';
+        const section = nameLookup?.section || claudeResult.section || '';
+        const validCognitive = new Set([
+          'CALCULATION',
+          'UNDERSTANDING',
+          'INFERENCE',
+          'PROBLEM_SOLVING',
+        ]);
+        const cogn = validCognitive.has(claudeResult.cognitiveDomain)
+          ? claudeResult.cognitiveDomain
+          : 'CALCULATION';
+        const analysis = {
+          classification: {
+            typeCode: claudeResult.typeCode,
+            typeName,
+            subject: claudeResult.subject || examSubject || '',
+            chapter,
+            section,
+            difficulty: Math.max(1, Math.min(10, claudeResult.difficulty)),
+            cognitiveDomain: cogn,
+            confidence: claudeResult.confidence,
+          },
+          correctedContent: null,
+        };
+        return await persistReanalysis(
+          problemId,
+          problem,
+          existingClassification,
+          analysis,
+          claudeResult.model || 'claude-sonnet-4-6',
+          false
+        );
+      }
+      console.warn(`[Reanalyze] classify.ts 결과 없음 → GPT 폴백`);
+    } catch (e) {
+      console.warn(`[Reanalyze] classify.ts 실패 → GPT 폴백:`, e);
+    }
+  }
+
+  // 과학 또는 Sonnet 실패 → GPT 폴백 (기존 흐름)
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) {
     return NextResponse.json({
@@ -299,7 +417,6 @@ async function reanalyzeClassificationOnly(
   }
 
   const model = isAdvanced ? 'gpt-4o' : (process.env.OPENAI_MODEL || 'gpt-4o-mini');
-  const contentText = problem.content_latex || '';
 
   // ★ 과학/수학에 따라 프롬프트 분기
   const systemPrompt = isScience
@@ -411,11 +528,32 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
     });
   }
 
+  return await persistReanalysis(
+    problemId,
+    problem,
+    existingClassification,
+    analysis,
+    model,
+    false
+  );
+}
+
+/**
+ * 분류 결과 DB 저장 + 최신 데이터 반환 — Sonnet/GPT 양쪽 진입점에서 공용.
+ */
+async function persistReanalysis(
+  problemId: string,
+  problem: any,
+  existingClassification: any,
+  analysis: any,
+  model: string,
+  ocrRedone: boolean
+) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
 
-  // DB 업데이트 — 분류만 갱신
+  // problems.ai_analysis — 분류만 갱신
   const updateData: any = {
     ai_analysis: {
       ...problem.ai_analysis,
@@ -424,7 +562,6 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
       model,
     },
   };
-
   if (analysis.correctedContent) {
     updateData.content_latex = analysis.correctedContent;
   }
@@ -433,12 +570,11 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
     .from('problems')
     .update(updateData)
     .eq('id', problemId);
-
   if (updateError) {
     console.error('[Reanalyze] Problem update error:', updateError);
   }
 
-  // Classification 업데이트
+  // classifications 갱신
   if (analysis.classification) {
     const classData: any = {
       problem_id: problemId,
@@ -448,7 +584,6 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
       ai_confidence: analysis.classification.confidence || 0.5,
       is_verified: false,
     };
-
     if (existingClassification) {
       await supabaseAdmin
         .from('classifications')
@@ -461,13 +596,11 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
     }
   }
 
-  // 업데이트된 데이터 반환
   const { data: updatedProblem } = await supabaseAdmin
     .from('problems')
     .select('*')
     .eq('id', problemId)
     .single();
-
   const { data: updatedClassification } = await supabaseAdmin
     .from('classifications')
     .select('*')
@@ -479,8 +612,10 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
     classification: updatedClassification,
     analysis,
     model,
-    ocrRedone: false,
-    message: '분류 재실행 완료 (크롭 이미지 없어 OCR 미실행)',
+    ocrRedone,
+    message: ocrRedone
+      ? 'OCR 재실행 + 재분류 완료'
+      : '분류 재실행 완료 (크롭 이미지 없어 OCR 미실행)',
   });
 }
 
