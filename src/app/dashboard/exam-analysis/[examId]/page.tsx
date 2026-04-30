@@ -5,7 +5,7 @@
 // /dashboard/exam-analysis/[examId]
 // ============================================================================
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -21,9 +21,12 @@ import {
   AlertCircle,
   Loader2,
   TableIcon,
+  Share2,
 } from 'lucide-react';
 import { useExamProblems, useExamList } from '@/hooks/useExamProblems';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { AIInsightTabs } from './AIInsightTabs';
+import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 import './exam-analysis.css';
 
 const DOMAIN_LABELS: Record<string, string> = {
@@ -67,7 +70,108 @@ export default function ExamAnalysisPage() {
   const [isExporting, setIsExporting] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
 
+  // AI 분석 상태
+  const [aiAnalysis, setAiAnalysis] = useState<ExamAIAnalysis | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // 학부모 공유 상태
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
   const exam = useMemo(() => exams.find((e) => e.id === examId), [exams, examId]);
+
+  // 페이지 진입 시 캐시된 AI 분석 조회
+  useEffect(() => {
+    if (!examId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/exams/${examId}/ai-analysis`);
+        if (!r.ok) return;
+        const d = (await r.json()) as { analysis: ExamAIAnalysis | null };
+        if (!cancelled && d.analysis) {
+          setAiAnalysis(d.analysis);
+        }
+      } catch (err) {
+        console.error('[ExamAnalysis] AI cache fetch failed:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [examId]);
+
+  // 학부모 공유 — 토큰 생성/조회 + 링크 복사
+  const handleShareParent = async () => {
+    if (!examId || isSharing) return;
+    setIsSharing(true);
+    try {
+      // 1. 기존 토큰 확인
+      let token = shareToken;
+      if (!token) {
+        const r = await fetch(`/api/exams/${examId}/share`);
+        const d = await r.json();
+        token = d.shareToken || null;
+      }
+      // 2. 없으면 생성
+      if (!token) {
+        const r2 = await fetch(`/api/exams/${examId}/share`, { method: 'POST' });
+        const d2 = await r2.json();
+        token = d2.shareToken || null;
+      }
+      if (!token) {
+        setShareToast('공유 링크 생성 실패');
+        return;
+      }
+      setShareToken(token);
+      const url = `${window.location.origin}/share/exam/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareToast(`학부모 공유 링크가 클립보드에 복사되었습니다 — ${url}`);
+      } catch {
+        setShareToast(`학부모 공유 링크: ${url}`);
+      }
+    } catch (err) {
+      console.error('[ExamAnalysis] share error:', err);
+      setShareToast('공유 링크 생성 중 오류 발생');
+    } finally {
+      setIsSharing(false);
+      setTimeout(() => setShareToast(null), 4000);
+    }
+  };
+
+  // AI 분석 생성/재생성
+  const handleGenerateAI = async (force = false) => {
+    if (!examId) return;
+    setIsGeneratingAI(true);
+    setAiError(null);
+    try {
+      const r = await fetch(`/api/exams/${examId}/ai-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force, hardDifficultyThreshold: 7, hardQuestionLimit: 4 }),
+      });
+      const d = (await r.json()) as {
+        analysis?: ExamAIAnalysis;
+        error?: string;
+        detail?: string;
+      };
+      if (!r.ok) {
+        setAiError(d.error || `HTTP ${r.status}`);
+        console.error('[ExamAnalysis] AI generate failed:', d);
+        return;
+      }
+      if (d.analysis) setAiAnalysis(d.analysis);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'AI 분석 생성 실패';
+      setAiError(msg);
+      console.error('[ExamAnalysis] AI generate error:', err);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
 
   // 수학비서 트리에서 단원명 Lookup
   React.useEffect(() => {
@@ -363,6 +467,16 @@ export default function ExamAnalysisPage() {
           </button>
           <button
             type="button"
+            className="ea-btn"
+            onClick={handleShareParent}
+            disabled={isSharing}
+            title="학부모용 공개 분석 리포트 링크 생성/복사"
+          >
+            {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
+            {isSharing ? '생성 중...' : '학부모 공유'}
+          </button>
+          <button
+            type="button"
             className="ea-btn primary"
             onClick={() => router.push(`/dashboard/cloud/${examId}`)}
           >
@@ -370,6 +484,26 @@ export default function ExamAnalysisPage() {
             시험지로 이동
           </button>
         </div>
+        {shareToast && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 32,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#1A1A1F',
+              color: '#fff',
+              padding: '12px 20px',
+              borderRadius: 12,
+              fontSize: 13,
+              zIndex: 100,
+              maxWidth: '90vw',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+            }}
+          >
+            {shareToast}
+          </div>
+        )}
       </div>
 
       {/* ═══════ BODY ═══════ */}
@@ -426,6 +560,14 @@ export default function ExamAnalysisPage() {
               <div className="ea-stat-sub">{unclassifiedCount > 0 ? '분류 필요' : '완료'}</div>
             </div>
           </div>
+
+          {/* AI 분석 패널 (시험총평·단원별·고난도) */}
+          <AIInsightTabs
+            analysis={aiAnalysis}
+            isGenerating={isGeneratingAI}
+            onGenerate={handleGenerateAI}
+            error={aiError}
+          />
 
           {/* Row: 난이도 + 인지영역 */}
           <div className="ea-row-2">

@@ -315,6 +315,17 @@
   .ea-subbar, .ea-subbar-actions { display: none !important; }
   .ea-shell { display: block; background: white; color: black; }
   .ea-body { padding: 20mm 15mm; overflow: visible; }
-  .ea-panel, .ea-stat { background: white; border: 1px solid #e5e7eb; color: black; }
+  .ea-panel, .ea-stat { background: white; border: 1px solid #e5e7eb; color: black; page-break-inside: avoid; break-inside: avoid; }
   .ea-stat-value, .ea-panel-h { color: black; }
+
+  /* AI 분석 패널 — 인쇄 시 모든 탭 펼쳐서 표시 */
+  .ai-insight-tabs-header,
+  .no-print { display: none !important; }
+  .print-show { display: block !important; page-break-inside: auto; }
+  .print-only { display: block !important; color: black; }
+}
+
+/* 화면에서는 print-only 항목 숨김 */
+@media screen {
+  .print-only { display: none !important; }
 }

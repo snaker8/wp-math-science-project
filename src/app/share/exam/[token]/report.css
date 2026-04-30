@@ -1,0 +1,467 @@
+/* ============================================================================
+   Share Report — 라이트 프리미엄 학원 보고서 디자인
+   딥 인디고 #312E81 단일 액센트, Pretendard, 넓은 여백
+   ============================================================================ */
+
+.report-shell {
+  --rp-bg: #FAFAFA;
+  --rp-paper: #FFFFFF;
+  --rp-text: #1A1A1F;
+  --rp-text-2: #3F3F46;
+  --rp-text-3: #71717A;
+  --rp-text-4: #A1A1AA;
+  --rp-line: #E5E7EB;
+  --rp-line-strong: #1A1A1F;
+  --rp-accent: #312E81;
+  --rp-accent-soft: #EEF2FF;
+  --rp-accent-mid: #6366F1;
+
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--rp-bg);
+  color: var(--rp-text);
+  min-height: 100vh;
+  padding: 32px 16px 80px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── 액션 바 ─────────────────────────────────────────── */
+.report-actions {
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  margin: 0 auto 24px;
+  max-width: 920px;
+}
+.report-actions-inner {
+  display: flex;
+  gap: 8px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--rp-line);
+  border-radius: 14px;
+  padding: 8px;
+  flex-wrap: wrap;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rp-text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.action-btn:hover {
+  background: var(--rp-accent-soft);
+  color: var(--rp-accent);
+}
+.action-btn.primary {
+  background: var(--rp-accent);
+  color: #fff;
+}
+.action-btn.primary:hover {
+  background: #1E1B5A;
+  color: #fff;
+}
+.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn svg { width: 14px; height: 14px; }
+.action-btn .spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── 토스트 ──────────────────────────────────────────── */
+.report-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--rp-text);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  animation: toastIn 0.25s ease-out;
+}
+.report-toast svg { width: 14px; height: 14px; color: #86EFAC; }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* ─── 보고서 페이지 ────────────────────────────────────── */
+.report-paper {
+  max-width: 920px;
+  margin: 0 auto;
+  background: var(--rp-paper);
+  border: 1px solid var(--rp-line);
+  border-radius: 4px;
+  padding: 64px 72px;
+  color: var(--rp-text);
+}
+
+/* ─── HEADER ─────────────────────────────────────────── */
+.report-header { margin-bottom: 56px; }
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+.brand-logo {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--rp-text);
+}
+.brand-tagline {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--rp-text-4);
+  margin-top: 2px;
+}
+.header-meta {
+  text-align: right;
+}
+.meta-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--rp-accent);
+}
+.meta-date {
+  font-size: 11px;
+  color: var(--rp-text-3);
+  margin-top: 2px;
+}
+.header-divider {
+  height: 2px;
+  background: var(--rp-line-strong);
+  margin-bottom: 32px;
+}
+.header-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.header-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--rp-accent);
+}
+.header-title {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--rp-text);
+  margin: 0;
+}
+.header-meta-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rp-text-2);
+  background: transparent;
+  border: 1px solid var(--rp-line);
+  border-radius: 999px;
+}
+.meta-chip.emphasis {
+  color: var(--rp-accent);
+  border-color: var(--rp-accent);
+  font-weight: 700;
+}
+
+/* ─── SECTION ────────────────────────────────────────── */
+.report-section {
+  margin-bottom: 56px;
+  page-break-inside: auto;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rp-line);
+}
+.section-num {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--rp-accent);
+  font-variant-numeric: tabular-nums;
+}
+.section-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--rp-text);
+  margin: 0;
+}
+
+/* ─── INFO BLOCK (기본 정보) ─────────────────────────── */
+.info-block {
+  margin-bottom: 28px;
+}
+.info-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--rp-text-3);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.info-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.range-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rp-text);
+  background: transparent;
+  border: 1px solid var(--rp-text-2);
+  border-radius: 999px;
+}
+.range-chip.muted {
+  color: var(--rp-text-4);
+  border-color: var(--rp-line);
+}
+
+/* ─── BAR CHART (단원/난이도 분포) ──────────────────── */
+.bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 100px;
+  align-items: center;
+  gap: 16px;
+}
+.bar-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rp-text-2);
+}
+.bar-track {
+  position: relative;
+  height: 16px;
+  background: #F4F4F5;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease-out;
+}
+.bar-fill.unit {
+  background: linear-gradient(90deg, var(--rp-accent) 0%, var(--rp-accent-mid) 100%);
+}
+.bar-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: var(--rp-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.bar-meta strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--rp-text);
+}
+
+/* ─── SUB BLOCK (총평/단원/고난도 sub-section) ───────── */
+.sub-block {
+  margin-bottom: 32px;
+}
+.sub-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sub-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--rp-accent);
+}
+.sub-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--rp-text);
+}
+.diff-pill {
+  margin-left: auto;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rp-accent);
+  background: var(--rp-accent-soft);
+  border-radius: 999px;
+}
+.sub-body {
+  font-size: 14px;
+  line-height: 1.85;
+  color: var(--rp-text-2);
+  white-space: pre-wrap;
+}
+
+/* ─── UNIT CARD (단원/고난도) ────────────────────────── */
+.unit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.unit-card {
+  background: #FCFCFD;
+  border: 1px solid var(--rp-line);
+  border-radius: 12px;
+  padding: 20px 22px;
+  page-break-inside: avoid;
+}
+.unit-card.hard {
+  background: linear-gradient(135deg, #FFF7ED 0%, #FEF3C7 100%);
+  border-color: #FCD34D;
+}
+.unit-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--rp-line);
+}
+.unit-card.hard .unit-card-head {
+  border-bottom-color: #FCD34D;
+}
+.unit-card-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--rp-text);
+  margin: 0;
+}
+.unit-card.hard .unit-card-title {
+  color: #92400E;
+}
+.unit-card-meta {
+  font-size: 11px;
+  color: var(--rp-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.unit-card-body { display: flex; flex-direction: column; gap: 12px; }
+.kv {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.kv-key {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--rp-text-3);
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+.unit-card.hard .kv-key { color: #92400E; }
+.kv-val {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--rp-text-2);
+}
+
+/* ─── EMPTY ANALYSIS ─────────────────────────────────── */
+.empty-analysis {
+  padding: 48px;
+  text-align: center;
+  color: var(--rp-text-3);
+  background: #FAFAFA;
+  border: 1px dashed var(--rp-line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--rp-text-4);
+  font-size: 12px;
+}
+
+/* ─── FOOTER ─────────────────────────────────────────── */
+.report-footer {
+  margin-top: 64px;
+}
+.footer-line {
+  height: 1px;
+  background: var(--rp-line-strong);
+  margin-bottom: 16px;
+}
+.footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: var(--rp-text-3);
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-meta {
+  font-weight: 600;
+  color: var(--rp-accent);
+  letter-spacing: 0.08em;
+}
+
+/* ─── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .report-paper { padding: 36px 24px; }
+  .header-title { font-size: 24px; }
+  .bar-row { grid-template-columns: 100px 1fr 80px; gap: 8px; }
+  .kv { grid-template-columns: 64px 1fr; gap: 8px; }
+}
+
+/* ─── PRINT ──────────────────────────────────────────── */
+@media print {
+  .report-shell {
+    background: white;
+    padding: 0;
+  }
+  .no-print { display: none !important; }
+  .report-paper {
+    border: none;
+    box-shadow: none;
+    padding: 16mm;
+    max-width: 100%;
+    border-radius: 0;
+  }
+  .report-section { page-break-inside: auto; }
+  .unit-card { page-break-inside: avoid; }
+}
