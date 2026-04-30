@@ -332,10 +332,11 @@
 }
 .bar-track {
   position: relative;
-  height: 8px;
+  height: 14px; /* 시각 임팩트 위해 키움 */
   background: white;
   border-radius: 999px;
   overflow: hidden;
+  box-shadow: 0 0 0 1px var(--rp-line) inset;
 }
 .bar-fill {
   position: absolute;
@@ -346,6 +347,55 @@
 }
 .bar-fill.unit {
   background: linear-gradient(90deg, var(--rp-accent-strong) 0%, var(--rp-accent-mid) 100%);
+}
+
+/* ─── DONUT CHART (단원별 분포) ──────────────────────── */
+.donut-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.donut-legend-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.donut-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.donut-legend-name {
+  font-weight: 600;
+  color: var(--rp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.donut-legend-pct {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.donut-legend-pct strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--rp-text);
+}
+.donut-legend-count {
+  font-size: 11px;
+  color: var(--rp-text-3);
 }
 
 /* ─── SUB CARD (총평/단원/고난도 외곽) ─────────────────── */
@@ -683,6 +733,7 @@
   .header-title { font-size: 22px; }
   .info-grid-2, .unit-grid, .hard-grid { grid-template-columns: 1fr; }
   .header-meta-pill { font-size: 14px; padding: 8px 14px; }
+  .donut-row { flex-direction: column; align-items: stretch; }
 }
 
 /* ─── PRINT ──────────────────────────────────────────── */
