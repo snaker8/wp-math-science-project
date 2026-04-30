@@ -58,7 +58,21 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { content_latex, solution_latex, answer_json, answer_json_patch, images, ai_analysis, difficulty, type_code, cognitive_domain, source_number, sequence_number, correction_reason } = body;
+    const { content_latex, solution_latex, answer_json, answer_json_patch, images, ai_analysis, difficulty, type_code: rawTypeCode, cognitive_domain, source_number, sequence_number, correction_reason } = body;
+
+    // ★ type_code sanitize — UI에서 "MS09-02-03-09-12. 실생활12 (식 세우기)" 같은 표시 텍스트가
+    //   통째로 들어오는 사고 차단. 정규식으로 MS코드(2~5세그먼트)만 추출.
+    //   예: "MS09-02-03-09-12 실생활12..." → "MS09-02-03-09-12"
+    let type_code: string | undefined = rawTypeCode;
+    if (typeof rawTypeCode === 'string' && rawTypeCode.startsWith('MS')) {
+      const match = rawTypeCode.match(/^MS\d{2}(?:-\d{2}){1,4}/);
+      if (match) {
+        type_code = match[0];
+        if (match[0] !== rawTypeCode) {
+          console.log(`[API/problems] type_code sanitized: "${rawTypeCode.slice(0, 60)}" → "${type_code}"`);
+        }
+      }
+    }
 
     // problems 테이블 업데이트
     const updateData: Record<string, any> = {};
