@@ -4,35 +4,31 @@
    ============================================================================ */
 
 .report-shell {
-  --rp-bg: #FAF7F2;            /* 따뜻한 크림 베이지 */
+  --rp-bg: #FAF8F5;            /* 따뜻한 크림 (주황과 어울리는 베이지) */
   --rp-paper: #FFFFFF;
   --rp-text: #1F2937;
   --rp-text-2: #374151;
   --rp-text-3: #6B7280;
   --rp-text-4: #9CA3AF;
-  --rp-line: #E7E2D9;          /* 베이지 톤 보더 */
-  --rp-line-soft: #F4F0E8;
+  --rp-line: #EBE5DC;
+  --rp-line-soft: #F5F1EA;
 
-  /* 메인 액센트 — 딥 인디고 */
-  --rp-accent: #4338CA;
-  --rp-accent-strong: #312E81;
-  --rp-accent-soft: #F5F3FF;
-  --rp-accent-mid: #6366F1;
-  --rp-accent-pale: #EDE9FE;
+  /* 메인 액센트 — 주황 (동부산 블로그 톤, 살짝 깊게) */
+  --rp-accent: #DD6B20;
+  --rp-accent-strong: #B5530F;
+  --rp-accent-soft: #FFFAF3;
+  --rp-accent-mid: #ED8936;
+  --rp-accent-pale: #FFEBD7;
 
-  /* 골드 포인트 — 따뜻한 강조 */
-  --rp-gold: #B45309;
-  --rp-gold-soft: #FEF3C7;
-
-  /* 보조 — 차콜 */
+  /* 보조 — 차콜 (대비전략 라벨용) */
   --rp-navy: #1F2937;
   --rp-navy-soft: #F3F4F6;
 
-  /* 난이도 색상 (절제된 톤) */
-  --rp-diff-low: #A7D7A0;
-  --rp-diff-mid: #F5C969;
-  --rp-diff-high: #E89B96;
-  --rp-diff-extra: #B7A7DA;
+  /* 난이도 색상 — 정제된 파스텔 (쉬움→어려움) */
+  --rp-diff-low: #FBE48F;      /* 1~2: 부드러운 노랑 */
+  --rp-diff-mid: #C8E9CD;      /* 3~4: sage 그린 */
+  --rp-diff-high: #F4C7C5;     /* 5~6: muted 코럴 */
+  --rp-diff-extra: #E8A6A3;    /* 7~8: 깊은 코럴 */
 
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background: var(--rp-bg);
@@ -120,10 +116,13 @@
   margin: 0 auto;
   background: var(--rp-paper);
   border: 1px solid var(--rp-line);
-  border-radius: 12px;
-  padding: 56px 64px;
+  border-radius: 14px;
+  padding: 60px 72px;
   color: var(--rp-text);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 8px 24px rgba(0,0,0,0.04);
+  box-shadow:
+    0 1px 2px rgba(24, 16, 8, 0.025),
+    0 12px 32px rgba(24, 16, 8, 0.05),
+    0 32px 80px -16px rgba(221, 107, 32, 0.04);
 }
 
 /* ─── HEADER ─────────────────────────────────────────── */
@@ -138,38 +137,44 @@
 .header-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   color: var(--rp-accent);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
 }
 .header-eyebrow::before {
   content: '';
   display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
+  width: 18px;
+  height: 2px;
   background: var(--rp-accent);
+  border-radius: 1px;
 }
 .header-title {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  line-height: 1.25;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
   color: var(--rp-text);
-  margin: 0 0 12px;
+  margin: 0 0 14px;
 }
 .header-title .accent {
   color: var(--rp-accent);
+  font-weight: 900;
 }
 .header-title-bar {
-  height: 2px;
-  background: linear-gradient(90deg, var(--rp-accent) 0%, var(--rp-accent-mid) 60%, transparent 100%);
-  border-radius: 2px;
+  height: 3px;
+  background: linear-gradient(90deg,
+    var(--rp-accent-strong) 0%,
+    var(--rp-accent) 30%,
+    var(--rp-accent-mid) 60%,
+    rgba(237, 137, 54, 0) 100%);
+  border-radius: 999px;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 .header-right {
   text-align: right;
@@ -185,14 +190,15 @@
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  padding: 10px 22px;
-  background: var(--rp-accent-soft);
-  border: 1px solid var(--rp-line);
+  padding: 11px 24px;
+  background: linear-gradient(135deg, var(--rp-accent-soft) 0%, var(--rp-accent-pale) 100%);
+  border: 1px solid var(--rp-accent-pale);
   border-radius: 12px;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 800;
-  color: var(--rp-text);
+  color: var(--rp-accent-strong);
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 4px rgba(221,107,32,0.06);
 }
 
 /* ─── SECTION ────────────────────────────────────────── */
@@ -208,16 +214,16 @@
 }
 .section-bar {
   width: 3px;
-  height: 16px;
-  background: var(--rp-accent);
+  height: 18px;
+  background: linear-gradient(180deg, var(--rp-accent-strong) 0%, var(--rp-accent) 100%);
   border-radius: 2px;
 }
 .section-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--rp-text);
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 /* 섹션별 복사 버튼 (헤더 우측) */
 .section-copy-btn {
@@ -344,11 +350,12 @@
 
 /* ─── SUB CARD (총평/단원/고난도 외곽) ─────────────────── */
 .sub-card {
-  background: var(--rp-line-soft);
+  background: linear-gradient(180deg, #FBFAF7 0%, var(--rp-line-soft) 100%);
   border: 1px solid var(--rp-line);
   border-radius: 14px;
-  padding: 24px 28px;
+  padding: 26px 30px;
   margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(24,16,8,0.02);
 }
 .sub-head {
   display: flex;
@@ -407,8 +414,14 @@
   background: white;
   border: 1px solid var(--rp-line);
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 20px 22px;
   page-break-inside: avoid;
+  box-shadow: 0 1px 2px rgba(24,16,8,0.02);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.unit-card:hover {
+  border-color: var(--rp-accent-pale);
+  box-shadow: 0 1px 2px rgba(24,16,8,0.02), 0 8px 20px -4px rgba(221,107,32,0.08);
 }
 .unit-card-head {
   display: flex;
@@ -469,8 +482,14 @@
   background: white;
   border: 1px solid var(--rp-line);
   border-radius: 12px;
-  padding: 22px 22px 20px;
+  padding: 24px 22px 20px;
   page-break-inside: avoid;
+  box-shadow: 0 1px 2px rgba(24,16,8,0.02);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.hard-card:hover {
+  border-color: var(--rp-accent-pale);
+  box-shadow: 0 1px 2px rgba(24,16,8,0.02), 0 8px 20px -4px rgba(221,107,32,0.08);
 }
 .hard-badge {
   position: absolute;
@@ -539,17 +558,19 @@
   color: var(--rp-text-2);
 }
 .hard-strategy-box {
-  background: var(--rp-accent-soft);
+  background: linear-gradient(135deg, var(--rp-accent-soft) 0%, #FFFCF8 100%);
   border: 1px solid var(--rp-accent-pale);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   font-size: 12.5px;
-  line-height: 1.8;
+  line-height: 1.85;
   color: var(--rp-text);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
 }
 .hard-strategy-box .step {
   font-weight: 800;
   color: var(--rp-accent-strong);
+  letter-spacing: -0.005em;
 }
 
 /* ─── PROBLEM TABLE ──────────────────────────────────── */
