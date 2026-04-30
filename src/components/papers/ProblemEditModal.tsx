@@ -9,6 +9,7 @@ import {
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
 import RenderRepairPanel from '@/components/papers/RenderRepairPanel';
+import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import dynamic from 'next/dynamic';
 
 // GraphModal은 Desmos API 사용하므로 dynamic import
@@ -440,6 +441,9 @@ function TagManagementPanel({
   onGenerateSolution: () => void; isGenerating: boolean;
   cropImageUrl?: string;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // 현재 typeCode에서 subject_code 추출 (예: MS09-... → 09). 모달 default로.
+  const initialSubjectCode = (typeCode.match(/^MS(\d{2})/) || [])[1] || '09';
   const domains = [
     { key: 'CALCULATION', label: '계산' },
     { key: 'UNDERSTANDING', label: '이해' },
@@ -516,12 +520,27 @@ function TagManagementPanel({
               }}
               className="flex-1 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-1.5 text-sm text-amber-400 font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
               placeholder="유형코드. 유형명" />
-            <button type="button" className="p-1.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors border border" title="유형 검색">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="p-1.5 rounded-lg text-content-tertiary hover:text-cyan-400 hover:bg-surface-raised transition-colors border border"
+              title="수학비서 분류 트리에서 선택"
+            >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
           </div>
+          {/* ★ Phase C-2c-3: 트리 selector 모달 — 직접 텍스트 입력 대체 */}
+          <MathsecrTreePicker
+            open={pickerOpen}
+            initialSubjectCode={initialSubjectCode}
+            onSelect={(code, fullPath) => {
+              onTypeCodeChange(code);
+              onTypeNameChange(fullPath);
+            }}
+            onClose={() => setPickerOpen(false)}
+          />
           {/* ★ Phase C-2c: 분류 보정 이유 — 강사가 왜 보정했는지 메모.
               classification_corrections.reason에 누적 → 다음 분류 호출 시 few-shot에 보정 이유까지 포함 → 정확도 향상. */}
           {onCorrectionReasonChange && (
