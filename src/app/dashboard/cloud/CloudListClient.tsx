@@ -79,6 +79,7 @@ interface ExamFile {
   problemCount: number;
   bookGroupId: string | null;
   createdAt?: string;
+  grade?: string;
 }
 
 interface DBExam {
@@ -97,7 +98,19 @@ interface DBExam {
   createdAt: string;
 }
 
-type SortField = 'order' | 'name' | 'problems';
+type SortField = 'order' | 'name' | 'problems' | 'grade';
+
+function gradeRank(grade?: string): number {
+  if (!grade) return 9999;
+  const head = grade.replace(/\s/g, '').charAt(0);
+  const numMatch = grade.match(/\d+/);
+  const num = numMatch ? parseInt(numMatch[0], 10) : 0;
+  if (head === '초') return 100 + num;
+  if (head === '중') return 200 + num;
+  if (head === '고') return 300 + num;
+  if (head === '대') return 400 + num;
+  return 9999;
+}
 type SortDir = 'asc' | 'desc';
 
 // ============================================================================
@@ -748,7 +761,7 @@ export default function CloudPage() {
   const [selectedId, setSelectedId] = useState<string | null>('all');
   const [selectedName, setSelectedName] = useState<string>('전체 시험지');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<SortField>('order');
+  const [sortField, setSortField] = useState<SortField>('grade');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   // --- Rename state ---
@@ -1027,6 +1040,7 @@ export default function CloudPage() {
       problemCount: exam.problemCount,
       bookGroupId: exam.bookGroupId,
       createdAt: exam.createdAt,
+      grade: exam.grade,
     }));
   }, [selectedId, subjectFilteredExams, treeNodes, findNodeById]);
 
@@ -1043,6 +1057,7 @@ export default function CloudPage() {
         problemCount: exam.problemCount,
         bookGroupId: exam.bookGroupId,
         createdAt: exam.createdAt,
+        grade: exam.grade,
       }));
       result = searchSource.filter((e) => {
         const name = (e.fileName || '').toLowerCase().replace(/\s+/g, '');
@@ -1051,7 +1066,14 @@ export default function CloudPage() {
     }
     result = [...result].sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'order') cmp = a.order - b.order;
+      if (sortField === 'grade') {
+        cmp = gradeRank(a.grade) - gradeRank(b.grade);
+        if (cmp === 0) {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          cmp = tb - ta;
+        }
+      } else if (sortField === 'order') cmp = a.order - b.order;
       else if (sortField === 'name') cmp = a.fileName.localeCompare(b.fileName);
       else if (sortField === 'problems') cmp = a.problemCount - b.problemCount;
       return sortDir === 'asc' ? cmp : -cmp;
