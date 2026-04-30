@@ -101,6 +101,11 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
   const userPrompt = `이 문제는 "${examSubject}" (${examGrade}) 시험지의 문제입니다.
 반드시 해당 과목 범위 내에서 분류하세요.
 
+★ 분류 시 흔한 실수 (반드시 주의 — 출제 의도 우선)
+- 본문에 "log X = N.NNNN" 형태 보조값이 명시되면 → 상용로그 활용 문제. 등비수열·다른 단원으로 가지 말고 지수·로그함수 노드 우선.
+- "매시간/매년 N% 증가·감소" + log 보조값 = 지수·로그 활용 (등비수열 X). 등비수열 일반항으로 풀려도 출제 의도가 상용로그면 상용로그.
+- 정수 거듭제곱 → 다항식. 변수 지수 → 지수함수. 시그마 → 수열. 극한·미분·적분 → 미적분.
+
 ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택하세요:\n${mathsecrTypeTable}\n` : ''}
 ■ 난이도 (수학비서 1~10 스케일, 한국 교육과정 + 정답률 기준):
 ● 쉬움 (정답률 85%+):
@@ -422,13 +427,23 @@ async function classifyWithClaudeTwoStage(params: {
   const stage1System = `한국 수학 교육과정 전문가. 수학비서 분류 체계에서 가장 적합한 대단원·중단원을 선택합니다.
 반드시 아래 테이블의 "1단계코드" 컬럼 값 중 하나를 그대로 JSON으로만 응답. 설명 텍스트 금지.
 
+★ 분류 시 흔한 실수 (반드시 주의 — 출제 의도를 우선)
+- 본문에 "log X = N.NNNN" 형태의 보조값(로그표·로그값 단서)이 명시되어 있으면 → 거의 항상 상용로그 활용 문제. 등비수열 일반항으로 풀리는 형태여도 출제 의도는 상용로그·지수로그 활용. 등비수열 노드 X, 지수·로그함수 노드 우선.
+- "매시간/매년 N% 증가·감소 + 시간이 지난 후 비율" + log 보조값 = 지수·로그 활용 (등비수열 X). log 보조값이 없고 단순 항 비교라면 등비수열.
+- 정수 거듭제곱 (n³, 2024³) → 다항식/인수분해. 변수 지수 (2^x, a^n) → 지수함수.
+- 시그마(Σ)·누적합 = 수열. 극한·연속·미분·적분 = 미적분.
+- 시험지 과목 일관성: 시험지가 "${examSubject}" 범위면 그 과목 안의 단원으로 분류. 다른 과목 단원으로 빠지지 마세요.
+
 참조 테이블 (MS${subjectCode} = ${examSubject}):
 ${l1l2Table}`;
-  const stage1User = `학년: ${examGrade}
+  const stage1User = `시험지 과목: ${examSubject}
+학년: ${examGrade}
+
 문제:
 ${content.slice(0, 1500)}
 
 위 문제에 가장 적합한 "1단계코드" (대단원+중단원)를 고르세요.
+※ 본문의 핵심 단서(log 보조값·시그마·미분 기호·정의역 조건 등)를 출제 의도로 보고, 풀이 가능 여부보다 의도를 우선.
 JSON: {"stage1Code":"MS${subjectCode}-??-??"}`;
 
   const stage1Raw = await callClaudeOnce({
@@ -467,6 +482,8 @@ JSON: {"stage1Code":"MS${subjectCode}-??-??"}`;
 
   const stage2System = `한국 수학 교육과정 전문가. 이미 결정된 범위(${stage1Code}) 하위에서 최종 소단원·세부유형을 선택합니다.
 반드시 아래 테이블의 "최종코드" 값 중 하나를 그대로 JSON으로만 응답. 설명 텍스트 금지.
+
+★ 본문 단서 우선 — log 보조값(log X = N.NNNN)·시그마·미분 기호 등이 명시되면 그 단서가 가리키는 세부유형 우선. 풀이 가능성보다 출제 의도를 따르세요.
 
 참조 테이블 (${stage1Code} 하위):
 ${l3l4Table}

@@ -28,7 +28,7 @@ import { cachedSystem } from '@/lib/claude/cache';
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o 기본 (분류 전담)
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o — 과학·해설·빠른정답 분기용 폴백 (수학 분류는 classify.ts Sonnet 4.6 직행)
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';  // ★ Claude Sonnet 4.6 (풀이 생성 전담) — Anthropic 공식 alias
 
@@ -898,12 +898,15 @@ const CLASSIFICATION_PROMPT = `당신은 "다사람수학"의 AI 수학 교육 �
   - 미적분 → "미적분2"
 ★ "고1 모의고사" 또는 "공통수학" 문제는 공통수학1 또는 공통수학2로 분류하세요.
 
-■ 흔한 분류 실수 (반드시 주의)
+■ 흔한 분류 실수 (반드시 주의 — 출제 의도 우선)
 - n³, n², 2024³ 같은 정수 거듭제곱 계산 → 다항식/인수분해 (공통수학1). 지수함수 아님!
 - a³-b³, a³+b³ 인수분해 공식 활용 → 인수분해 활용 (공통수학1)
 - 2^x, 3^x, (1/4)^x 같은 변수 지수 → 지수함수 (대수/수1)
 - log₂x, ln x → 로그함수 (대수/수1)
 - sin, cos, tan → 삼각함수 (대수/수1)
+- ★ 본문에 "log X = N.NNNN" 형태 보조값(로그표·로그값 단서)이 명시되어 있으면 → 거의 항상 상용로그 활용 문제. 등비수열 일반항으로 풀리는 형태여도 출제 의도는 상용로그·지수로그 활용. 등비수열 노드 X, 지수·로그함수 노드 우선 선택.
+- ★ "매시간/매년 N% 증가·감소" + 시간이 지난 후 비율 + log 보조값 = 지수·로그 활용 (등비수열 X). log 보조값이 없고 단순 항 비교라면 등비수열.
+- 시그마(Σ)·누적합 = 수열. 극한·연속·미분·적분 = 미적분.
 
 ■ 난이도 (수학비서 1~10 스케일, 한국 교육과정 + 정답률 기준)
 ● 쉬움 (정답률 85%+):
