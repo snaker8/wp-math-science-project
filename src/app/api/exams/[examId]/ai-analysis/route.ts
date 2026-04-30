@@ -15,6 +15,7 @@ import {
   buildExamAnalysisUserPrompt,
 } from '@/lib/ai/exam-analysis-prompt';
 import { resolveSubjectCode } from '@/lib/workflow/mathsecr-prompt';
+import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
 
 // 분석은 Claude Sonnet 응답 + 길어서 5분
@@ -161,10 +162,21 @@ export async function POST(
     });
   }
 
+  // 5-A. 학년·과목 재감지 — exam.grade가 잘못 박혀있을 때 보정
+  // ★ exam.grade가 "고1"로 박혔어도 title/subject에 "대수"가 있으면 detectGradeFromTitle이 "고2"로 잡음.
+  //   이 effectiveGrade를 Claude 프롬프트에 전달해야 summary 텍스트에 잘못된 학년이 박히지 않음.
+  //   사고 이력: 대수(고2) 시험지에 exam.grade="고1"로 저장 → Claude가 "이 시험지는 고1 수학 범위" summary 작성.
+  const detectedGrade =
+    detectGradeFromTitle(exam.title || '') || detectGradeFromTitle(exam.subject || '');
+  const effectiveGrade = detectedGrade || exam.grade || null;
+  const detectedSubject =
+    detectSubjectFromTitle(exam.title || '') || detectSubjectFromTitle(exam.subject || '');
+  const effectiveSubject = detectedSubject || exam.subject || null;
+
   // 5-B. mathsecr_types에서 majorUnit lookup — type_code prefix(MS09-01)로 정확한 대단원명 조회
   // ★ classifications.type_code(MS09=대수)는 정확하지만 problems.ai_analysis.classification.chapter는
   //   학년 무관 텍스트라 대수(고2)에 "다항식"(고1) 같은 단원명이 박히던 사고 차단.
-  const examSubjectCode = resolveSubjectCode(exam.grade ?? undefined, exam.subject ?? undefined);
+  const examSubjectCode = resolveSubjectCode(effectiveGrade ?? undefined, effectiveSubject ?? undefined);
   const msPrefixes = Array.from(
     new Set(
       Array.from(classByProblem.values())
@@ -245,11 +257,11 @@ export async function POST(
     );
   }
 
-  // 7. 사용자 프롬프트 생성
+  // 7. 사용자 프롬프트 생성 — 보정된 effectiveGrade/effectiveSubject 사용
   const userPrompt = buildExamAnalysisUserPrompt({
     examTitle: exam.title,
-    grade: exam.grade,
-    subject: exam.subject,
+    grade: effectiveGrade,
+    subject: effectiveSubject,
     problems: problemsForPrompt,
     hardDifficultyThreshold: hardThreshold,
     hardQuestionLimit: hardLimit,
