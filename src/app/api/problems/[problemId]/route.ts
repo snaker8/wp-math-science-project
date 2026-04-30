@@ -58,7 +58,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { content_latex, solution_latex, answer_json, answer_json_patch, images, ai_analysis, difficulty, type_code, cognitive_domain, source_number, sequence_number } = body;
+    const { content_latex, solution_latex, answer_json, answer_json_patch, images, ai_analysis, difficulty, type_code, cognitive_domain, source_number, sequence_number, correction_reason } = body;
 
     // problems 테이블 업데이트
     const updateData: Record<string, any> = {};
@@ -114,6 +114,26 @@ export async function PATCH(
 
     // classifications 테이블 업데이트 (난이도, 유형코드, 인지영역)
     if (difficulty !== undefined || type_code !== undefined || cognitive_domain !== undefined) {
+      // ★ Phase C-2: 분류 변경 전 before snapshot — corrections 누적용
+      let beforeCode: string | null = null;
+      let beforeTypeName: string | null = null;
+      if (type_code !== undefined) {
+        const { data: existingCls } = await supabaseAdmin
+          .from('classifications')
+          .select('type_code')
+          .eq('problem_id', problemId)
+          .maybeSingle();
+        beforeCode = existingCls?.type_code || null;
+        if (beforeCode && beforeCode.startsWith('MS')) {
+          const { data: beforeMs } = await supabaseAdmin
+            .from('mathsecr_types')
+            .select('full_path')
+            .eq('code', beforeCode)
+            .maybeSingle();
+          beforeTypeName = beforeMs?.full_path || null;
+        }
+      }
+
       const classUpdate: Record<string, any> = { is_verified: true };
       if (difficulty !== undefined) classUpdate.difficulty = String(difficulty);
       if (type_code !== undefined) classUpdate.type_code = type_code;
@@ -133,6 +153,61 @@ export async function PATCH(
         });
       }
       console.log(`[API/problems] Classification updated: difficulty=${difficulty}, type_code=${type_code}`);
+
+      // ★ Phase C-2: 분류 보정 누적 — 사용자가 type_code 변경 시 학습 데이터로 INSERT
+      //   다음 분류 호출에 비슷한 보정 사례를 few-shot으로 주입(classify.ts) → self-compiling.
+      if (type_code !== undefined && beforeCode !== type_code) {
+        try {
+          const { data: probSnapshot } = await supabaseAdmin
+            .from('problems')
+            .select('content_latex')
+            .eq('id', problemId)
+            .maybeSingle();
+          const { data: examLink } = await supabaseAdmin
+            .from('exam_problems')
+            .select('exam_id')
+            .eq('problem_id', problemId)
+            .limit(1)
+            .maybeSingle();
+          let examSubject: string | null = null;
+          let examGrade: string | null = null;
+          if (examLink?.exam_id) {
+            const { data: examMeta } = await supabaseAdmin
+              .from('exams')
+              .select('subject, grade')
+              .eq('id', examLink.exam_id)
+              .maybeSingle();
+            examSubject = examMeta?.subject || null;
+            examGrade = examMeta?.grade || null;
+          }
+          let afterTypeName: string | null = null;
+          if (type_code && type_code.startsWith('MS')) {
+            const { data: afterMs } = await supabaseAdmin
+              .from('mathsecr_types')
+              .select('full_path')
+              .eq('code', type_code)
+              .maybeSingle();
+            afterTypeName = afterMs?.full_path || null;
+          }
+          await supabaseAdmin.from('classification_corrections').insert({
+            problem_id: problemId,
+            problem_content: probSnapshot?.content_latex || null,
+            before_code: beforeCode,
+            after_code: type_code,
+            before_type_name: beforeTypeName,
+            after_type_name: afterTypeName,
+            exam_subject: examSubject,
+            exam_grade: examGrade,
+            reason: correction_reason || null,
+            corrected_by: guard.user?.id || null,
+          });
+          console.log(
+            `[API/problems] ★ Correction logged: ${beforeCode || '(none)'} → ${type_code}`
+          );
+        } catch (e) {
+          console.warn(`[API/problems] correction insert 실패:`, e);
+        }
+      }
     }
 
     // exam_problems 테이블의 sequence_number도 업데이트
