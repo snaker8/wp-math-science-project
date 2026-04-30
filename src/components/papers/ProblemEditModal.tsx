@@ -427,6 +427,7 @@ function TagManagementPanel({
   difficulty, onDifficultyChange,
   cognitiveDomain, onCognitiveDomainChange,
   typeCode, typeName, onTypeCodeChange, onTypeNameChange,
+  correctionReason, onCorrectionReasonChange,
   onGenerateSolution, isGenerating,
   cropImageUrl,
 }: {
@@ -434,6 +435,8 @@ function TagManagementPanel({
   cognitiveDomain: string; onCognitiveDomainChange: (d: string) => void;
   typeCode: string; typeName: string;
   onTypeCodeChange: (v: string) => void; onTypeNameChange: (v: string) => void;
+  correctionReason?: string;
+  onCorrectionReasonChange?: (v: string) => void;
   onGenerateSolution: () => void; isGenerating: boolean;
   cropImageUrl?: string;
 }) {
@@ -519,6 +522,17 @@ function TagManagementPanel({
               </svg>
             </button>
           </div>
+          {/* ★ Phase C-2c: 분류 보정 이유 — 강사가 왜 보정했는지 메모.
+              classification_corrections.reason에 누적 → 다음 분류 호출 시 few-shot에 보정 이유까지 포함 → 정확도 향상. */}
+          {onCorrectionReasonChange && (
+            <textarea
+              value={correctionReason || ''}
+              onChange={(e) => onCorrectionReasonChange(e.target.value)}
+              placeholder="분류 보정 이유 (선택) — 예: log 보조값 + 매시간 비율 → 식 세우기"
+              rows={2}
+              className="w-full rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-300 placeholder-amber-500/40 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none"
+            />
+          )}
         </div>
 
         {/* 문제 원본 이미지 */}
@@ -674,6 +688,9 @@ export function ProblemEditModal({
   const [cognitiveDomain, setCognitiveDomain] = useState(initialCognitiveDomain || 'UNDERSTANDING');
   const [typeCode, setTypeCode] = useState(initialTypeCode || '');
   const [typeName, setTypeName] = useState(initialTypeName || '');
+  // ★ Phase C-2c: 분류 보정 이유 — 사용자가 type_code 변경 시 메모.
+  //   classification_corrections.reason에 누적 → few-shot에 포함.
+  const [correctionReason, setCorrectionReason] = useState('');
 
   // AI 해설 생성
   const [isGeneratingSolution, setIsGeneratingSolution] = useState(false);
@@ -803,6 +820,9 @@ export function ProblemEditModal({
           difficulty,
           type_code: typeCode || undefined,
           cognitive_domain: cognitiveDomain || undefined,
+          // ★ Phase C-2c: 분류 보정 이유. type_code가 기존과 다를 때만 PATCH endpoint가
+          //   classification_corrections.reason으로 저장. 변경 없으면 무시됨.
+          correction_reason: correctionReason.trim() || undefined,
         }),
       });
       if (!res.ok) {
@@ -1036,6 +1056,8 @@ export function ProblemEditModal({
               cognitiveDomain={cognitiveDomain} onCognitiveDomainChange={setCognitiveDomain}
               typeCode={typeCode} typeName={typeName}
               onTypeCodeChange={setTypeCode} onTypeNameChange={setTypeName}
+              correctionReason={correctionReason}
+              onCorrectionReasonChange={setCorrectionReason}
               onGenerateSolution={handleGenerateSolution}
               isGenerating={isGeneratingSolution}
               cropImageUrl={cropImageUrl}
