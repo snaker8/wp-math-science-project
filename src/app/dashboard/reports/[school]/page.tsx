@@ -15,12 +15,19 @@ import {
   Sparkles,
   Share2,
   ChevronRight,
+  ChevronDown,
   Loader2,
   BarChart3,
   Layers,
   TrendingUp,
   ExternalLink,
+  Search,
+  Pin,
+  Target,
+  Lightbulb,
 } from 'lucide-react';
+import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 interface ExamRow {
   id: string;
@@ -30,11 +37,13 @@ interface ExamRow {
   problemCount: number;
   totalPoints: number;
   createdAt: string;
+  year: number | null;
   hasAnalysis: boolean;
   hasShare: boolean;
   shareToken: string | null;
   overallDifficulty: string | null;
   unitCount: number;
+  analysis: ExamAIAnalysis | null;
 }
 
 interface SchoolDetail {
@@ -49,6 +58,7 @@ interface SchoolDetail {
   gradeDistribution: Array<{ grade: string; count: number }>;
   topUnits: Array<{ unit: string; problemCount: number }>;
   overallDifficultyDist: Record<string, number>;
+  availableYears: number[];
   exams: ExamRow[];
 }
 
@@ -67,6 +77,9 @@ export default function SchoolReportPage() {
   const [data, setData] = useState<SchoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [yearFilter, setYearFilter] = useState<'all' | number>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!schoolParam) return;
@@ -122,11 +135,40 @@ export default function SchoolReportPage() {
   const maxUnitCount = Math.max(1, ...data.topUnits.map((u) => u.problemCount));
   const maxGradeCount = Math.max(1, ...data.gradeDistribution.map((g) => g.count));
 
-  // 시험지 학년·생성일 순 정렬
-  const sortedExams = [...data.exams].sort((a, b) => {
-    if (a.grade && b.grade && a.grade !== b.grade) return a.grade.localeCompare(b.grade);
-    return (b.createdAt || '').localeCompare(a.createdAt || '');
-  });
+  // 검색·년도 필터 + 학년·생성일 정렬
+  const filteredExams = (() => {
+    let result = data.exams;
+    if (yearFilter !== 'all') {
+      result = result.filter((e) => e.year === yearFilter);
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase().replace(/\s+/g, '');
+      const norm = (s: string | null | undefined) =>
+        (s || '').toLowerCase().replace(/\s+/g, '');
+      result = result.filter((e) => {
+        if (norm(e.title).includes(q)) return true;
+        if (norm(e.grade).includes(q)) return true;
+        const a = e.analysis;
+        if (a) {
+          if (norm(a.summary).includes(q)) return true;
+          for (const u of a.unitAnalyses || []) {
+            if (norm(u.majorUnit).includes(q)) return true;
+            if (norm(u.keyPoints).includes(q)) return true;
+            if (norm(u.strategy).includes(q)) return true;
+          }
+          for (const h of a.hardQuestions || []) {
+            if (norm(h.subTitle).includes(q)) return true;
+            if (norm(h.intent).includes(q)) return true;
+          }
+        }
+        return false;
+      });
+    }
+    return [...result].sort((a, b) => {
+      if (a.grade && b.grade && a.grade !== b.grade) return a.grade.localeCompare(b.grade);
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+  })();
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
@@ -263,86 +305,168 @@ export default function SchoolReportPage() {
           </Panel>
         )}
 
-        {/* 시험지 리스트 */}
-        <Panel title={`시험지 목록 (${sortedExams.length}건)`} icon={<FileText className="h-4 w-4" />}>
+        {/* 시험지 리스트 — 검색·년도 필터 + 행 펼침으로 ai_analysis 그대로 표시 */}
+        <Panel title={`시험지 목록 (${filteredExams.length}/${data.exams.length}건)`} icon={<FileText className="h-4 w-4" />}>
+          {/* 검색바 + 년도 필터 */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="시험지 / 단원 / 출제경향 검색..."
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+              />
+            </div>
+            {data.availableYears.length > 0 && (
+              <select
+                value={yearFilter === 'all' ? 'all' : String(yearFilter)}
+                onChange={(e) =>
+                  setYearFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))
+                }
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="all">전체 년도</option>
+                {data.availableYears.map((y) => (
+                  <option key={y} value={y}>
+                    {y}년
+                  </option>
+                ))}
+              </select>
+            )}
+            {(query.trim() || yearFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setYearFilter('all');
+                }}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:text-white"
+              >
+                초기화
+              </button>
+            )}
+          </div>
+
           <div className="overflow-hidden rounded-lg border border-zinc-800">
             <table className="w-full text-xs">
               <thead className="bg-zinc-900/60 text-zinc-400">
                 <tr>
+                  <th className="w-8 px-2 py-2"></th>
                   <th className="px-3 py-2 text-left">제목</th>
                   <th className="px-3 py-2 text-left">학년</th>
+                  <th className="px-3 py-2 text-center">년도</th>
                   <th className="px-3 py-2 text-center">문항</th>
                   <th className="px-3 py-2 text-center">분석</th>
                   <th className="px-3 py-2 text-center">난이도</th>
                   <th className="px-3 py-2 text-center">공유</th>
                   <th className="px-3 py-2 text-right">발행</th>
-                  <th className="px-3 py-2 text-center w-32">액션</th>
+                  <th className="px-3 py-2 text-center w-28">액션</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedExams.map((e) => (
-                  <tr key={e.id} className="border-t border-zinc-800/60 hover:bg-zinc-900/40">
-                    <td className="px-3 py-2 text-white">{e.title}</td>
-                    <td className="px-3 py-2 text-zinc-400">{e.grade || '-'}</td>
-                    <td className="px-3 py-2 text-center text-zinc-300">{e.problemCount}</td>
-                    <td className="px-3 py-2 text-center">
-                      {e.hasAnalysis ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-0.5 text-cyan-300">
-                          <Sparkles className="h-3 w-3" />
-                          완료
-                        </span>
-                      ) : (
-                        <span className="text-zinc-600">미생성</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {e.overallDifficulty ? (
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${DIFF_COLOR[e.overallDifficulty] || ''}`}
-                        >
-                          {e.overallDifficulty}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-600">-</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {e.hasShare ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300">
-                          <Share2 className="h-3 w-3" />
-                          활성
-                        </span>
-                      ) : (
-                        <span className="text-zinc-600">-</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right text-zinc-400">
-                      {new Date(e.createdAt).toLocaleDateString('ko-KR')}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link
-                          href={`/dashboard/exam-analysis/${e.id}`}
-                          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-cyan-400"
-                          title="분석 페이지"
-                        >
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Link>
-                        {e.shareToken && (
-                          <a
-                            href={`/share/exam/${e.shareToken}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
-                            title="학부모 페이지"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                      </div>
+                {filteredExams.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-8 text-center text-zinc-500">
+                      조건에 맞는 시험지가 없습니다
                     </td>
                   </tr>
-                ))}
+                )}
+                {filteredExams.map((e) => {
+                  const expanded = expandedId === e.id;
+                  return (
+                    <React.Fragment key={e.id}>
+                      <tr
+                        className={`border-t border-zinc-800/60 transition-colors ${
+                          expanded ? 'bg-zinc-900/60' : 'hover:bg-zinc-900/40'
+                        } ${e.hasAnalysis ? 'cursor-pointer' : ''}`}
+                        onClick={() => {
+                          if (e.hasAnalysis) {
+                            setExpandedId(expanded ? null : e.id);
+                          }
+                        }}
+                      >
+                        <td className="px-2 py-2 text-center text-zinc-500">
+                          {e.hasAnalysis ? (
+                            expanded ? (
+                              <ChevronDown className="mx-auto h-3.5 w-3.5" />
+                            ) : (
+                              <ChevronRight className="mx-auto h-3.5 w-3.5" />
+                            )
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 text-white">{e.title}</td>
+                        <td className="px-3 py-2 text-zinc-400">{e.grade || '-'}</td>
+                        <td className="px-3 py-2 text-center text-zinc-400">{e.year ?? '-'}</td>
+                        <td className="px-3 py-2 text-center text-zinc-300">{e.problemCount}</td>
+                        <td className="px-3 py-2 text-center">
+                          {e.hasAnalysis ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-0.5 text-cyan-300">
+                              <Sparkles className="h-3 w-3" />
+                              완료
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">미생성</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {e.overallDifficulty ? (
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${DIFF_COLOR[e.overallDifficulty] || ''}`}
+                            >
+                              {e.overallDifficulty}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">-</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {e.hasShare ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300">
+                              <Share2 className="h-3 w-3" />
+                              활성
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">-</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right text-zinc-400">
+                          {new Date(e.createdAt).toLocaleDateString('ko-KR')}
+                        </td>
+                        <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Link
+                              href={`/dashboard/exam-analysis/${e.id}`}
+                              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-cyan-400"
+                              title="분석 페이지"
+                            >
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
+                            {e.shareToken && (
+                              <a
+                                href={`/share/exam/${e.shareToken}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
+                                title="학부모 페이지"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expanded && e.analysis && (
+                        <tr className="border-t border-zinc-800/40 bg-zinc-950/60">
+                          <td colSpan={10} className="px-6 py-5">
+                            <ExamAnalysisInline analysis={e.analysis} />
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -408,5 +532,136 @@ function Panel({
 function Empty({ children }: { children: React.ReactNode }) {
   return (
     <div className="py-8 text-center text-xs text-zinc-500">{children}</div>
+  );
+}
+
+// ============================================================================
+// 시험지 ai_analysis 인라인 표시 — 그대로 펼쳐 보기
+// (summary / unitAnalyses / hardQuestions)
+// ============================================================================
+
+function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
+  return (
+    <div className="space-y-5 text-xs">
+      {/* 총평 */}
+      {analysis.summary && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+            <Pin className="h-3 w-3" />
+            시험 총평
+          </div>
+          <div className="text-zinc-200 leading-relaxed">
+            <MixedContentRenderer content={analysis.summary} />
+          </div>
+        </div>
+      )}
+
+      {/* 단원별 분석 */}
+      {analysis.unitAnalyses && analysis.unitAnalyses.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+            <Layers className="h-3 w-3" />
+            단원별 분석 ({analysis.unitAnalyses.length})
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {analysis.unitAnalyses.map((u, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3"
+              >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="font-bold text-cyan-300">{u.majorUnit}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {u.questionNumbers.map((n) => (
+                      <span
+                        key={n}
+                        className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300"
+                      >
+                        {n}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {u.keyPoints && (
+                  <div className="mt-2">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-amber-300">
+                      <Target className="h-3 w-3" />
+                      출제경향
+                    </div>
+                    <div className="text-zinc-300 leading-relaxed">
+                      <MixedContentRenderer content={u.keyPoints} />
+                    </div>
+                  </div>
+                )}
+                {u.strategy && (
+                  <div className="mt-2">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-300">
+                      <Lightbulb className="h-3 w-3" />
+                      대비전략
+                    </div>
+                    <div className="text-zinc-300 leading-relaxed">
+                      <MixedContentRenderer content={u.strategy} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 고난도 문항 심층분석 */}
+      {analysis.hardQuestions && analysis.hardQuestions.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+            <TrendingUp className="h-3 w-3" />
+            고난도 문항 ({analysis.hardQuestions.length})
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {analysis.hardQuestions.map((h) => (
+              <div
+                key={`${h.problemId}-${h.number}`}
+                className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/20 text-[11px] font-bold text-rose-300">
+                    {h.number}
+                  </span>
+                  {h.subTitle && (
+                    <div className="font-semibold text-rose-200">
+                      <MixedContentRenderer content={h.subTitle} />
+                    </div>
+                  )}
+                </div>
+                {h.intent && (
+                  <div className="mt-2">
+                    <div className="mb-1 text-[10px] font-semibold text-amber-300">출제 의도</div>
+                    <div className="text-zinc-300 leading-relaxed">
+                      <MixedContentRenderer content={h.intent} />
+                    </div>
+                  </div>
+                )}
+                {h.strategy && (
+                  <div className="mt-2">
+                    <div className="mb-1 text-[10px] font-semibold text-emerald-300">공략</div>
+                    <div className="text-zinc-300 leading-relaxed">
+                      <MixedContentRenderer content={h.strategy} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 메타 */}
+      {analysis.generatedAt && (
+        <div className="text-right text-[10px] text-zinc-600">
+          분석 생성: {new Date(analysis.generatedAt).toLocaleString('ko-KR')}
+          {analysis.modelVersion && ` · ${analysis.modelVersion}`}
+        </div>
+      )}
+    </div>
   );
 }

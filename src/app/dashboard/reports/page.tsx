@@ -26,6 +26,7 @@ interface SchoolCard {
   sharedCount: number;
   totalProblems: number;
   grades: string[];
+  years: number[];
   latestExamAt: string | null;
   earliestExamAt: string | null;
 }
@@ -53,6 +54,7 @@ export default function ReportsHubPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState<'all' | '초' | '중' | '고' | '대'>('all');
+  const [yearFilter, setYearFilter] = useState<'all' | number>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -82,12 +84,22 @@ export default function ReportsHubPage() {
     if (levelFilter !== 'all') {
       result = result.filter((s) => s.level === levelFilter);
     }
+    if (yearFilter !== 'all') {
+      result = result.filter((s) => s.years.includes(yearFilter));
+    }
     if (search.trim()) {
       const q = search.toLowerCase().replace(/\s+/g, '');
       result = result.filter((s) => s.school.toLowerCase().replace(/\s+/g, '').includes(q));
     }
     return result;
-  }, [schools, search, levelFilter]);
+  }, [schools, search, levelFilter, yearFilter]);
+
+  // 모든 학교의 발행 년도 union (내림차순)
+  const allYears = useMemo(() => {
+    const set = new Set<number>();
+    schools.forEach((s) => s.years.forEach((y) => set.add(y)));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [schools]);
 
   const totals = useMemo(
     () => ({
@@ -162,6 +174,22 @@ export default function ReportsHubPage() {
               </button>
             ))}
           </div>
+          {allYears.length > 0 && (
+            <select
+              value={yearFilter === 'all' ? 'all' : String(yearFilter)}
+              onChange={(e) =>
+                setYearFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))
+              }
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none"
+            >
+              <option value="all">전체 년도</option>
+              {allYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}년
+                </option>
+              ))}
+            </select>
+          )}
           {unclassified > 0 && (
             <span className="text-[11px] text-amber-400">
               미분류 시험지 {unclassified}건 (학교명 없음)

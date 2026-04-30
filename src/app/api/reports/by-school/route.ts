@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
+import { extractExamYear } from '@/lib/utils/year-extract';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ interface SchoolCard {
   sharedCount: number; // share_token 있는 시험지 수
   totalProblems: number;
   grades: string[]; // 등장한 학년 set ("중3", "고1" 등)
+  years: number[]; // 등장한 발행 년도 set (내림차순)
   latestExamAt: string | null; // 가장 최근 시험지 발행일
   earliestExamAt: string | null;
 }
@@ -58,6 +60,7 @@ export async function GET(_request: NextRequest) {
         sharedCount: 0,
         totalProblems: 0,
         grades: [],
+        years: [],
         latestExamAt: null,
         earliestExamAt: null,
       });
@@ -71,6 +74,10 @@ export async function GET(_request: NextRequest) {
     if (exam.grade && !card.grades.includes(exam.grade)) {
       card.grades.push(exam.grade);
     }
+    const yr = extractExamYear(exam.title, exam.created_at as string | null);
+    if (yr != null && !card.years.includes(yr)) {
+      card.years.push(yr);
+    }
     if (exam.created_at) {
       const t = exam.created_at as string;
       if (!card.latestExamAt || t > card.latestExamAt) card.latestExamAt = t;
@@ -78,9 +85,10 @@ export async function GET(_request: NextRequest) {
     }
   }
 
-  // 학년 정렬 (중1 → 중2 → 중3 → 고1 → 고2 → 고3 ...)
+  // 학년·년도 정렬 (학년 오름차순, 년도 내림차순)
   bySchool.forEach((card) => {
     card.grades.sort();
+    card.years.sort((a, b) => b - a);
   });
 
   // 학교 정렬 — level (초→중→고→대) → 학교명
