@@ -194,6 +194,14 @@ export const tutorNavItems: NavItem[] = [
     activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'tutor',
   },
+  {
+    href: '/dashboard/reports',
+    icon: BarChart3,
+    label: '학교별 분석 리포트',
+    description: '학교별 시험지 누적 분석 + 학부모 공유 관리',
+    activeColor: 'bg-cyan-500/10 text-cyan-400',
+    group: 'tutor',
+  },
 ];
 
 // 시스템 메뉴
@@ -303,6 +311,7 @@ export const topNavGroups: NavGroup[] = [
       tutorNavItems[5], // AI 오토큐레이션
       tutorNavItems[6], // 클리닉시험지
       tutorNavItems[7], // 성적분석
+      tutorNavItems[8], // 학교별 분석 리포트 (신규)
     ],
   },
 ];
