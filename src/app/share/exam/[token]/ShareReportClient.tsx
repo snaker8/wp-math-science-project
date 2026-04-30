@@ -8,11 +8,8 @@
 
 import React, { useRef, useState } from 'react';
 import {
-  Copy,
-  ImageDown,
   Printer,
   Link2,
-  FileCode,
   Check,
   Loader2,
   BookOpenText,
@@ -23,7 +20,6 @@ import {
   Lightbulb,
   ScrollText,
   AlertTriangle,
-  ListChecks,
   PenLine,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
@@ -106,12 +102,7 @@ function StepStrategy({ text }: { text: string }) {
 
 export function ShareReportClient({ data }: ShareReportClientProps) {
   const reportRef = useRef<HTMLDivElement>(null);
-  const sec1Ref = useRef<HTMLElement>(null); // 기본 정보
-  const sec2Ref = useRef<HTMLDivElement>(null); // 시험 총평 + 단원별
-  const sec3Ref = useRef<HTMLDivElement>(null); // 고난도
-  const [busy, setBusy] = useState<
-    null | 'image' | 'html' | 'link' | 'download' | 'naver' | 'sec1' | 'sec2' | 'sec3'
-  >(null);
+  const [busy, setBusy] = useState<null | 'link' | 'naver'>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -151,59 +142,7 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
   });
 
   // ── 클립보드
-  const handleCopyImage = async () => {
-    const el = reportRef.current;
-    if (!el) return;
-    setBusy('image');
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(el, {
-        scale: Math.max(4, window.devicePixelRatio * 2.5), // 매우 고화질 (블로그 게시 시 선명)
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: el.scrollWidth,
-        letterRendering: true,
-        imageTimeout: 30000,
-      } as Parameters<typeof html2canvas>[1]);
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          showToast('이미지가 클립보드에 복사되었습니다 — 블로그/카톡에 Ctrl+V');
-        } catch {
-          showToast('이미지 복사 실패 — 브라우저가 지원하지 않습니다');
-        }
-      }, 'image/png');
-    } catch (err) {
-      console.error('copy image:', err);
-      showToast('이미지 복사 중 오류가 발생했습니다');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleCopyHtml = async () => {
-    const el = reportRef.current;
-    if (!el) return;
-    setBusy('html');
-    try {
-      const htmlContent = el.outerHTML;
-      const textContent = el.innerText;
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([htmlContent], { type: 'text/html' }),
-          'text/plain': new Blob([textContent], { type: 'text/plain' }),
-        }),
-      ]);
-      showToast('HTML이 클립보드에 복사되었습니다 — 블로그 HTML 모드에서 Ctrl+V');
-    } catch (err) {
-      console.error('copy html:', err);
-      showToast('HTML 복사 실패');
-    } finally {
-      setBusy(null);
-    }
-  };
-
+  // 링크 복사 — 카톡/SNS 공유용
   const handleCopyLink = async () => {
     setBusy('link');
     try {
@@ -216,139 +155,29 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     }
   };
 
-  // ── 섹션별 이미지 클립보드 복사 헬퍼
-  const copySection = async (
-    el: HTMLElement | null,
-    label: string,
-    busyKey: 'sec1' | 'sec2' | 'sec3'
-  ) => {
-    if (!el) return;
-    setBusy(busyKey);
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(el, {
-        scale: Math.max(4, window.devicePixelRatio * 2.5), // 매우 고화질 (블로그 게시 시 선명)
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: el.scrollWidth,
-        letterRendering: true,
-        imageTimeout: 30000,
-      } as Parameters<typeof html2canvas>[1]);
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          showToast(`${label} 이미지 복사됨 — 블로그/카톡에 Ctrl+V`);
-        } catch {
-          showToast(`${label} 이미지 복사 실패`);
-        }
-      }, 'image/png');
-    } catch (err) {
-      console.error('section copy:', err);
-      showToast(`${label} 복사 실패`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  // ── 네이버 블로그 작성 (이미지 자동 복사 + 새 글쓰기 페이지 오픈)
-  const handleNaverBlog = async () => {
-    const el = reportRef.current;
-    if (!el) return;
+  // 네이버 블로그 글쓰기 페이지 단축 (사용자가 OS 캡처로 이미지 직접 붙여넣기)
+  const handleNaverBlog = () => {
     setBusy('naver');
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(el, {
-        scale: Math.max(4, window.devicePixelRatio * 2.5), // 매우 고화질 (블로그 게시 시 선명)
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: el.scrollWidth,
-        letterRendering: true,
-        imageTimeout: 30000,
-      } as Parameters<typeof html2canvas>[1]);
-
-      // 이미지 클립보드 복사
-      let clipboardOk = false;
-      await new Promise<void>((resolve) => {
-        canvas.toBlob(async (blob) => {
-          if (!blob) {
-            resolve();
-            return;
-          }
-          try {
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            clipboardOk = true;
-          } catch {
-            // 클립보드 실패 시에도 글쓰기 페이지는 열기
-          }
-          resolve();
-        }, 'image/png');
-      });
-
-      // 네이버 블로그 새 글쓰기 페이지 새 탭으로 오픈
       window.open('https://blog.naver.com/GoBlogWrite.naver', '_blank', 'noopener');
-      showToast(
-        clipboardOk
-          ? '이미지 복사됨 — 새로 열린 네이버 블로그에서 Ctrl+V'
-          : '네이버 블로그 글쓰기 페이지가 열렸습니다 (이미지 복사는 다시 시도)'
-      );
-    } catch (err) {
-      console.error('naver blog:', err);
-      showToast('네이버 블로그 작성 실패');
+      showToast('네이버 블로그 글쓰기 페이지가 열렸습니다');
     } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleDownload = async () => {
-    const el = reportRef.current;
-    if (!el) return;
-    setBusy('download');
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      } as Parameters<typeof html2canvas>[1]);
-      const link = document.createElement('a');
-      const safeTitle = data.exam.title.replace(/[\\/:*?"<>|]/g, '_');
-      link.download = `${safeTitle}_분석리포트.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      showToast('이미지를 다운로드했습니다');
-    } catch (err) {
-      console.error('download:', err);
-      showToast('다운로드 실패');
-    } finally {
-      setBusy(null);
+      setTimeout(() => setBusy(null), 300);
     }
   };
 
   return (
     <div className="report-shell">
-      {/* 액션 바 */}
+      {/* 액션 바 — 사용자는 OS 캡처 도구(Win+Shift+S 등)로 직접 캡처 후 붙여넣음 */}
       <div className="report-actions no-print">
         <div className="report-actions-inner">
           <button onClick={handleNaverBlog} disabled={busy !== null} className="action-btn primary">
             {busy === 'naver' ? <Loader2 className="spin" /> : <PenLine />}
             네이버 블로그 작성
           </button>
-          <button onClick={handleCopyImage} disabled={busy !== null} className="action-btn">
-            {busy === 'image' ? <Loader2 className="spin" /> : <Copy />}
-            전체 이미지 복사
-          </button>
-          <button onClick={handleCopyHtml} disabled={busy !== null} className="action-btn">
-            {busy === 'html' ? <Loader2 className="spin" /> : <FileCode />}
-            HTML 복사
-          </button>
           <button onClick={handleCopyLink} disabled={busy !== null} className="action-btn">
             {busy === 'link' ? <Loader2 className="spin" /> : <Link2 />}
             링크 복사
-          </button>
-          <button onClick={handleDownload} disabled={busy !== null} className="action-btn">
-            {busy === 'download' ? <Loader2 className="spin" /> : <ImageDown />}
-            PNG 저장
           </button>
           <button onClick={() => window.print()} disabled={busy !== null} className="action-btn">
             <Printer />
@@ -382,19 +211,10 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         </header>
 
         {/* SECTION 01 — 기본 정보 */}
-        <section ref={sec1Ref} className="report-section">
+        <section className="report-section">
           <div className="section-head">
             <div className="section-bar" />
             <h2 className="section-title">1. 기본 정보</h2>
-            <button
-              className="section-copy-btn no-print"
-              onClick={() => copySection(sec1Ref.current, '기본 정보', 'sec1')}
-              disabled={busy !== null}
-              title="이 섹션을 이미지로 복사"
-            >
-              {busy === 'sec1' ? <Loader2 className="spin" /> : <Copy />}
-              섹션 복사
-            </button>
           </div>
 
           <div className="info-card">
@@ -477,19 +297,10 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
 
         {/* SECTION 02 — 종합 분석 (시험총평 + 단원별) */}
         {data.analysis && (
-          <section ref={sec2Ref} className="report-section">
+          <section className="report-section">
             <div className="section-head">
               <div className="section-bar" />
               <h2 className="section-title">2. 종합 출제 경향 및 학습 전략</h2>
-              <button
-                className="section-copy-btn no-print"
-                onClick={() => copySection(sec2Ref.current, '종합 분석', 'sec2')}
-                disabled={busy !== null}
-                title="이 섹션을 이미지로 복사"
-              >
-                {busy === 'sec2' ? <Loader2 className="spin" /> : <Copy />}
-                섹션 복사
-              </button>
             </div>
 
             {/* 1. 시험 총평 */}
@@ -541,21 +352,12 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
           </section>
         )}
 
-        {/* SECTION 03 — 고난도 분석 (별도 섹션 — 사이에 유사문항 끼울 수 있게) */}
+        {/* SECTION 03 — 고난도 분석 */}
         {data.analysis && data.analysis.hardQuestions.length > 0 && (
-          <section ref={sec3Ref} className="report-section">
+          <section className="report-section">
             <div className="section-head">
               <div className="section-bar" />
               <h2 className="section-title">3. 상대적 고난도 문항 심층 분석</h2>
-              <button
-                className="section-copy-btn no-print"
-                onClick={() => copySection(sec3Ref.current, '고난도 분석', 'sec3')}
-                disabled={busy !== null}
-                title="이 섹션을 이미지로 복사"
-              >
-                {busy === 'sec3' ? <Loader2 className="spin" /> : <Copy />}
-                섹션 복사
-              </button>
             </div>
             <div className="hard-grid">
               {data.analysis.hardQuestions.map((q, i) => (

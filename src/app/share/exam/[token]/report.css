@@ -687,18 +687,60 @@
 
 /* ─── PRINT ──────────────────────────────────────────── */
 @media print {
+  /* ★ 막대 차트·배지 등 배경/색이 인쇄에서 사라지지 않게 강제 */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm 14mm;
+  }
+
+  body { background: white !important; }
+
   .report-shell {
-    background: white;
+    background: white !important;
     padding: 0;
   }
+
   .no-print { display: none !important; }
+
   .report-paper {
-    border: none;
-    box-shadow: none;
-    padding: 16mm;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
     border-radius: 0;
   }
+
+  /* 인쇄에서도 단원 + 난이도 2열 유지 (좁아지면 1열) */
+  .info-grid-2 {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 24px !important;
+  }
+  .unit-grid, .hard-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  /* 페이지 분할 */
   .report-section { page-break-inside: auto; }
-  .unit-card, .hard-card, .sub-card { page-break-inside: avoid; }
+  .unit-card, .hard-card, .sub-card, .info-card { page-break-inside: avoid; }
+  .header-title { page-break-after: avoid; }
+  .section-head { page-break-after: avoid; }
+
+  /* 그림자 제거 */
+  .header-meta-pill,
+  .hard-strategy-box,
+  .sub-card,
+  .unit-card,
+  .hard-card {
+    box-shadow: none !important;
+  }
 }
