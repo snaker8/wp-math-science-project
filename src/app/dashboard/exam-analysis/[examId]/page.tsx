@@ -127,12 +127,9 @@ export default function ExamAnalysisPage() {
       }
       setShareToken(token);
       const url = `${window.location.origin}/share/exam/${token}`;
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareToast(`학부모 공유 링크가 클립보드에 복사되었습니다 — ${url}`);
-      } catch {
-        setShareToast(`학부모 공유 링크: ${url}`);
-      }
+      // 새 탭에서 학부모 페이지 오픈 (링크 복사는 그 페이지 상단에서)
+      window.open(url, '_blank', 'noopener');
+      setShareToast('학부모 페이지가 새 탭에 열렸습니다');
     } catch (err) {
       console.error('[ExamAnalysis] share error:', err);
       setShareToast('공유 링크 생성 중 오류 발생');
