@@ -523,14 +523,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   background: var(--rp-accent-soft);
-  border: 1px solid var(--rp-accent-mid);
+  border: 1.5px solid var(--rp-accent-mid);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   color: var(--rp-accent-strong);
+  line-height: 1;
+  flex-shrink: 0;
 }
 .hard-title {
   font-size: 14px;

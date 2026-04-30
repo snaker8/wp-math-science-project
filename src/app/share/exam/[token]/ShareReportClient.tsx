@@ -158,7 +158,7 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(el, {
-        scale: Math.max(3, window.devicePixelRatio * 2), // 고화질 (Retina+ 자동 대응)
+        scale: Math.max(4, window.devicePixelRatio * 2.5), // 매우 고화질 (블로그 게시 시 선명)
         useCORS: true,
         backgroundColor: '#ffffff',
         windowWidth: el.scrollWidth,
@@ -227,7 +227,7 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(el, {
-        scale: Math.max(3, window.devicePixelRatio * 2), // 고화질 (Retina+ 자동 대응)
+        scale: Math.max(4, window.devicePixelRatio * 2.5), // 매우 고화질 (블로그 게시 시 선명)
         useCORS: true,
         backgroundColor: '#ffffff',
         windowWidth: el.scrollWidth,
@@ -259,7 +259,7 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(el, {
-        scale: Math.max(3, window.devicePixelRatio * 2), // 고화질 (Retina+ 자동 대응)
+        scale: Math.max(4, window.devicePixelRatio * 2.5), // 매우 고화질 (블로그 게시 시 선명)
         useCORS: true,
         backgroundColor: '#ffffff',
         windowWidth: el.scrollWidth,
