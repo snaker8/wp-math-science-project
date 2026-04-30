@@ -164,6 +164,12 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         windowWidth: el.scrollWidth,
         letterRendering: true,
         imageTimeout: 30000,
+        onclone: (clonedDoc: Document) => {
+          // 캡처 시 .no-print 요소 숨김 (섹션 복사 버튼, 액션바 등)
+          clonedDoc.querySelectorAll('.no-print').forEach((node) => {
+            (node as HTMLElement).style.display = 'none';
+          });
+        },
       } as Parameters<typeof html2canvas>[1]);
       canvas.toBlob(async (blob) => {
         if (!blob) return;
@@ -233,6 +239,12 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         windowWidth: el.scrollWidth,
         letterRendering: true,
         imageTimeout: 30000,
+        onclone: (clonedDoc: Document) => {
+          // 캡처 시 .no-print 요소 숨김 (섹션 복사 버튼, 액션바 등)
+          clonedDoc.querySelectorAll('.no-print').forEach((node) => {
+            (node as HTMLElement).style.display = 'none';
+          });
+        },
       } as Parameters<typeof html2canvas>[1]);
       canvas.toBlob(async (blob) => {
         if (!blob) return;
@@ -265,6 +277,12 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         windowWidth: el.scrollWidth,
         letterRendering: true,
         imageTimeout: 30000,
+        onclone: (clonedDoc: Document) => {
+          // 캡처 시 .no-print 요소 숨김 (섹션 복사 버튼, 액션바 등)
+          clonedDoc.querySelectorAll('.no-print').forEach((node) => {
+            (node as HTMLElement).style.display = 'none';
+          });
+        },
       } as Parameters<typeof html2canvas>[1]);
 
       // 이미지 클립보드 복사
