@@ -474,7 +474,7 @@
 /* ─── HARD CARD ──────────────────────────────────────── */
 .hard-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* 콘텐츠 overflow가 컬럼 폭 늘리지 못하게 */
   gap: 14px;
 }
 .hard-card {
@@ -486,6 +486,11 @@
   page-break-inside: avoid;
   box-shadow: 0 1px 2px rgba(24,16,8,0.02);
   transition: box-shadow 0.15s, border-color 0.15s;
+  min-width: 0; /* grid 자식 overflow 방지 */
+}
+.hard-strategy-box {
+  overflow-x: auto;
+  word-break: break-word;
 }
 .hard-card:hover {
   border-color: var(--rp-accent-pale);
