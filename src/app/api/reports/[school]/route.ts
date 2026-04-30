@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { extractSchoolName } from '@/lib/utils/school-extract';
+import { extractExamYear } from '@/lib/utils/year-extract';
+import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,11 +19,14 @@ interface ExamRow {
   problemCount: number;
   totalPoints: number;
   createdAt: string;
+  year: number | null;
   hasAnalysis: boolean;
   hasShare: boolean;
   shareToken: string | null;
   overallDifficulty: string | null;
   unitCount: number; // 분석 결과상 단원 개수
+  /** ai_analysis 풀 페이로드. 분석 미생성 시 null. 검색·인라인 펼침에서 그대로 사용 */
+  analysis: ExamAIAnalysis | null;
 }
 
 export async function GET(
@@ -57,10 +62,7 @@ export async function GET(
   const examRows: ExamRow[] = matched.map((e) => {
     const ai = e.ai_analysis as Record<string, unknown> | null;
     const hasAnalysis = !!(ai && typeof ai === 'object' && 'generatedAt' in ai);
-    const aiTyped = ai as {
-      overallDifficulty?: string;
-      unitAnalyses?: Array<{ majorUnit: string; questionNumbers: number[] }>;
-    } | null;
+    const analysis = hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null;
     return {
       id: e.id,
       title: e.title,
@@ -69,11 +71,13 @@ export async function GET(
       problemCount: Number(e.problem_count) || 0,
       totalPoints: Number(e.total_points) || 0,
       createdAt: e.created_at as string,
+      year: extractExamYear(e.title, e.created_at as string | null),
       hasAnalysis,
       hasShare: !!e.share_token,
       shareToken: e.share_token || null,
-      overallDifficulty: hasAnalysis ? aiTyped?.overallDifficulty || null : null,
-      unitCount: hasAnalysis ? aiTyped?.unitAnalyses?.length || 0 : 0,
+      overallDifficulty: analysis?.overallDifficulty || null,
+      unitCount: analysis?.unitAnalyses?.length || 0,
+      analysis,
     };
   });
 
@@ -123,6 +127,13 @@ export async function GET(
     .sort((a, b) => b.problemCount - a.problemCount)
     .slice(0, 10);
 
+  // 등장한 발행 년도 set (내림차순)
+  const yearSet = new Set<number>();
+  examRows.forEach((e) => {
+    if (e.year != null) yearSet.add(e.year);
+  });
+  const availableYears = Array.from(yearSet).sort((a, b) => b - a);
+
   return NextResponse.json({
     school,
     summary: {
@@ -135,6 +146,7 @@ export async function GET(
     gradeDistribution,
     topUnits,
     overallDifficultyDist,
+    availableYears,
     exams: examRows,
   });
 }
