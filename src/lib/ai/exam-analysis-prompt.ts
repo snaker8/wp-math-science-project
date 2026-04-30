@@ -55,6 +55,7 @@ export const EXAM_ANALYSIS_SYSTEM_PROMPT = `
    - questionNumbers는 해당 단원에 속한 문항의 시험지 내 번호
    - keyPoints는 학생이 반드시 알아야 할 개념 중심
    - strategy는 그 단원만의 특성에 맞춘 학습법
+   - **★ majorUnit 일관성**: 입력으로 받은 각 문제의 majorUnit 값은 시험지의 학년/과목에 정합한 정확한 대단원명입니다. unitAnalyses[i].majorUnit은 입력의 majorUnit 값을 그대로 사용하고, 임의의 단원명(예: 다른 학년의 단원명)으로 변경하거나 풀어쓰지 마세요. 입력에 없는 단원명을 새로 만들어내지 마세요.
 
 4. **hardQuestions**:
    - 사용자가 지정한 임계값(기본 7) 이상 난이도 문항 중 상위 N개(기본 4개)

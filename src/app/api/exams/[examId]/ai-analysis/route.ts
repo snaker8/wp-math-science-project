@@ -14,6 +14,7 @@ import {
   EXAM_ANALYSIS_SYSTEM_PROMPT,
   buildExamAnalysisUserPrompt,
 } from '@/lib/ai/exam-analysis-prompt';
+import { resolveSubjectCode } from '@/lib/workflow/mathsecr-prompt';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
 
 // 분석은 Claude Sonnet 응답 + 길어서 5분
@@ -160,6 +161,35 @@ export async function POST(
     });
   }
 
+  // 5-B. mathsecr_types에서 majorUnit lookup — type_code prefix(MS09-01)로 정확한 대단원명 조회
+  // ★ classifications.type_code(MS09=대수)는 정확하지만 problems.ai_analysis.classification.chapter는
+  //   학년 무관 텍스트라 대수(고2)에 "다항식"(고1) 같은 단원명이 박히던 사고 차단.
+  const examSubjectCode = resolveSubjectCode(exam.grade ?? undefined, exam.subject ?? undefined);
+  const msPrefixes = Array.from(
+    new Set(
+      Array.from(classByProblem.values())
+        .map((c) => {
+          const tc = c.expanded_type_code || c.type_code;
+          if (!tc || !tc.startsWith('MS')) return null;
+          const parts = tc.split('-');
+          return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : null;
+        })
+        .filter((x): x is string => x !== null)
+    )
+  );
+  const msUnitMap = new Map<string, { subjectCode: string; level1Name: string }>();
+  if (msPrefixes.length > 0) {
+    const { data: msRows } = await supabaseAdmin
+      .from('mathsecr_types')
+      .select('code, subject_code, level1_name')
+      .in('code', msPrefixes);
+    (msRows || []).forEach((r) => {
+      if (r.code && r.level1_name) {
+        msUnitMap.set(r.code, { subjectCode: r.subject_code, level1Name: r.level1_name });
+      }
+    });
+  }
+
   // 6. 변환 — 분석에 필요한 형태로
   const problemsForPrompt = rows
     .map((row, idx) => {
@@ -169,13 +199,20 @@ export async function POST(
       const tCode = cls?.expanded_type_code || cls?.type_code || '';
       const typeName = typeNameMap.get(tCode) || '';
 
-      // majorUnit 추출 우선순위:
-      //  1) ai_analysis.classification.chapter
-      //  2) typeName 앞부분
-      //  3) '미분류'
+      // majorUnit 추출 우선순위 (학년 정합성 우선):
+      //  1) mathsecr_types.level1_name — type_code prefix(MS09-01)로 정확한 대단원
+      //     ★ examSubjectCode와 prefix subject_code 일치 시에만 채택 (불일치 시 fallback)
+      //  2) ai_analysis.classification.chapter — OCR 텍스트 (학년 무관)
+      //  3) typeName 앞부분
+      //  4) '미분류'
+      const msPrefix = tCode.startsWith('MS') ? tCode.split('-').slice(0, 2).join('-') : '';
+      const msHit = msPrefix ? msUnitMap.get(msPrefix) : null;
+      const subjectMatches =
+        examSubjectCode == null || msHit == null || msHit.subjectCode === examSubjectCode;
       const aiCls = (p.ai_analysis as { classification?: { chapter?: string } } | null)
         ?.classification;
       const majorUnit =
+        (msHit && subjectMatches ? msHit.level1Name : null) ||
         aiCls?.chapter ||
         (typeName ? typeName.split(/[>\-]/)[0].trim() : '') ||
         '미분류';

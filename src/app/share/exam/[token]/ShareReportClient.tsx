@@ -66,6 +66,83 @@ interface ShareReportClientProps {
   domainLabels: Record<string, string>;
 }
 
+// ===== 단원별 분포용 도넛 차트 (SVG inline) =====
+const UNIT_COLORS = [
+  '#DD6B20', // 진한 오렌지
+  '#ED8936', // 오렌지
+  '#F6AD55', // 살구
+  '#FBD38D', // 옅은 살구
+  '#FEEBC8', // 크림 오렌지
+  '#CBD5E0', // 회색 (5+ 단원 fallback)
+];
+
+interface DonutSlice {
+  name: string;
+  count: number;
+  pct: number;
+}
+
+function DonutChart({ items, total }: { items: DonutSlice[]; total: number }) {
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const R = 78;
+  const r = 50;
+
+  if (items.length === 0 || total === 0) {
+    return (
+      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--rp-text-4)', fontSize: 11 }}>
+        데이터 없음
+      </div>
+    );
+  }
+
+  let startAngle = -90; // 12시 방향
+  const slices = items.map((item, idx) => {
+    const sweep = (item.count / total) * 360;
+    const endAngle = startAngle + sweep;
+    const sa = (startAngle * Math.PI) / 180;
+    const ea = (endAngle * Math.PI) / 180;
+    const x1 = cx + R * Math.cos(sa);
+    const y1 = cy + R * Math.sin(sa);
+    const x2 = cx + R * Math.cos(ea);
+    const y2 = cy + R * Math.sin(ea);
+    const ix2 = cx + r * Math.cos(ea);
+    const iy2 = cy + r * Math.sin(ea);
+    const ix1 = cx + r * Math.cos(sa);
+    const iy1 = cy + r * Math.sin(sa);
+    const largeArc = sweep > 180 ? 1 : 0;
+    const path = [
+      `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+      `A ${R} ${R} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+      `L ${ix2.toFixed(2)} ${iy2.toFixed(2)}`,
+      `A ${r} ${r} 0 ${largeArc} 0 ${ix1.toFixed(2)} ${iy1.toFixed(2)}`,
+      'Z',
+    ].join(' ');
+    const color = UNIT_COLORS[idx % UNIT_COLORS.length];
+    startAngle = endAngle;
+    return { path, color };
+  });
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+      {slices.map((s, i) => (
+        <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="2" />
+      ))}
+      {/* 중앙 텍스트 */}
+      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="10" fill="#6B7280" fontWeight="600" letterSpacing="0.5">
+        TOTAL
+      </text>
+      <text x={cx} y={cy + 14} textAnchor="middle" fontSize="22" fill="#1F2937" fontWeight="800">
+        {total}
+      </text>
+      <text x={cx} y={cy + 28} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="500">
+        문항
+      </text>
+    </svg>
+  );
+}
+
 // 단계별 풀이 ([1단계] [2단계] [3단계]) 강조 렌더
 function StepStrategy({ text }: { text: string }) {
   // [N단계] 패턴을 찾아 굵은 색 강조 + 줄바꿈
@@ -239,28 +316,34 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
 
             {/* 두 컬럼: 단원/난이도 분포 */}
             <div className="info-grid-2">
-              {/* 단원별 문항 분포 */}
+              {/* 단원별 문항 분포 — 도넛 차트 + 범례 */}
               <div className="info-block">
                 <div className="info-label">
                   <PieChart />
                   단원별 문항 분포
                 </div>
-                <div className="bar-list">
-                  {unitDist.length === 0 && <div className="empty">데이터 없음</div>}
-                  {unitDist.map((u, i) => (
-                    <div key={i} className="bar-row">
-                      <div className="bar-name">
-                        <span>{u.name}</span>
-                        <span className="bar-pct">
-                          {u.pct}%<span className="count">({u.count}문항)</span>
-                        </span>
-                      </div>
-                      <div className="bar-track">
-                        <div className="bar-fill unit" style={{ width: `${Math.max(2, u.pct)}%` }} />
-                      </div>
+                {unitDist.length === 0 ? (
+                  <div className="empty">데이터 없음</div>
+                ) : (
+                  <div className="donut-row">
+                    <DonutChart items={unitDist} total={data.stats.total} />
+                    <div className="donut-legend">
+                      {unitDist.map((u, i) => (
+                        <div key={i} className="donut-legend-row">
+                          <span
+                            className="donut-legend-dot"
+                            style={{ background: UNIT_COLORS[i % UNIT_COLORS.length] }}
+                          />
+                          <span className="donut-legend-name">{u.name}</span>
+                          <span className="donut-legend-pct">
+                            <strong>{u.pct}%</strong>
+                            <span className="donut-legend-count">{u.count}문항</span>
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* 난이도별 문항 분포 */}
