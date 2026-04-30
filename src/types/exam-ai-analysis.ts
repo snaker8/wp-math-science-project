@@ -6,15 +6,15 @@
 /** 전반적 난이도 평가 */
 export type OverallDifficulty = '평이' | '보통' | '난이도 있음' | '매우 난이도 있음';
 
-/** 단원별 학습전략 */
+/** 단원별 분석 — 출제경향 + 대비전략 */
 export interface UnitAnalysis {
   /** 대단원명 (예: '다항식의 연산') */
   majorUnit: string;
   /** 이 단원에 속한 문제 번호 (시험지 내 출제 순서) */
   questionNumbers: number[];
-  /** 핵심 개념 / 학습 포인트 */
+  /** ★ 출제경향 — 이 단원이 이번 시험에서 어떻게 출제됐는지 (keyPoints 필드 재사용) */
   keyPoints: string;
-  /** 대비 전략 (KICE 평가원 기준 학습 조언) */
+  /** 대비전략 — 학습 가이드 */
   strategy: string;
 }
 
@@ -24,9 +24,11 @@ export interface HardQuestionAnalysis {
   problemId: string;
   /** 시험지 내 문제 번호 */
   number: number;
+  /** ★ 단원·핵심 주제 (예: '제곱근을 포함한 식의 자연수 조건') — optional */
+  subTitle?: string;
   /** 출제 의도 */
   intent: string;
-  /** 공략(해결 전략) — LaTeX 가능 */
+  /** 공략(해결 전략) — [1단계] [2단계] [3단계] 단계별 표기 권장. LaTeX 가능 */
   strategy: string;
 }
 
