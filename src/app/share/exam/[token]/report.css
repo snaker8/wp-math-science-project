@@ -284,9 +284,11 @@
 .range-chip {
   display: inline-flex;
   align-items: center;
-  padding: 7px 16px;
-  font-size: 12.5px;
+  justify-content: center;
+  padding: 6px 18px 7px; /* 한글 폰트 baseline 보정 — top 1px 줄임 */
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.5;
   color: var(--rp-text);
   background: white;
   border: 1px solid var(--rp-line);
