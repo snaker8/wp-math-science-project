@@ -400,6 +400,49 @@ ${content.slice(0, 1500)}`;
   };
 }
 
+/**
+ * Phase C-2: classification_corrections에서 비슷한 보정 사례 fetch.
+ * stage1Code(예: MS09-02 = 상용로그) prefix와 같은 영역의 최근 보정 사례를 가져와
+ * Stage 2 user prompt에 few-shot으로 주입 → 학원이 쓸수록 정확도 향상 (self-compiling).
+ */
+async function fetchSimilarCorrections(
+  stage1CodePrefix: string,
+  limit: number = 5
+): Promise<Array<{
+  before: string;
+  after: string;
+  afterName: string;
+  reason: string | null;
+  contentSnippet: string;
+}>> {
+  if (!stage1CodePrefix || !stage1CodePrefix.startsWith('MS')) return [];
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseUrl || !serviceKey) return [];
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data } = await sb
+      .from('classification_corrections')
+      .select('before_code, after_code, after_type_name, reason, problem_content')
+      .like('after_code', `${stage1CodePrefix}%`)
+      .order('corrected_at', { ascending: false })
+      .limit(limit);
+    if (!data) return [];
+    return data.map((c: Record<string, unknown>) => ({
+      before: String(c.before_code || ''),
+      after: String(c.after_code || ''),
+      afterName: String(c.after_type_name || ''),
+      reason: c.reason ? String(c.reason) : null,
+      contentSnippet: String(c.problem_content || '').slice(0, 200),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ============================================================================
 // 2단계 Claude 분류 헬퍼 — mathsecr 트리 축소 버전
 // Stage 1: 대단원(L1) + 중단원(L2) 선택 (5~10K 토큰)
@@ -503,8 +546,23 @@ ${l3l4Table}
 - 7 (12%+): 다단계 추론·심화서급 / 8 (5%+): 수능 준킬러 / 9 (1%+): 수능 킬러 / 10: 경시급
 ※ 합답형/서술형은 자동 어렵게 X — 인지 부담으로 평가 (쉬운 합답형은 3~4 가능)
 ※ 학년 범위 밖 추론 = +1`;
+  // ★ Phase C-2: 같은 영역(stage1Code prefix) 강사 보정 사례 few-shot 주입 — self-compiling
+  const corrections = await fetchSimilarCorrections(stage1Code, 5);
+  let exampleSection = '';
+  if (corrections.length > 0) {
+    exampleSection = `\n\n★ 강사 보정 사례 (학습 데이터, 같은 영역 ${corrections.length}건) — 비슷한 패턴이면 우선 참고. 본문 키워드·풀이 패턴이 비슷하면 같은 정답 코드를 그대로 따르세요.`;
+    corrections.forEach((c, i) => {
+      exampleSection += `\n\n[사례 ${i + 1}]`;
+      if (c.contentSnippet) exampleSection += `\n본문 발췌: ${c.contentSnippet}`;
+      if (c.before) exampleSection += `\nAI 분류 (틀림): ${c.before}`;
+      exampleSection += `\n정답 분류 (강사 보정): ${c.after}${c.afterName ? ` — ${c.afterName}` : ''}`;
+      if (c.reason) exampleSection += `\n보정 이유: ${c.reason}`;
+    });
+    console.log(`[${label}:stage2] few-shot ${corrections.length}건 주입 (${stage1Code})`);
+  }
+
   const stage2User = `문제:
-${content.slice(0, 1500)}
+${content.slice(0, 1500)}${exampleSection}
 
 위 문제의 최종 typeCode(소단원+세부유형)와 난이도·인지영역을 JSON으로 응답:
 {"typeCode":"${stage1Code}-??-??","difficulty":5,"cognitiveDomain":"CALCULATION","confidence":0.9}
