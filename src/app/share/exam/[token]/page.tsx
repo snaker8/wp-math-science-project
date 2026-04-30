@@ -6,6 +6,8 @@
 
 import { notFound } from 'next/navigation';
 import { ShareReportClient } from './ShareReportClient';
+import { supabaseAdmin } from '@/lib/supabase/server';
+import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,17 +55,84 @@ interface PageData {
   } | null;
 }
 
+// Server Component에서 직접 Supabase 조회 (self-fetch 우회 — Vercel 환경 안정성 ↑)
 async function fetchData(token: string): Promise<PageData | null> {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3099');
-  try {
-    const res = await fetch(`${baseUrl}/api/share/exam/${token}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return (await res.json()) as PageData;
-  } catch {
-    return null;
-  }
+  if (!supabaseAdmin) return null;
+  if (!token || token.length < 16) return null;
+
+  // 1. 토큰으로 시험지 조회
+  const { data: examRows, error: examErr } = await supabaseAdmin
+    .from('exams')
+    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token')
+    .eq('share_token', token);
+
+  if (examErr || !examRows || examRows.length === 0) return null;
+  const exam = examRows[0];
+
+  const ai = exam.ai_analysis as Record<string, unknown> | null;
+  const hasAnalysis = !!(ai && typeof ai === 'object' && 'generatedAt' in ai);
+
+  // 2. exam_problems + classifications 일괄 조회
+  const { data: examProblems } = await supabaseAdmin
+    .from('exam_problems')
+    .select('points, problem_id')
+    .eq('exam_id', exam.id);
+
+  const problemIds = (examProblems || []).map((p) => p.problem_id).filter(Boolean) as string[];
+
+  const { data: classifications } = await supabaseAdmin
+    .from('classifications')
+    .select('problem_id, type_code, expanded_type_code, difficulty, cognitive_domain')
+    .in('problem_id', problemIds);
+
+  // 3. 통계 집계
+  const total = examProblems?.length || 0;
+  const totalPoints =
+    examProblems?.reduce((sum, p) => sum + (Number(p.points) || 0), 0) || exam.total_points || 0;
+
+  const diffDist: Record<number, number> = {};
+  for (let i = 1; i <= 10; i++) diffDist[i] = 0;
+  const domDist: Record<string, number> = {
+    CALCULATION: 0,
+    UNDERSTANDING: 0,
+    INFERENCE: 0,
+    PROBLEM_SOLVING: 0,
+  };
+
+  (classifications || []).forEach((c) => {
+    const d = Math.min(10, Math.max(1, parseInt(String(c.difficulty), 10) || 0));
+    if (d > 0) diffDist[d] = (diffDist[d] || 0) + 1;
+    const dom = c.cognitive_domain || 'UNDERSTANDING';
+    domDist[dom] = (domDist[dom] || 0) + 1;
+  });
+
+  const avgDifficulty =
+    total > 0
+      ? (classifications || []).reduce(
+          (sum, c) => sum + (parseInt(String(c.difficulty), 10) || 0),
+          0
+        ) / total
+      : 0;
+
+  return {
+    exam: {
+      id: exam.id,
+      title: exam.title,
+      grade: exam.grade,
+      subject: exam.subject,
+      problemCount: total,
+      totalPoints,
+      createdAt: exam.created_at as string,
+    },
+    stats: {
+      total,
+      totalPoints,
+      avgDifficulty: Math.round(avgDifficulty * 10) / 10,
+      diffDist,
+      domDist,
+    },
+    analysis: hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null,
+  } as PageData;
 }
 
 export default async function SharedExamReportPage({
