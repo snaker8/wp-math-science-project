@@ -3,7 +3,7 @@
 import React, { memo } from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
-import { cleanLatexContent, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
+import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
 import type { InterpretedFigure } from '@/types/ocr';
 
 // ============================================================================
@@ -164,7 +164,7 @@ function ExamProblemRendererInner({
               {problem.choices.map((choice, ci) => {
                 const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
                 const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
-                const cells = stripped.split('|').map(s => s.trim());
+                const cells = stripped.split('|').map(s => cleanChoiceText(s.trim()));
                 return (
                   <tr key={ci}>
                     <td className="px-1.5 py-0.5 text-gray-500 whitespace-nowrap">{prefix}</td>
@@ -191,7 +191,9 @@ function ExamProblemRendererInner({
       return (
         <div className="mt-2 space-y-1.5">
           {problem.choices.map((choice, ci) => {
-            const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
+            const stripped = cleanChoiceText(
+              choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim()
+            );
             return (
               <div key={ci} className="flex items-start gap-1.5 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
                 <span className="flex-shrink-0 font-semibold text-gray-900">({ci + 1})</span>
@@ -205,7 +207,9 @@ function ExamProblemRendererInner({
 
     const items = problem.choices.map((c, ci) => ({
       prefix: ['①', '②', '③', '④', '⑤'][ci] || '',
-      content: c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, ''),
+      content: cleanChoiceText(
+        c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '')
+      ),
     }));
     const maxLen = Math.max(...items.map(c => c.content.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length + 2));
 
