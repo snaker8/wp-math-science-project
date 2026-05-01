@@ -1350,6 +1350,8 @@ export async function analyzeProblemWithLLM(
               cognitiveDomain: cogn,
               confidence: claudeResult.confidence,
               prerequisites: [],
+              // ★ Phase C-1b: 함정 유형 자동 추출 — caller(upload route 등)가 problem_pitfalls INSERT용으로 활용
+              pitfalls: claudeResult.pitfalls || [],
             },
             // 해설은 batch-solutions(Claude Sonnet)에서 생성 — 여기선 빈 기본값
             solution: { approach: '', steps: [], finalAnswer: '' },
