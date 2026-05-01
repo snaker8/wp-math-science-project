@@ -1536,6 +1536,36 @@ async function saveEditedProblemsDirect(
         }).single();
       }
 
+      // ★ Phase C-1b: 함정 유형 자동 태깅 — edited.pitfalls가 있으면 INSERT.
+      //   클라이언트(analyze 페이지)가 cloud-flow의 pitfalls를 전달해야 동작.
+      //   미전달 시 빈 배열 → 스킵 (회귀 X).
+      if (problem) {
+        const editedPitfalls = (edited as { pitfalls?: Array<{ code: string; confidence: number; reason?: string }> }).pitfalls;
+        if (Array.isArray(editedPitfalls) && editedPitfalls.length > 0) {
+          try {
+            const pitfallRows = editedPitfalls
+              .filter((p) => p.code && /^[A-Z][A-Z0-9_]+$/.test(p.code))
+              .map((p) => ({
+                problem_id: problem.id,
+                pitfall_code: p.code,
+                ai_confidence: typeof p.confidence === 'number' ? p.confidence : 0.7,
+                reason: p.reason || null,
+                is_verified: false,
+              }));
+            if (pitfallRows.length > 0) {
+              const { error: pfErr } = await supabase.from('problem_pitfalls').insert(pitfallRows);
+              if (pfErr) {
+                console.warn(`[Direct Save] problem_pitfalls insert 실패 (problem ${problem.id}):`, pfErr.message);
+              } else {
+                console.log(`[Direct Save] ★ pitfalls 태깅 (${problem.id.slice(0, 8)}): ${editedPitfalls.map((p) => p.code).join(', ')}`);
+              }
+            }
+          } catch (e) {
+            console.warn(`[Direct Save] pitfalls insert 예외:`, e);
+          }
+        }
+      }
+
       savedCount++;
       if (problem?.id) savedProblemIds.push(problem.id);
 
@@ -2115,6 +2145,33 @@ async function saveProblemsToDB(
           estimated_time_minutes: result.estimatedTimeMinutes || 5,
           prerequisite_types: result.classification.prerequisites || [],
         });
+
+        // ★ Phase C-1b: 함정 유형 자동 태깅 — cloud-flow에서 받은 pitfalls를 problem_pitfalls에 INSERT.
+        //   분류 자체에 영향 X — INSERT 실패해도 try-catch로 격리.
+        const pitfallsRaw = (result.classification as { pitfalls?: Array<{ code: string; confidence: number; reason?: string }> }).pitfalls;
+        if (Array.isArray(pitfallsRaw) && pitfallsRaw.length > 0) {
+          try {
+            const pitfallRows = pitfallsRaw
+              .filter((p) => p.code && /^[A-Z][A-Z0-9_]+$/.test(p.code))
+              .map((p) => ({
+                problem_id: problem.id,
+                pitfall_code: p.code,
+                ai_confidence: typeof p.confidence === 'number' ? p.confidence : 0.7,
+                reason: p.reason || null,
+                is_verified: false,
+              }));
+            if (pitfallRows.length > 0) {
+              const { error: pfErr } = await supabase.from('problem_pitfalls').insert(pitfallRows);
+              if (pfErr) {
+                console.warn(`[DB] problem_pitfalls insert 실패 (problem ${problem.id}):`, pfErr.message);
+              } else {
+                console.log(`[DB] ★ pitfalls 태깅 (${problem.id.slice(0, 8)}): ${pitfallsRaw.map((p) => p.code).join(', ')}`);
+              }
+            }
+          } catch (e) {
+            console.warn(`[DB] pitfalls insert 예외:`, e);
+          }
+        }
 
         savedCount++;
 
