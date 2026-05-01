@@ -391,6 +391,42 @@ async function reanalyzeClassificationOnly(
           },
           correctedContent: null,
         };
+
+        // ★ Phase C-1b 후속: 함정 유형 자동 태깅 — problem_pitfalls 갱신
+        //   AI 태깅(is_verified=false)만 교체. 강사 검수(is_verified=true)는 보존.
+        if (
+          Array.isArray(claudeResult.pitfalls) &&
+          claudeResult.pitfalls.length > 0 &&
+          supabaseAdmin
+        ) {
+          try {
+            await supabaseAdmin
+              .from('problem_pitfalls')
+              .delete()
+              .eq('problem_id', problemId)
+              .eq('is_verified', false);
+            const rows = claudeResult.pitfalls.map((p) => ({
+              problem_id: problemId,
+              pitfall_code: p.code,
+              ai_confidence: p.confidence,
+              reason: p.reason || null,
+              is_verified: false,
+            }));
+            const { error: pfErr } = await supabaseAdmin
+              .from('problem_pitfalls')
+              .insert(rows);
+            if (pfErr) {
+              console.warn(`[Reanalyze] problem_pitfalls insert 실패:`, pfErr.message);
+            } else {
+              console.log(
+                `[Reanalyze] ★ pitfalls 태깅: ${claudeResult.pitfalls.map((p) => p.code).join(', ')}`
+              );
+            }
+          } catch (e) {
+            console.warn(`[Reanalyze] pitfalls insert 예외:`, e);
+          }
+        }
+
         return await persistReanalysis(
           problemId,
           problem,
