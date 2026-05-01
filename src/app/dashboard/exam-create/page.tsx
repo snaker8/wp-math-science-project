@@ -15,6 +15,7 @@
 // ============================================================================
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   Filter,
@@ -23,6 +24,7 @@ import {
   Layers,
   Plus,
   Check,
+  X,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
@@ -49,6 +51,7 @@ interface SearchResponse {
 const DIFFICULTIES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function ExamCreatePage() {
+  const router = useRouter();
   const [typeCode, setTypeCode] = useState<string>('');
   const [typeName, setTypeName] = useState<string>('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -58,6 +61,13 @@ export default function ExamCreatePage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // ★ 2차 PR: 시험지 편성 모달 state
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [examTitle, setExamTitle] = useState('');
+  const [examGrade, setExamGrade] = useState('');
+  const [examSubject, setExamSubject] = useState('');
+  const [composing, setComposing] = useState(false);
+  const [composeErr, setComposeErr] = useState<string | null>(null);
 
   const handleSearch = async () => {
     setLoading(true);
@@ -338,20 +348,152 @@ export default function ExamCreatePage() {
         onClose={() => setPickerOpen(false)}
       />
 
-      {/* 푸터 — 다음 PR에서 시험지 편성 액션 */}
+      {/* 푸터 — 시험지 편성 버튼 */}
       {picked.size > 0 && (
         <div className="flex-shrink-0 border-t border-cyan-500/30 bg-cyan-500/10 px-8 py-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-cyan-200">
-              <span className="font-bold">{picked.size}</span>개 문항 선택됨 — 시험지 편성 (2차 PR 예정)
+              <span className="font-bold">{picked.size}</span>개 문항 선택됨
             </span>
             <button
               type="button"
-              disabled
-              className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-1.5 text-xs font-bold text-cyan-300 opacity-60 cursor-not-allowed"
+              onClick={() => {
+                // 모달 기본값 — 단원명에서 추측
+                if (!examTitle && typeName) {
+                  const last = typeName.split(' > ').pop() || '시험지';
+                  setExamTitle(`${last} 연습 ${new Date().toLocaleDateString('ko-KR')}`);
+                }
+                setComposeOpen(true);
+              }}
+              className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30"
             >
-              다음: 시험지 편성
+              시험지 편성 →
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 시험지 편성 모달 */}
+      {composeOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !composing) setComposeOpen(false);
+          }}
+        >
+          <div className="w-[480px] max-w-[95vw] rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+              <h2 className="text-base font-bold text-white">시험지 편성</h2>
+              <button
+                type="button"
+                onClick={() => !composing && setComposeOpen(false)}
+                disabled={composing}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-900 hover:text-white disabled:opacity-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-5">
+              <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-300">
+                선택 문항 <span className="font-bold">{picked.size}</span>개 / 단원: {typeName || '미지정'}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-zinc-400">제목 *</label>
+                <input
+                  type="text"
+                  value={examTitle}
+                  onChange={(e) => setExamTitle(e.target.value)}
+                  placeholder="예: 26 신곡중 3-1 중간고사 대비"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-zinc-400">학년 (선택)</label>
+                  <input
+                    type="text"
+                    value={examGrade}
+                    onChange={(e) => setExamGrade(e.target.value)}
+                    placeholder="예: 고2"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-zinc-400">과목 (선택)</label>
+                  <input
+                    type="text"
+                    value={examSubject}
+                    onChange={(e) => setExamSubject(e.target.value)}
+                    placeholder="예: 대수"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {composeErr && (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
+                  {composeErr}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-zinc-800 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => !composing && setComposeOpen(false)}
+                disabled={composing}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:text-white disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={composing || !examTitle.trim() || picked.size === 0}
+                onClick={async () => {
+                  setComposing(true);
+                  setComposeErr(null);
+                  try {
+                    const res = await fetch('/api/exams/create-from-problems', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: examTitle.trim(),
+                        grade: examGrade.trim() || null,
+                        subject: examSubject.trim() || null,
+                        problemIds: Array.from(picked),
+                      }),
+                    });
+                    const d = await res.json();
+                    if (!res.ok && res.status !== 207) {
+                      throw new Error(d.error || `HTTP ${res.status}`);
+                    }
+                    // 207은 부분 성공 — examId는 있음
+                    if (d.examId) {
+                      router.push(`/dashboard/cloud/${d.examId}`);
+                    } else {
+                      throw new Error('examId 없음');
+                    }
+                  } catch (e) {
+                    setComposeErr(e instanceof Error ? e.message : '생성 실패');
+                  } finally {
+                    setComposing(false);
+                  }
+                }}
+                className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {composing ? (
+                  <>
+                    <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                    생성 중...
+                  </>
+                ) : (
+                  '시험지 생성'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
