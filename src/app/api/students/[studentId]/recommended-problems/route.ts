@@ -125,7 +125,31 @@ export async function GET(
     .in('difficulty', difficultyValues)
     .limit(200); // 후보 풀
 
-  const candidateIds = ((clsData as Array<{ problem_id: string }>) || []).map((c) => c.problem_id);
+  // ★ A-2a: 학생이 이미 정답 처리한 문제 제외 (오답 처리한 건 보강 차원에서 다시 권장)
+  //   흐름: print_sessions에서 학생 sessionIds → session_results에서 is_correct=true 필터
+  const { data: studentSessions } = await sb
+    .schema('diagnostics' as never)
+    .from('print_sessions')
+    .select('id')
+    .eq('student_id', studentId);
+  const sessionIds = ((studentSessions as Array<{ id: string }>) || []).map((s) => s.id);
+
+  const correctProblemIds = new Set<string>();
+  if (sessionIds.length > 0) {
+    const { data: graded } = await sb
+      .schema('diagnostics' as never)
+      .from('session_results')
+      .select('problem_id')
+      .eq('is_correct', true)
+      .in('session_id', sessionIds);
+    ((graded as Array<{ problem_id: string }>) || []).forEach((r) => {
+      correctProblemIds.add(r.problem_id);
+    });
+  }
+
+  const candidateIds = ((clsData as Array<{ problem_id: string }>) || [])
+    .map((c) => c.problem_id)
+    .filter((id) => !correctProblemIds.has(id));
 
   if (candidateIds.length === 0) {
     return NextResponse.json({
