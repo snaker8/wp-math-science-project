@@ -10,6 +10,7 @@ import {
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import { StudentPitfallSummary } from '@/components/prescription/StudentPitfallSummary';
 import { WeeklyConnections } from '@/components/prescription/WeeklyConnections';
+import { PrescriptionRecommendation } from '@/components/prescription/PrescriptionRecommendation';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip,
 } from 'recharts';
@@ -475,6 +476,18 @@ function PrescriptionContent() {
                       <ActionButton icon={Send} label="학부모 리포트 전송" disabled />
                     </div>
                   </ClinicCard>
+
+                  {/* ★ Phase C: AI 처방 추천 — 약점 체인 + 함정 패턴 결합 */}
+                  {student && (
+                    <PrescriptionRecommendation
+                      studentId={student.id}
+                      weakestUnit={
+                        weakestNode
+                          ? { fullPath: weakestLabel || weakestNode.mathsecr_code, status: weakestNode.status || null }
+                          : null
+                      }
+                    />
+                  )}
 
                   {/* ★ Phase C-3 B: "이번 주 새 연결" 위젯 — 카파시 영상의 본 메시지 */}
                   {student && <WeeklyConnections studentId={student.id} />}
