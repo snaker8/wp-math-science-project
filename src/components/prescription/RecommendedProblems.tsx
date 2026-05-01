@@ -46,6 +46,9 @@ export function RecommendedProblems({ studentId }: Props) {
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState<{ sessionUrl: string; problemCount: number } | null>(null);
+  const [genErr, setGenErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!studentId) return;
@@ -191,16 +194,71 @@ export function RecommendedProblems({ studentId }: Props) {
         ))}
       </div>
 
-      {/* 액션 — 향후 학습지 생성 hook */}
-      <button
-        type="button"
-        disabled
-        className="mt-3 w-full rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 opacity-60 cursor-not-allowed"
-        title="향후 PR — 추천 문항으로 학습지 자동 생성 + PDF 출력"
-      >
-        <ListPlus className="mr-1 inline h-3 w-3" />
-        학습지 생성 (준비 중)
-      </button>
+      {/* 학습지 자동 생성 — 추천 문항을 즉시 sessions로 발급 */}
+      {generated ? (
+        <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs">
+          <div className="font-semibold text-emerald-200">
+            ✓ 학습지 생성 완료 — 문항 {generated.problemCount}개
+          </div>
+          <a
+            href={generated.sessionUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block break-all text-[11px] text-emerald-300 underline hover:text-emerald-200"
+          >
+            {generated.sessionUrl}
+          </a>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={generating || data.problems.length === 0}
+          onClick={async () => {
+            setGenerating(true);
+            setGenErr(null);
+            try {
+              const res = await fetch(
+                `/api/students/${encodeURIComponent(studentId)}/generate-recommended-session`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    problemIds: data.problems.map((p) => p.problemId),
+                    label: data.weakestUnit
+                      ? `[맞춤] ${data.weakestUnit.fullPath.split(' > ').pop()} 보강`
+                      : undefined,
+                  }),
+                }
+              );
+              const d = await res.json();
+              if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+              setGenerated({ sessionUrl: d.sessionUrl, problemCount: d.problemCount });
+            } catch (e) {
+              setGenErr(e instanceof Error ? e.message : '학습지 생성 실패');
+            } finally {
+              setGenerating(false);
+            }
+          }}
+          className="mt-3 w-full rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {generating ? (
+            <>
+              <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+              생성 중...
+            </>
+          ) : (
+            <>
+              <ListPlus className="mr-1 inline h-3 w-3" />
+              학습지 생성 ({data.problems.length}개 문항)
+            </>
+          )}
+        </button>
+      )}
+      {genErr && (
+        <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-300">
+          {genErr}
+        </div>
+      )}
     </div>
   );
 }
