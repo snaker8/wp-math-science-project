@@ -103,16 +103,24 @@ export function injectSubQuestionPoints(
 
 /**
  * 선택지 텍스트 정리 — \begin{array}/\begin{aligned} 블록을 줄별 $...$로 변환
+ *   + 한글 자모 only 패턴(`\text{ㄱ, ㄴ}` 또는 `$ㄱ, ㄴ$`)은 KaTeX wrapping 풀어
+ *     본문 폰트로 출력. KaTeX의 \text{} 안 한글이 fallback 폰트로 그려져
+ *     "반듯하지 않게" 보이는 사고 차단.
  */
 export function cleanChoiceText(text: string): string {
-  return text.replace(
-    /\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?/gi,
-    (_m, inner) => {
-      return inner
-        .split('\\\\')
-        .map((l: string) => `$${l.replace(/&/g, '').trim()}$`)
-        .filter((l: string) => l !== '$$')
-        .join(' ');
-    }
-  );
+  return text
+    .replace(
+      /\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?/gi,
+      (_m, inner) => {
+        return inner
+          .split('\\\\')
+          .map((l: string) => `$${l.replace(/&/g, '').trim()}$`)
+          .filter((l: string) => l !== '$$')
+          .join(' ');
+      }
+    )
+    // $\text{ㄱ, ㄴ}$ / \text{ㄱ, ㄴ} → ㄱ, ㄴ
+    .replace(/^\$?\s*\\text\{\s*([ㄱ-ㅎ][ㄱ-ㅎ\s,]*)\s*\}\s*\$?$/, '$1')
+    // $ㄱ, ㄴ$ → ㄱ, ㄴ
+    .replace(/^\$\s*([ㄱ-ㅎ][ㄱ-ㅎ\s,]*)\s*\$$/, '$1');
 }
