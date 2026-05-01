@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
+import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 
 // ============================================================================
 // Types
@@ -734,6 +735,10 @@ export default function AnalyzeProblemEditModal({
   // === 메타데이터 ===
   const [difficulty, setDifficulty] = useState(problem.difficulty);
   const [problemNumber, setProblemNumber] = useState(problem.number);
+  // ★ Phase C-2c-2: 자산화 시점 분류 보정 — typeCode/typeName 편집 + picker
+  const [typeCode, setTypeCode] = useState(problem.typeCode || '');
+  const [typeName, setTypeName] = useState(problem.typeName || '');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [problemScore, setProblemScore] = useState<string>(
     (problem as any).score != null ? String((problem as any).score) : ''
   );
@@ -969,10 +974,13 @@ export default function AnalyzeProblemEditModal({
       number: problemNumber,
       score: !isNaN(parsedScore) && parsedScore > 0 ? parsedScore : undefined,
       status: 'edited',
+      // ★ Phase C-2c-2: 분류 보정 (자산화 시점) — typeCode/typeName 변경 시 같이 저장
+      typeCode,
+      typeName,
     };
 
     onSave(updated);
-  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, onSave]);
+  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, typeCode, typeName, onSave]);
 
   return (
     <>
@@ -1258,25 +1266,51 @@ export default function AnalyzeProblemEditModal({
                   onMultipleAnswerChange={setIsMultipleAnswer}
                 />
 
-                {/* 유형 분류 표시 (읽기 전용) */}
-                {problem.typeCode && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-bold text-gray-500">AI 분류 결과</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-xs px-2.5 py-1 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 font-mono">
-                        {problem.typeCode}
-                      </span>
-                      <span className="text-xs px-2.5 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                        {problem.typeName}
-                      </span>
-                      <span className="text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                        난이도: {difficulties.find(d => d.key === problem.difficulty)?.label || '중'}
-                      </span>
-                    </div>
+                {/* ★ Phase C-2c-2: 유형 분류 — 편집 가능 + 트리 picker */}
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-bold text-gray-500">분류 보정 (자산화 전)</span>
+                    <span className="text-[10px] text-gray-400">
+                      난이도: {difficulties.find((d) => d.key === difficulty)?.label || '중'}
+                    </span>
                   </div>
-                )}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={typeCode ? `${typeCode}. ${typeName}` : ''}
+                      onChange={(e) => {
+                        const parts = e.target.value.split('. ');
+                        setTypeCode(parts[0] || '');
+                        setTypeName(parts.slice(1).join('. ') || '');
+                      }}
+                      className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      placeholder="유형코드. 유형명 — 트리에서 선택 권장"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen(true)}
+                      className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors"
+                      title="수학비서 분류 트리에서 선택"
+                    >
+                      유형 검색
+                    </button>
+                  </div>
+                  {problem.typeCode && problem.typeCode !== typeCode && (
+                    <div className="mt-2 text-[10px] text-amber-600">
+                      AI 분류: <code className="bg-white px-1 rounded">{problem.typeCode}</code> → 보정 중
+                    </div>
+                  )}
+                </div>
+                {/* 트리 selector 모달 */}
+                <MathsecrTreePicker
+                  open={pickerOpen}
+                  initialSubjectCode={(typeCode.match(/^MS(\d{2})/) || [])[1] || '09'}
+                  onSelect={(code, fullPath) => {
+                    setTypeCode(code);
+                    setTypeName(fullPath);
+                  }}
+                  onClose={() => setPickerOpen(false)}
+                />
               </div>
             </div>
           </div>
