@@ -86,6 +86,16 @@ export async function GET(
     byCategory.set(s.category, (byCategory.get(s.category) || 0) + s.occurrenceCount);
   });
 
+  // ★ "이번 주 새 연결" — 카파시 영상 메시지의 본 무대
+  //   - newConnections: 이번 주에 첫 발생한 함정 (firstOccurredAt이 7일 내) → "새 연결 형성"
+  //   - intensifying: 이전부터 있었으나 이번 주 빈도 증가한 함정 → "약점 깊어짐"
+  const newConnections = summary
+    .filter((s) => s.recentWeekCount > 0 && new Date(s.firstOccurredAt).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000)
+    .sort((a, b) => b.recentWeekCount - a.recentWeekCount);
+  const intensifying = summary
+    .filter((s) => s.recentWeekCount > 0 && new Date(s.firstOccurredAt).getTime() < Date.now() - 7 * 24 * 60 * 60 * 1000)
+    .sort((a, b) => b.recentWeekCount - a.recentWeekCount);
+
   return NextResponse.json({
     studentId,
     totalOccurrences: summary.reduce((s, r) => s + r.occurrenceCount, 0),
@@ -93,5 +103,7 @@ export async function GET(
     recentWeekTotal: Array.from(recentCount.values()).reduce((s, c) => s + c, 0),
     byCategory: Array.from(byCategory.entries()).map(([category, count]) => ({ category, count })),
     summary,
+    newConnections,
+    intensifying,
   });
 }

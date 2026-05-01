@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import { StudentPitfallSummary } from '@/components/prescription/StudentPitfallSummary';
+import { WeeklyConnections } from '@/components/prescription/WeeklyConnections';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip,
 } from 'recharts';
@@ -474,6 +475,9 @@ function PrescriptionContent() {
                       <ActionButton icon={Send} label="학부모 리포트 전송" disabled />
                     </div>
                   </ClinicCard>
+
+                  {/* ★ Phase C-3 B: "이번 주 새 연결" 위젯 — 카파시 영상의 본 메시지 */}
+                  {student && <WeeklyConnections studentId={student.id} />}
 
                   {/* ★ Phase C-3: 학생 함정 누적 위젯 — 카파시 self-compiling 4번째 차원 시각화 */}
                   {student && <StudentPitfallSummary studentId={student.id} />}
