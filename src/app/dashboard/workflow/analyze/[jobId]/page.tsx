@@ -108,6 +108,8 @@ interface AnalyzedProblem {
   insertedImages?: InsertedImage[];
   // ★ 배점 (예: 3.4, 4 등 — OCR [3.4점] 패턴에서 추출)
   score?: number;
+  // ★ Phase C-1b: 학생 함정 유형 자동 추출 (cloud-flow → 자산화 시 problem_pitfalls INSERT)
+  pitfalls?: Array<{ code: string; confidence: number; reason?: string }>;
 }
 
 interface PageData {
@@ -3148,6 +3150,8 @@ export default function AnalyzeJobPage() {
           bbox: result.bbox || undefined,
           insertedImages: prevProblem?.insertedImages,  // ★ 삽입 이미지 보존
           score: isEdited ? (prevProblem.score ?? extractedScore) : extractedScore,  // ★ 배점 보존
+          // ★ Phase C-1b: cloud-flow가 채운 pitfalls 보존 — 저장 시 saveEditedProblemsDirect로 전달
+          pitfalls: isEdited ? (prevProblem.pitfalls || result.classification?.pitfalls) : result.classification?.pitfalls,
         });
       });
     }
@@ -3350,7 +3354,7 @@ export default function AnalyzeJobPage() {
     };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
-      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }> }> = [];
+      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }> }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
@@ -3398,6 +3402,7 @@ export default function AnalyzeJobPage() {
               bbox: p.bbox,       // ★ YOLO 학습 데이터용 bbox (problem 클래스)
               pageIndex: p.pageIndex, // ★ 페이지 인덱스 (0-based)
               ...(figureBboxes.length > 0 ? { figureBboxes } : {}), // ★ graph 클래스 학습 데이터
+              ...(p.pitfalls && p.pitfalls.length > 0 ? { pitfalls: p.pitfalls } : {}), // ★ Phase C-1b: 함정 자동 태깅
             });
           }
         }
@@ -4262,6 +4267,8 @@ export default function AnalyzeJobPage() {
                   subject: cls.subject || '',
                   chapter: cls.chapter || '',
                   section: cls.section || '',
+                  // ★ Phase C-1b: pitfalls 보존
+                  ...(Array.isArray(cls.pitfalls) ? { pitfalls: cls.pitfalls as Array<{ code: string; confidence: number; reason?: string }> } : {}),
                 } : {}),
                 // 풀이 결과
                 ...(classification?.solution ? {
@@ -4402,6 +4409,8 @@ export default function AnalyzeJobPage() {
                   if (latex) return `$$${latex}$$`;
                   return desc;
                 }).filter(Boolean).join('\n') || '',
+                // ★ Phase C-1b: BatchAnalyze 결과의 pitfalls 보존
+                pitfalls: classification.classification?.pitfalls,
               } : {}),
             };
             next.set(problem.pageIndex, pageProbs);
