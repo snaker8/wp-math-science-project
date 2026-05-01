@@ -1798,6 +1798,33 @@ function ExamPaperView({
                     출력하기
                   </button>
                 </div>
+
+                {/* ★ Phase 시험지 출제 3차: 별도 PDF 페이지 — KaTeX 서버 렌더 + 학생/강사 variant */}
+                <div className="border-t border-zinc-700 px-2 pt-2 pb-2">
+                  <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    별도 PDF 페이지 (새 창)
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(`/api/exams/${examId}/print?variant=student`, '_blank');
+                      setShowPrintMenu(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-300 transition-colors"
+                  >
+                    학생 배포용 (이름란)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(`/api/exams/${examId}/print?variant=teacher`, '_blank');
+                      setShowPrintMenu(false);
+                    }}
+                    className="mt-1 w-full flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 transition-colors"
+                  >
+                    강사용 (분류·난이도 라벨)
+                  </button>
+                </div>
               </div>
             )}
           </div>
