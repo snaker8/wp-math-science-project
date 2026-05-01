@@ -63,16 +63,18 @@ export async function POST(request: NextRequest) {
   if (!sessionId) return NextResponse.json({ error: 'session_id required' }, { status: 400 });
   if (rawResults.length === 0) return NextResponse.json({ error: 'results 배열 필요' }, { status: 400 });
 
-  // 세션 존재 확인
+  // 세션 존재 확인 + Phase C-2 학생 함정 매칭용 student_id/exam_id snapshot
   const { data: session, error: sErr } = await sb
     .schema('diagnostics' as never)
     .from('print_sessions')
-    .select('id')
+    .select('id, student_id, exam_id')
     .eq('id', sessionId)
     .single();
   if (sErr || !session) {
     return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
   }
+  const studentId = (session as { student_id?: string }).student_id || null;
+  const examId = (session as { exam_id?: string }).exam_id || null;
 
   // session_problems 로부터 sequence_number → problem_id 매핑 (problem_id 미지정 시 보조)
   const { data: sp } = await sb
@@ -136,6 +138,48 @@ export async function POST(request: NextRequest) {
   if (upErr) {
     console.error('[session-results] upsert error:', upErr.message);
     return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
+
+  // ★ Phase C-2: 오답(is_correct=false) 문항의 problem_pitfalls 매칭 → student_pitfall_history INSERT
+  //   학생별 함정 누적 → 학부모 대시보드 "이번 주 새 연결" + 약점 추적 base.
+  //   본 응답 영향 X — try-catch로 격리, 실패해도 채점 결과 저장은 그대로.
+  if (studentId) {
+    try {
+      const wrongProblemIds = rows
+        .filter((r) => r.is_correct === false && r.problem_id)
+        .map((r) => r.problem_id as string);
+
+      if (wrongProblemIds.length > 0) {
+        // 해당 문항들의 problem_pitfalls 일괄 조회
+        const { data: pitfallRows } = await sb
+          .from('problem_pitfalls')
+          .select('problem_id, pitfall_code')
+          .in('problem_id', wrongProblemIds);
+
+        if (pitfallRows && pitfallRows.length > 0) {
+          const historyRows = (pitfallRows as Array<{ problem_id: string; pitfall_code: string }>).map((p) => ({
+            student_id: studentId,
+            pitfall_code: p.pitfall_code,
+            problem_id: p.problem_id,
+            session_id: sessionId,
+            exam_id: examId,
+          }));
+          const { error: histErr } = await sb
+            .schema('diagnostics' as never)
+            .from('student_pitfall_history')
+            .insert(historyRows);
+          if (histErr) {
+            console.warn('[session-results] student_pitfall_history insert 실패:', histErr.message);
+          } else {
+            console.log(
+              `[session-results] ★ 학생 함정 누적: student=${studentId.slice(0, 8)}, 오답 ${wrongProblemIds.length}건 → ${historyRows.length}개 함정 매칭`
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[session-results] pitfall history insert 예외:', e);
+    }
   }
 
   return NextResponse.json({ saved: count ?? rows.length, errors });
