@@ -82,7 +82,7 @@ function ExamProblemRendererInner({
   problem,
   gap = 20,
   textSize = '14px',
-  lineHeight = '1.7',
+  lineHeight = '1.85',
   maxFigureWidth = 240,
 }: {
   problem: ExamRenderProblem;
@@ -224,9 +224,9 @@ function ExamProblemRendererInner({
 
     if (isInline) {
       return (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-7 gap-y-1.5">
           {items.map((it, ci) => (
-            <div key={ci} className="flex items-center gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+            <div key={ci} className="flex items-center gap-2 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
               <MixedContentRenderer content={it.content} className="text-gray-700" />
             </div>
