@@ -95,6 +95,8 @@ export interface TypeClassification {
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   confidence: number; // AI 신뢰도 0-1
   prerequisites: string[]; // 선수 유형 코드들
+  /** Phase C-1b: 학생 함정 유형 자동 추출 — caller가 problem_pitfalls INSERT용으로 활용 */
+  pitfalls?: Array<{ code: string; confidence: number; reason?: string }>;
 }
 
 export interface LLMAnalysisResult {

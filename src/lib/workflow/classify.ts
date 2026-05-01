@@ -51,6 +51,8 @@ export interface ClassifyResult {
   provider: 'anthropic' | 'gemini' | 'openai' | 'unknown';
   /** typeCode 가 mathsecr_types DB 에 실제 존재했는지 (orphan 추적용) */
   verified: boolean;
+  /** Phase C-1b: 학생 함정 유형 자동 추출 (pitfall_types.code 중에서 1~2개 선택) */
+  pitfalls?: Array<{ code: string; confidence: number; reason?: string }>;
 }
 
 /**
@@ -397,7 +399,44 @@ ${content.slice(0, 1500)}`;
     model: modelUsed,
     provider,
     verified,
+    // ★ Phase C-1b: 함정 유형 자동 추출 결과 (Sonnet 2단계 응답에서 추출)
+    pitfalls: Array.isArray((cls as Record<string, unknown>).pitfalls)
+      ? ((cls as Record<string, unknown>).pitfalls as Array<{ code: string; confidence: number; reason?: string }>)
+      : [],
   };
+}
+
+/**
+ * Phase C-1b: pitfall_types 마스터 fetch — process 내 캐시.
+ * Stage 2 prompt에 21개 함정 코드 + label + description 주입해 AI가 그 안에서 선택하게.
+ * Vercel cold start마다 첫 호출은 DB 조회, 이후 캐시.
+ */
+let cachedPitfallTypes: Array<{ code: string; label: string; description: string }> | null = null;
+async function fetchPitfallTypes(): Promise<Array<{ code: string; label: string; description: string }>> {
+  if (cachedPitfallTypes) return cachedPitfallTypes;
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseUrl || !serviceKey) return [];
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data } = await sb
+      .from('pitfall_types')
+      .select('code, label_ko, description')
+      .order('category')
+      .order('code');
+    if (!data) return [];
+    cachedPitfallTypes = data.map((r: Record<string, unknown>) => ({
+      code: String(r.code || ''),
+      label: String(r.label_ko || ''),
+      description: String(r.description || ''),
+    }));
+    return cachedPitfallTypes;
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -561,17 +600,29 @@ ${l3l4Table}
     console.log(`[${label}:stage2] few-shot ${corrections.length}건 주입 (${stage1Code})`);
   }
 
+  // ★ Phase C-1b: 함정 유형 자동 태깅 — pitfall_types 마스터 주입
+  const pitfallTypes = await fetchPitfallTypes();
+  let pitfallSection = '';
+  let pitfallJsonExample = '';
+  if (pitfallTypes.length > 0) {
+    pitfallSection =
+      `\n\n★ 학생 함정 유형 (이 문제에서 학생이 빠지기 쉬운 사고 패턴 1~2개를 아래 코드 중에서 선택. 명백히 해당하지 않으면 빈 배열):\n` +
+      pitfallTypes.map((p) => `- ${p.code}: ${p.label}${p.description ? ` — ${p.description}` : ''}`).join('\n');
+    pitfallJsonExample = ',"pitfalls":[{"code":"LOG_SUBSTITUTION","confidence":0.85,"reason":"왜 이 함정인지 한 줄"}]';
+  }
+
   const stage2User = `문제:
-${content.slice(0, 1500)}${exampleSection}
+${content.slice(0, 1500)}${exampleSection}${pitfallSection}
 
 위 문제의 최종 typeCode(소단원+세부유형)와 난이도·인지영역을 JSON으로 응답:
-{"typeCode":"${stage1Code}-??-??","difficulty":5,"cognitiveDomain":"CALCULATION","confidence":0.9}
+{"typeCode":"${stage1Code}-??-??","difficulty":5,"cognitiveDomain":"CALCULATION","confidence":0.9${pitfallJsonExample}}
 
-cognitiveDomain은 CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING 중 하나.`;
+cognitiveDomain은 CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING 중 하나.
+pitfalls의 code는 위 학생 함정 유형 목록의 정확한 SCREAMING_SNAKE_CASE 코드만 사용. 새 코드 만들지 마세요.`;
 
   const stage2Raw = await callClaudeOnce({
     apiKey, model, systemPrompt: stage2System, userPrompt: stage2User,
-    label: `${label}:stage2`, maxTokens: 200,
+    label: `${label}:stage2`, maxTokens: 600, // ★ pitfalls 추가로 200 → 600 (Phase C-1b)
   });
   if (!stage2Raw) return null;
 
@@ -696,6 +747,25 @@ function parseStage2Response(raw: string, stage1Code: string, examSubject: strin
   }
 
   const cog = String(parsed.cognitiveDomain || 'CALCULATION');
+
+  // ★ Phase C-1b: pitfalls 파싱 (선택 — AI가 추출 실패해도 분류 자체는 살림)
+  const pitfalls: Array<{ code: string; confidence: number; reason?: string }> = [];
+  if (Array.isArray(parsed.pitfalls)) {
+    const arr = parsed.pitfalls as Array<Record<string, unknown>>;
+    for (const p of arr) {
+      const code = String(p.code || '').trim();
+      if (!code || !/^[A-Z][A-Z0-9_]+$/.test(code)) continue;
+      const confidence =
+        typeof p.confidence === 'number'
+          ? p.confidence
+          : parseFloat(String(p.confidence || '0.7')) || 0.7;
+      const reasonText = p.reason ? String(p.reason).slice(0, 200) : '';
+      if (reasonText) pitfalls.push({ code, confidence, reason: reasonText });
+      else pitfalls.push({ code, confidence });
+      if (pitfalls.length >= 3) break; // 최대 3개
+    }
+  }
+
   return {
     typeCode,
     typeName: '',  // DB에서 full_path로 덮어씀 (classifyProblem 후단)
@@ -705,5 +775,6 @@ function parseStage2Response(raw: string, stage1Code: string, examSubject: strin
     difficulty: typeof parsed.difficulty === 'number' ? parsed.difficulty : parseInt(String(parsed.difficulty || '3')) || 3,
     cognitiveDomain: validCognitive.has(cog) ? cog : 'CALCULATION',
     confidence: typeof parsed.confidence === 'number' ? parsed.confidence : parseFloat(String(parsed.confidence || '0.85')) || 0.85,
+    pitfalls,
   };
 }
