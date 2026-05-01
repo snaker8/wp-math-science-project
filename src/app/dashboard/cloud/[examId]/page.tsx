@@ -1306,9 +1306,9 @@ function ProblemCardView({
 
               if (isInline) {
                 return (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
+                  <div className="mt-2 flex flex-wrap items-center gap-x-7 gap-y-1.5 pl-4">
                     {processed.map((c, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[13px] text-content-secondary">
+                      <div key={i} className="flex items-center gap-2 text-[13px] text-content-secondary">
                         <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
                         <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
                       </div>
@@ -1480,6 +1480,8 @@ function ExamPaperView({
       return result.length > 0 ? result : [[]];
     }
 
+    // ★ CSS columns(흐름식) 가정 — questi 양식: column-balance 좌측부터 채워 우측으로.
+    //   카드 wrapper 안에 풀이 공간이 들어가 한 카드 키 = 본문 + 풀이공간.
     const colMult = columns === 2 ? 2 : 1;
     const result: ProblemData[][] = [];
     let currentPage: ProblemData[] = [];
@@ -1518,14 +1520,23 @@ function ExamPaperView({
       }
       globalIdx += pageProblems.length;
 
-      // 사용 가능 높이 = 컬럼 수 × 페이지 높이 - 전체 문제 높이
       const availableSpace = colMult * maxH - totalH;
       const numProblems = pageProblems.length;
-      // 문제 간 간격을 균등 분배 (최소 8px)
       const autoGap = numProblems > 0 ? Math.max(8, Math.floor(availableSpace / numProblems)) : 20;
       return autoGap;
     });
   }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H]);
+
+  // ★ 카드별 풀이 공간 결정 — 어제 create-exam 양식 동일
+  //   짧은 객관식 100 / 보통 160 / 김 220 / 서답형 280 (px)
+  const getWritingSpace = useCallback((problem: ProblemData): number => {
+    const isMC = (problem.choices?.length ?? 0) > 0;
+    const cLen = (problem.content || '').length;
+    if (!isMC) return 280;
+    if (cLen < 80) return 100;
+    if (cLen < 200) return 160;
+    return 220;
+  }, []);
 
   // 현재 유효 간격 (프리셋 모드면 자동, 아니면 슬라이더)
   const getEffectiveGap = (pageIdx: number) => {
@@ -1803,14 +1814,16 @@ function ExamPaperView({
           top: -99999,
           left: -99999,
           width: `${measureWidth}px`,
-          fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+          fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
           fontSize: '14px',
-          lineHeight: '1.7',
+          lineHeight: '1.85',
         }}
       >
         {problems.map((problem, idx) => (
           <div key={problem.id} data-problem-idx={idx} style={{ marginBottom: '8px' }}>
             {renderProblem(problem)}
+            {/* ★ 카드별 풀이 공간 — 측정에 포함되어야 페이지 분할 정확 */}
+            <div style={{ height: `${getWritingSpace(problem)}px` }} aria-hidden />
           </div>
         ))}
       </div>
@@ -1830,7 +1843,8 @@ function ExamPaperView({
               borderRadius: '4px',
               position: 'relative',
               boxSizing: 'border-box',
-              fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+              // ★ 시험지 명조 폰트 — 한국 시험지 표준 양식
+              fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
             }}
           >
             {/* 헤더 — 첫 페이지만 */}
@@ -1847,12 +1861,13 @@ function ExamPaperView({
               </div>
             )}
 
-            {/* 문제 영역 — 2단은 CSS column-count로 네이티브 균형 */}
+            {/* 문제 영역 — 2단은 CSS columns column-balance (questi 양식) + 카드별 풀이 공간 */}
             {columns === 2 ? (
               <div
                 style={{
                   columnCount: 2,
                   columnGap: `${COLUMN_GAP}px`,
+                  // ★ column-balance — questi 처럼 좌측부터 균등 분배 (1·2 좌, 3·4 우)
                   columnFill: 'balance',
                   columnRule: '1px solid #e5e5e5',
                 }}
@@ -1868,6 +1883,7 @@ function ExamPaperView({
                     }}
                   >
                     {renderProblem(problem)}
+                    <div style={{ height: `${getWritingSpace(problem)}px` }} aria-hidden />
                   </div>
                 ))}
               </div>
@@ -1880,6 +1896,7 @@ function ExamPaperView({
                     style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
                   >
                     {renderProblem(problem)}
+                    <div style={{ height: `${getWritingSpace(problem)}px` }} aria-hidden />
                   </div>
                 ))}
               </div>
@@ -1907,12 +1924,18 @@ function ExamPaperView({
         .exam-page .katex {
           font-size: 1.05em !important;
         }
-        /* ★ CSS columns 내부 overflow 방어 (화면 뷰) */
+        /* ★ KaTeX cases/array 행간 — 거듭제곱근·분수가 위 행과 닿는 사고 차단 */
+        .exam-page .katex-display .mtable .col-align-l > .vlist-t > .vlist-r > .vlist > span,
+        .exam-page .katex-display .mtable .col-align-c > .vlist-t > .vlist-r > .vlist > span,
+        .exam-page .katex-display .mtable .col-align-r > .vlist-t > .vlist-r > .vlist > span {
+          padding: 0.18em 0;
+        }
+        /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화 */
         .exam-page .katex-display {
           max-width: 100%;
           overflow-x: auto;
           overflow-y: hidden;
-          margin: 0.3em 0;
+          margin: 0.5em 0;
         }
         .exam-page .katex-display > .katex {
           max-width: 100%;
@@ -1966,7 +1989,7 @@ function ExamPaperView({
           #exam-print-root .katex-display {
             max-width: 100%;
             overflow: hidden;
-            margin: 0.3em 0;
+            margin: 0.5em 0;
           }
           #exam-print-root .katex-display > .katex { max-width: 100%; }
           #exam-print-root table { max-width: 100%; table-layout: auto; }
@@ -2289,6 +2312,7 @@ function SolutionView({
       return result.length > 0 ? result : [[]];
     }
 
+    // ★ CSS columns(흐름식) 가정 — 시험지와 동일.
     const colMult = columns === 2 ? 2 : 1;
     const result: ProblemData[][] = [];
     let currentPage: ProblemData[] = [];
@@ -2348,7 +2372,7 @@ function SolutionView({
       </div>
 
       {/* 해설 본문 */}
-      <div className="pl-5 text-[13px] text-gray-700 whitespace-pre-line" style={{ lineHeight: '1.7' }}>
+      <div className="pl-5 text-[13px] text-gray-700 whitespace-pre-line" style={{ lineHeight: '1.85' }}>
         <MixedContentRenderer content={stripChoiceAnalysis(problem.solution || '') || '해설이 등록되지 않았습니다.'} className="text-gray-700" />
       </div>
 
@@ -2639,9 +2663,9 @@ function SolutionView({
           top: -99999,
           left: -99999,
           width: `${measureWidth}px`,
-          fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+          fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
           fontSize: '13px',
-          lineHeight: '1.7',
+          lineHeight: '1.85',
         }}
       >
         {problems.map((problem, idx) => (
@@ -2666,7 +2690,7 @@ function SolutionView({
               borderRadius: '4px',
               position: 'relative',
               boxSizing: 'border-box',
-              fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+              fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
             }}
           >
             {/* 헤더 — 첫 페이지만 */}
@@ -2680,7 +2704,7 @@ function SolutionView({
               </div>
             )}
 
-            {/* 해설 영역 — 2단은 CSS column-count로 네이티브 균형 */}
+            {/* 해설 영역 — 2단은 CSS columns column-balance (questi 양식) */}
             {columns === 2 ? (
               <div
                 style={{
@@ -2738,6 +2762,26 @@ function SolutionView({
       <style jsx global>{`
         .solution-page .katex {
           font-size: 1.05em !important;
+        }
+        /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화 (시험지와 동일) */
+        .solution-page .katex-display {
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          margin: 0.5em 0;
+        }
+        /* 인라인 분수 위/아래 줄 침범 차단 — 시험지와 동일 */
+        .solution-page .katex {
+          vertical-align: middle;
+        }
+        .solution-page .katex .mfrac {
+          vertical-align: middle;
+        }
+        .solution-page .katex-html {
+          padding: 0.1em 0;
+        }
+        .solution-page .katex-display > .katex {
+          max-width: 100%;
         }
       `}</style>
     </div>

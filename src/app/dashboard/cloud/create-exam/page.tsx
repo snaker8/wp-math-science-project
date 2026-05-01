@@ -276,40 +276,63 @@ export default function CreateExamPage() {
               </table>
             </div>
 
-            {/* 문제 영역 */}
-            <div className="p-6 columns-2 gap-8" style={{ columnGap: '24px' }}>
-              {problems.map((problem) => (
-                <div
-                  key={problem.id}
-                  className="break-inside-avoid"
-                  style={{ marginBottom: '24px' }}
-                >
-                  <div className="flex gap-2">
-                    <span className="text-sm font-bold text-gray-900 flex-shrink-0 pt-0.5">
-                      {problem.number}.
-                    </span>
-                    <div className="flex-1">
-                      <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
-                        <MixedContentRenderer content={problem.content} className="text-gray-800" />
-                      </div>
-                      {problem.choices.length > 0 && (
-                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
-                          {problem.choices.map((choice, ci) => {
-                            const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
-                            const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
-                            return (
-                              <div key={ci} className="flex items-start gap-1 text-[13px] text-gray-700">
-                                <span className="flex-shrink-0 text-gray-500">{prefix}</span>
-                                <MixedContentRenderer content={stripped} className="text-gray-700" />
-                              </div>
-                            );
-                          })}
+            {/* 문제 영역 — 행 단위 grid 분배: 좌·우 머리 정렬 보장 + 타입별 풀이 공간 부여 */}
+            <div
+              className="p-6 grid grid-cols-2 gap-x-6 relative"
+              style={{
+                backgroundImage: 'linear-gradient(to right, transparent calc(50% - 0.5px), #d1d5db calc(50% - 0.5px), #d1d5db calc(50% + 0.5px), transparent calc(50% + 0.5px))',
+              }}
+            >
+              {problems.map((problem) => {
+                // 풀이 공간 결정 — 객관식 짧음/보통/김, 서답형
+                const isMultipleChoice = problem.choices.length > 0;
+                const contentLen = problem.content.length;
+                let writingSpacePx: number;
+                if (!isMultipleChoice) {
+                  writingSpacePx = 280; // 서답형: 약 18줄
+                } else if (contentLen < 80) {
+                  writingSpacePx = 100; // 짧은 객관식: 약 6줄
+                } else if (contentLen < 200) {
+                  writingSpacePx = 160; // 일반 객관식: 약 10줄
+                } else {
+                  writingSpacePx = 220; // 긴 객관식: 약 14줄
+                }
+
+                return (
+                  <div
+                    key={problem.id}
+                    className="break-inside-avoid pr-3"
+                    style={{ marginBottom: '24px' }}
+                  >
+                    <div className="flex gap-2">
+                      <span className="text-sm font-bold text-gray-900 flex-shrink-0 pt-0.5">
+                        {problem.number}.
+                      </span>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                          <MixedContentRenderer content={problem.content} className="text-gray-800" />
                         </div>
-                      )}
+                        {isMultipleChoice && (
+                          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
+                            {problem.choices.map((choice, ci) => {
+                              const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '');
+                              const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
+                              return (
+                                <div key={ci} className="flex items-start gap-1 text-[13px] text-gray-700">
+                                  <span className="flex-shrink-0 text-gray-500">{prefix}</span>
+                                  <MixedContentRenderer content={stripped} className="text-gray-700" />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {/* 풀이 공간 — 의도된 빈 공간 */}
+                        <div style={{ height: `${writingSpacePx}px` }} aria-hidden />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
