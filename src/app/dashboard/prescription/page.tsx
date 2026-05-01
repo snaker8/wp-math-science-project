@@ -11,6 +11,7 @@ import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import { StudentPitfallSummary } from '@/components/prescription/StudentPitfallSummary';
 import { WeeklyConnections } from '@/components/prescription/WeeklyConnections';
 import { PrescriptionRecommendation } from '@/components/prescription/PrescriptionRecommendation';
+import { RecommendedProblems } from '@/components/prescription/RecommendedProblems';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip,
 } from 'recharts';
@@ -476,6 +477,9 @@ function PrescriptionContent() {
                       <ActionButton icon={Send} label="학부모 리포트 전송" disabled />
                     </div>
                   </ClinicCard>
+
+                  {/* ★ Phase B: 학생 맞춤 추천 문항 — 약점 + 함정 + 난이도 결합 */}
+                  {student && <RecommendedProblems studentId={student.id} />}
 
                   {/* ★ Phase C: AI 처방 추천 — 약점 체인 + 함정 패턴 결합 */}
                   {student && (
