@@ -474,7 +474,44 @@ function PrescriptionContent() {
                         <span>진단 결과 수동 입력</span>
                       </Link>
                       <ActionButton icon={Printer} label="맞춤형 학습지 출력" disabled />
-                      <ActionButton icon={Send} label="학부모 리포트 전송" disabled />
+                      {/* ★ Phase D 후속: 학부모 link 발급 — 클릭 → token 생성 → URL 복사 */}
+                      <button
+                        type="button"
+                        disabled={!student}
+                        onClick={async () => {
+                          if (!student) return;
+                          const label = window.prompt(
+                            '학부모 메모 (선택, 예: "어머니"):',
+                            ''
+                          );
+                          if (label === null) return; // 취소
+                          try {
+                            const res = await fetch('/api/parent/issue', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                student_id: student.id,
+                                label: label || undefined,
+                              }),
+                            });
+                            const d = await res.json();
+                            if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+                            // 클립보드 복사 시도 + 사용자에게 표시
+                            try {
+                              await navigator.clipboard.writeText(d.url);
+                              window.alert(`학부모 link 발급 완료. 클립보드에 복사됨:\n\n${d.url}`);
+                            } catch {
+                              window.prompt('아래 URL을 복사해 학부모에게 전달하세요:', d.url);
+                            }
+                          } catch (e) {
+                            window.alert(`발급 실패: ${e instanceof Error ? e.message : e}`);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-white/5 text-content-primary border border-white/10 hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Send size={18} />
+                        <span>학부모 link 발급</span>
+                      </button>
                     </div>
                   </ClinicCard>
 
