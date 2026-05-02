@@ -705,6 +705,8 @@ export default function CloudPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const appendToExamId = searchParams.get('appendTo') || undefined;
+  // ★ 사이드바 "DB 자산화" 메뉴 진입 시 ?upload=1 → 업로드 모달 자동 오픈
+  const autoOpenUpload = searchParams.get('upload') === '1';
 
   // --- DB Data ---
   const [dbExams, setDbExams] = useState<DBExam[]>([]);
@@ -713,7 +715,7 @@ export default function CloudPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // --- Upload Modal ---
-  const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId);
+  const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId || autoOpenUpload);
   const [userId, setUserId] = useState<string>('');
   // --- Source List (출처 목록 보기) ---
   const [showSourceList, setShowSourceList] = useState(false);
