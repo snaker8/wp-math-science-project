@@ -7,6 +7,11 @@
 //   - 학교별 평균 난이도 + 표준편차 (1~10)
 //   - 함정 패턴 (problem_pitfalls + pitfall_types.label_ko)
 //   - 학교별 표 + 매칭 시험지 목록
+//   [Phase 2]
+//   - unitSegmentation: 공통(>=80% 학교 출제) vs 차별(<=30%) 단원
+//   - unitTrends: 년도별 단원 출제 추세 (year filter 풀어서)
+//   - insights: 데이터 기반 rule-based 한 줄 요약
+//   - aiNarratives: 매칭 시험지의 ai_analysis.summary/hardQuestions 인용 (출처 명시)
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -58,6 +63,30 @@ interface ExamRow {
   hasAnalysis: boolean;
   shareToken: string | null;
   createdAt: string;
+}
+
+interface UnitTrend {
+  level1Code: string;
+  level1Name: string;
+  /** 년도별 출제 데이터 — { 2024: { problemCount, schoolCount, examCount } } */
+  byYear: Record<string, { problemCount: number; schoolCount: number; examCount: number }>;
+}
+
+interface AiNarrative {
+  examId: string;
+  examTitle: string;
+  school: string;
+  year: number | null;
+  /** ai_analysis.summary — 시험지 전체 요약 */
+  summary: string | null;
+  /** hardQuestions 의 핵심 발췌 (최대 3개) — 각 problemId 인용 */
+  hardQuestions: Array<{
+    problemId: string;
+    number: number;
+    subTitle: string;
+    intent: string;
+  }>;
+  generatedAt: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -360,6 +389,216 @@ export async function GET(request: NextRequest) {
   // 그룹 전체 평균 = 매칭 시험지들의 평균값들의 평균 (시험지 등가중)
   const overall = stat(allExamAvgs);
 
+  // ─────────────────────────────────────────────────────────────────────
+  // [Phase 2] 단원 공통/차별 분리 (>=80% 학교 출제 = 공통, <=30% = 차별)
+  // ─────────────────────────────────────────────────────────────────────
+  const totalSchools = matchedSchools.size;
+  const unitCommon: UnitRow[] = [];
+  const unitUnique: UnitRow[] = [];
+  if (totalSchools > 0) {
+    for (const u of unitFrequency) {
+      const ratio = u.schoolCount / totalSchools;
+      if (ratio >= 0.8) unitCommon.push(u);
+      else if (ratio <= 0.3 && u.schoolCount >= 1) unitUnique.push(u);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // [Phase 2] 단원 추세 — top 5 단원의 년도별 출제 (year filter 풀어서)
+  // trendBase = school+semester+examType 매칭 (year 무시)
+  // ─────────────────────────────────────────────────────────────────────
+  const trendBase = allExams.filter((e) => {
+    const school = extractSchoolName(e.title);
+    if (!school) return false;
+    if (filterSchools && !filterSchools.includes(school)) return false;
+    if (filterSemester != null && extractSemester(e.title) !== filterSemester) return false;
+    if (filterExamType != null && extractExamType(e.title) !== filterExamType) return false;
+    return true;
+  });
+
+  // 년도 set
+  const trendYearSet = new Set<number>();
+  // 단원 → 년도 → 통계
+  const unitYearStats = new Map<
+    string,
+    Map<number, { problemCount: number; schoolIds: Set<string>; examIds: Set<string> }>
+  >();
+
+  for (const e of trendBase) {
+    const yr = extractExamYear(e.title, e.created_at);
+    if (yr == null) continue;
+    trendYearSet.add(yr);
+    const school = extractSchoolName(e.title)!;
+    for (const ep of e.exam_problems || []) {
+      const pArr = ep.problems;
+      const p = Array.isArray(pArr) ? pArr[0] : pArr;
+      if (!p) continue;
+      const cls = (p.classifications || [])[0];
+      if (!cls?.type_code) continue;
+      const segs = cls.type_code.split('-');
+      if (segs.length < 2) continue;
+      const level1Code = `${segs[0]}-${segs[1]}`;
+      if (!unitYearStats.has(level1Code)) unitYearStats.set(level1Code, new Map());
+      const yearMap = unitYearStats.get(level1Code)!;
+      if (!yearMap.has(yr)) {
+        yearMap.set(yr, { problemCount: 0, schoolIds: new Set(), examIds: new Set() });
+      }
+      const stats = yearMap.get(yr)!;
+      stats.problemCount++;
+      stats.schoolIds.add(school);
+      stats.examIds.add(e.id);
+    }
+  }
+
+  const availableYears = Array.from(trendYearSet).sort((a, b) => a - b);
+
+  const unitTrends: UnitTrend[] = unitFrequency.slice(0, 5).map((u) => {
+    const yearMap = unitYearStats.get(u.level1Code) || new Map();
+    const byYear: UnitTrend['byYear'] = {};
+    for (const yr of availableYears) {
+      const s = yearMap.get(yr);
+      byYear[yr] = {
+        problemCount: s?.problemCount || 0,
+        schoolCount: s?.schoolIds.size || 0,
+        examCount: s?.examIds.size || 0,
+      };
+    }
+    return {
+      level1Code: u.level1Code,
+      level1Name: u.level1Name,
+      byYear,
+    };
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // [Phase 2] AI 자연어 인용 — ai_analysis 있는 시험지만, 출처 problemId 명시
+  // ─────────────────────────────────────────────────────────────────────
+  const aiNarratives: AiNarrative[] = matchedExams
+    .map((e) => {
+      const ai = e.ai_analysis as
+        | { summary?: string; generatedAt?: string; hardQuestions?: Array<{
+            number: number;
+            subTitle?: string;
+            intent?: string;
+            problemId?: string;
+          }> }
+        | null;
+      if (!ai || !ai.generatedAt) return null;
+      const hardQs = (ai.hardQuestions || []).slice(0, 3).map((h) => ({
+        problemId: h.problemId || '',
+        number: h.number,
+        subTitle: h.subTitle || '',
+        intent: (h.intent || '').slice(0, 200),
+      }));
+      return {
+        examId: e.id,
+        examTitle: e.title,
+        school: extractSchoolName(e.title)!,
+        year: extractExamYear(e.title, e.created_at),
+        summary: ai.summary ? ai.summary.slice(0, 400) : null,
+        hardQuestions: hardQs,
+        generatedAt: ai.generatedAt || null,
+      };
+    })
+    .filter((x): x is AiNarrative => x !== null);
+
+  // ─────────────────────────────────────────────────────────────────────
+  // [Phase 2] 데이터 기반 인사이트 — rule-based, 모든 주장은 raw 수치 기반
+  // ─────────────────────────────────────────────────────────────────────
+  const insights: string[] = [];
+
+  // 매칭 요약
+  if (matchedExams.length > 0) {
+    insights.push(
+      `매칭 ${matchedExams.length}건 / 학교 ${totalSchools}곳 / 분류 완료 ${classifiedProblems}/${totalProblems}문항 (${Math.round((classifiedProblems / Math.max(1, totalProblems)) * 100)}%)`
+    );
+  }
+
+  // 평균 난이도 + 밴드
+  if (overall.avg != null) {
+    const band = difficultyToBand(overall.avg);
+    insights.push(
+      `시험지 평균 난이도 ${overall.avg.toFixed(2)}/10${band ? ` (${band.label} 밴드)` : ''}${overall.std != null ? `, 표준편차 ${overall.std.toFixed(2)}` : ''}`
+    );
+  }
+
+  // 공통 단원 — 매칭 학교 모두 출제
+  const universalUnits = unitFrequency.filter(
+    (u) => totalSchools > 0 && u.schoolCount === totalSchools
+  );
+  if (universalUnits.length > 0) {
+    const names = universalUnits.slice(0, 3).map((u) => u.level1Name).join(', ');
+    insights.push(
+      `${totalSchools}/${totalSchools}곳 학교 모두 출제: ${names}${universalUnits.length > 3 ? ` 외 ${universalUnits.length - 3}개` : ''}`
+    );
+  }
+
+  // 학교별 outlier — 평균에서 ±0.6 이상 차이
+  if (overall.avg != null) {
+    const harder = schoolBreakdown
+      .filter((s) => s.avgDifficulty != null && s.avgDifficulty - overall.avg! >= 0.6)
+      .sort((a, b) => (b.avgDifficulty || 0) - (a.avgDifficulty || 0));
+    const easier = schoolBreakdown
+      .filter((s) => s.avgDifficulty != null && overall.avg! - s.avgDifficulty >= 0.6)
+      .sort((a, b) => (a.avgDifficulty || 0) - (b.avgDifficulty || 0));
+    if (harder.length > 0) {
+      insights.push(
+        `그룹 평균 대비 +0.6 이상: ${harder
+          .slice(0, 3)
+          .map((s) => `${s.school} ${(s.avgDifficulty || 0).toFixed(2)}`)
+          .join(', ')}`
+      );
+    }
+    if (easier.length > 0) {
+      insights.push(
+        `그룹 평균 대비 -0.6 이상: ${easier
+          .slice(0, 3)
+          .map((s) => `${s.school} ${(s.avgDifficulty || 0).toFixed(2)}`)
+          .join(', ')}`
+      );
+    }
+  }
+
+  // 작년 대비 추세 — top unit 의 가장 최근 2년 비교
+  if (filterYear != null && availableYears.includes(filterYear)) {
+    const prevYear = filterYear - 1;
+    if (availableYears.includes(prevYear)) {
+      const trendChanges: string[] = [];
+      for (const t of unitTrends.slice(0, 3)) {
+        const cur = t.byYear[String(filterYear)]?.problemCount || 0;
+        const prev = t.byYear[String(prevYear)]?.problemCount || 0;
+        if (prev > 0) {
+          const pct = Math.round(((cur - prev) / prev) * 100);
+          if (Math.abs(pct) >= 20) {
+            trendChanges.push(`${t.level1Name} ${pct >= 0 ? '+' : ''}${pct}%`);
+          }
+        } else if (cur > 0) {
+          trendChanges.push(`${t.level1Name} 신규 출제`);
+        }
+      }
+      if (trendChanges.length > 0) {
+        insights.push(`${prevYear} 대비 변화: ${trendChanges.join(' · ')}`);
+      }
+    }
+  }
+
+  // 함정 매핑 상태
+  if (matchedExams.length > 0 && pitfalls.length === 0) {
+    insights.push(
+      `함정 매핑 0/${matchedExams.length} — 자산화 시 함정 태깅 누적 필요`
+    );
+  } else if (pitfalls.length > 0) {
+    const top = pitfalls.slice(0, 3).map((p) => `${p.label}(${p.problemCount})`).join(', ');
+    insights.push(`함정 패턴 TOP 3: ${top}`);
+  }
+
+  // AI 분석 비율
+  if (matchedExams.length > 0 && analyzedExamCount > 0) {
+    insights.push(
+      `AI 분석 완료 ${analyzedExamCount}/${matchedExams.length} (${Math.round((analyzedExamCount / matchedExams.length) * 100)}%) — 자연어 인용 카드에 표시`
+    );
+  }
+
   return NextResponse.json({
     filters: {
       year: filterYear,
@@ -390,5 +629,11 @@ export async function GET(request: NextRequest) {
     schoolBreakdown,
     pitfalls,
     exams: examRows,
+    // [Phase 2]
+    unitSegmentation: { common: unitCommon, unique: unitUnique },
+    unitTrends,
+    availableYears,
+    aiNarratives,
+    insights,
   });
 }
