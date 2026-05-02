@@ -72,12 +72,16 @@ export function cleanLatexContent(content: string): string {
 
 /**
  * ★ 서술형 소문제별 배점 인라인 주입
- * - answer_json.subQuestions 의 points 를 본문 "N-M." / "N-M)" 라인 뒤에 [N점] 으로 박는다.
+ * - answer_json.subQuestions 의 points 를 본문 소문제 표식 뒤에 [N점] 으로 박는다.
+ * - 3가지 패턴 지원 (parseSubQuestions 분기와 동일 매핑):
+ *   1) "N-M." / "N-M)" 라인 — 라인 끝에 [N점] 부착 (동백중 5-1./5-2.)
+ *   2) "[서·논술형 N-M]" 대괄호 — 닫는 ] 직후에 [N점] 부착 (신도중)
+ *   3) "[N-M]" 단순 대괄호 — 닫는 ] 직후에 [N점] 부착 (서·논술형 키워드 없는 케이스)
  * - cleanLatexContent 의 stripping 단계 이후에 호출해야 [N점] 이 다시 떼어지지 않음.
  * - 카드 화면(ProblemCardView)·시험지 출력(ExamProblemRenderer) 양쪽에서 일관 사용.
  *
  * Why: 카드 SubQuestionTable 에 입력한 소문제별 점수가 실제 본문/시험지 출력에는
- *      반영되지 않던 사고 (동백중 2-1 [서논술형 5/6]).
+ *      반영되지 않던 사고 (동백중 2-1 [서논술형 5/6], 19-21번 [3-1][3-2] 형식).
  */
 export function injectSubQuestionPoints(
   content: string,
@@ -89,13 +93,22 @@ export function injectSubQuestionPoints(
     if (sq.points == null || !Number.isFinite(sq.points as number)) continue;
     const num = String(sq.number).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const ptsLabel = `[${sq.points}점]`;
-    // 이미 같은 [N점] 표기가 그 라인에 있으면 skip
-    const already = new RegExp(`(^|\\n)\\s*${num}\\s*[.．)][^\\n]*${ptsLabel.replace(/[\[\]]/g, '\\$&')}`, 'm');
-    if (already.test(result)) continue;
-    // "N-M." 또는 "N-M)" 라인 끝에 " [N점]" 추가
-    const re = new RegExp(`(^|\\n)(\\s*${num}\\s*[.．)][^\\n]*?)(?=\\n|$)`, 'm');
-    if (re.test(result)) {
-      result = result.replace(re, `$1$2 ${ptsLabel}`);
+    const escLabel = ptsLabel.replace(/[\[\]]/g, '\\$&');
+    // 이미 같은 [N점] 표기가 그 영역에 있으면 skip (중복 방지)
+    const dupDot = new RegExp(`(^|\\n)\\s*${num}\\s*[.．)][^\\n]*${escLabel}`, 'm');
+    const dupBracket = new RegExp(`\\[[^\\]]*${num}\\s*\\][^\\n]*?${escLabel}`, 'm');
+    if (dupDot.test(result) || dupBracket.test(result)) continue;
+    // 1) "N-M." 또는 "N-M)" 라인 끝에 " [N점]" 추가
+    const reDot = new RegExp(`(^|\\n)(\\s*${num}\\s*[.．)][^\\n]*?)(?=\\n|$)`, 'm');
+    if (reDot.test(result)) {
+      result = result.replace(reDot, `$1$2 ${ptsLabel}`);
+      continue;
+    }
+    // 2)·3) "[서·논술형 N-M]" 또는 "[N-M]" 대괄호 직후에 " [N점]" 추가.
+    //    [^\]]*? 가 대괄호 내부의 임의 prefix(서·논술형 등)를 흡수.
+    const reBracket = new RegExp(`(\\[[^\\]]*?${num}\\s*\\])`, '');
+    if (reBracket.test(result)) {
+      result = result.replace(reBracket, `$1 ${ptsLabel}`);
     }
   }
   return result;

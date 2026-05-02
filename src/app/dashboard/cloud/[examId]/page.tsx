@@ -584,6 +584,38 @@ function parseSubQuestions(
     }
   }
 
+  // 1.6) [N-M] 단순 대괄호 패턴 — "서·논술형" 키워드 없이 그냥 [3-1] [3-2] 식으로 표기된 케이스.
+  //      예: "물음에 답하시오. [3-1] $\\sqrt{60/x}$ ... [3-2] ..." 같은 시험지 (헤더 없는 묶음).
+  //      [총 N점] / [N점] / [도형] 등은 N-M 형식이 아니므로 매칭 안 됨.
+  //      lineSubs 와 동일하게 같은 부모 N 그룹이 ≥ 2 일 때만 인정 (false positive 차단).
+  const reBracketSub = /\[\s*(\d+)\s*-\s*(\d+)\s*\]/g;
+  const bracketSubs: { number: string; index: number; matchEnd: number }[] = [];
+  while ((m = reBracketSub.exec(content)) !== null) {
+    bracketSubs.push({
+      number: `${m[1]}-${m[2]}`,
+      index: m.index,
+      matchEnd: m.index + m[0].length,
+    });
+  }
+  if (bracketSubs.length >= 2) {
+    const firstParent = bracketSubs[0].number.split('-')[0];
+    const sameParent = bracketSubs.filter(s => s.number.split('-')[0] === firstParent);
+    if (sameParent.length >= 2) {
+      return sameParent.map((mt, i) => {
+        const start = mt.matchEnd;
+        const end = i + 1 < sameParent.length ? sameParent[i + 1].index : content.length;
+        const text = content.substring(start, end).trim();
+        const savedItem = saved.find(s => s.number === mt.number);
+        return {
+          number: mt.number,
+          text,
+          answer: savedItem?.answer || '',
+          points: savedItem?.points ?? extractPointsFromText(text),
+        };
+      });
+    }
+  }
+
   // 2) 본문에 (1) (2) (3) ... 가 연속 + 서술형 키워드 포함 → 소문제로 인식
   const reParenBody = /\(([1-9])\)/g;
   const parens: { number: string; index: number }[] = [];
