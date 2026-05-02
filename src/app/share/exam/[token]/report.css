@@ -579,9 +579,11 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  /* line-height:1 + 대칭 padding 으로 html2canvas 에서 텍스트 처짐 방지 */
+  padding: 6px 11px;
   font-size: 10px;
   font-weight: 800;
+  line-height: 1;
   color: var(--rp-accent-strong);
   background: var(--rp-accent-soft);
   border: 1px solid var(--rp-accent-mid);
@@ -596,9 +598,9 @@
   margin-bottom: 12px;
 }
 .hard-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  /* inline-block + text-align:center + line-height:height 트릭 — html2canvas 에서
+     inline-flex align-items:center 가 안 먹어 숫자가 동그라미 밑으로 처지는 사고 차단 */
+  display: inline-block;
   width: 30px;
   height: 30px;
   background: var(--rp-accent-soft);
@@ -607,8 +609,12 @@
   font-size: 14px;
   font-weight: 800;
   color: var(--rp-accent-strong);
-  line-height: 1;
+  line-height: 27px; /* 30 - 2*1.5 border = 27 (content 영역 높이) */
+  text-align: center;
+  vertical-align: middle;
   flex-shrink: 0;
+  box-sizing: content-box;
+  font-variant-numeric: tabular-nums;
 }
 .hard-title {
   font-size: 16px;
