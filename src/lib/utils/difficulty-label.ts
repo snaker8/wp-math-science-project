@@ -20,10 +20,10 @@ export interface DifficultyBand {
  * 모든 학교·시험지에 동일 기준 적용 → 학부모가 다른 학교와 비교 가능.
  */
 export const DIFFICULTY_BANDS: DifficultyBand[] = [
-  { min: 1, max: 2, label: '기초', hue: 'emerald', hint: '교과서 기본 개념·계산 위주' },
-  { min: 3, max: 4, label: '응용', hue: 'sky', hint: '개념을 가벼운 문제 상황에 적용' },
-  { min: 5, max: 6, label: '심화', hue: 'amber', hint: '내신 평균 변별 — 두 개념 결합 정도' },
-  { min: 7, max: 8, label: '고난도', hue: 'orange', hint: '상위권 변별 — 다단계 추론·복합 조건' },
+  { min: 1, max: 2, label: '평이', hue: 'emerald', hint: '교과서 기본 개념·계산 위주' },
+  { min: 3, max: 4, label: '보통', hue: 'sky', hint: '개념을 가벼운 문제 상황에 적용' },
+  { min: 5, max: 6, label: '난이도 있음', hue: 'amber', hint: '내신 평균 변별 — 두 개념 결합 정도' },
+  { min: 7, max: 8, label: '매우 난이도 있음', hue: 'orange', hint: '상위권 변별 — 다단계 추론·복합 조건' },
   { min: 9, max: 10, label: '최고난도', hue: 'rose', hint: '최상위 변별 — 창의적 사고·정답률 낮음' },
 ];
 
