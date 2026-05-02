@@ -74,21 +74,20 @@ export async function PATCH(
       }
     }
 
-    // ★ 객관식 정답 박힘 가드 — 클라이언트 가드(ProblemEditModal handleSave) 우회한 PATCH 차단.
-    //   객관식(multiple_choice)인데 correct_answer 가 1~5 또는 ①~⑤ 가 아니면 reject.
-    //   메모리: feedback_objective_answer_safety.md (4·7·12번 0 박힘 사고 학습)
+    // ★ 객관식 정답 박힘 가드 — 0/모호값은 빈값으로 normalize, 정상값(① ~ ⑤·1~5)은 그대로.
+    //   미입력(빈값)은 허용 — 자산화 직후 사용자 입력 대기 상태.
+    //   메모리: feedback_objective_answer_safety.md
     if (answer_json && typeof answer_json === 'object') {
       const aj = answer_json as Record<string, any>;
       if (aj.type === 'multiple_choice') {
+        const { normalizeObjectiveAnswer, isEmptyAnswer, isValidObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const ans = aj.correct_answer ?? aj.finalAnswer;
-        const validCircled = typeof ans === 'string' && /^[①②③④⑤]$/.test(ans);
-        const validNumber = (typeof ans === 'number' && ans >= 1 && ans <= 5)
-          || (typeof ans === 'string' && /^[1-5]$/.test(ans));
-        if (!validCircled && !validNumber) {
-          return NextResponse.json(
-            { error: `객관식 정답은 ① ~ ⑤ (또는 1~5) 만 허용됩니다. 받은 값: ${JSON.stringify(ans)}` },
-            { status: 400 }
-          );
+        if (!isEmptyAnswer(ans) && !isValidObjectiveAnswer(ans)) {
+          // 모호값(0, "5번" 등) → 빈값으로 강제. 박힘 사고 차단.
+          const normalized = normalizeObjectiveAnswer(ans);
+          aj.correct_answer = normalized;
+          aj.finalAnswer = normalized;
+          console.warn(`[API/problems] objective answer normalized: ${JSON.stringify(ans)} → "${normalized}" (problemId=${problemId})`);
         }
       }
     }

@@ -36,6 +36,8 @@ export default function AnswerFixPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const fetchItems = useCallback(async (offset: number) => {
     setLoading(true);
@@ -84,6 +86,55 @@ export default function AnswerFixPage() {
     setSkippedIds(prev => new Set(prev).add(problemId));
   };
 
+  /**
+   * 추천 답 일괄 적용 — 현재 페이지에서 suggestedAnswer 가 있고 아직 처리 안 한 카드들을
+   * 클라이언트 sequential 로 PATCH (Vercel chain 신뢰 X 메모리 가드 준수).
+   * 메모리: feedback_vercel_chain_unreliable.md
+   */
+  const handleBulkApplySuggested = async () => {
+    const targets = items.filter(it =>
+      it.suggestedAnswer && !doneIds.has(it.problemId) && !skippedIds.has(it.problemId)
+    );
+    if (targets.length === 0) {
+      alert('이 페이지에 적용할 추천 답이 없습니다.');
+      return;
+    }
+    if (!confirm(`추천 답이 있는 ${targets.length}개 문제에 일괄 적용합니다. 진행하시겠습니까?`)) {
+      return;
+    }
+    setBulkApplying(true);
+    setBulkProgress({ done: 0, total: targets.length });
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const it = targets[i];
+        try {
+          const res = await fetch('/api/admin/objective-answer-fix', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ problemId: it.problemId, answer: it.suggestedAnswer }),
+          });
+          if (res.ok) {
+            setDoneIds(prev => new Set(prev).add(it.problemId));
+          } else {
+            console.warn(`[bulk-apply] ${it.problemId} 실패: ${res.status}`);
+          }
+        } catch (e) {
+          console.warn(`[bulk-apply] ${it.problemId} 예외:`, e);
+        }
+        setBulkProgress({ done: i + 1, total: targets.length });
+        // 짧은 호흡 (Supabase 부하 방지)
+        await new Promise(r => setTimeout(r, 80));
+      }
+    } finally {
+      setBulkApplying(false);
+      setTimeout(() => setBulkProgress(null), 2000);
+    }
+  };
+
+  const suggestedCountThisPage = items.filter(it =>
+    it.suggestedAnswer && !doneIds.has(it.problemId) && !skippedIds.has(it.problemId)
+  ).length;
+
   const totalPages = Math.ceil(total / pageSize);
   const remaining = items.filter(it => !doneIds.has(it.problemId) && !skippedIds.has(it.problemId)).length;
 
@@ -95,10 +146,27 @@ export default function AnswerFixPage() {
           정답이 <code className="bg-red-50 text-red-600 px-1 rounded">0</code> / 빈값 / null 로 박힌 객관식 문제를 한 번에 보고 수정합니다.
           ① ~ ⑤ 누르면 즉시 DB 갱신.
         </p>
-        <div className="mt-3 flex items-center gap-4 text-sm">
+        <div className="mt-3 flex items-center gap-4 text-sm flex-wrap">
           <span className="text-gray-500">전체 박힘: <strong className="text-red-600">{total}</strong>개</span>
           <span className="text-gray-500">현재 페이지: <strong>{page + 1} / {totalPages || 1}</strong></span>
           <span className="text-gray-500">이번 페이지 남은 항목: <strong>{remaining}</strong></span>
+          {suggestedCountThisPage > 0 && (
+            <button
+              type="button"
+              onClick={handleBulkApplySuggested}
+              disabled={bulkApplying}
+              className="ml-auto px-3 py-1.5 rounded-md bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {bulkApplying ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  적용 중 {bulkProgress ? `${bulkProgress.done}/${bulkProgress.total}` : ''}
+                </>
+              ) : (
+                `추천 답 일괄 적용 (${suggestedCountThisPage}개)`
+              )}
+            </button>
+          )}
         </div>
       </div>
 
