@@ -1824,6 +1824,16 @@ function ExamPaperView({
                   >
                     강사용 (분류·난이도 라벨)
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(`/api/exams/${examId}/print?variant=teacher&withAnswer=true`, '_blank');
+                      setShowPrintMenu(false);
+                    }}
+                    className="mt-1 w-full flex items-center justify-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/20 px-3 py-1.5 text-xs font-bold text-violet-300 transition-colors"
+                  >
+                    강사용 + 정답·해설
+                  </button>
                 </div>
               </div>
             )}
