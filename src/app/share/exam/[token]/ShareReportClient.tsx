@@ -191,14 +191,6 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     setTimeout(() => setToast(null), 2200);
   };
 
-  const reportDate = data.analysis?.generatedAt
-    ? new Date(data.analysis.generatedAt).toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : new Date().toLocaleDateString('ko-KR');
-
   // ── 단원별 분포 (analysis 기준)
   const unitDist = (data.analysis?.unitAnalyses || []).map((u) => ({
     name: u.majorUnit,
@@ -564,13 +556,6 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
           </section>
         )}
 
-        {/* FOOTER */}
-        <footer className="report-footer">
-          <div className="footer-row">
-            <div>ⓒ 과사람 수학 분석 시스템</div>
-            <div>발행 · {reportDate}</div>
-          </div>
-        </footer>
       </article>
     </div>
   );
