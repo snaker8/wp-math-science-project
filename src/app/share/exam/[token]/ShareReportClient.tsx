@@ -236,7 +236,9 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         scale,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: el.scrollWidth,
+        // 사용자 화면과 동일한 폭으로 시뮬레이션 — el.scrollWidth(880px) 를 쓰면
+        // @media (max-width: 900px) 가 발동해 풀폭 데스크탑에서도 1열로 캡처되는 사고.
+        windowWidth: window.innerWidth,
         letterRendering: true,
         imageTimeout: 30000,
       } as Parameters<typeof html2canvas>[1]);
