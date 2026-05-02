@@ -150,7 +150,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         .tutor-layout {
           display: flex;
           min-height: 100vh;
-          background: #f8fafc;
+          background: #000000;
         }
 
         .mobile-header {
@@ -160,8 +160,9 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
           left: 0;
           right: 0;
           height: 60px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
+          background: rgba(9, 9, 11, 0.92);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
           padding: 0 16px;
           align-items: center;
           gap: 16px;
@@ -171,7 +172,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         .mobile-header h1 {
           font-size: 18px;
           font-weight: 700;
-          color: #1e1b4b;
+          color: #ffffff;
         }
 
         .menu-btn,
@@ -183,7 +184,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
           height: 40px;
           border: none;
           background: none;
-          color: #374151;
+          color: #d4d4d8;
           cursor: pointer;
         }
 
@@ -193,8 +194,8 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
           position: fixed;
           left: 0;
           top: 0;
-          background: white;
-          border-right: 1px solid #e5e7eb;
+          background: #0a0a0a;
+          border-right: 1px solid rgba(255, 255, 255, 0.06);
           display: flex;
           flex-direction: column;
           z-index: 200;
@@ -202,7 +203,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
 
         .sidebar-header {
           padding: 20px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -233,7 +234,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         .logo span {
           font-size: 18px;
           font-weight: 700;
-          color: #1e1b4b;
+          color: #ffffff;
         }
 
         .sidebar-nav {
@@ -248,7 +249,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
           gap: 12px;
           padding: 12px 16px;
           border-radius: 8px;
-          color: #6b7280;
+          color: #a1a1aa;
           text-decoration: none;
           font-size: 14px;
           font-weight: 500;
@@ -257,37 +258,37 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         }
 
         .nav-item:hover {
-          background: #f3f4f6;
-          color: #374151;
+          background: rgba(255, 255, 255, 0.04);
+          color: #ffffff;
         }
 
         .nav-item.active {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(99, 102, 241, 0.14);
+          color: #a5b4fc;
         }
 
         .nav-item.external {
           margin-top: 16px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
           padding-top: 16px;
         }
 
         .nav-item.admin-link {
           margin-top: 16px;
           padding-top: 16px;
-          border-top: 1px solid #e5e7eb;
-          background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-          color: #dc2626;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(220, 38, 38, 0.08);
+          color: #fca5a5;
         }
 
         .nav-item.admin-link:hover {
-          background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-          color: #b91c1c;
+          background: rgba(220, 38, 38, 0.16);
+          color: #fecaca;
         }
 
         .sidebar-footer {
           padding: 16px 12px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .logout-btn {
@@ -299,7 +300,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
           border: none;
           border-radius: 8px;
           background: none;
-          color: #dc2626;
+          color: #f87171;
           font-size: 14px;
           font-weight: 500;
           cursor: pointer;
@@ -307,7 +308,8 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         }
 
         .logout-btn:hover {
-          background: #fef2f2;
+          background: rgba(220, 38, 38, 0.12);
+          color: #fca5a5;
         }
 
         .overlay {
