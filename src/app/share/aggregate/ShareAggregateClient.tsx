@@ -329,9 +329,14 @@ function ShareAggregateContent() {
           </div>
         </Section>
 
+        {/* ★ HERO — 학교별 비교 (집계 분석의 핵심) */}
+        <Section number="02" title="학교별 비교" icon={<TrendingUp className="h-4 w-4" />}>
+          <SchoolComparison data={data} />
+        </Section>
+
         {/* 강사 인사이트 — narrative */}
         {data.narrative.length > 0 && (
-          <Section number="02" title="강사 인사이트" icon={<Lightbulb className="h-4 w-4" />}>
+          <Section number="03" title="강사 인사이트" icon={<Lightbulb className="h-4 w-4" />}>
             <div className="space-y-6 rounded-xl border border-orange-100 bg-orange-50/40 p-6 text-[15.5px] leading-[1.8] text-zinc-700">
               {data.narrative.map((sec, i) => (
                 <div key={i}>
@@ -351,12 +356,12 @@ function ShareAggregateContent() {
         )}
 
         {/* 난이도 분포 */}
-        <Section number="03" title="시험지 전체 난이도" icon={<BarChart3 className="h-4 w-4" />}>
+        <Section number="04" title="시험지 전체 난이도" icon={<BarChart3 className="h-4 w-4" />}>
           <DifficultyView data={data} />
         </Section>
 
         {/* 단원 빈도 + 시계열 */}
-        <Section number="04" title="단원 출제 빈도" icon={<PieChart className="h-4 w-4" />}>
+        <Section number="05" title="단원 출제 빈도" icon={<PieChart className="h-4 w-4" />}>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <UnitListView data={data} />
             <UnitTrendsView data={data} />
@@ -364,7 +369,7 @@ function ShareAggregateContent() {
         </Section>
 
         {/* 공통 vs 차별 단원 */}
-        <Section number="05" title="공통 단원 vs 학교별 차별 단원" icon={<Users className="h-4 w-4" />}>
+        <Section number="06" title="공통 단원 vs 학교별 차별 단원" icon={<Users className="h-4 w-4" />}>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <UnitSegmentView
               title={`공통 출제 (≥80% 학교)`}
@@ -381,11 +386,6 @@ function ShareAggregateContent() {
               empty="모든 단원이 고르게 출제됨"
             />
           </div>
-        </Section>
-
-        {/* 학교별 비교 */}
-        <Section number="06" title="학교별 비교" icon={<TrendingUp className="h-4 w-4" />}>
-          <SchoolTable data={data} />
         </Section>
 
         {/* 함정(있을 때만) + 시험지별 분석 인용 */}
@@ -695,6 +695,266 @@ function UnitSegmentView({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── 학교별 비교 (HERO) ─────────────────────────────────────────────────
+// 막대 차트(그룹 평균 점선) + 랭킹 3카드(가장 어려운/특이/평이) + 카드 그리드(차별 단원 ★).
+// 마지막에 SchoolTable 을 접기로 노출 (데이터 디테일 원하는 사람용).
+function SchoolComparison({ data }: { data: AggregateResponse }) {
+  const groupAvg = data.difficultyDist.overallAvg;
+  // avgDifficulty 있는 학교만 + 높은 난이도 순 정렬
+  const sorted = [...data.schoolBreakdown]
+    .filter((s) => s.avgDifficulty != null)
+    .sort((a, b) => (b.avgDifficulty || 0) - (a.avgDifficulty || 0));
+
+  if (sorted.length === 0) {
+    return (
+      <div className="rounded-lg border border-orange-100 bg-orange-50/30 py-8 text-center text-sm text-zinc-500">
+        평균 난이도 계산 가능한 학교 데이터 없음
+      </div>
+    );
+  }
+
+  const hardest = sorted[0];
+  const easiest = sorted[sorted.length - 1];
+  // 가장 특이 = 그룹 평균에서 가장 멀리 떨어진 학교 (절댓값 기준)
+  const mostUnique =
+    groupAvg != null
+      ? [...sorted].sort(
+          (a, b) =>
+            Math.abs((b.avgDifficulty || 0) - groupAvg) -
+            Math.abs((a.avgDifficulty || 0) - groupAvg),
+        )[0]
+      : null;
+  // 차별(unique) 단원 lookup — 학교 카드의 ★ 표시용
+  const uniqueUnits = new Set(data.unitSegmentation.unique.map((u) => u.level1Name));
+
+  return (
+    <div className="space-y-6">
+      {/* 1. 학교별 평균 난이도 막대 차트 (그룹 평균 점선) */}
+      <div className="rounded-xl border border-orange-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-baseline justify-between">
+          <div className="text-sm font-bold text-zinc-800">학교별 평균 난이도 (높은 순)</div>
+          {groupAvg != null && (
+            <div className="text-[12.5px] text-zinc-500">
+              그룹 평균 <span className="font-bold text-orange-700">{groupAvg.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          {sorted.map((s, i) => {
+            const pct = ((s.avgDifficulty || 0) / 10) * 100;
+            const band = bandFor(s.avgDifficulty);
+            const cls = band ? BAND_COLOR[band] : null;
+            return (
+              <div key={s.school} className="flex items-center gap-3">
+                <div className="w-24 truncate text-right text-[13px] font-semibold text-zinc-800" title={s.school}>
+                  {i === 0 && <span className="mr-1 text-rose-600">▲</span>}
+                  {i === sorted.length - 1 && sorted.length > 1 && <span className="mr-1 text-emerald-600">▼</span>}
+                  {s.school}
+                </div>
+                <div className="relative flex-1 overflow-hidden rounded-full bg-zinc-100" style={{ height: 18 }}>
+                  <div
+                    className={`h-full ${cls?.bar || 'bg-zinc-400'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                  {/* 그룹 평균 점선 */}
+                  {groupAvg != null && (
+                    <div
+                      className="absolute top-0 bottom-0 border-l-2 border-dashed border-zinc-700/70"
+                      style={{ left: `${(groupAvg / 10) * 100}%` }}
+                      title={`그룹 평균 ${groupAvg.toFixed(2)}`}
+                    />
+                  )}
+                </div>
+                <div className="w-14 text-right tabular-nums text-[14px] font-bold text-zinc-900">
+                  {(s.avgDifficulty || 0).toFixed(2)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-[11.5px] text-zinc-500">
+          <span>← 평이 (1)</span>
+          <span className="text-zinc-700">┊ 그룹 평균 (점선)</span>
+          <span>최고난도 (10) →</span>
+        </div>
+      </div>
+
+      {/* 2. 랭킹 3카드 — 가장 어려운 / 그룹 대비 가장 특이 / 가장 평이 */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <RankingCard
+          tone="rose"
+          label="가장 어려운 학교"
+          school={hardest.school}
+          metric={hardest.avgDifficulty != null ? hardest.avgDifficulty.toFixed(2) : '-'}
+          band={bandFor(hardest.avgDifficulty)}
+          subtle={
+            groupAvg != null && hardest.avgDifficulty != null
+              ? `그룹 평균 대비 +${(hardest.avgDifficulty - groupAvg).toFixed(2)}`
+              : undefined
+          }
+        />
+        {mostUnique && (
+          <RankingCard
+            tone="amber"
+            label="그룹 대비 가장 특이"
+            school={mostUnique.school}
+            metric={
+              groupAvg != null && mostUnique.avgDifficulty != null
+                ? `${(mostUnique.avgDifficulty - groupAvg) > 0 ? '+' : ''}${(mostUnique.avgDifficulty - groupAvg).toFixed(2)}`
+                : '-'
+            }
+            subtle={`평균 ${(mostUnique.avgDifficulty || 0).toFixed(2)} · ${bandFor(mostUnique.avgDifficulty)}`}
+          />
+        )}
+        <RankingCard
+          tone="emerald"
+          label="가장 평이한 학교"
+          school={easiest.school}
+          metric={easiest.avgDifficulty != null ? easiest.avgDifficulty.toFixed(2) : '-'}
+          band={bandFor(easiest.avgDifficulty)}
+          subtle={
+            groupAvg != null && easiest.avgDifficulty != null
+              ? `그룹 평균 대비 ${(easiest.avgDifficulty - groupAvg).toFixed(2)}`
+              : undefined
+          }
+        />
+      </div>
+
+      {/* 3. 학교별 상세 카드 그리드 (3열) */}
+      <div>
+        <div className="mb-2.5 flex items-baseline justify-between">
+          <div className="text-sm font-bold text-zinc-800">학교별 한눈에 보기</div>
+          <div className="text-[11.5px] text-zinc-500">★ 이 학교 특화 단원 (그룹 30% 이하 학교에서만 출제)</div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {sorted.map((s) => {
+            const band = bandFor(s.avgDifficulty);
+            const cls = band ? BAND_COLOR[band] : null;
+            const diff = groupAvg != null && s.avgDifficulty != null ? s.avgDifficulty - groupAvg : null;
+            const borderCls =
+              band === '최고난도' ? 'border-rose-300' :
+              band === '매우 난이도 있음' ? 'border-rose-200' :
+              band === '난이도 있음' ? 'border-orange-200' :
+              band === '보통' ? 'border-emerald-200' :
+              band === '평이' ? 'border-yellow-200' : 'border-zinc-200';
+            return (
+              <div
+                key={s.school}
+                className={`rounded-xl border-2 ${borderCls} bg-white p-4 shadow-sm transition-shadow hover:shadow-md`}
+              >
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <h4 className="truncate text-[15.5px] font-bold text-zinc-900" title={s.school}>{s.school}</h4>
+                  <span className="flex-shrink-0 text-[11px] text-zinc-500">
+                    {s.examCount}건 · {s.problemCount}문항
+                  </span>
+                </div>
+                <div className="mb-3 flex items-baseline gap-2">
+                  <span className="text-[28px] font-bold tabular-nums leading-none text-zinc-900">
+                    {(s.avgDifficulty || 0).toFixed(2)}
+                  </span>
+                  {cls && band && (
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>
+                      {band}
+                    </span>
+                  )}
+                  {diff != null && Math.abs(diff) >= 0.05 && (
+                    <span className={`text-[12.5px] font-bold ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {diff > 0 ? '▲' : '▼'} {Math.abs(diff).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-orange-600">자주 출제 단원</div>
+                  <div className="flex flex-wrap gap-1">
+                    {s.topUnits.slice(0, 3).map((u) => {
+                      const isUnique = uniqueUnits.has(u.level1Name);
+                      return (
+                        <span
+                          key={u.level1Name}
+                          className={`rounded-md border px-2 py-0.5 text-[12px] ${
+                            isUnique
+                              ? 'border-amber-300 bg-amber-100 text-amber-800'
+                              : 'border-orange-200 bg-orange-50 text-orange-700'
+                          }`}
+                          title={isUnique ? '이 학교 특화 단원 (그룹 30% 이하 학교에서만 출제)' : undefined}
+                        >
+                          {isUnique && '★ '}{u.level1Name}
+                          <span className="ml-1 opacity-60">{u.problemCount}</span>
+                        </span>
+                      );
+                    })}
+                    {s.topUnits.length === 0 && (
+                      <span className="text-[11.5px] text-zinc-400">단원 데이터 없음</span>
+                    )}
+                  </div>
+                </div>
+                {s.stdDevDifficulty != null && (
+                  <div className="mt-2 text-[10.5px] text-zinc-400">
+                    난이도 표준편차 σ {s.stdDevDifficulty.toFixed(2)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 4. 상세 표 (접기) — 그룹 비교 코멘트 포함, 데이터 디테일 원하는 사람용 */}
+      <details className="rounded-lg border border-orange-100 bg-orange-50/20 p-3">
+        <summary className="cursor-pointer text-[13.5px] font-semibold text-orange-700">
+          상세 표 보기 (그룹 비교 코멘트 포함)
+        </summary>
+        <div className="mt-3">
+          <SchoolTable data={data} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function RankingCard({
+  tone,
+  label,
+  school,
+  metric,
+  band,
+  subtle,
+}: {
+  tone: 'rose' | 'amber' | 'emerald';
+  label: string;
+  school: string;
+  metric: string;
+  band?: string | null;
+  subtle?: string;
+}) {
+  const toneCls = {
+    rose: 'border-rose-300 bg-gradient-to-br from-rose-50 to-rose-50/30',
+    amber: 'border-amber-300 bg-gradient-to-br from-amber-50 to-amber-50/30',
+    emerald: 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-50/30',
+  }[tone];
+  const labelCls = {
+    rose: 'text-rose-700',
+    amber: 'text-amber-700',
+    emerald: 'text-emerald-700',
+  }[tone];
+  const metricCls = {
+    rose: 'text-rose-700',
+    amber: 'text-amber-700',
+    emerald: 'text-emerald-700',
+  }[tone];
+  return (
+    <div className={`rounded-xl border-2 ${toneCls} p-4 shadow-sm`}>
+      <div className={`mb-1.5 text-[11.5px] font-bold uppercase tracking-wider ${labelCls}`}>{label}</div>
+      <div className="text-[16px] font-bold text-zinc-900">{school}</div>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className={`text-[26px] font-bold tabular-nums leading-none ${metricCls}`}>{metric}</span>
+        {band && <span className="text-[11.5px] font-semibold text-zinc-600">{band}</span>}
+      </div>
+      {subtle && <div className="mt-1.5 text-[11.5px] text-zinc-500">{subtle}</div>}
     </div>
   );
 }
