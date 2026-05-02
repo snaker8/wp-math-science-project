@@ -74,6 +74,25 @@ export async function PATCH(
       }
     }
 
+    // ★ 객관식 정답 박힘 가드 — 클라이언트 가드(ProblemEditModal handleSave) 우회한 PATCH 차단.
+    //   객관식(multiple_choice)인데 correct_answer 가 1~5 또는 ①~⑤ 가 아니면 reject.
+    //   메모리: feedback_objective_answer_safety.md (4·7·12번 0 박힘 사고 학습)
+    if (answer_json && typeof answer_json === 'object') {
+      const aj = answer_json as Record<string, any>;
+      if (aj.type === 'multiple_choice') {
+        const ans = aj.correct_answer ?? aj.finalAnswer;
+        const validCircled = typeof ans === 'string' && /^[①②③④⑤]$/.test(ans);
+        const validNumber = (typeof ans === 'number' && ans >= 1 && ans <= 5)
+          || (typeof ans === 'string' && /^[1-5]$/.test(ans));
+        if (!validCircled && !validNumber) {
+          return NextResponse.json(
+            { error: `객관식 정답은 ① ~ ⑤ (또는 1~5) 만 허용됩니다. 받은 값: ${JSON.stringify(ans)}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // problems 테이블 업데이트
     const updateData: Record<string, any> = {};
     if (content_latex !== undefined) updateData.content_latex = content_latex;
