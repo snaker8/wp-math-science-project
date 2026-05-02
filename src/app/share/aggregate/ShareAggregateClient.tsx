@@ -286,16 +286,16 @@ function ShareAggregateContent() {
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-base font-bold text-orange-900">
+                  <h3 className="text-lg font-bold text-orange-900">
                     이 통합 리포트는 ‘큰 흐름’입니다 — 시험지 한 건씩 깊이 들어가 보세요
                   </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-700">
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-zinc-700">
                     학교별 시험지 <strong className="text-orange-700">{detailCount}건</strong>이
                     문항 단위까지 상세 분석 완료된 상태입니다. 각 시험지 카드를 클릭하면{' '}
                     <strong>실제 수식 · 단계별 풀이 전략 · 출제 의도</strong>까지 보실 수 있습니다.
                     이 깊이 있는 시험지별 분석이 본 시스템의 가장 큰 강점입니다.
                   </p>
-                  <p className="mt-2 text-[11px] text-zinc-600">
+                  <p className="mt-2 text-[13.5px] text-zinc-600">
                     아래 <strong>섹션 07 시험지별 분석 인용</strong> 또는{' '}
                     <strong>섹션 08 시험지 목록</strong>의 ‘상세 보기’ 버튼에서 진입하세요.
                   </p>
@@ -332,19 +332,19 @@ function ShareAggregateContent() {
         {/* 강사 인사이트 — narrative */}
         {data.narrative.length > 0 && (
           <Section number="02" title="강사 인사이트" icon={<Lightbulb className="h-4 w-4" />}>
-            <div className="space-y-5 rounded-xl border border-orange-100 bg-orange-50/40 p-5 text-sm leading-relaxed text-zinc-700">
+            <div className="space-y-6 rounded-xl border border-orange-100 bg-orange-50/40 p-6 text-[15.5px] leading-[1.8] text-zinc-700">
               {data.narrative.map((sec, i) => (
                 <div key={i}>
-                  <h4 className="mb-1.5 text-[13px] font-bold text-orange-700">{sec.heading}</h4>
+                  <h4 className="mb-2 text-[15px] font-bold text-orange-700">{sec.heading}</h4>
                   {sec.paragraphs.map((p, j) => (
-                    <p key={j} className="text-zinc-700">
+                    <p key={j} className="mb-2 text-zinc-700 last:mb-0">
                       {p}
                     </p>
                   ))}
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-[10px] text-zinc-500">
+            <div className="mt-2 text-[11px] text-zinc-500">
               ※ 모든 수치는 시험지 분류·난이도 데이터에서 직접 도출됩니다 (할루시네이션 없음).
             </div>
           </Section>
@@ -442,11 +442,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-8 first:mt-0">
-      <div className="mb-4 flex items-center gap-2 border-l-4 border-orange-500 pl-3">
-        <span className="font-mono text-xs text-orange-600">{number}</span>
+    <section className="mt-9 first:mt-0">
+      <div className="mb-4 flex items-center gap-2.5 border-l-4 border-orange-500 pl-3">
+        <span className="font-mono text-sm text-orange-600">{number}</span>
         {icon && <span className="text-orange-600">{icon}</span>}
-        <h2 className="text-base font-bold text-zinc-900">{title}</h2>
+        <h2 className="text-lg font-bold text-zinc-900">{title}</h2>
       </div>
       {children}
     </section>
@@ -455,11 +455,11 @@ function Section({
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-orange-600">{label}</div>
-      <div className="mt-1 text-xl font-bold tabular-nums text-zinc-900">
+    <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-3.5">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-orange-600">{label}</div>
+      <div className="mt-1.5 text-2xl font-bold tabular-nums text-zinc-900">
         {value}
-        {hint && <span className="ml-1.5 text-[11px] font-medium text-zinc-500">({hint})</span>}
+        {hint && <span className="ml-1.5 text-[12px] font-medium text-zinc-500">({hint})</span>}
       </div>
     </div>
   );
@@ -514,20 +514,20 @@ function DifficultyView({ data }: { data: AggregateResponse }) {
           if (!cls2) return null;
           const pct = total > 0 ? (bc.examCount / total) * 100 : 0;
           return (
-            <div key={bc.band} className="flex items-center gap-3 text-xs">
-              <div className={`w-20 text-right font-bold ${cls2.text}`}>{bc.band}</div>
+            <div key={bc.band} className="flex items-center gap-3 text-sm">
+              <div className={`w-24 text-right font-bold ${cls2.text}`}>{bc.band}</div>
               <div className="flex-1 overflow-hidden rounded-full bg-zinc-100">
                 <div className={`h-2.5 ${cls2.bar}`} style={{ width: `${pct}%` }} />
               </div>
               <div className="w-16 text-right tabular-nums font-semibold text-zinc-700">
                 {bc.examCount}건
               </div>
-              <div className="w-12 text-right tabular-nums text-zinc-500">{pct.toFixed(0)}%</div>
+              <div className="w-14 text-right tabular-nums text-zinc-500">{pct.toFixed(0)}%</div>
             </div>
           );
         })}
       </div>
-      <div className="mt-3 rounded-md bg-zinc-50 p-2.5 text-[11px] text-zinc-600">
+      <div className="mt-3 rounded-md bg-zinc-50 p-3 text-[12.5px] leading-relaxed text-zinc-600">
         <strong className="text-orange-700">학부모 가이드</strong> — 1~2 평이 (교과서 기본) / 3~4 보통 / 5~6 난이도 있음 (내신 평균) / 7~8 매우 난이도 있음 (상위권 변별) / 9~10 최고난도
       </div>
     </div>
@@ -539,32 +539,32 @@ function UnitListView({ data }: { data: AggregateResponse }) {
   const max = Math.max(1, ...top.map((u) => u.problemCount));
   return (
     <div>
-      <div className="mb-2 text-xs font-semibold text-zinc-700">단원 출제 빈도 (TOP 12)</div>
-      <div className="space-y-1.5">
+      <div className="mb-2.5 text-sm font-semibold text-zinc-700">단원 출제 빈도 (TOP 12)</div>
+      <div className="space-y-2">
         {top.map((u) => {
           const pct = (u.problemCount / max) * 100;
           return (
-            <div key={u.level1Code} className="flex items-center gap-2 text-xs">
-              <div className="w-32 truncate text-zinc-700" title={u.level1Name}>
+            <div key={u.level1Code} className="flex items-center gap-2.5 text-[13.5px]">
+              <div className="w-36 truncate font-medium text-zinc-700" title={u.level1Name}>
                 {u.level1Name}
               </div>
               <div className="flex-1 overflow-hidden rounded-full bg-zinc-100">
                 <div
-                  className="h-2 rounded-full bg-gradient-to-r from-orange-400 to-orange-600"
+                  className="h-2.5 rounded-full bg-gradient-to-r from-orange-400 to-orange-600"
                   style={{ width: `${pct}%` }}
                 />
               </div>
               <div className="w-10 text-right tabular-nums font-semibold text-zinc-700">
                 {u.problemCount}
               </div>
-              <div className="w-14 text-right text-[10px] text-zinc-500">
+              <div className="w-16 text-right text-[11.5px] text-zinc-500">
                 {u.schoolCount}/{data.matched.schoolCount}곳
               </div>
             </div>
           );
         })}
         {top.length === 0 && (
-          <div className="py-4 text-center text-xs text-zinc-500">분류된 문항 없음</div>
+          <div className="py-4 text-center text-sm text-zinc-500">분류된 문항 없음</div>
         )}
       </div>
     </div>
@@ -669,27 +669,27 @@ function UnitSegmentView({
     accent === 'cyan' ? 'text-cyan-700' : 'text-amber-700';
   return (
     <div>
-      <div className={`mb-2 text-xs font-semibold ${labelCls}`}>{title}</div>
+      <div className={`mb-2.5 text-sm font-semibold ${labelCls}`}>{title}</div>
       {units.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-xs text-zinc-500">
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-sm text-zinc-500">
           {empty}
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {units.slice(0, 8).map((u) => {
             const pct = totalSchools > 0 ? (u.schoolCount / totalSchools) * 100 : 0;
             return (
-              <div key={u.level1Code} className="flex items-center gap-2 text-xs">
-                <div className="w-32 truncate text-zinc-700" title={u.level1Name}>
+              <div key={u.level1Code} className="flex items-center gap-2.5 text-[13.5px]">
+                <div className="w-36 truncate font-medium text-zinc-700" title={u.level1Name}>
                   {u.level1Name}
                 </div>
                 <div className="flex-1 overflow-hidden rounded-full bg-zinc-100">
-                  <div className={`h-2 rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+                  <div className={`h-2.5 rounded-full ${bar}`} style={{ width: `${pct}%` }} />
                 </div>
-                <div className="w-14 text-right tabular-nums font-semibold text-zinc-700">
+                <div className="w-16 text-right tabular-nums font-semibold text-zinc-700">
                   {u.schoolCount}/{totalSchools}
                 </div>
-                <div className="w-12 text-right tabular-nums text-zinc-500">{u.problemCount}문</div>
+                <div className="w-14 text-right tabular-nums text-zinc-500">{u.problemCount}문</div>
               </div>
             );
           })}
@@ -703,15 +703,15 @@ function SchoolTable({ data }: { data: AggregateResponse }) {
   const groupAvg = data.difficultyDist.overallAvg;
   return (
     <div className="overflow-x-auto rounded-lg border border-orange-100">
-      <table className="w-full text-xs">
+      <table className="w-full text-[13.5px]">
         <thead>
-          <tr className="border-b border-orange-200 bg-orange-50/50 text-[10px] uppercase tracking-wider text-zinc-600">
-            <th className="px-3 py-2 text-left">학교</th>
-            <th className="px-3 py-2 text-right">시험지</th>
-            <th className="px-3 py-2 text-right">문항</th>
-            <th className="px-3 py-2 text-left">평균 난이도</th>
-            <th className="px-3 py-2 text-left">그룹 비교</th>
-            <th className="px-3 py-2 text-left">자주 출제 단원</th>
+          <tr className="border-b border-orange-200 bg-orange-50/50 text-[11.5px] uppercase tracking-wider text-zinc-600">
+            <th className="px-3 py-2.5 text-left">학교</th>
+            <th className="px-3 py-2.5 text-right">시험지</th>
+            <th className="px-3 py-2.5 text-right">문항</th>
+            <th className="px-3 py-2.5 text-left">평균 난이도</th>
+            <th className="px-3 py-2.5 text-left">그룹 비교</th>
+            <th className="px-3 py-2.5 text-left">자주 출제 단원</th>
           </tr>
         </thead>
         <tbody>
@@ -722,33 +722,33 @@ function SchoolTable({ data }: { data: AggregateResponse }) {
               s.avgDifficulty != null && groupAvg != null ? compareToGroupKo(s.avgDifficulty, groupAvg) : '-';
             return (
               <tr key={s.school} className="border-b border-orange-50">
-                <td className="px-3 py-2 font-bold text-zinc-800">{s.school}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{s.examCount}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{s.problemCount}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5 font-bold text-zinc-800">{s.school}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{s.examCount}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{s.problemCount}</td>
+                <td className="px-3 py-2.5">
                   {cls ? (
                     <span className="inline-flex items-baseline gap-1.5">
                       <span className="font-bold tabular-nums text-zinc-900">
                         {(s.avgDifficulty || 0).toFixed(2)}
                       </span>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${cls.bg} ${cls.text}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>
                         {band}
                       </span>
                       {s.stdDevDifficulty != null && (
-                        <span className="text-[10px] text-zinc-500">σ{s.stdDevDifficulty.toFixed(1)}</span>
+                        <span className="text-[11px] text-zinc-500">σ{s.stdDevDifficulty.toFixed(1)}</span>
                       )}
                     </span>
                   ) : (
                     <span className="text-zinc-500">-</span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-zinc-600">{cmp}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5 text-zinc-600">{cmp}</td>
+                <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
                     {s.topUnits.slice(0, 3).map((u) => (
                       <span
                         key={u.level1Name}
-                        className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-700"
+                        className="rounded bg-orange-50 px-2 py-0.5 text-[11.5px] text-orange-700"
                       >
                         {u.level1Name}
                         <span className="ml-1 text-orange-400">{u.problemCount}</span>
@@ -769,28 +769,28 @@ function PitfallView({ data }: { data: AggregateResponse }) {
   const top = data.pitfalls.slice(0, 6);
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-zinc-700">
-        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+      <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-zinc-700">
+        <AlertTriangle className="h-4 w-4 text-amber-600" />
         함정 패턴
       </div>
       {top.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-xs text-zinc-500">
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-sm text-zinc-500">
           매칭된 함정 태깅 없음
         </div>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {top.map((p) => (
             <li
               key={p.code}
-              className="flex items-center justify-between rounded-md border border-amber-100 bg-amber-50/40 px-3 py-2 text-xs"
+              className="flex items-center justify-between rounded-md border border-amber-100 bg-amber-50/40 px-3.5 py-2.5 text-[13.5px]"
             >
               <div>
                 <div className="font-bold text-zinc-800">{p.label}</div>
-                {p.category && <div className="text-[10px] text-zinc-500">{p.category}</div>}
+                {p.category && <div className="text-[11.5px] text-zinc-500">{p.category}</div>}
               </div>
               <div className="text-right">
                 <div className="font-bold text-amber-700">{p.problemCount}문항</div>
-                <div className="text-[10px] text-zinc-500">
+                <div className="text-[11.5px] text-zinc-500">
                   {p.examCount}/{data.matched.examCount}건
                 </div>
               </div>
@@ -810,51 +810,51 @@ function AiNarrativeView({ data }: { data: AggregateResponse }) {
   }
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-zinc-700">
-        <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+      <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-zinc-700">
+        <Sparkles className="h-4 w-4 text-orange-500" />
         시험지별 분석 인용 ({data.aiNarratives.length}건)
-        <span className="text-[10px] font-normal text-zinc-500">
+        <span className="text-[11px] font-normal text-zinc-500">
           ✻ 출처 시험지명 명시
         </span>
       </div>
       {data.aiNarratives.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-xs text-zinc-500">
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-sm text-zinc-500">
           시험지별 분석 완료 데이터 없음
         </div>
       ) : (
-        <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-[28rem] space-y-2.5 overflow-y-auto pr-1">
           {data.aiNarratives.map((n) => (
             <details
               key={n.examId}
-              className="rounded-lg border border-orange-100 bg-orange-50/30 p-2.5 text-xs open:bg-orange-50/60"
+              className="rounded-lg border border-orange-100 bg-orange-50/30 p-3.5 text-[14px] open:bg-orange-50/60"
             >
-              <summary className="cursor-pointer">
+              <summary className="cursor-pointer text-[14.5px]">
                 <span className="font-bold text-zinc-800">{n.school}</span>
                 <span className="ml-1.5 text-zinc-500">
                   {n.year} · {n.examTitle.slice(0, 30)}
                 </span>
-                <span className="ml-1.5 text-[10px] text-orange-600">✻</span>
+                <span className="ml-1.5 text-[11px] text-orange-600">✻</span>
               </summary>
               {n.summary && (
-                <div className="mt-2">
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-orange-600">요약</div>
-                  <p className="text-zinc-700">{n.summary}</p>
+                <div className="mt-2.5">
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-orange-600">요약</div>
+                  <p className="leading-[1.75] text-zinc-700">{n.summary}</p>
                 </div>
               )}
               {n.hardQuestions.length > 0 && (
-                <div className="mt-2.5">
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-orange-600">
+                <div className="mt-3">
+                  <div className="mb-1.5 text-[11px] uppercase tracking-wider text-orange-600">
                     고난도 문항
                   </div>
-                  <ul className="space-y-1.5">
+                  <ul className="space-y-2">
                     {n.hardQuestions.map((h) => (
                       <li
                         key={h.problemId}
-                        className="border-l-2 border-orange-300 pl-2 text-zinc-700"
+                        className="border-l-2 border-orange-300 pl-2.5 text-zinc-700"
                       >
                         <span className="font-bold text-orange-700">#{h.number}</span>
                         <span className="ml-1.5 font-semibold">{h.subTitle}</span>
-                        <div className="mt-0.5 text-[11px] text-zinc-600">{h.intent}</div>
+                        <div className="mt-1 text-[13px] leading-relaxed text-zinc-600">{h.intent}</div>
                       </li>
                     ))}
                   </ul>
@@ -866,11 +866,11 @@ function AiNarrativeView({ data }: { data: AggregateResponse }) {
                     href={`/share/exam/${tokenByExam.get(n.examId)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-orange-600"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-orange-600"
                   >
                     이 시험지 상세 분석 보기 →
                   </a>
-                  <span className="ml-2 text-[10px] text-zinc-500">
+                  <span className="ml-2 text-[11.5px] text-zinc-500">
                     수식·풀이 단계·학습 전략까지
                   </span>
                 </div>
@@ -886,15 +886,15 @@ function AiNarrativeView({ data }: { data: AggregateResponse }) {
 function ExamTable({ data }: { data: AggregateResponse }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-orange-100">
-      <table className="w-full text-xs">
+      <table className="w-full text-[13.5px]">
         <thead>
-          <tr className="border-b border-orange-200 bg-orange-50/50 text-[10px] uppercase tracking-wider text-zinc-600">
-            <th className="px-3 py-2 text-left">제목</th>
-            <th className="px-3 py-2 text-left">학교</th>
-            <th className="px-3 py-2 text-left">메타</th>
-            <th className="px-3 py-2 text-right">문항</th>
-            <th className="px-3 py-2 text-left">난이도</th>
-            <th className="px-3 py-2 text-center">상세</th>
+          <tr className="border-b border-orange-200 bg-orange-50/50 text-[11.5px] uppercase tracking-wider text-zinc-600">
+            <th className="px-3 py-2.5 text-left">제목</th>
+            <th className="px-3 py-2.5 text-left">학교</th>
+            <th className="px-3 py-2.5 text-left">메타</th>
+            <th className="px-3 py-2.5 text-right">문항</th>
+            <th className="px-3 py-2.5 text-left">난이도</th>
+            <th className="px-3 py-2.5 text-center">상세</th>
           </tr>
         </thead>
         <tbody>
@@ -903,23 +903,23 @@ function ExamTable({ data }: { data: AggregateResponse }) {
             const cls = band ? BAND_COLOR[band] : null;
             return (
               <tr key={e.id} className="border-b border-orange-50">
-                <td className="max-w-md truncate px-3 py-2 text-zinc-800" title={e.title}>
+                <td className="max-w-md truncate px-3 py-2.5 text-zinc-800" title={e.title}>
                   {e.title}
                 </td>
-                <td className="px-3 py-2 font-semibold text-zinc-700">{e.school}</td>
-                <td className="px-3 py-2 text-zinc-500">
+                <td className="px-3 py-2.5 font-semibold text-zinc-700">{e.school}</td>
+                <td className="px-3 py-2.5 text-zinc-500">
                   {[e.year, e.semester ? `${e.semester}학기` : '', e.examType]
                     .filter(Boolean)
                     .join(' · ')}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-zinc-700">{e.problemCount}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5 text-right tabular-nums text-zinc-700">{e.problemCount}</td>
+                <td className="px-3 py-2.5">
                   {cls ? (
                     <span className="inline-flex items-baseline gap-1.5">
                       <span className="font-bold tabular-nums text-zinc-900">
                         {(e.avgDifficulty || 0).toFixed(2)}
                       </span>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${cls.bg} ${cls.text}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>
                         {band}
                       </span>
                     </span>
@@ -927,18 +927,18 @@ function ExamTable({ data }: { data: AggregateResponse }) {
                     <span className="text-zinc-400">-</span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-center">
+                <td className="px-3 py-2.5 text-center">
                   {e.hasAnalysis && e.shareToken ? (
                     <a
                       href={`/share/exam/${e.shareToken}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-700 hover:bg-orange-100"
+                      className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-[12px] font-bold text-orange-700 hover:bg-orange-100"
                     >
                       상세 보기 →
                     </a>
                   ) : e.hasAnalysis ? (
-                    <span className="text-[10px] text-zinc-400">분석 완료</span>
+                    <span className="text-[12px] text-zinc-400">분석 완료</span>
                   ) : (
                     <span className="text-zinc-300">-</span>
                   )}
