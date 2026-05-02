@@ -269,7 +269,7 @@ export const topNavGroups: NavGroup[] = [
     label: '문제은행',
     icon: FolderOpen,
     children: [
-      tutorNavItems[0], // ★ DB 자산화 (수업관리에서 이동 — 사용자 요청)
+      // ★ tutorNavItems[0] (DB 자산화)는 별도 단독 탭으로 분리 (사용자 요청 — 드롭다운 안 들어가게)
       dashboardNavItems[1], // 시험지저장소
       dashboardNavItems[7], // 과사람클라우드
       dashboardNavItems[6], // 유형/문제관리
@@ -316,6 +316,14 @@ export const topNavGroups: NavGroup[] = [
       tutorNavItems[7], // 성적분석
       tutorNavItems[8], // 학교별 분석 리포트 (신규)
     ],
+  },
+  // ★ DB 자산화 — 단독 탭 (드롭다운 X). 한 번 클릭으로 클라우드 페이지 + 업로드 모달 자동 오픈.
+  //   사용자 요청: 다른 메뉴와 분리해서 네비게이션 맨 오른쪽에 즉시 진입 가능하게.
+  {
+    id: 'db-assetize',
+    label: 'DB 자산화',
+    icon: Upload,
+    href: '/dashboard/cloud?upload=1',
   },
 ];
 
