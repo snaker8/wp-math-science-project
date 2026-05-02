@@ -131,9 +131,11 @@ export const tutorNavItems: NavItem[] = [
     // ★ 검증된 자산화 경로(클라우드 페이지)로 통일 — 기존 /tutor/workflow 는
     //   exam 레코드 미생성·중복 자산화 사고가 반복되어 라우팅만 유지하고
     //   실제 기능은 /dashboard/cloud 로 보냄.
-    href: '/dashboard/cloud',
+    // ★ 메뉴 위치: 문제은행 그룹 (수업관리에 있던 것을 이동, 사용자 요청).
+    // ★ ?upload=1 — 클릭 시 클라우드 페이지 도착 직후 업로드 모달 자동 오픈.
+    href: '/dashboard/cloud?upload=1',
     icon: Upload,
-    label: '시험지 자산화',
+    label: 'DB 자산화',
     description: 'PDF → OCR → 클라우드 저장',
     activeColor: 'bg-sky-500/10 text-sky-500',
     group: 'tutor',
@@ -267,6 +269,7 @@ export const topNavGroups: NavGroup[] = [
     label: '문제은행',
     icon: FolderOpen,
     children: [
+      tutorNavItems[0], // ★ DB 자산화 (수업관리에서 이동 — 사용자 요청)
       dashboardNavItems[1], // 시험지저장소
       dashboardNavItems[7], // 과사람클라우드
       dashboardNavItems[6], // 유형/문제관리
@@ -295,8 +298,8 @@ export const topNavGroups: NavGroup[] = [
     id: 'teaching',
     label: '수업관리',
     icon: Users,
+    // ★ tutorNavItems[0] (DB 자산화)는 문제은행 그룹으로 이동 (사용자 요청 — 수업관리와 맥락 안 맞음)
     children: [
-      tutorNavItems[0], // 문제 업로드
       tutorNavItems[1], // 반 관리
       tutorNavItems[2], // 채점하기
     ],
