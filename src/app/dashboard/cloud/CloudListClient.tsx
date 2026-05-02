@@ -716,6 +716,19 @@ export default function CloudPage() {
 
   // --- Upload Modal ---
   const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId || autoOpenUpload);
+
+  // ★ 같은 페이지에 머물면서 ?upload=1 로 다시 클릭 시 (Next.js Link soft navigation),
+  //   useState 초기값은 mount 시점만 평가되므로 모달이 안 뜸. useEffect 로 query 감지.
+  //   모달 띄운 후 URL 에서 ?upload=1 제거 → 다음 클릭 때도 query 변경으로 인식.
+  useEffect(() => {
+    if (autoOpenUpload) {
+      setShowUploadModal(true);
+      // history.replaceState 로 URL 만 갱신 (router.replace 는 페이지 재렌더 유발)
+      const url = new URL(window.location.href);
+      url.searchParams.delete('upload');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [autoOpenUpload]);
   const [userId, setUserId] = useState<string>('');
   // --- Source List (출처 목록 보기) ---
   const [showSourceList, setShowSourceList] = useState(false);
