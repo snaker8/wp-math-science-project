@@ -729,6 +729,14 @@ export default function CloudPage() {
       window.history.replaceState({}, '', url.toString());
     }
   }, [autoOpenUpload]);
+
+  // ★ TopNav DB 자산화 탭이 클라우드 페이지에 있을 때 dispatch 하는 글로벌 이벤트 리스너.
+  //   Next.js Link 가 same URL 로는 navigation 안 일으키는 회귀 차단 (PR #47/#49 사고).
+  useEffect(() => {
+    const handler = () => setShowUploadModal(true);
+    window.addEventListener('cloud:open-upload', handler);
+    return () => window.removeEventListener('cloud:open-upload', handler);
+  }, []);
   const [userId, setUserId] = useState<string>('');
   // --- Source List (출처 목록 보기) ---
   const [showSourceList, setShowSourceList] = useState(false);
