@@ -951,13 +951,9 @@ export function ProblemEditModal({
 
   // 저장
   const handleSave = useCallback(async () => {
-    // ★ 객관식 정답 0 박힘 방지 — 사용자가 ① ~ ⑤ 안 누른 채 저장 누르면 정답 0 으로
-    //   DB 박힘. 빠른 정답표·해설 생성 후속 작업이 모두 깨지므로 저장 차단.
-    //   메모리: feedback_objective_answer_safety.md
-    if (answerType === 'objective' && (correctAnswer < 1 || correctAnswer > 5)) {
-      setError('객관식 정답을 ① ~ ⑤ 중 하나 선택해주세요. (정답 미선택 시 저장 불가)');
-      return;
-    }
+    // 객관식 정답 미선택 (correctAnswer < 1) 도 저장 허용 — 사용자가 답 모르는 상태에서도
+    // 본문/선택지/분류 등 다른 필드 수정 가능해야 함. "0 박힘" 사고는 서버 PATCH 정규화
+    // (src/lib/validation/objective-answer.ts isEmptyAnswer → '') 가 차단.
     setIsSaving(true);
     setError(null);
     try {
