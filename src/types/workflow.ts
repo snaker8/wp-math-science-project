@@ -107,6 +107,7 @@ export interface LLMAnalysisResult {
   contentWithMath?: string;   // Mathpix Markdown (수식 $...$ 인라인 포함)
   contentMmd?: string;        // Mathpix Markdown 원본 (도형 마커 [도형] 포함)
   choices?: string[];         // 선택지 배열 (수식 포함)
+  choiceImages?: (string | null)[]; // 선택지별 이미지 URL (그림 객관식). choices와 인덱스 정렬.
   pageIndex?: number;         // PDF 페이지 인덱스 (0-based)
   bbox?: { x: number; y: number; w: number; h: number }; // 문제 영역 bbox (비율 0~1)
   hasFigure?: boolean;        // 도형/다이어그램 포함 여부

@@ -10,6 +10,7 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
 import RenderRepairPanel from '@/components/papers/RenderRepairPanel';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
+import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import dynamic from 'next/dynamic';
 
 // GraphModal은 Desmos API 사용하므로 dynamic import
@@ -28,6 +29,8 @@ interface ProblemEditModalProps {
   initialSolution: string;
   initialAnswer: Record<string, any>;
   initialChoices?: string[];
+  /** 그림 객관식: 선택지별 이미지 URL 초기값 (choices 인덱스 정렬, null = 텍스트 옵션) */
+  initialChoiceImages?: (string | null)[];
   initialDifficulty?: number;
   initialCognitiveDomain?: string;
   initialTypeCode?: string;
@@ -305,6 +308,11 @@ function ChoicesEditor({
   onChoiceLayoutChange,
   isMultipleAnswer,
   onMultipleAnswerChange,
+  choiceImages,
+  onUploadChoiceImage,
+  onRemoveChoiceImage,
+  uploadingChoiceIdx,
+  onOpenDiagramBrowser,
 }: {
   choices: string[];
   onChange: (choices: string[]) => void;
@@ -318,6 +326,11 @@ function ChoicesEditor({
   onChoiceLayoutChange: (n: number) => void;
   isMultipleAnswer: boolean;
   onMultipleAnswerChange: (v: boolean) => void;
+  choiceImages: (string | null)[];
+  onUploadChoiceImage: (idx: number, file: File | Blob) => void;
+  onRemoveChoiceImage: (idx: number) => void;
+  uploadingChoiceIdx: number | null;
+  onOpenDiagramBrowser: (idx: number) => void;
 }) {
   const circledNumbers = ['①', '②', '③', '④', '⑤'];
 
@@ -362,24 +375,100 @@ function ChoicesEditor({
           <div className={`grid gap-1 ${
             choiceLayout === 1 ? 'grid-cols-1' : choiceLayout === 2 ? 'grid-cols-2' : choiceLayout === 3 ? 'grid-cols-3' : 'grid-cols-5'
           }`}>
-            {choices.map((choice, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <span className="text-xs text-content-tertiary w-4 text-center flex-shrink-0">{circledNumbers[i]}</span>
-                <input type="text"
-                  value={choice.replace(/^[①②③④⑤]\s*/, '')}
-                  onChange={(e) => handleChoiceChange(i, e.target.value)}
-                  className="flex-1 rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
-                  placeholder={`선택지 ${i + 1}`} />
-                {/* 마지막 선택지에 삭제 버튼 (2개 이상일 때) */}
-                {i === choices.length - 1 && choices.length > 2 && (
-                  <button type="button" onClick={() => onChange(choices.slice(0, -1))}
-                    className="text-content-tertiary hover:text-red-400 transition-colors flex-shrink-0 p-0.5"
-                    title="선택지 삭제">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ))}
+            {choices.map((choice, i) => {
+              const imgUrl = choiceImages[i] || null;
+              const isUploading = uploadingChoiceIdx === i;
+              const handleCellPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (const item of Array.from(items)) {
+                  if (item.type.startsWith('image/')) {
+                    const blob = item.getAsFile();
+                    if (blob) {
+                      e.preventDefault();
+                      onUploadChoiceImage(i, blob);
+                      return;
+                    }
+                  }
+                }
+              };
+              return (
+                <div key={i} className="flex flex-col gap-1" onPaste={handleCellPaste}>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-content-tertiary w-4 text-center flex-shrink-0">{circledNumbers[i]}</span>
+                    <input type="text"
+                      value={choice.replace(/^[①②③④⑤]\s*/, '')}
+                      onChange={(e) => handleChoiceChange(i, e.target.value)}
+                      className="flex-1 rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
+                      placeholder={`선택지 ${i + 1}`} />
+                    {/* 마지막 선택지에 삭제 버튼 (2개 이상일 때) */}
+                    {i === choices.length - 1 && choices.length > 2 && (
+                      <button type="button" onClick={() => onChange(choices.slice(0, -1))}
+                        className="text-content-tertiary hover:text-red-400 transition-colors flex-shrink-0 p-0.5"
+                        title="선택지 삭제">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  {/* 그림 객관식: 이미지 슬롯 — 본문 도식 교체와 동일 흐름(DiagramBrowserModal) */}
+                  <div className="pl-5 flex items-center gap-1.5 flex-wrap">
+                    {imgUrl ? (
+                      <>
+                        <div className="relative inline-block">
+                          <img
+                            src={imgUrl}
+                            alt={`선택지 ${i + 1} 이미지`}
+                            className="max-h-20 max-w-full rounded border border bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => onRemoveChoiceImage(i)}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[11px] leading-none shadow hover:bg-red-600"
+                            title="이미지 제거"
+                          >×</button>
+                        </div>
+                        {/* 교체 버튼 — DiagramBrowserModal 호출 */}
+                        <button
+                          type="button"
+                          onClick={() => onOpenDiagramBrowser(i)}
+                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
+                          title="SVG·이미지·도형 DB로 교체"
+                        >교체</button>
+                      </>
+                    ) : (
+                      <>
+                        {/* 1) 도식 입력 — 본문과 동일 (SVG paste/SVG 파일/이미지 업로드/도형 DB) */}
+                        <button
+                          type="button"
+                          onClick={() => onOpenDiagramBrowser(i)}
+                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
+                          title="SVG · 이미지 파일 · 도형 DB"
+                        >+ 도식 입력</button>
+                        {/* 2) 빠른 클립보드/파일 업로드 (paste 가능) */}
+                        <label className={`cursor-pointer text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed transition-colors ${
+                          isUploading
+                            ? 'text-content-tertiary border-zinc-700'
+                            : 'text-content-tertiary border-zinc-700 hover:text-cyan-400 hover:border-cyan-500/50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={isUploading}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) onUploadChoiceImage(i, f);
+                              e.target.value = '';
+                            }}
+                          />
+                          {isUploading ? '업로드 중…' : '클립보드 paste'}
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {/* 정답 선택 + 선택지 추가 — 한 줄로 통합 */}
           <div className="flex items-center gap-2 pt-1 border-t border-subtle">
@@ -612,6 +701,7 @@ export function ProblemEditModal({
   initialSolution,
   initialAnswer,
   initialChoices,
+  initialChoiceImages,
   initialDifficulty,
   initialCognitiveDomain,
   initialTypeCode,
@@ -668,6 +758,64 @@ export function ProblemEditModal({
   }, [initialChoices]);
 
   const [choices, setChoices] = useState<string[]>(parsedChoices);
+
+  // ★ 그림 객관식: 선택지별 이미지 URL (choices 인덱스 정렬, null = 텍스트 옵션)
+  const initialChoiceImagesPadded = useMemo(() => {
+    const arr: (string | null)[] = [null, null, null, null, null];
+    if (Array.isArray(initialChoiceImages)) {
+      initialChoiceImages.forEach((url, i) => {
+        if (i < 5) arr[i] = (typeof url === 'string' && url.length > 0) ? url : null;
+      });
+    }
+    return arr;
+  }, [initialChoiceImages]);
+  const [choiceImages, setChoiceImages] = useState<(string | null)[]>(initialChoiceImagesPadded);
+  const [uploadingChoiceIdx, setUploadingChoiceIdx] = useState<number | null>(null);
+  // ★ DiagramBrowserModal 트리거 — 본문 도식 교체와 동일 컴포넌트 재사용.
+  //   -1 = 닫힘, 0~4 = 해당 선택지 인덱스로 열림.
+  const [choiceDiagramIdx, setChoiceDiagramIdx] = useState<number>(-1);
+
+  // 업로드 헬퍼 — base64 → /api/storage/upload-image 프록시
+  const uploadChoiceImage = useCallback(async (idx: number, file: File | Blob) => {
+    setUploadingChoiceIdx(idx);
+    try {
+      const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      const base64: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const path = `problem-crops/choice-images/${problemId}/${idx}-${Date.now()}.${ext}`;
+      const res = await fetch('/api/storage/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, path, contentType: file.type || `image/${ext}` }),
+      });
+      if (!res.ok) throw new Error(`업로드 실패: ${res.status}`);
+      const data = await res.json();
+      const url = data.publicUrl as string | null;
+      if (!url) throw new Error('publicUrl 없음');
+      setChoiceImages((prev) => {
+        const next = [...prev];
+        next[idx] = url;
+        return next;
+      });
+    } catch (e) {
+      console.error('[ChoiceImage] upload failed', e);
+      alert(`선택지 이미지 업로드 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setUploadingChoiceIdx(null);
+    }
+  }, [problemId]);
+
+  const removeChoiceImage = useCallback((idx: number) => {
+    setChoiceImages((prev) => {
+      const next = [...prev];
+      next[idx] = null;
+      return next;
+    });
+  }, []);
   const [answerType, setAnswerType] = useState<AnswerType>(() => {
     // ★ 1순위: answer_json.type 명시값 (short_answer = 서술형)
     const explicitType = (initialAnswer as Record<string, unknown> | undefined)?.type;
@@ -818,6 +966,10 @@ export function ProblemEditModal({
         return stripped ? `${circledNumbers[i]} ${stripped}` : '';
       }).filter(Boolean);
 
+      // ★ 그림 객관식: choiceImages — formattedChoices 길이만큼 자르고, 모두 null 이면 미저장.
+      const trimmedChoiceImages = choiceImages.slice(0, formattedChoices.length);
+      const hasAnyChoiceImage = trimmedChoiceImages.some((v) => typeof v === 'string' && v.length > 0);
+
       const res = await fetch(`/api/problems/${problemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -829,6 +981,8 @@ export function ProblemEditModal({
             correct_answer: finalAnswer,
             finalAnswer: finalAnswer,
             choices: formattedChoices,
+            // ★ 그림 객관식: 인덱스 정렬된 이미지 URL 배열. 모두 null 이면 키 자체 제거(텍스트 객관식).
+            ...(hasAnyChoiceImage ? { choiceImages: trimmedChoiceImages } : { choiceImages: undefined }),
             type: answerType === 'objective' ? 'multiple_choice' : 'short_answer',
             choiceLayout: choiceLayout,
             // ★ 사용자가 모달에서 직접 저장 — 재생성 시 이 답/해설을 보존(덮어쓰지 않음)
@@ -887,9 +1041,9 @@ export function ProblemEditModal({
     } finally {
       setIsSaving(false);
     }
-  // ★ choiceLayout / isMultipleAnswer 가 deps 에 빠져있어 사용자가 1줄/2줄/3줄 토글해도
-  //   handleSave 가 stale closure 의 옛 값을 저장해서 화면이 안 바뀌던 회귀.
-  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, onSaved, onClose]);
+  // ★ choiceLayout / isMultipleAnswer / choiceImages 가 deps 에 빠지면 stale closure 로
+  //   이미지 추가/레이아웃 변경이 저장 안 되던 회귀. 그림 객관식 슬롯 추가 시 같은 패턴 발생.
+  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, choiceImages, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, correctionReason, onSaved, onClose]);
 
   // ★ AI 재분석: 분류 재실행
   const handleReanalyze = useCallback(async () => {
@@ -1093,6 +1247,11 @@ export function ProblemEditModal({
             subjectiveAnswer={subjectiveAnswer} onSubjectiveAnswerChange={setSubjectiveAnswer}
             choiceLayout={choiceLayout} onChoiceLayoutChange={setChoiceLayout}
             isMultipleAnswer={isMultipleAnswer} onMultipleAnswerChange={setIsMultipleAnswer}
+            choiceImages={choiceImages}
+            onUploadChoiceImage={uploadChoiceImage}
+            onRemoveChoiceImage={removeChoiceImage}
+            uploadingChoiceIdx={uploadingChoiceIdx}
+            onOpenDiagramBrowser={(idx) => setChoiceDiagramIdx(idx)}
           />
         </div>
 
@@ -1158,6 +1317,24 @@ export function ProblemEditModal({
           onInsert={(imageDataUrl) => handleGraphInsert(imageDataUrl)}
         />
       )}
+
+      {/* 그림 객관식: 선택지별 도식 입력 — 본문 도식 교체와 동일 컴포넌트 재사용 */}
+      <DiagramBrowserModal
+        isOpen={choiceDiagramIdx >= 0}
+        onClose={() => setChoiceDiagramIdx(-1)}
+        currentImageUrl={choiceDiagramIdx >= 0 ? (choiceImages[choiceDiagramIdx] || undefined) : undefined}
+        problemNumber={undefined}
+        onSelect={(imageUrl) => {
+          if (choiceDiagramIdx >= 0) {
+            setChoiceImages((prev) => {
+              const next = [...prev];
+              next[choiceDiagramIdx] = imageUrl;
+              return next;
+            });
+          }
+          setChoiceDiagramIdx(-1);
+        }}
+      />
     </div>
   );
 }
