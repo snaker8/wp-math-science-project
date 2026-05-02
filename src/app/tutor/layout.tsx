@@ -22,19 +22,46 @@ import {
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
-const NAV_ITEMS = [
-  { href: '/tutor/dashboard', label: '대시보드', icon: LayoutDashboard },
-  // ★ 검증된 자산화 경로로 통일 (사고 반복 방지)
-  { href: '/dashboard/cloud', label: '문제 업로드', icon: Upload },
-  { href: '/tutor/problems', label: '문제 관리', icon: BookOpen },
-  { href: '/tutor/classes', label: '반 관리', icon: Users },
-  { href: '/tutor/students', label: '학생 관리', icon: GraduationCap },
-  { href: '/tutor/grading', label: '채점하기', icon: CheckSquare },
-  { href: '/tutor/clinic', label: '클리닉', icon: Stethoscope },
-  { href: '/tutor/exams', label: '시험 관리', icon: ClipboardList },
-  { href: '/tutor/analytics', label: '성적 분석', icon: BarChart3 },
-  { href: '/tutor/settings', label: '설정', icon: Settings },
-  { href: '/dashboard', label: '메인으로', icon: Home, isExternal: true },
+// 사이드바 그룹 — 학습 흐름 순서대로 묶음 (학원장 검토 톤 통일)
+const NAV_GROUPS: Array<{
+  label: string | null;
+  items: Array<{ href: string; label: string; icon: typeof LayoutDashboard; isExternal?: boolean }>;
+}> = [
+  {
+    label: null, // 첫 그룹은 무라벨 (대시보드)
+    items: [{ href: '/tutor/dashboard', label: '대시보드', icon: LayoutDashboard }],
+  },
+  {
+    label: '콘텐츠',
+    items: [
+      // ★ 검증된 자산화 경로로 통일 (사고 반복 방지)
+      { href: '/dashboard/cloud', label: '문제 업로드', icon: Upload },
+      { href: '/tutor/problems', label: '문제 관리', icon: BookOpen },
+      { href: '/tutor/exams', label: '시험 관리', icon: ClipboardList },
+    ],
+  },
+  {
+    label: '학생·반',
+    items: [
+      { href: '/tutor/classes', label: '반 관리', icon: Users },
+      { href: '/tutor/students', label: '학생 관리', icon: GraduationCap },
+    ],
+  },
+  {
+    label: '평가·분석',
+    items: [
+      { href: '/tutor/grading', label: '채점하기', icon: CheckSquare },
+      { href: '/tutor/clinic', label: '클리닉', icon: Stethoscope },
+      { href: '/tutor/analytics', label: '성적 분석', icon: BarChart3 },
+    ],
+  },
+  {
+    label: '시스템',
+    items: [
+      { href: '/tutor/settings', label: '설정', icon: Settings },
+      { href: '/dashboard', label: '메인으로', icon: Home, isExternal: true },
+    ],
+  },
 ];
 
 export default function TutorLayout({ children }: { children: React.ReactNode }) {
@@ -101,40 +128,46 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-            const isExternal = 'isExternal' in item && item.isExternal;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`nav-item ${isActive ? 'active' : ''} ${isExternal ? 'external' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Icon size={20} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi} className="nav-group">
+              {group.label && <div className="nav-group-label">{group.label}</div>}
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`nav-item ${isActive ? 'active' : ''} ${item.isExternal ? 'external' : ''}`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <Icon size={16} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
 
           {/* 관리자 권한이 있는 경우 관리자 콘솔 링크 표시 */}
           {isAcademyAdmin && (
-            <Link
-              href="/admin/dashboard"
-              className="nav-item admin-link"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Shield size={20} />
-              <span>관리자 콘솔</span>
-            </Link>
+            <div className="nav-group">
+              <div className="nav-group-label">관리</div>
+              <Link
+                href="/admin/dashboard"
+                className="nav-item admin-link"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Shield size={16} />
+                <span>관리자 콘솔</span>
+              </Link>
+            </div>
           )}
         </nav>
 
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={20} />
+            <LogOut size={16} />
             <span>로그아웃</span>
           </button>
         </div>
@@ -189,7 +222,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         }
 
         .sidebar {
-          width: 260px;
+          width: 232px;
           height: 100vh;
           position: fixed;
           left: 0;
@@ -202,7 +235,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         }
 
         .sidebar-header {
-          padding: 20px;
+          padding: 16px 16px 14px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.06);
           display: flex;
           align-items: center;
@@ -216,45 +249,64 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         .logo {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           text-decoration: none;
         }
 
         .logo-icon {
-          width: 40px;
-          height: 40px;
+          width: 32px;
+          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
           background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
-          border-radius: 10px;
+          border-radius: 8px;
           color: white;
         }
+        .logo-icon :global(svg) { width: 18px; height: 18px; }
 
         .logo span {
-          font-size: 18px;
+          font-size: 15px;
           font-weight: 700;
           color: #ffffff;
+          letter-spacing: -0.01em;
         }
 
         .sidebar-nav {
           flex: 1;
-          padding: 16px 12px;
+          padding: 8px 10px;
           overflow-y: auto;
+        }
+
+        .nav-group {
+          padding: 6px 0 4px;
+        }
+        .nav-group + .nav-group {
+          margin-top: 2px;
+          border-top: 1px solid rgba(255, 255, 255, 0.04);
+          padding-top: 8px;
+        }
+        .nav-group-label {
+          padding: 4px 10px 6px;
+          font-size: 10.5px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #52525b;
         }
 
         .nav-item {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
-          border-radius: 8px;
+          gap: 10px;
+          padding: 7px 10px;
+          border-radius: 6px;
           color: #a1a1aa;
           text-decoration: none;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 500;
-          transition: all 0.2s;
-          margin-bottom: 4px;
+          transition: background 0.15s, color 0.15s;
+          margin-bottom: 1px;
         }
 
         .nav-item:hover {
@@ -268,15 +320,10 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         }
 
         .nav-item.external {
-          margin-top: 16px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          padding-top: 16px;
+          color: #71717a;
         }
 
         .nav-item.admin-link {
-          margin-top: 16px;
-          padding-top: 16px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
           background: rgba(220, 38, 38, 0.08);
           color: #fca5a5;
         }
@@ -287,21 +334,21 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         }
 
         .sidebar-footer {
-          padding: 16px 12px;
+          padding: 10px;
           border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .logout-btn {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           width: 100%;
-          padding: 12px 16px;
+          padding: 7px 10px;
           border: none;
-          border-radius: 8px;
+          border-radius: 6px;
           background: none;
           color: #f87171;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 500;
           cursor: pointer;
           transition: background 0.2s;
@@ -322,7 +369,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
 
         .main-content {
           flex: 1;
-          margin-left: 260px;
+          margin-left: 232px;
           padding: 24px;
           min-height: 100vh;
         }
