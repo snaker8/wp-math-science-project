@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
       title,
       grade: body.grade || null,
       subject: body.subject || null,
-      problem_count: problemIds.length,
       status: 'DRAFT',
     })
     .select()

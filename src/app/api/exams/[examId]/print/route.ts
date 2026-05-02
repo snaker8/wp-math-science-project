@@ -1,5 +1,5 @@
 // ============================================================================
-// GET /api/exams/[examId]/print?variant=teacher|student
+// GET /api/exams/[examId]/print?variant=teacher|student&withAnswer=true|false
 //
 // 시험지(exams) 단위 인쇄용 HTML 반환. 사용자가 브라우저 인쇄(Ctrl+P) → PDF 저장.
 // /api/sessions/[id]/pdf 패턴 그대로, sessions 특정 부분(QR·학생명·O/X) 제거.
@@ -7,6 +7,9 @@
 // variant:
 //   teacher — 각 문항 옆 [MS코드 · ★난이도] 라벨 표시
 //   student — 라벨 제거 (학생 배포용 깔끔)
+// withAnswer:
+//   true  — 본문 뒤에 빠른정답 표 + 해설지 페이지 추가 (강사 채점용)
+//   false — 본문만 (기본)
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +27,69 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ============================================================================
+// 정답 추출 + 렌더 헬퍼 (cloud/[examId]/page.tsx formatAnswer 로직 서버 이식)
+// ============================================================================
+
+const CIRCLED_NUMS = ['', '①', '②', '③', '④', '⑤'];
+
+function extractAnswerValue(answerJson: Record<string, unknown>): unknown {
+  const candidates = ['correct_answer', 'finalAnswer', 'answer', 'value', 'values'];
+  for (const key of candidates) {
+    const v = answerJson[key];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return undefined;
+}
+
+function formatAnswerToHtml(
+  answerJson: Record<string, unknown>,
+  choices: string[]
+): string {
+  const ans = extractAnswerValue(answerJson);
+  if (ans === undefined) return '<span class="empty-ans">-</span>';
+  const isMC = choices.length >= 2;
+
+  if (typeof ans === 'number' && ans >= 1 && ans <= 5 && isMC) return CIRCLED_NUMS[ans];
+
+  const str = String(ans).trim();
+  if (!str || str === '-') return '<span class="empty-ans">-</span>';
+
+  if (isMC) {
+    if (/^[1-5]$/.test(str)) return CIRCLED_NUMS[parseInt(str, 10)];
+    if (/^[①②③④⑤]$/.test(str)) return str;
+    const circledPrefix = str.match(/^([①②③④⑤])/);
+    if (circledPrefix) return circledPrefix[1];
+    const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
+    if (sameParen && sameParen[1] === sameParen[2]) return CIRCLED_NUMS[parseInt(sameParen[1], 10)];
+    const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
+    if (verboseParen && verboseParen[1] === verboseParen[2]) return CIRCLED_NUMS[parseInt(verboseParen[1], 10)];
+    const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
+    if (banOnly) return CIRCLED_NUMS[parseInt(banOnly[1], 10)];
+  }
+
+  // 단답·서답 — 길면 결론부 추출
+  let display = str;
+  const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
+  const conclusion = str.match(
+    /(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/
+  );
+  if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
+    display = tailEq[1].trim();
+  } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
+    display = conclusion[1].trim();
+  }
+
+  // 수식 자동 래핑 (KaTeX 렌더링 보장)
+  const hasDollar = /\$/.test(display);
+  const looksLikeMath =
+    /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
+  if (!hasDollar && looksLikeMath) {
+    display = `$${display}$`;
+  }
+  return renderMixedContent(display);
 }
 
 function renderMixedContent(raw: string): string {
@@ -72,11 +138,12 @@ export async function GET(
 
   const { searchParams } = new URL(request.url);
   const variant = searchParams.get('variant') === 'teacher' ? 'teacher' : 'student';
+  const withAnswer = searchParams.get('withAnswer') === 'true';
 
   // 시험지 조회
   const { data: exam, error: examErr } = await sb
     .from('exams')
-    .select('id, title, grade, subject, total_points, problem_count')
+    .select('id, title, grade, subject, total_points')
     .eq('id', examId)
     .maybeSingle();
 
@@ -98,14 +165,14 @@ export async function GET(
 
   const { data: problems } =
     problemIds.length > 0
-      ? await sb.from('problems').select('id, content_latex, answer_json').in('id', problemIds)
-      : { data: [] as Array<{ id: string; content_latex: string; answer_json: Record<string, unknown> }> };
+      ? await sb.from('problems').select('id, content_latex, answer_json, solution_latex').in('id', problemIds)
+      : { data: [] as Array<{ id: string; content_latex: string; answer_json: Record<string, unknown>; solution_latex: string | null }> };
   const problemMap = new Map<
     string,
-    { content_latex: string; answer_json: Record<string, unknown> }
+    { content_latex: string; answer_json: Record<string, unknown>; solution_latex: string | null }
   >();
-  ((problems || []) as Array<{ id: string; content_latex: string; answer_json: Record<string, unknown> }>).forEach(
-    (p) => problemMap.set(p.id, { content_latex: p.content_latex, answer_json: p.answer_json })
+  ((problems || []) as Array<{ id: string; content_latex: string; answer_json: Record<string, unknown>; solution_latex: string | null }>).forEach(
+    (p) => problemMap.set(p.id, { content_latex: p.content_latex, answer_json: p.answer_json, solution_latex: p.solution_latex })
   );
 
   // classifications (라벨용)
@@ -168,6 +235,82 @@ export async function GET(
       `;
     })
     .join('');
+
+  // ★ 정답표·해설지 (withAnswer=true 일 때만)
+  let answerKeyHtml = '';
+  let solutionSheetHtml = '';
+  if (withAnswer) {
+    const epRowsArr = (epRows || []) as Array<{
+      sequence_number: number;
+      problem_id: string;
+      points: number | null;
+    }>;
+    const half = Math.ceil(epRowsArr.length / 2);
+    const rows: string[] = [];
+    for (let i = 0; i < half; i++) {
+      const left = epRowsArr[i];
+      const right = epRowsArr[i + half];
+      const buildAnsCell = (
+        row: { problem_id: string } | undefined
+      ): string => {
+        if (!row) return '';
+        const p = problemMap.get(row.problem_id);
+        const aj = (p?.answer_json || {}) as Record<string, unknown>;
+        const choices = Array.isArray((aj as { choices?: string[] }).choices)
+          ? ((aj as { choices: string[] }).choices)
+          : [];
+        return formatAnswerToHtml(aj, choices);
+      };
+      rows.push(`
+        <tr>
+          <td class="num-cell">${left ? left.sequence_number : ''}</td>
+          <td class="ans-cell">${buildAnsCell(left)}</td>
+          <td class="num-cell">${right ? right.sequence_number : ''}</td>
+          <td class="ans-cell">${buildAnsCell(right)}</td>
+        </tr>
+      `);
+    }
+    answerKeyHtml = `
+      <section class="answer-key">
+        <h2>빠른정답</h2>
+        <table class="answer-table">
+          <thead>
+            <tr>
+              <th>문항</th><th>정답</th><th>문항</th><th>정답</th>
+            </tr>
+          </thead>
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      </section>
+    `;
+
+    const solutionItems = epRowsArr
+      .map((row) => {
+        const p = problemMap.get(row.problem_id);
+        const sol = (p?.solution_latex || '').trim();
+        if (!sol || sol.length < 30) {
+          return `
+            <article class="solution">
+              <div class="solution-num">${row.sequence_number}.</div>
+              <div class="solution-body empty">해설 미생성 — 일괄해설 실행 필요</div>
+            </article>
+          `;
+        }
+        return `
+          <article class="solution">
+            <div class="solution-num">${row.sequence_number}.</div>
+            <div class="solution-body">${renderMixedContent(sol)}</div>
+          </article>
+        `;
+      })
+      .join('');
+    solutionSheetHtml = `
+      <section class="solution-sheet">
+        <h2>해설</h2>
+        ${solutionItems || '<p>문항이 없습니다.</p>'}
+      </section>
+    `;
+  }
 
   const examTitle = (exam as { title?: string }).title || '시험지';
   const examGrade = (exam as { grade?: string }).grade || '';
@@ -241,6 +384,39 @@ export async function GET(
   }
   .choices .choice { white-space: nowrap; }
   .katex-error { color: #c00; background: #fee; padding: 0 2px; border-radius: 2px; }
+  section.answer-key, section.solution-sheet {
+    page-break-before: always;
+    padding-top: 14px;
+    margin-top: 18px;
+  }
+  section.answer-key h2, section.solution-sheet h2 {
+    font-size: 16px; font-weight: 800;
+    border-bottom: 2px solid #111;
+    padding-bottom: 4px; margin: 0 0 12px;
+  }
+  table.answer-table {
+    width: 100%; border-collapse: collapse;
+    table-layout: fixed; font-size: 12px;
+  }
+  table.answer-table th, table.answer-table td {
+    border: 1px solid #555;
+    padding: 6px 8px; text-align: center;
+    vertical-align: middle;
+  }
+  table.answer-table thead th { background: #f5f5f5; font-weight: 700; }
+  table.answer-table .num-cell { width: 12%; font-weight: 700; }
+  table.answer-table .ans-cell { width: 38%; color: #1d4ed8; font-weight: 700; }
+  table.answer-table .empty-ans { color: #999; }
+  .solution {
+    padding: 8px 0 10px;
+    border-bottom: 1px dashed #ddd;
+    page-break-inside: avoid;
+    display: flex; gap: 10px;
+  }
+  .solution:last-child { border-bottom: none; }
+  .solution-num { font-size: 13px; font-weight: 800; min-width: 28px; }
+  .solution-body { flex: 1; font-size: 12px; line-height: 1.6; }
+  .solution-body.empty { color: #999; font-style: italic; }
   @media print {
     .controls { display: none !important; }
     .page { padding: 0; }
@@ -251,9 +427,10 @@ export async function GET(
 <body>
   <div class="page">
     <div class="controls">
-      <span>${variant === 'teacher' ? '강사용 (분류·난이도 라벨)' : '학생 배포용 (라벨 제거)'} — Ctrl+P → PDF 저장</span>
+      <span>${variant === 'teacher' ? '강사용 (분류·난이도 라벨)' : '학생 배포용 (라벨 제거)'}${withAnswer ? ' + 정답·해설' : ''} — Ctrl+P → PDF 저장</span>
       <span class="links">
-        <a href="?variant=${variant === 'teacher' ? 'student' : 'teacher'}">${variant === 'teacher' ? '학생용으로' : '강사용으로'} 전환</a>
+        <a href="?variant=${variant === 'teacher' ? 'student' : 'teacher'}${withAnswer ? '&withAnswer=true' : ''}">${variant === 'teacher' ? '학생용으로' : '강사용으로'} 전환</a>
+        <a href="?variant=${variant}${withAnswer ? '' : '&withAnswer=true'}">정답·해설 ${withAnswer ? '끄기' : '켜기'}</a>
         <button type="button" class="primary" onclick="window.print()">인쇄 / PDF 저장</button>
       </span>
     </div>
@@ -273,6 +450,8 @@ export async function GET(
 
     <main>
       ${items || '<p>문항이 없습니다.</p>'}
+      ${answerKeyHtml}
+      ${solutionSheetHtml}
     </main>
   </div>
 </body>
