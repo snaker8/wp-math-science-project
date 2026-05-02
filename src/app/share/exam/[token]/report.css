@@ -187,20 +187,22 @@
   margin-bottom: 8px;
 }
 .header-meta-pill {
-  /* height + line-height 동일값 트릭 — Pretendard 한글 line-box 상단 붙음 사고 차단 */
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 40px;
-  line-height: 40px;
   padding: 0 24px;
   background: linear-gradient(135deg, var(--rp-accent-soft) 0%, var(--rp-accent-pale) 100%);
   border: 1px solid var(--rp-accent-pale);
   border-radius: 12px;
   font-size: 18px;
   font-weight: 800;
+  line-height: 1;
   color: var(--rp-accent-strong);
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
   white-space: nowrap;
+  box-sizing: border-box;
   box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 4px rgba(221,107,32,0.06);
 }
 
@@ -288,21 +290,23 @@
   flex-wrap: wrap;
 }
 .range-chip {
-  /* height + line-height 동일값 트릭 — 단일 라인 정중앙 가장 안정적 패턴.
-     padding:9px + line-height:1 조합은 Pretendard 한글이 line-box 상단에 붙어
-     위로 떠 보이는 사고 (PR #66 후 발견). */
-  display: inline-block;
+  /* flex 정중앙 + 명시적 height — 표준 패턴. 폰트 로드 완료(document.fonts.ready) 후
+     캡처해야 Pretendard 메트릭으로 올바르게 정중앙. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 32px;
-  line-height: 32px;
   padding: 0 18px;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1;
   color: var(--rp-text);
   background: white;
   border: 1px solid var(--rp-line);
   border-radius: 999px;
   vertical-align: middle;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 /* 두 컬럼 그리드 — 단원별 도넛 영역 ↑, 난이도 영역 ↓.
@@ -459,20 +463,22 @@
   letter-spacing: -0.01em;
 }
 .diff-pill {
-  /* height + line-height 동일값 트릭 */
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
   height: 22px;
-  line-height: 22px;
   padding: 0 12px;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1;
   color: var(--rp-accent-strong);
   background: white;
   border: 1px solid var(--rp-accent-mid);
   border-radius: 999px;
   vertical-align: middle;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 .sub-body-bold {
   font-size: 16px;
@@ -782,7 +788,7 @@
   .header-title { font-size: 22px; }
   .header-eyebrow { font-size: 11px; letter-spacing: 0.16em; }
   .unit-grid, .hard-grid { grid-template-columns: 1fr; gap: 14px; }
-  .header-meta-pill { font-size: 16px; height: 36px; line-height: 36px; padding: 0 14px; }
+  .header-meta-pill { font-size: 16px; height: 36px; padding: 0 14px; }
   /* 도넛은 가운데 정렬, 범례는 좌측 정렬 */
   .donut-row { flex-direction: column; align-items: center; gap: 14px; }
   .donut-legend { width: 100%; }
@@ -805,7 +811,7 @@
   .sub-title { font-size: 15px; }
   .sub-body { font-size: 14px; line-height: 1.85; }
   .unit-kv-val, .hard-section-body, .hard-strategy-box { font-size: 13.5px; }
-  .header-meta-pill { font-size: 14px; height: 32px; line-height: 32px; padding: 0 12px; }
+  .header-meta-pill { font-size: 14px; height: 32px; padding: 0 12px; }
 }
 
 /* ─── PRINT ──────────────────────────────────────────── */
