@@ -5,7 +5,7 @@
 // /dashboard/reports/aggregate
 //
 // 5개 필터 + Phase 1·2 결과 카드. 모든 수치는 DB raw aggregation (할루시네이션 0).
-// ai_analysis 자연어는 examId/problemId 출처 명시 + "AI 생성" 라벨.
+// ai_analysis 자연어는 examId/problemId 출처 명시.
 // /dashboard/reports/[school] 와 톤·레이아웃 통일 — bg-black + zinc-900/40 + cyan/indigo.
 // ============================================================================
 
@@ -127,7 +127,7 @@ interface AggregateResponse {
     }>;
     generatedAt: string | null;
   }>;
-  insights: string[];
+  narrative: Array<{ heading: string; paragraphs: string[] }>;
 }
 
 const GRADE_OPTIONS = ['중1', '중2', '중3', '고1', '고2', '고3'] as const;
@@ -140,7 +140,6 @@ export default function AggregatePage() {
   const [allYears, setAllYears] = useState<number[]>([]);
   const [data, setData] = useState<AggregateResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
 
   // 필터
   const [year, setYear] = useState<number | null>(null);
@@ -202,14 +201,17 @@ export default function AggregatePage() {
 
   const clearSchools = () => setSelectedSchools(new Set());
 
-  const handleShare = async () => {
+  // 학부모 공유 — 새 탭으로 열기 + 클립보드 복사 동시 (popup 차단 회피용 anchor 기반)
+  const [shareCopied, setShareCopied] = useState(false);
+  const handleShareClick = async () => {
+    if (typeof window === 'undefined') return;
     const url = `${window.location.origin}/share/aggregate?${buildQueryString()}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
+      setTimeout(() => setShareCopied(false), 2200);
     } catch {
-      window.prompt('학부모 공유 링크를 복사하세요', url);
+      // 클립보드 실패해도 anchor target=_blank 가 새 탭을 열어줌
     }
   };
 
@@ -244,14 +246,17 @@ export default function AggregatePage() {
               모든 수치는 DB 기반 (할루시네이션 0)
             </span>
             {data && data.matched.examCount > 0 && (
-              <button
-                type="button"
-                onClick={handleShare}
+              <a
+                href={`/share/aggregate?${buildQueryString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleShareClick}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20"
+                title="새 탭에서 학부모 공유 페이지를 엽니다 (링크도 자동 복사)"
               >
                 {shareCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-                {shareCopied ? '복사됨' : '학부모 공유'}
-              </button>
+                {shareCopied ? '링크 복사됨 + 새 탭 열림' : '학부모 공유 페이지 열기'}
+              </a>
             )}
           </div>
         </div>
@@ -504,7 +509,7 @@ function ResultsView({ data }: { data: AggregateResponse }) {
           icon={<Layers className="h-4 w-4" />}
         />
         <StatCard
-          label="AI 분석"
+          label="분석 완료"
           value={`${data.matched.analyzedExamCount}/${data.matched.examCount}`}
           icon={<Sparkles className="h-4 w-4" />}
           accent="cyan"
@@ -517,17 +522,23 @@ function ResultsView({ data }: { data: AggregateResponse }) {
         />
       </div>
 
-      {/* 인사이트 — 데이터 기반 한 줄 요약 */}
-      {data.insights.length > 0 && (
-        <Panel title="데이터 기반 인사이트" icon={<Lightbulb className="h-4 w-4 text-amber-400" />} hint="rule-based · DB 수치만 사용">
-          <ul className="space-y-1.5 text-sm text-zinc-200">
-            {data.insights.map((ins, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-amber-400">▸</span>
-                <span>{ins}</span>
-              </li>
+      {/* 강사 인사이트 — narrative 형식 (베테랑 수학 강사가 학부모에게 풀어 설명) */}
+      {data.narrative.length > 0 && (
+        <Panel
+          title="강사 인사이트"
+          icon={<Lightbulb className="h-4 w-4 text-amber-400" />}
+          hint="모든 수치는 DB 분류·난이도에서 직접 도출 (할루시네이션 0)"
+        >
+          <div className="space-y-4 text-sm leading-relaxed text-zinc-200">
+            {data.narrative.map((sec, i) => (
+              <div key={i}>
+                <h4 className="mb-1 text-[13px] font-bold text-amber-300">{sec.heading}</h4>
+                {sec.paragraphs.map((p, j) => (
+                  <p key={j} className="text-zinc-300">{p}</p>
+                ))}
+              </div>
             ))}
-          </ul>
+          </div>
         </Panel>
       )}
 
@@ -561,9 +572,13 @@ function ResultsView({ data }: { data: AggregateResponse }) {
       {/* 학교별 비교 */}
       <SchoolBreakdownPanel data={data} />
 
-      {/* 함정 + AI 자연어 인용 */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PitfallPanel data={data} />
+      {/* 함정(있을 때만) + 시험지별 분석 인용 */}
+      <div
+        className={`grid grid-cols-1 gap-4 ${
+          data.pitfalls.length > 0 ? 'lg:grid-cols-2' : ''
+        }`}
+      >
+        {data.pitfalls.length > 0 && <PitfallPanel data={data} />}
         <AiNarrativePanel data={data} />
       </div>
 
@@ -886,12 +901,12 @@ function PitfallPanel({ data }: { data: AggregateResponse }) {
 function AiNarrativePanel({ data }: { data: AggregateResponse }) {
   return (
     <Panel
-      title={`AI 분석 인용 (${data.aiNarratives.length}건)`}
+      title={`시험지별 분석 인용 (${data.aiNarratives.length}건)`}
       icon={<Sparkles className="h-4 w-4 text-violet-400" />}
-      hint="✻ AI 생성 — 출처 시험지 ID 명시"
+      hint="출처 시험지 ID 명시"
     >
       {data.aiNarratives.length === 0 ? (
-        <Empty>AI 분석 완료 시험지 없음</Empty>
+        <Empty>분석 완료 시험지 없음</Empty>
       ) : (
         <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
           {data.aiNarratives.map((n) => (
@@ -899,7 +914,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
               <summary className="cursor-pointer text-zinc-200">
                 <span className="font-semibold">{n.school}</span>
                 <span className="ml-1.5 text-zinc-500">{n.year} · {n.examTitle.slice(0, 30)}</span>
-                <span className="ml-1.5 text-[10px] text-violet-400">✻ AI</span>
+                <span className="ml-1.5 text-[10px] text-violet-400">✻ 시험지 분석</span>
               </summary>
               {n.summary && (
                 <div className="mt-2 text-zinc-300">
@@ -942,7 +957,7 @@ function ExamListPanel({ data }: { data: AggregateResponse }) {
               <th className="py-1.5 px-2 text-right">문항</th>
               <th className="py-1.5 px-2 text-right">분류</th>
               <th className="py-1.5 px-2 text-left">난이도</th>
-              <th className="py-1.5 pl-2 text-center">AI</th>
+              <th className="py-1.5 pl-2 text-center">분석</th>
             </tr>
           </thead>
           <tbody>

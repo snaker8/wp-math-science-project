@@ -4,6 +4,7 @@
 // 인증 없이 접근. 라이트 프리미엄 보고서 디자인.
 // ============================================================================
 
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ShareReportClient } from './ShareReportClient';
@@ -11,6 +12,59 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 export const dynamic = 'force-dynamic';
+
+// ─── 학교명 추출 (이전 같은 로직 사용 — 단순 정규식) ──────────────────────
+// 시험지 title 예: "2026 1학기 동백중 중3 중간고사" → "동백중"
+function extractSchoolFromTitle(title: string | null | undefined): string | null {
+  if (!title) return null;
+  const m = title.match(/([가-힣A-Za-z0-9]+(?:초|중|고|대))/);
+  return m ? m[1] : null;
+}
+
+// ─── OG 메타데이터 — 카톡/SNS 미리보기용 ─────────────────────────────────
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const fallback: Metadata = {
+    title: '학교 기출 분석 — 과사람 수학',
+    description: '내신 시험지 단원·난이도·고난도 문항 분석 리포트',
+    openGraph: {
+      title: '학교 기출 분석',
+      description: '내신 시험지 단원·난이도·고난도 문항 분석 리포트',
+      type: 'article',
+      siteName: '과사람 학교 기출 분석',
+    },
+    twitter: { card: 'summary' },
+  };
+  if (!supabaseAdmin || !token || token.length < 16) return fallback;
+  try {
+    const { data } = await supabaseAdmin
+      .from('exams')
+      .select('title, grade')
+      .eq('share_token', token)
+      .maybeSingle();
+    if (!data) return fallback;
+    const school = extractSchoolFromTitle(data.title) || '학교';
+    const title = `${school} 기출 분석 리포트${data.grade ? ` · ${data.grade}` : ''}`;
+    const description = `${data.title} — 단원 분포 · 난이도 · 고난도 문항 출제 의도 분석`;
+    return {
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        type: 'article',
+        siteName: '과사람 학교 기출 분석',
+      },
+      twitter: { card: 'summary', title, description },
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 const DOMAIN_LABELS: Record<string, string> = {
   CALCULATION: '계산',
