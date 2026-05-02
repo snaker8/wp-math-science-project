@@ -16,6 +16,7 @@ import {
   Shield,
   UserCog,
   Home,
+  Wrench,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: '사용자 관리', icon: Users },
   { href: '/admin/teachers', label: '강사 권한 관리', icon: UserCog },
   { href: '/admin/problems', label: '문제 관리', icon: BookOpen },
+  { href: '/admin/answer-fix', label: '객관식 정답 회복', icon: Wrench },
   { href: '/admin/analytics', label: '통계', icon: BarChart3 },
   { href: '/admin/settings', label: '설정', icon: Settings },
   { href: '/dashboard', label: '메인으로', icon: Home },
