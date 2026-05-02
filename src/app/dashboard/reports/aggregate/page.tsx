@@ -610,8 +610,8 @@ function DifficultyPanel({ data }: { data: AggregateResponse }) {
           )}
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
-          <span>1 기초</span>
-          <span>5 심화</span>
+          <span>1 평이</span>
+          <span>5 난이도 있음</span>
           <span>10 최고난도</span>
         </div>
       </div>
@@ -638,7 +638,7 @@ function DifficultyPanel({ data }: { data: AggregateResponse }) {
         })}
       </div>
       <div className="mt-2 text-[10px] text-zinc-500">
-        💡 학부모 가이드 — 1~2 기초 / 3~4 응용 / 5~6 심화 (내신 평균) / 7~8 고난도 (상위권 변별) / 9~10 최고난도
+        💡 학부모 가이드 — 1~2 평이 / 3~4 보통 / 5~6 난이도 있음 (내신 평균) / 7~8 매우 난이도 있음 (상위권 변별) / 9~10 최고난도
       </div>
     </Panel>
   );

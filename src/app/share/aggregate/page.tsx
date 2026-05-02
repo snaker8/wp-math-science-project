@@ -113,19 +113,19 @@ interface AggregateResponse {
 
 // 5밴드 색상 (크림 톤 기준 매핑)
 const BAND_COLOR: Record<string, { bg: string; text: string; bar: string; soft: string }> = {
-  기초: { bg: 'bg-yellow-50', text: 'text-yellow-700', bar: 'bg-yellow-400', soft: '#FEF3C7' },
-  응용: { bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-400', soft: '#D1FAE5' },
-  심화: { bg: 'bg-orange-50', text: 'text-orange-700', bar: 'bg-orange-400', soft: '#FFEBD7' },
-  고난도: { bg: 'bg-rose-50', text: 'text-rose-700', bar: 'bg-rose-400', soft: '#FFE4E6' },
-  최고난도: { bg: 'bg-rose-100', text: 'text-rose-800', bar: 'bg-rose-600', soft: '#FECACA' },
+  '평이': { bg: 'bg-yellow-50', text: 'text-yellow-700', bar: 'bg-yellow-400', soft: '#FEF3C7' },
+  '보통': { bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-400', soft: '#D1FAE5' },
+  '난이도 있음': { bg: 'bg-orange-50', text: 'text-orange-700', bar: 'bg-orange-400', soft: '#FFEBD7' },
+  '매우 난이도 있음': { bg: 'bg-rose-50', text: 'text-rose-700', bar: 'bg-rose-400', soft: '#FFE4E6' },
+  '최고난도': { bg: 'bg-rose-100', text: 'text-rose-800', bar: 'bg-rose-600', soft: '#FECACA' },
 };
 
 function bandFor(avg: number | null | undefined): string {
   if (avg == null) return '';
-  if (avg <= 2) return '기초';
-  if (avg <= 4) return '응용';
-  if (avg <= 6) return '심화';
-  if (avg <= 8) return '고난도';
+  if (avg <= 2) return '평이';
+  if (avg <= 4) return '보통';
+  if (avg <= 6) return '난이도 있음';
+  if (avg <= 8) return '매우 난이도 있음';
   return '최고난도';
 }
 
@@ -453,8 +453,8 @@ function DifficultyView({ data }: { data: AggregateResponse }) {
           )}
         </div>
         <div className="mt-1 flex justify-between text-[10px] font-medium text-zinc-500">
-          <span>1 기초</span>
-          <span>5 심화</span>
+          <span>1 평이</span>
+          <span>5 난이도 있음</span>
           <span>10 최고난도</span>
         </div>
       </div>
@@ -479,7 +479,7 @@ function DifficultyView({ data }: { data: AggregateResponse }) {
         })}
       </div>
       <div className="mt-3 rounded-md bg-zinc-50 p-2.5 text-[11px] text-zinc-600">
-        <strong className="text-orange-700">학부모 가이드</strong> — 1~2 기초 (교과서 기본) / 3~4 응용 / 5~6 심화 (내신 평균) / 7~8 고난도 (상위권 변별) / 9~10 최고난도
+        <strong className="text-orange-700">학부모 가이드</strong> — 1~2 평이 (교과서 기본) / 3~4 보통 / 5~6 난이도 있음 (내신 평균) / 7~8 매우 난이도 있음 (상위권 변별) / 9~10 최고난도
       </div>
     </div>
   );
