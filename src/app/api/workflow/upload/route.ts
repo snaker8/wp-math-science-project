@@ -13,6 +13,7 @@ import { processUploadJob, getStatusLabel, convertedPdfStore } from '@/lib/workf
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
+import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -1492,12 +1493,19 @@ async function saveEditedProblemsDirect(
           content_html: null,
           solution_latex: edited.solution || '',
           solution_html: null,
-          answer_json: {
-            finalAnswer: String(edited.answer || ''),
-            type: formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer',
-            correct_answer: String(edited.answer || ''),
-            choices: formattedChoices,
-          },
+          answer_json: (() => {
+            // ★ 객관식 정답 박힘 차단 — 0/모호값은 빈값으로 normalize.
+            //   메모리: feedback_objective_answer_safety.md (261개 박힘 사고)
+            const isObj = formattedChoices.length > 0;
+            const rawAns = String(edited.answer || '');
+            const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
+            return {
+              finalAnswer: safeAns,
+              type: isObj ? 'multiple_choice' : 'short_answer',
+              correct_answer: safeAns,
+              choices: formattedChoices,
+            };
+          })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
           source_number: edited.number || null,
@@ -2103,12 +2111,18 @@ async function saveProblemsToDB(
             return parts.length > 0 ? parts.join('\n') : '해설 자동 생성 실패';
           })(),
           solution_html: null,
-          answer_json: {
-            finalAnswer: result.solution.finalAnswer || '',
-            type: (result.choices && result.choices.length > 0) ? 'multiple_choice' : 'short_answer',
-            correct_answer: result.solution.finalAnswer || '',
-            choices: result.choices || [],
-          },
+          answer_json: (() => {
+            // ★ 객관식 정답 박힘 차단 — 0/모호값은 빈값으로 normalize.
+            const isObj = !!(result.choices && result.choices.length > 0);
+            const rawAns = result.solution.finalAnswer || '';
+            const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
+            return {
+              finalAnswer: safeAns,
+              type: isObj ? 'multiple_choice' : 'short_answer',
+              correct_answer: safeAns,
+              choices: result.choices || [],
+            };
+          })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
           source_number: problemNum || null,

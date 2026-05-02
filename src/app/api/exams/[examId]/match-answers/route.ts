@@ -277,8 +277,15 @@ export async function PUT(
       const mergedAj: Record<string, unknown> = { ...answerJson };
 
       if (match.newAnswer) {
-        mergedAj.finalAnswer = match.newAnswer;
-        mergedAj.correct_answer = match.newAnswer;
+        // ★ 객관식 박힘 차단 — 0/모호값은 빈값으로 normalize.
+        //   메모리: feedback_objective_answer_safety.md
+        const isObjective = mergedAj.type === 'multiple_choice'
+          || (Array.isArray(mergedAj.choices) && (mergedAj.choices as unknown[]).length > 0);
+        const safeAns = isObjective
+          ? (await import('@/lib/validation/objective-answer')).normalizeObjectiveAnswer(match.newAnswer)
+          : match.newAnswer;
+        mergedAj.finalAnswer = safeAns;
+        mergedAj.correct_answer = safeAns;
         mergedAj.answer_user_edited = true;    // ★ 일괄 재생성이 안 건드리도록
         mergedAj.uploaded_at = new Date().toISOString();
       }
