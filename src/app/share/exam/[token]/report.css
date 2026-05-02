@@ -187,17 +187,18 @@
   margin-bottom: 8px;
 }
 .header-meta-pill {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 11px 24px;
+  /* inline-block + 대칭 padding + line-height:1 — html2canvas/모바일 시각 중앙 보장 */
+  display: inline-block;
+  padding: 12px 24px;
   background: linear-gradient(135deg, var(--rp-accent-soft) 0%, var(--rp-accent-pale) 100%);
   border: 1px solid var(--rp-accent-pale);
   border-radius: 12px;
   font-size: 18px;
   font-weight: 800;
+  line-height: 1;
   color: var(--rp-accent-strong);
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
   box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 4px rgba(221,107,32,0.06);
 }
 
@@ -285,15 +286,18 @@
   flex-wrap: wrap;
 }
 .range-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 18px;
+  /* inline-flex + align-items:center 는 html2canvas 캡처 시 텍스트가 아래로 처지는 사고.
+     inline-block + 대칭 padding + line-height:1 로 두 환경 모두 시각 중앙. */
+  display: inline-block;
+  padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1;
   color: var(--rp-text);
   background: white;
   border: 1px solid var(--rp-line);
   border-radius: 999px;
+  vertical-align: middle;
 }
 
 /* 두 컬럼 그리드 — 단원별 도넛 영역 ↑, 난이도 영역 ↓.
@@ -450,14 +454,17 @@
   letter-spacing: -0.01em;
 }
 .diff-pill {
+  display: inline-block;
   margin-left: auto;
-  padding: 4px 12px;
+  padding: 6px 12px;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1;
   color: var(--rp-accent-strong);
   background: white;
   border: 1px solid var(--rp-accent-mid);
   border-radius: 999px;
+  vertical-align: middle;
 }
 .sub-body-bold {
   font-size: 16px;
