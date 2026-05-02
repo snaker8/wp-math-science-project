@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Settings, LogOut, HelpCircle } from 'lucide-react';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
@@ -103,6 +103,12 @@ function NavTab({
         (child) => pathname === child.href || pathname.startsWith(child.href + '/')
       );
 
+  // ★ DB 자산화 — 특수 처리: 클라우드 페이지면 글로벌 이벤트, 다른 페이지면 router.push.
+  //   Next.js Link 가 같은 URL 로는 navigation 안 일으키는 회귀 차단 (PR #47/#49 사고).
+  if (group.id === 'db-assetize') {
+    return <DbAssetizeTab group={group} isActive={!!isActive} pathname={pathname} />;
+  }
+
   // 직접 링크
   if (group.href && !group.children) {
     return (
@@ -189,6 +195,49 @@ function NavTab({
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ============================================================================
+// DbAssetizeTab — DB 자산화 단독 탭. Link 가 같은 URL 로 navigation 안 일으키는
+// 문제 회피용. pathname 보고 분기.
+//   - 클라우드 페이지: window.dispatchEvent('cloud:open-upload') → CloudListClient
+//                     가 즉시 모달 오픈
+//   - 다른 페이지: router.push('/dashboard/cloud?upload=1') → 마운트 시 모달
+// ============================================================================
+function DbAssetizeTab({
+  group,
+  isActive,
+  pathname,
+}: {
+  group: NavGroup;
+  isActive: boolean;
+  pathname: string;
+}) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (pathname.startsWith('/dashboard/cloud')) {
+          // 같은 페이지 — 즉시 모달
+          window.dispatchEvent(new CustomEvent('cloud:open-upload'));
+        } else {
+          // 다른 페이지 — 이동 (?upload=1 으로 mount 시 자동 오픈)
+          router.push('/dashboard/cloud?upload=1');
+        }
+      }}
+      className={`
+        flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+        ${isActive
+          ? 'text-accent bg-accent-muted'
+          : 'text-content-secondary hover:text-content-primary hover:bg-surface-raised'
+        }
+      `}
+    >
+      <group.icon size={16} />
+      <span>{group.label}</span>
+    </button>
   );
 }
 
