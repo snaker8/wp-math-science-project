@@ -18,6 +18,8 @@ export interface ExamProblemData {
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
   choices: string[];
+  /** ★ 그림 객관식: 선택지별 이미지 URL. choices와 인덱스 정렬. null = 텍스트 옵션 */
+  choiceImages?: (string | null)[];
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
   /** ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) */
@@ -228,6 +230,10 @@ function toExamProblemData(
   const choiceHeaders: string[] | undefined = Array.isArray(answerJson.choiceHeaders) ? answerJson.choiceHeaders : undefined;
   // ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로)
   const choiceLayout: number | undefined = typeof answerJson.choiceLayout === 'number' ? answerJson.choiceLayout : undefined;
+  // ★ 그림 객관식: 선택지별 이미지 URL (choices 인덱스 정렬, null = 텍스트 옵션)
+  const choiceImages: (string | null)[] | undefined = Array.isArray(answerJson.choiceImages)
+    ? answerJson.choiceImages.map((v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null))
+    : undefined;
 
   // ★ 2순위: content_latex에서 추출 (fallback)
   const { content: rawContent, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
@@ -296,6 +302,7 @@ function toExamProblemData(
     choices,
     choiceHeaders,
     choiceLayout,
+    choiceImages,
     answer: extractAnswerNumber(answerJson),
     answerJson: answerJson as Record<string, unknown>,
     solution: problem.solution_latex || '',

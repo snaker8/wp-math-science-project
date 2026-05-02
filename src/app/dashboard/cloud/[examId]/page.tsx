@@ -90,6 +90,8 @@ interface ProblemData {
   cognitiveDomain: 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING';
   content: string;
   choices: string[];
+  /** ★ 그림 객관식: 선택지별 이미지 URL (choices 인덱스 정렬, null = 텍스트 옵션) */
+  choiceImages?: (string | null)[];
   /** ★ 표 형식 선택지 열 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) */
   choiceHeaders?: string[];
   /** ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) */
@@ -1284,24 +1286,29 @@ function ProblemCardView({
               const processed = problem.choices.map((choice, i) => {
                 const circled = ['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`;
                 const stripped = cleanChoiceText(choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, ''));
-                return { circled, stripped };
+                // ★ 그림 객관식: 옵션별 이미지 URL
+                const imgUrl = problem.choiceImages?.[i] || null;
+                return { circled, stripped, imgUrl };
               });
+              const hasAnyChoiceImage = processed.some(c => !!c.imgUrl);
               const maxLen = Math.max(...processed.map(c => c.stripped.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length));
 
               // ★ 저장된 choiceLayout 우선 적용 (1=1열, 2=2열, 3=3열, 5=가로)
               const savedLayout = problem.choiceLayout ?? (problem.answerJson as { choiceLayout?: number })?.choiceLayout;
 
               // 레이아웃 결정: savedLayout이 있으면 무조건 우선, 없으면 maxLen 자동감지
+              // ★ 그림 객관식이면 inline(가로 한 줄) 모드는 강제 해제 — 이미지가 줄을 깨므로 grid로 강제
               let gridClass = 'mt-2 space-y-1.5 pl-4'; // 기본: 1열
               let isInline = false;
               if (savedLayout) {
-                if (savedLayout === 5) { isInline = true; }
+                if (savedLayout === 5 && !hasAnyChoiceImage) { isInline = true; }
+                else if (savedLayout === 5 && hasAnyChoiceImage) { gridClass = 'mt-2 grid grid-cols-5 gap-x-3 gap-y-2 pl-4'; }
                 else if (savedLayout === 3) { gridClass = 'mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 pl-4'; }
                 else if (savedLayout === 2) { gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4'; }
                 // savedLayout === 1 → 기본 1열
               } else {
-                if (maxLen <= 12) isInline = true;
-                else if (maxLen <= 30) gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4';
+                if (maxLen <= 12 && !hasAnyChoiceImage) isInline = true;
+                else if (maxLen <= 30 || hasAnyChoiceImage) gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4';
               }
 
               if (isInline) {
@@ -1321,7 +1328,20 @@ function ProblemCardView({
                   {processed.map((c, i) => (
                     <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
                       <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
-                      <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
+                      <div className="flex flex-col gap-1 min-w-0">
+                        {/* 그림 객관식: 이미지 있으면 표시 */}
+                        {c.imgUrl && (
+                          <img
+                            src={c.imgUrl}
+                            alt={`선택지 ${i + 1}`}
+                            className="max-h-24 max-w-full rounded border border bg-white object-contain"
+                          />
+                        )}
+                        {/* 텍스트 — 비어있어도 항상 렌더(렌더러에서 빈 문자열 처리) */}
+                        {c.stripped && (
+                          <MixedContentRenderer content={c.stripped} className="text-content-secondary" />
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2853,6 +2873,7 @@ export default function CloudExamDetailPage() {
       cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
       content: p.content,
       choices: p.choices,
+      choiceImages: p.choiceImages,
       choiceHeaders: p.choiceHeaders,
       choiceLayout: p.choiceLayout,
       answer: p.answer,
@@ -4291,6 +4312,7 @@ export default function CloudExamDetailPage() {
           initialSolution={editModalProblem.solution || ''}
           initialAnswer={editModalProblem.answerJson || { correct_answer: editModalProblem.answer }}
           initialChoices={editModalProblem.choices}
+          initialChoiceImages={editModalProblem.choiceImages}
           initialDifficulty={editModalProblem.difficulty}
           initialCognitiveDomain={editModalProblem.cognitiveDomain}
           initialTypeCode={editModalProblem.typeCode}

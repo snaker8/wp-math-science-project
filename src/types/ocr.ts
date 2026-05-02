@@ -97,6 +97,7 @@ export interface MathpixLine {
 export interface ParsedChoice {
   label: string; // "1", "2", "3", "4", "5" 또는 "ㄱ", "ㄴ", "ㄷ"
   content_latex: string;
+  image_url?: string | null; // 그림 객관식: 선택지 이미지 URL
 }
 
 /**
