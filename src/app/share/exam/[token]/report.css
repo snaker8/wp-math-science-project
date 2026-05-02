@@ -24,11 +24,11 @@
   --rp-navy: #1F2937;
   --rp-navy-soft: #F3F4F6;
 
-  /* 난이도 색상 — 정제된 파스텔 (쉬움→어려움) */
-  --rp-diff-low: #FBE48F;      /* 1~2: 부드러운 노랑 */
-  --rp-diff-mid: #C8E9CD;      /* 3~4: sage 그린 */
-  --rp-diff-high: #F4C7C5;     /* 5~6: muted 코럴 */
-  --rp-diff-extra: #E8A6A3;    /* 7~8: 깊은 코럴 */
+  /* 난이도 색상 — 진한 파스텔 (쉬움→어려움) */
+  --rp-diff-low: #F5C648;      /* 1~2: 진한 노랑 */
+  --rp-diff-mid: #92D69D;      /* 3~4: 진한 sage 그린 */
+  --rp-diff-high: #E89690;     /* 5~6: 진한 코럴 */
+  --rp-diff-extra: #C97874;    /* 7~8: 깊은 코럴 */
 
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background: var(--rp-bg);
