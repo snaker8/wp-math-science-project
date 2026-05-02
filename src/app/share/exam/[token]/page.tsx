@@ -6,7 +6,6 @@
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import type { Metadata } from 'next';
 import { ShareReportClient } from './ShareReportClient';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
@@ -22,6 +21,7 @@ function extractSchoolFromTitle(title: string | null | undefined): string | null
 }
 
 // ─── OG 메타데이터 — 카톡/SNS 미리보기용 ─────────────────────────────────
+// 썸네일은 같은 폴더의 opengraph-image.tsx 가 자동 등록 → summary_large_image 사용.
 export async function generateMetadata({
   params,
 }: {
@@ -29,15 +29,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { token } = await params;
   const fallback: Metadata = {
-    title: '학교 기출 분석 — 과사람 수학',
+    title: '학교 기출 분석',
     description: '내신 시험지 단원·난이도·고난도 문항 분석 리포트',
     openGraph: {
       title: '학교 기출 분석',
       description: '내신 시험지 단원·난이도·고난도 문항 분석 리포트',
       type: 'article',
-      siteName: '과사람 학교 기출 분석',
+      siteName: '학교 기출 분석',
     },
-    twitter: { card: 'summary' },
+    twitter: { card: 'summary_large_image' },
   };
   if (!supabaseAdmin || !token || token.length < 16) return fallback;
   try {
@@ -57,9 +57,9 @@ export async function generateMetadata({
         title,
         description,
         type: 'article',
-        siteName: '과사람 학교 기출 분석',
+        siteName: '학교 기출 분석',
       },
-      twitter: { card: 'summary', title, description },
+      twitter: { card: 'summary_large_image', title, description },
     };
   } catch {
     return fallback;
@@ -188,39 +188,6 @@ async function fetchData(token: string): Promise<PageData | null> {
     },
     analysis: hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null,
   } as PageData;
-}
-
-// ============================================================================
-// generateMetadata — 카톡/슬랙/페북 등 외부에 공유 시 미리보기에 학교명·시험명 노출.
-// title/description 은 OG·Twitter 카드에 모두 적용. 썸네일은 opengraph-image.tsx.
-// ============================================================================
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}): Promise<Metadata> {
-  const { token } = await params;
-  const data = await fetchData(token);
-  if (!data) {
-    return { title: '시험지 분석 리포트 — 과사람' };
-  }
-  const title = `${data.exam.title} 분석 리포트 — 과사람`;
-  const desc = `총 ${data.exam.problemCount}문항 · 평균 난이도 ${data.stats.avgDifficulty}/10`;
-  return {
-    title,
-    description: desc,
-    openGraph: {
-      title,
-      description: desc,
-      type: 'article',
-      // 썸네일은 opengraph-image.tsx 가 자동 등록
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description: desc,
-    },
-  };
 }
 
 export default async function SharedExamReportPage({
