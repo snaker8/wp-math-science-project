@@ -269,6 +269,9 @@
   font-weight: 700;
   color: var(--rp-text);
   margin-bottom: 12px;
+  /* 한국어가 글자단위로 끊기지 않도록 (예: "난이도별 문항 분 / 포 (1~10단계)") */
+  word-break: keep-all;
+  line-height: 1.35;
 }
 .info-label svg {
   width: 14px;
@@ -319,6 +322,11 @@
   justify-content: space-between;
   align-items: center; /* baseline → center: html2canvas/모바일에서 라벨이 아래로 처지는 현상 방지 */
   gap: 8px;
+}
+/* 좌측 라벨 (예: "3~4단계") — 좁은 컬럼에서 '3~4 / 단계'로 글자단위 break 차단 */
+.bar-name > span:first-child {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .bar-pct {
   font-size: 14px;
@@ -739,6 +747,11 @@
 }
 
 /* ─── RESPONSIVE ─────────────────────────────────────── */
+/* 중간 폭 (≤900px): info-grid-2 의 0.8fr 컬럼이 좁아져 라벨이 글자단위로 끊기는 사고
+   (예: "난이도별 문항 분 / 포", "3~4 / 단계") 차단 — 도넛/막대 차트 1열로 스택 */
+@media (max-width: 900px) {
+  .info-grid-2 { grid-template-columns: 1fr; gap: 24px; }
+}
 @media (max-width: 768px) {
   .report-shell { padding: 20px 12px 60px; }
   .report-paper { padding: 28px 18px; border-radius: 12px; }
@@ -747,7 +760,7 @@
   .unit-card, .hard-card { padding: 18px 16px; }
   .header-title { font-size: 22px; }
   .header-eyebrow { font-size: 11px; letter-spacing: 0.16em; }
-  .info-grid-2, .unit-grid, .hard-grid { grid-template-columns: 1fr; gap: 14px; }
+  .unit-grid, .hard-grid { grid-template-columns: 1fr; gap: 14px; }
   .header-meta-pill { font-size: 16px; padding: 8px 14px; }
   /* 도넛은 가운데 정렬, 범례는 좌측 정렬 */
   .donut-row { flex-direction: column; align-items: center; gap: 14px; }
