@@ -227,6 +227,13 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     setBusy(busyKey);
     try {
       const html2canvas = (await import('html2canvas')).default;
+      // Pretendard 등 웹폰트가 로드되기 전 캡처하면 시스템 폰트로 fallback 되어
+      // 메트릭이 달라져 칩/알약 텍스트가 어긋남. 폰트 로드 완료까지 대기.
+      try {
+        await document.fonts.ready;
+      } catch {
+        /* 폰트 API 미지원 환경은 무시 */
+      }
       const w = Math.max(el.scrollWidth, 1);
       const h = Math.max(el.scrollHeight, 1);
       const desired = Math.max(6, (window.devicePixelRatio || 1) * 4);
