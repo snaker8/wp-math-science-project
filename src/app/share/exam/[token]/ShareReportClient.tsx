@@ -130,14 +130,15 @@ function DonutChart({ items, total }: { items: DonutSlice[]; total: number }) {
       {slices.map((s, i) => (
         <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="2" />
       ))}
-      {/* 중앙 텍스트 */}
-      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="10" fill="#6B7280" fontWeight="600" letterSpacing="0.5">
+      {/* 중앙 텍스트 — 3줄 묶음을 cy 기준 시각 중앙에 위치
+          (SVG <text> 기본 정렬은 alphabetic baseline 이라 그대로 두면 ~7px 아래로 처짐) */}
+      <text x={cx} y={cy - 15} textAnchor="middle" fontSize="10" fill="#6B7280" fontWeight="600" letterSpacing="0.5">
         TOTAL
       </text>
-      <text x={cx} y={cy + 14} textAnchor="middle" fontSize="22" fill="#1F2937" fontWeight="800">
+      <text x={cx} y={cy + 7} textAnchor="middle" fontSize="22" fill="#1F2937" fontWeight="800">
         {total}
       </text>
-      <text x={cx} y={cy + 28} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="500">
+      <text x={cx} y={cy + 21} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="500">
         문항
       </text>
     </svg>
