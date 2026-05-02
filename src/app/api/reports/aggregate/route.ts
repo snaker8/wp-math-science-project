@@ -503,37 +503,72 @@ export async function GET(request: NextRequest) {
     .filter((x): x is AiNarrative => x !== null);
 
   // ─────────────────────────────────────────────────────────────────────
-  // [Phase 2] 데이터 기반 인사이트 — rule-based, 모든 주장은 raw 수치 기반
+  // [Phase 2] 베테랑 강사 톤 narrative — rule-based, 데이터 기반 + 해석
+  // 학부모도 이해할 수 있게 풀어 설명. 모든 수치는 raw aggregation 결과.
   // ─────────────────────────────────────────────────────────────────────
-  const insights: string[] = [];
+  const narrative: Array<{ heading: string; paragraphs: string[] }> = [];
 
-  // 매칭 요약
+  // 1. 한 줄 요약 — 무엇을 분석했나
   if (matchedExams.length > 0) {
-    insights.push(
-      `매칭 ${matchedExams.length}건 / 학교 ${totalSchools}곳 / 분류 완료 ${classifiedProblems}/${totalProblems}문항 (${Math.round((classifiedProblems / Math.max(1, totalProblems)) * 100)}%)`
-    );
+    const subjLabel = filterGrade ? ` ${filterGrade}` : '';
+    const semLabel = filterSemester ? ` ${filterSemester}학기` : '';
+    const typeLabel = filterExamType ? ` ${filterExamType}` : '';
+    const yearLabel = filterYear ? `${filterYear}학년도` : '최근';
+    narrative.push({
+      heading: '이번 분석의 한 줄 요약',
+      paragraphs: [
+        `${yearLabel}${subjLabel}${semLabel}${typeLabel}고사를 ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
+          classifiedProblems === totalProblems
+            ? '모든 문항이 단원·난이도 분류 완료'
+            : `${classifiedProblems}/${totalProblems}문항 분류 완료`
+        }됐고, 아래 단원 분포·난이도 분포·학교별 비교를 함께 보시면 학교별 출제 성향이 한눈에 잡힙니다.`,
+      ],
+    });
   }
 
-  // 평균 난이도 + 밴드
+  // 2. 평균 난이도 해석 — 강사 톤
   if (overall.avg != null) {
     const band = difficultyToBand(overall.avg);
-    insights.push(
-      `시험지 평균 난이도 ${overall.avg.toFixed(2)}/10${band ? ` (${band.label} 밴드)` : ''}${overall.std != null ? `, 표준편차 ${overall.std.toFixed(2)}` : ''}`
-    );
+    let interp = '';
+    if (overall.avg <= 4) {
+      interp =
+        '교과서 기본 개념과 정형 응용 풀이에 무게가 실려 있습니다. 기본기를 정확히 숙지한 학생이 안정적으로 점수를 확보할 수 있는 구간이며, 단원 통합 응용보다는 단일 개념 정확도가 변별 요소가 됩니다.';
+    } else if (overall.avg <= 6) {
+      interp =
+        '내신 평균 변별이 본격적으로 작동하는 구간입니다. 두 개념을 결합하거나 조건을 정확히 분석해야 풀리는 문항이 일정 비율 포함되어, 평소 단원 통합 학습 여부가 점수를 가르는 결정적 요소가 됩니다.';
+    } else {
+      interp =
+        '상위권 변별이 강하게 작동하는 구간입니다. 한 문제에 다단계 추론과 복합 조건이 결합돼, 풀이 시간 관리와 핵심 단계 정확도가 점수에 직결됩니다.';
+    }
+    narrative.push({
+      heading: '평균 난이도와 해석',
+      paragraphs: [
+        `시험지 평균은 ${overall.avg.toFixed(2)}/10 (${band?.label ?? '-'})${
+          overall.std != null ? `, 학교 간 편차는 σ ${overall.std.toFixed(2)}` : ''
+        }로 집계되었습니다.`,
+        interp,
+      ],
+    });
   }
 
-  // 공통 단원 — 매칭 학교 모두 출제
+  // 3. 공통 단원 — 모든 학교가 출제한 단원
   const universalUnits = unitFrequency.filter(
     (u) => totalSchools > 0 && u.schoolCount === totalSchools
   );
   if (universalUnits.length > 0) {
-    const names = universalUnits.slice(0, 3).map((u) => u.level1Name).join(', ');
-    insights.push(
-      `${totalSchools}/${totalSchools}곳 학교 모두 출제: ${names}${universalUnits.length > 3 ? ` 외 ${universalUnits.length - 3}개` : ''}`
-    );
+    const top = universalUnits.slice(0, 3).map((u) => u.level1Name);
+    narrative.push({
+      heading: `${totalSchools}/${totalSchools}곳 학교 모두 출제한 핵심 단원`,
+      paragraphs: [
+        `${top.join(' · ')}${
+          universalUnits.length > 3 ? ` 외 ${universalUnits.length - 3}개 단원` : ''
+        }은 매칭된 모든 학교가 빠짐없이 출제했습니다.`,
+        '학교별로 출제 비중과 난이도만 다를 뿐 출제 자체를 건너뛰는 학교가 없으므로, 시험 대비에서 가장 먼저 마무리해야 할 1순위 영역입니다. 이 단원에서 점수를 잃으면 학교 평균 이하로 떨어질 위험이 높습니다.',
+      ],
+    });
   }
 
-  // 학교별 outlier — 평균에서 ±0.6 이상 차이
+  // 4. 학교별 난이도 outlier
   if (overall.avg != null) {
     const harder = schoolBreakdown
       .filter((s) => s.avgDifficulty != null && s.avgDifficulty - overall.avg! >= 0.6)
@@ -541,62 +576,90 @@ export async function GET(request: NextRequest) {
     const easier = schoolBreakdown
       .filter((s) => s.avgDifficulty != null && overall.avg! - s.avgDifficulty >= 0.6)
       .sort((a, b) => (a.avgDifficulty || 0) - (b.avgDifficulty || 0));
+    const ps: string[] = [];
     if (harder.length > 0) {
-      insights.push(
-        `그룹 평균 대비 +0.6 이상: ${harder
-          .slice(0, 3)
-          .map((s) => `${s.school} ${(s.avgDifficulty || 0).toFixed(2)}`)
-          .join(', ')}`
+      const list = harder
+        .slice(0, 3)
+        .map((s) => `${s.school} ${(s.avgDifficulty || 0).toFixed(2)}`)
+        .join(', ');
+      ps.push(
+        `${list} — 그룹 평균 대비 한 밴드 위에서 출제됐습니다. 상위권 변별을 강하게 두는 학교 성향이 데이터로 확인됩니다. 같은 단원을 풀더라도 한 단계 더 깊은 사고를 요구하는 문항이 섞여 있다고 보시면 됩니다.`
       );
     }
     if (easier.length > 0) {
-      insights.push(
-        `그룹 평균 대비 -0.6 이상: ${easier
-          .slice(0, 3)
-          .map((s) => `${s.school} ${(s.avgDifficulty || 0).toFixed(2)}`)
-          .join(', ')}`
+      const list = easier
+        .slice(0, 3)
+        .map((s) => `${s.school} ${(s.avgDifficulty || 0).toFixed(2)}`)
+        .join(', ');
+      ps.push(
+        `반면 ${list} 은 그룹 평균보다 낮게 출제됐습니다. 기본기 안정 평가에 무게가 실린 흐름으로, 정형 풀이와 계산 정확도를 충실히 다지면 안정적으로 점수를 확보할 수 있습니다.`
       );
+    }
+    if (ps.length > 0) {
+      narrative.push({ heading: '학교별 난이도 성향', paragraphs: ps });
     }
   }
 
-  // 작년 대비 추세 — top unit 의 가장 최근 2년 비교
+  // 5. 작년 대비 출제 흐름
   if (filterYear != null && availableYears.includes(filterYear)) {
     const prevYear = filterYear - 1;
     if (availableYears.includes(prevYear)) {
-      const trendChanges: string[] = [];
-      for (const t of unitTrends.slice(0, 3)) {
+      const ups: string[] = [];
+      const downs: string[] = [];
+      const news: string[] = [];
+      for (const t of unitTrends.slice(0, 5)) {
         const cur = t.byYear[String(filterYear)]?.problemCount || 0;
         const prev = t.byYear[String(prevYear)]?.problemCount || 0;
         if (prev > 0) {
           const pct = Math.round(((cur - prev) / prev) * 100);
-          if (Math.abs(pct) >= 20) {
-            trendChanges.push(`${t.level1Name} ${pct >= 0 ? '+' : ''}${pct}%`);
-          }
+          if (pct >= 15) ups.push(`${t.level1Name} +${pct}%`);
+          else if (pct <= -15) downs.push(`${t.level1Name} ${pct}%`);
         } else if (cur > 0) {
-          trendChanges.push(`${t.level1Name} 신규 출제`);
+          news.push(t.level1Name);
         }
       }
-      if (trendChanges.length > 0) {
-        insights.push(`${prevYear} 대비 변화: ${trendChanges.join(' · ')}`);
+      const ps: string[] = [];
+      if (ups.length > 0 || news.length > 0) {
+        const upText = [...ups, ...news.map((n) => `${n} (신규)`)].join(' · ');
+        ps.push(
+          `${prevYear}년 대비 출제 비중이 늘어난 단원: ${upText}. 출제 가능성이 더 높아졌으므로 우선순위를 두고 대비할 영역입니다.`
+        );
+      }
+      if (downs.length > 0) {
+        ps.push(
+          `반대로 줄어든 단원: ${downs.join(' · ')}. 비중은 떨어졌지만 매년 일정 수준의 문항은 유지되므로 기본 풀이까지는 익혀두는 것이 안전합니다.`
+        );
+      }
+      if (ps.length > 0) {
+        narrative.push({ heading: `${prevYear}년 대비 출제 흐름`, paragraphs: ps });
       }
     }
   }
 
-  // 함정 매핑 상태
-  if (matchedExams.length > 0 && pitfalls.length === 0) {
-    insights.push(
-      `함정 매핑 0/${matchedExams.length} — 자산화 시 함정 태깅 누적 필요`
-    );
-  } else if (pitfalls.length > 0) {
-    const top = pitfalls.slice(0, 3).map((p) => `${p.label}(${p.problemCount})`).join(', ');
-    insights.push(`함정 패턴 TOP 3: ${top}`);
+  // 6. 함정 패턴 — 있을 때만 (사용자 요청: 데이터 0 이면 표시 X)
+  if (pitfalls.length > 0) {
+    const top = pitfalls
+      .slice(0, 3)
+      .map((p) => `${p.label}(${p.problemCount}문항)`)
+      .join(' · ');
+    narrative.push({
+      heading: '자주 노출되는 함정 패턴',
+      paragraphs: [
+        `${top} 가 가장 빈번하게 매핑되었습니다.`,
+        '학생이 같은 패턴으로 실수를 반복할 가능성이 큰 영역입니다. 풀이 후 채점 단계에서 이 함정에 빠진 문항이 있는지 점검하면 점수 회복이 가장 빠릅니다.',
+      ],
+    });
   }
 
-  // AI 분석 비율
-  if (matchedExams.length > 0 && analyzedExamCount > 0) {
-    insights.push(
-      `AI 분석 완료 ${analyzedExamCount}/${matchedExams.length} (${Math.round((analyzedExamCount / matchedExams.length) * 100)}%) — 자연어 인용 카드에 표시`
-    );
+  // 7. 시험지별 상세 분석 안내 — 강점 부각
+  if (analyzedExamCount > 0) {
+    narrative.push({
+      heading: `시험지별 상세 분석 ${analyzedExamCount}건 — 깊이까지 들어가 보세요`,
+      paragraphs: [
+        `매칭된 ${matchedExams.length}건 중 ${analyzedExamCount}건은 학교별로 단원 분포·고난도 문항 출제 의도·단계별 풀이 전략까지 분석이 완료된 상태입니다.`,
+        '이 통합 리포트는 큰 흐름을 보여드리고, 각 시험지를 클릭해 들어가시면 문항 단위 수식·풀이 과정·핵심 학습 전략까지 보실 수 있습니다 — 학교별 시험지 분석은 이 시스템의 가장 큰 강점입니다.',
+      ],
+    });
   }
 
   return NextResponse.json({
@@ -634,6 +697,6 @@ export async function GET(request: NextRequest) {
     unitTrends,
     availableYears,
     aiNarratives,
-    insights,
+    narrative,
   });
 }

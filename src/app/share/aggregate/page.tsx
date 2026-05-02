@@ -5,7 +5,8 @@
 // /share/aggregate?year=&grade=&semester=&examType=&schools=
 //
 // 인증 없이 접근. /share/exam/[token] 톤(크림+오렌지) 일관 — 친근한 학원 보고서.
-// 모든 수치는 DB raw aggregation. 자연어 인용은 ✻ AI 출처 시험지명 명시.
+// 모든 수치는 DB raw aggregation. 시험지별 분석 인용은 출처 시험지명 명시.
+// 베테랑 강사 톤의 narrative 인사이트 + 시험지 상세 분석 진입 유도 CTA.
 // ============================================================================
 
 import React, { useEffect, useState, Suspense } from 'react';
@@ -108,7 +109,7 @@ interface AggregateResponse {
     }>;
     generatedAt: string | null;
   }>;
-  insights: string[];
+  narrative: Array<{ heading: string; paragraphs: string[] }>;
 }
 
 // 5밴드 색상 (크림 톤 기준 매핑)
@@ -274,13 +275,43 @@ function ShareAggregateContent() {
           </div>
         </header>
 
+        {/* CTA 배너 — 시험지별 상세 분석 진입 강조 */}
+        {(() => {
+          const detailCount = data.exams.filter((e) => e.hasAnalysis && e.shareToken).length;
+          if (detailCount === 0) return null;
+          return (
+            <div className="mt-6 mb-2 rounded-xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50 p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-orange-900">
+                    이 통합 리포트는 ‘큰 흐름’입니다 — 시험지 한 건씩 깊이 들어가 보세요
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-700">
+                    학교별 시험지 <strong className="text-orange-700">{detailCount}건</strong>이
+                    문항 단위까지 상세 분석 완료된 상태입니다. 각 시험지 카드를 클릭하면{' '}
+                    <strong>실제 수식 · 단계별 풀이 전략 · 출제 의도</strong>까지 보실 수 있습니다.
+                    이 깊이 있는 시험지별 분석이 본 시스템의 가장 큰 강점입니다.
+                  </p>
+                  <p className="mt-2 text-[11px] text-zinc-600">
+                    아래 <strong>섹션 07 시험지별 분석 인용</strong> 또는{' '}
+                    <strong>섹션 08 시험지 목록</strong>의 ‘상세 보기’ 버튼에서 진입하세요.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* 기본 통계 4 카드 */}
         <Section number="01" title="기본 정보">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="학교" value={`${m.schoolCount}곳`} />
             <Stat label="시험지" value={`${m.examCount}건`} />
             <Stat
-              label="AI 분석"
+              label="분석 완료"
               value={`${m.analyzedExamCount}/${m.examCount}`}
               hint={
                 m.examCount > 0 ? `${Math.round((m.analyzedExamCount / m.examCount) * 100)}%` : ''
@@ -298,17 +329,21 @@ function ShareAggregateContent() {
           </div>
         </Section>
 
-        {/* 인사이트 */}
-        {data.insights.length > 0 && (
-          <Section number="02" title="데이터 기반 인사이트" icon={<Lightbulb className="h-4 w-4" />}>
-            <ul className="space-y-2 rounded-lg border border-orange-100 bg-orange-50/40 p-4 text-sm text-zinc-700">
-              {data.insights.map((ins, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="text-orange-500">▸</span>
-                  <span>{ins}</span>
-                </li>
+        {/* 강사 인사이트 — narrative */}
+        {data.narrative.length > 0 && (
+          <Section number="02" title="강사 인사이트" icon={<Lightbulb className="h-4 w-4" />}>
+            <div className="space-y-5 rounded-xl border border-orange-100 bg-orange-50/40 p-5 text-sm leading-relaxed text-zinc-700">
+              {data.narrative.map((sec, i) => (
+                <div key={i}>
+                  <h4 className="mb-1.5 text-[13px] font-bold text-orange-700">{sec.heading}</h4>
+                  {sec.paragraphs.map((p, j) => (
+                    <p key={j} className="text-zinc-700">
+                      {p}
+                    </p>
+                  ))}
+                </div>
               ))}
-            </ul>
+            </div>
             <div className="mt-2 text-[10px] text-zinc-500">
               ※ 모든 수치는 시험지 분류·난이도 데이터에서 직접 도출됩니다 (할루시네이션 없음).
             </div>
@@ -353,13 +388,27 @@ function ShareAggregateContent() {
           <SchoolTable data={data} />
         </Section>
 
-        {/* 함정 + AI 인용 */}
-        <Section number="07" title="함정 패턴 · AI 분석 인용" icon={<ScrollText className="h-4 w-4" />}>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <PitfallView data={data} />
-            <AiNarrativeView data={data} />
-          </div>
-        </Section>
+        {/* 함정(있을 때만) + 시험지별 분석 인용 */}
+        {(data.pitfalls.length > 0 || data.aiNarratives.length > 0) && (
+          <Section
+            number="07"
+            title={
+              data.pitfalls.length > 0
+                ? '함정 패턴 · 시험지별 분석 인용'
+                : '시험지별 분석 인용'
+            }
+            icon={<ScrollText className="h-4 w-4" />}
+          >
+            <div
+              className={`grid grid-cols-1 gap-5 ${
+                data.pitfalls.length > 0 ? 'lg:grid-cols-2' : ''
+              }`}
+            >
+              {data.pitfalls.length > 0 && <PitfallView data={data} />}
+              <AiNarrativeView data={data} />
+            </div>
+          </Section>
+        )}
 
         {/* 매칭 시험지 목록 */}
         <Section number="08" title={`매칭 시험지 (${data.exams ? '' : ''}${m.examCount}건)`}>
@@ -371,7 +420,7 @@ function ShareAggregateContent() {
           과사람 수학프로그램 · 학교별 시험지 집계 분석 리포트
           {data.aiNarratives.length > 0 && (
             <span className="ml-2">
-              · AI 분석 {data.aiNarratives.length}건 인용 (출처 시험지 ID 명시)
+              · 시험지별 분석 {data.aiNarratives.length}건 인용 (출처 시험지 ID 명시)
             </span>
           )}
         </footer>
@@ -754,18 +803,23 @@ function PitfallView({ data }: { data: AggregateResponse }) {
 }
 
 function AiNarrativeView({ data }: { data: AggregateResponse }) {
+  // examId → shareToken 매핑 (상세 페이지 진입 링크용)
+  const tokenByExam = new Map<string, string>();
+  for (const e of data.exams) {
+    if (e.shareToken) tokenByExam.set(e.id, e.shareToken);
+  }
   return (
     <div>
       <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-zinc-700">
         <Sparkles className="h-3.5 w-3.5 text-orange-500" />
-        AI 분석 인용 ({data.aiNarratives.length}건)
+        시험지별 분석 인용 ({data.aiNarratives.length}건)
         <span className="text-[10px] font-normal text-zinc-500">
-          ✻ AI 생성 — 출처 시험지명 명시
+          ✻ 출처 시험지명 명시
         </span>
       </div>
       {data.aiNarratives.length === 0 ? (
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-xs text-zinc-500">
-          AI 분석 완료 시험지 없음
+          시험지별 분석 완료 데이터 없음
         </div>
       ) : (
         <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
@@ -779,7 +833,7 @@ function AiNarrativeView({ data }: { data: AggregateResponse }) {
                 <span className="ml-1.5 text-zinc-500">
                   {n.year} · {n.examTitle.slice(0, 30)}
                 </span>
-                <span className="ml-1.5 text-[10px] text-orange-600">✻ AI</span>
+                <span className="ml-1.5 text-[10px] text-orange-600">✻</span>
               </summary>
               {n.summary && (
                 <div className="mt-2">
@@ -806,6 +860,21 @@ function AiNarrativeView({ data }: { data: AggregateResponse }) {
                   </ul>
                 </div>
               )}
+              {tokenByExam.has(n.examId) && (
+                <div className="mt-3 border-t border-orange-200 pt-2.5">
+                  <a
+                    href={`/share/exam/${tokenByExam.get(n.examId)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-orange-600"
+                  >
+                    이 시험지 상세 분석 보기 →
+                  </a>
+                  <span className="ml-2 text-[10px] text-zinc-500">
+                    수식·풀이 단계·학습 전략까지
+                  </span>
+                </div>
+              )}
             </details>
           ))}
         </div>
@@ -825,7 +894,7 @@ function ExamTable({ data }: { data: AggregateResponse }) {
             <th className="px-3 py-2 text-left">메타</th>
             <th className="px-3 py-2 text-right">문항</th>
             <th className="px-3 py-2 text-left">난이도</th>
-            <th className="px-3 py-2 text-center">AI</th>
+            <th className="px-3 py-2 text-center">상세</th>
           </tr>
         </thead>
         <tbody>
@@ -859,8 +928,17 @@ function ExamTable({ data }: { data: AggregateResponse }) {
                   )}
                 </td>
                 <td className="px-3 py-2 text-center">
-                  {e.hasAnalysis ? (
-                    <Sparkles className="inline h-3.5 w-3.5 text-orange-500" />
+                  {e.hasAnalysis && e.shareToken ? (
+                    <a
+                      href={`/share/exam/${e.shareToken}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-700 hover:bg-orange-100"
+                    >
+                      상세 보기 →
+                    </a>
+                  ) : e.hasAnalysis ? (
+                    <span className="text-[10px] text-zinc-400">분석 완료</span>
                   ) : (
                     <span className="text-zinc-300">-</span>
                   )}
