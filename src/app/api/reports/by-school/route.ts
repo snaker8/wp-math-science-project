@@ -30,9 +30,10 @@ export async function GET(_request: NextRequest) {
   }
 
   // 시험지 + 분석/공유 상태 일괄 조회
+  // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive (useExams.ts 동일 패턴)
   const { data: exams, error } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, created_at, ai_analysis, share_token, problem_count')
+    .select('id, title, grade, subject, created_at, ai_analysis, share_token, exam_problems(count)')
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
@@ -70,7 +71,8 @@ export async function GET(_request: NextRequest) {
     card.examCount++;
     if (hasAnalysis) card.analyzedCount++;
     if (hasShare) card.sharedCount++;
-    card.totalProblems += Number(exam.problem_count) || 0;
+    const epCount = (exam as { exam_problems?: Array<{ count: number }> }).exam_problems?.[0]?.count ?? 0;
+    card.totalProblems += Number(epCount) || 0;
     if (exam.grade && !card.grades.includes(exam.grade)) {
       card.grades.push(exam.grade);
     }

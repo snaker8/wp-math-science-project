@@ -89,7 +89,6 @@ export async function POST(
       created_by: teacherId,
       title: examTitle,
       grade: studentGrade,
-      problem_count: problemIds.length,
       status: 'DRAFT',
     })
     .select()

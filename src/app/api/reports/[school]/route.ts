@@ -41,9 +41,10 @@ export async function GET(
   const school = decodeURIComponent(rawSchool);
 
   // 모든 시험지 조회 후 학교명 매칭
+  // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive
   const { data: exams, error } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, total_points, problem_count, ai_analysis, share_token, created_at')
+    .select('id, title, grade, subject, total_points, ai_analysis, share_token, created_at, exam_problems(count)')
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
@@ -68,7 +69,10 @@ export async function GET(
       title: e.title,
       grade: e.grade,
       subject: e.subject,
-      problemCount: Number(e.problem_count) || 0,
+      problemCount:
+        Number(
+          (e as { exam_problems?: Array<{ count: number }> }).exam_problems?.[0]?.count
+        ) || 0,
       totalPoints: Number(e.total_points) || 0,
       createdAt: e.created_at as string,
       year: extractExamYear(e.title, e.created_at as string | null),
