@@ -16,6 +16,8 @@ import {
   FileText,
   Loader2,
   Filter,
+  BarChart3,
+  Layers,
 } from 'lucide-react';
 
 interface SchoolCard {
@@ -112,44 +114,72 @@ export default function ReportsHubPage() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
-      {/* Header */}
+      {/* Header — 두 진입점(학교별 / 집계) 균형 배치 */}
       <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/40 via-cyan-900/30 to-zinc-900/30 px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/10">
-              <School className="h-5 w-5 text-cyan-400" />
+        <div className="flex items-stretch gap-6">
+          {/* LEFT: 페이지 타이틀 + 통계 */}
+          <div className="flex flex-1 items-center gap-3">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+              <School className="h-6 w-6 text-cyan-400" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold">학교별 분석 리포트</h1>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold">학교별 분석 리포트</h1>
+                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">
+                  학교별
+                </span>
+              </div>
               <p className="mt-0.5 text-xs text-zinc-400">
                 자산화된 시험지를 학교별로 묶어 누적 출제 경향과 학부모 공유를 한눈에 관리
               </p>
+              <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-400">
+                <span>
+                  학교 <span className="font-semibold text-white">{schools.length}</span>곳
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span>
+                  시험지 <span className="font-semibold text-white">{totalExams}</span>건
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span className="flex items-center gap-1">
+                  <Sparkles className="h-3 w-3 text-cyan-400" />
+                  분석 <span className="font-semibold text-cyan-300">{totals.analyzed}</span>
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span className="flex items-center gap-1">
+                  <Share2 className="h-3 w-3 text-emerald-400" />
+                  공유 <span className="font-semibold text-emerald-300">{totals.shared}</span>
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-              <span>학교 {schools.length}곳</span>
-              <span className="text-zinc-700">·</span>
-              <span>시험지 {totalExams}건</span>
-              <span className="text-zinc-700">·</span>
-              <span className="flex items-center gap-1">
-                <Sparkles className="h-3 w-3 text-cyan-400" />
-                분석 {totals.analyzed}
-              </span>
-              <span className="text-zinc-700">·</span>
-              <span className="flex items-center gap-1">
-                <Share2 className="h-3 w-3 text-emerald-400" />
-                공유 {totals.shared}
-              </span>
+
+          {/* RIGHT: 집계 분석 — 동등한 무게의 진입점 */}
+          <Link
+            href="/dashboard/reports/aggregate"
+            className="group relative flex w-80 flex-shrink-0 items-center gap-3 overflow-hidden rounded-xl border border-violet-500/40 bg-gradient-to-br from-violet-600/25 via-violet-500/15 to-fuchsia-500/10 px-4 py-3 transition-all hover:border-violet-400/70 hover:from-violet-600/35 hover:to-fuchsia-500/20"
+          >
+            <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-violet-500/20 blur-2xl transition-opacity group-hover:opacity-80" />
+            <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-violet-400/40 bg-violet-500/30">
+              <BarChart3 className="h-6 w-6 text-violet-100" />
             </div>
-            <Link
-              href="/dashboard/reports/aggregate"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs font-bold text-violet-300 hover:bg-violet-500/20"
-            >
-              <Filter className="h-3.5 w-3.5" />
-              집계 분석 →
-            </Link>
-          </div>
+            <div className="relative min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-bold text-white">다학교 집계 분석</h2>
+                <span className="rounded-md border border-violet-400/40 bg-violet-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100">
+                  집계
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] leading-tight text-violet-200/80">
+                학년·학기·구분 매칭 → 단원·난이도·함정 패턴 한눈에 비교
+              </p>
+              <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-100">
+                <Layers className="h-3 w-3" />
+                집계 분석 시작
+                <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
 

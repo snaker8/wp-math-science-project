@@ -201,8 +201,18 @@ export default function AggregatePage() {
 
   const clearSchools = () => setSelectedSchools(new Set());
 
-  const handleShare = () => {
-    window.open(`/share/aggregate?${buildQueryString()}`, '_blank');
+  // 학부모 공유 — 새 탭으로 열기 + 클립보드 복사 동시 (popup 차단 회피용 anchor 기반)
+  const [shareCopied, setShareCopied] = useState(false);
+  const handleShareClick = async () => {
+    if (typeof window === 'undefined') return;
+    const url = `${window.location.origin}/share/aggregate?${buildQueryString()}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2200);
+    } catch {
+      // 클립보드 실패해도 anchor target=_blank 가 새 탭을 열어줌
+    }
   };
 
   const hasActiveFilter =
@@ -236,14 +246,17 @@ export default function AggregatePage() {
               모든 수치는 DB 기반 (할루시네이션 0)
             </span>
             {data && data.matched.examCount > 0 && (
-              <button
-                type="button"
-                onClick={handleShare}
+              <a
+                href={`/share/aggregate?${buildQueryString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleShareClick}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20"
+                title="새 탭에서 학부모 공유 페이지를 엽니다 (링크도 자동 복사)"
               >
-                <Share2 className="h-3.5 w-3.5" />
-                학부모 공유 페이지 열기
-              </button>
+                {shareCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+                {shareCopied ? '링크 복사됨 + 새 탭 열림' : '학부모 공유 페이지 열기'}
+              </a>
             )}
           </div>
         </div>
