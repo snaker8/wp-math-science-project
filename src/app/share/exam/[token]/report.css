@@ -293,10 +293,11 @@
   border-radius: 999px;
 }
 
-/* 두 컬럼 그리드 */
+/* 두 컬럼 그리드 — 단원별 도넛 영역 ↑, 난이도 영역 ↓.
+   A4 인쇄 폭(794px)에서 단원명이 잘리는 문제 해결 (시안 2). */
 .info-grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.2fr 0.8fr;
   gap: 32px;
 }
 
@@ -378,9 +379,11 @@
 .donut-legend-name {
   font-weight: 600;
   color: var(--rp-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 줄바꿈 허용 — 한 줄에 안 맞으면 두 줄로 표시 (단원명 잘림 사고 차단).
+     word-break: keep-all 로 한국어 단어 단위 유지. */
+  white-space: normal;
+  word-break: keep-all;
+  line-height: 1.35;
 }
 .donut-legend-pct {
   display: inline-flex;
@@ -771,9 +774,10 @@
     border-radius: 0;
   }
 
-  /* 인쇄에서도 단원 + 난이도 2열 유지 (좁아지면 1열) */
+  /* 인쇄에서도 단원 + 난이도 2열 유지 (좁아지면 1열).
+     단원 영역을 약간 더 넓혀 단원명 잘림 차단. */
   .info-grid-2 {
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: 1.2fr 0.8fr !important;
     gap: 24px !important;
   }
   .unit-grid, .hard-grid {
