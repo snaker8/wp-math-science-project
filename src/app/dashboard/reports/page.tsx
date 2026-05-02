@@ -126,20 +126,29 @@ export default function ReportsHubPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-            <span>학교 {schools.length}곳</span>
-            <span className="text-zinc-700">·</span>
-            <span>시험지 {totalExams}건</span>
-            <span className="text-zinc-700">·</span>
-            <span className="flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-cyan-400" />
-              분석 {totals.analyzed}
-            </span>
-            <span className="text-zinc-700">·</span>
-            <span className="flex items-center gap-1">
-              <Share2 className="h-3 w-3 text-emerald-400" />
-              공유 {totals.shared}
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+              <span>학교 {schools.length}곳</span>
+              <span className="text-zinc-700">·</span>
+              <span>시험지 {totalExams}건</span>
+              <span className="text-zinc-700">·</span>
+              <span className="flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-cyan-400" />
+                분석 {totals.analyzed}
+              </span>
+              <span className="text-zinc-700">·</span>
+              <span className="flex items-center gap-1">
+                <Share2 className="h-3 w-3 text-emerald-400" />
+                공유 {totals.shared}
+              </span>
+            </div>
+            <Link
+              href="/dashboard/reports/aggregate"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs font-bold text-violet-300 hover:bg-violet-500/20"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              집계 분석 →
+            </Link>
           </div>
         </div>
       </div>
