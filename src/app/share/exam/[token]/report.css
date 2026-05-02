@@ -219,7 +219,7 @@
   border-radius: 2px;
 }
 .section-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--rp-text);
   margin: 0;
@@ -265,7 +265,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--rp-text);
   margin-bottom: 12px;
@@ -284,8 +284,8 @@
 .range-chip {
   display: inline-flex;
   align-items: center;
-  padding: 7px 16px;
-  font-size: 12.5px;
+  padding: 8px 18px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--rp-text);
   background: white;
@@ -311,22 +311,22 @@
   display: grid;
 }
 .bar-name {
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--rp-text);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
 .bar-pct {
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--rp-text-3);
   font-variant-numeric: tabular-nums;
 }
 .bar-pct .count {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--rp-text-4);
   margin-left: 4px;
@@ -368,7 +368,7 @@
   grid-template-columns: 10px 1fr auto;
   align-items: center;
   gap: 10px;
-  font-size: 12.5px;
+  font-size: 14px;
 }
 .donut-legend-dot {
   width: 10px;
@@ -383,7 +383,7 @@
      word-break: keep-all 로 한국어 단어 단위 유지. */
   white-space: normal;
   word-break: keep-all;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 .donut-legend-pct {
   display: inline-flex;
@@ -392,12 +392,12 @@
   font-variant-numeric: tabular-nums;
 }
 .donut-legend-pct strong {
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 800;
   color: var(--rp-text);
 }
 .donut-legend-count {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--rp-text-3);
 }
 
@@ -444,14 +444,14 @@
   border-radius: 999px;
 }
 .sub-body-bold {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--rp-text);
-  line-height: 1.6;
-  margin-bottom: 8px;
+  line-height: 1.65;
+  margin-bottom: 10px;
 }
 .sub-body {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.85;
   color: var(--rp-text-2);
   white-space: pre-wrap;
@@ -491,36 +491,36 @@
   stroke-width: 2;
 }
 .unit-card-title {
-  font-size: 14.5px;
+  font-size: 16.5px;
   font-weight: 800;
   color: var(--rp-text);
   margin: 0;
   letter-spacing: -0.01em;
 }
 .unit-card-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--rp-text-3);
   margin-left: auto;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .unit-kv {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .unit-kv:last-child { margin-bottom: 0; }
 .unit-kv-key {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--rp-accent);
-  margin-bottom: 4px;
+  margin-bottom: 5px;
   letter-spacing: 0.02em;
 }
 .unit-kv-key.navy {
   color: var(--rp-navy);
 }
 .unit-kv-val {
-  font-size: 12.5px;
-  line-height: 1.7;
+  font-size: 14.5px;
+  line-height: 1.75;
   color: var(--rp-text-2);
 }
 
@@ -576,53 +576,53 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   background: var(--rp-accent-soft);
   border: 1.5px solid var(--rp-accent-mid);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--rp-accent-strong);
   line-height: 1;
   flex-shrink: 0;
 }
 .hard-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--rp-text);
   margin: 0;
   letter-spacing: -0.01em;
 }
 .hard-section {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .hard-section:last-child { margin-bottom: 0; }
 .hard-section-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--rp-accent);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 .hard-section-label svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   stroke-width: 2;
 }
 .hard-section-body {
-  font-size: 12.5px;
-  line-height: 1.7;
+  font-size: 14.5px;
+  line-height: 1.75;
   color: var(--rp-text-2);
 }
 .hard-strategy-box {
   background: linear-gradient(135deg, var(--rp-accent-soft) 0%, #FFFCF8 100%);
   border: 1px solid var(--rp-accent-pale);
   border-radius: 10px;
-  padding: 14px 16px;
-  font-size: 12.5px;
+  padding: 16px 18px;
+  font-size: 14.5px;
   line-height: 1.85;
   color: var(--rp-text);
   box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
@@ -642,26 +642,26 @@
 .problem-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13.5px;
 }
 .problem-table thead {
   background: var(--rp-line-soft);
 }
 .problem-table th {
-  padding: 10px 8px;
+  padding: 11px 9px;
   text-align: left;
   font-weight: 700;
   color: var(--rp-text);
-  font-size: 11px;
+  font-size: 12.5px;
   letter-spacing: 0.02em;
   border-bottom: 1px solid var(--rp-line);
 }
 .problem-table td {
-  padding: 9px 8px;
+  padding: 10px 9px;
   border-bottom: 1px solid var(--rp-line-soft);
   color: var(--rp-text-2);
   vertical-align: top;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .problem-table tr:last-child td {
   border-bottom: none;
