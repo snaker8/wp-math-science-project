@@ -8,6 +8,7 @@
 
 import React, { useRef, useState } from 'react';
 import {
+  Copy,
   Printer,
   Link2,
   Check,
@@ -179,7 +180,10 @@ function StepStrategy({ text }: { text: string }) {
 
 export function ShareReportClient({ data }: ShareReportClientProps) {
   const reportRef = useRef<HTMLDivElement>(null);
-  const [busy, setBusy] = useState<null | 'link' | 'naver'>(null);
+  const sec1Ref = useRef<HTMLElement>(null); // 1. 기본 정보
+  const sec2Ref = useRef<HTMLElement>(null); // 2. 종합 분석
+  const sec3Ref = useRef<HTMLElement>(null); // 3. 고난도 분석
+  const [busy, setBusy] = useState<null | 'link' | 'naver' | 'sec1' | 'sec2' | 'sec3'>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -217,6 +221,51 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
       pct: data.stats.total > 0 ? Math.round((count / data.stats.total) * 100) : 0,
     };
   });
+
+  // ── 섹션별 이미지 클립보드 복사 — 3단락 분할 게시용
+  // 해상도: DPR×4 또는 6배 중 큰 값. 단, 캔버스 16384px 한계 초과시 자동 다운스케일.
+  // (캡처 대상 안의 '섹션 복사' 버튼 자체는 data-html2canvas-ignore 로 캡처 결과에서 제외)
+  const copySection = async (
+    el: HTMLElement | null,
+    label: string,
+    busyKey: 'sec1' | 'sec2' | 'sec3'
+  ) => {
+    if (!el) return;
+    setBusy(busyKey);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const w = Math.max(el.scrollWidth, 1);
+      const h = Math.max(el.scrollHeight, 1);
+      const desired = Math.max(6, (window.devicePixelRatio || 1) * 4);
+      const cap = Math.floor(Math.min(16384 / w, 16384 / h));
+      const scale = Math.max(2, Math.min(desired, cap));
+      const canvas = await html2canvas(el, {
+        scale,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: el.scrollWidth,
+        letterRendering: true,
+        imageTimeout: 30000,
+      } as Parameters<typeof html2canvas>[1]);
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          showToast(`${label} 이미지 생성 실패`);
+          return;
+        }
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          showToast(`${label} 이미지가 복사되었습니다 — 블로그/카톡에 Ctrl+V`);
+        } catch {
+          showToast(`${label} 이미지 복사 실패 — 브라우저가 지원하지 않습니다`);
+        }
+      }, 'image/png');
+    } catch (err) {
+      console.error('section copy:', err);
+      showToast(`${label} 복사 중 오류가 발생했습니다`);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   // ── 클립보드
   // 링크 복사 — 카톡/SNS 공유용
@@ -288,10 +337,20 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         </header>
 
         {/* SECTION 01 — 기본 정보 */}
-        <section className="report-section">
+        <section ref={sec1Ref} className="report-section">
           <div className="section-head">
             <div className="section-bar" />
             <h2 className="section-title">1. 기본 정보</h2>
+            <button
+              className="section-copy-btn no-print"
+              data-html2canvas-ignore="true"
+              onClick={() => copySection(sec1Ref.current, '기본 정보', 'sec1')}
+              disabled={busy !== null}
+              title="이 섹션을 이미지로 복사"
+            >
+              {busy === 'sec1' ? <Loader2 className="spin" /> : <Copy />}
+              섹션 복사
+            </button>
           </div>
 
           <div className="info-card">
@@ -380,10 +439,20 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
 
         {/* SECTION 02 — 종합 분석 (시험총평 + 단원별) */}
         {data.analysis && (
-          <section className="report-section">
+          <section ref={sec2Ref} className="report-section">
             <div className="section-head">
               <div className="section-bar" />
               <h2 className="section-title">2. 종합 출제 경향 및 학습 전략</h2>
+              <button
+                className="section-copy-btn no-print"
+                data-html2canvas-ignore="true"
+                onClick={() => copySection(sec2Ref.current, '종합 분석', 'sec2')}
+                disabled={busy !== null}
+                title="이 섹션을 이미지로 복사"
+              >
+                {busy === 'sec2' ? <Loader2 className="spin" /> : <Copy />}
+                섹션 복사
+              </button>
             </div>
 
             {/* 1. 시험 총평 */}
@@ -437,10 +506,20 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
 
         {/* SECTION 03 — 고난도 분석 */}
         {data.analysis && data.analysis.hardQuestions.length > 0 && (
-          <section className="report-section">
+          <section ref={sec3Ref} className="report-section">
             <div className="section-head">
               <div className="section-bar" />
               <h2 className="section-title">3. 상대적 고난도 문항 심층 분석</h2>
+              <button
+                className="section-copy-btn no-print"
+                data-html2canvas-ignore="true"
+                onClick={() => copySection(sec3Ref.current, '고난도 분석', 'sec3')}
+                disabled={busy !== null}
+                title="이 섹션을 이미지로 복사"
+              >
+                {busy === 'sec3' ? <Loader2 className="spin" /> : <Copy />}
+                섹션 복사
+              </button>
             </div>
             <div className="hard-grid">
               {data.analysis.hardQuestions.map((q, i) => (
