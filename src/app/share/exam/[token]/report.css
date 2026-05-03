@@ -187,22 +187,18 @@
   margin-bottom: 8px;
 }
 .header-meta-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  padding: 0 24px;
+  display: inline-block;
+  padding: 8px 24px;
   background: linear-gradient(135deg, var(--rp-accent-soft) 0%, var(--rp-accent-pale) 100%);
   border: 1px solid var(--rp-accent-pale);
   border-radius: 12px;
   font-size: 18px;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.4;
   color: var(--rp-accent-strong);
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
   white-space: nowrap;
-  box-sizing: border-box;
   box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 4px rgba(221,107,32,0.06);
 }
 
@@ -290,23 +286,19 @@
   flex-wrap: wrap;
 }
 .range-chip {
-  /* flex 정중앙 + 명시적 height — 표준 패턴. 폰트 로드 완료(document.fonts.ready) 후
-     캡처해야 Pretendard 메트릭으로 올바르게 정중앙. */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0 18px;
+  /* 순수 inline-block + Pretendard 자연 line-height — html2canvas 가 가장 확실히 따라가는 패턴.
+     flex 정렬은 html2canvas v1.4.1 에서 정확히 못 따라가 텍스트 어긋남 (반복 사고). */
+  display: inline-block;
+  padding: 6px 18px;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.4;
   color: var(--rp-text);
   background: white;
   border: 1px solid var(--rp-line);
   border-radius: 999px;
   vertical-align: middle;
   white-space: nowrap;
-  box-sizing: border-box;
 }
 
 /* 두 컬럼 그리드 — 단원별 도넛 영역 ↑, 난이도 영역 ↓.
@@ -463,22 +455,18 @@
   letter-spacing: -0.01em;
 }
 .diff-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   margin-left: auto;
-  height: 22px;
-  padding: 0 12px;
+  padding: 4px 12px;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.4;
   color: var(--rp-accent-strong);
   background: white;
   border: 1px solid var(--rp-accent-mid);
   border-radius: 999px;
   vertical-align: middle;
   white-space: nowrap;
-  box-sizing: border-box;
 }
 .sub-body-bold {
   font-size: 16px;
