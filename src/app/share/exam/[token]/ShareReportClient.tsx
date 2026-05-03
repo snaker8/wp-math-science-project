@@ -6,7 +6,7 @@
 // 클립보드: 이미지 / HTML / 링크 / PNG 다운로드 / 인쇄
 // ============================================================================
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Copy,
   Printer,
@@ -22,7 +22,10 @@ import {
   ScrollText,
   AlertTriangle,
   PenLine,
+  X,
 } from 'lucide-react';
+
+const HINT_DISMISSED_KEY = 'share-report.capture-hint.dismissed';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import './report.css';
 
@@ -186,6 +189,23 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
   const sec3Ref = useRef<HTMLElement>(null); // 3. 고난도 분석
   const [busy, setBusy] = useState<null | 'link' | 'naver' | 'sec1' | 'sec2' | 'sec3'>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // 캡처 안내 배너 — 사용자가 X 버튼으로 닫으면 localStorage 에 저장 (다음 방문에도 안 보임)
+  const [hintVisible, setHintVisible] = useState<boolean>(false);
+  useEffect(() => {
+    try {
+      setHintVisible(localStorage.getItem(HINT_DISMISSED_KEY) !== '1');
+    } catch {
+      setHintVisible(true);
+    }
+  }, []);
+  const dismissHint = () => {
+    setHintVisible(false);
+    try {
+      localStorage.setItem(HINT_DISMISSED_KEY, '1');
+    } catch {
+      /* localStorage 비활성 환경은 무시 */
+    }
+  };
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -319,18 +339,29 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         </div>
       )}
 
-      {/* 캡처 안내 — 두 가지 방법 (캡처/인쇄에선 숨김) */}
-      <div className="capture-hint no-print" data-html2canvas-ignore="true">
-        <div className="capture-hint-inner">
-          <span className="capture-hint-icon">💡</span>
-          <span className="capture-hint-text">
-            <b>캡처 두 가지 방법</b> &nbsp;·&nbsp;
-            <b>① 섹션 복사 버튼</b>: 섹션 단위로 한 번에 클립보드 복사 (빠름) &nbsp;|&nbsp;
-            <b>② 직접 캡처</b>: <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (Windows) /
-            <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd> (Mac) 로 원하는 영역 자유 캡처 (가장 정확)
-          </span>
+      {/* 캡처 안내 — 두 가지 방법. X 로 닫으면 localStorage 저장 (OS 캡처 시 화면에서도 사라짐) */}
+      {hintVisible && (
+        <div className="capture-hint no-print" data-html2canvas-ignore="true">
+          <div className="capture-hint-inner">
+            <span className="capture-hint-icon">💡</span>
+            <span className="capture-hint-text">
+              <b>캡처 두 가지 방법</b> &nbsp;·&nbsp;
+              <b>① 섹션 복사 버튼</b>: 섹션 단위로 한 번에 클립보드 복사 (빠름) &nbsp;|&nbsp;
+              <b>② 직접 캡처</b>: <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (Windows) /
+              <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd> (Mac) 로 원하는 영역 자유 캡처 (가장 정확)
+            </span>
+            <button
+              type="button"
+              onClick={dismissHint}
+              className="capture-hint-close"
+              aria-label="안내 닫기"
+              title="안내 닫기 (다시 보지 않음)"
+            >
+              <X />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 보고서 본문 */}
       <article ref={reportRef} className="report-paper">

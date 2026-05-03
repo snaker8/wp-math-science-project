@@ -151,6 +151,32 @@
   border-radius: 4px;
   vertical-align: 1px;
 }
+.capture-hint-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--rp-text-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.capture-hint-close:hover {
+  background: white;
+  color: var(--rp-text);
+  border-color: var(--rp-line);
+}
+.capture-hint-close svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
 
 /* ─── 보고서 페이지 ────────────────────────────────────── */
 .report-paper {
