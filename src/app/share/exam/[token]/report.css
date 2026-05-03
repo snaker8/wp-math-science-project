@@ -110,6 +110,74 @@
 .report-toast svg { width: 14px; height: 14px; color: #86EFAC; }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } }
 
+/* ─── 캡처 안내 배너 (캡처/인쇄에선 숨김) ────────────── */
+.capture-hint {
+  max-width: 920px;
+  margin: 0 auto 14px;
+  padding: 0 4px;
+}
+.capture-hint-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 246, 232, 0.85);
+  border: 1px solid var(--rp-accent-pale);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--rp-text-2);
+}
+.capture-hint-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.capture-hint-text b {
+  color: var(--rp-text);
+  font-weight: 700;
+}
+.capture-hint-text kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 1px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rp-text);
+  background: white;
+  border: 1px solid var(--rp-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  vertical-align: 1px;
+}
+.capture-hint-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--rp-text-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.capture-hint-close:hover {
+  background: white;
+  color: var(--rp-text);
+  border-color: var(--rp-line);
+}
+.capture-hint-close svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
 /* ─── 보고서 페이지 ────────────────────────────────────── */
 .report-paper {
   max-width: 920px;
