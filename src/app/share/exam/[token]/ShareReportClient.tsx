@@ -236,8 +236,9 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
   });
 
   // ── 섹션별 이미지 클립보드 복사 — 3단락 분할 게시용
-  // 해상도: DPR×4 또는 6배 중 큰 값. 단, 캔버스 16384px 한계 초과시 자동 다운스케일.
-  // (캡처 대상 안의 '섹션 복사' 버튼 자체는 data-html2canvas-ignore 로 캡처 결과에서 제외)
+  // html-to-image 사용 (foreignObject 기반 — 브라우저 네이티브 렌더링 보존, 한국어 메트릭 정확).
+  // html2canvas 의 한국어 텍스트 처짐 사고를 회피하기 위해 교체됨.
+  // 데이터 속성 ignore: data-html2canvas-ignore 로 통일 (배너·복사 버튼 캡처 결과 제외).
   const copySection = async (
     el: HTMLElement | null,
     label: string,
@@ -246,39 +247,36 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
     if (!el) return;
     setBusy(busyKey);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      // Pretendard 등 웹폰트가 로드되기 전 캡처하면 시스템 폰트로 fallback 되어
-      // 메트릭이 달라져 칩/알약 텍스트가 어긋남. 폰트 로드 완료까지 대기.
+      const { toBlob } = await import('html-to-image');
+      // Pretendard 폰트 100% 로드 대기 — 시스템 폰트 fallback 메트릭 어긋남 차단
       try {
         await document.fonts.ready;
       } catch {
         /* 폰트 API 미지원 환경은 무시 */
       }
-      const w = Math.max(el.scrollWidth, 1);
-      const h = Math.max(el.scrollHeight, 1);
-      const desired = Math.max(6, (window.devicePixelRatio || 1) * 4);
-      const cap = Math.floor(Math.min(16384 / w, 16384 / h));
-      const scale = Math.max(2, Math.min(desired, cap));
-      const canvas = await html2canvas(el, {
-        scale,
-        useCORS: true,
+      const desired = Math.max(4, (window.devicePixelRatio || 1) * 3);
+      const blob = await toBlob(el, {
+        pixelRatio: desired,
         backgroundColor: '#ffffff',
-        windowWidth: el.scrollWidth,
-        letterRendering: true,
-        imageTimeout: 30000,
-      } as Parameters<typeof html2canvas>[1]);
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          showToast(`${label} 이미지 생성 실패`);
-          return;
-        }
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          showToast(`${label} 이미지가 복사되었습니다 — 블로그/카톡에 Ctrl+V`);
-        } catch {
-          showToast(`${label} 이미지 복사 실패 — 브라우저가 지원하지 않습니다`);
-        }
-      }, 'image/png');
+        cacheBust: true,
+        // data-html2canvas-ignore 속성이 붙은 노드는 캡처에서 제외
+        filter: (node) => {
+          if (node instanceof HTMLElement) {
+            return node.getAttribute('data-html2canvas-ignore') !== 'true';
+          }
+          return true;
+        },
+      });
+      if (!blob) {
+        showToast(`${label} 이미지 생성 실패`);
+        return;
+      }
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast(`${label} 이미지가 복사되었습니다 — 블로그/카톡에 Ctrl+V`);
+      } catch {
+        showToast(`${label} 이미지 복사 실패 — 브라우저가 지원하지 않습니다`);
+      }
     } catch (err) {
       console.error('section copy:', err);
       showToast(`${label} 복사 중 오류가 발생했습니다`);
