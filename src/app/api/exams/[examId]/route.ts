@@ -149,9 +149,12 @@ export async function GET(
         }
       }
 
-      // 6. classifications에 type_name 병합 — expanded_type_code 우선, 없으면 type_code
+      // 6. classifications에 type_name 병합 — ★ type_code 우선 (사용자 수동 보정 반영용)
+      //    이전엔 expanded_type_code 우선이라 PATCH 가 type_code 만 갱신해도 옛 typeName 잔존.
+      //    PATCH 가 두 컬럼을 동기화하지만, 레거시 데이터 또는 race 대비해 lookup 우선순위도
+      //    type_code → expanded_type_code 로 변경.
       (classData || []).forEach((c: any) => {
-        const typeName = typeNamesMap.get(c.expanded_type_code || '') || typeNamesMap.get(c.type_code || '');
+        const typeName = typeNamesMap.get(c.type_code || '') || typeNamesMap.get(c.expanded_type_code || '');
         if (typeName) c.type_name = typeName;
       });
 

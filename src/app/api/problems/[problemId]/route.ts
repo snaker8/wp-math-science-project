@@ -146,13 +146,16 @@ export async function PATCH(
 
     // classifications 테이블 업데이트 (난이도, 유형코드, 인지영역)
     if (difficulty !== undefined || type_code !== undefined || cognitive_domain !== undefined) {
-      // ★ Phase C-2: 분류 변경 전 before snapshot — corrections 누적용 + 행 존재 여부 확인
-      //   (Supabase update().eq() 가 0행 매칭 시 silent-success 라 분기 필요)
-      const { data: existingCls } = await supabaseAdmin
+      // ★ before snapshot — corrections 누적용 + 행 존재 여부 확인.
+      //   maybeSingle() 은 2행 이상이면 PGRST116 으로 null 반환하므로 .limit(1) 사용.
+      //   (자산화 직후 / 데이터 마이그레이션 잔재로 problem_id 당 행이 여러 개일 수 있음)
+      const { data: existingClsRows } = await supabaseAdmin
         .from('classifications')
-        .select('id, type_code')
+        .select('id, type_code, expanded_type_code')
         .eq('problem_id', problemId)
-        .maybeSingle();
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .limit(1);
+      const existingCls = (existingClsRows || [])[0] || null;
 
       let beforeCode: string | null = existingCls?.type_code || null;
       let beforeTypeName: string | null = null;
@@ -167,16 +170,31 @@ export async function PATCH(
 
       const classUpdate: Record<string, any> = { is_verified: true };
       if (difficulty !== undefined) classUpdate.difficulty = String(difficulty);
-      if (type_code !== undefined) classUpdate.type_code = type_code;
+      if (type_code !== undefined) {
+        classUpdate.type_code = type_code;
+        // ★ expanded_type_code 도 동기화 — 안 하면 /api/exams 의 typeName lookup 이
+        //   stale expanded_type_code 우선이라 화면에 옛 typeName 잔존 (반영 안 된 인상).
+        classUpdate.expanded_type_code = type_code;
+      }
       if (cognitive_domain !== undefined) classUpdate.cognitive_domain = cognitive_domain;
 
       if (existingCls?.id) {
-        const { error: updErr } = await supabaseAdmin
+        // ★ update().eq().select() 로 실제 적용된 행 수 확인 (silent-success 차단)
+        const { data: updatedRows, error: updErr } = await supabaseAdmin
           .from('classifications')
           .update(classUpdate)
-          .eq('id', existingCls.id);
+          .eq('problem_id', problemId)
+          .select('id');
         if (updErr) {
           console.error('[API/problems] classifications update error:', updErr.message);
+        } else if (!updatedRows || updatedRows.length === 0) {
+          // 0행 업데이트 → 다른 워커가 지웠거나 race → insert 폴백
+          const { error: insErr } = await supabaseAdmin.from('classifications').insert({
+            problem_id: problemId,
+            ...classUpdate,
+            classification_source: 'MANUAL',
+          });
+          if (insErr) console.error('[API/problems] classifications fallback insert error:', insErr.message);
         }
       } else {
         const { error: insErr } = await supabaseAdmin.from('classifications').insert({
