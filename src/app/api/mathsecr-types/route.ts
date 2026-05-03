@@ -19,46 +19,62 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
 
   try {
-    // 1. mathsecr_types 트리 조회
-    let query = supabaseAdmin
-      .from('mathsecr_types')
-      .select('code, full_path, depth, subject_code, subject_name')
-      .order('code');
+    // 1. mathsecr_types 트리 조회 — ★ Supabase .select() 1000행 제한 회피 위해
+    //   range 페이지네이션. 22,785행 / 대수만 해도 수백 ~ 수천 행 → 일부 단원
+    //   (수열·삼각함수 활용 등) 누락되던 사고. CLAUDE.md 가드 #6 참고.
+    type MathsecrTypeRow = {
+      code: string;
+      full_path: string;
+      depth: number;
+      subject_code: string;
+      subject_name: string;
+    };
+    const PAGE = 1000;
+    const types: MathsecrTypeRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let q = supabaseAdmin
+        .from('mathsecr_types')
+        .select('code, full_path, depth, subject_code, subject_name')
+        .order('code')
+        .range(from, from + PAGE - 1);
+      if (subject) q = q.eq('subject_code', subject);
+      if (code) q = q.like('code', `${code}%`);
 
-    if (subject) {
-      query = query.eq('subject_code', subject);
+      const { data: page, error: typesErr } = await q;
+      if (typesErr) throw typesErr;
+      if (!page || page.length === 0) break;
+      types.push(...(page as MathsecrTypeRow[]));
+      if (page.length < PAGE) break;
     }
-    if (code) {
-      query = query.like('code', `${code}%`);
-    }
-
-    const { data: types, error: typesErr } = await query;
-    if (typesErr) throw typesErr;
 
     // 2. 문제 수 집계: classifications.type_code가 MS로 시작하는 것만
     const { data: counts, error: countsErr } = await supabaseAdmin
       .rpc('count_problems_by_ms_prefix', { prefix_filter: subject ? `MS${subject}` : 'MS' });
 
-    // RPC가 없으면 직접 쿼리 (fallback)
+    // RPC가 없으면 직접 쿼리 (fallback) — 같은 1000행 사고 회피 위해 페이지네이션
     let problemCounts: Record<string, number> = {};
     if (countsErr || !counts) {
-      // 직접 집계
-      const { data: clsData } = await supabaseAdmin
-        .from('classifications')
-        .select('type_code')
-        .like('type_code', subject ? `MS${subject}%` : 'MS%');
+      const clsAll: Array<{ type_code: string }> = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data: page } = await supabaseAdmin
+          .from('classifications')
+          .select('type_code')
+          .like('type_code', subject ? `MS${subject}%` : 'MS%')
+          .range(from, from + PAGE - 1);
+        if (!page || page.length === 0) break;
+        clsAll.push(...(page as Array<{ type_code: string }>));
+        if (page.length < PAGE) break;
+      }
 
-      if (clsData) {
-        for (const row of clsData) {
-          const tc = row.type_code;
-          if (!tc) continue;
-          problemCounts[tc] = (problemCounts[tc] || 0) + 1;
-          // 상위 코드에도 합산 (MS09-01-03-02 → MS09-01-03, MS09-01, MS09)
-          const parts = tc.split('-');
-          for (let i = parts.length - 1; i >= 1; i--) {
-            const parent = parts.slice(0, i).join('-');
-            problemCounts[parent] = (problemCounts[parent] || 0) + 1;
-          }
+      for (const row of clsAll) {
+        const tc = row.type_code;
+        if (!tc) continue;
+        problemCounts[tc] = (problemCounts[tc] || 0) + 1;
+        // 상위 코드에도 합산 (MS09-01-03-02 → MS09-01-03, MS09-01, MS09)
+        const parts = tc.split('-');
+        for (let i = parts.length - 1; i >= 1; i--) {
+          const parent = parts.slice(0, i).join('-');
+          problemCounts[parent] = (problemCounts[parent] || 0) + 1;
         }
       }
     } else {
