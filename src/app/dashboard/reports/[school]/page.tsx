@@ -659,7 +659,6 @@ function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
       {analysis.generatedAt && (
         <div className="text-right text-[10px] text-zinc-600">
           분석 생성: {new Date(analysis.generatedAt).toLocaleString('ko-KR')}
-          {analysis.modelVersion && ` · ${analysis.modelVersion}`}
         </div>
       )}
     </div>
