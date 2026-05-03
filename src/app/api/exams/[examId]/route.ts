@@ -88,9 +88,12 @@ export async function GET(
       const classMap = new Map<string, any>();
       (classData || []).forEach((c: any) => classMap.set(c.problem_id, c));
 
-      // 5. expanded_math_types에서 유형명 일괄 조회
-      // ★ classifications에는 "EQU-06-001" (짧은 형식), expanded_math_types에는 "MA-HS0-EQU-06-001" (전체 형식)
-      //    → 짧은 코드에 가능한 prefix를 붙여서 정확 매칭
+      // 5. expanded_math_types + mathsecr_types 에서 유형명 일괄 조회
+      //    - MA-* 레거시 코드: expanded_math_types
+      //    - MS* 코드 (수학비서): mathsecr_types.full_path
+      //    이전엔 MS 코드에 대한 lookup 이 없어 type_code 보정 후 type_name
+      //    이 빈값으로 떨어지던 사고. 보정한 코드가 화면에 라벨 없이 보이거나
+      //    이전 typeName 잔존으로 \"수정이 반영 안 됐다\" 인상을 주던 원인.
       const allTypeCodes = new Set<string>();
       (classData || []).forEach((c: any) => {
         if (c.type_code) allTypeCodes.add(c.type_code);
@@ -99,36 +102,54 @@ export async function GET(
 
       const typeNamesMap = new Map<string, string>();
       if (allTypeCodes.size > 0) {
-        // 짧은 코드(EQU-06-001)에 가능한 level prefix를 붙여 전체 코드 후보 생성
+        // (a) MA-* 코드 — expanded_math_types
         const LEVEL_PREFIXES = ['MA-HS0', 'MA-HS1', 'MA-HS2', 'MA-MS1', 'MA-MS2', 'MA-MS3', 'MA-EL4', 'MA-EL5', 'MA-EL6'];
-        const lookupCodes = new Set<string>();
+        const maLookup = new Set<string>();
+        const msLookup = new Set<string>();
         allTypeCodes.forEach(code => {
-          lookupCodes.add(code); // 원본 코드
-          if (!code.startsWith('MA-')) {
-            // 짧은 코드 → 모든 prefix 조합 추가
-            LEVEL_PREFIXES.forEach(prefix => lookupCodes.add(`${prefix}-${code}`));
+          if (code.startsWith('MS')) {
+            msLookup.add(code);
+          } else if (code.startsWith('MA-')) {
+            maLookup.add(code);
+          } else {
+            // 짧은 레거시 코드 (EQU-06-001 등) — 모든 level prefix 조합
+            maLookup.add(code);
+            LEVEL_PREFIXES.forEach(prefix => maLookup.add(`${prefix}-${code}`));
           }
         });
 
-        const { data: typeData } = await supabaseAdmin
-          .from('expanded_math_types')
-          .select('type_code, type_name')
-          .in('type_code', Array.from(lookupCodes));
-
-        (typeData || []).forEach((t: any) => {
-          typeNamesMap.set(t.type_code, t.type_name);
-          // 전체 코드에서 짧은 코드도 매핑 (MA-HS0-EQU-06-001 → EQU-06-001)
-          if (t.type_code.startsWith('MA-')) {
-            const parts = t.type_code.split('-');
-            if (parts.length >= 5) {
-              const shortCode = parts.slice(2).join('-');
-              typeNamesMap.set(shortCode, t.type_name);
+        if (maLookup.size > 0) {
+          const { data: typeData } = await supabaseAdmin
+            .from('expanded_math_types')
+            .select('type_code, type_name')
+            .in('type_code', Array.from(maLookup));
+          (typeData || []).forEach((t: any) => {
+            typeNamesMap.set(t.type_code, t.type_name);
+            if (t.type_code.startsWith('MA-')) {
+              const parts = t.type_code.split('-');
+              if (parts.length >= 5) {
+                const shortCode = parts.slice(2).join('-');
+                typeNamesMap.set(shortCode, t.type_name);
+              }
             }
-          }
-        });
+          });
+        }
+
+        // (b) MS* 코드 — mathsecr_types.full_path 를 type_name 으로 사용
+        if (msLookup.size > 0) {
+          const { data: msData } = await supabaseAdmin
+            .from('mathsecr_types')
+            .select('code, full_path')
+            .in('code', Array.from(msLookup));
+          (msData || []).forEach((t: any) => {
+            if (t.code && t.full_path) {
+              typeNamesMap.set(t.code, t.full_path);
+            }
+          });
+        }
       }
 
-      // 6. classifications에 type_name 병합
+      // 6. classifications에 type_name 병합 — expanded_type_code 우선, 없으면 type_code
       (classData || []).forEach((c: any) => {
         const typeName = typeNamesMap.get(c.expanded_type_code || '') || typeNamesMap.get(c.type_code || '');
         if (typeName) c.type_name = typeName;

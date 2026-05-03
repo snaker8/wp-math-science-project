@@ -146,24 +146,23 @@ export async function PATCH(
 
     // classifications 테이블 업데이트 (난이도, 유형코드, 인지영역)
     if (difficulty !== undefined || type_code !== undefined || cognitive_domain !== undefined) {
-      // ★ Phase C-2: 분류 변경 전 before snapshot — corrections 누적용
-      let beforeCode: string | null = null;
+      // ★ Phase C-2: 분류 변경 전 before snapshot — corrections 누적용 + 행 존재 여부 확인
+      //   (Supabase update().eq() 가 0행 매칭 시 silent-success 라 분기 필요)
+      const { data: existingCls } = await supabaseAdmin
+        .from('classifications')
+        .select('id, type_code')
+        .eq('problem_id', problemId)
+        .maybeSingle();
+
+      let beforeCode: string | null = existingCls?.type_code || null;
       let beforeTypeName: string | null = null;
-      if (type_code !== undefined) {
-        const { data: existingCls } = await supabaseAdmin
-          .from('classifications')
-          .select('type_code')
-          .eq('problem_id', problemId)
+      if (type_code !== undefined && beforeCode && beforeCode.startsWith('MS')) {
+        const { data: beforeMs } = await supabaseAdmin
+          .from('mathsecr_types')
+          .select('full_path')
+          .eq('code', beforeCode)
           .maybeSingle();
-        beforeCode = existingCls?.type_code || null;
-        if (beforeCode && beforeCode.startsWith('MS')) {
-          const { data: beforeMs } = await supabaseAdmin
-            .from('mathsecr_types')
-            .select('full_path')
-            .eq('code', beforeCode)
-            .maybeSingle();
-          beforeTypeName = beforeMs?.full_path || null;
-        }
+        beforeTypeName = beforeMs?.full_path || null;
       }
 
       const classUpdate: Record<string, any> = { is_verified: true };
@@ -171,20 +170,25 @@ export async function PATCH(
       if (type_code !== undefined) classUpdate.type_code = type_code;
       if (cognitive_domain !== undefined) classUpdate.cognitive_domain = cognitive_domain;
 
-      const { error: clsError } = await supabaseAdmin
-        .from('classifications')
-        .update(classUpdate)
-        .eq('problem_id', problemId);
-
-      if (clsError) {
-        // classifications 레코드가 없을 수 있으므로 insert 시도
-        await supabaseAdmin.from('classifications').insert({
+      if (existingCls?.id) {
+        const { error: updErr } = await supabaseAdmin
+          .from('classifications')
+          .update(classUpdate)
+          .eq('id', existingCls.id);
+        if (updErr) {
+          console.error('[API/problems] classifications update error:', updErr.message);
+        }
+      } else {
+        const { error: insErr } = await supabaseAdmin.from('classifications').insert({
           problem_id: problemId,
           ...classUpdate,
           classification_source: 'MANUAL',
         });
+        if (insErr) {
+          console.error('[API/problems] classifications insert error:', insErr.message);
+        }
       }
-      console.log(`[API/problems] Classification updated: difficulty=${difficulty}, type_code=${type_code}`);
+      console.log(`[API/problems] Classification ${existingCls?.id ? 'updated' : 'inserted'}: difficulty=${difficulty}, type_code=${type_code}`);
 
       // ★ Phase C-2: 분류 보정 누적 — 사용자가 type_code 변경 시 학습 데이터로 INSERT
       //   다음 분류 호출에 비슷한 보정 사례를 few-shot으로 주입(classify.ts) → self-compiling.
