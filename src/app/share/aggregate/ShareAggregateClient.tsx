@@ -208,8 +208,10 @@ function ShareAggregateContent() {
     data.filters.grade,
     data.filters.semester ? `${data.filters.semester}학기` : null,
     data.filters.examType,
+    // chip 은 실제 매칭된 학교 수를 표시 — 사용자 필터(filters.schools)에는 데이터 없는 학교가 섞여
+    // 우측 'MATCHED' 와 불일치하던 사고 차단 (사용자 7곳 선택했는데 chip 만 10곳으로 표시되는 등).
     data.filters.schools && data.filters.schools.length > 0
-      ? `학교 ${data.filters.schools.length}곳 선택`
+      ? `학교 ${m.schoolCount}곳`
       : null,
   ].filter(Boolean) as string[];
 
