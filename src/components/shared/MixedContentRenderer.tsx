@@ -139,7 +139,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline }: 
   );
 
   // 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 분리
-  const { mainContent, conditionBoxes, conditionHeaders } = extractConditionBoxes(protectedBody);
+  const { mainContent, conditionBoxes, conditionHeaderLabels } = extractConditionBoxes(protectedBody);
 
   // tabular 블록 복원
   let restoredMainContent = mainContent;
@@ -335,12 +335,12 @@ function MixedContentRendererInner({ content, className, onMathClick, inline }: 
           if (boxMatch) {
             const boxIdx = parseInt(boxMatch[1], 10);
             const boxContent = restoredConditionBoxes[boxIdx];
-            const hasHeader = conditionHeaders[boxIdx];
+            const headerLabel = conditionHeaderLabels[boxIdx];
             if (boxContent) {
               return (
                 <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
-                  {hasHeader && (
-                    <div className="text-xs font-bold text-zinc-400 mb-2 -mt-1">&lt;보기&gt;</div>
+                  {headerLabel && (
+                    <div className="text-xs font-bold text-zinc-400 mb-2 -mt-1">&lt;{headerLabel}&gt;</div>
                   )}
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
@@ -468,39 +468,60 @@ function stripTrailingChoiceLines(text: string): string {
 }
 
 /**
- * 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 본문에서 분리
- * 시험지에서 조건이 사각형 테두리 박스 안에 들어가는 형식을 구현
+ * 조건 박스 추출: (가)...(나)... 또는 <보기>/<규칙>/<조건>... 블록을 본문에서 분리
+ * 시험지에서 조건이 사각형 테두리 박스 안에 들어가는 형식을 구현.
+ * 헤더 라벨은 원본 그대로 보존(보기/규칙/조건/...) — 렌더 시 동일 라벨 표시.
  */
-function extractConditionBoxes(text: string): { mainContent: string; conditionBoxes: string[]; conditionHeaders: boolean[] } {
+const BOX_HEADER_KEYWORDS = ['보기', '규칙', '조건', '참고', '자료', '안내', '주의', '정의', '설명'];
+
+function detectBoxHeaderLabel(trimmed: string): string | null {
+  // 1) `< X >` 또는 `〈 X 〉` 단독 라인 (장식 문자 _, -, ─, —, =, $, \, . 가능)
+  const angleMatch = trimmed.match(
+    /^\s*(?:[$_\\\-─—=.\s]{2,}\s*)?[<〈]\s*([가-힣\s]+?)\s*[>〉]\s*(?:[$_\\\-─—=.\s]{2,})?\s*$/,
+  );
+  if (angleMatch) {
+    const inner = angleMatch[1].replace(/\s+/g, '');
+    if (BOX_HEADER_KEYWORDS.includes(inner)) return inner;
+  }
+  // 2) `| 보 기 |` 형식 (Mathpix가 가로 테두리를 파이프로 출력하는 케이스)
+  const pipeMatch = trimmed.match(/^\s*\|\s*([가-힣\s]+?)\s*\|\s*$/);
+  if (pipeMatch) {
+    const inner = pipeMatch[1].replace(/\s+/g, '');
+    if (BOX_HEADER_KEYWORDS.includes(inner)) return inner;
+  }
+  return null;
+}
+
+function extractConditionBoxes(text: string): { mainContent: string; conditionBoxes: string[]; conditionHeaderLabels: (string | null)[] } {
   const lines = text.split('\n');
   const conditionBoxes: string[] = [];
-  const conditionHeaders: boolean[] = []; // ★ <보기> 헤더 유무
+  const conditionHeaderLabels: (string | null)[] = []; // ★ 박스 헤더 라벨 (보기/규칙/조건/...) — null 이면 헤더 없음
   const mainLines: string[] = [];
 
-  // (가)/(나)/(다) 또는 <보기> 블록 감지
+  // (가)/(나)/(다) 또는 <보기>/<규칙>/<조건> 블록 감지
   let inConditionBlock = false;
   let conditionLines: string[] = [];
-  let currentHasHeader = false;
+  let currentHeaderLabel: string | null = null;
   let boxIndex = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
 
-    // 조건 시작: (가), (나), (다), <보기>, | 보 기 |, ㄱ., ㄴ., ㄷ.
+    // 조건 시작: (가), (나), (다), <보기>/<규칙>/<조건>/..., | 보 기 |, ㄱ., ㄴ., ㄷ.
     // ★ \displaystyle이 앞에 붙어있을 수 있으므로 선택적으로 매칭
-    // ★ 보기 헤더: 단독 줄에 있는 경우만 (문장 중간 <보기>는 무시)
+    // ★ 박스 헤더: 단독 줄에 있는 경우만 (문장 중간 <조건>은 무시)
     // ★ 장식 문자: _, -, ─, —, =, $, \, . (Mathpix가 $\_\_\_\_$ 형식으로 출력)
-    const isBogiHeader = /^\s*(?:[$_\\\-─—=.\s]{2,}\s*)?(?:<\s*보기\s*>|〈\s*보\s*기\s*〉)\s*(?:[$_\\\-─—=.\s]{2,})?\s*$/.test(trimmed) ||
-                         /^\s*\|\s*보\s*기\s*\|\s*$/.test(trimmed);
+    const boxHeaderLabel = detectBoxHeaderLabel(trimmed);
+    const isBoxHeader = boxHeaderLabel !== null;
     const isConditionStart = /^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(trimmed) ||
-                             isBogiHeader ||
+                             isBoxHeader ||
                              /^\s*(?:\\displaystyle\s*)?[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
 
     if (isConditionStart && !inConditionBlock) {
       inConditionBlock = true;
-      currentHasHeader = isBogiHeader;
-      // ★ 보기 헤더 줄 자체는 제외 (렌더링 시 별도 헤더로 표시)
-      if (isBogiHeader) {
+      currentHeaderLabel = boxHeaderLabel;
+      // ★ 박스 헤더 줄 자체는 제외 (렌더링 시 별도 헤더로 표시)
+      if (isBoxHeader) {
         conditionLines = [];
       } else {
         conditionLines = [lines[i]];
@@ -530,13 +551,13 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
       if (isBlockEnd) {
         if (conditionLines.length > 0) {
           conditionBoxes.push(conditionLines.join('\n'));
-          conditionHeaders.push(currentHasHeader);
+          conditionHeaderLabels.push(currentHeaderLabel);
           mainLines.push(`__CONDITION_BOX_${boxIndex}__`);
           boxIndex++;
         }
         inConditionBlock = false;
         conditionLines = [];
-        currentHasHeader = false;
+        currentHeaderLabel = null;
         if (trimmed !== '') mainLines.push(lines[i]);
         continue;
       }
@@ -551,11 +572,11 @@ function extractConditionBoxes(text: string): { mainContent: string; conditionBo
   // 마지막 조건 블록 처리
   if (inConditionBlock && conditionLines.length > 0) {
     conditionBoxes.push(conditionLines.join('\n'));
-    conditionHeaders.push(currentHasHeader);
+    conditionHeaderLabels.push(currentHeaderLabel);
     mainLines.push(`__CONDITION_BOX_${boxIndex}__`);
   }
 
-  return { mainContent: mainLines.join('\n'), conditionBoxes, conditionHeaders };
+  return { mainContent: mainLines.join('\n'), conditionBoxes, conditionHeaderLabels };
 }
 
 /** 조건 블록이 끝나는지 판단 */
