@@ -319,6 +319,19 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         </div>
       )}
 
+      {/* 캡처 안내 — 두 가지 방법 (캡처/인쇄에선 숨김) */}
+      <div className="capture-hint no-print" data-html2canvas-ignore="true">
+        <div className="capture-hint-inner">
+          <span className="capture-hint-icon">💡</span>
+          <span className="capture-hint-text">
+            <b>캡처 두 가지 방법</b> &nbsp;·&nbsp;
+            <b>① 섹션 복사 버튼</b>: 섹션 단위로 한 번에 클립보드 복사 (빠름) &nbsp;|&nbsp;
+            <b>② 직접 캡처</b>: <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (Windows) /
+            <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd> (Mac) 로 원하는 영역 자유 캡처 (가장 정확)
+          </span>
+        </div>
+      </div>
+
       {/* 보고서 본문 */}
       <article ref={reportRef} className="report-paper">
         {/* HEADER */}
