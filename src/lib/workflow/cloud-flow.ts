@@ -381,6 +381,17 @@ function groupLinesIntoQuestions(
         } else if (_hasParenChoice && !_isSubProblemLine && (lineText.match(/\([1-5]\)/g) || []).length >= 2) {
           // (1)(2)...(5) 패턴이 한 줄에 2개 이상 있으면 선택지 라인
           currentQuestion.choiceTexts.push(lineText);
+        } else if (
+          // ★ ④까지 ①②③④ 모두 수집됐는데 다음 라인이 단일 `(5) X` 형식 →
+          //   누락된 ⑤ 선택지 (Mathpix 가 ⑤만 (5) 로 변환하는 OCR 사고).
+          //   choiceTexts.length === 4 + 직전이 ④ 포함 + 라인 시작이 (5) 인 케이스만.
+          //   2026 센텀중 2-1 등 사고 (5문제 중 3문제 누락).
+          !_isSubProblemLine
+          && currentQuestion.choiceTexts.length === 4
+          && /④/.test(currentQuestion.choiceTexts[3])
+          && /^\s*\(5\)\s*\S/.test(lineText)
+        ) {
+          currentQuestion.choiceTexts.push(lineText);
         }
       }
     }
