@@ -57,7 +57,7 @@ export function AIInsightTabs({
             )}
           </button>
           <p style={{ fontSize: 11, color: 'var(--chrome-fg-4)', marginTop: 12 }}>
-            Claude Sonnet 4.6이 시험지 전체를 분석하여 시험 총평·단원별 학습전략·고난도 문항 심층분석을 생성합니다.
+            AI가 시험지 전체를 분석하여 시험 총평·단원별 학습전략·고난도 문항 심층분석을 생성합니다.
           </p>
           {error && (
             <div style={{ marginTop: 12, color: '#fca5a5', fontSize: 12 }}>
@@ -77,8 +77,6 @@ export function AIInsightTabs({
           AI 분석
           <span className="sub">
             난이도 평가: <strong style={{ color: '#67e8f9' }}>{analysis.overallDifficulty}</strong>
-            {' · '}
-            <span style={{ fontSize: 10 }}>{analysis.modelVersion}</span>
             {' · '}
             <span style={{ fontSize: 10 }}>
               {new Date(analysis.generatedAt).toLocaleDateString('ko-KR')}
