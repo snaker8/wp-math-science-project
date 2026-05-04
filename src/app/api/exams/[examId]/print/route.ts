@@ -145,6 +145,13 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const variant = searchParams.get('variant') === 'teacher' ? 'teacher' : 'student';
   const withAnswer = searchParams.get('withAnswer') === 'true';
+  // ★ 단원·주제별 부분 인쇄 — exam_problems 중 일부만 필터.
+  //   학원자료 페이지에서 진단지 [+ 출제] 클릭 시 사용.
+  const onlyProblemIdsParam = searchParams.get('onlyProblemIds') || '';
+  const onlyProblemIds = onlyProblemIdsParam
+    ? new Set(onlyProblemIdsParam.split(',').map((s) => s.trim()).filter(Boolean))
+    : null;
+  const subtitle = (searchParams.get('subtitle') || '').trim();
 
   // 시험지 조회
   const { data: exam, error: examErr } = await sb
@@ -161,11 +168,16 @@ export async function GET(
   }
 
   // exam_problems + 본문
-  const { data: epRows } = await sb
+  const { data: rawEpRows } = await sb
     .from('exam_problems')
     .select('sequence_number, points, problem_id')
     .eq('exam_id', examId)
     .order('sequence_number', { ascending: true });
+
+  // onlyProblemIds 필터 적용 (단원·주제별 부분 인쇄)
+  const epRows = onlyProblemIds
+    ? ((rawEpRows || []) as Array<{ problem_id: string }>).filter((r) => onlyProblemIds.has(r.problem_id))
+    : (rawEpRows || []);
 
   const problemIds = ((epRows || []) as Array<{ problem_id: string }>).map((r) => r.problem_id);
 
@@ -443,8 +455,8 @@ export async function GET(
 
     <header class="print-header">
       ${headerLabel ? `<div class="meta">${escapeHtml(headerLabel)}</div>` : ''}
-      <div class="title">${escapeHtml(examTitle)}</div>
-      <div class="stats">총 ${probCount}문항${totalPts > 0 ? ` · ${totalPts}점` : ''}</div>
+      <div class="title">${escapeHtml(examTitle)}${subtitle ? ` <span class="subtitle">— ${escapeHtml(subtitle)}</span>` : ''}</div>
+      <div class="stats">총 ${probCount}문항${totalPts > 0 ? ` · ${totalPts}점` : ''}${onlyProblemIds ? ' · 단원/주제별 발췌' : ''}</div>
       ${variant === 'student'
         ? `<div class="name-line">
              <span class="field">학교 / 학년 / 반:</span>
