@@ -176,6 +176,21 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 ## 현재 작업 상태
 
 ### 완료됨
+- **Multi-Tenancy 격리 (계층 구조: 학원 → 센터, 2026-05-04)**
+  - 매쓰플랫 모델 — 공통 문제풀 + 학원별 독립 운영
+  - `organizations` (학원) 테이블 신설, `institutes`(센터) 에 `organization_id` 추가
+  - role enum 에 `ORG_ADMIN` 추가 (학원 산하 모든 센터 통합 관리)
+  - 권한 helper: `is_super_admin()`, `get_my_organization_id()`, `can_access_institute(uuid)`
+  - 8개 RLS 정책에 `can_access_institute` 적용 (exams, problems, classes, book_groups, source_files, classifications, users)
+  - diagnostics 4개 테이블 + class_enrollments 에 `institute_id` 컬럼 (트리거 자동 복사)
+  - `src/lib/security/institute-guard.ts` — 헬퍼 모듈 (`getUserAccessScope`, `applyInstituteFilter`, `assertInstituteAccess`, `assertExamAccess`, `assertProblemAccess`, `resolveInsertInstituteId`)
+  - 27개 API route 패치 (admin/exams/problems/book-groups/sessions) — institute-guard 적용
+  - **운영 데이터 마이그레이션** — "과사람" organization + "본부" institute (id 보존)
+  - snaker → super_admin (auth metadata), icegimbab17 → ORG_ADMIN
+  - problems 1971건 → NULL (공통풀 통합)
+  - 어드민 UI: `/admin/institutes` (학원/센터 관리), `/admin/users` (사용자 배정) — super_admin 만
+  - 검증 스크립트: `scripts/verify-multitenancy.sql` (24개 항목)
+  - 참조: [PLAN_MULTITENANCY.md](PLAN_MULTITENANCY.md), [PLAN_MULTITENANCY_AUDIT.md](PLAN_MULTITENANCY_AUDIT.md)
 - **3,000 세부유형 분류 체계 확장 + Supabase DB 적재**
   - `scripts/expansion-v4-*.ts` — V4 확장 데이터 (3,045개 총 적재)
   - `curriculum_data/seed_expanded_types*.sql` — SQL 시드 파일
