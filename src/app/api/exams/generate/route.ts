@@ -1,15 +1,29 @@
 // ============================================================================
 // POST /api/exams/generate — 시험지 자동 생성
 // classifications 기반 type_code 필터 + 난이도별 배분
-// supabaseAdmin으로 RLS 바이패스
+// supabaseAdmin + institute-guard (격리)
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { resolveInsertInstituteId, applyInstituteFilter } from '@/lib/security/institute-guard';
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+
+  // INSERT 에 사용할 institute_id 결정 (자기 institute. ORG_ADMIN/super 가 명시 가능)
+  let insertInstituteId: string;
+  try {
+    insertInstituteId = resolveInsertInstituteId(scope);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 403 });
   }
 
   try {
@@ -25,6 +39,8 @@ export async function POST(request: NextRequest) {
           status: 'DRAFT',
           subject: criteria?.subject || '수학',
           total_points: problemIds.length * 4,
+          institute_id: insertInstituteId,
+          created_by: user.id,
         })
         .select('id')
         .single();
@@ -64,17 +80,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '문항수를 설정해주세요.' }, { status: 400 });
     }
 
-    // ---- 1. classifications에서 type_code 매칭 문제 후보 조회 ----
-    // type_code가 선택된 standardCode로 시작하는 문제들 (LIKE 'HS0-POL-%' 등)
-    // Supabase JS에서 OR LIKE 다수는 어려우므로, 전체 가져온 후 JS 필터
+    // ---- 1. 격리 — 자기 institute + 공통 풀 problems 만 사용 가능 ----
+    // classifications 는 institute_id 없으므로 problems → classifications 두 단계.
+    const accessibleProbsBase = supabaseAdmin
+      .from('problems')
+      .select('id')
+      .is('deleted_at', null);
+    const { data: accessibleProbs, error: accErr } = await applyInstituteFilter(
+      accessibleProbsBase,
+      scope,
+      { allowCommonPool: true }
+    );
+    if (accErr) {
+      return NextResponse.json({ error: '문제 조회 실패', detail: accErr.message }, { status: 500 });
+    }
+    const accessibleIds = (accessibleProbs || []).map((p: { id: string }) => p.id);
+    if (accessibleIds.length === 0) {
+      return NextResponse.json({ error: '접근 가능한 문제가 없습니다.' }, { status: 404 });
+    }
+
+    // ---- 2. classifications 에서 type_code 매칭 + 격리 문제만 ----
     let candidateQuery = supabaseAdmin
       .from('classifications')
       .select('problem_id, type_code, difficulty, cognitive_domain')
-      .not('problem_id', 'is', null);
+      .not('problem_id', 'is', null)
+      .in('problem_id', accessibleIds);
 
     // type_code 필터: typeCodes 배열에 정확히 매칭되는 것들 또는 prefix 매칭
     if (typeCodes.length > 0) {
-      // OR 조건으로 type_code가 각 standardCode로 시작하는 것들
       const orFilters = typeCodes.map(tc => `type_code.like.${tc}%`).join(',');
       candidateQuery = candidateQuery.or(orFilters);
     }
@@ -152,7 +185,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ---- 4. 시험지 생성 ----
+    // ---- 4. 시험지 생성 (institute_id, created_by 포함) ----
     const { data: exam, error: examError } = await supabaseAdmin
       .from('exams')
       .insert({
@@ -160,6 +193,8 @@ export async function POST(request: NextRequest) {
         status: 'DRAFT',
         subject: criteria.subject || '수학',
         total_points: selectedProblemIds.length * 4,
+        institute_id: insertInstituteId,
+        created_by: user.id,
       })
       .select('id')
       .single();

@@ -7,8 +7,9 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { applyInstituteFilter, assertInstituteAccess, type InstituteAccessScope } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -98,7 +99,7 @@ function parseStorageUrl(url: string): { bucket: string; path: string } | null {
   return { bucket: m[1], path: decodeURIComponent(m[2]) };
 }
 
-async function processExam(examId: string): Promise<{
+async function processExam(examId: string, scope: InstituteAccessScope): Promise<{
   examId: string;
   title?: string;
   status: 'success' | 'skip' | 'error';
@@ -113,10 +114,16 @@ async function processExam(examId: string): Promise<{
 
   const { data: exam } = await supabaseAdmin
     .from('exams')
-    .select('id, title')
+    .select('id, title, institute_id')
     .eq('id', examId)
     .single();
   if (!exam) return { examId, status: 'error', reason: 'exam not found' };
+  // 격리 가드 — 다른 institute exam 접근 차단
+  try {
+    assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
+  } catch {
+    return { examId, status: 'error', reason: 'forbidden' };
+  }
 
   const { data: eps } = await supabaseAdmin
     .from('exam_problems')
@@ -199,10 +206,10 @@ async function processExam(examId: string): Promise<{
 }
 
 export async function POST(request: NextRequest) {
-  const authed = await requireAuth();
+  const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
-  const { user } = authed;
-  const isAdmin = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR';
+  const { user, scope } = authed.data;
+  const isAdmin = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
   if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
@@ -212,15 +219,17 @@ export async function POST(request: NextRequest) {
   if (!examId) return NextResponse.json({ error: 'examId required (UUID 또는 "all")' }, { status: 400 });
 
   if (examId === 'all') {
-    const { data: exams } = await supabaseAdmin
+    // 격리: 자기 institute exam 만 (super_admin 은 전체)
+    const baseQuery = supabaseAdmin
       .from('exams')
       .select('id')
       .is('deleted_at', null);
+    const { data: exams } = await applyInstituteFilter(baseQuery, scope);
     const ids = (exams || []).map((e: any) => e.id);
     const results: any[] = [];
     for (const id of ids) {
       try {
-        const r = await processExam(id);
+        const r = await processExam(id, scope);
         results.push({ examId: r.examId, title: r.title, status: r.status, updated: r.updated, total: r.total, reason: r.reason });
         console.log(`[reocr-points] ${id.slice(0, 8)} ${r.title || '-'}: ${r.status} ${r.updated}/${r.total}`);
       } catch (err) {
@@ -238,7 +247,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const r = await processExam(examId);
+    const r = await processExam(examId, scope);
     return NextResponse.json(r);
   } catch (err) {
     return NextResponse.json({

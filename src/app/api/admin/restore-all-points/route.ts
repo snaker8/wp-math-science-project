@@ -5,18 +5,19 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function POST() {
-  const authed = await requireAuth();
+  const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
 
-  const { user } = authed;
-  const isAdmin = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR';
+  const { user, scope } = authed.data;
+  const isAdmin = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
   if (!isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -55,11 +56,13 @@ export async function POST() {
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const from = page * PAGE;
-    const { data: problems, error } = await supabaseAdmin
+    // 격리: 자기 institute + 공통 풀 (institute_id IS NULL)
+    const baseQuery = supabaseAdmin
       .from('problems')
       .select('id, content_latex')
       .is('deleted_at', null)
       .range(from, from + PAGE - 1);
+    const { data: problems, error } = await applyInstituteFilter(baseQuery, scope, { allowCommonPool: true });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

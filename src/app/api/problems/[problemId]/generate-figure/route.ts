@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { interpretImage } from '@/lib/vision/image-interpreter';
 import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
 import { tryUpscaleCrop } from '@/lib/vision/image-upscaler';
@@ -30,6 +32,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { problemId } = await params;
 
   // ★ OpenAI 키 체크는 AI Vision 폴백 시에만 필요 (업스케일은 키 불필요)
@@ -41,6 +45,8 @@ export async function POST(
       { status: 503 }
     );
   }
+  const guard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
     // 1. 문제 데이터 조회 (이미지 URL 필요)

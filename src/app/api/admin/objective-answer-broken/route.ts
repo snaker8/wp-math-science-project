@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAdmin } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,8 +38,13 @@ function extractSuggestedAnswer(solution: string | null): string | null {
 }
 
 export async function GET(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requireAuthScope();
   if (!guard.ok) return guard.response;
+  const { user, scope } = guard.data;
+  // ADMIN/ORG_ADMIN/super_admin 만 접근
+  if (user.role !== 'ADMIN' && user.role !== 'ORG_ADMIN' && !scope.isSuperAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -51,7 +57,8 @@ export async function GET(request: NextRequest) {
   // 박힌 객관식 문제 조회 — type='multiple_choice' AND correct_answer in ('0', '', null)
   // exam 정보는 exam_problems 조인 (한 문제가 여러 시험에 속할 수 있어 첫 번째만)
   // ★ 1000행 제한 회피 — pagination 명시 (메모리: feedback_supabase_select_limit.md)
-  const { data: problems, error } = await supabaseAdmin
+  // 격리: 자기 institute + 공통 풀 (institute_id IS NULL)
+  const baseQuery = supabaseAdmin
     .from('problems')
     .select('id, content_latex, solution_latex, answer_json, source_number, source_name')
     .is('deleted_at', null)
@@ -59,6 +66,7 @@ export async function GET(request: NextRequest) {
     .or('answer_json->>correct_answer.eq.0,answer_json->>correct_answer.eq.,answer_json->>correct_answer.is.null')
     .order('id')
     .range(offset, offset + limit - 1);
+  const { data: problems, error } = await applyInstituteFilter(baseQuery, scope, { allowCommonPool: true });
 
   if (error) {
     console.error('[admin/objective-answer-broken]', error);
@@ -83,13 +91,14 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  // 전체 카운트 (페이지네이션용)
-  const { count: total } = await supabaseAdmin
+  // 전체 카운트 (페이지네이션용) — 동일 격리 적용
+  const countBase = supabaseAdmin
     .from('problems')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
     .eq('answer_json->>type', 'multiple_choice')
     .or('answer_json->>correct_answer.eq.0,answer_json->>correct_answer.eq.,answer_json->>correct_answer.is.null');
+  const { count: total } = await applyInstituteFilter(countBase, scope, { allowCommonPool: true });
 
   const items = (problems || []).map((p: any) => {
     const aj = p.answer_json || {};

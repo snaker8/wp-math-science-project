@@ -136,6 +136,37 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - 정규식 양쪽 통일: `[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]` (대괄호·소괄호 모두 + OCR 오타 점/졈/졍).
 - 사고 이력: 사직여중 중2-1 서답형 자산화 배점이 매번 첫 [3점] 으로 들어가 사용자가 수동 수정 (1ba79ff).
 
+### 8. Multi-tenancy 격리 — 격리 대상 테이블은 institute-guard 통과 필수
+- 격리 대상 테이블: `exams`, `problems`, `classes`, `class_enrollments`, `book_groups`, `source_files`, `users`, `diagnostics.*`
+- 공통 풀 테이블 (`institute_id IS NULL` = 모두 접근): `problems`, `book_groups`
+- 위치: `src/lib/security/institute-guard.ts`
+- **가드**: `supabaseAdmin.from('<격리 대상>')` 호출 시 항상 `applyInstituteFilter(query, scope)` 또는 `assertInstituteAccess(scope, instituteId)` 적용.
+- **사용 패턴**:
+  ```ts
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
+  // SELECT — 격리 필터
+  const q = supabaseAdmin.from('exams').select('*');
+  const { data } = await applyInstituteFilter(q, scope);
+
+  // ID 접근 가드
+  const { data: exam } = await supabaseAdmin.from('exams').select('institute_id, ...').eq('id', examId).single();
+  assertInstituteAccess(scope, exam.institute_id); // throw if forbidden
+
+  // INSERT
+  const instId = resolveInsertInstituteId(scope, payload.institute_id);
+  ```
+- **공통 풀 옵션**: `applyInstituteFilter(q, scope, { allowCommonPool: true })` — problems / book_groups
+- **권한 계층**:
+  - super_admin (auth metadata `super_admin=true`) → 모든 institute
+  - ORG_ADMIN (`users.role='ORG_ADMIN'` + `organization_id`) → 학원 산하 모든 institute
+  - 일반 user → 자기 institute 만
+- **service_role bypass 주의**: `supabaseAdmin` 은 RLS 우회 → 앱 레벨 가드 안 걸면 cross-tenant 누수.
+- 신규 API route 작성 시 격리 대상 테이블 접근하면 무조건 institute-guard 사용.
+- 사고 학습: PR-5 audit (2026-05-04) — 25+개 파일 누락 발견 (현재 institute 1개라 leak 0이지만 PR-6 마이그레이션 후 현실화 예정).
+
 ### 학습 저장 위치
 - DB: `figure_corrections` (도형 교정 diff), `latex_render_corrections` (LaTeX 수정 diff)
 - 메모리: `~/.claude/projects/.../memory/feedback_*.md` (5개 파일 인덱스 MEMORY.md 참조)
@@ -145,6 +176,21 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 ## 현재 작업 상태
 
 ### 완료됨
+- **Multi-Tenancy 격리 (계층 구조: 학원 → 센터, 2026-05-04)**
+  - 매쓰플랫 모델 — 공통 문제풀 + 학원별 독립 운영
+  - `organizations` (학원) 테이블 신설, `institutes`(센터) 에 `organization_id` 추가
+  - role enum 에 `ORG_ADMIN` 추가 (학원 산하 모든 센터 통합 관리)
+  - 권한 helper: `is_super_admin()`, `get_my_organization_id()`, `can_access_institute(uuid)`
+  - 8개 RLS 정책에 `can_access_institute` 적용 (exams, problems, classes, book_groups, source_files, classifications, users)
+  - diagnostics 4개 테이블 + class_enrollments 에 `institute_id` 컬럼 (트리거 자동 복사)
+  - `src/lib/security/institute-guard.ts` — 헬퍼 모듈 (`getUserAccessScope`, `applyInstituteFilter`, `assertInstituteAccess`, `assertExamAccess`, `assertProblemAccess`, `resolveInsertInstituteId`)
+  - 27개 API route 패치 (admin/exams/problems/book-groups/sessions) — institute-guard 적용
+  - **운영 데이터 마이그레이션** — "과사람" organization + "본부" institute (id 보존)
+  - snaker → super_admin (auth metadata), icegimbab17 → ORG_ADMIN
+  - problems 1971건 → NULL (공통풀 통합)
+  - 어드민 UI: `/admin/institutes` (학원/센터 관리), `/admin/users` (사용자 배정) — super_admin 만
+  - 검증 스크립트: `scripts/verify-multitenancy.sql` (24개 항목)
+  - 참조: [PLAN_MULTITENANCY.md](PLAN_MULTITENANCY.md), [PLAN_MULTITENANCY_AUDIT.md](PLAN_MULTITENANCY_AUDIT.md)
 - **3,000 세부유형 분류 체계 확장 + Supabase DB 적재**
   - `scripts/expansion-v4-*.ts` — V4 확장 데이터 (3,045개 총 적재)
   - `curriculum_data/seed_expanded_types*.sql` — SQL 시드 파일

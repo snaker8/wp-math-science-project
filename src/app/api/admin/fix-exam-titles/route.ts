@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,8 @@ export const dynamic = 'force-dynamic';
  * 제목이 sanitize(한글→_)되어 저장된 기존 exam들을 일괄 복구.
  * exam.description의 "업로드 파일: {원본명}" 패턴에서 한글 원본명을 추출해 title로 덮어씀.
  *
+ * 격리: institute-guard 로 자기 institute 만 (super_admin 은 전체).
+ *
  * 대상 조건:
  *   - deleted_at IS NULL
  *   - title이 3연속 이상 '_'를 포함 (sanitize된 흔적)
@@ -17,12 +20,12 @@ export const dynamic = 'force-dynamic';
  *   - 추출한 fileName이 현재 title과 다름
  */
 export async function POST() {
-  const authed = await requireAuth();
+  const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
 
-  const { user } = authed;
+  const { user, scope } = authed.data;
   const isAdmin =
-    user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR';
+    user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
   if (!isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -34,12 +37,13 @@ export async function POST() {
     );
   }
 
-  // 깨진 패턴: 3연속 이상 밑줄
-  const { data: exams, error } = await supabaseAdmin
+  // 깨진 패턴: 3연속 이상 밑줄. institute-guard 로 격리.
+  const baseQuery = supabaseAdmin
     .from('exams')
     .select('id, title, description')
     .is('deleted_at', null)
     .like('title', '%___%');
+  const { data: exams, error } = await applyInstituteFilter(baseQuery, scope);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

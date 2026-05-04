@@ -4,12 +4,18 @@
 
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
+import { getUserAccessScope, type InstituteAccessScope } from '@/lib/security/institute-guard';
 
 export type GuardUser = {
   id: string;
   email: string | null;
-  role: 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT' | null;
+  role: 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT' | 'ORG_ADMIN' | null;
   instituteId: string | null;
+};
+
+export type AuthedSession = {
+  user: GuardUser;
+  scope: InstituteAccessScope;
 };
 
 /**
@@ -95,3 +101,48 @@ export const requireAdmin = () => requireRole(['ADMIN']);
  * 문제/시험지 수정 권한 (ADMIN 또는 TEACHER/TUTOR).
  */
 export const requireEditor = () => requireRole(['ADMIN', 'TEACHER', 'TUTOR']);
+
+/**
+ * 인증 + 격리 scope 통합. Multi-tenancy API 라우트에서 권장.
+ *
+ * @example
+ *   const authed = await requireAuthScope();
+ *   if (!authed.ok) return authed.response;
+ *   const { user, scope } = authed.data;
+ *
+ *   const q = supabaseAdmin!.from('exams').select('*');
+ *   const { data } = await applyInstituteFilter(q, scope);
+ */
+export async function requireAuthScope(): Promise<
+  { ok: true; data: AuthedSession } | { ok: false; response: NextResponse }
+> {
+  const supa = await createSupabaseServerClient();
+  if (!supa) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Supabase not configured' }, { status: 500 }),
+    };
+  }
+  const { data: { user: rawUser }, error } = await supa.auth.getUser();
+  if (error || !rawUser) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    };
+  }
+  if (!supabaseAdmin) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Supabase admin not configured' }, { status: 500 }),
+    };
+  }
+
+  const scope = await getUserAccessScope(supabaseAdmin, rawUser.id, rawUser.app_metadata);
+  const guardUser: GuardUser = {
+    id: rawUser.id,
+    email: rawUser.email ?? null,
+    role: scope.role as GuardUser['role'],
+    instituteId: scope.instituteId,
+  };
+  return { ok: true, data: { user: guardUser, scope } };
+}

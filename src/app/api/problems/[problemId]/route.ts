@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAuth, requireEditor } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertProblemAccess } from '@/lib/security/institute-guard';
 
 // ============================================================================
 // GET /api/problems/[problemId] - 문제 단일 조회 (로그인 필수)
@@ -16,15 +17,17 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
-  // ★ 로그인 필수 (민감 정보 아니지만 무단 스크래핑 방지)
-  const auth = await requireAuth();
-  if (!auth.ok) return auth.response;
+  // ★ 로그인 + 격리 scope (공통 풀 NULL 은 모두 접근)
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
 
   const { problemId } = await params;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
+  const guard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const { data, error } = await supabaseAdmin
     .from('problems')
@@ -43,9 +46,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
-  // ★ ADMIN/TEACHER/TUTOR만 문제 수정 허용 (학생/학부모 차단)
-  const guard = await requireEditor();
-  if (!guard.ok) return guard.response;
+  // ★ ADMIN/TEACHER/TUTOR/ORG_ADMIN 만 문제 수정 허용 (학생/학부모 차단) + 격리 scope
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+  const isEditor = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
+  if (!isEditor) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const { problemId } = await params;
 
@@ -55,6 +63,10 @@ export async function PATCH(
       { status: 503 }
     );
   }
+
+  // 격리 가드 — 다른 institute problem 수정 차단
+  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, scope);
+  if (!accessGuard.ok) return NextResponse.json({ error: accessGuard.error }, { status: accessGuard.status });
 
   try {
     const body = await request.json();
@@ -253,7 +265,7 @@ export async function PATCH(
             exam_subject: examSubject,
             exam_grade: examGrade,
             reason: correction_reason || null,
-            corrected_by: guard.user?.id || null,
+            corrected_by: user?.id || null,
           });
           console.log(
             `[API/problems] ★ Correction logged: ${beforeCode || '(none)'} → ${type_code}`
@@ -303,9 +315,14 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
-  // ★ 편집자 role 전용 (학생/학부모가 남 문제 지우는 것 방지)
-  const guard = await requireEditor();
-  if (!guard.ok) return guard.response;
+  // ★ 편집자 role + 격리 scope (학생/학부모 차단 + cross-tenant 차단)
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+  const isEditor = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
+  if (!isEditor) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const { problemId } = await params;
 
@@ -315,6 +332,8 @@ export async function DELETE(
       { status: 503 }
     );
   }
+  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, scope);
+  if (!accessGuard.ok) return NextResponse.json({ error: accessGuard.error }, { status: accessGuard.status });
 
   try {
     // 1. 분류 데이터 먼저 삭제 (외래키 관계)

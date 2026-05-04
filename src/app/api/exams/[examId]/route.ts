@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAuth, requireEditor } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 // Next.js 14 Data Cache 비활성화
 export const dynamic = 'force-dynamic';
@@ -17,9 +18,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
-  // ★ 로그인 필수 (학생도 자기 시험지는 조회 가능해야 함)
-  const auth = await requireAuth();
+  // ★ 로그인 + 격리 scope 필수
+  const auth = await requireAuthScope();
   if (!auth.ok) return auth.response;
+  const { scope } = auth.data;
 
   const { examId } = await params;
 
@@ -31,12 +33,10 @@ export async function GET(
   }
 
   try {
-    // 1. 시험지 정보 조회 (schema.sql 기준 컬럼)
-    // ★ subject/exam_type/grade 도 포함 — 시험지 헤더(EditableExamHeader) 가 이 값으로
-    //   학원/과목/유형/학년을 채움. 빠뜨리면 출력 시 기본값으로 떨어져 사용자 편집이 무시됨.
+    // 1. 시험지 정보 조회 — institute_id 포함해서 격리 가드
     const { data: exam, error: examError } = await supabaseAdmin
       .from('exams')
-      .select('id, title, description, status, total_points, book_group_id, subject, exam_type, grade, created_at')
+      .select('id, title, description, status, total_points, book_group_id, subject, exam_type, grade, created_at, institute_id')
       .eq('id', examId)
       .single();
 
@@ -46,6 +46,13 @@ export async function GET(
         { error: 'Exam not found', detail: examError.message },
         { status: 404 }
       );
+    }
+
+    // 격리 가드 — 다른 institute exam 접근 차단
+    try {
+      assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // 2. exam_problems 조회 (supabaseAdmin + JOIN은 0건 반환 이슈 → 분리 쿼리)
@@ -196,9 +203,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
-  // ★ 편집자 role 전용
-  const guard = await requireEditor();
+  // ★ 편집자 role + 격리 scope
+  const guard = await requireAuthScope();
   if (!guard.ok) return guard.response;
+  const { user, scope } = guard.data;
+  const isEditor = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
+  if (!isEditor) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const { examId } = await params;
 
@@ -207,6 +219,21 @@ export async function PATCH(
       { error: 'Supabase not configured' },
       { status: 503 }
     );
+  }
+
+  // 격리 가드 — exam 의 institute 접근 권한 검증
+  const { data: existingExam } = await supabaseAdmin
+    .from('exams')
+    .select('institute_id')
+    .eq('id', examId)
+    .maybeSingle();
+  if (!existingExam) {
+    return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+  }
+  try {
+    assertInstituteAccess(scope, (existingExam as { institute_id: string | null }).institute_id);
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
@@ -284,9 +311,14 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
-  // ★ 편집자 role 전용 (학생이 남 시험지 지우는 것 방지)
-  const guard = await requireEditor();
+  // ★ 편집자 role + 격리 scope (학생이 남 시험지 지우는 것 방지 + cross-tenant 차단)
+  const guard = await requireAuthScope();
   if (!guard.ok) return guard.response;
+  const { user, scope } = guard.data;
+  const isEditor = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
+  if (!isEditor) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const { examId } = await params;
 
@@ -296,6 +328,23 @@ export async function DELETE(
   if (!supabaseUrl || !serviceKey) {
     console.error('[API/exams] DELETE: env 미설정', { supabaseUrl: !!supabaseUrl, serviceKey: !!serviceKey });
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+
+  // 격리 가드 — supabaseAdmin 으로 exam 의 institute_id 확인 후 권한 체크
+  if (supabaseAdmin) {
+    const { data: existingExam } = await supabaseAdmin
+      .from('exams')
+      .select('institute_id')
+      .eq('id', examId)
+      .maybeSingle();
+    if (!existingExam) {
+      return NextResponse.json({ error: '해당 시험지를 찾을 수 없습니다.' }, { status: 404 });
+    }
+    try {
+      assertInstituteAccess(scope, (existingExam as { institute_id: string | null }).institute_id);
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const headers = {
