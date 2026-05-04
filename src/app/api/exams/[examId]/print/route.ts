@@ -145,6 +145,13 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const variant = searchParams.get('variant') === 'teacher' ? 'teacher' : 'student';
   const withAnswer = searchParams.get('withAnswer') === 'true';
+  // ★ 단원·주제별 부분 인쇄 — exam_problems 중 일부만 필터.
+  //   학원자료 페이지에서 진단지 [+ 출제] 클릭 시 사용.
+  const onlyProblemIdsParam = searchParams.get('onlyProblemIds') || '';
+  const onlyProblemIds = onlyProblemIdsParam
+    ? new Set(onlyProblemIdsParam.split(',').map((s) => s.trim()).filter(Boolean))
+    : null;
+  const subtitle = (searchParams.get('subtitle') || '').trim();
 
   // 시험지 조회
   const { data: exam, error: examErr } = await sb
@@ -161,11 +168,16 @@ export async function GET(
   }
 
   // exam_problems + 본문
-  const { data: epRows } = await sb
+  const { data: rawEpRows } = await sb
     .from('exam_problems')
     .select('sequence_number, points, problem_id')
     .eq('exam_id', examId)
     .order('sequence_number', { ascending: true });
+
+  // onlyProblemIds 필터 적용 (단원·주제별 부분 인쇄)
+  const epRows = onlyProblemIds
+    ? ((rawEpRows || []) as Array<{ problem_id: string }>).filter((r) => onlyProblemIds.has(r.problem_id))
+    : (rawEpRows || []);
 
   const problemIds = ((epRows || []) as Array<{ problem_id: string }>).map((r) => r.problem_id);
 
@@ -383,12 +395,23 @@ export async function GET(
     margin-left: auto;
   }
   .problem-body { font-size: 13px; line-height: 1.6; }
+  /* ★ 객관식 보기 — grid 레이아웃으로 각 행이 자연스럽게 자기 높이 가짐.
+   *   이전 flex+nowrap 방식은 KaTeX 행렬(다중 행) 의 첫 줄이 위로 잘리던 사고.
+   */
   .choices {
     margin-top: 6px;
-    display: flex; flex-wrap: wrap; gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 14px;
     font-size: 12px;
   }
-  .choices .choice { white-space: nowrap; }
+  .choices .choice {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .choices .choice .katex { vertical-align: middle; }
   .katex-error { color: #c00; background: #fee; padding: 0 2px; border-radius: 2px; }
   section.answer-key, section.solution-sheet {
     page-break-before: always;
@@ -443,8 +466,8 @@ export async function GET(
 
     <header class="print-header">
       ${headerLabel ? `<div class="meta">${escapeHtml(headerLabel)}</div>` : ''}
-      <div class="title">${escapeHtml(examTitle)}</div>
-      <div class="stats">총 ${probCount}문항${totalPts > 0 ? ` · ${totalPts}점` : ''}</div>
+      <div class="title">${escapeHtml(examTitle)}${subtitle ? ` <span class="subtitle">— ${escapeHtml(subtitle)}</span>` : ''}</div>
+      <div class="stats">총 ${probCount}문항${totalPts > 0 ? ` · ${totalPts}점` : ''}${onlyProblemIds ? ' · 단원/주제별 발췌' : ''}</div>
       ${variant === 'student'
         ? `<div class="name-line">
              <span class="field">학교 / 학년 / 반:</span>

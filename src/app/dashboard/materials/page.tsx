@@ -673,38 +673,28 @@ export default function MaterialsPage() {
     }
   }, []);
 
-  // ★ "출제" — 선택한 노드의 problemIds 로 새 시험지 생성 → cloud 페이지 이동
-  const handlePublishUnit = useCallback(async (node: BreakdownNode | null) => {
+  // ★ "출제" — 선택 노드의 problemIds 로 인쇄용 새 창 (DB 사본 X).
+  //   기존 /api/exams/[examId]/print 에 onlyProblemIds 필터 + subtitle 전달.
+  //   사본 생성 시 cloud 목록 어수선해지는 사고 차단 (사용자 지적).
+  const handlePublishUnit = useCallback((node: BreakdownNode | null) => {
     if (!selectedMaterial) return;
-    const problemIds = node ? node.problemIds : (breakdownTree?.groups.flatMap(g => collectProblemIds(g)) || []);
+    const problemIds = node
+      ? node.problemIds
+      : (breakdownTree?.groups.flatMap((g) => collectProblemIds(g)) || []);
     if (problemIds.length === 0) {
       alert('출제할 문제가 없습니다.');
       return;
     }
-    const baseTitle = selectedMaterial.name;
-    const title = node ? `${baseTitle} — ${node.name}` : `${baseTitle} (사본)`;
-    try {
-      const res = await fetch('/api/exams/create-from-problems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          grade: selectedMaterial.grade || null,
-          subject: selectedMaterial.subject || null,
-          problemIds,
-        }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${res.status}`);
-      }
-      const j = await res.json();
-      if (j.examId) {
-        window.location.href = `/dashboard/cloud/${j.examId}`;
-      }
-    } catch (err) {
-      alert('출제 실패: ' + (err instanceof Error ? err.message : ''));
+    const params = new URLSearchParams();
+    params.set('variant', 'student');
+    if (node) {
+      // 부분 인쇄 — onlyProblemIds 필터 + 단원명을 부제로
+      params.set('onlyProblemIds', problemIds.join(','));
+      params.set('subtitle', node.name);
     }
+    // 전체 출제(node === null)는 필터 X — 원본 시험지 그대로 인쇄
+    const url = `/api/exams/${selectedMaterial.id}/print?${params.toString()}`;
+    window.open(url, '_blank', 'noopener');
   }, [selectedMaterial, breakdownTree]);
 
   // Grade auto-select group
