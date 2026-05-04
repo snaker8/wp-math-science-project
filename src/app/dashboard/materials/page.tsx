@@ -46,6 +46,18 @@ interface MaterialListItem {
   diagnosticRound?: string | null;
   diagnosticDifficulty?: string | null;
   grade?: string | null;
+  subject?: string | null;
+}
+
+// ★ 단원·주제별 트리 노드 — /api/exams/[examId]/breakdown 응답
+interface BreakdownNode {
+  code: string;
+  level: 1 | 2 | 3 | 4;
+  name: string;
+  problemCount: number;
+  problemIds: string[];
+  difficultyDist: Record<string, number>;
+  children: BreakdownNode[];
 }
 
 interface ExamListItem {
@@ -240,6 +252,11 @@ function generateMockExams(folderName: string, subFolder?: string): ExamListItem
 //   자산화 시 제목 패턴(BS_M1_R1 등) 자동 인식되어 태깅되거나, 시험관리에서 수동 마킹.
 //   mockAcademyMaterials 제거됨.
 
+// ★ 트리 노드의 problemIds — API 가 자손 누적 push 하므로 그대로 반환
+function collectProblemIds(node: BreakdownNode): string[] {
+  return node.problemIds;
+}
+
 // ============================================================================
 // Sub Components
 // ============================================================================
@@ -272,6 +289,190 @@ function DifficultyBar({ bars }: { bars: { color: string; percent: number }[] })
           {bar.percent >= 15 ? `${bar.percent}%` : ''}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// 단원·주제별 트리 패널 — 학원자료(자산화된 exam) 선택 시 우측 표시
+// ============================================================================
+function BreakdownPanel({
+  material,
+  tree,
+  loading,
+  expandedNodes,
+  toggleNode,
+  onPublish,
+}: {
+  material: MaterialListItem;
+  tree: { totalProblems: number; classifiedCount: number; groups: BreakdownNode[] } | null;
+  loading: boolean;
+  expandedNodes: Set<string>;
+  toggleNode: (code: string) => void;
+  onPublish: (node: BreakdownNode | null) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-sm text-content-tertiary">
+        단원·주제별 분석 불러오는 중...
+      </div>
+    );
+  }
+  if (!tree) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <EmptyState message="단원 분석 데이터를 불러올 수 없습니다." />
+      </div>
+    );
+  }
+  if (tree.totalProblems === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <EmptyState message="이 자료에는 문제가 없습니다." />
+      </div>
+    );
+  }
+
+  const unclassified = tree.totalProblems - tree.classifiedCount;
+
+  return (
+    <div className="px-4 py-3 space-y-2">
+      {/* 헤더: 자료명 + 전체 출제 */}
+      <div className="flex items-center justify-between rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 mb-3">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-content-primary truncate">{material.name}</div>
+          <div className="text-[11px] text-content-tertiary">
+            전체 {tree.totalProblems}문제
+            {unclassified > 0 && <span className="text-amber-400"> · 미분류 {unclassified}</span>}
+            {tree.classifiedCount > 0 && <span> · 분류 {tree.classifiedCount}</span>}
+          </div>
+        </div>
+        <button
+          onClick={() => onPublish(null)}
+          className="shrink-0 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:-translate-y-[1px] transition-all shadow shadow-indigo-500/20"
+        >
+          + 전체 출제
+        </button>
+      </div>
+
+      {/* 트리 */}
+      {tree.groups.length === 0 ? (
+        <div className="text-center text-xs text-content-tertiary py-6">
+          분류된 문제가 없습니다. 자산화 시 mathsecr 분류가 안 되었거나, 시험관리에서 수동 분류가 필요합니다.
+        </div>
+      ) : (
+        tree.groups.map((node) => (
+          <BreakdownNodeRow
+            key={node.code}
+            node={node}
+            depth={0}
+            expandedNodes={expandedNodes}
+            toggleNode={toggleNode}
+            onPublish={onPublish}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+// 트리 행 (재귀)
+function BreakdownNodeRow({
+  node,
+  depth,
+  expandedNodes,
+  toggleNode,
+  onPublish,
+}: {
+  node: BreakdownNode;
+  depth: number;
+  expandedNodes: Set<string>;
+  toggleNode: (code: string) => void;
+  onPublish: (node: BreakdownNode | null) => void;
+}) {
+  const expanded = expandedNodes.has(node.code);
+  const hasChildren = node.children.length > 0;
+  const indent = depth * 16;
+
+  // 난이도 분포 정렬: 1,2,3,4,5,unknown 순
+  const diffOrder = ['1', '2', '3', '4', '5', 'unknown'];
+  const diffEntries = diffOrder
+    .map((k) => [k, node.difficultyDist[k] || 0] as const)
+    .filter(([, v]) => v > 0);
+
+  return (
+    <div>
+      <div
+        className="flex items-center gap-2 rounded-md hover:bg-surface-card/40 transition-colors px-2 py-1.5"
+        style={{ paddingLeft: 8 + indent }}
+      >
+        {/* 펼침 토글 */}
+        <button
+          onClick={() => hasChildren && toggleNode(node.code)}
+          disabled={!hasChildren}
+          className="shrink-0 w-4 h-4 flex items-center justify-center text-content-tertiary disabled:opacity-30"
+        >
+          {hasChildren ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : <span className="text-[8px]">•</span>}
+        </button>
+
+        {/* 레벨 배지 */}
+        <span
+          className={`shrink-0 inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold border ${
+            node.level === 1
+              ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/20'
+              : node.level === 2
+              ? 'bg-violet-500/15 text-violet-400 border-violet-500/20'
+              : node.level === 3
+              ? 'bg-pink-500/15 text-pink-400 border-pink-500/20'
+              : 'bg-amber-500/15 text-amber-400 border-amber-500/20'
+          }`}
+        >
+          {node.level === 1 ? '대' : node.level === 2 ? '중' : node.level === 3 ? '소' : '유형'}
+        </span>
+
+        {/* 이름 */}
+        <span className="flex-1 min-w-0 text-sm text-content-primary truncate" title={node.code}>
+          {node.name}
+        </span>
+
+        {/* 난이도 분포 (간단 텍스트) */}
+        <div className="shrink-0 flex items-center gap-1 text-[10px] text-content-tertiary">
+          {diffEntries.map(([k, v]) => (
+            <span key={k} className="rounded bg-surface-card/60 px-1.5 py-0.5">
+              {k === 'unknown' ? '?' : `★${k}`}×{v}
+            </span>
+          ))}
+        </div>
+
+        {/* 문제 수 */}
+        <span className="shrink-0 w-12 text-right text-xs font-semibold text-content-primary">
+          {node.problemCount}문제
+        </span>
+
+        {/* 출제 버튼 */}
+        <button
+          onClick={() => onPublish(node)}
+          className="shrink-0 rounded-md bg-indigo-600 hover:bg-indigo-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm shadow-indigo-500/20"
+        >
+          + 출제
+        </button>
+      </div>
+
+      {/* 하위 노드 */}
+      {expanded && hasChildren && (
+        <div>
+          {node.children.map((child) => (
+            <BreakdownNodeRow
+              key={child.code}
+              node={child}
+              depth={depth + 1}
+              expandedNodes={expandedNodes}
+              toggleNode={toggleNode}
+              onPublish={onPublish}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -311,6 +512,25 @@ export default function MaterialsPage() {
   const [academyMaterials, setAcademyMaterials] = useState<MaterialListItem[]>([]);
   const [loadingAcademy, setLoadingAcademy] = useState(true);
 
+  // ★ 단원·주제별 트리 (선택된 자료의 problems 그룹핑)
+  const [breakdownTree, setBreakdownTree] = useState<{
+    totalProblems: number;
+    classifiedCount: number;
+    groups: BreakdownNode[];
+  } | null>(null);
+  const [breakdownLoading, setBreakdownLoading] = useState(false);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+
+  // 트리 노드 펼침/접힘 토글
+  const toggleNode = useCallback((code: string) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }, []);
+
   // Right panel exams
   const [examList, setExamList] = useState<ExamListItem[]>([]);
 
@@ -331,6 +551,7 @@ export default function MaterialsPage() {
           problemCount: number;
           createdAt: string;
           grade?: string | null;
+          subject?: string | null;
           diagnosticCategory?: 'BS' | 'DD' | 'PT' | 'SC' | null;
           diagnosticRound?: string | null;
           diagnosticDifficulty?: string | null;
@@ -342,6 +563,7 @@ export default function MaterialsPage() {
           createdAt: (e.createdAt || '').slice(0, 10),
           type: 'academy' as const,
           grade: e.grade,
+          subject: e.subject,
           diagnosticCategory: e.diagnosticCategory,
           diagnosticRound: e.diagnosticRound,
           diagnosticDifficulty: e.diagnosticDifficulty,
@@ -425,8 +647,65 @@ export default function MaterialsPage() {
 
   const handleSelectMaterial = useCallback((material: MaterialListItem) => {
     setSelectedMaterial(material);
-    setExamList(generateMockExams(material.name));
+    // ★ 자산화된 자료는 mock 분포 차트 X. 단원·주제별 트리 fetch (/breakdown).
+    setExamList([]);
+    if (material.type === 'academy') {
+      setBreakdownLoading(true);
+      setBreakdownTree(null);
+      fetch(`/api/exams/${material.id}/breakdown`)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(j => {
+          setBreakdownTree({
+            totalProblems: j.totalProblems || 0,
+            classifiedCount: j.classifiedCount || 0,
+            groups: j.groups || [],
+          });
+        })
+        .catch(err => {
+          console.error('[materials] breakdown fetch 실패:', err);
+          setBreakdownTree(null);
+        })
+        .finally(() => setBreakdownLoading(false));
+    } else {
+      // 출판 학습지(provider) 는 mock 흐름 유지
+      setBreakdownTree(null);
+      setExamList(generateMockExams(material.name));
+    }
   }, []);
+
+  // ★ "출제" — 선택한 노드의 problemIds 로 새 시험지 생성 → cloud 페이지 이동
+  const handlePublishUnit = useCallback(async (node: BreakdownNode | null) => {
+    if (!selectedMaterial) return;
+    const problemIds = node ? node.problemIds : (breakdownTree?.groups.flatMap(g => collectProblemIds(g)) || []);
+    if (problemIds.length === 0) {
+      alert('출제할 문제가 없습니다.');
+      return;
+    }
+    const baseTitle = selectedMaterial.name;
+    const title = node ? `${baseTitle} — ${node.name}` : `${baseTitle} (사본)`;
+    try {
+      const res = await fetch('/api/exams/create-from-problems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          grade: selectedMaterial.grade || null,
+          subject: selectedMaterial.subject || null,
+          problemIds,
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const j = await res.json();
+      if (j.examId) {
+        window.location.href = `/dashboard/cloud/${j.examId}`;
+      }
+    } catch (err) {
+      alert('출제 실패: ' + (err instanceof Error ? err.message : ''));
+    }
+  }, [selectedMaterial, breakdownTree]);
 
   // Grade auto-select group
   const handleGradeChange = useCallback((val: string) => {
@@ -725,9 +1004,18 @@ export default function MaterialsPage() {
                 </div>
               )}
 
-              {/* Exam list */}
+              {/* Exam list / Breakdown tree */}
               <div className="flex-1 overflow-auto min-h-0 scrollbar-thin">
-                {hasExams ? (
+                {selectedMaterial?.type === 'academy' ? (
+                  <BreakdownPanel
+                    material={selectedMaterial}
+                    tree={breakdownTree}
+                    loading={breakdownLoading}
+                    expandedNodes={expandedNodes}
+                    toggleNode={toggleNode}
+                    onPublish={handlePublishUnit}
+                  />
+                ) : hasExams ? (
                   <div className="divide-y divide-zinc-800/30">
                     {examList.map((exam) => (
                       <div
