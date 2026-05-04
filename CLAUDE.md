@@ -136,6 +136,37 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - 정규식 양쪽 통일: `[\[(]\s*(?:총\s*)?(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]` (대괄호·소괄호 모두 + OCR 오타 점/졈/졍).
 - 사고 이력: 사직여중 중2-1 서답형 자산화 배점이 매번 첫 [3점] 으로 들어가 사용자가 수동 수정 (1ba79ff).
 
+### 8. Multi-tenancy 격리 — 격리 대상 테이블은 institute-guard 통과 필수
+- 격리 대상 테이블: `exams`, `problems`, `classes`, `class_enrollments`, `book_groups`, `source_files`, `users`, `diagnostics.*`
+- 공통 풀 테이블 (`institute_id IS NULL` = 모두 접근): `problems`, `book_groups`
+- 위치: `src/lib/security/institute-guard.ts`
+- **가드**: `supabaseAdmin.from('<격리 대상>')` 호출 시 항상 `applyInstituteFilter(query, scope)` 또는 `assertInstituteAccess(scope, instituteId)` 적용.
+- **사용 패턴**:
+  ```ts
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
+  // SELECT — 격리 필터
+  const q = supabaseAdmin.from('exams').select('*');
+  const { data } = await applyInstituteFilter(q, scope);
+
+  // ID 접근 가드
+  const { data: exam } = await supabaseAdmin.from('exams').select('institute_id, ...').eq('id', examId).single();
+  assertInstituteAccess(scope, exam.institute_id); // throw if forbidden
+
+  // INSERT
+  const instId = resolveInsertInstituteId(scope, payload.institute_id);
+  ```
+- **공통 풀 옵션**: `applyInstituteFilter(q, scope, { allowCommonPool: true })` — problems / book_groups
+- **권한 계층**:
+  - super_admin (auth metadata `super_admin=true`) → 모든 institute
+  - ORG_ADMIN (`users.role='ORG_ADMIN'` + `organization_id`) → 학원 산하 모든 institute
+  - 일반 user → 자기 institute 만
+- **service_role bypass 주의**: `supabaseAdmin` 은 RLS 우회 → 앱 레벨 가드 안 걸면 cross-tenant 누수.
+- 신규 API route 작성 시 격리 대상 테이블 접근하면 무조건 institute-guard 사용.
+- 사고 학습: PR-5 audit (2026-05-04) — 25+개 파일 누락 발견 (현재 institute 1개라 leak 0이지만 PR-6 마이그레이션 후 현실화 예정).
+
 ### 학습 저장 위치
 - DB: `figure_corrections` (도형 교정 diff), `latex_render_corrections` (LaTeX 수정 diff)
 - 메모리: `~/.claude/projects/.../memory/feedback_*.md` (5개 파일 인덱스 MEMORY.md 참조)

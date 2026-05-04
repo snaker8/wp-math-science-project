@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAdmin } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -15,8 +16,12 @@ export const maxDuration = 30;
 const VALID_CIRCLED = ['①', '②', '③', '④', '⑤'];
 
 export async function PATCH(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requireAuthScope();
   if (!guard.ok) return guard.response;
+  const { user, scope } = guard.data;
+  if (user.role !== 'ADMIN' && user.role !== 'ORG_ADMIN' && !scope.isSuperAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -40,14 +45,24 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  // 기존 answer_json 가져와서 correct_answer / finalAnswer 만 갱신
+  // 기존 answer_json + institute_id 가져와서 격리 검증
   const { data: existing, error: getErr } = await supabaseAdmin
     .from('problems')
-    .select('answer_json')
+    .select('answer_json, institute_id')
     .eq('id', problemId)
     .maybeSingle();
   if (getErr || !existing) {
     return NextResponse.json({ error: 'problem not found' }, { status: 404 });
+  }
+
+  // 격리 가드 — 공통 풀(institute_id IS NULL)도 허용 (모두 수정 가능)
+  const targetInstituteId = (existing as { institute_id: string | null }).institute_id;
+  if (targetInstituteId !== null) {
+    try {
+      assertInstituteAccess(scope, targetInstituteId);
+    } catch {
+      return NextResponse.json({ error: 'Forbidden — 다른 학원 문제' }, { status: 403 });
+    }
   }
 
   const merged = {
