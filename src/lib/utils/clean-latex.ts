@@ -119,12 +119,21 @@ export function injectSubQuestionPoints(
  *   + 한글 자모 only 패턴(`\text{ㄱ, ㄴ}` 또는 `$ㄱ, ㄴ$`)은 KaTeX wrapping 풀어
  *     본문 폰트로 출력. KaTeX의 \text{} 안 한글이 fallback 폰트로 그려져
  *     "반듯하지 않게" 보이는 사고 차단.
+ *
+ * ★ 안전 가드: 행렬 (`$\left(\begin{array}{lll}2 & 2 & 2 \\ ...\end{array}\right)$`)
+ *   은 *원본 유지*. 행렬은 한글·\text 없이 숫자/수식만 들어있으므로 그 조건으로
+ *   판별. (이전엔 무조건 strip 해서 BS_H1S1_R2 #39 같은 행렬 객관식이 KaTeX
+ *   파싱 실패로 빨간 텍스트 노출되던 사고)
  */
 export function cleanChoiceText(text: string): string {
   return text
     .replace(
       /\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?/gi,
-      (_m, inner) => {
+      (m, inner: string) => {
+        // ★ 한글 보기형(ㄱ./ㄴ./가/나/\text{...}) 인 경우만 변환.
+        //   행렬 등 한글 없는 array 는 KaTeX 가 그대로 렌더하도록 원본 유지.
+        const hasKoreanLabel = /[ㄱ-ㅎ가-힣]|\\text\s*\{/.test(inner);
+        if (!hasKoreanLabel) return m;
         return inner
           .split('\\\\')
           .map((l: string) => `$${l.replace(/&/g, '').trim()}$`)
