@@ -1,16 +1,22 @@
 // ============================================================================
 // GET /api/exams - 시험지 목록 조회
-// supabaseAdmin으로 RLS 바이패스
+// supabaseAdmin으로 RLS 바이패스 + institute-guard 격리
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
 // Next.js 14 Data Cache 비활성화 — supabaseAdmin 내부 fetch가 캐싱되는 문제 방지
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json(
       { error: 'Supabase not configured' },
@@ -19,12 +25,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // ★ 시험지 목록 조회 (exam_problems 관계형 조인은 supabaseAdmin에서 0건 반환 이슈로 제거)
-    const { data: exams, error: examsError } = await supabaseAdmin
+    // ★ 시험지 목록 조회 (institute-guard 격리). super_admin 은 전체, ORG_ADMIN 은 산하, 일반 user 는 자기 institute.
+    const examsBaseQuery = supabaseAdmin
       .from('exams')
       .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade')
       .order('created_at', { ascending: false })
       .limit(200);
+    const { data: exams, error: examsError } = await applyInstituteFilter(examsBaseQuery, scope);
 
     if (examsError) {
       console.error('[API/exams] List error:', examsError.message);
@@ -123,10 +130,11 @@ export async function GET(request: NextRequest) {
     );
 
     if (examsNeedFix.length > 0) {
-      // book_groups 조회 (1회)
-      const { data: allGroups } = await supabaseAdmin
+      // book_groups 조회 (1회) — 자기 institute + 공통 풀(NULL)
+      const groupsBase = supabaseAdmin
         .from('book_groups')
         .select('id, name');
+      const { data: allGroups } = await applyInstituteFilter(groupsBase, scope, { allowCommonPool: true });
       const groupNameMap = new Map<string, string>();
       (allGroups || []).forEach((g: any) => groupNameMap.set(g.name, g.id));
 
