@@ -398,9 +398,20 @@ export async function GET(
   .choices {
     margin-top: 6px;
     display: flex; flex-wrap: wrap; gap: 14px;
+    align-items: center;
     font-size: 12px;
   }
-  .choices .choice { white-space: nowrap; }
+  /* ★ KaTeX 행렬 등 multi-row 컨텐츠가 baseline 으로 정렬되며 위쪽 잘리던 사고 방지.
+   *   inline-block + vertical-align: middle 로 컨텐츠 전체가 flex item 안에 안전히 들어가게.
+   */
+  .choices .choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .choices .choice .katex { vertical-align: middle; }
+  .choices .choice .katex-display { margin: 0; display: inline-block; }
   .katex-error { color: #c00; background: #fee; padding: 0 2px; border-radius: 2px; }
   section.answer-key, section.solution-sheet {
     page-break-before: always;
