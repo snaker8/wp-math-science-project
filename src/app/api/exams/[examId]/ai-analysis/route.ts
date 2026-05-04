@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertExamAccess } from '@/lib/security/institute-guard';
 import { cachedSystem } from '@/lib/claude/cache';
 import {
   EXAM_ANALYSIS_SYSTEM_PROMPT,
@@ -32,11 +34,15 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const { data, error } = await supabaseAdmin
     .from('exams')
@@ -63,11 +69,16 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
   if (!ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'Anthropic API key not configured' }, { status: 500 });
   }
