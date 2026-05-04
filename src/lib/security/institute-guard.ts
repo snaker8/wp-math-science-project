@@ -276,7 +276,41 @@ export function resolveInsertInstituteId(
 }
 
 // ============================================================================
-// 5. 격리 대상 테이블 enum (타입 안전성)
+// 5. 편의: examId 접근 가드 (자주 쓰이는 패턴)
+// ============================================================================
+
+/**
+ * exam 의 institute 가 scope 안에 있는지 한 번에 검증.
+ * 라우트 핸들러에서 자주 쓰이는 패턴 (admin/exam route 등 9~10개) 통일.
+ *
+ * @returns { ok: true } 또는 { ok: false, status, error } — 호출자가 NextResponse 로 변환
+ *
+ * @example
+ *   const guard = await assertExamAccess(supabaseAdmin, examId, scope);
+ *   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+ */
+export async function assertExamAccess(
+  adminClient: SupabaseClient,
+  examId: string,
+  scope: InstituteAccessScope
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const { data: exam, error } = await adminClient
+    .from('exams')
+    .select('institute_id')
+    .eq('id', examId)
+    .maybeSingle();
+  if (error) return { ok: false, status: 500, error: error.message };
+  if (!exam) return { ok: false, status: 404, error: 'Exam not found' };
+  try {
+    assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
+}
+
+// ============================================================================
+// 6. 격리 대상 테이블 enum (타입 안전성)
 // ============================================================================
 
 /**

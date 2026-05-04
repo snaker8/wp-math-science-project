@@ -13,6 +13,8 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertExamAccess } from '@/lib/security/institute-guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import katex from 'katex';
 
@@ -129,11 +131,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   const sb = supabaseAdmin;
 
   const { searchParams } = new URL(request.url);

@@ -7,6 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertExamAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -15,8 +17,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
     const body = await request.json().catch(() => ({}));
@@ -112,8 +118,12 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
     const { error: epErr, count } = await supabaseAdmin
