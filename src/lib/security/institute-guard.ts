@@ -309,8 +309,40 @@ export async function assertExamAccess(
   }
 }
 
+/**
+ * problem 의 institute 가 scope 안에 있는지 한 번에 검증.
+ * problems 는 공통 풀 (institute_id IS NULL = 모두 접근 가능) 이므로 자동 통과.
+ *
+ * @example
+ *   const guard = await assertProblemAccess(supabaseAdmin, problemId, scope);
+ *   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+ */
+export async function assertProblemAccess(
+  adminClient: SupabaseClient,
+  problemId: string,
+  scope: InstituteAccessScope
+): Promise<{ ok: true; institute_id: string | null } | { ok: false; status: number; error: string }> {
+  const { data: problem, error } = await adminClient
+    .from('problems')
+    .select('institute_id')
+    .eq('id', problemId)
+    .maybeSingle();
+  if (error) return { ok: false, status: 500, error: error.message };
+  if (!problem) return { ok: false, status: 404, error: 'Problem not found' };
+  const targetInstituteId = (problem as { institute_id: string | null }).institute_id;
+  // 공통 풀 — 모두 접근 가능
+  if (targetInstituteId === null) return { ok: true, institute_id: null };
+  // 격리 검증
+  try {
+    assertInstituteAccess(scope, targetInstituteId);
+    return { ok: true, institute_id: targetInstituteId };
+  } catch {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
+}
+
 // ============================================================================
-// 6. 격리 대상 테이블 enum (타입 안전성)
+// 7. 격리 대상 테이블 enum (타입 안전성)
 // ============================================================================
 
 /**

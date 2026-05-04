@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { cachedSystem } from '@/lib/claude/cache';
 
 // ★ Vercel 함수 시간 제한: 기본 60s 로는 Sonnet thinking(최대 90s) + Gemini 검증 +
@@ -29,12 +31,16 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { problemId } = await params;
 
   try {
     if (!supabaseAdmin) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
+    const guard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     // 1. 문제 데이터 조회 (이미지, AI 분석 데이터 포함)
     const body = await request.json().catch(() => ({}));

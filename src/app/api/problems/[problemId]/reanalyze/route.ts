@@ -8,6 +8,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 
 /** 과학 과목인지 판단 */
@@ -63,6 +65,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { problemId } = await params;
 
   try {
@@ -75,6 +79,8 @@ export async function POST(
         { status: 500 }
       );
     }
+    const guard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     // 1. 기존 문제 데이터 조회
     const { data: problem, error: fetchError } = await supabaseAdmin
