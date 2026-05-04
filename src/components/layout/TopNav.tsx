@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Settings, LogOut, HelpCircle } from 'lucide-react';
+import { ChevronDown, Settings, LogOut, HelpCircle, User } from 'lucide-react';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
+import { supabaseBrowser } from '@/lib/supabase/client';
 
 // ============================================================================
 // TopNav — 상단 가로 네비게이션 (참조사이트 스타일)
@@ -55,15 +56,90 @@ export function TopNav() {
             <Settings size={18} />
           </Link>
           <div className="w-px h-6 bg-surface-raised mx-1" />
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-raised transition-colors">
-            <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center">
-              <span className="text-accent text-xs font-semibold">임</span>
-            </div>
-            <span className="text-content-secondary text-sm hidden md:block">임세현</span>
-          </button>
+          <UserMenu />
         </div>
       </div>
     </nav>
+  );
+}
+
+// ============================================================================
+// UserMenu — 사용자 아이콘 클릭 시 드롭다운 (프로필 / 로그아웃)
+// ============================================================================
+function UserMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  // 바깥 클릭 시 닫기
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [open]);
+
+  const handleLogout = async () => {
+    setOpen(false);
+    if (supabaseBrowser) {
+      await supabaseBrowser.auth.signOut();
+    }
+    router.push('/auth/login');
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-raised transition-colors"
+        aria-label="사용자 메뉴"
+      >
+        <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center">
+          <span className="text-accent text-xs font-semibold">임</span>
+        </div>
+        <span className="text-content-secondary text-sm hidden md:block">임세현</span>
+        <ChevronDown
+          size={14}
+          className={`text-content-tertiary transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full right-0 mt-1 w-48 rounded-xl border bg-surface-card shadow-xl shadow-black/20 overflow-hidden z-50"
+          >
+            <div className="py-1.5">
+              <Link
+                href="/dashboard/settings"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 text-sm text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors"
+              >
+                <User size={16} className="text-content-tertiary" />
+                <span>프로필 / 설정</span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-content-secondary hover:text-red-400 hover:bg-surface-raised transition-colors"
+              >
+                <LogOut size={16} className="text-content-tertiary" />
+                <span>로그아웃</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
