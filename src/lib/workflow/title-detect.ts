@@ -148,3 +148,78 @@ export function detectGradeFromTitle(title: string): string {
 
   return '';
 }
+
+// ============================================================================
+// 진단지 메타 자동 인식 — 자산화 시 제목 패턴 매치하여 exam 컬럼 채우기
+//
+// 지원 패턴:
+//   BS_M1_R1, BS_M2_R3, BS_M3_R1 (광역 스캔, 라운드 필수)
+//   BS_H1_R1, BS_H2_R2 (고등도 동일)
+//   DD_M2_연립방정식, DD_M3_이차함수 (정밀 진단, 라운드 보통 없음)
+//   PT_M2_*, PT_M3_* (선수 추적)
+//   SC_M2_*, SC_M3_* (스팟체크)
+//
+//   접미사 자유: "BS_M1_R1 (중1 과정)", "BS_M1_R1_240425", "BS_M1_R1.pdf"
+//   대소문자 자유: 패턴은 대문자 BS/DD/PT/SC 우선이지만 소문자도 인식
+//
+// 임선생님 운영 컨벤션 (BS R1=하, R2=중하, R3=중) 은 자동 추론하지 않음.
+// 난이도 표기가 제목에 명시 없으면 NULL 유지 → 모달에서 수동 입력.
+// ============================================================================
+
+export interface DiagnosticMeta {
+  is_diagnostic: boolean;
+  diagnostic_category: 'BS' | 'DD' | 'PT' | 'SC' | null;
+  diagnostic_round: string | null;          // 'R1' / 'R2' / ... (BS 만 보통 채워짐)
+  diagnostic_difficulty: string | null;      // 보통 NULL
+}
+
+const EMPTY_DIAG: DiagnosticMeta = {
+  is_diagnostic: false,
+  diagnostic_category: null,
+  diagnostic_round: null,
+  diagnostic_difficulty: null,
+};
+
+// 메인 매처:
+//   BS_M1_R1, BS_H1_R2, BS_M1S1_R2, BS_H1S1_R2 (공통수학1 과정), DD_M2_연립방정식, PT_*, SC_*
+//   학년 코드 = M1~M3 / H1~H3, 학기 suffix S1/S2 선택, _R숫자 선택.
+const DIAG_PATTERN = /\b(BS|DD|PT|SC)_[MH][1-3](?:S[12])?(?:_R(\d{1,2}))?\b/i;
+
+// 난이도 명시 키워드 (제목 어딘가에 있으면 채움)
+const DIFFICULTY_KEYWORDS: Array<{ key: RegExp; value: string }> = [
+  { key: /\b(?:최상|최고난이도)\b/, value: '최상' },
+  { key: /\b상\b(?!류|위)/, value: '상' },
+  { key: /\b중하\b/, value: '중하' },
+  { key: /\b중\b(?!학|간|등|급|요)/, value: '중' },
+  { key: /\b하\b(?!급|류|단|위)/, value: '하' },
+];
+
+/**
+ * 시험지 제목에서 진단지 메타 추출.
+ * 패턴 매치 안 되면 {is_diagnostic: false, ...nulls} 반환.
+ */
+export function detectDiagnosticMetaFromTitle(title: string): DiagnosticMeta {
+  if (!title) return EMPTY_DIAG;
+
+  const m = title.match(DIAG_PATTERN);
+  if (!m) return EMPTY_DIAG;
+
+  const category = m[1].toUpperCase() as 'BS' | 'DD' | 'PT' | 'SC';
+  const roundNum = m[2];
+
+  // 난이도 — 제목에 명시 키워드 있으면 채움
+  let difficulty: string | null = null;
+  for (const { key, value } of DIFFICULTY_KEYWORDS) {
+    if (key.test(title)) {
+      difficulty = value;
+      break;
+    }
+  }
+
+  return {
+    is_diagnostic: true,
+    diagnostic_category: category,
+    diagnostic_round: roundNum ? `R${roundNum}` : null,
+    diagnostic_difficulty: difficulty,
+  };
+}
