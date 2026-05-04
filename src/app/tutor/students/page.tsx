@@ -13,6 +13,10 @@ import {
   User,
   GraduationCap,
   Filter,
+  X,
+  Loader2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -38,6 +42,19 @@ export default function TutorStudentsPage() {
   const [filterClass, setFilterClass] = useState('전체');
   const [filterStatus, setFilterStatus] = useState('전체');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  // 직접 등록 모달
+  const [showDirectAdd, setShowDirectAdd] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addForm, setAddForm] = useState({
+    fullName: '',
+    grade: '',
+    phone: '',
+    email: '',
+    password: '',
+  });
+  // 등록 후 자격증명 표시
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
     loadStudents();
@@ -182,12 +199,18 @@ export default function TutorStudentsPage() {
       <header className="page-header">
         <div>
           <h1>학생 관리</h1>
-          <p>반에 등록된 학생들을 관리하세요</p>
+          <p>학생을 직접 등록하거나 초대하세요</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowInviteModal(true)}>
-          <UserPlus size={18} />
-          학생 초대
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-primary" onClick={() => { setShowDirectAdd(true); setCredentials(null); }}>
+            <UserPlus size={18} />
+            학생 직접 등록
+          </button>
+          <button className="btn-secondary" onClick={() => setShowInviteModal(true)}>
+            <Mail size={18} />
+            이메일 초대
+          </button>
+        </div>
       </header>
 
       {/* Stats */}
@@ -351,6 +374,161 @@ export default function TutorStudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Add Modal — 학생 직접 등록 (반 없이도 가능) */}
+      {showDirectAdd && (
+        <div className="modal-overlay" onClick={() => setShowDirectAdd(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h2 style={{ margin: 0 }}>학생 직접 등록</h2>
+              <button onClick={() => setShowDirectAdd(false)} style={{ background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p>이름과 학년만 있으면 등록 가능. 이메일/비밀번호 미입력 시 자동 생성됩니다.</p>
+
+            {credentials ? (
+              <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8, padding: 16, marginTop: 12 }}>
+                <h3 style={{ margin: 0, marginBottom: 8, fontSize: 14, color: '#a5b4fc' }}>✓ 등록 완료 — 학생 자격증명</h3>
+                <p style={{ fontSize: 12, color: '#a1a1aa', marginBottom: 12 }}>학생에게 직접 전달하세요. 다시 볼 수 없습니다.</p>
+                {(['email', 'password'] as const).map((field) => (
+                  <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <label style={{ width: 70, fontSize: 12, color: '#a1a1aa' }}>{field === 'email' ? '이메일' : '비밀번호'}</label>
+                    <code style={{ flex: 1, padding: '6px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 4, fontSize: 13, color: '#fff' }}>{credentials[field]}</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(credentials[field]);
+                        setCopiedField(field);
+                        setTimeout(() => setCopiedField(null), 1500);
+                      }}
+                      style={{ background: 'transparent', border: '1px solid #52525b', borderRadius: 4, padding: '4px 8px', color: '#a1a1aa', cursor: 'pointer' }}
+                    >
+                      {copiedField === field ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn-submit"
+                    onClick={() => {
+                      setCredentials(null);
+                      setAddForm({ fullName: '', grade: '', phone: '', email: '', password: '' });
+                    }}
+                  >
+                    다른 학생 등록
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-cancel"
+                    onClick={() => {
+                      setShowDirectAdd(false);
+                      setCredentials(null);
+                      setAddForm({ fullName: '', grade: '', phone: '', email: '', password: '' });
+                    }}
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!addForm.fullName.trim()) return;
+                  setAddBusy(true);
+                  try {
+                    const res = await fetch('/api/students', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        fullName: addForm.fullName.trim(),
+                        grade: addForm.grade || null,
+                        phone: addForm.phone || null,
+                        email: addForm.email || undefined,
+                        password: addForm.password || undefined,
+                      }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok) {
+                      alert(json.error || '등록 실패');
+                      return;
+                    }
+                    if (json.credentials) {
+                      setCredentials({ email: json.credentials.email, password: json.credentials.password });
+                    } else {
+                      alert('학생 등록 완료 (기존 계정 활용)');
+                      setShowDirectAdd(false);
+                      setAddForm({ fullName: '', grade: '', phone: '', email: '', password: '' });
+                    }
+                    loadStudents();
+                  } catch (err) {
+                    alert((err as Error).message);
+                  } finally {
+                    setAddBusy(false);
+                  }
+                }}
+              >
+                <div className="form-group">
+                  <label>이름 *</label>
+                  <input
+                    type="text"
+                    value={addForm.fullName}
+                    onChange={(e) => setAddForm((f) => ({ ...f, fullName: e.target.value }))}
+                    placeholder="홍길동"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>학년</label>
+                  <input
+                    type="text"
+                    value={addForm.grade}
+                    onChange={(e) => setAddForm((f) => ({ ...f, grade: e.target.value }))}
+                    placeholder="중1, 중2, 고1, 고2…"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>연락처</label>
+                  <input
+                    type="tel"
+                    value={addForm.phone}
+                    onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
+                    placeholder="010-0000-0000"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>이메일 (선택, 미입력 시 자동 생성)</label>
+                  <input
+                    type="email"
+                    value={addForm.email}
+                    onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="student@example.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>비밀번호 (선택, 미입력 시 자동 생성)</label>
+                  <input
+                    type="text"
+                    value={addForm.password}
+                    onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
+                    placeholder="자동 생성 권장"
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-cancel" onClick={() => setShowDirectAdd(false)}>
+                    취소
+                  </button>
+                  <button type="submit" className="btn-submit" disabled={addBusy || !addForm.fullName.trim()}>
+                    {addBusy ? <Loader2 size={14} className="spinner" /> : '등록'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
