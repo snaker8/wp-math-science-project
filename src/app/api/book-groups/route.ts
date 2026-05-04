@@ -5,8 +5,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
 
 export async function GET(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json(
       { error: 'Supabase not configured' },
@@ -28,7 +34,9 @@ export async function GET(request: NextRequest) {
       query = query.eq('subject', subject);
     }
 
-    const { data: groups, error } = await query;
+    // 격리 — 자기 institute + 공통 풀 (NULL)
+    const filteredQuery = applyInstituteFilter(query, scope, { allowCommonPool: true });
+    const { data: groups, error } = await filteredQuery;
 
     if (error) {
       console.error('[API/book-groups] List error:', error.message);
@@ -49,6 +57,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json(
       { error: 'Supabase not configured' },
@@ -67,15 +79,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // INSERT institute_id 결정 — 명시 instituteId 가 scope 안이면 사용, 아니면 자기 institute
+    let insertInstituteId: string;
+    try {
+      insertInstituteId = resolveInsertInstituteId(scope, instituteId);
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 403 });
+    }
+
     const insertData: Record<string, any> = {
       name: name.trim(),
+      institute_id: insertInstituteId,
+      created_by: createdBy || user.id,
     };
 
     if (parentId) insertData.parent_id = parentId;
     if (subject) insertData.subject = subject;
     if (groupType) insertData.group_type = groupType;
-    if (instituteId) insertData.institute_id = instituteId;
-    if (createdBy) insertData.created_by = createdBy;
 
     let { data: group, error } = await supabaseAdmin
       .from('book_groups')
