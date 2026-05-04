@@ -25,6 +25,9 @@ import {
   Sparkles,
   HelpCircle,
   ImageIcon,
+  Building2,
+  UserCog,
+  Shield,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -113,13 +116,29 @@ export const dashboardNavItems: NavItem[] = [
   },
 ];
 
-// 교직원 관리 메뉴
+// 교직원·운영 관리 메뉴
 export const adminNavItems: NavItem[] = [
   {
     href: '/admin/staff',
     icon: Users,
     label: '교직원 관리',
     description: '강사/직원 권한 관리',
+    activeColor: 'bg-indigo-500/10 text-indigo-500',
+    group: 'main',
+  },
+  {
+    href: '/admin/institutes',
+    icon: Building2,
+    label: '학원·센터 관리',
+    description: '학원/센터 추가 (슈퍼관리자만)',
+    activeColor: 'bg-indigo-500/10 text-indigo-500',
+    group: 'main',
+  },
+  {
+    href: '/admin/users',
+    icon: UserCog,
+    label: '사용자 배정',
+    description: '학원/센터/역할 배정 (슈퍼관리자만)',
     activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
@@ -324,6 +343,14 @@ export const topNavGroups: NavGroup[] = [
     label: 'DB 자산화',
     icon: Upload,
     href: '/dashboard/cloud?upload=1',
+  },
+  // ★ 운영 관리 — multi-tenancy. 학원·센터·사용자/교직원 관리. 메뉴 자체는 모두에게 보이지만
+  //   /admin/institutes·/admin/users 페이지가 super_admin 가드로 막음 (일반 user → 친절 403).
+  {
+    id: 'admin-ops',
+    label: '운영 관리',
+    icon: Shield,
+    children: adminNavItems,
   },
 ];
 
