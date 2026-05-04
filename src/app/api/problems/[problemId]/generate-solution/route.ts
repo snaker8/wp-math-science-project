@@ -950,9 +950,26 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
 
     let finalAnswerToSave: string;
     if (answerUserEdited && userEnteredAnswer) {
-      // 사용자 직접 입력 보존
-      finalAnswerToSave = userEnteredAnswer;
-      console.log(`[generate-solution] ★ 사용자 편집 정답 보존: "${finalAnswerToSave}" (AI가 제안한 "${solution.finalAnswer}" 는 무시)`);
+      // ★ 사용자 편집 보존 — 단, 객관식이면 ①~⑤ 만 신뢰. 모호값(0/숫자/'5번' 등)은 폐기.
+      //   메모리 CLAUDE.md ★ 안전 가드 #3. 이 분기에 가드가 빠져 있어 "0" 영구 박힘
+      //   사고가 양운중 26 중2-1 등에서 재발 (사용자 보고).
+      const userIsValidCircled = /^[①②③④⑤]$/.test(userEnteredAnswer);
+      if (isObjective && !userIsValidCircled) {
+        // AI 가 ①~⑤ 추출했으면 그걸 우선, 못 뽑았으면 빈값으로 폐기 (재입력 유도)
+        const aiCircled =
+          solution.finalAnswer && /^[①②③④⑤]$/.test(String(solution.finalAnswer).trim())
+            ? String(solution.finalAnswer).trim()
+            : '';
+        finalAnswerToSave = aiCircled;
+        console.warn(
+          `[generate-solution] ⚠ 사용자 편집 객관식 답 무효 폐기: "${userEnteredAnswer}" → "${
+            finalAnswerToSave || '(빈값)'
+          }" (AI 결론="${solution.finalAnswer || ''}")`
+        );
+      } else {
+        finalAnswerToSave = userEnteredAnswer;
+        console.log(`[generate-solution] ★ 사용자 편집 정답 보존: "${finalAnswerToSave}" (AI가 제안한 "${solution.finalAnswer}" 는 무시)`);
+      }
     } else if (isObjective && solution.finalAnswer && /^[①②③④⑤]$/.test(String(solution.finalAnswer).trim())) {
       // 객관식 + 사용자 편집 없음 + AI가 ①~⑤ 정답 생성 → AI 결과로 교체
       finalAnswerToSave = String(solution.finalAnswer).trim();
