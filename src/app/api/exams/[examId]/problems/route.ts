@@ -3,8 +3,27 @@
 // GET    /api/exams/[examId]/problems — 문제 목록 + 배점 정보 + content 미리보기 (진단용)
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess, type InstituteAccessScope } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
+
+/** exam 격리 가드 — examId 의 institute 가 scope 안에 있는지 검증 */
+async function guardExamAccess(examId: string, scope: InstituteAccessScope): Promise<NextResponse | null> {
+  if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  const { data: exam } = await supabaseAdmin
+    .from('exams')
+    .select('institute_id')
+    .eq('id', examId)
+    .maybeSingle();
+  if (!exam) return NextResponse.json({ error: '시험지를 찾을 수 없습니다' }, { status: 404 });
+  try {
+    assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  return null;
+}
 
 // ============================================================================
 // GET — 진단용 간단 조회
@@ -13,7 +32,12 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
+  const guardErr = await guardExamAccess(examId, authed.data.scope);
+  if (guardErr) return guardErr;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
@@ -64,7 +88,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
+  const guardErr = await guardExamAccess(examId, authed.data.scope);
+  if (guardErr) return guardErr;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -143,7 +171,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
+  const guardErr = await guardExamAccess(examId, authed.data.scope);
+  if (guardErr) return guardErr;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -156,16 +188,7 @@ export async function POST(
       return NextResponse.json({ error: 'problemIds 배열 필요' }, { status: 400 });
     }
 
-    // 1. 시험지 존재 확인
-    const { data: exam, error: examErr } = await supabaseAdmin
-      .from('exams')
-      .select('id')
-      .eq('id', examId)
-      .single();
-
-    if (examErr || !exam) {
-      return NextResponse.json({ error: '시험지를 찾을 수 없습니다' }, { status: 404 });
-    }
+    // 시험지 존재는 guardExamAccess 에서 이미 확인됨
 
     // 2. 현재 마지막 sequence_number 조회
     const { data: lastSeq } = await supabaseAdmin
