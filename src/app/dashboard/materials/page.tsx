@@ -425,7 +425,9 @@ export default function MaterialsPage() {
 
   const handleSelectMaterial = useCallback((material: MaterialListItem) => {
     setSelectedMaterial(material);
-    setExamList(generateMockExams(material.name));
+    // ★ 진단지(자산화된 exam) 는 우측 패널의 mock 분포 차트 의미 X — 빈 배열로 초기화.
+    //   (generateMockExams 는 출판 학습지(과사람 제공 자료) 에만 의미 있음)
+    setExamList([]);
   }, []);
 
   // Grade auto-select group
