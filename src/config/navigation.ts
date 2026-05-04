@@ -25,6 +25,8 @@ import {
   Sparkles,
   HelpCircle,
   ImageIcon,
+  Building2,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -113,13 +115,29 @@ export const dashboardNavItems: NavItem[] = [
   },
 ];
 
-// 교직원 관리 메뉴
+// 교직원·운영 관리 메뉴
 export const adminNavItems: NavItem[] = [
   {
     href: '/admin/staff',
     icon: Users,
     label: '교직원 관리',
     description: '강사/직원 권한 관리',
+    activeColor: 'bg-indigo-500/10 text-indigo-500',
+    group: 'main',
+  },
+  {
+    href: '/admin/institutes',
+    icon: Building2,
+    label: '학원·센터 관리',
+    description: '학원/센터 추가 (슈퍼관리자만)',
+    activeColor: 'bg-indigo-500/10 text-indigo-500',
+    group: 'main',
+  },
+  {
+    href: '/admin/users',
+    icon: UserCog,
+    label: '사용자 배정',
+    description: '학원/센터/역할 배정 (슈퍼관리자만)',
     activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
