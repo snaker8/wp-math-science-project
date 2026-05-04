@@ -5,8 +5,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertProblemAccess } from '@/lib/security/institute-guard';
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json(
       { error: 'Supabase not configured' },
@@ -42,6 +48,10 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // ─── 원본 문제 격리 가드 (공통 풀 = NULL 은 통과) ───
+    const guard = await assertProblemAccess(supabaseAdmin, originalProblemId, scope);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     // ─── 원본 문제에서 institute_id, created_by 상속 ───
     let instituteId: string | null = null;

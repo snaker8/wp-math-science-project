@@ -1,12 +1,19 @@
 // GET /api/problems/search — 문제은행 검색
 // ★ 2단계 쿼리: 1) classifications에서 problem_id 조회, 2) problems 조회
 //   PostgREST !inner + ilike 필터 조합의 호환성 이슈를 방지
+// 격리: 자기 institute + 공통 풀(institute_id IS NULL) — 매쓰플랫 모델
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
@@ -55,10 +62,11 @@ export async function GET(request: NextRequest) {
     }
 
     // ★ 2단계: problems 조회 (+ classifications 조인으로 메타데이터 포함)
+    // 격리 — 자기 institute + 공통 풀
     let query = supabaseAdmin
       .from('problems')
       .select(`
-        id, content_latex, answer_json, source_name, source_year, images, created_at,
+        id, content_latex, answer_json, source_name, source_year, images, created_at, institute_id,
         classifications!inner(type_code, expanded_type_code, difficulty, cognitive_domain)
       `)
       .order('created_at', { ascending: false })
@@ -74,7 +82,9 @@ export async function GET(request: NextRequest) {
       query = query.ilike('content_latex', `%${q}%`);
     }
 
-    const { data: problems, error } = await query;
+    // 격리 필터 적용 (공통 풀 NULL 도 포함)
+    const filteredQuery = applyInstituteFilter(query, scope, { allowCommonPool: true });
+    const { data: problems, error } = await filteredQuery;
 
     if (error) {
       console.error('[API/problems/search] Error:', error.message);
