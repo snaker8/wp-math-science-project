@@ -12,6 +12,7 @@ import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/wor
 import { processUploadJob, getStatusLabel, convertedPdfStore } from '@/lib/workflow/cloud-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
+import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 
@@ -1325,6 +1326,7 @@ async function saveEditedProblemsDirect(
   // ★ append 모드 (examId 이미 set 됨) 면 새 exam INSERT 스킵
   if (!examId) {
     try {
+      const diagnosticMeta = detectDiagnosticMetaFromTitle(fileTitle);
       const examInsertData: Record<string, any> = {
         title: fileTitle,
         description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
@@ -1336,6 +1338,11 @@ async function saveEditedProblemsDirect(
         subject: detectSubjectFromTitle(fileTitle),
         exam_type: detectExamTypeFromTitle(fileTitle),
         grade: detectGradeFromTitle(fileTitle),
+        // ★ 진단지 자동 태깅 — 제목 패턴(BS_M1_R1 등) 매치 시 채워짐. 미매치면 모두 NULL/FALSE.
+        is_diagnostic: diagnosticMeta.is_diagnostic,
+        diagnostic_category: diagnosticMeta.diagnostic_category,
+        diagnostic_round: diagnosticMeta.diagnostic_round,
+        diagnostic_difficulty: diagnosticMeta.diagnostic_difficulty,
       };
       if (bookGroupId) {
         examInsertData.book_group_id = bookGroupId;
@@ -1355,6 +1362,9 @@ async function saveEditedProblemsDirect(
         }
       }
 
+      if (diagnosticMeta.is_diagnostic) {
+        console.log(`[Direct Save] ★ 진단지 자동 태깅: ${diagnosticMeta.diagnostic_category}${diagnosticMeta.diagnostic_round ? `/${diagnosticMeta.diagnostic_round}` : ''}${diagnosticMeta.diagnostic_difficulty ? `/${diagnosticMeta.diagnostic_difficulty}` : ''}`);
+      }
       console.log(`[Direct Save] Creating exam: title="${examInsertData.title}", subject=${examInsertData.subject}, bookGroup=${examInsertData.book_group_id || 'auto'}`);
 
       let examResult = await supabase
@@ -1938,6 +1948,7 @@ async function saveProblemsToDB(
 
     // ★ append 모드면 새 exam INSERT 스킵 (examId 이미 set)
     if (!examId) {
+      const diagnosticMeta = detectDiagnosticMetaFromTitle(fileTitle);
       const examInsertData: Record<string, any> = {
         title: fileTitle,
         description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
@@ -1949,7 +1960,15 @@ async function saveProblemsToDB(
         subject: detectSubjectFromTitle(fileTitle),
         exam_type: detectExamTypeFromTitle(fileTitle),
         grade: detectGradeFromTitle(fileTitle),
+        // ★ 진단지 자동 태깅 — saveEditedProblemsDirect 와 동일 로직 (한쪽만 패치되면 사고)
+        is_diagnostic: diagnosticMeta.is_diagnostic,
+        diagnostic_category: diagnosticMeta.diagnostic_category,
+        diagnostic_round: diagnosticMeta.diagnostic_round,
+        diagnostic_difficulty: diagnosticMeta.diagnostic_difficulty,
       };
+      if (diagnosticMeta.is_diagnostic) {
+        console.log(`[DB] ★ 진단지 자동 태깅: ${diagnosticMeta.diagnostic_category}${diagnosticMeta.diagnostic_round ? `/${diagnosticMeta.diagnostic_round}` : ''}`);
+      }
 
       // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치 (fuzzy 매칭)
       if (bookGroupId) {

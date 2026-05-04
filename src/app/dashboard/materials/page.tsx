@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -41,6 +41,11 @@ interface MaterialListItem {
   paperCount: number;
   createdAt: string;
   type: 'provider' | 'academy';
+  // ★ 진단지 메타 (자산화된 exam 의 diagnostic_* 컬럼 매핑)
+  diagnosticCategory?: 'BS' | 'DD' | 'PT' | 'SC' | null;
+  diagnosticRound?: string | null;
+  diagnosticDifficulty?: string | null;
+  grade?: string | null;
 }
 
 interface ExamListItem {
@@ -231,13 +236,9 @@ function generateMockExams(folderName: string, subFolder?: string): ExamListItem
   return baseExams;
 }
 
-const mockAcademyMaterials: MaterialListItem[] = [
-  { id: 'am1', name: '중간고사 대비 세트', paperCount: 5, createdAt: '2025-02-01', type: 'academy' },
-  { id: 'am2', name: '기말고사 대비 세트', paperCount: 8, createdAt: '2025-01-28', type: 'academy' },
-  { id: 'am3', name: '수능특강 연습문제', paperCount: 12, createdAt: '2025-01-25', type: 'provider' },
-  { id: 'am4', name: '모의고사 기출 변형', paperCount: 10, createdAt: '2025-01-20', type: 'academy' },
-  { id: 'am5', name: '단원별 진단평가', paperCount: 6, createdAt: '2025-01-15', type: 'provider' },
-];
+// ★ 학원자료(진단평가지) 는 이제 DB 에서 fetch — exams.is_diagnostic=true 인 것만.
+//   자산화 시 제목 패턴(BS_M1_R1 등) 자동 인식되어 태깅되거나, 시험관리에서 수동 마킹.
+//   mockAcademyMaterials 제거됨.
 
 // ============================================================================
 // Sub Components
@@ -306,8 +307,55 @@ export default function MaterialsPage() {
   // Academy materials
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialListItem | null>(null);
 
+  // ★ 진단평가지 — exams.is_diagnostic=true 에서 fetch
+  const [academyMaterials, setAcademyMaterials] = useState<MaterialListItem[]>([]);
+  const [loadingAcademy, setLoadingAcademy] = useState(true);
+
   // Right panel exams
   const [examList, setExamList] = useState<ExamListItem[]>([]);
+
+  // 진단지 fetch — mount 시 1회. 자산화된 exam 중 is_diagnostic=true 인 것만.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingAcademy(true);
+      try {
+        const res = await fetch('/api/exams?is_diagnostic=true');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const j = await res.json();
+        if (cancelled) return;
+        type ExamRow = {
+          id: string;
+          title: string;
+          fileName: string;
+          problemCount: number;
+          createdAt: string;
+          grade?: string | null;
+          diagnosticCategory?: 'BS' | 'DD' | 'PT' | 'SC' | null;
+          diagnosticRound?: string | null;
+          diagnosticDifficulty?: string | null;
+        };
+        const mapped: MaterialListItem[] = (j.exams || []).map((e: ExamRow) => ({
+          id: e.id,
+          name: e.title || e.fileName || '(제목 없음)',
+          paperCount: e.problemCount || 0,
+          createdAt: (e.createdAt || '').slice(0, 10),
+          type: 'academy' as const,
+          grade: e.grade,
+          diagnosticCategory: e.diagnosticCategory,
+          diagnosticRound: e.diagnosticRound,
+          diagnosticDifficulty: e.diagnosticDifficulty,
+        }));
+        setAcademyMaterials(mapped);
+      } catch (err) {
+        console.error('[materials] 진단지 fetch 실패:', err);
+        if (!cancelled) setAcademyMaterials([]);
+      } finally {
+        if (!cancelled) setLoadingAcademy(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Computed
   const filteredGroups = useMemo(() => {
@@ -327,10 +375,10 @@ export default function MaterialsPage() {
   }, [selectedGroup, selectedFolder]);
 
   const filteredMaterials = useMemo(() => {
-    return mockAcademyMaterials.filter((m) =>
+    return academyMaterials.filter((m) =>
       m.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [searchQuery]);
+  }, [academyMaterials, searchQuery]);
 
   const itemsPerPage = 10;
   const totalPages = Math.max(1, Math.ceil(filteredMaterials.length / itemsPerPage));
@@ -556,32 +604,53 @@ export default function MaterialsPage() {
 
               {/* Material list */}
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
-                <ul role="list">
-                  {filteredMaterials.map((material) => (
-                    <li
-                      key={material.id}
-                      onClick={() => handleSelectMaterial(material)}
-                      className={`cursor-pointer border-b border-subtle px-4 py-2.5 transition-colors ${
-                        selectedMaterial?.id === material.id
-                          ? 'bg-indigo-500/10 border-l-2 border-l-indigo-500'
-                          : 'hover:bg-surface-card'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={13} className="text-content-muted shrink-0" />
-                          <span className="text-xs font-medium text-content-primary truncate">{material.name}</span>
-                          {material.type === 'provider' && (
-                            <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400 shrink-0">
-                              과사람
-                            </span>
-                          )}
+                {loadingAcademy ? (
+                  <div className="px-4 py-8 text-center text-xs text-content-tertiary">불러오는 중...</div>
+                ) : filteredMaterials.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-xs text-content-tertiary">
+                    등록된 진단평가지가 없습니다.
+                    <p className="mt-2 text-[10px] text-content-muted">
+                      자산화 페이지에서 BS_M1_R1 같은 형식으로 업로드하면 자동 등록됩니다.
+                    </p>
+                  </div>
+                ) : (
+                  <ul role="list">
+                    {filteredMaterials.map((material) => (
+                      <li
+                        key={material.id}
+                        onClick={() => handleSelectMaterial(material)}
+                        className={`cursor-pointer border-b border-subtle px-4 py-2.5 transition-colors ${
+                          selectedMaterial?.id === material.id
+                            ? 'bg-indigo-500/10 border-l-2 border-l-indigo-500'
+                            : 'hover:bg-surface-card'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <FileText size={13} className="text-content-muted shrink-0" />
+                            <span className="text-xs font-medium text-content-primary truncate">{material.name}</span>
+                            {material.diagnosticCategory && (
+                              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400 shrink-0">
+                                {material.diagnosticCategory}
+                              </span>
+                            )}
+                            {material.type === 'provider' && (
+                              <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400 shrink-0">
+                                과사람
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-content-tertiary shrink-0 ml-2">{material.paperCount}문제</span>
                         </div>
-                        <span className="text-[10px] text-content-tertiary shrink-0 ml-2">{material.paperCount}장</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                        {(material.grade || material.diagnosticRound || material.diagnosticDifficulty) && (
+                          <div className="ml-5 mt-0.5 text-[10px] text-content-tertiary">
+                            {[material.grade, material.diagnosticRound, material.diagnosticDifficulty].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* Pagination */}

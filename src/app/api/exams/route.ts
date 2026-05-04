@@ -12,7 +12,7 @@ import { applyInstituteFilter } from '@/lib/security/institute-guard';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -25,12 +25,25 @@ export async function GET(_request: NextRequest) {
   }
 
   try {
+    // ★ 진단지 필터 (학원자료 페이지 진단평가 카테고리에서 사용)
+    const { searchParams } = new URL(request.url);
+    const isDiagnosticParam = searchParams.get('is_diagnostic');
+    const diagnosticCategory = searchParams.get('diagnostic_category');
+
     // ★ 시험지 목록 조회 (institute-guard 격리). super_admin 은 전체, ORG_ADMIN 은 산하, 일반 user 는 자기 institute.
-    const examsBaseQuery = supabaseAdmin
+    let examsBaseQuery = supabaseAdmin
       .from('exams')
-      .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade')
+      .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade, is_diagnostic, diagnostic_category, diagnostic_round, diagnostic_difficulty')
       .order('created_at', { ascending: false })
       .limit(200);
+
+    if (isDiagnosticParam === 'true' || isDiagnosticParam === '1') {
+      examsBaseQuery = examsBaseQuery.eq('is_diagnostic', true);
+    }
+    if (diagnosticCategory) {
+      examsBaseQuery = examsBaseQuery.eq('diagnostic_category', diagnosticCategory);
+    }
+
     const { data: exams, error: examsError } = await applyInstituteFilter(examsBaseQuery, scope);
 
     if (examsError) {
@@ -231,6 +244,11 @@ export async function GET(_request: NextRequest) {
         examType: exam.exam_type || '학교기출',
         grade: exam.grade || '고1',
         createdAt: exam.created_at,
+        // ★ 진단지 메타 — 학원자료 페이지·진단 분석에서 사용
+        isDiagnostic: !!exam.is_diagnostic,
+        diagnosticCategory: exam.diagnostic_category || null,
+        diagnosticRound: exam.diagnostic_round || null,
+        diagnosticDifficulty: exam.diagnostic_difficulty || null,
       };
     });
 
