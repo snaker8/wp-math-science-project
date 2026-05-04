@@ -5,11 +5,38 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+/** 격리 가드 — book_group 의 institute 가 scope 안인지 검증. NULL = 공통풀 통과. */
+async function guardBookGroupAccess(
+  client: SupabaseClient,
+  groupId: string,
+  scope: import('@/lib/security/institute-guard').InstituteAccessScope
+): Promise<NextResponse | null> {
+  const { data: group } = await client
+    .from('book_groups')
+    .select('institute_id')
+    .eq('id', groupId)
+    .maybeSingle();
+  if (!group) return NextResponse.json({ error: 'Book group not found' }, { status: 404 });
+  const targetInstituteId = (group as { institute_id: string | null }).institute_id;
+  if (targetInstituteId === null) return null; // 공통 풀 통과
+  try {
+    assertInstituteAccess(scope, targetInstituteId);
+    return null;
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+}
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ groupId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { groupId } = await params;
 
   if (!supabaseAdmin) {
@@ -18,6 +45,8 @@ export async function PUT(
       { status: 503 }
     );
   }
+  const guardErr = await guardBookGroupAccess(supabaseAdmin, groupId, authed.data.scope);
+  if (guardErr) return guardErr;
 
   try {
     const body = await request.json();
@@ -61,6 +90,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ groupId: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { groupId } = await params;
 
   if (!supabaseAdmin) {
@@ -69,6 +100,8 @@ export async function DELETE(
       { status: 503 }
     );
   }
+  const guardErr = await guardBookGroupAccess(supabaseAdmin, groupId, authed.data.scope);
+  if (guardErr) return guardErr;
 
   try {
     // 삭제 전: 이 그룹에 속한 시험지를 미분류로 이동

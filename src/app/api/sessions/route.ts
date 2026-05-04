@@ -23,6 +23,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertExamAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -40,6 +42,10 @@ interface CreateBody {
 }
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
@@ -62,7 +68,9 @@ export async function POST(request: NextRequest) {
   if (!examId) return NextResponse.json({ error: 'exam_id required' }, { status: 400 });
   if (studentIds.length === 0) return NextResponse.json({ error: 'student_ids 배열 필요' }, { status: 400 });
 
-  // 1) exam 확인
+  // 1) exam 격리 가드 + 확인
+  const examGuard = await assertExamAccess(sb, examId, scope);
+  if (!examGuard.ok) return NextResponse.json({ error: examGuard.error }, { status: examGuard.status });
   const { data: exam, error: examErr } = await sb
     .from('exams')
     .select('id, title')
