@@ -80,6 +80,8 @@ interface DiagramBrowserModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (imageUrl: string, meta?: DiagramSelectMeta) => void;
+  // ★ "현재 이미지 삭제" 옵션. 미지정 시 버튼 숨김 (기존 호출부 영향 X).
+  onDelete?: () => void;
   currentImageUrl?: string;
   problemNumber?: number;
 }
@@ -88,6 +90,7 @@ export function DiagramBrowserModal({
   isOpen,
   onClose,
   onSelect,
+  onDelete,
   currentImageUrl,
   problemNumber,
 }: DiagramBrowserModalProps) {
@@ -645,11 +648,24 @@ export function DiagramBrowserModal({
         )}
 
         {/* 푸터 */}
-        <div className="px-6 py-4 border-t border-subtle flex items-center justify-between">
-          <p className="text-xs text-content-muted">
-            이미지를 선택하고 &quot;교체&quot;를 누르면 현재 도식이 교체됩니다
+        <div className="px-6 py-4 border-t border-subtle flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-content-muted flex-1 min-w-0">
+            이미지를 선택하고 &quot;교체&quot;를 누르거나, &quot;이미지 삭제&quot;로 현재 도식을 제거할 수 있습니다
           </p>
           <div className="flex items-center gap-2">
+            {/* ★ 이미지 삭제 — 현재 이미지 있고 onDelete 핸들러 제공된 경우만 노출 */}
+            {currentImageUrl && onDelete && (
+              <button
+                onClick={() => {
+                  if (confirm('현재 도식·이미지를 삭제하시겠습니까?')) {
+                    onDelete();
+                  }
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                이미지 삭제
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg text-sm text-content-muted hover:bg-surface-raised transition-colors"
