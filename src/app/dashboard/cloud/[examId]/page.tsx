@@ -3351,6 +3351,55 @@ export default function CloudExamDetailPage() {
     }
   }, [refetchProblems]);
 
+  // ★ 도식 교체 모달 안에서 [이미지 삭제] — 현재 figure_crop 인덱스 제거 + 첫 이미지면 ai_analysis 도 정리.
+  const handleDeleteCurrentDiagramFromModal = useCallback(async () => {
+    if (!diagramBrowserProblem) return;
+    try {
+      const allImages = diagramBrowserProblem.images || [];
+      const figureCrops = allImages.filter((img) => img.type === 'figure_crop');
+      const nonFigureCrops = allImages.filter((img) => img.type !== 'figure_crop');
+
+      // 인덱스 제거 (-1 이거나 범위 밖이면 첫 번째 제거)
+      const idx = diagramReplaceIndex >= 0 && diagramReplaceIndex < figureCrops.length ? diagramReplaceIndex : 0;
+      const newFigureCrops = figureCrops.filter((_, i) => i !== idx);
+      const newImages = [...nonFigureCrops, ...newFigureCrops];
+
+      // ai_analysis 정리 — 첫 번째 이미지(idx 0) 삭제 시 figureData/figureSvg/upscaledCropUrl 도 같이 제거
+      const existRes = await fetch(`/api/problems/${diagramBrowserProblem.id}`);
+      let existingAi: Record<string, unknown> = {};
+      if (existRes.ok) {
+        const existData = await existRes.json();
+        existingAi = existData.ai_analysis || {};
+      }
+      const updatedAi: Record<string, unknown> = { ...existingAi };
+      if (idx === 0) {
+        delete updatedAi.figureData;
+        delete updatedAi.figureSvg;
+        delete updatedAi.upscaledCropUrl;
+        // hasFigure 는 남은 figure_crop 이 있을 때만 유지
+        updatedAi.hasFigure = newFigureCrops.length > 0;
+      }
+
+      const patchRes = await fetch(`/api/problems/${diagramBrowserProblem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: newImages, ai_analysis: updatedAi }),
+      });
+      if (!patchRes.ok) {
+        const err = await patchRes.json().catch(() => ({}));
+        alert(`이미지 삭제 실패: ${err.error || patchRes.status}`);
+        return;
+      }
+      console.log(`[DiagramDelete] Problem #${diagramBrowserProblem.number} 이미지 #${idx} 삭제 완료`);
+      refetchProblems();
+    } catch (err) {
+      console.error('[DiagramDelete] Error:', err);
+      alert(`이미지 삭제 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+    } finally {
+      setDiagramBrowserProblem(null);
+    }
+  }, [diagramBrowserProblem, diagramReplaceIndex, refetchProblems]);
+
   // ★ 단일 문제 재스캔 (이미지 업로드 → OCR → 교체)
   const [rescanningId, setRescanningId] = useState<string | null>(null);
   const rescanInputRef = useRef<HTMLInputElement>(null);
@@ -4382,6 +4431,7 @@ export default function CloudExamDetailPage() {
         isOpen={!!diagramBrowserProblem}
         onClose={() => setDiagramBrowserProblem(null)}
         onSelect={handleDiagramSelected}
+        onDelete={handleDeleteCurrentDiagramFromModal}
         currentImageUrl={diagramBrowserProblem?.images?.find(img => img.type === 'figure_crop' || img.type === 'crop')?.url}
         problemNumber={diagramBrowserProblem?.number}
       />
