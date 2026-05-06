@@ -9,12 +9,74 @@ import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 // ============================================================================
+// 사용자 role + 표시명 (TopNav 와 UserMenu 공유)
+// ============================================================================
+function useCurrentUser() {
+  const [role, setRole] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>('');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabaseBrowser) {
+        if (!cancelled) setLoaded(true);
+        return;
+      }
+      try {
+        const { data: { user } } = await supabaseBrowser.auth.getUser();
+        if (cancelled || !user) {
+          if (!cancelled) setLoaded(true);
+          return;
+        }
+        // super_admin 은 auth metadata 에 표시됨 (institute-guard 패턴)
+        const isSuperAdmin = user.user_metadata?.super_admin === true;
+        const { data: userRow } = await supabaseBrowser
+          .from('users')
+          .select('name, role')
+          .eq('id', user.id)
+          .maybeSingle();
+        const row = userRow as { name?: string; role?: string } | null;
+        const resolvedRole = isSuperAdmin
+          ? 'super_admin'
+          : (row?.role || 'STUDENT'); // 안전 fallback — 알 수 없으면 학생 권한
+        const name =
+          row?.name ||
+          (user.user_metadata?.name as string | undefined) ||
+          (user.user_metadata?.full_name as string | undefined) ||
+          (user.email ? user.email.split('@')[0] : '') ||
+          '사용자';
+        if (!cancelled) {
+          setRole(resolvedRole);
+          setDisplayName(name);
+          setLoaded(true);
+        }
+      } catch (err) {
+        console.warn('[TopNav] 사용자 정보 fetch 실패:', err);
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  return { role, displayName, loaded };
+}
+
+// ============================================================================
 // TopNav — 상단 가로 네비게이션 (참조사이트 스타일)
 // ============================================================================
 
 export function TopNav() {
   const pathname = usePathname();
   const activeItem = findActiveNavItem(pathname);
+  const { role, displayName, loaded } = useCurrentUser();
+
+  // ★ role 필터 — 그룹의 roles 미지정 시 모두 노출, 지정 시 해당 role 만
+  const visibleGroups = topNavGroups.filter((g) => {
+    if (!g.roles || g.roles.length === 0) return true;
+    if (!role) return false; // 미로딩·미인증 시 권한 메뉴 숨김 (보수적)
+    return g.roles.includes(role);
+  });
 
   return (
     <nav className="sticky top-0 z-50 h-14 border-b bg-surface-card/95 backdrop-blur-md">
@@ -30,7 +92,7 @@ export function TopNav() {
 
           {/* 메뉴 탭 */}
           <div className="flex items-center gap-0.5">
-            {topNavGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <NavTab
                 key={group.id}
                 group={group}
@@ -56,7 +118,7 @@ export function TopNav() {
             <Settings size={18} />
           </Link>
           <div className="w-px h-6 bg-surface-raised mx-1" />
-          <UserMenu />
+          <UserMenu displayName={displayName} loaded={loaded} />
         </div>
       </div>
     </nav>
@@ -66,39 +128,10 @@ export function TopNav() {
 // ============================================================================
 // UserMenu — 사용자 아이콘 클릭 시 드롭다운 (프로필 / 로그아웃)
 // ============================================================================
-function UserMenu() {
+function UserMenu({ displayName, loaded }: { displayName: string; loaded: boolean }) {
   const [open, setOpen] = useState(false);
-  const [displayName, setDisplayName] = useState<string>('');
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
-
-  // ★ 실제 로그인 사용자 정보 fetch — 하드코딩 "임세현" 제거 사고 (사용자 보고).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!supabaseBrowser) return;
-      try {
-        const { data: { user } } = await supabaseBrowser.auth.getUser();
-        if (cancelled || !user) return;
-        // 1순위: users 테이블의 name. 2순위: auth metadata. 3순위: email 앞부분.
-        const { data: userRow } = await supabaseBrowser
-          .from('users')
-          .select('name')
-          .eq('id', user.id)
-          .maybeSingle();
-        const name =
-          (userRow as { name?: string } | null)?.name ||
-          (user.user_metadata?.name as string | undefined) ||
-          (user.user_metadata?.full_name as string | undefined) ||
-          (user.email ? user.email.split('@')[0] : '') ||
-          '사용자';
-        if (!cancelled) setDisplayName(name);
-      } catch (err) {
-        console.warn('[TopNav] 사용자 정보 fetch 실패:', err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   // 바깥 클릭 시 닫기
   useEffect(() => {
@@ -122,7 +155,7 @@ function UserMenu() {
   };
 
   // 이니셜 — 한글이면 첫 글자, 영문이면 대문자 첫 글자
-  const initial = displayName ? displayName.charAt(0) : '?';
+  const initial = displayName ? displayName.charAt(0) : (loaded ? '?' : '');
 
   return (
     <div ref={ref} className="relative">
