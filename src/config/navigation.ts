@@ -274,6 +274,9 @@ export interface NavGroup {
   icon: LucideIcon;
   href?: string;           // 직접 링크 (드롭다운 없음)
   children?: NavItem[];     // 드롭다운 하위 메뉴
+  // ★ 권한별 노출. 미지정 시 모두 노출. 지정 시 해당 role 만 노출.
+  //   role 값: 'super_admin' | 'ADMIN' | 'ORG_ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT'
+  roles?: string[];
 }
 
 export const topNavGroups: NavGroup[] = [
@@ -344,13 +347,15 @@ export const topNavGroups: NavGroup[] = [
     icon: Upload,
     href: '/dashboard/cloud?upload=1',
   },
-  // ★ 운영 관리 — multi-tenancy. 학원·센터·사용자/교직원 관리. 메뉴 자체는 모두에게 보이지만
-  //   /admin/institutes·/admin/users 페이지가 super_admin 가드로 막음 (일반 user → 친절 403).
+  // ★ 운영 관리 — multi-tenancy. 학원·센터·사용자/교직원 관리.
+  //   페이지는 super_admin 가드로 막혀있지만 *메뉴 자체* 가 강사·학생에게도 보이면
+  //   "관리자로 로그인된 것처럼" 보이는 사고. roles 필터로 노출 자체 차단.
   {
     id: 'admin-ops',
     label: '운영 관리',
     icon: Shield,
     children: adminNavItems,
+    roles: ['super_admin', 'ADMIN', 'ORG_ADMIN'],
   },
 ];
 
