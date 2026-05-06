@@ -68,8 +68,37 @@ export function TopNav() {
 // ============================================================================
 function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState<string>('');
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // ★ 실제 로그인 사용자 정보 fetch — 하드코딩 "임세현" 제거 사고 (사용자 보고).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabaseBrowser) return;
+      try {
+        const { data: { user } } = await supabaseBrowser.auth.getUser();
+        if (cancelled || !user) return;
+        // 1순위: users 테이블의 name. 2순위: auth metadata. 3순위: email 앞부분.
+        const { data: userRow } = await supabaseBrowser
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle();
+        const name =
+          (userRow as { name?: string } | null)?.name ||
+          (user.user_metadata?.name as string | undefined) ||
+          (user.user_metadata?.full_name as string | undefined) ||
+          (user.email ? user.email.split('@')[0] : '') ||
+          '사용자';
+        if (!cancelled) setDisplayName(name);
+      } catch (err) {
+        console.warn('[TopNav] 사용자 정보 fetch 실패:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // 바깥 클릭 시 닫기
   useEffect(() => {
@@ -92,6 +121,9 @@ function UserMenu() {
     router.push('/auth/login');
   };
 
+  // 이니셜 — 한글이면 첫 글자, 영문이면 대문자 첫 글자
+  const initial = displayName ? displayName.charAt(0) : '?';
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -100,9 +132,11 @@ function UserMenu() {
         aria-label="사용자 메뉴"
       >
         <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center">
-          <span className="text-accent text-xs font-semibold">임</span>
+          <span className="text-accent text-xs font-semibold">{initial}</span>
         </div>
-        <span className="text-content-secondary text-sm hidden md:block">임세현</span>
+        <span className="text-content-secondary text-sm hidden md:block">
+          {displayName || '...'}
+        </span>
         <ChevronDown
           size={14}
           className={`text-content-tertiary transition-transform ${open ? 'rotate-180' : ''}`}
