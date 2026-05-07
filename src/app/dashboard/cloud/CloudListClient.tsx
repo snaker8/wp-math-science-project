@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -197,28 +198,18 @@ function collectGroupIds(node: TreeNode): string[] {
 // Sub-Components
 // ============================================================================
 
-const subjectOptions = [
-  '전체',
-  '── 수학 ──',
-  '공통수학1',
-  '공통수학2',
-  '대수',
-  '미적분1',
-  '확률과 통계',
-  '미적분2',
-  '기하',
-  '── 과학 ──',
-  '공통과학1',
-  '공통과학2',
-  '물리학1',
-  '물리학2',
-  '화학1',
-  '화학2',
-  '생명과학1',
-  '생명과학2',
-  '지구과학1',
-  '지구과학2',
-];
+const MATH_SUBJECTS = ['공통수학1', '공통수학2', '대수', '미적분1', '확률과 통계', '미적분2', '기하'];
+const SCIENCE_SUBJECTS = ['공통과학1', '공통과학2', '물리학1', '물리학2', '화학1', '화학2', '생명과학1', '생명과학2', '지구과학1', '지구과학2'];
+
+// PR-T10 — 활성 트랙별 옵션. 트랙 미정·flag false 시 둘 다 노출 (기존 동작).
+function getSubjectOptions(track: 'math' | 'science' | null): string[] {
+  if (track === 'math') return ['전체', '── 수학 ──', ...MATH_SUBJECTS];
+  if (track === 'science') return ['전체', '── 과학 ──', ...SCIENCE_SUBJECTS];
+  return ['전체', '── 수학 ──', ...MATH_SUBJECTS, '── 과학 ──', ...SCIENCE_SUBJECTS];
+}
+
+// 기존 호환 (Provider 외부 컴포넌트가 import 할 경우)
+const subjectOptions = getSubjectOptions(null);
 
 // 과목 드롭다운
 const SubjectDropdown: React.FC<{
@@ -707,6 +698,10 @@ export default function CloudPage() {
   const appendToExamId = searchParams.get('appendTo') || undefined;
   // ★ 사이드바 "DB 자산화" 메뉴 진입 시 ?upload=1 → 업로드 모달 자동 오픈
   const autoOpenUpload = searchParams.get('upload') === '1';
+  // PR-T10 — 활성 트랙별 과목 옵션. flag false / Provider 없음 → 둘 다 노출 (기존 동작)
+  const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
+  const trackKey = trackSplitEnabled ? activeTrack ?? null : null;
+  const trackSubjectOptions = useMemo(() => getSubjectOptions(trackKey), [trackKey]);
 
   // --- DB Data ---
   const [dbExams, setDbExams] = useState<DBExam[]>([]);
@@ -779,7 +774,8 @@ export default function CloudPage() {
   }, []);
 
   // --- State ---
-  const [subject, setSubject] = useState(subjectOptions[0]);
+  // PR-T10 — 트랙별 옵션 첫 항목 (보통 '전체')
+  const [subject, setSubject] = useState(trackSubjectOptions[0]);
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>('all');
   const [selectedName, setSelectedName] = useState<string>('전체 시험지');
@@ -1270,7 +1266,7 @@ export default function CloudPage() {
           <h1 className="text-lg font-semibold text-content-primary">과사람클라우드 관리</h1>
           <div className="flex items-center gap-2">
             <span className="text-xs text-content-tertiary">과목</span>
-            <SubjectDropdown value={subject} options={subjectOptions} onChange={setSubject} />
+            <SubjectDropdown value={subject} options={trackSubjectOptions} onChange={setSubject} />
           </div>
         </div>
         <div className="flex items-center gap-3">

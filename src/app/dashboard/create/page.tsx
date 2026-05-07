@@ -23,6 +23,8 @@ import {
   Search,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
+import { Beaker } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
@@ -890,6 +892,25 @@ function DifficultyDistributionBar({
 export default function PaperCreatePage() {
   const router = useRouter();
   const previewRef = useRef<HTMLDivElement>(null);
+  // PR-T10 G-13d — 과학 트랙은 출제기 임시 안내 (수학비서 분류 마스터 정식 분기 전)
+  const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
+  if (trackSplitEnabled && activeTrack === 'science') {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-6">
+        <div className="max-w-md text-center bg-surface-card border border-subtle rounded-2xl p-8">
+          <Beaker className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-content-primary mb-2">과학 시험지 출제 준비 중</h2>
+          <p className="text-sm text-content-tertiary leading-relaxed">
+            현재 시험지 출제는 수학비서 분류 트리 기반으로 운영됩니다.
+            <br />
+            과학 분류 마스터 데이터 적재 후 정식 분기 예정입니다.
+            <br />
+            상단 토글에서 [수학] 트랙으로 전환하면 사용 가능합니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ---- State ----
   const [paperName, setPaperName] = useState(() =>

@@ -5,8 +5,9 @@
 // PDF 업로드 → OCR → AI 분류/해설 자동화 UI
 // ============================================================================
 
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import {
   Upload,
   FileText,
@@ -77,8 +78,16 @@ export default function CloudFlowUploader({
     QUICK_ANSWER: null,
   });
 
-  // 과목 선택 상태
-  const [subjectArea, setSubjectArea] = useState<'math' | 'science'>('math');
+  // PR-T10 — 활성 트랙 (Provider 없거나 flag false 면 fallback)
+  const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
+  const enforcedTrack: 'math' | 'science' | null =
+    trackSplitEnabled && activeTrack ? activeTrack : null;
+  // 과목 선택 상태 — 활성 트랙으로 초기값 강제 (없으면 'math')
+  const [subjectArea, setSubjectArea] = useState<'math' | 'science'>(enforcedTrack ?? 'math');
+  // 활성 트랙 변경 시 강제 동기화 (헤더 토글)
+  useEffect(() => {
+    if (enforcedTrack) setSubjectArea(enforcedTrack);
+  }, [enforcedTrack]);
   const [scienceSubject, setScienceSubject] = useState<ScienceSubjectCode>('IS1');
   const [curriculumVersion, setCurriculumVersion] = useState<CurriculumVersion>('2022');
 
@@ -503,22 +512,26 @@ export default function CloudFlowUploader({
 
   return (
     <div className="cloud-flow-uploader">
-      {/* ── 과목 영역 선택 (수학/과학) ── */}
+      {/* ── 과목 영역 선택 (수학/과학) — PR-T10: 활성 트랙만 노출 ── */}
       <div className="subject-area-selector">
-        <button
-          className={`subject-area-btn ${subjectArea === 'math' ? 'active math' : ''}`}
-          onClick={() => setSubjectArea('math')}
-        >
-          <Calculator size={16} />
-          수학
-        </button>
-        <button
-          className={`subject-area-btn ${subjectArea === 'science' ? 'active science' : ''}`}
-          onClick={() => setSubjectArea('science')}
-        >
-          <Beaker size={16} />
-          과학
-        </button>
+        {(!enforcedTrack || enforcedTrack === 'math') && (
+          <button
+            className={`subject-area-btn ${subjectArea === 'math' ? 'active math' : ''}`}
+            onClick={() => setSubjectArea('math')}
+          >
+            <Calculator size={16} />
+            수학
+          </button>
+        )}
+        {(!enforcedTrack || enforcedTrack === 'science') && (
+          <button
+            className={`subject-area-btn ${subjectArea === 'science' ? 'active science' : ''}`}
+            onClick={() => setSubjectArea('science')}
+          >
+            <Beaker size={16} />
+            과학
+          </button>
+        )}
       </div>
 
       {/* ── 과학 세부 과목 선택 ── */}
