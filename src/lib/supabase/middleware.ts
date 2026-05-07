@@ -5,6 +5,7 @@
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import { isSubjectTrack, type SubjectTrack } from '@/lib/subject-track';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -23,6 +24,9 @@ export interface AuthUser {
   instituteId: string | null;
   fullName: string;
   isAcademyAdmin: boolean; // 선생님에게 부여된 학원 관리자 권한
+  // PR-T7 — 트랙 분리. flag false 일 때도 채워짐 (DB DEFAULT 'math'); 호출처가 무시하면 영향 0.
+  subjectTracks: SubjectTrack[];
+  activeSubjectTrack: SubjectTrack | null;
 }
 
 /**
@@ -108,10 +112,10 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
       user = authUser;
     }
 
-    // users 테이블에서 역할 정보 조회
+    // users 테이블에서 역할 + 트랙 정보 조회
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('role, institute_id, full_name, preferences')
+      .select('role, institute_id, full_name, preferences, subject_tracks, active_subject_track')
       .eq('id', user.id)
       .single();
 
@@ -123,6 +127,16 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
     const preferences = userData.preferences as Record<string, unknown> || {};
     const isAcademyAdmin = preferences.isAcademyAdmin === true;
 
+    // 트랙 정규화 (DB 값 비정상이면 빈 배열 / null)
+    const rawTracks = (userData as { subject_tracks?: unknown }).subject_tracks;
+    const subjectTracks = Array.isArray(rawTracks)
+      ? (rawTracks.filter(isSubjectTrack) as SubjectTrack[])
+      : [];
+    const rawActive = (userData as { active_subject_track?: unknown }).active_subject_track;
+    const activeSubjectTrack: SubjectTrack | null = isSubjectTrack(rawActive)
+      ? rawActive
+      : null;
+
     return {
       id: user.id,
       email: user.email || '',
@@ -130,6 +144,8 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
       instituteId: userData.institute_id,
       fullName: userData.full_name,
       isAcademyAdmin,
+      subjectTracks,
+      activeSubjectTrack,
     };
   } catch {
     return null;

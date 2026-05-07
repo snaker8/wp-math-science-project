@@ -1,5 +1,10 @@
 // ============================================================================
-// Next.js Middleware - 역할 기반 접근 제어 (RBAC)
+// Next.js Middleware - 역할 기반 접근 제어 (RBAC) + 트랙 분리 (URL 기반)
+// ----------------------------------------------------------------------------
+// PR-T7 foundation:
+//   - URL 첫 세그먼트가 /math, /science 면 'x-user-active-track' 헤더 주입
+//   - /api/* 진입 시 referer URL 의 track 또는 user.activeSubjectTrack 으로 헤더 주입
+//   - legacy /dashboard → /{activeTrack}/dashboard redirect 는 PR-T8 (페이지 생성 후) 활성
 // ============================================================================
 
 import { NextResponse } from 'next/server';
@@ -10,6 +15,7 @@ import {
   hasAcademyAdminAccess,
   type UserRole,
 } from '@/lib/supabase/middleware';
+import { isSubjectTrack, type SubjectTrack } from '@/lib/subject-track';
 
 // 경로별 허용 역할 설정
 const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
@@ -45,10 +51,54 @@ const IGNORED_PATHS = [
   '/fonts',
 ];
 
+// URL 첫 세그먼트가 'math'/'science' 면 그 값 반환 (예: /math/dashboard → 'math')
+function extractUrlTrack(pathname: string): SubjectTrack | null {
+  const seg = pathname.split('/')[1];
+  return isSubjectTrack(seg) ? seg : null;
+}
+
+// /api/* 진입 시 — Referer URL 또는 사용자 active_subject_track 으로 트랙 헤더 주입.
+// SELECT 필터·INSERT 태깅 헬퍼가 이 헤더 읽고 활성 트랙 결정.
+function trackFromReferer(refererHeader: string | null): SubjectTrack | null {
+  if (!refererHeader) return null;
+  try {
+    const path = new URL(refererHeader).pathname;
+    return extractUrlTrack(path);
+  } catch {
+    return null;
+  }
+}
+
+async function passThroughApiWithTrackHeaders(request: NextRequest) {
+  // /api/* 는 인증 강제 안 함 (기존 동작 유지). 인증된 경우 트랙 헤더만 추가.
+  try {
+    const { supabase } = createSupabaseMiddlewareClient(request);
+    if (!supabase) return NextResponse.next();
+    const user = await getAuthUser(supabase, request);
+    if (!user) return NextResponse.next();
+
+    const headers = new Headers(request.headers);
+    headers.set('x-user-id', user.id);
+    headers.set('x-user-role', user.role);
+    headers.set('x-user-tracks', (user.subjectTracks ?? []).join(','));
+    const refererTrack = trackFromReferer(request.headers.get('referer'));
+    const effectiveTrack = refererTrack ?? user.activeSubjectTrack ?? null;
+    if (effectiveTrack) headers.set('x-user-active-track', effectiveTrack);
+    return NextResponse.next({ request: { headers } });
+  } catch {
+    return NextResponse.next();
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (IGNORED_PATHS.some((path) => pathname.startsWith(path))) {
+    // /api/* 만 트랙 헤더 주입 (다른 IGNORED 는 그대로). 헤더 주입은 항상 동작 (flag 무관) —
+    // route 가 헤더 안 읽으면 무시되므로 안전.
+    if (pathname.startsWith('/api')) {
+      return passThroughApiWithTrackHeaders(request);
+    }
     return NextResponse.next();
   }
 
@@ -102,12 +152,33 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  response.headers.set('x-user-id', user.id);
-  response.headers.set('x-user-role', user.role);
-  response.headers.set('x-user-email', user.email);
-  response.headers.set('x-user-academy-admin', String(user.isAcademyAdmin));
+  // ★ 트랙 헤더 주입 — URL [track] 우선, 없으면 user.activeSubjectTrack.
+  //   PR-T8 이전엔 /math/* /science/* URL 자체가 없으므로 user.active 만 흐름.
+  //   request.headers 에도 동일하게 set 해서 RSC/server route 가 headers() 로 읽을 수 있게 함.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-user-id', user.id);
+  requestHeaders.set('x-user-role', user.role);
+  requestHeaders.set('x-user-email', user.email);
+  requestHeaders.set('x-user-academy-admin', String(user.isAcademyAdmin));
+  requestHeaders.set('x-user-tracks', (user.subjectTracks ?? []).join(','));
+  const urlTrack = extractUrlTrack(pathname);
+  const effectiveTrack = urlTrack ?? user.activeSubjectTrack ?? null;
+  if (effectiveTrack) requestHeaders.set('x-user-active-track', effectiveTrack);
 
-  return response;
+  // 새 response — supabase auth cookie 는 그대로 옮김
+  const finalResponse = NextResponse.next({ request: { headers: requestHeaders } });
+  response.cookies.getAll().forEach((c) => {
+    finalResponse.cookies.set(c.name, c.value);
+  });
+  // 클라이언트 응답에도 동일 헤더 노출 (디버그·CSR 코드 호환용)
+  finalResponse.headers.set('x-user-id', user.id);
+  finalResponse.headers.set('x-user-role', user.role);
+  finalResponse.headers.set('x-user-email', user.email);
+  finalResponse.headers.set('x-user-academy-admin', String(user.isAcademyAdmin));
+  finalResponse.headers.set('x-user-tracks', (user.subjectTracks ?? []).join(','));
+  if (effectiveTrack) finalResponse.headers.set('x-user-active-track', effectiveTrack);
+
+  return finalResponse;
 }
 
 function getRoleBasedRedirect(role: UserRole, baseUrl: string): URL {
