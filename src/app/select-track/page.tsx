@@ -83,7 +83,7 @@ export default function SelectTrackPage() {
           {accessibleTracks.includes('math') && (
             <TrackCard
               label="수학"
-              description="수학비서 분류 · 시험지 · 진단"
+              description="문제은행 · 시험지 · 진단"
               icon="∑"
               isActive={activeTrack === 'math'}
               onClick={() => handleSelect('math')}
