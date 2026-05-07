@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Settings, LogOut, HelpCircle, User } from 'lucide-react';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { TrackToggle } from '@/components/layout/TrackToggle';
 
 // ============================================================================
 // 사용자 role + 표시명 (TopNav 와 UserMenu 공유)
@@ -103,8 +104,10 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* ── Right: 설정 + 사용자 ── */}
+        {/* ── Right: 트랙 토글 + 설정 + 사용자 ── */}
         <div className="flex items-center gap-2">
+          {/* 트랙 토글 — flag true + 다중 트랙일 때만 노출, 그 외엔 null */}
+          <TrackToggle />
           <Link
             href="/support"
             className="p-2 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors"
