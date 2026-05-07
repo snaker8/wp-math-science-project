@@ -20,6 +20,8 @@
 // ============================================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { TRACK_SPLIT_ENABLED } from '@/lib/featureFlags';
+import { DEFAULT_SUBJECT_TRACK, isSubjectTrack, type SubjectTrack } from '@/types/track';
 
 /**
  * Query builder 의 격리 필터링에 필요한 메서드만 추상화.
@@ -47,6 +49,10 @@ export interface InstituteAccessScope {
   isSuperAdmin: boolean;
   /** 캐시: 이 scope 로 접근 가능한 institute_id 목록 (super_admin 인 경우 null = 모두) */
   accessibleInstituteIds: string[] | null;
+  /** 사용자가 담당·학습 가능한 트랙 배열 — users.subject_tracks. flag false 면 ['math']. */
+  accessibleTracks: SubjectTrack[];
+  /** 현재 활성 트랙 — users.active_subject_track. flag false 면 'math'. */
+  activeTrack: SubjectTrack;
 }
 
 export interface ApplyInstituteFilterOptions {
@@ -81,10 +87,10 @@ export async function getUserAccessScope(
 ): Promise<InstituteAccessScope> {
   const isSuperAdmin = Boolean(appMetadata?.super_admin === true);
 
-  // 1) users 테이블에서 institute/organization/role 조회
+  // 1) users 테이블에서 institute/organization/role + subject_track 조회
   const { data: userRow, error } = await adminClient
     .from('users')
-    .select('institute_id, organization_id, role')
+    .select('institute_id, organization_id, role, subject_tracks, active_subject_track')
     .eq('id', userId)
     .maybeSingle();
 
@@ -95,6 +101,24 @@ export async function getUserAccessScope(
   const instituteId = (userRow?.institute_id as string | null) ?? null;
   const organizationId = (userRow?.organization_id as string | null) ?? null;
   const role = (userRow?.role as string | null) ?? null;
+
+  // subject_track — flag false 면 강제 'math' 단일 (기존 운영 흐름 호환).
+  // flag true 면 DB 값 사용. DB 값이 비정상이면 fallback 'math'.
+  let accessibleTracks: SubjectTrack[];
+  let activeTrack: SubjectTrack;
+  if (TRACK_SPLIT_ENABLED) {
+    const rawTracks = (userRow?.subject_tracks as unknown[] | null) ?? null;
+    const filtered = Array.isArray(rawTracks) ? rawTracks.filter(isSubjectTrack) : [];
+    accessibleTracks = filtered.length > 0 ? filtered : [DEFAULT_SUBJECT_TRACK];
+
+    const rawActive = userRow?.active_subject_track as unknown;
+    activeTrack = isSubjectTrack(rawActive) && accessibleTracks.includes(rawActive)
+      ? rawActive
+      : (accessibleTracks[0] ?? DEFAULT_SUBJECT_TRACK);
+  } else {
+    accessibleTracks = [DEFAULT_SUBJECT_TRACK];
+    activeTrack = DEFAULT_SUBJECT_TRACK;
+  }
 
   // 2) accessibleInstituteIds 계산
   let accessibleInstituteIds: string[] | null;
@@ -132,6 +156,8 @@ export async function getUserAccessScope(
     role,
     isSuperAdmin,
     accessibleInstituteIds,
+    accessibleTracks,
+    activeTrack,
   };
 }
 
@@ -339,6 +365,50 @@ export async function assertProblemAccess(
   } catch {
     return { ok: false, status: 403, error: 'Forbidden' };
   }
+}
+
+// ============================================================================
+// 6. subject_track 필터 (Phase 2 — 헬퍼만 추가, 호출처 0)
+// ============================================================================
+
+export interface ApplyTrackFilterOptions {
+  /** 컬럼 이름. 기본 'subject_track'. */
+  column?: string;
+  /** scope.activeTrack 대신 강제로 사용할 트랙. */
+  trackOverride?: SubjectTrack;
+}
+
+/**
+ * 쿼리 빌더에 subject_track 필터를 적용.
+ *
+ * 동작:
+ *   - feature flag false → 필터 없음 (현 동작 100% 유지). 호출 자체가 no-op.
+ *   - flag true 인데 호출 안 함 → 모든 트랙 보임. PR-T5 에서 단계적 호출.
+ *   - flag true + 호출 → activeTrack(또는 override) 으로 필터.
+ *
+ * @example
+ *   const q = supabaseAdmin!.from('exams').select('*');
+ *   const filtered = applyInstituteFilter(q, scope);
+ *   const final = applyTrackFilter(filtered, scope);
+ *   const { data } = await final;
+ *
+ * @example // 강제 트랙 (어드민 페이지 등)
+ *   const filtered = applyTrackFilter(q, scope, { trackOverride: 'science' });
+ */
+export function applyTrackFilter<Q extends FilterableQuery<Q>>(
+  query: Q,
+  scope: InstituteAccessScope,
+  options: ApplyTrackFilterOptions = {}
+): Q {
+  // flag false → 트랙 분리 미활성. 필터 안 걸음 (현 동작 유지).
+  if (!TRACK_SPLIT_ENABLED) {
+    return query;
+  }
+
+  const column = options.column ?? 'subject_track';
+  const track = options.trackOverride ?? scope.activeTrack;
+
+  return query.eq(column, track);
 }
 
 // ============================================================================
