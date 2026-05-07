@@ -59,13 +59,18 @@ export async function POST(request: NextRequest) {
 
     const { data: originalProblem } = await supabaseAdmin
       .from('problems')
-      .select('institute_id, created_by')
+      .select('institute_id, created_by, subject_track')
       .eq('id', originalProblemId)
       .single();
 
+    let originalSubjectTrack: 'math' | 'science' | null = null;
     if (originalProblem) {
       instituteId = originalProblem.institute_id;
       createdBy = originalProblem.created_by;
+      const rawTrack = (originalProblem as { subject_track?: unknown }).subject_track;
+      if (rawTrack === 'math' || rawTrack === 'science') {
+        originalSubjectTrack = rawTrack;
+      }
     }
 
     // ─── 1. problems 테이블 INSERT ───
@@ -93,6 +98,11 @@ export async function POST(request: NextRequest) {
 
     if (instituteId) insertData.institute_id = instituteId;
     if (createdBy) insertData.created_by = createdBy;
+    // ★ 트랙 상속 — 원본 problem 의 subject_track 을 유사문제에 그대로 부여.
+    //   feature flag false 여도 컬럼은 채워둠. 미상속 (NULL/invalid) 시 DB DEFAULT 'math' 자동 적용.
+    if (originalSubjectTrack) {
+      insertData.subject_track = originalSubjectTrack;
+    }
 
     const { data: newProblem, error: problemError } = await supabaseAdmin
       .from('problems')

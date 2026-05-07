@@ -9,12 +9,13 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
-import { processUploadJob, getStatusLabel, convertedPdfStore } from '@/lib/workflow/cloud-flow';
+import { processUploadJob, getStatusLabel, convertedPdfStore, isScienceSubject } from '@/lib/workflow/cloud-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
+import type { SubjectTrack } from '@/types/track';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -1258,6 +1259,11 @@ async function saveEditedProblemsDirect(
   // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
   const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
 
+  // ★ subject_track 결정 — 시험지 제목 기반. 시험지·모든 문제 같은 트랙으로 박힘.
+  //   isScienceSubject 매치 안 되면 'math' fallback (수학 라인 보호).
+  //   feature flag false 여도 컬럼은 채워둠 — 추후 활성 시 즉시 분리됨.
+  const subjectTrack: SubjectTrack = isScienceSubject(fileTitle) ? 'science' : 'math';
+
   // ★ append 모드 — 기존 시험지에 문제 추가 (cloud "기존 시험지에 추가" 흐름)
   //   여기서 examId 결정 + sequenceOffset 설정. 새 exam INSERT 와 중복 차단 모두 스킵.
   //   기존엔 saveProblemsToDB 의 깨진 분기에서만 처리되어 autoCrop 모드(주 경로)에선 동작 X.
@@ -1343,6 +1349,7 @@ async function saveEditedProblemsDirect(
         diagnostic_category: diagnosticMeta.diagnostic_category,
         diagnostic_round: diagnosticMeta.diagnostic_round,
         diagnostic_difficulty: diagnosticMeta.diagnostic_difficulty,
+        subject_track: subjectTrack,
       };
       if (bookGroupId) {
         examInsertData.book_group_id = bookGroupId;
@@ -1533,6 +1540,7 @@ async function saveEditedProblemsDirect(
           },
           tags: [],
           source_name: job.fileName,
+          subject_track: subjectTrack,
         })
         .select()
         .single();
@@ -1872,6 +1880,12 @@ async function saveProblemsToDB(
   console.log(`[DB] Saving ${results.length} problems for job ${jobId}`);
   console.log(`[DB] instituteId: ${instituteId}, createdBy: ${createdBy}`);
 
+  // ★ subject_track 결정 — saveEditedProblemsDirect 와 동일 로직 (한쪽만 패치되면 사고).
+  //   시험지·모든 문제 같은 트랙. isScienceSubject 매치 안 되면 'math' fallback.
+  const subjectTrack: SubjectTrack = isScienceSubject(
+    job.fileName.replace(/\.[^/.]+$/, '')
+  ) ? 'science' : 'math';
+
   // 1. Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   // 003_exams.sql 마이그레이션 스키마 기준 컬럼만 사용
   let examId: string | null = null;
@@ -1965,6 +1979,7 @@ async function saveProblemsToDB(
         diagnostic_category: diagnosticMeta.diagnostic_category,
         diagnostic_round: diagnosticMeta.diagnostic_round,
         diagnostic_difficulty: diagnosticMeta.diagnostic_difficulty,
+        subject_track: subjectTrack,
       };
       if (diagnosticMeta.is_diagnostic) {
         console.log(`[DB] ★ 진단지 자동 태깅: ${diagnosticMeta.diagnostic_category}${diagnosticMeta.diagnostic_round ? `/${diagnosticMeta.diagnostic_round}` : ''}`);
@@ -2154,6 +2169,7 @@ async function saveProblemsToDB(
           },
           tags: result.keywordsTags || [],
           source_name: job.fileName,
+          subject_track: subjectTrack,
         })
         .select()
         .single();
