@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { applyInstituteFilter } from '@/lib/security/institute-guard';
+import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,9 +82,10 @@ export async function GET(request: NextRequest) {
       query = query.ilike('content_latex', `%${q}%`);
     }
 
-    // 격리 필터 적용 (공통 풀 NULL 도 포함)
+    // 격리 필터 적용 (공통 풀 NULL 도 포함) + 트랙 필터 (flag false 시 no-op)
     const filteredQuery = applyInstituteFilter(query, scope, { allowCommonPool: true });
-    const { data: problems, error } = await filteredQuery;
+    const trackFilteredQuery = applyTrackFilter(filteredQuery, scope);
+    const { data: problems, error } = await trackFilteredQuery;
 
     if (error) {
       console.error('[API/problems/search] Error:', error.message);

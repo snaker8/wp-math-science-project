@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { applyInstituteFilter, applyTrackFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
 
 export async function GET(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -35,8 +35,10 @@ export async function GET(request: NextRequest) {
     }
 
     // 격리 — 자기 institute + 공통 풀 (NULL)
-    const filteredQuery = applyInstituteFilter(query, scope, { allowCommonPool: true });
-    const { data: groups, error } = await filteredQuery;
+    // 트랙 필터 — flag false 시 no-op, flag true 시 activeTrack 으로 필터 (book_groups.subject_track DEFAULT 'math')
+    const instituteFiltered = applyInstituteFilter(query, scope, { allowCommonPool: true });
+    const trackFiltered = applyTrackFilter(instituteFiltered, scope);
+    const { data: groups, error } = await trackFiltered;
 
     if (error) {
       console.error('[API/book-groups] List error:', error.message);
