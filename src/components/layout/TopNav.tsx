@@ -8,6 +8,15 @@ import { ChevronDown, Settings, LogOut, HelpCircle, User } from 'lucide-react';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { TrackToggle } from '@/components/layout/TrackToggle';
+import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
+import { trackHref } from '@/lib/track/href';
+import { withTrackGroups } from '@/lib/track/nav';
+import { DEFAULT_SUBJECT_TRACK } from '@/lib/subject-track';
+
+// URL 첫 세그먼트의 /math, /science 를 제거 — 활성 메뉴 비교용 정규화 path 생성.
+function stripTrackPrefix(pathname: string): string {
+  return pathname.replace(/^\/(math|science)(?=\/|$)/, '') || '/';
+}
 
 // ============================================================================
 // 사용자 role + 표시명 (TopNav 와 UserMenu 공유)
@@ -73,8 +82,12 @@ function useCurrentUser() {
 
 export function TopNav() {
   const pathname = usePathname();
-  const activeItem = findActiveNavItem(pathname);
+  // 활성 메뉴 비교용 — URL [track] prefix 제거 후 기존 navigation.ts 와 비교
+  const normPathname = stripTrackPrefix(pathname);
+  const activeItem = findActiveNavItem(normPathname);
   const { role, displayName, loaded } = useCurrentUser();
+  const { activeTrack } = useSubjectTrack();
+  const track = activeTrack ?? DEFAULT_SUBJECT_TRACK;
 
   // ★ role 필터 — 그룹의 roles 미지정 시 모두 노출, 지정 시 해당 role 만
   const visibleGroups = topNavGroups.filter((g) => {
@@ -82,27 +95,30 @@ export function TopNav() {
     if (!role) return false; // 미로딩·미인증 시 권한 메뉴 숨김 (보수적)
     return g.roles.includes(role);
   });
+  // ★ 트랙 prefix 일괄 적용 — /dashboard/X → /{track}/dashboard/X (PR-T9)
+  const trackedGroups = withTrackGroups(visibleGroups, track);
 
   return (
     <nav className="sticky top-0 z-50 h-14 border-b bg-surface-card/95 backdrop-blur-md">
       <div className="flex h-full items-center justify-between px-6 max-w-screen-2xl mx-auto">
         {/* ── Left: 로고 + 탭 ── */}
         <div className="flex items-center gap-1">
-          {/* 로고 */}
-          <Link href="/dashboard" className="flex items-center mr-6 shrink-0">
+          {/* 로고 — 트랙 prefix 적용 */}
+          <Link href={trackHref('/dashboard', track)} className="flex items-center mr-6 shrink-0">
             <span className="text-content-primary font-bold text-base">
               과사람
             </span>
           </Link>
 
-          {/* 메뉴 탭 */}
+          {/* 메뉴 탭 — 이미 trackHref 적용된 그룹 사용 */}
           <div className="flex items-center gap-0.5">
-            {visibleGroups.map((group) => (
+            {trackedGroups.map((group) => (
               <NavTab
                 key={group.id}
                 group={group}
                 pathname={pathname}
                 activeItem={activeItem}
+                track={track}
               />
             ))}
           </div>
@@ -119,7 +135,7 @@ export function TopNav() {
             <HelpCircle size={18} />
           </Link>
           <Link
-            href="/dashboard/settings"
+            href={trackHref('/dashboard/settings', track)}
             className="p-2 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-raised transition-colors"
           >
             <Settings size={18} />
@@ -139,6 +155,8 @@ function UserMenu({ displayName, loaded }: { displayName: string; loaded: boolea
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { activeTrack } = useSubjectTrack();
+  const track = activeTrack ?? DEFAULT_SUBJECT_TRACK;
 
   // 바깥 클릭 시 닫기
   useEffect(() => {
@@ -198,7 +216,7 @@ function UserMenu({ displayName, loaded }: { displayName: string; loaded: boolea
           >
             <div className="py-1.5">
               <Link
-                href="/dashboard/settings"
+                href={trackHref('/dashboard/settings', track)}
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors"
               >
@@ -229,10 +247,12 @@ function NavTab({
   group,
   pathname,
   activeItem,
+  track,
 }: {
   group: NavGroup;
   pathname: string;
   activeItem: NavItem | undefined;
+  track: 'math' | 'science';
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -250,7 +270,8 @@ function NavTab({
     }
   }, [open]);
 
-  // 활성 여부 판단
+  // 활성 여부 판단 — group.href / child.href 는 이미 trackHref 적용된 상태,
+  // pathname 도 URL track 포함된 상태이므로 그대로 비교 OK.
   const isActive = group.href
     ? pathname === group.href
     : group.children?.some(
@@ -260,7 +281,7 @@ function NavTab({
   // ★ DB 자산화 — 특수 처리: 클라우드 페이지면 글로벌 이벤트, 다른 페이지면 router.push.
   //   Next.js Link 가 같은 URL 로는 navigation 안 일으키는 회귀 차단 (PR #47/#49 사고).
   if (group.id === 'db-assetize') {
-    return <DbAssetizeTab group={group} isActive={!!isActive} pathname={pathname} />;
+    return <DbAssetizeTab group={group} isActive={!!isActive} pathname={pathname} track={track} />;
   }
 
   // 직접 링크
@@ -363,22 +384,26 @@ function DbAssetizeTab({
   group,
   isActive,
   pathname,
+  track,
 }: {
   group: NavGroup;
   isActive: boolean;
   pathname: string;
+  track: 'math' | 'science';
 }) {
   const router = useRouter();
   return (
     <button
       type="button"
       onClick={() => {
-        if (pathname.startsWith('/dashboard/cloud')) {
+        // pathname 정규화 — /math/dashboard/cloud, /science/dashboard/cloud, /dashboard/cloud 모두 매치
+        const stripped = stripTrackPrefix(pathname);
+        if (stripped.startsWith('/dashboard/cloud')) {
           // 같은 페이지 — 즉시 모달
           window.dispatchEvent(new CustomEvent('cloud:open-upload'));
         } else {
-          // 다른 페이지 — 이동 (?upload=1 으로 mount 시 자동 오픈)
-          router.push('/dashboard/cloud?upload=1');
+          // 다른 페이지 — 이동 (?upload=1 으로 mount 시 자동 오픈), 트랙 prefix 적용
+          router.push(trackHref('/dashboard/cloud?upload=1', track));
         }
       }}
       className={`
