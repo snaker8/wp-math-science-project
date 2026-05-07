@@ -31,6 +31,12 @@ const PUBLIC_PATHS = [
   '/share',
 ];
 
+// 트랙 선택 검사 대상 경로 — 로그인 후 진입하는 영역
+const TRACK_GATED_PREFIXES = ['/dashboard', '/admin', '/tutor', '/student', '/parent'];
+
+// 트랙 선택 페이지 자체 — redirect 대상에서 제외 (loop 방지)
+const TRACK_CHOICE_PATH = '/select-track';
+
 const IGNORED_PATHS = [
   '/_next',
   '/api',
@@ -73,6 +79,26 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(redirectUrl);
       }
       break;
+    }
+  }
+
+  // ★ 트랙 선택 redirect — feature flag true 시 로그인 사용자가 대시보드 영역
+  //   진입 시 track-chosen 쿠키 검사. 미설정이면 /select-track 으로 보냄.
+  //   /select-track 페이지가 사용자 트랙 수 (1 vs 2+) 에 따라 자동 처리:
+  //     - 1 트랙: 자동 PATCH + 쿠키 set + /dashboard redirect (사용자 눈에 거의 안 띔)
+  //     - 2+ 트랙: 카드 표시 → 선택 → 쿠키 set → /dashboard
+  //   쿠키 기반 → middleware 매 요청 DB 쿼리 0.
+  const TRACK_SPLIT_ENABLED = process.env.NEXT_PUBLIC_TRACK_SPLIT_ENABLED === 'true';
+  if (
+    TRACK_SPLIT_ENABLED &&
+    pathname !== TRACK_CHOICE_PATH &&
+    TRACK_GATED_PREFIXES.some((p) => pathname.startsWith(p))
+  ) {
+    const trackCookie = request.cookies.get('track-chosen');
+    if (!trackCookie) {
+      const selectUrl = new URL(TRACK_CHOICE_PATH, request.url);
+      selectUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(selectUrl);
     }
   }
 

@@ -59,6 +59,10 @@ export function Sidebar() {
     if (supabaseBrowser) {
       await supabaseBrowser.auth.signOut();
     }
+    // ★ 트랙 선택 쿠키 삭제 — 다음 로그인 시 /select-track 카드 다시 표시
+    if (typeof document !== 'undefined') {
+      document.cookie = 'track-chosen=; path=/; max-age=0';
+    }
     router.push('/auth/login');
   };
 
