@@ -30,8 +30,12 @@ function useCurrentUser() {
           if (!cancelled) setLoaded(true);
           return;
         }
-        // super_admin 은 auth metadata 에 표시됨 (institute-guard 패턴)
-        const isSuperAdmin = user.user_metadata?.super_admin === true;
+        // super_admin 은 auth.users.app_metadata 에 표시됨 (institute-guard.ts:82 패턴).
+        // user_metadata 는 사용자 자가 설정 가능 영역 — 보안 가드용으로 부적합.
+        // 양쪽 다 검사해서 어느 쪽에 박혀있어도 정확히 잡음.
+        const isSuperAdmin =
+          user.app_metadata?.super_admin === true ||
+          user.user_metadata?.super_admin === true;
         const { data: userRow } = await supabaseBrowser
           .from('users')
           .select('name, role')
