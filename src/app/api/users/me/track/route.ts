@@ -116,5 +116,14 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, active_subject_track: track });
+  // ★ track-chosen 쿠키 set — middleware redirect 가드 통과용.
+  //   다음 /dashboard 진입 시 middleware 가 이 쿠키 읽고 redirect 안 함.
+  //   세션 쿠키 (max-age 미지정) — 브라우저 닫으면 만료 → 다음 로그인 시 다시 카드.
+  const response = NextResponse.json({ ok: true, active_subject_track: track });
+  response.cookies.set('track-chosen', track, {
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+  return response;
 }

@@ -13,8 +13,8 @@
 //   - 두 트랙 사용자 → 카드 표시, 클릭 시 setActiveTrack + /dashboard 이동
 // ============================================================================
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import type { SubjectTrack } from '@/types/track';
 
@@ -22,19 +22,34 @@ export default function SelectTrackPage() {
   const { activeTrack, accessibleTracks, setActiveTrack, isEnabled, isLoading } =
     useSubjectTrack();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTarget = searchParams?.get('redirect') || '/dashboard';
+  const autoPickTriedRef = useRef(false);
 
-  // flag false 또는 단일 트랙 → /dashboard 자동 이동
+  // flag false → /dashboard 즉시 redirect (의미 없는 페이지)
+  // 단일 트랙 사용자 → 그 트랙 자동 PATCH (쿠키 set) 후 /dashboard
+  // 두 트랙 사용자 → 카드 표시 (아래 render)
   useEffect(() => {
     if (isLoading) return;
-    if (!isEnabled || accessibleTracks.length < 2) {
-      router.replace('/dashboard');
+    if (!isEnabled) {
+      router.replace(redirectTarget);
+      return;
     }
-  }, [isEnabled, isLoading, accessibleTracks, router]);
+    if (accessibleTracks.length < 2 && !autoPickTriedRef.current) {
+      autoPickTriedRef.current = true;
+      const onlyTrack = accessibleTracks[0];
+      // setActiveTrack 이 PATCH 호출 → 서버가 track-chosen 쿠키 set
+      // 실패해도 redirect 진행 (middleware 가 다시 잡으면 사용자가 새로고침으로 회복)
+      setActiveTrack(onlyTrack)
+        .catch((e) => console.warn('[SelectTrack] auto-pick 실패:', e))
+        .finally(() => router.replace(redirectTarget));
+    }
+  }, [isEnabled, isLoading, accessibleTracks, router, redirectTarget, setActiveTrack]);
 
   const handleSelect = async (track: SubjectTrack) => {
     try {
       await setActiveTrack(track);
-      router.push('/dashboard');
+      router.push(redirectTarget);
     } catch (e) {
       console.error('[SelectTrack] setActiveTrack 실패:', e);
     }
