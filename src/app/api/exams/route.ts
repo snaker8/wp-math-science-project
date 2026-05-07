@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { applyInstituteFilter } from '@/lib/security/institute-guard';
+import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
 
 // Next.js 14 Data Cache 비활성화 — supabaseAdmin 내부 fetch가 캐싱되는 문제 방지
 export const dynamic = 'force-dynamic';
@@ -44,7 +44,10 @@ export async function GET(request: NextRequest) {
       examsBaseQuery = examsBaseQuery.eq('diagnostic_category', diagnosticCategory);
     }
 
-    const { data: exams, error: examsError } = await applyInstituteFilter(examsBaseQuery, scope);
+    // ★ 격리 필터 + 트랙 필터 (flag false 시 트랙 필터는 no-op, 기존 동작 그대로)
+    const filteredQuery = applyInstituteFilter(examsBaseQuery, scope);
+    const trackFilteredQuery = applyTrackFilter(filteredQuery, scope);
+    const { data: exams, error: examsError } = await trackFilteredQuery;
 
     if (examsError) {
       console.error('[API/exams] List error:', examsError.message);
