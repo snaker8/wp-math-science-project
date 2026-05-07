@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import 'katex/dist/katex.min.css';
+import { RootProviders } from '@/components/providers/RootProviders';
 
 export const metadata: Metadata = {
   title: '과사람 수학 문제은행',
@@ -14,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <RootProviders>{children}</RootProviders>
+      </body>
     </html>
   );
 }
