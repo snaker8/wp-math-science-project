@@ -127,7 +127,10 @@ export async function middleware(request: NextRequest) {
 
   for (const [routePrefix, allowedRoles] of Object.entries(ROUTE_PERMISSIONS)) {
     if (pathname.startsWith(routePrefix)) {
+      // /admin/* 는 hasAcademyAdminAccess (super_admin·ORG_ADMIN·ADMIN·TEACHER+isAcademyAdmin) 통과
       if (routePrefix === '/admin' && hasAcademyAdminAccess(user)) break;
+      // /tutor·/student 등 다른 영역도 super_admin·ORG_ADMIN·ADMIN 은 자유 진입 (운영 관리 차원)
+      if (user.isSuperAdmin || user.role === 'ORG_ADMIN' || user.role === 'ADMIN') break;
       if (!allowedRoles.includes(user.role)) {
         const redirectUrl = getRoleBasedRedirect(user.role, request.url);
         return NextResponse.redirect(redirectUrl);
@@ -201,6 +204,7 @@ export async function middleware(request: NextRequest) {
 function getRoleBasedRedirect(role: UserRole, baseUrl: string): URL {
   const redirectPaths: Record<UserRole, string> = {
     ADMIN: '/admin/dashboard',
+    ORG_ADMIN: '/admin/dashboard',  // 학원장도 운영 관리 영역 진입
     TEACHER: '/tutor/dashboard',
     TUTOR: '/tutor/dashboard',
     STUDENT: '/student/dashboard',
