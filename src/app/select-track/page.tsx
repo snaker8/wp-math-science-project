@@ -16,6 +16,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
+import { trackHref } from '@/lib/track/href';
 import type { SubjectTrack } from '@/types/track';
 
 export default function SelectTrackPage() {
@@ -27,7 +28,7 @@ export default function SelectTrackPage() {
   const autoPickTriedRef = useRef(false);
 
   // flag false → /dashboard 즉시 redirect (의미 없는 페이지)
-  // 단일 트랙 사용자 → 그 트랙 자동 PATCH (쿠키 set) 후 /dashboard
+  // 단일 트랙 사용자 → 그 트랙 자동 PATCH (쿠키 set) 후 /{track}/dashboard
   // 두 트랙 사용자 → 카드 표시 (아래 render)
   useEffect(() => {
     if (isLoading) return;
@@ -39,17 +40,18 @@ export default function SelectTrackPage() {
       autoPickTriedRef.current = true;
       const onlyTrack = accessibleTracks[0];
       // setActiveTrack 이 PATCH 호출 → 서버가 track-chosen 쿠키 set
-      // 실패해도 redirect 진행 (middleware 가 다시 잡으면 사용자가 새로고침으로 회복)
+      // 트랙 prefix 적용된 path 로 redirect → middleware 추가 redirect 회피
       setActiveTrack(onlyTrack)
         .catch((e) => console.warn('[SelectTrack] auto-pick 실패:', e))
-        .finally(() => router.replace(redirectTarget));
+        .finally(() => router.replace(trackHref(redirectTarget, onlyTrack)));
     }
   }, [isEnabled, isLoading, accessibleTracks, router, redirectTarget, setActiveTrack]);
 
   const handleSelect = async (track: SubjectTrack) => {
     try {
       await setActiveTrack(track);
-      router.push(redirectTarget);
+      // 트랙 prefix 적용된 path 로 push → middleware 추가 redirect 회피
+      router.push(trackHref(redirectTarget, track));
     } catch (e) {
       console.error('[SelectTrack] setActiveTrack 실패:', e);
     }

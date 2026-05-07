@@ -4,7 +4,11 @@
 // PR-T7 foundation:
 //   - URL 첫 세그먼트가 /math, /science 면 'x-user-active-track' 헤더 주입
 //   - /api/* 진입 시 referer URL 의 track 또는 user.activeSubjectTrack 으로 헤더 주입
-//   - legacy /dashboard → /{activeTrack}/dashboard redirect 는 PR-T8 (페이지 생성 후) 활성
+//
+// PR-T8 활성:
+//   - legacy /dashboard/* → /{cookieTrack}/dashboard/* redirect (쿠키 있을 때)
+//     · (tracks)/[track]/dashboard/* 라우트 그룹 신설 후 활성
+//     · 쿠키 없으면 T6 로직으로 /select-track redirect (카드 흐름)
 // ============================================================================
 
 import { NextResponse } from 'next/server';
@@ -132,23 +136,36 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ★ 트랙 선택 redirect — feature flag true 시 로그인 사용자가 대시보드 영역
-  //   진입 시 track-chosen 쿠키 검사. 미설정이면 /select-track 으로 보냄.
-  //   /select-track 페이지가 사용자 트랙 수 (1 vs 2+) 에 따라 자동 처리:
-  //     - 1 트랙: 자동 PATCH + 쿠키 set + /dashboard redirect (사용자 눈에 거의 안 띔)
-  //     - 2+ 트랙: 카드 표시 → 선택 → 쿠키 set → /dashboard
+  // ★ 트랙 분리 redirect — feature flag true 시:
+  //   1. 쿠키 없음 → /select-track (카드 흐름 — T6 로직)
+  //   2. 쿠키 있음 + legacy /dashboard/* (URL 에 [track] 없음) → /{cookieTrack}/dashboard/* (T8)
+  //   3. 쿠키 있음 + URL 에 [track] 있음 → 통과 (헤더 주입 단계로)
   //   쿠키 기반 → middleware 매 요청 DB 쿼리 0.
   const TRACK_SPLIT_ENABLED = process.env.NEXT_PUBLIC_TRACK_SPLIT_ENABLED === 'true';
-  if (
-    TRACK_SPLIT_ENABLED &&
-    pathname !== TRACK_CHOICE_PATH &&
-    TRACK_GATED_PREFIXES.some((p) => pathname.startsWith(p))
-  ) {
+  if (TRACK_SPLIT_ENABLED && pathname !== TRACK_CHOICE_PATH) {
     const trackCookie = request.cookies.get('track-chosen');
-    if (!trackCookie) {
+    const isAnyGated = TRACK_GATED_PREFIXES.some((p) => pathname.startsWith(p));
+
+    // 1. 쿠키 없음 + 보호 영역 → /select-track (T6 카드 흐름)
+    if (!trackCookie && isAnyGated) {
       const selectUrl = new URL(TRACK_CHOICE_PATH, request.url);
       selectUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(selectUrl);
+    }
+
+    // 2. 쿠키 있음 + legacy /dashboard/* (URL [track] 없음) → /{cookieTrack}/dashboard/* (T8)
+    //    (tracks)/[track]/dashboard/* 라우트 그룹이 PR-T8 에 신설됨.
+    //    /admin·/tutor·/student·/parent 는 라우트 그룹 미신설 — redirect 안 함.
+    if (trackCookie) {
+      const hasUrlTrack = !!extractUrlTrack(pathname);
+      const isLegacyDashboard =
+        !hasUrlTrack && (pathname === '/dashboard' || pathname.startsWith('/dashboard/'));
+      if (isLegacyDashboard) {
+        const target = isSubjectTrack(trackCookie.value) ? trackCookie.value : 'math';
+        const newUrl = new URL(`/${target}${pathname}`, request.url);
+        newUrl.search = request.nextUrl.search;
+        return NextResponse.redirect(newUrl);
+      }
     }
   }
 
