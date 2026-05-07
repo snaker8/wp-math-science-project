@@ -1289,7 +1289,7 @@ function detectGradeFromFileName(fileName?: string): string {
 }
 
 /** subject가 과학 과목인지 판별 */
-function isScienceSubject(subject?: string): boolean {
+export function isScienceSubject(subject?: string): boolean {
   if (!subject) return false;
   return /과학|물리|화학|생명|생물|지구|IS[12]|PHY|CHE|BIO|ESC|science/i.test(subject);
 }
