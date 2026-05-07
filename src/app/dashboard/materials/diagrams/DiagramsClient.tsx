@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import {
   ArrowLeft,
   Image as ImageIcon,
@@ -48,7 +49,15 @@ export default function DiagramGalleryPage() {
   const [processingInfo, setProcessingInfo] = useState<{
     active: boolean; phase: string; current_page: number; total_pages: number; source: string;
   } | null>(null);
-  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  // PR-T10 — 활성 트랙으로 도식 자동 필터 (math 트랙 → 수학 도식만).
+  // Provider 없거나 flag false 면 'all' fallback (기존 동작).
+  const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
+  const enforcedTrack = trackSplitEnabled && activeTrack ? activeTrack : null;
+  const [subjectFilter, setSubjectFilter] = useState<string>(enforcedTrack ?? 'all');
+  // 활성 트랙 변경 시 필터 동기화 (헤더 토글로 트랙 전환 케이스)
+  useEffect(() => {
+    if (enforcedTrack) setSubjectFilter(enforcedTrack);
+  }, [enforcedTrack]);
   const [scienceSubjectFilter, setScienceSubjectFilter] = useState<string>('all');
   const [previewImage, setPreviewImage] = useState<DiagramImage | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -312,9 +321,9 @@ export default function DiagramGalleryPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 과목 필터 */}
+            {/* 과목 필터 — PR-T10: 활성 트랙 있으면 그 트랙만 표시 (다른 옵션 숨김) */}
             <div className="flex items-center gap-1.5 bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-              {['all', 'math', 'science'].map(val => (
+              {(enforcedTrack ? [enforcedTrack] : ['all', 'math', 'science']).map(val => (
                 <button
                   key={val}
                   onClick={() => setSubjectFilter(val)}

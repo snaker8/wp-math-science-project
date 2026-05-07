@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import {
   FolderOpen,
   FileText,
@@ -475,7 +476,17 @@ export default function ExamManagementPage() {
   } as const;
   const EXAM_TYPES = ['전체', '모의고사', '학교기출'] as const;
   const GRADES = ['전체', '중1', '중2', '중3', '고1', '고2', '고3'] as const;
-  const [subjectCategory, setSubjectCategory] = useState<'수학' | '과학'>('수학');
+  // PR-T10 — 활성 트랙으로 카테고리 강제. flag false 또는 Provider 없으면 '수학' fallback.
+  const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
+  const initialCategory: '수학' | '과학' =
+    trackSplitEnabled && activeTrack === 'science' ? '과학' : '수학';
+  const [subjectCategory, setSubjectCategory] = useState<'수학' | '과학'>(initialCategory);
+  // 활성 트랙 변경 시 카테고리 동기화 (헤더 토글)
+  useEffect(() => {
+    if (!trackSplitEnabled) return;
+    if (activeTrack === 'science') setSubjectCategory('과학');
+    else if (activeTrack === 'math') setSubjectCategory('수학');
+  }, [activeTrack, trackSplitEnabled]);
   const [subjectFilter, setSubjectFilter] = useState('전체');
   const [examTypeFilter, setExamTypeFilter] = useState('전체');
   const [gradeFilter, setGradeFilter] = useState('전체');
@@ -1141,7 +1152,12 @@ export default function ExamManagementPage() {
         {/* 과목 카테고리 & 필터 */}
         <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--em-border-sub)' }}>
           <div className="flex items-center gap-1 mb-2 p-0.5 rounded-lg" style={{ background: 'var(--em-bg-raised)', border: '1px solid var(--em-border-sub)' }}>
-            {(['수학', '과학'] as const).map((cat) => (
+            {/* PR-T10 — 트랙 분리 활성 시 활성 트랙 카테고리만 노출 (다른 트랙 옵션 숨김).
+                flag false / Provider 없음 → 둘 다 노출 (기존 동작) */}
+            {(trackSplitEnabled && activeTrack
+              ? ([activeTrack === 'science' ? '과학' : '수학'] as const)
+              : (['수학', '과학'] as const)
+            ).map((cat) => (
               <button
                 key={cat}
                 type="button"
