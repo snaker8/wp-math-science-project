@@ -15,7 +15,7 @@ const isSupabaseConfigured = supabaseUrl &&
   supabaseAnonKey &&
   !supabaseAnonKey.includes('your-');
 
-export type UserRole = 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT';
+export type UserRole = 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT' | 'ORG_ADMIN';
 
 export interface AuthUser {
   id: string;
@@ -24,6 +24,9 @@ export interface AuthUser {
   instituteId: string | null;
   fullName: string;
   isAcademyAdmin: boolean; // 선생님에게 부여된 학원 관리자 권한
+  // ★ 시스템 슈퍼관리자 — auth.users.app_metadata.super_admin = true (service_role 만 set 가능).
+  //   학원·센터 소속과 무관하게 모든 학원·센터 관리. 운영 주체.
+  isSuperAdmin: boolean;
   // PR-T7 — 트랙 분리. flag false 일 때도 채워짐 (DB DEFAULT 'math'); 호출처가 무시하면 영향 0.
   subjectTracks: SubjectTrack[];
   activeSubjectTrack: SubjectTrack | null;
@@ -127,6 +130,11 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
     const preferences = userData.preferences as Record<string, unknown> || {};
     const isAcademyAdmin = preferences.isAcademyAdmin === true;
 
+    // ★ super_admin — auth.users.app_metadata.super_admin = true (institute-guard.ts:82 패턴)
+    //   service_role 만 set 가능 → 보안 가드용 정답. 운영 주체로 시스템 전체 관리.
+    const appMetadata = user.app_metadata as Record<string, unknown> | undefined;
+    const isSuperAdmin = appMetadata?.super_admin === true;
+
     // 트랙 정규화 (DB 값 비정상이면 빈 배열 / null)
     const rawTracks = (userData as { subject_tracks?: unknown }).subject_tracks;
     const subjectTracks = Array.isArray(rawTracks)
@@ -144,6 +152,7 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
       instituteId: userData.institute_id,
       fullName: userData.full_name,
       isAcademyAdmin,
+      isSuperAdmin,
       subjectTracks,
       activeSubjectTrack,
     };
@@ -153,10 +162,20 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
 }
 
 /**
- * 학원 관리자 권한 검사 (ADMIN 또는 isAcademyAdmin이 true인 TEACHER)
+ * 학원·시스템 관리자 권한 검사 — /admin/* 영역 진입 가드.
+ *
+ * 통과 조건:
+ *   1. super_admin (auth.users.app_metadata.super_admin = true) — 운영 주체, 모든 학원·센터
+ *   2. ORG_ADMIN (users.role) — 학원장, 자기 학원 산하 모든 센터 통합
+ *   3. ADMIN (users.role) — 센터 관리자, 자기 센터
+ *   4. TEACHER + isAcademyAdmin (preferences) — 강사에게 부여된 학원 관리자 권한
  */
 export function hasAcademyAdminAccess(user: AuthUser): boolean {
-  return user.role === 'ADMIN' || (user.role === 'TEACHER' && user.isAcademyAdmin);
+  if (user.isSuperAdmin) return true;
+  if (user.role === 'ADMIN') return true;
+  if (user.role === 'ORG_ADMIN') return true;
+  if (user.role === 'TEACHER' && user.isAcademyAdmin) return true;
+  return false;
 }
 
 /**
