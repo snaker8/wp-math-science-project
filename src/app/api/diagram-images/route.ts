@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { supabaseAdmin, createSupabaseServerClient } from '@/lib/supabase/server';
 
 const INDEX_PATH = path.join(process.cwd(), 'image-pipeline', 'dasaram_diagram_db', 'index.json');
 const PIPELINE_URL = process.env.NEXT_PUBLIC_IMAGE_PIPELINE_URL || 'http://localhost:8200';
@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
 
   // ★ 2) diagram_images 테이블에서 사용자 업로드 이미지 조회 (DB 검색)
   let dbImages: any[] = [];
+  // ★ soft-delete 마커 — 로컬 index.json 출처 도식의 삭제 표시
+  //   (로컬 파일은 Vercel filesystem read-only 라 물리 삭제 X → 마커 테이블로 필터링)
+  let hiddenIds = new Set<string>();
   if (supabaseAdmin) {
     try {
       let dbQuery = supabaseAdmin
@@ -73,10 +76,25 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       console.warn('[diagram-images] DB 조회 실패 (무시):', err);
     }
+
+    try {
+      const { data: hiddenRows } = await supabaseAdmin
+        .from('diagram_images_hidden')
+        .select('image_id')
+        .limit(20000);
+      hiddenIds = new Set((hiddenRows || []).map((r: any) => String(r.image_id)));
+    } catch (err) {
+      // 테이블 없으면 무시 (마이그레이션 전 상태)
+      console.warn('[diagram-images] hidden 조회 실패 (무시):', err);
+    }
   }
 
   // ★ 3) 로컬 + DB 합치기 (DB 업로드 이미지가 먼저 보이도록)
-  let allImages = [...dbImages, ...localImages];
+  //    hidden 마커 적용 — id 일치하는 것 제외
+  const allImages = [...dbImages, ...localImages].filter((img: any) => {
+    const id = img?.id != null ? String(img.id) : '';
+    return id ? !hiddenIds.has(id) : true;
+  });
 
   if (allImages.length > 0) {
     // 필터링 (DB 이미지는 이미 필터링됨, 로컬만 추가 필터)
@@ -160,14 +178,31 @@ export async function GET(request: NextRequest) {
 /**
  * DELETE /api/diagram-images?id=xxx — 개별 이미지 삭제
  * DELETE /api/diagram-images?source=xxx — 소스별 일괄 삭제
+ *
+ * 처리 순서:
+ *   1. diagram_images 테이블에서 hard delete (DB 업로드 이미지)
+ *   2. diagram_images_hidden 에 image_id 기록 (로컬 index.json soft-delete 마커)
+ *   3. (파이프라인 서버 가용 시) 로컬 index.json 도 정리 시도 — best-effort
+ *
+ * 핵심: 2번이 있어 Vercel 환경에서도 로컬 index 출처 도식이 살아나지 않음.
  */
 export async function DELETE(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const imageId = sp.get('id');
   const sourceName = sp.get('source');
 
+  // 현재 사용자 (hidden_by 기록용 — 실패해도 진행)
+  let actorId: string | null = null;
   try {
-    // ★ 1) diagram_images 테이블에서 삭제 (DB 업로드 이미지)
+    const supa = await createSupabaseServerClient();
+    if (supa) {
+      const { data: { user } } = await supa.auth.getUser();
+      if (user?.id) actorId = user.id;
+    }
+  } catch { /* 인증 실패해도 삭제는 진행 (admin 권한 호출일 수 있음) */ }
+
+  try {
+    // ★ 1) diagram_images 테이블 hard delete (DB 업로드 이미지)
     if (imageId && supabaseAdmin) {
       const { error: dbErr } = await supabaseAdmin
         .from('diagram_images')
@@ -187,12 +222,47 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    // ★ 2) 파이프라인 서버에서도 삭제 시도 (로컬 index.json)
+    // ★ 2) soft-delete 마커 INSERT (로컬 index.json 출처 도식 차단)
+    //    같은 id 중복 INSERT 시 onConflict 무시 (이미 hidden 이면 OK)
+    if (imageId && supabaseAdmin) {
+      const { error: hidErr } = await supabaseAdmin
+        .from('diagram_images_hidden')
+        .upsert({ image_id: String(imageId), hidden_by: actorId }, { onConflict: 'image_id' });
+      if (hidErr) {
+        console.warn(`[diagram-images] hidden 마커 INSERT 실패: ${hidErr.message}`);
+      } else {
+        console.log(`[diagram-images] hidden 마킹: ${imageId}`);
+      }
+    }
+    if (sourceName && supabaseAdmin) {
+      // 소스별 일괄 삭제 — 해당 source 의 로컬 index 이미지 id 들도 hidden 마킹
+      try {
+        const idx = (await loadIndex()).filter((img: any) => {
+          const sn = String(img?.source_name || img?.source || '');
+          return sn.includes(sourceName);
+        });
+        const rows = idx
+          .map((img: any) => (img?.id != null ? { image_id: String(img.id), hidden_by: actorId } : null))
+          .filter(Boolean) as { image_id: string; hidden_by: string | null }[];
+        if (rows.length > 0) {
+          const { error: hidErr } = await supabaseAdmin
+            .from('diagram_images_hidden')
+            .upsert(rows, { onConflict: 'image_id' });
+          if (!hidErr) {
+            console.log(`[diagram-images] 소스별 hidden 마킹: ${sourceName} (${rows.length}건)`);
+          }
+        }
+      } catch (e) {
+        console.warn('[diagram-images] 소스별 hidden 처리 실패:', e);
+      }
+    }
+
+    // ★ 3) 파이프라인 서버에서도 삭제 시도 — best-effort (로컬 dev 환경)
     if (imageId) {
       try {
         const res = await fetch(`${PIPELINE_URL}/db/image/${imageId}`, { method: 'DELETE' });
         if (res.ok) console.log(`[diagram-images] 파이프라인 삭제 완료: ${imageId}`);
-      } catch { /* 파이프라인 서버 안 돌아도 OK */ }
+      } catch { /* 파이프라인 서버 안 돌아도 OK — soft-delete 마커가 처리 */ }
       cachedIndex = null;
       return NextResponse.json({ success: true, deleted: imageId });
     }
@@ -207,7 +277,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'id or source required' }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: 'Pipeline server unreachable' }, { status: 502 });
+  } catch (e) {
+    console.error('[diagram-images] DELETE 예외:', e);
+    return NextResponse.json({ error: 'delete failed' }, { status: 500 });
   }
 }
