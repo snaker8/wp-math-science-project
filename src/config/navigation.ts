@@ -168,35 +168,28 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    href: '/tutor/grading',
+    // ★ /tutor/grading mock 제거 (2026-05-12). 실 채점은 /dashboard/grading 으로.
+    href: '/dashboard/grading',
     icon: ClipboardCheck,
     label: '채점하기',
-    description: '4단계 정밀 채점',
+    description: 'QR 채점 세션 관리 · 학생 답 자동채점',
     activeColor: 'bg-green-500/10 text-green-500',
-    group: 'tutor',
-  },
-  {
-    href: '/dashboard/prescription',
-    icon: Stethoscope,
-    label: 'AI처방 · 진단 대시보드',
-    description: '학생별 단원 히트맵·취약점·약점 추적',
-    activeColor: 'bg-orange-500/10 text-orange-500',
     group: 'tutor',
   },
   {
     href: '/dashboard/prescription/entry',
     icon: ClipboardCheck,
-    label: '진단 결과 입력',
+    label: '수동 채점 입력',
     description: '시험·진단지 채점 결과 수동 입력',
     activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'tutor',
   },
   {
-    href: '/dashboard/curation',
-    icon: Sparkles,
-    label: 'AI 오토큐레이션',
-    description: '자동 맞춤 문제 선정',
-    activeColor: 'bg-purple-500/10 text-purple-500',
+    href: '/dashboard/prescription',
+    icon: Stethoscope,
+    label: '학생 진단',
+    description: '학생별 단원 히트맵·취약점·약점 추적',
+    activeColor: 'bg-orange-500/10 text-orange-500',
     group: 'tutor',
   },
   {
@@ -208,9 +201,17 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
+    href: '/dashboard/curation',
+    icon: Sparkles,
+    label: 'AI 자동 출제',
+    description: '자동 맞춤 문제 선정',
+    activeColor: 'bg-purple-500/10 text-purple-500',
+    group: 'tutor',
+  },
+  {
     href: '/tutor/analytics',
     icon: BarChart3,
-    label: '성적분석',
+    label: '학생 성적',
     description: '히트맵 및 통계',
     activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'tutor',
@@ -218,7 +219,7 @@ export const tutorNavItems: NavItem[] = [
   {
     href: '/dashboard/reports',
     icon: BarChart3,
-    label: '학교별 분석 리포트',
+    label: '학교별 리포트',
     description: '학교별 시험지 누적 분석 + 학부모 공유 관리',
     activeColor: 'bg-cyan-500/10 text-cyan-400',
     group: 'tutor',
@@ -314,29 +315,46 @@ export const topNavGroups: NavGroup[] = [
     children: [
       dashboardNavItems[2], // 시험지출제
       dashboardNavItems[8], // 시험지관리
+      tutorNavItems[6],     // AI 자동 출제 (이전 AI 오토큐레이션)
     ],
   },
   {
     id: 'teaching',
     label: '수업관리',
     icon: Users,
-    // ★ tutorNavItems[0] (DB 자산화)는 문제은행 그룹으로 이동 (사용자 요청 — 수업관리와 맥락 안 맞음)
+    // ★ 채점하기는 별도 [채점] 그룹으로 분리 (2026-05-12).
     children: [
       tutorNavItems[1], // 반 관리
-      tutorNavItems[2], // 채점하기
     ],
   },
+  // ★ [채점] — 매일 워크플로우 1급 시민. 학생 답 자동채점·수동 입력 한자리.
   {
-    id: 'ai',
-    label: 'AI분석',
-    icon: Sparkles,
+    id: 'grading',
+    label: '채점',
+    icon: ClipboardCheck,
     children: [
-      tutorNavItems[3], // AI처방 · 진단 대시보드
-      tutorNavItems[4], // 진단 결과 입력 (신규)
-      tutorNavItems[5], // AI 오토큐레이션
-      tutorNavItems[6], // 클리닉시험지
-      tutorNavItems[7], // 성적분석
-      tutorNavItems[8], // 학교별 분석 리포트 (신규)
+      tutorNavItems[2], // 채점하기 (/dashboard/grading)
+      tutorNavItems[3], // 수동 채점 입력 (/dashboard/prescription/entry)
+    ],
+  },
+  // ★ [진단] — 학생별 약점 분석·처방. 클리닉 PDF 까지 처방 결과물 묶음.
+  {
+    id: 'diagnosis',
+    label: '진단',
+    icon: Stethoscope,
+    children: [
+      tutorNavItems[4], // 학생 진단 (/dashboard/prescription)
+      tutorNavItems[5], // 클리닉시험지
+    ],
+  },
+  // ★ [분석] — 통계·리포트. 학생·학교 단위.
+  {
+    id: 'analytics',
+    label: '분석',
+    icon: BarChart3,
+    children: [
+      tutorNavItems[7], // 학생 성적
+      tutorNavItems[8], // 학교별 리포트
     ],
   },
   // ★ DB 자산화 — 단독 탭 (드롭다운 X). 한 번 클릭으로 클라우드 페이지 + 업로드 모달 자동 오픈.
@@ -375,8 +393,8 @@ export const quickNavItems: NavItem[] = [
   dashboardNavItems[0], // 대시보드
   dashboardNavItems[1], // 시험지저장소
   dashboardNavItems[2], // 시험지출제
-  tutorNavItems[2],     // 채점하기
-  tutorNavItems[3],     // AI처방
+  tutorNavItems[2],     // 채점하기 (/dashboard/grading)
+  tutorNavItems[4],     // 학생 진단 (/dashboard/prescription)
 ];
 
 // 현재 경로에서 활성 메뉴 찾기

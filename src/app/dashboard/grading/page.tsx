@@ -1,0 +1,374 @@
+'use client';
+
+// ============================================================================
+// /dashboard/grading — QR 채점 세션 관리 페이지
+//
+// 매일 사용하는 채점 워크플로우의 1급 진입점.
+// - "QR 채점 세션 생성" 버튼 → CreateSessionsModal
+// - 학생별/시험지별/상태별 필터
+// - 각 세션 카드 → [강사 PDF] [학생 PDF] [답입력] [채점] 4종 진입 링크
+// ============================================================================
+
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  ClipboardCheck, Printer, QrCode, ExternalLink, Search, Plus, Loader2,
+  Filter, CheckCircle2, Clock, AlertCircle,
+  type LucideIcon,
+} from 'lucide-react';
+import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
+
+// ============================================================================
+// Types
+// ============================================================================
+interface SessionRow {
+  id: string;
+  student_id: string;
+  student_name: string;
+  exam_id: string;
+  exam_title: string;
+  round_number: number;
+  session_type: string;
+  issued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  problems_total: number;
+  problems_graded: number;
+  correct_cnt: number;
+  score_pct: number | null;
+}
+
+interface Student {
+  id: string;
+  name: string;
+  grade: string;
+  className: string;
+}
+
+const SESSION_TYPE_LABEL: Record<string, string> = {
+  BS: '광역 스캔', DD: '정밀 진단', PT: '선수 추적', SC: '스팟 체크',
+};
+
+const SESSION_TYPE_COLOR: Record<string, string> = {
+  BS: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  DD: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  PT: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  SC: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+};
+
+type StatusFilter = 'all' | 'pending' | 'done';
+
+function fmtDate(iso?: string | null) {
+  if (!iso) return '-';
+  try {
+    return new Date(iso).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
+// ============================================================================
+// Page
+// ============================================================================
+export default function GradingPage() {
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 필터
+  const [studentFilter, setStudentFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState<string>('');
+
+  // 모달
+  const [showCreate, setShowCreate] = useState(false);
+
+  // ──────────────────────────────────────────────
+  // 데이터 로드
+  // ──────────────────────────────────────────────
+  const loadSessions = async (opts?: { studentId?: string; status?: StatusFilter }) => {
+    const studentId = opts?.studentId ?? studentFilter;
+    const status = opts?.status ?? statusFilter;
+    const qs = new URLSearchParams();
+    if (studentId) qs.set('student_id', studentId);
+    if (status !== 'all') qs.set('status', status);
+    qs.set('limit', '100');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sessions?${qs.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setSessions((data.sessions || []) as SessionRow[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 학생 목록 로드 (필터 드롭다운용)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/users/students');
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.students)) {
+          setStudents(data.students);
+        }
+      } catch (e) {
+        console.error('[grading] students load error:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 세션 목록 — 필터 변경 시 재조회
+  useEffect(() => {
+    void loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentFilter, statusFilter]);
+
+  // 검색 필터링 (클라이언트)
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sessions;
+    const q = search.trim().toLowerCase();
+    return sessions.filter(s =>
+      (s.student_name || '').toLowerCase().includes(q) ||
+      (s.exam_title || '').toLowerCase().includes(q),
+    );
+  }, [sessions, search]);
+
+  // 집계
+  const stats = useMemo(() => {
+    const total = sessions.length;
+    const done = sessions.filter(s => s.completed_at).length;
+    const pending = total - done;
+    return { total, done, pending };
+  }, [sessions]);
+
+  // ──────────────────────────────────────────────
+  // 렌더
+  // ──────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-surface-base text-content-primary">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* 헤더 */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ClipboardCheck size={26} className="text-emerald-400" />
+              채점하기
+            </h1>
+            <p className="text-sm text-content-tertiary mt-1">
+              QR 채점 세션을 만들고 학생 답안을 채점합니다 — 학생용 PDF 의 QR 로 학생 직접 입력, 강사용 페이지에서 O/X 확인.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+          >
+            <Plus size={16} /> QR 채점 세션 생성
+          </button>
+        </div>
+
+        {/* 통계 카드 */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <StatCard label="전체 세션" value={stats.total} icon={ClipboardCheck} color="text-content-primary" />
+          <StatCard label="미채점" value={stats.pending} icon={Clock} color="text-amber-400" />
+          <StatCard label="채점 완료" value={stats.done} icon={CheckCircle2} color="text-emerald-400" />
+        </div>
+
+        {/* 필터 */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-tertiary" />
+            <input
+              type="text"
+              placeholder="학생명 / 시험지 검색"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-1 text-xs text-content-tertiary">
+            <Filter size={12} /> 학생
+          </div>
+          <select
+            value={studentFilter}
+            onChange={(e) => setStudentFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+          >
+            <option value="">전체</option>
+            {students.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}{s.grade ? ` (${s.grade})` : ''}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-1 text-xs text-content-tertiary">상태</div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+          >
+            <option value="all">전체</option>
+            <option value="pending">미채점</option>
+            <option value="done">완료</option>
+          </select>
+        </div>
+
+        {/* 세션 리스트 */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-content-tertiary">
+            <Loader2 className="animate-spin mr-2" size={18} /> 세션 로딩 중…
+          </div>
+        ) : error ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-400 text-sm flex items-start gap-2">
+            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <div>{error}</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center text-content-tertiary py-20">
+            세션이 없습니다. 우측 상단 [QR 채점 세션 생성] 버튼으로 시작하세요.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map(s => (
+              <SessionCard key={s.id} session={s} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 세션 생성 모달 */}
+      <CreateSessionsModal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        students={students.map(st => ({
+          id: st.id,
+          name: st.name,
+          grade: st.grade || '',
+          className: st.className || '',
+        }))}
+        onCreated={() => {
+          // 모달 닫힌 뒤 세션 재조회
+          void loadSessions();
+        }}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// Components
+// ============================================================================
+function StatCard({
+  label, value, icon: Icon, color,
+}: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  color: string;
+}) {
+  return (
+    <div className="bg-surface-card border border-white/10 rounded-xl p-4">
+      <div className="flex items-center gap-2 text-xs text-content-tertiary mb-1">
+        <Icon size={12} /> {label}
+      </div>
+      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+    </div>
+  );
+}
+
+function SessionCard({ session: s }: { session: SessionRow }) {
+  const isDone = !!s.completed_at;
+  const pct = s.score_pct ?? null;
+  const progressPct = s.problems_total > 0
+    ? Math.round((s.problems_graded / s.problems_total) * 100)
+    : 0;
+
+  return (
+    <div className={`rounded-xl border bg-surface-card overflow-hidden ${isDone ? 'border-emerald-500/30' : 'border-white/10'}`}>
+      <div className="p-4 flex items-center gap-4 flex-wrap">
+        {/* 메타 */}
+        <div className="flex-1 min-w-[240px]">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${SESSION_TYPE_COLOR[s.session_type] || 'bg-white/5 border-white/10 text-content-tertiary'}`}>
+              {SESSION_TYPE_LABEL[s.session_type] || s.session_type}
+            </span>
+            <span className="text-xs text-content-tertiary">R{s.round_number}</span>
+            <span className="text-xs text-content-tertiary">·</span>
+            <span className="text-xs text-content-tertiary">{fmtDate(s.issued_at)}</span>
+            {isDone && (
+              <span className="text-[10px] text-emerald-400 flex items-center gap-1 ml-auto">
+                <CheckCircle2 size={10} /> 완료
+              </span>
+            )}
+          </div>
+          <div className="font-semibold text-sm truncate">{s.student_name}</div>
+          <div className="text-xs text-content-tertiary truncate">{s.exam_title}</div>
+        </div>
+
+        {/* 진행률 */}
+        <div className="min-w-[140px]">
+          <div className="flex justify-between items-center text-[11px] text-content-tertiary mb-1">
+            <span>채점 {s.problems_graded}/{s.problems_total}</span>
+            {pct != null && (
+              <span className="text-emerald-400 font-bold">{pct}%</span>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className={`h-full transition-all ${isDone ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 액션 버튼들 */}
+        <div className="flex items-center gap-1.5">
+          <a
+            href={`/api/sessions/${s.id}/pdf?variant=teacher`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
+            title="강사용 인쇄 페이지"
+          >
+            <Printer size={12} /> 강사
+          </a>
+          <a
+            href={`/api/sessions/${s.id}/pdf?variant=student`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
+            title="학생용 인쇄 페이지 — QR 이 /answer 로 향함"
+          >
+            <Printer size={12} /> 학생
+          </a>
+          <Link
+            href={`/answer/${s.id}`}
+            target="_blank"
+            className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
+            title="학생 답 입력 페이지 (미리보기)"
+          >
+            <QrCode size={12} /> 답입력
+          </Link>
+          <Link
+            href={`/grade/${s.id}`}
+            target="_blank"
+            className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 flex items-center gap-1"
+            title="강사 채점 페이지"
+          >
+            <ExternalLink size={12} /> 채점
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
