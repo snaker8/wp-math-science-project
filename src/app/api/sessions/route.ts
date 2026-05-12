@@ -29,6 +29,127 @@ import { assertExamAccess } from '@/lib/security/institute-guard';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// ============================================================================
+// GET /api/sessions
+//   채점하기 페이지 — 세션 목록 조회 (institute 격리).
+//
+// 쿼리:
+//   ?student_id  특정 학생 한정
+//   ?exam_id     특정 시험지 한정
+//   ?status      'pending'(미완료) | 'done'(완료) | 미지정(전체)
+//   ?limit       기본 50, 최대 200
+//
+// 응답:
+//   { sessions: [{ id, student_id, student_name, exam_id, exam_title,
+//                  round_number, session_type, issued_at, started_at, completed_at,
+//                  problems_total, problems_graded, correct_cnt, score_pct }] }
+//
+// institute 격리:
+//   print_sessions 에 institute_id 컬럼이 없으므로, 같은 institute 의 users 와
+//   exams 만 매칭되는 세션으로 한정한다. (exam_id ∈ institute_exams) 또는
+//   (student_id ∈ institute_users).
+// ============================================================================
+export async function GET(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+  }
+  const sb = supabaseAdmin;
+
+  const sp = request.nextUrl.searchParams;
+  const filterStudentId = sp.get('student_id') || undefined;
+  const filterExamId = sp.get('exam_id') || undefined;
+  const status = sp.get('status') || undefined;
+  const limit = Math.min(Math.max(parseInt(sp.get('limit') || '50') || 50, 1), 200);
+
+  // 세션 본체 — v_print_session_summary 뷰 사용 (집계 포함)
+  let query = sb
+    .schema('diagnostics' as never)
+    .from('v_print_session_summary')
+    .select('*')
+    .order('issued_at', { ascending: false })
+    .limit(limit);
+
+  if (filterStudentId) query = query.eq('student_id', filterStudentId);
+  if (filterExamId) query = query.eq('exam_id', filterExamId);
+  if (status === 'pending') query = query.is('completed_at', null);
+  if (status === 'done') query = query.not('completed_at', 'is', null);
+
+  const { data: summaryRows, error: sumErr } = await query;
+  if (sumErr) {
+    console.error('[api/sessions GET] summary error:', sumErr.message);
+    return NextResponse.json({ error: sumErr.message }, { status: 500 });
+  }
+
+  const rows = (summaryRows || []) as Array<Record<string, unknown>>;
+  if (rows.length === 0) {
+    return NextResponse.json({ sessions: [] });
+  }
+
+  // institute 격리 — student/exam 쪽에서 가져와 같은 institute 만 통과시킴.
+  // super_admin 은 통과. ORG_ADMIN/user 는 자기 institute_ids 만.
+  const studentIds = Array.from(new Set(rows.map(r => r.student_id as string).filter(Boolean)));
+  const examIds = Array.from(new Set(rows.map(r => r.exam_id as string).filter(Boolean)));
+
+  const [{ data: usersData }, { data: examsData }] = await Promise.all([
+    studentIds.length
+      ? sb.from('users').select('id, full_name, name, institute_id').in('id', studentIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; name?: string; institute_id?: string }> }),
+    examIds.length
+      ? sb.from('exams').select('id, title, institute_id').in('id', examIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; title?: string; institute_id?: string }> }),
+  ]);
+
+  const userMap = new Map<string, { name: string; institute_id?: string }>();
+  for (const u of (usersData || []) as Array<{ id: string; full_name?: string; name?: string; institute_id?: string }>) {
+    userMap.set(u.id, { name: u.full_name || u.name || '(이름 없음)', institute_id: u.institute_id });
+  }
+  const examMap = new Map<string, { title: string; institute_id?: string }>();
+  for (const e of (examsData || []) as Array<{ id: string; title?: string; institute_id?: string }>) {
+    examMap.set(e.id, { title: e.title || '', institute_id: e.institute_id });
+  }
+
+  const sessions = rows
+    .map(r => {
+      const stu = userMap.get(r.student_id as string);
+      const ex = examMap.get(r.exam_id as string);
+      return {
+        id: r.session_id as string,
+        student_id: r.student_id as string,
+        student_name: stu?.name || '(이름 없음)',
+        student_institute_id: stu?.institute_id,
+        exam_id: r.exam_id as string,
+        exam_title: ex?.title || '',
+        exam_institute_id: ex?.institute_id,
+        round_number: r.round_number as number,
+        session_type: r.session_type as string,
+        issued_at: r.issued_at as string,
+        started_at: (r.started_at as string) || null,
+        completed_at: (r.completed_at as string) || null,
+        problems_total: Number(r.problems_total || 0),
+        problems_graded: Number(r.problems_graded || 0),
+        correct_cnt: Number(r.correct_cnt || 0),
+        score_pct: r.score_pct == null ? null : Number(r.score_pct),
+      };
+    })
+    .filter(s => {
+      // institute 가드 — super_admin 통과, 그 외 자기 institute 한정.
+      if (scope.isSuperAdmin) return true;
+      const allowed = new Set(scope.accessibleInstituteIds || []);
+      // 공통 풀 (institute_id null) 은 exam 일 수 있음 (problems 공통풀과 같은 정책).
+      // 다만 채점 세션은 학생 단위라 student_institute_id 가 우선.
+      if (s.student_institute_id && allowed.has(s.student_institute_id)) return true;
+      if (s.exam_institute_id && allowed.has(s.exam_institute_id)) return true;
+      return false;
+    })
+    .map(({ student_institute_id, exam_institute_id, ...rest }) => rest);
+
+  return NextResponse.json({ sessions });
+}
+
 type SessionType = 'BS' | 'DD' | 'PT' | 'SC';
 const VALID_TYPES: SessionType[] = ['BS', 'DD', 'PT', 'SC'];
 

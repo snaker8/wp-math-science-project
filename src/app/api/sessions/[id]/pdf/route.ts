@@ -148,9 +148,11 @@ export async function GET(
   const problemMap = new Map<string, any>();
   for (const p of (problems || []) as any[]) problemMap.set(p.id as string, p);
 
-  // QR — 채점 페이지 URL 인코딩
+  // QR — variant 별 진입 URL 분기
+  //   teacher: /grade/[id]  (강사 O/X 채점)
+  //   student: /answer/[id] (학생 직접 답 입력 → 자동채점)
   const origin = request.nextUrl.origin;
-  const qrUrl = buildSessionUrl(sessionId, origin);
+  const qrUrl = buildSessionUrl(sessionId, origin, variant === 'student' ? 'answer' : 'grade');
   let qrSvg = '';
   try {
     qrSvg = await generateQRSvg(qrUrl);

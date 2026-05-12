@@ -34,10 +34,18 @@ export async function generateQRSvg(url: string): Promise<string> {
 }
 
 /**
- * 세션 URL 빌더 — origin + /grade/[session_id]
- * origin 을 인자로 받아 서버/클라이언트 어디서든 일관된 URL 생성.
+ * 세션 URL 빌더.
+ * - mode='grade'  → /grade/[session_id]  (강사 채점 페이지)
+ * - mode='answer' → /answer/[session_id] (학생 직접 답 입력 페이지)
+ *
+ * QR 변형:
+ *   variant='teacher' PDF 는 grade URL, variant='student' PDF 는 answer URL 사용.
  */
-export function buildSessionUrl(sessionId: string, origin: string): string {
+export function buildSessionUrl(
+  sessionId: string,
+  origin: string,
+  mode: 'grade' | 'answer' = 'grade',
+): string {
   const base = origin.replace(/\/+$/, '');
-  return `${base}/grade/${sessionId}`;
+  return `${base}/${mode}/${sessionId}`;
 }

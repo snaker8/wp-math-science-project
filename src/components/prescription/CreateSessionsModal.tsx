@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Search, Loader2, CheckCircle2, AlertCircle, ExternalLink, Printer } from 'lucide-react';
+import { X, Search, Loader2, CheckCircle2, AlertCircle, ExternalLink, Printer, QrCode } from 'lucide-react';
 
 // ============================================================================
 // Types
@@ -237,6 +237,15 @@ export default function CreateSessionsModal({
                           title="학생용 인쇄 페이지"
                         >
                           <Printer size={12} /> 학생
+                        </a>
+                        <a
+                          href={`/answer/${c.session_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
+                          title="학생 답 입력 페이지 (QR 진입 화면 미리보기)"
+                        >
+                          <QrCode size={12} /> 답입력
                         </a>
                         <a
                           href={`/grade/${c.session_id}`}
