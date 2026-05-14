@@ -2042,9 +2042,10 @@ function ProblemDetailPanel({
                         if (!choiceText) return null;
                         const numberLabel = circledNumbers[i + 1] || `${i + 1}`;
 
-                        // ★ 표 객관식: 사선 ' / ' 으로 분리된 content 를 컬럼별 표시
+                        // ★ 표 객관식: ' | ' 구분자로 분리된 content 를 컬럼별 표시
+                        //   ExamProblemRenderer·cloud/[examId] 페이지와 동일 컨벤션 (메모리 reference_table_choices.md)
                         if (hasTableHeaders) {
-                          const cols = choiceText.split(/\s*\/\s*/);
+                          const cols = choiceText.split(/\s*\|\s*|\s+\/\s+/);
                           // 컬럼 수 부족하면 빈 칸 추가
                           while (cols.length < colCount) cols.push('');
                           return (

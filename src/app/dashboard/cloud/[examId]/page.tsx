@@ -1273,8 +1273,8 @@ function ProblemCardView({
                         {problem.choices.map((choice, i) => {
                           const circled = ['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`;
                           const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
-                          // | 구분자로 셀 분리
-                          const cells = stripped.split('|').map(s => s.trim());
+                          // | 구분자로 셀 분리 (백워드 호환: PR #124 가 ' / ' 로 join 한 초기 데이터도 인식)
+                          const cells = stripped.split(/\s*\|\s*|\s+\/\s+/).map(s => s.trim());
                           return (
                             <tr key={i}>
                               <td className="px-2 py-0.5 text-content-tertiary whitespace-nowrap">{circled}</td>

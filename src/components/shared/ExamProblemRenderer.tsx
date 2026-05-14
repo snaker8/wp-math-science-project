@@ -164,7 +164,8 @@ function ExamProblemRendererInner({
               {problem.choices.map((choice, ci) => {
                 const prefix = ['①', '②', '③', '④', '⑤'][ci] || '';
                 const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
-                const cells = stripped.split('|').map(s => cleanChoiceText(s.trim()));
+                // 백워드 호환: PR #124 가 ' / ' 로 join 한 초기 데이터도 인식 (이후 저장은 모두 ' | ')
+                const cells = stripped.split(/\s*\|\s*|\s+\/\s+/).map(s => cleanChoiceText(s.trim()));
                 return (
                   <tr key={ci}>
                     <td className="px-1.5 py-0.5 text-gray-500 whitespace-nowrap">{prefix}</td>
