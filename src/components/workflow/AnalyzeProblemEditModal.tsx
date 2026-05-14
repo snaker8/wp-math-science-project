@@ -402,13 +402,13 @@ function ChoiceCell({
 
   // ★ 표 객관식: 컬럼별 input 분리
   if (columnCount >= 2) {
-    const cols = displayValue.split(/\s*\/\s*/);
+    const cols = displayValue.split(/\s*\|\s*|\s+\/\s+/);
     while (cols.length < columnCount) cols.push('');
     const handleColChange = (ci: number, v: string) => {
       const next = [...cols];
       next[ci] = v;
       // 빈 끝 칸 trim 하지 말 것 — 사용자가 의도적으로 비웠을 수 있음
-      onChange(next.slice(0, columnCount).join(' / '));
+      onChange(next.slice(0, columnCount).join(' | '));
     };
     return (
       <div className="flex items-center gap-1.5">
@@ -513,8 +513,8 @@ function ChoicesEditor({
     onChoiceHeadersChange(next);
     // 마지막 컬럼 제거 시 각 choice 의 마지막 컬럼 값도 제거
     const trimmed = choices.map((c) => {
-      const parts = c.split(/\s*\/\s*/);
-      return parts.slice(0, Math.max(1, next.length || 1)).join(' / ');
+      const parts = c.split(/\s*\|\s*|\s+\/\s+/);
+      return parts.slice(0, Math.max(1, next.length || 1)).join(' | ');
     });
     onChange(trimmed);
   };
@@ -526,7 +526,7 @@ function ChoicesEditor({
     // 표 모드 끄기 — 헤더 비우고 각 choice 의 ' / ' 첫 칸만 남김
     onChoiceHeadersChange([]);
     const flattened = choices.map((c) => {
-      const parts = c.split(/\s*\/\s*/);
+      const parts = c.split(/\s*\|\s*|\s+\/\s+/);
       return parts[0]?.trim() || '';
     });
     onChange(flattened);

@@ -364,8 +364,8 @@ function ChoicesEditor({
     const next = choiceHeaders.slice(0, -1);
     onChoiceHeadersChange(next);
     const trimmed = choices.map((c) => {
-      const parts = c.replace(/^[①②③④⑤]\s*/, '').split(/\s*\/\s*/);
-      return parts.slice(0, Math.max(1, next.length || 1)).join(' / ');
+      const parts = c.replace(/^[①②③④⑤]\s*/, '').split(/\s*\|\s*|\s+\/\s+/);
+      return parts.slice(0, Math.max(1, next.length || 1)).join(' | ');
     });
     onChange(trimmed);
   };
@@ -375,7 +375,7 @@ function ChoicesEditor({
   const handleDisableTableMode = () => {
     onChoiceHeadersChange([]);
     const flattened = choices.map((c) => {
-      const parts = c.replace(/^[①②③④⑤]\s*/, '').split(/\s*\/\s*/);
+      const parts = c.replace(/^[①②③④⑤]\s*/, '').split(/\s*\|\s*|\s+\/\s+/);
       return parts[0]?.trim() || '';
     });
     onChange(flattened);
@@ -452,7 +452,7 @@ function ChoicesEditor({
                   </div>
                 </div>
               </div>
-              <p className="text-[9px] text-amber-400/70 pl-[3.5rem]">각 선택지를 ` / ` 로 컬럼 구분 (예: `2 / 16 / 2`).</p>
+              <p className="text-[9px] text-amber-400/70 pl-[3.5rem]">각 선택지를 ` | ` 로 컬럼 구분 (예: `2 | 16 | 2`).</p>
             </div>
           )}
 
@@ -481,12 +481,12 @@ function ChoicesEditor({
               // ★ 표 객관식 모드: 컬럼별 input 분리 (이미지 슬롯 숨김)
               if (hasHeaders) {
                 const rawValue = choice.replace(/^[①②③④⑤]\s*/, '');
-                const cols = rawValue.split(/\s*\/\s*/);
+                const cols = rawValue.split(/\s*\|\s*|\s+\/\s+/);
                 while (cols.length < columnCount) cols.push('');
                 const handleColChange = (ci: number, v: string) => {
                   const next = [...cols];
                   next[ci] = v;
-                  handleChoiceChange(i, next.slice(0, columnCount).join(' / '));
+                  handleChoiceChange(i, next.slice(0, columnCount).join(' | '));
                 };
                 return (
                   <div key={i} className="flex items-center gap-1">
