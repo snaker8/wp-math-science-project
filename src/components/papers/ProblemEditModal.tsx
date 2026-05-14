@@ -313,6 +313,8 @@ function ChoicesEditor({
   onRemoveChoiceImage,
   uploadingChoiceIdx,
   onOpenDiagramBrowser,
+  choiceHeaders,
+  onChoiceHeadersChange,
 }: {
   choices: string[];
   onChange: (choices: string[]) => void;
@@ -331,6 +333,9 @@ function ChoicesEditor({
   onRemoveChoiceImage: (idx: number) => void;
   uploadingChoiceIdx: number | null;
   onOpenDiagramBrowser: (idx: number) => void;
+  // ★ 표 객관식 헤더 (A/B 등). 길이 0 = 일반 객관식, 1+ = 표 객관식.
+  choiceHeaders: string[];
+  onChoiceHeadersChange: (h: string[]) => void;
 }) {
   const circledNumbers = ['①', '②', '③', '④', '⑤'];
 
@@ -338,6 +343,42 @@ function ChoicesEditor({
     const newChoices = [...choices];
     newChoices[idx] = value;
     onChange(newChoices);
+  };
+
+  // ★ 표 객관식 헤더 핸들러
+  const hasHeaders = choiceHeaders.length >= 1;
+  const columnCount = hasHeaders ? choiceHeaders.length : 1;
+  const handleHeaderChange = (ci: number, v: string) => {
+    const next = [...choiceHeaders];
+    next[ci] = v;
+    onChoiceHeadersChange(next);
+  };
+  const handleAddColumn = () => {
+    if (choiceHeaders.length >= 4) return;
+    const defaults = ['A', 'B', 'C', 'D'];
+    const next = [...choiceHeaders, defaults[choiceHeaders.length] || ''];
+    onChoiceHeadersChange(next);
+  };
+  const handleRemoveColumn = () => {
+    if (choiceHeaders.length === 0) return;
+    const next = choiceHeaders.slice(0, -1);
+    onChoiceHeadersChange(next);
+    const trimmed = choices.map((c) => {
+      const parts = c.replace(/^[①②③④⑤]\s*/, '').split(/\s*\/\s*/);
+      return parts.slice(0, Math.max(1, next.length || 1)).join(' / ');
+    });
+    onChange(trimmed);
+  };
+  const handleEnableTableMode = () => {
+    onChoiceHeadersChange(['A', 'B']);
+  };
+  const handleDisableTableMode = () => {
+    onChoiceHeadersChange([]);
+    const flattened = choices.map((c) => {
+      const parts = c.replace(/^[①②③④⑤]\s*/, '').split(/\s*\/\s*/);
+      return parts[0]?.trim() || '';
+    });
+    onChange(flattened);
   };
 
   return (
@@ -359,20 +400,65 @@ function ChoicesEditor({
 
       {answerType === 'objective' ? (
         <div className="px-3 py-2 space-y-1.5">
-          {/* 레이아웃 옵션 */}
+          {/* 표 객관식 토글 + 레이아웃 옵션 */}
           <div className="flex items-center gap-2">
+            <button type="button" onClick={hasHeaders ? handleDisableTableMode : handleEnableTableMode}
+              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                hasHeaders ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-content-tertiary border border hover:text-content-secondary'
+              }`}
+              title={hasHeaders ? '표 객관식 해제 (헤더 제거, 각 보기는 첫 칸 값만 남김)' : '표 객관식 활성화 (A/B 헤더 추가)'}>
+              표 객관식
+            </button>
             <div className="flex items-center gap-1 ml-auto">
               {[1, 2, 3, 5].map((cols) => (
-                <button key={cols} type="button" onClick={() => onChoiceLayoutChange(cols)}
+                <button key={cols} type="button"
+                  disabled={hasHeaders}
+                  onClick={() => onChoiceLayoutChange(cols)}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    hasHeaders ? 'text-content-tertiary/40 border border-subtle cursor-not-allowed' :
                     choiceLayout === cols ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary'
-                  }`}>{cols}줄</button>
+                  }`}
+                  title={hasHeaders ? '표 객관식 모드는 1줄 고정' : `${cols}줄 레이아웃`}>{cols}줄</button>
               ))}
             </div>
           </div>
 
+          {/* ★ 헤더 입력 영역 — 표 객관식일 때만 표시 */}
+          {hasHeaders && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-amber-400 flex-shrink-0">컬럼 헤더</span>
+                <div className="flex-1 grid gap-1.5 items-center" style={{ gridTemplateColumns: `1rem repeat(${columnCount}, 1fr) auto` }}>
+                  <span />
+                  {choiceHeaders.map((h, ci) => (
+                    <input
+                      key={ci}
+                      type="text"
+                      value={h}
+                      onChange={(e) => handleHeaderChange(ci, e.target.value)}
+                      className="rounded border border-amber-500/40 bg-surface-raised px-2 py-0.5 text-xs text-amber-300 font-bold text-center focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      placeholder={String.fromCharCode(65 + ci)}
+                    />
+                  ))}
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <button type="button" onClick={handleRemoveColumn}
+                      disabled={choiceHeaders.length <= 1}
+                      className="w-5 h-5 rounded text-[10px] font-bold text-amber-400 border border-amber-500/40 bg-surface-raised hover:bg-amber-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="컬럼 제거">−</button>
+                    <button type="button" onClick={handleAddColumn}
+                      disabled={choiceHeaders.length >= 4}
+                      className="w-5 h-5 rounded text-[10px] font-bold text-amber-400 border border-amber-500/40 bg-surface-raised hover:bg-amber-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="컬럼 추가 (최대 4)">+</button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[9px] text-amber-400/70 pl-[3.5rem]">각 선택지를 ` / ` 로 컬럼 구분 (예: `2 / 16 / 2`).</p>
+            </div>
+          )}
+
           {/* 선택지 입력 — 컴팩트화 */}
           <div className={`grid gap-1 ${
+            hasHeaders ? 'grid-cols-1' :
             choiceLayout === 1 ? 'grid-cols-1' : choiceLayout === 2 ? 'grid-cols-2' : choiceLayout === 3 ? 'grid-cols-3' : 'grid-cols-5'
           }`}>
             {choices.map((choice, i) => {
@@ -392,6 +478,42 @@ function ChoicesEditor({
                   }
                 }
               };
+              // ★ 표 객관식 모드: 컬럼별 input 분리 (이미지 슬롯 숨김)
+              if (hasHeaders) {
+                const rawValue = choice.replace(/^[①②③④⑤]\s*/, '');
+                const cols = rawValue.split(/\s*\/\s*/);
+                while (cols.length < columnCount) cols.push('');
+                const handleColChange = (ci: number, v: string) => {
+                  const next = [...cols];
+                  next[ci] = v;
+                  handleChoiceChange(i, next.slice(0, columnCount).join(' / '));
+                };
+                return (
+                  <div key={i} className="flex items-center gap-1">
+                    <span className="text-xs text-content-tertiary w-4 text-center flex-shrink-0">{circledNumbers[i]}</span>
+                    <div className="flex-1 grid gap-1 min-w-0" style={{ gridTemplateColumns: `repeat(${columnCount}, 1fr)` }}>
+                      {cols.slice(0, columnCount).map((col, ci) => (
+                        <input
+                          key={ci}
+                          type="text"
+                          value={col}
+                          onChange={(e) => handleColChange(ci, e.target.value)}
+                          className="rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
+                          placeholder={`컬럼 ${ci + 1}`}
+                        />
+                      ))}
+                    </div>
+                    {i === choices.length - 1 && choices.length > 2 && (
+                      <button type="button" onClick={() => onChange(choices.slice(0, -1))}
+                        className="text-content-tertiary hover:text-red-400 transition-colors flex-shrink-0 p-0.5"
+                        title="선택지 삭제">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <div key={i} className="flex flex-col gap-1" onPaste={handleCellPaste}>
                   <div className="flex items-center gap-1">
@@ -849,6 +971,11 @@ export function ProblemEditModal({
     return typeof saved === 'number' && [1, 2, 3, 5].includes(saved) ? saved : 2;
   });
   const [isMultipleAnswer, setIsMultipleAnswer] = useState(false);
+  // ★ 표 객관식 헤더 — initialAnswer.choiceHeaders 에서 복원. 빈 배열 = 일반 객관식.
+  const [choiceHeaders, setChoiceHeaders] = useState<string[]>(() => {
+    const saved = initialAnswer?.choiceHeaders;
+    return Array.isArray(saved) && saved.length >= 1 ? (saved as string[]) : [];
+  });
 
   // 태그 정보
   const [difficulty, setDifficulty] = useState(initialDifficulty || 3);
@@ -988,6 +1115,9 @@ export function ProblemEditModal({
             ...(hasAnyChoiceImage ? { choiceImages: trimmedChoiceImages } : { choiceImages: undefined }),
             type: answerType === 'objective' ? 'multiple_choice' : 'short_answer',
             choiceLayout: choiceLayout,
+            // ★ 표 객관식 헤더 — trim 후 1개+ 만 박음. 0개면 빈 배열 (모드 해제 의도).
+            //    spread 보다 뒤에 와야 initialAnswer 값 덮어쓸 수 있음.
+            choiceHeaders: choiceHeaders.map((h) => h.trim()).filter((h) => h.length > 0),
             // ★ 사용자가 모달에서 직접 저장 — 재생성 시 이 답/해설을 보존(덮어쓰지 않음)
             answer_user_edited: true,
             solution_user_edited: true,
@@ -1044,9 +1174,9 @@ export function ProblemEditModal({
     } finally {
       setIsSaving(false);
     }
-  // ★ choiceLayout / isMultipleAnswer / choiceImages 가 deps 에 빠지면 stale closure 로
-  //   이미지 추가/레이아웃 변경이 저장 안 되던 회귀. 그림 객관식 슬롯 추가 시 같은 패턴 발생.
-  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, choiceImages, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, correctionReason, onSaved, onClose]);
+  // ★ choiceLayout / isMultipleAnswer / choiceImages / choiceHeaders 가 deps 에 빠지면
+  //   stale closure 로 변경이 저장 안 되던 회귀. 그림 객관식·표 객관식 추가 시 같은 패턴 발생.
+  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, choiceImages, choiceHeaders, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, correctionReason, onSaved, onClose]);
 
   // ★ AI 재분석: 분류 재실행
   const handleReanalyze = useCallback(async () => {
@@ -1255,6 +1385,8 @@ export function ProblemEditModal({
             onRemoveChoiceImage={removeChoiceImage}
             uploadingChoiceIdx={uploadingChoiceIdx}
             onOpenDiagramBrowser={(idx) => setChoiceDiagramIdx(idx)}
+            choiceHeaders={choiceHeaders}
+            onChoiceHeadersChange={setChoiceHeaders}
           />
         </div>
 

@@ -110,6 +110,10 @@ interface AnalyzedProblem {
   score?: number;
   // ★ Phase C-1b: 학생 함정 유형 자동 추출 (cloud-flow → 자산화 시 problem_pitfalls INSERT)
   pitfalls?: Array<{ code: string; confidence: number; reason?: string }>;
+  // ★ 표 객관식 헤더 (자동 감지) — 예: ['A', 'B'] 또는 ['수1', '수2']
+  //   choices 의 각 content 는 헤더 개수만큼 ' / ' 구분된 컬럼 값 ("노란색 / 자홍색")
+  //   분석 카드가 헤더 행 + 컬럼 정렬 표시
+  choiceHeaders?: string[];
 }
 
 interface PageData {
@@ -1999,7 +2003,7 @@ function ProblemDetailPanel({
                           return (
                             <div key={i} className="flex items-start gap-2 py-0.5">
                               <span className="flex-shrink-0 text-[14px] leading-[1.8] text-gray-700 font-medium">({i + 1})</span>
-                              <MixedContentRenderer content={choiceText} className="text-[14px] leading-[1.8] text-gray-800" />
+                              <MixedContentRenderer content={choiceText} className="text-[14px] leading-[1.8] text-gray-800" disableConditionBox />
                             </div>
                           );
                         })}
@@ -2007,8 +2011,24 @@ function ProblemDetailPanel({
                     );
                   }
 
+                  // ★ 표 객관식: choiceHeaders 있으면 헤더 행 + 컬럼 분리 표시
+                  const hasTableHeaders = problem.choiceHeaders && problem.choiceHeaders.length >= 2;
+                  const colCount = hasTableHeaders ? problem.choiceHeaders!.length : 1;
                   return (
                     <div className="mt-3 space-y-1.5">
+                      {/* 헤더 행 (표 객관식일 때만) */}
+                      {hasTableHeaders && (
+                        <div className="flex items-center gap-2 py-1 px-2 border-b border-gray-200">
+                          <span className="flex-shrink-0 text-[14px] w-6"></span>
+                          <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}>
+                            {problem.choiceHeaders!.map((h, hi) => (
+                              <div key={hi} className="text-[14px] font-bold text-gray-700 text-center">
+                                {h}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {problem.choices.map((choice, i) => {
                         const isCorrect = typeof problem.answer === 'number' && problem.answer === i + 1;
                         let choiceText = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^[1-5]\s*\)\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '').trim();
@@ -2020,8 +2040,34 @@ function ProblemDetailPanel({
                           choiceText = `$${choiceText.trim()}$`;
                         }
                         if (!choiceText) return null;
-                        // ★ 모든 객관식은 ① 형태로 통일 (cloud 페이지 ProblemCardView 와 일관)
                         const numberLabel = circledNumbers[i + 1] || `${i + 1}`;
+
+                        // ★ 표 객관식: 사선 ' / ' 으로 분리된 content 를 컬럼별 표시
+                        if (hasTableHeaders) {
+                          const cols = choiceText.split(/\s*\/\s*/);
+                          // 컬럼 수 부족하면 빈 칸 추가
+                          while (cols.length < colCount) cols.push('');
+                          return (
+                            <div key={i} className={`flex items-center gap-2 py-1 px-2 rounded-md ${isCorrect ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
+                              <span className={`flex-shrink-0 text-[15px] leading-[1.6] w-6 ${isCorrect ? 'text-emerald-600 font-bold' : 'text-gray-500'}`}>
+                                {numberLabel}
+                              </span>
+                              <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}>
+                                {cols.slice(0, colCount).map((col, ci) => (
+                                  <div key={ci} className="text-center">
+                                    <MixedContentRenderer
+                                      content={col}
+                                      className={`text-[14px] leading-[1.6] ${isCorrect ? 'text-emerald-700 font-medium' : 'text-gray-700'}`}
+                                      disableConditionBox
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // 일반 객관식 (단일 컬럼)
                         return (
                           <div key={i} className={`flex items-start gap-2 py-1 px-2 rounded-md ${isCorrect ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
                             <span className={`flex-shrink-0 text-[15px] leading-[1.6] ${isCorrect ? 'text-emerald-600 font-bold' : 'text-gray-500'}`}>
@@ -2030,6 +2076,7 @@ function ProblemDetailPanel({
                             <MixedContentRenderer
                               content={choiceText}
                               className={`text-[14px] leading-[1.6] ${isCorrect ? 'text-emerald-700 font-medium' : 'text-gray-700'}`}
+                              disableConditionBox
                             />
                           </div>
                         );
@@ -4965,8 +5012,14 @@ export default function AnalyzeJobPage() {
                 if (updated.typeCode !== undefined) body.type_code = updated.typeCode;
                 if (updated.cognitiveDomain !== undefined) body.cognitive_domain = updated.cognitiveDomain;
 
-                // 정답/선택지를 answer_json으로 변환
-                if (updated.answer !== undefined || updated.choices !== undefined) {
+                // 정답/선택지/헤더를 answer_json으로 변환
+                //   ★ choiceHeaders 가 별도 컬럼 없어 answer_json 에 박음 (useExamProblems 가 거기서 읽음).
+                //   answer/choices/choiceHeaders 중 하나라도 바뀌면 answer_json 전체 갱신.
+                if (
+                  updated.answer !== undefined ||
+                  updated.choices !== undefined ||
+                  (updated as { choiceHeaders?: string[] }).choiceHeaders !== undefined
+                ) {
                   const finalAnswer = updated.answer ?? editingProblem.answer;
                   const circledNumbers = ['①', '②', '③', '④', '⑤'];
                   const currentChoices = updated.choices ?? editingProblem.choices ?? [];
@@ -4974,11 +5027,16 @@ export default function AnalyzeJobPage() {
                     const stripped = c.replace(/^[①②③④⑤]\s*/, '');
                     return stripped ? `${circledNumbers[i]} ${stripped}` : '';
                   }).filter(Boolean);
+                  const headers = (updated as { choiceHeaders?: string[] }).choiceHeaders
+                    ?? (editingProblem as { choiceHeaders?: string[] }).choiceHeaders
+                    ?? [];
                   body.answer_json = {
                     correct_answer: finalAnswer,
                     finalAnswer: finalAnswer,
                     choices: formattedChoices,
                     type: formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer',
+                    // ★ 헤더 1개+ 면 박음. 0개면 명시적 빈 배열 (모드 해제 의도 보존).
+                    choiceHeaders: headers,
                   };
                 }
 
