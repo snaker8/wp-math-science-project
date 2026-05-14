@@ -27,7 +27,9 @@ export interface MathpixRequestOptions {
  * Mathpix API 응답 - Line Data
  */
 export interface MathpixLineData {
-  type: 'text' | 'math' | 'table';
+  // ★ 'latex' — Mathpix v3/text 가 표 객관식 헤더(`\underline{\mathrm{A}}`) 같은
+  //   인라인 LaTeX 항목을 별도 데이터로 분리해 보낼 때 사용. 응답에서 실제 확인됨.
+  type: 'text' | 'math' | 'table' | 'latex';
   value: string;
   latex?: string;
   cnt?: number[]; // bounding box coordinates
@@ -119,6 +121,12 @@ export interface ParsedQuestion {
   };
   /** GPT-4o Vision으로 해석된 도형/그래프 데이터 */
   interpreted_figures?: InterpretedFigure[];
+  /**
+   * ★ 표 객관식 헤더 (자동 감지) — 예: ['A', 'B'] 또는 ['수1', '수2']
+   * 선택지가 표 형식일 때 각 컬럼 헤더를 분리 저장. 분석 카드가 <table>로 렌더.
+   * 메모리 reference_table_choices.md 패턴.
+   */
+  choiceHeaders?: string[];
 }
 
 // ============================================================================

@@ -21,6 +21,13 @@ interface MixedContentRendererProps {
   onMathClick?: (latex: string, isDisplay: boolean) => void;
   /** true면 wrapper를 <span style={{display:'contents'}}>로 렌더 — 뱃지 같은 인라인 요소 뒤에 올 때 줄바꿈 방지 */
   inline?: boolean;
+  /**
+   * true 면 (가)/(나)/(다) 또는 <보기> 패턴이 있어도 조건 박스로 그리지 않음.
+   * 선택지 본문이 "(가)는 음이온이다" 처럼 한글 라벨로 시작할 때
+   * 분석 페이지가 자동 박스 처리하는 사고 방지.
+   * 기본값 false (수학 라인 영향 0).
+   */
+  disableConditionBox?: boolean;
 }
 
 /**
@@ -36,7 +43,7 @@ interface MixedContentRendererProps {
  * - \begin{...}...\end{...} → 디스플레이 수식 블록
  * - <보기>, (가), (나) 등 → 구조적 텍스트 처리
  */
-function MixedContentRendererInner({ content, className, onMathClick, inline }: MixedContentRendererProps) {
+function MixedContentRendererInner({ content, className, onMathClick, inline, disableConditionBox }: MixedContentRendererProps) {
   if (!content) return <span className={className}>(문제 내용 없음)</span>;
   // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
   // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
@@ -139,7 +146,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline }: 
   );
 
   // 조건 박스 추출: (가)...(나)... 또는 <보기>... 블록을 분리
-  const { mainContent, conditionBoxes, conditionHeaderLabels } = extractConditionBoxes(protectedBody);
+  // ★ disableConditionBox=true 면 박스 분리 스킵 (선택지 컨텍스트 등) — 본문 그대로 사용
+  const { mainContent, conditionBoxes, conditionHeaderLabels } = disableConditionBox
+    ? { mainContent: protectedBody, conditionBoxes: [], conditionHeaderLabels: [] }
+    : extractConditionBoxes(protectedBody);
 
   // tabular 블록 복원
   let restoredMainContent = mainContent;
@@ -360,7 +370,8 @@ export const MixedContentRenderer = memo(MixedContentRendererInner, (prev, next)
     prev.content === next.content &&
     prev.className === next.className &&
     prev.onMathClick === next.onMathClick &&
-    prev.inline === next.inline
+    prev.inline === next.inline &&
+    prev.disableConditionBox === next.disableConditionBox
   );
 });
 
