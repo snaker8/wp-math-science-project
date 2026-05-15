@@ -111,6 +111,9 @@ export async function POST(request: NextRequest) {
   }
 
   // 신규 발급
+  //   ★ user_metadata 에 institute_id 동봉 — handle_new_auth_user() 트리거가 이를 읽어
+  //     public.users.institute_id 에 박음. 안 박으면 트리거 NULL fallback → users
+  //     NOT NULL 제약 위반 ('Database error creating new user' 사고, 2026-05-15).
   if (!studentId) {
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -119,6 +122,7 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         full_name: fullName,
         role: 'STUDENT',
+        institute_id: instituteId,
       },
     });
     if (createErr || !created.user) {
