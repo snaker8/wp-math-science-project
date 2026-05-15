@@ -134,15 +134,21 @@ export async function POST(request: NextRequest) {
     studentId = created.user.id;
     createdNew = true;
 
-    const { error: insertErr } = await supabaseAdmin.from('users').insert({
-      id: studentId,
-      email,
-      full_name: fullName,
-      phone,
-      grade,
-      role: 'STUDENT',
-      institute_id: instituteId,
-    });
+    // ★ upsert (ignoreDuplicates) — handle_new_auth_user 트리거가 이미 INSERT
+    //   했으면 PK 충돌 (users_pkey) 발생. 트리거 실패 시에만 본 INSERT 가 백업
+    //   동작. ignoreDuplicates 로 충돌 무시.
+    //   사고 (2026-05-15): 트리거 fix 후 본 INSERT 가 중복 → users_pkey 위반.
+    const { error: insertErr } = await supabaseAdmin
+      .from('users')
+      .upsert({
+        id: studentId,
+        email,
+        full_name: fullName,
+        phone,
+        grade,
+        role: 'STUDENT',
+        institute_id: instituteId,
+      }, { onConflict: 'id', ignoreDuplicates: true });
     if (insertErr) {
       // public.users 실패 → auth.users orphan 정리
       await supabaseAdmin.auth.admin.deleteUser(studentId).catch(() => {});
