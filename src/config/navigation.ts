@@ -142,6 +142,14 @@ export const adminNavItems: NavItem[] = [
     activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
+  {
+    href: '/admin/organization-applications',
+    icon: Building2,
+    label: '가맹 학원 신청',
+    description: '신규 학원 가맹 신청 승인/거부 (슈퍼관리자만)',
+    activeColor: 'bg-amber-500/10 text-amber-500',
+    group: 'main',
+  },
 ];
 
 // 튜터/수업 관련 메뉴
