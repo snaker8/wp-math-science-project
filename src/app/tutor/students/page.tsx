@@ -256,7 +256,7 @@ export default function TutorStudentsPage() {
           <Search size={18} />
           <input
             type="text"
-            placeholder="이름 또는 이메일로 검색..."
+            placeholder="이름 또는 전화번호로 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -308,16 +308,13 @@ export default function TutorStudentsPage() {
                   </span>
                 </div>
                 <div className="student-details">
+                  {/* 학생 ID 표시 — '@local.suzag.com' 도메인 제거하고 전화번호만 노출 */}
                   <span>
-                    <Mail size={14} />
-                    {student.email}
+                    <Phone size={14} />
+                    {student.email
+                      ? student.email.replace(/@local\.suzag\.com$/i, '')
+                      : (student.phone || '—')}
                   </span>
-                  {student.phone && (
-                    <span>
-                      <Phone size={14} />
-                      {student.phone}
-                    </span>
-                  )}
                   {student.className && (
                     <span>
                       <GraduationCap size={14} />
@@ -402,29 +399,37 @@ export default function TutorStudentsPage() {
                 <X size={20} />
               </button>
             </div>
-            <p>이름과 학년만 있으면 등록 가능. 이메일/비밀번호 미입력 시 자동 생성됩니다.</p>
+            <p>이름과 전화번호만 입력하면 등록 완료. 학생 ID = 전화번호, 초기 비밀번호 = 123456.</p>
 
             {credentials ? (
               <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8, padding: 16, marginTop: 12 }}>
-                <h3 style={{ margin: 0, marginBottom: 8, fontSize: 14, color: '#a5b4fc' }}>✓ 등록 완료 — 학생 자격증명</h3>
-                <p style={{ fontSize: 12, color: '#a1a1aa', marginBottom: 12 }}>학생에게 직접 전달하세요. 다시 볼 수 없습니다.</p>
-                {(['email', 'password'] as const).map((field) => (
-                  <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <label style={{ width: 70, fontSize: 12, color: '#a1a1aa' }}>{field === 'email' ? '이메일' : '비밀번호'}</label>
-                    <code style={{ flex: 1, padding: '6px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 4, fontSize: 13, color: '#fff' }}>{credentials[field]}</code>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(credentials[field]);
-                        setCopiedField(field);
-                        setTimeout(() => setCopiedField(null), 1500);
-                      }}
-                      style={{ background: 'transparent', border: '1px solid #52525b', borderRadius: 4, padding: '4px 8px', color: '#a1a1aa', cursor: 'pointer' }}
-                    >
-                      {copiedField === field ? <Check size={14} /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                ))}
+                <h3 style={{ margin: 0, marginBottom: 8, fontSize: 14, color: '#a5b4fc' }}>✓ 등록 완료 — 학생 로그인 정보</h3>
+                <p style={{ fontSize: 12, color: '#a1a1aa', marginBottom: 12 }}>학생에게 직접 전달하세요.</p>
+                {/* email = "<phone>@local.suzag.com" 또는 "student-XXX@local.suzag.com".
+                    학생 입장에서 보일 ID 는 도메인 제거한 전화번호(또는 코드). */}
+                {(['email', 'password'] as const).map((field) => {
+                  const label = field === 'email' ? '전화번호' : '비밀번호';
+                  const value = field === 'email'
+                    ? credentials.email.replace(/@local\.suzag\.com$/i, '')
+                    : credentials.password;
+                  return (
+                    <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <label style={{ width: 70, fontSize: 12, color: '#a1a1aa' }}>{label}</label>
+                      <code style={{ flex: 1, padding: '6px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 4, fontSize: 13, color: '#fff' }}>{value}</code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(value);
+                          setCopiedField(field);
+                          setTimeout(() => setCopiedField(null), 1500);
+                        }}
+                        style={{ background: 'transparent', border: '1px solid #52525b', borderRadius: 4, padding: '4px 8px', color: '#a1a1aa', cursor: 'pointer' }}
+                      >
+                        {copiedField === field ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  );
+                })}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button
                     type="button"

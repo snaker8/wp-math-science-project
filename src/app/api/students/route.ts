@@ -173,10 +173,15 @@ export async function POST(request: NextRequest) {
       },
     });
     if (createErr || !created.user) {
-      return NextResponse.json(
-        { error: createErr?.message || '학생 계정 생성 실패' },
-        { status: 500 }
-      );
+      // supabase 의 'A user with this email address has already been registered'
+      // 등을 학생 가입 맥락에서 한글 + '전화번호' 표현으로 변환.
+      const raw = (createErr?.message || '').toLowerCase();
+      const friendly = raw.includes('already')
+        ? (phone && !providedEmail
+            ? `이미 등록된 전화번호입니다 (${phone}). 기존 학생 계정을 확인해주세요.`
+            : '이미 등록된 계정입니다. 기존 계정을 확인해주세요.')
+        : (createErr?.message || '학생 계정 생성 실패');
+      return NextResponse.json({ error: friendly }, { status: 500 });
     }
     studentId = created.user.id;
     createdNew = true;
