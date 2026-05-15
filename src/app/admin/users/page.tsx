@@ -15,6 +15,7 @@ interface UserRow {
   role: string | null;
   instituteId: string | null;
   organizationId?: string | null;
+  isSuperAdmin?: boolean;
 }
 
 interface Organization { id: string; name: string }
@@ -211,12 +212,24 @@ export default function UsersAdminPage() {
                             <option value="">선택…</option>
                             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
-                        ) : u.role ? (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${ROLE_BADGE[u.role] || 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
-                            {u.role}
-                          </span>
                         ) : (
-                          <span className="text-zinc-600">—</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {u.role ? (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${ROLE_BADGE[u.role] || 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
+                                {u.role}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )}
+                            {u.isSuperAdmin && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-amber-500/15 text-amber-400 border-amber-500/30 inline-flex items-center gap-0.5"
+                                title="본부 운영자 — auth.users.app_metadata.super_admin"
+                              >
+                                <Shield size={9} /> SUPER
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3">
