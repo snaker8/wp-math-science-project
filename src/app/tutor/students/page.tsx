@@ -112,52 +112,66 @@ export default function TutorStudentsPage() {
     }
 
     try {
-      const { data: { user } } = await supabaseBrowser.auth.getUser();
-      if (!user) return;
-
-      // Get all classes for this tutor
-      const { data: classes } = await supabaseBrowser
-        .from('classes')
-        .select('id, name')
-        .eq('tutor_id', user.id)
-        .is('deleted_at', null);
-
-      if (!classes || classes.length === 0) {
+      // ★ institute_id 기반 학생 목록 — /api/users/students 가 같은 institute 의
+      //   STUDENT role 사용자 전체 반환. 반(class) 배정 여부와 무관.
+      //   기존엔 class_enrollments 기반이라 반 미배정 학생 (직접 등록) 이 목록에
+      //   안 나오던 사고 차단 (2026-05-15).
+      const res = await fetch('/api/users/students');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        console.error('[students] API error:', errBody.error || res.statusText);
         setStudents([]);
         setLoading(false);
         return;
       }
+      const { students: apiStudents = [] } = await res.json();
 
-      // Get all enrollments for these classes
-      const classIds = classes.map((c) => c.id);
-      const { data: enrollments } = await supabaseBrowser
-        .from('class_enrollments')
-        .select(`
-          id,
-          status,
-          enrolled_at,
-          class_id,
-          student:users!class_enrollments_student_id_fkey (
-            id,
-            name,
-            email,
-            phone
-          )
-        `)
-        .in('class_id', classIds);
+      // (옵션) 반 배정 정보 — 본 강사의 classes·enrollments 추가 조회해서 className 채움.
+      //   학생 목록 노출에는 영향 X. 실패해도 학생 목록은 그대로.
+      const { data: { user } } = await supabaseBrowser.auth.getUser();
+      const enrollmentMap = new Map<string, { className: string; classId: string; status: string; enrolledAt: string }>();
+      if (user) {
+        try {
+          const { data: classes } = await supabaseBrowser
+            .from('classes')
+            .select('id, name')
+            .eq('tutor_id', user.id)
+            .is('deleted_at', null);
+          if (classes && classes.length > 0) {
+            const classIds = classes.map((c) => c.id);
+            const { data: enrollments } = await supabaseBrowser
+              .from('class_enrollments')
+              .select('class_id, student_id, status, enrolled_at')
+              .in('class_id', classIds);
+            for (const e of (enrollments || []) as Array<{ class_id: string; student_id: string; status: string; enrolled_at: string }>) {
+              const cls = classes.find((c) => c.id === e.class_id);
+              if (cls) {
+                enrollmentMap.set(e.student_id, {
+                  className: cls.name,
+                  classId: e.class_id,
+                  status: e.status,
+                  enrolledAt: e.enrolled_at,
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[students] enrollment 보조 로드 실패:', e);
+        }
+      }
 
-      const studentList: Student[] = (enrollments || []).map((e: any) => {
-        const cls = classes.find((c) => c.id === e.class_id);
+      const studentList: Student[] = (apiStudents as Array<{ id: string; name: string; email: string; phone: string | null; grade: string }>).map((s) => {
+        const enrollment = enrollmentMap.get(s.id);
         return {
-          id: e.student?.id || e.id,
-          name: e.student?.name || '이름 없음',
-          email: e.student?.email || '',
-          phone: e.student?.phone || null,
-          grade: null,
-          className: cls?.name || null,
-          classId: e.class_id,
-          status: e.status,
-          enrolledAt: e.enrolled_at,
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          phone: s.phone,
+          grade: s.grade || null,
+          className: enrollment?.className || null,
+          classId: enrollment?.classId || null,
+          status: (enrollment?.status as 'ACCEPTED' | 'PENDING' | 'REJECTED') || 'ACCEPTED',
+          enrolledAt: enrollment?.enrolledAt || '',
           lastActivity: null,
           totalProblems: 0,
           correctRate: 0,
