@@ -163,7 +163,15 @@ export const tutorNavItems: NavItem[] = [
     href: '/tutor/classes',
     icon: Users,
     label: '반 관리',
-    description: '학생 및 반 관리',
+    description: '반 편성·관리',
+    activeColor: 'bg-amber-500/10 text-amber-500',
+    group: 'tutor',
+  },
+  {
+    href: '/tutor/students',
+    icon: User,
+    label: '학생 관리',
+    description: '학생 등록·관리 (반 없이도 가능)',
     activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'tutor',
   },
@@ -315,7 +323,7 @@ export const topNavGroups: NavGroup[] = [
     children: [
       dashboardNavItems[2], // 시험지출제
       dashboardNavItems[8], // 시험지관리
-      tutorNavItems[6],     // AI 자동 출제 (이전 AI 오토큐레이션)
+      tutorNavItems[7],     // AI 자동 출제 (이전 AI 오토큐레이션)
     ],
   },
   {
@@ -325,6 +333,7 @@ export const topNavGroups: NavGroup[] = [
     // ★ 채점하기는 별도 [채점] 그룹으로 분리 (2026-05-12).
     children: [
       tutorNavItems[1], // 반 관리
+      tutorNavItems[2], // 학생 관리
     ],
   },
   // ★ [채점] — 매일 워크플로우 1급 시민. 학생 답 자동채점·수동 입력 한자리.
@@ -333,8 +342,8 @@ export const topNavGroups: NavGroup[] = [
     label: '채점',
     icon: ClipboardCheck,
     children: [
-      tutorNavItems[2], // 채점하기 (/dashboard/grading)
-      tutorNavItems[3], // 수동 채점 입력 (/dashboard/prescription/entry)
+      tutorNavItems[3], // 채점하기 (/dashboard/grading)
+      tutorNavItems[4], // 수동 채점 입력 (/dashboard/prescription/entry)
     ],
   },
   // ★ [진단] — 학생별 약점 분석·처방. 클리닉 PDF 까지 처방 결과물 묶음.
@@ -343,8 +352,8 @@ export const topNavGroups: NavGroup[] = [
     label: '진단',
     icon: Stethoscope,
     children: [
-      tutorNavItems[4], // 학생 진단 (/dashboard/prescription)
-      tutorNavItems[5], // 클리닉시험지
+      tutorNavItems[5], // 학생 진단 (/dashboard/prescription)
+      tutorNavItems[6], // 클리닉시험지
     ],
   },
   // ★ [분석] — 통계·리포트. 학생·학교 단위.
@@ -353,8 +362,8 @@ export const topNavGroups: NavGroup[] = [
     label: '분석',
     icon: BarChart3,
     children: [
-      tutorNavItems[7], // 학생 성적
-      tutorNavItems[8], // 학교별 리포트
+      tutorNavItems[8], // 학생 성적
+      tutorNavItems[9], // 학교별 리포트
     ],
   },
   // ★ DB 자산화 — 단독 탭 (드롭다운 X). 한 번 클릭으로 클라우드 페이지 + 업로드 모달 자동 오픈.
@@ -393,8 +402,8 @@ export const quickNavItems: NavItem[] = [
   dashboardNavItems[0], // 대시보드
   dashboardNavItems[1], // 시험지저장소
   dashboardNavItems[2], // 시험지출제
-  tutorNavItems[2],     // 채점하기 (/dashboard/grading)
-  tutorNavItems[4],     // 학생 진단 (/dashboard/prescription)
+  tutorNavItems[3],     // 채점하기 (/dashboard/grading)
+  tutorNavItems[5],     // 학생 진단 (/dashboard/prescription)
 ];
 
 // 현재 경로에서 활성 메뉴 찾기

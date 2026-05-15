@@ -65,11 +65,13 @@ export async function GET(request: NextRequest) {
   const status = sp.get('status') || undefined;
   const limit = Math.min(Math.max(parseInt(sp.get('limit') || '50') || 50, 1), 200);
 
-  // 세션 본체 — v_print_session_summary 뷰 사용 (집계 포함)
+  // 세션 본체 — print_sessions 테이블 직접 조회 (v_print_session_summary 뷰는
+  // PostgREST 에 자동 노출되지 않아 'Invalid schema' 에러가 남. 대신 아래에서
+  // session_problems / session_results 를 batch in() 으로 받아 집계).
   let query = sb
     .schema('diagnostics' as never)
-    .from('v_print_session_summary')
-    .select('*')
+    .from('print_sessions')
+    .select('id, student_id, exam_id, round_number, session_type, issued_at, started_at, completed_at, teacher_note')
     .order('issued_at', { ascending: false })
     .limit(limit);
 
@@ -78,13 +80,60 @@ export async function GET(request: NextRequest) {
   if (status === 'pending') query = query.is('completed_at', null);
   if (status === 'done') query = query.not('completed_at', 'is', null);
 
-  const { data: summaryRows, error: sumErr } = await query;
-  if (sumErr) {
-    console.error('[api/sessions GET] summary error:', sumErr.message);
-    return NextResponse.json({ error: sumErr.message }, { status: 500 });
+  const { data: psRows, error: psErr } = await query;
+  if (psErr) {
+    console.error('[api/sessions GET] print_sessions error:', psErr.message);
+    return NextResponse.json({ error: psErr.message }, { status: 500 });
   }
 
-  const rows = (summaryRows || []) as Array<Record<string, unknown>>;
+  const sessionIds = ((psRows || []) as Array<{ id: string }>).map(r => r.id);
+  if (sessionIds.length === 0) {
+    return NextResponse.json({ sessions: [] });
+  }
+
+  // 집계 — session_problems 행 수(=problems_total), session_results 행 수(=problems_graded) + correct 수
+  const [{ data: spRows }, { data: srRows }] = await Promise.all([
+    sb.schema('diagnostics' as never)
+      .from('session_problems')
+      .select('session_id')
+      .in('session_id', sessionIds),
+    sb.schema('diagnostics' as never)
+      .from('session_results')
+      .select('session_id, is_correct')
+      .in('session_id', sessionIds),
+  ]);
+
+  const totalsBySession = new Map<string, number>();
+  for (const r of (spRows || []) as Array<{ session_id: string }>) {
+    totalsBySession.set(r.session_id, (totalsBySession.get(r.session_id) || 0) + 1);
+  }
+  const gradedBySession = new Map<string, number>();
+  const correctBySession = new Map<string, number>();
+  for (const r of (srRows || []) as Array<{ session_id: string; is_correct: boolean }>) {
+    gradedBySession.set(r.session_id, (gradedBySession.get(r.session_id) || 0) + 1);
+    if (r.is_correct) correctBySession.set(r.session_id, (correctBySession.get(r.session_id) || 0) + 1);
+  }
+
+  const rows: Array<Record<string, unknown>> = ((psRows || []) as Array<Record<string, unknown>>).map(r => {
+    const sid = r.id as string;
+    const total = totalsBySession.get(sid) || 0;
+    const graded = gradedBySession.get(sid) || 0;
+    const correct = correctBySession.get(sid) || 0;
+    return {
+      session_id: sid,
+      student_id: r.student_id,
+      exam_id: r.exam_id,
+      round_number: r.round_number,
+      session_type: r.session_type,
+      issued_at: r.issued_at,
+      started_at: r.started_at,
+      completed_at: r.completed_at,
+      problems_total: total,
+      problems_graded: graded,
+      correct_cnt: correct,
+      score_pct: graded > 0 ? Math.round((correct / graded) * 1000) / 10 : null,
+    };
+  });
   if (rows.length === 0) {
     return NextResponse.json({ sessions: [] });
   }
