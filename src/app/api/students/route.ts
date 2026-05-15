@@ -152,6 +152,8 @@ export async function POST(request: NextRequest) {
         full_name: fullName,
         role: 'STUDENT',
         institute_id: instituteId,
+        phone: phone || null,
+        grade: grade != null ? String(grade) : null,
       },
     });
     if (createErr || !created.user) {
