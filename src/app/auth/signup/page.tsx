@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  Building2,
 } from 'lucide-react';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -65,9 +66,29 @@ export default function SignUpPage() {
     fullName: '',
     phone: '',
     grade: '',
+    instituteId: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 소속 학원(institute) 목록 — 가입 시 사용자가 직접 선택.
+  // 미선택 시 가입 후 가드(/api/exams 등)에 막혀서 데이터 안 보임 → 의무 입력.
+  const [institutes, setInstitutes] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/institutes/public');
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.institutes)) {
+          setInstitutes(data.institutes);
+        }
+      } catch (e) {
+        console.warn('[Signup] institutes load 실패:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);
@@ -100,6 +121,11 @@ export default function SignUpPage() {
       return;
     }
 
+    if (!formData.instituteId) {
+      setError('소속 학원을 선택해주세요');
+      return;
+    }
+
     // Supabase 미설정 시 Mock 모드
     if (!isSupabaseConfigured || !supabaseBrowser) {
       console.warn('[Auth] Supabase not configured, using mock signup');
@@ -127,6 +153,7 @@ export default function SignUpPage() {
             role: selectedRole,
             phone: formData.phone || null,
             grade: selectedRole === 'STUDENT' && formData.grade ? parseInt(formData.grade) : null,
+            institute_id: formData.instituteId,
           },
         },
       });
@@ -165,6 +192,7 @@ export default function SignUpPage() {
             phone: formData.phone || null,
             role: selectedRole,
             grade: selectedRole === 'STUDENT' && formData.grade ? parseInt(formData.grade) : null,
+            institute_id: formData.instituteId,
             preferences: {},
           },
           { onConflict: 'id', ignoreDuplicates: true }
@@ -413,6 +441,35 @@ export default function SignUpPage() {
                     className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
                 </div>
+              </div>
+
+              {/* 소속 학원 — 모든 역할 의무 입력 */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                  소속 학원
+                </label>
+                <div className="relative">
+                  <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={18} />
+                  <select
+                    name="instituteId"
+                    value={formData.instituteId}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                  >
+                    <option value="" className="bg-zinc-900">소속 학원을 선택하세요</option>
+                    {institutes.map((inst) => (
+                      <option key={inst.id} value={inst.id} className="bg-zinc-900">
+                        {inst.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {institutes.length === 0 && (
+                  <p className="text-[11px] text-amber-400/80 ml-1">
+                    학원 목록을 불러오는 중… (안 보이면 관리자에게 문의)
+                  </p>
+                )}
               </div>
 
               {/* 학년 (학생만) */}
