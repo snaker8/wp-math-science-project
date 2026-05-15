@@ -13,10 +13,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ClipboardCheck, Printer, QrCode, ExternalLink, Search, Plus, Loader2,
-  Filter, CheckCircle2, Clock, AlertCircle,
+  Filter, CheckCircle2, Clock, AlertCircle, Camera,
   type LucideIcon,
 } from 'lucide-react';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
+import GradingSheetUpload from '@/components/grading/GradingSheetUpload';
 
 // ============================================================================
 // Types
@@ -83,6 +84,7 @@ export default function GradingPage() {
 
   // 모달
   const [showCreate, setShowCreate] = useState(false);
+  const [sheetUpload, setSheetUpload] = useState<SessionRow | null>(null);
 
   // ──────────────────────────────────────────────
   // 데이터 로드
@@ -240,7 +242,7 @@ export default function GradingPage() {
         ) : (
           <div className="space-y-2">
             {filtered.map(s => (
-              <SessionCard key={s.id} session={s} />
+              <SessionCard key={s.id} session={s} onSheetUpload={() => setSheetUpload(s)} />
             ))}
           </div>
         )}
@@ -261,6 +263,20 @@ export default function GradingPage() {
           void loadSessions();
         }}
       />
+
+      {/* 채점표 이미지 자동 채점 모달 */}
+      {sheetUpload && (
+        <GradingSheetUpload
+          sessionId={sheetUpload.id}
+          studentName={sheetUpload.student_name}
+          examTitle={sheetUpload.exam_title}
+          onClose={() => setSheetUpload(null)}
+          onSaved={() => {
+            setSheetUpload(null);
+            void loadSessions();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -286,7 +302,7 @@ function StatCard({
   );
 }
 
-function SessionCard({ session: s }: { session: SessionRow }) {
+function SessionCard({ session: s, onSheetUpload }: { session: SessionRow; onSheetUpload: () => void }) {
   const isDone = !!s.completed_at;
   const pct = s.score_pct ?? null;
   const progressPct = s.problems_total > 0
@@ -359,6 +375,14 @@ function SessionCard({ session: s }: { session: SessionRow }) {
           >
             <QrCode size={12} /> 답입력
           </Link>
+          <button
+            type="button"
+            onClick={onSheetUpload}
+            className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 flex items-center gap-1"
+            title="채점표 이미지 업로드 → AI 자동 채점"
+          >
+            <Camera size={12} /> 이미지 채점
+          </button>
           <Link
             href={`/grade/${s.id}`}
             target="_blank"
