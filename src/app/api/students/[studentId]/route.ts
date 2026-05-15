@@ -85,7 +85,7 @@ interface PatchBody {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ studentId: string }> },
 ) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
@@ -96,7 +96,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden — 수정 권한 없음' }, { status: 403 });
   }
 
-  const { id: studentId } = await params;
+  const { studentId } = await params;
   const guard = await loadStudentWithGuard(studentId, scope);
   if (!guard.ok) {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
@@ -193,7 +193,7 @@ export async function PATCH(
 // ----------------------------------------------------------------------------
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ studentId: string }> },
 ) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
@@ -204,7 +204,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden — 삭제 권한 없음' }, { status: 403 });
   }
 
-  const { id: studentId } = await params;
+  const { studentId } = await params;
   const guard = await loadStudentWithGuard(studentId, scope);
   if (!guard.ok) {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
