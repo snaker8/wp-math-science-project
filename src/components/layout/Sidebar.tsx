@@ -77,7 +77,7 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 h-screen w-64 border-r border bg-surface-base text-white flex flex-col">
       {/* 로고 */}
       <Link href="/dashboard" className="flex h-16 items-center px-6 border-b border-subtle hover:bg-surface-card/30 transition-colors">
-        <span className="text-lg font-bold tracking-tight">과사람</span>
+        <span className="text-base font-bold tracking-tight">Math×Sci Bank</span>
         <span className="ml-2 rounded bg-indigo-500/10 px-1.5 py-0.5 text-xs font-medium text-indigo-400">
           PRO
         </span>

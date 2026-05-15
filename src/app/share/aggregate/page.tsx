@@ -55,7 +55,7 @@ export async function generateMetadata({
       title,
       description,
       type: 'article',
-      siteName: '과사람 학교 기출 분석',
+      siteName: 'Math×Sci Bank — 학교 기출 분석',
     },
     twitter: { card: 'summary', title, description },
   };

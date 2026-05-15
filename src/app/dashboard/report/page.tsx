@@ -118,7 +118,7 @@ export default function ReportPage() {
 
                     {/* Print Watermark Hidden by Default */}
                     <div className="hidden print:block absolute bottom-0 right-0 opacity-10 pointer-events-none">
-                        <h3 className="text-2xl font-black italic">과사람 With-People</h3>
+                        <h3 className="text-2xl font-black italic">Math×Sci Bank</h3>
                     </div>
                 </motion.div>
 
@@ -386,8 +386,8 @@ export default function ReportPage() {
 
             {/* 3. Print Watermark Footer (Visible only in Print) */}
             <div className="hidden print:flex fixed bottom-8 left-1/2 -translate-x-1/2 w-full justify-between px-12 items-center text-content-secondary">
-                <div className="text-sm">© 2026 과사람 With-People. All rights reserved.</div>
-                <div className="text-2xl font-black italic opacity-20">과사람 WITH-PEOPLE</div>
+                <div className="text-sm">© 2026 Math×Sci Bank. All rights reserved.</div>
+                <div className="text-2xl font-black italic opacity-20">MATH×SCI BANK</div>
             </div>
 
             {/* 4. Global Print Styles */}

@@ -48,7 +48,7 @@ export default function parentReportPage() {
                         <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white">
                             <Star size={18} fill="currentColor" />
                         </div>
-                        <span className="font-bold text-lg tracking-tight">과사람 Growth</span>
+                        <span className="font-bold text-base tracking-tight">Math×Sci Bank</span>
                     </div>
                     <button className="p-2 rounded-full hover:bg-[#F5F5F7] transition-colors">
                         <MessageSquare size={20} className="text-[#86868B]" />

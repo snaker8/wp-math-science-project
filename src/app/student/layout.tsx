@@ -22,7 +22,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     <div className="min-h-screen bg-gray-50 text-zinc-900 font-sans pb-20 md:pb-0">
       {/* Mobile Header (Optional, mostly for branding) */}
       <header className="bg-white border-b border-gray-100 p-4 flex items-center justify-between sticky top-0 z-10">
-        <h1 className="text-lg font-bold tracking-tight text-indigo-600">과사람 수학</h1>
+        <h1 className="text-base font-bold tracking-tight text-indigo-600">Math×Sci Bank</h1>
         <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="Avatar" />
