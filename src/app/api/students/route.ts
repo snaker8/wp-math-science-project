@@ -24,6 +24,32 @@ function generatePassword(): string {
   return randomToken(8).toLowerCase() + Math.floor(Math.random() * 100);
 }
 
+// 학년 입력을 integer 로 정규화 — public.users.grade 컬럼이 integer 라
+// 한글 라벨('중1','고1' 등) 또는 문자열 숫자가 들어오면 변환 필요.
+// 매핑은 signup 페이지 select(value=7..12) 와 동일.
+//   초1~6 = 1~6, 중1~3 = 7~9, 고1~3 = 10~12
+const GRADE_LABEL_TO_INT: Record<string, number> = {
+  '초1': 1, '초2': 2, '초3': 3, '초4': 4, '초5': 5, '초6': 6,
+  '중1': 7, '중2': 8, '중3': 9,
+  '고1': 10, '고2': 11, '고3': 12,
+};
+function normalizeGrade(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (typeof raw === 'number') {
+    return Number.isInteger(raw) && raw >= 1 && raw <= 12 ? raw : null;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return null;
+    if (/^\d+$/.test(s)) {
+      const n = parseInt(s, 10);
+      return n >= 1 && n <= 12 ? n : null;
+    }
+    if (GRADE_LABEL_TO_INT[s] != null) return GRADE_LABEL_TO_INT[s];
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
@@ -43,7 +69,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const fullName = String(body.fullName || '').trim();
   const phone = body.phone ? String(body.phone).trim() : null;
-  const grade = body.grade != null ? String(body.grade).trim() : null;
+  const grade = normalizeGrade(body.grade);
   const providedEmail = body.email ? String(body.email).trim().toLowerCase() : '';
   const providedPassword = body.password ? String(body.password) : '';
   const classId = body.classId ? String(body.classId) : null; // 옵션

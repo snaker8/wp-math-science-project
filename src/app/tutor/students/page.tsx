@@ -485,12 +485,18 @@ export default function TutorStudentsPage() {
                 </div>
                 <div className="form-group">
                   <label>학년</label>
-                  <input
-                    type="text"
+                  <select
                     value={addForm.grade}
                     onChange={(e) => setAddForm((f) => ({ ...f, grade: e.target.value }))}
-                    placeholder="중1, 중2, 고1, 고2…"
-                  />
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="7">중1</option>
+                    <option value="8">중2</option>
+                    <option value="9">중3</option>
+                    <option value="10">고1</option>
+                    <option value="11">고2</option>
+                    <option value="12">고3</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>연락처</label>
