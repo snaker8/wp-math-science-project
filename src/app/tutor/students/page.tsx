@@ -17,6 +17,9 @@ import {
   Loader2,
   Copy,
   Check,
+  Pencil,
+  KeyRound,
+  Trash2,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -55,6 +58,75 @@ export default function TutorStudentsPage() {
   // 등록 후 자격증명 표시
   const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // ── 학생 관리 액션 ────────────────────────────────────────────────
+  // 수정 모달
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editForm, setEditForm] = useState({ fullName: '', grade: '', phone: '' });
+  const [editBusy, setEditBusy] = useState(false);
+
+  // 비밀번호 초기화 결과 (간이 alert 대신)
+  const [resetResult, setResetResult] = useState<{ name: string; password: string } | null>(null);
+
+  // 액션 핸들러들
+  const openEditModal = (s: Student) => {
+    setEditingStudent(s);
+    setEditForm({
+      fullName: s.name,
+      grade: s.grade ? String(s.grade) : '',
+      phone: s.email
+        ? s.email.replace(/@local\.suzag\.com$/i, '')
+        : (s.phone || ''),
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editingStudent) return;
+    setEditBusy(true);
+    try {
+      const res = await fetch(`/api/students/${editingStudent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: editForm.fullName,
+          grade: editForm.grade || null,
+          phone: editForm.phone || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '수정 실패');
+      setEditingStudent(null);
+      loadStudents();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const handleResetPassword = async (s: Student) => {
+    if (!confirm(`${s.name} 학생의 비밀번호를 초기값(123456)으로 재설정하시겠어요?`)) return;
+    try {
+      const res = await fetch(`/api/students/${s.id}/reset-password`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '재설정 실패');
+      setResetResult({ name: s.name, password: json.password || '123456' });
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handleDelete = async (s: Student) => {
+    if (!confirm(`${s.name} 학생을 삭제하시겠어요?\n학습 이력은 보존되며 학생 로그인은 차단됩니다.`)) return;
+    try {
+      const res = await fetch(`/api/students/${s.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '삭제 실패');
+      loadStudents();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
 
   useEffect(() => {
     loadStudents();
@@ -339,8 +411,186 @@ export default function TutorStudentsPage() {
                 <BarChart3 size={16} />
                 분석 보기
               </Link>
+
+              {/* 학생 관리 액션 — 수정/비번초기화/삭제 */}
+              <div style={{ display: 'flex', gap: 6, marginLeft: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => openEditModal(student)}
+                  title="정보 수정"
+                  style={{
+                    padding: '6px 8px',
+                    background: 'transparent',
+                    border: '1px solid #3f3f46',
+                    borderRadius: 6,
+                    color: '#a1a1aa',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleResetPassword(student)}
+                  title="비밀번호 초기화 (→ 123456)"
+                  style={{
+                    padding: '6px 8px',
+                    background: 'transparent',
+                    border: '1px solid #3f3f46',
+                    borderRadius: 6,
+                    color: '#fbbf24',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <KeyRound size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(student)}
+                  title="학생 삭제 (학습 이력 보존)"
+                  style={{
+                    padding: '6px 8px',
+                    background: 'transparent',
+                    border: '1px solid #7f1d1d',
+                    borderRadius: 6,
+                    color: '#f87171',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 학생 정보 수정 모달 */}
+      {editingStudent && (
+        <div className="modal-overlay" onClick={() => !editBusy && setEditingStudent(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 style={{ margin: 0 }}>학생 정보 수정 — {editingStudent.name}</h2>
+              <button type="button" onClick={() => !editBusy && setEditingStudent(null)} className="modal-close">
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <div className="form-group">
+                <label>이름 *</label>
+                <input
+                  type="text"
+                  value={editForm.fullName}
+                  onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>학년</label>
+                <select
+                  value={editForm.grade}
+                  onChange={(e) => setEditForm((f) => ({ ...f, grade: e.target.value }))}
+                >
+                  <option value="">선택 안함</option>
+                  <option value="7">중1</option>
+                  <option value="8">중2</option>
+                  <option value="9">중3</option>
+                  <option value="10">고1</option>
+                  <option value="11">고2</option>
+                  <option value="12">고3</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>전화번호 (학생 로그인 ID)</label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="01012345678"
+                />
+                <p style={{ fontSize: 11, color: '#a78bfa', marginTop: 4 }}>
+                  전화번호를 변경하면 학생이 새 번호로 로그인해야 합니다.
+                </p>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setEditingStudent(null)}
+                  disabled={editBusy}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="btn-submit"
+                  onClick={handleEditSave}
+                  disabled={editBusy || !editForm.fullName.trim()}
+                >
+                  {editBusy ? <Loader2 size={14} className="spinner" /> : '저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 비밀번호 재설정 결과 모달 */}
+      {resetResult && (
+        <div className="modal-overlay" onClick={() => setResetResult(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h2 style={{ margin: 0 }}>✓ 비밀번호 재설정 완료</h2>
+              <button type="button" onClick={() => setResetResult(null)} className="modal-close">
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <p style={{ fontSize: 13, color: '#a1a1aa', marginBottom: 12 }}>
+                <strong>{resetResult.name}</strong> 학생의 비밀번호가 초기값으로 재설정되었습니다.
+                학생에게 직접 전달해주세요.
+              </p>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: 12,
+                background: 'rgba(251, 191, 36, 0.1)',
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+                borderRadius: 8,
+              }}>
+                <span style={{ fontSize: 12, color: '#a1a1aa' }}>초기 비밀번호</span>
+                <code style={{ flex: 1, fontSize: 16, color: '#fbbf24', fontWeight: 'bold', textAlign: 'center' }}>
+                  {resetResult.password}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resetResult.password);
+                  }}
+                  style={{
+                    padding: '4px 8px',
+                    background: 'transparent',
+                    border: '1px solid #52525b',
+                    borderRadius: 4,
+                    color: '#a1a1aa',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: '#71717a', marginTop: 12 }}>
+                학생이 로그인 후 본인이 직접 비밀번호를 변경하도록 안내해주세요.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

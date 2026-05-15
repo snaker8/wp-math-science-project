@@ -48,7 +48,8 @@ export async function GET() {
   let query = supabase
     .from('users')
     .select('*')
-    .eq('role', 'STUDENT');
+    .eq('role', 'STUDENT')
+    .is('deleted_at', null); // soft delete 된 학생은 목록에서 제외
 
   if (me.role !== 'ADMIN') {
     if (!me.institute_id) {
