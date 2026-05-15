@@ -71,24 +71,104 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 소속 학원(institute) 목록 — 가입 시 사용자가 직접 선택.
-  // 미선택 시 가입 후 가드(/api/exams 등)에 막혀서 데이터 안 보임 → 의무 입력.
+  // ── 학원 자유 입력 + 매칭 (B2B 가맹 모델) ──────────────────────────────
+  // 사용자가 학원 이름 자유 입력 → /api/organizations/search 로 매칭 시도.
+  // 매칭됨   : selectedOrgId 박힘 → 산하 센터 드롭다운 활성화 → 정상 가입
+  // 매칭 안됨: applyMode=true → institute_id NULL 가입 + 가맹 신청 INSERT
+  // ────────────────────────────────────────────────────────────────────
+  const [orgQuery, setOrgQuery] = useState('');
+  const [orgCandidates, setOrgCandidates] = useState<Array<{ id: string; name: string }>>([]);
+  const [orgSearching, setOrgSearching] = useState(false);
+  const [selectedOrg, setSelectedOrg] = useState<{ id: string; name: string } | null>(null);
+  const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
+
+  // 선택된 학원의 센터 목록
   const [institutes, setInstitutes] = useState<Array<{ id: string; name: string }>>([]);
+  const [institutesLoading, setInstitutesLoading] = useState(false);
+
+  // 가맹 신청 모드 — 학원 매칭 안 됐을 때 토글
+  const [applyMode, setApplyMode] = useState(false);
+  const [applyInstituteName, setApplyInstituteName] = useState('');
+
+  // 가맹 신청 완료 (step 3 분기)
+  const [applicationSubmitted, setApplicationSubmitted] = useState(false);
+
+  // ── 학원 검색 (debounced 300ms) ──
   useEffect(() => {
     let cancelled = false;
+    if (selectedOrg) return; // 이미 선택된 상태면 검색 안 함
+    const handle = setTimeout(async () => {
+      setOrgSearching(true);
+      try {
+        const q = orgQuery.trim();
+        const url = q ? `/api/organizations/search?q=${encodeURIComponent(q)}` : '/api/organizations/search';
+        const res = await fetch(url);
+        const data = await res.json();
+        if (cancelled) return;
+        const all: Array<{ id: string; name: string }> = [];
+        if (data.exactMatch) all.push(data.exactMatch);
+        if (Array.isArray(data.candidates)) all.push(...data.candidates);
+        setOrgCandidates(all);
+      } catch (e) {
+        if (!cancelled) console.warn('[Signup] org search 실패:', e);
+      } finally {
+        if (!cancelled) setOrgSearching(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [orgQuery, selectedOrg]);
+
+  // ── 선택된 학원의 센터 fetch ──
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedOrg) {
+      setInstitutes([]);
+      setFormData((f) => ({ ...f, instituteId: '' }));
+      return;
+    }
+    setInstitutesLoading(true);
     (async () => {
       try {
-        const res = await fetch('/api/institutes/public');
+        const res = await fetch(`/api/institutes/public?organization_id=${selectedOrg.id}`);
         const data = await res.json();
         if (!cancelled && Array.isArray(data.institutes)) {
           setInstitutes(data.institutes);
         }
       } catch (e) {
-        console.warn('[Signup] institutes load 실패:', e);
+        if (!cancelled) console.warn('[Signup] institutes load 실패:', e);
+      } finally {
+        if (!cancelled) setInstitutesLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedOrg]);
+
+  // 학원 선택 (드롭다운 클릭 또는 정확 일치 자동 선택)
+  const pickOrg = (org: { id: string; name: string }) => {
+    setSelectedOrg(org);
+    setOrgQuery(org.name);
+    setOrgDropdownOpen(false);
+    setApplyMode(false);
+  };
+
+  // 학원 입력 변경 — 선택 해제
+  const handleOrgInputChange = (v: string) => {
+    setOrgQuery(v);
+    if (selectedOrg) {
+      setSelectedOrg(null);
+      setFormData((f) => ({ ...f, instituteId: '' }));
+    }
+    setOrgDropdownOpen(true);
+    setApplyMode(false);
+  };
+
+  // 매칭 안됨 → 가맹 신청 모드 전환
+  const enableApplyMode = () => {
+    setApplyMode(true);
+    setSelectedOrg(null);
+    setOrgDropdownOpen(false);
+    setFormData((f) => ({ ...f, instituteId: '' }));
+  };
 
   const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);
@@ -121,9 +201,23 @@ export default function SignUpPage() {
       return;
     }
 
-    if (!formData.instituteId) {
-      setError('소속 학원을 선택해주세요');
-      return;
+    // 학원 입력 검증 — 두 흐름 중 하나여야 함
+    // (A) 기존 학원 매칭됨 + 산하 센터 선택 → 정상 가입
+    // (B) 매칭 안됨 → 가맹 신청 모드 (학원·센터 자유 입력)
+    if (!applyMode) {
+      if (!selectedOrg) {
+        setError('학원을 입력하고 매칭된 학원을 선택해주세요. 매칭이 안 되면 [신규 학원 신청] 으로 진행하실 수 있습니다.');
+        return;
+      }
+      if (!formData.instituteId) {
+        setError('소속 센터를 선택해주세요');
+        return;
+      }
+    } else {
+      if (!orgQuery.trim()) {
+        setError('가맹 신청할 학원 이름을 입력해주세요');
+        return;
+      }
     }
 
     // Supabase 미설정 시 Mock 모드
@@ -144,6 +238,9 @@ export default function SignUpPage() {
       // ★ public.users 테이블은 on_auth_user_created 트리거가 자동 생성
       //   (auth.users INSERT → handle_new_auth_user() → public.users INSERT)
       //   raw_user_meta_data의 role/full_name/phone/grade를 그대로 읽음
+      // 매칭 모드: institute_id 박힘 / 신청 모드: institute_id NULL (가맹 승인 후 결정)
+      const instituteIdForSignUp = applyMode ? null : (formData.instituteId || null);
+
       const { data: authData, error: authError } = await supabaseBrowser.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -153,7 +250,7 @@ export default function SignUpPage() {
             role: selectedRole,
             phone: formData.phone || null,
             grade: selectedRole === 'STUDENT' && formData.grade ? parseInt(formData.grade) : null,
-            institute_id: formData.instituteId,
+            institute_id: instituteIdForSignUp,
           },
         },
       });
@@ -182,6 +279,7 @@ export default function SignUpPage() {
 
       // ★ 안전 장치: 트리거가 실패했을 경우 대비 upsert로 한 번 더 시도
       //   트리거가 성공했으면 on conflict로 no-op, 실패했으면 이제라도 저장됨
+      const instituteIdForUpsert = applyMode ? null : (formData.instituteId || null);
       const { error: upsertError } = await supabaseBrowser
         .from('users')
         .upsert(
@@ -192,7 +290,7 @@ export default function SignUpPage() {
             phone: formData.phone || null,
             role: selectedRole,
             grade: selectedRole === 'STUDENT' && formData.grade ? parseInt(formData.grade) : null,
-            institute_id: formData.instituteId,
+            institute_id: instituteIdForUpsert,
             preferences: {},
           },
           { onConflict: 'id', ignoreDuplicates: true }
@@ -200,6 +298,32 @@ export default function SignUpPage() {
 
       if (upsertError) {
         console.warn('[Signup] users upsert 경고 (트리거가 이미 처리했을 가능성):', upsertError.message);
+      }
+
+      // ★ 가맹 신청 모드 — organization_applications 에 신청 행 INSERT (super_admin 승인 대기)
+      if (applyMode) {
+        try {
+          const appRes = await fetch('/api/organization-applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              proposed_organization_name: orgQuery.trim(),
+              proposed_institute_name: applyInstituteName.trim() || null,
+              applicant_role: selectedRole,
+              applicant_full_name: formData.fullName,
+              applicant_email: formData.email,
+              applicant_phone: formData.phone || null,
+            }),
+          });
+          if (!appRes.ok) {
+            const err = await appRes.json().catch(() => ({}));
+            console.warn('[Signup] 가맹 신청 INSERT 경고:', err);
+          }
+          setApplicationSubmitted(true);
+        } catch (e) {
+          console.warn('[Signup] 가맹 신청 INSERT 예외:', e);
+          setApplicationSubmitted(true); // 가입은 완료됐으므로 step3 진행
+        }
       }
 
       // 성공 화면 표시
@@ -443,32 +567,124 @@ export default function SignUpPage() {
                 </div>
               </div>
 
-              {/* 소속 학원 — 모든 역할 의무 입력 */}
+              {/* 소속 학원 — 자유 입력 + 매칭 (B2B 가맹 모델) */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
                   소속 학원
                 </label>
                 <div className="relative">
-                  <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={18} />
-                  <select
-                    name="instituteId"
-                    value={formData.instituteId}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
-                  >
-                    <option value="" className="bg-zinc-900">소속 학원을 선택하세요</option>
-                    {institutes.map((inst) => (
-                      <option key={inst.id} value={inst.id} className="bg-zinc-900">
-                        {inst.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none z-10" size={18} />
+                  <input
+                    type="text"
+                    value={orgQuery}
+                    onChange={(e) => handleOrgInputChange(e.target.value)}
+                    onFocus={() => setOrgDropdownOpen(true)}
+                    placeholder="예: 과사람, 차수학, 라온수학…"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                  {orgSearching && (
+                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 animate-spin" size={16} />
+                  )}
+                  {selectedOrg && !orgSearching && (
+                    <CheckCircle2 className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" size={16} />
+                  )}
+
+                  {/* 매칭 후보 드롭다운 */}
+                  {orgDropdownOpen && !selectedOrg && !applyMode && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl max-h-64 overflow-y-auto z-20">
+                      {orgCandidates.length > 0 ? (
+                        <>
+                          {orgCandidates.map((org) => (
+                            <button
+                              key={org.id}
+                              type="button"
+                              onClick={() => pickOrg(org)}
+                              className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-indigo-500/20 transition-colors flex items-center gap-2"
+                            >
+                              <Building2 size={14} className="text-zinc-500 flex-shrink-0" />
+                              <span>{org.name}</span>
+                            </button>
+                          ))}
+                          {orgQuery.trim() && !orgCandidates.some((o) => o.name.trim().toLowerCase() === orgQuery.trim().toLowerCase()) && (
+                            <button
+                              type="button"
+                              onClick={enableApplyMode}
+                              className="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors border-t border-white/10 flex items-center gap-2"
+                            >
+                              <AlertCircle size={14} className="flex-shrink-0" />
+                              <span>{`'${orgQuery.trim()}' (으)로 신규 학원 신청 →`}</span>
+                            </button>
+                          )}
+                        </>
+                      ) : orgQuery.trim() ? (
+                        <button
+                          type="button"
+                          onClick={enableApplyMode}
+                          className="w-full text-left px-4 py-3 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-2"
+                        >
+                          <AlertCircle size={14} className="flex-shrink-0" />
+                          <span>{`'${orgQuery.trim()}' 매칭 없음 — 신규 학원 신청 →`}</span>
+                        </button>
+                      ) : (
+                        <div className="px-4 py-3 text-xs text-zinc-500">학원 이름을 입력하세요</div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {institutes.length === 0 && (
-                  <p className="text-[11px] text-amber-400/80 ml-1">
-                    학원 목록을 불러오는 중… (안 보이면 관리자에게 문의)
-                  </p>
+
+                {/* 학원 선택 후 — 산하 센터 드롭다운 */}
+                {selectedOrg && (
+                  <div className="space-y-1.5 mt-3">
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">센터</label>
+                    <select
+                      name="instituteId"
+                      value={formData.instituteId}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                    >
+                      <option value="" className="bg-zinc-900">
+                        {institutesLoading ? '로딩 중…' : (institutes.length === 0 ? '등록된 센터 없음' : '센터를 선택하세요')}
+                      </option>
+                      {institutes.map((inst) => (
+                        <option key={inst.id} value={inst.id} className="bg-zinc-900">
+                          {inst.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!institutesLoading && institutes.length === 0 && (
+                      <p className="text-[11px] text-amber-400/80 ml-1">
+                        선택하신 학원에 등록된 센터가 없습니다 — 관리자에게 문의하세요
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 가맹 신청 모드 — 학원·센터 자유 입력 */}
+                {applyMode && (
+                  <div className="mt-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                      <AlertCircle size={12} /> 신규 학원 가맹 신청
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      입력하신 학원 <span className="text-amber-300 font-semibold">"{orgQuery}"</span> 은 아직 시스템에 없습니다.
+                      가입은 진행되지만 관리자 승인 후에 서비스를 이용하실 수 있습니다.
+                    </p>
+                    <input
+                      type="text"
+                      value={applyInstituteName}
+                      onChange={(e) => setApplyInstituteName(e.target.value)}
+                      placeholder="센터 이름 (선택, 예: 동래본원)"
+                      className="w-full bg-black/50 border border-amber-500/30 rounded-lg py-2 px-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setApplyMode(false); setOrgDropdownOpen(true); }}
+                      className="text-[11px] text-zinc-500 hover:text-indigo-400 transition-colors"
+                    >
+                      ← 학원 다시 검색
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -551,34 +767,63 @@ export default function SignUpPage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center"
+              className={`w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center ${
+                applicationSubmitted
+                  ? 'bg-amber-500/20 border border-amber-500/30'
+                  : 'bg-green-500/20 border border-green-500/30'
+              }`}
             >
-              <CheckCircle2 size={40} className="text-green-400" />
+              {applicationSubmitted ? (
+                <AlertCircle size={40} className="text-amber-400" />
+              ) : (
+                <CheckCircle2 size={40} className="text-green-400" />
+              )}
             </motion.div>
 
-            <h2 className="text-2xl font-bold text-white mb-3">가입 완료!</h2>
-            <p className="text-zinc-400 text-sm mb-2">
-              환영합니다! <span className="text-indigo-400 font-medium">{formData.fullName}</span>님
-            </p>
-            <p className="text-zinc-500 text-xs mb-8">
-              {isSupabaseConfigured
-                ? '이메일 인증을 완료하면 모든 기능을 이용할 수 있습니다.'
-                : 'Demo 모드에서는 바로 이용 가능합니다.'}
-            </p>
+            {applicationSubmitted ? (
+              <>
+                <h2 className="text-2xl font-bold text-white mb-3">신청 완료 — 승인 대기</h2>
+                <p className="text-zinc-400 text-sm mb-2">
+                  <span className="text-indigo-400 font-medium">{formData.fullName}</span>님,
+                  가입 신청을 접수했습니다.
+                </p>
+                <p className="text-zinc-500 text-xs mb-2 leading-relaxed">
+                  입력하신 학원 <span className="text-amber-300 font-semibold">"{orgQuery}"</span> 은
+                  본부 관리자 승인 후 활성화됩니다.
+                </p>
+                <p className="text-zinc-500 text-xs mb-8 leading-relaxed">
+                  승인까지 1~2 영업일이 소요될 수 있으며, 승인 완료 시 등록하신 이메일로 안내드립니다.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold text-white mb-3">가입 완료!</h2>
+                <p className="text-zinc-400 text-sm mb-2">
+                  환영합니다! <span className="text-indigo-400 font-medium">{formData.fullName}</span>님
+                </p>
+                <p className="text-zinc-500 text-xs mb-8">
+                  {isSupabaseConfigured
+                    ? '이메일 인증을 완료하면 모든 기능을 이용할 수 있습니다.'
+                    : 'Demo 모드에서는 바로 이용 가능합니다.'}
+                </p>
+              </>
+            )}
 
             <div className="space-y-3">
-              <button
-                onClick={navigateByRole}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 group"
-              >
-                <span>시작하기</span>
-                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </button>
+              {!applicationSubmitted && (
+                <button
+                  onClick={navigateByRole}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 group"
+                >
+                  <span>시작하기</span>
+                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
               <Link
                 href="/auth/login"
                 className="block w-full text-sm text-zinc-500 hover:text-zinc-300 transition-colors py-2"
               >
-                로그인 페이지로 이동
+                {applicationSubmitted ? '닫고 로그인 페이지로' : '로그인 페이지로 이동'}
               </Link>
             </div>
           </motion.div>
