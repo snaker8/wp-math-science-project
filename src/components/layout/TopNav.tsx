@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Settings, LogOut, HelpCircle, User } from 'lucide-react';
+import { BrandLogo } from '@/components/brand/Logo';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { TrackToggle } from '@/components/layout/TrackToggle';
@@ -105,9 +106,7 @@ export function TopNav() {
         <div className="flex items-center gap-1">
           {/* 로고 — 트랙 prefix 적용 */}
           <Link href={trackHref('/dashboard', track)} className="flex items-center mr-6 shrink-0">
-            <span className="text-content-primary font-bold text-base">
-              과사람
-            </span>
+            <BrandLogo size="sm" />
           </Link>
 
           {/* 메뉴 탭 — 이미 trackHref 적용된 그룹 사용 */}

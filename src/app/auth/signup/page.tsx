@@ -20,6 +20,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
+import { BrandLogo } from '@/components/brand/Logo';
 
 type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
 
@@ -241,11 +242,8 @@ export default function SignUpPage() {
         className="mb-10 text-center"
       >
         <Link href="/" className="inline-block">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">
-            과사람 <span className="text-indigo-500">With-People</span>
-          </h1>
+          <BrandLogo size="xl" showTagline />
         </Link>
-        <p className="text-zinc-500 text-sm">프리미엄 수학 교육 플랫폼</p>
       </motion.div>
 
       {/* Main Card */}
@@ -586,7 +584,7 @@ export default function SignUpPage() {
       </AnimatePresence>
 
       <footer className="absolute bottom-6 text-center">
-        <p className="text-[10px] text-zinc-700">© 2026 Core Science & Math Institute. All Code Secure.</p>
+        <p className="text-[10px] text-zinc-700">© 2026 Math×Sci Bank. All rights reserved.</p>
       </footer>
     </div>
   );
