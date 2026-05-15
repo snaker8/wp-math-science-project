@@ -20,8 +20,25 @@ function generateLocalEmail(): string {
   return `student-${randomToken(8).toLowerCase()}@local.suzag.com`;
 }
 
-function generatePassword(): string {
-  return randomToken(8).toLowerCase() + Math.floor(Math.random() * 100);
+// 학생 초기 비밀번호 — 학생이 로그인 후 직접 변경 (단순화 정책).
+// 학원 현장에서 강사가 학생에게 "초기 비밀번호 123456" 전달.
+const STUDENT_INITIAL_PASSWORD = '123456';
+
+/**
+ * 전화번호를 학생 로그인 ID 용 이메일 형태로 변환.
+ * 입력: '010-1234-5678', '010 1234 5678', '01012345678' 등
+ * 출력: '01012345678@local.suzag.com'
+ *
+ * 학생이 로그인 시 하이픈 있든 없든 같은 ID 로 매칭되도록 normalize.
+ * 빈값/유효하지 않은 형식이면 null.
+ */
+export function phoneToStudentEmail(rawPhone: string): string | null {
+  if (!rawPhone) return null;
+  const digits = rawPhone.replace(/\D/g, '');
+  if (!digits) return null;
+  // 한국 휴대전화 010/011/016/017/018/019 + 7~8자리 본번 = 총 10~11자리
+  if (digits.length < 9 || digits.length > 11) return null;
+  return `${digits}@local.suzag.com`;
 }
 
 // 학년 입력을 integer 로 정규화 — public.users.grade 컬럼이 integer 라
@@ -86,10 +103,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 403 });
   }
 
-  // 자격 증명 결정
-  const email = providedEmail || generateLocalEmail();
-  const password = providedPassword || generatePassword();
-  const emailGenerated = !providedEmail;
+  // 자격 증명 결정 — 학생 ID = 전화번호 (숫자만 normalize)
+  //   providedEmail 명시: 그대로 사용 (역호환 / 일반 강사 등록 시 사용)
+  //   phone 명시:        phoneToStudentEmail 로 normalize → 학생 로그인 ID
+  //   둘 다 없음:        랜덤 local email (fallback)
+  let email: string;
+  let emailGenerated = false;
+  if (providedEmail) {
+    email = providedEmail;
+  } else if (phone) {
+    const phoneEmail = phoneToStudentEmail(phone);
+    if (!phoneEmail) {
+      return NextResponse.json(
+        { error: '전화번호 형식이 올바르지 않습니다 (예: 010-1234-5678)' },
+        { status: 400 }
+      );
+    }
+    email = phoneEmail;
+    emailGenerated = true;
+  } else {
+    email = generateLocalEmail();
+    emailGenerated = true;
+  }
+
+  // 비밀번호 — 학생은 초기 '123456', 강사 이메일 가입은 자동 생성
+  //   학생 로그인 후 본인이 비밀번호 변경 (계정 설정 페이지)
+  const password = providedPassword || (phone && !providedEmail ? STUDENT_INITIAL_PASSWORD : (randomToken(8).toLowerCase() + Math.floor(Math.random() * 100)));
   const passwordGenerated = !providedPassword;
 
   let studentId: string | null = null;

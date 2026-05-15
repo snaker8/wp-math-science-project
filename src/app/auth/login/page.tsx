@@ -24,6 +24,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // 학생 탭: 전화번호 입력 → 숫자만 추출 → `<digits>@local.suzag.com` 로그인 ID 변환.
+  // 강사·학부모: 이메일 그대로 사용.
+  const resolveLoginEmail = (rawInput: string, type: typeof loginType): string => {
+    if (type !== 'student') return rawInput.trim();
+    const digits = rawInput.replace(/\D/g, '');
+    if (digits.length >= 9 && digits.length <= 11) {
+      return `${digits}@local.suzag.com`;
+    }
+    // 학생 탭이지만 이메일 형식으로 입력한 경우엔 그대로 시도 (역호환)
+    return rawInput.trim();
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -40,9 +52,12 @@ export default function LoginPage() {
     }
 
     try {
+      // 학생 탭일 때 전화번호 → 이메일 변환
+      const loginEmail = resolveLoginEmail(email, loginType);
+
       // Supabase Auth로 로그인
       const { data, error: authError } = await supabaseBrowser.auth.signInWithPassword({
-        email,
+        email: loginEmail,
         password,
       });
 
@@ -158,18 +173,25 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Email</label>
+            <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+              {loginType === 'student' ? '전화번호' : 'Email'}
+            </label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
               <input
-                type="email"
+                type={loginType === 'student' ? 'tel' : 'email'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="이메일을 입력하세요"
+                placeholder={loginType === 'student' ? '010-1234-5678 또는 01012345678' : '이메일을 입력하세요'}
                 required
                 className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
+            {loginType === 'student' && (
+              <p className="text-[11px] text-zinc-500 ml-1">
+                하이픈 입력해도 OK. 초기 비밀번호 <strong className="text-indigo-400">123456</strong> → 로그인 후 변경 권장.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

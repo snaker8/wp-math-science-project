@@ -440,6 +440,10 @@ export default function TutorStudentsPage() {
                 onSubmit={async (e) => {
                   e.preventDefault();
                   if (!addForm.fullName.trim()) return;
+                  if (!addForm.phone.trim()) {
+                    alert('전화번호는 필수입니다 (학생 로그인 ID)');
+                    return;
+                  }
                   setAddBusy(true);
                   try {
                     const res = await fetch('/api/students', {
@@ -449,8 +453,8 @@ export default function TutorStudentsPage() {
                         fullName: addForm.fullName.trim(),
                         grade: addForm.grade || null,
                         phone: addForm.phone || null,
-                        email: addForm.email || undefined,
-                        password: addForm.password || undefined,
+                        // 학생 ID = 전화번호 (서버에서 자동 변환).
+                        // 이메일·비밀번호는 명시 안 함 — 서버가 phone→email + 초기비번 '123456' 자동 처리.
                       }),
                     });
                     const json = await res.json();
@@ -499,37 +503,24 @@ export default function TutorStudentsPage() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>연락처</label>
+                  <label>전화번호 * (학생 로그인 ID)</label>
                   <input
                     type="tel"
                     value={addForm.phone}
                     onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
-                    placeholder="010-0000-0000"
+                    placeholder="010-1234-5678 또는 01012345678"
+                    required
                   />
-                </div>
-                <div className="form-group">
-                  <label>이메일 (선택, 미입력 시 자동 생성)</label>
-                  <input
-                    type="email"
-                    value={addForm.email}
-                    onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
-                    placeholder="student@example.com"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>비밀번호 (선택, 미입력 시 자동 생성)</label>
-                  <input
-                    type="text"
-                    value={addForm.password}
-                    onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
-                    placeholder="자동 생성 권장"
-                  />
+                  <p style={{ fontSize: 11, color: '#a78bfa', marginTop: 4 }}>
+                    학생은 이 전화번호로 로그인합니다 (하이픈 자동 처리).
+                    초기 비밀번호는 <strong>123456</strong> — 로그인 후 학생이 직접 변경.
+                  </p>
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="btn-cancel" onClick={() => setShowDirectAdd(false)}>
                     취소
                   </button>
-                  <button type="submit" className="btn-submit" disabled={addBusy || !addForm.fullName.trim()}>
+                  <button type="submit" className="btn-submit" disabled={addBusy || !addForm.fullName.trim() || !addForm.phone.trim()}>
                     {addBusy ? <Loader2 size={14} className="spinner" /> : '등록'}
                   </button>
                 </div>
