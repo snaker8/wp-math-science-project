@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import Link from 'next/link';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { ChevronRight, Zap, Target, BarChart3, ArrowUpRight } from 'lucide-react';
+import { BrandLogo } from '@/components/brand/Logo';
 
 // --- Components ---
 
@@ -37,15 +38,19 @@ function Hero() {
           </span>
 
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-[1.1]">
-            Math Academy OS <br />
+            <span className="bg-gradient-to-br from-indigo-400 to-indigo-600 bg-clip-text text-transparent">Math</span>
+            <span className="text-violet-500 mx-2 font-extralight">×</span>
+            <span className="bg-gradient-to-br from-violet-400 to-pink-500 bg-clip-text text-transparent">Sci</span>
+            <span className="ml-3 text-white">Bank</span>
+            <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50">
               for the Future
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            과사람 수학프로그램은 단순한 문제은행이 아닙니다. <br className="hidden md:block" />
-            AI 정밀 채점과 완전무결한 오답 관리 루프로 수학 교육의 본질을 혁신합니다.
+            Math×Sci Bank 는 단순한 문제은행이 아닙니다. <br className="hidden md:block" />
+            가맹 학원이 함께 만드는 자산, AI 정밀 채점과 완전무결한 오답 관리 루프로 수학·과학 교육의 본질을 혁신합니다.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -209,8 +214,8 @@ function Footer() {
     <footer className="bg-black border-t border-white/10 py-12 px-6">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="text-center md:text-left">
-          <div className="text-xl font-bold text-white tracking-tight mb-2">과사람 <span className="text-indigo-500">With-People</span></div>
-          <p className="text-xs text-gray-500">© 2026 Math Academy OS. All rights reserved.</p>
+          <BrandLogo size="md" />
+          <p className="text-xs text-gray-500 mt-2">© 2026 Math×Sci Bank. All rights reserved.</p>
         </div>
         <div className="flex gap-6 text-sm text-gray-400">
           <Link href="#" className="hover:text-white transition-colors">Privacy</Link>
@@ -227,7 +232,7 @@ export default function Home() {
     <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b border-white/5 bg-black/50 h-16 flex items-center px-6">
         <div className="max-w-6xl w-full mx-auto flex justify-between items-center">
-          <div className="font-bold text-lg tracking-tight">With-People</div>
+          <BrandLogo size="md" />
           <div className="flex gap-6 text-sm font-medium text-gray-300">
             <Link href="/auth/login" className="hover:text-white transition-colors">로그인</Link>
             <Link href="/auth/signup" className="px-4 py-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 transition-colors">회원가입</Link>

@@ -4,8 +4,8 @@ import 'katex/dist/katex.min.css';
 import { RootProviders } from '@/components/providers/RootProviders';
 
 export const metadata: Metadata = {
-  title: '과사람 수학 문제은행',
-  description: '과사람 유사 수학 문제은행 SaaS 플랫폼',
+  title: 'Math×Sci Bank',
+  description: '가맹 학원이 함께 만드는 수학·과학 문제은행 플랫폼',
 };
 
 export default function RootLayout({
