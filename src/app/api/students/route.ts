@@ -7,6 +7,7 @@
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { phoneToStudentEmail, STUDENT_INITIAL_PASSWORD } from '@/lib/students/phone-id';
 import { NextRequest, NextResponse } from 'next/server';
 
 function randomToken(len: number): string {
@@ -20,26 +21,7 @@ function generateLocalEmail(): string {
   return `student-${randomToken(8).toLowerCase()}@local.suzag.com`;
 }
 
-// 학생 초기 비밀번호 — 학생이 로그인 후 직접 변경 (단순화 정책).
-// 학원 현장에서 강사가 학생에게 "초기 비밀번호 123456" 전달.
-const STUDENT_INITIAL_PASSWORD = '123456';
-
-/**
- * 전화번호를 학생 로그인 ID 용 이메일 형태로 변환.
- * 입력: '010-1234-5678', '010 1234 5678', '01012345678' 등
- * 출력: '01012345678@local.suzag.com'
- *
- * 학생이 로그인 시 하이픈 있든 없든 같은 ID 로 매칭되도록 normalize.
- * 빈값/유효하지 않은 형식이면 null.
- */
-export function phoneToStudentEmail(rawPhone: string): string | null {
-  if (!rawPhone) return null;
-  const digits = rawPhone.replace(/\D/g, '');
-  if (!digits) return null;
-  // 한국 휴대전화 010/011/016/017/018/019 + 7~8자리 본번 = 총 10~11자리
-  if (digits.length < 9 || digits.length > 11) return null;
-  return `${digits}@local.suzag.com`;
-}
+// phoneToStudentEmail / STUDENT_INITIAL_PASSWORD 는 @/lib/students/phone-id 로 이동됨.
 
 // 학년 입력을 integer 로 정규화 — public.users.grade 컬럼이 integer 라
 // 한글 라벨('중1','고1' 등) 또는 문자열 숫자가 들어오면 변환 필요.
@@ -170,6 +152,8 @@ export async function POST(request: NextRequest) {
         full_name: fullName,
         role: 'STUDENT',
         institute_id: instituteId,
+        phone: phone || null,
+        grade: grade != null ? String(grade) : null,
       },
     });
     if (createErr || !created.user) {
