@@ -15,6 +15,7 @@ import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle }
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
+import { isSharedLibraryMode } from '@/lib/security/institute-guard';
 import type { SubjectTrack } from '@/types/track';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
@@ -1203,48 +1204,56 @@ async function saveEditedProblemsDirect(
     }
   }
 
-  // ★ institute_id 조회 (saveProblemsToDB와 동일 로직)
-  let instituteId: string | null = isValidUUID(job.instituteId) ? job.instituteId : null;
-  if (!instituteId && createdBy) {
-    try {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('institute_id')
-        .eq('id', createdBy)
-        .single();
-      if (userData?.institute_id) {
-        instituteId = userData.institute_id;
-        console.log(`[Direct Save] Found user's institute_id: ${instituteId}`);
-      }
-    } catch (e) {
-      console.log('[Direct Save] Could not fetch user institute_id:', e);
-    }
-  }
-  if (!instituteId) {
-    try {
-      const { data: defaultInst } = await supabase
-        .from('institutes')
-        .select('id')
-        .eq('name', '개인 사용자')
-        .limit(1)
-        .single();
-      if (defaultInst) {
-        instituteId = defaultInst.id;
-      } else {
-        const { data: newInst } = await supabase
-          .from('institutes')
-          .insert({ name: '개인 사용자' })
-          .select('id')
+  // ★ institute_id 결정 (saveProblemsToDB와 동일 로직)
+  //   콜드스타트 정책: SHARED_LIBRARY_MODE=true 면 NULL 강제 → 본부 공통 풀.
+  //   모든 가맹 학원이 검색·사용 가능. 학원별 자산 격리로 전환 시 env 만 끔.
+  let instituteId: string | null;
+  if (isSharedLibraryMode()) {
+    instituteId = null;
+    console.log('[Direct Save] SHARED_LIBRARY_MODE=on → institute_id=NULL (본부 공통 풀)');
+  } else {
+    instituteId = isValidUUID(job.instituteId) ? job.instituteId : null;
+    if (!instituteId && createdBy) {
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('institute_id')
+          .eq('id', createdBy)
           .single();
-        if (newInst) {
-          instituteId = newInst.id;
-          if (createdBy) {
-            await supabase.from('users').update({ institute_id: instituteId }).eq('id', createdBy);
+        if (userData?.institute_id) {
+          instituteId = userData.institute_id;
+          console.log(`[Direct Save] Found user's institute_id: ${instituteId}`);
+        }
+      } catch (e) {
+        console.log('[Direct Save] Could not fetch user institute_id:', e);
+      }
+    }
+    if (!instituteId) {
+      try {
+        const { data: defaultInst } = await supabase
+          .from('institutes')
+          .select('id')
+          .eq('name', '개인 사용자')
+          .limit(1)
+          .single();
+        if (defaultInst) {
+          instituteId = defaultInst.id;
+        } else {
+          const { data: newInst } = await supabase
+            .from('institutes')
+            .insert({ name: '개인 사용자' })
+            .select('id')
+            .single();
+          if (newInst) {
+            instituteId = newInst.id;
+            if (createdBy) {
+              await supabase.from('users').update({ institute_id: instituteId }).eq('id', createdBy);
+            }
           }
         }
+      } catch (e) {
+        console.log('[Direct Save] Institute lookup/create error:', e);
       }
-    } catch (e) {
-      console.log('[Direct Save] Institute lookup/create error:', e);
     }
   }
 
@@ -1813,7 +1822,13 @@ async function saveProblemsToDB(
   }
 
   // 사용자의 institute_id 조회 (users 테이블에서)
-  let instituteId: string | null = isValidUUID(job.instituteId) ? job.instituteId : null;
+  //   콜드스타트 정책: SHARED_LIBRARY_MODE=true 면 NULL 강제 → 본부 공통 풀.
+  let instituteId: string | null;
+  if (isSharedLibraryMode()) {
+    instituteId = null;
+    console.log('[DB] SHARED_LIBRARY_MODE=on → institute_id=NULL (본부 공통 풀)');
+  } else {
+  instituteId = isValidUUID(job.instituteId) ? job.instituteId : null;
 
   if (!instituteId && createdBy) {
     try {
@@ -1876,6 +1891,7 @@ async function saveProblemsToDB(
       console.log('[DB] Institute lookup/create error:', e);
     }
   }
+  } // close: else (SHARED_LIBRARY_MODE off branch)
 
   console.log(`[DB] Saving ${results.length} problems for job ${jobId}`);
   console.log(`[DB] instituteId: ${instituteId}, createdBy: ${createdBy}`);
