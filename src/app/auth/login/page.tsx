@@ -112,11 +112,16 @@ export default function LoginPage() {
       console.error('[Auth] Login error:', err);
       const errorMessage = err instanceof Error ? err.message : '로그인에 실패했습니다.';
 
-      // 한국어 에러 메시지 변환
+      // 한국어 에러 메시지 변환 — 학생 탭이면 '전화번호' 표현 사용
+      const idLabel = loginType === 'student' ? '전화번호' : '이메일';
       if (errorMessage.includes('Invalid login credentials')) {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setError(`${idLabel} 또는 비밀번호가 올바르지 않습니다.`);
       } else if (errorMessage.includes('Email not confirmed')) {
-        setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+        setError(loginType === 'student'
+          ? '계정 활성화가 필요합니다. 학원 관리자에게 문의하세요.'
+          : '이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+      } else if (errorMessage.toLowerCase().includes('already')) {
+        setError(`이미 등록된 ${idLabel} 입니다.`);
       } else {
         setError(errorMessage);
       }
