@@ -134,18 +134,26 @@ export async function POST(request: NextRequest) {
   let studentId: string | null = null;
   let createdNew = false;
 
-  // 기존 user 확인 (이메일 명시 시)
-  if (providedEmail) {
+  // 기존 user 확인 — providedEmail 이든 자동 생성(phone/random) 이든 동일 검증.
+  //   이전 코드는 providedEmail 만 검사 → phone 등록 시 이메일 중복(이미 가입된
+  //   학생) 검사 누락 → createUser 단계에서 'already registered' 사고.
+  //   (사용자가 같은 전화번호로 두 번 등록 시도 또는 다른 강사가 먼저 등록한 경우)
+  {
     const { data: existing } = await supabaseAdmin
       .from('users')
       .select('id, role')
-      .eq('email', providedEmail)
+      .eq('email', email)
       .maybeSingle();
     if (existing) {
       if (existing.role !== 'STUDENT') {
-        return NextResponse.json({ error: '해당 이메일은 학생 계정이 아닙니다' }, { status: 400 });
+        return NextResponse.json({
+          error: phone && !providedEmail
+            ? '해당 전화번호는 이미 다른 역할(강사·관리자) 계정으로 등록되어 있습니다'
+            : '해당 이메일은 학생 계정이 아닙니다',
+        }, { status: 400 });
       }
       studentId = existing.id;
+      // 기존 학생 계정 재사용 — 신규 발급 스킵, 반 enrollment 만 진행 가능
     }
   }
 
@@ -165,10 +173,15 @@ export async function POST(request: NextRequest) {
       },
     });
     if (createErr || !created.user) {
-      return NextResponse.json(
-        { error: createErr?.message || '학생 계정 생성 실패' },
-        { status: 500 }
-      );
+      // supabase 의 'A user with this email address has already been registered'
+      // 등을 학생 가입 맥락에서 한글 + '전화번호' 표현으로 변환.
+      const raw = (createErr?.message || '').toLowerCase();
+      const friendly = raw.includes('already')
+        ? (phone && !providedEmail
+            ? `이미 등록된 전화번호입니다 (${phone}). 기존 학생 계정을 확인해주세요.`
+            : '이미 등록된 계정입니다. 기존 계정을 확인해주세요.')
+        : (createErr?.message || '학생 계정 생성 실패');
+      return NextResponse.json({ error: friendly }, { status: 500 });
     }
     studentId = created.user.id;
     createdNew = true;

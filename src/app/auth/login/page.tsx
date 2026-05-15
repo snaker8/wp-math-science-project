@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 import { useRouter } from 'next/navigation';
-import { ArrowRight, User, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowRight, User, Lock, Loader2, AlertCircle, Building2 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/Logo';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -23,6 +23,27 @@ export default function LoginPage() {
   const [loginType, setLoginType] = useState<'student' | 'teacher' | 'parent'>('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // ★ URL ?org=<id> 학원 표시 — 학원이 자기 사용자들에게 전용 로그인 URL 공유.
+  //   useSearchParams 대신 window.location.search 사용해 Suspense boundary 회피.
+  const [orgInfo, setOrgInfo] = useState<{ id: string; name: string } | null>(null);
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const orgId = params.get('org');
+    if (!orgId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/organizations/${orgId}/public`);
+        const data = await res.json();
+        if (res.ok && data.organization) {
+          setOrgInfo(data.organization);
+        }
+      } catch (e) {
+        console.warn('[Login] organization fetch 실패:', e);
+      }
+    })();
+  }, []);
 
   // 학생 탭: 전화번호 입력 → 숫자만 추출 → `<digits>@local.suzag.com` 로그인 ID 변환.
   // 강사·학부모: 이메일 그대로 사용.
@@ -91,11 +112,16 @@ export default function LoginPage() {
       console.error('[Auth] Login error:', err);
       const errorMessage = err instanceof Error ? err.message : '로그인에 실패했습니다.';
 
-      // 한국어 에러 메시지 변환
+      // 한국어 에러 메시지 변환 — 학생 탭이면 '전화번호' 표현 사용
+      const idLabel = loginType === 'student' ? '전화번호' : '이메일';
       if (errorMessage.includes('Invalid login credentials')) {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setError(`${idLabel} 또는 비밀번호가 올바르지 않습니다.`);
       } else if (errorMessage.includes('Email not confirmed')) {
-        setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+        setError(loginType === 'student'
+          ? '계정 활성화가 필요합니다. 학원 관리자에게 문의하세요.'
+          : '이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+      } else if (errorMessage.toLowerCase().includes('already')) {
+        setError(`이미 등록된 ${idLabel} 입니다.`);
       } else {
         setError(errorMessage);
       }
@@ -130,10 +156,18 @@ export default function LoginPage() {
 
       {/* Logo */}
       <div
-        className="mb-12 text-center"
+        className="mb-8 text-center"
       >
         <BrandLogo size="xl" showTagline />
 
+        {/* 학원 표시 — URL ?org=<id> 로 진입 시 */}
+        {orgInfo && (
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500/10 to-violet-500/10 border border-indigo-500/30">
+            <Building2 size={14} className="text-indigo-400" />
+            <span className="text-[11px] uppercase tracking-wider text-zinc-500">학원</span>
+            <span className="text-sm font-bold text-indigo-300">{orgInfo.name}</span>
+          </div>
+        )}
       </div>
 
       {/* Login Card */}
