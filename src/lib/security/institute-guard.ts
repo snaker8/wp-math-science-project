@@ -17,11 +17,28 @@
 // 공통 풀 처리:
 //   - problems, book_groups: institute_id IS NULL = 공통 풀, 모두 접근 가능
 //   - applyInstituteFilter({ allowCommonPool: true }) 옵션으로 처리
+//
+// 콜드스타트 정책 (2026-05-15 ~):
+//   - SHARED_LIBRARY_MODE=true: 자산화된 데이터(exams/problems/book_groups)를
+//     모두 institute_id NULL(본부 공통 풀)로 강제. 가맹 학원이 업로드한 데이터
+//     를 플랫폼 전체가 공유. 라이브러리 빠르게 키우기 위한 초기 정책.
+//   - 후일 학원별 자산 격리로 전환 시 env 만 끄면 됨.
 // ============================================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TRACK_SPLIT_ENABLED } from '@/lib/featureFlags';
 import { DEFAULT_SUBJECT_TRACK, isSubjectTrack, type SubjectTrack } from '@/types/track';
+
+/**
+ * 자산화 공유 모드 — 초기 콜드스타트 정책.
+ * true 이면 자산화 INSERT 시 institute_id = NULL 강제 (모든 가맹 학원 공유).
+ * 기본값 true — 초기 단계.
+ */
+export function isSharedLibraryMode(): boolean {
+  const raw = process.env.SHARED_LIBRARY_MODE;
+  if (raw === undefined || raw === null || raw === '') return true; // 기본 ON
+  return raw === 'true' || raw === '1' || raw.toLowerCase() === 'on';
+}
 
 /**
  * Query builder 의 격리 필터링에 필요한 메서드만 추상화.
