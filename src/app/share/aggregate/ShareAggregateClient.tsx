@@ -235,7 +235,7 @@ function ShareAggregateContent() {
             인쇄
           </button>
           <div className="ml-auto flex items-center pr-2 text-[10px] text-zinc-500">
-            과사람 수학 분석 리포트
+            Math×Sci Bank — 학교 기출 분석
           </div>
         </div>
       </div>
@@ -419,7 +419,7 @@ function ShareAggregateContent() {
 
         {/* 푸터 */}
         <footer className="mt-10 border-t border-orange-100 pt-4 text-center text-[10px] text-zinc-500">
-          과사람 수학프로그램 · 학교별 시험지 집계 분석 리포트
+          Math×Sci Bank · 학교별 시험지 집계 분석 리포트
           {data.aiNarratives.length > 0 && (
             <span className="ml-2">
               · 시험지별 분석 {data.aiNarratives.length}건 인용 (출처 시험지 ID 명시)

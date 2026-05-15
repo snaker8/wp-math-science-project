@@ -195,8 +195,8 @@ export default function SessionReportPage() {
 
             {/* 3. Branding Footer (Print Only) */}
             <div className="hidden print:flex flex-col items-center pt-20 border-t border-zinc-200">
-                <div className="text-lg font-black text-black mb-2">과사람 : With-People</div>
-                <div className="text-[10px] text-zinc-500">본 리포트는 과사람 AI 분석 엔진에 의해 생성되었습니다.</div>
+                <div className="text-lg font-black text-black mb-2">Math×Sci Bank</div>
+                <div className="text-[10px] text-zinc-500">본 리포트는 Math×Sci Bank AI 분석 엔진에 의해 생성되었습니다.</div>
             </div>
         </div>
     );

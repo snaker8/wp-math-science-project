@@ -90,7 +90,7 @@ export default function EditorPage() {
             수학 전용 웹 에디터
           </h1>
           <p className="text-sm text-indigo-200">
-            과사람 수학 문제은행 플랫폼
+            Math×Sci Bank — 수학·과학 문제은행 플랫폼
           </p>
         </div>
       </header>

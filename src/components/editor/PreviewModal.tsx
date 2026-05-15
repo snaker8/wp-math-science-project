@@ -179,7 +179,7 @@ export function PreviewModal({ isOpen, onClose, content }: PreviewModalProps) {
 
                                 <div className="flex items-center gap-2 opacity-80">
                                     <Hexagon className="w-3 h-3 fill-zinc-300 text-zinc-400" />
-                                    <span className="tracking-widest font-medium">과사람 With-People <span className="mx-1.5 text-zinc-300">|</span> 대치 본원</span>
+                                    <span className="tracking-widest font-medium">Math×Sci Bank</span>
                                 </div>
 
                                 <div className="flex items-center gap-1 opacity-80 font-medium">

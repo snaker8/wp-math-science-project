@@ -133,12 +133,13 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
             style={{
               display: 'flex',
               alignItems: 'center',
-              fontSize: 28,
-              fontWeight: 800,
+              fontSize: 22,
+              fontWeight: 900,
               color: '#1f2937',
+              letterSpacing: -0.5,
             }}
           >
-            과사람
+            Math×Sci Bank
           </div>
         </div>
 
