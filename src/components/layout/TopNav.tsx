@@ -215,12 +215,20 @@ function UserMenu({ displayName, loaded }: { displayName: string; loaded: boolea
           >
             <div className="py-1.5">
               <Link
+                href={trackHref('/dashboard/account', track)}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 text-sm text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors"
+              >
+                <User size={16} className="text-content-tertiary" />
+                <span>내 계정 / 비밀번호</span>
+              </Link>
+              <Link
                 href={trackHref('/dashboard/settings', track)}
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors"
               >
                 <User size={16} className="text-content-tertiary" />
-                <span>프로필 / 설정</span>
+                <span>시스템 설정</span>
               </Link>
               <button
                 type="button"

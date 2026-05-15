@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { User, Mail, Phone, School, Calendar, Edit2, Save, X } from 'lucide-react';
+import { ChangePasswordCard } from '@/components/account/ChangePasswordCard';
 
 export default function StudentProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
@@ -152,6 +153,11 @@ export default function StudentProfilePage() {
               </>
             )}
           </div>
+        </div>
+
+        {/* 비밀번호 변경 */}
+        <div className="mt-6">
+          <ChangePasswordCard variant="dark" />
         </div>
       </div>
     </div>
