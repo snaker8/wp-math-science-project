@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ studentId: string }> },
 ) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
@@ -31,7 +31,7 @@ export async function POST(
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
 
-  const { id: studentId } = await params;
+  const { studentId } = await params;
 
   // 학생 institute 검증
   const { data: student, error: stErr } = await supabaseAdmin
