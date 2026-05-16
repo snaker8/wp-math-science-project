@@ -203,17 +203,14 @@ export default function SignUpPage() {
     }
 
     // 학원 입력 검증 — 두 흐름 중 하나여야 함
-    // (A) 기존 학원 매칭됨 + 산하 센터 선택 → 정상 가입
+    // (A) 기존 학원 매칭됨 → 정상 가입 (센터는 선택, 사용자 지시: "센터가 없는 학원도 있다")
     // (B) 매칭 안됨 → 가맹 신청 모드 (학원·센터 자유 입력)
     if (!applyMode) {
       if (!selectedOrg) {
         setError('학원을 입력하고 매칭된 학원을 선택해주세요. 매칭이 안 되면 [신규 학원 신청] 으로 진행하실 수 있습니다.');
         return;
       }
-      if (!formData.instituteId) {
-        setError('소속 센터를 선택해주세요');
-        return;
-      }
+      // 센터는 선택 사항 — 단일 센터 운영 학원은 센터 미선택 허용.
     } else {
       if (!orgQuery.trim()) {
         setError('가맹 신청할 학원 이름을 입력해주세요');
@@ -630,19 +627,22 @@ export default function SignUpPage() {
                   )}
                 </div>
 
-                {/* 학원 선택 후 — 산하 센터 드롭다운 */}
+                {/* 학원 선택 후 — 산하 센터 드롭다운 (선택, 사용자 지시: "센터가 없는 학원도 있다") */}
                 {selectedOrg && (
                   <div className="space-y-1.5 mt-3">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">센터</label>
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                      센터 <span className="text-zinc-600 normal-case font-normal">(선택)</span>
+                    </label>
                     <select
                       name="instituteId"
                       value={formData.instituteId}
                       onChange={handleInputChange}
-                      required
                       className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
                     >
                       <option value="" className="bg-zinc-900">
-                        {institutesLoading ? '로딩 중…' : (institutes.length === 0 ? '등록된 센터 없음' : '센터를 선택하세요')}
+                        {institutesLoading
+                          ? '로딩 중…'
+                          : (institutes.length === 0 ? '센터 없이 가입' : '센터 선택 안 함')}
                       </option>
                       {institutes.map((inst) => (
                         <option key={inst.id} value={inst.id} className="bg-zinc-900">
@@ -651,8 +651,8 @@ export default function SignUpPage() {
                       ))}
                     </select>
                     {!institutesLoading && institutes.length === 0 && (
-                      <p className="text-[11px] text-amber-400/80 ml-1">
-                        선택하신 학원에 등록된 센터가 없습니다 — 관리자에게 문의하세요
+                      <p className="text-[11px] text-zinc-500 ml-1">
+                        등록된 센터가 없습니다. 센터 없이 그대로 가입 가능합니다.
                       </p>
                     )}
                   </div>
