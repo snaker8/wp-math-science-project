@@ -36,6 +36,8 @@ export interface UploadJob {
   subjectArea?: 'math' | 'science';  // ★ 과목 영역 (수학/과학)
   scienceSubject?: string;           // ★ 과학 세부 과목 코드 (ScienceSubjectCode)
   curriculumVersion?: '2015' | '2022'; // ★ 교육과정 버전
+  // ★ 사용자 명시 출처 카테고리 — 자산화 시 자동 태깅 override (사용자 지시 2026-05-16)
+  sourceCategory?: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock';
   error?: string;
   createdAt: string;
   updatedAt: string;

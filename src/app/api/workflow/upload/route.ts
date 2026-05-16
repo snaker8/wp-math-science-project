@@ -16,6 +16,49 @@ import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
+
+// ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
+//   사용자 지시 (2026-05-16): "자산화 할때 분류해서 하게 하자".
+//   - 'auto' : 자동 태깅 결과 그대로 사용 (기존 동작)
+//   - 'school' / 'textbook' / 'mock' : 진단평가 아님 (is_diagnostic=false 강제)
+//   - 'diagnostic' : 진단평가 강제 (제목에서 round 추출 시도, 실패 시 빈값)
+function applySourceCategoryOverride(
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock',
+  autoMeta: { is_diagnostic: boolean; diagnostic_category: 'BS' | 'DD' | 'PT' | 'SC' | null; diagnostic_round: string | null; diagnostic_difficulty: string | null },
+  title: string,
+): {
+  is_diagnostic: boolean;
+  diagnostic_category: 'BS' | 'DD' | 'PT' | 'SC' | null;
+  diagnostic_round: string | null;
+  diagnostic_difficulty: string | null;
+  exam_type: string | null;  // null = 자동 감지 결과 사용
+} {
+  if (sourceCategory === 'auto') {
+    return { ...autoMeta, exam_type: null };
+  }
+  if (sourceCategory === 'diagnostic') {
+    return {
+      is_diagnostic: true,
+      diagnostic_category: autoMeta.diagnostic_category || 'BS',  // 패턴 매치 실패 시 BS 기본
+      diagnostic_round: autoMeta.diagnostic_round,
+      diagnostic_difficulty: autoMeta.diagnostic_difficulty,
+      exam_type: '진단평가',
+    };
+  }
+  // school / textbook / mock 모두 진단평가 X
+  const examTypeMap: Record<string, string> = {
+    school:   '학교기출',
+    textbook: '시중교재',
+    mock:     '모의고사',
+  };
+  return {
+    is_diagnostic: false,
+    diagnostic_category: null,
+    diagnostic_round: null,
+    diagnostic_difficulty: null,
+    exam_type: examTypeMap[sourceCategory] || null,
+  };
+}
 import { isSharedLibraryMode } from '@/lib/security/institute-guard';
 import type { SubjectTrack } from '@/types/track';
 
@@ -95,6 +138,11 @@ export async function POST(request: NextRequest) {
     const bookGroupId = formData.get('bookGroupId') as string | null;
     const appendToExamId = formData.get('appendTo') as string | null; // 기존 시험지에 병합
     const subjectArea = (formData.get('subjectArea') as 'math' | 'science') || 'math';
+    // ★ 사용자 명시 출처 카테고리 — 자동 태깅보다 우선 (사용자 지시 2026-05-16)
+    //   auto = 제목 패턴 자동 분류 (기존 동작) / school / diagnostic / textbook / mock
+    const sourceCategory = (formData.get('sourceCategory') as
+      | 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock'
+      | null) || 'auto';
     const scienceSubject = formData.get('scienceSubject') as string | null;
     const curriculumVersion = (formData.get('curriculumVersion') as '2015' | '2022') || '2022';
     const scienceMode = (formData.get('scienceMode') as 'diagrams_only' | 'full') || 'full';
@@ -187,6 +235,7 @@ export async function POST(request: NextRequest) {
       subjectArea,
       scienceSubject: scienceSubject || undefined,
       curriculumVersion: subjectArea === 'science' ? curriculumVersion : undefined,
+      sourceCategory,  // ★ 사용자 명시 출처 카테고리 — PUT 시점에 jobStore 에서 가져와 사용
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -551,6 +600,7 @@ export async function PUT(request: NextRequest) {
           generateSolutions: false,
           bookGroupId: bookGroupId || undefined,
           subjectArea: subjectAreaHint,
+          sourceCategory: 'auto',  // ★ Storage 복원 경로 — formData 가 없는 케이스, auto 기본
           createdAt: mainFile.created_at || new Date().toISOString(),
           updatedAt: mainFile.updated_at || new Date().toISOString(),
         };
@@ -640,7 +690,7 @@ export async function PUT(request: NextRequest) {
     if ((!results || results.length === 0) && editedProblems && editedProblems.length > 0) {
       const acBookGroupId = bookGroupId || job.bookGroupId || null;
       console.log(`[Upload PUT] AutoCrop 모드: ${editedProblems.length}개 문제 직접 저장, bookGroupId="${acBookGroupId}"`);
-      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap, request.nextUrl.origin);
+      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap, request.nextUrl.origin, job.sourceCategory || 'auto');
     }
 
     if (job.status !== 'COMPLETED') {
@@ -754,7 +804,7 @@ export async function PUT(request: NextRequest) {
     // DB에 저장 (bookGroupId, imageUrlMap 전달) — 클라이언트 값 우선, 폴백으로 job.bookGroupId
     const effectiveBookGroupId = bookGroupId || job.bookGroupId || null;
     console.log(`[Upload PUT] ★ DB 저장 시 bookGroupId: "${effectiveBookGroupId}"`);
-    await saveProblemsToDB(jobId, results, effectiveBookGroupId, imageUrlMap, editedProblems, pageImagePathMap);
+    await saveProblemsToDB(jobId, results, effectiveBookGroupId, imageUrlMap, editedProblems, pageImagePathMap, job.sourceCategory || 'auto');
 
     return NextResponse.json({
       success: true,
@@ -1129,7 +1179,9 @@ async function saveEditedProblemsDirect(
   }>,
   bookGroupId: string | null,
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
-  requestOrigin: string = ''
+  requestOrigin: string = '',
+  // ★ 사용자 명시 출처 카테고리 — exam INSERT 시 자동 태깅 override
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock' = 'auto'
 ) {
   const supabase = supabaseAdmin;
   if (!supabase) {
@@ -1367,6 +1419,8 @@ async function saveEditedProblemsDirect(
   if (!examId) {
     try {
       const diagnosticMeta = detectDiagnosticMetaFromTitle(fileTitle);
+      // ★ 사용자 명시 sourceCategory override — 'auto' 면 자동 태깅 결과 사용
+      const sourceOverride = applySourceCategoryOverride(sourceCategory, diagnosticMeta, fileTitle);
       const examInsertData: Record<string, any> = {
         title: fileTitle,
         description: `업로드 파일: ${job.fileName} (${editedProblems.length}문항)`,
@@ -1376,13 +1430,13 @@ async function saveEditedProblemsDirect(
         total_points: editedProblems.length * 4,
         time_limit_minutes: 50,
         subject: detectSubjectFromTitle(fileTitle),
-        exam_type: detectExamTypeFromTitle(fileTitle),
+        exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
         grade: detectGradeFromTitle(fileTitle),
-        // ★ 진단지 자동 태깅 — 제목 패턴(BS_M1_R1 등) 매치 시 채워짐. 미매치면 모두 NULL/FALSE.
-        is_diagnostic: diagnosticMeta.is_diagnostic,
-        diagnostic_category: diagnosticMeta.diagnostic_category,
-        diagnostic_round: diagnosticMeta.diagnostic_round,
-        diagnostic_difficulty: diagnosticMeta.diagnostic_difficulty,
+        // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
+        is_diagnostic: sourceOverride.is_diagnostic,
+        diagnostic_category: sourceOverride.diagnostic_category,
+        diagnostic_round: sourceOverride.diagnostic_round,
+        diagnostic_difficulty: sourceOverride.diagnostic_difficulty,
         subject_track: subjectTrack,
       };
       if (bookGroupId) {
@@ -1812,7 +1866,9 @@ async function saveProblemsToDB(
   bookGroupId: string | null = null,
   imageUrlMap: Map<number, string> = new Map(),
   editedProblems?: Array<{ number: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; [key: string]: any }>,
-  pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map()
+  pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
+  // ★ 사용자 명시 출처 카테고리 — exam INSERT 시 자동 태깅 override
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock' = 'auto'
 ): Promise<void> {
   // Use Admin Client to bypass RLS for background processing
   const supabase = supabaseAdmin;
@@ -2036,6 +2092,8 @@ async function saveProblemsToDB(
     // ★ append 모드면 새 exam INSERT 스킵 (examId 이미 set)
     if (!examId) {
       const diagnosticMeta = detectDiagnosticMetaFromTitle(fileTitle);
+      // ★ 사용자 명시 sourceCategory override — saveEditedProblemsDirect 와 동일 로직.
+      const sourceOverride = applySourceCategoryOverride(sourceCategory, diagnosticMeta, fileTitle);
       const examInsertData: Record<string, any> = {
         title: fileTitle,
         description: `업로드: ${job.fileName} (${results.length}문항) | 과목: ${classification?.subject || '수학'} | 단원: ${classification?.chapter || '미분류'}`,
@@ -2045,13 +2103,13 @@ async function saveProblemsToDB(
         total_points: results.length * 4,
         time_limit_minutes: 50,
         subject: detectSubjectFromTitle(fileTitle),
-        exam_type: detectExamTypeFromTitle(fileTitle),
+        exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
         grade: detectGradeFromTitle(fileTitle),
-        // ★ 진단지 자동 태깅 — saveEditedProblemsDirect 와 동일 로직 (한쪽만 패치되면 사고)
-        is_diagnostic: diagnosticMeta.is_diagnostic,
-        diagnostic_category: diagnosticMeta.diagnostic_category,
-        diagnostic_round: diagnosticMeta.diagnostic_round,
-        diagnostic_difficulty: diagnosticMeta.diagnostic_difficulty,
+        // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
+        is_diagnostic: sourceOverride.is_diagnostic,
+        diagnostic_category: sourceOverride.diagnostic_category,
+        diagnostic_round: sourceOverride.diagnostic_round,
+        diagnostic_difficulty: sourceOverride.diagnostic_difficulty,
         subject_track: subjectTrack,
       };
       if (diagnosticMeta.is_diagnostic) {
