@@ -297,12 +297,9 @@ export interface NavGroup {
 }
 
 export const topNavGroups: NavGroup[] = [
-  {
-    id: 'dashboard',
-    label: '대시보드',
-    icon: LayoutDashboard,
-    href: '/dashboard',
-  },
+  // ★ 대시보드 단독 메뉴 제거 — 로고 클릭으로 /dashboard 진입 가능
+  //   (TopNav.tsx 의 <Link href="/dashboard" ...> 로고 link 가 처리).
+  //   사용자 지시 (2026-05-16): "대시보드 굳이 필요없을거 같은데 로고 누르면 대시보드로 가게 하면".
   {
     id: 'repository',
     label: '문제은행',
