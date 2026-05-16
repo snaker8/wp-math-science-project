@@ -1180,14 +1180,13 @@ export default function CloudPage() {
         case 'diagnostic':
           return !!e.isDiagnostic;
         case 'school':
+          // examType 기준 우선 — bookGroupId는 폴더 구분용이라 출처 판단에 사용 X
           if (e.isDiagnostic) return false;
-          if (e.bookGroupId) return false;
-          // school 컬럼이 채워졌거나 title 에서 학교명 추출 가능
-          return !!(e.school || extractSchoolName(e.title || e.fileName || ''));
+          return e.examType !== '모의고사' && e.examType !== '시중교재';
         case 'textbook':
-          return !!e.bookGroupId;
+          return !e.isDiagnostic && e.examType === '시중교재';
         case 'mock':
-          return MOCK_TYPE_PATTERN.test(e.examType || '') || MOCK_TITLE_PATTERN.test(e.title || e.fileName || '');
+          return !e.isDiagnostic && (e.examType === '모의고사' || MOCK_TITLE_PATTERN.test(e.title || e.fileName || ''));
         default:
           return true;
       }
@@ -1447,12 +1446,12 @@ export default function CloudPage() {
                     switch (cat.id) {
                       case 'diagnostic': return !!e.isDiagnostic;
                       case 'school':
-                        if (e.isDiagnostic || e.bookGroupId) return false;
-                        return !!(e.school || extractSchoolName(e.title || e.fileName || ''));
-                      case 'textbook': return !!e.bookGroupId;
+                        if (e.isDiagnostic) return false;
+                        return e.examType !== '모의고사' && e.examType !== '시중교재';
+                      case 'textbook': return !e.isDiagnostic && e.examType === '시중교재';
                       case 'mock':
-                        return MOCK_TYPE_PATTERN.test(e.examType || '') ||
-                               MOCK_TITLE_PATTERN.test(e.title || e.fileName || '');
+                        return !e.isDiagnostic && (e.examType === '모의고사' ||
+                               MOCK_TITLE_PATTERN.test(e.title || e.fileName || ''));
                       default: return false;
                     }
                   }).length;
