@@ -16,6 +16,7 @@ import {
   Filter, CheckCircle2, Clock, AlertCircle, Camera, Trash2,
   type LucideIcon,
 } from 'lucide-react';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import GradingSheetUpload from '@/components/grading/GradingSheetUpload';
 
@@ -26,6 +27,7 @@ interface SessionRow {
   id: string;
   student_id: string;
   student_name: string;
+  student_grade?: number | null;
   exam_id: string;
   exam_title: string;
   round_number: number;
@@ -406,7 +408,14 @@ function SessionCard({
               </span>
             )}
           </div>
-          <div className="font-semibold text-sm truncate">{s.student_name}</div>
+          <div className="font-semibold text-sm truncate flex items-center gap-2">
+            <span>{s.student_name}</span>
+            {gradeIntToLabel(s.student_grade) && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-content-tertiary font-normal">
+                {gradeIntToLabel(s.student_grade)}
+              </span>
+            )}
+          </div>
           <div className="text-xs text-content-tertiary truncate">{s.exam_title}</div>
         </div>
 

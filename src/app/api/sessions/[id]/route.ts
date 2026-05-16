@@ -63,15 +63,14 @@ export async function GET(
     }
   }
 
-  // 학생 정보
+  // 학생 정보 — users.name 컬럼 없음, full_name 만 사용
   const { data: student } = await sb
     .from('users')
-    .select('id, full_name, name, email, grade, class_name, className, institute_id')
+    .select('id, full_name, email, grade, institute_id')
     .eq('id', (session as any).student_id)
     .maybeSingle();
   const studentName =
     ((student as any)?.full_name as string) ||
-    ((student as any)?.name as string) ||
     ((student as any)?.email as string) ||
     '(이름 없음)';
 

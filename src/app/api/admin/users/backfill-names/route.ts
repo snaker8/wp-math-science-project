@@ -38,7 +38,7 @@ export async function POST(_request: NextRequest) {
   //   대신 전체 조회 후 client 에서 filter — 학원당 수십~수백명 한도면 무관.
   let query = sb
     .from('users')
-    .select('id, full_name, name, institute_id, email, role')
+    .select('id, full_name, institute_id, email, role')
     .eq('role', 'STUDENT');
 
   if (!scope.isSuperAdmin) {
@@ -62,11 +62,10 @@ export async function POST(_request: NextRequest) {
   }
 
   const targets = ((candidates || []) as Array<{
-    id: string; full_name?: string | null; name?: string | null; institute_id?: string; email?: string;
+    id: string; full_name?: string | null; institute_id?: string; email?: string;
   }>).filter((u) => {
     const fn = (u.full_name || '').trim();
-    const nm = (u.name || '').trim();
-    return !fn && !nm;
+    return !fn;
   });
 
   if (targets.length === 0) {

@@ -145,23 +145,23 @@ export async function GET(request: NextRequest) {
 
   const [{ data: usersData }, { data: examsData }] = await Promise.all([
     studentIds.length
-      ? sb.from('users').select('id, full_name, name, email, institute_id').in('id', studentIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; name?: string; email?: string; institute_id?: string }> }),
+      ? sb.from('users').select('id, full_name, email, grade, institute_id').in('id', studentIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; email?: string; grade?: number; institute_id?: string }> }),
     examIds.length
       ? sb.from('exams').select('id, title, institute_id').in('id', examIds)
       : Promise.resolve({ data: [] as Array<{ id: string; title?: string; institute_id?: string }> }),
   ]);
 
-  // ★ 이름 backfill — public.users.full_name/name 둘 다 비면 auth.users 의
+  // ★ 이름 backfill — public.users.full_name 비면 auth.users 의
   //   raw_user_meta_data.full_name 에서 가져와 박음 (signup·createUser 시점에
   //   동봉됐던 진짜 이름). 부수적 update — fire-and-forget.
-  //   사용자 명시 (2026-05-16): "전번이 아니라 이름이 나오게 해야지" —
-  //   phone 폴백 제거하고 진짜 이름이 표시되도록.
+  //   ★ users.name 컬럼은 존재하지 않음 — full_name 만 사용 (사용자 보고
+  //   "column users.name does not exist", 2026-05-16).
   const userList = (usersData || []) as Array<{
-    id: string; full_name?: string; name?: string; email?: string; institute_id?: string;
+    id: string; full_name?: string; email?: string; grade?: number; institute_id?: string;
   }>;
   const missingNameIds = userList
-    .filter((u) => !(u.full_name || u.name))
+    .filter((u) => !u.full_name)
     .map((u) => u.id);
   const authNameMap = new Map<string, string>();
   if (missingNameIds.length > 0) {
@@ -185,14 +185,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const userMap = new Map<string, { name: string; institute_id?: string }>();
+  const userMap = new Map<string, { name: string; grade?: number; institute_id?: string }>();
   for (const u of userList) {
-    // ★ 이름 폴백 — full_name → name → auth metadata → email prefix → "(이름 없음)"
-    //   phone 은 표시 X (사용자 명시).
+    // ★ 이름 폴백 — full_name → auth metadata → email prefix → "(이름 없음)"
+    //   users.name 컬럼 없음, phone 표시 X.
     const authName = authNameMap.get(u.id);
     const emailPrefix = u.email ? u.email.split('@')[0] : '';
-    const displayName = u.full_name || u.name || authName || emailPrefix || '(이름 없음)';
-    userMap.set(u.id, { name: displayName, institute_id: u.institute_id });
+    const displayName = u.full_name || authName || emailPrefix || '(이름 없음)';
+    userMap.set(u.id, { name: displayName, grade: u.grade, institute_id: u.institute_id });
   }
   const examMap = new Map<string, { title: string; institute_id?: string }>();
   for (const e of (examsData || []) as Array<{ id: string; title?: string; institute_id?: string }>) {
@@ -207,6 +207,7 @@ export async function GET(request: NextRequest) {
         id: r.session_id as string,
         student_id: r.student_id as string,
         student_name: stu?.name || '(이름 없음)',
+        student_grade: stu?.grade ?? null,
         student_institute_id: stu?.institute_id,
         exam_id: r.exam_id as string,
         exam_title: ex?.title || '',
