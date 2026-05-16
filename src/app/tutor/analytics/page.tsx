@@ -1,638 +1,555 @@
 'use client';
 
 // ============================================================================
-// Tutor Analytics Dashboard Page
-// 튜터/교사용 학생 학습 분석 대시보드
+// /tutor/analytics
+//   강사용 학생 학습 분석 — 학생 선택 후 진단평가 4종 집계 실시간 표시.
+//   API: GET /api/users/students (목록), GET /api/students/[id]/analytics (집계)
+//
+// 핵심: 강사가 본인 institute 학생을 골라 진단평가 결과를 확인.
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BarChart3,
-  RefreshCw,
-  Download,
-  Calendar,
-  Users,
-  ChevronDown,
-  Search,
+  BarChart3, Users, Search, ChevronDown, Loader2, AlertTriangle,
+  TrendingUp, Brain, Target, Calendar, Activity, ExternalLink,
+  type LucideIcon,
 } from 'lucide-react';
-import { Heatmap } from '@/components/analytics';
-import { generateMockHeatmapData } from '@/lib/analytics/heatmap';
-import type { HeatmapData } from '@/types/analytics';
+import Link from 'next/link';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell,
+} from 'recharts';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 
-// Mock 학생 목록 (실제 구현 시 API에서 가져옴)
-const mockStudents = [
-  { id: 'student-1', name: '김철수', grade: '고1' },
-  { id: 'student-2', name: '이영희', grade: '고2' },
-  { id: 'student-3', name: '박민수', grade: '고1' },
-  { id: 'student-4', name: '정수진', grade: '고3' },
-  { id: 'student-5', name: '최준혁', grade: '고2' },
-];
+interface StudentRow {
+  id: string;
+  name?: string | null;
+  full_name?: string | null;
+  grade?: number | null;
+}
+
+interface AnalyticsData {
+  student: { id: string; name: string; grade: number | null };
+  summary: {
+    totalSessions: number;
+    totalGraded: number;
+    avgScorePct: number | null;
+    lastActiveAt: string | null;
+  };
+  performanceTrend: Array<{
+    date: string; sessionId: string; sessionType: string; roundNumber: number;
+    total: number; correct: number; pct: number;
+  }>;
+  errorCauses: Record<string, number>;
+  mathsecrHeatmap: Array<Record<string, unknown>>;
+  pitfalls: Array<{ pitfall_code: string; hitCount: number; recent: string }>;
+  sessions: Array<{
+    id: string; exam_id: string; exam_title: string;
+    round_number: number; session_type: string;
+    issued_at: string; completed_at: string | null;
+    total: number; correct: number; pct: number | null;
+  }>;
+}
+
+const SESSION_TYPE_LABEL: Record<string, string> = {
+  BS: '광역 스캔', DD: '정밀 진단', PT: '선수 추적', SC: '스팟 체크',
+};
+
+const ERROR_CAUSE_COLORS: Record<string, string> = {
+  개념: '#6366f1', 유형: '#8b5cf6', 계산: '#ec4899', 문장제: '#f59e0b', 시간: '#10b981',
+};
+
+function Card({ children, title, icon: Icon, className = '' }: {
+  children: React.ReactNode; title: string; icon?: LucideIcon; className?: string;
+}) {
+  return (
+    <div className={`bg-white border border-gray-200 rounded-2xl p-5 ${className}`}>
+      <div className="flex items-center gap-2 mb-4 text-gray-500">
+        {Icon && <Icon size={16} />}
+        <h3 className="font-bold text-xs uppercase tracking-wider">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function StatCell({ label, value, sub, icon: Icon }: {
+  label: string; value: string | number; sub?: string; icon: LucideIcon;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-4">
+      <div className="flex items-center gap-2 text-gray-500 text-xs mb-2">
+        <Icon size={14} /> {label}
+      </div>
+      <div className="text-2xl font-bold text-zinc-900">{value}</div>
+      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return '-';
+  try {
+    return new Date(iso).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
 
 export default function TutorAnalyticsPage() {
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
+
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
-  const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState('30days');
 
-  // 필터링된 학생 목록
-  const filteredStudents = mockStudents.filter(
-    (student) =>
-      student.name.includes(searchQuery) ||
-      student.grade.includes(searchQuery)
-  );
-
-  // 선택된 학생 정보
-  const selectedStudentInfo = mockStudents.find(
-    (s) => s.id === selectedStudent
-  );
-
-  // 데이터 로드
-  const loadAnalyticsData = async () => {
-    if (!selectedStudent) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // TODO: 실제 API 호출로 대체
-      // const response = await fetch(`/api/analytics/heatmap?studentId=${selectedStudent}&range=${dateRange}`);
-      // if (!response.ok) throw new Error('Failed to load analytics data');
-      // const data = await response.json();
-
-      // 임시: Mock 데이터 사용
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const studentInfo = mockStudents.find((s) => s.id === selectedStudent);
-      const mockData = generateMockHeatmapData(
-        selectedStudent,
-        studentInfo?.name || '알 수 없음'
-      );
-      setHeatmapData(mockData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '데이터 로드 실패');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // 학생 목록 로드
   useEffect(() => {
-    if (selectedStudent) {
-      loadAnalyticsData();
-    } else {
-      setHeatmapData(null);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/users/students');
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        if (!cancelled) setStudents((json.students || []) as StudentRow[]);
+      } catch (e) {
+        if (!cancelled) setStudentsError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setStudentsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 학생 선택 시 분석 데이터 fetch
+  useEffect(() => {
+    if (!selectedStudent) {
+      setData(null);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStudent, dateRange]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/students/${selectedStudent}/analytics`);
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        if (!cancelled) setData(json as AnalyticsData);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedStudent]);
 
-  // 유사 문제 생성 핸들러
-  const handleGenerateTwin = (typeCode: string) => {
-    if (!selectedStudent) return;
-    console.log('Generate twin for student:', selectedStudent, 'type:', typeCode);
-    alert(
-      `학생 "${selectedStudentInfo?.name}"의 유형 코드 "${typeCode}"에 대한 유사 문제를 생성합니다.\n(AI 기반 Twin Generation 기능 - 추후 구현 예정)`
-    );
-  };
+  // 학생 필터
+  const filteredStudents = useMemo(() => {
+    if (!searchQuery.trim()) return students;
+    const q = searchQuery.trim().toLowerCase();
+    return students.filter((s) => {
+      const name = (s.full_name || s.name || '').toLowerCase();
+      return name.includes(q);
+    });
+  }, [students, searchQuery]);
 
-  // CSV 내보내기
-  const handleExportCSV = () => {
-    if (!heatmapData) return;
+  const selectedInfo = students.find((s) => s.id === selectedStudent);
+  const selectedName = selectedInfo
+    ? selectedInfo.full_name || selectedInfo.name || '(이름 없음)'
+    : null;
 
-    const rows = [
-      ['과목', '단원', '유형코드', '유형명', '숙달도', '총시도', '정답', '부분정답(상)', '부분정답(하)', '오답'],
-    ];
+  // 오답 원인 차트
+  const errorCauseChart = useMemo(() => {
+    if (!data) return [];
+    return Object.entries(data.errorCauses)
+      .filter(([, v]) => v > 0)
+      .map(([cause, value]) => ({ cause, value }));
+  }, [data]);
 
-    heatmapData.rows.forEach((row) => {
-      row.cells.forEach((cell) => {
-        rows.push([
-          cell.subject,
-          cell.chapter,
-          cell.typeCode,
-          cell.typeName,
-          String(cell.masteryScore),
-          String(cell.totalAttempts),
-          String(cell.correctCount),
-          String(cell.partialCorrectCount),
-          String(cell.partialWrongCount),
-          String(cell.wrongCount),
-        ]);
+  // 인사이트 룰 기반
+  const insights = useMemo(() => {
+    if (!data) return [];
+    const out: Array<{ kind: 'good' | 'warn'; title: string; body: string }> = [];
+
+    if (data.summary.avgScorePct != null) {
+      if (data.summary.avgScorePct >= 80) {
+        out.push({
+          kind: 'good',
+          title: `평균 정답률 ${data.summary.avgScorePct}% — 안정적`,
+          body: `채점 ${data.summary.totalGraded}건 기준. 심화 학습 권장.`,
+        });
+      } else if (data.summary.avgScorePct < 60) {
+        out.push({
+          kind: 'warn',
+          title: `평균 정답률 ${data.summary.avgScorePct}% — 보강 필요`,
+          body: '오답 원인·약점 단원 분석 후 맞춤 학습지 권장.',
+        });
+      }
+    }
+    const topCause = errorCauseChart.sort((a, b) => b.value - a.value)[0];
+    if (topCause) {
+      out.push({
+        kind: 'warn',
+        title: `최다 오답 원인: ${topCause.cause} (${topCause.value}건)`,
+        body: '해당 원인 유형에 맞는 보강 학습지 또는 클리닉 권장.',
       });
-    });
-
-    const csvContent = rows.map((row) => row.join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `학습분석_${heatmapData.studentName}_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+    }
+    const topPitfall = data.pitfalls[0];
+    if (topPitfall) {
+      out.push({
+        kind: 'warn',
+        title: `반복 함정: ${topPitfall.pitfall_code} (${topPitfall.hitCount}회)`,
+        body: '같은 함정을 여러 번 적중 — 개념 재확인 필요.',
+      });
+    }
+    if (out.length === 0) {
+      out.push({
+        kind: 'good',
+        title: '아직 분석할 데이터가 충분치 않습니다',
+        body: '학생이 진단평가를 채점받으면 자동으로 인사이트가 생성됩니다.',
+      });
+    }
+    return out;
+  }, [data, errorCauseChart]);
 
   return (
-    <div className="analytics-page">
-      {/* 페이지 헤더 */}
-      <header className="page-header">
-        <div className="header-content">
-          <div className="header-info">
-            <h1 className="page-title">
-              <BarChart3 size={28} />
-              학생 학습 분석
-            </h1>
-            <p className="page-description">
-              학생별 문제 유형 숙달도를 분석하여 맞춤 학습을 지원합니다.
-            </p>
-          </div>
-
-          <div className="header-actions">
-            {selectedStudent && (
-              <>
-                <div className="date-filter">
-                  <Calendar size={16} />
-                  <select
-                    value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
-                  >
-                    <option value="7days">최근 7일</option>
-                    <option value="30days">최근 30일</option>
-                    <option value="90days">최근 90일</option>
-                    <option value="all">전체 기간</option>
-                  </select>
-                </div>
-
-                <button
-                  className="action-button secondary"
-                  onClick={handleExportCSV}
-                  disabled={!heatmapData}
-                >
-                  <Download size={16} />
-                  CSV 내보내기
-                </button>
-
-                <button
-                  className="action-button primary"
-                  onClick={loadAnalyticsData}
-                  disabled={isLoading}
-                >
-                  <RefreshCw size={16} className={isLoading ? 'spinning' : ''} />
-                  새로고침
-                </button>
-              </>
-            )}
-          </div>
+    <div className="min-h-screen bg-gray-50 text-zinc-900 p-6 md:p-8 space-y-6 font-sans">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <BarChart3 size={26} className="text-indigo-600" />
+            학생 학습 분석
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            학생을 선택하면 진단평가 4종 집계 (정답률 추이 · 오답 원인 · 단원별 정답률 · 함정 누적) 가 표시됩니다.
+          </p>
         </div>
-      </header>
+      </div>
 
-      {/* 학생 선택 섹션 */}
-      <div className="student-selector-section">
-        <div className="student-selector-container">
-          <div className="selector-label">
-            <Users size={18} />
-            학생 선택
+      {/* 학생 선택 */}
+      <Card title="학생 선택" icon={Users}>
+        {studentsLoading ? (
+          <div className="flex items-center gap-2 text-gray-500 text-sm py-3">
+            <Loader2 size={16} className="animate-spin" /> 학생 목록 불러오는 중…
           </div>
-
-          <div className="student-dropdown">
+        ) : studentsError ? (
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm">
+            <AlertTriangle size={14} className="mt-0.5" /> {studentsError}
+          </div>
+        ) : students.length === 0 ? (
+          <div className="text-sm text-gray-500 py-3">등록된 학생이 없습니다.</div>
+        ) : (
+          <div className="relative">
             <button
-              className="dropdown-trigger"
-              onClick={() => setIsStudentDropdownOpen(!isStudentDropdownOpen)}
+              type="button"
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-gray-300 bg-white hover:border-indigo-400 text-sm"
             >
-              {selectedStudentInfo ? (
-                <span className="selected-student">
-                  {selectedStudentInfo.name}
-                  <span className="student-grade">{selectedStudentInfo.grade}</span>
+              {selectedInfo ? (
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold">{selectedName}</span>
+                  {gradeIntToLabel(selectedInfo.grade) && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                      {gradeIntToLabel(selectedInfo.grade)}
+                    </span>
+                  )}
                 </span>
               ) : (
-                <span className="placeholder">학생을 선택하세요</span>
+                <span className="text-gray-400">학생을 선택하세요…</span>
               )}
-              <ChevronDown size={18} />
+              <ChevronDown size={16} className={`text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
             </button>
-
-            {isStudentDropdownOpen && (
-              <div className="dropdown-menu">
-                <div className="search-box">
-                  <Search size={16} />
+            {dropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-hidden">
+                <div className="p-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
+                  <Search size={14} className="text-gray-400" />
                   <input
                     type="text"
-                    placeholder="이름 또는 학년으로 검색..."
+                    autoFocus
+                    placeholder="이름으로 검색…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    autoFocus
+                    className="flex-1 bg-transparent text-sm outline-none"
                   />
                 </div>
-
-                <div className="student-list">
-                  {filteredStudents.map((student) => (
-                    <button
-                      key={student.id}
-                      className={`student-item ${selectedStudent === student.id ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedStudent(student.id);
-                        setIsStudentDropdownOpen(false);
-                        setSearchQuery('');
-                      }}
-                    >
-                      <span className="student-name">{student.name}</span>
-                      <span className="student-grade">{student.grade}</span>
-                    </button>
-                  ))}
-
-                  {filteredStudents.length === 0 && (
-                    <div className="no-results">검색 결과가 없습니다.</div>
+                <div className="overflow-y-auto max-h-60">
+                  {filteredStudents.length === 0 ? (
+                    <div className="text-center py-4 text-sm text-gray-400">검색 결과 없음</div>
+                  ) : (
+                    filteredStudents.map((s) => {
+                      const name = s.full_name || s.name || '(이름 없음)';
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudent(s.id);
+                            setDropdownOpen(false);
+                            setSearchQuery('');
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 ${
+                            selectedStudent === s.id ? 'bg-indigo-50 text-indigo-700' : ''
+                          }`}
+                        >
+                          <span className="truncate">{name}</span>
+                          {gradeIntToLabel(s.grade) && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 flex-shrink-0">
+                              {gradeIntToLabel(s.grade)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
             )}
           </div>
+        )}
+      </Card>
+
+      {!selectedStudent && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
+          <Users size={36} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-zinc-700 font-semibold">학생을 선택해주세요</p>
+          <p className="text-sm text-gray-500 mt-1">선택하면 진단평가 분석이 표시됩니다.</p>
         </div>
-      </div>
-
-      {/* 메인 콘텐츠 */}
-      <main className="main-content">
-        {!selectedStudent && (
-          <div className="empty-state">
-            <Users size={48} />
-            <h3>학생을 선택해주세요</h3>
-            <p>상단에서 학생을 선택하면 학습 분석 히트맵이 표시됩니다.</p>
-          </div>
-        )}
-
-        {selectedStudent && isLoading && (
-          <div className="loading-state">
-            <RefreshCw size={32} className="spinning" />
-            <p>분석 데이터를 불러오는 중...</p>
-          </div>
-        )}
-
-        {selectedStudent && error && (
-          <div className="error-state">
-            <p>{error}</p>
-            <button onClick={loadAnalyticsData}>다시 시도</button>
-          </div>
-        )}
-
-        {selectedStudent && !isLoading && !error && heatmapData && (
-          <Heatmap data={heatmapData} onGenerateTwin={handleGenerateTwin} />
-        )}
-      </main>
-
-      {/* 클릭 외부 영역 감지 */}
-      {isStudentDropdownOpen && (
-        <div
-          className="dropdown-overlay"
-          onClick={() => setIsStudentDropdownOpen(false)}
-        />
       )}
 
-      <style jsx>{`
-        .analytics-page {
-          min-height: 100vh;
-          background: #f3f4f6;
-        }
+      {loading && (
+        <div className="flex items-center justify-center py-16 text-gray-500 gap-2">
+          <Loader2 size={18} className="animate-spin" /> 분석 데이터 불러오는 중…
+        </div>
+      )}
 
-        .page-header {
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
-          padding: 24px 32px;
-        }
+      {error && !loading && (
+        <div className="flex items-start gap-2 p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm">
+          <AlertTriangle size={16} className="mt-0.5" /> {error}
+        </div>
+      )}
 
-        .header-content {
-          max-width: 1400px;
-          margin: 0 auto;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 24px;
-        }
+      {data && !loading && !error && (
+        <>
+          {/* 요약 카드 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCell label="세션 수" value={data.summary.totalSessions} icon={Activity} />
+            <StatCell label="채점 건수" value={data.summary.totalGraded} icon={Target} />
+            <StatCell
+              label="평균 정답률"
+              value={data.summary.avgScorePct != null ? `${data.summary.avgScorePct}%` : '-'}
+              icon={TrendingUp}
+            />
+            <StatCell label="최근 활동" value={fmtDate(data.summary.lastActiveAt)} icon={Calendar} />
+          </div>
 
-        .header-info {
-          flex: 1;
-        }
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Performance Trend */}
+            <Card title="세션별 정답률 추이" icon={TrendingUp} className="lg:col-span-2">
+              <div className="h-[280px]">
+                {data.performanceTrend.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                    채점된 세션이 누적되면 차트가 표시됩니다.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={data.performanceTrend}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="date"
+                        stroke="#6b7280"
+                        tickFormatter={(d) => d.slice(5)}
+                      />
+                      <YAxis stroke="#6b7280" domain={[0, 100]} unit="%" />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }}
+                        formatter={(value) => `${value}%`}
+                        labelFormatter={(label, payload) => {
+                          const p = payload?.[0]?.payload as { sessionType?: string; roundNumber?: number };
+                          return `${label} (${p?.sessionType || ''} R${p?.roundNumber || '-'})`;
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="pct"
+                        name="정답률"
+                        stroke="#6366f1"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#6366f1' }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </Card>
 
-        .page-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          font-size: 24px;
-          font-weight: 700;
-          color: #1f2937;
-          margin: 0 0 8px 0;
-        }
+            {/* Error Causes */}
+            <Card title="오답 원인 분포" icon={Brain}>
+              <div className="h-[280px]">
+                {errorCauseChart.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                    오답 원인이 태깅된 채점이 없습니다.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={errorCauseChart} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                      <XAxis type="number" stroke="#6b7280" />
+                      <YAxis dataKey="cause" type="category" stroke="#374151" width={60} />
+                      <Tooltip cursor={{ fill: '#00000010' }} contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }} />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={28}>
+                        {errorCauseChart.map((d) => (
+                          <Cell key={d.cause} fill={ERROR_CAUSE_COLORS[d.cause] || '#8b5cf6'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </Card>
+          </div>
 
-        .page-description {
-          font-size: 14px;
-          color: #6b7280;
-          margin: 0;
-        }
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* 단원별 정답률 (히트맵) */}
+            <Card title="수학비서 대단원 정답률" icon={Brain}>
+              {data.mathsecrHeatmap.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-sm">
+                  diagnostics.items 가 누적되면 대단원별 α·β·γ 가 표시됩니다.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-500 uppercase tracking-wider">
+                        <th className="text-left py-2 pr-3">과목</th>
+                        <th className="text-left py-2 pr-3">대단원</th>
+                        <th className="text-right py-2 pr-3">정답률</th>
+                        <th className="text-center py-2">상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.mathsecrHeatmap.slice(0, 20).map((row, i) => {
+                        const r = row as Record<string, any>;
+                        const rate = Number(r.correct_rate ?? r.correctRate ?? r.pct ?? 0);
+                        const state = rate >= 80 ? 'α' : rate >= 60 ? 'β' : 'γ';
+                        const stateColor = rate >= 80 ? 'text-emerald-600' : rate >= 60 ? 'text-amber-600' : 'text-rose-600';
+                        return (
+                          <tr key={i} className="border-t border-gray-100">
+                            <td className="py-2 pr-3 text-zinc-600">{String(r.subject ?? '')}</td>
+                            <td className="py-2 pr-3 text-zinc-700">{String(r.level1 ?? r.major_unit ?? '')}</td>
+                            <td className="py-2 pr-3 text-right text-zinc-700">{rate ? `${rate}%` : '-'}</td>
+                            <td className={`py-2 text-center font-bold ${stateColor}`}>{state}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
 
-        .header-actions {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
+            {/* 함정 누적 */}
+            <Card title="반복 함정 Top 10" icon={AlertTriangle}>
+              {data.pitfalls.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-sm">
+                  오답 시 자동 누적되는 함정 기록이 없습니다.
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {data.pitfalls.map((p) => (
+                    <li
+                      key={p.pitfall_code}
+                      className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-gray-50 border border-gray-100"
+                    >
+                      <div className="font-mono text-xs text-zinc-700">{p.pitfall_code}</div>
+                      <span className="text-rose-600 font-bold text-xs">{p.hitCount}회</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
 
-        .date-filter {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          color: #6b7280;
-        }
+          {/* 최근 세션 카드 */}
+          <Card title="최근 세션" icon={Calendar}>
+            {data.sessions.length === 0 ? (
+              <div className="py-6 text-center text-gray-400 text-sm">
+                채점된 세션이 없습니다.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-500 uppercase tracking-wider">
+                      <th className="text-left py-2 pr-3">시험지</th>
+                      <th className="text-left py-2 pr-3">유형 · 회차</th>
+                      <th className="text-left py-2 pr-3">발급일</th>
+                      <th className="text-right py-2 pr-3">정답률</th>
+                      <th className="text-center py-2">상세</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.sessions.map((s) => (
+                      <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="py-2 pr-3 text-zinc-700 truncate max-w-xs">{s.exam_title || '(제목 없음)'}</td>
+                        <td className="py-2 pr-3 text-zinc-500">
+                          {SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}
+                        </td>
+                        <td className="py-2 pr-3 text-zinc-500">{fmtDate(s.issued_at)}</td>
+                        <td className="py-2 pr-3 text-right text-zinc-700">
+                          {s.pct != null ? <span className="font-bold text-indigo-600">{s.pct}%</span> : '-'}
+                          <span className="text-gray-400 ml-1">({s.correct}/{s.total})</span>
+                        </td>
+                        <td className="py-2 text-center">
+                          <Link
+                            href={`/grade/${s.id}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                          >
+                            <ExternalLink size={12} /> 채점
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
 
-        .date-filter select {
-          border: none;
-          background: transparent;
-          font-size: 13px;
-          color: #1f2937;
-          cursor: pointer;
-        }
-
-        .action-button {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 10px 16px;
-          font-size: 13px;
-          font-weight: 500;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .action-button.primary {
-          color: white;
-          background: #4f46e5;
-          border: none;
-        }
-
-        .action-button.primary:hover:not(:disabled) {
-          background: #4338ca;
-        }
-
-        .action-button.secondary {
-          color: #374151;
-          background: white;
-          border: 1px solid #d1d5db;
-        }
-
-        .action-button.secondary:hover:not(:disabled) {
-          background: #f9fafb;
-        }
-
-        .action-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .student-selector-section {
-          max-width: 1400px;
-          margin: 24px auto 0;
-          padding: 0 32px;
-        }
-
-        .student-selector-container {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 16px 20px;
-          background: white;
-          border-radius: 12px;
-          border: 1px solid #e5e7eb;
-        }
-
-        .selector-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          color: #374151;
-        }
-
-        .student-dropdown {
-          position: relative;
-          flex: 1;
-          max-width: 320px;
-        }
-
-        .dropdown-trigger {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 10px 14px;
-          background: #f9fafb;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .dropdown-trigger:hover {
-          border-color: #9ca3af;
-        }
-
-        .selected-student {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #1f2937;
-          font-weight: 500;
-        }
-
-        .placeholder {
-          color: #9ca3af;
-        }
-
-        .student-grade {
-          font-size: 12px;
-          color: #6b7280;
-          background: #e5e7eb;
-          padding: 2px 8px;
-          border-radius: 4px;
-        }
-
-        .dropdown-menu {
-          position: absolute;
-          top: calc(100% + 8px);
-          left: 0;
-          right: 0;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 10px;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-          z-index: 100;
-          overflow: hidden;
-        }
-
-        .search-box {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 14px;
-          border-bottom: 1px solid #e5e7eb;
-          color: #6b7280;
-        }
-
-        .search-box input {
-          flex: 1;
-          border: none;
-          background: transparent;
-          font-size: 14px;
-          outline: none;
-        }
-
-        .student-list {
-          max-height: 240px;
-          overflow-y: auto;
-        }
-
-        .student-item {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 14px;
-          border: none;
-          background: transparent;
-          font-size: 14px;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-
-        .student-item:hover {
-          background: #f9fafb;
-        }
-
-        .student-item.selected {
-          background: #eef2ff;
-        }
-
-        .student-item .student-name {
-          color: #1f2937;
-        }
-
-        .no-results {
-          padding: 20px;
-          text-align: center;
-          color: #9ca3af;
-          font-size: 13px;
-        }
-
-        .dropdown-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 50;
-        }
-
-        .main-content {
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: 24px 32px;
-        }
-
-        .empty-state,
-        .loading-state,
-        .error-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 80px 20px;
-          background: white;
-          border-radius: 12px;
-          border: 1px solid #e5e7eb;
-          color: #6b7280;
-          text-align: center;
-        }
-
-        .empty-state h3 {
-          margin: 20px 0 8px;
-          font-size: 18px;
-          font-weight: 600;
-          color: #374151;
-        }
-
-        .empty-state p {
-          margin: 0;
-          font-size: 14px;
-        }
-
-        .loading-state p,
-        .error-state p {
-          margin: 16px 0 0;
-          font-size: 14px;
-        }
-
-        .error-state button {
-          margin-top: 16px;
-          padding: 8px 16px;
-          font-size: 13px;
-          color: #4f46e5;
-          background: #eef2ff;
-          border: 1px solid #c7d2fe;
-          border-radius: 6px;
-          cursor: pointer;
-        }
-
-        .error-state button:hover {
-          background: #e0e7ff;
-        }
-
-        .spinning {
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        @media (max-width: 768px) {
-          .page-header {
-            padding: 20px;
-          }
-
-          .header-content {
-            flex-direction: column;
-          }
-
-          .header-actions {
-            width: 100%;
-            flex-wrap: wrap;
-          }
-
-          .student-selector-section {
-            padding: 0 20px;
-          }
-
-          .student-selector-container {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-
-          .student-dropdown {
-            width: 100%;
-            max-width: none;
-          }
-
-          .main-content {
-            padding: 20px;
-          }
-        }
-      `}</style>
+          {/* AI 인사이트 */}
+          <Card title="AI 진단 인사이트" icon={Brain} className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
+            <div className="space-y-3">
+              {insights.map((it, i) => (
+                <div key={i} className="flex gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      it.kind === 'good' ? 'bg-indigo-100 text-indigo-600' : 'bg-rose-100 text-rose-600'
+                    }`}
+                  >
+                    {it.kind === 'good' ? <TrendingUp size={20} /> : <AlertTriangle size={20} />}
+                  </div>
+                  <div>
+                    <h4 className={`font-semibold text-sm ${it.kind === 'good' ? 'text-indigo-900' : 'text-rose-900'}`}>
+                      {it.title}
+                    </h4>
+                    <p className="text-gray-600 text-xs leading-relaxed mt-1">{it.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
