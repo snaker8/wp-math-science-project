@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import CloudFlowUploader from '@/components/workflow/CloudFlowUploader';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { extractSchoolName } from '@/lib/utils/school-extract';
 
 // ============================================================================
 // Types
@@ -97,7 +98,29 @@ interface DBExam {
   examType: string;
   grade: string;
   createdAt: string;
+  // ★ 출처별 카테고리 분류용 (Phase 1)
+  isDiagnostic?: boolean;
+  diagnosticCategory?: string | null;
+  diagnosticRound?: number | null;
 }
+
+// ============================================================================
+// 출처별 카테고리 — exam-create 와 동일 분류 체계
+// ============================================================================
+type SourceCategory = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock';
+
+const SOURCE_CATEGORIES: Array<{
+  id: SourceCategory; label: string; color: string; emoji: string;
+}> = [
+  { id: 'all', label: '전체', color: 'cyan', emoji: '📚' },
+  { id: 'diagnostic', label: '진단평가', color: 'indigo', emoji: '🩺' },
+  { id: 'school', label: '학교기출', color: 'emerald', emoji: '🏫' },
+  { id: 'textbook', label: '시중교재', color: 'amber', emoji: '📖' },
+  { id: 'mock', label: '모의고사', color: 'rose', emoji: '📝' },
+];
+
+const MOCK_TITLE_PATTERN = /모의고사|평가원|교육청|수능|학평/;
+const MOCK_TYPE_PATTERN = /모의|수능|평가원|학평/;
 
 type SortField = 'order' | 'name' | 'problems' | 'grade';
 
@@ -709,6 +732,9 @@ export default function CloudPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // ★ 출처별 카테고리 (Phase 1) — 트리·결과에 우선 적용되는 1차 필터
+  const [sourceCategory, setSourceCategory] = useState<SourceCategory>('all');
+
   // --- Upload Modal ---
   const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId || autoOpenUpload);
 
@@ -1031,21 +1057,48 @@ export default function CloudPage() {
     return dbExams.filter((e) => e.subject === subject);
   }, [dbExams, subject]);
 
+  // ★ 출처별 카테고리 필터 — 과목 필터 다음에 적용
+  //   진단평가:  isDiagnostic === true
+  //   학교기출:  학교명 추출 가능 && !isDiagnostic && !bookGroupId
+  //   시중교재:  bookGroupId 있음
+  //   모의고사:  title/examType 에 모의·수능·평가원·학평·교육청 매칭
+  //   exam-create 의 SOURCE_TABS 분류와 동일 — 한 화면 일관성.
+  const categoryFilteredExams = useMemo(() => {
+    if (sourceCategory === 'all') return subjectFilteredExams;
+    return subjectFilteredExams.filter((e) => {
+      switch (sourceCategory) {
+        case 'diagnostic':
+          return !!e.isDiagnostic;
+        case 'school':
+          if (e.isDiagnostic) return false;
+          if (e.bookGroupId) return false;
+          // school 컬럼이 채워졌거나 title 에서 학교명 추출 가능
+          return !!(e.school || extractSchoolName(e.title || e.fileName || ''));
+        case 'textbook':
+          return !!e.bookGroupId;
+        case 'mock':
+          return MOCK_TYPE_PATTERN.test(e.examType || '') || MOCK_TITLE_PATTERN.test(e.title || e.fileName || '');
+        default:
+          return true;
+      }
+    });
+  }, [subjectFilteredExams, sourceCategory]);
+
   const exams: ExamFile[] = useMemo(() => {
-    if (!selectedId || subjectFilteredExams.length === 0) return [];
+    if (!selectedId || categoryFilteredExams.length === 0) return [];
 
     let filtered: DBExam[];
 
     if (selectedId === 'all') {
-      filtered = subjectFilteredExams;
+      filtered = categoryFilteredExams;
     } else if (selectedId === 'unclassified') {
-      filtered = subjectFilteredExams.filter((e) => !e.bookGroupId);
+      filtered = categoryFilteredExams.filter((e) => !e.bookGroupId);
     } else {
       // 선택된 그룹 + 자손 그룹의 시험지
       const node = findNodeById(treeNodes, selectedId);
       if (node) {
         const groupIds = new Set(collectGroupIds(node));
-        filtered = subjectFilteredExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
+        filtered = categoryFilteredExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
       } else {
         filtered = [];
       }
@@ -1061,14 +1114,14 @@ export default function CloudPage() {
       createdAt: exam.createdAt,
       grade: exam.grade,
     }));
-  }, [selectedId, subjectFilteredExams, treeNodes, findNodeById]);
+  }, [selectedId, categoryFilteredExams, treeNodes, findNodeById]);
 
   const filteredExams = useMemo(() => {
     let result = exams;
     if (searchQuery) {
-      // ★ 검색 시 전체 시험지에서 검색 (북그룹 필터 무시) + 공백 제거 + 대소문자 무시
+      // ★ 검색 시 카테고리·과목 필터된 전체에서 검색 (북그룹 필터만 무시) + 공백 제거 + 대소문자 무시
       const q = searchQuery.toLowerCase().replace(/\s+/g, '');
-      const searchSource = subjectFilteredExams.map((exam, idx) => ({
+      const searchSource = categoryFilteredExams.map((exam, idx) => ({
         id: exam.id,
         order: idx + 1,
         fileName: exam.fileName || exam.title,
@@ -1098,7 +1151,7 @@ export default function CloudPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [exams, searchQuery, sortField, sortDir, subjectFilteredExams]);
+  }, [exams, searchQuery, sortField, sortDir, categoryFilteredExams]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -1267,6 +1320,44 @@ export default function CloudPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-content-tertiary">과목</span>
             <SubjectDropdown value={subject} options={trackSubjectOptions} onChange={setSubject} />
+          </div>
+          {/* ★ 출처별 카테고리 탭 — exam-create 와 동일 분류 (Phase 1) */}
+          <div className="flex items-center gap-1 border-l border-subtle/50 pl-3">
+            {SOURCE_CATEGORIES.map((cat) => {
+              const isActive = sourceCategory === cat.id;
+              const count = cat.id === 'all'
+                ? subjectFilteredExams.length
+                : subjectFilteredExams.filter((e) => {
+                    switch (cat.id) {
+                      case 'diagnostic': return !!e.isDiagnostic;
+                      case 'school':
+                        if (e.isDiagnostic || e.bookGroupId) return false;
+                        return !!(e.school || extractSchoolName(e.title || e.fileName || ''));
+                      case 'textbook': return !!e.bookGroupId;
+                      case 'mock':
+                        return MOCK_TYPE_PATTERN.test(e.examType || '') ||
+                               MOCK_TITLE_PATTERN.test(e.title || e.fileName || '');
+                      default: return false;
+                    }
+                  }).length;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSourceCategory(cat.id)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    isActive
+                      ? `bg-${cat.color}-500/15 text-${cat.color}-300 border border-${cat.color}-500/40`
+                      : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'
+                  }`}
+                  title={`${cat.label} (${count}건)`}
+                >
+                  <span>{cat.emoji}</span>
+                  <span>{cat.label}</span>
+                  <span className="text-[10px] opacity-70">{count}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="flex items-center gap-3">
