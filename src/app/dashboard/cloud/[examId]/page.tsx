@@ -3534,8 +3534,38 @@ export default function CloudExamDetailPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showAddProblemsModal, setShowAddProblemsModal] = useState(false);
   const [showAnswerMatchModal, setShowAnswerMatchModal] = useState(false);
+  const [isSyncingFromSolutions, setIsSyncingFromSolutions] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
   const [isAutoMapping, setIsAutoMapping] = useState(false);
+
+  // 해설에서 빠른답 자동 추출 (진단평가 BS_H1S1_R1 류 사고 차단 회로)
+  const handleSyncAnswersFromSolutions = useCallback(async () => {
+    if (isSyncingFromSolutions) return;
+    if (!confirm('이 시험지의 해설(solution_latex)에서 빠른답을 자동 추출해 채웁니다. 이미 빠른답이 있는 문제는 건너뜁니다. 진행할까요?')) return;
+    setIsSyncingFromSolutions(true);
+    try {
+      const res = await fetch(`/api/exams/${examId}/sync-answers-from-solutions`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      console.log('[sync-answers] 응답:', data);
+      const lines = [
+        `${data.updatedCount}개 문제에 답이 자동 추출되어 박혔습니다.`,
+        `이미 답 있음: ${data.skippedAlreadyFilled}건`,
+        `해설 없음: ${data.skippedNoSolution}건`,
+        `추출 실패: ${data.skippedNoExtraction}건`,
+      ];
+      if (Array.isArray(data.failed) && data.failed.length > 0) {
+        lines.push(`업데이트 실패: ${data.failed.length}건 (콘솔 확인)`);
+      }
+      alert(lines.join('\n'));
+      refetchProblems();
+    } catch (err) {
+      console.error('[sync-answers] 오류:', err);
+      alert(`해설→빠른답 동기화 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+    } finally {
+      setIsSyncingFromSolutions(false);
+    }
+  }, [examId, isSyncingFromSolutions, refetchProblems]);
 
   // ★ 펼쳐보기 카드 드래그앤드롭 재정렬 (optimistic UI)
   const [draggedProblemId, setDraggedProblemId] = useState<string | null>(null);
@@ -3845,6 +3875,16 @@ export default function CloudExamDetailPage() {
             >
               <FileText className="h-4 w-4" />
               <span>빠른답/해설</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncAnswersFromSolutions}
+              disabled={isSyncingFromSolutions}
+              title="해설에서 정답을 자동 추출해 빠른답 칸을 채웁니다 (이미 답 있는 문제는 건너뜀)"
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+            >
+              <FileText className="h-4 w-4" />
+              <span>{isSyncingFromSolutions ? '추출 중...' : '해설→빠른답'}</span>
             </button>
             <button
               type="button"
