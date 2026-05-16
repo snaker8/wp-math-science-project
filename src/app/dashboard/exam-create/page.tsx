@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
+import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
 
 // ============================================================================
 // 출처별 카테고리 탭 (매쓰플랫 식 — 학교시험 / 유형기준 / 출처기준 식 구성)
@@ -71,10 +72,10 @@ const SOURCE_TABS: Array<{
   {
     id: 'school',
     label: '학교기출',
-    description: '학교 → 학년·학기 → 시험지 → 문제',
+    description: '학교 → 시험지 → 문제 (자산화 대부분이 학교기출)',
     icon: School,
     color: 'emerald',
-    available: false,
+    available: true,
   },
   {
     id: 'textbook',
@@ -141,6 +142,25 @@ export default function ExamCreatePage() {
   const [selectedDiagExamId, setSelectedDiagExamId] = useState<string | null>(null);
   const [diagProblems, setDiagProblems] = useState<ProblemRow[]>([]);
   const [diagProblemsLoading, setDiagProblemsLoading] = useState(false);
+
+  // ★ Phase 3 — 학교기출 탭 state
+  interface SchoolExam {
+    id: string;
+    title: string;
+    grade: string | null;
+    subject: string | null;
+    exam_type: string | null;
+    created_at: string;
+    school?: string | null;  // 클라이언트에서 extractSchoolName 결과
+  }
+  const [schoolExams, setSchoolExams] = useState<SchoolExam[]>([]);
+  const [schoolLoading, setSchoolLoading] = useState(false);
+  const [schoolError, setSchoolError] = useState<string | null>(null);
+  const [selectedSchool, setSelectedSchool] = useState<string | null>(null);
+  const [selectedSchoolExamId, setSelectedSchoolExamId] = useState<string | null>(null);
+  const [schoolProblems, setSchoolProblems] = useState<ProblemRow[]>([]);
+  const [schoolProblemsLoading, setSchoolProblemsLoading] = useState(false);
+  const [schoolQuery, setSchoolQuery] = useState('');
   const [problems, setProblems] = useState<ProblemRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -175,6 +195,66 @@ export default function ExamCreatePage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // ★ 학교기출 시험지 목록 fetch — 탭 진입 시 1회
+  useEffect(() => {
+    if (activeTab !== 'school') return;
+    if (schoolExams.length > 0) return;
+    let cancelled = false;
+    setSchoolLoading(true);
+    setSchoolError(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const rows = ((data.exams || []) as SchoolExam[]).map((ex) => ({
+          ...ex,
+          school: extractSchoolName(ex.title),
+        }));
+        if (!cancelled) setSchoolExams(rows);
+      } catch (e) {
+        if (!cancelled) setSchoolError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setSchoolLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // ★ 학교기출 시험지 선택 시 문제 목록 fetch
+  useEffect(() => {
+    if (!selectedSchoolExamId) {
+      setSchoolProblems([]);
+      return;
+    }
+    let cancelled = false;
+    setSchoolProblemsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/exams/${selectedSchoolExamId}`, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const rows: ProblemRow[] = ((data.problems || []) as Array<Record<string, unknown>>).map((r) => {
+          const p = (r.problems || r) as Record<string, unknown>;
+          return {
+            id: String(p.id || ''),
+            content_latex: String(p.content_latex || ''),
+            source_name: (p.source_name as string) || null,
+            source_year: (p.source_year as number) || null,
+            classifications: (p.classifications as ProblemRow['classifications']) || [],
+          };
+        }).filter((p) => p.id);
+        if (!cancelled) setSchoolProblems(rows);
+      } catch (e) {
+        if (!cancelled) setSchoolError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setSchoolProblemsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedSchoolExamId]);
 
   // ★ 진단평가 시험지 선택 시 문제 목록 fetch
   useEffect(() => {
@@ -460,8 +540,229 @@ export default function ExamCreatePage() {
             )}
           </main>
         </div>
+      ) : activeTab === 'school' ? (
+        // ★ 학교기출 탭 — 학교 그룹 → 시험지 → 문제 grid
+        (() => {
+          // 학교명별 그룹 + 검색 필터
+          const filteredExams = schoolExams.filter((ex) => {
+            if (!schoolQuery.trim()) return true;
+            const q = schoolQuery.trim().toLowerCase();
+            return (
+              (ex.school || '').toLowerCase().includes(q) ||
+              (ex.title || '').toLowerCase().includes(q)
+            );
+          });
+          const bySchool = new Map<string, SchoolExam[]>();
+          for (const ex of filteredExams) {
+            const key = ex.school || '(학교 미상)';
+            if (!bySchool.has(key)) bySchool.set(key, []);
+            bySchool.get(key)!.push(ex);
+          }
+          // 학교 레벨(초·중·고) 별 정렬 — 중·고 우선
+          const sortedSchools = Array.from(bySchool.keys()).sort((a, b) => {
+            const order: Record<string, number> = { '중': 0, '고': 1, '초': 2, '대': 3, '미분류': 4 };
+            const la = classifySchoolLevel(a === '(학교 미상)' ? null : a);
+            const lb = classifySchoolLevel(b === '(학교 미상)' ? null : b);
+            if (order[la] !== order[lb]) return order[la] - order[lb];
+            return a.localeCompare(b, 'ko');
+          });
+          const examsForSelected = selectedSchool ? bySchool.get(selectedSchool) || [] : [];
+          return (
+            <div className="flex flex-1 overflow-hidden">
+              {/* 좌측: 학교 list + 검색 */}
+              <aside className="w-[260px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
+                <div className="mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-300">학교</h3>
+                  <p className="mt-1 text-[10px] text-zinc-500">자산화 대부분이 학교기출</p>
+                </div>
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={schoolQuery}
+                    onChange={(e) => setSchoolQuery(e.target.value)}
+                    placeholder="학교명·시험지 검색"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-[11px] text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                {schoolLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+                    <Loader2 className="h-3 w-3 animate-spin" /> 학교 목록 불러오는 중…
+                  </div>
+                ) : schoolError ? (
+                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
+                    {schoolError}
+                  </div>
+                ) : sortedSchools.length === 0 ? (
+                  <div className="text-xs text-zinc-500 py-4">검색 결과가 없습니다.</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {sortedSchools.map((sch) => {
+                      const count = bySchool.get(sch)!.length;
+                      const level = classifySchoolLevel(sch === '(학교 미상)' ? null : sch);
+                      const isSelected = selectedSchool === sch;
+                      return (
+                        <li key={sch}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSchool(sch);
+                              setSelectedSchoolExamId(null);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+                              isSelected
+                                ? 'bg-emerald-500/15 text-emerald-200'
+                                : 'text-zinc-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5 truncate">
+                              {level !== '미분류' && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 font-bold">
+                                  {level}
+                                </span>
+                              )}
+                              <span className="truncate">{sch}</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-500 flex-shrink-0">{count}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </aside>
+
+              {/* 중간: 선택된 학교의 시험지 list */}
+              <section className="w-[280px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/20 p-4">
+                {!selectedSchool ? (
+                  <div className="text-xs text-zinc-500 py-4 text-center">학교를 선택하세요</div>
+                ) : (
+                  <>
+                    <h4 className="mb-2 text-xs font-bold text-emerald-200">{selectedSchool} 시험지</h4>
+                    <ul className="space-y-1.5">
+                      {examsForSelected.map((ex) => {
+                        const isSelected = selectedSchoolExamId === ex.id;
+                        return (
+                          <li key={ex.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSchoolExamId(ex.id)}
+                              className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
+                                isSelected
+                                  ? 'border-emerald-500/50 bg-emerald-500/10'
+                                  : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                {ex.grade && (
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                                    {ex.grade}
+                                  </span>
+                                )}
+                                {ex.exam_type && (
+                                  <span className="text-[9px] text-zinc-500">{ex.exam_type}</span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-semibold text-white truncate">{ex.title}</div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </section>
+
+              {/* 우측: 시험지 문제 grid */}
+              <main className="flex-1 overflow-y-auto p-6">
+                {!selectedSchoolExamId ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                    <School className="mb-3 h-10 w-10 text-zinc-700" />
+                    <p className="text-sm">
+                      {selectedSchool
+                        ? '중간 패널에서 시험지를 선택하세요.'
+                        : '좌측에서 학교를 먼저 선택하세요.'}
+                    </p>
+                  </div>
+                ) : schoolProblemsLoading ? (
+                  <div className="flex items-center justify-center py-20 text-zinc-500">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 문제 불러오는 중…
+                  </div>
+                ) : schoolProblems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                    <Layers className="mb-3 h-10 w-10 text-zinc-700" />
+                    <p className="text-sm">이 시험지에 문제가 없습니다.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-xs text-zinc-400">
+                        문제 <span className="font-bold text-white">{schoolProblems.length}</span>건
+                        <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const all = new Set(picked);
+                          const allSelected = schoolProblems.every((p) => all.has(p.id));
+                          if (allSelected) schoolProblems.forEach((p) => all.delete(p.id));
+                          else schoolProblems.forEach((p) => all.add(p.id));
+                          setPicked(all);
+                        }}
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 underline"
+                      >
+                        전체 선택/해제
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {schoolProblems.map((p) => {
+                        const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
+                        const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
+                        const code = cls?.type_code || '';
+                        const isPicked = picked.has(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => togglePick(p.id)}
+                            className={`text-left rounded-xl border p-4 transition-all ${
+                              isPicked
+                                ? 'border-emerald-500/50 bg-emerald-500/10'
+                                : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                {diff > 0 && (
+                                  <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                    난이도 {diff}
+                                  </span>
+                                )}
+                                <code className="truncate text-[10px] text-zinc-500">{code}</code>
+                              </div>
+                              <div
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                                  isPicked ? 'bg-emerald-500 text-white' : 'border border-zinc-700'
+                                }`}
+                              >
+                                {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
+                              </div>
+                            </div>
+                            <div className="line-clamp-3 text-xs text-zinc-300">
+                              <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </main>
+            </div>
+          );
+        })()
       ) : activeTab !== 'all' ? (
-        // ★ Phase 3~5 예정 카테고리 — placeholder
+        // ★ Phase 4~5 예정 카테고리 — placeholder
         <div className="flex flex-1 items-center justify-center p-10">
           <div className="max-w-md text-center">
             {(() => {
