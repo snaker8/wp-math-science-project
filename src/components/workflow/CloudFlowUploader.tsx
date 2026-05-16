@@ -88,6 +88,11 @@ export default function CloudFlowUploader({
   useEffect(() => {
     if (enforcedTrack) setSubjectArea(enforcedTrack);
   }, [enforcedTrack]);
+
+  // ★ 출처 카테고리 — 자산화 시 사용자 명시 선택 (사용자 지시 2026-05-16).
+  //   exam-create / cloud 의 5종 카테고리 + 'auto' (자동 태깅 시도, 기본값).
+  type UploadSourceCategory = 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock';
+  const [sourceCategory, setSourceCategory] = useState<UploadSourceCategory>('auto');
   const [scienceSubject, setScienceSubject] = useState<ScienceSubjectCode>('IS1');
   const [curriculumVersion, setCurriculumVersion] = useState<CurriculumVersion>('2022');
 
@@ -255,6 +260,8 @@ export default function CloudFlowUploader({
       formData.append('userId', userId);
       formData.append('documentType', 'PROBLEM');
       formData.append('subjectArea', subjectArea);
+      // ★ 사용자 명시 출처 카테고리 (자동 태깅보다 우선) — 사용자 지시 (2026-05-16)
+      formData.append('sourceCategory', sourceCategory);
 
       if (subjectArea === 'science') {
         formData.append('scienceSubject', scienceSubject);
@@ -532,6 +539,37 @@ export default function CloudFlowUploader({
             과학
           </button>
         )}
+      </div>
+
+      {/* ★ 출처 카테고리 선택 — 자산화 시 사용자 명시 분류 (자동 태깅보다 우선)
+            사용자 지시 (2026-05-16): "자산화 할때 분류해서 하게 하자. 선택을 자산화 탭에 넣게" */}
+      <div className="flex flex-wrap items-center gap-2 mt-2 mb-3 px-1">
+        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mr-1">출처</span>
+        {([
+          { id: 'auto',       label: '자동 감지', emoji: '✨', color: 'zinc' },
+          { id: 'school',     label: '학교기출', emoji: '🏫', color: 'emerald' },
+          { id: 'diagnostic', label: '진단평가', emoji: '🩺', color: 'indigo' },
+          { id: 'textbook',   label: '시중교재', emoji: '📖', color: 'amber' },
+          { id: 'mock',       label: '모의고사', emoji: '📝', color: 'rose' },
+        ] as Array<{ id: UploadSourceCategory; label: string; emoji: string; color: string }>).map((c) => {
+          const isActive = sourceCategory === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setSourceCategory(c.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors border ${
+                isActive
+                  ? `bg-${c.color}-500/20 text-${c.color}-300 border-${c.color}-500/50`
+                  : 'bg-transparent text-zinc-400 border-zinc-700 hover:text-zinc-200 hover:border-zinc-600'
+              }`}
+              title={c.id === 'auto' ? '제목 패턴으로 자동 분류' : `${c.label} 으로 강제 박힘`}
+            >
+              <span>{c.emoji}</span>
+              <span>{c.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── 과학 세부 과목 선택 ── */}
