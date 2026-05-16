@@ -90,6 +90,30 @@ export default function GradingPage() {
   //   사용자 명시: "묻지말고 내가 삭제 가능하게 해라".
   //   잘못 만든 R1·R2 같은 중복 세션을 1클릭으로 정리.
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // 학생 이름 일괄 복구 — "(이름 없음)" 학생들의 auth metadata.full_name → public.users.full_name
+  const [backfilling, setBackfilling] = useState(false);
+  const handleBackfillNames = async () => {
+    if (backfilling) return;
+    setBackfilling(true);
+    try {
+      const res = await fetch('/api/admin/users/backfill-names', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      alert(
+        `이름 복구 완료\n` +
+        `검사 대상: ${data.scanned}명\n` +
+        `복구됨: ${data.updated}명\n` +
+        `메타에도 이름 없음: ${data.skippedNoMeta}명`,
+      );
+      void loadSessions();
+    } catch (e) {
+      alert(`이름 복구 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   const handleDeleteSession = async (sessionId: string) => {
     if (deletingId) return;
     setDeletingId(sessionId);
@@ -190,13 +214,25 @@ export default function GradingPage() {
               QR 채점 세션을 만들고 학생 답안을 채점합니다 — 학생용 PDF 의 QR 로 학생 직접 입력, 강사용 페이지에서 O/X 확인.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30"
-          >
-            <Plus size={16} /> QR 채점 세션 생성
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBackfillNames}
+              disabled={backfilling}
+              className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-content-secondary text-xs flex items-center gap-2 disabled:opacity-50"
+              title="(이름 없음) 학생들의 이름을 auth metadata 에서 일괄 복구"
+            >
+              {backfilling ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
+              이름 일괄 복구
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+            >
+              <Plus size={16} /> QR 채점 세션 생성
+            </button>
+          </div>
         </div>
 
         {/* 통계 카드 */}
