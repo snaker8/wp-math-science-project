@@ -99,7 +99,12 @@ export default function GradingPage() {
     try {
       const res = await fetch('/api/admin/users/backfill-names', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok) {
+        // ★ details/hint 까지 alert + console — Supabase 쿼리 실패 원인 식별용
+        const detail = [data.error, data.details, data.hint].filter(Boolean).join(' | ');
+        console.error('[backfill-names] 실패:', { status: res.status, data });
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
       alert(
         `이름 복구 완료\n` +
         `검사 대상: ${data.scanned}명\n` +
