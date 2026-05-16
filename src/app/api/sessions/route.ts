@@ -145,20 +145,53 @@ export async function GET(request: NextRequest) {
 
   const [{ data: usersData }, { data: examsData }] = await Promise.all([
     studentIds.length
-      ? sb.from('users').select('id, full_name, name, phone, email, institute_id').in('id', studentIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; name?: string; phone?: string; email?: string; institute_id?: string }> }),
+      ? sb.from('users').select('id, full_name, name, email, institute_id').in('id', studentIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; name?: string; email?: string; institute_id?: string }> }),
     examIds.length
       ? sb.from('exams').select('id, title, institute_id').in('id', examIds)
       : Promise.resolve({ data: [] as Array<{ id: string; title?: string; institute_id?: string }> }),
   ]);
 
+  // ★ 이름 backfill — public.users.full_name/name 둘 다 비면 auth.users 의
+  //   raw_user_meta_data.full_name 에서 가져와 박음 (signup·createUser 시점에
+  //   동봉됐던 진짜 이름). 부수적 update — fire-and-forget.
+  //   사용자 명시 (2026-05-16): "전번이 아니라 이름이 나오게 해야지" —
+  //   phone 폴백 제거하고 진짜 이름이 표시되도록.
+  const userList = (usersData || []) as Array<{
+    id: string; full_name?: string; name?: string; email?: string; institute_id?: string;
+  }>;
+  const missingNameIds = userList
+    .filter((u) => !(u.full_name || u.name))
+    .map((u) => u.id);
+  const authNameMap = new Map<string, string>();
+  if (missingNameIds.length > 0) {
+    // auth.admin.getUserById 는 1명씩 호출 — 학생 수십명 한도면 무관.
+    //   첫 호출 후 backfill UPDATE 되므로 다음 호출엔 missingNameIds 가 빔.
+    await Promise.all(
+      missingNameIds.map(async (uid) => {
+        try {
+          const { data: authUser } = await sb.auth.admin.getUserById(uid);
+          const meta = (authUser?.user?.user_metadata || {}) as Record<string, unknown>;
+          const metaName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+          if (metaName) {
+            authNameMap.set(uid, metaName);
+            // public.users 영구 박음 — 다음 호출부터는 admin API 호출 없이 즉시 표시.
+            void sb.from('users').update({ full_name: metaName }).eq('id', uid);
+          }
+        } catch (e) {
+          console.warn(`[api/sessions] auth.getUserById(${uid}) 실패:`, (e as Error).message);
+        }
+      }),
+    );
+  }
+
   const userMap = new Map<string, { name: string; institute_id?: string }>();
-  for (const u of (usersData || []) as Array<{ id: string; full_name?: string; name?: string; phone?: string; email?: string; institute_id?: string }>) {
-    // ★ 이름 폴백 4단 — full_name → name → phone → email prefix → "(이름 없음)"
-    //   사고 (2026-05-16): users.full_name/name 둘 다 빈 학생이 dashboard 에
-    //   "(이름 없음)" 으로만 표시되어 식별 불가. phone·email 로 최소 식별 보장.
+  for (const u of userList) {
+    // ★ 이름 폴백 — full_name → name → auth metadata → email prefix → "(이름 없음)"
+    //   phone 은 표시 X (사용자 명시).
+    const authName = authNameMap.get(u.id);
     const emailPrefix = u.email ? u.email.split('@')[0] : '';
-    const displayName = u.full_name || u.name || u.phone || emailPrefix || '(이름 없음)';
+    const displayName = u.full_name || u.name || authName || emailPrefix || '(이름 없음)';
     userMap.set(u.id, { name: displayName, institute_id: u.institute_id });
   }
   const examMap = new Map<string, { title: string; institute_id?: string }>();
