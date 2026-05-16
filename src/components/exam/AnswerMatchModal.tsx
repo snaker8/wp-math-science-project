@@ -208,8 +208,15 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       if (!data.matches) throw new Error('매칭 데이터가 없습니다. OCR 결과: ' + (data.rawTextPreview || '(비어 있음)'));
 
       setMatchResult(data);
-      const changed = new Set<number>(data.matches.filter((m: MatchResult) => m.hasChange).map((m: MatchResult) => m.problemNumber));
-      setSelectedMatches(changed);
+      // ★ 자동 체크는 newAnswer/newSolution 가 있는 모든 행 — hasChange=false 도 포함.
+      //   (currentAnswer === newAnswer 인 경우도 사용자가 "확인 적용" 의도일 수 있음.
+      //   진단평가에서 일부 답이 적용 후 누락되는 사고 차단 — 가설 A 보강)
+      const autoSelected = new Set<number>(
+        data.matches
+          .filter((m: MatchResult) => !!m.newAnswer || !!m.newSolution)
+          .map((m: MatchResult) => m.problemNumber)
+      );
+      setSelectedMatches(autoSelected);
     } catch (err) {
       console.error('[AnswerMatch] Error:', err);
       setError(err instanceof Error ? err.message : '알 수 없는 오류');
@@ -225,13 +232,18 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
     setError(null);
 
     try {
+      // ★ hasChange filter 제거 — 사용자가 명시적으로 체크한 행은 모두 PUT 송신.
+      //   동일값 update 라도 서버는 멱등 처리 + answer_user_edited 플래그 박힘.
+      //   진단평가 빠른답 누락 사고 차단 (가설 A 보강).
       const toApply = matchResult.matches
-        .filter(m => selectedMatches.has(m.problemNumber) && m.hasChange)
+        .filter(m => selectedMatches.has(m.problemNumber) && (!!m.newAnswer || !!m.newSolution))
         .map(m => ({
           problemId: m.problemId,
           newAnswer: m.newAnswer || undefined,
           newSolution: m.newSolution || undefined,
         }));
+
+      console.log(`[AnswerMatch] PUT 송신: ${toApply.length}건`, toApply.slice(0, 5));
 
       const res = await fetch(`/api/exams/${examId}/match-answers`, {
         method: 'PUT',
@@ -242,7 +254,14 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '적용 실패');
 
-      alert(`${data.updatedCount}개 문제에 답이 적용되었습니다.`);
+      // ★ 서버 응답의 실패/스킵 사례 표면화 — 사고 시 즉시 식별 가능.
+      const failedCount = Array.isArray(data.failedUpdates) ? data.failedUpdates.length : 0;
+      if (failedCount > 0) {
+        console.error('[AnswerMatch] 일부 update 실패:', data.failedUpdates);
+        alert(`${data.updatedCount}개 적용, ${failedCount}개 실패. 콘솔에서 실패 사례 확인 바람.`);
+      } else {
+        alert(`${data.updatedCount}개 문제에 답이 적용되었습니다.`);
+      }
       onApplied();
       onClose();
     } catch (err) {
