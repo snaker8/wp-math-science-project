@@ -74,6 +74,10 @@ export default function GradeSessionPage() {
   // 로컬 마킹 상태 — seq → mark
   const [marks, setMarks] = useState<Record<number, LocalMark>>({});
 
+  // 채점 완료 처리 상태
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+
   // ──────────────────────────────────
   // 데이터 로드
   // ──────────────────────────────────
@@ -193,6 +197,40 @@ export default function GradeSessionPage() {
       teacher_note: current.teacher_note ?? null,
     });
   }, [marks, saveOne]);
+
+  // ──────────────────────────────────
+  // 채점 완료 처리 — 명시 버튼
+  // ──────────────────────────────────
+  const handleComplete = useCallback(async () => {
+    if (completing) return;
+    setCompleting(true);
+    setCompleteError(null);
+    try {
+      // 1. dirty 마크(자동저장 실패 잔여) 일괄 재시도
+      const pending = Object.entries(marks).filter(
+        ([, m]) => m.dirty && m.is_correct !== null,
+      );
+      for (const [seqStr, m] of pending) {
+        const seq = Number(seqStr);
+        await saveOne(seq, {
+          is_correct: m.is_correct as boolean,
+          error_cause: m.error_cause,
+          teacher_note: m.teacher_note,
+        });
+      }
+      // 2. 명시 완료 처리 — print_sessions.completed_at = NOW()
+      const res = await fetch(`/api/sessions/${sessionId}/complete`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // 3. 대시보드 복귀
+      router.push('/dashboard/grading');
+    } catch (e) {
+      setCompleteError(e instanceof Error ? e.message : String(e));
+      console.error('[grade] complete error:', e);
+    } finally {
+      setCompleting(false);
+    }
+  }, [completing, marks, saveOne, sessionId, router]);
 
   // ──────────────────────────────────
   // 집계
@@ -411,11 +449,31 @@ export default function GradeSessionPage() {
         </div>
       )}
       {stats.graded === stats.total && stats.total > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 bg-emerald-600 text-white px-4 py-3">
-          <div className="text-center text-sm font-semibold flex items-center justify-center gap-2">
-            <CheckCircle2 size={16} />
-            채점 완료 — 정답률 {stats.pct}%
-          </div>
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-emerald-600 text-white">
+          {completeError && (
+            <div className="bg-rose-700/90 px-4 py-1.5 text-xs text-center flex items-center justify-center gap-1">
+              <AlertCircle size={12} /> {completeError}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleComplete}
+            disabled={completing}
+            className="w-full px-4 py-3 hover:bg-emerald-500 active:bg-emerald-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            <div className="text-center text-sm font-semibold flex items-center justify-center gap-2">
+              {completing ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> 완료 처리 중…
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  채점 완료 — 정답률 {stats.pct}% (탭하여 마무리)
+                </>
+              )}
+            </div>
+          </button>
         </div>
       )}
     </div>
