@@ -577,7 +577,7 @@ export default function SignUpPage() {
                     value={orgQuery}
                     onChange={(e) => handleOrgInputChange(e.target.value)}
                     onFocus={() => setOrgDropdownOpen(true)}
-                    placeholder="예: 과사람, 차수학, 라온수학…"
+                    placeholder="학원명 입력"
                     className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
                   {orgSearching && (
@@ -665,14 +665,14 @@ export default function SignUpPage() {
                       <AlertCircle size={12} /> 신규 학원 가맹 신청
                     </div>
                     <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      입력하신 학원 <span className="text-amber-300 font-semibold">"{orgQuery}"</span> 은 아직 시스템에 없습니다.
+                      입력하신 학원 <span className="text-amber-300 font-semibold">&ldquo;{orgQuery}&rdquo;</span> 은 아직 시스템에 없습니다.
                       가입은 진행되지만 관리자 승인 후에 서비스를 이용하실 수 있습니다.
                     </p>
                     <input
                       type="text"
                       value={applyInstituteName}
                       onChange={(e) => setApplyInstituteName(e.target.value)}
-                      placeholder="센터 이름 (선택, 예: 동래본원)"
+                      placeholder="센터 이름 (선택)"
                       className="w-full bg-black/50 border border-amber-500/30 rounded-lg py-2 px-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
                     />
                     <button
@@ -786,7 +786,7 @@ export default function SignUpPage() {
                   가입 신청을 접수했습니다.
                 </p>
                 <p className="text-zinc-500 text-xs mb-2 leading-relaxed">
-                  입력하신 학원 <span className="text-amber-300 font-semibold">"{orgQuery}"</span> 은
+                  입력하신 학원 <span className="text-amber-300 font-semibold">&ldquo;{orgQuery}&rdquo;</span> 은
                   본부 관리자 승인 후 활성화됩니다.
                 </p>
                 <p className="text-zinc-500 text-xs mb-8 leading-relaxed">
