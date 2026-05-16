@@ -143,10 +143,12 @@ export async function GET(request: NextRequest) {
       '중1': '중1 기출', '중2': '중2 기출', '중3': '중3 기출',
     };
 
-    // 보정 필요한 시험지 수집 (book_group_id 없거나 subject/exam_type/grade 없는 것만)
+    // 보정 필요한 시험지 수집 (book_group_id 없거나 subject/grade 없는 것만)
     // ★ 이미 book_group_id가 설정된 경우는 사용자 선택 존중 — 재분류 안 함
+    // ★ is_diagnostic=true 인 경우 exam_type 보정 제외 — 진단평가는 exam_type NULL 이 정상
     const examsNeedFix = (exams || []).filter((e: any) =>
-      e.title && (!e.book_group_id || !e.subject || !e.exam_type || !e.grade)
+      e.title && (!e.book_group_id || !e.subject || !e.grade ||
+        (!e.is_diagnostic && !e.exam_type))
     );
 
     if (examsNeedFix.length > 0) {
@@ -171,8 +173,8 @@ export async function GET(request: NextRequest) {
           exam.subject = detected;
           updates.subject = detected;
         }
-        // exam_type 보정
-        if (!exam.exam_type) {
+        // exam_type 보정 — is_diagnostic=true 면 exam_type NULL 이 정상이므로 스킵
+        if (!exam.exam_type && !exam.is_diagnostic) {
           const detected = detectExamTypeFromTitle(title);
           exam.exam_type = detected;
           updates.exam_type = detected;
@@ -248,7 +250,7 @@ export async function GET(request: NextRequest) {
         year: yearMatch?.[1] || '',
         bookGroupId: exam.book_group_id || null,
         subject: exam.subject || '공통수학1',
-        examType: exam.exam_type || '학교기출',
+        examType: exam.exam_type ?? (exam.is_diagnostic ? null : '학교기출'),
         grade: exam.grade || '고1',
         createdAt: exam.created_at,
         // ★ 진단지 메타 — 학원자료 페이지·진단 분석에서 사용

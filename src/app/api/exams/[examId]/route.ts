@@ -238,14 +238,15 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { title, bookGroupId, subject, examType, grade, syncProblemSources } = body;
+    const { title, bookGroupId, subject, examType, grade, isDiagnostic, syncProblemSources } = body;
 
     const updateData: Record<string, any> = {};
 
     if (title !== undefined) updateData.title = title.trim();
     if (bookGroupId !== undefined) updateData.book_group_id = bookGroupId; // null allowed (move to unclassified)
     if (subject !== undefined) updateData.subject = subject;
-    if (examType !== undefined) updateData.exam_type = examType;
+    if (examType !== undefined) updateData.exam_type = examType; // null 허용 (진단평가 카테고리 변경 시)
+    if (isDiagnostic !== undefined) updateData.is_diagnostic = isDiagnostic;
     if (grade !== undefined) updateData.grade = grade;
 
     if (Object.keys(updateData).length === 0) {
