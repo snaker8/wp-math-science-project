@@ -25,9 +25,74 @@ import {
   Plus,
   Check,
   X,
+  ClipboardCheck,
+  School,
+  Library,
+  FileText,
+  Sparkles,
+  type LucideIcon,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
+
+// ============================================================================
+// 출처별 카테고리 탭 (매쓰플랫 식 — 학교시험 / 유형기준 / 출처기준 식 구성)
+//   사용자 요구 (2026-05-16):
+//     "시험지 출제 페이지를 개선해야한다. 각 단원선택으로 되는 하나의 종류만
+//     있는데 진단평가, 학교기출문제, 시중교재, 모의고사 등을 선택해서 그 안에서
+//     또 트리가 나눠져야하는 형태로... 모든 문제 포함 단원 선택도 유지"
+// ============================================================================
+type SourceTab = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock';
+
+const SOURCE_TABS: Array<{
+  id: SourceTab;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  color: string;
+  available: boolean;
+}> = [
+  {
+    id: 'all',
+    label: '전체 문제',
+    description: '모든 출처 — 단원·유형 트리에서 직접 선택',
+    icon: Layers,
+    color: 'cyan',
+    available: true,
+  },
+  {
+    id: 'diagnostic',
+    label: '진단평가',
+    description: 'BS · DD · PT · SC — 진단 회차별 시험지',
+    icon: ClipboardCheck,
+    color: 'indigo',
+    available: false,
+  },
+  {
+    id: 'school',
+    label: '학교기출',
+    description: '학교 → 학년·학기 → 시험지 → 문제',
+    icon: School,
+    color: 'emerald',
+    available: false,
+  },
+  {
+    id: 'textbook',
+    label: '시중교재',
+    description: '출판사 → 책 → 단원 → 문제',
+    icon: Library,
+    color: 'amber',
+    available: false,
+  },
+  {
+    id: 'mock',
+    label: '모의고사',
+    description: '연도 · 회차별 모의고사 문제',
+    icon: FileText,
+    color: 'rose',
+    available: false,
+  },
+];
 
 interface ProblemRow {
   id: string;
@@ -52,6 +117,8 @@ const DIFFICULTIES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function ExamCreatePage() {
   const router = useRouter();
+  // ★ 출처별 카테고리 탭 — 'all' 만 Phase 1 에서 작동, 나머지는 Phase 2.
+  const [activeTab, setActiveTab] = useState<SourceTab>('all');
   const [typeCode, setTypeCode] = useState<string>('');
   const [typeName, setTypeName] = useState<string>('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -142,8 +209,71 @@ export default function ExamCreatePage() {
             선택한 문항 <span className="font-bold text-cyan-400">{picked.size}</span>개
           </div>
         </div>
+
+        {/* ★ 출처별 카테고리 탭 (매쓰플랫 식) */}
+        <div className="flex items-stretch gap-1 mt-4 border-b border-zinc-800/60 -mb-px overflow-x-auto">
+          {SOURCE_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                disabled={!tab.available}
+                className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-all ${
+                  isActive
+                    ? `text-${tab.color}-300`
+                    : tab.available
+                      ? 'text-zinc-400 hover:text-zinc-200'
+                      : 'text-zinc-600 cursor-not-allowed'
+                }`}
+                title={tab.available ? tab.description : `${tab.description} (곧 출시)`}
+              >
+                <Icon size={15} className={isActive ? `text-${tab.color}-400` : ''} />
+                {tab.label}
+                {!tab.available && (
+                  <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500 font-normal">
+                    곧 출시
+                  </span>
+                )}
+                {isActive && (
+                  <span className={`absolute bottom-0 left-0 right-0 h-0.5 bg-${tab.color}-400`} />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {activeTab !== 'all' ? (
+        // ★ Phase 2 예정 카테고리 — placeholder
+        <div className="flex flex-1 items-center justify-center p-10">
+          <div className="max-w-md text-center">
+            {(() => {
+              const tab = SOURCE_TABS.find((t) => t.id === activeTab)!;
+              const Icon = tab.icon;
+              return (
+                <>
+                  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-${tab.color}-500/30 bg-${tab.color}-500/10`}>
+                    <Icon size={28} className={`text-${tab.color}-400`} />
+                  </div>
+                  <h2 className="text-xl font-bold text-white mb-2">{tab.label}</h2>
+                  <p className="text-sm text-zinc-400 mb-4">{tab.description}</p>
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-500">
+                    <Sparkles size={14} className="inline mr-1 text-amber-400" />
+                    Phase 2 에서 활성화됩니다. 현재는 <button
+                      type="button"
+                      onClick={() => setActiveTab('all')}
+                      className="text-cyan-400 underline hover:text-cyan-300"
+                    >전체 문제</button> 탭에서 단원·유형으로 출제 가능.
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-1 overflow-hidden">
         {/* 좌측 필터 */}
         <aside className="w-[320px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-5 space-y-4">
@@ -335,6 +465,7 @@ export default function ExamCreatePage() {
           )}
         </main>
       </div>
+      )}
 
       {/* 트리 picker */}
       <MathsecrTreePicker
