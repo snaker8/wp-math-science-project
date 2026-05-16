@@ -183,7 +183,11 @@ const EMPTY_DIAG: DiagnosticMeta = {
 // 메인 매처:
 //   BS_M1_R1, BS_H1_R2, BS_M1S1_R2, BS_H1S1_R2 (공통수학1 과정), DD_M2_연립방정식, PT_*, SC_*
 //   학년 코드 = M1~M3 / H1~H3, 학기 suffix S1/S2 선택, _R숫자 선택.
-const DIAG_PATTERN = /\b(BS|DD|PT|SC)_[MH][1-3](?:S[12])?(?:_R(\d{1,2}))?\b/i;
+//
+// ★ \b 대신 lookbehind/lookahead 사용 — underscore(_) 가 \w 에 포함되어
+//   `260504_BS_H1S1_R1` 처럼 _BS_ 가 word boundary 매치 실패 사고 (2026-05-16).
+//   사용자 보고: "오늘 진단평가 더올렸는데 안보인다" → 자동 태깅 누락 원인.
+const DIAG_PATTERN = /(?<![A-Za-z0-9])(BS|DD|PT|SC)_[MH][1-3](?:S[12])?(?:_R(\d{1,2}))?(?![A-Za-z0-9])/i;
 
 // 난이도 명시 키워드 (제목 어딘가에 있으면 채움)
 const DIFFICULTY_KEYWORDS: Array<{ key: RegExp; value: string }> = [
