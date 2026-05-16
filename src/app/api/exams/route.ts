@@ -45,7 +45,11 @@ export async function GET(request: NextRequest) {
     }
 
     // ★ 격리 필터 + 트랙 필터 (flag false 시 트랙 필터는 no-op, 기존 동작 그대로)
-    const filteredQuery = applyInstituteFilter(examsBaseQuery, scope);
+    //   allowCommonPool: true — exams 도 공통풀(institute_id NULL) 자료는 모든 학원 공유.
+    //   사용자 보고 (2026-05-16): "엄궁차수학에서 다른 공통자산이 안보인다" —
+    //   PR #164 isolated_assets=true 적용 후 격리 학원에서 NULL 공통풀이 차단된 사고.
+    //   problems / book_groups 와 동일한 공통풀 정책 적용.
+    const filteredQuery = applyInstituteFilter(examsBaseQuery, scope, { allowCommonPool: true });
     const trackFilteredQuery = applyTrackFilter(filteredQuery, scope);
     const { data: exams, error: examsError } = await trackFilteredQuery;
 
