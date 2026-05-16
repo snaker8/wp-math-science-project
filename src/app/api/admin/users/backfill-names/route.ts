@@ -32,11 +32,14 @@ export async function POST(_request: NextRequest) {
   }
   const sb = supabaseAdmin;
 
-  // 1) full_name/name 빈 사용자 식별 — institute 격리 (super_admin 제외)
+  // 1) 사용자 목록 조회 — institute 격리 (super_admin 제외)
+  //   ★ 이전 코드의 `.or('full_name.is.null,full_name.eq.')` 는 PostgREST 가
+  //   빈 값 파싱 못 해 500 반환 (사용자 보고: "이름 복구 실패뜬다").
+  //   대신 전체 조회 후 client 에서 filter — 학원당 수십~수백명 한도면 무관.
   let query = sb
     .from('users')
-    .select('id, full_name, name, institute_id, email')
-    .or('full_name.is.null,full_name.eq.');
+    .select('id, full_name, institute_id, email, role')
+    .eq('role', 'STUDENT');
 
   if (!scope.isSuperAdmin) {
     const accessibleIds = scope.accessibleInstituteIds || [];
@@ -51,12 +54,19 @@ export async function POST(_request: NextRequest) {
 
   const { data: candidates, error: qErr } = await query;
   if (qErr) {
-    return NextResponse.json({ error: qErr.message }, { status: 500 });
+    console.error('[backfill-names] users query error:', qErr);
+    return NextResponse.json(
+      { error: `사용자 조회 실패: ${qErr.message}`, details: qErr.details, hint: qErr.hint },
+      { status: 500 }
+    );
   }
 
   const targets = ((candidates || []) as Array<{
-    id: string; full_name?: string; name?: string; institute_id?: string; email?: string;
-  }>).filter((u) => !(u.full_name || u.name));
+    id: string; full_name?: string | null; institute_id?: string; email?: string;
+  }>).filter((u) => {
+    const fn = (u.full_name || '').trim();
+    return !fn;
+  });
 
   if (targets.length === 0) {
     return NextResponse.json({ ok: true, scanned: 0, updated: 0, skippedNoMeta: 0 });

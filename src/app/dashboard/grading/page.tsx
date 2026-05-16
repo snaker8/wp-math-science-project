@@ -16,6 +16,7 @@ import {
   Filter, CheckCircle2, Clock, AlertCircle, Camera, Trash2,
   type LucideIcon,
 } from 'lucide-react';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import GradingSheetUpload from '@/components/grading/GradingSheetUpload';
 
@@ -26,6 +27,7 @@ interface SessionRow {
   id: string;
   student_id: string;
   student_name: string;
+  student_grade?: number | null;
   exam_id: string;
   exam_title: string;
   round_number: number;
@@ -99,7 +101,12 @@ export default function GradingPage() {
     try {
       const res = await fetch('/api/admin/users/backfill-names', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok) {
+        // ★ details/hint 까지 alert + console — Supabase 쿼리 실패 원인 식별용
+        const detail = [data.error, data.details, data.hint].filter(Boolean).join(' | ');
+        console.error('[backfill-names] 실패:', { status: res.status, data });
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
       alert(
         `이름 복구 완료\n` +
         `검사 대상: ${data.scanned}명\n` +
@@ -401,7 +408,14 @@ function SessionCard({
               </span>
             )}
           </div>
-          <div className="font-semibold text-sm truncate">{s.student_name}</div>
+          <div className="font-semibold text-sm truncate flex items-center gap-2">
+            <span>{s.student_name}</span>
+            {gradeIntToLabel(s.student_grade) && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-content-tertiary font-normal">
+                {gradeIntToLabel(s.student_grade)}
+              </span>
+            )}
+          </div>
           <div className="text-xs text-content-tertiary truncate">{s.exam_title}</div>
         </div>
 
