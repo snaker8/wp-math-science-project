@@ -28,6 +28,7 @@ import type {
   DiagnosisSession, StudentNodeStatus, MathsecrHeatmapRow, ErrorCause, NodeStatus,
 } from './lib/types';
 import { STATUS_COLOR, STATUS_LABEL } from './lib/types';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 
 // ============================================================================
 // Student (from /api/users/students)
@@ -155,7 +156,7 @@ function PrescriptionContent() {
     const q = searchQuery.trim().toLowerCase();
     return students.filter(s =>
       s.name.toLowerCase().includes(q) ||
-      (s.grade || '').toLowerCase().includes(q) ||
+      gradeIntToLabel(s.grade).toLowerCase().includes(q) ||
       (s.className || '').toLowerCase().includes(q),
     );
   }, [students, searchQuery]);
@@ -380,7 +381,7 @@ function PrescriptionContent() {
               >
                 <div className="font-bold text-sm">{s.name}</div>
                 <div className="text-xs opacity-70 mt-0.5">
-                  {s.grade || '-'} {s.className ? ` · ${s.className}` : ''}
+                  {gradeIntToLabel(s.grade, '-')} {s.className ? ` · ${s.className}` : ''}
                 </div>
               </button>
             ))
@@ -414,7 +415,7 @@ function PrescriptionContent() {
               <div className="text-right">
                 <div className="font-bold text-sm">{student.name}</div>
                 <div className="text-xs text-gray-500">
-                  {student.grade || '-'} {student.className ? `| ${student.className}` : ''}
+                  {gradeIntToLabel(student.grade, '-')} {student.className ? `| ${student.className}` : ''}
                 </div>
               </div>
               <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-lg font-bold">
