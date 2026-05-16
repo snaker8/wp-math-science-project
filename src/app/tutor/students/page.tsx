@@ -22,6 +22,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 
 interface Student {
   id: string;
@@ -387,6 +388,13 @@ export default function TutorStudentsPage() {
                       ? student.email.replace(/@local\.suzag\.com$/i, '')
                       : (student.phone || '—')}
                   </span>
+                  {/* 학년 라벨 — integer(7) → "중1" 변환 */}
+                  {gradeIntToLabel(student.grade) && (
+                    <span>
+                      <Calendar size={14} />
+                      {gradeIntToLabel(student.grade)}
+                    </span>
+                  )}
                   {student.className && (
                     <span>
                       <GraduationCap size={14} />

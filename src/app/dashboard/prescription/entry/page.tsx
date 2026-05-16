@@ -12,6 +12,7 @@ import {
 } from '../lib/queries';
 import type { MathsecrNode, ErrorCause, SessionType } from '../lib/types';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 
 // 문항별 입력 행
 // mathsecr_code 는 가장 깊게 선택된 노드의 code (level1~level5 중 어느 depth든 가능)
@@ -289,11 +290,14 @@ export default function EntryPage() {
                 className={selectCls}
               >
                 <option value="">학생 선택…</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.full_name}{s.grade ? ` (${s.grade}학년)` : ''}
-                  </option>
-                ))}
+                {students.map((s) => {
+                  const gradeLabel = gradeIntToLabel(s.grade);
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.full_name}{gradeLabel ? ` (${gradeLabel})` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </Field>
 
