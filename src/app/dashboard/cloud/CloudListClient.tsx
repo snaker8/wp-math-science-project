@@ -336,6 +336,85 @@ const GroupContextMenu: React.FC<{
   );
 };
 
+// ============================================================================
+// 출처 카테고리 뱃지 — 클릭 시 변경 드롭다운
+// ============================================================================
+
+type ReclassifyCategory = 'diagnostic' | 'school' | 'textbook' | 'mock';
+
+const RECLASSIFY_OPTIONS: Array<{
+  id: ReclassifyCategory; label: string; emoji: string;
+  colorClass: string; bgClass: string; borderClass: string;
+}> = [
+  { id: 'diagnostic', label: '진단평가', emoji: '🩺', colorClass: 'text-indigo-400', bgClass: 'bg-indigo-500/5', borderClass: 'border-indigo-500/30' },
+  { id: 'school',     label: '학교기출', emoji: '🏫', colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/5', borderClass: 'border-emerald-500/30' },
+  { id: 'textbook',   label: '시중교재', emoji: '📖', colorClass: 'text-amber-400',   bgClass: 'bg-amber-500/5',   borderClass: 'border-amber-500/30' },
+  { id: 'mock',       label: '모의고사', emoji: '📝', colorClass: 'text-rose-400',    bgClass: 'bg-rose-500/5',    borderClass: 'border-rose-500/30' },
+];
+
+function examCategoryInfo(isDiagnostic?: boolean, examType?: string | null) {
+  if (isDiagnostic) return RECLASSIFY_OPTIONS[0]; // 진단평가
+  if (examType === '모의고사') return RECLASSIFY_OPTIONS[3];
+  if (examType === '시중교재') return RECLASSIFY_OPTIONS[2];
+  return RECLASSIFY_OPTIONS[1]; // 학교기출 (기본)
+}
+
+const SourceCategoryBadge: React.FC<{
+  examId: string;
+  isDiagnostic?: boolean;
+  examType?: string | null;
+  onReclassify: (examId: string, cat: ReclassifyCategory) => Promise<void>;
+}> = ({ examId, isDiagnostic, examType, onReclassify }) => {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const info = examCategoryInfo(isDiagnostic, examType);
+
+  const handleSelect = async (e: React.MouseEvent, cat: ReclassifyCategory) => {
+    e.stopPropagation();
+    setSaving(true);
+    setOpen(false);
+    await onReclassify(examId, cat);
+    setSaving(false);
+  };
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-all hover:opacity-80 ${info.bgClass} ${info.borderClass} ${info.colorClass} ${saving ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+      >
+        <span>{info.emoji}</span>
+        <span>{info.label}</span>
+        {!saving && <ChevronDown className="h-2.5 w-2.5 opacity-50" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-40 mt-1 min-w-[120px] rounded-lg border bg-surface-card py-1 shadow-xl">
+            {RECLASSIFY_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={(e) => handleSelect(e, opt.id)}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-surface-raised transition-colors ${
+                  opt.id === (isDiagnostic ? 'diagnostic' : examType === '모의고사' ? 'mock' : examType === '시중교재' ? 'textbook' : 'school')
+                    ? `${opt.colorClass} font-semibold`
+                    : 'text-content-secondary'
+                }`}
+              >
+                <span>{opt.emoji}</span>
+                <span>{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // 파일 3점 메뉴 (참조사이트 스타일)
 const FileContextMenu: React.FC<{
   onRename: () => void;
@@ -815,6 +894,37 @@ export default function CloudPage() {
   const [renamingExamId, setRenamingExamId] = useState<string | null>(null);
   const [renameExamValue, setRenameExamValue] = useState('');
 
+  // --- Reclassify handler ---
+  const handleReclassify = useCallback(async (examId: string, cat: ReclassifyCategory) => {
+    const payload: Record<string, any> =
+      cat === 'diagnostic'
+        ? { isDiagnostic: true,  examType: null }
+        : cat === 'mock'
+        ? { isDiagnostic: false, examType: '모의고사' }
+        : cat === 'textbook'
+        ? { isDiagnostic: false, examType: '시중교재' }
+        : { isDiagnostic: false, examType: '학교기출' };
+
+    try {
+      const res = await fetch(`/api/exams/${examId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) { console.error('[Cloud] reclassify failed'); return; }
+      // 로컬 상태 즉시 반영
+      setDbExams((prev) => prev.map((e) =>
+        e.id !== examId ? e : {
+          ...e,
+          isDiagnostic: payload.isDiagnostic,
+          examType: payload.examType ?? e.examType,
+        }
+      ));
+    } catch (err) {
+      console.error('[Cloud] reclassify error', err);
+    }
+  }, []);
+
   // Resizable panels
   const [leftWidth, setLeftWidth] = useState(28);
   const isDragging = useRef(false);
@@ -1113,6 +1223,9 @@ export default function CloudPage() {
       bookGroupId: exam.bookGroupId,
       createdAt: exam.createdAt,
       grade: exam.grade,
+      isDiagnostic: exam.isDiagnostic,
+      examType: exam.examType,
+      diagnosticCategory: exam.diagnosticCategory,
     }));
   }, [selectedId, categoryFilteredExams, treeNodes, findNodeById]);
 
@@ -1130,6 +1243,9 @@ export default function CloudPage() {
         bookGroupId: exam.bookGroupId,
         createdAt: exam.createdAt,
         grade: exam.grade,
+        isDiagnostic: exam.isDiagnostic,
+        examType: exam.examType,
+        diagnosticCategory: exam.diagnosticCategory,
       }));
       result = searchSource.filter((e) => {
         const name = (e.fileName || '').toLowerCase().replace(/\s+/g, '');
@@ -2031,6 +2147,7 @@ export default function CloudPage() {
                       >
                         파일명
                       </span>
+                      <span className="w-28 text-center">출처</span>
                       <span
                         className="w-24 text-center cursor-pointer hover:text-content-primary"
                         onClick={() => toggleSort('problems')}
@@ -2080,7 +2197,16 @@ export default function CloudPage() {
                               </span>
                             )}
                           </div>
+                          {/* 출처 카테고리 뱃지 */}
                           <span className="w-28 flex justify-center">
+                            <SourceCategoryBadge
+                              examId={exam.id}
+                              isDiagnostic={exam.isDiagnostic}
+                              examType={exam.examType}
+                              onReclassify={handleReclassify}
+                            />
+                          </span>
+                          <span className="w-24 flex justify-center">
                             {exam.problemCount > 0 ? (
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/5 px-3 py-1 text-xs font-medium text-indigo-400">
                                 <Sparkles className="h-3 w-3" />
