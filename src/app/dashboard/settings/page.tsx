@@ -10,7 +10,7 @@ import {
 
 type Tab = 'general' | 'ai-engine' | 'permissions' | 'logs';
 
-type Role = 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT';
+type Role = 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT' | 'ORG_ADMIN';
 
 interface AdminUser {
   id: string;
@@ -44,6 +44,7 @@ const ROLE_LABEL: Record<Role, string> = {
   TUTOR: '보조강사',
   STUDENT: '학생',
   PARENT: '학부모',
+  ORG_ADMIN: '학원 관리자',
 };
 
 const ROLE_COLOR: Record<Role, string> = {
@@ -52,6 +53,7 @@ const ROLE_COLOR: Record<Role, string> = {
   TUTOR: 'bg-sky-500/20 text-sky-300',
   STUDENT: 'bg-emerald-500/20 text-emerald-300',
   PARENT: 'bg-amber-500/20 text-amber-300',
+  ORG_ADMIN: 'bg-fuchsia-500/20 text-fuchsia-300',
 };
 
 function formatRelative(iso: string | null): string {
