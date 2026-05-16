@@ -267,9 +267,23 @@ export async function PUT(
     }
 
     let updatedCount = 0;
+    let skippedNoChange = 0;
+    let skippedProblemMissing = 0;
+    const failedUpdates: Array<{ problemId: string; reason: string }> = [];
+
+    console.log(`[match-answers PUT] examId=${examId}, totalMatches=${matches.length}`,
+      matches.slice(0, 5).map(m => ({
+        pid: m.problemId,
+        newAns: m.newAnswer,
+        hasSol: !!m.newSolution,
+      })),
+    );
 
     for (const match of matches) {
-      if (!match.newAnswer && !match.newSolution) continue;
+      if (!match.newAnswer && !match.newSolution) {
+        skippedNoChange++;
+        continue;
+      }
 
       // 기존 데이터 조회
       const { data: problem } = await supabaseAdmin
@@ -278,7 +292,11 @@ export async function PUT(
         .eq('id', match.problemId)
         .single();
 
-      if (!problem) continue;
+      if (!problem) {
+        skippedProblemMissing++;
+        failedUpdates.push({ problemId: match.problemId, reason: 'problem not found' });
+        continue;
+      }
 
       const updates: Record<string, unknown> = {};
 
@@ -323,15 +341,29 @@ export async function PUT(
           .update(updates)
           .eq('id', match.problemId);
 
-        if (!error) updatedCount++;
-        else console.error(`[match-answers] 문제 ${match.problemId} 업데이트 실패:`, error.message);
+        if (!error) {
+          updatedCount++;
+        } else {
+          console.error(`[match-answers PUT] 문제 ${match.problemId} 업데이트 실패:`, error.message, {
+            newAnswer: match.newAnswer,
+            hasSolution: !!match.newSolution,
+            finalAnswerToSet: mergedAj.finalAnswer,
+          });
+          failedUpdates.push({ problemId: match.problemId, reason: error.message });
+        }
       }
     }
+
+    console.log(`[match-answers PUT] 완료 — updated=${updatedCount}, failed=${failedUpdates.length}, skippedNoChange=${skippedNoChange}, skippedMissing=${skippedProblemMissing}, totalMatches=${matches.length}`);
 
     return NextResponse.json({
       examId,
       updatedCount,
       totalMatches: matches.length,
+      // ★ 사용자가 alert 에서 실제 적용 누락 사례 확인 가능하도록 노출
+      skippedNoChange,
+      skippedProblemMissing,
+      failedUpdates,
     });
 
   } catch (error) {
