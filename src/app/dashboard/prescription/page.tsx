@@ -183,17 +183,46 @@ function PrescriptionContent() {
     setDataError(null);
     (async () => {
       try {
-        const [s, n, h, e] = await Promise.all([
+        // ★ 오답 원인 분포 두 소스 통합:
+        //   1) diagnostics.v_student_error_profile — 담임 진단 수동 입력 (prescription/entry)
+        //   2) diagnostics.session_results.error_cause — QR 채점 결과
+        //   기존엔 1번만 봐서 QR 채점만 받은 학생 → "총 0건" 표시 사고 (2026-05-16).
+        const [s, n, h, e, analyticsRes] = await Promise.all([
           getStudentSessions(student.id).catch(() => []),
           getStudentNodeStatus(student.id).catch(() => []),
           getStudentHeatmap(student.id).catch(() => []),
           getStudentErrorProfile(student.id).catch(() => []),
+          fetch(`/api/students/${student.id}/analytics`, { cache: 'no-store' }).catch(() => null),
         ]);
+
+        // QR 채점 오답 원인 추출
+        let qrErrorCauses: Record<string, number> = {};
+        if (analyticsRes && analyticsRes.ok) {
+          const json = await analyticsRes.json().catch(() => ({}));
+          qrErrorCauses = (json.errorCauses || {}) as Record<string, number>;
+        }
+
+        // 두 소스 합산
+        const mergedMap = new Map<ErrorCause, number>();
+        for (const item of e) {
+          mergedMap.set(item.error_cause, (mergedMap.get(item.error_cause) || 0) + (item.cnt || 0));
+        }
+        for (const [cause, cnt] of Object.entries(qrErrorCauses)) {
+          if (typeof cnt !== 'number' || cnt <= 0) continue;
+          mergedMap.set(cause as ErrorCause, (mergedMap.get(cause as ErrorCause) || 0) + cnt);
+        }
+        const total = Array.from(mergedMap.values()).reduce((a, b) => a + b, 0);
+        const mergedProfile = Array.from(mergedMap.entries()).map(([cause, cnt]) => ({
+          error_cause: cause,
+          cnt,
+          pct: total > 0 ? Math.round((cnt / total) * 100) : 0,
+        }));
+
         if (!cancelled) {
           setSessions(s);
           setNodeStatus(n);
           setHeatmap(h);
-          setErrorProfile(e);
+          setErrorProfile(mergedProfile);
         }
       } catch (err) {
         if (!cancelled) setDataError(err instanceof Error ? err.message : String(err));
