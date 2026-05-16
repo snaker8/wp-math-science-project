@@ -13,7 +13,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ClipboardCheck, Printer, QrCode, ExternalLink, Search, Plus, Loader2,
-  Filter, CheckCircle2, Clock, AlertCircle, Camera,
+  Filter, CheckCircle2, Clock, AlertCircle, Camera, Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
@@ -85,6 +85,28 @@ export default function GradingPage() {
   // 모달
   const [showCreate, setShowCreate] = useState(false);
   const [sheetUpload, setSheetUpload] = useState<SessionRow | null>(null);
+
+  // 세션 삭제 — 휴지통 아이콘 클릭 시 confirm 없이 즉시 삭제.
+  //   사용자 명시: "묻지말고 내가 삭제 가능하게 해라".
+  //   잘못 만든 R1·R2 같은 중복 세션을 1클릭으로 정리.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const handleDeleteSession = async (sessionId: string) => {
+    if (deletingId) return;
+    setDeletingId(sessionId);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      // 로컬 state 즉시 제거 — refetch 없이 카드 사라짐
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (e) {
+      alert(`세션 삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // ──────────────────────────────────────────────
   // 데이터 로드
@@ -242,7 +264,13 @@ export default function GradingPage() {
         ) : (
           <div className="space-y-2">
             {filtered.map(s => (
-              <SessionCard key={s.id} session={s} onSheetUpload={() => setSheetUpload(s)} />
+              <SessionCard
+                key={s.id}
+                session={s}
+                onSheetUpload={() => setSheetUpload(s)}
+                onDelete={() => handleDeleteSession(s.id)}
+                isDeleting={deletingId === s.id}
+              />
             ))}
           </div>
         )}
@@ -302,7 +330,17 @@ function StatCard({
   );
 }
 
-function SessionCard({ session: s, onSheetUpload }: { session: SessionRow; onSheetUpload: () => void }) {
+function SessionCard({
+  session: s,
+  onSheetUpload,
+  onDelete,
+  isDeleting,
+}: {
+  session: SessionRow;
+  onSheetUpload: () => void;
+  onDelete: () => void;
+  isDeleting: boolean;
+}) {
   const isDone = !!s.completed_at;
   const pct = s.score_pct ?? null;
   const progressPct = s.problems_total > 0
@@ -391,6 +429,16 @@ function SessionCard({ session: s, onSheetUpload }: { session: SessionRow; onShe
           >
             <ExternalLink size={12} /> 채점
           </Link>
+          {/* ★ 세션 삭제 — 묻지말고 즉시 삭제. 잘못 만든 세션(R1·R2 중복 등) 정리용 */}
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isDeleting}
+            className="text-xs px-2 py-1 rounded bg-white/5 border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200 disabled:opacity-50 flex items-center gap-1"
+            title="세션 삭제 (즉시)"
+          >
+            {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+          </button>
         </div>
       </div>
     </div>
