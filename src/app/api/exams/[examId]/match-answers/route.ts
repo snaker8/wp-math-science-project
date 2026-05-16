@@ -289,9 +289,15 @@ export async function PUT(
       if (match.newAnswer) {
         // ★ 객관식 박힘 차단 — 0/모호값은 빈값으로 normalize.
         //   메모리: feedback_objective_answer_safety.md
-        const isObjective = mergedAj.type === 'multiple_choice'
+        // ★ 보완 (2026-05-15): OCR 결과가 객관식 형식(①~⑤/1~5)인 경우에만
+        //   객관식 normalize 적용. 그 외(숫자 65, 분수 1/2 등) 는 단답 의도로
+        //   판단하고 그대로 박음. 메모리 가드(객관식 모호값 차단) 는 유지하되,
+        //   OCR 이 명확한 단답을 추출한 경우 빈값 강등 사고 방지.
+        const trimmedAns = match.newAnswer.trim();
+        const looksObjective = /^[①②③④⑤]$/.test(trimmedAns) || /^[1-5]$/.test(trimmedAns);
+        const problemIsObjective = mergedAj.type === 'multiple_choice'
           || (Array.isArray(mergedAj.choices) && (mergedAj.choices as unknown[]).length > 0);
-        const safeAns = isObjective
+        const safeAns = (problemIsObjective && looksObjective)
           ? (await import('@/lib/validation/objective-answer')).normalizeObjectiveAnswer(match.newAnswer)
           : match.newAnswer;
         mergedAj.finalAnswer = safeAns;
