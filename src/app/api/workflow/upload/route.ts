@@ -15,6 +15,7 @@ import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle }
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
+import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { isSharedLibraryMode } from '@/lib/security/institute-guard';
 import type { SubjectTrack } from '@/types/track';
 
@@ -1523,7 +1524,17 @@ async function saveEditedProblemsDirect(
             // ★ 객관식 정답 박힘 차단 — 0/모호값은 빈값으로 normalize.
             //   메모리: feedback_objective_answer_safety.md (261개 박힘 사고)
             const isObj = formattedChoices.length > 0;
-            const rawAns = String(edited.answer || '');
+            let rawAns = String(edited.answer || '');
+            // ★ 해설→빠른답 자동 회로 (사용자 원칙: 해설 박히면 빠른답 자동 추출)
+            //   edited.answer 비고 edited.solution 있으면 해설 패턴에서 정답 추출.
+            //   진단평가 BS_H1S1_R1 류 사고 차단.
+            if (!rawAns.trim() && edited.solution) {
+              const extracted = extractFinalAnswerFromSolution(edited.solution);
+              if (extracted) {
+                rawAns = extracted.answer;
+                console.log(`[saveEditedProblemsDirect] 문제 ${edited.number}: 해설→답 자동 추출 "${rawAns}" (${extracted.answerType})`);
+              }
+            }
             const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
             return {
               finalAnswer: safeAns,
@@ -2164,7 +2175,23 @@ async function saveProblemsToDB(
           answer_json: (() => {
             // ★ 객관식 정답 박힘 차단 — 0/모호값은 빈값으로 normalize.
             const isObj = !!(result.choices && result.choices.length > 0);
-            const rawAns = result.solution.finalAnswer || '';
+            let rawAns = result.solution.finalAnswer || '';
+            // ★ 해설→빠른답 자동 회로 — finalAnswer 비고 해설 본문에서 추출 가능하면 보충.
+            //   solution_latex 구성 (line 2146~) 완료 전이라 result.solution.steps 등으로 재구성된 본문 사용.
+            if (!String(rawAns).trim()) {
+              const solBody = [
+                (result.solution as any).concept || '',
+                ...(result.solution.steps || []).map((s: any) => `${s.description || ''} ${s.latex || ''}`),
+                result.solution.finalAnswer ? `∴ 정답: ${result.solution.finalAnswer}` : '',
+              ].filter(Boolean).join('\n');
+              if (solBody) {
+                const extracted = extractFinalAnswerFromSolution(solBody);
+                if (extracted) {
+                  rawAns = extracted.answer;
+                  console.log(`[saveProblemsToDB] 문제 ${problemNum}: 해설→답 자동 추출 "${rawAns}" (${extracted.answerType})`);
+                }
+              }
+            }
             const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
             return {
               finalAnswer: safeAns,

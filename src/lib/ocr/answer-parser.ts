@@ -305,8 +305,11 @@ export function parseAnswerDocument(ocrText: string): ParseResult {
 /**
  * 해설 텍스트에서 최종 정답만 추출 (빠른답 자동 도출용)
  * 흔한 해설지 패턴을 순차 매칭
+ *
+ * ★ 자산화 fallback 으로도 사용 — edited.answer 비고 edited.solution 있으면 호출
+ *   (workflow/upload/route.ts). 진단평가 BS_H1S1_R1 류 자동 회로의 핵심.
  */
-function extractFinalAnswerFromSolution(solutionText: string): Omit<ParsedAnswer, 'problemNumber'> | null {
+export function extractFinalAnswerFromSolution(solutionText: string): Omit<ParsedAnswer, 'problemNumber'> | null {
   if (!solutionText) return null;
   const s = solutionText.trim();
   if (s.length < 2) return null;
