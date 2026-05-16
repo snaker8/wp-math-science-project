@@ -66,7 +66,7 @@ const SOURCE_TABS: Array<{
     description: 'BS · DD · PT · SC — 진단 회차별 시험지',
     icon: ClipboardCheck,
     color: 'indigo',
-    available: false,
+    available: true,
   },
   {
     id: 'school',
@@ -117,13 +117,30 @@ const DIFFICULTIES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function ExamCreatePage() {
   const router = useRouter();
-  // ★ 출처별 카테고리 탭 — 'all' 만 Phase 1 에서 작동, 나머지는 Phase 2.
+  // ★ 출처별 카테고리 탭 — 'all' + 'diagnostic' Phase 2 까지 작동.
   const [activeTab, setActiveTab] = useState<SourceTab>('all');
   const [typeCode, setTypeCode] = useState<string>('');
   const [typeName, setTypeName] = useState<string>('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedDiffs, setSelectedDiffs] = useState<Set<number>>(new Set());
   const [keyword, setKeyword] = useState('');
+
+  // ★ Phase 2 — 진단평가 탭 state
+  interface DiagnosticExam {
+    id: string;
+    title: string;
+    grade: string | null;
+    diagnostic_category?: string | null;
+    diagnostic_round?: number | null;
+    total_points?: number | null;
+    created_at: string;
+  }
+  const [diagExams, setDiagExams] = useState<DiagnosticExam[]>([]);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState<string | null>(null);
+  const [selectedDiagExamId, setSelectedDiagExamId] = useState<string | null>(null);
+  const [diagProblems, setDiagProblems] = useState<ProblemRow[]>([]);
+  const [diagProblemsLoading, setDiagProblemsLoading] = useState(false);
   const [problems, setProblems] = useState<ProblemRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -135,6 +152,63 @@ export default function ExamCreatePage() {
   const [examSubject, setExamSubject] = useState('');
   const [composing, setComposing] = useState(false);
   const [composeErr, setComposeErr] = useState<string | null>(null);
+
+  // ★ 진단평가 시험지 목록 fetch — 탭 진입 시 1회
+  useEffect(() => {
+    if (activeTab !== 'diagnostic') return;
+    if (diagExams.length > 0) return; // 이미 로드된 경우 재호출 X
+    let cancelled = false;
+    setDiagLoading(true);
+    setDiagError(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/exams?is_diagnostic=true', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        if (!cancelled) setDiagExams((data.exams || []) as DiagnosticExam[]);
+      } catch (e) {
+        if (!cancelled) setDiagError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setDiagLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // ★ 진단평가 시험지 선택 시 문제 목록 fetch
+  useEffect(() => {
+    if (!selectedDiagExamId) {
+      setDiagProblems([]);
+      return;
+    }
+    let cancelled = false;
+    setDiagProblemsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/exams/${selectedDiagExamId}`, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        // /api/exams/[examId] 응답의 problems 배열 → ProblemRow 형식으로 매핑
+        const rows: ProblemRow[] = ((data.problems || []) as Array<Record<string, unknown>>).map((r) => {
+          const p = (r.problems || r) as Record<string, unknown>;
+          return {
+            id: String(p.id || ''),
+            content_latex: String(p.content_latex || ''),
+            source_name: (p.source_name as string) || null,
+            source_year: (p.source_year as number) || null,
+            classifications: (p.classifications as ProblemRow['classifications']) || [],
+          };
+        }).filter((p) => p.id);
+        if (!cancelled) setDiagProblems(rows);
+      } catch (e) {
+        if (!cancelled) setDiagError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setDiagProblemsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedDiagExamId]);
 
   const handleSearch = async () => {
     setLoading(true);
@@ -246,8 +320,148 @@ export default function ExamCreatePage() {
         </div>
       </div>
 
-      {activeTab !== 'all' ? (
-        // ★ Phase 2 예정 카테고리 — placeholder
+      {activeTab === 'diagnostic' ? (
+        // ★ 진단평가 탭 — 시험지 list + 선택 → 문제 grid
+        <div className="flex flex-1 overflow-hidden">
+          {/* 좌측: 진단평가 시험지 목록 */}
+          <aside className="w-[320px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
+            <div className="mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">진단평가 시험지</h3>
+              <p className="mt-1 text-[10px] text-zinc-500">BS · DD · PT · SC 회차별</p>
+            </div>
+            {diagLoading ? (
+              <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+                <Loader2 className="h-3 w-3 animate-spin" /> 시험지 목록 불러오는 중…
+              </div>
+            ) : diagError ? (
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
+                {diagError}
+              </div>
+            ) : diagExams.length === 0 ? (
+              <div className="text-xs text-zinc-500 py-4">
+                진단평가 시험지가 없습니다. 자산화 시 BS·DD·PT·SC 패턴으로 자동 태깅됩니다.
+              </div>
+            ) : (
+              <ul className="space-y-1.5">
+                {diagExams.map((ex) => {
+                  const isSelected = selectedDiagExamId === ex.id;
+                  return (
+                    <li key={ex.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDiagExamId(ex.id)}
+                        className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
+                          isSelected
+                            ? 'border-indigo-500/50 bg-indigo-500/10'
+                            : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-0.5">
+                          {ex.diagnostic_category && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">
+                              {ex.diagnostic_category}
+                            </span>
+                          )}
+                          {ex.diagnostic_round != null && (
+                            <span className="text-[9px] text-zinc-500">R{ex.diagnostic_round}</span>
+                          )}
+                          {ex.grade && (
+                            <span className="text-[9px] text-zinc-500">· {ex.grade}</span>
+                          )}
+                        </div>
+                        <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </aside>
+
+          {/* 우측: 선택된 시험지의 문제 grid */}
+          <main className="flex-1 overflow-y-auto p-6">
+            {!selectedDiagExamId ? (
+              <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                <ClipboardCheck className="mb-3 h-10 w-10 text-zinc-700" />
+                <p className="text-sm">좌측에서 진단평가 시험지를 선택하세요.</p>
+              </div>
+            ) : diagProblemsLoading ? (
+              <div className="flex items-center justify-center py-20 text-zinc-500">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 문제 불러오는 중…
+              </div>
+            ) : diagProblems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                <Layers className="mb-3 h-10 w-10 text-zinc-700" />
+                <p className="text-sm">이 시험지에 문제가 없습니다.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-xs text-zinc-400">
+                    문제 <span className="font-bold text-white">{diagProblems.length}</span>건
+                    <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const all = new Set(picked);
+                      const allSelected = diagProblems.every((p) => all.has(p.id));
+                      if (allSelected) diagProblems.forEach((p) => all.delete(p.id));
+                      else diagProblems.forEach((p) => all.add(p.id));
+                      setPicked(all);
+                    }}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
+                  >
+                    전체 선택/해제
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {diagProblems.map((p) => {
+                    const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
+                    const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
+                    const code = cls?.type_code || '';
+                    const isPicked = picked.has(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => togglePick(p.id)}
+                        className={`text-left rounded-xl border p-4 transition-all ${
+                          isPicked
+                            ? 'border-indigo-500/50 bg-indigo-500/10'
+                            : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            {diff > 0 && (
+                              <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                난이도 {diff}
+                              </span>
+                            )}
+                            <code className="truncate text-[10px] text-zinc-500">{code}</code>
+                          </div>
+                          <div
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                              isPicked ? 'bg-indigo-500 text-white' : 'border border-zinc-700'
+                            }`}
+                          >
+                            {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
+                          </div>
+                        </div>
+                        <div className="line-clamp-3 text-xs text-zinc-300">
+                          <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      ) : activeTab !== 'all' ? (
+        // ★ Phase 3~5 예정 카테고리 — placeholder
         <div className="flex flex-1 items-center justify-center p-10">
           <div className="max-w-md text-center">
             {(() => {
@@ -262,7 +476,7 @@ export default function ExamCreatePage() {
                   <p className="text-sm text-zinc-400 mb-4">{tab.description}</p>
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-500">
                     <Sparkles size={14} className="inline mr-1 text-amber-400" />
-                    Phase 2 에서 활성화됩니다. 현재는 <button
+                    다음 Phase 에서 활성화됩니다. 현재는 <button
                       type="button"
                       onClick={() => setActiveTab('all')}
                       className="text-cyan-400 underline hover:text-cyan-300"
