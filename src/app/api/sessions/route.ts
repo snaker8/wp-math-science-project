@@ -145,16 +145,21 @@ export async function GET(request: NextRequest) {
 
   const [{ data: usersData }, { data: examsData }] = await Promise.all([
     studentIds.length
-      ? sb.from('users').select('id, full_name, name, institute_id').in('id', studentIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; name?: string; institute_id?: string }> }),
+      ? sb.from('users').select('id, full_name, name, phone, email, institute_id').in('id', studentIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name?: string; name?: string; phone?: string; email?: string; institute_id?: string }> }),
     examIds.length
       ? sb.from('exams').select('id, title, institute_id').in('id', examIds)
       : Promise.resolve({ data: [] as Array<{ id: string; title?: string; institute_id?: string }> }),
   ]);
 
   const userMap = new Map<string, { name: string; institute_id?: string }>();
-  for (const u of (usersData || []) as Array<{ id: string; full_name?: string; name?: string; institute_id?: string }>) {
-    userMap.set(u.id, { name: u.full_name || u.name || '(이름 없음)', institute_id: u.institute_id });
+  for (const u of (usersData || []) as Array<{ id: string; full_name?: string; name?: string; phone?: string; email?: string; institute_id?: string }>) {
+    // ★ 이름 폴백 4단 — full_name → name → phone → email prefix → "(이름 없음)"
+    //   사고 (2026-05-16): users.full_name/name 둘 다 빈 학생이 dashboard 에
+    //   "(이름 없음)" 으로만 표시되어 식별 불가. phone·email 로 최소 식별 보장.
+    const emailPrefix = u.email ? u.email.split('@')[0] : '';
+    const displayName = u.full_name || u.name || u.phone || emailPrefix || '(이름 없음)';
+    userMap.set(u.id, { name: displayName, institute_id: u.institute_id });
   }
   const examMap = new Map<string, { title: string; institute_id?: string }>();
   for (const e of (examsData || []) as Array<{ id: string; title?: string; institute_id?: string }>) {
