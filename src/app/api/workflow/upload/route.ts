@@ -1208,8 +1208,32 @@ async function saveEditedProblemsDirect(
   // ★ institute_id 결정 (saveProblemsToDB와 동일 로직)
   //   콜드스타트 정책: SHARED_LIBRARY_MODE=true 면 NULL 강제 → 본부 공통 풀.
   //   모든 가맹 학원이 검색·사용 가능. 학원별 자산 격리로 전환 시 env 만 끔.
+  //
+  // ★ 학원 단위 격리 우선 (organizations.isolated_assets=true)
+  //   사용자 organization 이 격리 모드면 env 무시하고 institute_id 박음.
+  //   예: 엄궁차수학(isolated_assets=true) → 자산화 problems 가 다른 학원에 안 보임.
+  //   사용자 지시 (2026-05-16): "엄궁차수학에서 만들거나 올리는 데이터는 다른
+  //   학원에서 조회 되지 않게".
+  let isolatedByOrg = false;
+  if (createdBy) {
+    try {
+      const { data: userOrgRow } = await supabase
+        .from('users')
+        .select('institute_id, institutes!inner(organization_id, organizations!inner(isolated_assets))')
+        .eq('id', createdBy)
+        .maybeSingle();
+      const orgRow = (userOrgRow as { institutes?: { organizations?: { isolated_assets?: boolean } } } | null)?.institutes?.organizations;
+      isolatedByOrg = orgRow?.isolated_assets === true;
+      if (isolatedByOrg) {
+        console.log('[Direct Save] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
+      }
+    } catch (e) {
+      console.warn('[Direct Save] organization isolated_assets 조회 실패 (기본 동작 진행):', (e as Error).message);
+    }
+  }
+
   let instituteId: string | null;
-  if (isSharedLibraryMode()) {
+  if (isSharedLibraryMode() && !isolatedByOrg) {
     instituteId = null;
     console.log('[Direct Save] SHARED_LIBRARY_MODE=on → institute_id=NULL (본부 공통 풀)');
   } else {
@@ -1834,8 +1858,30 @@ async function saveProblemsToDB(
 
   // 사용자의 institute_id 조회 (users 테이블에서)
   //   콜드스타트 정책: SHARED_LIBRARY_MODE=true 면 NULL 강제 → 본부 공통 풀.
+  //
+  // ★ 학원 단위 격리 우선 (organizations.isolated_assets=true)
+  //   사용자 organization 이 격리 모드면 env 무시하고 institute_id 박음.
+  //   예: 엄궁차수학(isolated_assets=true) → 자산화 problems 다른 학원 차단.
+  let isolatedByOrg = false;
+  if (createdBy) {
+    try {
+      const { data: userOrgRow } = await supabase
+        .from('users')
+        .select('institute_id, institutes!inner(organization_id, organizations!inner(isolated_assets))')
+        .eq('id', createdBy)
+        .maybeSingle();
+      const orgRow = (userOrgRow as { institutes?: { organizations?: { isolated_assets?: boolean } } } | null)?.institutes?.organizations;
+      isolatedByOrg = orgRow?.isolated_assets === true;
+      if (isolatedByOrg) {
+        console.log('[DB] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
+      }
+    } catch (e) {
+      console.warn('[DB] organization isolated_assets 조회 실패 (기본 동작 진행):', (e as Error).message);
+    }
+  }
+
   let instituteId: string | null;
-  if (isSharedLibraryMode()) {
+  if (isSharedLibraryMode() && !isolatedByOrg) {
     instituteId = null;
     console.log('[DB] SHARED_LIBRARY_MODE=on → institute_id=NULL (본부 공통 풀)');
   } else {
