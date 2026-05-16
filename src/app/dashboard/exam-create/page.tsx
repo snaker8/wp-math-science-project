@@ -88,10 +88,10 @@ const SOURCE_TABS: Array<{
   {
     id: 'mock',
     label: '모의고사',
-    description: '연도 · 회차별 모의고사 문제',
+    description: '연도 → 시험지 → 문제 (모의고사·수능·평가원)',
     icon: FileText,
     color: 'rose',
-    available: false,
+    available: true,
   },
 ];
 
@@ -187,6 +187,25 @@ export default function ExamCreatePage() {
   const [textbookProblems, setTextbookProblems] = useState<ProblemRow[]>([]);
   const [textbookProblemsLoading, setTextbookProblemsLoading] = useState(false);
   const [textbookQuery, setTextbookQuery] = useState('');
+
+  // ★ Phase 5 — 모의고사 탭 state
+  interface MockExam {
+    id: string;
+    title: string;
+    grade: string | null;
+    subject: string | null;
+    exam_type: string | null;
+    created_at: string;
+    year?: number | null;  // 클라이언트에서 추출
+  }
+  const [mockExams, setMockExams] = useState<MockExam[]>([]);
+  const [mockLoading, setMockLoading] = useState(false);
+  const [mockError, setMockError] = useState<string | null>(null);
+  const [selectedMockYear, setSelectedMockYear] = useState<number | null>(null);
+  const [selectedMockExamId, setSelectedMockExamId] = useState<string | null>(null);
+  const [mockProblems, setMockProblems] = useState<ProblemRow[]>([]);
+  const [mockProblemsLoading, setMockProblemsLoading] = useState(false);
+  const [mockQuery, setMockQuery] = useState('');
   const [problems, setProblems] = useState<ProblemRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -314,6 +333,82 @@ export default function ExamCreatePage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // ★ 모의고사 시험지 목록 fetch — 탭 진입 시 1회
+  useEffect(() => {
+    if (activeTab !== 'mock') return;
+    if (mockExams.length > 0) return;
+    let cancelled = false;
+    setMockLoading(true);
+    setMockError(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        // 모의고사 후보 필터 — exam_type 또는 title 패턴 매칭
+        const MOCK_PATTERN = /모의고사|평가원|교육청|수능|학평/;
+        const filtered = ((data.exams || []) as MockExam[])
+          .filter((ex) => {
+            if (ex.exam_type && /모의|수능|평가원|학평/.test(ex.exam_type)) return true;
+            if (ex.title && MOCK_PATTERN.test(ex.title)) return true;
+            return false;
+          })
+          .map((ex) => {
+            // 연도 추출 — title 의 4자리 또는 2자리 연도 패턴
+            const m4 = ex.title.match(/(20\d{2})/);
+            const m2 = ex.title.match(/(?:^|\s)(\d{2})(?=\D|$)/);
+            let year: number | null = null;
+            if (m4) year = parseInt(m4[1], 10);
+            else if (m2) {
+              const n = parseInt(m2[1], 10);
+              year = n >= 0 && n <= 99 ? 2000 + n : null;
+            }
+            return { ...ex, year };
+          });
+        if (!cancelled) setMockExams(filtered);
+      } catch (e) {
+        if (!cancelled) setMockError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setMockLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // ★ 모의고사 시험지 선택 시 문제 목록 fetch
+  useEffect(() => {
+    if (!selectedMockExamId) {
+      setMockProblems([]);
+      return;
+    }
+    let cancelled = false;
+    setMockProblemsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/exams/${selectedMockExamId}`, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const rows: ProblemRow[] = ((data.problems || []) as Array<Record<string, unknown>>).map((r) => {
+          const p = (r.problems || r) as Record<string, unknown>;
+          return {
+            id: String(p.id || ''),
+            content_latex: String(p.content_latex || ''),
+            source_name: (p.source_name as string) || null,
+            source_year: (p.source_year as number) || null,
+            classifications: (p.classifications as ProblemRow['classifications']) || [],
+          };
+        }).filter((p) => p.id);
+        if (!cancelled) setMockProblems(rows);
+      } catch (e) {
+        if (!cancelled) setMockError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setMockProblemsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedMockExamId]);
 
   // ★ 시중교재 시험지 선택 시 문제 목록 fetch
   useEffect(() => {
@@ -1074,8 +1169,227 @@ export default function ExamCreatePage() {
             </div>
           );
         })()
+      ) : activeTab === 'mock' ? (
+        // ★ 모의고사 탭 — 연도 → 시험지 → 문제
+        (() => {
+          // 검색 필터
+          const filteredExams = mockExams.filter((ex) => {
+            if (!mockQuery.trim()) return true;
+            const q = mockQuery.trim().toLowerCase();
+            return (ex.title || '').toLowerCase().includes(q);
+          });
+          // 연도별 그룹 (year null 은 '연도 미상')
+          const byYear = new Map<string, MockExam[]>();
+          for (const ex of filteredExams) {
+            const key = ex.year != null ? String(ex.year) : '(연도 미상)';
+            if (!byYear.has(key)) byYear.set(key, []);
+            byYear.get(key)!.push(ex);
+          }
+          const sortedYears = Array.from(byYear.keys()).sort((a, b) => {
+            // 연도 내림차순 (최신 우선), '(연도 미상)' 은 맨 뒤
+            if (a === '(연도 미상)') return 1;
+            if (b === '(연도 미상)') return -1;
+            return b.localeCompare(a);
+          });
+          const selectedYearKey = selectedMockYear != null ? String(selectedMockYear) : null;
+          const examsForYear = selectedYearKey ? byYear.get(selectedYearKey) || [] : [];
+          return (
+            <div className="flex flex-1 overflow-hidden">
+              {/* 좌측: 연도 list + 검색 */}
+              <aside className="w-[220px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
+                <div className="mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-rose-300">연도</h3>
+                  <p className="mt-1 text-[10px] text-zinc-500">모의·수능·평가원·학평</p>
+                </div>
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={mockQuery}
+                    onChange={(e) => setMockQuery(e.target.value)}
+                    placeholder="제목 검색"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-[11px] text-white placeholder-zinc-500 focus:border-rose-500 focus:outline-none"
+                  />
+                </div>
+                {mockLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+                    <Loader2 className="h-3 w-3 animate-spin" /> 시험지 불러오는 중…
+                  </div>
+                ) : mockError ? (
+                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
+                    {mockError}
+                  </div>
+                ) : sortedYears.length === 0 ? (
+                  <div className="text-xs text-zinc-500 py-4">
+                    모의고사 시험지가 없습니다. exam_type 또는 제목에 &lsquo;모의고사·수능·평가원·학평&rsquo; 키워드가 있어야 분류됩니다.
+                  </div>
+                ) : (
+                  <ul className="space-y-1">
+                    {sortedYears.map((yearKey) => {
+                      const count = byYear.get(yearKey)!.length;
+                      const isSelected = selectedYearKey === yearKey;
+                      const isUnknown = yearKey === '(연도 미상)';
+                      return (
+                        <li key={yearKey}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedMockYear(isUnknown ? -1 : parseInt(yearKey, 10));
+                              setSelectedMockExamId(null);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+                              isSelected
+                                ? 'bg-rose-500/15 text-rose-200'
+                                : 'text-zinc-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="truncate font-semibold">
+                              {isUnknown ? yearKey : `${yearKey}년`}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 flex-shrink-0">{count}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </aside>
+
+              {/* 중간: 연도의 시험지 list */}
+              <section className="w-[300px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/20 p-4">
+                {selectedMockYear == null ? (
+                  <div className="text-xs text-zinc-500 py-4 text-center">연도를 선택하세요</div>
+                ) : examsForYear.length === 0 ? (
+                  <div className="text-xs text-zinc-500 py-4 text-center">시험지가 없습니다.</div>
+                ) : (
+                  <>
+                    <h4 className="mb-2 text-xs font-bold text-rose-200">
+                      {selectedMockYear === -1 ? '(연도 미상)' : `${selectedMockYear}년`} 시험지
+                    </h4>
+                    <ul className="space-y-1.5">
+                      {examsForYear.map((ex) => {
+                        const isSelected = selectedMockExamId === ex.id;
+                        return (
+                          <li key={ex.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMockExamId(ex.id)}
+                              className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
+                                isSelected
+                                  ? 'border-rose-500/50 bg-rose-500/10'
+                                  : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                {ex.exam_type && (
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/15 text-rose-300">
+                                    {ex.exam_type}
+                                  </span>
+                                )}
+                                {ex.grade && (
+                                  <span className="text-[9px] text-zinc-500">{ex.grade}</span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-semibold text-white truncate">{ex.title}</div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </section>
+
+              {/* 우측: 시험지 문제 grid */}
+              <main className="flex-1 overflow-y-auto p-6">
+                {!selectedMockExamId ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                    <FileText className="mb-3 h-10 w-10 text-zinc-700" />
+                    <p className="text-sm">
+                      {selectedMockYear != null
+                        ? '중간 패널에서 시험지를 선택하세요.'
+                        : '좌측에서 연도를 먼저 선택하세요.'}
+                    </p>
+                  </div>
+                ) : mockProblemsLoading ? (
+                  <div className="flex items-center justify-center py-20 text-zinc-500">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 문제 불러오는 중…
+                  </div>
+                ) : mockProblems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                    <Layers className="mb-3 h-10 w-10 text-zinc-700" />
+                    <p className="text-sm">이 시험지에 문제가 없습니다.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-xs text-zinc-400">
+                        문제 <span className="font-bold text-white">{mockProblems.length}</span>건
+                        <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const all = new Set(picked);
+                          const allSelected = mockProblems.every((p) => all.has(p.id));
+                          if (allSelected) mockProblems.forEach((p) => all.delete(p.id));
+                          else mockProblems.forEach((p) => all.add(p.id));
+                          setPicked(all);
+                        }}
+                        className="text-[11px] text-rose-400 hover:text-rose-300 underline"
+                      >
+                        전체 선택/해제
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {mockProblems.map((p) => {
+                        const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
+                        const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
+                        const code = cls?.type_code || '';
+                        const isPicked = picked.has(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => togglePick(p.id)}
+                            className={`text-left rounded-xl border p-4 transition-all ${
+                              isPicked
+                                ? 'border-rose-500/50 bg-rose-500/10'
+                                : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                {diff > 0 && (
+                                  <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                    난이도 {diff}
+                                  </span>
+                                )}
+                                <code className="truncate text-[10px] text-zinc-500">{code}</code>
+                              </div>
+                              <div
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                                  isPicked ? 'bg-rose-500 text-white' : 'border border-zinc-700'
+                                }`}
+                              >
+                                {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
+                              </div>
+                            </div>
+                            <div className="line-clamp-3 text-xs text-zinc-300">
+                              <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </main>
+            </div>
+          );
+        })()
       ) : activeTab !== 'all' ? (
-        // ★ Phase 5 예정 카테고리 — placeholder
+        // ★ 도달 불가 (모든 탭 활성화 완료) — 안전망 placeholder
         <div className="flex flex-1 items-center justify-center p-10">
           <div className="max-w-md text-center">
             {(() => {
