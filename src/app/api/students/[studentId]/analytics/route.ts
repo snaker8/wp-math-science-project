@@ -117,11 +117,20 @@ export async function GET(
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // errorCauses
+  // errorCauses + 미분류 카운트
+  //   강사가 X 만 누르고 오답 원인 칩을 안 골랐으면 error_cause = NULL.
+  //   분포 차트에 안 잡혀 "총 0건" 표시 사고 원인 (2026-05-16, 사용자 보고).
+  //   → totalWrong / uncategorizedWrong 도 응답에 노출해서 강사에게 분류 입력 유도.
   const errorCauses: Record<string, number> = { 개념: 0, 유형: 0, 계산: 0, 문장제: 0, 시간: 0 };
+  let totalWrong = 0;
+  let uncategorizedWrong = 0;
   for (const r of allResults) {
-    if (r.is_correct === false && r.error_cause && errorCauses[r.error_cause] !== undefined) {
+    if (r.is_correct !== false) continue;
+    totalWrong++;
+    if (r.error_cause && errorCauses[r.error_cause] !== undefined) {
       errorCauses[r.error_cause]++;
+    } else {
+      uncategorizedWrong++;
     }
   }
 
@@ -192,6 +201,8 @@ export async function GET(
     summary: {
       totalSessions: sessionList.length,
       totalGraded,
+      totalWrong,
+      uncategorizedWrong,
       avgScorePct,
       lastActiveAt: allResults.length > 0
         ? allResults.reduce((max, r) => (r.graded_at > max ? r.graded_at : max), '')

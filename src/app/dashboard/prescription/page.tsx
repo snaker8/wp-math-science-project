@@ -168,6 +168,7 @@ function PrescriptionContent() {
   const [nodeStatus, setNodeStatus] = useState<StudentNodeStatus[]>([]);
   const [heatmap, setHeatmap] = useState<MathsecrHeatmapRow[]>([]);
   const [errorProfile, setErrorProfile] = useState<Array<{ error_cause: ErrorCause; cnt: number; pct: number }>>([]);
+  const [wrongStats, setWrongStats] = useState<{ totalWrong: number; uncategorizedWrong: number }>({ totalWrong: 0, uncategorizedWrong: 0 });
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
 
@@ -177,6 +178,7 @@ function PrescriptionContent() {
   useEffect(() => {
     if (!student?.id) {
       setSessions([]); setNodeStatus([]); setHeatmap([]); setErrorProfile([]);
+      setWrongStats({ totalWrong: 0, uncategorizedWrong: 0 });
       return;
     }
     let cancelled = false;
@@ -196,11 +198,15 @@ function PrescriptionContent() {
           fetch(`/api/students/${student.id}/analytics`, { cache: 'no-store' }).catch(() => null),
         ]);
 
-        // QR 채점 오답 원인 추출
+        // QR 채점 오답 원인 + 총·미분류 오답 추출
         let qrErrorCauses: Record<string, number> = {};
+        let qrTotalWrong = 0;
+        let qrUncategorized = 0;
         if (analyticsRes && analyticsRes.ok) {
           const json = await analyticsRes.json().catch(() => ({}));
           qrErrorCauses = (json.errorCauses || {}) as Record<string, number>;
+          qrTotalWrong = Number(json.summary?.totalWrong ?? 0);
+          qrUncategorized = Number(json.summary?.uncategorizedWrong ?? 0);
         }
 
         // 두 소스 합산
@@ -224,6 +230,7 @@ function PrescriptionContent() {
           setNodeStatus(n);
           setHeatmap(h);
           setErrorProfile(mergedProfile);
+          setWrongStats({ totalWrong: qrTotalWrong, uncategorizedWrong: qrUncategorized });
         }
       } catch (err) {
         if (!cancelled) setDataError(err instanceof Error ? err.message : String(err));
@@ -445,15 +452,29 @@ function PrescriptionContent() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Radar */}
                 <ClinicCard className="col-span-1 lg:col-span-2">
-                  <div className="flex justify-between items-center mb-4">
+                  <div className="flex justify-between items-center mb-2">
                     <h3 className="font-bold text-lg flex items-center gap-2">
                       <Sparkles size={18} className="text-indigo-400" />
                       오답 원인 분포 (5요인)
                     </h3>
                     <div className="text-xs text-content-tertiary">
-                      총 {errorProfile.reduce((a, c) => a + c.cnt, 0)}건
+                      분류 {errorProfile.reduce((a, c) => a + c.cnt, 0)}건
+                      {wrongStats.totalWrong > 0 && (
+                        <span className="ml-1 text-content-muted">
+                          / 총 오답 {wrongStats.totalWrong}건
+                        </span>
+                      )}
                     </div>
                   </div>
+                  {/* 미분류 안내 — QR 채점 시 강사가 X 누르고 원인 칩 안 골랐을 때 */}
+                  {wrongStats.uncategorizedWrong > 0 && (
+                    <div className="mb-3 text-[11px] text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+                      ⚠ 오답 {wrongStats.uncategorizedWrong}건이 원인 분류 안 됨 —
+                      <Link href="/dashboard/grading" className="ml-1 underline hover:text-amber-200">
+                        강사 채점 페이지
+                      </Link>{' '}에서 X 옆 원인 칩(개념·유형·계산·문장제·시간)을 선택해주세요.
+                    </div>
+                  )}
                   <div className="h-[300px] w-full">
                     {dataLoading ? (
                       <div className="h-full flex items-center justify-center text-content-tertiary">
