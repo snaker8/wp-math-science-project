@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +18,13 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // ★ 인증 가드 — 세션은 학생 사적 정보. 외부 노출 차단.
+  //   - STUDENT: 본인 세션만
+  //   - ADMIN/TEACHER/TUTOR/ORG_ADMIN/super_admin: institute 격리 통과
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
   const { id } = await params;
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
@@ -32,6 +41,26 @@ export async function GET(
 
   if (sErr || !session) {
     return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
+  }
+
+  // ★ 권한 검증
+  const sessionStudentId = (session as { student_id: string }).student_id;
+  if (user.role === 'STUDENT') {
+    if (sessionStudentId !== user.id) {
+      return NextResponse.json({ error: 'Forbidden — 다른 학생 세션' }, { status: 403 });
+    }
+  } else {
+    // 강사·관리자 — 학생의 institute 와 격리 비교
+    const { data: stuRow } = await sb
+      .from('users')
+      .select('institute_id')
+      .eq('id', sessionStudentId)
+      .maybeSingle();
+    try {
+      assertInstituteAccess(scope, (stuRow as { institute_id?: string } | null)?.institute_id ?? null);
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 403 });
+    }
   }
 
   // 학생 정보
@@ -129,10 +158,41 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // ★ 인증 가드 — 학생 본인은 삭제 X, 강사·관리자만 가능
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+  const allowedRoles = ['ADMIN', 'TEACHER', 'TUTOR', 'ORG_ADMIN'];
+  if (!user.role || (!allowedRoles.includes(user.role) && !scope.isSuperAdmin)) {
+    return NextResponse.json({ error: 'Forbidden — 삭제 권한 없음' }, { status: 403 });
+  }
+
   const { id } = await params;
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
+
+  // 세션 존재 + institute 격리 확인
+  const { data: session } = await supabaseAdmin
+    .schema('diagnostics' as never)
+    .from('print_sessions')
+    .select('student_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (!session) {
+    return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
+  }
+  const { data: stuRow } = await supabaseAdmin
+    .from('users')
+    .select('institute_id')
+    .eq('id', (session as { student_id: string }).student_id)
+    .maybeSingle();
+  try {
+    assertInstituteAccess(scope, (stuRow as { institute_id?: string } | null)?.institute_id ?? null);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 403 });
+  }
+
   const { error } = await supabaseAdmin
     .schema('diagnostics' as never)
     .from('print_sessions')
