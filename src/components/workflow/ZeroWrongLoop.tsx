@@ -252,7 +252,7 @@ export default function ZeroWrongLoop({
               onChange={(e) => setUseLLM(e.target.checked)}
             />
             <Brain size={16} />
-            <span>GPT-4o 기반 생성</span>
+            <span>AI 기반 생성</span>
           </label>
 
           <div className="option-item">
