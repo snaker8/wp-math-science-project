@@ -627,8 +627,11 @@ export default function SignUpPage() {
                   )}
                 </div>
 
-                {/* 학원 선택 후 — 산하 센터 드롭다운 (선택, 사용자 지시: "센터가 없는 학원도 있다") */}
-                {selectedOrg && (
+                {/* 학원 선택 후 — 산하 센터 드롭다운 (선택)
+                   ★ institutes 0건 학원(단일 센터·본부만 운영, 예: 엄궁차수학)은
+                     dropdown 자체 숨김 → 사용자 지시 "선택하면 센터 선택없이 가입되게".
+                     다중 센터 학원만 dropdown 표시 (선택 사항). */}
+                {selectedOrg && !institutesLoading && institutes.length > 0 && (
                   <div className="space-y-1.5 mt-3">
                     <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
                       센터 <span className="text-zinc-600 normal-case font-normal">(선택)</span>
@@ -639,23 +642,17 @@ export default function SignUpPage() {
                       onChange={handleInputChange}
                       className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
                     >
-                      <option value="" className="bg-zinc-900">
-                        {institutesLoading
-                          ? '로딩 중…'
-                          : (institutes.length === 0 ? '센터 없이 가입' : '센터 선택 안 함')}
-                      </option>
+                      <option value="" className="bg-zinc-900">센터 선택 안 함</option>
                       {institutes.map((inst) => (
                         <option key={inst.id} value={inst.id} className="bg-zinc-900">
                           {inst.name}
                         </option>
                       ))}
                     </select>
-                    {!institutesLoading && institutes.length === 0 && (
-                      <p className="text-[11px] text-zinc-500 ml-1">
-                        등록된 센터가 없습니다. 센터 없이 그대로 가입 가능합니다.
-                      </p>
-                    )}
                   </div>
+                )}
+                {selectedOrg && institutesLoading && (
+                  <p className="mt-3 text-[11px] text-zinc-500 ml-1">센터 조회 중…</p>
                 )}
 
                 {/* 가맹 신청 모드 — 학원·센터 자유 입력 */}
