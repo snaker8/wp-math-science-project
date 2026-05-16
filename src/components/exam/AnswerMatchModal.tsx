@@ -391,7 +391,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                 />
                 <Upload size={32} className="mx-auto text-content-muted mb-2" />
                 <p className="text-sm text-content-secondary">
-                  {mode === 'solution' ? '해설지 파일을 드롭하세요 (Mathpix OCR)' : '빠른답 파일을 드롭하세요 (Gemini Vision)'}
+                  {mode === 'solution' ? '해설지 파일을 드롭하세요' : '빠른답 파일을 드롭하세요'}
                 </p>
                 <p className="text-xs text-content-muted mt-1">PDF, PNG, JPG · 여러 장 선택 가능 (최대 {MAX_FILES}개)</p>
               </div>
@@ -428,7 +428,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                   }`}
                 >
                   {isUploading ? (
-                    <><Loader2 size={16} className="animate-spin" /> {mode === 'solution' ? 'Mathpix OCR + 해설 파싱' : 'OCR + 매칭 분석'} 중 ({files.length}장)...</>
+                    <><Loader2 size={16} className="animate-spin" /> {mode === 'solution' ? 'OCR + 해설 파싱' : 'OCR + 매칭 분석'} 중 ({files.length}장)...</>
                   ) : (
                     <><Upload size={16} /> {files.length}개 파일 분석 시작</>
                   )}
