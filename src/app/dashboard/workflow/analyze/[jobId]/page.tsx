@@ -32,6 +32,24 @@ import AnalyzeProblemEditModal from '@/components/workflow/AnalyzeProblemEditMod
 import type { AnalyzedProblemData } from '@/components/workflow/AnalyzeProblemEditModal';
 import dynamic from 'next/dynamic';
 import { analyzePageBlocksSplit, getMultiBlocks, refineAiBboxes, type CropRect } from '@/lib/pdf/auto-crop';
+// ★ 페이지 순서 정정 — 드래그 앤 드롭 (2026-05-17)
+//   PDF 스캔이 잘못된 순서(예: 1, 3, 2)로 들어왔을 때 사용자가 정정 가능
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 
 // Desmos 그래프 뷰어 (클라이언트 전용, dynamic import)
 const InlineDesmosGraph = dynamic(
@@ -329,8 +347,122 @@ function PdfPageCanvas({
 }
 
 // ============================================================================
-// Page Thumbnail List (좌측)
+// Page Thumbnail List (좌측) — 드래그 앤 드롭으로 페이지 순서 정정 가능
 // ============================================================================
+
+interface PageEntry {
+  /** 표시용 페이지 번호 (1부터, 드래그 후 재할당) */
+  displayNumber: number;
+  /** 원본 PDF 페이지 번호 (썸네일 렌더링에 사용 — 절대 변경 안 됨) */
+  pdfPageNumber: number;
+  /** 분석 결과 (있을 수 있음) */
+  pageData?: PageData;
+  /** AI 감지 상태 — 원본 PDF page index 기준 */
+  aiStatus?: 'loading' | 'done' | 'error';
+}
+
+function PageThumbnailItem({
+  entry,
+  isActive,
+  pdfUrl,
+  onPageSelect,
+  reorderEnabled,
+}: {
+  entry: PageEntry;
+  isActive: boolean;
+  pdfUrl?: string;
+  onPageSelect: (displayNumber: number) => void;
+  reorderEnabled: boolean;
+}) {
+  const sortable = useSortable({ id: entry.pdfPageNumber, disabled: !reorderEnabled });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-all ${
+        isActive
+          ? 'bg-cyan-500/10 border-2 border-cyan-500/40'
+          : 'border-2 border-zinc-800 hover:border-zinc-600'
+      } ${isDragging ? 'shadow-xl' : ''}`}
+    >
+      {/* 드래그 핸들 (정정 모드일 때만 표시) */}
+      {reorderEnabled && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="flex items-center justify-center w-5 h-7 rounded text-zinc-500 hover:text-zinc-300 cursor-grab active:cursor-grabbing flex-shrink-0"
+          title="드래그해서 순서 변경"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onPageSelect(entry.displayNumber)}
+        className="flex flex-1 items-center gap-2.5 min-w-0"
+      >
+        {/* 표시 페이지 번호 */}
+        <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 ${
+          isActive
+            ? 'bg-cyan-500 text-white'
+            : 'bg-zinc-700 text-zinc-400'
+        }`}>
+          {entry.displayNumber}
+        </div>
+
+        {/* 썸네일 — 원본 PDF 페이지 번호로 렌더링 (절대 변경 X) */}
+        <div className={`relative w-14 h-20 rounded border overflow-hidden flex-shrink-0 bg-white ${
+          isActive ? 'border-cyan-400' : 'border-zinc-600'
+        }`}>
+          <PdfPageCanvas
+            pdfUrl={pdfUrl}
+            pageNumber={entry.pdfPageNumber}
+            width={56}
+            height={80}
+          />
+          {entry.aiStatus === 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+            </div>
+          )}
+          {entry.aiStatus === 'error' && (
+            <div className="absolute bottom-0.5 right-0.5">
+              <AlertCircle className="h-3 w-3 text-amber-400" />
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className={`text-xs font-medium ${
+            isActive ? 'text-cyan-300' : 'text-zinc-400'
+          }`}>
+            페이지 {entry.displayNumber}
+            {entry.pdfPageNumber !== entry.displayNumber && (
+              <span className="ml-1 text-[9px] text-amber-400 font-normal">
+                (PDF {entry.pdfPageNumber})
+              </span>
+            )}
+          </div>
+          {entry.pageData && entry.pageData.problems.length > 0 && (
+            <div className="text-[10px] text-zinc-500 mt-0.5">
+              {entry.pageData.problems.length}문항
+            </div>
+          )}
+        </div>
+      </button>
+    </div>
+  );
+}
 
 function PageThumbnailList({
   pages,
@@ -339,86 +471,102 @@ function PageThumbnailList({
   pdfUrl,
   onPageSelect,
   aiDetectProgress,
+  pageOrder,
+  onReorder,
 }: {
   pages: PageData[];
   currentPage: number;
   totalPdfPages: number;
   pdfUrl?: string;
-  onPageSelect: (page: number) => void;
+  onPageSelect: (displayNumber: number) => void;
   aiDetectProgress?: Map<number, 'loading' | 'done' | 'error'>;
+  /** displayNumber → pdfPageNumber 매핑 배열. index 0 = 표시 1번 페이지의 원본 PDF 번호 */
+  pageOrder: number[];
+  /** 새 순서로 변경 시 호출 (새 pageOrder 배열) */
+  onReorder: (newOrder: number[]) => void;
 }) {
-  const maxPages = Math.max(totalPdfPages, pages.length);
+  const [reorderMode, setReorderMode] = useState(false);
+
+  // 표시할 페이지 엔트리 — pageOrder 기준으로 매핑
+  //   pageData 는 원본 PDF 페이지 번호로 매핑 (pages.pageNumber 가 PDF 기준이라 가정)
+  const entries: PageEntry[] = pageOrder.map((pdfPageNumber, idx) => {
+    const displayNumber = idx + 1;
+    return {
+      displayNumber,
+      pdfPageNumber,
+      pageData: pages.find((p) => p.pageNumber === pdfPageNumber),
+      aiStatus: aiDetectProgress?.get(pdfPageNumber - 1),
+    };
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = pageOrder.indexOf(active.id as number);
+    const newIndex = pageOrder.indexOf(over.id as number);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    onReorder(arrayMove(pageOrder, oldIndex, newIndex));
+  };
+
+  const isReordered = pageOrder.some((pdfNum, idx) => pdfNum !== idx + 1);
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800/50">
-        <span className="text-xs font-bold text-zinc-300">페이지</span>
-        <span className="text-xs text-cyan-400 font-bold">{maxPages}</span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {Array.from({ length: maxPages }).map((_, i) => {
-          const pageNum = i + 1;
-          const pageData = pages.find(p => p.pageNumber === pageNum);
-          const isActive = currentPage === pageNum;
-
-          return (
+        <span className="text-xs font-bold text-zinc-300">페이지 {pageOrder.length}</span>
+        <div className="flex items-center gap-1">
+          {isReordered && (
             <button
-              key={pageNum}
               type="button"
-              onClick={() => onPageSelect(pageNum)}
-              className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-all ${
-                isActive
-                  ? 'bg-cyan-500/10 border-2 border-cyan-500/40'
-                  : 'border-2 border-zinc-800 hover:border-zinc-600'
-              }`}
+              onClick={() => onReorder(Array.from({ length: totalPdfPages }, (_, i) => i + 1))}
+              className="text-[10px] text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 hover:bg-amber-500/10"
+              title="원본 PDF 순서로 복원"
             >
-              {/* 페이지 번호 */}
-              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 ${
-                isActive
-                  ? 'bg-cyan-500 text-white'
-                  : 'bg-zinc-700 text-zinc-400'
-              }`}>
-                {pageNum}
-              </div>
-
-              {/* 썸네일 */}
-              <div className={`relative w-14 h-20 rounded border overflow-hidden flex-shrink-0 bg-white ${
-                isActive ? 'border-cyan-400' : 'border-zinc-600'
-              }`}>
-                <PdfPageCanvas
-                  pdfUrl={pdfUrl}
-                  pageNumber={pageNum}
-                  width={56}
-                  height={80}
-                />
-                {/* AI 감지 상태 표시 */}
-                {aiDetectProgress?.get(i) === 'loading' && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                    <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
-                  </div>
-                )}
-                {aiDetectProgress?.get(i) === 'error' && (
-                  <div className="absolute bottom-0.5 right-0.5">
-                    <AlertCircle className="h-3 w-3 text-amber-400" />
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className={`text-xs font-medium ${
-                  isActive ? 'text-cyan-300' : 'text-zinc-400'
-                }`}>
-                  페이지 {pageNum}
-                </div>
-                {pageData && pageData.problems.length > 0 && (
-                  <div className="text-[10px] text-zinc-500 mt-0.5">
-                    {pageData.problems.length}문항
-                  </div>
-                )}
-              </div>
+              초기화
             </button>
-          );
-        })}
+          )}
+          <button
+            type="button"
+            onClick={() => setReorderMode((v) => !v)}
+            className={`text-[10px] px-1.5 py-0.5 rounded border ${
+              reorderMode
+                ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+                : 'text-zinc-400 border-zinc-700 hover:bg-zinc-800'
+            }`}
+            title="페이지가 잘못 스캔된 순서로 들어왔을 때 드래그로 정정"
+          >
+            {reorderMode ? '완료' : '순서정정'}
+          </button>
+        </div>
+      </div>
+      {reorderMode && (
+        <div className="px-3 py-1.5 bg-cyan-500/5 border-b border-cyan-500/20 text-[10px] text-cyan-300">
+          📌 핸들을 드래그해 페이지 순서를 정정하세요
+        </div>
+      )}
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={pageOrder} strategy={verticalListSortingStrategy}>
+            {entries.map((entry) => (
+              <PageThumbnailItem
+                key={entry.pdfPageNumber}
+                entry={entry}
+                isActive={currentPage === entry.displayNumber}
+                pdfUrl={pdfUrl}
+                onPageSelect={onPageSelect}
+                reorderEnabled={reorderMode}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
@@ -2759,6 +2907,11 @@ export default function AnalyzeJobPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  // ★ 페이지 순서 정정 (2026-05-17) — PDF 스캔이 잘못된 순서일 때 사용자가 드래그로 재배열
+  //   pageOrder[displayIndex - 1] = 원본 PDF page number
+  //   기본값: [1, 2, ..., totalPdfPages]
+  //   localStorage 저장: 'analyze-page-order-{jobId}' (새로고침 후 유지)
+  const [pageOrder, setPageOrder] = useState<number[]>([]);
   const [mergeMode, setMergeMode] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -2904,6 +3057,74 @@ export default function AnalyzeJobPage() {
 
     return () => { cancelled = true; };
   }, [jobData?.pdfUrl]);
+
+  // ★ pageOrder 초기화 + localStorage 복원 (2026-05-17)
+  //   totalPdfPages 변경 시 또는 jobId 변경 시
+  useEffect(() => {
+    if (totalPdfPages <= 0) return;
+    const defaultOrder = Array.from({ length: totalPdfPages }, (_, i) => i + 1);
+    if (typeof window === 'undefined') {
+      setPageOrder(defaultOrder);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`analyze-page-order-${jobId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as number[];
+        // 검증: 길이 일치 + 모든 페이지 번호가 1..totalPdfPages 범위 + 중복 없음
+        if (
+          Array.isArray(parsed) &&
+          parsed.length === totalPdfPages &&
+          parsed.every((n) => Number.isInteger(n) && n >= 1 && n <= totalPdfPages) &&
+          new Set(parsed).size === totalPdfPages
+        ) {
+          setPageOrder(parsed);
+          return;
+        }
+      }
+    } catch {
+      // 무시 — 기본 순서로 폴백
+    }
+    setPageOrder(defaultOrder);
+  }, [totalPdfPages, jobId]);
+
+  // pageOrder 변경 시 localStorage 저장
+  const handlePageReorder = useCallback(
+    (newOrder: number[]) => {
+      setPageOrder(newOrder);
+      if (typeof window !== 'undefined') {
+        try {
+          // 기본 순서면 키 제거 (저장소 정리)
+          const isDefault = newOrder.every((n, idx) => n === idx + 1);
+          if (isDefault) {
+            localStorage.removeItem(`analyze-page-order-${jobId}`);
+          } else {
+            localStorage.setItem(`analyze-page-order-${jobId}`, JSON.stringify(newOrder));
+          }
+        } catch {
+          // localStorage 가득 등 — 무시
+        }
+      }
+    },
+    [jobId]
+  );
+
+  // displayNumber ↔ pdfPageNumber 변환 헬퍼
+  const displayToPdfPage = useCallback(
+    (displayNum: number): number => {
+      if (pageOrder.length === 0) return displayNum;
+      return pageOrder[displayNum - 1] ?? displayNum;
+    },
+    [pageOrder]
+  );
+  const pdfToDisplayPage = useCallback(
+    (pdfPageNum: number): number => {
+      if (pageOrder.length === 0) return pdfPageNum;
+      const idx = pageOrder.indexOf(pdfPageNum);
+      return idx === -1 ? pdfPageNum : idx + 1;
+    },
+    [pageOrder]
+  );
 
   // 모든 페이지 자동 프리로드 — PDF 로드 후 모든 페이지의 문제를 미리 감지
   // AutoCrop 감지는 여기서만 실행 (PdfViewerWithBoxes에서는 렌더링만 담당)
@@ -4924,11 +5145,16 @@ export default function AnalyzeJobPage() {
         <div className="aze-sidebar">
           <PageThumbnailList
             pages={activeJobData?.pages || jobData.pages}
-            currentPage={currentPage}
+            // ★ currentPage 자체는 PDF page number 기준 (기존 동작 유지)
+            //   리스트에는 display number 로 표시하기 위해 pdfToDisplayPage 변환
+            currentPage={pdfToDisplayPage(currentPage)}
             totalPdfPages={totalPdfPages}
             pdfUrl={jobData.pdfUrl}
-            onPageSelect={setCurrentPage}
+            // 사용자가 클릭하면 display number → PDF page number 로 변환해서 setCurrentPage
+            onPageSelect={(displayNum) => setCurrentPage(displayToPdfPage(displayNum))}
             aiDetectProgress={detectionMode === 'ai' ? aiDetectProgress : undefined}
+            pageOrder={pageOrder.length > 0 ? pageOrder : Array.from({ length: totalPdfPages }, (_, i) => i + 1)}
+            onReorder={handlePageReorder}
           />
         </div>
 
