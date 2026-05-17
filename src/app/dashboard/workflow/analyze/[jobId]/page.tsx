@@ -5013,6 +5013,12 @@ export default function AnalyzeJobPage() {
                 if (updated.typeCode !== undefined) body.type_code = updated.typeCode;
                 if (updated.cognitiveDomain !== undefined) body.cognitive_domain = updated.cognitiveDomain;
 
+                // ★ 문제 번호 변경 (2026-05-17 fix): 사용자 보고 "모달에서 번호 바꿔도 적용 안 됨"
+                //   API 가 source_number 받아서 problems.source_number + exam_problems.sequence_number
+                //   양쪽 업데이트 함. 클라이언트에서 박지 않으면 로컬 state 만 바뀌고 DB 미반영.
+                //   메모리: feedback_modal_save_deps.md (모달 저장 회귀 패턴 3번째)
+                if (updated.number !== undefined) body.source_number = updated.number;
+
                 // 정답/선택지/헤더를 answer_json으로 변환
                 //   ★ choiceHeaders 가 별도 컬럼 없어 answer_json 에 박음 (useExamProblems 가 거기서 읽음).
                 //   answer/choices/choiceHeaders 중 하나라도 바뀌면 answer_json 전체 갱신.
