@@ -102,12 +102,41 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   let protectedBody = bodyForTabular.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (m) => {
+      // ★ 풀이 박스 감지 (보기형 아님 — 2026-05-18 사고)
+      //   사용자 보고: \begin{array}{|l|} ... \boxed{(가)} ... \end{array} 가 보기형으로 오인되어
+      //   LaTeX 환경이 해체되며 raw 텍스트로 표시됨.
+      //
+      //   ★ 회귀 방지 원칙: "정상 단일 컬럼 보기형(\begin{tabular}{l} ㄱ. 식 \\ ...)" 도
+      //      변환되어야 함. 따라서 "단일 컬럼" 만으로는 풀이 박스로 판정 X.
+      //
+      //   풀이 박스 전용 시그니처 3개 중 하나라도 있으면 보호 (일반 tabular 로):
+      //     1) colSpec 에 vertical bar `|` 포함 ({|l|}, {l|}, {|c|c|} 등)
+      //     2) \hline 포함 (가로 구분선 — 풀이 박스 특유 양식)
+      //     3) \begin{aligned} 중첩 (식 정리 풀이)
+      //   + boxed 본문은 placeholder 라 라벨 카운트에서 제거
+      const colSpecMatch = m.match(/\\begin\{(?:tabular|array)\}\s*\{([^}]*)\}/);
+      const colSpec = colSpecMatch?.[1] || '';
+      const hasVerticalBar = colSpec.includes('|');
+      const hasHline = /\\hline/i.test(m);
+      const hasAlignedInside = /\\begin\{aligned\}/i.test(m);
+      const looksLikeSolutionBox = hasVerticalBar || hasHline || hasAlignedInside;
+
+      // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
+      //   \boxed{\text{(가)}} 의 (가) 는 placeholder 라 셀의 보기 라벨과 의미 다름
+      const stripped = m.replace(/\\boxed\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
+
       // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
-      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(m);
-      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(m);
-      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(m);
-      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(m);
-      if (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels) {
+      //   ★ boxed 제거된 stripped 에서 검사 — placeholder 오탐 차단
+      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(stripped);
+      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(stripped);
+      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(stripped);
+      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(stripped);
+
+      const isChoiceTabular =
+        !looksLikeSolutionBox &&
+        (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels);
+
+      if (isChoiceTabular) {
         // tabular → 각 보기를 개별 줄로 변환
         let converted = m
           .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '') // 시작 태그 제거
