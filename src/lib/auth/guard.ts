@@ -103,6 +103,35 @@ export const requireAdmin = () => requireRole(['ADMIN']);
 export const requireEditor = () => requireRole(['ADMIN', 'TEACHER', 'TUTOR']);
 
 /**
+ * ★ super_admin (플랫폼 관리자) 만 통과. /api/admin/* 엔드포인트 전용.
+ *   auth.users.app_metadata.super_admin === true 인 계정만 인정.
+ *
+ *   사용자 요구사항 (2026-05-17): "관리자 콘솔도 플랫폼관리자 말고는 보게 하면 안된다"
+ *   외부 개발팀이 ORG_ADMIN 으로 들어오므로 admin 콘솔 접근 격리 필수.
+ *
+ * @example
+ *   const authed = await requireSuperAdmin();
+ *   if (!authed.ok) return authed.response;
+ *   const { user, scope } = authed.data;
+ */
+export async function requireSuperAdmin(): Promise<
+  { ok: true; data: AuthedSession } | { ok: false; response: NextResponse }
+> {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed;
+  if (!authed.data.scope.isSuperAdmin) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Forbidden', message: '플랫폼 관리자만 접근 가능합니다.' },
+        { status: 403 }
+      ),
+    };
+  }
+  return authed;
+}
+
+/**
  * 인증 + 격리 scope 통합. Multi-tenancy API 라우트에서 권장.
  *
  * @example

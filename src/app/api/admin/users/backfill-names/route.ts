@@ -6,26 +6,23 @@
 //
 // 사용처: dashboard/grading 의 "(이름 없음)" 학생 일괄 복구 버튼.
 //
-// 권한: ADMIN / TUTOR / TEACHER / ORG_ADMIN / super_admin — 자기 institute 한정.
-//       (super_admin 은 전체 user 처리 가능).
+// 권한: super_admin only (2026-05-17 보안 강화)
+//   - 사용자 요구사항: "관리자 콘솔도 플랫폼관리자 말고는 보게 하면 안된다"
+//   - /api/admin/* 일관성 — 모든 admin 라우트 super_admin 전용으로 통일
+//   - 학원 운영진이 이 도구가 필요하면 향후 /api/users/backfill-names 로 분리 검토
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAuthScope } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(_request: NextRequest) {
-  const authed = await requireAuthScope();
+  const authed = await requireSuperAdmin();
   if (!authed.ok) return authed.response;
-  const { user, scope } = authed.data;
-
-  const allowedRoles = ['ADMIN', 'TUTOR', 'TEACHER', 'ORG_ADMIN'];
-  if (!user.role || (!allowedRoles.includes(user.role) && !scope.isSuperAdmin)) {
-    return NextResponse.json({ error: 'Forbidden — 권한 없음' }, { status: 403 });
-  }
+  const { scope } = authed.data;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
