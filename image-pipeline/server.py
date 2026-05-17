@@ -247,6 +247,516 @@ async def clean_pdf_base64(req: dict):
     }
 
 
+# ============================================================================
+# /detect-figures-cv — PDF/이미지 각 페이지에서 그림 bbox 자동 검출 (OpenCV)
+# ============================================================================
+# Gemini 의 bbox 환각 사고 우회.
+# 깨끗한 시험지 (캡쳐본/스캔) 에서 OpenCV connected components + 텍스트 필터링
+# 으로 그림·실험장치·그래프 영역 자동 검출. 학습 필요 X, 무료, <100ms/페이지.
+#
+# 결과: 페이지 정규화 좌표 + 크롭 PNG base64 (Sharp 업스케일 같이 적용).
+
+def _merge_nearby_bboxes(boxes, max_gap=30):
+    """가까운 bbox 들 union-find 로 묶기."""
+    if not boxes:
+        return []
+    n = len(boxes)
+    parent = list(range(n))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    def near(b1, b2, gap):
+        x1, y1, w1, h1 = b1
+        x2, y2, w2, h2 = b2
+        return not (x1 + w1 + gap < x2 or x2 + w2 + gap < x1 or
+                    y1 + h1 + gap < y2 or y2 + h2 + gap < y1)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if near(boxes[i], boxes[j], max_gap):
+                union(i, j)
+
+    groups = {}
+    for i in range(n):
+        r = find(i)
+        groups.setdefault(r, []).append(boxes[i])
+
+    merged = []
+    for grp in groups.values():
+        x0 = min(b[0] for b in grp)
+        y0 = min(b[1] for b in grp)
+        x1 = max(b[0] + b[2] for b in grp)
+        y1 = max(b[1] + b[3] for b in grp)
+        merged.append((x0, y0, x1 - x0, y1 - y0))
+    return merged
+
+
+def _detect_figures_in_page_image(pil_img, strict_filter=True):
+    """
+    한 페이지 PIL 이미지에서 그림 bbox 검출 (v2 — 사용자 피드백 반영).
+
+    v1 사고 두 가지:
+      1) "과학영역", "제3교시" 같은 박스형 헤더 텍스트가 figure 로 잡힘
+      2) (가)/(나) 도형 한 쌍에서 한쪽만 잡히거나 라벨이 잘림 (gap 30px 부족)
+
+    v2 알고리즘:
+      A. 적응형 이진화
+      B. **공격적 dilation** — 큰 kernel 로 그림 부분들을 미리 한 덩어리로 묶음
+      C. dilated 이미지에서 connected components 분석
+      D. 각 후보 bbox 안 내용물 검사:
+         - 큰 CC (>=TEXT_MAX) 1개 이상 있어야 figure (없으면 텍스트 박스 = 헤더 등)
+         - 너무 wide-thin (aspect>8) 은 헤더 띠로 간주 제외
+         - 페이지 최상단 5% 안 짧은 박스는 헤더로 간주 제외
+
+    Returns: list of {x, y, w, h} (페이지 정규화 0~1)
+    """
+    import cv2
+    import numpy as np
+
+    img = np.array(pil_img.convert('RGB'))
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    H, W = gray.shape
+
+    # 적응형 이진화
+    binary = cv2.adaptiveThreshold(
+        gray, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        35, 15,
+    )
+
+    # ★ 핵심 — 비등방 dilation 으로 figure 부분들 미리 합치기
+    #   (가)/(나) 처럼 가로로 떨어진 도형 한 쌍을 한 덩어리로 묶기 위해
+    #   가로 방향을 훨씬 공격적으로 — kernel 40×15 + iterations 2 → 가로 ~160px / 세로 ~60px
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 15))
+    dilated = cv2.dilate(binary, kernel, iterations=2)
+
+    # dilated 위에서 connected components
+    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(dilated, connectivity=8)
+
+    # 한글 글자 60-70px (300 DPI 기준 ascender + descender 포함)
+    TEXT_MAX = 70
+
+    figures = []
+    for i in range(1, num_labels):
+        x, y, w, h, area = stats[i]
+        x, y, w, h = int(x), int(y), int(w), int(h)
+
+        # === 크기 필터 ===
+        # strict (페이지 통째): 헤더 띠 거르려고 큰 임계값 — w≥120, h≥80
+        # lenient (문제 crop 안): 작은 figure 보호 — w≥80, h≥40
+        #   ex) 양성자/중성자 단일 row 점 모음 figure 가 lenient 임계값으로 통과
+        min_w = 120 if strict_filter else 80
+        min_h = 80 if strict_filter else 40
+        min_area = 12000 if strict_filter else 5000
+        if w < min_w or h < min_h:
+            continue
+        if w * h < min_area:
+            continue
+        # ★ 면적 비율 상한 — bbox 가 입력의 60% 이상이면 "본문 통째로" 잡힌 케이스 (#4 사고)
+        #    문제 안 figure 는 보통 절반 이하. 이 필터는 strict/lenient 모두 적용.
+        area_ratio = (w * h) / max(1, W * H)
+        if area_ratio > 0.60:
+            continue
+        # 거의 페이지 전체 (오검출)
+        if w > W * 0.95 and h > H * 0.90:
+            continue
+
+        # === 위치 필터: 최상단 헤더 띠 제외 ===
+        #   상단 7% 안에 위치 + 높이 짧으면 헤더로 간주 (시험지 제목·교시 등)
+        if y < H * 0.07 and h < 120:
+            continue
+
+        # === 종횡비 필터: 가로로 매우 긴 띠는 보통 헤더/구분선 ===
+        aspect = w / h if h > 0 else 99
+        if aspect > 8:
+            continue
+        # 세로로 매우 긴 띠도 figure 아님 (테이블 컬럼 등)
+        if h / max(1, w) > 6:
+            continue
+
+        # === 내용물 검사 (원본 이진화 ROI 사용, dilated 아님) ===
+        orig_roi = binary[y:y+h, x:x+w]
+        n_inside, _, stats_inside, _ = cv2.connectedComponentsWithStats(orig_roi, connectivity=8)
+
+        large_cc_count = 0
+        text_cc_count = 0
+        max_inner_dim = 0
+        for j in range(1, n_inside):
+            iw = int(stats_inside[j, cv2.CC_STAT_WIDTH])
+            ih = int(stats_inside[j, cv2.CC_STAT_HEIGHT])
+            if iw < TEXT_MAX and ih < TEXT_MAX:
+                text_cc_count += 1
+            else:
+                large_cc_count += 1
+                max_inner_dim = max(max_inner_dim, max(iw, ih))
+
+        # ★ strict 모드 — 페이지 통째 호출 시 헤더/표지 텍스트 박스 거름
+        if strict_filter:
+            if large_cc_count == 0:
+                continue
+            if text_cc_count >= 30 and large_cc_count <= 2:
+                continue
+            if max_inner_dim < 80:
+                continue
+        else:
+            # ★ lenient 모드 (문제 crop 안 호출) — strict 보다 느슨하지만
+            #   "본문 통째 텍스트 / <보기> 박스 / 라벨 박스" 같은 명백한 텍스트 영역은 거름.
+            #   #4·#7 사고에서 확인된 케이스 차단.
+            #
+            #   ★ 작은 점·원 모임 (양성자/중성자, 전자 이동도) 같은 figure 보호:
+            #     max_inner_dim 임계값을 60→40 으로 낮춤. 텍스트 한글 글자는 보통 30-40px 라
+            #     40 임계값으로도 단일 글자 라벨은 거르고 점 모음 figure 는 통과.
+            #     추가로 CC 수를 봄 — figure 안엔 보통 많은 CC 가 있고, 텍스트 박스도 마찬가지라
+            #     단일 잣대로 충분치 않음. text_cc / total_cc 비율 + 큰 CC 절대 수 조합으로 판정.
+
+            # 1) 큰 CC 가 하나도 없으면 텍스트 박스 — 제외 (strict 와 동일)
+            if large_cc_count == 0:
+                continue
+            # 2) 가장 큰 내부 stroke 40px 미만 → 라벨 텍스트만 (figure 아님)
+            #    완화: 40 = 한글 글자 평균 크기. 점·원 figure 는 통과, 단일 글자만은 거름.
+            if max_inner_dim < 40:
+                continue
+            # ★ 이전 v3 의 "text_cc≥50 AND large_cc≤2 → 거름" 필터는 제거.
+            #   양성자/중성자 점 모음, 전자 이동도 같은 dot-figure 가 작은 원 ~50개+
+            #   가지런해서 위 패턴에 걸려 손실되던 사고 (#12, #24).
+            #   대신 area_ratio < 0.60 (위 위 단계) 가 본문 통째 케이스 차단 — 충분.
+            #   <보기> 텍스트 박스 일부가 figure 로 잡힐 수 있지만 사용자 명시 정책 부합.
+
+        figures.append({
+            "x": float(x) / W,
+            "y": float(y) / H,
+            "w": float(w) / W,
+            "h": float(h) / H,
+        })
+
+    # === 후처리: 선택지 그리드 패턴 제거 ===
+    #   3+ 비슷한 크기의 figure 가 가로로 줄지어 있으면 선택지 그리드 (예: "A 노란색", "B 자홍색", "A 노란색" ...)
+    #   → 진짜 그림 아님, 제외
+    figures = _suppress_choice_grids(figures)
+
+    return figures
+
+
+def _suppress_choice_grids(figures):
+    """
+    선택지 그리드 패턴 제거:
+      - 3+ 의 figure 가 비슷한 y 좌표 (4% 이내) AND 비슷한 height (1.5배 이내) 면
+        선택지 옵션 행으로 간주 → 모두 제거.
+      - 단, 각 figure 가 페이지 width 의 25% 이상 차지하면 큰 figure 일 가능성 ↑ → 유지.
+    """
+    if len(figures) < 3:
+        return figures
+
+    used = set()
+    keep = []
+
+    for i in range(len(figures)):
+        if i in used:
+            continue
+        fi = figures[i]
+        row = [i]
+        for j in range(i + 1, len(figures)):
+            if j in used:
+                continue
+            fj = figures[j]
+            y_diff = abs(fj["y"] - fi["y"])
+            h_max = max(fj["h"], fi["h"])
+            h_min = max(0.001, min(fj["h"], fi["h"]))
+            h_ratio = h_max / h_min
+            if y_diff < 0.04 and h_ratio < 1.5:
+                row.append(j)
+
+        if len(row) >= 3:
+            # 선택지 그리드 후보 — 각 figure 가 충분히 크면 (페이지 width 25% 이상) 유지
+            all_large = all(figures[k]["w"] >= 0.25 for k in row)
+            if all_large:
+                # 큰 multi-panel figure 들 → 유지
+                for k in row:
+                    used.add(k)
+                    keep.append(figures[k])
+            else:
+                # 작은 옵션 그리드 → 제거
+                for k in row:
+                    used.add(k)
+        else:
+            for k in row:
+                used.add(k)
+                keep.append(figures[k])
+
+    return keep
+
+
+@app.post("/detect-figures-cv")
+async def detect_figures_cv(req: dict):
+    """
+    Body:
+      file_base64: str         — PDF 또는 이미지 base64 (data: prefix 허용)
+      mime_type: str
+      dpi: int = 300
+      include_crops: bool = True   — true 면 figure 별 crop PNG 도 base64 로 함께 반환
+
+    Returns:
+      success: bool
+      page_count: int
+      pages: [{
+        page_idx, width, height,
+        figures: [{x, y, w, h, crop_base64?}]
+      }]
+    """
+    import fitz
+    import base64
+    import io
+    from PIL import Image
+
+    file_base64 = req.get("file_base64", "")
+    mime_type = req.get("mime_type", "")
+    dpi = int(req.get("dpi", 300))
+    include_crops = bool(req.get("include_crops", True))
+    # strict_filter=True: 텍스트만 든 박스 거름 (whole-page 호출용, 헤더 노이즈 제거)
+    # strict_filter=False: <보기> 같은 텍스트 박스도 보존 (문제 crop 안 호출용)
+    strict_filter = bool(req.get("strict_filter", True))
+
+    if not file_base64:
+        raise HTTPException(status_code=400, detail="file_base64 필요")
+    if "," in file_base64:
+        file_base64 = file_base64.split(",", 1)[1]
+    missing_padding = len(file_base64) % 4
+    if missing_padding:
+        file_base64 += "=" * (4 - missing_padding)
+
+    raw = base64.b64decode(file_base64)
+    is_pdf = "pdf" in mime_type.lower() or file_base64[:5].startswith("JVBER")
+
+    page_images = []
+    if is_pdf:
+        doc = fitz.open(stream=raw, filetype="pdf")
+        scale = dpi / 72.0
+        mat = fitz.Matrix(scale, scale)
+        for idx in range(len(doc)):
+            page = doc[idx]
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            page_images.append((idx, img))
+        doc.close()
+    else:
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+        page_images.append((0, img))
+
+    pages_result = []
+    for (page_idx, pil_img) in page_images:
+        W, H = pil_img.size
+        figures = _detect_figures_in_page_image(pil_img, strict_filter=strict_filter)
+
+        # 크롭 PNG 함께 반환
+        if include_crops:
+            for fig in figures:
+                left = int(fig["x"] * W)
+                top = int(fig["y"] * H)
+                right = int((fig["x"] + fig["w"]) * W)
+                bottom = int((fig["y"] + fig["h"]) * H)
+                # padding 10px
+                pad = 10
+                left = max(0, left - pad)
+                top = max(0, top - pad)
+                right = min(W, right + pad)
+                bottom = min(H, bottom + pad)
+                crop = pil_img.crop((left, top, right, bottom))
+                buf = io.BytesIO()
+                crop.save(buf, format="PNG", optimize=True)
+                fig["crop_base64"] = base64.b64encode(buf.getvalue()).decode()
+                fig["crop_width"] = crop.width
+                fig["crop_height"] = crop.height
+
+        pages_result.append({
+            "page_idx": page_idx,
+            "width": W,
+            "height": H,
+            "figures": figures,
+        })
+
+    return {
+        "success": True,
+        "page_count": len(page_images),
+        "pages": pages_result,
+    }
+
+
+# ============================================================================
+# /render-pdf-pages — PDF 전체 페이지를 base64 PNG 배열로 렌더
+# ============================================================================
+# 과학 자산화 per-problem 흐름용. 페이지별 PNG 를 한 번에 받아서 클라이언트가
+# 각 페이지를 YOLO 에 던지고, 각 문제 crop 을 Gemini 에 던지는 데 사용.
+@app.post("/render-pdf-pages")
+async def render_pdf_pages(req: dict):
+    """
+    Body:
+      file_base64: str   — PDF base64 (data: prefix 허용)
+      dpi: int = 300     — 렌더 DPI (300=A4 약 2480x3508 px)
+
+    Returns:
+      success: bool
+      page_count: int
+      pages: [{ page_idx, width, height, image_base64 }]
+    """
+    import fitz
+    import base64
+    import io
+    from PIL import Image
+
+    file_base64 = req.get("file_base64", "")
+    dpi = int(req.get("dpi", 300))
+
+    if not file_base64:
+        raise HTTPException(status_code=400, detail="file_base64 필요")
+
+    if "," in file_base64:
+        file_base64 = file_base64.split(",", 1)[1]
+    missing_padding = len(file_base64) % 4
+    if missing_padding:
+        file_base64 += "=" * (4 - missing_padding)
+
+    pdf_bytes = base64.b64decode(file_base64)
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page_count = len(doc)
+    scale = dpi / 72.0
+    mat = fitz.Matrix(scale, scale)
+
+    pages = []
+    for idx in range(page_count):
+        page = doc[idx]
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        out_buf = io.BytesIO()
+        img.save(out_buf, format="PNG", optimize=True)
+        page_b64 = base64.b64encode(out_buf.getvalue()).decode()
+        pages.append({
+            "page_idx": idx,
+            "width": pix.width,
+            "height": pix.height,
+            "image_base64": page_b64,
+        })
+
+    doc.close()
+
+    return {
+        "success": True,
+        "page_count": page_count,
+        "pages": pages,
+    }
+
+
+# ============================================================================
+# /crop-figure — PDF/이미지 + 정규화 bbox → 잘라낸 PNG (base64)
+# ============================================================================
+# 과학 자산화 Gemini POC 용. Gemini Vision 이 반환한 figures bbox 좌표(0~1)로
+# 페이지를 렌더링한 뒤 크롭. PDF 는 PyMuPDF 로 page_idx 페이지를 dpi 해상도로
+# 렌더, 이미지는 그대로 사용.
+@app.post("/crop-figure")
+async def crop_figure(req: dict):
+    """
+    Body:
+      file_base64: str        — PDF 또는 이미지 base64 (data: prefix 허용)
+      mime_type: str           — 'application/pdf' or 'image/jpeg' etc.
+      page_idx: int = 0        — PDF 페이지 인덱스 (0-based). 이미지는 무시.
+      x, y, w, h: float        — 정규화 좌표 (0.0~1.0). 좌상단 기준.
+      dpi: int = 400           — PDF 렌더 DPI. 400 이면 A4 약 3300x4700 px.
+      padding: float = 0.01    — bbox 주변 여유 (정규화). 글자 라벨 잘림 방지.
+
+    Returns:
+      success: bool
+      image_base64: str        — 크롭된 PNG (raw base64, no prefix)
+      width: int               — 크롭 픽셀 너비
+      height: int              — 크롭 픽셀 높이
+      page_count: int          — PDF 총 페이지 수 (이미지면 1)
+    """
+    import fitz
+    import base64
+    import io
+    from PIL import Image
+
+    file_base64 = req.get("file_base64", "")
+    mime_type = req.get("mime_type", "")
+    page_idx = int(req.get("page_idx", 0))
+    x = float(req.get("x", 0))
+    y = float(req.get("y", 0))
+    w = float(req.get("w", 1))
+    h = float(req.get("h", 1))
+    dpi = int(req.get("dpi", 400))
+    padding = float(req.get("padding", 0.01))
+
+    if not file_base64:
+        raise HTTPException(status_code=400, detail="file_base64 필요")
+
+    # data: prefix 제거
+    if "," in file_base64:
+        file_base64 = file_base64.split(",", 1)[1]
+    # base64 패딩 보정
+    missing_padding = len(file_base64) % 4
+    if missing_padding:
+        file_base64 += "=" * (4 - missing_padding)
+
+    raw_bytes = base64.b64decode(file_base64)
+
+    # bbox 정규화 + padding (0~1 범위 클램프)
+    px = max(0.0, x - padding)
+    py = max(0.0, y - padding)
+    pw = min(1.0 - px, w + 2 * padding)
+    ph = min(1.0 - py, h + 2 * padding)
+
+    is_pdf = "pdf" in mime_type.lower() or file_base64[:5] in ("JVBER", "JVBER")
+
+    if is_pdf:
+        # PDF 페이지 렌더 + 크롭
+        doc = fitz.open(stream=raw_bytes, filetype="pdf")
+        page_count = len(doc)
+        if page_idx >= page_count or page_idx < 0:
+            doc.close()
+            raise HTTPException(status_code=400, detail=f"page_idx={page_idx} 범위 초과 (총 {page_count}p)")
+
+        page = doc[page_idx]
+        # dpi → matrix scale (PDF 는 기본 72 dpi)
+        scale = dpi / 72.0
+        mat = fitz.Matrix(scale, scale)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        doc.close()
+    else:
+        # 이미지: 그대로 PIL 로 열기
+        img = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+        page_count = 1
+
+    img_w, img_h = img.size
+    crop_box = (
+        int(px * img_w),
+        int(py * img_h),
+        int((px + pw) * img_w),
+        int((py + ph) * img_h),
+    )
+    cropped = img.crop(crop_box)
+
+    out_buf = io.BytesIO()
+    cropped.save(out_buf, format="PNG", optimize=True)
+    out_base64 = base64.b64encode(out_buf.getvalue()).decode()
+
+    return {
+        "success": True,
+        "image_base64": out_base64,
+        "width": cropped.width,
+        "height": cropped.height,
+        "page_count": page_count,
+    }
+
+
 @app.post("/clean-handwriting-base64")
 async def clean_handwriting_base64(req: dict):
     """base64 이미지로 낙서 제거 (Next.js 호환)"""
