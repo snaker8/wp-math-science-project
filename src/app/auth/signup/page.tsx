@@ -13,7 +13,6 @@ import {
   Phone,
   GraduationCap,
   School,
-  UserCog,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -22,7 +21,10 @@ import {
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 import { BrandLogo } from '@/components/brand/Logo';
 
-type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
+// ★ 보안 — 가입 폼에서 선택 가능한 role 은 STUDENT / TEACHER 만.
+//   ADMIN / ORG_ADMIN / TUTOR 는 super_admin 이 /admin/users 페이지에서 수동 배정만 가능.
+//   외부 개발팀이 ORG_ADMIN 권한으로 들어올 예정이라 가입 경로의 권한 승격 차단 필수.
+type UserRole = 'TEACHER' | 'STUDENT';
 
 interface RoleOption {
   value: UserRole;
@@ -46,13 +48,6 @@ const ROLE_OPTIONS: RoleOption[] = [
     description: '반을 만들고 학생들을 관리합니다',
     icon: <School size={24} />,
     color: 'from-indigo-500 to-purple-500',
-  },
-  {
-    value: 'ADMIN',
-    label: '관리자',
-    description: '학원 전체를 관리합니다',
-    icon: <UserCog size={24} />,
-    color: 'from-violet-500 to-pink-500',
   },
 ];
 
