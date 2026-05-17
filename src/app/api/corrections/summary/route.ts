@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireEditor } from '@/lib/auth/guard';
+import { apiError } from '@/lib/api/error';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,8 +39,7 @@ export async function GET(_request: NextRequest) {
     .order('corrected_at', { ascending: false });
 
   if (error) {
-    console.error('[corrections/summary] fetch error:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError('/api/corrections/summary GET', error, 'Failed to load corrections', 500);
   }
 
   const rows = (data || []) as CorrectionRow[];

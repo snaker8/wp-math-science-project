@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
+import { apiError } from '@/lib/api/error';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,8 +124,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query;
   if (error) {
-    console.error('[organization-applications GET] error:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError('/api/organization-applications GET', error, 'Failed to load applications', 500);
   }
 
   return NextResponse.json({ applications: data || [] });

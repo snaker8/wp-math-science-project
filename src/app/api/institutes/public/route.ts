@@ -10,12 +10,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { apiError } from '@/lib/api/error';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   if (!supabaseAdmin) {
-    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   }
   const sb = supabaseAdmin;
 
@@ -34,8 +35,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    console.error('[api/institutes/public] error:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError('/api/institutes/public GET', error, 'Failed to load institutes', 500);
   }
 
   return NextResponse.json({
