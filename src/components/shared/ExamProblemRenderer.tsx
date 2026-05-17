@@ -145,11 +145,12 @@ function ExamProblemRendererInner({
     const hasTableHeaders = headers && headers.length > 0;
 
     // ★ 표 형식 선택지: choiceHeaders가 있으면 테이블로 렌더링
+    //   max-w-full + break-inside-avoid: 컬럼·페이지 경계에서 표 잘림 방지
     if (hasTableHeaders) {
       const colCount = headers.length;
       return (
-        <div className="mt-2 overflow-x-auto">
-          <table className="border-collapse text-[13px]">
+        <div className="mt-2 max-w-full overflow-x-auto break-inside-avoid">
+          <table className="border-collapse text-[13px]" style={{ maxWidth: '100%' }}>
             <thead>
               <tr>
                 <th className="px-1.5 py-0.5" />
@@ -190,15 +191,21 @@ function ExamProblemRendererInner({
 
     if (isSubProblem) {
       return (
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-2 space-y-1.5 max-w-full">
           {problem.choices.map((choice, ci) => {
             const stripped = cleanChoiceText(
               choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim()
             );
             return (
-              <div key={ci} className="flex items-start gap-1.5 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+              <div
+                key={ci}
+                className="flex items-start gap-1.5 text-[13.5px] text-gray-700 min-w-0"
+                style={{ lineHeight: '1.65', overflowWrap: 'anywhere' }}
+              >
                 <span className="flex-shrink-0 font-semibold text-gray-900">({ci + 1})</span>
-                <MixedContentRenderer content={stripped} className="text-gray-700" />
+                <div className="flex-1 min-w-0 break-words">
+                  <MixedContentRenderer content={stripped} className="text-gray-700" />
+                </div>
               </div>
             );
           })}
@@ -229,9 +236,13 @@ function ExamProblemRendererInner({
 
     if (isInline) {
       return (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-7 gap-y-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-7 gap-y-1.5 max-w-full">
           {items.map((it, ci) => (
-            <div key={ci} className="flex items-center gap-2 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+            <div
+              key={ci}
+              className="flex items-center gap-2 text-[13.5px] text-gray-700 min-w-0"
+              style={{ lineHeight: '1.65', overflowWrap: 'anywhere' }}
+            >
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
               <MixedContentRenderer content={it.content} className="text-gray-700" />
             </div>
@@ -240,11 +251,17 @@ function ExamProblemRendererInner({
       );
     }
     return (
-      <div className={gridClass}>
+      <div className={`${gridClass} max-w-full`}>
         {items.map((it, ci) => (
-          <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+          <div
+            key={ci}
+            className="flex items-start gap-1 text-[13.5px] text-gray-700 min-w-0"
+            style={{ lineHeight: '1.65', overflowWrap: 'anywhere' }}
+          >
             <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
-            <MixedContentRenderer content={it.content} className="text-gray-700" />
+            <div className="flex-1 min-w-0 break-words">
+              <MixedContentRenderer content={it.content} className="text-gray-700" />
+            </div>
           </div>
         ))}
       </div>
@@ -381,13 +398,19 @@ function ExamProblemRendererInner({
     );
   };
 
+  // ★ 컬럼 폭(약 345px) 초과로 본문/조건박스/수식이 삐져나오는 사고 차단.
+  //   - 외부 flex 컨테이너: min-w-0 + max-w-full (flex item 기본 min-content 무시)
+  //   - 본문 div: break-words + overflowWrap:'anywhere' — 긴 수식/식별자 강제 줄바꿈
   return (
-    <div className="flex gap-2.5">
+    <div className="flex gap-2.5 min-w-0 max-w-full">
       <span className="font-bold text-gray-900 flex-shrink-0" style={{ fontSize: textSize, minWidth: '24px', lineHeight }}>
         {problem.number}.
       </span>
       <div className="flex-1 min-w-0">
-        <div className="text-gray-800 whitespace-pre-line" style={{ fontSize: textSize, lineHeight }}>
+        <div
+          className="text-gray-800 whitespace-pre-line break-words"
+          style={{ fontSize: textSize, lineHeight, overflowWrap: 'anywhere' }}
+        >
           {renderContentWithFigures()}
           {/* '?' 없는 경우 fallback: 콘텐츠 끝에 표시 */}
           {hasPoints && !badgeInserted && pointsBadge}

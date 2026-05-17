@@ -1494,7 +1494,13 @@ export default function ExamManagementPage() {
                           key={problem.id}
                           data-problem-idx={idx}
                           className="break-inside-avoid"
-                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                          style={{
+                            marginBottom: `${getEffectiveGap(pageIdx)}px`,
+                            // ★ 컬럼 폭 초과로 옆 컬럼 침범·박스 삐져나옴 차단
+                            minWidth: 0,
+                            maxWidth: '100%',
+                            boxSizing: 'border-box',
+                          }}
                         >
                           <ExamProblemRenderer problem={problem} />
                         </div>
@@ -1875,6 +1881,17 @@ export default function ExamManagementPage() {
             break-inside: avoid;
             page-break-inside: avoid;
           }
+          /* ★ 컬럼 폭 초과 단어/식별자 강제 줄바꿈 — 본문/조건박스/선택지 모두 적용 */
+          #exam-print-root .exam-page {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+          }
+          #exam-print-root .katex { max-width: 100%; }
+          #exam-print-root .katex-display {
+            max-width: 100%;
+            overflow: hidden;
+          }
+          #exam-print-root table { max-width: 100%; }
         }
         @page { size: A4 portrait; margin: 0; }
       `}} />

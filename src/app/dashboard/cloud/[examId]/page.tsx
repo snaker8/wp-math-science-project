@@ -1950,7 +1950,8 @@ function ExamPaperView({
               </div>
             )}
 
-            {/* 문제 영역 — 2단은 CSS columns column-balance (questi 양식) + 카드별 풀이 공간 */}
+            {/* 문제 영역 — 2단은 CSS columns column-balance (questi 양식) + 카드별 풀이 공간
+                ★ 카드 wrapper: min-width:0 + overflow:hidden — 컬럼 폭(약 345px) 초과로 옆 컬럼 침범 차단 */}
             {columns === 2 ? (
               <div
                 style={{
@@ -1969,6 +1970,10 @@ function ExamPaperView({
                       marginBottom: `${getEffectiveGap(pageIdx)}px`,
                       breakInside: 'avoid',
                       pageBreakInside: 'avoid',
+                      minWidth: 0,
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      boxSizing: 'border-box',
                     }}
                   >
                     {renderProblem(problem)}
@@ -1982,7 +1987,13 @@ function ExamPaperView({
                   <div
                     key={problem.id}
                     className="break-inside-avoid"
-                    style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                    style={{
+                      marginBottom: `${getEffectiveGap(pageIdx)}px`,
+                      minWidth: 0,
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      boxSizing: 'border-box',
+                    }}
                   >
                     {renderProblem(problem)}
                     <div style={{ height: `${getWritingSpace(problem)}px` }} aria-hidden />
@@ -2035,6 +2046,18 @@ function ExamPaperView({
         .exam-page img {
           max-width: 100%;
           height: auto;
+        }
+        /* ★ 컬럼 폭 초과 단어/식별자 강제 줄바꿈 — 본문/조건박스/선택지 모두 적용 */
+        .exam-page {
+          word-break: break-word;
+          overflow-wrap: anywhere;
+        }
+        /* ★ KaTeX 인라인 수식 — 인쇄 시 컬럼 폭 초과 차단 (display 는 별도 처리됨) */
+        .exam-page .katex {
+          max-width: 100%;
+        }
+        .exam-page .katex-html {
+          white-space: normal;
         }
 
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */

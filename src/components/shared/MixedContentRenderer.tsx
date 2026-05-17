@@ -347,10 +347,20 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
             const boxContent = restoredConditionBoxes[boxIdx];
             const headerLabel = conditionHeaderLabels[boxIdx];
             if (boxContent) {
+              // ★ 시험지·다크 모두 친화 박스
+              //   - leading-[3] → leading-relaxed (line-height 1.625) 박스 세로 폭주 차단
+              //   - border-zinc-600/text-zinc-400 → border-gray-500/text-gray-700 (흰 배경에서 가시성 확보,
+              //     다크 모드 부모는 .dark 토큰으로 처리되므로 무관)
+              //   - max-w-full + min-w-0 + break-words: 긴 수식·표가 컬럼/페이지 폭 초과 시 박스 밖으로 삐져나오는 사고 차단
+              //   - break-inside-avoid: CSS columns / @media print 컬럼 경계에서 박스 잘림 방지
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
+                <div
+                  key={`cbox-${boxIdx}`}
+                  className="my-3 px-4 py-2.5 rounded-md border border-gray-500 leading-relaxed max-w-full min-w-0 break-words break-inside-avoid"
+                  style={{ overflowWrap: 'anywhere', boxSizing: 'border-box' }}
+                >
                   {headerLabel && (
-                    <div className="text-xs font-bold text-zinc-400 mb-2 -mt-1">&lt;{headerLabel}&gt;</div>
+                    <div className="text-xs font-bold text-gray-700 mb-1.5 -mt-0.5">&lt;{headerLabel}&gt;</div>
                   )}
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
