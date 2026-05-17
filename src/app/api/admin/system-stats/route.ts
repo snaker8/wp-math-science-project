@@ -1,20 +1,13 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const authed = await requireAuth();
+  // ★ super_admin only (2026-05-17) — 시스템 통계는 플랫폼 관리자 전용
+  const authed = await requireSuperAdmin();
   if (!authed.ok) return authed.response;
-
-  const { user } = authed;
-  const isPlatformAdmin = user.role === 'ADMIN';
-  const isAcademyAdmin = user.role === 'TEACHER' || user.role === 'TUTOR';
-
-  if (!isPlatformAdmin && !isAcademyAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   if (!supabaseAdmin) {
     return NextResponse.json(
@@ -27,7 +20,8 @@ export async function GET() {
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const scopeInstituteId = !isPlatformAdmin ? user.instituteId : null;
+  // super_admin 은 전체 — scope 한정 없음
+  const scopeInstituteId: string | null = null;
 
   const usersQ = () => {
     let q = admin.from('users').select('*', { count: 'exact', head: true }).is('deleted_at', null);
@@ -56,7 +50,7 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
-    scope: isPlatformAdmin ? 'platform' : 'institute',
+    scope: 'platform',
     instituteId: scopeInstituteId,
     users: {
       total: totalRes.count ?? 0,

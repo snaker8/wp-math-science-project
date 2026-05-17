@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -7,17 +7,9 @@ export const dynamic = 'force-dynamic';
 type Role = 'ADMIN' | 'TEACHER' | 'TUTOR' | 'STUDENT' | 'PARENT';
 
 export async function GET(req: NextRequest) {
-  const authed = await requireAuth();
+  // ★ super_admin only (2026-05-17) — 관리자 콘솔 일관성
+  const authed = await requireSuperAdmin();
   if (!authed.ok) return authed.response;
-
-  const { user } = authed;
-  const isPlatformAdmin = user.role === 'ADMIN';
-  const isAcademyAdmin =
-    user.role === 'TEACHER' || user.role === 'TUTOR';
-
-  if (!isPlatformAdmin && !isAcademyAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   if (!supabaseAdmin) {
     return NextResponse.json(
@@ -41,10 +33,7 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  // 플랫폼 ADMIN이 아니면 본인 학원으로 스코프 제한
-  if (!isPlatformAdmin && user.instituteId) {
-    query = query.eq('institute_id', user.instituteId);
-  }
+  // super_admin only — 전체 사용자 조회 (scope 제한 없음)
 
   if (role) query = query.eq('role', role);
   if (search) {

@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server';
-import { requireAuthScope } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
@@ -13,14 +13,10 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function POST() {
-  const authed = await requireAuthScope();
+  // ★ super_admin only (2026-05-17) — 배점 일괄 복원 도구는 플랫폼 관리자 전용
+  const authed = await requireSuperAdmin();
   if (!authed.ok) return authed.response;
-
-  const { user, scope } = authed.data;
-  const isAdmin = user.role === 'ADMIN' || user.role === 'TEACHER' || user.role === 'TUTOR' || user.role === 'ORG_ADMIN';
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const { scope } = authed.data;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase admin not configured' }, { status: 500 });

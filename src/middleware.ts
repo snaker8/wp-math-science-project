@@ -16,14 +16,14 @@ import type { NextRequest } from 'next/server';
 import {
   createSupabaseMiddlewareClient,
   getAuthUser,
-  hasAcademyAdminAccess,
   type UserRole,
 } from '@/lib/supabase/middleware';
 import { isSubjectTrack, type SubjectTrack } from '@/lib/subject-track';
 
 // 경로별 허용 역할 설정
+// ★ /admin 은 별도 처리 (super_admin only) — ROUTE_PERMISSIONS 에서 제외.
+//   사용자 요구사항 (2026-05-17): "관리자 콘솔도 플랫폼관리자 말고는 보게 하면 안된다"
 const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
-  '/admin': ['ADMIN'],
   '/tutor': ['ADMIN', 'TEACHER', 'TUTOR'],
   '/student': ['STUDENT'],
 };
@@ -125,11 +125,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // ★ /admin/* 가드 — super_admin only (플랫폼 관리자 전용)
+  //   사용자 요구사항: 외부 개발팀이 ORG_ADMIN 권한으로 들어와도 admin 콘솔 보면 안 됨.
+  //   ADMIN role (학원 관리자), ORG_ADMIN, TEACHER+isAcademyAdmin 모두 차단.
+  if (pathname.startsWith('/admin')) {
+    if (!user.isSuperAdmin) {
+      const redirectUrl = getRoleBasedRedirect(user.role, request.url);
+      return NextResponse.redirect(redirectUrl);
+    }
+    // super_admin 통과 — 아래 트랙 분리 / 헤더 주입 로직으로
+  }
+
   for (const [routePrefix, allowedRoles] of Object.entries(ROUTE_PERMISSIONS)) {
     if (pathname.startsWith(routePrefix)) {
-      // /admin/* 는 hasAcademyAdminAccess (super_admin·ORG_ADMIN·ADMIN·TEACHER+isAcademyAdmin) 통과
-      if (routePrefix === '/admin' && hasAcademyAdminAccess(user)) break;
-      // /tutor·/student 등 다른 영역도 super_admin·ORG_ADMIN·ADMIN 은 자유 진입 (운영 관리 차원)
+      // /tutor·/student 등 다른 영역은 super_admin·ORG_ADMIN·ADMIN 은 자유 진입 (운영 관리 차원)
       if (user.isSuperAdmin || user.role === 'ORG_ADMIN' || user.role === 'ADMIN') break;
       if (!allowedRoles.includes(user.role)) {
         const redirectUrl = getRoleBasedRedirect(user.role, request.url);
@@ -202,9 +211,11 @@ export async function middleware(request: NextRequest) {
 }
 
 function getRoleBasedRedirect(role: UserRole, baseUrl: string): URL {
+  // ★ /admin 은 super_admin 전용 (2026-05-17 보안 강화)
+  //   ADMIN/ORG_ADMIN 학원 운영자도 /dashboard 로 — admin 콘솔 접근 불가.
   const redirectPaths: Record<UserRole, string> = {
-    ADMIN: '/admin/dashboard',
-    ORG_ADMIN: '/admin/dashboard',  // 학원장도 운영 관리 영역 진입
+    ADMIN: '/dashboard',
+    ORG_ADMIN: '/dashboard',
     TEACHER: '/tutor/dashboard',
     TUTOR: '/tutor/dashboard',
     STUDENT: '/student/dashboard',

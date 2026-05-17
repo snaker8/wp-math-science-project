@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAuthScope } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
@@ -16,12 +16,10 @@ export const maxDuration = 30;
 const VALID_CIRCLED = ['①', '②', '③', '④', '⑤'];
 
 export async function PATCH(request: NextRequest) {
-  const guard = await requireAuthScope();
+  // ★ super_admin only (2026-05-17) — 객관식 정답 일괄 수정은 플랫폼 관리자 전용
+  const guard = await requireSuperAdmin();
   if (!guard.ok) return guard.response;
-  const { user, scope } = guard.data;
-  if (user.role !== 'ADMIN' && user.role !== 'ORG_ADMIN' && !scope.isSuperAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const { scope } = guard.data;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
