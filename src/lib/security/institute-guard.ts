@@ -352,18 +352,39 @@ export async function assertExamAccess(
   }
 }
 
+export interface AssertAccessOptions {
+  /**
+   * true 면 쓰기 작업으로 처리 — 공통 풀(institute_id IS NULL) 자료는
+   * super_admin 만 통과. 외부팀(ORG_ADMIN)이 공통 문제풀 수정·삭제하는
+   * 사고 방지. (2026-05-17 보안 강화)
+   */
+  requireWrite?: boolean;
+}
+
 /**
  * problem 의 institute 가 scope 안에 있는지 한 번에 검증.
- * problems 는 공통 풀 (institute_id IS NULL = 모두 접근 가능) 이므로 자동 통과.
+ *
+ * 읽기 (requireWrite: false, 기본):
+ *   - 공통 풀 (institute_id IS NULL) → 모두 접근 가능
+ *   - 격리 자료 → scope 안에 있는지 검증
+ *
+ * 쓰기 (requireWrite: true):
+ *   - 공통 풀 → super_admin 만 통과 (외부 ORG_ADMIN 차단)
+ *   - 격리 자료 → scope 안에 있는지 검증
  *
  * @example
+ *   // 읽기
  *   const guard = await assertProblemAccess(supabaseAdmin, problemId, scope);
+ *
+ *   // 쓰기 (수정/삭제)
+ *   const guard = await assertProblemAccess(supabaseAdmin, problemId, scope, { requireWrite: true });
  *   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
  */
 export async function assertProblemAccess(
   adminClient: SupabaseClient,
   problemId: string,
-  scope: InstituteAccessScope
+  scope: InstituteAccessScope,
+  options: AssertAccessOptions = {}
 ): Promise<{ ok: true; institute_id: string | null } | { ok: false; status: number; error: string }> {
   const { data: problem, error } = await adminClient
     .from('problems')
@@ -373,14 +394,40 @@ export async function assertProblemAccess(
   if (error) return { ok: false, status: 500, error: error.message };
   if (!problem) return { ok: false, status: 404, error: 'Problem not found' };
   const targetInstituteId = (problem as { institute_id: string | null }).institute_id;
-  // 공통 풀 — 모두 접근 가능
-  if (targetInstituteId === null) return { ok: true, institute_id: null };
+
+  // 공통 풀 — 쓰기 시 super_admin 검증
+  if (targetInstituteId === null) {
+    if (options.requireWrite && !scope.isSuperAdmin) {
+      return { ok: false, status: 403, error: 'Common pool write requires super_admin' };
+    }
+    return { ok: true, institute_id: null };
+  }
+
   // 격리 검증
   try {
     assertInstituteAccess(scope, targetInstituteId);
     return { ok: true, institute_id: targetInstituteId };
   } catch {
     return { ok: false, status: 403, error: 'Forbidden' };
+  }
+}
+
+/**
+ * 공통 풀 쓰기 가드 — instituteId === null 인 자료의 수정/삭제 시도 시
+ * super_admin 이 아니면 throw.
+ *
+ * book_groups 같이 별도 fetch 후 inline 검증 시 사용.
+ *
+ * @example
+ *   const { data: bg } = await admin.from('book_groups').select('institute_id').eq('id', id).single();
+ *   assertCommonPoolWriteAccess(scope, bg.institute_id);
+ */
+export function assertCommonPoolWriteAccess(
+  scope: InstituteAccessScope,
+  instituteId: string | null
+): void {
+  if (instituteId === null && !scope.isSuperAdmin) {
+    throw new Error('FORBIDDEN_COMMON_POOL_WRITE');
   }
 }
 

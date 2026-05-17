@@ -79,7 +79,8 @@ export async function POST(
         { status: 500 }
       );
     }
-    const guard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope);
+    // 격리 가드 — 재분석은 쓰기이므로 공통풀은 super_admin only
+    const guard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope, { requireWrite: true });
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     // 1. 기존 문제 데이터 조회

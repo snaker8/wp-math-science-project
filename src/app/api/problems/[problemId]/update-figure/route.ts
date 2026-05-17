@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertProblemAccess } from '@/lib/security/institute-guard';
 
 export async function POST(
   request: NextRequest,
@@ -12,9 +14,17 @@ export async function POST(
 ) {
   const { problemId } = await params;
 
+  // 인증 + 격리 가드 (2026-05-17 P0-4): 이전에 가드 전혀 없던 사고 수정
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
+
+  // 격리 가드 — 공통풀 figure 수정은 super_admin only
+  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, authed.data.scope, { requireWrite: true });
+  if (!accessGuard.ok) return NextResponse.json({ error: accessGuard.error }, { status: accessGuard.status });
 
   try {
     const body = await request.json();
