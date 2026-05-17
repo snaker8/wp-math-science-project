@@ -136,6 +136,31 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
         !looksLikeSolutionBox &&
         (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels);
 
+      // ★ 풀이 박스 — KaTeX 비호환 토큰 정규화 (2026-05-18 사고)
+      //   PR #188 가드로 array 환경은 보호됐지만 KaTeX 가 다음 토큰 못 풀어
+      //   raw 텍스트(빨간색 errorColor)로 표시되던 사고:
+      //     - verticals `|` 컬럼 spec (KaTeX 미지원)
+      //     - `\hline` (array{|l|} 안에서 잘 안 됨)
+      //     - `\\[10pt]` 커스텀 spacing (KaTeX 가 spacing 인자 처리 불완전)
+      //     - nested aligned (KaTeX 가 환경 중첩 처리 불완전)
+      //   → KaTeX 친화 form 으로 변환해서 보호 (의미는 보존, 시각 약간 단순)
+      if (looksLikeSolutionBox) {
+        const normalized = m
+          // verticals 제거: {|l|} → {l}
+          .replace(/(\\begin\{(?:tabular|array)\}\s*)\{([^}]*)\}/g, (_outer, prefix, spec) =>
+            `${prefix}{${spec.replace(/\|/g, '').trim() || 'l'}}`
+          )
+          // \hline 제거 (KaTeX 가 비- ruled array 안에서 미지원)
+          .replace(/\\hline\s*/g, '')
+          // \\[10pt] → \\ (spacing 인자 제거)
+          .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+          // 잔여 \displaystyle 토큰 (수식 밖에서 의미 없음) 정리
+          .replace(/\\displaystyle\s+(?=\\end\{)/g, '');
+        const idx = tabularProtected.length;
+        tabularProtected.push(normalized);
+        return `__TABULAR_PROTECT_${idx}__`;
+      }
+
       if (isChoiceTabular) {
         // tabular → 각 보기를 개별 줄로 변환
         let converted = m
