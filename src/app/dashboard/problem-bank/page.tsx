@@ -258,7 +258,7 @@ export default function ProblemBankPage() {
       if (data.examId) {
         router.push(`/dashboard/cloud/${data.examId}`);
       } else {
-        alert('시험지 생성 완료. 클라우드로 이동합니다.');
+        alert('시험지 생성 완료. 과사람클라우드로 이동합니다.');
         router.push('/dashboard/cloud');
       }
     } catch (e) {

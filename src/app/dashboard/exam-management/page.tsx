@@ -1271,7 +1271,7 @@ export default function ExamManagementPage() {
           <div className="em-cloud-footer">
             <div className="head">
               <Cloud className="h-3 w-3" />
-              과사람 클라우드
+              과사람클라우드
             </div>
             <div className="sub">다른 캠퍼스 시험지 열람 가능</div>
           </div>
