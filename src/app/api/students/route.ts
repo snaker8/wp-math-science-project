@@ -6,7 +6,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { resolveInsertInstituteId, assertInstituteAccess } from '@/lib/security/institute-guard';
 import { phoneToStudentEmail, STUDENT_INITIAL_PASSWORD } from '@/lib/students/phone-id';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -204,6 +204,17 @@ export async function POST(request: NextRequest) {
     if (!cls) {
       return NextResponse.json({
         warning: '학생 등록은 완료되었으나 반을 찾을 수 없어 반 배정은 건너뜀',
+        student: { id: studentId, email, fullName, createdNew },
+      }, { status: 200 });
+    }
+    // ★ 격리 가드 (2026-05-17 P1-7): 다른 학원 classId 로 학생 등록 차단
+    //   - 보안 감사 C-6: cls.institute_id 가져왔지만 assertInstituteAccess 누락
+    //   - 학생 등록은 했지만 다른 학원 반 배정 시도 → 403
+    try {
+      assertInstituteAccess(scope, (cls as { institute_id: string | null }).institute_id);
+    } catch {
+      return NextResponse.json({
+        warning: '학생 등록은 완료되었으나 다른 학원 반이라 배정 거부 (403)',
         student: { id: studentId, email, fullName, createdNew },
       }, { status: 200 });
     }
