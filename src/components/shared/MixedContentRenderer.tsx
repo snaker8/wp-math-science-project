@@ -107,20 +107,30 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // ★ bodyForTabular 기반 — $ 래퍼 제거 후 상태를 받음 (위에서 처리됨)
   let preBody = bodyForTabular;
   // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} (선택적 \, / \def\arraystretch 토큰 허용)
+  //   ★ 회귀 방지 가드 (사용자 요구 "다른 거 영향 X"):
+  //      풀이 박스 = 줄바꿈(\\) AND (한글 OR \text) 둘 다 있어야 인정.
+  //      단순 식 박스 (\boxed{\begin{aligned} x &= 1 \\ y &= 2 \end{aligned}}) 영향 없음.
   preBody = preBody.replace(
     /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
-    (_m, body) => {
+    (m, body) => {
+      const hasLineBreak = /\\\\/.test(body);
+      const hasKoreanOrText = /[가-힣]|\\text/.test(body);
+      if (!(hasLineBreak && hasKoreanOrText)) return m;  // 단순 식 박스 — 원본 유지
       const idx = solutionBoxes.length;
       solutionBoxes.push(body.trim());
       return `__SOLUTION_BOX_${idx}__`;
     }
   );
-  // 패턴 2: \begin{array}{|l|}\hline ... \hline\end{array} (vertical bar 컬럼 + hline 풀이 박스)
+  // 패턴 2: \begin{array}{|l|} ... \hline ... \end{array} (verticals + hline 풀이 박스)
+  //   ★ 회귀 방지 가드:
+  //      \hline 필수 (옵셔널 X) — 단순 verticals 박스 (예: \begin{array}{|c|} x=1 \end{array})
+  //      는 풀이 박스 아님, 일반 array 로 보호.
   preBody = preBody.replace(
-    /\\begin\{array\}\s*\{\|[^}]*\|\}\s*(?:\\hline\s*)?([\s\S]*?)(?:\\hline\s*)?\\end\{array\}/gi,
-    (_m, body) => {
+    /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
+    (m, body) => {
+      if (!/\\hline/.test(body)) return m;  // hline 없으면 풀이 박스 아님
       const idx = solutionBoxes.length;
-      // hline 제거 + spacing 옵션 제거 + 외부 array 환경은 aligned 로 (안의 aligned 는 그대로 둠)
+      // hline 제거 + \\[Npt] → \\ 정규화
       const cleaned = body
         .replace(/\\hline\s*/g, '')
         .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
@@ -128,7 +138,6 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       return `__SOLUTION_BOX_${idx}__`;
     }
   );
-  // 패턴 3: $$ 안에 \begin{array}{|l|} 형태가 있는 경우도 처리 (위 패턴 2 가 이미 잡지만, 보강)
 
   // ★ tabular/array 블록 처리
   // 보기형 tabular (ㄱ./ㄴ./ㄷ. 포함)는 조건박스로 변환, 나머지는 보호
@@ -445,7 +454,15 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   className="my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full"
                   style={{ overflowWrap: 'anywhere', boxSizing: 'border-box' }}
                 >
-                  <MathRenderer content={`\\begin{aligned}${cleanedBody}\\end{aligned}`} />
+                  {/* ★ block=true 필수 (2026-05-18 회귀 fix):
+                       block 없으면 MathRenderer 가 inline 모드에서 \displaystyle 자동 prefix
+                       + \def\arraystretch{1.3} wrapping → KaTeX 가 inline 에서 \boxed{aligned}
+                       처리하다 fail (사용자 화면에 raw \displaystyle 토큰 표시).
+                       block=true 시 displayMode 로 처리되어 정상 렌더. */}
+                  <MathRenderer
+                    content={`\\begin{aligned}${cleanedBody}\\end{aligned}`}
+                    block
+                  />
                 </div>
               );
             }
