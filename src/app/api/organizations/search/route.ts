@@ -19,12 +19,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { apiError } from '@/lib/api/error';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   if (!supabaseAdmin) {
-    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   }
   const sb = supabaseAdmin;
 
@@ -40,8 +41,7 @@ export async function GET(request: NextRequest) {
       .limit(20);
 
     if (error) {
-      console.error('[organizations/search] empty-q error:', error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return apiError('/api/organizations/search GET empty-q', error, 'Failed to load organizations', 500);
     }
     return NextResponse.json({
       query: '',
@@ -61,8 +61,7 @@ export async function GET(request: NextRequest) {
     .limit(100);
 
   if (error) {
-    console.error('[organizations/search] error:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError('/api/organizations/search GET', error, 'Failed to search organizations', 500);
   }
 
   const all = (rows || []) as Array<{ id: string; name: string }>;
