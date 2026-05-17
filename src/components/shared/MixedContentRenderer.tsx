@@ -96,10 +96,44 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
     }
   );
 
+  // ★★ 풀이 박스 (Solution Box) 추출 — KaTeX 가 못 푸는 복잡 LaTeX 환경 (2026-05-18)
+  //    배경: 사용자 보고 — MathJax 가 정상 렌더하는 풀이 박스 양식이 KaTeX 에서 fail.
+  //          \boxed{\begin{aligned}...\end{aligned}} (외부 박스 + 식 정리 + 한글) 또는
+  //          \begin{array}{|l|}\hline...\hline\end{array} 같은 풀이 박스.
+  //    전략: 외부 박스는 HTML CSS (.solution-box) 로 그리고,
+  //          내부는 단순 aligned 만 추출해 KaTeX 가 처리 가능한 form 으로 변환.
+  //          \boxed{(\text{가})} 같은 단일 식 placeholder 는 KaTeX 처리 가능 — 그대로 유지.
+  const solutionBoxes: string[] = [];
+  // ★ bodyForTabular 기반 — $ 래퍼 제거 후 상태를 받음 (위에서 처리됨)
+  let preBody = bodyForTabular;
+  // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} (선택적 \, / \def\arraystretch 토큰 허용)
+  preBody = preBody.replace(
+    /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
+    (_m, body) => {
+      const idx = solutionBoxes.length;
+      solutionBoxes.push(body.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 패턴 2: \begin{array}{|l|}\hline ... \hline\end{array} (vertical bar 컬럼 + hline 풀이 박스)
+  preBody = preBody.replace(
+    /\\begin\{array\}\s*\{\|[^}]*\|\}\s*(?:\\hline\s*)?([\s\S]*?)(?:\\hline\s*)?\\end\{array\}/gi,
+    (_m, body) => {
+      const idx = solutionBoxes.length;
+      // hline 제거 + spacing 옵션 제거 + 외부 array 환경은 aligned 로 (안의 aligned 는 그대로 둠)
+      const cleaned = body
+        .replace(/\\hline\s*/g, '')
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
+      solutionBoxes.push(cleaned.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 패턴 3: $$ 안에 \begin{array}{|l|} 형태가 있는 경우도 처리 (위 패턴 2 가 이미 잡지만, 보강)
+
   // ★ tabular/array 블록 처리
   // 보기형 tabular (ㄱ./ㄴ./ㄷ. 포함)는 조건박스로 변환, 나머지는 보호
   const tabularProtected: string[] = [];
-  let protectedBody = bodyForTabular.replace(
+  let protectedBody = preBody.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (m) => {
       // ★ 풀이 박스 감지 (보기형 아님 — 2026-05-18 사고)
@@ -393,6 +427,30 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   return (
     <Wrapper className={className} style={wrapperStyle}>
       {elements.map((el, i) => {
+        // ★ 풀이 박스 placeholder 감지: __SOLUTION_BOX_N__ 패턴 (2026-05-18)
+        //   외부 박스는 HTML CSS, 내부는 \begin{aligned}...\end{aligned} 만 KaTeX 처리
+        if (el.type === 'text') {
+          const solMatch = el.value.match(/^__SOLUTION_BOX_(\d+)__$/);
+          if (solMatch) {
+            const solIdx = parseInt(solMatch[1], 10);
+            const solBody = solutionBoxes[solIdx];
+            if (solBody !== undefined) {
+              // 내부 LaTeX 정규화: \\[Npt] → \\, \displaystyle 제거 (KaTeX 호환)
+              const cleanedBody = solBody
+                .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+                .replace(/\\displaystyle\s+/g, '');
+              return (
+                <div
+                  key={`sbox-${solIdx}`}
+                  className="my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full"
+                  style={{ overflowWrap: 'anywhere', boxSizing: 'border-box' }}
+                >
+                  <MathRenderer content={`\\begin{aligned}${cleanedBody}\\end{aligned}`} />
+                </div>
+              );
+            }
+          }
+        }
         // 조건 박스 placeholder 감지: __CONDITION_BOX_N__ 패턴
         if (el.type === 'text') {
           const boxMatch = el.value.match(/^__CONDITION_BOX_(\d+)__$/);
@@ -402,9 +460,9 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
             const headerLabel = conditionHeaderLabels[boxIdx];
             if (boxContent) {
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
+                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-md border border-gray-500 leading-relaxed max-w-full">
                   {headerLabel && (
-                    <div className="text-xs font-bold text-zinc-400 mb-2 -mt-1">&lt;{headerLabel}&gt;</div>
+                    <div className="text-xs font-bold text-gray-700 mb-1.5 -mt-0.5">&lt;{headerLabel}&gt;</div>
                   )}
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
