@@ -1373,8 +1373,10 @@ function parseMixedContent(text: string): ContentElement[] {
 
   // 1단계: bare LaTeX를 $...$로 감싸기
   // ★ 플레이스홀더 보호: wrapBareLatex가 __ 를 첨자로 인식하는 것을 방지
+  // ★ SOLUTION_BOX 포함 — 누락 시 wrapBareLatexInSegment 가 `N_BOX_0__` 의
+  //   `N`+`_` 를 첨자로 인식해 마커를 깨뜨림 (30번 회귀 #5, 2026-05-18)
   const placeholders: string[] = [];
-  textWithPlaceholders = textWithPlaceholders.replace(/__(?:TABULAR|CONDITION_BOX)_\d+__/g, (m) => {
+  textWithPlaceholders = textWithPlaceholders.replace(/__(?:TABULAR|CONDITION_BOX|SOLUTION_BOX)_\d+__/g, (m) => {
     const idx = placeholders.length;
     placeholders.push(m);
     return `\x00PH${idx}\x00`;
@@ -1385,9 +1387,11 @@ function parseMixedContent(text: string): ContentElement[] {
 
   const elements: ContentElement[] = [];
 
-  // 통합 정규식: 이미지 → tabular placeholder → $$display$$ → $inline$ 순서로 매칭
+  // 통합 정규식: 이미지 → tabular/condition/solution placeholder → $$display$$ → $inline$ 순서로 매칭
   // $$...$$ 에서 내부에 줄바꿈을 허용 ([\s\S]+? non-greedy)
-  const regex = /!\[([^\]]*)\]\(([^)]+)\)|__TABULAR_(\d+)__|__CONDITION_BOX_(\d+)__|\$\$([\s\S]+?)\$\$|\$([^$\n]+)\$/g;
+  // ★ SOLUTION_BOX 추가 — renderElement 의 `^__SOLUTION_BOX_(\d+)__$` 매치를 위해
+  //   마커가 *단독 text element* 로 분리되어야 함 (앞뒤 텍스트와 섞이면 매치 실패)
+  const regex = /!\[([^\]]*)\]\(([^)]+)\)|__TABULAR_(\d+)__|__CONDITION_BOX_(\d+)__|__SOLUTION_BOX_(\d+)__|\$\$([\s\S]+?)\$\$|\$([^$\n]+)\$/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -1410,11 +1414,15 @@ function parseMixedContent(text: string): ContentElement[] {
       // condition-box placeholder: __CONDITION_BOX_N__ → 별도 text element로 분리
       elements.push({ type: 'text', value: `__CONDITION_BOX_${match[4]}__` });
     } else if (match[5] !== undefined) {
-      // display math: $$...$$
-      elements.push({ type: 'display-math', value: match[5].trim() });
+      // solution-box placeholder: __SOLUTION_BOX_N__ → 단독 text element 로 분리
+      //   renderElement 의 `^__SOLUTION_BOX_(\d+)__$` 매치 → SolutionBoxRender 로 연결
+      elements.push({ type: 'text', value: `__SOLUTION_BOX_${match[5]}__` });
     } else if (match[6] !== undefined) {
+      // display math: $$...$$
+      elements.push({ type: 'display-math', value: match[6].trim() });
+    } else if (match[7] !== undefined) {
       // inline math: $...$
-      elements.push({ type: 'inline-math', value: match[6] });
+      elements.push({ type: 'inline-math', value: match[7] });
     }
 
     lastIndex = match.index + match[0].length;
