@@ -102,12 +102,36 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   let protectedBody = bodyForTabular.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (m) => {
+      // ★ 풀이 박스 감지 (보기형 아님 — 2026-05-18 사고)
+      //   사용자 보고: \begin{array}{|l|} ... \boxed{(가)} ... \end{array} 가 보기형으로 오인되어
+      //   LaTeX 환경이 해체되며 raw 텍스트로 표시됨.
+      //   - 단일 컬럼 ({l} {c} {|l|} {|c|} 등) — 보기 리스트는 다중 컬럼이 정상
+      //   - \begin{aligned} 중첩 — 식 정리 박스 (풀이) 라 보기형 아님
+      //   - \boxed{...} 안의 (가)/(나) — placeholder 라벨이라 셀의 보기 라벨과 의미 다름
+      //   → 위 케이스는 일반 tabular 로 보호 (KaTeX 가 그대로 렌더)
+      const colSpecMatch = m.match(/\\begin\{(?:tabular|array)\}\s*\{([^}]*)\}/);
+      const colSpec = colSpecMatch?.[1] || '';
+      // 단일 컬럼: 알파벳(c/l/r) 1개만 (구분선 | 제외 후 카운트)
+      const colCount = (colSpec.replace(/[^clr]/g, '')).length;
+      const isSingleColumn = colCount === 1;
+      // aligned 중첩 → 풀이 박스
+      const hasAlignedInside = /\\begin\{aligned\}/i.test(m);
+      // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
+      const stripped = m.replace(/\\boxed\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
+
       // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
-      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(m);
-      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(m);
-      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(m);
-      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(m);
-      if (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels) {
+      //   ★ boxed 제거된 stripped 에서 검사 — placeholder 오탐 차단
+      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(stripped);
+      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(stripped);
+      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(stripped);
+      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(stripped);
+
+      const isChoiceTabular =
+        !isSingleColumn &&
+        !hasAlignedInside &&
+        (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels);
+
+      if (isChoiceTabular) {
         // tabular → 각 보기를 개별 줄로 변환
         let converted = m
           .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '') // 시작 태그 제거
