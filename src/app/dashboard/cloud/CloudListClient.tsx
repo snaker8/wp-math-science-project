@@ -82,6 +82,10 @@ interface ExamFile {
   bookGroupId: string | null;
   createdAt?: string;
   grade?: string;
+  // ★ 출처별 카테고리 (Phase 1)
+  isDiagnostic?: boolean;
+  examType?: string | null;
+  diagnosticCategory?: string | null;
 }
 
 interface DBExam {
@@ -101,7 +105,7 @@ interface DBExam {
   // ★ 출처별 카테고리 분류용 (Phase 1)
   isDiagnostic?: boolean;
   diagnosticCategory?: string | null;
-  diagnosticRound?: number | null;
+  diagnosticRound?: string | null;  // 'R1', 'R2', ...
 }
 
 // ============================================================================
@@ -121,6 +125,19 @@ const SOURCE_CATEGORIES: Array<{
 
 const MOCK_TITLE_PATTERN = /모의고사|평가원|교육청|수능|학평/;
 const MOCK_TYPE_PATTERN = /모의|수능|평가원|학평/;
+
+// ★ 진단평가 트리 — 세션 타입 + 회차 계층 구조
+const DIAG_CATEGORIES: Array<{ id: string; label: string; emoji: string }> = [
+  { id: 'BS', label: '광역스캔', emoji: '🔬' },
+  { id: 'DD', label: '정밀진단', emoji: '🎯' },
+  { id: 'PT', label: '선수추적', emoji: '🔗' },
+  { id: 'SC', label: '스팟체크', emoji: '✅' },
+];
+
+function diagRoundLabel(round: string): string {
+  const num = round.replace(/[^0-9]/g, '');
+  return `${num}회차`;
+}
 
 type SortField = 'order' | 'name' | 'problems' | 'grade';
 
@@ -814,6 +831,21 @@ export default function CloudPage() {
   // ★ 출처별 카테고리 (Phase 1) — 트리·결과에 우선 적용되는 1차 필터
   const [sourceCategory, setSourceCategory] = useState<SourceCategory>('all');
 
+  // ★ 진단평가/모의고사 sub-필터 (탭 아래 2번째 줄 칩) — 카테고리 직교 차원
+  const [diagSession, setDiagSession] = useState<'all' | 'BS' | 'DD' | 'PT' | 'SC'>('all');
+  const [diagRound, setDiagRound] = useState<string>('all');   // 'all' | 'R1' | 'R2' ...
+  const [mockYear, setMockYear] = useState<string>('all');     // 'all' | '2026' ...
+
+  // ★ 출처 카테고리 변경 시 sub-필터·왼쪽 선택 리셋
+  useEffect(() => {
+    setDiagSession('all');
+    setDiagRound('all');
+    setMockYear('all');
+    setSelectedId('all');
+    setSelectedName('전체 시험지');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceCategory]);
+
   // --- Upload Modal ---
   const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId || autoOpenUpload);
 
@@ -1193,21 +1225,121 @@ export default function CloudPage() {
     });
   }, [subjectFilteredExams, sourceCategory]);
 
+  // ★ Sub-필터 적용 후 최종 examPool — 진단평가: BS/DD/PT/SC + 회차, 모의고사: 연도
+  const subFilteredExams = useMemo(() => {
+    if (sourceCategory === 'diagnostic') {
+      return categoryFilteredExams.filter((e) => {
+        if (diagSession !== 'all' && e.diagnosticCategory !== diagSession) return false;
+        if (diagRound !== 'all' && e.diagnosticRound !== diagRound) return false;
+        return true;
+      });
+    }
+    if (sourceCategory === 'mock') {
+      if (mockYear === 'all') return categoryFilteredExams;
+      return categoryFilteredExams.filter((e) => e.createdAt?.startsWith(mockYear));
+    }
+    return categoryFilteredExams;
+  }, [categoryFilteredExams, sourceCategory, diagSession, diagRound, mockYear]);
+
+  // ★ 진단평가 sub-필터 옵션 (사용 가능한 세션·회차) — categoryFilteredExams 기준 자동 생성
+  const diagSessionOptions = useMemo(() => {
+    if (sourceCategory !== 'diagnostic') return [];
+    const catCount = new Map<string, number>();
+    for (const e of categoryFilteredExams) {
+      const cat = e.diagnosticCategory || 'BS';
+      catCount.set(cat, (catCount.get(cat) || 0) + 1);
+    }
+    return DIAG_CATEGORIES.map(({ id, label, emoji }) => ({
+      id, label, emoji, count: catCount.get(id) || 0,
+    }));
+  }, [categoryFilteredExams, sourceCategory]);
+
+  const diagRoundOptions = useMemo(() => {
+    if (sourceCategory !== 'diagnostic') return [];
+    // diagSession 적용한 후 회차별 집계
+    const base = diagSession === 'all'
+      ? categoryFilteredExams
+      : categoryFilteredExams.filter((e) => e.diagnosticCategory === diagSession);
+    const roundCount = new Map<string, number>();
+    for (const e of base) {
+      const r = e.diagnosticRound || '';
+      if (r) roundCount.set(r, (roundCount.get(r) || 0) + 1);
+    }
+    return Array.from(roundCount.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([round, count]) => ({ id: round, label: diagRoundLabel(round), count }));
+  }, [categoryFilteredExams, sourceCategory, diagSession]);
+
+  const mockYearOptions = useMemo(() => {
+    if (sourceCategory !== 'mock') return [];
+    const yearCount = new Map<string, number>();
+    for (const e of categoryFilteredExams) {
+      const year = e.createdAt ? e.createdAt.substring(0, 4) : '미확인';
+      yearCount.set(year, (yearCount.get(year) || 0) + 1);
+    }
+    return Array.from(yearCount.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([year, count]) => ({ id: year, label: `${year}년`, count }));
+  }, [categoryFilteredExams, sourceCategory]);
+
+  // ★ 트리 노드를 sub-필터된 examPool 기준으로 재계산 + 빈 폴더 숨김
+  //   sourceCategory==='all' 일 때는 빈 폴더도 표시 (관리 화면).
+  //   그 외(진단/모의/학교/시중)는 자료 있는 폴더만 표시 (사용자 결정).
+  const displayedTreeNodes = useMemo(() => {
+    const examCountMap = new Map<string, number>();
+    let unclassifiedCount = 0;
+    for (const e of subFilteredExams) {
+      if (e.bookGroupId) {
+        examCountMap.set(e.bookGroupId, (examCountMap.get(e.bookGroupId) || 0) + 1);
+      } else {
+        unclassifiedCount++;
+      }
+    }
+
+    const rebuild = (nodes: TreeNode[]): TreeNode[] => {
+      const result: TreeNode[] = [];
+      for (const n of nodes) {
+        if (n.id === 'all') {
+          result.push({ ...n, examCount: subFilteredExams.length });
+          continue;
+        }
+        if (n.id === 'unclassified') {
+          if (sourceCategory === 'all' || unclassifiedCount > 0) {
+            result.push({ ...n, examCount: unclassifiedCount });
+          }
+          continue;
+        }
+        const children = rebuild(n.children);
+        const directCount = examCountMap.get(n.id) || 0;
+        const childExamSum = children.reduce((sum, c) => {
+          if (c.id === 'all' || c.id === 'unclassified') return sum;
+          return sum + c.examCount;
+        }, 0);
+        const totalCount = directCount + childExamSum;
+        if (sourceCategory !== 'all' && totalCount === 0) continue;
+        result.push({ ...n, examCount: directCount, children });
+      }
+      return result;
+    };
+
+    return rebuild(treeNodes);
+  }, [treeNodes, subFilteredExams, sourceCategory]);
+
   const exams: ExamFile[] = useMemo(() => {
-    if (!selectedId || categoryFilteredExams.length === 0) return [];
+    if (!selectedId || subFilteredExams.length === 0) return [];
 
     let filtered: DBExam[];
 
     if (selectedId === 'all') {
-      filtered = categoryFilteredExams;
+      filtered = subFilteredExams;
     } else if (selectedId === 'unclassified') {
-      filtered = categoryFilteredExams.filter((e) => !e.bookGroupId);
+      filtered = subFilteredExams.filter((e) => !e.bookGroupId);
     } else {
       // 선택된 그룹 + 자손 그룹의 시험지
       const node = findNodeById(treeNodes, selectedId);
       if (node) {
         const groupIds = new Set(collectGroupIds(node));
-        filtered = categoryFilteredExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
+        filtered = subFilteredExams.filter((e) => e.bookGroupId && groupIds.has(e.bookGroupId));
       } else {
         filtered = [];
       }
@@ -1226,14 +1358,14 @@ export default function CloudPage() {
       examType: exam.examType,
       diagnosticCategory: exam.diagnosticCategory,
     }));
-  }, [selectedId, categoryFilteredExams, treeNodes, findNodeById]);
+  }, [selectedId, subFilteredExams, treeNodes, findNodeById]);
 
   const filteredExams = useMemo(() => {
     let result = exams;
     if (searchQuery) {
-      // ★ 검색 시 카테고리·과목 필터된 전체에서 검색 (북그룹 필터만 무시) + 공백 제거 + 대소문자 무시
+      // ★ 검색 시 sub-필터된 전체에서 검색 (북그룹 필터만 무시) + 공백 제거 + 대소문자 무시
       const q = searchQuery.toLowerCase().replace(/\s+/g, '');
-      const searchSource = categoryFilteredExams.map((exam, idx) => ({
+      const searchSource = subFilteredExams.map((exam, idx) => ({
         id: exam.id,
         order: idx + 1,
         fileName: exam.fileName || exam.title,
@@ -1266,7 +1398,7 @@ export default function CloudPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [exams, searchQuery, sortField, sortDir, categoryFilteredExams]);
+  }, [exams, searchQuery, sortField, sortDir, subFilteredExams]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -1512,6 +1644,116 @@ export default function CloudPage() {
           </span>
         </div>
       </div>
+
+      {/* ★ Sub-필터 줄 — 진단평가 탭: BS/DD/PT/SC + 회차, 모의고사 탭: 연도 */}
+      {(sourceCategory === 'diagnostic' || sourceCategory === 'mock') && (
+        <div className="flex flex-shrink-0 items-center gap-3 px-6 py-2 border-b border-subtle/30 bg-surface-base/60">
+          {sourceCategory === 'diagnostic' && (
+            <>
+              <span className="text-[11px] text-content-tertiary font-medium">세션</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setDiagSession('all'); setDiagRound('all'); }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                    diagSession === 'all'
+                      ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
+                      : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
+                  }`}
+                >
+                  전체 <span className="text-[9px] opacity-60">{categoryFilteredExams.length}</span>
+                </button>
+                {diagSessionOptions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { setDiagSession(s.id as any); setDiagRound('all'); }}
+                    disabled={s.count === 0}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                      diagSession === s.id
+                        ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
+                        : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
+                    }`}
+                    title={`${s.label} (${s.count}건)`}
+                  >
+                    <span>{s.emoji}</span>
+                    <span>{s.label}</span>
+                    <span className="text-[9px] opacity-60">{s.count}</span>
+                  </button>
+                ))}
+              </div>
+              {diagRoundOptions.length > 0 && (
+                <>
+                  <div className="h-4 w-px bg-subtle/50" />
+                  <span className="text-[11px] text-content-tertiary font-medium">회차</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDiagRound('all')}
+                      className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                        diagRound === 'all'
+                          ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
+                          : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
+                      }`}
+                    >
+                      전체
+                    </button>
+                    {diagRoundOptions.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setDiagRound(r.id)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                          diagRound === r.id
+                            ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
+                            : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
+                        }`}
+                      >
+                        <span>{r.label}</span>
+                        <span className="text-[9px] opacity-60">{r.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+          {sourceCategory === 'mock' && (
+            <>
+              <span className="text-[11px] text-content-tertiary font-medium">연도</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setMockYear('all')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                    mockYear === 'all'
+                      ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40'
+                      : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
+                  }`}
+                >
+                  전체 <span className="text-[9px] opacity-60">{categoryFilteredExams.length}</span>
+                </button>
+                {mockYearOptions.map((y) => (
+                  <button
+                    key={y.id}
+                    type="button"
+                    onClick={() => setMockYear(y.id)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                      mockYear === y.id
+                        ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40'
+                        : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
+                    }`}
+                  >
+                    <span>📅</span>
+                    <span>{y.label}</span>
+                    <span className="text-[9px] opacity-60">{y.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Loading State */}
       {isLoading && (
@@ -1989,34 +2231,38 @@ export default function CloudPage() {
       {/* Main Split Panel */}
       {!isLoading && !loadError && (
         <div ref={containerRef} className="flex flex-1 min-h-0 px-4 py-3 gap-0">
-          {/* ======== Left Panel: Tree ======== */}
+          {/* ======== Left Panel: Tree (모든 카테고리에서 북그룹 폴더 트리 공통) ======== */}
           <div
             className="flex flex-col gap-3 overflow-hidden pr-2"
             style={{ width: `${leftWidth}%`, flexShrink: 0 }}
           >
-            {/* Top Bar: Group Count + Add Button */}
+            {/* Top Bar */}
             <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
               <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
-                북그룹 {totalGroups}개
+                {sourceCategory === 'all'
+                  ? `북그룹 ${totalGroups}개`
+                  : `${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.emoji ?? ''} ${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.label ?? ''} · ${subFilteredExams.length}건`}
               </span>
-              <button
-                type="button"
-                onClick={handleAddRootGroup}
-                className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
-              >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
-                  <Plus className="h-3 w-3" />
-                </span>
-                <span>최상위 북그룹 추가</span>
-              </button>
+              {sourceCategory === 'all' && (
+                <button
+                  type="button"
+                  onClick={handleAddRootGroup}
+                  className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
+                    <Plus className="h-3 w-3" />
+                  </span>
+                  <span>최상위 북그룹 추가</span>
+                </button>
+              )}
             </div>
 
-            {/* Tree Panel */}
+            {/* Tree Panel — sub-필터·카테고리 적용된 examCount 기준 빈 폴더 자동 숨김 */}
             <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/90">
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 p-2">
-                {treeNodes.length > 0 ? (
+                {displayedTreeNodes.length > 0 ? (
                   <div className="space-y-0.5">
-                    {treeNodes.map((node) => (
+                    {displayedTreeNodes.map((node) => (
                       <TreeNodeComponent
                         key={node.id}
                         node={node}
@@ -2038,8 +2284,14 @@ export default function CloudPage() {
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2">
                     <Smile className="h-12 w-12 text-cyan-500/50" />
-                    <p className="text-sm text-content-tertiary">업로드된 시험지가 없습니다.</p>
-                    <p className="text-xs text-content-muted">문제를 업로드하면 자동으로 표시됩니다.</p>
+                    <p className="text-sm text-content-tertiary">
+                      {sourceCategory === 'all' ? '업로드된 시험지가 없습니다.' : '이 분류에 해당하는 자료가 없습니다.'}
+                    </p>
+                    <p className="text-xs text-content-muted">
+                      {sourceCategory === 'all'
+                        ? '문제를 업로드하면 자동으로 표시됩니다.'
+                        : '다른 출처 탭을 선택해보세요.'}
+                    </p>
                   </div>
                 )}
               </div>
