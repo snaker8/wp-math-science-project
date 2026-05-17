@@ -6,7 +6,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Loader2, AlertTriangle, Save, Pencil, X, Search, Shield } from 'lucide-react';
+import Link from 'next/link';
+import { Users, Loader2, AlertTriangle, Save, Pencil, X, Search, Shield, UserCog, ChevronRight } from 'lucide-react';
 
 interface UserRow {
   id: string;
@@ -32,6 +33,19 @@ const ROLE_BADGE: Record<string, string> = {
   ORG_ADMIN: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
 };
 
+// ★ 사용자 배정 기본 view 에서 제외되는 role
+//   강사는 /admin/teachers 에서 관리. 명시적으로 'all' 필터 선택 시 표시.
+const TEACHER_ROLES = new Set(['TEACHER', 'TUTOR', 'ORG_ADMIN']);
+
+type RoleFilter = 'non-teacher' | 'all' | 'STUDENT' | 'PARENT' | 'TEACHER' | 'TUTOR' | 'ORG_ADMIN' | 'ADMIN';
+
+const ROLE_FILTER_OPTIONS: Array<{ value: RoleFilter; label: string }> = [
+  { value: 'non-teacher', label: '학생·학부모·기타 (기본)' },
+  { value: 'STUDENT', label: '학생만' },
+  { value: 'PARENT', label: '학부모만' },
+  { value: 'all', label: '전체 (강사 포함)' },
+];
+
 export default function UsersAdminPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -40,6 +54,7 @@ export default function UsersAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [permError, setPermError] = useState(false);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('non-teacher');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState('');
@@ -129,6 +144,14 @@ export default function UsersAdminPage() {
     : institutes;
 
   const filteredUsers = users.filter((u) => {
+    // ★ role 필터 (2026-05-17): 기본 view 에서 강사 제외
+    //   강사는 /admin/teachers 에서 관리
+    if (roleFilter === 'non-teacher') {
+      if (u.role && TEACHER_ROLES.has(u.role)) return false;
+    } else if (roleFilter !== 'all') {
+      if (u.role !== roleFilter) return false;
+    }
+
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -136,6 +159,8 @@ export default function UsersAdminPage() {
       (u.fullName || '').toLowerCase().includes(q)
     );
   });
+
+  const teacherCount = users.filter((u) => u.role && TEACHER_ROLES.has(u.role)).length;
 
   return (
     <div className="min-h-screen bg-black text-white p-6 space-y-6">
@@ -150,20 +175,45 @@ export default function UsersAdminPage() {
             <p className="text-xs text-zinc-500 mt-0.5">학원·센터·역할 배정 · 슈퍼관리자 전용</p>
           </div>
         </div>
+        {/* 교직원관리 빠른 이동 */}
+        <Link
+          href="/admin/teachers"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+        >
+          <UserCog size={14} />
+          <span>교직원관리 ({teacherCount}명)</span>
+          <ChevronRight size={12} />
+        </Link>
       </div>
 
-      {/* 검색 */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="이메일 또는 이름 검색…"
-            className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none"
-          />
+      {/* 검색 + 필터 */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="이메일 또는 이름 검색…"
+              className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+            className="px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-white focus:border-indigo-500 focus:outline-none"
+          >
+            {ROLE_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
+        {roleFilter === 'non-teacher' && (
+          <p className="text-[11px] text-zinc-500">
+            ※ 기본 view 는 학생·학부모 위주입니다. 강사·ORG_ADMIN 은 <Link href="/admin/teachers" className="text-emerald-400 hover:underline">교직원관리</Link> 에서 관리하세요.
+          </p>
+        )}
       </div>
 
       {/* 로딩 / 에러 */}

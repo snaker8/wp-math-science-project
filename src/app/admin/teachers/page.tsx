@@ -13,6 +13,7 @@ import {
   Building2,
   AlertCircle,
 } from 'lucide-react';
+import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 interface Teacher {
@@ -40,32 +41,9 @@ export default function TeachersManagementPage() {
   }, []);
 
   const loadTeachers = async () => {
+    // ★ mockup fallback 제거 (2026-05-17) — Supabase 미구성 시도 실제 환경 외에는 없음
     if (!supabaseBrowser) {
-      // Mock data for demo
-      setTeachers([
-        {
-          id: '1',
-          email: 'teacher1@example.com',
-          full_name: '김선생',
-          phone: '010-1234-5678',
-          institute_id: null,
-          preferences: {},
-          created_at: new Date().toISOString(),
-          isAcademyAdmin: false,
-          role: 'TEACHER',
-        },
-        {
-          id: '2',
-          email: 'teacher2@example.com',
-          full_name: '이강사',
-          phone: '010-9876-5432',
-          institute_id: null,
-          preferences: { isAcademyAdmin: true },
-          created_at: new Date().toISOString(),
-          isAcademyAdmin: true,
-          role: 'TEACHER',
-        },
-      ]);
+      setMessage({ type: 'error', text: 'Supabase 클라이언트가 구성되지 않았습니다.' });
       setLoading(false);
       return;
     }
@@ -220,7 +198,10 @@ export default function TeachersManagementPage() {
       <header className="page-header">
         <div className="header-content">
           <h1>강사 권한 관리</h1>
-          <p>선생님에게 학원 관리자 권한을 부여하거나 해제할 수 있습니다.</p>
+          <p>강사(TEACHER) + 학원 산하 ORG_ADMIN(비본부) 관리. 본부 ORG_ADMIN 은 사용자 배정에서 관리.</p>
+          <Link href="/admin/users" className="nav-link">
+            ← 사용자 배정 (학생·학부모)
+          </Link>
         </div>
       </header>
 
@@ -363,6 +344,18 @@ export default function TeachersManagementPage() {
         .page-header p {
           color: #6b7280;
           font-size: 14px;
+        }
+
+        .nav-link {
+          display: inline-block;
+          margin-top: 8px;
+          color: #6366f1;
+          font-size: 12px;
+          text-decoration: none;
+        }
+
+        .nav-link:hover {
+          text-decoration: underline;
         }
 
         .stats-row {
