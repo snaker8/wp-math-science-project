@@ -1,7 +1,34 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
+import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
+
+// ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18 회귀 fix)
+//   MathRenderer 의 stretchArrays 가 \begin{aligned} 자동 wrapping +
+//   \\[Npt] 자동 삽입 + (inline 모드) \displaystyle prefix → nested \boxed{aligned} fail.
+//   SolutionBoxRender 는 KaTeX 직접 호출로 전처리 우회 → 정상 렌더.
+function SolutionBoxRender({ body }: { body: string }) {
+  const html = useMemo(() => {
+    try {
+      const cleaned = body
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+        .replace(/\\displaystyle\s+/g, '');
+      return katex.renderToString(
+        `\\begin{aligned}${cleaned}\\end{aligned}`,
+        {
+          displayMode: true,
+          throwOnError: false,
+          strict: false,
+          trust: true,
+        }
+      );
+    } catch {
+      return `<pre style="color:#dc2626;font-size:11px">${body}</pre>`;
+    }
+  }, [body]);
+  return <div className="solution-box-content" dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 // ★ 표 셀용 수식 정제 — 짝 안 맞는 $ / \displaystyle 으로 인한 KaTeX 렌더 실패 방지
 //   셀 내용은 MathRenderer가 math 모드로 감싸므로 내부 $ 는 불필요하며 오히려 파싱 에러 유발
@@ -48,8 +75,43 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
   // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
 
-  // 전처리: Mathpix 특유 포맷 정규화
-  let normalized = preprocessMathpixContent(content)
+  // ★★ 풀이 박스 추출 (preprocess 이전 — 2026-05-18 회귀 fix #4)
+  //   PR #191 의 풀이박스 추출은 preprocessMathpixContent 후에 동작 → 그 사이 line 730~ 의
+  //   "전체 LaTeX 줄 → $...$ 감싸기" 가 \boxed{\begin{aligned} 단독 줄을 $...$ 로 잘못 wrap
+  //   → MathRenderer inline → \displaystyle prefix → KaTeX fail → raw 표시.
+  //   해결: 풀이 박스를 raw content 에서 가장 먼저 추출. 마커로 치환 후 preprocess 진행.
+  const solutionBoxes: string[] = [];
+  let rawWithMarkers = content;
+  // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} — 줄바꿈 + 한글/text 가드
+  rawWithMarkers = rawWithMarkers.replace(
+    /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
+    (m, body) => {
+      const hasLineBreak = /\\\\/.test(body);
+      const hasKoreanOrText = /[가-힣]|\\text/.test(body);
+      if (!(hasLineBreak && hasKoreanOrText)) return m;
+      const idx = solutionBoxes.length;
+      solutionBoxes.push(body.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 패턴 2: \begin{array}{|l|}\hline ... \end{array} — hline 필수
+  rawWithMarkers = rawWithMarkers.replace(
+    /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
+    (m, body) => {
+      if (!/\\hline/.test(body)) return m;
+      const idx = solutionBoxes.length;
+      const cleaned = body
+        .replace(/\\hline\s*/g, '')
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
+      solutionBoxes.push(cleaned.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // $$ \boxed{aligned} $$ 같이 외부 $$ 감싼 케이스: 마커만 남기면 preprocess 가 정상 처리
+  rawWithMarkers = rawWithMarkers.replace(/\$\$\s*(__SOLUTION_BOX_\d+__)\s*\$\$/g, '$1');
+
+  // 전처리: Mathpix 특유 포맷 정규화 (마커는 환경 토큰 아니라서 preprocess 무영향)
+  let normalized = preprocessMathpixContent(rawWithMarkers)
     // ★ $ 밖의 \displaystyle 수식 블록 → $$...$$ 로 감싸기 (KaTeX 렌더링)
     .replace(/(?<!\$)\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
     .replace(/(?<!\$)\\\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
@@ -96,44 +158,11 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
     }
   );
 
-  // ★★ 풀이 박스 (Solution Box) 추출 — KaTeX 가 못 푸는 복잡 LaTeX 환경 (2026-05-18)
-  //    배경: 사용자 보고 — MathJax 가 정상 렌더하는 풀이 박스 양식이 KaTeX 에서 fail.
-  //          \boxed{\begin{aligned}...\end{aligned}} (외부 박스 + 식 정리 + 한글) 또는
-  //          \begin{array}{|l|}\hline...\hline\end{array} 같은 풀이 박스.
-  //    전략: 외부 박스는 HTML CSS (.solution-box) 로 그리고,
-  //          내부는 단순 aligned 만 추출해 KaTeX 가 처리 가능한 form 으로 변환.
-  //          \boxed{(\text{가})} 같은 단일 식 placeholder 는 KaTeX 처리 가능 — 그대로 유지.
-  const solutionBoxes: string[] = [];
-  // ★ bodyForTabular 기반 — $ 래퍼 제거 후 상태를 받음 (위에서 처리됨)
-  let preBody = bodyForTabular;
-  // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} (선택적 \, / \def\arraystretch 토큰 허용)
-  preBody = preBody.replace(
-    /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
-    (_m, body) => {
-      const idx = solutionBoxes.length;
-      solutionBoxes.push(body.trim());
-      return `__SOLUTION_BOX_${idx}__`;
-    }
-  );
-  // 패턴 2: \begin{array}{|l|}\hline ... \hline\end{array} (vertical bar 컬럼 + hline 풀이 박스)
-  preBody = preBody.replace(
-    /\\begin\{array\}\s*\{\|[^}]*\|\}\s*(?:\\hline\s*)?([\s\S]*?)(?:\\hline\s*)?\\end\{array\}/gi,
-    (_m, body) => {
-      const idx = solutionBoxes.length;
-      // hline 제거 + spacing 옵션 제거 + 외부 array 환경은 aligned 로 (안의 aligned 는 그대로 둠)
-      const cleaned = body
-        .replace(/\\hline\s*/g, '')
-        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
-      solutionBoxes.push(cleaned.trim());
-      return `__SOLUTION_BOX_${idx}__`;
-    }
-  );
-  // 패턴 3: $$ 안에 \begin{array}{|l|} 형태가 있는 경우도 처리 (위 패턴 2 가 이미 잡지만, 보강)
-
   // ★ tabular/array 블록 처리
   // 보기형 tabular (ㄱ./ㄴ./ㄷ. 포함)는 조건박스로 변환, 나머지는 보호
+  // 풀이 박스는 함수 시작 부분에서 이미 마커 처리됨 — 여기선 처리 안 함.
   const tabularProtected: string[] = [];
-  let protectedBody = preBody.replace(
+  let protectedBody = bodyForTabular.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (m) => {
       // ★ 풀이 박스 감지 (보기형 아님 — 2026-05-18 사고)
@@ -445,7 +474,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   className="my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full"
                   style={{ overflowWrap: 'anywhere', boxSizing: 'border-box' }}
                 >
-                  <MathRenderer content={`\\begin{aligned}${cleanedBody}\\end{aligned}`} />
+                  <SolutionBoxRender body={cleanedBody} />
                 </div>
               );
             }
