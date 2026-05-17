@@ -2237,29 +2237,16 @@ const HEADER_LINE_PATTERNS = [
 function replaceTablePatternWithImage(
   content: string,
   imageMarkdown: string,
-  cropRelativeRect?: { x: number; y: number; w: number; h: number }
+  _cropRelativeRect?: { x: number; y: number; w: number; h: number }
 ): { newContent: string; replacedPattern: string; insertPosition: 'replace-table' | 'append' } {
-  // ★ 면적 기반 판단: 드래그 영역이 크롭 이미지의 50% 이상이면 전체 교체
-  const area = cropRelativeRect ? cropRelativeRect.w * cropRelativeRect.h : 0;
-
-  if (area >= 0.5) {
-    // === 전체 교체 모드 ===
-    // 선택지(①~⑤)는 보존, 나머지 전체를 이미지로 교체
-    const choicesRegex = /(?:^|\n)\s*(?:①|②|③|④|⑤|\(\d\)|\d\))[^\n]*/;
-    const choicesIdx = content.search(choicesRegex);
-    let textPart = content;
-    let choicesPart = '';
-    if (choicesIdx > 0) {
-      textPart = content.substring(0, choicesIdx).trimEnd();
-      choicesPart = content.substring(choicesIdx);
-    }
-
-    return {
-      newContent: imageMarkdown + (choicesPart ? '\n\n' + choicesPart : '\n'),
-      replacedPattern: textPart,
-      insertPosition: 'replace-table',
-    };
-  }
+  // ★ 본문 자동 삭제 분기 제거 (2026-05-17, 사용자 보고)
+  //   기존: 드래그 영역 ≥ 50% 이면 본문 텍스트 전체를 이미지로 교체 (선택지만 보존)
+  //   사고: "이미지 자동 크롭/삽입 시 이미 분석된 문제 텍스트가 안 보이거나 삭제"
+  //   수정: 면적 무관하게 본문은 절대 자동 삭제 안 함.
+  //         표 패턴(tabular/array/markdown table)이 있으면 그 자리에만 교체,
+  //         없으면 본문 끝에 append. 본문 정리는 모달 편집에서 사용자가 직접.
+  //
+  //   _cropRelativeRect 인자는 시그니처 호환 위해 유지 (호출처 변경 X)
 
   // === 표 패턴 감지 모드 ===
   const patterns: RegExp[] = [
