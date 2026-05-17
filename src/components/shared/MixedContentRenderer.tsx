@@ -1,7 +1,36 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
+import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
+
+// ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
+//   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
+//   \def\arraystretch{1.3} 자동 wrapping → KaTeX 가 nested \boxed{aligned} 에서 fail.
+//   풀이 박스는 stretchArrays 거치지 않고 KaTeX 직접 호출로 처리.
+function SolutionBoxRender({ body }: { body: string }) {
+  const html = useMemo(() => {
+    try {
+      const cleaned = body
+        // \\[Npt] 같은 spacing 옵션 제거 (KaTeX 가 일부 환경에서 못 풂)
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+        // \displaystyle 잔여 제거 (displayMode 가 자동 처리)
+        .replace(/\\displaystyle\s+/g, '');
+      return katex.renderToString(
+        `\\begin{aligned}${cleaned}\\end{aligned}`,
+        {
+          displayMode: true,
+          throwOnError: false,
+          strict: false,
+          trust: true,
+        }
+      );
+    } catch {
+      return `<pre style="color:#dc2626;font-size:11px">${body}</pre>`;
+    }
+  }, [body]);
+  return <div className="solution-box-content" dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 // ★ 표 셀용 수식 정제 — 짝 안 맞는 $ / \displaystyle 으로 인한 KaTeX 렌더 실패 방지
 //   셀 내용은 MathRenderer가 math 모드로 감싸므로 내부 $ 는 불필요하며 오히려 파싱 에러 유발
@@ -107,20 +136,27 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // ★ bodyForTabular 기반 — $ 래퍼 제거 후 상태를 받음 (위에서 처리됨)
   let preBody = bodyForTabular;
   // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} (선택적 \, / \def\arraystretch 토큰 허용)
+  //   ★ 회귀 방지 가드: 풀이 박스 = 줄바꿈(\\) AND (한글 OR \text) 둘 다 있어야 인정.
+  //      단순 식 박스 (\boxed{\begin{aligned} x &= 1 \\ y &= 2 \end{aligned}}) 영향 없음.
   preBody = preBody.replace(
     /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
-    (_m, body) => {
+    (m, body) => {
+      const hasLineBreak = /\\\\/.test(body);
+      const hasKoreanOrText = /[가-힣]|\\text/.test(body);
+      if (!(hasLineBreak && hasKoreanOrText)) return m;  // 단순 식 박스 — 원본 유지
       const idx = solutionBoxes.length;
       solutionBoxes.push(body.trim());
       return `__SOLUTION_BOX_${idx}__`;
     }
   );
-  // 패턴 2: \begin{array}{|l|}\hline ... \hline\end{array} (vertical bar 컬럼 + hline 풀이 박스)
+  // 패턴 2: \begin{array}{|l|} ... \hline ... \end{array} (verticals + hline 풀이 박스)
+  //   ★ 회귀 방지 가드: \hline 필수 (옵셔널 X) — 단순 verticals 박스는 풀이 박스 아님.
   preBody = preBody.replace(
-    /\\begin\{array\}\s*\{\|[^}]*\|\}\s*(?:\\hline\s*)?([\s\S]*?)(?:\\hline\s*)?\\end\{array\}/gi,
-    (_m, body) => {
+    /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
+    (m, body) => {
+      if (!/\\hline/.test(body)) return m;  // hline 없으면 풀이 박스 아님
       const idx = solutionBoxes.length;
-      // hline 제거 + spacing 옵션 제거 + 외부 array 환경은 aligned 로 (안의 aligned 는 그대로 둠)
+      // hline 제거 + \\[Npt] → \\ 정규화
       const cleaned = body
         .replace(/\\hline\s*/g, '')
         .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
@@ -445,7 +481,11 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   className="my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full"
                   style={{ overflowWrap: 'anywhere', boxSizing: 'border-box' }}
                 >
-                  <MathRenderer content={`\\begin{aligned}${cleanedBody}\\end{aligned}`} />
+                  {/* ★ SolutionBoxRender 사용 (2026-05-18 회귀 fix #3):
+                       MathRenderer 의 stretchArrays 가 \begin{aligned} 자동 wrapping +
+                       \\[Npt] 삽입 → KaTeX nested \boxed{aligned} fail.
+                       SolutionBoxRender 는 KaTeX 직접 호출 (전처리 우회) → 정상 렌더. */}
+                  <SolutionBoxRender body={cleanedBody} />
                 </div>
               );
             }
