@@ -24,6 +24,8 @@ interface Teacher {
   preferences: Record<string, unknown>;
   created_at: string;
   isAcademyAdmin: boolean;
+  /** 'TEACHER' 또는 'ORG_ADMIN' (비본부) — 정책 (2026-05-17) */
+  role: string;
 }
 
 export default function TeachersManagementPage() {
@@ -50,6 +52,7 @@ export default function TeachersManagementPage() {
           preferences: {},
           created_at: new Date().toISOString(),
           isAcademyAdmin: false,
+          role: 'TEACHER',
         },
         {
           id: '2',
@@ -60,6 +63,7 @@ export default function TeachersManagementPage() {
           preferences: { isAcademyAdmin: true },
           created_at: new Date().toISOString(),
           isAcademyAdmin: true,
+          role: 'TEACHER',
         },
       ]);
       setLoading(false);
@@ -67,20 +71,42 @@ export default function TeachersManagementPage() {
     }
 
     try {
+      // ★ 정책 (2026-05-17): TEACHER + ORG_ADMIN(비본부) 모두 강사로 표시
+      //   본부 institute 소속 ORG_ADMIN 은 학원 운영자라 제외.
+      //   1) organizations.headquarter_institute_id 목록 조회
+      //   2) users.role IN (TEACHER, ORG_ADMIN) 조회
+      //   3) 본부 ORG_ADMIN 클라이언트 필터링
+      const { data: orgs } = await supabaseBrowser
+        .from('organizations')
+        .select('headquarter_institute_id');
+      const hqIds = new Set(
+        ((orgs || []) as Array<{ headquarter_institute_id: string | null }>)
+          .map((o) => o.headquarter_institute_id)
+          .filter((v): v is string => !!v)
+      );
+
       const { data, error } = await supabaseBrowser
         .from('users')
         .select('*')
-        .eq('role', 'TEACHER')
+        .in('role', ['TEACHER', 'ORG_ADMIN'])
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const teachersWithAdmin = (data || []).map((teacher) => ({
-        ...teacher,
-        isAcademyAdmin:
-          (teacher.preferences as Record<string, unknown>)?.isAcademyAdmin === true,
-      }));
+      const teachersWithAdmin = (data || [])
+        .filter((u) => {
+          // 본부 institute ORG_ADMIN 은 제외 (학원 운영자로 분류)
+          if (u.role === 'ORG_ADMIN' && u.institute_id && hqIds.has(u.institute_id)) {
+            return false;
+          }
+          return true;
+        })
+        .map((teacher) => ({
+          ...teacher,
+          isAcademyAdmin:
+            (teacher.preferences as Record<string, unknown>)?.isAcademyAdmin === true,
+        }));
 
       setTeachers(teachersWithAdmin);
     } catch (error) {
