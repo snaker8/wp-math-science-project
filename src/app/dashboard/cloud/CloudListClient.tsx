@@ -82,6 +82,10 @@ interface ExamFile {
   bookGroupId: string | null;
   createdAt?: string;
   grade?: string;
+  // ★ 출처별 카테고리 (Phase 1)
+  isDiagnostic?: boolean;
+  examType?: string | null;
+  diagnosticCategory?: string | null;
 }
 
 interface DBExam {
@@ -101,7 +105,7 @@ interface DBExam {
   // ★ 출처별 카테고리 분류용 (Phase 1)
   isDiagnostic?: boolean;
   diagnosticCategory?: string | null;
-  diagnosticRound?: number | null;
+  diagnosticRound?: string | null;  // 'R1', 'R2', ...
 }
 
 // ============================================================================
@@ -121,6 +125,19 @@ const SOURCE_CATEGORIES: Array<{
 
 const MOCK_TITLE_PATTERN = /모의고사|평가원|교육청|수능|학평/;
 const MOCK_TYPE_PATTERN = /모의|수능|평가원|학평/;
+
+// ★ 진단평가 트리 — 세션 타입 + 회차 계층 구조
+const DIAG_CATEGORIES: Array<{ id: string; label: string; emoji: string }> = [
+  { id: 'BS', label: '광역스캔', emoji: '🔬' },
+  { id: 'DD', label: '정밀진단', emoji: '🎯' },
+  { id: 'PT', label: '선수추적', emoji: '🔗' },
+  { id: 'SC', label: '스팟체크', emoji: '✅' },
+];
+
+function diagRoundLabel(round: string): string {
+  const num = round.replace(/[^0-9]/g, '');
+  return `${num}회차`;
+}
 
 type SortField = 'order' | 'name' | 'problems' | 'grade';
 
@@ -814,6 +831,21 @@ export default function CloudPage() {
   // ★ 출처별 카테고리 (Phase 1) — 트리·결과에 우선 적용되는 1차 필터
   const [sourceCategory, setSourceCategory] = useState<SourceCategory>('all');
 
+  // ★ 출처 카테고리 변경 시 왼쪽 선택 노드 리셋
+  useEffect(() => {
+    if (sourceCategory === 'diagnostic') {
+      setSelectedId('diag-all');
+      setSelectedName('전체 진단평가');
+    } else if (sourceCategory === 'mock') {
+      setSelectedId('mock-all');
+      setSelectedName('전체 모의고사');
+    } else {
+      setSelectedId('all');
+      setSelectedName('전체 시험지');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceCategory]);
+
   // --- Upload Modal ---
   const [showUploadModal, setShowUploadModal] = useState(!!appendToExamId || autoOpenUpload);
 
@@ -1193,12 +1225,72 @@ export default function CloudPage() {
     });
   }, [subjectFilteredExams, sourceCategory]);
 
+  // ★ 진단평가 트리 데이터 — BS/DD/PT/SC × 회차 계층
+  const diagnosticTreeData = useMemo(() => {
+    const diagExams = categoryFilteredExams.filter((e) => e.isDiagnostic);
+    // 카테고리별 + 회차별 집계
+    const catMap = new Map<string, Map<string, number>>();
+    for (const e of diagExams) {
+      const cat = e.diagnosticCategory || 'BS';
+      const round = e.diagnosticRound || '';
+      if (!catMap.has(cat)) catMap.set(cat, new Map());
+      const roundMap = catMap.get(cat)!;
+      roundMap.set(round, (roundMap.get(round) || 0) + 1);
+    }
+    return DIAG_CATEGORIES
+      .map(({ id, label, emoji }) => {
+        const roundMap = catMap.get(id);
+        const total = roundMap ? Array.from(roundMap.values()).reduce((a, b) => a + b, 0) : 0;
+        const rounds = roundMap
+          ? Array.from(roundMap.entries())
+              .filter(([r]) => r !== '')
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([round, count]) => ({ id: `diag-${id}-${round}`, label: diagRoundLabel(round), count }))
+          : [];
+        return { id: `diag-${id}`, label: `${emoji} ${label}`, catCode: id, total, rounds };
+      });
+  }, [categoryFilteredExams]);
+
+  // ★ 모의고사 연도별 트리 데이터
+  const mockYearData = useMemo(() => {
+    const mockExams = categoryFilteredExams.filter((e) => !e.isDiagnostic);
+    const yearMap = new Map<string, number>();
+    for (const e of mockExams) {
+      const year = e.createdAt ? e.createdAt.substring(0, 4) : '미확인';
+      yearMap.set(year, (yearMap.get(year) || 0) + 1);
+    }
+    return Array.from(yearMap.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([year, count]) => ({ id: `mock-${year}`, label: `${year}년`, count }));
+  }, [categoryFilteredExams]);
+
   const exams: ExamFile[] = useMemo(() => {
     if (!selectedId || categoryFilteredExams.length === 0) return [];
 
     let filtered: DBExam[];
 
-    if (selectedId === 'all') {
+    // ★ 진단평가 가상 ID 처리
+    if (selectedId === 'diag-all') {
+      filtered = categoryFilteredExams.filter((e) => e.isDiagnostic);
+    } else if (selectedId.startsWith('diag-')) {
+      const parts = selectedId.split('-'); // ['diag', 'BS'] or ['diag', 'BS', 'R1']
+      const cat = parts[1];
+      const round = parts[2];
+      filtered = categoryFilteredExams.filter((e) => {
+        if (!e.isDiagnostic) return false;
+        if (e.diagnosticCategory !== cat) return false;
+        if (round && e.diagnosticRound !== round) return false;
+        return true;
+      });
+    // ★ 모의고사 가상 ID 처리
+    } else if (selectedId === 'mock-all') {
+      filtered = categoryFilteredExams.filter((e) => !e.isDiagnostic);
+    } else if (selectedId.startsWith('mock-')) {
+      const year = selectedId.replace('mock-', '');
+      filtered = categoryFilteredExams.filter((e) =>
+        !e.isDiagnostic && e.createdAt?.startsWith(year)
+      );
+    } else if (selectedId === 'all') {
       filtered = categoryFilteredExams;
     } else if (selectedId === 'unclassified') {
       filtered = categoryFilteredExams.filter((e) => !e.bookGroupId);
@@ -1989,58 +2081,174 @@ export default function CloudPage() {
       {/* Main Split Panel */}
       {!isLoading && !loadError && (
         <div ref={containerRef} className="flex flex-1 min-h-0 px-4 py-3 gap-0">
-          {/* ======== Left Panel: Tree ======== */}
+          {/* ======== Left Panel: Tree (카테고리별 동적 트리) ======== */}
           <div
             className="flex flex-col gap-3 overflow-hidden pr-2"
             style={{ width: `${leftWidth}%`, flexShrink: 0 }}
           >
-            {/* Top Bar: Group Count + Add Button */}
-            <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
-              <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
-                북그룹 {totalGroups}개
-              </span>
-              <button
-                type="button"
-                onClick={handleAddRootGroup}
-                className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
-              >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
-                  <Plus className="h-3 w-3" />
+            {/* Top Bar: 카테고리에 따라 헤더 달라짐 */}
+            {sourceCategory === 'diagnostic' ? (
+              /* 진단평가 헤더 */
+              <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
+                <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
+                  🩺 진단평가 세션
                 </span>
-                <span>최상위 북그룹 추가</span>
-              </button>
-            </div>
+                <span className="text-[11px] text-content-muted">
+                  총 {categoryFilteredExams.length}건
+                </span>
+              </div>
+            ) : sourceCategory === 'mock' ? (
+              /* 모의고사 헤더 */
+              <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
+                <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
+                  📝 모의고사 연도별
+                </span>
+                <span className="text-[11px] text-content-muted">
+                  총 {categoryFilteredExams.length}건
+                </span>
+              </div>
+            ) : (
+              /* 폴더 트리 헤더 (전체/학교기출/시중교재) */
+              <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
+                <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
+                  북그룹 {totalGroups}개
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddRootGroup}
+                  className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
+                    <Plus className="h-3 w-3" />
+                  </span>
+                  <span>최상위 북그룹 추가</span>
+                </button>
+              </div>
+            )}
 
             {/* Tree Panel */}
             <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/90">
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 p-2">
-                {treeNodes.length > 0 ? (
+                {/* ★ 진단평가 트리 */}
+                {sourceCategory === 'diagnostic' ? (
                   <div className="space-y-0.5">
-                    {treeNodes.map((node) => (
-                      <TreeNodeComponent
-                        key={node.id}
-                        node={node}
-                        level={0}
-                        selectedId={selectedId}
-                        renamingId={renamingGroupId}
-                        renameValue={renameValue}
-                        onSelect={handleSelect}
-                        onToggle={toggleNode}
-                        onRename={handleStartRenameGroup}
-                        onRenameChange={setRenameValue}
-                        onRenameConfirm={handleConfirmRenameGroup}
-                        onRenameCancel={() => setRenamingGroupId(null)}
-                        onAddChild={handleAddChild}
-                        onDelete={handleDeleteGroup}
-                      />
+                    {/* 전체 */}
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedId('diag-all'); setSelectedName('전체 진단평가'); }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        selectedId === 'diag-all'
+                          ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                          : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
+                      }`}
+                    >
+                      <span>📋 전체 진단평가</span>
+                      <span className="text-[10px] opacity-60">{categoryFilteredExams.length}</span>
+                    </button>
+                    {/* BS/DD/PT/SC */}
+                    {diagnosticTreeData.map((cat) => (
+                      <div key={cat.id}>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedId(cat.id); setSelectedName(cat.label); }}
+                          className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            selectedId === cat.id
+                              ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                              : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
+                          }`}
+                        >
+                          <span>{cat.label}</span>
+                          <span className="text-[10px] opacity-60">{cat.total}</span>
+                        </button>
+                        {/* 회차 자식 */}
+                        {cat.rounds.length > 0 && (
+                          <div className="ml-4 mt-0.5 space-y-0.5">
+                            {cat.rounds.map((r) => (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => { setSelectedId(r.id); setSelectedName(`${cat.label} ${r.label}`); }}
+                                className={`w-full flex items-center justify-between px-3 py-1 rounded-md text-[11px] transition-colors ${
+                                  selectedId === r.id
+                                    ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                                    : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary'
+                                }`}
+                              >
+                                <span>📌 {r.label}</span>
+                                <span className="text-[10px] opacity-60">{r.count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <Smile className="h-12 w-12 text-cyan-500/50" />
-                    <p className="text-sm text-content-tertiary">업로드된 시험지가 없습니다.</p>
-                    <p className="text-xs text-content-muted">문제를 업로드하면 자동으로 표시됩니다.</p>
+                ) : sourceCategory === 'mock' ? (
+                  /* ★ 모의고사 트리 — 연도별 */
+                  <div className="space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedId('mock-all'); setSelectedName('전체 모의고사'); }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        selectedId === 'mock-all'
+                          ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                          : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
+                      }`}
+                    >
+                      <span>📝 전체 모의고사</span>
+                      <span className="text-[10px] opacity-60">{categoryFilteredExams.length}</span>
+                    </button>
+                    {mockYearData.map((y) => (
+                      <button
+                        key={y.id}
+                        type="button"
+                        onClick={() => { setSelectedId(y.id); setSelectedName(y.label); }}
+                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          selectedId === y.id
+                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                            : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
+                        }`}
+                      >
+                        <span>📅 {y.label}</span>
+                        <span className="text-[10px] opacity-60">{y.count}</span>
+                      </button>
+                    ))}
+                    {mockYearData.length === 0 && (
+                      <div className="flex h-32 flex-col items-center justify-center gap-2 text-center">
+                        <p className="text-xs text-content-muted">모의고사 자료가 없습니다.</p>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  /* ★ 폴더 트리 (전체/학교기출/시중교재) */
+                  treeNodes.length > 0 ? (
+                    <div className="space-y-0.5">
+                      {treeNodes.map((node) => (
+                        <TreeNodeComponent
+                          key={node.id}
+                          node={node}
+                          level={0}
+                          selectedId={selectedId}
+                          renamingId={renamingGroupId}
+                          renameValue={renameValue}
+                          onSelect={handleSelect}
+                          onToggle={toggleNode}
+                          onRename={handleStartRenameGroup}
+                          onRenameChange={setRenameValue}
+                          onRenameConfirm={handleConfirmRenameGroup}
+                          onRenameCancel={() => setRenamingGroupId(null)}
+                          onAddChild={handleAddChild}
+                          onDelete={handleDeleteGroup}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2">
+                      <Smile className="h-12 w-12 text-cyan-500/50" />
+                      <p className="text-sm text-content-tertiary">업로드된 시험지가 없습니다.</p>
+                      <p className="text-xs text-content-muted">문제를 업로드하면 자동으로 표시됩니다.</p>
+                    </div>
+                  )
                 )}
               </div>
             </div>
