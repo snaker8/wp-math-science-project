@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { processUploadJob, getStatusLabel, convertedPdfStore, isScienceSubject } from '@/lib/workflow/cloud-flow';
+import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
@@ -1052,6 +1053,74 @@ async function processJobInBackground(
         jobStore.set(jobId, failedJob);
       }
       return; // 변환 실패 시 더 이상 진행하지 않음
+    }
+  }
+
+  // ★ 과학 트랙 + Gemini POC 분기 — feature flag 로 안전 폴백.
+  //   SCIENCE_USE_GEMINI=true 일 때만 활성. 기본 비활성 (기존 Mathpix 경로).
+  //   수학 라인 영향 0.
+  const useGeminiScience =
+    job.subjectArea === 'science' && process.env.SCIENCE_USE_GEMINI === 'true';
+
+  if (useGeminiScience) {
+    console.log(`[Job ${jobId}] 과학 트랙 — Gemini POC 파이프라인 사용`);
+    try {
+      // 변환된 PDF 우선 (HWP 인 경우), 없으면 원본
+      const buffer = convertedPdfStore.get(jobId) || currentBuffers.problem;
+      const mimeType =
+        job.fileType === 'HWP'
+          ? 'application/pdf' // HWP 변환 후 PDF
+          : job.fileType === 'PDF'
+            ? 'application/pdf'
+            : 'image/jpeg';
+
+      const results = await processScienceWithGemini(buffer, mimeType, {
+        onStatusChange: (status: ProcessingStatus, step: string) => {
+          const currentJob = jobStore.get(jobId);
+          if (currentJob) {
+            currentJob.status = status;
+            currentJob.currentStep = step;
+            currentJob.updatedAt = new Date().toISOString();
+            if (status === 'COMPLETED') {
+              currentJob.completedAt = new Date().toISOString();
+            }
+            jobStore.set(jobId, currentJob);
+          }
+        },
+        onProgress: (progress: number) => {
+          const currentJob = jobStore.get(jobId);
+          if (currentJob) {
+            currentJob.progress = progress;
+            currentJob.updatedAt = new Date().toISOString();
+            jobStore.set(jobId, currentJob);
+          }
+        },
+        onPartialResult: (partialResults: LLMAnalysisResult[]) => {
+          jobResults.set(jobId, partialResults);
+        },
+      });
+
+      // 최종 결과 저장
+      jobResults.set(jobId, results);
+
+      // 메모리 정리
+      convertedPdfStore.delete(jobId);
+      fileBufferStore.delete(jobId);
+
+      // 과학 트랙은 일단 **자동 자산화 X** (POC 단계, 사용자 검수 우선)
+      console.log(`[Job ${jobId}] 과학 Gemini 완료: ${results.length}문제`);
+      return;
+    } catch (err) {
+      console.error(`[Job ${jobId}] 과학 Gemini 실패:`, err);
+      const currentJob = jobStore.get(jobId);
+      if (currentJob) {
+        currentJob.error = err instanceof Error ? err.message : String(err);
+        currentJob.status = 'FAILED';
+        currentJob.updatedAt = new Date().toISOString();
+        jobStore.set(jobId, currentJob);
+      }
+      fileBufferStore.delete(jobId);
+      return;
     }
   }
 
