@@ -4864,10 +4864,10 @@ export default function AnalyzeJobPage() {
                 type="button"
                 onClick={() => router.push(savedExamId ? `/dashboard/cloud/${savedExamId}` : '/dashboard/cloud')}
                 className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                title={savedExamId ? '방금 자산화한 시험지로 이동' : '클라우드 목록으로 이동'}
+                title={savedExamId ? '방금 자산화한 시험지로 이동' : '과사람클라우드 목록으로 이동'}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
-                클라우드에서 확인하기 →
+                과사람클라우드에서 확인하기 →
               </button>
             ) : (
               <button

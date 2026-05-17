@@ -3747,7 +3747,7 @@ export default function CloudExamDetailPage() {
                 시험지 목록
               </button>
               <span className="sep">/</span>
-              <span>과사람 클라우드</span>
+              <span>과사람클라우드</span>
               <span className="sep">/</span>
               <span style={{ color: 'var(--chrome-fg-2)' }}>{examTitle}</span>
             </div>
