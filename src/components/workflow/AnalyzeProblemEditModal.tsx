@@ -40,6 +40,9 @@ export interface AnalyzedProblemData {
   //   사용자가 모달에서 수동 기입 가능. 비어있으면 일반 5지선다.
   //   각 choices 항목은 컬럼 수만큼 ' / ' 로 join 된 문자열.
   choiceHeaders?: string[];
+  // ★ 선택지 레이아웃 (1=1열, 2=2열, 3=3열, 5=가로) — answer_json.choiceLayout 에서 읽고 저장
+  //   (2026-05-17 사고: 모달에서 변경해도 저장 안 됨 — type/state/save deps/onSave 모두 누락)
+  choiceLayout?: number;
 }
 
 interface AnalyzeProblemEditModalProps {
@@ -855,7 +858,8 @@ export default function AnalyzeProblemEditModal({
     if (typeof ans === 'string' && !/^\d$/.test(ans)) return ans;
     return '';
   });
-  const [choiceLayout, setChoiceLayout] = useState(2);
+  // ★ DB 저장값 우선 — problem.choiceLayout 이 있으면 그 값으로 초기화 (회귀 fix)
+  const [choiceLayout, setChoiceLayout] = useState(problem.choiceLayout ?? 2);
   const [isMultipleAnswer, setIsMultipleAnswer] = useState(false);
   // ★ 표 객관식 헤더 — 자동 인식 결과 있으면 채워지고, 없으면 사용자 수동 기입.
   //   빈 배열 = 일반 객관식, 1+ 개 = 표 객관식 (각 choice 가 ' / ' 로 컬럼 분리).
@@ -1113,10 +1117,12 @@ export default function AnalyzeProblemEditModal({
       typeName,
       // ★ 표 객관식 헤더 — 1개+ 면 박음. 0개면 명시적으로 빈 배열 (기존 헤더 제거 의도 반영).
       choiceHeaders: trimmedHeaders,
+      // ★ 선택지 레이아웃 (회귀 fix 2026-05-17) — 1열/2열/3열/가로 변경값 저장
+      choiceLayout,
     };
 
     onSave(updated);
-  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, typeCode, typeName, choiceHeaders, onSave]);
+  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, typeCode, typeName, choiceHeaders, choiceLayout, onSave]);
 
   return (
     <>

@@ -114,6 +114,9 @@ interface AnalyzedProblem {
   //   choices 의 각 content 는 헤더 개수만큼 ' / ' 구분된 컬럼 값 ("노란색 / 자홍색")
   //   분석 카드가 헤더 행 + 컬럼 정렬 표시
   choiceHeaders?: string[];
+  // ★ 선택지 레이아웃 — answer_json.choiceLayout (1=1열, 2=2열, 3=3열, 5=가로)
+  //   모달에서 변경 시 onSave 핸들러가 answer_json 에 박아 DB 저장 (2026-05-17 fix)
+  choiceLayout?: number;
 }
 
 interface PageData {
@@ -5019,13 +5022,15 @@ export default function AnalyzeJobPage() {
                 //   메모리: feedback_modal_save_deps.md (모달 저장 회귀 패턴 3번째)
                 if (updated.number !== undefined) body.source_number = updated.number;
 
-                // 정답/선택지/헤더를 answer_json으로 변환
-                //   ★ choiceHeaders 가 별도 컬럼 없어 answer_json 에 박음 (useExamProblems 가 거기서 읽음).
-                //   answer/choices/choiceHeaders 중 하나라도 바뀌면 answer_json 전체 갱신.
+                // 정답/선택지/헤더/레이아웃을 answer_json으로 변환
+                //   ★ choiceHeaders / choiceLayout 가 별도 컬럼 없어 answer_json 에 박음 (useExamProblems 가 거기서 읽음).
+                //   ★ choiceLayout 추가 (2026-05-17 fix) — 사용자 보고 "객관식 보기 1줄/2줄/3줄 변경 적용 안 됨"
+                //     메모리: feedback_modal_save_deps.md (모달 저장 회귀 패턴 4번째)
                 if (
                   updated.answer !== undefined ||
                   updated.choices !== undefined ||
-                  (updated as { choiceHeaders?: string[] }).choiceHeaders !== undefined
+                  (updated as { choiceHeaders?: string[] }).choiceHeaders !== undefined ||
+                  (updated as { choiceLayout?: number }).choiceLayout !== undefined
                 ) {
                   const finalAnswer = updated.answer ?? editingProblem.answer;
                   const circledNumbers = ['①', '②', '③', '④', '⑤'];
@@ -5037,6 +5042,10 @@ export default function AnalyzeJobPage() {
                   const headers = (updated as { choiceHeaders?: string[] }).choiceHeaders
                     ?? (editingProblem as { choiceHeaders?: string[] }).choiceHeaders
                     ?? [];
+                  // ★ choiceLayout — 모달 변경값 우선, 없으면 기존 값 유지
+                  const updatedLayout = (updated as { choiceLayout?: number }).choiceLayout;
+                  const existingLayout = (editingProblem as { choiceLayout?: number }).choiceLayout;
+                  const choiceLayout = updatedLayout ?? existingLayout;
                   body.answer_json = {
                     correct_answer: finalAnswer,
                     finalAnswer: finalAnswer,
@@ -5044,6 +5053,8 @@ export default function AnalyzeJobPage() {
                     type: formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer',
                     // ★ 헤더 1개+ 면 박음. 0개면 명시적 빈 배열 (모드 해제 의도 보존).
                     choiceHeaders: headers,
+                    // ★ 레이아웃 — undefined 가 아니면 박음 (1/2/3/5)
+                    ...(choiceLayout !== undefined ? { choiceLayout } : {}),
                   };
                 }
 
