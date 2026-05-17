@@ -74,11 +74,46 @@ interface MixedContentRendererProps {
  */
 function MixedContentRendererInner({ content, className, onMathClick, inline, disableConditionBox }: MixedContentRendererProps) {
   if (!content) return <span className={className}>(문제 내용 없음)</span>;
+  // ★★ 풀이 박스 추출 (preprocess 이전 — 2026-05-18 회귀 #4 최종 해결)
+  //   PR #191/#193 의 추출은 preprocessMathpixContent 호출 *후* 라 그 사이
+  //   line 730~ 의 "전체 LaTeX 줄 → $...$ 감싸기" 가 \boxed{\begin{aligned} 단독 줄을
+  //   $\boxed{\begin{aligned}$ 로 잘못 wrap → MathRenderer inline → \displaystyle prefix
+  //   → KaTeX fail → raw 텍스트. 해결: 풀이 박스를 raw content 에서 가장 먼저 추출.
+  const solutionBoxes: string[] = [];
+  let rawWithMarkers = content;
+  // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} — 줄바꿈 + 한글/text 가드
+  rawWithMarkers = rawWithMarkers.replace(
+    /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
+    (m, body) => {
+      const hasLineBreak = /\\\\/.test(body);
+      const hasKoreanOrText = /[가-힣]|\\text/.test(body);
+      if (!(hasLineBreak && hasKoreanOrText)) return m;
+      const idx = solutionBoxes.length;
+      solutionBoxes.push(body.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 패턴 2: \begin{array}{|l|}\hline ... \end{array} — hline 필수
+  rawWithMarkers = rawWithMarkers.replace(
+    /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
+    (m, body) => {
+      if (!/\\hline/.test(body)) return m;
+      const idx = solutionBoxes.length;
+      const cleaned = body
+        .replace(/\\hline\s*/g, '')
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
+      solutionBoxes.push(cleaned.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 외부 $$ 감싼 케이스 정리
+  rawWithMarkers = rawWithMarkers.replace(/\$\$\s*(__SOLUTION_BOX_\d+__)\s*\$\$/g, '$1');
+
   // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
   // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
 
-  // 전처리: Mathpix 특유 포맷 정규화
-  let normalized = preprocessMathpixContent(content)
+  // 전처리: Mathpix 특유 포맷 정규화 (마커는 환경 토큰 아니라서 변환에 무영향)
+  let normalized = preprocessMathpixContent(rawWithMarkers)
     // ★ $ 밖의 \displaystyle 수식 블록 → $$...$$ 로 감싸기 (KaTeX 렌더링)
     .replace(/(?<!\$)\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
     .replace(/(?<!\$)\\\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
@@ -132,44 +167,12 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   //    전략: 외부 박스는 HTML CSS (.solution-box) 로 그리고,
   //          내부는 단순 aligned 만 추출해 KaTeX 가 처리 가능한 form 으로 변환.
   //          \boxed{(\text{가})} 같은 단일 식 placeholder 는 KaTeX 처리 가능 — 그대로 유지.
-  const solutionBoxes: string[] = [];
-  // ★ bodyForTabular 기반 — $ 래퍼 제거 후 상태를 받음 (위에서 처리됨)
-  let preBody = bodyForTabular;
-  // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} (선택적 \, / \def\arraystretch 토큰 허용)
-  //   ★ 회귀 방지 가드: 풀이 박스 = 줄바꿈(\\) AND (한글 OR \text) 둘 다 있어야 인정.
-  //      단순 식 박스 (\boxed{\begin{aligned} x &= 1 \\ y &= 2 \end{aligned}}) 영향 없음.
-  preBody = preBody.replace(
-    /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
-    (m, body) => {
-      const hasLineBreak = /\\\\/.test(body);
-      const hasKoreanOrText = /[가-힣]|\\text/.test(body);
-      if (!(hasLineBreak && hasKoreanOrText)) return m;  // 단순 식 박스 — 원본 유지
-      const idx = solutionBoxes.length;
-      solutionBoxes.push(body.trim());
-      return `__SOLUTION_BOX_${idx}__`;
-    }
-  );
-  // 패턴 2: \begin{array}{|l|} ... \hline ... \end{array} (verticals + hline 풀이 박스)
-  //   ★ 회귀 방지 가드: \hline 필수 (옵셔널 X) — 단순 verticals 박스는 풀이 박스 아님.
-  preBody = preBody.replace(
-    /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
-    (m, body) => {
-      if (!/\\hline/.test(body)) return m;  // hline 없으면 풀이 박스 아님
-      const idx = solutionBoxes.length;
-      // hline 제거 + \\[Npt] → \\ 정규화
-      const cleaned = body
-        .replace(/\\hline\s*/g, '')
-        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
-      solutionBoxes.push(cleaned.trim());
-      return `__SOLUTION_BOX_${idx}__`;
-    }
-  );
-  // 패턴 3: $$ 안에 \begin{array}{|l|} 형태가 있는 경우도 처리 (위 패턴 2 가 이미 잡지만, 보강)
+  // (풀이 박스 추출은 함수 시작 부분에서 raw content 에서 이미 완료 — preprocess 이전)
 
   // ★ tabular/array 블록 처리
   // 보기형 tabular (ㄱ./ㄴ./ㄷ. 포함)는 조건박스로 변환, 나머지는 보호
   const tabularProtected: string[] = [];
-  let protectedBody = preBody.replace(
+  let protectedBody = bodyForTabular.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (m) => {
       // ★ 풀이 박스 감지 (보기형 아님 — 2026-05-18 사고)
