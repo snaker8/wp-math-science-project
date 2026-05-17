@@ -64,8 +64,8 @@ export async function PATCH(
     );
   }
 
-  // 격리 가드 — 다른 institute problem 수정 차단
-  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, scope);
+  // 격리 가드 — 다른 institute problem 수정 차단 + 공통풀 쓰기는 super_admin only
+  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, scope, { requireWrite: true });
   if (!accessGuard.ok) return NextResponse.json({ error: accessGuard.error }, { status: accessGuard.status });
 
   try {
@@ -332,7 +332,8 @@ export async function DELETE(
       { status: 503 }
     );
   }
-  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, scope);
+  // 격리 가드 — 공통풀 삭제는 super_admin only
+  const accessGuard = await assertProblemAccess(supabaseAdmin, problemId, scope, { requireWrite: true });
   if (!accessGuard.ok) return NextResponse.json({ error: accessGuard.error }, { status: accessGuard.status });
 
   try {

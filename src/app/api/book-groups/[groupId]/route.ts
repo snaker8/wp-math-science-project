@@ -9,11 +9,18 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** 격리 가드 — book_group 의 institute 가 scope 안인지 검증. NULL = 공통풀 통과. */
+/**
+ * 격리 가드 — book_group 의 institute 가 scope 안인지 검증.
+ *
+ * NULL (공통풀):
+ *   - 읽기 (requireWrite: false): 모두 통과
+ *   - 쓰기 (requireWrite: true): super_admin only (2026-05-17 P0-4)
+ */
 async function guardBookGroupAccess(
   client: SupabaseClient,
   groupId: string,
-  scope: import('@/lib/security/institute-guard').InstituteAccessScope
+  scope: import('@/lib/security/institute-guard').InstituteAccessScope,
+  options: { requireWrite?: boolean } = {}
 ): Promise<NextResponse | null> {
   const { data: group } = await client
     .from('book_groups')
@@ -22,7 +29,13 @@ async function guardBookGroupAccess(
     .maybeSingle();
   if (!group) return NextResponse.json({ error: 'Book group not found' }, { status: 404 });
   const targetInstituteId = (group as { institute_id: string | null }).institute_id;
-  if (targetInstituteId === null) return null; // 공통 풀 통과
+  if (targetInstituteId === null) {
+    // 공통 풀 — 쓰기 시 super_admin only
+    if (options.requireWrite && !scope.isSuperAdmin) {
+      return NextResponse.json({ error: 'Common pool write requires super_admin' }, { status: 403 });
+    }
+    return null;
+  }
   try {
     assertInstituteAccess(scope, targetInstituteId);
     return null;
@@ -45,7 +58,7 @@ export async function PUT(
       { status: 503 }
     );
   }
-  const guardErr = await guardBookGroupAccess(supabaseAdmin, groupId, authed.data.scope);
+  const guardErr = await guardBookGroupAccess(supabaseAdmin, groupId, authed.data.scope, { requireWrite: true });
   if (guardErr) return guardErr;
 
   try {
@@ -100,7 +113,7 @@ export async function DELETE(
       { status: 503 }
     );
   }
-  const guardErr = await guardBookGroupAccess(supabaseAdmin, groupId, authed.data.scope);
+  const guardErr = await guardBookGroupAccess(supabaseAdmin, groupId, authed.data.scope, { requireWrite: true });
   if (guardErr) return guardErr;
 
   try {
