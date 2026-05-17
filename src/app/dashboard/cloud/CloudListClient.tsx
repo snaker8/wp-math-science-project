@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
+import { useOrganizationName } from '@/hooks/useUserScope';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -821,6 +822,8 @@ export default function CloudPage() {
   const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
   const trackKey = trackSplitEnabled ? activeTrack ?? null : null;
   const trackSubjectOptions = useMemo(() => getSubjectOptions(trackKey), [trackKey]);
+  // ★ 학원명 prefix — "{학원명}클라우드" 동적 표시 (2026-05-17)
+  const orgName = useOrganizationName('과사람');
 
   // --- DB Data ---
   const [dbExams, setDbExams] = useState<DBExam[]>([]);
@@ -1563,7 +1566,7 @@ export default function CloudPage() {
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-3 border-b border-subtle/50">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-content-primary">과사람클라우드 관리</h1>
+          <h1 className="text-lg font-semibold text-content-primary">{orgName}클라우드 관리</h1>
           <div className="flex items-center gap-2">
             <span className="text-xs text-content-tertiary">과목</span>
             <SubjectDropdown value={subject} options={trackSubjectOptions} onChange={setSubject} />

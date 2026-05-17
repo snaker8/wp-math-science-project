@@ -29,6 +29,7 @@ import {
   List as ListIcon,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { useOrganizationName } from '@/hooks/useUserScope';
 import './problem-bank.css';
 
 // ============================================================================
@@ -91,6 +92,7 @@ const DIFFICULTY_PRESETS = [
 
 export default function ProblemBankPage() {
   const router = useRouter();
+  const orgName = useOrganizationName('과사람');
   // PR-T10 G-13c — 과학 트랙은 수학비서 트리 기반이라 임시 안내 카드만 (마스터 데이터 정식 분기 전)
   const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
   if (trackSplitEnabled && activeTrack === 'science') {
@@ -258,7 +260,7 @@ export default function ProblemBankPage() {
       if (data.examId) {
         router.push(`/dashboard/cloud/${data.examId}`);
       } else {
-        alert('시험지 생성 완료. 클라우드로 이동합니다.');
+        alert(`시험지 생성 완료. ${orgName}클라우드로 이동합니다.`);
         router.push('/dashboard/cloud');
       }
     } catch (e) {
@@ -266,7 +268,7 @@ export default function ProblemBankPage() {
     } finally {
       setCreatingExam(false);
     }
-  }, [cart, router]);
+  }, [cart, router, orgName]);
 
   // ── Tree render helper
   const renderTreeNode = useCallback(

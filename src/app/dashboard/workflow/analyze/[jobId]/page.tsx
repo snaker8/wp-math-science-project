@@ -32,6 +32,7 @@ import AnalyzeProblemEditModal from '@/components/workflow/AnalyzeProblemEditMod
 import type { AnalyzedProblemData } from '@/components/workflow/AnalyzeProblemEditModal';
 import dynamic from 'next/dynamic';
 import { analyzePageBlocksSplit, getMultiBlocks, refineAiBboxes, type CropRect } from '@/lib/pdf/auto-crop';
+import { useOrganizationName } from '@/hooks/useUserScope';
 
 // Desmos 그래프 뷰어 (클라이언트 전용, dynamic import)
 const InlineDesmosGraph = dynamic(
@@ -2749,6 +2750,7 @@ export default function AnalyzeJobPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const jobId = params.jobId as string;
+  const orgName = useOrganizationName('과사람');
   const urlBookGroupId = searchParams.get('bookGroupId');
   const urlSubjectArea = searchParams.get('subjectArea') as 'math' | 'science' | null;
   const urlScienceSubject = searchParams.get('scienceSubject');
@@ -4864,10 +4866,10 @@ export default function AnalyzeJobPage() {
                 type="button"
                 onClick={() => router.push(savedExamId ? `/dashboard/cloud/${savedExamId}` : '/dashboard/cloud')}
                 className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                title={savedExamId ? '방금 자산화한 시험지로 이동' : '클라우드 목록으로 이동'}
+                title={savedExamId ? '방금 자산화한 시험지로 이동' : `${orgName}클라우드 목록으로 이동`}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
-                클라우드에서 확인하기 →
+                {orgName}클라우드에서 확인하기 →
               </button>
             ) : (
               <button
