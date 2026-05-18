@@ -124,7 +124,10 @@ JSON 만 응답. 설명 텍스트 추가 금지.`;
         },
       ],
       generationConfig: {
-        maxOutputTokens: 8192,
+        // ★ 8192 → 32768 (2026-05-19): 긴 과학 문제 (지문+<보기>+합답형) 가
+        //   8192 토큰 한계에 걸려 JSON 응답 중간 잘림 → content 일부 누락
+        //   ("긴 문제 펼쳐보기에서 다 안나온다" 사고)
+        maxOutputTokens: 32768,
         temperature: 0.1,
         responseMimeType: 'application/json',
         responseSchema,

@@ -28,9 +28,17 @@ interface ImagePositionEditorProps {
   onCancel: () => void;
 }
 
-/** 콘텐츠를 블록 단위로 분할 */
+/** 콘텐츠를 블록 단위로 분할
+ *
+ * ★ 다중 figure 사고 (2026-05-19):
+ *   기존엔 ALL 마커를 strip 한 뒤 assembleContent 가 1개만 재삽입 → 2개 figure
+ *   중 1개가 영구 소실. 이제 첫 번째 마커만 strip 하고 나머지는 블록 안에
+ *   그대로 보존. assembleContent 가 새 위치에 1개 삽입할 때 나머지는 블록 안에
+ *   살아남음.
+ */
 function splitIntoBlocks(content: string): string[] {
-  const cleaned = content.replace(/\[도형(?::[\w%]+)*\]/g, '').trim();
+  // 첫 번째 [도형...] 마커만 제거 — 나머지는 블록 안에 보존
+  const cleaned = content.replace(/\[도형(?::\w+[-\w]*)?(?::\d+%?)?\]/, '').trim();
   const blocks = cleaned.split(/\n{2,}/).filter(b => b.trim().length > 0);
   if (blocks.length <= 1) {
     const lineBlocks = cleaned.split('\n').filter(b => b.trim().length > 0);
