@@ -102,7 +102,7 @@ export const dashboardNavItems: NavItem[] = [
     href: '/dashboard/cloud',
     icon: Cloud,
     label: '문제은행 클라우드',
-    description: '본부 공통 문제·시험지 라이브러리',
+    description: '문제·시험지 라이브러리',
     activeColor: 'bg-cyan-500/10 text-cyan-500',
     group: 'main',
   },
