@@ -182,12 +182,15 @@ export async function processScienceWithGemini(
 
           partialResults.push(result);
         } catch (err) {
-          console.error(`[science-gemini-flow] 문제 ${bbox.numberHint} 처리 실패:`, err);
-          // 실패해도 placeholder 라도 넣어둠 (사용자 수동 보정 가능)
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[science-gemini-flow] 문제 ${bbox.numberHint} 처리 실패:`, errMsg);
+          // ★ "텍스트 사라짐" 사고 방지 (2026-05-18):
+          //   실패 시 빈 본문 대신 에러 메시지 박음 → 사용자가 카드에서 원인 확인 후
+          //   수정 모달에서 수동 보정 가능. 침묵 실패 방지.
           partialResults.push(
             buildLLMAnalysisResult(
               bbox.numberHint,
-              '',
+              `[자동 OCR 실패 — 수동 입력 필요]\n에러: ${errMsg.slice(0, 200)}`,
               [],
               false,
               undefined,
@@ -221,7 +224,14 @@ export async function processScienceWithGemini(
 }
 
 /**
- * PDF 면 image-pipeline /render-pdf-pages, 이미지면 그대로.
+ * PDF 면 image-pipeline /render-pdf-pages, 이미지면 PNG 재인코딩 + 다운스케일.
+ *
+ * ★ 큰 이미지 사고 (2026-05-18):
+ *   - 모바일 사진(4000~6000px) 또는 고해상도 스캔본 그대로 Gemini 에 보내면
+ *     20MB inlineData 한계 초과 → 호출 실패 → empty content placeholder → "텍스트 사라짐"
+ *   - 또한 PNG/JPEG/WebP/HEIC 등 다양한 포맷이 들어오는데 mimeType 을 'image/png' 로
+ *     강제 송신하던 사고
+ *   - 해결: max 2400px 다운스케일 + sharp 로 PNG 통일 재인코딩
  */
 async function renderPages(buffer: Buffer, isPdf: boolean): Promise<PageData[]> {
   if (isPdf) {
@@ -243,13 +253,32 @@ async function renderPages(buffer: Buffer, isPdf: boolean): Promise<PageData[]> 
       imageBase64: p.image_base64,
     }));
   } else {
-    const meta = await sharp(buffer).metadata();
+    // 이미지 입력 — 다운스케일 + PNG 통일 재인코딩
+    const meta0 = await sharp(buffer).metadata();
+    const MAX_DIM = 2400;
+    const w0 = meta0.width || 0;
+    const h0 = meta0.height || 0;
+    const needsResize = w0 > MAX_DIM || h0 > MAX_DIM;
+
+    let pipeline = sharp(buffer);
+    if (needsResize) {
+      console.log(`[science-gemini-flow] 이미지 다운스케일: ${w0}x${h0} → max ${MAX_DIM}px`);
+      pipeline = pipeline.resize({
+        width: MAX_DIM,
+        height: MAX_DIM,
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+    }
+    const workingBuffer = await pipeline.png({ compressionLevel: 6 }).toBuffer();
+    const meta = await sharp(workingBuffer).metadata();
+
     return [
       {
         pageIdx: 0,
         width: meta.width || 0,
         height: meta.height || 0,
-        imageBase64: buffer.toString('base64'),
+        imageBase64: workingBuffer.toString('base64'),
       },
     ];
   }
