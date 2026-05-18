@@ -270,6 +270,9 @@ export async function PUT(
     let skippedNoChange = 0;
     let skippedProblemMissing = 0;
     const failedUpdates: Array<{ problemId: string; reason: string }> = [];
+    // ★ 객관식 모호값 → 빈값 강등 케이스 추적 (2026-05-18)
+    //   "5개 적용, 3개는 빈값 강등 → 수동 입력 필요" 같은 정확한 보고 위해
+    const coercedToEmpty: Array<{ problemId: string; rawAnswer: string }> = [];
 
     console.log(`[match-answers PUT] examId=${examId}, totalMatches=${matches.length}`,
       matches.slice(0, 5).map(m => ({
@@ -307,17 +310,26 @@ export async function PUT(
       if (match.newAnswer) {
         // ★ 객관식 박힘 차단 — 0/모호값은 빈값으로 normalize.
         //   메모리: feedback_objective_answer_safety.md
-        // ★ 보완 (2026-05-15): OCR 결과가 객관식 형식(①~⑤/1~5)인 경우에만
-        //   객관식 normalize 적용. 그 외(숫자 65, 분수 1/2 등) 는 단답 의도로
-        //   판단하고 그대로 박음. 메모리 가드(객관식 모호값 차단) 는 유지하되,
-        //   OCR 이 명확한 단답을 추출한 경우 빈값 강등 사고 방지.
+        //
+        // ★★ 단일 판정 기준 (2026-05-18) — "객관식 vs 단답" 가 코드 분기마다 다르게
+        //   판정되던 "왔다갔다" 우려 해소. 진실의 원천은 `answer_json.type` 하나만:
+        //     - type==='multiple_choice' → 객관식 (normalize 강제)
+        //     - 그 외(short_answer, narrative, null 등) → 단답·서술 (원본 보존)
+        //
+        //   이전 가드는 두 갈래 (type-기반 + choices-기반) 라 동일 문제가 분기마다
+        //   다른 결과. CHECK constraint chk_objective_answer_valid 도 type 기준이라
+        //   일관성 확보 — 단답으로 처리된 row 는 CHECK 미적용, 객관식은 normalize 통과.
+        const { normalizeObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const trimmedAns = match.newAnswer.trim();
-        const looksObjective = /^[①②③④⑤]$/.test(trimmedAns) || /^[1-5]$/.test(trimmedAns);
-        const problemIsObjective = mergedAj.type === 'multiple_choice'
-          || (Array.isArray(mergedAj.choices) && (mergedAj.choices as unknown[]).length > 0);
-        const safeAns = (problemIsObjective && looksObjective)
-          ? (await import('@/lib/validation/objective-answer')).normalizeObjectiveAnswer(match.newAnswer)
-          : match.newAnswer;
+        const isMultipleChoice = mergedAj.type === 'multiple_choice';
+        const safeAns = isMultipleChoice
+          ? normalizeObjectiveAnswer(match.newAnswer)  // CHECK 통과 보장
+          : match.newAnswer;                            // 단답·서술 원본 보존
+        // ★ 빈값 강등된 경우 추적 — alert 에서 사용자에게 보고
+        if (isMultipleChoice && trimmedAns !== '' && safeAns === '') {
+          console.log(`[match-answers PUT] 객관식 모호값 → 빈값 강등: id=${match.problemId}, raw="${trimmedAns}"`);
+          coercedToEmpty.push({ problemId: match.problemId, rawAnswer: trimmedAns });
+        }
         mergedAj.finalAnswer = safeAns;
         mergedAj.correct_answer = safeAns;
         mergedAj.answer_user_edited = true;    // ★ 일괄 재생성이 안 건드리도록
@@ -354,7 +366,7 @@ export async function PUT(
       }
     }
 
-    console.log(`[match-answers PUT] 완료 — updated=${updatedCount}, failed=${failedUpdates.length}, skippedNoChange=${skippedNoChange}, skippedMissing=${skippedProblemMissing}, totalMatches=${matches.length}`);
+    console.log(`[match-answers PUT] 완료 — updated=${updatedCount}, failed=${failedUpdates.length}, skippedNoChange=${skippedNoChange}, skippedMissing=${skippedProblemMissing}, coercedToEmpty=${coercedToEmpty.length}, totalMatches=${matches.length}`);
 
     return NextResponse.json({
       examId,
@@ -364,6 +376,7 @@ export async function PUT(
       skippedNoChange,
       skippedProblemMissing,
       failedUpdates,
+      coercedToEmpty, // 객관식 모호값 → 빈값 강등 사례
     });
 
   } catch (error) {
