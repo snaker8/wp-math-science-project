@@ -76,6 +76,9 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
   };
 
   // ★ 텍스트 붙여넣기 파싱 (답 추출기 형식)
+  //   2026-05-18: **번호 기반 매칭** 추가 — "30. ③" 만 붙여넣으면 30번만 등록.
+  //   누락된 일부 번호만 재등록하거나, 특정 번호만 개별 등록할 때 사용.
+  //   모든 줄에 번호 prefix 가 있으면 번호 기반, 그렇지 않으면 기존 순서 기반.
   const handleTextParse = () => {
     if (!pasteText.trim() || !problems || problems.length === 0) {
       setError('텍스트를 붙여넣거나 문제가 없습니다');
@@ -85,14 +88,19 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
     // ★ 빈 줄도 보존 (빈 줄 = 해당 문제 답 없음 / 건너뛰기)
     // 단, 맨 앞/뒤의 빈 줄만 trim
     const lines = pasteText.replace(/^\n+|\n+$/g, '').split('\n');
-    const parsed: Array<{ type: 'shortAnswer' | 'narrative' | 'empty'; answer: string }> = [];
+    type ParsedLine = {
+      num: number | null; // 번호 prefix 가 있으면 그 번호, 없으면 null
+      type: 'shortAnswer' | 'narrative' | 'empty';
+      answer: string;
+    };
+    const parsed: ParsedLine[] = [];
 
     for (const line of lines) {
       const trimmed = line.trim();
 
       // ★ 빈 줄 = 건너뛰기 (해당 번호는 답 변경 없음)
       if (!trimmed) {
-        parsed.push({ type: 'empty', answer: '' });
+        parsed.push({ num: null, type: 'empty', answer: '' });
         continue;
       }
 
@@ -100,18 +108,22 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       const extractorMatch = trimmed.match(/^(shortAnswer|narrative)[\t\s]{1,}(.+)/);
       if (extractorMatch) {
         parsed.push({
+          num: null,
           type: extractorMatch[1] as 'shortAnswer' | 'narrative',
           answer: extractorMatch[2].trim(),
         });
         continue;
       }
 
-      // 형식 2: 1. 3 또는 1) 3 또는 1. a=2,b=1,c=8
-      const numMatch = trimmed.match(/^\d+[.)]\s*(.+)/);
+      // 형식 2: 1. 3 또는 1) 3 또는 30. ③ 또는 1. a=2,b=1,c=8
+      //   ★ 번호도 추출 — 번호 기반 매칭에 사용
+      const numMatch = trimmed.match(/^(\d+)[.)]\s*(.+)/);
       if (numMatch) {
-        const ans = numMatch[1].trim();
+        const num = parseInt(numMatch[1], 10);
+        const ans = numMatch[2].trim();
         const isPureNum = /^-?\d+(?:[.,]\d+)?$/.test(ans);
         parsed.push({
+          num,
           type: isPureNum ? 'shortAnswer' : 'narrative',
           answer: ans, // ★ LaTeX/수식/좌표 그대로 보존
         });
@@ -120,13 +132,13 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
 
       // 형식 3: 단순 숫자 (정수/음수/소수)
       if (/^-?\d+(?:[.,]\d+)?$/.test(trimmed)) {
-        parsed.push({ type: 'shortAnswer', answer: trimmed });
+        parsed.push({ num: null, type: 'shortAnswer', answer: trimmed });
         continue;
       }
 
       // 기타: 수식/좌표/LaTeX 등 → narrative로 원본 그대로 보존
       // 예: "a=2,b=1,c=8", "-4,-1,4", "\frac{3}{2}", "(x,y)=(2,3)"
-      parsed.push({ type: 'narrative', answer: trimmed });
+      parsed.push({ num: null, type: 'narrative', answer: trimmed });
     }
 
     if (parsed.length === 0) {
@@ -134,27 +146,55 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       return;
     }
 
-    // 문제 목록과 매칭 — parsed 개수가 더 많으면 parsed 기준으로 생성
+    // 문제 목록과 매칭
     const sortedProblems = [...problems].sort((a, b) => a.number - b.number);
-    const maxLen = Math.max(sortedProblems.length, parsed.length);
+
+    // ★ 번호 기반 매칭 분기: 비어있지 않은 줄 중 *모두* 번호 prefix 가 있으면 번호 기반.
+    //   그렇지 않으면 기존 순서 기반 (백워드 호환). 빈 줄은 양쪽 모두 건너뛰기.
+    const nonEmptyParsed = parsed.filter(p => p.type !== 'empty');
+    const allHaveNum = nonEmptyParsed.length > 0 && nonEmptyParsed.every(p => p.num !== null);
     const matches: MatchResult[] = [];
 
-    for (let i = 0; i < maxLen; i++) {
-      const p = sortedProblems[i];
-      const parsedAnswer = parsed[i];
-      const newAnswer = parsedAnswer?.answer || '';
-      const currentAnswer = p ? String(p.answer || '') : '';
-      // ★ empty 타입이면 답 변경 없음 (빈 줄로 건너뛰기)
-      const isEmpty = parsedAnswer?.type === 'empty';
-      matches.push({
-        problemNumber: p?.number || (i + 1),
-        problemId: p?.id || '',
-        currentAnswer,
-        newAnswer,
-        currentSolution: '',
-        newSolution: '',
-        hasChange: !!p && !isEmpty && !!newAnswer && newAnswer !== currentAnswer,
-      });
+    if (allHaveNum) {
+      // ★ 번호 기반: 명시된 번호만 적용, 다른 번호는 변경 없음
+      const byNum = new Map<number, ParsedLine>();
+      for (const p of nonEmptyParsed) {
+        if (p.num !== null) byNum.set(p.num, p);
+      }
+      for (const prob of sortedProblems) {
+        const parsedItem = byNum.get(prob.number);
+        const newAnswer = parsedItem?.answer || '';
+        const currentAnswer = String(prob.answer || '');
+        matches.push({
+          problemNumber: prob.number,
+          problemId: prob.id,
+          currentAnswer,
+          newAnswer,
+          currentSolution: '',
+          newSolution: '',
+          hasChange: !!newAnswer && newAnswer !== currentAnswer,
+        });
+      }
+    } else {
+      // ★ 순서 기반 (기존): parsed 개수가 더 많으면 parsed 기준으로 생성
+      const maxLen = Math.max(sortedProblems.length, parsed.length);
+      for (let i = 0; i < maxLen; i++) {
+        const p = sortedProblems[i];
+        const parsedAnswer = parsed[i];
+        const newAnswer = parsedAnswer?.answer || '';
+        const currentAnswer = p ? String(p.answer || '') : '';
+        // ★ empty 타입이면 답 변경 없음 (빈 줄로 건너뛰기)
+        const isEmpty = parsedAnswer?.type === 'empty';
+        matches.push({
+          problemNumber: p?.number || (i + 1),
+          problemId: p?.id || '',
+          currentAnswer,
+          newAnswer,
+          currentSolution: '',
+          newSolution: '',
+          hasChange: !!p && !isEmpty && !!newAnswer && newAnswer !== currentAnswer,
+        });
+      }
     }
 
     const changedCount = matches.filter(m => m.hasChange).length;
@@ -352,10 +392,17 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                   <span className="text-xs text-content-secondary font-medium">답 추출기 결과 붙여넣기</span>
                   <span className="text-[10px] text-content-muted">shortAnswer/narrative 또는 1. 3 형식</span>
                 </div>
+                {/* ★ 개별 번호 등록 안내 (2026-05-18) — 누락분 재등록·일부 번호만 등록 가능 */}
+                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px] leading-relaxed text-content-secondary">
+                  💡 <b>번호 명시하면 해당 번호만 등록</b> — 누락된 일부만 재등록할 때 사용.
+                  <br />
+                  예: <code className="text-emerald-400">30. ③</code> 만 붙여넣으면 <b>30번만</b> 등록됩니다.
+                  번호 없이 답만 나열하면 1번부터 순서대로 매칭.
+                </div>
                 <textarea
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
-                  placeholder={`shortAnswer\t3\nshortAnswer\t2\nshortAnswer\t4\nnarrative\tπ/3, π/2\n\n또는\n\n1. 3\n2. 2\n3. 4`}
+                  placeholder={`# 개별 번호만 등록 (번호 prefix 사용):\n30. ③\n32. 7\n\n# 또는 전체 일괄 등록 (번호 prefix 통일 or 생략):\n1. 3\n2. 2\n3. 4\n\n# 답 추출기 형식:\nshortAnswer\\t3\nnarrative\\tπ/3`}
                   className="w-full h-48 rounded-lg border border-subtle bg-surface-raised px-3 py-2.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
                   autoFocus
                 />
