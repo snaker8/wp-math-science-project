@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { tryUpscaleCrop } from '@/lib/vision/image-upscaler';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -48,8 +49,30 @@ export async function POST(req: NextRequest) {
 
   try {
     const pure = base64.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(pure, 'base64');
-    const type = contentType || 'image/jpeg';
+    let buffer = Buffer.from(pure, 'base64');
+    let type = contentType || 'image/jpeg';
+
+    // ★ 선택지 이미지(객관식 보기) 자동 업스케일 (2026-05-19)
+    //   path 가 problem-crops/choice-images/ 면 Sharp Lanczos3 업스케일 적용.
+    //   해상도 낮은 모바일 사진/클립보드 paste 도 인쇄 품질로 끌어올림.
+    //   수학 figure 업스케일과 동일 파이프라인 (tryUpscaleCrop) 재사용.
+    if (path.includes('choice-images/')) {
+      try {
+        const upscale = await tryUpscaleCrop(buffer);
+        if (upscale && upscale.upscaled.base64) {
+          buffer = Buffer.from(upscale.upscaled.base64, 'base64');
+          type = upscale.upscaled.contentType || 'image/png';
+          console.log(
+            `[upload-image] 선택지 이미지 업스케일 적용 — ` +
+            `${upscale.quality.width}x${upscale.quality.height} → ` +
+            `${upscale.upscaled.width}x${upscale.upscaled.height} (${upscale.upscaled.scale.toFixed(2)}x)`
+          );
+        }
+      } catch (upErr) {
+        // 업스케일 실패해도 원본 업로드 계속 진행 (사용자 흐름 안 막음)
+        console.warn('[upload-image] 업스케일 실패, 원본 사용:', upErr instanceof Error ? upErr.message : upErr);
+      }
+    }
 
     const { data, error } = await supabaseAdmin.storage
       .from('source-files')
