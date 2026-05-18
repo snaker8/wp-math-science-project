@@ -295,13 +295,37 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       if (!res.ok) throw new Error(data.error || '적용 실패');
 
       // ★ 서버 응답의 실패/스킵 사례 표면화 — 사고 시 즉시 식별 가능.
-      const failedCount = Array.isArray(data.failedUpdates) ? data.failedUpdates.length : 0;
-      if (failedCount > 0) {
+      // ★ 강등 사례 (객관식 모호값 → 빈값) 도 사용자에게 보고 — 2026-05-18 보완
+      const failedList = Array.isArray(data.failedUpdates) ? data.failedUpdates : [];
+      const coercedList = Array.isArray(data.coercedToEmpty) ? data.coercedToEmpty : [];
+
+      // problemId → problemNumber 매핑
+      const idToNum = new Map<string, number>();
+      matchResult.matches.forEach(m => idToNum.set(m.problemId, m.problemNumber));
+
+      const failedNumbers: number[] = failedList
+        .map((f: { problemId: string }) => idToNum.get(f.problemId))
+        .filter((n: number | undefined): n is number => !!n)
+        .sort((a: number, b: number) => a - b);
+      const coercedNumbers: Array<{ num: number; raw: string }> = coercedList
+        .map((c: { problemId: string; rawAnswer: string }) => ({
+          num: idToNum.get(c.problemId),
+          raw: c.rawAnswer,
+        }))
+        .filter((c: { num: number | undefined; raw: string }): c is { num: number; raw: string } => !!c.num)
+        .sort((a: { num: number }, b: { num: number }) => a.num - b.num);
+
+      const lines: string[] = [`${data.updatedCount}개 적용 완료`];
+      if (failedNumbers.length > 0) {
         console.error('[AnswerMatch] 일부 update 실패:', data.failedUpdates);
-        alert(`${data.updatedCount}개 적용, ${failedCount}개 실패. 콘솔에서 실패 사례 확인 바람.`);
-      } else {
-        alert(`${data.updatedCount}개 문제에 답이 적용되었습니다.`);
+        lines.push(`❌ ${failedNumbers.length}개 실패 (번호: ${failedNumbers.join(', ')}) — 콘솔 확인`);
       }
+      if (coercedNumbers.length > 0) {
+        console.warn('[AnswerMatch] 객관식 모호값 → 빈값 강등:', coercedList);
+        const detail = coercedNumbers.map((c: { num: number; raw: string }) => `${c.num}번(OCR: "${c.raw}")`).join(', ');
+        lines.push(`⚠️ ${coercedNumbers.length}개는 OCR 답 모호 → 빈값 강등: ${detail}\n   → 텍스트 모드에서 "30. ③" 같이 직접 입력해 재등록 가능`);
+      }
+      alert(lines.join('\n\n'));
       onApplied();
       onClose();
     } catch (err) {
