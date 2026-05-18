@@ -1362,10 +1362,13 @@ function ProblemCardView({
                     <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
                       <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
                       <div className="flex flex-col gap-1 min-w-0">
-                        {/* 그림 객관식: 이미지 있으면 표시 */}
+                        {/* 그림 객관식: 이미지 있으면 표시
+                            ★ 프록시 URL 변환 필수 (2026-05-19): private storage 라
+                            직접 접근 불가 → 변환 누락 시 이미지 로드 실패로
+                            선택지 자체가 안 보이던 사고 차단. */}
                         {c.imgUrl && (
                           <img
-                            src={c.imgUrl}
+                            src={getProxiedImageUrl(c.imgUrl)}
                             alt={`선택지 ${i + 1}`}
                             className="max-h-24 max-w-full rounded border border bg-white object-contain"
                           />
