@@ -57,6 +57,7 @@ import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/l
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
+import { useOrganizationName } from '@/hooks/useUserScope';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
@@ -2901,6 +2902,8 @@ export default function CloudExamDetailPage() {
   const router = useRouter();
   const params = useParams();
   const examId = params.examId as string;
+  // ★ 학원명 prefix (2026-05-17)
+  const orgName = useOrganizationName('과사람');
 
   // DB에서 문제 로드
   const { problems: dbProblems, examInfo, isLoading: dbLoading, refetch: refetchProblems } = useExamProblems(examId);
@@ -3747,7 +3750,7 @@ export default function CloudExamDetailPage() {
                 시험지 목록
               </button>
               <span className="sep">/</span>
-              <span>과사람 클라우드</span>
+              <span>{orgName}클라우드</span>
               <span className="sep">/</span>
               <span style={{ color: 'var(--chrome-fg-2)' }}>{examTitle}</span>
             </div>

@@ -53,6 +53,7 @@ import { downloadExamDocx } from '@/lib/export/docx-generator';
 import type { DocxProblem } from '@/lib/export/docx-generator';
 // HWPX는 /api/export/hwpx API로 서버사이드 생성
 import { useExamList, useExamProblems } from '@/hooks/useExamProblems';
+import { useOrganizationName } from '@/hooks/useUserScope';
 import type { InterpretedFigure } from '@/types/ocr';
 // ★ shadcn/ui components (Phase 2 점진 도입)
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -462,6 +463,7 @@ function PrintMenu({
 
 export default function ExamManagementPage() {
   const router = useRouter();
+  const orgName = useOrganizationName('과사람');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>('all');
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'exam' | 'answer' | 'solution'>('exam');
@@ -1271,7 +1273,7 @@ export default function ExamManagementPage() {
           <div className="em-cloud-footer">
             <div className="head">
               <Cloud className="h-3 w-3" />
-              과사람 클라우드
+              {orgName}클라우드
             </div>
             <div className="sub">다른 캠퍼스 시험지 열람 가능</div>
           </div>
