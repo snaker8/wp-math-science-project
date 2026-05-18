@@ -149,12 +149,15 @@ function ExamProblemRendererInner({
       const colCount = headers.length;
       return (
         <div className="mt-2 overflow-x-auto">
+          {/* ★ 컬럼 간격 확장 (2026-05-18): (가)/(나) 등 헤더가 너무 붙어있다는
+                사용자 보고. px-3 → px-10 으로 보기 컬럼 간격 ↑. prefix 컬럼은
+                좌측 여백 그대로 유지 (px-1.5). */}
           <table className="border-collapse text-[13px]">
             <thead>
               <tr>
                 <th className="px-1.5 py-0.5" />
                 {headers.map((h, i) => (
-                  <th key={i} className="px-3 py-0.5 text-center font-bold text-gray-500 border-b border-gray-300 whitespace-nowrap text-[12px]">
+                  <th key={i} className="px-10 py-0.5 text-center font-bold text-gray-500 border-b border-gray-300 whitespace-nowrap text-[12px]">
                     {h}
                   </th>
                 ))}
@@ -170,7 +173,7 @@ function ExamProblemRendererInner({
                   <tr key={ci}>
                     <td className="px-1.5 py-0.5 text-gray-500 whitespace-nowrap">{prefix}</td>
                     {Array.from({ length: colCount }, (_, j) => (
-                      <td key={j} className="px-3 py-0.5 text-center text-gray-700 whitespace-nowrap">
+                      <td key={j} className="px-10 py-0.5 text-center text-gray-700 whitespace-nowrap">
                         <MixedContentRenderer content={cells[j] || ''} className="text-gray-700" />
                       </td>
                     ))}
