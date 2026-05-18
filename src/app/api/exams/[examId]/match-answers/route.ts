@@ -310,27 +310,23 @@ export async function PUT(
       if (match.newAnswer) {
         // ★ 객관식 박힘 차단 — 0/모호값은 빈값으로 normalize.
         //   메모리: feedback_objective_answer_safety.md
-        // ★ 보완 (2026-05-15): OCR 결과가 객관식 형식(①~⑤/1~5)인 경우에만
-        //   객관식 normalize 적용. 그 외(숫자 65, 분수 1/2 등) 는 단답 의도로
-        //   판단하고 그대로 박음.
-        // ★★ 추가 보완 (2026-05-18, 5/40 누락 사고): type='multiple_choice' 인
-        //   row 는 CHECK constraint chk_objective_answer_valid 가 `①~⑤ / 1~5 /
-        //   빈값` 만 허용. OCR 이 '①번', '5번', '0' 같은 모호값 추출하면 가드
-        //   탈락 → 원본 그대로 박힘 → CHECK 위반 → update 실패.
-        //   → type='multiple_choice' 면 *항상* normalize 강제. 모호값은 빈값으로.
+        //
+        // ★★ 단일 판정 기준 (2026-05-18) — "객관식 vs 단답" 가 코드 분기마다 다르게
+        //   판정되던 "왔다갔다" 우려 해소. 진실의 원천은 `answer_json.type` 하나만:
+        //     - type==='multiple_choice' → 객관식 (normalize 강제)
+        //     - 그 외(short_answer, narrative, null 등) → 단답·서술 (원본 보존)
+        //
+        //   이전 가드는 두 갈래 (type-기반 + choices-기반) 라 동일 문제가 분기마다
+        //   다른 결과. CHECK constraint chk_objective_answer_valid 도 type 기준이라
+        //   일관성 확보 — 단답으로 처리된 row 는 CHECK 미적용, 객관식은 normalize 통과.
         const { normalizeObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const trimmedAns = match.newAnswer.trim();
-        const looksObjective = /^[①②③④⑤]$/.test(trimmedAns) || /^[1-5]$/.test(trimmedAns);
-        const isStrictlyMultipleChoice = mergedAj.type === 'multiple_choice';
-        const hasChoicesField = Array.isArray(mergedAj.choices) && (mergedAj.choices as unknown[]).length > 0;
-        const problemIsObjective = isStrictlyMultipleChoice || hasChoicesField;
-        // type='multiple_choice' 는 CHECK 강제 — 무조건 normalize.
-        // 그 외 객관식(choices만 있고 type 모호)은 looksObjective 일 때만 normalize.
-        const safeAns = isStrictlyMultipleChoice || (problemIsObjective && looksObjective)
-          ? normalizeObjectiveAnswer(match.newAnswer)
-          : match.newAnswer;
-        // ★ 빈값으로 강등된 경우 추적 — alert 에서 사용자에게 보고
-        if (isStrictlyMultipleChoice && trimmedAns !== '' && safeAns === '') {
+        const isMultipleChoice = mergedAj.type === 'multiple_choice';
+        const safeAns = isMultipleChoice
+          ? normalizeObjectiveAnswer(match.newAnswer)  // CHECK 통과 보장
+          : match.newAnswer;                            // 단답·서술 원본 보존
+        // ★ 빈값 강등된 경우 추적 — alert 에서 사용자에게 보고
+        if (isMultipleChoice && trimmedAns !== '' && safeAns === '') {
           console.log(`[match-answers PUT] 객관식 모호값 → 빈값 강등: id=${match.problemId}, raw="${trimmedAns}"`);
           coercedToEmpty.push({ problemId: match.problemId, rawAnswer: trimmedAns });
         }

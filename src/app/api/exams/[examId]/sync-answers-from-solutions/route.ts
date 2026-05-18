@@ -87,10 +87,10 @@ export async function POST(
       continue;
     }
 
-    // 객관식 여부 — answer_json.type 또는 choices 배열
-    const isObjective =
-      aj.type === 'multiple_choice' ||
-      (Array.isArray(aj.choices) && (aj.choices as unknown[]).length > 0);
+    // ★ 객관식 판정 단일 기준 (2026-05-18 통일):
+    //   `answer_json.type === 'multiple_choice'` 만이 객관식 진실의 원천.
+    //   choices 만으로는 판정 X — match-answers / CHECK constraint 와 일관.
+    const isObjective = aj.type === 'multiple_choice';
     const safeAns = isObjective ? normalizeObjectiveAnswer(extracted.answer) : extracted.answer;
 
     if (!safeAns) {
