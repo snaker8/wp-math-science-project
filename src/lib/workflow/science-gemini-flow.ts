@@ -357,13 +357,26 @@ function buildLLMAnalysisResult(
     finalAnswer: '',
   };
 
-  // figure 정보는 hasFigure 플래그 + bbox 만 일단 전달.
-  // cvFigures crop base64 는 별도 필드로 분석 페이지가 활용 가능 (UI 통합 후속).
+  // ★ figure 임베드 (2026-05-19): cvFigures crop 을 content 끝에 `![이미지](data:...)`
+  //   마커로 자동 삽입. saveEditedProblemsDirect 가 base64 마커를 Storage 업로드 +
+  //   figure_crop 타입으로 자동 변환 → 자산화 시 그림이 DB에 살아남음.
+  //   "자산화 시 이미지 크롭이 작동 안 했던 거 같다" 사고 차단.
+  let contentWithFigures = content;
+  if (cvFigures.length > 0) {
+    const figureMarkers = cvFigures
+      .filter((f) => f.cropBase64)
+      .map((f) => `\n\n![이미지](data:image/png;base64,${f.cropBase64})`)
+      .join('');
+    if (figureMarkers) {
+      contentWithFigures = content + figureMarkers;
+    }
+  }
+
   return {
     problemId: `science-${Date.now()}-${problemNumber}`,
     problemNumber,
-    contentWithMath: content,
-    contentMmd: content,
+    contentWithMath: contentWithFigures,
+    contentMmd: contentWithFigures,
     choices,
     pageIndex: pageIdx,
     bbox,
