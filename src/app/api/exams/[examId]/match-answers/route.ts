@@ -397,7 +397,60 @@ const CIRCLED_TO_DIGIT: Record<string, string> = {
   '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5',
 };
 
+// ============================================================================
+// PDF 페이지 분할 — 페이지/컬럼 경계 사고 차단 (2026-05-18)
+//   배경: 사용자 보고 — 해설지에서 "12번 문제 좌측 끝 → 12번 답 우측 상단 시작" 또는
+//         "1쪽 끝 → 2쪽 시작" 같은 경계에서 Gemini 가 문제와 답 연결 실패.
+//   전략: multi-page PDF 를 1쪽 단위로 분할 → 페이지마다 Gemini 호출 → 결과 누적.
+//         페이지 안 좌→우 컬럼 순서는 Gemini 가 잘 처리. 페이지 경계만 해소.
+//   회귀: 단일 페이지 PDF / 이미지는 분할 안 함 (기존 흐름 유지).
+// ============================================================================
+async function splitPdfToPages(file: File): Promise<File[]> {
+  const { PDFDocument } = await import('pdf-lib');
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const pdfDoc = await PDFDocument.load(buffer);
+  const pageCount = pdfDoc.getPageCount();
+  if (pageCount <= 1) return [file]; // 단일 페이지 — 분할 X
+
+  const pages: File[] = [];
+  for (let i = 0; i < pageCount; i++) {
+    const newPdf = await PDFDocument.create();
+    const [copied] = await newPdf.copyPages(pdfDoc, [i]);
+    newPdf.addPage(copied);
+    const bytes = await newPdf.save();
+    // bytes 는 Uint8Array — Buffer 로 감싸서 명시적 ArrayBuffer 전달
+    pages.push(new File([Buffer.from(bytes)], `${file.name.replace(/\.pdf$/i, '')}_p${i + 1}.pdf`, { type: 'application/pdf' }));
+  }
+  console.log(`[match-answers] PDF 페이지 분할: ${file.name} → ${pageCount} 쪽`);
+  return pages;
+}
+
+// ★ 페이지 분할 래퍼: multi-page PDF 면 페이지별 분리 호출 + 결과 누적 (2026-05-18)
 async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  if (!isPdf) return extractAnswersWithGeminiSingle(file);
+  const pages = await splitPdfToPages(file);
+  if (pages.length === 1) return extractAnswersWithGeminiSingle(pages[0]);
+  const all: ParsedAnswer[] = [];
+  const seen = new Set<number>();
+  for (const page of pages) {
+    try {
+      const ans = await extractAnswersWithGeminiSingle(page);
+      for (const a of ans) {
+        if (!seen.has(a.problemNumber)) {
+          all.push(a);
+          seen.add(a.problemNumber);
+        }
+      }
+    } catch (err) {
+      console.error(`[match-answers] 답 추출 페이지 실패 ${page.name}: ${err instanceof Error ? err.message : err}`);
+      // 한 페이지 실패해도 나머지 페이지는 계속
+    }
+  }
+  return all.sort((a, b) => a.problemNumber - b.problemNumber);
+}
+
+async function extractAnswersWithGeminiSingle(file: File): Promise<ParsedAnswer[]> {
   if (!GEMINI_API_KEY) throw new Error('Gemini API 키가 설정되지 않았습니다.');
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -487,7 +540,46 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
 // Mathpix 타임아웃 회피용, 구조화된 출력 후 파싱
 // ============================================================================
 
+// ★ 페이지 분할 래퍼 (해설용): multi-page PDF 면 페이지별 분리 호출 + 결과 누적 (2026-05-18)
 async function extractSolutionsWithGemini(
+  file: File
+): Promise<{ answers: ParsedAnswer[]; solutions: { problemNumber: number; solutionLatex: string }[] }> {
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  if (!isPdf) return extractSolutionsWithGeminiSingle(file);
+  const pages = await splitPdfToPages(file);
+  if (pages.length === 1) return extractSolutionsWithGeminiSingle(pages[0]);
+  const allAnswers: ParsedAnswer[] = [];
+  const allSolutions: { problemNumber: number; solutionLatex: string }[] = [];
+  const seenAns = new Set<number>();
+  for (const page of pages) {
+    try {
+      const { answers, solutions } = await extractSolutionsWithGeminiSingle(page);
+      for (const a of answers) {
+        if (!seenAns.has(a.problemNumber)) {
+          allAnswers.push(a);
+          seenAns.add(a.problemNumber);
+        }
+      }
+      // 해설은 같은 번호여도 페이지 경계로 잘릴 수 있어 이어붙임
+      for (const s of solutions) {
+        const existing = allSolutions.find(x => x.problemNumber === s.problemNumber);
+        if (existing) {
+          existing.solutionLatex = existing.solutionLatex + '\n' + s.solutionLatex;
+        } else {
+          allSolutions.push(s);
+        }
+      }
+    } catch (err) {
+      console.error(`[match-answers] 해설 추출 페이지 실패 ${page.name}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  return {
+    answers: allAnswers.sort((a, b) => a.problemNumber - b.problemNumber),
+    solutions: allSolutions.sort((a, b) => a.problemNumber - b.problemNumber),
+  };
+}
+
+async function extractSolutionsWithGeminiSingle(
   file: File
 ): Promise<{ answers: ParsedAnswer[]; solutions: { problemNumber: number; solutionLatex: string }[] }> {
   if (!GEMINI_API_KEY) throw new Error('Gemini API 키가 설정되지 않았습니다.');
