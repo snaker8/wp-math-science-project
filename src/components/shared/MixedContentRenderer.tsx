@@ -15,7 +15,11 @@ function SolutionBoxRender({ body }: { body: string }) {
         // \\[Npt] 같은 spacing 옵션 제거 (KaTeX 가 일부 환경에서 못 풂)
         .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
         // \displaystyle 잔여 제거 (displayMode 가 자동 처리)
-        .replace(/\\displaystyle\s+/g, '');
+        .replace(/\\displaystyle\s+/g, '')
+        // ★ 분수 크기 정상화 (2026-05-18): displayMode 에서 \frac 가
+        //   본문 글자 대비 너무 크게 그려져 박스가 어색해 보임. \tfrac (textstyle)
+        //   으로 강제해 본문 글자 비례에 맞춤. \dfrac 사용자는 명시 의도이므로 보존.
+        .replace(/\\frac(?![a-zA-Z])/g, '\\tfrac');
       return katex.renderToString(
         `\\begin{aligned}${cleaned}\\end{aligned}`,
         {
