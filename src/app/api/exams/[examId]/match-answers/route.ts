@@ -270,6 +270,9 @@ export async function PUT(
     let skippedNoChange = 0;
     let skippedProblemMissing = 0;
     const failedUpdates: Array<{ problemId: string; reason: string }> = [];
+    // ★ 객관식 모호값 → 빈값 강등 케이스 추적 (2026-05-18)
+    //   "5개 적용, 3개는 빈값 강등 → 수동 입력 필요" 같은 정확한 보고 위해
+    const coercedToEmpty: Array<{ problemId: string; rawAnswer: string }> = [];
 
     console.log(`[match-answers PUT] examId=${examId}, totalMatches=${matches.length}`,
       matches.slice(0, 5).map(m => ({
@@ -309,15 +312,28 @@ export async function PUT(
         //   메모리: feedback_objective_answer_safety.md
         // ★ 보완 (2026-05-15): OCR 결과가 객관식 형식(①~⑤/1~5)인 경우에만
         //   객관식 normalize 적용. 그 외(숫자 65, 분수 1/2 등) 는 단답 의도로
-        //   판단하고 그대로 박음. 메모리 가드(객관식 모호값 차단) 는 유지하되,
-        //   OCR 이 명확한 단답을 추출한 경우 빈값 강등 사고 방지.
+        //   판단하고 그대로 박음.
+        // ★★ 추가 보완 (2026-05-18, 5/40 누락 사고): type='multiple_choice' 인
+        //   row 는 CHECK constraint chk_objective_answer_valid 가 `①~⑤ / 1~5 /
+        //   빈값` 만 허용. OCR 이 '①번', '5번', '0' 같은 모호값 추출하면 가드
+        //   탈락 → 원본 그대로 박힘 → CHECK 위반 → update 실패.
+        //   → type='multiple_choice' 면 *항상* normalize 강제. 모호값은 빈값으로.
+        const { normalizeObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const trimmedAns = match.newAnswer.trim();
         const looksObjective = /^[①②③④⑤]$/.test(trimmedAns) || /^[1-5]$/.test(trimmedAns);
-        const problemIsObjective = mergedAj.type === 'multiple_choice'
-          || (Array.isArray(mergedAj.choices) && (mergedAj.choices as unknown[]).length > 0);
-        const safeAns = (problemIsObjective && looksObjective)
-          ? (await import('@/lib/validation/objective-answer')).normalizeObjectiveAnswer(match.newAnswer)
+        const isStrictlyMultipleChoice = mergedAj.type === 'multiple_choice';
+        const hasChoicesField = Array.isArray(mergedAj.choices) && (mergedAj.choices as unknown[]).length > 0;
+        const problemIsObjective = isStrictlyMultipleChoice || hasChoicesField;
+        // type='multiple_choice' 는 CHECK 강제 — 무조건 normalize.
+        // 그 외 객관식(choices만 있고 type 모호)은 looksObjective 일 때만 normalize.
+        const safeAns = isStrictlyMultipleChoice || (problemIsObjective && looksObjective)
+          ? normalizeObjectiveAnswer(match.newAnswer)
           : match.newAnswer;
+        // ★ 빈값으로 강등된 경우 추적 — alert 에서 사용자에게 보고
+        if (isStrictlyMultipleChoice && trimmedAns !== '' && safeAns === '') {
+          console.log(`[match-answers PUT] 객관식 모호값 → 빈값 강등: id=${match.problemId}, raw="${trimmedAns}"`);
+          coercedToEmpty.push({ problemId: match.problemId, rawAnswer: trimmedAns });
+        }
         mergedAj.finalAnswer = safeAns;
         mergedAj.correct_answer = safeAns;
         mergedAj.answer_user_edited = true;    // ★ 일괄 재생성이 안 건드리도록
@@ -354,7 +370,7 @@ export async function PUT(
       }
     }
 
-    console.log(`[match-answers PUT] 완료 — updated=${updatedCount}, failed=${failedUpdates.length}, skippedNoChange=${skippedNoChange}, skippedMissing=${skippedProblemMissing}, totalMatches=${matches.length}`);
+    console.log(`[match-answers PUT] 완료 — updated=${updatedCount}, failed=${failedUpdates.length}, skippedNoChange=${skippedNoChange}, skippedMissing=${skippedProblemMissing}, coercedToEmpty=${coercedToEmpty.length}, totalMatches=${matches.length}`);
 
     return NextResponse.json({
       examId,
@@ -364,6 +380,7 @@ export async function PUT(
       skippedNoChange,
       skippedProblemMissing,
       failedUpdates,
+      coercedToEmpty, // 객관식 모호값 → 빈값 강등 사례
     });
 
   } catch (error) {
