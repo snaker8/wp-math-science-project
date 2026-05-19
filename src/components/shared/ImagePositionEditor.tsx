@@ -411,17 +411,19 @@ function DropZone({
     <div
       className={`transition-all cursor-pointer flex items-center justify-center ${
         isDragOver
-          ? 'h-8 border-2 border-dashed border-violet-400 bg-violet-500/10 rounded-lg mx-2 my-1'
-          : 'h-2 hover:h-6 border border-dashed border-zinc-700/60 hover:border-violet-500/60 bg-zinc-800/10 hover:bg-violet-500/10 rounded mx-2 my-0.5'
+          ? 'h-10 border-2 border-dashed border-violet-400 bg-violet-500/15 rounded-lg mx-2 my-1.5'
+          : 'h-5 hover:h-8 border-2 border-dashed border-violet-500/40 hover:border-violet-500/70 bg-violet-500/[0.04] hover:bg-violet-500/15 rounded mx-2 my-1'
       }`}
       onDragOver={(e) => onDragOver(e, idx)}
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, idx)}
       onClick={onClick}
-      title="여기에 도형 배치"
+      title="여기에 도형 배치 (드래그 또는 클릭)"
     >
-      {isDragOver && (
-        <span className="text-[10px] text-violet-400">여기에 놓기</span>
+      {isDragOver ? (
+        <span className="text-[11px] text-violet-300 font-medium">여기에 놓기</span>
+      ) : (
+        <span className="text-[10px] text-violet-400/70">⋮ 드래그하거나 클릭</span>
       )}
     </div>
   );
