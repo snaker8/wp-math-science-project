@@ -1083,6 +1083,16 @@ function ProblemCardView({
               cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined}
               upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined}
               figureSource={problem.figureSource}
+              // ★ 멀티 figure 지원 (2026-05-19): 2번째 이후 figure_crop 들도 전달.
+              //   첫 figure 가 cropImage(=figure_crop 첫개 or crop) 와 동일하면 skip,
+              //   아니면 첫 figure_crop 부터 모두 추가. 이전 사고: 2번째 도형이 [도형] 텍스트로 남음.
+              extraFigureUrls={(() => {
+                const figureCrops = problem.images?.filter((img: { type: string }) => img.type === 'figure_crop') || [];
+                if (figureCrops.length === 0) return [];
+                // 첫 cropImage 가 cropImage 와 동일하면 두번째부터, 아니면 첫번째부터
+                const startIdx = (cropImage && figureCrops[0]?.url === cropImage.url) ? 1 : 0;
+                return figureCrops.slice(startIdx).map((img: { url: string }) => getProxiedImageUrl(img.url));
+              })()}
               onSave={async (updatedContent) => {
                 await onUpdateContent?.(problem.id, updatedContent);
                 setIsEditingPosition(false);
