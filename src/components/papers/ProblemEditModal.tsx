@@ -538,7 +538,7 @@ function ChoicesEditor({
                       <>
                         <div className="relative inline-block">
                           <img
-                            src={imgUrl}
+                            src={imgUrl.match(/\/storage\/v1\/object\/(?:public|sign(?:ed)?)\/source-files\/(.+)/) ? `/api/storage/image?path=${encodeURIComponent(imgUrl.match(/\/storage\/v1\/object\/(?:public|sign(?:ed)?)\/source-files\/(.+)/)![1])}` : imgUrl}
                             alt={`선택지 ${i + 1} 이미지`}
                             className="max-h-20 max-w-full rounded border border bg-white"
                           />
@@ -1087,14 +1087,25 @@ export function ProblemEditModal({
       const finalAnswer = answerType === 'objective' ? correctAnswer : subjectiveAnswer;
       const circledNumbers = ['①', '②', '③', '④', '⑤'];
       // ★ choices prefix 정규화 — ①②③ / (1)(2)(3) / 1) 1. 등 모두 제거 후 ① 으로 통일
-      const formattedChoices = choices.map((c, i) => {
+      // ★ 그림 객관식 보존 (2026-05-19): 텍스트 비어있어도 이미지가 있으면
+      //   선택지로 유지. 이전엔 filter(Boolean) 이 image-only 선택지를 통째
+      //   삭제하고 choiceImages 인덱스도 어긋났던 사고 차단.
+      const mapped = choices.map((c, i) => {
         const stripped = c
           .replace(/^[①②③④⑤]\s*/, '')          // ① 제거
           .replace(/^\(\s*[1-5]\s*\)\s*/, '')   // (1) 제거
           .replace(/^[1-5]\s*[).]\s*/, '')      // 1) 또는 1. 제거
           .trim();
-        return stripped ? `${circledNumbers[i]} ${stripped}` : '';
-      }).filter(Boolean);
+        const hasImg = typeof choiceImages[i] === 'string' && (choiceImages[i] as string).length > 0;
+        // 텍스트 있으면 `① text`, 없고 이미지 있으면 `①` 만 (placeholder 로 인덱스 유지)
+        if (stripped) return `${circledNumbers[i]} ${stripped}`;
+        if (hasImg) return circledNumbers[i] || '';
+        return '';
+      });
+      // 마지막 빈 선택지부터 trailing trim — 인덱스는 보존, 끝 빈칸만 제거
+      let formattedLen = mapped.length;
+      while (formattedLen > 0 && !mapped[formattedLen - 1]) formattedLen--;
+      const formattedChoices = mapped.slice(0, formattedLen);
 
       // ★ 그림 객관식: choiceImages — formattedChoices 길이만큼 자르고, 모두 null 이면 미저장.
       const trimmedChoiceImages = choiceImages.slice(0, formattedChoices.length);

@@ -174,6 +174,10 @@ export async function POST(request: NextRequest) {
     //   했으면 PK 충돌 (users_pkey) 발생. 트리거 실패 시에만 본 INSERT 가 백업
     //   동작. ignoreDuplicates 로 충돌 무시.
     //   사고 (2026-05-15): 트리거 fix 후 본 INSERT 가 중복 → users_pkey 위반.
+    // ★ 트랙 격리 (2026-05-19): 등록 시 활성 트랙으로 학생 태깅
+    //   수학 트랙에서 등록한 학생은 과학에 안 보이고, 그 반대도 성립.
+    //   subject_tracks 는 배열이라 나중에 다른 트랙으로도 등록 시 PATCH 로 확장 가능.
+    const studentTrack = scope.activeTrack || 'math';
     const { error: insertErr } = await supabaseAdmin
       .from('users')
       .upsert({
@@ -184,6 +188,8 @@ export async function POST(request: NextRequest) {
         grade,
         role: 'STUDENT',
         institute_id: instituteId,
+        subject_tracks: [studentTrack],
+        active_subject_track: studentTrack,
       }, { onConflict: 'id', ignoreDuplicates: true });
     if (insertErr) {
       // public.users 실패 → auth.users orphan 정리

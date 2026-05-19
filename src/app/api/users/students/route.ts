@@ -31,7 +31,7 @@ export async function GET() {
 
   const { data: me, error: meErr } = await supabase
     .from('users')
-    .select('role, institute_id')
+    .select('role, institute_id, active_subject_track')
     .eq('id', user.id)
     .single();
 
@@ -56,6 +56,19 @@ export async function GET() {
       return NextResponse.json({ students: [] });
     }
     query = query.eq('institute_id', me.institute_id);
+  }
+
+  // ★ 트랙 격리 (2026-05-19): 사용자 active_subject_track 기준으로
+  //   subject_tracks 배열에 해당 트랙 포함된 학생만 반환.
+  //   수학 트랙에서 등록한 학생은 과학에 안 보이고, 그 반대도 성립.
+  //   active_subject_track 없거나 'math' 면 기본값. NULL subject_tracks 인
+  //   기존 학생은 'math' 로 간주 (기존 운영 흐름 호환).
+  const activeTrack = (me.active_subject_track as string | null) || 'math';
+  if (activeTrack === 'science') {
+    query = query.contains('subject_tracks', ['science']);
+  } else {
+    // 수학 트랙 — 'math' 포함 OR subject_tracks NULL (기존 미태깅 학생)
+    query = query.or('subject_tracks.cs.{math},subject_tracks.is.null');
   }
 
   const { data, error } = await query;
