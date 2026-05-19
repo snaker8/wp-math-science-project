@@ -426,11 +426,15 @@ function DbAssetizeTab({
       onClick={() => {
         // pathname 정규화 — /math/dashboard/cloud, /science/dashboard/cloud, /dashboard/cloud 모두 매치
         const stripped = stripTrackPrefix(pathname);
-        if (stripped.startsWith('/dashboard/cloud')) {
+        // ★ 클라우드 리스트 페이지(정확히 /dashboard/cloud)에서만 이벤트 dispatch.
+        //   디테일 페이지(/dashboard/cloud/[examId])는 리스너가 없어서 클릭이 무반응이 됨 (2026-05-19 사고).
+        //   디테일 페이지면 리스트로 navigate + ?upload=1.
+        const isCloudList = stripped === '/dashboard/cloud' || stripped === '/dashboard/cloud/';
+        if (isCloudList) {
           // 같은 페이지 — 즉시 모달
           window.dispatchEvent(new CustomEvent('cloud:open-upload'));
         } else {
-          // 다른 페이지 — 이동 (?upload=1 으로 mount 시 자동 오픈), 트랙 prefix 적용
+          // 다른 페이지 (디테일 포함) — 리스트로 이동 (?upload=1 으로 mount 시 자동 오픈), 트랙 prefix 적용
           router.push(trackHref('/dashboard/cloud?upload=1', track));
         }
       }}
