@@ -118,6 +118,19 @@ interface AnalyzedProblem {
   // ★ 선택지 레이아웃 — answer_json.choiceLayout (1=1열, 2=2열, 3=3열, 5=가로)
   //   모달에서 변경 시 onSave 핸들러가 answer_json 에 박아 DB 저장 (2026-05-17 fix)
   choiceLayout?: number;
+  // ★ 그림 객관식: 선택지별 이미지 URL (data:image/png;base64,... 또는 storage URL)
+  //   1차 분석 모달에서 cvFigure 후보를 선택지에 할당 시 사용. 저장 시 answer_json.choiceImages 박힘.
+  choiceImages?: (string | null)[];
+  // ★ 과학 자산화 — Gemini OpenCV 가 자동 크롭한 figure 후보 (data:image/png;base64,...)
+  //   1차 분석 모달의 "이미지 후보" 픽커가 이 배열에서 썸네일을 보여줌.
+  //   본문 또는 선택지에 클릭 한 번으로 삽입 가능. 자산화 시 base64 마커 → Storage 업로드.
+  cvFigures?: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    cropBase64?: string;
+  }>;
 }
 
 interface PageData {
@@ -3205,6 +3218,11 @@ export default function AnalyzeJobPage() {
           score: isEdited ? (prevProblem.score ?? extractedScore) : extractedScore,  // ★ 배점 보존
           // ★ Phase C-1b: cloud-flow가 채운 pitfalls 보존 — 저장 시 saveEditedProblemsDirect로 전달
           pitfalls: isEdited ? (prevProblem.pitfalls || result.classification?.pitfalls) : result.classification?.pitfalls,
+          // ★ 과학 자산화 (2026-05-19): Gemini OpenCV 자동 크롭 figure 후보 보존
+          //   AnalyzeProblemEditModal "이미지 후보" 픽커가 사용. edit 후에도 보존.
+          cvFigures: isEdited ? (prevProblem.cvFigures || result._scienceCvFigures) : result._scienceCvFigures,
+          // ★ 그림 객관식: 선택지별 이미지 (edited 상태에서만 의미 있음 — 1차 분석 후 사용자 설정)
+          choiceImages: prevProblem?.choiceImages,
         });
       });
     }
@@ -3456,6 +3474,11 @@ export default function AnalyzeJobPage() {
               pageIndex: p.pageIndex, // ★ 페이지 인덱스 (0-based)
               ...(figureBboxes.length > 0 ? { figureBboxes } : {}), // ★ graph 클래스 학습 데이터
               ...(p.pitfalls && p.pitfalls.length > 0 ? { pitfalls: p.pitfalls } : {}), // ★ Phase C-1b: 함정 자동 태깅
+              // ★ 그림 객관식 (2026-05-19): 선택지별 이미지 (base64 또는 URL)
+              //   saveEditedProblemsDirect 가 data:image base64 → Storage 업로드 + answer_json.choiceImages 박힘.
+              ...(p.choiceImages && p.choiceImages.some((img: string | null) => !!img)
+                ? { choiceImages: p.choiceImages }
+                : {}),
             });
           }
         }
@@ -5032,15 +5055,27 @@ export default function AnalyzeJobPage() {
                   updated.answer !== undefined ||
                   updated.choices !== undefined ||
                   (updated as { choiceHeaders?: string[] }).choiceHeaders !== undefined ||
-                  (updated as { choiceLayout?: number }).choiceLayout !== undefined
+                  (updated as { choiceLayout?: number }).choiceLayout !== undefined ||
+                  (updated as { choiceImages?: (string | null)[] }).choiceImages !== undefined
                 ) {
                   const finalAnswer = updated.answer ?? editingProblem.answer;
                   const circledNumbers = ['①', '②', '③', '④', '⑤'];
                   const currentChoices = updated.choices ?? editingProblem.choices ?? [];
+                  // ★ filter(Boolean) 금지: 이미지만 들어간 선택지(텍스트 빈)도 인덱스 유지 위해 placeholder 보존
+                  const updatedChoiceImages = (updated as { choiceImages?: (string | null)[] }).choiceImages;
+                  const existingChoiceImages = (editingProblem as { choiceImages?: (string | null)[] }).choiceImages;
+                  const effectiveImages = updatedChoiceImages ?? existingChoiceImages;
                   const formattedChoices = currentChoices.map((c: string, i: number) => {
                     const stripped = c.replace(/^[①②③④⑤]\s*/, '');
-                    return stripped ? `${circledNumbers[i]} ${stripped}` : '';
-                  }).filter(Boolean);
+                    if (stripped) return `${circledNumbers[i]} ${stripped}`;
+                    // 이미지만 있는 선택지는 번호 placeholder 만 박음 (filter(Boolean) 사고 차단)
+                    if (effectiveImages && effectiveImages[i]) return `${circledNumbers[i]}`;
+                    return '';
+                  });
+                  // 뒤쪽 빈 항목 trim (5번이 비어있으면 4번까지)
+                  while (formattedChoices.length > 0 && !formattedChoices[formattedChoices.length - 1]) {
+                    formattedChoices.pop();
+                  }
                   const headers = (updated as { choiceHeaders?: string[] }).choiceHeaders
                     ?? (editingProblem as { choiceHeaders?: string[] }).choiceHeaders
                     ?? [];
@@ -5057,6 +5092,9 @@ export default function AnalyzeJobPage() {
                     choiceHeaders: headers,
                     // ★ 레이아웃 — undefined 가 아니면 박음 (1/2/3/5)
                     ...(choiceLayout !== undefined ? { choiceLayout } : {}),
+                    // ★ 그림 객관식 (2026-05-19) — 1개라도 변경되었으면 박음.
+                    //   nano-banana / Gemini 자동 크롭 이미지 → 자산화 후 PATCH 경로에서도 보존.
+                    ...(effectiveImages ? { choiceImages: effectiveImages } : {}),
                   };
                 }
 

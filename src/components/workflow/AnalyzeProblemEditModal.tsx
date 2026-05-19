@@ -43,6 +43,19 @@ export interface AnalyzedProblemData {
   // ★ 선택지 레이아웃 (1=1열, 2=2열, 3=3열, 5=가로) — answer_json.choiceLayout 에서 읽고 저장
   //   (2026-05-17 사고: 모달에서 변경해도 저장 안 됨 — type/state/save deps/onSave 모두 누락)
   choiceLayout?: number;
+  // ★ 그림 객관식 (2026-05-19): 선택지별 이미지. data:image/png;base64,... 또는 storage URL.
+  //   length 5 — index 0~4 가 ①~⑤. null 이면 해당 선택지는 텍스트만.
+  //   저장 시 answer_json.choiceImages 박힘. 자산화 단계에서 base64 → Storage 업로드.
+  choiceImages?: (string | null)[];
+  // ★ 과학 자동 크롭 figure 후보 (2026-05-19): Gemini + OpenCV 가 1차 분석에서 잘라낸 그림들.
+  //   모달의 "이미지 후보" 픽커 그리드가 사용. 본문 또는 ①~⑤ 선택지에 클릭 한 번으로 삽입.
+  cvFigures?: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    cropBase64?: string;
+  }>;
 }
 
 interface AnalyzeProblemEditModalProps {
@@ -471,6 +484,7 @@ function ChoicesEditor({
   choiceLayout, onChoiceLayoutChange,
   isMultipleAnswer, onMultipleAnswerChange,
   choiceHeaders, onChoiceHeadersChange,
+  choiceImages, onClearChoiceImage,
 }: {
   choices: string[];
   onChange: (choices: string[]) => void;
@@ -487,6 +501,10 @@ function ChoicesEditor({
   // ★ 표 객관식 헤더 (A/B 등). 길이 0 = 일반 객관식, 1+ = 표 객관식.
   choiceHeaders: string[];
   onChoiceHeadersChange: (h: string[]) => void;
+  // ★ 그림 객관식 (2026-05-19) — 선택지별 이미지 미리보기 + X 버튼 으로 해제.
+  //   "이미지 후보" 픽커에서 채워지고, 빈 항목은 null. 텍스트와 동시 표시 가능.
+  choiceImages: (string | null)[];
+  onClearChoiceImage: (idx: number) => void;
 }) {
   const circledNumbers = ['①', '②', '③', '④', '⑤'];
 
@@ -615,15 +633,31 @@ function ChoicesEditor({
             hasHeaders ? 'grid-cols-1' :
             choiceLayout === 1 ? 'grid-cols-1' : choiceLayout === 2 ? 'grid-cols-2' : choiceLayout === 3 ? 'grid-cols-3' : 'grid-cols-5'
           }`}>
-            {choices.map((choice, i) => (
-              <ChoiceCell
-                key={i}
-                index={i}
-                value={choice}
-                onChange={(v) => handleChoiceChange(i, v)}
-                columnCount={columnCount}
-              />
-            ))}
+            {choices.map((choice, i) => {
+              const img = choiceImages[i];
+              return (
+                <div key={i} className="flex flex-col gap-1">
+                  <ChoiceCell
+                    index={i}
+                    value={choice}
+                    onChange={(v) => handleChoiceChange(i, v)}
+                    columnCount={columnCount}
+                  />
+                  {/* ★ 그림 객관식: 선택지에 이미지가 있으면 인라인 썸네일 + 제거 버튼 */}
+                  {img && (
+                    <div className="ml-7 relative inline-block rounded border border-cyan-200 bg-cyan-50/30 p-1 self-start">
+                      <img src={img} alt={`선택지 ${i + 1} 이미지`} className="max-h-16 max-w-full object-contain rounded" />
+                      <button type="button"
+                        onClick={() => onClearChoiceImage(i)}
+                        title="이미지 제거"
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-800/70 text-white hover:bg-red-500 transition-colors flex items-center justify-center">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           {/* 선택지 추가/삭제 */}
           <div className="flex items-center gap-2">
@@ -866,6 +900,14 @@ export default function AnalyzeProblemEditModal({
   const [choiceHeaders, setChoiceHeaders] = useState<string[]>(
     problem.choiceHeaders && problem.choiceHeaders.length >= 1 ? problem.choiceHeaders : []
   );
+  // ★ 그림 객관식 (2026-05-19): 선택지별 이미지 — index 0~4 가 ①~⑤.
+  //   "이미지 후보" 픽커에서 썸네일 클릭 시 채워짐. 본문 마커가 아닌 별도 필드로 분리해야
+  //   ChoicesEditor 가 텍스트 옆 작은 이미지 미리보기로 렌더 + answer_json.choiceImages 박힘.
+  const [choiceImages, setChoiceImages] = useState<(string | null)[]>(() => {
+    const arr: (string | null)[] = problem.choiceImages ? [...problem.choiceImages] : [null, null, null, null, null];
+    while (arr.length < 5) arr.push(null);
+    return arr.slice(0, 5);
+  });
 
   // === 메타데이터 ===
   const [difficulty, setDifficulty] = useState(problem.difficulty);
@@ -1040,6 +1082,31 @@ export default function AnalyzeProblemEditModal({
     e.target.value = '';
   }, [activeSetter]);
 
+  // === 자동 크롭 figure 후보 → 본문/선택지 삽입 ===
+  //   본문 삽입은 base64 마커 (자산화 시 Storage 업로드 + figure_crop 자동 변환).
+  //   선택지 삽입은 별도 choiceImages state — 텍스트 옆 인라인 미리보기 + answer_json.choiceImages.
+  const handleInsertFigureToBody = useCallback((cropBase64: string) => {
+    const dataUrl = cropBase64.startsWith('data:') ? cropBase64 : `data:image/png;base64,${cropBase64}`;
+    const markdown = `\n![이미지](${dataUrl})\n`;
+    setContent(prev => prev + markdown);
+  }, []);
+  const handleInsertFigureToChoice = useCallback((cropBase64: string, choiceIdx: number) => {
+    if (choiceIdx < 0 || choiceIdx > 4) return;
+    const dataUrl = cropBase64.startsWith('data:') ? cropBase64 : `data:image/png;base64,${cropBase64}`;
+    setChoiceImages(prev => {
+      const next = [...prev];
+      next[choiceIdx] = dataUrl;
+      return next;
+    });
+  }, []);
+  const handleClearChoiceImage = useCallback((choiceIdx: number) => {
+    setChoiceImages(prev => {
+      const next = [...prev];
+      next[choiceIdx] = null;
+      return next;
+    });
+  }, []);
+
   // === 해설 이미지 드래그&드롭 ===
   const handleSolutionImageDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -1103,6 +1170,10 @@ export default function AnalyzeProblemEditModal({
     // ★ 표 객관식 헤더 — 빈 배열·문자열 모두 trim 후 1개+ 만 박음.
     //   사용자가 모드 켰지만 헤더 비워두면 무의미하므로 ' ' 만 있는 칸은 제외.
     const trimmedHeaders = choiceHeaders.map((h) => h.trim()).filter((h) => h.length > 0);
+    // ★ 그림 객관식 (2026-05-19): choiceImages — 비어있는(null) 항목은 제거하지 말고 그대로
+      //   length 5 로 유지. 모두 null 이면 명시적 빈 배열 저장하지 않음 (불필요한 필드).
+    const hasAnyChoiceImage = choiceImages.some((img) => !!img);
+
     const updated: Partial<AnalyzedProblemData> = {
       content,
       solution,
@@ -1119,10 +1190,17 @@ export default function AnalyzeProblemEditModal({
       choiceHeaders: trimmedHeaders,
       // ★ 선택지 레이아웃 (회귀 fix 2026-05-17) — 1열/2열/3열/가로 변경값 저장
       choiceLayout,
+      // ★ 그림 객관식 (2026-05-19) — 1개라도 있으면 박음. 없으면 명시적 5-null 배열로
+      //   (이미 박혀있던 이미지를 모두 제거한 의도 보존).
+      ...(hasAnyChoiceImage
+        ? { choiceImages: [...choiceImages] }
+        : (problem.choiceImages && problem.choiceImages.length > 0
+            ? { choiceImages: [null, null, null, null, null] }
+            : {})),
     };
 
     onSave(updated);
-  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, typeCode, typeName, choiceHeaders, choiceLayout, onSave]);
+  }, [content, solution, choices, answerType, correctAnswer, subjectiveAnswer, difficulty, problemNumber, problemScore, typeCode, typeName, choiceHeaders, choiceLayout, choiceImages, problem.choiceImages, onSave]);
 
   return (
     <>
@@ -1246,6 +1324,47 @@ export default function AnalyzeProblemEditModal({
                       </button>
                     </div>
                   </div>
+
+                  {/* ★ 이미지 후보 픽커 (2026-05-19): 1차 분석에서 Gemini+OpenCV 가 자동 크롭한
+                      figure 후보들. 클릭 한 번으로 본문 또는 ①~⑤ 선택지에 삽입.
+                      과학 트랙 자동 크롭 활용 — 사용자가 일일이 마우스 크롭할 필요 없음. */}
+                  {problem.cvFigures && problem.cvFigures.length > 0 && (
+                    <div>
+                      <div className="text-xs font-bold text-gray-500 mb-1.5 flex items-center gap-1.5">
+                        <ImageIcon className="h-3.5 w-3.5 text-cyan-500" />
+                        이미지 후보 ({problem.cvFigures.length})
+                        <span className="ml-auto text-[9px] text-gray-400 font-normal">클릭해서 본문/선택지에 삽입</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {problem.cvFigures.map((fig, fi) => {
+                          if (!fig.cropBase64) return null;
+                          const dataUrl = fig.cropBase64.startsWith('data:')
+                            ? fig.cropBase64
+                            : `data:image/png;base64,${fig.cropBase64}`;
+                          return (
+                            <div key={fi} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
+                              <img src={dataUrl} alt={`후보 ${fi + 1}`} className="w-full h-20 object-contain bg-gray-50 rounded" />
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <button type="button"
+                                  onClick={() => handleInsertFigureToBody(fig.cropBase64!)}
+                                  className="flex-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 transition-colors">
+                                  본문
+                                </button>
+                                {['①', '②', '③', '④', '⑤'].map((cn, ci) => (
+                                  <button key={ci} type="button"
+                                    onClick={() => handleInsertFigureToChoice(fig.cropBase64!, ci)}
+                                    title={`${cn} 선택지에 삽입`}
+                                    className="w-5 h-5 rounded text-[10px] font-bold bg-gray-50 text-gray-500 border border-gray-200 hover:bg-cyan-50 hover:text-cyan-600 hover:border-cyan-300 transition-colors">
+                                    {cn}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -1408,6 +1527,8 @@ export default function AnalyzeProblemEditModal({
                   onMultipleAnswerChange={setIsMultipleAnswer}
                   choiceHeaders={choiceHeaders}
                   onChoiceHeadersChange={setChoiceHeaders}
+                  choiceImages={choiceImages}
+                  onClearChoiceImage={handleClearChoiceImage}
                 />
 
                 {/* ★ Phase C-2c-2: 유형 분류 — 편집 가능 + 트리 picker */}

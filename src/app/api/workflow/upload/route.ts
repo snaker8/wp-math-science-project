@@ -1610,10 +1610,24 @@ async function saveEditedProblemsDirect(
 
       const choices = edited.choices || [];
       const circledNumbers = ['①', '②', '③', '④', '⑤'];
+      // ★ 그림 객관식 (2026-05-19): 텍스트가 비어도 choiceImages[i] 가 있으면 placeholder 유지.
+      //   filter(Boolean) 로 dropping 하면 index 어긋나서 ImagePositionEditor 가 깨짐.
+      const editedChoiceImagesPreFormat: (string | null)[] | undefined = (edited as {
+        choiceImages?: (string | null)[];
+      }).choiceImages;
       const formattedChoices = choices.map((c: string, i: number) => {
         const stripped = c.replace(/^[①②③④⑤]\s*/, '');
-        return stripped ? `${circledNumbers[i]} ${stripped}` : '';
-      }).filter(Boolean);
+        if (stripped) return `${circledNumbers[i]} ${stripped}`;
+        // 이미지만 있는 선택지는 번호만 박음 (filter(Boolean) 사고 차단)
+        if (editedChoiceImagesPreFormat && editedChoiceImagesPreFormat[i]) {
+          return `${circledNumbers[i]}`;
+        }
+        return '';
+      });
+      // 뒤쪽 trailing empty 만 trim — 중간 빈 항목은 그림 객관식 placeholder 이므로 유지
+      while (formattedChoices.length > 0 && !formattedChoices[formattedChoices.length - 1]) {
+        formattedChoices.pop();
+      }
 
       // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
       let contentLatex = edited.content || '(문제 내용 없음)';
@@ -1657,6 +1671,57 @@ async function saveEditedProblemsDirect(
         base64ImageRegex.lastIndex = 0;
       }
 
+      // ★ 그림 객관식 (2026-05-19): edited.choiceImages 의 base64 data URL → Storage 업로드.
+      //   각 선택지 이미지를 problem-crops/{jobId}/problem-{N}-choice-{idx}.png 로 저장 후
+      //   data URL → public URL 로 교체. 비어있거나 이미 URL 이면 그대로 보존.
+      const rawChoiceImages: (string | null)[] | undefined = (edited as {
+        choiceImages?: (string | null)[];
+      }).choiceImages;
+      const resolvedChoiceImages: (string | null)[] = rawChoiceImages
+        ? [...rawChoiceImages]
+        : [];
+      if (rawChoiceImages && rawChoiceImages.length > 0) {
+        for (let ci = 0; ci < rawChoiceImages.length; ci++) {
+          const img = rawChoiceImages[ci];
+          if (!img) {
+            resolvedChoiceImages[ci] = null;
+            continue;
+          }
+          // data URL 이 아니면 (이미 storage URL) 그대로
+          const m = img.match(/^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/);
+          if (!m) {
+            resolvedChoiceImages[ci] = img;
+            continue;
+          }
+          try {
+            const ext = m[1] === 'jpg' ? 'jpeg' : m[1];
+            const imgBuffer = Buffer.from(m[2], 'base64');
+            const choicePath = `problem-crops/${jobId}/problem-${edited.number}-choice-${ci}.${ext === 'jpeg' ? 'jpg' : ext}`;
+            const { data: ciData, error: ciError } = await supabase.storage
+              .from('source-files')
+              .upload(choicePath, imgBuffer, { contentType: `image/${ext}`, upsert: true });
+            if (!ciError && ciData) {
+              const { data: ciUrlData } = supabase.storage
+                .from('source-files')
+                .getPublicUrl(ciData.path);
+              if (ciUrlData?.publicUrl) {
+                resolvedChoiceImages[ci] = ciUrlData.publicUrl;
+                imagesArray.push({ url: ciUrlData.publicUrl, type: 'choice_image', label: `선택지 ${ci + 1} 이미지` });
+              } else {
+                // URL 못 만들면 base64 유지 (자산화 깨지지 않게)
+                resolvedChoiceImages[ci] = img;
+              }
+            } else {
+              console.warn(`[Direct Save] choice ${ci} image upload 실패:`, ciError?.message);
+              resolvedChoiceImages[ci] = img;
+            }
+          } catch (ciErr) {
+            console.error(`[Direct Save] 문제 ${edited.number}번 choice ${ci} 이미지 업로드 오류:`, ciErr);
+            resolvedChoiceImages[ci] = img;
+          }
+        }
+      }
+
       const { data: problem, error: problemError } = await supabase
         .from('problems')
         .insert({
@@ -1683,12 +1748,17 @@ async function saveEditedProblemsDirect(
               }
             }
             const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
-            return {
+            const aj: Record<string, unknown> = {
               finalAnswer: safeAns,
               type: isObj ? 'multiple_choice' : 'short_answer',
               correct_answer: safeAns,
               choices: formattedChoices,
             };
+            // ★ 그림 객관식 — 한 개라도 있으면 박음
+            if (resolvedChoiceImages.some((u) => !!u)) {
+              aj.choiceImages = resolvedChoiceImages;
+            }
+            return aj;
           })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
