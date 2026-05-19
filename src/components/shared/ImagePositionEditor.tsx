@@ -112,7 +112,10 @@ export function ImagePositionEditor({
   const initialState = useMemo(() => {
     const parsed = parseFigureMarker(content);
     return {
-      position: parsed.position >= 0 ? parsed.position : blocks.length,
+      // [도형] 마커가 없을 때 기본값을 0(맨 위)으로 — 모달을 열자마자
+      // 도형이 즉시 보이도록. 이전엔 blocks.length(맨 아래)라 사용자가
+      // 스크롤하거나 DropZone(h-1, 사실상 안 보임)을 클릭해야만 도형이 나타남.
+      position: parsed.position >= 0 ? parsed.position : 0,
       mode: parsed.mode,
       widthPercent: parsed.widthPercent,
     };
@@ -406,15 +409,16 @@ function DropZone({
 
   return (
     <div
-      className={`transition-all cursor-pointer ${
+      className={`transition-all cursor-pointer flex items-center justify-center ${
         isDragOver
-          ? 'h-8 border-2 border-dashed border-violet-400 bg-violet-500/10 rounded-lg mx-2 my-1 flex items-center justify-center'
-          : 'h-1 hover:h-6 hover:border hover:border-dashed hover:border-zinc-600 hover:bg-zinc-800/30 rounded-lg mx-2 my-0.5'
+          ? 'h-8 border-2 border-dashed border-violet-400 bg-violet-500/10 rounded-lg mx-2 my-1'
+          : 'h-2 hover:h-6 border border-dashed border-zinc-700/60 hover:border-violet-500/60 bg-zinc-800/10 hover:bg-violet-500/10 rounded mx-2 my-0.5'
       }`}
       onDragOver={(e) => onDragOver(e, idx)}
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, idx)}
       onClick={onClick}
+      title="여기에 도형 배치"
     >
       {isDragOver && (
         <span className="text-[10px] text-violet-400">여기에 놓기</span>
