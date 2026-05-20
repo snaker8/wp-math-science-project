@@ -20,6 +20,7 @@ import {
 } from './hwp-processor';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { parseQuestions, getQuestionParser } from '@/lib/ocr/question-parser';
+import { parseAnswerDocument } from '@/lib/ocr/answer-parser';
 import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } from '@/types/ocr';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -2052,6 +2053,24 @@ export async function processUploadJob(
       console.log(`[Cloud Flow] Extracted Quick Answer text: ${quickAnswerText.length} chars`);
     }
 
+    // Step 1.2: 해설지/빠른답 텍스트를 번호별로 파싱 (2026-05-19, 사용자 보고)
+    //   사고: 1차 업로드 모달에서 빠른답/해설지 첨부해도 Claude classify 직행 분기가
+    //         answerText/quickAnswerText 통째로 버려서 DB 에 빈 finalAnswer/solution 박힘.
+    //   해결: parseAnswerDocument 로 번호별 매칭 → analysis 에 자동 박기 (아래 Step 4 후)
+    const auxAnswerMap = new Map<number, string>();
+    const auxSolutionMap = new Map<number, string>();
+    const combinedAuxText = [answerText, quickAnswerText].filter(t => t.trim()).join('\n\n');
+    if (combinedAuxText.trim()) {
+      try {
+        const parsedAux = parseAnswerDocument(combinedAuxText);
+        for (const a of parsedAux.answers) auxAnswerMap.set(a.problemNumber, a.answer);
+        for (const s of parsedAux.solutions) auxSolutionMap.set(s.problemNumber, s.solutionLatex);
+        console.log(`[Cloud Flow] Aux 파싱: 답 ${auxAnswerMap.size}건, 해설 ${auxSolutionMap.size}건`);
+      } catch (e) {
+        console.warn('[Cloud Flow] Aux 파싱 실패 (무시):', e instanceof Error ? e.message : e);
+      }
+    }
+
     // Step 2: 모든 페이지에서 개별 문제 추출
     callbacks.onStatusChange('LLM_ANALYZING', '문제 분리 중...');
 
@@ -2199,6 +2218,24 @@ export async function processUploadJob(
         detectedSubject,
         gradeHint
       );
+
+      // ★ Aux 답/해설 매칭 (2026-05-19): 1차 모달에서 첨부한 빠른답/해설지를
+      //   번호별로 매칭해 analysis 에 박기 — Claude classify 직행 분기가 무시하던 사고 해소.
+      const qNum = (question as any).questionNumber
+        ?? (question as any).question_number
+        ?? (question as any).number
+        ?? (i + 1);
+      const auxAns = auxAnswerMap.get(qNum);
+      const auxSol = auxSolutionMap.get(qNum);
+      if (auxAns && (!analysis.solution.finalAnswer || analysis.solution.finalAnswer.trim() === '')) {
+        analysis.solution.finalAnswer = auxAns;
+        console.log(`[Cloud Flow] 문제 ${qNum}: aux finalAnswer 적용 "${auxAns}"`);
+      }
+      if (auxSol && (!analysis.solution.steps || analysis.solution.steps.length === 0)) {
+        // 해설을 steps 한 줄로 박음 (자세한 단계 분리는 추후 batch-solutions 가 처리)
+        analysis.solution.steps = [{ stepNumber: 1, description: auxSol, latex: '', explanation: '' }];
+        console.log(`[Cloud Flow] 문제 ${qNum}: aux solution 적용 (${auxSol.length}자)`);
+      }
 
       // 원본 텍스트를 분석 결과에 포함 (DB 저장 시 content_latex로 사용)
       analysis.originalText = question.text;
