@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertExamAccess } from '@/lib/security/institute-guard';
-import { parseAnswerDocument, type ParsedAnswer } from '@/lib/ocr/answer-parser';
+import { parseAnswerDocument, extractFinalAnswerFromSolution, type ParsedAnswer } from '@/lib/ocr/answer-parser';
 
 const MATHPIX_APP_ID = process.env.MATHPIX_APP_ID || '';
 const MATHPIX_APP_KEY = process.env.MATHPIX_APP_KEY || '';
@@ -202,8 +202,19 @@ export async function POST(
       const matchedAnswer = parseResult.answers.find(a => a.problemNumber === seqNum);
       const matchedSolution = parseResult.solutions.find(s => s.problemNumber === seqNum);
 
-      const newAnswer = matchedAnswer?.answer || '';
+      let newAnswer = matchedAnswer?.answer || '';
       const newSolution = matchedSolution?.solutionLatex || '';
+      // ★ 단답형 폴백 (2026-05-19): Gemini 가 해설은 추출했는데 답을 라벨링 못 한 경우
+      //   (예: "|9-(-4)| = 13" 처럼 본문에 = N 만 있는 단답형). 해설 본문에서 최종 답
+      //   자동 추출 → "정답 -" 표시 사고 차단.
+      //   사용자 보고: BS_H1S2_R1 1번/4번 등 정답 빈 채로 박힘.
+      if (!newAnswer && newSolution) {
+        const extracted = extractFinalAnswerFromSolution(newSolution);
+        if (extracted) {
+          newAnswer = extracted.answer;
+          console.log(`[match-answers POST] 문제 ${seqNum}: 해설→답 자동 추출 "${newAnswer}" (${extracted.answerType})`);
+        }
+      }
       const hasChange = Boolean((newAnswer && newAnswer !== currentAnswer) || (newSolution && newSolution !== currentSolution));
 
       matches.push({
@@ -286,6 +297,16 @@ export async function PUT(
       if (!match.newAnswer && !match.newSolution) {
         skippedNoChange++;
         continue;
+      }
+
+      // ★ 이중 보호 (2026-05-19): POST 가 newAnswer 채워주지만, 클라이언트가 직접
+      //   PUT 호출하거나 미리보기 캐시가 오래된 경우 대비. 해설 있고 답 없으면 자동 추출.
+      if (!match.newAnswer && match.newSolution) {
+        const extracted = extractFinalAnswerFromSolution(match.newSolution);
+        if (extracted) {
+          match.newAnswer = extracted.answer;
+          console.log(`[match-answers PUT] 문제 ${match.problemId.slice(0, 8)}: 해설→답 자동 추출 "${match.newAnswer}"`);
+        }
       }
 
       // 기존 데이터 조회
