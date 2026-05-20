@@ -18,6 +18,7 @@ import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
+import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
 //   사용자 지시 (2026-05-16): "자산화 할때 분류해서 하게 하자".
@@ -1258,6 +1259,12 @@ async function saveEditedProblemsDirect(
     return NextResponse.json({ error: 'Supabase Admin not configured' }, { status: 500 });
   }
 
+  // ★ 학습 규칙 로드 (2026-05-19) — 한 번 로드해서 루프에서 재사용
+  //   카드 편집 모달에서 누적된 (original, corrected) 패턴 중 confidence ≥ 0.7
+  //   규칙만 자산화 시점에 자동 적용. 수학(Mathpix) / 과학(Gemini) OCR 모두 적용.
+  const learnedRules = await loadLearnedRules(supabase);
+  console.log(`[Direct Save] 학습 규칙 로드: ${learnedRules.length}개 (confidence ≥ 0.7)`);
+
   // ★ 크롭 이미지를 Supabase Storage에 업로드 / 이미 업로드된 path는 public URL만 생성
   // ★ Phase 3 최적화: for-of 직렬 → concurrency 5 chunk 병렬.
   //   30개 문제 시 직렬 ~30초 → 5개 동시로 ~6초. Supabase rate limit 회피.
@@ -1637,6 +1644,15 @@ async function saveEditedProblemsDirect(
       //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐, 라인 끝 `\\` 잔여 등
       //   광역 점검 결과 2,332건 중 8건만 영향 (0.34%) — 모두 OCR 깨진 패턴
       contentLatex = repairOcrBrokenLatex(contentLatex);
+
+      // ★ 학습 규칙 자동 적용 (2026-05-19) — 카드 편집에서 누적된 정정 자동 변환
+      {
+        const { result, appliedCount, appliedRules } = applyLearnedRules(contentLatex, learnedRules);
+        if (appliedCount > 0) {
+          console.log(`[Direct Save] 문제 ${edited.number}: 학습 규칙 ${appliedCount}회 적용 — ${appliedRules.join(', ')}`);
+          contentLatex = result;
+        }
+      }
 
       // ★ 본문 (3점)/[3점] 등 배점 표기 제거 — 카드 헤더 배지와 중복 방지
       //   배점은 exam_problems.points 로 별도 저장됨.
@@ -2026,6 +2042,10 @@ async function saveProblemsToDB(
   const job = jobStore.get(jobId);
   if (!job) return;
 
+  // ★ 학습 규칙 로드 (2026-05-19) — 한 번 로드해서 루프에서 재사용
+  const learnedRules: LearnedRule[] = await loadLearnedRules(supabase);
+  console.log(`[DB] 학습 규칙 로드: ${learnedRules.length}개 (confidence ≥ 0.7)`);
+
   // ★ TS 에러 보강 — 아래 appendToExamId 분기가 problems 저장 전에 이 변수를 참조해
   //   기존엔 ReferenceError 가능성 있던 코드 (사실상 사용자가 거의 안 만나던 dead 분기).
   //   안전하게 빈 배열로 선언만 추가 — 분기 동작은 그대로 (toAdd=[] → no-op).
@@ -2368,6 +2388,15 @@ async function saveProblemsToDB(
       // ★ OCR 깨진 LaTeX 자산화 시점 정정 (2026-05-19, BS_H1S2_R2 1번 사고)
       //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐 등
       contentWithMath = repairOcrBrokenLatex(contentWithMath);
+
+      // ★ 학습 규칙 자동 적용 (2026-05-19)
+      {
+        const { result, appliedCount, appliedRules } = applyLearnedRules(contentWithMath, learnedRules);
+        if (appliedCount > 0) {
+          console.log(`[DB] 문제 ${problemIndex}: 학습 규칙 ${appliedCount}회 적용 — ${appliedRules.join(', ')}`);
+          contentWithMath = result;
+        }
+      }
 
       // ★ 본문에 남은 (3점)/[3점]/(3.4점)/[3.4점] 제거 (배점은 exam_problems.points 로만 보존)
       //   카드 헤더의 노란 배점 배지와 본문 (N점) 가 중복 노출되는 사고 방지.
