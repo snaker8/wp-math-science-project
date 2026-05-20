@@ -337,20 +337,34 @@ export async function PUT(
         //     - type==='multiple_choice' → 객관식 (normalize 강제)
         //     - 그 외(short_answer, narrative, null 등) → 단답·서술 (원본 보존)
         //
-        //   이전 가드는 두 갈래 (type-기반 + choices-기반) 라 동일 문제가 분기마다
-        //   다른 결과. CHECK constraint chk_objective_answer_valid 도 type 기준이라
-        //   일관성 확보 — 단답으로 처리된 row 는 CHECK 미적용, 객관식은 normalize 통과.
-        const { normalizeObjectiveAnswer } = await import('@/lib/validation/objective-answer');
+        // ★★★ 단답형 misclassification 자동 보정 (2026-05-19) — 사용자 보고:
+        //   "모달엔 잘 나오는데 적용 안 됨"
+        //   원인: 자산화 시 type='multiple_choice' 로 박혔지만, 해설지 답이 "13", "(5,3)"
+        //   같은 단답형. normalizeObjectiveAnswer("13") → "" → DB 빈값 박힘.
+        //   해결: newAnswer 가 명백히 객관식 답 (①~⑤, 1~5) 이 아니면 type 을 short_answer
+        //   로 flip 하고 원본 보존. CHECK 도 short_answer 면 미적용이라 통과.
+        const { normalizeObjectiveAnswer, isValidObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const trimmedAns = match.newAnswer.trim();
-        const isMultipleChoice = mergedAj.type === 'multiple_choice';
-        const safeAns = isMultipleChoice
-          ? normalizeObjectiveAnswer(match.newAnswer)  // CHECK 통과 보장
-          : match.newAnswer;                            // 단답·서술 원본 보존
-        // ★ 빈값 강등된 경우 추적 — alert 에서 사용자에게 보고
-        if (isMultipleChoice && trimmedAns !== '' && safeAns === '') {
-          console.log(`[match-answers PUT] 객관식 모호값 → 빈값 강등: id=${match.problemId}, raw="${trimmedAns}"`);
-          coercedToEmpty.push({ problemId: match.problemId, rawAnswer: trimmedAns });
+        const wasMultipleChoice = mergedAj.type === 'multiple_choice';
+        const isObviouslyShortAnswer = wasMultipleChoice && trimmedAns !== '' && !isValidObjectiveAnswer(trimmedAns);
+
+        let safeAns: string;
+        if (isObviouslyShortAnswer) {
+          // 단답형 misclassification — type 보정 + 답 원본 보존
+          mergedAj.type = 'short_answer';
+          safeAns = trimmedAns;
+          console.log(`[match-answers PUT] type misclassification 보정: id=${match.problemId.slice(0, 8)}, multiple_choice → short_answer (ans="${trimmedAns}")`);
+        } else if (wasMultipleChoice) {
+          safeAns = normalizeObjectiveAnswer(match.newAnswer);  // CHECK 통과 보장
+          // ★ 빈값 강등된 경우 추적 — alert 에서 사용자에게 보고
+          if (trimmedAns !== '' && safeAns === '') {
+            console.log(`[match-answers PUT] 객관식 모호값 → 빈값 강등: id=${match.problemId}, raw="${trimmedAns}"`);
+            coercedToEmpty.push({ problemId: match.problemId, rawAnswer: trimmedAns });
+          }
+        } else {
+          safeAns = match.newAnswer;  // 단답·서술 원본 보존
         }
+
         mergedAj.finalAnswer = safeAns;
         mergedAj.correct_answer = safeAns;
         mergedAj.answer_user_edited = true;    // ★ 일괄 재생성이 안 건드리도록
