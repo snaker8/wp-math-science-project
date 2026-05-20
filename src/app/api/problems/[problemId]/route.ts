@@ -89,17 +89,23 @@ export async function PATCH(
     // ★ 객관식 정답 박힘 가드 — 0/모호값은 빈값으로 normalize, 정상값(① ~ ⑤·1~5)은 그대로.
     //   미입력(빈값)은 허용 — 자산화 직후 사용자 입력 대기 상태.
     //   메모리: feedback_objective_answer_safety.md
+    //
+    // ★★ 단답형 misclassification 자동 보정 (2026-05-19) — 사용자 보고:
+    //   "1번 답을 수동 기입해도 입력 안 됨 (공통수학2 R1)"
+    //   원인: 자산화 시 type='multiple_choice' 박혔지만 실제 단답형. 수동 답 "13" 등
+    //   → normalize → "" → DB 빈값.
+    //   해결: answer 가 명백히 객관식이 아니면 type flip + 원본 보존. (match-answers PUT
+    //   에도 같은 fix 적용 — 박힘 패턴 회로 전체 차단).
     if (answer_json && typeof answer_json === 'object') {
       const aj = answer_json as Record<string, any>;
       if (aj.type === 'multiple_choice') {
         const { normalizeObjectiveAnswer, isEmptyAnswer, isValidObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const ans = aj.correct_answer ?? aj.finalAnswer;
         if (!isEmptyAnswer(ans) && !isValidObjectiveAnswer(ans)) {
-          // 모호값(0, "5번" 등) → 빈값으로 강제. 박힘 사고 차단.
-          const normalized = normalizeObjectiveAnswer(ans);
-          aj.correct_answer = normalized;
-          aj.finalAnswer = normalized;
-          console.warn(`[API/problems] objective answer normalized: ${JSON.stringify(ans)} → "${normalized}" (problemId=${problemId})`);
+          // 단답형 misclassification — type 보정 + 답 원본 보존
+          aj.type = 'short_answer';
+          // correct_answer/finalAnswer 는 이미 원본 — 그대로 둠
+          console.log(`[API/problems] type misclassification 보정: ${problemId.slice(0, 8)} multiple_choice → short_answer (ans=${JSON.stringify(ans)})`);
         }
       }
     }
