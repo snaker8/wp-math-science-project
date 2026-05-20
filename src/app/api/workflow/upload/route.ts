@@ -17,6 +17,7 @@ import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
+import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
 //   사용자 지시 (2026-05-16): "자산화 할때 분류해서 하게 하자".
@@ -1632,6 +1633,11 @@ async function saveEditedProblemsDirect(
       // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
       let contentLatex = edited.content || '(문제 내용 없음)';
 
+      // ★ OCR 깨진 LaTeX 자산화 시점 정정 (2026-05-19, BS_H1S2_R2 1번 사고)
+      //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐, 라인 끝 `\\` 잔여 등
+      //   광역 점검 결과 2,332건 중 8건만 영향 (0.34%) — 모두 OCR 깨진 패턴
+      contentLatex = repairOcrBrokenLatex(contentLatex);
+
       // ★ 본문 (3점)/[3점] 등 배점 표기 제거 — 카드 헤더 배지와 중복 방지
       //   배점은 exam_problems.points 로 별도 저장됨.
       contentLatex = contentLatex
@@ -2358,6 +2364,10 @@ async function saveProblemsToDB(
       let contentWithMath = mathExprs.length > 0
         ? `${problemContent}\n\n수식:\n${mathExprs.map(m => `$${m}$`).join('\n')}`
         : problemContent;
+
+      // ★ OCR 깨진 LaTeX 자산화 시점 정정 (2026-05-19, BS_H1S2_R2 1번 사고)
+      //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐 등
+      contentWithMath = repairOcrBrokenLatex(contentWithMath);
 
       // ★ 본문에 남은 (3점)/[3점]/(3.4점)/[3.4점] 제거 (배점은 exam_problems.points 로만 보존)
       //   카드 헤더의 노란 배점 배지와 본문 (N점) 가 중복 노출되는 사고 방지.
