@@ -8,7 +8,9 @@
 // ============================================================================
 
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
-const DEFAULT_MODEL = process.env.GEMINI_SCIENCE_SEGMENT_MODEL || 'gemini-2.5-pro';
+// gemini-3.5-flash (2026-05-19~) — env GEMINI_SCIENCE_SEGMENT_MODEL 오버라이드 가능.
+// 롤백: GEMINI_SCIENCE_SEGMENT_MODEL=gemini-2.5-pro
+const DEFAULT_MODEL = process.env.GEMINI_SCIENCE_SEGMENT_MODEL || 'gemini-3.5-flash';
 
 export interface SegmentBBox {
   /** 시험지 번호 (없으면 0) */

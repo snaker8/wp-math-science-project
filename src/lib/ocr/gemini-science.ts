@@ -4,7 +4,9 @@
 //
 // 입력: PDF 또는 이미지 (Buffer)
 // 출력: 구조화 JSON (문제 배열)
-// 모델: gemini-2.5-pro (기본) — env GEMINI_SCIENCE_MODEL 로 오버라이드 가능
+// 모델: gemini-3.5-flash (기본, 2026-05-19~) — env GEMINI_SCIENCE_MODEL 로 오버라이드.
+//   이전 gemini-2.5-pro 대비 output 가격 $10→$9 + 속도 개선 기대.
+//   롤백 필요 시 env GEMINI_SCIENCE_MODEL=gemini-2.5-pro 로 즉시 복귀.
 //
 // ★ 수학 영향 0 — 과학 전용. `src/lib/ocr/mathpix.ts` 와 분리.
 // ★ 패턴 출처: `src/app/api/exams/[examId]/match-answers/route.ts`
@@ -15,7 +17,7 @@
 import type { ScienceGeminiProblem } from '@/types/science-ocr';
 
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
-const DEFAULT_MODEL = process.env.GEMINI_SCIENCE_MODEL || 'gemini-2.5-pro';
+const DEFAULT_MODEL = process.env.GEMINI_SCIENCE_MODEL || 'gemini-3.5-flash';
 
 /**
  * Gemini Vision 호출 결과 (raw)
