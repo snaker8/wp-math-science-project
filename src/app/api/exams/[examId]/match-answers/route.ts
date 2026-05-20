@@ -426,6 +426,7 @@ async function splitPdfToPages(file: File): Promise<File[]> {
 }
 
 // ★ 페이지 분할 래퍼: multi-page PDF 면 페이지별 분리 호출 + 결과 누적 (2026-05-18)
+//   ★ 504 차단 (2026-05-19): 병렬 처리 — sequential 8쪽 × 25s = 200s → 함수 한도 초과 사고
 async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
   const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
   if (!isPdf) return extractAnswersWithGeminiSingle(file);
@@ -433,18 +434,22 @@ async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer[]> {
   if (pages.length === 1) return extractAnswersWithGeminiSingle(pages[0]);
   const all: ParsedAnswer[] = [];
   const seen = new Set<number>();
-  for (const page of pages) {
-    try {
-      const ans = await extractAnswersWithGeminiSingle(page);
-      for (const a of ans) {
-        if (!seen.has(a.problemNumber)) {
-          all.push(a);
-          seen.add(a.problemNumber);
-        }
+  const t0 = Date.now();
+  const results = await Promise.allSettled(
+    pages.map((page) => extractAnswersWithGeminiSingle(page))
+  );
+  console.log(`[match-answers] 답 페이지 ${pages.length}개 병렬 처리 완료 (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (r.status === 'rejected') {
+      console.error(`[match-answers] 답 추출 페이지 실패 ${pages[i].name}: ${r.reason instanceof Error ? r.reason.message : r.reason}`);
+      continue;
+    }
+    for (const a of r.value) {
+      if (!seen.has(a.problemNumber)) {
+        all.push(a);
+        seen.add(a.problemNumber);
       }
-    } catch (err) {
-      console.error(`[match-answers] 답 추출 페이지 실패 ${page.name}: ${err instanceof Error ? err.message : err}`);
-      // 한 페이지 실패해도 나머지 페이지는 계속
     }
   }
   return all.sort((a, b) => a.problemNumber - b.problemNumber);
@@ -541,8 +546,10 @@ async function extractAnswersWithGeminiSingle(file: File): Promise<ParsedAnswer[
 // ============================================================================
 
 // ★ 페이지 분할 래퍼 (해설용): multi-page PDF 면 페이지별 분리 호출 + 결과 누적 (2026-05-18)
-//   ★ 누락 복구 (2026-05-19): 페이지별 처리 후 누락 번호 발견 시 통짜 PDF 로 한 번 더
-//   호출. Gemini 가 페이지 단독으로는 형식 변형해도 전체로 보면 정상 처리하는 케이스 보강.
+//   ★ 504 타임아웃 차단 (2026-05-19): 페이지 병렬 처리 + 통짜 PDF 폴백 비동기 race.
+//   이전 sequential 처리 (8쪽 × 25s = 200s) + 폴백 (30s) → 300s 한계 초과 → 504.
+//   변경: Promise.allSettled 로 페이지 동시 처리 (Gemini 동시 호출 안전) → 총 시간 ≈ 가장 느린 페이지 + a.
+//   통짜 PDF 폴백은 누락 ≥ 25% 일 때만 진입 (sparse gap 만 보강), 시간 마진 확보.
 async function extractSolutionsWithGemini(
   file: File
 ): Promise<{ answers: ParsedAnswer[]; solutions: { problemNumber: number; solutionLatex: string }[] }> {
@@ -550,36 +557,48 @@ async function extractSolutionsWithGemini(
   if (!isPdf) return extractSolutionsWithGeminiSingle(file);
   const pages = await splitPdfToPages(file);
   if (pages.length === 1) return extractSolutionsWithGeminiSingle(pages[0]);
+
+  // ★ 동시 호출 (2026-05-19): 페이지별 Gemini 를 병렬로. 8쪽이라도 ~30s 안에 마감.
+  //   Promise.allSettled 로 일부 실패해도 나머지는 살림.
+  const t0 = Date.now();
+  const results = await Promise.allSettled(
+    pages.map((page) => extractSolutionsWithGeminiSingle(page))
+  );
+  console.log(`[match-answers] 페이지 ${pages.length}개 병렬 처리 완료 (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+
   const allAnswers: ParsedAnswer[] = [];
   const allSolutions: { problemNumber: number; solutionLatex: string }[] = [];
   const seenAns = new Set<number>();
-  for (const page of pages) {
-    try {
-      const { answers, solutions } = await extractSolutionsWithGeminiSingle(page);
-      for (const a of answers) {
-        if (!seenAns.has(a.problemNumber)) {
-          allAnswers.push(a);
-          seenAns.add(a.problemNumber);
-        }
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (r.status === 'rejected') {
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      console.error(`[match-answers] 해설 추출 페이지 실패 ${pages[i].name}: ${msg}`);
+      continue;
+    }
+    const { answers, solutions } = r.value;
+    for (const a of answers) {
+      if (!seenAns.has(a.problemNumber)) {
+        allAnswers.push(a);
+        seenAns.add(a.problemNumber);
       }
-      // 해설은 같은 번호여도 페이지 경계로 잘릴 수 있어 이어붙임
-      for (const s of solutions) {
-        const existing = allSolutions.find(x => x.problemNumber === s.problemNumber);
-        if (existing) {
-          existing.solutionLatex = existing.solutionLatex + '\n' + s.solutionLatex;
-        } else {
-          allSolutions.push(s);
-        }
+    }
+    for (const s of solutions) {
+      const existing = allSolutions.find(x => x.problemNumber === s.problemNumber);
+      if (existing) {
+        existing.solutionLatex = existing.solutionLatex + '\n' + s.solutionLatex;
+      } else {
+        allSolutions.push(s);
       }
-    } catch (err) {
-      console.error(`[match-answers] 해설 추출 페이지 실패 ${page.name}: ${err instanceof Error ? err.message : err}`);
     }
   }
 
   // ★ 통짜 PDF 폴백 (2026-05-19) — 페이지별 결과의 sparse gap 보강.
-  //   기준: 최대 번호 기준 expected 1..max 중 누락 비율이 ≥ 10% 면 통짜로 한 번 더 호출.
-  //   누락된 번호만 합쳐서 사용 — 기존 답·해설은 덮어쓰지 않음 (페이지 결과 우선).
-  if (allAnswers.length > 0 || allSolutions.length > 0) {
+  //   조건 강화: 누락 ≥ 25% 일 때만 진입 (이전 10% → 504 사고). 시간 마진 확보.
+  //   페이지 병렬 처리 후 남은 시간 budget 안에서만 실행.
+  const elapsedMs = Date.now() - t0;
+  const TIME_BUDGET_MS = 240 * 1000; // 300s 함수 한도 중 240s 이내면 폴백 시도
+  if (elapsedMs < TIME_BUDGET_MS && (allAnswers.length > 0 || allSolutions.length > 0)) {
     const maxNum = Math.max(
       ...allAnswers.map(a => a.problemNumber),
       ...allSolutions.map(s => s.problemNumber),
@@ -593,8 +612,8 @@ async function extractSolutionsWithGemini(
       if (!seenSol.has(n)) missingSol.push(n);
     }
     const missingRatio = Math.max(missingAns.length, missingSol.length) / Math.max(maxNum, 1);
-    if (missingRatio >= 0.10 && (missingAns.length > 0 || missingSol.length > 0)) {
-      console.log(`[match-answers] 누락 복구 폴백 진입 (${file.name}): 답 누락=${missingAns.join(',')}, 해설 누락=${missingSol.join(',')} → 통짜 PDF 재호출`);
+    if (missingRatio >= 0.25 && (missingAns.length > 0 || missingSol.length > 0)) {
+      console.log(`[match-answers] 누락 복구 폴백 진입 (${file.name}, ratio=${(missingRatio * 100).toFixed(0)}%): 답 누락=${missingAns.join(',')}, 해설 누락=${missingSol.join(',')} → 통짜 PDF 재호출`);
       try {
         const full = await extractSolutionsWithGeminiSingle(file);
         let recoveredA = 0;
@@ -617,7 +636,11 @@ async function extractSolutionsWithGemini(
       } catch (err) {
         console.warn(`[match-answers] 통짜 PDF 복구 실패 (${file.name}): ${err instanceof Error ? err.message : err}`);
       }
+    } else if (missingRatio > 0 && missingRatio < 0.25) {
+      console.log(`[match-answers] 누락 ${missingAns.length}+${missingSol.length} 개 (ratio=${(missingRatio * 100).toFixed(0)}%) — 25% 미만이라 폴백 스킵`);
     }
+  } else if (elapsedMs >= TIME_BUDGET_MS) {
+    console.warn(`[match-answers] 페이지 처리 ${(elapsedMs / 1000).toFixed(0)}s — 통짜 폴백 스킵 (타임아웃 마진 확보)`);
   }
 
   return {
