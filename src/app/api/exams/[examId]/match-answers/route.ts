@@ -541,6 +541,8 @@ async function extractAnswersWithGeminiSingle(file: File): Promise<ParsedAnswer[
 // ============================================================================
 
 // ★ 페이지 분할 래퍼 (해설용): multi-page PDF 면 페이지별 분리 호출 + 결과 누적 (2026-05-18)
+//   ★ 누락 복구 (2026-05-19): 페이지별 처리 후 누락 번호 발견 시 통짜 PDF 로 한 번 더
+//   호출. Gemini 가 페이지 단독으로는 형식 변형해도 전체로 보면 정상 처리하는 케이스 보강.
 async function extractSolutionsWithGemini(
   file: File
 ): Promise<{ answers: ParsedAnswer[]; solutions: { problemNumber: number; solutionLatex: string }[] }> {
@@ -573,6 +575,51 @@ async function extractSolutionsWithGemini(
       console.error(`[match-answers] 해설 추출 페이지 실패 ${page.name}: ${err instanceof Error ? err.message : err}`);
     }
   }
+
+  // ★ 통짜 PDF 폴백 (2026-05-19) — 페이지별 결과의 sparse gap 보강.
+  //   기준: 최대 번호 기준 expected 1..max 중 누락 비율이 ≥ 10% 면 통짜로 한 번 더 호출.
+  //   누락된 번호만 합쳐서 사용 — 기존 답·해설은 덮어쓰지 않음 (페이지 결과 우선).
+  if (allAnswers.length > 0 || allSolutions.length > 0) {
+    const maxNum = Math.max(
+      ...allAnswers.map(a => a.problemNumber),
+      ...allSolutions.map(s => s.problemNumber),
+      0,
+    );
+    const seenSol = new Set(allSolutions.map(s => s.problemNumber));
+    const missingAns: number[] = [];
+    const missingSol: number[] = [];
+    for (let n = 1; n <= maxNum; n++) {
+      if (!seenAns.has(n)) missingAns.push(n);
+      if (!seenSol.has(n)) missingSol.push(n);
+    }
+    const missingRatio = Math.max(missingAns.length, missingSol.length) / Math.max(maxNum, 1);
+    if (missingRatio >= 0.10 && (missingAns.length > 0 || missingSol.length > 0)) {
+      console.log(`[match-answers] 누락 복구 폴백 진입 (${file.name}): 답 누락=${missingAns.join(',')}, 해설 누락=${missingSol.join(',')} → 통짜 PDF 재호출`);
+      try {
+        const full = await extractSolutionsWithGeminiSingle(file);
+        let recoveredA = 0;
+        let recoveredS = 0;
+        for (const a of full.answers) {
+          if (!seenAns.has(a.problemNumber)) {
+            allAnswers.push(a);
+            seenAns.add(a.problemNumber);
+            recoveredA++;
+          }
+        }
+        for (const s of full.solutions) {
+          if (!seenSol.has(s.problemNumber)) {
+            allSolutions.push(s);
+            seenSol.add(s.problemNumber);
+            recoveredS++;
+          }
+        }
+        console.log(`[match-answers]   복구 결과: 답 +${recoveredA}, 해설 +${recoveredS}`);
+      } catch (err) {
+        console.warn(`[match-answers] 통짜 PDF 복구 실패 (${file.name}): ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
+
   return {
     answers: allAnswers.sort((a, b) => a.problemNumber - b.problemNumber),
     solutions: allSolutions.sort((a, b) => a.problemNumber - b.problemNumber),
@@ -589,9 +636,9 @@ async function extractSolutionsWithGeminiSingle(
   const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
   const mimeType = isPdf ? 'application/pdf' : (file.type || 'image/jpeg');
 
-  const prompt = `이 파일은 수학 시험의 해설지야. 각 문제의 답과 해설을 추출해서 아래 형식으로 출력해.
+  const prompt = `이 파일은 수학·과학 시험의 해설지야. 각 문제의 답과 해설을 추출해서 아래 형식으로 출력해.
 
-[출력 형식]
+[출력 형식 — 반드시 이 헤더 형식만 사용. 다른 헤더(##, **, [N] 등) 금지]
 --- 문제 1 ---
 답: ③
 해설: (해설 원문을 그대로 옮겨. 수식은 LaTeX 문법 $...$ 또는 $$...$$ 사용)
@@ -600,16 +647,17 @@ async function extractSolutionsWithGeminiSingle(
 답: -17
 해설: ...
 
-(빈 줄로 구분)
+(블록은 빈 줄로 구분)
 
 [중요 원칙]
 1. 문서에 있는 해설을 요약하거나 재구성하지 말고 **원문 그대로** 옮겨.
 2. 객관식 답은 원문자(①②③④⑤) 그대로 유지. (1), 1 로 변환 금지.
 3. 수식은 LaTeX 보존 (분수, 극한, 적분, 제곱근 등).
 4. 문제 번호는 1~50 범위. 범위 밖은 제외.
-5. 해설이 없는 문제는 "해설: 없음"으로 표기.
+5. 해설이 없는 문제는 "해설: 없음"으로 표기. **답은 항상 추출** — 모르면 "답: 알 수 없음".
 6. 불필요한 인사나 설명 생략, 위 형식만 출력.
-7. 모든 문제를 **빠짐없이** 추출. 중간에 멈추지 말 것.`;
+7. 모든 문제를 **빠짐없이** 추출. 중간에 멈추지 말 것. 문제 번호 누락 절대 금지.
+8. 페이지 안에 보이는 모든 문제 번호를 빠짐없이 "--- 문제 N ---" 헤더로 시작해. 헤더 빼먹지 마.`;
 
   const model = process.env.GEMINI_VISION_MODEL || 'gemini-3-flash-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
@@ -646,45 +694,178 @@ async function extractSolutionsWithGeminiSingle(
   }
   if (!rawText) throw new Error('Gemini Vision 응답이 비어있습니다');
 
-  // "--- 문제 N ---" 블록 단위로 쪼개서 파싱
+  // ★ 다양한 블록 델리미터 지원 (2026-05-19): Gemini 가 가끔 prompt 무시하고
+  //   "## 문제 15", "### 15번", "**문제 15**", "[15]" 같은 형식 섞어서 출력 →
+  //   기존엔 strict "--- 문제 N ---" 만 인식해서 그 문제 통째로 누락.
+  //   사용자 보고: 40문제 중 #15·#8 등이 새 답·해설 빈값으로 표시됨.
+  //
+  //   1) 다양한 헤더 패턴 매칭 (정규식 union)
+  //   2) 매칭된 위치들 사이 텍스트를 body 로 슬라이싱
+  //   3) 마지막 매칭 이후 끝까지도 body 로 포함
   const answers: ParsedAnswer[] = [];
   const solutions: { problemNumber: number; solutionLatex: string }[] = [];
 
-  // 블록 분리: "--- 문제 N ---" 패턴 기준
-  const blocks = rawText.split(/^---\s*문제\s*(\d{1,2})\s*---\s*$/m);
-  // split 결과: [before, num1, body1, num2, body2, ...]
-  for (let i = 1; i < blocks.length; i += 2) {
-    const num = parseInt(blocks[i]);
-    const body = blocks[i + 1] || '';
-    if (!num || num < 1 || num > 50) continue;
+  // 블록 헤더 후보 패턴들 (대소문자·공백·기호 변형 허용).
+  // capture group 1 = 문제 번호. 줄 시작·줄 끝 앵커 ^...$ + multiline.
+  const HEADER_PATTERNS: RegExp[] = [
+    /^[-=]{2,}\s*문제\s*(\d{1,2})\s*[-=]{2,}\s*$/gm,         // --- 문제 N ---
+    /^#{1,6}\s*문제\s*(\d{1,2})\s*\.?\s*$/gm,                  // ## 문제 N
+    /^#{1,6}\s*(\d{1,2})\s*번\s*\.?\s*$/gm,                    // ### N번
+    /^\*{1,2}\s*문제\s*(\d{1,2})\s*\*{1,2}\s*$/gm,            // **문제 N**
+    /^\[\s*(\d{1,2})\s*\]\s*$/gm,                              // [N]
+    /^문제\s*(\d{1,2})\s*[.):]?\s*$/gm,                        // 문제 N (단독 라인)
+    /^(\d{1,2})\s*번\s*\.?\s*$/gm,                             // N번 (단독 라인)
+  ];
 
-    // 답 추출
-    const ansMatch = body.match(/답\s*[:：]\s*([^\n]+)/);
-    if (ansMatch) {
-      let ans = ansMatch[1].trim();
-      let answerType: ParsedAnswer['answerType'] = 'text';
-      if (/^[①②③④⑤]\s*$/.test(ans)) {
-        ans = CIRCLED_TO_DIGIT[ans.trim()] || ans;
-        answerType = 'choice';
-      } else if (/^[1-5]$/.test(ans)) {
-        answerType = 'choice';
-      } else if (/^-?\d+(?:[.,]\d+)?$/.test(ans)) {
-        answerType = 'numeric';
-      }
-      if (ans) answers.push({ problemNumber: num, answer: ans, answerType });
+  // 모든 헤더 매칭 수집: { index, length, num }
+  type Hit = { index: number; length: number; num: number };
+  const hits: Hit[] = [];
+  const seenIdx = new Set<number>();
+  for (const re of HEADER_PATTERNS) {
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(rawText)) !== null) {
+      // 같은 위치 중복 방지 (다른 패턴이 겹쳐 매칭한 경우)
+      if (seenIdx.has(m.index)) continue;
+      const num = parseInt(m[1], 10);
+      if (!num || num < 1 || num > 50) continue;
+      hits.push({ index: m.index, length: m[0].length, num });
+      seenIdx.add(m.index);
     }
+  }
+  // 등장 순서 (파일 내 위치) 로 정렬
+  hits.sort((a, b) => a.index - b.index);
 
-    // 해설 추출 (답 라인 다음부터 블록 끝까지)
-    const solMatch = body.match(/해설\s*[:：]\s*([\s\S]+?)(?=\n---|\s*$)/);
-    if (solMatch) {
-      const sol = solMatch[1].trim();
-      if (sol && sol !== '없음') {
-        solutions.push({ problemNumber: num, solutionLatex: sol });
-      }
-    }
+  // 같은 번호가 여러 번 등장하면 첫 번째 만 사용 (중복 헤더 fallback)
+  const seenNum = new Set<number>();
+  const dedupHits: Hit[] = [];
+  for (const h of hits) {
+    if (seenNum.has(h.num)) continue;
+    seenNum.add(h.num);
+    dedupHits.push(h);
+  }
+
+  // 각 hit 의 body = 자기 헤더 끝 ~ 다음 hit 시작 (마지막은 ~ rawText 끝)
+  for (let i = 0; i < dedupHits.length; i++) {
+    const h = dedupHits[i];
+    const bodyStart = h.index + h.length;
+    const bodyEnd = i + 1 < dedupHits.length ? dedupHits[i + 1].index : rawText.length;
+    const body = rawText.slice(bodyStart, bodyEnd);
+    parseBlockBody(body, h.num, answers, solutions);
+  }
+
+  // ★ Fallback (2026-05-19): 블록 헤더 매칭 0개거나 매우 적으면 line-based 파싱 시도.
+  //   Gemini 가 헤더 없이 "15. 답: 4\n해설: ..." 같은 flat 출력하는 경우.
+  if (dedupHits.length === 0) {
+    parseFlatFallback(rawText, answers, solutions);
   }
 
   return { answers, solutions };
+}
+
+// 블록 body 에서 답·해설 추출 (in-place push)
+function parseBlockBody(
+  body: string,
+  num: number,
+  answers: ParsedAnswer[],
+  solutions: { problemNumber: number; solutionLatex: string }[],
+) {
+  // 답 추출 — "답:" 다음 줄에 답이 와도 OK (한 줄 또는 다음 줄)
+  const ansMatch = body.match(/답\s*[:：]\s*([^\n]*)/);
+  if (ansMatch) {
+    let ans = ansMatch[1].trim();
+    // 같은 줄이 비어있으면 다음 줄에서 첫 비어있지 않은 라인 시도
+    if (!ans) {
+      const after = body.slice(body.indexOf(ansMatch[0]) + ansMatch[0].length).split('\n');
+      for (const ln of after) {
+        const t = ln.trim();
+        if (t && !/^(해설|풀이)/.test(t)) { ans = t; break; }
+        if (t && /^(해설|풀이)/.test(t)) break;
+      }
+    }
+    let answerType: ParsedAnswer['answerType'] = 'text';
+    if (/^[①②③④⑤]\s*$/.test(ans)) {
+      ans = CIRCLED_TO_DIGIT[ans.trim()] || ans;
+      answerType = 'choice';
+    } else if (/^[1-5]$/.test(ans)) {
+      answerType = 'choice';
+    } else if (/^-?\d+(?:[.,]\d+)?$/.test(ans)) {
+      answerType = 'numeric';
+    }
+    if (ans && ans !== '없음' && !/^알\s*수\s*없/.test(ans)) {
+      answers.push({ problemNumber: num, answer: ans, answerType });
+    }
+  }
+
+  // 해설 추출 — "해설:" 또는 "풀이:" 다음부터 블록 끝까지
+  const solMatch = body.match(/(?:해설|풀이)\s*[:：]\s*([\s\S]+?)$/);
+  if (solMatch) {
+    const sol = solMatch[1].trim();
+    if (sol && sol !== '없음' && !/^알\s*수\s*없/.test(sol)) {
+      solutions.push({ problemNumber: num, solutionLatex: sol });
+    }
+  }
+}
+
+// Flat 출력 폴백: 헤더 없이 "15. 답: 4\n해설: ..." 같은 형식
+function parseFlatFallback(
+  text: string,
+  answers: ParsedAnswer[],
+  solutions: { problemNumber: number; solutionLatex: string }[],
+) {
+  // "N. 답: X" 줄 단위 스캔
+  const lines = text.split('\n');
+  let currentNum: number | null = null;
+  let currentSolBuf: string[] = [];
+  const flushSol = () => {
+    if (currentNum !== null && currentSolBuf.length > 0) {
+      const sol = currentSolBuf.join('\n').trim();
+      if (sol && sol !== '없음') {
+        solutions.push({ problemNumber: currentNum, solutionLatex: sol });
+      }
+    }
+    currentSolBuf = [];
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    // "N. 답: X" 패턴
+    const m = line.match(/^(\d{1,2})\s*[.)]\s*답\s*[:：]\s*(.+)$/);
+    if (m) {
+      flushSol();
+      const num = parseInt(m[1], 10);
+      const ans = m[2].trim();
+      if (num >= 1 && num <= 50 && ans) {
+        let answerType: ParsedAnswer['answerType'] = 'text';
+        let normalized = ans;
+        if (/^[①②③④⑤]$/.test(ans)) {
+          normalized = CIRCLED_TO_DIGIT[ans] || ans;
+          answerType = 'choice';
+        } else if (/^[1-5]$/.test(ans)) {
+          answerType = 'choice';
+        } else if (/^-?\d+(?:[.,]\d+)?$/.test(ans)) {
+          answerType = 'numeric';
+        }
+        if (normalized !== '없음') {
+          answers.push({ problemNumber: num, answer: normalized, answerType });
+        }
+        currentNum = num;
+      }
+      continue;
+    }
+    // "해설:" 시작 → 이후 블록을 currentSolBuf 에 누적
+    const solStart = line.match(/^(?:해설|풀이)\s*[:：]\s*(.*)$/);
+    if (solStart && currentNum !== null) {
+      flushSol();
+      const rest = solStart[1].trim();
+      if (rest) currentSolBuf.push(rest);
+      continue;
+    }
+    // 진행 중인 해설에 라인 추가
+    if (currentNum !== null && currentSolBuf.length > 0) {
+      currentSolBuf.push(raw);
+    }
+  }
+  flushSol();
 }
 
 // ============================================================================
