@@ -24,6 +24,7 @@ import {
   ImagePlus,
   Merge,
   Keyboard,
+  RotateCw,
 } from 'lucide-react';
 import './pdf-analyze.css';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -32,6 +33,10 @@ import AnalyzeProblemEditModal from '@/components/workflow/AnalyzeProblemEditMod
 import type { AnalyzedProblemData } from '@/components/workflow/AnalyzeProblemEditModal';
 import dynamic from 'next/dynamic';
 import { analyzePageBlocksSplit, getMultiBlocks, refineAiBboxes, type CropRect } from '@/lib/pdf/auto-crop';
+// ★ bbox 회전 헬퍼 (PDF 자동 회전 + 사용자 토글, 2026-05-22)
+//   - rotateBbox: 원본 PDF 좌표 → 회전 디스플레이 좌표 (렌더용)
+//   - unrotateBbox: 디스플레이 좌표 → 원본 좌표 (DB 저장용 — 항상 원본 유지)
+import { rotateBbox as rotateBboxLocal, unrotateBbox as unrotateBboxLocal } from '@/lib/pdf-viewer';
 // ★ 페이지 순서 정정 — 드래그 앤 드롭 (2026-05-17)
 //   PDF 스캔이 잘못된 순서(예: 1, 3, 2)로 들어왔을 때 사용자가 정정 가능
 import {
@@ -284,12 +289,14 @@ function PdfPageCanvas({
   pageNumber,
   width,
   height,
+  rotation = 0,
   className,
 }: {
   pdfUrl?: string;
   pageNumber: number;
   width: number;
   height: number;
+  rotation?: 0 | 90 | 180 | 270;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -317,7 +324,7 @@ function PdfPageCanvas({
         const canvas = canvasRef.current;
         if (!canvas || cancelled) return;
 
-        await renderPdfPage(canvas, pdf, pageNumber, width, height);
+        await renderPdfPage(canvas, pdf, pageNumber, width, height, rotation);
 
         if (!cancelled) {
           setIsRendering(false);
@@ -336,7 +343,7 @@ function PdfPageCanvas({
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, pageNumber, width, height]);
+  }, [pdfUrl, pageNumber, width, height, rotation]);
 
   if (!pdfUrl) {
     return (
@@ -384,12 +391,14 @@ function PageThumbnailItem({
   pdfUrl,
   onPageSelect,
   reorderEnabled,
+  rotation = 0,
 }: {
   entry: PageEntry;
   isActive: boolean;
   pdfUrl?: string;
   onPageSelect: (displayNumber: number) => void;
   reorderEnabled: boolean;
+  rotation?: 0 | 90 | 180 | 270;
 }) {
   const sortable = useSortable({ id: entry.pdfPageNumber, disabled: !reorderEnabled });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
@@ -446,6 +455,7 @@ function PageThumbnailItem({
             pageNumber={entry.pdfPageNumber}
             width={56}
             height={80}
+            rotation={rotation}
           />
           {entry.aiStatus === 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -490,6 +500,7 @@ function PageThumbnailList({
   aiDetectProgress,
   pageOrder,
   onReorder,
+  getRotation,
 }: {
   pages: PageData[];
   currentPage: number;
@@ -501,6 +512,8 @@ function PageThumbnailList({
   pageOrder: number[];
   /** 새 순서로 변경 시 호출 (새 pageOrder 배열) */
   onReorder: (newOrder: number[]) => void;
+  /** ★ 페이지별 회전값 조회 — 썸네일도 회전 반영 */
+  getRotation?: (pdfPageNumber: number) => 0 | 90 | 180 | 270;
 }) {
   const [reorderMode, setReorderMode] = useState(false);
 
@@ -580,6 +593,7 @@ function PageThumbnailList({
                 pdfUrl={pdfUrl}
                 onPageSelect={onPageSelect}
                 reorderEnabled={reorderMode}
+                rotation={getRotation?.(entry.pdfPageNumber) ?? 0}
               />
             ))}
           </SortableContext>
@@ -600,6 +614,7 @@ function DraggableBbox({
   onSelect,
   onDoubleClick,
   onBboxChange,
+  rotation = 0,
 }: {
   problem: AnalyzedProblem;
   canvasSize: { width: number; height: number };
@@ -607,8 +622,13 @@ function DraggableBbox({
   onSelect: () => void;
   onDoubleClick: () => void;
   onBboxChange: (bbox: { x: number; y: number; w: number; h: number }) => void;
+  rotation?: 0 | 90 | 180 | 270;
 }) {
-  const bbox = problem.bbox!;
+  // ★ 회전 적용 — 원본 bbox 는 PDF 좌표계, displayBbox 는 회전된 디스플레이 좌표계.
+  //   드래그/리사이즈는 displayBbox 기준으로 계산하고, 저장 시 unrotateBbox 로 원본 좌표 복원.
+  const originalBbox = problem.bbox!;
+  const displayBbox = rotateBboxLocal(originalBbox, rotation);
+  const bbox = displayBbox;
   const isComplete = problem.status === 'completed' || problem.status === 'edited';
   const isProcessing = problem.status === 'analyzing';
   const isPending = problem.status === 'pending';
@@ -670,7 +690,8 @@ function DraggableBbox({
         if (newBbox.h < 0.02) newBbox.h = 0.02;
       }
 
-      onBboxChange(newBbox);
+      // ★ DB 에는 항상 원본 PDF 좌표로 저장 — display 좌표 → 원본 좌표 역변환
+      onBboxChange(rotation === 0 ? newBbox : unrotateBboxLocal(newBbox, rotation));
     };
 
     const handleMouseUp = () => {
@@ -681,7 +702,7 @@ function DraggableBbox({
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [bbox, canvasSize, onBboxChange, onSelect]);
+  }, [bbox, canvasSize, onBboxChange, onSelect, rotation]);
 
   // 리사이즈 핸들 (선택된 bbox만)
   const handles = isSelected ? [
@@ -779,6 +800,8 @@ function PdfViewerWithBoxes({
   isAnalyzing,
   canvasRef: externalCanvasRef,
   onManualCropDetected,
+  rotation = 0,
+  onRotate,
 }: {
   pdfUrl?: string;
   pageNumber: number;
@@ -791,6 +814,10 @@ function PdfViewerWithBoxes({
   isAnalyzing: boolean;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   onManualCropDetected?: (pageNumber: number, blocks: CropRect[]) => void;
+  /** ★ 페이지 회전 (0|90|180|270). 자동 감지(가로→90)+사용자 토글로 설정됨 */
+  rotation?: 0 | 90 | 180 | 270;
+  /** ★ 회전 버튼 클릭 시 호출 — 현재 PDF page number 전달 */
+  onRotate?: (pdfPageNumber: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -1034,7 +1061,8 @@ function PdfViewerWithBoxes({
         if (pageNumber > pdf.numPages || cancelled) return;
 
         const page = await pdf.getPage(pageNumber);
-        const viewport = page.getViewport({ scale: 1 });
+        // ★ 회전 적용 — viewport.width/height 가 90/270 시 자동 swap.
+        const viewport = page.getViewport({ scale: 1, rotation });
 
         const container = containerRef.current;
         if (!container || cancelled) return;
@@ -1063,7 +1091,7 @@ function PdfViewerWithBoxes({
           2.5
         );
 
-        const scaledViewport = page.getViewport({ scale });
+        const scaledViewport = page.getViewport({ scale, rotation });
 
         const canvas = canvasRef.current;
         if (!canvas || cancelled) return;
@@ -1122,7 +1150,7 @@ function PdfViewerWithBoxes({
       }
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [pdfUrl, pageNumber]);
+  }, [pdfUrl, pageNumber, rotation]);
 
   // 바운딩 박스가 있는 문제들 (AutoCrop bbox는 preloadAllPages에서 이미 할당됨)
   const problemsWithBoxes = useMemo(() => {
@@ -1159,7 +1187,19 @@ function PdfViewerWithBoxes({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-auto flex justify-center py-4 bg-zinc-950/30">
+    <div ref={containerRef} className="flex-1 overflow-auto flex justify-center py-4 bg-zinc-950/30 relative">
+      {/* ★ 페이지 회전 토글 (PDF 자동 정렬 + 사용자 수동 보정) — 우측 상단 fixed */}
+      {onRotate && (
+        <button
+          type="button"
+          onClick={() => onRotate(pageNumber)}
+          className="absolute top-3 right-3 z-40 px-2 py-1 rounded text-xs font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 transition-colors flex items-center gap-1"
+          title={`페이지 회전 (90° 시계방향). 현재 ${rotation}°`}
+        >
+          <RotateCw className="h-3 w-3" />
+          회전 {rotation > 0 && <span className="text-cyan-300">{rotation}°</span>}
+        </button>
+      )}
       <div
         className="relative inline-block"
         onMouseDown={handleCanvasMouseDown}
@@ -1206,6 +1246,7 @@ function PdfViewerWithBoxes({
               onSelect={() => onSelectProblem(problem.id)}
               onDoubleClick={() => onEditProblem?.(problem)}
               onBboxChange={(newBbox) => onBboxUpdate?.(problem.id, newBbox)}
+              rotation={rotation}
             />
           );
         })}
@@ -2937,6 +2978,12 @@ export default function AnalyzeJobPage() {
   const [editingProblem, setEditingProblem] = useState<AnalyzedProblem | null>(null);
   const [totalPdfPages, setTotalPdfPages] = useState(1);
 
+  // ★ 페이지별 회전 (2026-05-22) — key: PDF page number, value: 0|90|180|270
+  //   PDF 로드 시 detectPageRotation 으로 자동 감지 (가로 페이지 → 90°),
+  //   사용자가 회전 버튼을 누르면 90° 시계방향으로 누적.
+  //   bbox 는 DB 에 항상 원본 좌표로 저장 — 렌더 시 rotateBbox 변환, 드래그 저장 시 unrotateBbox 역변환.
+  const [pageRotations, setPageRotations] = useState<Map<number, 0 | 90 | 180 | 270>>(new Map());
+
   // ★ AutoCrop 주도 파이프라인 상태
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
@@ -3075,6 +3122,59 @@ export default function AnalyzeJobPage() {
 
     return () => { cancelled = true; };
   }, [jobData?.pdfUrl]);
+
+  // ★ PDF 로드 후 페이지별 자동 회전 감지 (가로 페이지 → 90°). 사용자 토글은 보존.
+  useEffect(() => {
+    if (!jobData?.pdfUrl || totalPdfPages <= 0) return;
+
+    let cancelled = false;
+
+    const detectAll = async () => {
+      try {
+        const { loadPdfDocument, detectPageRotation } = await import('@/lib/pdf-viewer');
+        const pdf = await loadPdfDocument(jobData.pdfUrl!);
+        if (cancelled) return;
+
+        const detected = new Map<number, 0 | 90>();
+        for (let pageNum = 1; pageNum <= totalPdfPages; pageNum++) {
+          if (cancelled) return;
+          const rot = await detectPageRotation(pdf, pageNum);
+          if (rot !== 0) detected.set(pageNum, rot);
+        }
+
+        if (cancelled || detected.size === 0) return;
+
+        setPageRotations((prev) => {
+          const next = new Map(prev);
+          let changed = false;
+          for (const [pageNum, rot] of detected.entries()) {
+            // 이미 사용자가 설정한 회전은 덮어쓰지 않음
+            if (!next.has(pageNum)) {
+              next.set(pageNum, rot);
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      } catch (err) {
+        console.warn('[PDF Rotation] 자동 감지 실패:', err);
+      }
+    };
+
+    detectAll();
+    return () => { cancelled = true; };
+  }, [jobData?.pdfUrl, totalPdfPages]);
+
+  // ★ 회전 버튼 핸들러 — 90° 시계방향 누적 (0 → 90 → 180 → 270 → 0)
+  const handleRotatePage = useCallback((pdfPageNumber: number) => {
+    setPageRotations((prev) => {
+      const next = new Map(prev);
+      const current = next.get(pdfPageNumber) ?? 0;
+      const newRot = ((current + 90) % 360) as 0 | 90 | 180 | 270;
+      next.set(pdfPageNumber, newRot);
+      return next;
+    });
+  }, []);
 
   // ★ pageOrder 초기화 + localStorage 복원 (2026-05-17)
   //   totalPdfPages 변경 시 또는 jobId 변경 시
@@ -5183,6 +5283,7 @@ export default function AnalyzeJobPage() {
             aiDetectProgress={detectionMode === 'ai' ? aiDetectProgress : undefined}
             pageOrder={pageOrder.length > 0 ? pageOrder : Array.from({ length: totalPdfPages }, (_, i) => i + 1)}
             onReorder={handlePageReorder}
+            getRotation={(pdfPageNum) => pageRotations.get(pdfPageNum) ?? 0}
           />
         </div>
 
@@ -5205,6 +5306,8 @@ export default function AnalyzeJobPage() {
           isAnalyzing={isProcessing && !isAutoCropActive}
           canvasRef={pdfCanvasRef}
           onManualCropDetected={handleManualCropDetected}
+          rotation={pageRotations.get(currentPage) ?? 0}
+          onRotate={handleRotatePage}
         />
 
         {/* --- 우측: 문제 상세 패널 (Chrome 디자인) --- */}
