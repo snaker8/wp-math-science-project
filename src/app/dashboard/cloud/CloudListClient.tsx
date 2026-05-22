@@ -979,7 +979,7 @@ export default function CloudPage() {
       // 북그룹 + 시험지 병렬 fetch (no-store: 삭제 후 최신 데이터 보장)
       const [groupsRes, examsRes] = await Promise.all([
         fetch(`/api/book-groups${subjectParam}`, { cache: 'no-store' }),
-        fetch('/api/exams', { cache: 'no-store' }),
+        fetch(`/api/exams${subjectParam}`, { cache: 'no-store' }),
       ]);
 
       if (!groupsRes.ok) throw new Error(`BookGroups HTTP ${groupsRes.status}`);
