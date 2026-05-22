@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+
   try {
     const body = await request.json();
     const { problemId, errorType, errorDetail, rawInput, correction, metadata } = body;
@@ -31,6 +35,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+
   try {
     if (!supabaseAdmin) {
       return NextResponse.json({ error: 'DB not configured' }, { status: 500 });

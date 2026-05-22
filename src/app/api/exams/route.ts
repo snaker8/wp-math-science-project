@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const isDiagnosticParam = searchParams.get('is_diagnostic');
     const diagnosticCategory = searchParams.get('diagnostic_category');
+    // ★ 과목 필터 — CloudListClient 에서 과목 전환 시 서버 단 필터 (전체 재로드 후 클라 필터 회피).
+    //   book_groups 와 동일한 패턴: .eq('subject', value). '전체' 등 빈값이면 무필터.
+    const subjectParam = searchParams.get('subject');
 
     // ★ 시험지 목록 조회 (institute-guard 격리). super_admin 은 전체, ORG_ADMIN 은 산하, 일반 user 는 자기 institute.
     let examsBaseQuery = supabaseAdmin
@@ -43,6 +46,9 @@ export async function GET(request: NextRequest) {
     if (diagnosticCategory) {
       examsBaseQuery = examsBaseQuery.eq('diagnostic_category', diagnosticCategory);
     }
+    if (subjectParam) {
+      examsBaseQuery = examsBaseQuery.eq('subject', subjectParam);
+    }
 
     // ★ 격리 필터 + 트랙 필터 (flag false 시 트랙 필터는 no-op, 기존 동작 그대로)
     //   allowCommonPool: true — exams 도 공통풀(institute_id NULL) 자료는 모든 학원 공유.
@@ -56,7 +62,7 @@ export async function GET(request: NextRequest) {
     if (examsError) {
       console.error('[API/exams] List error:', examsError.message);
       return NextResponse.json(
-        { error: 'Failed to fetch exams', detail: examsError.message },
+        { error: 'Failed to fetch exams' },
         { status: 500 }
       );
     }

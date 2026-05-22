@@ -486,7 +486,7 @@ export default function RepositoryPage() {
               key={paper.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
+              transition={{ delay: Math.min(idx * 0.02, 0.4) }}
             >
               <GlowCard
                 className="group h-full flex flex-col p-0 overflow-hidden border-subtle hover:border-white/20 transition-all cursor-pointer"
