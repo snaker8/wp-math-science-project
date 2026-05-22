@@ -1,7 +1,40 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
+import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
+
+// ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
+//   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
+//   \def\arraystretch{1.3} 자동 wrapping → KaTeX 가 nested \boxed{aligned} 에서 fail.
+//   풀이 박스는 stretchArrays 거치지 않고 KaTeX 직접 호출로 처리.
+function SolutionBoxRender({ body }: { body: string }) {
+  const html = useMemo(() => {
+    try {
+      const cleaned = body
+        // \\[Npt] 같은 spacing 옵션 제거 (KaTeX 가 일부 환경에서 못 풂)
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+        // \displaystyle 잔여 제거 (displayMode 가 자동 처리)
+        .replace(/\\displaystyle\s+/g, '')
+        // ★ 분수 크기 정상화 (2026-05-18): displayMode 에서 \frac 가
+        //   본문 글자 대비 너무 크게 그려져 박스가 어색해 보임. \tfrac (textstyle)
+        //   으로 강제해 본문 글자 비례에 맞춤. \dfrac 사용자는 명시 의도이므로 보존.
+        .replace(/\\frac(?![a-zA-Z])/g, '\\tfrac');
+      return katex.renderToString(
+        `\\begin{aligned}${cleaned}\\end{aligned}`,
+        {
+          displayMode: true,
+          throwOnError: false,
+          strict: false,
+          trust: true,
+        }
+      );
+    } catch {
+      return `<pre style="color:#dc2626;font-size:11px">${body}</pre>`;
+    }
+  }, [body]);
+  return <div className="solution-box-content" dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 // ★ 표 셀용 수식 정제 — 짝 안 맞는 $ / \displaystyle 으로 인한 KaTeX 렌더 실패 방지
 //   셀 내용은 MathRenderer가 math 모드로 감싸므로 내부 $ 는 불필요하며 오히려 파싱 에러 유발
@@ -45,11 +78,46 @@ interface MixedContentRendererProps {
  */
 function MixedContentRendererInner({ content, className, onMathClick, inline, disableConditionBox }: MixedContentRendererProps) {
   if (!content) return <span className={className}>(문제 내용 없음)</span>;
+  // ★★ 풀이 박스 추출 (preprocess 이전 — 2026-05-18 회귀 #4 최종 해결)
+  //   PR #191/#193 의 추출은 preprocessMathpixContent 호출 *후* 라 그 사이
+  //   line 730~ 의 "전체 LaTeX 줄 → $...$ 감싸기" 가 \boxed{\begin{aligned} 단독 줄을
+  //   $\boxed{\begin{aligned}$ 로 잘못 wrap → MathRenderer inline → \displaystyle prefix
+  //   → KaTeX fail → raw 텍스트. 해결: 풀이 박스를 raw content 에서 가장 먼저 추출.
+  const solutionBoxes: string[] = [];
+  let rawWithMarkers = content;
+  // 패턴 1: \boxed{\begin{aligned}...\end{aligned}} — 줄바꿈 + 한글/text 가드
+  rawWithMarkers = rawWithMarkers.replace(
+    /\\boxed\s*\{\s*(?:\\,\s*)?(?:\\def\\arraystretch\s*\{[^}]+\}\s*)?\\begin\{aligned\}([\s\S]*?)\\end\{aligned\}\s*(?:\\,\s*)?\}/gi,
+    (m, body) => {
+      const hasLineBreak = /\\\\/.test(body);
+      const hasKoreanOrText = /[가-힣]|\\text/.test(body);
+      if (!(hasLineBreak && hasKoreanOrText)) return m;
+      const idx = solutionBoxes.length;
+      solutionBoxes.push(body.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 패턴 2: \begin{array}{|l|}\hline ... \end{array} — hline 필수
+  rawWithMarkers = rawWithMarkers.replace(
+    /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
+    (m, body) => {
+      if (!/\\hline/.test(body)) return m;
+      const idx = solutionBoxes.length;
+      const cleaned = body
+        .replace(/\\hline\s*/g, '')
+        .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\');
+      solutionBoxes.push(cleaned.trim());
+      return `__SOLUTION_BOX_${idx}__`;
+    }
+  );
+  // 외부 $$ 감싼 케이스 정리
+  rawWithMarkers = rawWithMarkers.replace(/\$\$\s*(__SOLUTION_BOX_\d+__)\s*\$\$/g, '$1');
+
   // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
   // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
 
-  // 전처리: Mathpix 특유 포맷 정규화
-  let normalized = preprocessMathpixContent(content)
+  // 전처리: Mathpix 특유 포맷 정규화 (마커는 환경 토큰 아니라서 변환에 무영향)
+  let normalized = preprocessMathpixContent(rawWithMarkers)
     // ★ $ 밖의 \displaystyle 수식 블록 → $$...$$ 로 감싸기 (KaTeX 렌더링)
     .replace(/(?<!\$)\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
     .replace(/(?<!\$)\\\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
@@ -96,18 +164,81 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
     }
   );
 
+  // ★★ 풀이 박스 (Solution Box) 추출 — KaTeX 가 못 푸는 복잡 LaTeX 환경 (2026-05-18)
+  //    배경: 사용자 보고 — MathJax 가 정상 렌더하는 풀이 박스 양식이 KaTeX 에서 fail.
+  //          \boxed{\begin{aligned}...\end{aligned}} (외부 박스 + 식 정리 + 한글) 또는
+  //          \begin{array}{|l|}\hline...\hline\end{array} 같은 풀이 박스.
+  //    전략: 외부 박스는 HTML CSS (.solution-box) 로 그리고,
+  //          내부는 단순 aligned 만 추출해 KaTeX 가 처리 가능한 form 으로 변환.
+  //          \boxed{(\text{가})} 같은 단일 식 placeholder 는 KaTeX 처리 가능 — 그대로 유지.
+  // (풀이 박스 추출은 함수 시작 부분에서 raw content 에서 이미 완료 — preprocess 이전)
+
   // ★ tabular/array 블록 처리
   // 보기형 tabular (ㄱ./ㄴ./ㄷ. 포함)는 조건박스로 변환, 나머지는 보호
   const tabularProtected: string[] = [];
   let protectedBody = bodyForTabular.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (m) => {
+      // ★ 풀이 박스 감지 (보기형 아님 — 2026-05-18 사고)
+      //   사용자 보고: \begin{array}{|l|} ... \boxed{(가)} ... \end{array} 가 보기형으로 오인되어
+      //   LaTeX 환경이 해체되며 raw 텍스트로 표시됨.
+      //
+      //   ★ 회귀 방지 원칙: "정상 단일 컬럼 보기형(\begin{tabular}{l} ㄱ. 식 \\ ...)" 도
+      //      변환되어야 함. 따라서 "단일 컬럼" 만으로는 풀이 박스로 판정 X.
+      //
+      //   풀이 박스 전용 시그니처 3개 중 하나라도 있으면 보호 (일반 tabular 로):
+      //     1) colSpec 에 vertical bar `|` 포함 ({|l|}, {l|}, {|c|c|} 등)
+      //     2) \hline 포함 (가로 구분선 — 풀이 박스 특유 양식)
+      //     3) \begin{aligned} 중첩 (식 정리 풀이)
+      //   + boxed 본문은 placeholder 라 라벨 카운트에서 제거
+      const colSpecMatch = m.match(/\\begin\{(?:tabular|array)\}\s*\{([^}]*)\}/);
+      const colSpec = colSpecMatch?.[1] || '';
+      const hasVerticalBar = colSpec.includes('|');
+      const hasHline = /\\hline/i.test(m);
+      const hasAlignedInside = /\\begin\{aligned\}/i.test(m);
+      const looksLikeSolutionBox = hasVerticalBar || hasHline || hasAlignedInside;
+
+      // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
+      //   \boxed{\text{(가)}} 의 (가) 는 placeholder 라 셀의 보기 라벨과 의미 다름
+      const stripped = m.replace(/\\boxed\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
+
       // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
-      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(m);
-      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(m);
-      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(m);
-      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(m);
-      if (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels) {
+      //   ★ boxed 제거된 stripped 에서 검사 — placeholder 오탐 차단
+      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(stripped);
+      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(stripped);
+      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(stripped);
+      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(stripped);
+
+      const isChoiceTabular =
+        !looksLikeSolutionBox &&
+        (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels);
+
+      // ★ 풀이 박스 — KaTeX 비호환 토큰 정규화 (2026-05-18 사고)
+      //   PR #188 가드로 array 환경은 보호됐지만 KaTeX 가 다음 토큰 못 풀어
+      //   raw 텍스트(빨간색 errorColor)로 표시되던 사고:
+      //     - verticals `|` 컬럼 spec (KaTeX 미지원)
+      //     - `\hline` (array{|l|} 안에서 잘 안 됨)
+      //     - `\\[10pt]` 커스텀 spacing (KaTeX 가 spacing 인자 처리 불완전)
+      //     - nested aligned (KaTeX 가 환경 중첩 처리 불완전)
+      //   → KaTeX 친화 form 으로 변환해서 보호 (의미는 보존, 시각 약간 단순)
+      if (looksLikeSolutionBox) {
+        const normalized = m
+          // verticals 제거: {|l|} → {l}
+          .replace(/(\\begin\{(?:tabular|array)\}\s*)\{([^}]*)\}/g, (_outer, prefix, spec) =>
+            `${prefix}{${spec.replace(/\|/g, '').trim() || 'l'}}`
+          )
+          // \hline 제거 (KaTeX 가 비- ruled array 안에서 미지원)
+          .replace(/\\hline\s*/g, '')
+          // \\[10pt] → \\ (spacing 인자 제거)
+          .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+          // 잔여 \displaystyle 토큰 (수식 밖에서 의미 없음) 정리
+          .replace(/\\displaystyle\s+(?=\\end\{)/g, '');
+        const idx = tabularProtected.length;
+        tabularProtected.push(normalized);
+        return `__TABULAR_PROTECT_${idx}__`;
+      }
+
+      if (isChoiceTabular) {
         // tabular → 각 보기를 개별 줄로 변환
         let converted = m
           .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '') // 시작 태그 제거
@@ -339,6 +470,34 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   return (
     <Wrapper className={className} style={wrapperStyle}>
       {elements.map((el, i) => {
+        // ★ 풀이 박스 placeholder 감지: __SOLUTION_BOX_N__ 패턴 (2026-05-18)
+        //   외부 박스는 HTML CSS, 내부는 \begin{aligned}...\end{aligned} 만 KaTeX 처리
+        if (el.type === 'text') {
+          const solMatch = el.value.match(/^__SOLUTION_BOX_(\d+)__$/);
+          if (solMatch) {
+            const solIdx = parseInt(solMatch[1], 10);
+            const solBody = solutionBoxes[solIdx];
+            if (solBody !== undefined) {
+              // 내부 LaTeX 정규화: \\[Npt] → \\, \displaystyle 제거 (KaTeX 호환)
+              const cleanedBody = solBody
+                .replace(/\\\\\s*\[[^\]]*\]/g, '\\\\')
+                .replace(/\\displaystyle\s+/g, '');
+              return (
+                <div
+                  key={`sbox-${solIdx}`}
+                  className="my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full"
+                  style={{ overflowWrap: 'anywhere', boxSizing: 'border-box' }}
+                >
+                  {/* ★ SolutionBoxRender 사용 (2026-05-18 회귀 fix #3):
+                       MathRenderer 의 stretchArrays 가 \begin{aligned} 자동 wrapping +
+                       \\[Npt] 삽입 → KaTeX nested \boxed{aligned} fail.
+                       SolutionBoxRender 는 KaTeX 직접 호출 (전처리 우회) → 정상 렌더. */}
+                  <SolutionBoxRender body={cleanedBody} />
+                </div>
+              );
+            }
+          }
+        }
         // 조건 박스 placeholder 감지: __CONDITION_BOX_N__ 패턴
         if (el.type === 'text') {
           const boxMatch = el.value.match(/^__CONDITION_BOX_(\d+)__$/);
@@ -348,9 +507,9 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
             const headerLabel = conditionHeaderLabels[boxIdx];
             if (boxContent) {
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-lg border border-zinc-600 leading-[3]">
+                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-md border border-gray-500 leading-relaxed max-w-full">
                   {headerLabel && (
-                    <div className="text-xs font-bold text-zinc-400 mb-2 -mt-1">&lt;{headerLabel}&gt;</div>
+                    <div className="text-xs font-bold text-gray-700 mb-1.5 -mt-0.5">&lt;{headerLabel}&gt;</div>
                   )}
                   {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
                 </div>
@@ -1218,8 +1377,10 @@ function parseMixedContent(text: string): ContentElement[] {
 
   // 1단계: bare LaTeX를 $...$로 감싸기
   // ★ 플레이스홀더 보호: wrapBareLatex가 __ 를 첨자로 인식하는 것을 방지
+  // ★ SOLUTION_BOX 포함 — 누락 시 wrapBareLatexInSegment 가 `N_BOX_0__` 의
+  //   `N`+`_` 를 첨자로 인식해 마커를 깨뜨림 (30번 회귀 #5, 2026-05-18)
   const placeholders: string[] = [];
-  textWithPlaceholders = textWithPlaceholders.replace(/__(?:TABULAR|CONDITION_BOX)_\d+__/g, (m) => {
+  textWithPlaceholders = textWithPlaceholders.replace(/__(?:TABULAR|CONDITION_BOX|SOLUTION_BOX)_\d+__/g, (m) => {
     const idx = placeholders.length;
     placeholders.push(m);
     return `\x00PH${idx}\x00`;
@@ -1230,9 +1391,11 @@ function parseMixedContent(text: string): ContentElement[] {
 
   const elements: ContentElement[] = [];
 
-  // 통합 정규식: 이미지 → tabular placeholder → $$display$$ → $inline$ 순서로 매칭
+  // 통합 정규식: 이미지 → tabular/condition/solution placeholder → $$display$$ → $inline$ 순서로 매칭
   // $$...$$ 에서 내부에 줄바꿈을 허용 ([\s\S]+? non-greedy)
-  const regex = /!\[([^\]]*)\]\(([^)]+)\)|__TABULAR_(\d+)__|__CONDITION_BOX_(\d+)__|\$\$([\s\S]+?)\$\$|\$([^$\n]+)\$/g;
+  // ★ SOLUTION_BOX 추가 — renderElement 의 `^__SOLUTION_BOX_(\d+)__$` 매치를 위해
+  //   마커가 *단독 text element* 로 분리되어야 함 (앞뒤 텍스트와 섞이면 매치 실패)
+  const regex = /!\[([^\]]*)\]\(([^)]+)\)|__TABULAR_(\d+)__|__CONDITION_BOX_(\d+)__|__SOLUTION_BOX_(\d+)__|\$\$([\s\S]+?)\$\$|\$([^$\n]+)\$/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -1255,11 +1418,15 @@ function parseMixedContent(text: string): ContentElement[] {
       // condition-box placeholder: __CONDITION_BOX_N__ → 별도 text element로 분리
       elements.push({ type: 'text', value: `__CONDITION_BOX_${match[4]}__` });
     } else if (match[5] !== undefined) {
-      // display math: $$...$$
-      elements.push({ type: 'display-math', value: match[5].trim() });
+      // solution-box placeholder: __SOLUTION_BOX_N__ → 단독 text element 로 분리
+      //   renderElement 의 `^__SOLUTION_BOX_(\d+)__$` 매치 → SolutionBoxRender 로 연결
+      elements.push({ type: 'text', value: `__SOLUTION_BOX_${match[5]}__` });
     } else if (match[6] !== undefined) {
+      // display math: $$...$$
+      elements.push({ type: 'display-math', value: match[6].trim() });
+    } else if (match[7] !== undefined) {
       // inline math: $...$
-      elements.push({ type: 'inline-math', value: match[6] });
+      elements.push({ type: 'inline-math', value: match[7] });
     }
 
     lastIndex = match.index + match[0].length;

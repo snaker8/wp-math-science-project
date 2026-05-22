@@ -20,8 +20,29 @@ import type { SubjectTrack } from '@/types/track';
 
 // /math/dashboard/X · /science/dashboard/X · /dashboard/X 모두 처리해
 // 첫 세그먼트의 트랙 prefix 만 교체 (또는 추가) 한 path 반환.
+//
+// ★ 디테일 페이지 보정 (2026-05-19): 트랙별로 ID 가 다른 리소스(클라우드 시험지·시험 관리)
+//   는 [id] 를 그대로 옮기면 다른 트랙에 그 ID 가 없어 404/잘못된 데이터 표시 사고.
+//   해당 경로는 리스트 페이지로 redirect.
+//   사용자 보고: "수학에서 과학으로 넘어오면 클라우드 페이지가 안 넘어간다"
 function swapTrackInPath(pathname: string, newTrack: SubjectTrack): string {
   const stripped = pathname.replace(/^\/(math|science)(?=\/|$)/, '') || '/';
+
+  // 트랙 종속 디테일 경로 → 리스트로 redirect
+  //   /dashboard/cloud/[examId]       → /dashboard/cloud
+  //   /dashboard/exam-management/[id] → /dashboard/exam-management
+  //   /dashboard/workflow/analyze/[jobId] → /dashboard/workflow
+  const DETAIL_REDIRECTS: Array<{ match: RegExp; to: string }> = [
+    { match: /^\/dashboard\/cloud\/[^/]+/, to: '/dashboard/cloud' },
+    { match: /^\/dashboard\/exam-management\/[^/]+/, to: '/dashboard/exam-management' },
+    { match: /^\/dashboard\/workflow\/analyze\/[^/]+/, to: '/dashboard/workflow' },
+  ];
+  for (const { match, to } of DETAIL_REDIRECTS) {
+    if (match.test(stripped)) {
+      return trackHref(to, newTrack);
+    }
+  }
+
   return trackHref(stripped, newTrack);
 }
 

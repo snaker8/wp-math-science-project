@@ -4,12 +4,13 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Settings, LogOut, HelpCircle, User } from 'lucide-react';
+import { ChevronDown, Settings, LogOut, HelpCircle, User, Building2 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/Logo';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { TrackToggle } from '@/components/layout/TrackToggle';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
+import { useUserScope } from '@/hooks/useUserScope';
 import { trackHref } from '@/lib/track/href';
 import { withTrackGroups } from '@/lib/track/nav';
 import { DEFAULT_SUBJECT_TRACK } from '@/lib/subject-track';
@@ -89,6 +90,7 @@ export function TopNav() {
   const { role, displayName, loaded } = useCurrentUser();
   const { activeTrack } = useSubjectTrack();
   const track = activeTrack ?? DEFAULT_SUBJECT_TRACK;
+  const { scope: userScope } = useUserScope();
 
   // ★ role 필터 — 그룹의 roles 미지정 시 모두 노출, 지정 시 해당 role 만
   const visibleGroups = topNavGroups.filter((g) => {
@@ -104,10 +106,29 @@ export function TopNav() {
       <div className="flex h-full items-center justify-between px-6 max-w-screen-2xl mx-auto">
         {/* ── Left: 로고 + 탭 ── */}
         <div className="flex items-center gap-1">
-          {/* 로고 — 트랙 prefix 적용 */}
-          <Link href={trackHref('/dashboard', track)} className="flex items-center mr-6 shrink-0">
+          {/* 로고 + 학원·센터 표시 — 트랙 prefix 적용
+              ★ 학원명 / 센터명 우아하게 표시 (2026-05-17 사용자 요구):
+                 로고 우측에 옅은 구분선 + 학원·센터 정보 (조밀, 세련) */}
+          <Link href={trackHref('/dashboard', track)} className="flex items-center mr-4 shrink-0 group">
             <BrandLogo size="sm" />
           </Link>
+          {userScope?.organizationName && (
+            <div className="hidden md:flex items-center mr-6 pl-4 border-l border-zinc-700/40 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <Building2 className="h-3 w-3 text-indigo-400/70 shrink-0" />
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[11px] font-bold text-zinc-200 tracking-tight">
+                    {userScope.organizationName}
+                  </span>
+                  {userScope.instituteName && userScope.instituteName !== userScope.organizationName && (
+                    <span className="text-[9px] text-zinc-500 mt-px">
+                      {userScope.instituteName}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 메뉴 탭 — 이미 trackHref 적용된 그룹 사용 */}
           <div className="flex items-center gap-0.5">
@@ -405,11 +426,15 @@ function DbAssetizeTab({
       onClick={() => {
         // pathname 정규화 — /math/dashboard/cloud, /science/dashboard/cloud, /dashboard/cloud 모두 매치
         const stripped = stripTrackPrefix(pathname);
-        if (stripped.startsWith('/dashboard/cloud')) {
+        // ★ 클라우드 리스트 페이지(정확히 /dashboard/cloud)에서만 이벤트 dispatch.
+        //   디테일 페이지(/dashboard/cloud/[examId])는 리스너가 없어서 클릭이 무반응이 됨 (2026-05-19 사고).
+        //   디테일 페이지면 리스트로 navigate + ?upload=1.
+        const isCloudList = stripped === '/dashboard/cloud' || stripped === '/dashboard/cloud/';
+        if (isCloudList) {
           // 같은 페이지 — 즉시 모달
           window.dispatchEvent(new CustomEvent('cloud:open-upload'));
         } else {
-          // 다른 페이지 — 이동 (?upload=1 으로 mount 시 자동 오픈), 트랙 prefix 적용
+          // 다른 페이지 (디테일 포함) — 리스트로 이동 (?upload=1 으로 mount 시 자동 오픈), 트랙 prefix 적용
           router.push(trackHref('/dashboard/cloud?upload=1', track));
         }
       }}

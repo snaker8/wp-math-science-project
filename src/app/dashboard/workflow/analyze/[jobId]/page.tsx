@@ -50,6 +50,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
+import { useOrganizationName } from '@/hooks/useUserScope';
 
 // Desmos 그래프 뷰어 (클라이언트 전용, dynamic import)
 const InlineDesmosGraph = dynamic(
@@ -132,6 +133,22 @@ interface AnalyzedProblem {
   //   choices 의 각 content 는 헤더 개수만큼 ' / ' 구분된 컬럼 값 ("노란색 / 자홍색")
   //   분석 카드가 헤더 행 + 컬럼 정렬 표시
   choiceHeaders?: string[];
+  // ★ 선택지 레이아웃 — answer_json.choiceLayout (1=1열, 2=2열, 3=3열, 5=가로)
+  //   모달에서 변경 시 onSave 핸들러가 answer_json 에 박아 DB 저장 (2026-05-17 fix)
+  choiceLayout?: number;
+  // ★ 그림 객관식: 선택지별 이미지 URL (data:image/png;base64,... 또는 storage URL)
+  //   1차 분석 모달에서 cvFigure 후보를 선택지에 할당 시 사용. 저장 시 answer_json.choiceImages 박힘.
+  choiceImages?: (string | null)[];
+  // ★ 과학 자산화 — Gemini OpenCV 가 자동 크롭한 figure 후보 (data:image/png;base64,...)
+  //   1차 분석 모달의 "이미지 후보" 픽커가 이 배열에서 썸네일을 보여줌.
+  //   본문 또는 선택지에 클릭 한 번으로 삽입 가능. 자산화 시 base64 마커 → Storage 업로드.
+  cvFigures?: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    cropBase64?: string;
+  }>;
 }
 
 interface PageData {
@@ -2897,6 +2914,7 @@ export default function AnalyzeJobPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const jobId = params.jobId as string;
+  const orgName = useOrganizationName('과사람');
   const urlBookGroupId = searchParams.get('bookGroupId');
   const urlSubjectArea = searchParams.get('subjectArea') as 'math' | 'science' | null;
   const urlScienceSubject = searchParams.get('scienceSubject');
@@ -3421,6 +3439,11 @@ export default function AnalyzeJobPage() {
           score: isEdited ? (prevProblem.score ?? extractedScore) : extractedScore,  // ★ 배점 보존
           // ★ Phase C-1b: cloud-flow가 채운 pitfalls 보존 — 저장 시 saveEditedProblemsDirect로 전달
           pitfalls: isEdited ? (prevProblem.pitfalls || result.classification?.pitfalls) : result.classification?.pitfalls,
+          // ★ 과학 자산화 (2026-05-19): Gemini OpenCV 자동 크롭 figure 후보 보존
+          //   AnalyzeProblemEditModal "이미지 후보" 픽커가 사용. edit 후에도 보존.
+          cvFigures: isEdited ? (prevProblem.cvFigures || result._scienceCvFigures) : result._scienceCvFigures,
+          // ★ 그림 객관식: 선택지별 이미지 (edited 상태에서만 의미 있음 — 1차 분석 후 사용자 설정)
+          choiceImages: prevProblem?.choiceImages,
         });
       });
     }
@@ -3672,6 +3695,11 @@ export default function AnalyzeJobPage() {
               pageIndex: p.pageIndex, // ★ 페이지 인덱스 (0-based)
               ...(figureBboxes.length > 0 ? { figureBboxes } : {}), // ★ graph 클래스 학습 데이터
               ...(p.pitfalls && p.pitfalls.length > 0 ? { pitfalls: p.pitfalls } : {}), // ★ Phase C-1b: 함정 자동 태깅
+              // ★ 그림 객관식 (2026-05-19): 선택지별 이미지 (base64 또는 URL)
+              //   saveEditedProblemsDirect 가 data:image base64 → Storage 업로드 + answer_json.choiceImages 박힘.
+              ...(p.choiceImages && p.choiceImages.some((img: string | null) => !!img)
+                ? { choiceImages: p.choiceImages }
+                : {}),
             });
           }
         }
@@ -5085,10 +5113,10 @@ export default function AnalyzeJobPage() {
                 type="button"
                 onClick={() => router.push(savedExamId ? `/dashboard/cloud/${savedExamId}` : '/dashboard/cloud')}
                 className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                title={savedExamId ? '방금 자산화한 시험지로 이동' : '클라우드 목록으로 이동'}
+                title={savedExamId ? '방금 자산화한 시험지로 이동' : `${orgName}클라우드 목록으로 이동`}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
-                클라우드에서 확인하기 →
+                {orgName}클라우드에서 확인하기 →
               </button>
             ) : (
               <button
@@ -5239,24 +5267,48 @@ export default function AnalyzeJobPage() {
                 if (updated.typeCode !== undefined) body.type_code = updated.typeCode;
                 if (updated.cognitiveDomain !== undefined) body.cognitive_domain = updated.cognitiveDomain;
 
-                // 정답/선택지/헤더를 answer_json으로 변환
-                //   ★ choiceHeaders 가 별도 컬럼 없어 answer_json 에 박음 (useExamProblems 가 거기서 읽음).
-                //   answer/choices/choiceHeaders 중 하나라도 바뀌면 answer_json 전체 갱신.
+                // ★ 문제 번호 변경 (2026-05-17 fix): 사용자 보고 "모달에서 번호 바꿔도 적용 안 됨"
+                //   API 가 source_number 받아서 problems.source_number + exam_problems.sequence_number
+                //   양쪽 업데이트 함. 클라이언트에서 박지 않으면 로컬 state 만 바뀌고 DB 미반영.
+                //   메모리: feedback_modal_save_deps.md (모달 저장 회귀 패턴 3번째)
+                if (updated.number !== undefined) body.source_number = updated.number;
+
+                // 정답/선택지/헤더/레이아웃을 answer_json으로 변환
+                //   ★ choiceHeaders / choiceLayout 가 별도 컬럼 없어 answer_json 에 박음 (useExamProblems 가 거기서 읽음).
+                //   ★ choiceLayout 추가 (2026-05-17 fix) — 사용자 보고 "객관식 보기 1줄/2줄/3줄 변경 적용 안 됨"
+                //     메모리: feedback_modal_save_deps.md (모달 저장 회귀 패턴 4번째)
                 if (
                   updated.answer !== undefined ||
                   updated.choices !== undefined ||
-                  (updated as { choiceHeaders?: string[] }).choiceHeaders !== undefined
+                  (updated as { choiceHeaders?: string[] }).choiceHeaders !== undefined ||
+                  (updated as { choiceLayout?: number }).choiceLayout !== undefined ||
+                  (updated as { choiceImages?: (string | null)[] }).choiceImages !== undefined
                 ) {
                   const finalAnswer = updated.answer ?? editingProblem.answer;
                   const circledNumbers = ['①', '②', '③', '④', '⑤'];
                   const currentChoices = updated.choices ?? editingProblem.choices ?? [];
+                  // ★ filter(Boolean) 금지: 이미지만 들어간 선택지(텍스트 빈)도 인덱스 유지 위해 placeholder 보존
+                  const updatedChoiceImages = (updated as { choiceImages?: (string | null)[] }).choiceImages;
+                  const existingChoiceImages = (editingProblem as { choiceImages?: (string | null)[] }).choiceImages;
+                  const effectiveImages = updatedChoiceImages ?? existingChoiceImages;
                   const formattedChoices = currentChoices.map((c: string, i: number) => {
                     const stripped = c.replace(/^[①②③④⑤]\s*/, '');
-                    return stripped ? `${circledNumbers[i]} ${stripped}` : '';
-                  }).filter(Boolean);
+                    if (stripped) return `${circledNumbers[i]} ${stripped}`;
+                    // 이미지만 있는 선택지는 번호 placeholder 만 박음 (filter(Boolean) 사고 차단)
+                    if (effectiveImages && effectiveImages[i]) return `${circledNumbers[i]}`;
+                    return '';
+                  });
+                  // 뒤쪽 빈 항목 trim (5번이 비어있으면 4번까지)
+                  while (formattedChoices.length > 0 && !formattedChoices[formattedChoices.length - 1]) {
+                    formattedChoices.pop();
+                  }
                   const headers = (updated as { choiceHeaders?: string[] }).choiceHeaders
                     ?? (editingProblem as { choiceHeaders?: string[] }).choiceHeaders
                     ?? [];
+                  // ★ choiceLayout — 모달 변경값 우선, 없으면 기존 값 유지
+                  const updatedLayout = (updated as { choiceLayout?: number }).choiceLayout;
+                  const existingLayout = (editingProblem as { choiceLayout?: number }).choiceLayout;
+                  const choiceLayout = updatedLayout ?? existingLayout;
                   body.answer_json = {
                     correct_answer: finalAnswer,
                     finalAnswer: finalAnswer,
@@ -5264,6 +5316,11 @@ export default function AnalyzeJobPage() {
                     type: formattedChoices.length > 0 ? 'multiple_choice' : 'short_answer',
                     // ★ 헤더 1개+ 면 박음. 0개면 명시적 빈 배열 (모드 해제 의도 보존).
                     choiceHeaders: headers,
+                    // ★ 레이아웃 — undefined 가 아니면 박음 (1/2/3/5)
+                    ...(choiceLayout !== undefined ? { choiceLayout } : {}),
+                    // ★ 그림 객관식 (2026-05-19) — 1개라도 변경되었으면 박음.
+                    //   nano-banana / Gemini 자동 크롭 이미지 → 자산화 후 PATCH 경로에서도 보존.
+                    ...(effectiveImages ? { choiceImages: effectiveImages } : {}),
                   };
                 }
 

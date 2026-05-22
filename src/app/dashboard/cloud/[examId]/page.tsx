@@ -57,6 +57,7 @@ import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/l
 import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
+import { useOrganizationName } from '@/hooks/useUserScope';
 import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
 import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
 import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
@@ -391,7 +392,7 @@ function FigureMarkerRenderer({
               <FigureRenderer
                 figureData={problem.figureData}
                 figureSvg={problem.figureSvg}
-                upscaledCropUrl={problem.upscaledCropUrl}
+                upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined}
                 figureSource={problem.figureSource}
                 cropImageUrl={proxiedCrop}
                 maxWidth={240}
@@ -450,13 +451,13 @@ function FigureMarkerRenderer({
               <div className="flex flex-col items-center">
                 <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                 <div className="border border-emerald-500/30 rounded p-1">
-                  <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={200} darkMode editable problemId={problem.id} problemContent={problem.content} />
+                  <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={200} darkMode editable problemId={problem.id} problemContent={problem.content} />
                 </div>
               </div>
             </div>
           ) : (
             <div key={i} className="my-2 flex justify-center">
-              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
+              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
             </div>
           );
         }
@@ -1080,8 +1081,18 @@ function ProblemCardView({
               figureData={problem.figureData}
               figureSvg={problem.figureSvg}
               cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined}
-              upscaledCropUrl={problem.upscaledCropUrl}
+              upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined}
               figureSource={problem.figureSource}
+              // ★ 멀티 figure 지원 (2026-05-19): 2번째 이후 figure_crop 들도 전달.
+              //   첫 figure 가 cropImage(=figure_crop 첫개 or crop) 와 동일하면 skip,
+              //   아니면 첫 figure_crop 부터 모두 추가. 이전 사고: 2번째 도형이 [도형] 텍스트로 남음.
+              extraFigureUrls={(() => {
+                const figureCrops = problem.images?.filter((img: { type: string }) => img.type === 'figure_crop') || [];
+                if (figureCrops.length === 0) return [];
+                // 첫 cropImage 가 cropImage 와 동일하면 두번째부터, 아니면 첫번째부터
+                const startIdx = (cropImage && figureCrops[0]?.url === cropImage.url) ? 1 : 0;
+                return figureCrops.slice(startIdx).map((img: { url: string }) => getProxiedImageUrl(img.url));
+              })()}
               onSave={async (updatedContent) => {
                 await onUpdateContent?.(problem.id, updatedContent);
                 setIsEditingPosition(false);
@@ -1234,13 +1245,13 @@ function ProblemCardView({
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
                           <div className="border border-emerald-500/30 rounded p-1">
-                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} problemContent={problem.content} />
+                            <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={200} darkMode editable problemId={problem.id} problemContent={problem.content} />
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-2 flex justify-center">
-                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
+                        <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined} figureSource={problem.figureSource} cropImageUrl={cropImage?.url ? getProxiedImageUrl(cropImage.url) : undefined} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
                       </div>
                     )
                   )}
@@ -1361,10 +1372,13 @@ function ProblemCardView({
                     <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
                       <span className="flex-shrink-0 text-content-tertiary">{c.circled}</span>
                       <div className="flex flex-col gap-1 min-w-0">
-                        {/* 그림 객관식: 이미지 있으면 표시 */}
+                        {/* 그림 객관식: 이미지 있으면 표시
+                            ★ 프록시 URL 변환 필수 (2026-05-19): private storage 라
+                            직접 접근 불가 → 변환 누락 시 이미지 로드 실패로
+                            선택지 자체가 안 보이던 사고 차단. */}
                         {c.imgUrl && (
                           <img
-                            src={c.imgUrl}
+                            src={getProxiedImageUrl(c.imgUrl)}
                             alt={`선택지 ${i + 1}`}
                             className="max-h-24 max-w-full rounded border border bg-white object-contain"
                           />
@@ -2901,6 +2915,8 @@ export default function CloudExamDetailPage() {
   const router = useRouter();
   const params = useParams();
   const examId = params.examId as string;
+  // ★ 학원명 prefix (2026-05-17)
+  const orgName = useOrganizationName('과사람');
 
   // DB에서 문제 로드
   const { problems: dbProblems, examInfo, isLoading: dbLoading, refetch: refetchProblems } = useExamProblems(examId);
@@ -3747,7 +3763,7 @@ export default function CloudExamDetailPage() {
                 시험지 목록
               </button>
               <span className="sep">/</span>
-              <span>과사람 클라우드</span>
+              <span>{orgName}클라우드</span>
               <span className="sep">/</span>
               <span style={{ color: 'var(--chrome-fg-2)' }}>{examTitle}</span>
             </div>

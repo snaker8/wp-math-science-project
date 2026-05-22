@@ -10,12 +10,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
 import { processUploadJob, getStatusLabel, convertedPdfStore, isScienceSubject } from '@/lib/workflow/cloud-flow';
+import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
+import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
+import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
 //   사용자 지시 (2026-05-16): "자산화 할때 분류해서 하게 하자".
@@ -1055,6 +1058,74 @@ async function processJobInBackground(
     }
   }
 
+  // ★ 과학 트랙 + Gemini POC 분기 — feature flag 로 안전 폴백.
+  //   SCIENCE_USE_GEMINI=true 일 때만 활성. 기본 비활성 (기존 Mathpix 경로).
+  //   수학 라인 영향 0.
+  const useGeminiScience =
+    job.subjectArea === 'science' && process.env.SCIENCE_USE_GEMINI === 'true';
+
+  if (useGeminiScience) {
+    console.log(`[Job ${jobId}] 과학 트랙 — Gemini POC 파이프라인 사용`);
+    try {
+      // 변환된 PDF 우선 (HWP 인 경우), 없으면 원본
+      const buffer = convertedPdfStore.get(jobId) || currentBuffers.problem;
+      const mimeType =
+        job.fileType === 'HWP'
+          ? 'application/pdf' // HWP 변환 후 PDF
+          : job.fileType === 'PDF'
+            ? 'application/pdf'
+            : 'image/jpeg';
+
+      const results = await processScienceWithGemini(buffer, mimeType, {
+        onStatusChange: (status: ProcessingStatus, step: string) => {
+          const currentJob = jobStore.get(jobId);
+          if (currentJob) {
+            currentJob.status = status;
+            currentJob.currentStep = step;
+            currentJob.updatedAt = new Date().toISOString();
+            if (status === 'COMPLETED') {
+              currentJob.completedAt = new Date().toISOString();
+            }
+            jobStore.set(jobId, currentJob);
+          }
+        },
+        onProgress: (progress: number) => {
+          const currentJob = jobStore.get(jobId);
+          if (currentJob) {
+            currentJob.progress = progress;
+            currentJob.updatedAt = new Date().toISOString();
+            jobStore.set(jobId, currentJob);
+          }
+        },
+        onPartialResult: (partialResults: LLMAnalysisResult[]) => {
+          jobResults.set(jobId, partialResults);
+        },
+      });
+
+      // 최종 결과 저장
+      jobResults.set(jobId, results);
+
+      // 메모리 정리
+      convertedPdfStore.delete(jobId);
+      fileBufferStore.delete(jobId);
+
+      // 과학 트랙은 일단 **자동 자산화 X** (POC 단계, 사용자 검수 우선)
+      console.log(`[Job ${jobId}] 과학 Gemini 완료: ${results.length}문제`);
+      return;
+    } catch (err) {
+      console.error(`[Job ${jobId}] 과학 Gemini 실패:`, err);
+      const currentJob = jobStore.get(jobId);
+      if (currentJob) {
+        currentJob.error = err instanceof Error ? err.message : String(err);
+        currentJob.status = 'FAILED';
+        currentJob.updatedAt = new Date().toISOString();
+        jobStore.set(jobId, currentJob);
+      }
+      fileBufferStore.delete(jobId);
+      return;
+    }
+  }
+
   try {
     const results = await processUploadJob(job, {
       onStatusChange: (status: ProcessingStatus, step: string) => {
@@ -1187,6 +1258,12 @@ async function saveEditedProblemsDirect(
   if (!supabase) {
     return NextResponse.json({ error: 'Supabase Admin not configured' }, { status: 500 });
   }
+
+  // ★ 학습 규칙 로드 (2026-05-19) — 한 번 로드해서 루프에서 재사용
+  //   카드 편집 모달에서 누적된 (original, corrected) 패턴 중 confidence ≥ 0.7
+  //   규칙만 자산화 시점에 자동 적용. 수학(Mathpix) / 과학(Gemini) OCR 모두 적용.
+  const learnedRules = await loadLearnedRules(supabase);
+  console.log(`[Direct Save] 학습 규칙 로드: ${learnedRules.length}개 (confidence ≥ 0.7)`);
 
   // ★ 크롭 이미지를 Supabase Storage에 업로드 / 이미 업로드된 path는 public URL만 생성
   // ★ Phase 3 최적화: for-of 직렬 → concurrency 5 chunk 병렬.
@@ -1541,13 +1618,41 @@ async function saveEditedProblemsDirect(
 
       const choices = edited.choices || [];
       const circledNumbers = ['①', '②', '③', '④', '⑤'];
+      // ★ 그림 객관식 (2026-05-19): 텍스트가 비어도 choiceImages[i] 가 있으면 placeholder 유지.
+      //   filter(Boolean) 로 dropping 하면 index 어긋나서 ImagePositionEditor 가 깨짐.
+      const editedChoiceImagesPreFormat: (string | null)[] | undefined = (edited as {
+        choiceImages?: (string | null)[];
+      }).choiceImages;
       const formattedChoices = choices.map((c: string, i: number) => {
         const stripped = c.replace(/^[①②③④⑤]\s*/, '');
-        return stripped ? `${circledNumbers[i]} ${stripped}` : '';
-      }).filter(Boolean);
+        if (stripped) return `${circledNumbers[i]} ${stripped}`;
+        // 이미지만 있는 선택지는 번호만 박음 (filter(Boolean) 사고 차단)
+        if (editedChoiceImagesPreFormat && editedChoiceImagesPreFormat[i]) {
+          return `${circledNumbers[i]}`;
+        }
+        return '';
+      });
+      // 뒤쪽 trailing empty 만 trim — 중간 빈 항목은 그림 객관식 placeholder 이므로 유지
+      while (formattedChoices.length > 0 && !formattedChoices[formattedChoices.length - 1]) {
+        formattedChoices.pop();
+      }
 
       // ★ 크롭 이미지는 images JSONB에만 저장 (content_latex에는 삽입하지 않음)
       let contentLatex = edited.content || '(문제 내용 없음)';
+
+      // ★ OCR 깨진 LaTeX 자산화 시점 정정 (2026-05-19, BS_H1S2_R2 1번 사고)
+      //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐, 라인 끝 `\\` 잔여 등
+      //   광역 점검 결과 2,332건 중 8건만 영향 (0.34%) — 모두 OCR 깨진 패턴
+      contentLatex = repairOcrBrokenLatex(contentLatex);
+
+      // ★ 학습 규칙 자동 적용 (2026-05-19) — 카드 편집에서 누적된 정정 자동 변환
+      {
+        const { result, appliedCount, appliedRules } = applyLearnedRules(contentLatex, learnedRules);
+        if (appliedCount > 0) {
+          console.log(`[Direct Save] 문제 ${edited.number}: 학습 규칙 ${appliedCount}회 적용 — ${appliedRules.join(', ')}`);
+          contentLatex = result;
+        }
+      }
 
       // ★ 본문 (3점)/[3점] 등 배점 표기 제거 — 카드 헤더 배지와 중복 방지
       //   배점은 exam_problems.points 로 별도 저장됨.
@@ -1588,6 +1693,57 @@ async function saveEditedProblemsDirect(
         base64ImageRegex.lastIndex = 0;
       }
 
+      // ★ 그림 객관식 (2026-05-19): edited.choiceImages 의 base64 data URL → Storage 업로드.
+      //   각 선택지 이미지를 problem-crops/{jobId}/problem-{N}-choice-{idx}.png 로 저장 후
+      //   data URL → public URL 로 교체. 비어있거나 이미 URL 이면 그대로 보존.
+      const rawChoiceImages: (string | null)[] | undefined = (edited as {
+        choiceImages?: (string | null)[];
+      }).choiceImages;
+      const resolvedChoiceImages: (string | null)[] = rawChoiceImages
+        ? [...rawChoiceImages]
+        : [];
+      if (rawChoiceImages && rawChoiceImages.length > 0) {
+        for (let ci = 0; ci < rawChoiceImages.length; ci++) {
+          const img = rawChoiceImages[ci];
+          if (!img) {
+            resolvedChoiceImages[ci] = null;
+            continue;
+          }
+          // data URL 이 아니면 (이미 storage URL) 그대로
+          const m = img.match(/^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/);
+          if (!m) {
+            resolvedChoiceImages[ci] = img;
+            continue;
+          }
+          try {
+            const ext = m[1] === 'jpg' ? 'jpeg' : m[1];
+            const imgBuffer = Buffer.from(m[2], 'base64');
+            const choicePath = `problem-crops/${jobId}/problem-${edited.number}-choice-${ci}.${ext === 'jpeg' ? 'jpg' : ext}`;
+            const { data: ciData, error: ciError } = await supabase.storage
+              .from('source-files')
+              .upload(choicePath, imgBuffer, { contentType: `image/${ext}`, upsert: true });
+            if (!ciError && ciData) {
+              const { data: ciUrlData } = supabase.storage
+                .from('source-files')
+                .getPublicUrl(ciData.path);
+              if (ciUrlData?.publicUrl) {
+                resolvedChoiceImages[ci] = ciUrlData.publicUrl;
+                imagesArray.push({ url: ciUrlData.publicUrl, type: 'choice_image', label: `선택지 ${ci + 1} 이미지` });
+              } else {
+                // URL 못 만들면 base64 유지 (자산화 깨지지 않게)
+                resolvedChoiceImages[ci] = img;
+              }
+            } else {
+              console.warn(`[Direct Save] choice ${ci} image upload 실패:`, ciError?.message);
+              resolvedChoiceImages[ci] = img;
+            }
+          } catch (ciErr) {
+            console.error(`[Direct Save] 문제 ${edited.number}번 choice ${ci} 이미지 업로드 오류:`, ciErr);
+            resolvedChoiceImages[ci] = img;
+          }
+        }
+      }
+
       const { data: problem, error: problemError } = await supabase
         .from('problems')
         .insert({
@@ -1614,12 +1770,17 @@ async function saveEditedProblemsDirect(
               }
             }
             const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
-            return {
+            const aj: Record<string, unknown> = {
               finalAnswer: safeAns,
               type: isObj ? 'multiple_choice' : 'short_answer',
               correct_answer: safeAns,
               choices: formattedChoices,
             };
+            // ★ 그림 객관식 — 한 개라도 있으면 박음
+            if (resolvedChoiceImages.some((u) => !!u)) {
+              aj.choiceImages = resolvedChoiceImages;
+            }
+            return aj;
           })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
@@ -1880,6 +2041,10 @@ async function saveProblemsToDB(
 
   const job = jobStore.get(jobId);
   if (!job) return;
+
+  // ★ 학습 규칙 로드 (2026-05-19) — 한 번 로드해서 루프에서 재사용
+  const learnedRules: LearnedRule[] = await loadLearnedRules(supabase);
+  console.log(`[DB] 학습 규칙 로드: ${learnedRules.length}개 (confidence ≥ 0.7)`);
 
   // ★ TS 에러 보강 — 아래 appendToExamId 분기가 problems 저장 전에 이 변수를 참조해
   //   기존엔 ReferenceError 가능성 있던 코드 (사실상 사용자가 거의 안 만나던 dead 분기).
@@ -2219,6 +2384,19 @@ async function saveProblemsToDB(
       let contentWithMath = mathExprs.length > 0
         ? `${problemContent}\n\n수식:\n${mathExprs.map(m => `$${m}$`).join('\n')}`
         : problemContent;
+
+      // ★ OCR 깨진 LaTeX 자산화 시점 정정 (2026-05-19, BS_H1S2_R2 1번 사고)
+      //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐 등
+      contentWithMath = repairOcrBrokenLatex(contentWithMath);
+
+      // ★ 학습 규칙 자동 적용 (2026-05-19)
+      {
+        const { result, appliedCount, appliedRules } = applyLearnedRules(contentWithMath, learnedRules);
+        if (appliedCount > 0) {
+          console.log(`[DB] 문제 ${problemIndex}: 학습 규칙 ${appliedCount}회 적용 — ${appliedRules.join(', ')}`);
+          contentWithMath = result;
+        }
+      }
 
       // ★ 본문에 남은 (3점)/[3점]/(3.4점)/[3.4점] 제거 (배점은 exam_problems.points 로만 보존)
       //   카드 헤더의 노란 배점 배지와 본문 (N점) 가 중복 노출되는 사고 방지.
