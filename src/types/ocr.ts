@@ -21,6 +21,10 @@ export interface MathpixRequestOptions {
   math_inline_delimiters?: [string, string];
   math_display_delimiters?: [string, string];
   rm_spaces?: boolean;
+  // ★ 2025 Mathpix 고급 옵션
+  enable_tables_fallback?: boolean; // 복잡한 표에 대한 고급 표 처리 알고리즘
+  idiomatic_eqn_arrays?: boolean;   // aligned/cases 환경 사용 (array 대신)
+  rm_fonts?: boolean;               // \mathbf 등 폰트 명령어 제거
 }
 
 /**

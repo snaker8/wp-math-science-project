@@ -319,9 +319,11 @@ export async function POST(request: NextRequest) {
         include_asciimath: false,
         include_mathml: false,
         include_svg: false,
-        include_table_html: false,
+        include_table_html: true,   // ★ 표 HTML 포함 (표 구조 분석용)
       },
       include_line_data: true,
+      enable_tables_fallback: true, // ★ 2025 Mathpix: 복잡한 표에 대한 고급 표 처리 알고리즘
+      idiomatic_eqn_arrays: true,   // ★ aligned/cases 환경 사용 (array 대신) — KaTeX 호환성 향상
     });
 
     // 그래프 분석을 OCR과 병렬 실행 (추가 지연 없음)

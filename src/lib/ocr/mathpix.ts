@@ -46,6 +46,8 @@ export class MathpixClient {
       math_inline_delimiters: ['$', '$'],
       math_display_delimiters: ['$$', '$$'],
       rm_spaces: true,
+      enable_tables_fallback: true, // ★ 2025 Mathpix SuperNet-108: 복잡한 표 고급 처리 알고리즘
+      idiomatic_eqn_arrays: true,   // ★ aligned/cases 환경 사용 (array 대신) — KaTeX 호환성 향상
       ...options,
     };
 
