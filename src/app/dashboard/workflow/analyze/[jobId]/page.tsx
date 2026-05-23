@@ -3004,6 +3004,15 @@ export default function AnalyzeJobPage() {
   const [insertImageMode, setInsertImageMode] = useState(false);
   const [isOcrBboxLoading, setIsOcrBboxLoading] = useState(false);
 
+  // ★ 메모리 누수 방지 (2026-05-23) — 페이지 unmount 시 PDF.js 캐시 해제.
+  //   pdfDocCache 가 module-level Map 이라 SPA 라우팅으로 떠나도 자동 정리 안 됨 →
+  //   여러 시험지 분석 페이지 왕복 시 PDFDocumentProxy 가 누적되어 100MB+ 누수 가능.
+  useEffect(() => {
+    return () => {
+      import('@/lib/pdf-viewer').then(({ clearPdfCache }) => clearPdfCache()).catch(() => {});
+    };
+  }, []);
+
   // detectionMode, columnMode, cropSensitivity 변경 시 기존 감지 결과 초기화 → 재감지 트리거
   useEffect(() => {
     blocksDetectedRef.current.clear();

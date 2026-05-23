@@ -45,6 +45,26 @@ export async function loadPdfDocument(url: string): Promise<PDFDocumentProxy> {
 }
 
 /**
+ * 메모리 누수 방지 — 페이지 unmount 시 호출.
+ * url 지정 시 해당 PDF 만, 미지정 시 전체 캐시 비움.
+ * PDFDocumentProxy.destroy() 가 내부 worker·page 캐시·텍스처 해제.
+ */
+export function clearPdfCache(url?: string): void {
+  if (url) {
+    const pdf = pdfDocCache.get(url);
+    if (pdf) {
+      try { pdf.destroy(); } catch { /* already destroyed */ }
+      pdfDocCache.delete(url);
+    }
+  } else {
+    pdfDocCache.forEach((pdf) => {
+      try { pdf.destroy(); } catch { /* already destroyed */ }
+    });
+    pdfDocCache.clear();
+  }
+}
+
+/**
  * PDF 페이지를 캔버스에 렌더링
  *
  * @param rotation - 0|90|180|270. PDF.js 네이티브 회전 — viewport.width/height 가 90/270 시 자동 swap.
