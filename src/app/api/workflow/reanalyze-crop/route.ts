@@ -510,74 +510,72 @@ function normalizeChoiceParens(text: string): string {
     '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
   };
 
-  // 이미 ①②③ 가 있으면 변환 불필요
-  if (/[①②③④⑤]/.test(text)) return text;
+  // ★ 기존: ①②③ 있으면 즉시 return → 표 내 (N) 변환 누락 사고 (도수분포표 (1)(2)...).
+  //   개선: 컴팩트 순차 그룹 탐색으로 교체 — ①②③④⑤가 이미 있어도 표 내 (N)은 별도 변환.
 
-  // (1)~(5) 위치 찾기 (수식 내부 제외)
+  // (1)~(5) 위치 수집 (수식 내부·영문자 뒤 제외)
   const parenRegex = /\(([1-5])\)/g;
-  const matches: { index: number; num: string; len: number }[] = [];
+  const allMatches: { index: number; num: number; len: number }[] = [];
   let m: RegExpExecArray | null;
 
   while ((m = parenRegex.exec(text)) !== null) {
-    // 수식 내부인지 간단 체크: 앞쪽에 $가 홀수 개면 수식 안
     const before = text.substring(Math.max(0, m.index - 100), m.index);
     const dollarCount = (before.match(/(?<![\\])\$/g) || []).length;
     const isInMath = dollarCount % 2 === 1 || /\\\(\s*$/.test(before);
     if (!isInMath) {
-      // ★ 함수 인수 보호: f(1), Q(2), R(1) 등 영문자 바로 뒤 (N)은 제외
       const charBefore = m.index > 0 ? text[m.index - 1] : '';
       if (/[a-zA-Z]/.test(charBefore)) continue;
-      matches.push({ index: m.index, num: m[1], len: m[0].length });
+      allMatches.push({ index: m.index, num: parseInt(m[1]), len: m[0].length });
     }
   }
 
-  // ★ 최소 4개 이상 필요 (3개면 서술형 소문제일 가능성 높음)
-  if (matches.length < 4) return text;
+  if (allMatches.length < 4) return text;
 
-  // 순서 검증: (1)(2)(3)(4) 최소 포함
-  const nums = matches.map(m => parseInt(m.num));
-  if (!nums.includes(1) || !nums.includes(2) || !nums.includes(3) || !nums.includes(4)) return text;
-
-  // 간격 확인: 평균 간격 150자 이하 (선택지는 보통 짧음)
-  const totalSpan = matches[matches.length - 1].index - matches[0].index;
-  if (totalSpan / (matches.length - 1) > 150) return text;
-
-  // ★ 소문제 패턴 감지: 내용에 "서술형" 키워드가 있으면 변환 안 함
+  // ★ 컴팩트 순차 그룹 탐색: (1)→(2)→(3)→(4)→(5) 순서로 인접 gap < 150자인 그룹 발견 시 변환
+  // 장점: ①②③④⑤가 이미 있어도 표 내 별도 (N) 그룹을 독립 변환 가능
+  const MAX_GAP = 150;
   const subQuestionKeywords = /구하시오|구하여라|구해라|서술하시오|증명하시오|의\s*값을?\s*구|풀이\s*과정|설명하시오|나타내시오|보이시오|\[\s*\d+\s*점\s*\]/;
 
-  for (let i = 0; i < matches.length - 1; i++) {
-    const start = matches[i].index + matches[i].len;
-    const end = matches[i + 1].index;
-    const content = text.substring(start, end).trim();
-    // 내용이 100자 초과이거나 서술형 키워드 포함 → 소문제
-    if (content.length > 100 || subQuestionKeywords.test(content)) {
-      return text;
+  for (let startIdx = 0; startIdx < allMatches.length; startIdx++) {
+    if (allMatches[startIdx].num !== 1) continue;
+
+    const group: typeof allMatches = [allMatches[startIdx]];
+    for (let nextNum = 2; nextNum <= 5; nextNum++) {
+      const prev = group[group.length - 1];
+      // 현재 위치 이후에서 nextNum 찾기
+      const nextMatch = allMatches.find(mm => mm.num === nextNum && mm.index > prev.index);
+      if (!nextMatch) break;
+      const gap = nextMatch.index - (prev.index + prev.len);
+      if (gap > MAX_GAP) break;
+      const gapContent = text.substring(prev.index + prev.len, nextMatch.index);
+      if (subQuestionKeywords.test(gapContent)) break;
+      group.push(nextMatch);
     }
+
+    if (group.length < 4) continue; // 최소 4개 미만 → 이 시작점 스킵
+
+    // (5) 없으면 추가 검증: 각 gap 내용 50자 이하여야 함
+    if (group.length === 4) {
+      const tooLong = group.slice(0, -1).some((gm, i) => {
+        const nextGm = group[i + 1];
+        return text.substring(gm.index + gm.len, nextGm.index).trim().length > 50;
+      });
+      if (tooLong) continue;
+    }
+
+    // ★ 유효 그룹 발견 — 뒤→앞 순서로 인덱스 유지하며 변환
+    let result = text;
+    for (let i = group.length - 1; i >= 0; i--) {
+      const { index, num, len } = group[i];
+      const circled = NUMBER_TO_CIRCLED[String(num)];
+      if (circled) {
+        result = result.substring(0, index) + circled + result.substring(index + len);
+      }
+    }
+    return result;
   }
 
-  // 5개 모두 있으면 확실한 선택지
-  const hasFive = nums.includes(5);
-  if (!hasFive) {
-    // 4개만 있을 때 추가 검증: 각 내용이 아주 짧아야 함 (선택지 특성)
-    for (let i = 0; i < matches.length - 1; i++) {
-      const start = matches[i].index + matches[i].len;
-      const end = matches[i + 1].index;
-      const content = text.substring(start, end).trim();
-      if (content.length > 50) return text; // 50자 초과면 소문제
-    }
-  }
-
-  // 변환 실행 (뒤→앞 순서로 인덱스 유지)
-  let result = text;
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const { index, num, len } = matches[i];
-    const circled = NUMBER_TO_CIRCLED[num];
-    if (circled) {
-      result = result.substring(0, index) + circled + result.substring(index + len);
-    }
-  }
-
-  return result;
+  return text;
 }
 
 /**

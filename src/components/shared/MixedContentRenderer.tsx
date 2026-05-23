@@ -116,8 +116,20 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // ★ OCR 교정 패턴 로깅 제거 — 매 렌더마다 require + console.log 발생해서 성능 저하 주범
   // 문제 발생 시에는 렌더링 자체가 깨져서 바로 확인 가능하므로 로깅 불필요
 
+  // ★ \begin{table}...\end{table} 래퍼 제거 — Mathpix가 표를 감쌀 때 출력.
+  //   \captionsetup{...} / \caption{...} 도 같이 제거. 안의 tabular/array 가 정상 처리됨.
+  const strippedTableWrapper = rawWithMarkers
+    .replace(/\\begin\{table\}[\s\S]*?\\end\{table\}/gi, (match) =>
+      match
+        .replace(/\\begin\{table\}/gi, '')
+        .replace(/\\end\{table\}/gi, '')
+        .replace(/\\captionsetup\{[^}]*\}/g, '')
+        .replace(/\\caption\{[^}]*\}/g, '')
+        .trim()
+    );
+
   // 전처리: Mathpix 특유 포맷 정규화 (마커는 환경 토큰 아니라서 변환에 무영향)
-  let normalized = preprocessMathpixContent(rawWithMarkers)
+  let normalized = preprocessMathpixContent(strippedTableWrapper)
     // ★ $ 밖의 \displaystyle 수식 블록 → $$...$$ 로 감싸기 (KaTeX 렌더링)
     .replace(/(?<!\$)\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
     .replace(/(?<!\$)\\\\displaystyle\s+([\s\S]*?)(?=\n\s*[가-힣①②③④⑤]|\n\s*$|$)/gm, (_m, expr) => `$$${expr.trim()}$$`)
