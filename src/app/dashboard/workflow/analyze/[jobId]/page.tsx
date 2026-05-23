@@ -2752,7 +2752,7 @@ function reapplyInsertedImages(ocrContent: string, insertedImages: InsertedImage
   return result;
 }
 
-function extractProblemContent(rawContent: string, fallbackTypeName?: string): { content: string; score?: number } {
+function extractProblemContent(rawContent: string, fallbackTypeName?: string, problemNumber?: number): { content: string; score?: number } {
   if (!rawContent || !rawContent.trim()) {
     return { content: fallbackTypeName || '' };
   }
@@ -2857,6 +2857,14 @@ function extractProblemContent(rawContent: string, fallbackTypeName?: string): {
     const questionMatch = result.match(/^\s*\d{1,2}\s*(?:[.)번\]]|\s+(?=[가-힣]))([\s\S]*)/);
     if (questionMatch && questionMatch[1].trim()) {
       result = questionMatch[1].trim();
+    } else if (problemNumber) {
+      // ★ 딜리미터 없이 번호가 바로 붙는 폴백 (예: 문제 11 → OCR "112(x-4)" → strip "11" → "2(x-4)")
+      // 기존 정규식이 실패했을 때만 동작 (딜리미터 있는 정상 케이스는 위에서 처리됨)
+      const numStr = String(problemNumber);
+      if (result.startsWith(numStr)) {
+        const stripped = result.slice(numStr.length).trimStart();
+        if (stripped) result = stripped;
+      }
     }
   } else {
     result = fallbackTypeName || rawContent.trim();
@@ -3506,7 +3514,7 @@ export default function AnalyzeJobPage() {
           extractedScore = prevProblem.score;
         } else {
           const rawContent = result.contentWithMath || result.originalText || '';
-          const extracted = extractProblemContent(rawContent, result.classification?.typeName);
+          const extracted = extractProblemContent(rawContent, result.classification?.typeName, idx + 1);
           contentSource = extracted.content;
           extractedScore = extracted.score;
           // ★ 디버그: content 변환 전후 비교
@@ -4643,7 +4651,7 @@ export default function AnalyzeJobPage() {
             if (idx >= 0) {
               const classification = data.classification;
               const rawContent = data.ocrText || '';
-              const extracted = extractProblemContent(rawContent, classification?.classification?.typeName);
+              const extracted = extractProblemContent(rawContent, classification?.classification?.typeName, problem.number);
               // ★ 기존 삽입 이미지 + 분석 후 YOLO 가 잡은 figure 합치기
               const existingImages = pageProbs[idx].insertedImages || [];
               const allImages = [...existingImages, ...yoloFigures];
@@ -4788,8 +4796,8 @@ export default function AnalyzeJobPage() {
           if (idx >= 0) {
             const classification = data.classification;
             const rawContent = data.ocrText || '';
-            const extracted = extractProblemContent(rawContent, classification?.classification?.typeName);
-            // ★ 기존 삽입 이미지 + 분석 후 YOLO 가 잡은 figure 합치기
+            const extracted = extractProblemContent(rawContent, classification?.classification?.typeName, problem.number);
+            // ★ 기존 삽입 이미지 + 분析 후 YOLO 가 잡은 figure 합치기
             const existingImages = pageProbs[idx].insertedImages || [];
             const allImages = [...existingImages, ...yoloFigures];
             const finalContent = reapplyInsertedImages(extracted.content, allImages);
