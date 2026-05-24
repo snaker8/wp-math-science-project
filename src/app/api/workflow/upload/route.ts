@@ -1100,7 +1100,7 @@ async function processJobInBackground(
         onPartialResult: (partialResults: LLMAnalysisResult[]) => {
           jobResults.set(jobId, partialResults);
         },
-      });
+      }, jobId);
 
       // 최종 결과 저장
       jobResults.set(jobId, results);

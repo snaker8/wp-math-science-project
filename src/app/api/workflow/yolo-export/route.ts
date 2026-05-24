@@ -7,10 +7,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
 // YOLO 클래스 매핑
+//   0: problem        — 수학 문제 영역 (짧고 정형)
+//   1: graph          — 그래프/좌표평면/함수 그림
+//   2: table          — 표/도표
+//   3: science_problem — 과학 문제 영역 (길고 가변, 별도 클래스로 분리하여 학습)
 const CLASS_MAP: Record<string, number> = {
   problem: 0,
   graph: 1,
   table: 2,
+  science_problem: 3,
 };
 
 export async function GET(request: NextRequest) {
