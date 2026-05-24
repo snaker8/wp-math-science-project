@@ -879,6 +879,16 @@ function preprocessMathpixContent(text: string): string {
   // (d) bare \neg 뒤에 점/쉼표 → ㄱ
   result = result.replace(/\\neg(?=\s*[.,)])/g, 'ㄱ');
 
+  // 2-1b. ★ 본문 한글 자모 KaTeX wrapping 자동 해제 (2026-05-25, 9c614b2 패턴 확장)
+  //   본문(특히 <보기> 박스 안)에서 ㄱ,ㄴ,ㄷ 가 $\text{ㄱ}$ 또는 \text{ㄱ,ㄴ} 형태로 OCR 되면
+  //   KaTeX 의 fallback 폰트로 그려져 글씨체가 다르게 보임. 본문 텍스트 흐름에 맞게 unwrap.
+  //   - $\text{ㄱ}$ → ㄱ
+  //   - \text{ㄱ,ㄴ} → ㄱ,ㄴ
+  //   - $ㄱ$ → ㄱ (단독 자모만, 수식 안 깨도록 보수적 매칭)
+  result = result.replace(/\$\s*\\text\{\s*([ㄱ-ㅎ][ㄱ-ㅎ\s,]*)\s*\}\s*\$/g, '$1');
+  result = result.replace(/\\text\{\s*([ㄱ-ㅎ][ㄱ-ㅎ\s,]*)\s*\}/g, '$1');
+  result = result.replace(/\$\s*([ㄱ-ㅎ](?:\s*,\s*[ㄱ-ㅎ])*)\s*\$/g, '$1');
+
   // 2-2. \displaystyle 정리 (MathRenderer가 자동 추가하므로 중복 제거)
   // ★ 디버그: displaystyle 존재 여부 확인
   if (result.includes('displaystyle')) {
