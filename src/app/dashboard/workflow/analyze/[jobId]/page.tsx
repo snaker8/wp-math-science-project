@@ -2440,33 +2440,14 @@ const HEADER_LINE_PATTERNS = [
 ];
 
 // ★ OCR content에서 표/그래프 패턴을 찾아 이미지 마크다운으로 교체
+//   ★ 회귀 차단 (2026-05-25 재적용, 원본 fix: 86c8d99 2026-05-17):
+//     "drag area >= 50% → 본문 전체 교체" 분기가 사용자 텍스트를 임의로 삭제하는 사고 유발.
+//     제거 후 표 패턴 매칭 또는 append fallback 만 사용. 본문 텍스트는 절대 자동 삭제 X.
 function replaceTablePatternWithImage(
   content: string,
   imageMarkdown: string,
-  cropRelativeRect?: { x: number; y: number; w: number; h: number }
+  _cropRelativeRect?: { x: number; y: number; w: number; h: number }
 ): { newContent: string; replacedPattern: string; insertPosition: 'replace-table' | 'append' } {
-  // ★ 면적 기반 판단: 드래그 영역이 크롭 이미지의 50% 이상이면 전체 교체
-  const area = cropRelativeRect ? cropRelativeRect.w * cropRelativeRect.h : 0;
-
-  if (area >= 0.5) {
-    // === 전체 교체 모드 ===
-    // 선택지(①~⑤)는 보존, 나머지 전체를 이미지로 교체
-    const choicesRegex = /(?:^|\n)\s*(?:①|②|③|④|⑤|\(\d\)|\d\))[^\n]*/;
-    const choicesIdx = content.search(choicesRegex);
-    let textPart = content;
-    let choicesPart = '';
-    if (choicesIdx > 0) {
-      textPart = content.substring(0, choicesIdx).trimEnd();
-      choicesPart = content.substring(choicesIdx);
-    }
-
-    return {
-      newContent: imageMarkdown + (choicesPart ? '\n\n' + choicesPart : '\n'),
-      replacedPattern: textPart,
-      insertPosition: 'replace-table',
-    };
-  }
-
   // === 표 패턴 감지 모드 ===
   const patterns: RegExp[] = [
     /\$?\$?\\begin\{tabular\}(?:\{[^}]*\})?[\s\S]*?\\end\{tabular\}\$?\$?/gi,
