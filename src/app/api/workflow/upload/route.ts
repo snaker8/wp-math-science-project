@@ -1780,6 +1780,16 @@ async function saveEditedProblemsDirect(
             if (resolvedChoiceImages.some((u) => !!u)) {
               aj.choiceImages = resolvedChoiceImages;
             }
+            // ★ 표 객관식 헤더 (2026-05-25 누락 복원) — 클라이언트에서 보낸 choiceHeaders 보존
+            const ch = (edited as { choiceHeaders?: string[] }).choiceHeaders;
+            if (ch && Array.isArray(ch) && ch.length > 0) {
+              aj.choiceHeaders = ch;
+            }
+            // ★ 선택지 레이아웃 (1/2/3/5 컬럼) — 자산화 시점에 보존되어야 클라우드 렌더 정상
+            const cl = (edited as { choiceLayout?: number }).choiceLayout;
+            if (cl !== undefined && cl !== null) {
+              aj.choiceLayout = cl;
+            }
             return aj;
           })(),
           images: imagesArray,

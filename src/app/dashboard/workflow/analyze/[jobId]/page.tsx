@@ -3727,7 +3727,7 @@ export default function AnalyzeJobPage() {
     };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
-      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }> }> = [];
+      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }>; choiceImages?: Array<string | null>; choiceHeaders?: string[]; choiceLayout?: number }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
@@ -3780,6 +3780,13 @@ export default function AnalyzeJobPage() {
               //   saveEditedProblemsDirect 가 data:image base64 → Storage 업로드 + answer_json.choiceImages 박힘.
               ...(p.choiceImages && p.choiceImages.some((img: string | null) => !!img)
                 ? { choiceImages: p.choiceImages }
+                : {}),
+              // ★ 표 객관식 헤더 + 레이아웃 — 자산화 시점에 answer_json 에 함께 박혀야 클라우드 표시 정상
+              ...((p as { choiceHeaders?: string[] }).choiceHeaders && (p as { choiceHeaders?: string[] }).choiceHeaders!.length > 0
+                ? { choiceHeaders: (p as { choiceHeaders?: string[] }).choiceHeaders }
+                : {}),
+              ...((p as { choiceLayout?: number }).choiceLayout !== undefined
+                ? { choiceLayout: (p as { choiceLayout?: number }).choiceLayout }
                 : {}),
             });
           }
