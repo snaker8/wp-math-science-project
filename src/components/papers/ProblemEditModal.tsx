@@ -890,7 +890,28 @@ export function ProblemEditModal({
 
   // 선택지 & 정답
   const parsedChoices = useMemo(() => {
-    if (initialChoices && initialChoices.length > 0) return initialChoices;
+    if (initialChoices && initialChoices.length > 0) {
+      // ★ raw tabular 자동 정규화 (2026-05-25 사고 fix 2/2):
+      //   과학 자산화의 raw `& 지권 & 기권 & 생물권 \\` 가 들어오면 마운트 시점에
+      //   자동으로 `"지권 | 기권 | 생물권"` 형식으로 변환해 state 에 박는다.
+      //   이전엔 모달 셀별 input 표시는 분리됐지만 (cols 변수 — 렌더링용) state.choices 는
+      //   raw 그대로 → 사용자가 셀 수정 안 하고 저장하면 raw 가 PATCH body 에 그대로
+      //   박혀 DB 도 raw → 카드 표시 그대로 사고. 마운트 시 state 정규화로 차단.
+      //   영향 0 — 이미 `|` 형식인 데이터는 split → join 거치며 동일 결과 (수학 보호).
+      return initialChoices.map((choice) => {
+        const isRawTabular = /\\\\|\\end\{tabular\}|\s+&\s+/.test(choice);
+        if (!isRawTabular) return choice;
+        const normalized = choice
+          .replace(/^[①②③④⑤]\s*/, '')
+          .replace(/^&\s*/, '')
+          .replace(/\\\\\s*$/, '')
+          .replace(/\\end\{tabular\}\s*$/, '')
+          .trim();
+        const cells = normalized.split(/\s*\|\s*|\s+\/\s+|\s*&\s*/).filter((s) => s.length > 0);
+        if (cells.length === 0) return choice;
+        return cells.join(' | ');
+      });
+    }
     return ['', '', '', '', ''];
   }, [initialChoices]);
 
