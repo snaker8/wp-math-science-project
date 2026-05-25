@@ -871,7 +871,25 @@ export function ProblemEditModal({
       if (res.ok) {
         const data = await res.json();
         if (data.ocrText && data.ocrText.trim()) {
-          setContent(data.ocrText);
+          // ★ 이미지 마커 위치 보존 (2026-05-25 사고 fix):
+          //   "텍스트 다시 읽기" 가 OCR 결과로 본문 통째 덮어쓰면 사용자가 카드에서
+          //   변경한 이미지 마커 (`![이미지](...)`) 위치 사라짐 → 카드가 마커 없으니
+          //   기본 위치 (본문 위) 로 reset + 본문 짤림 사고.
+          //   기존 본문 마커를 추출해서 OCR 결과의 앞/뒤에 다시 박는다 (위치 추정).
+          //   OCR 결과에 이미 마커가 있으면 (가능성 낮음) 그대로 둠.
+          setContent((prevContent) => {
+            if (data.ocrText.includes('![')) return data.ocrText;
+            const imageMarkerRegex = /!\[[^\]]*\]\([^)]+\)/g;
+            const matches = [...prevContent.matchAll(imageMarkerRegex)];
+            if (matches.length === 0) return data.ocrText;
+            const markersText = matches.map((m) => m[0]).join('\n');
+            const totalLen = prevContent.length;
+            const firstIdx = matches[0].index ?? 0;
+            const isPrefix = firstIdx < totalLen / 2;
+            return isPrefix
+              ? `${markersText}\n\n${data.ocrText}`
+              : `${data.ocrText}\n\n${markersText}`;
+          });
           if (data.choices && data.choices.length > 0) {
             setChoices(data.choices.map((c: string) => c.replace(/^[①②③④⑤]\s*/, '')));
           }
