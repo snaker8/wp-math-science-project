@@ -225,13 +225,20 @@ function toExamProblemData(
 
   // ★ 1순위: answer_json.choices (자산화 시 별도 저장된 선택지)
   const answerJson = problem.answer_json || {};
-  const dbChoices: string[] = Array.isArray(answerJson.choices) ? answerJson.choices : [];
-  // ★ 표 형식 선택지 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"])
-  const choiceHeaders: string[] | undefined = Array.isArray(answerJson.choiceHeaders) ? answerJson.choiceHeaders : undefined;
-  // ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로)
-  const choiceLayout: number | undefined = typeof answerJson.choiceLayout === 'number' ? answerJson.choiceLayout : undefined;
-  // ★ 그림 객관식: 선택지별 이미지 URL (choices 인덱스 정렬, null = 텍스트 옵션)
-  const choiceImages: (string | null)[] | undefined = Array.isArray(answerJson.choiceImages)
+  // ★ 답 유형 — 'short_answer' (주관식) 이면 choices 매핑 자체를 차단 (2026-05-25 사고 fix).
+  //   사용자가 모달에서 객관식 → 주관식으로 답유형 변경해도 DB 의 choices 가 raw 로 남아있으면
+  //   카드들이 무조건 객관식 ①~⑤ 렌더하던 회귀. type 값 우선 — 'multiple_choice' / undefined (legacy) 만 객관식.
+  //   여기 한 곳 fix 로 ProblemCardView 등 모든 cloud 카드 자동 수혜.
+  const answerType = typeof answerJson.type === 'string' ? answerJson.type : null;
+  const isObjective = answerType !== 'short_answer';
+
+  const dbChoices: string[] = (isObjective && Array.isArray(answerJson.choices)) ? answerJson.choices : [];
+  // ★ 표 형식 선택지 헤더 (예: ["ㄱ","ㄴ","ㄷ","ㄹ"]) — 주관식이면 무시
+  const choiceHeaders: string[] | undefined = (isObjective && Array.isArray(answerJson.choiceHeaders)) ? answerJson.choiceHeaders : undefined;
+  // ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) — 주관식이면 무시
+  const choiceLayout: number | undefined = (isObjective && typeof answerJson.choiceLayout === 'number') ? answerJson.choiceLayout : undefined;
+  // ★ 그림 객관식: 선택지별 이미지 URL — 주관식이면 무시
+  const choiceImages: (string | null)[] | undefined = (isObjective && Array.isArray(answerJson.choiceImages))
     ? answerJson.choiceImages.map((v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null))
     : undefined;
 
@@ -240,8 +247,8 @@ function toExamProblemData(
   // ★ LaTeX 정리 (공통 유틸 — 모든 페이지에 자동 적용)
   const content = cleanLatexContent(rawContent);
 
-  // DB에 저장된 선택지가 있으면 우선 사용 + LaTeX 정리
-  const rawChoices = dbChoices.length > 0 ? dbChoices : extractedChoices;
+  // DB에 저장된 선택지가 있으면 우선 사용 + LaTeX 정리. 주관식이면 빈 배열 (extracted 도 차단).
+  const rawChoices = dbChoices.length > 0 ? dbChoices : (isObjective ? extractedChoices : []);
   const choices = rawChoices.map(c => cleanChoiceText(c));
 
   // type_code → 표시용 짧은 코드 변환
