@@ -1,18 +1,21 @@
 // ============================================================================
-// science-gemini-flow — 과학 자산화 Gemini 파이프라인 (분석 페이지 통합용)
+// science-gemini-flow — 과학 자산화 파이프라인 (YOLO + per-problem Gemini, 모드 B)
 // ============================================================================
 //
 // /api/workflow/upload-science-perproblem 의 핵심 로직을 함수로 추출.
 // processJobInBackground 에서 subjectArea === 'science' 일 때 호출.
 //
-// 흐름:
+// 흐름 (모드 B):
 //   1) image-pipeline /render-pdf-pages → 페이지별 PNG
-//   2) Gemini segmenter → 문제 bbox
+//   2) YOLO /detect → 문제 bbox (실패/0건 시 Gemini segmenter 폴백)
+//      ★ 비용 절감 + 일관성 향상 — 페이지당 Gemini 호출 1회 제거.
 //   3) 각 문제 crop → Gemini per-problem (텍스트) + /detect-figures-cv (figure)
 //   4) LLMAnalysisResult[] 로 변환 → analyze 페이지가 그대로 렌더
 //
 // ★ 수학 영향 0 — 신규 함수, subjectArea === 'science' 일 때만 호출됨.
 // ★ SCIENCE_USE_GEMINI=true env 활성화 시에만 실행 (feature flag 안전망).
+// ★ YOLO production = HF Spaces snaker1107/gwasaram-yolo (CLASS 0='problem'),
+//   환경변수 YOLO_SERVER_URL 로 주입. 미연결/0건이면 Gemini segmenter 자동 폴백.
 // ============================================================================
 
 import sharp from 'sharp';
@@ -30,6 +33,11 @@ const IMAGE_PIPELINE_URL = process.env.IMAGE_PIPELINE_URL || 'http://localhost:8
 const RENDER_DPI = parseInt(process.env.SCIENCE_RENDER_DPI || '300');
 const GEMINI_CONCURRENCY = parseInt(process.env.GEMINI_SCIENCE_CONCURRENCY || '4');
 const PIPELINE_TIMEOUT_MS = 120_000;
+
+// ===== YOLO segmenter (모드 B) =====
+const YOLO_SERVER_URL = process.env.YOLO_SERVER_URL || 'http://localhost:8100';
+const YOLO_CONFIDENCE = parseFloat(process.env.YOLO_CONFIDENCE_THRESHOLD || '0.25');
+const YOLO_TIMEOUT_MS = parseInt(process.env.YOLO_TIMEOUT_MS || '15000');
 
 export interface ScienceFlowCallbacks {
   onStatusChange?: (status: ProcessingStatus, step: string) => void;
@@ -88,27 +96,56 @@ export async function processScienceWithGemini(
   onProgress?.(15);
   onStatusChange?.('OCR_PROCESSING', `${pages.length}개 페이지 → 문제 영역 검출 중...`);
 
-  // ===== 2) 페이지별 Gemini segmenter → 문제 bbox =====
+  // ===== 2) 페이지별 YOLO → 문제 bbox (실패/0건 시 Gemini segmenter 폴백) =====
+  //   ★ 모드 B 핵심: 페이지 segmentation 을 YOLO 로 이관 → Gemini 호출 N→0 (페이지당).
+  //   ★ 폴백 보장: YOLO 헬스/모델/검출 실패 시 Gemini segmenter 사용 → 가용성 유지.
   const allBboxes: ProblemBBox[] = [];
+  const bboxSourceMap = new Map<number, 'yolo' | 'gemini'>(); // 페이지별 검출 출처 (학습 데이터 source 구분용)
   let globalIdx = 0;
+  let yoloPageCount = 0;
+  let geminiFallbackPageCount = 0;
   await Promise.all(
     pages.map(async (page) => {
-      try {
-        const pageBuf = Buffer.from(page.imageBase64, 'base64');
-        const seg = await segmentSciencePageWithGemini(pageBuf);
-        const sorted = [...seg.bboxes].sort((a, b) => a.y - b.y);
-        for (const b of sorted) {
-          allBboxes.push({
-            pageIdx: page.pageIdx,
-            x: b.x,
-            y: b.y,
-            w: b.w,
-            h: b.h,
-            numberHint: 0, // 글로벌 인덱스로 나중에 재할당
-          });
+      let bboxes: Array<{ x: number; y: number; w: number; h: number }> = [];
+      let source: 'yolo' | 'gemini' = 'yolo';
+
+      // 1차: YOLO segmenter
+      const yoloResult = await detectProblemsWithYolo(page);
+      if (yoloResult && yoloResult.bboxes.length > 0) {
+        bboxes = yoloResult.bboxes;
+        source = 'yolo';
+        yoloPageCount += 1;
+        console.log(
+          `[science-gemini-flow] page ${page.pageIdx + 1}: YOLO ${bboxes.length}건 (${yoloResult.inferenceMs}ms)`,
+        );
+      } else {
+        // 2차 폴백: Gemini segmenter (YOLO 미배포·모델 미로딩·0건 검출 등)
+        try {
+          const pageBuf = Buffer.from(page.imageBase64, 'base64');
+          const seg = await segmentSciencePageWithGemini(pageBuf);
+          bboxes = seg.bboxes;
+          source = 'gemini';
+          geminiFallbackPageCount += 1;
+          console.log(
+            `[science-gemini-flow] page ${page.pageIdx + 1}: Gemini segmenter ${bboxes.length}건 (YOLO 폴백)`,
+          );
+        } catch (err) {
+          console.warn(`[science-gemini-flow] page ${page.pageIdx + 1} Gemini segmenter도 실패:`, err);
+          return;
         }
-      } catch (err) {
-        console.warn(`[science-gemini-flow] page ${page.pageIdx} segment 실패:`, err);
+      }
+
+      bboxSourceMap.set(page.pageIdx, source);
+      const sorted = [...bboxes].sort((a, b) => a.y - b.y);
+      for (const b of sorted) {
+        allBboxes.push({
+          pageIdx: page.pageIdx,
+          x: b.x,
+          y: b.y,
+          w: b.w,
+          h: b.h,
+          numberHint: 0, // 글로벌 인덱스로 나중에 재할당
+        });
       }
     }),
   );
@@ -120,7 +157,9 @@ export async function processScienceWithGemini(
     b.numberHint = globalIdx;
   }
 
-  console.log(`[science-gemini-flow] segmenter: 총 ${allBboxes.length}문제`);
+  console.log(
+    `[science-gemini-flow] segmenter 결과: 총 ${allBboxes.length}문제 (YOLO 페이지 ${yoloPageCount}, Gemini 폴백 ${geminiFallbackPageCount})`,
+  );
   onProgress?.(25);
 
   if (allBboxes.length === 0) {
@@ -137,9 +176,9 @@ export async function processScienceWithGemini(
   //   ★ 실패해도 메인 흐름 영향 X (try/catch 격리). 학습 데이터 누적은 best-effort.
   if (jobId && supabaseAdmin) {
     try {
-      await saveScienceAnnotationsForTraining(jobId, pages, allBboxes);
+      await saveScienceAnnotationsForTraining(jobId, pages, allBboxes, bboxSourceMap);
     } catch (annErr) {
-      console.warn('[science-gemini-flow] AUTO_GEMINI 어노테이션 저장 실패 (무시):', annErr);
+      console.warn('[science-gemini-flow] 어노테이션 저장 실패 (무시):', annErr);
     }
   }
 
@@ -242,16 +281,18 @@ export async function processScienceWithGemini(
 }
 
 /**
- * YOLO 학습 데이터 누적 — Gemini 가 검출한 bbox 를 detection_annotations 에 AUTO_GEMINI 로 저장.
+ * YOLO 학습 데이터 누적 — 검출 bbox 를 detection_annotations 에 누적 저장.
  *
  * 흐름:
  *   1) 각 페이지 이미지를 Supabase Storage 에 업로드 (`page-images/{jobId}/page-{N}.png`)
  *   2) 각 bbox 를 detection_annotations 에 INSERT
  *      - class_label='science_problem' (수학 'problem' 과 분리)
- *      - detection_source='AUTO_GEMINI' (MANUAL 과 구분)
+ *      - detection_source: 페이지의 검출 출처별 — 'AUTO_YOLO' / 'AUTO_GEMINI'
  *      - problem_id=NULL (자산화 시 매칭 가능하지만 학습용으론 페이지+bbox 면 충분)
  *
- * 향후 충분히 누적 시 (500+) YOLO multi-class 모델 (problem, science_problem, graph, table) 재학습 → HF Spaces 업로드.
+ * 모드 B 전환 후:
+ *   - YOLO 가 검출한 페이지 → AUTO_YOLO (재학습 시 self-distillation 위험 → 가중치 ↓)
+ *   - Gemini 폴백 페이지 → AUTO_GEMINI (재학습 핵심 데이터, 가중치 ↑)
  *
  * ★ 실패해도 메인 흐름 영향 X (caller 에서 try/catch 격리).
  */
@@ -259,6 +300,7 @@ async function saveScienceAnnotationsForTraining(
   jobId: string,
   pages: PageData[],
   bboxes: ProblemBBox[],
+  bboxSourceMap: Map<number, 'yolo' | 'gemini'>,
 ): Promise<void> {
   if (!supabaseAdmin) {
     console.warn('[science-gemini-flow:training] supabaseAdmin 없음 — 학습 데이터 저장 스킵');
@@ -300,6 +342,7 @@ async function saveScienceAnnotationsForTraining(
       const pageNum = bbox.pageIdx + 1;
       const pageInfo = pageImagePathMap.get(pageNum);
       if (!pageInfo) return null; // 페이지 업로드 실패한 건 스킵
+      const pageSource = bboxSourceMap.get(bbox.pageIdx);
       return {
         problem_id: null, // 자산화 전이라 problem_id 없음. job_id + page + bbox 로 매칭 가능
         exam_id: null,
@@ -314,7 +357,7 @@ async function saveScienceAnnotationsForTraining(
         bbox_h: bbox.h,
         class_label: 'science_problem',
         problem_number: bbox.numberHint,
-        detection_source: 'AUTO_GEMINI',
+        detection_source: pageSource === 'yolo' ? 'AUTO_YOLO' : 'AUTO_GEMINI',
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -334,6 +377,64 @@ async function saveScienceAnnotationsForTraining(
     console.log(
       `[science-gemini-flow:training] ✅ ${annotationsToInsert.length}개 science_problem annotation 저장 (job ${jobId})`,
     );
+  }
+}
+
+/**
+ * 페이지 이미지를 YOLO 서버 (/detect) 로 보내 'problem' bbox 검출.
+ *
+ * 응답 규약 (yolo-server/server.py):
+ *   - problems: [{x, y, w, h, confidence, class='problem'}]  ← 모두 top-left normalized (0~1)
+ *   - others:   [{...class='graph'|'table'}]
+ *
+ * 폴백 트리거 (null 반환 → caller 가 Gemini segmenter 사용):
+ *   - 헬스체크 실패 / 모델 미로딩
+ *   - /detect HTTP 에러
+ *   - 검출 0건 (과학 시험지 형식 미학습 페이지 가능성)
+ *   - 네트워크 timeout / 예외
+ *
+ * ★ production YOLO = HF Spaces (snaker1107/gwasaram-yolo) — Vercel env YOLO_SERVER_URL 필수.
+ */
+async function detectProblemsWithYolo(
+  page: PageData,
+): Promise<{ bboxes: Array<{ x: number; y: number; w: number; h: number }>; inferenceMs: number } | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), YOLO_TIMEOUT_MS);
+  try {
+    // 헬스체크 — 미배포/미로딩 즉시 폴백
+    const healthRes = await fetch(`${YOLO_SERVER_URL}/health`, { signal: controller.signal });
+    if (!healthRes.ok) return null;
+    const health = await healthRes.json();
+    if (!health.model_loaded) return null;
+
+    const formData = new FormData();
+    formData.append('image_base64', page.imageBase64);
+    formData.append('confidence', String(YOLO_CONFIDENCE));
+    formData.append('page_number', String(page.pageIdx + 1));
+
+    const detectRes = await fetch(`${YOLO_SERVER_URL}/detect`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+    if (!detectRes.ok) return null;
+
+    const data = await detectRes.json();
+    const problems = (data.problems || []) as Array<{ x: number; y: number; w: number; h: number }>;
+    if (problems.length === 0) return null;
+
+    return {
+      bboxes: problems.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })),
+      inferenceMs: data.inference_ms || 0,
+    };
+  } catch (err) {
+    console.warn(
+      `[science-gemini-flow] YOLO page ${page.pageIdx + 1} 호출 실패:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
