@@ -236,12 +236,20 @@ function toExamProblemData(
     : undefined;
 
   // ★ 2순위: content_latex에서 추출 (fallback)
-  const { content: rawContent, choices: extractedChoices } = extractChoicesFromLatex(problem.content_latex || '');
+  //   ★ 본문 cut 방지 (2026-05-25 사고 fix):
+  //     DB 에 choices 가 박혀있으면 본문에서 ①~⑤ 추출 (cut) 하지 않음 — 본문 전체 사용.
+  //     extractChoicesFromLatex 는 본문에 첫 ① 만나면 그 앞까지만 content 로 자르는데,
+  //     본문 안 표 환경 (`\begin{tabular}` 안 ① 라벨) 이나 본문 설명에 ①~⑤ 가 있으면
+  //     content 가 매우 짧게 cut됨 (사용자 보고: "문제가 안 나온다").
+  //     DB choices 가 있으면 그 추출이 무의미 + 본문 부당하게 짤림 → 본문 전체 사용.
+  const fullContent = problem.content_latex || '';
+  const { content: extractedContent, choices: extractedChoices } = extractChoicesFromLatex(fullContent);
+  const hasDbChoices = dbChoices.length > 0;
   // ★ LaTeX 정리 (공통 유틸 — 모든 페이지에 자동 적용)
-  const content = cleanLatexContent(rawContent);
+  const content = cleanLatexContent(hasDbChoices ? fullContent : extractedContent);
 
   // DB에 저장된 선택지가 있으면 우선 사용 + LaTeX 정리
-  const rawChoices = dbChoices.length > 0 ? dbChoices : extractedChoices;
+  const rawChoices = hasDbChoices ? dbChoices : extractedChoices;
   const choices = rawChoices.map(c => cleanChoiceText(c));
 
   // type_code → 표시용 짧은 코드 변환
