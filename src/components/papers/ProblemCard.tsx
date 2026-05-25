@@ -76,9 +76,17 @@ export function ProblemCard({ index, problem, points }: ProblemCardProps) {
   const content = problem.content_latex || '';
   const { body, choices: extractedChoices } = extractChoices(content);
 
+  // ★ 답 유형 — 'short_answer' (주관식) 이면 choices 자체를 무시.
+  //   사고 (2026-05-25): 사용자가 모달에서 답유형을 객관식 → 주관식으로 변경해도
+  //   DB 의 choices 배열이 그대로 남아있으면 카드가 객관식 ①~⑤ 로 렌더하던 회귀.
+  //   type 값 우선 — 'multiple_choice' / undefined (legacy) 만 객관식으로 처리.
+  const answerType = (answerJson?.type ?? null) as string | null;
+  const isObjective = answerType !== 'short_answer';
+
   // ★ 1순위: answer_json.choices (자산화 시 별도 저장된 선택지), 2순위: content_latex에서 추출
-  const answerChoices: string[] = Array.isArray(answerJson?.choices) ? answerJson.choices : [];
-  const choices = answerChoices.length > 0 ? answerChoices : extractedChoices;
+  //   isObjective=false (주관식) 이면 raw choices 가 남아있어도 빈 배열로 처리 → 카드 렌더 차단.
+  const answerChoices: string[] = (isObjective && Array.isArray(answerJson?.choices)) ? answerJson.choices : [];
+  const choices = answerChoices.length > 0 ? answerChoices : (isObjective ? extractedChoices : []);
   // answer_json.choices가 있으면 body를 full content로 사용 (content_latex에서 추출할 필요 없음)
   const bodyText = answerChoices.length > 0 ? content : body;
 
