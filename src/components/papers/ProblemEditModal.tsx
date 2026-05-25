@@ -480,8 +480,23 @@ function ChoicesEditor({
               };
               // ★ 표 객관식 모드: 컬럼별 input 분리 (이미지 슬롯 숨김)
               if (hasHeaders) {
-                const rawValue = choice.replace(/^[①②③④⑤]\s*/, '');
-                const cols = rawValue.split(/\s*\|\s*|\s+\/\s+/);
+                // ★ raw tabular 패턴 자동 인식 (2026-05-25 사고 fix):
+                //   과학 자산화 OCR 시 표 객관식이 `& 지권 & 기권 & 생물권 \\` 또는
+                //   끝에 `\end{tabular}` 가 박힌 raw 형태로 저장됨 — 변환 누락 케이스.
+                //   `|` 만 인식하면 raw 가 첫 셀에 통째로 박혀 사용자가 셀별로 수정 못 함.
+                //   `\\` 또는 `\end{tabular}` 또는 ` & ` 패턴이 있으면 raw 로 판정 → `&` 도 분리.
+                //   수학 영향 0 — 수학 표 객관식은 `|` 형식으로 박혀 raw 패턴 매칭 안 됨.
+                const rawValue = choice
+                  .replace(/^[①②③④⑤]\s*/, '')
+                  .replace(/^&\s*/, '')                      // 시작 & 제거 (첫 셀 빈 표시)
+                  .replace(/\\\\\s*$/, '')                   // 끝 \\ 제거
+                  .replace(/\\end\{tabular\}\s*$/, '')       // 끝 \end{tabular} 제거
+                  .trim();
+                const isRawTabular = /\\\\|\\end\{tabular\}|\s+&\s+/.test(choice);
+                const splitRegex = isRawTabular
+                  ? /\s*\|\s*|\s+\/\s+|\s*&\s*/              // raw tabular: & 도 셀 구분
+                  : /\s*\|\s*|\s+\/\s+/;                     // 일반: 기존 분리
+                const cols = rawValue.split(splitRegex).filter(s => s.length > 0);
                 while (cols.length < columnCount) cols.push('');
                 const handleColChange = (ci: number, v: string) => {
                   const next = [...cols];
