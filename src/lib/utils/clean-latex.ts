@@ -12,7 +12,16 @@ export function cleanLatexContent(content: string): string {
     .replace(/\\displaystyle\s*/g, '')
     // \lbrace → \left\{ , \rbrace → \right\} (KaTeX 호환)
     .replace(/\\lbrace/g, '\\left\\{')
-    .replace(/\\rbrace/g, '\\right\\}');
+    .replace(/\\rbrace/g, '\\right\\}')
+    // ★ 동그라미 한글 보기 라벨 복원 (2026-05-26 사고 fix):
+    //   원본 PDF 의 `㉠ ㉡ ㉢ ㉣ ㉤` 가 OCR 시 `(ㄱ) (ㄴ) (ㄷ) (ㄹ) (ㅁ)` 로 잘못 인식되어
+    //   카드 표시 시 어색. 본문·선택지 양쪽 일관성 위해 정자 복원.
+    //   (ㄱ) → ㉠, (ㄴ) → ㉡, (ㄷ) → ㉢, (ㄹ) → ㉣, (ㅁ) → ㉤
+    .replace(/\(\s*ㄱ\s*\)/g, '㉠')
+    .replace(/\(\s*ㄴ\s*\)/g, '㉡')
+    .replace(/\(\s*ㄷ\s*\)/g, '㉢')
+    .replace(/\(\s*ㄹ\s*\)/g, '㉣')
+    .replace(/\(\s*ㅁ\s*\)/g, '㉤');
 
   // ★ \[ ... \] (display math 구분자, Mathpix/AMS 표준) → $$ ... $$
   //   downstream MixedContentRenderer 도 같은 변환을 하지만 splitAtQuestion 등
@@ -127,6 +136,14 @@ export function injectSubQuestionPoints(
  */
 export function cleanChoiceText(text: string): string {
   return text
+    // ★ 동그라미 한글 보기 라벨 복원 (2026-05-26 사고 fix):
+    //   원본 PDF 의 `㉠ ㉡ ㉢ ㉣ ㉤` 가 OCR 시 `(ㄱ) (ㄴ) (ㄷ) (ㄹ) (ㅁ)` 로 잘못 인식.
+    //   선택지 `"① (ㄱ)"`, `"② (ㄴ), (ㄷ)"` 같은 케이스를 `"① ㉠"`, `"② ㉡, ㉢"` 로 정자 복원.
+    .replace(/\(\s*ㄱ\s*\)/g, '㉠')
+    .replace(/\(\s*ㄴ\s*\)/g, '㉡')
+    .replace(/\(\s*ㄷ\s*\)/g, '㉢')
+    .replace(/\(\s*ㄹ\s*\)/g, '㉣')
+    .replace(/\(\s*ㅁ\s*\)/g, '㉤')
     .replace(
       /\$?\s*\\begin\{(?:array|aligned)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned)\}\s*\$?/gi,
       (m, inner: string) => {
