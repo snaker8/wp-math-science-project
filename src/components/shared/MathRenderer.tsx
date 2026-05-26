@@ -46,7 +46,12 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                   const gap = (myTall || nextTall) ? '8pt' : '2pt';
                   return row + `\\\\[${gap}]`;
                 }).join('');
-                return `{\\def\\arraystretch{1.3}\\begin{${env}}${widened}\\end{${env}}}`;
+                // ★ \def\arraystretch{1.3} 제거 (2026-05-26 사고 fix):
+                //   KaTeX 가 \def 명령 미지원 — strict:false 면 보통 무시되지만
+                //   inline `$...$` 안 `\left(\begin{array}...\end{array}\right)` 같은 nested
+                //   케이스에서 raw 채로 빨갛게 표시되는 사고 (성취도평가 16번 행렬식).
+                //   행 spacing (\\[2pt]/[8pt]) 만 유지하면 시각적 동일 + 호환성 OK.
+                return `\\begin{${env}}${widened}\\end{${env}}`;
               }
             );
             const widened = stretchArrays(stripped);
@@ -90,7 +95,12 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                       const gap = (myTall || nextTall) ? '8pt' : '2pt';
                       return row + `\\\\[${gap}]`;
                     }).join('');
-                    return `{\\def\\arraystretch{1.3}\\begin{${env}}${widened}\\end{${env}}}`;
+                    // ★ \def\arraystretch{1.3} 제거 (2026-05-26 사고 fix):
+                //   KaTeX 가 \def 명령 미지원 — strict:false 면 보통 무시되지만
+                //   inline `$...$` 안 `\left(\begin{array}...\end{array}\right)` 같은 nested
+                //   케이스에서 raw 채로 빨갛게 표시되는 사고 (성취도평가 16번 행렬식).
+                //   행 spacing (\\[2pt]/[8pt]) 만 유지하면 시각적 동일 + 호환성 OK.
+                return `\\begin{${env}}${widened}\\end{${env}}`;
                   }
                 );
                 const fallbackContent = block ? fallbackWidened : `\\displaystyle ${fallbackWidened}`;
