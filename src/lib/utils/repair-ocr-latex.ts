@@ -30,6 +30,18 @@ export function repairOcrBrokenLatex(content: string): string {
   if (!content) return content;
   let result = content;
 
+  // ─── 패턴 0: 동그라미 한글 보기 라벨 OCR 오인식 복원 (2026-05-26 학습) ───
+  //   원본 PDF 의 `㉠ ㉡ ㉢ ㉣ ㉤` 가 Mathpix/Gemini OCR 시 `(ㄱ) (ㄴ) (ㄷ) (ㄹ) (ㅁ)`
+  //   로 잘못 인식되어 자산화 후 카드에 어색하게 표시되는 사고.
+  //   자산화 시점에 정자 (㉠~㉤) 로 복원해 DB 에 박음 — 표시 단 변환 (cleanLatexContent /
+  //   cleanChoiceText) 의 안전망 + 영구 데이터 정상화.
+  result = result
+    .replace(/\(\s*ㄱ\s*\)/g, '㉠')
+    .replace(/\(\s*ㄴ\s*\)/g, '㉡')
+    .replace(/\(\s*ㄷ\s*\)/g, '㉢')
+    .replace(/\(\s*ㄹ\s*\)/g, '㉣')
+    .replace(/\(\s*ㅁ\s*\)/g, '㉤');
+
   // ─── 패턴 1: $(한글)$ inline-math wrap 해제 ───
   //   정상 LaTeX 에 단독 한글만 든 inline-math 케이스 없음. 안전.
   //   `(가)`, `(ㄴ)`, `(가나다)` 등 한글/자모 + 선택적 공백·쉼표.
