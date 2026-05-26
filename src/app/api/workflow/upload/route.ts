@@ -26,7 +26,7 @@ import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/wor
 //   - 'school' / 'textbook' / 'mock' : 진단평가 아님 (is_diagnostic=false 강제)
 //   - 'diagnostic' : 진단평가 강제 (제목에서 round 추출 시도, 실패 시 빈값)
 function applySourceCategoryOverride(
-  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock',
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock',
   autoMeta: { is_diagnostic: boolean; diagnostic_category: 'BS' | 'DD' | 'PT' | 'SC' | null; diagnostic_round: string | null; diagnostic_difficulty: string | null },
   title: string,
 ): {
@@ -48,11 +48,12 @@ function applySourceCategoryOverride(
       exam_type: '진단평가',
     };
   }
-  // school / textbook / mock 모두 진단평가 X
+  // school / achievement / textbook / mock 모두 진단평가 X
   const examTypeMap: Record<string, string> = {
-    school:   '학교기출',
-    textbook: '시중교재',
-    mock:     '모의고사',
+    school:      '학교기출',
+    achievement: '성취도 평가',
+    textbook:    '시중교재',
+    mock:        '모의고사',
   };
   return {
     is_diagnostic: false,
@@ -1252,7 +1253,7 @@ async function saveEditedProblemsDirect(
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
   requestOrigin: string = '',
   // ★ 사용자 명시 출처 카테고리 — exam INSERT 시 자동 태깅 override
-  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock' = 'auto'
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock' = 'auto'
 ) {
   const supabase = supabaseAdmin;
   if (!supabase) {
@@ -2039,7 +2040,7 @@ async function saveProblemsToDB(
   editedProblems?: Array<{ number: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; [key: string]: any }>,
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
   // ★ 사용자 명시 출처 카테고리 — exam INSERT 시 자동 태깅 override
-  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock' = 'auto'
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock' = 'auto'
 ): Promise<void> {
   // Use Admin Client to bypass RLS for background processing
   const supabase = supabaseAdmin;
