@@ -112,13 +112,14 @@ interface DBExam {
 // ============================================================================
 // 출처별 카테고리 — exam-create 와 동일 분류 체계
 // ============================================================================
-type SourceCategory = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock';
+type SourceCategory = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock' | 'achievement';
 
 const SOURCE_CATEGORIES: Array<{
   id: SourceCategory; label: string; color: string; emoji: string;
 }> = [
   { id: 'all', label: '전체', color: 'cyan', emoji: '📚' },
   { id: 'diagnostic', label: '진단평가', color: 'indigo', emoji: '🩺' },
+  { id: 'achievement', label: '성취도 평가', color: 'violet', emoji: '🎓' },
   { id: 'school', label: '학교기출', color: 'emerald', emoji: '🏫' },
   { id: 'textbook', label: '시중교재', color: 'amber', emoji: '📖' },
   { id: 'mock', label: '모의고사', color: 'rose', emoji: '📝' },
@@ -126,6 +127,9 @@ const SOURCE_CATEGORIES: Array<{
 
 const MOCK_TITLE_PATTERN = /모의고사|평가원|교육청|수능|학평/;
 const MOCK_TYPE_PATTERN = /모의|수능|평가원|학평/;
+// ★ 성취도 평가 패턴 (2026-05-19): 사용자 요청 — 신규 카테고리.
+//   학평·모의고사 와 충돌 방지 위해 "성취도" 명시어만 매칭.
+const ACHIEVEMENT_TITLE_PATTERN = /성취도/;
 
 // ★ 진단평가 트리 — 세션 타입 + 회차 계층 구조
 const DIAG_CATEGORIES: Array<{ id: string; label: string; emoji: string }> = [
@@ -358,23 +362,25 @@ const GroupContextMenu: React.FC<{
 // 출처 카테고리 뱃지 — 클릭 시 변경 드롭다운
 // ============================================================================
 
-type ReclassifyCategory = 'diagnostic' | 'school' | 'textbook' | 'mock';
+type ReclassifyCategory = 'diagnostic' | 'achievement' | 'school' | 'textbook' | 'mock';
 
 const RECLASSIFY_OPTIONS: Array<{
   id: ReclassifyCategory; label: string; emoji: string;
   colorClass: string; bgClass: string; borderClass: string;
 }> = [
-  { id: 'diagnostic', label: '진단평가', emoji: '🩺', colorClass: 'text-indigo-400', bgClass: 'bg-indigo-500/5', borderClass: 'border-indigo-500/30' },
-  { id: 'school',     label: '학교기출', emoji: '🏫', colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/5', borderClass: 'border-emerald-500/30' },
-  { id: 'textbook',   label: '시중교재', emoji: '📖', colorClass: 'text-amber-400',   bgClass: 'bg-amber-500/5',   borderClass: 'border-amber-500/30' },
-  { id: 'mock',       label: '모의고사', emoji: '📝', colorClass: 'text-rose-400',    bgClass: 'bg-rose-500/5',    borderClass: 'border-rose-500/30' },
+  { id: 'diagnostic',  label: '진단평가',    emoji: '🩺', colorClass: 'text-indigo-400',  bgClass: 'bg-indigo-500/5',  borderClass: 'border-indigo-500/30' },
+  { id: 'achievement', label: '성취도 평가', emoji: '🎓', colorClass: 'text-violet-400',  bgClass: 'bg-violet-500/5',  borderClass: 'border-violet-500/30' },
+  { id: 'school',      label: '학교기출',    emoji: '🏫', colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/5', borderClass: 'border-emerald-500/30' },
+  { id: 'textbook',    label: '시중교재',    emoji: '📖', colorClass: 'text-amber-400',   bgClass: 'bg-amber-500/5',   borderClass: 'border-amber-500/30' },
+  { id: 'mock',        label: '모의고사',    emoji: '📝', colorClass: 'text-rose-400',    bgClass: 'bg-rose-500/5',    borderClass: 'border-rose-500/30' },
 ];
 
 function examCategoryInfo(isDiagnostic?: boolean, examType?: string | null) {
-  if (isDiagnostic) return RECLASSIFY_OPTIONS[0]; // 진단평가
-  if (examType === '모의고사') return RECLASSIFY_OPTIONS[3];
-  if (examType === '시중교재') return RECLASSIFY_OPTIONS[2];
-  return RECLASSIFY_OPTIONS[1]; // 학교기출 (기본)
+  if (isDiagnostic) return RECLASSIFY_OPTIONS[0];                            // 진단평가
+  if (examType === '성취도 평가') return RECLASSIFY_OPTIONS[1];              // 성취도 평가
+  if (examType === '모의고사') return RECLASSIFY_OPTIONS[4];
+  if (examType === '시중교재') return RECLASSIFY_OPTIONS[3];
+  return RECLASSIFY_OPTIONS[2]; // 학교기출 (기본)
 }
 
 const SourceCategoryBadge: React.FC<{
@@ -417,7 +423,7 @@ const SourceCategoryBadge: React.FC<{
                 type="button"
                 onClick={(e) => handleSelect(e, opt.id)}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-surface-raised transition-colors ${
-                  opt.id === (isDiagnostic ? 'diagnostic' : examType === '모의고사' ? 'mock' : examType === '시중교재' ? 'textbook' : 'school')
+                  opt.id === (isDiagnostic ? 'diagnostic' : examType === '성취도 평가' ? 'achievement' : examType === '모의고사' ? 'mock' : examType === '시중교재' ? 'textbook' : 'school')
                     ? `${opt.colorClass} font-semibold`
                     : 'text-content-secondary'
                 }`}
@@ -934,6 +940,8 @@ export default function CloudPage() {
     const payload: Record<string, any> =
       cat === 'diagnostic'
         ? { isDiagnostic: true,  examType: null }
+        : cat === 'achievement'
+        ? { isDiagnostic: false, examType: '성취도 평가' }
         : cat === 'mock'
         ? { isDiagnostic: false, examType: '모의고사' }
         : cat === 'textbook'
@@ -1211,17 +1219,24 @@ export default function CloudPage() {
   const categoryFilteredExams = useMemo(() => {
     if (sourceCategory === 'all') return subjectFilteredExams;
     return subjectFilteredExams.filter((e) => {
+      const titleStr = e.title || e.fileName || '';
       switch (sourceCategory) {
         case 'diagnostic':
           return !!e.isDiagnostic;
+        case 'achievement':
+          // ★ 성취도 평가 (2026-05-19): examType 명시값 OR 제목에 '성취도'
+          if (e.isDiagnostic) return false;
+          return e.examType === '성취도 평가' || ACHIEVEMENT_TITLE_PATTERN.test(titleStr);
         case 'school':
           // bookGroupId는 폴더 구분용 — 출처 판단 기준이 아님
           if (e.isDiagnostic) return false;
+          // 성취도 평가 도 학교기출 에서 제외
+          if (e.examType === '성취도 평가' || ACHIEVEMENT_TITLE_PATTERN.test(titleStr)) return false;
           return e.examType !== '모의고사' && e.examType !== '시중교재';
         case 'textbook':
           return !e.isDiagnostic && e.examType === '시중교재';
         case 'mock':
-          return !e.isDiagnostic && (e.examType === '모의고사' || MOCK_TITLE_PATTERN.test(e.title || e.fileName || ''));
+          return !e.isDiagnostic && (e.examType === '모의고사' || MOCK_TITLE_PATTERN.test(titleStr));
         default:
           return true;
       }

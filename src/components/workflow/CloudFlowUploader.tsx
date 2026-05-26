@@ -91,7 +91,7 @@ export default function CloudFlowUploader({
 
   // ★ 출처 카테고리 — 자산화 시 사용자 명시 선택 (사용자 지시 2026-05-16).
   //   exam-create / cloud 의 5종 카테고리 + 'auto' (자동 태깅 시도, 기본값).
-  type UploadSourceCategory = 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock';
+  type UploadSourceCategory = 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock';
   const [sourceCategory, setSourceCategory] = useState<UploadSourceCategory>('auto');
   const [scienceSubject, setScienceSubject] = useState<ScienceSubjectCode>('IS1');
   const [curriculumVersion, setCurriculumVersion] = useState<CurriculumVersion>('2022');
@@ -546,11 +546,12 @@ export default function CloudFlowUploader({
       <div className="flex flex-wrap items-center gap-2 mt-2 mb-3 px-1">
         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mr-1">출처</span>
         {([
-          { id: 'auto',       label: '자동 감지', emoji: '✨', color: 'zinc' },
-          { id: 'school',     label: '학교기출', emoji: '🏫', color: 'emerald' },
-          { id: 'diagnostic', label: '진단평가', emoji: '🩺', color: 'indigo' },
-          { id: 'textbook',   label: '시중교재', emoji: '📖', color: 'amber' },
-          { id: 'mock',       label: '모의고사', emoji: '📝', color: 'rose' },
+          { id: 'auto',        label: '자동 감지',    emoji: '✨', color: 'zinc' },
+          { id: 'school',      label: '학교기출',    emoji: '🏫', color: 'emerald' },
+          { id: 'diagnostic',  label: '진단평가',    emoji: '🩺', color: 'indigo' },
+          { id: 'achievement', label: '성취도 평가', emoji: '🎓', color: 'violet' },
+          { id: 'textbook',    label: '시중교재',    emoji: '📖', color: 'amber' },
+          { id: 'mock',        label: '모의고사',    emoji: '📝', color: 'rose' },
         ] as Array<{ id: UploadSourceCategory; label: string; emoji: string; color: string }>).map((c) => {
           const isActive = sourceCategory === c.id;
           return (
