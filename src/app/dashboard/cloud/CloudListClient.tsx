@@ -1593,15 +1593,21 @@ export default function CloudPage() {
               const count = cat.id === 'all'
                 ? subjectFilteredExams.length
                 : subjectFilteredExams.filter((e) => {
+                    const titleStr = e.title || e.fileName || '';
                     switch (cat.id) {
                       case 'diagnostic': return !!e.isDiagnostic;
+                      case 'achievement':
+                        if (e.isDiagnostic) return false;
+                        return e.examType === '성취도 평가' || ACHIEVEMENT_TITLE_PATTERN.test(titleStr);
                       case 'school':
                         if (e.isDiagnostic) return false;
+                        // 성취도 평가 제외 (categoryFilteredExams 와 동일 로직)
+                        if (e.examType === '성취도 평가' || ACHIEVEMENT_TITLE_PATTERN.test(titleStr)) return false;
                         return e.examType !== '모의고사' && e.examType !== '시중교재';
                       case 'textbook': return !e.isDiagnostic && e.examType === '시중교재';
                       case 'mock':
                         return !e.isDiagnostic && (e.examType === '모의고사' ||
-                               MOCK_TITLE_PATTERN.test(e.title || e.fileName || ''));
+                               MOCK_TITLE_PATTERN.test(titleStr));
                       default: return false;
                     }
                   }).length;
