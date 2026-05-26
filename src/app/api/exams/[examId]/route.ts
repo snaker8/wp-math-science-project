@@ -49,10 +49,17 @@ export async function GET(
     }
 
     // 격리 가드 — 다른 institute exam 접근 차단
-    try {
-      assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
-    } catch {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // ★ NULL (공통 풀) 은 모든 로그인 사용자 접근 허용 (2026-05-26 사고 fix):
+    //   사용자 정책 = "원래 자산화한 문제는 모두 다 보이게, 엄궁차수학만 격리".
+    //   NULL exam = 공통 풀 — assertInstituteAccess throw 대신 통과.
+    //   PATCH/DELETE 는 의도적으로 기존 동작 유지 (NULL 시험지 수정·삭제는 super_admin 만).
+    const examInstituteId = (exam as { institute_id: string | null }).institute_id;
+    if (examInstituteId !== null) {
+      try {
+        assertInstituteAccess(scope, examInstituteId);
+      } catch {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // 2. exam_problems 조회 (supabaseAdmin + JOIN은 0건 반환 이슈 → 분리 쿼리)
