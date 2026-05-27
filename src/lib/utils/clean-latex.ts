@@ -106,6 +106,14 @@ export function injectSubQuestionPoints(
     }
     // 2)·3) "[서·논술형 N-M]" 또는 "[N-M]" 대괄호 직후에 " [N점]" 추가.
     //    [^\]]*? 가 대괄호 내부의 임의 prefix(서·논술형 등)를 흡수.
+    //    ★ sq.number 가 "N-M" 형식일 때만 매칭 — 단일 N ("1","2","3"...) 은
+    //      [서답형 N] 같은 대문제 헤더에 false positive 매칭하므로 skip.
+    //      사고 (2026-05-27 사직여중 15·18번): parseSubQuestions 분기 4 (1)(2)(3)
+    //      케이스의 sq.number="1" 이 [서답형 1] 헤더에 매칭되어 본문에 [2점]
+    //      자동 박힘. 모달 textarea 에는 없는 텍스트가 카드에만 표시되던 사고.
+    //      단일 N 케이스는 SubQuestionTable 합계로만 표시 — (1)(2)(3) 본문은
+    //      그대로 두고 점수 라벨 안 박음 (라인 시작이 `(` 라서 reDot 도 매칭 X).
+    if (!/^\d+-\d+$/.test(String(sq.number))) continue;
     const reBracket = new RegExp(`(\\[[^\\]]*?${num}\\s*\\])`, '');
     if (reBracket.test(result)) {
       result = result.replace(reBracket, `$1 ${ptsLabel}`);
