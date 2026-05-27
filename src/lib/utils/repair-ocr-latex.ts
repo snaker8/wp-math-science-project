@@ -20,11 +20,15 @@
  *     예: `$2(...)=$(ㄴ)$\\` → `$2(...)=(ㄴ)$`
  *  3. 수식 닫힘 직후 라인 끝 `\\` + 다음 라인 한글 시작 — `\\` 제거
  *     예: `...$\\<개행>(가)` → `...$<개행>(가)`
+ *  4. 본문 leading 문제 번호 prefix — 카드 번호 배지와 중복 표시 차단 (2026-05-27)
+ *     예: `1. 다음에서...` → `다음에서...` / `01) 이차방정식...` → `이차방정식...`
+ *     gemini-3.5-flash 가 content 안에 번호 prefix 남기는 사고 차단.
  *
  * 회귀 안전성:
  *  - 패턴 1: 한글이 inline-math 안 있는 경우는 OCR 오류로 간주 (정상 LaTeX 에 단독 한글 wrap 없음)
  *  - 패턴 2: `=` 직후 `$` + 한글 라벨 + `$\\` 의 매우 특정한 형식만 매치
  *  - 패턴 3: 수식 닫는 `$` 직후 라인 끝 `\\` + 다음 라인 한글 시작 한정
+ *  - 패턴 4: 1~2자리 + `.` 또는 `)` + 공백. "1번째", "1차 함수" 같은 자연어 시작은 매칭 X
  */
 export function repairOcrBrokenLatex(content: string): string {
   if (!content) return content;
@@ -48,6 +52,12 @@ export function repairOcrBrokenLatex(content: string): string {
   //   `text$\\<개행>` 형식에서 `\\` 는 LaTeX 줄바꿈 의미 — 수식 밖에서는 무효.
   //   다음 라인이 한글로 시작하는 경우만 정정 (정상 LaTeX block 보호).
   result = result.replace(/(\$)\\\\(\s*\n\s*[가-힣(\[])/g, '$1$2');
+
+  // ─── 패턴 4: 본문 leading 문제 번호 prefix 제거 (2026-05-27) ───
+  //   gemini-3.5-flash 가 content 시작에 '1.', '01.', '1)' prefix 를 남기는 사고.
+  //   카드 헤더에 별도 번호 배지 있어서 중복 표시 → 사용자 불만.
+  //   안전 패턴: 1~2자리 + `.` 또는 `)` + 공백. 한 번만 strip.
+  result = result.replace(/^\s*\d{1,2}\s*[.)]\s+/, '');
 
   return result;
 }
