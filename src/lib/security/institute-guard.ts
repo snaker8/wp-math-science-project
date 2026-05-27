@@ -344,8 +344,17 @@ export async function assertExamAccess(
     .maybeSingle();
   if (error) return { ok: false, status: 500, error: error.message };
   if (!exam) return { ok: false, status: 404, error: 'Exam not found' };
+  // ★ NULL institute_id (공통 풀) — 모든 로그인 사용자 R/W 허용 (2026-05-27 사고 fix):
+  //   사용자 정책 = "원래 자산화한 문제는 모두 보이게 + 수정 가능. 엄궁차수학만 격리".
+  //   엄궁차수학 등 isolated organization 의 institute_id 박힌 exam 만 격리 분기 진입.
+  //   직전 fix (14e709b) 가 /api/exams/[examId] GET 만 적용 → 14곳 (auto-fix 포함) 모두 일관.
+  //   사용자 보고: "자동매핑 실패 HTTP 403" 해소.
+  const examInstituteId = (exam as { institute_id: string | null }).institute_id;
+  if (examInstituteId === null) {
+    return { ok: true };
+  }
   try {
-    assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
+    assertInstituteAccess(scope, examInstituteId);
     return { ok: true };
   } catch {
     return { ok: false, status: 403, error: 'Forbidden' };
