@@ -626,9 +626,17 @@ function stripTrailingChoiceLines(text: string): string {
     // 연속 선택지 줄이 3개 미만이면 서술형 소문제일 가능성 높으므로 제거하지 않음
     const choiceLineCount = lastNonEmptyIdx - firstChoiceIdx + 1;
     if (choiceLineCount < 3) return text;
+    const choiceBlock = lines.slice(firstChoiceIdx, lastNonEmptyIdx + 1).join('\n');
+    // ★ (1)~(5) 5개 모두 있을 때만 객관식. 4개 이하 (1)(2)(3) / (1)(2)(3)(4) 는 서답형 보존.
+    //   한국 수학 시험지 객관식은 항상 5개. CLAUDE.md / extractChoicesFromLatex /
+    //   removeChoicesFromContent 의 서답형 보호 정책 일관성.
+    //   사고 (2026-05-27 사직여중 15·18번): (1)(2)(3)(4) 4개 본문이 객관식 오인되어
+    //   본문에서 통째로 제거됨. 소문제가 "~기" 액션 동사만이라 키워드 매칭도 실패해
+    //   stripTrailingChoiceLines 가 선택지 블록 통째 strip.
+    const parenChoiceCount = (choiceBlock.match(/\(\s*[1-5]\s*\)/g) || []).length;
+    if (parenChoiceCount > 0 && parenChoiceCount < 5) return text;
     // ★ 서술형 키워드가 포함된 줄이 있으면 서술형 소문제이므로 제거하지 않음
     const subProblemKeywords = /구하시오|구하여라|구해라|서술하시오|설명하시오|증명하시오|나타내시오|보이시오|판단하시오|풀이\s*과정|쓰시오|쓰고|답하시오|완성하시오|그리시오|작도하시오|구하세요|구해\s*보시오|넓이를?\s*구|길이를?\s*구|값을?\s*구|과정을?\s*쓰|\[\s*\d+\s*점\s*\]|\d+점/;
-    const choiceBlock = lines.slice(firstChoiceIdx, lastNonEmptyIdx + 1).join('\n');
     if (subProblemKeywords.test(choiceBlock)) return text;
     // 선택지 블록 제거
     return lines.slice(0, firstChoiceIdx).join('\n').trimEnd();
