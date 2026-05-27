@@ -108,7 +108,14 @@ export function injectSubQuestionPoints(
     //    [^\]]*? 가 대괄호 내부의 임의 prefix(서·논술형 등)를 흡수.
     const reBracket = new RegExp(`(\\[[^\\]]*?${num}\\s*\\])`, '');
     if (reBracket.test(result)) {
-      result = result.replace(reBracket, `$1 ${ptsLabel}`);
+      const matched = result.match(reBracket)![0];
+      // ★ [서답형 N] 대문제 헤더 false positive 차단 (2026-05-27 사직여중 14·15번 사고).
+      //   분기 4 (1)(2)(3) 케이스의 sq.number="1" 이 [서답형 1] 헤더에 매칭되어
+      //   본문에 [2점] 자동 박힘. 모달 textarea 엔 없는 텍스트가 카드에만 표시되던 사고.
+      //   [서·논술형 N-M] / [N-M] 같은 의도 케이스는 'serdapyung' 키워드 없어 통과.
+      if (!/서답형/.test(matched)) {
+        result = result.replace(reBracket, `$1 ${ptsLabel}`);
+      }
     }
   }
   return result;
