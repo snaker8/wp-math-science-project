@@ -31,12 +31,6 @@ export function cleanLatexContent(content: string): string {
   //   카드 표시에서만 가린다. (수식 내부 의미 있는 [..] 는 영향 없음 — N점 형태만 매칭)
   result = result.replace(/[\[(]\s*(?:총\s*)?\d+(?:\.\d+)?\s*점\s*[\])]/g, '').replace(/[ \t]{2,}/g, ' ');
 
-  // ★ 본문 leading 문제 번호 prefix 제거 (2026-05-19) — 렌더링 시점만, DB 안 건드림.
-  //   카드 헤더에 별도 "N." 배지가 표시되므로 본문 시작의 "1.", "01.", "1)" 는 중복 표시.
-  //   사용자 보고: gemini-3.5-flash 교체 후 자산화 시 본문 앞에 번호가 박힘.
-  //   안전 패턴: 1~2자리 숫자 + `.` 또는 `)` + 공백. "1번째", "1차 함수" 같은 자연어는 매칭 X.
-  //   처음 한 번만 strip (replace 의 기본 동작).
-  result = result.replace(/^\s*\d{1,2}\s*[.)]\s+/, '');
 
   // ─── 연립방정식 괄호 패턴 수정 ───
   // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX에서 $ 구분자 꼬임
