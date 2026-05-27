@@ -18,6 +18,7 @@ import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
+import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
@@ -1646,6 +1647,21 @@ async function saveEditedProblemsDirect(
       //   광역 점검 결과 2,332건 중 8건만 영향 (0.34%) — 모두 OCR 깨진 패턴
       contentLatex = repairOcrBrokenLatex(contentLatex);
 
+      // ★ 사전 심볼 탐지 게이트 (2026-05-27 MVP) — 원본 클론 보장:
+      //   Mathpix 가 동그라미 한글 (㉠~㉩) 을 (ㄱ)~(ㅊ) 로 잘못 인식하는 사고.
+      //   단순 치환은 원본이 진짜 (ㄱ) 인 시험지를 깰 위험 → 원본 크롭을 Flash 로 보고
+      //   실제 ㉠ 동그라미 보일 때만 변환. 의심 패턴 없는 문제는 호출 0 (비용 절감).
+      //   실패 시 (네트워크/API) 원본 그대로 — fail-safe.
+      try {
+        const { repairedText, repairCount } = await detectAndRepairSymbols(cropImageUrl, contentLatex);
+        if (repairCount > 0) {
+          console.log(`[Direct Save] 문제 ${edited.number}: 심볼 탐지 ${repairCount}건 교정 (㉠~㉩)`);
+          contentLatex = repairedText;
+        }
+      } catch (e) {
+        console.warn(`[Direct Save] 문제 ${edited.number}: 심볼 탐지 실패 (무시):`, e instanceof Error ? e.message : e);
+      }
+
       // ★ 학습 규칙 자동 적용 (2026-05-19) — 카드 편집에서 누적된 정정 자동 변환
       {
         const { result, appliedCount, appliedRules } = applyLearnedRules(contentLatex, learnedRules);
@@ -2399,6 +2415,19 @@ async function saveProblemsToDB(
       // ★ OCR 깨진 LaTeX 자산화 시점 정정 (2026-05-19, BS_H1S2_R2 1번 사고)
       //   `$(가)$` 한글 라벨 wrap, `=$(ㄴ)$\\` 등호 분리 깨짐 등
       contentWithMath = repairOcrBrokenLatex(contentWithMath);
+
+      // ★ 사전 심볼 탐지 게이트 (2026-05-27 MVP) — saveEditedProblemsDirect 와 동일 흐름.
+      //   원본 클론 보장 — Mathpix 가 (ㄱ)~(ㅊ) 로 잘못 인식하고 Flash 가 실제 ㉠~㉩ 보일 때만 교정.
+      try {
+        const tmpCropUrl = imageUrlMap.get(problemNum);
+        const { repairedText, repairCount } = await detectAndRepairSymbols(tmpCropUrl, contentWithMath);
+        if (repairCount > 0) {
+          console.log(`[DB] 문제 ${problemIndex}: 심볼 탐지 ${repairCount}건 교정 (㉠~㉩)`);
+          contentWithMath = repairedText;
+        }
+      } catch (e) {
+        console.warn(`[DB] 문제 ${problemIndex}: 심볼 탐지 실패 (무시):`, e instanceof Error ? e.message : e);
+      }
 
       // ★ 학습 규칙 자동 적용 (2026-05-19)
       {
