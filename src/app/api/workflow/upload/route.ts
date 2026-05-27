@@ -19,6 +19,7 @@ import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
 import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
+import { verifyAndRepairWithVision, persistVisionDiffsForLearning } from '@/lib/ocr/vision-verifier';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
@@ -1662,6 +1663,25 @@ async function saveEditedProblemsDirect(
         console.warn(`[Direct Save] 문제 ${edited.number}: 심볼 탐지 실패 (무시):`, e instanceof Error ? e.message : e);
       }
 
+      // ★ 비전 검증 + 자동 교정 (2026-05-27 단계 3 full 루프 Phase 1) — 원본 클론 자동화:
+      //   원본 크롭 vs OCR 전체 본문 대조. 명확한 OCR 오인식만 자동 교정.
+      //   사용자 의도 = "분석 다르면 자동 수정 루프 완성". 사람 개입 0.
+      //   비용: 자산화당 모든 문제 1 Flash 호출 (~$0.001). 25문항 ~$0.025/시험지.
+      //   Phase 2 (학습 누적 → 결정론적 룰 자동 승급) 는 INSERT 후 problemId 받은 시점에 추가 예정.
+      try {
+        const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(cropImageUrl, contentLatex);
+        if (!isMatch && correctedText) {
+          console.log(
+            `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
+            diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
+          );
+          contentLatex = correctedText;
+        }
+      } catch (e) {
+        console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
+      }
+
+
       // ★ 학습 규칙 자동 적용 (2026-05-19) — 카드 편집에서 누적된 정정 자동 변환
       {
         const { result, appliedCount, appliedRules } = applyLearnedRules(contentLatex, learnedRules);
@@ -2429,6 +2449,22 @@ async function saveProblemsToDB(
         }
       } catch (e) {
         console.warn(`[DB] 문제 ${problemIndex}: 심볼 탐지 실패 (무시):`, e instanceof Error ? e.message : e);
+      }
+
+      // ★ 비전 검증 + 자동 교정 (2026-05-27 단계 3 full 루프 Phase 1) — saveEditedProblemsDirect 와 동일.
+      try {
+        const _pNum = result.problemNumber || problemIndex;
+        const tmpCropUrl = imageUrlMap.get(_pNum);
+        const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(tmpCropUrl, contentWithMath);
+        if (!isMatch && correctedText) {
+          console.log(
+            `[DB] 문제 ${problemIndex}: 비전 교정 적용 (diff ${diffs.length}개)`,
+            diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
+          );
+          contentWithMath = correctedText;
+        }
+      } catch (e) {
+        console.warn(`[DB] 문제 ${problemIndex}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
       }
 
       // ★ 학습 규칙 자동 적용 (2026-05-19)
