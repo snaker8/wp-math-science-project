@@ -2418,8 +2418,10 @@ async function saveProblemsToDB(
 
       // ★ 사전 심볼 탐지 게이트 (2026-05-27 MVP) — saveEditedProblemsDirect 와 동일 흐름.
       //   원본 클론 보장 — Mathpix 가 (ㄱ)~(ㅊ) 로 잘못 인식하고 Flash 가 실제 ㉠~㉩ 보일 때만 교정.
+      //   problemNum 변수는 아래 line 2448 에서 정의되므로 여기선 result.problemNumber 직접 사용.
       try {
-        const tmpCropUrl = imageUrlMap.get(problemNum);
+        const _pNum = result.problemNumber || problemIndex;
+        const tmpCropUrl = imageUrlMap.get(_pNum);
         const { repairedText, repairCount } = await detectAndRepairSymbols(tmpCropUrl, contentWithMath);
         if (repairCount > 0) {
           console.log(`[DB] 문제 ${problemIndex}: 심볼 탐지 ${repairCount}건 교정 (㉠~㉩)`);
