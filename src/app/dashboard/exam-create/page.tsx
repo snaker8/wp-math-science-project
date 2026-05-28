@@ -14,7 +14,7 @@
 // 다음 PR (3차): PDF 출력
 // ============================================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search,
@@ -35,6 +35,7 @@ import {
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
+import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
 
 // ============================================================================
 // 출처별 카테고리 탭 (매쓰플랫 식 — 학교시험 / 유형기준 / 출처기준 식 구성)
@@ -209,7 +210,8 @@ export default function ExamCreatePage() {
   const [problems, setProblems] = useState<ProblemRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [pickedList, setPickedList] = useState<PickedProblem[]>([]);
+  const pickedIds = useMemo(() => new Set(pickedList.map((p) => p.id)), [pickedList]);
   // ★ 2차 PR: 시험지 편성 모달 state
   const [composeOpen, setComposeOpen] = useState(false);
   const [examTitle, setExamTitle] = useState('');
@@ -521,13 +523,45 @@ export default function ExamCreatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeCode]);
 
-  const togglePick = (id: string) => {
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const toPickedProblem = (p: ProblemRow): PickedProblem => {
+    const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
+    const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
+    return {
+      id: p.id,
+      content_latex: p.content_latex || '',
+      typeCode: cls?.type_code || '',
+      difficulty: Number.isFinite(diff) ? diff : 0,
+      sourceName: p.source_name,
+      sourceYear: p.source_year,
+    };
+  };
+
+  const togglePick = (p: ProblemRow) => {
+    setPickedList((prev) => {
+      if (prev.some((x) => x.id === p.id)) return prev.filter((x) => x.id !== p.id);
+      return [...prev, toPickedProblem(p)];
     });
+  };
+
+  const toggleAll = (rows: ProblemRow[]) => {
+    setPickedList((prev) => {
+      const prevIds = new Set(prev.map((x) => x.id));
+      const allIn = rows.length > 0 && rows.every((r) => prevIds.has(r.id));
+      if (allIn) {
+        const rowIds = new Set(rows.map((r) => r.id));
+        return prev.filter((x) => !rowIds.has(x.id));
+      }
+      const toAdd = rows.filter((r) => !prevIds.has(r.id)).map(toPickedProblem);
+      return [...prev, ...toAdd];
+    });
+  };
+
+  const openCompose = () => {
+    if (!examTitle && typeName) {
+      const last = typeName.split(' > ').pop() || '시험지';
+      setExamTitle(`${last} 연습 ${new Date().toLocaleDateString('ko-KR')}`);
+    }
+    setComposeOpen(true);
   };
 
   return (
@@ -547,7 +581,7 @@ export default function ExamCreatePage() {
             </div>
           </div>
           <div className="text-[11px] text-zinc-400">
-            선택한 문항 <span className="font-bold text-cyan-400">{picked.size}</span>개
+            선택한 문항 <span className="font-bold text-cyan-400">{pickedList.length}</span>개
           </div>
         </div>
 
@@ -671,11 +705,7 @@ export default function ExamCreatePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const all = new Set(picked);
-                      const allSelected = diagProblems.every((p) => all.has(p.id));
-                      if (allSelected) diagProblems.forEach((p) => all.delete(p.id));
-                      else diagProblems.forEach((p) => all.add(p.id));
-                      setPicked(all);
+                      toggleAll(diagProblems);
                     }}
                     className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
                   >
@@ -687,12 +717,12 @@ export default function ExamCreatePage() {
                     const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                     const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                     const code = cls?.type_code || '';
-                    const isPicked = picked.has(p.id);
+                    const isPicked = pickedIds.has(p.id);
                     return (
                       <button
                         key={p.id}
                         type="button"
-                        onClick={() => togglePick(p.id)}
+                        onClick={() => togglePick(p)}
                         className={`text-left rounded-xl border p-4 transition-all ${
                           isPicked
                             ? 'border-indigo-500/50 bg-indigo-500/10'
@@ -890,11 +920,7 @@ export default function ExamCreatePage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const all = new Set(picked);
-                          const allSelected = schoolProblems.every((p) => all.has(p.id));
-                          if (allSelected) schoolProblems.forEach((p) => all.delete(p.id));
-                          else schoolProblems.forEach((p) => all.add(p.id));
-                          setPicked(all);
+                          toggleAll(schoolProblems);
                         }}
                         className="text-[11px] text-emerald-400 hover:text-emerald-300 underline"
                       >
@@ -906,12 +932,12 @@ export default function ExamCreatePage() {
                         const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                         const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                         const code = cls?.type_code || '';
-                        const isPicked = picked.has(p.id);
+                        const isPicked = pickedIds.has(p.id);
                         return (
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => togglePick(p.id)}
+                            onClick={() => togglePick(p)}
                             className={`text-left rounded-xl border p-4 transition-all ${
                               isPicked
                                 ? 'border-emerald-500/50 bg-emerald-500/10'
@@ -1111,11 +1137,7 @@ export default function ExamCreatePage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const all = new Set(picked);
-                          const allSelected = textbookProblems.every((p) => all.has(p.id));
-                          if (allSelected) textbookProblems.forEach((p) => all.delete(p.id));
-                          else textbookProblems.forEach((p) => all.add(p.id));
-                          setPicked(all);
+                          toggleAll(textbookProblems);
                         }}
                         className="text-[11px] text-amber-400 hover:text-amber-300 underline"
                       >
@@ -1127,12 +1149,12 @@ export default function ExamCreatePage() {
                         const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                         const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                         const code = cls?.type_code || '';
-                        const isPicked = picked.has(p.id);
+                        const isPicked = pickedIds.has(p.id);
                         return (
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => togglePick(p.id)}
+                            onClick={() => togglePick(p)}
                             className={`text-left rounded-xl border p-4 transition-all ${
                               isPicked
                                 ? 'border-amber-500/50 bg-amber-500/10'
@@ -1330,11 +1352,7 @@ export default function ExamCreatePage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const all = new Set(picked);
-                          const allSelected = mockProblems.every((p) => all.has(p.id));
-                          if (allSelected) mockProblems.forEach((p) => all.delete(p.id));
-                          else mockProblems.forEach((p) => all.add(p.id));
-                          setPicked(all);
+                          toggleAll(mockProblems);
                         }}
                         className="text-[11px] text-rose-400 hover:text-rose-300 underline"
                       >
@@ -1346,12 +1364,12 @@ export default function ExamCreatePage() {
                         const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                         const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                         const code = cls?.type_code || '';
-                        const isPicked = picked.has(p.id);
+                        const isPicked = pickedIds.has(p.id);
                         return (
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => togglePick(p.id)}
+                            onClick={() => togglePick(p)}
                             className={`text-left rounded-xl border p-4 transition-all ${
                               isPicked
                                 ? 'border-rose-500/50 bg-rose-500/10'
@@ -1505,7 +1523,7 @@ export default function ExamCreatePage() {
           <button
             type="button"
             onClick={handleSearch}
-            disabled={loading || !typeCode}
+            disabled={loading || (!typeCode && !keyword.trim() && selectedDiffs.size === 0)}
             className="w-full rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2 text-xs font-bold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -1521,9 +1539,9 @@ export default function ExamCreatePage() {
             )}
           </button>
 
-          {!typeCode && (
+          {!typeCode && !keyword.trim() && selectedDiffs.size === 0 && (
             <p className="text-[10px] text-zinc-500">
-              먼저 단원/유형을 선택하세요. 트리에서 과목별로 분류된 단원·세부유형을 고를 수 있습니다.
+              단원/유형, 키워드, 난이도 중 하나 이상을 지정하세요. 트리에서 과목별 단원·세부유형을 고르거나 본문 키워드만으로도 검색할 수 있습니다.
             </p>
           )}
         </aside>
@@ -1545,9 +1563,9 @@ export default function ExamCreatePage() {
             <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
               <Layers className="mb-3 h-10 w-10 text-zinc-700" />
               <p className="text-sm">
-                {typeCode
+                {typeCode || keyword.trim() || selectedDiffs.size > 0
                   ? '검색 결과가 없습니다. 필터를 조정해 보세요.'
-                  : '좌측 필터에서 단원/유형을 선택하면 결과가 표시됩니다.'}
+                  : '좌측에서 단원/유형, 키워드, 난이도 중 하나 이상을 지정하고 검색하세요.'}
               </p>
             </div>
           ) : (
@@ -1562,12 +1580,12 @@ export default function ExamCreatePage() {
                   const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                   const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                   const code = cls?.type_code || '';
-                  const isPicked = picked.has(p.id);
+                  const isPicked = pickedIds.has(p.id);
                   return (
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => togglePick(p.id)}
+                      onClick={() => togglePick(p)}
                       className={`text-left rounded-xl border p-4 transition-all ${
                         isPicked
                           ? 'border-cyan-500/50 bg-cyan-500/10'
@@ -1616,28 +1634,21 @@ export default function ExamCreatePage() {
         onSelect={(code, fullPath) => {
           setTypeCode(code);
           setTypeName(fullPath);
-          setPicked(new Set()); // 단원 바뀌면 선택 초기화
+          setPickedList([]); // 단원 바뀌면 선택 초기화
         }}
         onClose={() => setPickerOpen(false)}
       />
 
       {/* 푸터 — 시험지 편성 버튼 */}
-      {picked.size > 0 && (
+      {pickedList.length > 0 && (
         <div className="flex-shrink-0 border-t border-cyan-500/30 bg-cyan-500/10 px-8 py-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-cyan-200">
-              <span className="font-bold">{picked.size}</span>개 문항 선택됨
+              <span className="font-bold">{pickedList.length}</span>개 문항 선택됨
             </span>
             <button
               type="button"
-              onClick={() => {
-                // 모달 기본값 — 단원명에서 추측
-                if (!examTitle && typeName) {
-                  const last = typeName.split(' > ').pop() || '시험지';
-                  setExamTitle(`${last} 연습 ${new Date().toLocaleDateString('ko-KR')}`);
-                }
-                setComposeOpen(true);
-              }}
+              onClick={openCompose}
               className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30"
             >
               시험지 편성 →
@@ -1645,6 +1656,15 @@ export default function ExamCreatePage() {
           </div>
         </div>
       )}
+
+      {/* 선택 트레이 — 출처 탭 가로지르며 picked 누적 가시화 */}
+      <SelectionTray
+        picked={pickedList}
+        onReorder={setPickedList}
+        onRemove={(id) => setPickedList((prev) => prev.filter((x) => x.id !== id))}
+        onClear={() => setPickedList([])}
+        onCompose={openCompose}
+      />
 
       {/* 시험지 편성 모달 */}
       {composeOpen && (
@@ -1669,7 +1689,7 @@ export default function ExamCreatePage() {
 
             <div className="space-y-3 p-5">
               <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-300">
-                선택 문항 <span className="font-bold">{picked.size}</span>개 / 단원: {typeName || '미지정'}
+                선택 문항 <span className="font-bold">{pickedList.length}</span>개 / 단원: {typeName || '미지정'}
               </div>
 
               <div>
@@ -1724,7 +1744,7 @@ export default function ExamCreatePage() {
               </button>
               <button
                 type="button"
-                disabled={composing || !examTitle.trim() || picked.size === 0}
+                disabled={composing || !examTitle.trim() || pickedList.length === 0}
                 onClick={async () => {
                   setComposing(true);
                   setComposeErr(null);
@@ -1736,7 +1756,7 @@ export default function ExamCreatePage() {
                         title: examTitle.trim(),
                         grade: examGrade.trim() || null,
                         subject: examSubject.trim() || null,
-                        problemIds: Array.from(picked),
+                        problemIds: pickedList.map((p) => p.id),
                       }),
                     });
                     const d = await res.json();

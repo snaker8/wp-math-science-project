@@ -51,6 +51,7 @@ import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { downloadExamDocx } from '@/lib/export/docx-generator';
 import type { DocxProblem } from '@/lib/export/docx-generator';
+import { executeExamPrint } from '@/lib/print/exam-print';
 // HWPX는 /api/export/hwpx API로 서버사이드 생성
 import { useExamList, useExamProblems } from '@/hooks/useExamProblems';
 import { useOrganizationName } from '@/hooks/useUserScope';
@@ -535,81 +536,7 @@ export default function ExamManagementPage() {
   // 출력 실행 — 클라우드 페이지와 완전 동일 방식 (원본 className/style 유지)
   const executePrint = useCallback(() => {
     setShowPrintModal(false);
-    const printRoot = document.createElement('div');
-    printRoot.id = 'exam-print-root';
-
-    // ★ 시험지: 미리보기 페이지를 **원본 스타일 그대로** 복제
-    if (printSections.exam) {
-      const previewPages = document.querySelectorAll('.preview-exam-page');
-      // ★ 헤더(학원명/시험명/담당/과목/유형/학년) 복제 준비 — 첫 페이지 상단에 삽입
-      const metaHeader = document.querySelector('.exam-meta-header');
-      previewPages.forEach((page, idx) => {
-        const clone = page.cloneNode(true) as HTMLElement;
-        // UI 전용 요소만 제거 (페이지 구분선 — 인쇄 불필요)
-        clone.querySelectorAll('.page-divider-ui').forEach(el => el.remove());
-        // ★ 기존 className 유지 + exam-page 클래스만 추가 (클라우드 페이지와 동일)
-        clone.classList.add('exam-page');
-        if (idx === previewPages.length - 1) {
-          clone.classList.add('exam-last-page');
-        }
-        // ★ 첫 페이지: 헤더 테이블 복제해서 맨 위에 삽입
-        if (idx === 0 && metaHeader) {
-          const headerClone = metaHeader.cloneNode(true) as HTMLElement;
-          // input/select를 static text로 변환 (인쇄 시 깔끔하게 표시)
-          headerClone.querySelectorAll('input').forEach((input) => {
-            const span = document.createElement('span');
-            span.textContent = (input as HTMLInputElement).value || (input as HTMLInputElement).placeholder || '';
-            span.style.cssText = 'padding: 2px 6px; font-weight: bold; color: #111; font-size: 14px;';
-            input.replaceWith(span);
-          });
-          headerClone.querySelectorAll('select').forEach((select) => {
-            const span = document.createElement('span');
-            const selectedOption = (select as HTMLSelectElement).options[(select as HTMLSelectElement).selectedIndex];
-            span.textContent = selectedOption?.textContent || '';
-            span.style.cssText = 'padding: 2px 6px; font-weight: bold; color: #111; font-size: 14px;';
-            select.replaceWith(span);
-          });
-          headerClone.style.marginBottom = '12px';
-          clone.insertBefore(headerClone, clone.firstChild);
-        }
-        printRoot.appendChild(clone);
-      });
-    }
-
-    // 빠른정답 섹션
-    if (printSections.answer) {
-      const answerSection = document.querySelector('.print-section-answer') || document.querySelector('.quick-answer-print');
-      if (answerSection) {
-        const clone = answerSection.cloneNode(true) as HTMLElement;
-        clone.classList.add('exam-page');
-        printRoot.appendChild(clone);
-      }
-    }
-
-    // 해설지 섹션
-    if (printSections.solution) {
-      const solutionPages = document.querySelectorAll('.solution-page');
-      if (solutionPages.length > 0) {
-        solutionPages.forEach(page => {
-          const clone = page.cloneNode(true) as HTMLElement;
-          clone.classList.add('exam-page');
-          printRoot.appendChild(clone);
-        });
-      } else {
-        const solutionSection = document.querySelector('.print-section-solution');
-        if (solutionSection) {
-          const clone = solutionSection.cloneNode(true) as HTMLElement;
-          clone.classList.add('exam-page');
-          printRoot.appendChild(clone);
-        }
-      }
-    }
-
-    if (printRoot.children.length === 0) return;
-
-    document.body.appendChild(printRoot);
-    window.print();
-    document.body.removeChild(printRoot);
+    executeExamPrint(printSections);
   }, [printSections]);
 
   // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
