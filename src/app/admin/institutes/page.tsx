@@ -220,7 +220,7 @@ export default function InstitutesAdminPage() {
         <div className="space-y-4">
           {orgs.length === 0 && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-12 text-center text-zinc-500 text-sm">
-              학원이 없습니다. 우측 상단 "학원 추가" 버튼으로 시작하세요.
+              학원이 없습니다. 우측 상단 &quot;학원 추가&quot; 버튼으로 시작하세요.
             </div>
           )}
           {orgs.map((org) => {
