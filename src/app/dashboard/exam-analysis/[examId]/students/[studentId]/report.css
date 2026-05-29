@@ -1,0 +1,73 @@
+/* ============================================================================
+ * 1인 학생 A4 성취도 리포트 — 라이트 테마 격리
+ *
+ * 대시보드의 다크 테마와 분리하기 위해 .student-report-root 안에서만 적용.
+ * 인쇄 시 A4 portrait 1+2page.
+ * ========================================================================== */
+
+.student-report-root {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  min-height: 100vh;
+  font-family:
+    'Pretendard',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.student-report-root .a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  height: auto;
+  background: #ffffff;
+  margin: 0 auto 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  padding: 20mm;
+  position: relative;
+  box-sizing: border-box;
+  border-radius: 8px;
+  overflow: visible;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html,
+  body {
+    background-color: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .student-report-no-print {
+    display: none !important;
+  }
+  .student-report-root .a4-page {
+    box-shadow: none;
+    margin: 0;
+    padding: 15mm;
+    border-radius: 0;
+    page-break-after: always;
+  }
+  .student-report-root .print-page-1 {
+    height: 297mm !important;
+    overflow: hidden !important;
+  }
+  .student-report-root .print-page-auto {
+    height: auto !important;
+    min-height: 297mm;
+    overflow: visible !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .student-report-root .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
