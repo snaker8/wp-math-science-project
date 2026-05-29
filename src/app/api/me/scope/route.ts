@@ -44,19 +44,25 @@ export async function GET() {
   let organizationName: string | null = null;
   let instituteName: string | null = null;
 
-  // institute → name + organization_id
+  // institute → 표시명(display_name 우선) + organization_id
   if (effectiveInstituteId) {
     const { data: inst, error: instErr } = await supabaseAdmin
       .from('institutes')
-      .select('name, organization_id')
+      .select('name, display_name, organization_id')
       .eq('id', effectiveInstituteId)
       .maybeSingle();
     if (instErr) {
       return apiError('/api/me/scope', instErr, 'Failed to load institute', 500);
     }
     if (inst) {
-      instituteName = (inst as { name: string | null }).name;
-      organizationId = (inst as { organization_id: string | null }).organization_id;
+      const ii = inst as {
+        name: string | null;
+        display_name: string | null;
+        organization_id: string | null;
+      };
+      // display_name 있으면 우선 (예: "본원" → "엄궁차수학")
+      instituteName = ii.display_name ?? ii.name;
+      organizationId = ii.organization_id;
     }
   }
   // ORG_ADMIN 은 scope.organizationId 가 더 정확
