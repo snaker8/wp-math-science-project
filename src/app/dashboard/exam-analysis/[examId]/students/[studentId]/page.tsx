@@ -721,6 +721,15 @@ export default function StudentReportPage() {
     }
   };
 
+  // 학생 리포트 페이지 mount 시 body 에 클래스 추가 → 인쇄 시 TopNav/패딩 등 숨김
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.classList.add('student-report-printing');
+    return () => {
+      document.body.classList.remove('student-report-printing');
+    };
+  }, []);
+
   useEffect(() => {
     if (!examId || !studentId) return;
     let cancelled = false;
