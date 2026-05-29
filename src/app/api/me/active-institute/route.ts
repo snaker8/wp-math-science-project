@@ -34,6 +34,17 @@ async function fetchAccessibleInstitutes(
   const s = scope.data.scope;
 
   if (s.isSuperAdmin) {
+    // super_admin 이라도 사용자 organization 산하만 기본 노출
+    //   → 운영자가 자기 학원 산하 센터만 깔끔하게 보임 (다른 학원 노이즈 제거)
+    //   organization_id 없는 시스템 관리자만 모든 institute 반환
+    if (s.organizationId) {
+      const { data } = await supabaseAdmin
+        .from('institutes')
+        .select('id, name, organization_id')
+        .eq('organization_id', s.organizationId)
+        .order('name', { ascending: true });
+      return (data ?? []) as InstituteRow[];
+    }
     const { data } = await supabaseAdmin
       .from('institutes')
       .select('id, name, organization_id')
