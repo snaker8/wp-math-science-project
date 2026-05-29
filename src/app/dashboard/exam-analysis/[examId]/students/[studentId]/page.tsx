@@ -765,6 +765,29 @@ export default function StudentReportPage() {
     };
   }, [data]);
 
+  // 시험 제목 정규화 + 학교명 추출 + 표시용 짧은 라벨
+  // ★ early return 이전에 위치 — React error #310 (hooks 순서) 회피
+  const { periodLabel, schoolBadge } = useMemo(() => {
+    const raw = data?.exam.title || '';
+    // 학교명 추출 — "중간고사"의 "중간고" 같은 false positive 방지 (한글 경계)
+    const sm = raw.match(/(?<![가-힣])([가-힣]{2,4}(?:중|고))(?![가-힣])/);
+    const school = sm ? sm[1] : '';
+    // 학년·학기 추출 (예: "중2-1", "2-1")
+    const gm = raw.match(/(?:중|고)?(\d-\d)/);
+    const semester = gm ? gm[1] : '';
+    // 시험 종류 추출
+    const em = raw.match(/(중간고사|기말고사|중간|기말|모의|성취도(?:평가)?)/);
+    const examKind = em ? em[1] : '';
+    const shortParts = [semester, examKind].filter(Boolean);
+    return {
+      periodLabel:
+        shortParts.length > 0
+          ? shortParts.join(' ')
+          : raw.replace(/^기출분석\s*/, '').slice(0, 30),
+      schoolBadge: school,
+    };
+  }, [data?.exam.title]);
+
   // ============================================================================
   // Render
   // ============================================================================
@@ -809,30 +832,7 @@ export default function StudentReportPage() {
     );
   }
 
-  // 시험 제목 정규화 + 학교명 추출 + 표시용 짧은 라벨
-  const { periodLabel, schoolBadge } = useMemo(() => {
-    const raw = data.exam.title || '';
-    // 학교명 추출 — "중간고사"의 "중간고" 같은 false positive 방지 (한글 경계)
-    const sm = raw.match(/(?<![가-힣])([가-힣]{2,4}(?:중|고))(?![가-힣])/);
-    const school = sm ? sm[1] : '';
-
-    // 학년·학기 추출 (예: "중2-1", "2-1")
-    const gm = raw.match(/(?:중|고)?(\d-\d)/);
-    const semester = gm ? gm[1] : '';
-
-    // 시험 종류 추출 (중간/기말/모의/기말고사 등)
-    const em = raw.match(/(중간고사|기말고사|중간|기말|모의|성취도(?:평가)?)/);
-    const examKind = em ? em[1] : '';
-
-    // 표시용 짧은 라벨 — 학교 제외(우측 배지로 표시), 학기·시험만
-    const shortParts = [semester, examKind].filter(Boolean);
-    const periodLabel =
-      shortParts.length > 0
-        ? shortParts.join(' ')
-        : raw.replace(/^기출분석\s*/, '').slice(0, 30);
-
-    return { periodLabel, schoolBadge: school };
-  }, [data.exam.title]);
+  // periodLabel/schoolBadge 는 위에서 useMemo 로 계산됨 (early return 이전, hooks 순서 안전)
 
   return (
     <div className="student-report-root">
