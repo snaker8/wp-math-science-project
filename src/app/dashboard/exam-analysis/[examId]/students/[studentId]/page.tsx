@@ -809,12 +809,30 @@ export default function StudentReportPage() {
     );
   }
 
-  const periodLabel = data.exam.title.replace(/^기출분석\s*/, '');
-  const schoolBadge = (() => {
-    // exam.title 에서 학교명 추출 (예: "2025 신곡중 2-1 기말")
-    const m = data.exam.title.match(/[가-힣]{2,4}(?:중|고)/);
-    return m ? m[0] : '';
-  })();
+  // 시험 제목 정규화 + 학교명 추출 + 표시용 짧은 라벨
+  const { periodLabel, schoolBadge } = useMemo(() => {
+    const raw = data.exam.title || '';
+    // 학교명 추출 — "중간고사"의 "중간고" 같은 false positive 방지 (한글 경계)
+    const sm = raw.match(/(?<![가-힣])([가-힣]{2,4}(?:중|고))(?![가-힣])/);
+    const school = sm ? sm[1] : '';
+
+    // 학년·학기 추출 (예: "중2-1", "2-1")
+    const gm = raw.match(/(?:중|고)?(\d-\d)/);
+    const semester = gm ? gm[1] : '';
+
+    // 시험 종류 추출 (중간/기말/모의/기말고사 등)
+    const em = raw.match(/(중간고사|기말고사|중간|기말|모의|성취도(?:평가)?)/);
+    const examKind = em ? em[1] : '';
+
+    // 표시용 짧은 라벨 — 학교 제외(우측 배지로 표시), 학기·시험만
+    const shortParts = [semester, examKind].filter(Boolean);
+    const periodLabel =
+      shortParts.length > 0
+        ? shortParts.join(' ')
+        : raw.replace(/^기출분석\s*/, '').slice(0, 30);
+
+    return { periodLabel, schoolBadge: school };
+  }, [data.exam.title]);
 
   return (
     <div className="student-report-root">
@@ -893,27 +911,27 @@ export default function StudentReportPage() {
         {/* ============================================================== */}
         <div className="a4-page bg-white print-page-1">
           {/* Header */}
-          <div className="border-b-4 border-indigo-900 pb-6 mb-8 flex justify-between items-end">
-            <div>
-              <div className="text-indigo-600 font-black text-xs tracking-widest mb-1 uppercase">
+          <div className="border-b-4 border-indigo-900 pb-5 mb-8 flex justify-between items-end gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-indigo-600 font-black text-[11px] tracking-widest mb-1 uppercase">
                 Achievement Report
               </div>
-              <div className="flex items-baseline gap-3">
-                <h1 className="text-[28px] font-black text-slate-900 leading-tight">
-                  {periodLabel} 수학 성취도 리포트
-                </h1>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 {schoolBadge && (
-                  <span className="text-[17px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-md">
+                  <span className="text-[13px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-md whitespace-nowrap">
                     {schoolBadge}
                   </span>
                 )}
+                <h1 className="text-[24px] font-black text-slate-900 leading-tight break-keep">
+                  {periodLabel} 수학 성취도 리포트
+                </h1>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-500 font-bold mb-1 uppercase tracking-tighter">
-                Student Name
+            <div className="text-right shrink-0">
+              <p className="text-[11px] text-slate-500 font-bold mb-1 uppercase tracking-tighter">
+                Student
               </p>
-              <p className="text-2xl font-black text-slate-800 bg-indigo-50 px-4 py-1 rounded-lg shadow-sm border border-indigo-100">
+              <p className="text-xl font-black text-slate-800 bg-indigo-50 px-3 py-1 rounded-lg shadow-sm border border-indigo-100 whitespace-nowrap">
                 {data.student.name}
               </p>
             </div>
@@ -1049,7 +1067,11 @@ export default function StudentReportPage() {
           </div>
 
           {/* 강사 추가 의견 박스 — 인쇄 시에도 박스 그대로 나옴 */}
-          <div className="mb-8 bg-amber-50/40 border-2 border-amber-200 rounded-2xl p-5 shadow-sm break-inside-avoid">
+          <div
+            className={`mb-8 bg-amber-50/40 border-2 border-amber-200 rounded-2xl p-5 shadow-sm break-inside-avoid ${
+              !data.teacherComment?.text ? 'print:hidden' : ''
+            }`}
+          >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[15px] font-black text-amber-800 flex items-center gap-2">
                 ✏️ 선생님 한마디
