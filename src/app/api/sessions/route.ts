@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertExamAccess } from '@/lib/security/institute-guard';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -79,6 +80,20 @@ export async function GET(request: NextRequest) {
   if (filterExamId) query = query.eq('exam_id', filterExamId);
   if (status === 'pending') query = query.is('completed_at', null);
   if (status === 'done') query = query.not('completed_at', 'is', null);
+
+  // 활성 센터 필터 — 활성 institute 의 학생 세션만 노출
+  const activeInstituteId = resolveActiveInstitute(scope);
+  if (activeInstituteId) {
+    const { data: instUsers } = await sb
+      .from('users')
+      .select('id')
+      .eq('institute_id', activeInstituteId);
+    const userIds = ((instUsers ?? []) as { id: string }[]).map((u) => u.id);
+    if (userIds.length === 0) {
+      return NextResponse.json({ sessions: [] });
+    }
+    query = query.in('student_id', userIds);
+  }
 
   const { data: psRows, error: psErr } = await query;
   if (psErr) {

@@ -15,6 +15,8 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +53,15 @@ export async function GET() {
     .eq('role', 'STUDENT')
     .is('deleted_at', null); // soft delete 된 학생은 목록에서 제외
 
-  if (me.role !== 'ADMIN') {
+  // 활성 센터 우선 — 쿠키로 박힌 활성 institute 가 있으면 그걸 사용
+  // 그 외엔 기존 동작 (ADMIN=모든 학생, 일반 강사=본인 institute)
+  const scopeAuth = await requireAuthScope();
+  const activeInstituteId = scopeAuth.ok
+    ? resolveActiveInstitute(scopeAuth.data.scope)
+    : null;
+  if (activeInstituteId) {
+    query = query.eq('institute_id', activeInstituteId);
+  } else if (me.role !== 'ADMIN') {
     if (!me.institute_id) {
       return NextResponse.json({ students: [] });
     }
