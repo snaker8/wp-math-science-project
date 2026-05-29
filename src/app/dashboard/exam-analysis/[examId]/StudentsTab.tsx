@@ -75,6 +75,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // ----------- 학생 리스트 조회 -----------
   const fetchStudents = useCallback(async () => {
@@ -188,10 +189,53 @@ export default function StudentsTab({ examId }: { examId: string }) {
         </div>
 
         <label
-          className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+          onDragOver={(e) => {
+            if (uploadBusy) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isDragOver) setIsDragOver(true);
+          }}
+          onDragEnter={(e) => {
+            if (uploadBusy) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 자식 요소로 이동한 경우 무시 (전체 영역 벗어났을 때만 해제)
+            const related = e.relatedTarget as Node | null;
+            if (related && (e.currentTarget as Node).contains(related)) return;
+            setIsDragOver(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragOver(false);
+            if (uploadBusy) return;
+            const dropped = e.dataTransfer?.files;
+            if (!dropped || dropped.length === 0) return;
+            // 확장자 화이트리스트 필터 — 잘못된 파일 드롭 시 미동작
+            const allow = /\.(xlsx|xls|csv|tsv)$/i;
+            const files = Array.from(dropped).filter((f) => allow.test(f.name));
+            if (files.length === 0) {
+              setError(
+                '엑셀(.xlsx/.xls) 또는 CSV/TSV 파일만 드롭 가능합니다.'
+              );
+              return;
+            }
+            // DataTransfer 새로 만들어서 FileList 로 변환
+            const dt = new DataTransfer();
+            files.forEach((f) => dt.items.add(f));
+            handleFiles(dt.files);
+          }}
+          className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all ${
             uploadBusy
               ? 'border-zinc-700 bg-zinc-800/40 cursor-not-allowed'
-              : 'border-zinc-700 hover:border-indigo-500 hover:bg-indigo-500/5'
+              : isDragOver
+                ? 'border-indigo-400 bg-indigo-500/10 scale-[1.01]'
+                : 'border-zinc-700 hover:border-indigo-500 hover:bg-indigo-500/5'
           }`}
         >
           <input
@@ -207,6 +251,16 @@ export default function StudentsTab({ examId }: { examId: string }) {
             <div className="flex items-center justify-center gap-2 text-indigo-400">
               <Loader2 size={18} className="animate-spin" />
               <span className="font-bold">업로드 및 채점 중...</span>
+            </div>
+          ) : isDragOver ? (
+            <div className="flex flex-col items-center gap-2 pointer-events-none">
+              <FileSpreadsheet size={28} className="text-indigo-400" />
+              <p className="text-sm font-black text-indigo-300">
+                여기에 놓으면 채점됩니다
+              </p>
+              <p className="text-xs text-indigo-400/80">
+                .xlsx / .xls / .csv / .tsv
+              </p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">

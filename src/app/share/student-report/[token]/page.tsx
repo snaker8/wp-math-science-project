@@ -411,10 +411,22 @@ export default function PublicStudentReportPage() {
     );
   }
 
-  const periodLabel = data.exam.title.replace(/^기출분석\s*/, '');
-  const schoolBadge = (() => {
-    const m = data.exam.title.match(/[가-힣]{2,4}(?:중|고)/);
-    return m ? m[0] : '';
+  const { periodLabel, schoolBadge } = (() => {
+    const raw = data.exam.title || '';
+    const sm = raw.match(/(?<![가-힣])([가-힣]{2,4}(?:중|고))(?![가-힣])/);
+    const school = sm ? sm[1] : '';
+    const gm = raw.match(/(?:중|고)?(\d-\d)/);
+    const semester = gm ? gm[1] : '';
+    const em = raw.match(/(중간고사|기말고사|중간|기말|모의|성취도(?:평가)?)/);
+    const examKind = em ? em[1] : '';
+    const parts = [semester, examKind].filter(Boolean);
+    return {
+      periodLabel:
+        parts.length > 0
+          ? parts.join(' ')
+          : raw.replace(/^기출분석\s*/, '').slice(0, 30),
+      schoolBadge: school,
+    };
   })();
 
   // AI 코멘트 우선, 없으면 정형
@@ -444,17 +456,19 @@ export default function PublicStudentReportPage() {
       <div className="pt-8">
         {/* Page 1 */}
         <div className="a4-page bg-white print-page-1">
-          <div className="border-b-4 border-indigo-900 pb-6 mb-8 flex justify-between items-end">
-            <div>
-              <div className="text-indigo-600 font-black text-xs tracking-widest mb-1 uppercase">Achievement Report</div>
-              <div className="flex items-baseline gap-3">
-                <h1 className="text-[28px] font-black text-slate-900 leading-tight">{periodLabel} 수학 성취도 리포트</h1>
-                {schoolBadge && <span className="text-[17px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-md">{schoolBadge}</span>}
+          <div className="border-b-4 border-indigo-900 pb-5 mb-8 flex justify-between items-end gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-indigo-600 font-black text-[11px] tracking-widest mb-1 uppercase">Achievement Report</div>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                {schoolBadge && (
+                  <span className="text-[13px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-md whitespace-nowrap">{schoolBadge}</span>
+                )}
+                <h1 className="text-[24px] font-black text-slate-900 leading-tight break-keep">{periodLabel} 수학 성취도 리포트</h1>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-500 font-bold mb-1 uppercase tracking-tighter">Student Name</p>
-              <p className="text-2xl font-black text-slate-800 bg-indigo-50 px-4 py-1 rounded-lg shadow-sm border border-indigo-100">{data.student.name}</p>
+            <div className="text-right shrink-0">
+              <p className="text-[11px] text-slate-500 font-bold mb-1 uppercase tracking-tighter">Student</p>
+              <p className="text-xl font-black text-slate-800 bg-indigo-50 px-3 py-1 rounded-lg shadow-sm border border-indigo-100 whitespace-nowrap">{data.student.name}</p>
             </div>
           </div>
 
