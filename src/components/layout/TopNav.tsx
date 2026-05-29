@@ -2,9 +2,16 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Settings, LogOut, HelpCircle, User, Building2 } from 'lucide-react';
+
+// dynamic import + ssr:false — 절대 SSR 안 함 → hydration mismatch 원천 차단
+const ActiveInstituteSwitcher = dynamic(
+  () => import('./ActiveInstituteSwitcher'),
+  { ssr: false }
+);
 import { BrandLogo } from '@/components/brand/Logo';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -453,83 +460,6 @@ function DbAssetizeTab({
   );
 }
 
-// ============================================================================
-// ActiveInstituteSwitcher — 활성 센터 변경 (Context 사용 안 함, 자체 fetch)
-//
-// hydration 안전 — useEffect 안에서만 fetch, 첫 렌더링은 null 반환.
-// 변경 시 POST → router.refresh() 로 모든 서버 컴포넌트 다시 렌더.
-// ============================================================================
-function ActiveInstituteSwitcher() {
-  const [mounted, setMounted] = useState(false);
-  const [activeId, setActiveId] = useState<string>('');
-  const [institutes, setInstitutes] = useState<{ id: string; name: string }[]>(
-    []
-  );
-  const [busy, setBusy] = useState(false);
-  const router = useRouter();
-
-  // 마운트 후 한 번만 fetch — hydration mismatch 회피 (mounted 가드)
-  useEffect(() => {
-    setMounted(true);
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch('/api/me/active-institute', { cache: 'no-store' });
-        if (!r.ok) return;
-        const d = await r.json();
-        if (cancelled) return;
-        setActiveId(d.activeInstituteId ?? '');
-        setInstitutes(d.institutes ?? []);
-      } catch {
-        // 무시
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // 마운트 전 또는 다중 institute 아니면 아무것도 안 보임 (hydration 안전)
-  if (!mounted || institutes.length <= 1) return null;
-
-  const onChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = e.target.value;
-    if (!next || next === activeId || busy) return;
-    setBusy(true);
-    setActiveId(next); // 낙관적 업데이트
-    try {
-      const r = await fetch('/api/me/active-institute', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ instituteId: next }),
-      });
-      if (r.ok) {
-        // 모든 서버 컴포넌트 다시 렌더 + 페이지 데이터 갱신
-        router.refresh();
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="hidden md:flex items-center gap-1.5 mr-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
-      <Building2 className="h-3 w-3 text-amber-400 shrink-0" />
-      <select
-        value={activeId}
-        onChange={onChange}
-        disabled={busy}
-        className="bg-transparent text-[12px] font-bold text-amber-200 focus:outline-none cursor-pointer pr-1 max-w-[160px] truncate disabled:opacity-60"
-        title="활성 센터 — 학생 채점, 자산화 등 모든 작업이 이 센터 기준"
-      >
-        {institutes.map((i) => (
-          <option key={i.id} value={i.id} className="bg-zinc-900 text-white">
-            {i.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
+// ActiveInstituteSwitcher 는 별도 파일 — TopNav 상단에서 next/dynamic + ssr:false 로 import
 
 export default TopNav;
