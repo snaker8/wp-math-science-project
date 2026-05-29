@@ -24,8 +24,12 @@ export const dynamic = 'force-dynamic';
 interface InstituteRow {
   id: string;
   name: string;
+  display_name: string | null;
+  hidden: boolean;
   organization_id: string | null;
 }
+
+const COLS = 'id, name, display_name, hidden, organization_id';
 
 async function fetchAccessibleInstitutes(
   scope: Awaited<ReturnType<typeof requireAuthScope>>
@@ -33,23 +37,39 @@ async function fetchAccessibleInstitutes(
   if (!scope.ok || !supabaseAdmin) return [];
   const s = scope.data.scope;
 
+  let rows: InstituteRow[] = [];
+
   if (s.isSuperAdmin) {
+    // super_admin 이라도 자기 organization 산하만 기본 노출 (다른 학원 노이즈 제거)
+    // organization_id 없는 시스템 관리자만 모든 institute
+    if (s.organizationId) {
+      const { data } = await supabaseAdmin
+        .from('institutes')
+        .select(COLS)
+        .eq('organization_id', s.organizationId)
+        .order('name', { ascending: true });
+      rows = (data ?? []) as InstituteRow[];
+    } else {
+      const { data } = await supabaseAdmin
+        .from('institutes')
+        .select(COLS)
+        .order('name', { ascending: true });
+      rows = (data ?? []) as InstituteRow[];
+    }
+  } else {
+    // ORG_ADMIN 또는 일반 user — accessibleInstituteIds 사용
+    const ids = s.accessibleInstituteIds ?? [];
+    if (ids.length === 0) return [];
     const { data } = await supabaseAdmin
       .from('institutes')
-      .select('id, name, organization_id')
+      .select(COLS)
+      .in('id', ids)
       .order('name', { ascending: true });
-    return (data ?? []) as InstituteRow[];
+    rows = (data ?? []) as InstituteRow[];
   }
 
-  // ORG_ADMIN 또는 일반 user — accessibleInstituteIds 사용
-  const ids = s.accessibleInstituteIds ?? [];
-  if (ids.length === 0) return [];
-  const { data } = await supabaseAdmin
-    .from('institutes')
-    .select('id, name, organization_id')
-    .in('id', ids)
-    .order('name', { ascending: true });
-  return (data ?? []) as InstituteRow[];
+  // hidden=true 인 institute 는 드롭다운에서 제외
+  return rows.filter((r) => !r.hidden);
 }
 
 export async function GET() {
@@ -70,14 +90,18 @@ export async function GET() {
     activeId = list[0].id;
   }
 
-  const activeName = list.find((i) => i.id === activeId)?.name ?? null;
+  const activeInst = list.find((i) => i.id === activeId);
+  const activeName = activeInst
+    ? (activeInst.display_name ?? activeInst.name)
+    : null;
 
   return NextResponse.json({
     activeInstituteId: activeId,
     activeInstituteName: activeName,
     institutes: list.map((i) => ({
       id: i.id,
-      name: i.name,
+      // 표시명 우선순위: display_name → name
+      name: i.display_name ?? i.name,
       organizationId: i.organization_id,
     })),
     canSwitch: list.length > 1,

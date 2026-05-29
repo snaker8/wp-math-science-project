@@ -8,7 +8,6 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Building2 } from 'lucide-react';
 
 export default function ActiveInstituteSwitcher() {
@@ -17,7 +16,6 @@ export default function ActiveInstituteSwitcher() {
     []
   );
   const [busy, setBusy] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +52,11 @@ export default function ActiveInstituteSwitcher() {
         body: JSON.stringify({ instituteId: next }),
       });
       if (r.ok) {
-        router.refresh();
+        // 전체 페이지 새로고침 — TopNav 좌측 학원/센터 라벨,
+        // 학생 채점 페이지의 "등록 센터" 표시 등 모든 client component 가
+        // 활성 institute 를 다시 fetch 하도록 강제
+        window.location.reload();
+        return;
       }
     } finally {
       setBusy(false);
