@@ -7,18 +7,33 @@
 //   TEACHER / TUTOR / ORG_ADMIN — 같은 institute_id 의 학생
 //   STUDENT / PARENT — 접근 거부 (403)
 //
-// 반환 스키마:
-//   [{ id, name, grade, className, email, ... }]
+// 데이터 소스 두 갈래 (2026-05-29 통합):
+//   - users (role=STUDENT): auth 가입된 실 학생 — source: 'user'
+//   - roster_students: 엑셀 일괄 채점 시 자동등록된 명단 학생 — source: 'roster'
+//     promoted_user_id 채워진 roster 는 users 와 중복이라 제외.
 //
-// ★ 이 엔드포인트는 prescription 페이지의 학생 드롭다운 실 데이터 연결용.
+// 반환 스키마:
+//   { students: [{ id, name, grade, className, email, source }] }
+//
+// ★ 이 엔드포인트는 prescription / tutor analytics 페이지의 학생 드롭다운
+//   실 데이터 연결용.
 // ============================================================================
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 export const dynamic = 'force-dynamic';
+
+interface StudentRow {
+  id: string;
+  name: string;
+  grade: string;
+  className: string;
+  email: string | null;
+  source: 'user' | 'roster';
+}
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -88,19 +103,78 @@ export async function GET() {
   }
 
   // 프론트에서 편히 쓰도록 shape 정리 (full_name / name 둘 다 지원)
-  const students = (data || [])
-    .map((u: Record<string, unknown>) => ({
-      id: u.id as string,
-      name:
-        (u.full_name as string) ||
-        (u.name as string) ||
-        (u.email as string) ||
-        '(이름 없음)',
-      grade: (u.grade as string | null) || '',
-      className: (u.class_name as string | null) || (u.className as string | null) || '',
-      email: (u.email as string | null) || null,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const userStudents: StudentRow[] = (data || []).map((u: Record<string, unknown>) => ({
+    id: u.id as string,
+    name:
+      (u.full_name as string) ||
+      (u.name as string) ||
+      (u.email as string) ||
+      '(이름 없음)',
+    grade: (u.grade as string | null) || '',
+    className: (u.class_name as string | null) || (u.className as string | null) || '',
+    email: (u.email as string | null) || null,
+    source: 'user',
+  }));
+  const userIdSet = new Set(userStudents.map((s) => s.id));
+
+  // ──────────────────────────────────────────────────────────────────────
+  // 자동등록 학생 (roster_students) 병합
+  //
+  // 엑셀 일괄 채점에서 만든 명단 학생을 학습분석 드롭다운에서도 보이게.
+  // 데이터 모델은 분리(diagnostics.sessions vs print_sessions)되어 있어서
+  // analytics 엔드포인트에서 source 별로 다르게 집계.
+  //
+  // 중복 제거 — promoted_user_id 가 채워진 roster 는 이미 users 에 있는
+  // 학생과 머지된 상태라 users 측에 포함되어 있으면 skip.
+  //
+  // institute 필터: 활성 센터 우선, 없으면 본인 institute (ADMIN 은 전체).
+  // 트랙: roster_students 에 subject_tracks 컬럼 없으므로 트랙 격리 미적용
+  //       (현 단계 — 추후 컬럼 추가 시 동일 패턴 적용 가능).
+  // ──────────────────────────────────────────────────────────────────────
+  let rosterStudents: StudentRow[] = [];
+  if (supabaseAdmin) {
+    let rosterQuery = supabaseAdmin
+      .from('roster_students')
+      .select('id, full_name, grade, class_label, promoted_user_id, institute_id');
+    if (activeInstituteId) {
+      rosterQuery = rosterQuery.eq('institute_id', activeInstituteId);
+    } else if (me.role !== 'ADMIN' && me.institute_id) {
+      rosterQuery = rosterQuery.eq('institute_id', me.institute_id);
+    } else if (me.role !== 'ADMIN') {
+      // 활성 institute · 본인 institute 둘 다 없는 비-ADMIN — 빈 결과
+      rosterQuery = rosterQuery.eq(
+        'institute_id',
+        '00000000-0000-0000-0000-000000000000'
+      );
+    }
+    // ADMIN + 활성 institute 없음 → institute 필터 없음 (모든 roster)
+
+    const { data: rosterData, error: rosterErr } = await rosterQuery;
+    if (rosterErr) {
+      console.warn('[users/students] roster_students 조회 실패:', rosterErr.message);
+    } else {
+      rosterStudents = (rosterData || [])
+        .filter((r: Record<string, unknown>) => {
+          const promoted = r.promoted_user_id as string | null;
+          return !promoted || !userIdSet.has(promoted);
+        })
+        .map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          name: (r.full_name as string) || '(이름 없음)',
+          grade:
+            typeof r.grade === 'number'
+              ? String(r.grade)
+              : ((r.grade as string | null) || ''),
+          className: (r.class_label as string | null) || '',
+          email: null,
+          source: 'roster' as const,
+        }));
+    }
+  }
+
+  const students = [...userStudents, ...rosterStudents].sort((a, b) =>
+    a.name.localeCompare(b.name, 'ko')
+  );
 
   return NextResponse.json({ students });
 }
