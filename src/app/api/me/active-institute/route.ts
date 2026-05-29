@@ -1,10 +1,12 @@
 // ============================================================================
 // /api/me/active-institute
 //
-// GET  — 현재 활성 institute + 접근 가능 institute 목록 반환
-// POST — 활성 institute 변경 (쿠키 set, 권한 검증)
+// GET  — 현재 활성 institute + 접근 가능 institute 목록 반환.
+//        쿠키와 서버측 resolveActiveInstitute() 가 어긋나는 경우 쿠키 자동 동기화.
+// POST — 활성 institute 변경 (쿠키 set, 권한 검증).
 //
-// 클라이언트는 변경 후 router.refresh() 로 서버 컴포넌트 다시 렌더.
+// 클라이언트는 POST 후 window.location.reload() 로 전체 새로고침
+// (client component 들의 자체 useEffect fetch 까지 모두 재실행).
 // 쿠키 이름: active_institute_id (lib/security/active-institute.ts 참조)
 // ============================================================================
 
@@ -95,7 +97,7 @@ export async function GET() {
     ? (activeInst.display_name ?? activeInst.name)
     : null;
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     activeInstituteId: activeId,
     activeInstituteName: activeName,
     institutes: list.map((i) => ({
@@ -106,6 +108,20 @@ export async function GET() {
     })),
     canSwitch: list.length > 1,
   });
+
+  // 쿠키 동기화 — UI 가 보여주는 activeId 와 서버측 resolveActiveInstitute() 가
+  // 항상 같은 값을 반환하도록 보장. 쿠키 부재 / 쿠키가 권한 잃은 institute 를
+  // 가리키는 경우 UI 와 데이터 격리가 어긋날 수 있어 매번 동기화.
+  if (activeId && activeId !== cookieVal) {
+    res.cookies.set(ACTIVE_INSTITUTE_COOKIE, activeId, {
+      httpOnly: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+
+  return res;
 }
 
 export async function POST(req: NextRequest) {

@@ -87,7 +87,8 @@ export async function GET(request: NextRequest) {
     const { data: instUsers } = await sb
       .from('users')
       .select('id')
-      .eq('institute_id', activeInstituteId);
+      .eq('institute_id', activeInstituteId)
+      .eq('role', 'STUDENT');
     const userIds = ((instUsers ?? []) as { id: string }[]).map((u) => u.id);
     if (userIds.length === 0) {
       return NextResponse.json({ sessions: [] });
