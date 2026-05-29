@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 export const runtime = 'nodejs';
 
@@ -72,7 +73,30 @@ export async function GET(
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
 
-  const sessionList = sessions ?? [];
+  const rawSessionList = sessions ?? [];
+  if (rawSessionList.length === 0) {
+    return NextResponse.json({ students: [] });
+  }
+
+  // 1-2. 활성 센터 필터 — 그 institute 에 등록된 roster 학생만 노출
+  //      (super_admin 도 자기 활성 센터 기준으로 보임)
+  const activeInstituteId = resolveActiveInstitute(scope);
+  let sessionList = rawSessionList;
+  if (activeInstituteId) {
+    const studentIds = Array.from(
+      new Set(rawSessionList.map((s) => s.student_id as string))
+    );
+    const { data: rosters } = await supabaseAdmin
+      .from('roster_students')
+      .select('id, institute_id')
+      .in('id', studentIds)
+      .eq('institute_id', activeInstituteId);
+    const allowedIds = new Set((rosters ?? []).map((r) => r.id as string));
+    sessionList = rawSessionList.filter((s) =>
+      allowedIds.has(s.student_id as string)
+    );
+  }
+
   if (sessionList.length === 0) {
     return NextResponse.json({ students: [] });
   }
