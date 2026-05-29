@@ -153,6 +153,13 @@ export default function ExamCreatePage() {
     exam_type: string | null;
     created_at: string;
     school?: string | null;  // 클라이언트에서 extractSchoolName 결과
+    // ★ PR-1 (2026-05-28) 추가 학교 기출 메타 컬럼
+    school_name?: string | null;
+    district?: string | null;
+    semester?: number | null;
+    exam_year?: number | null;
+    exam_round?: string | null;
+    chapter?: string | null;
   }
   const [schoolExams, setSchoolExams] = useState<SchoolExam[]>([]);
   const [schoolLoading, setSchoolLoading] = useState(false);
@@ -162,6 +169,25 @@ export default function ExamCreatePage() {
   const [schoolProblems, setSchoolProblems] = useState<ProblemRow[]>([]);
   const [schoolProblemsLoading, setSchoolProblemsLoading] = useState(false);
   const [schoolQuery, setSchoolQuery] = useState('');
+
+  // ★ PR-3 (2026-05-28) — 매쓰플랫식 4-필터 풀세트 state
+  interface RegionTreeNode {
+    sido: string;
+    sigungus: Array<{ sigungu: string; schools: string[] }>;
+  }
+  const [schoolFilterOptions, setSchoolFilterOptions] = useState<{
+    regionTree: RegionTreeNode[];
+    otherSchools: string[];
+    grades: string[];
+    examRounds: string[];
+  } | null>(null);
+  // 4-필터 선택 상태
+  const [filterSchoolLevel, setFilterSchoolLevel] = useState<'전체' | '초' | '중' | '고'>('전체');
+  const [filterGradeSemester, setFilterGradeSemester] = useState<string>('');  // "중2-1" 같은 표기 (빈값=전체)
+  const [filterExamRound, setFilterExamRound] = useState<string>('');  // "중간"/"기말"/"단원집" (빈값=전체)
+  const [filterChapter, setFilterChapter] = useState<string>('');  // 단원명 (빈값=전체)
+  const [regionPickerOpen, setRegionPickerOpen] = useState(false);
+  const [selectedSchoolNames, setSelectedSchoolNames] = useState<Set<string>>(new Set());
 
   // ★ Phase 4 — 시중교재 탭 state
   interface BookGroup {
@@ -257,13 +283,40 @@ export default function ExamCreatePage() {
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         const rows = ((data.exams || []) as SchoolExam[]).map((ex) => ({
           ...ex,
-          school: extractSchoolName(ex.title),
+          // ★ PR-1 새 컬럼이 있으면 우선, 없으면 title 정규식 추출 fallback
+          school: ex.school_name || extractSchoolName(ex.title),
         }));
         if (!cancelled) setSchoolExams(rows);
       } catch (e) {
         if (!cancelled) setSchoolError(e instanceof Error ? e.message : String(e));
       } finally {
         if (!cancelled) setSchoolLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // ★ PR-3 (2026-05-28) — 학교 필터 옵션(지역 트리/학년/회차) fetch — 탭 진입 시 1회
+  useEffect(() => {
+    if (activeTab !== 'school') return;
+    if (schoolFilterOptions) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/exams/school-filter-options', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        if (!cancelled) {
+          setSchoolFilterOptions({
+            regionTree: data.regionTree || [],
+            otherSchools: data.otherSchools || [],
+            grades: data.grades || [],
+            examRounds: data.examRounds || [],
+          });
+        }
+      } catch (e) {
+        console.warn('[exam-create] school-filter-options fetch 실패:', e);
       }
     })();
     return () => { cancelled = true; };
@@ -758,16 +811,51 @@ export default function ExamCreatePage() {
           </main>
         </div>
       ) : activeTab === 'school' ? (
-        // ★ 학교기출 탭 — 학교 그룹 → 시험지 → 문제 grid
+        // ★ 학교기출 탭 — 매쓰플랫식 4-필터 풀세트 + 학교 그룹 → 시험지 → 문제 grid
         (() => {
-          // 학교명별 그룹 + 검색 필터
+          // ★ PR-3 매쓰플랫식 4-필터 적용
+          //   각 필터는 빈값/전체면 통과. 선택된 학교들이 있으면 그 학교 exams 만.
           const filteredExams = schoolExams.filter((ex) => {
-            if (!schoolQuery.trim()) return true;
-            const q = schoolQuery.trim().toLowerCase();
-            return (
-              (ex.school || '').toLowerCase().includes(q) ||
-              (ex.title || '').toLowerCase().includes(q)
-            );
+            // 1) 검색 키워드
+            if (schoolQuery.trim()) {
+              const q = schoolQuery.trim().toLowerCase();
+              const match =
+                (ex.school || '').toLowerCase().includes(q) ||
+                (ex.title || '').toLowerCase().includes(q);
+              if (!match) return false;
+            }
+            // 2) 학교급 필터 — grade 의 첫 글자 (중/고/초) 와 매칭
+            if (filterSchoolLevel !== '전체') {
+              const lv = classifySchoolLevel(ex.school || null);
+              if (lv !== filterSchoolLevel) return false;
+            }
+            // 3) 학년·학기 필터 (예: "중2-1") — ex.grade + ex.semester 조합
+            if (filterGradeSemester) {
+              const m = filterGradeSemester.match(/^(초|중|고)?(\d)?(?:-([12]))?$/);
+              if (m) {
+                const lv = m[1];
+                const gr = m[2];
+                const sem = m[3] ? Number(m[3]) : null;
+                if (lv) {
+                  const exLv = classifySchoolLevel(ex.school || null);
+                  if (exLv !== lv) return false;
+                }
+                if (gr && ex.grade && !String(ex.grade).includes(gr)) return false;
+                if (sem != null && ex.semester != null && ex.semester !== sem) return false;
+              }
+            }
+            // 4) 회차 필터 — exam_round 직접 일치
+            if (filterExamRound && ex.exam_round !== filterExamRound) return false;
+            // 5) 단원 필터 — chapter 부분일치 (다단원 시험지에선 fail 가능)
+            if (filterChapter) {
+              if (!(ex.chapter && ex.chapter.includes(filterChapter))) return false;
+            }
+            // 6) 지역·학교 팝업 다중선택 — selectedSchoolNames 가 있으면 그 학교만
+            if (selectedSchoolNames.size > 0) {
+              const n = ex.school_name || ex.school || '';
+              if (!selectedSchoolNames.has(n)) return false;
+            }
+            return true;
           });
           const bySchool = new Map<string, SchoolExam[]>();
           for (const ex of filteredExams) {
@@ -784,8 +872,97 @@ export default function ExamCreatePage() {
             return a.localeCompare(b, 'ko');
           });
           const examsForSelected = selectedSchool ? bySchool.get(selectedSchool) || [] : [];
+          // ★ PR-3 4-필터 옵션
+          const GRADE_SEM_OPTIONS = ['', '중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '고1', '고2', '고3'];
+          const EXAM_ROUND_OPTIONS = ['', '중간', '기말', '단원집', '수행평가'];
+          const chapterOptions = Array.from(new Set(schoolExams.map((e) => e.chapter).filter((c): c is string => !!c))).sort();
           return (
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* ★ 상단: 매쓰플랫식 4-필터 바 */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/50 bg-zinc-950/60 px-4 py-2.5 text-xs">
+                <span className="font-semibold text-emerald-300">학교별 기출 필터</span>
+                <select
+                  value={filterSchoolLevel}
+                  onChange={(e) => setFilterSchoolLevel(e.target.value as '전체' | '초' | '중' | '고')}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                >
+                  <option value="전체">학교급 전체</option>
+                  <option value="중">중학교</option>
+                  <option value="고">고등학교</option>
+                  <option value="초">초등학교</option>
+                </select>
+                <select
+                  value={filterGradeSemester}
+                  onChange={(e) => setFilterGradeSemester(e.target.value)}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                >
+                  {GRADE_SEM_OPTIONS.map((g) => (
+                    <option key={g || 'all'} value={g}>{g || '학년·학기 전체'}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setRegionPickerOpen(true)}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white hover:border-emerald-500 transition flex items-center gap-1.5"
+                >
+                  <School className="h-3 w-3" />
+                  {selectedSchoolNames.size > 0
+                    ? `학교 ${selectedSchoolNames.size}개 선택`
+                    : '지역·학교 선택'}
+                </button>
+                <select
+                  value={filterExamRound}
+                  onChange={(e) => setFilterExamRound(e.target.value)}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                >
+                  {EXAM_ROUND_OPTIONS.map((r) => (
+                    <option key={r || 'all'} value={r}>{r || '회차 전체'}</option>
+                  ))}
+                </select>
+                {chapterOptions.length > 0 && (
+                  <select
+                    value={filterChapter}
+                    onChange={(e) => setFilterChapter(e.target.value)}
+                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="">단원 전체</option>
+                    {chapterOptions.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                )}
+                {(filterSchoolLevel !== '전체' || filterGradeSemester || filterExamRound || filterChapter || selectedSchoolNames.size > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterSchoolLevel('전체');
+                      setFilterGradeSemester('');
+                      setFilterExamRound('');
+                      setFilterChapter('');
+                      setSelectedSchoolNames(new Set());
+                    }}
+                    className="ml-auto text-zinc-400 hover:text-rose-300 underline"
+                  >
+                    초기화
+                  </button>
+                )}
+                <div className="ml-auto text-[10px] text-zinc-500">
+                  매칭 시험지 <span className="text-emerald-300 font-bold">{filteredExams.length}</span>건
+                </div>
+              </div>
+
+              {/* 지역·학교 팝업 */}
+              {regionPickerOpen && schoolFilterOptions && (
+                <RegionPicker
+                  regionTree={schoolFilterOptions.regionTree}
+                  otherSchools={schoolFilterOptions.otherSchools}
+                  selected={selectedSchoolNames}
+                  onChange={setSelectedSchoolNames}
+                  onClose={() => setRegionPickerOpen(false)}
+                />
+              )}
+
+              <div className="flex flex-1 overflow-hidden">
               {/* 좌측: 학교 list + 검색 */}
               <aside className="w-[260px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
                 <div className="mb-3">
@@ -971,6 +1148,7 @@ export default function ExamCreatePage() {
                   </>
                 )}
               </main>
+              </div>{/* end inner 3-pane row (PR-3 학교기출 4-필터 보강) */}
             </div>
           );
         })()
@@ -1790,6 +1968,196 @@ export default function ExamCreatePage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// RegionPicker — PR-3 (2026-05-28) 매쓰플랫식 지역·학교 다중선택 팝업
+//
+// 좌측: 시도 list / 중앙: 시군구 list / 우측: 학교 체크박스 + 검색
+// 매쓰플랫 캡쳐와 동일 — "선택한 학교 수 N개" + [전체 초기화] [적용하기]
+// ============================================================================
+interface RegionPickerProps {
+  regionTree: Array<{ sido: string; sigungus: Array<{ sigungu: string; schools: string[] }> }>;
+  otherSchools: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+  onClose: () => void;
+}
+
+function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }: RegionPickerProps) {
+  const [activeSido, setActiveSido] = React.useState<string | null>(regionTree[0]?.sido || null);
+  const [activeSigungu, setActiveSigungu] = React.useState<string | null>(regionTree[0]?.sigungus[0]?.sigungu || null);
+  const [draft, setDraft] = React.useState<Set<string>>(new Set(selected));
+  const [search, setSearch] = React.useState('');
+
+  const activeSidoNode = regionTree.find((n) => n.sido === activeSido);
+  const activeSigunguNode = activeSidoNode?.sigungus.find((n) => n.sigungu === activeSigungu);
+  const visibleSchools = (() => {
+    const base = activeSigunguNode?.schools || (activeSido === null ? otherSchools : []);
+    if (!search.trim()) return base;
+    const q = search.trim().toLowerCase();
+    return base.filter((s) => s.toLowerCase().includes(q));
+  })();
+
+  const toggleSchool = (school: string) => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      if (next.has(school)) next.delete(school);
+      else next.add(school);
+      return next;
+    });
+  };
+
+  const apply = () => {
+    onChange(draft);
+    onClose();
+  };
+
+  const reset = () => setDraft(new Set());
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="relative w-[820px] max-h-[80vh] flex flex-col rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+          <div>
+            <h3 className="text-sm font-bold text-emerald-300">지역·학교 선택</h3>
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              자산화된 학교 중에서만 선택 가능. 폴더 import 후 데이터가 점점 추가됨.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-4 py-2 border-b border-zinc-800">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="학교명으로 검색"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1.5 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* 좌: 시도 */}
+          <div className="w-[100px] flex-shrink-0 overflow-y-auto border-r border-zinc-800 p-2">
+            <div className="mb-1 text-[10px] font-bold text-zinc-500 uppercase">지역</div>
+            {regionTree.map((node) => (
+              <button
+                key={node.sido}
+                type="button"
+                onClick={() => {
+                  setActiveSido(node.sido);
+                  setActiveSigungu(node.sigungus[0]?.sigungu || null);
+                }}
+                className={`w-full rounded px-2 py-1 text-left text-xs transition ${
+                  activeSido === node.sido
+                    ? 'bg-emerald-500/20 text-emerald-200'
+                    : 'text-zinc-300 hover:bg-zinc-900'
+                }`}
+              >
+                {node.sido}
+              </button>
+            ))}
+            {otherSchools.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSido(null);
+                  setActiveSigungu(null);
+                }}
+                className={`w-full rounded px-2 py-1 text-left text-xs transition ${
+                  activeSido === null
+                    ? 'bg-emerald-500/20 text-emerald-200'
+                    : 'text-zinc-500 hover:bg-zinc-900'
+                }`}
+              >
+                기타
+              </button>
+            )}
+          </div>
+
+          {/* 중: 시군구 */}
+          <div className="w-[140px] flex-shrink-0 overflow-y-auto border-r border-zinc-800 p-2">
+            <div className="mb-1 text-[10px] font-bold text-zinc-500 uppercase">시/구/군</div>
+            {(activeSidoNode?.sigungus || []).map((node) => (
+              <button
+                key={node.sigungu}
+                type="button"
+                onClick={() => setActiveSigungu(node.sigungu)}
+                className={`w-full rounded px-2 py-1 text-left text-xs transition ${
+                  activeSigungu === node.sigungu
+                    ? 'bg-emerald-500/20 text-emerald-200'
+                    : 'text-zinc-300 hover:bg-zinc-900'
+                }`}
+              >
+                {node.sigungu}
+                <span className="ml-1 text-[9px] text-zinc-500">({node.schools.length})</span>
+              </button>
+            ))}
+          </div>
+
+          {/* 우: 학교 체크박스 */}
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="mb-1 text-[10px] font-bold text-zinc-500 uppercase">학교</div>
+            {visibleSchools.length === 0 ? (
+              <div className="py-6 text-center text-xs text-zinc-500">학교가 없습니다.</div>
+            ) : (
+              <ul className="space-y-0.5">
+                {visibleSchools.map((school) => (
+                  <li key={school}>
+                    <label className="flex items-center gap-2 rounded px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-900 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draft.has(school)}
+                        onChange={() => toggleSchool(school)}
+                        className="accent-emerald-500"
+                      />
+                      {school}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-3">
+          <button
+            type="button"
+            onClick={reset}
+            className="text-xs text-zinc-400 hover:text-rose-300 underline"
+          >
+            전체 초기화
+          </button>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-zinc-400">
+              선택한 학교 수 <span className="font-bold text-emerald-300">{draft.size}</span>개
+            </span>
+            <button
+              type="button"
+              onClick={apply}
+              className="rounded-lg bg-emerald-500 px-4 py-1.5 font-semibold text-zinc-950 hover:bg-emerald-400 transition"
+            >
+              적용하기
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

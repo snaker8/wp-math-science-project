@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     // ★ 시험지 목록 조회 (institute-guard 격리). super_admin 은 전체, ORG_ADMIN 은 산하, 일반 user 는 자기 institute.
     let examsBaseQuery = supabaseAdmin
       .from('exams')
-      .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade, is_diagnostic, diagnostic_category, diagnostic_round, diagnostic_difficulty')
+      .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade, is_diagnostic, diagnostic_category, diagnostic_round, diagnostic_difficulty, school_name, district, semester, exam_year, exam_round, chapter')
       .order('created_at', { ascending: false })
       .limit(200);
 
