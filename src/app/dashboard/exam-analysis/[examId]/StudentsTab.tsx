@@ -77,51 +77,23 @@ export default function StudentsTab({ examId }: { examId: string }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // 학원(institute) 선택 — super_admin/ORG_ADMIN 이 여러 institute 접근 가능 시 노출
-  const [institutes, setInstitutes] = useState<{ id: string; name: string }[]>([]);
-  const [selectedInstituteId, setSelectedInstituteId] = useState<string>('');
+  // 활성 센터 표시용 — 변경은 TopNav 우측 드롭다운에서 (쿠키 기반)
+  const [activeInstituteName, setActiveInstituteName] = useState<string | null>(
+    null
+  );
   const [canSwitch, setCanSwitch] = useState(false);
-
-  // 사용자 scope + 접근 가능 institute 목록 로드 (페이지 첫 진입 시 한 번)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const sr = await fetch('/api/me/scope', { cache: 'no-store' });
-        if (!sr.ok) return;
-        const sd = await sr.json();
+        const r = await fetch('/api/me/active-institute', { cache: 'no-store' });
+        if (!r.ok) return;
+        const d = await r.json();
         if (cancelled) return;
-
-        let list: { id: string; name: string }[] = [];
-        if (sd.isSuperAdmin) {
-          const ir = await fetch('/api/admin/tenancy/institutes', { cache: 'no-store' });
-          if (ir.ok) {
-            const id = await ir.json();
-            list = ((id.institutes ?? id.data ?? []) as { id: string; name: string }[])
-              .map((i) => ({ id: i.id, name: i.name }));
-          }
-        } else if (sd.organizationId) {
-          const ir = await fetch(
-            `/api/admin/tenancy/institutes?organization_id=${sd.organizationId}`,
-            { cache: 'no-store' }
-          );
-          if (ir.ok) {
-            const id = await ir.json();
-            list = ((id.institutes ?? id.data ?? []) as { id: string; name: string }[])
-              .map((i) => ({ id: i.id, name: i.name }));
-          }
-        }
-        if (cancelled) return;
-        setInstitutes(list);
-        setCanSwitch(list.length > 1);
-        // 기본 선택: 자기 institute 우선 → 첫 항목
-        const defaultId =
-          (sd.instituteId && list.some((i) => i.id === sd.instituteId)
-            ? sd.instituteId
-            : list[0]?.id) ?? '';
-        setSelectedInstituteId(defaultId);
+        setActiveInstituteName(d.activeInstituteName ?? null);
+        setCanSwitch(!!d.canSwitch);
       } catch {
-        // 무시 — fallback 빈 문자열 (서버가 scope.instituteId 사용)
+        // 무시
       }
     })();
     return () => {
@@ -166,10 +138,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
       try {
         const fd = new FormData();
         Array.from(files).forEach((f) => fd.append('files', f));
-        // ORG_ADMIN/super_admin 이 명시 선택한 institute_id (있을 때만)
-        if (selectedInstituteId) {
-          fd.append('institute_id', selectedInstituteId);
-        }
+        // institute_id 는 더 이상 폼에 박지 않음 — 서버가 활성 센터 쿠키 사용
 
         const r = await fetch(`/api/exams/${examId}/student-responses`, {
           method: 'POST',
@@ -188,7 +157,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
         setUploadBusy(false);
       }
     },
-    [examId, fetchStudents, selectedInstituteId]
+    [examId, fetchStudents]
   );
 
   // ----------- 학생 삭제 (세션 삭제) -----------
@@ -244,26 +213,17 @@ export default function StudentsTab({ examId }: { examId: string }) {
           </button>
         </div>
 
-        {/* 학원(institute) 선택 — 여러 institute 접근 가능한 사용자만 노출 */}
-        {canSwitch && (
-          <div className="mb-4 flex items-center gap-3 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+        {/* 활성 센터 표시 — 변경은 우측 상단 TopNav 드롭다운에서 */}
+        {canSwitch && activeInstituteName && (
+          <div className="mb-4 flex items-center gap-2 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
             <span className="text-[12px] font-black text-amber-300 shrink-0">
               ⚠ 등록 센터
             </span>
-            <select
-              value={selectedInstituteId}
-              onChange={(e) => setSelectedInstituteId(e.target.value)}
-              disabled={uploadBusy}
-              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm font-bold text-white focus:outline-none focus:border-amber-400"
-            >
-              {institutes.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
-            <span className="text-[11px] text-zinc-400 shrink-0">
-              업로드된 학생은 위 학원에 등록됩니다
+            <span className="text-[13px] font-bold text-amber-200">
+              {activeInstituteName}
+            </span>
+            <span className="text-[11px] text-zinc-500">
+              · 변경하려면 우측 상단 센터 드롭다운에서
             </span>
           </div>
         )}
