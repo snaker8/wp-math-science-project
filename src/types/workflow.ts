@@ -38,10 +38,32 @@ export interface UploadJob {
   curriculumVersion?: '2015' | '2022'; // ★ 교육과정 버전
   // ★ 사용자 명시 출처 카테고리 — 자산화 시 자동 태깅 override (사용자 지시 2026-05-16)
   sourceCategory?: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock';
+  // ★ 학교 기출 단원집 메타 (2026-05-28) — sourceCategory='school' 일 때 폴더 업로드가 채움.
+  //   부분 누락 허용: 빈 필드는 title 기반 자동 추출로 fallback.
+  schoolMeta?: SchoolMetaInput;
   error?: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+}
+
+/**
+ * 학교 기출 단원집 자산화 시 폴더/사용자 입력으로 전달되는 메타.
+ * 모든 필드 optional — 빈 필드는 자동 추출 fallback.
+ */
+export interface SchoolMetaInput {
+  /** 학교명 raw (예: "동래중학교"). DB 저장 직전 normalizeSchoolName() 적용. */
+  schoolName?: string;
+  /** "부산 동래구" 같은 시도+시군구 조합. */
+  district?: string;
+  /** 1 또는 2. */
+  semester?: 1 | 2;
+  /** 4자리 년도 (2026). 파일명 YYMMDD prefix 에서 자동 추출 가능. */
+  examYear?: number;
+  /** "중간" / "기말" / "단원집" / "수행평가". */
+  examRound?: string;
+  /** 단원명 (예: "방정식"). 단원집 PDF 전용. */
+  chapter?: string;
 }
 
 export interface OCRResult {

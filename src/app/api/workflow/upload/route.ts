@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
-import type { UploadJob, ProcessingStatus, LLMAnalysisResult } from '@/types/workflow';
+import type { UploadJob, ProcessingStatus, LLMAnalysisResult, SchoolMetaInput } from '@/types/workflow';
 import { processUploadJob, getStatusLabel, convertedPdfStore, isScienceSubject } from '@/lib/workflow/cloud-flow';
 import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
@@ -21,6 +21,68 @@ import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
 import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
 import { verifyAndRepairWithVision, persistVisionDiffsForLearning } from '@/lib/ocr/vision-verifier';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
+import { extractSchoolName } from '@/lib/utils/school-extract';
+import { normalizeSchoolName, formatSourceLabel } from '@/lib/utils/school-normalize';
+
+// ★ schoolMeta 부분 누락 시 title 기반 fallback 추출.
+//   - schoolName: extractSchoolName() → normalizeSchoolName()
+//   - examYear: 4자리 또는 2자리 ("2024 동래중", "26·1 동래중") 패턴
+//   - semester: "1학기"/"2학기"/"M1"/"M2" 패턴
+//   - examRound: "중간"/"기말"/"단원집"/"수행" 키워드
+function fillSchoolMetaFromTitle(meta: SchoolMetaInput, title: string): {
+  schoolName: string | null;
+  district: string | null;
+  semester: 1 | 2 | null;
+  examYear: number | null;
+  examRound: string | null;
+  chapter: string | null;
+} {
+  // school_name: 명시값 normalize → fallback title 추출 → normalize
+  let schoolName = normalizeSchoolName(meta.schoolName);
+  if (!schoolName) {
+    schoolName = normalizeSchoolName(extractSchoolName(title) || '');
+  }
+
+  // exam_year: 명시값 → title 패턴
+  let examYear: number | null = typeof meta.examYear === 'number' ? meta.examYear : null;
+  if (!examYear) {
+    // 4자리 우선 (2024, 2025, 2026)
+    const m4 = title.match(/(20\d{2})/);
+    if (m4) {
+      examYear = Number(m4[1]);
+    } else {
+      // 2자리 prefix ("26 신곡중", "26·1 ...")
+      const m2 = title.match(/(?:^|\s|\[)(\d{2})(?=[\s·\-_])/);
+      if (m2) examYear = 2000 + Number(m2[1]);
+    }
+  }
+
+  // semester: 명시값 → "1학기"/"2학기" → "[2-1-M]" 패턴
+  let semester: 1 | 2 | null = meta.semester ?? null;
+  if (!semester) {
+    if (/1\s*학기/.test(title)) semester = 1;
+    else if (/2\s*학기/.test(title)) semester = 2;
+    else {
+      const mSem = title.match(/[중고]\s*[1-3]\s*-\s*([12])(?![0-9])/);
+      if (mSem) semester = (Number(mSem[1]) as 1 | 2);
+    }
+  }
+
+  // exam_round: 명시값 → 키워드
+  let examRound: string | null = meta.examRound ?? null;
+  if (!examRound) {
+    if (/중간/.test(title)) examRound = '중간';
+    else if (/기말/.test(title)) examRound = '기말';
+    else if (/단원집/.test(title)) examRound = '단원집';
+    else if (/수행/.test(title)) examRound = '수행평가';
+  }
+
+  // district / chapter 은 명시값만 (title 에서 안전하게 추출하기 어려움)
+  const district = meta.district || null;
+  const chapter = meta.chapter || null;
+
+  return { schoolName, district, semester, examYear, examRound, chapter };
+}
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
 //   사용자 지시 (2026-05-16): "자산화 할때 분류해서 하게 하자".
@@ -149,6 +211,19 @@ export async function POST(request: NextRequest) {
     const sourceCategory = (formData.get('sourceCategory') as
       | 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock'
       | null) || 'auto';
+    // ★ 학교 기출 단원집 메타 (2026-05-28) — sourceCategory='school' 일 때 폴더 업로드가 채움.
+    //   JSON string 으로 전달 (예: {"schoolName":"동래중학교","district":"부산 동래구",...}).
+    //   파싱 실패 시 빈 객체 → fillSchoolMetaFromTitle() 가 title fallback 추출.
+    let schoolMeta: SchoolMetaInput = {};
+    const schoolMetaRaw = formData.get('schoolMeta') as string | null;
+    if (schoolMetaRaw) {
+      try {
+        const parsed = JSON.parse(schoolMetaRaw);
+        if (parsed && typeof parsed === 'object') schoolMeta = parsed as SchoolMetaInput;
+      } catch (e) {
+        console.warn('[Upload] schoolMeta JSON parse 실패 — 무시:', e);
+      }
+    }
     const scienceSubject = formData.get('scienceSubject') as string | null;
     const curriculumVersion = (formData.get('curriculumVersion') as '2015' | '2022') || '2022';
     const scienceMode = (formData.get('scienceMode') as 'diagrams_only' | 'full') || 'full';
@@ -242,6 +317,7 @@ export async function POST(request: NextRequest) {
       scienceSubject: scienceSubject || undefined,
       curriculumVersion: subjectArea === 'science' ? curriculumVersion : undefined,
       sourceCategory,  // ★ 사용자 명시 출처 카테고리 — PUT 시점에 jobStore 에서 가져와 사용
+      schoolMeta,      // ★ 학교 단원집 메타 — PUT 시점에 jobStore 에서 가져와 사용
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -696,7 +772,7 @@ export async function PUT(request: NextRequest) {
     if ((!results || results.length === 0) && editedProblems && editedProblems.length > 0) {
       const acBookGroupId = bookGroupId || job.bookGroupId || null;
       console.log(`[Upload PUT] AutoCrop 모드: ${editedProblems.length}개 문제 직접 저장, bookGroupId="${acBookGroupId}"`);
-      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap, request.nextUrl.origin, job.sourceCategory || 'auto');
+      return await saveEditedProblemsDirect(jobId, job, editedProblems, acBookGroupId, pageImagePathMap, request.nextUrl.origin, job.sourceCategory || 'auto', job.schoolMeta);
     }
 
     if (job.status !== 'COMPLETED') {
@@ -810,7 +886,7 @@ export async function PUT(request: NextRequest) {
     // DB에 저장 (bookGroupId, imageUrlMap 전달) — 클라이언트 값 우선, 폴백으로 job.bookGroupId
     const effectiveBookGroupId = bookGroupId || job.bookGroupId || null;
     console.log(`[Upload PUT] ★ DB 저장 시 bookGroupId: "${effectiveBookGroupId}"`);
-    await saveProblemsToDB(jobId, results, effectiveBookGroupId, imageUrlMap, editedProblems, pageImagePathMap, job.sourceCategory || 'auto');
+    await saveProblemsToDB(jobId, results, effectiveBookGroupId, imageUrlMap, editedProblems, pageImagePathMap, job.sourceCategory || 'auto', job.schoolMeta);
 
     return NextResponse.json({
       success: true,
@@ -1169,7 +1245,7 @@ async function processJobInBackground(
           const currentJob = jobStore.get(jobId);
           const bookGroupId = currentJob?.bookGroupId || null;
           console.log(`[Job ${jobId}] 자동 자산화 시작: ${analysisResults.length}개 문제, bookGroupId="${bookGroupId}"`);
-          await saveProblemsToDB(jobId, analysisResults, bookGroupId);
+          await saveProblemsToDB(jobId, analysisResults, bookGroupId, undefined, undefined, undefined, currentJob?.sourceCategory || 'auto', currentJob?.schoolMeta);
           console.log(`[Job ${jobId}] 자동 자산화 완료`);
         } catch (autoSaveErr) {
           console.error(`[Job ${jobId}] 자동 자산화 실패 (수동 자산화로 대체):`, autoSaveErr);
@@ -1255,7 +1331,9 @@ async function saveEditedProblemsDirect(
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
   requestOrigin: string = '',
   // ★ 사용자 명시 출처 카테고리 — exam INSERT 시 자동 태깅 override
-  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock' = 'auto'
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock' = 'auto',
+  // ★ 학교 단원집 메타 (2026-05-28) — sourceCategory='school' 일 때 examInsertData 에 박힘
+  schoolMeta?: SchoolMetaInput,
 ) {
   const supabase = supabaseAdmin;
   if (!supabase) {
@@ -1496,6 +1574,8 @@ async function saveEditedProblemsDirect(
   }
 
   // ★ append 모드 (examId 이미 set 됨) 면 새 exam INSERT 스킵
+  // ★ 학교 단원집 메타 산출 — 두 함수 공통 패턴. school 모드 외에도 명시값 들어오면 박음.
+  const resolvedSchoolMeta = fillSchoolMetaFromTitle(schoolMeta || {}, fileTitle);
   if (!examId) {
     try {
       const diagnosticMeta = detectDiagnosticMetaFromTitle(fileTitle);
@@ -1518,6 +1598,13 @@ async function saveEditedProblemsDirect(
         diagnostic_round: sourceOverride.diagnostic_round,
         diagnostic_difficulty: sourceOverride.diagnostic_difficulty,
         subject_track: subjectTrack,
+        // ★ 학교 기출 단원집 메타 (2026-05-28) — null 은 컬럼 미박힘
+        school_name: resolvedSchoolMeta.schoolName,
+        district: resolvedSchoolMeta.district,
+        semester: resolvedSchoolMeta.semester,
+        exam_year: resolvedSchoolMeta.examYear,
+        exam_round: resolvedSchoolMeta.examRound,
+        chapter: resolvedSchoolMeta.chapter,
       };
       if (bookGroupId) {
         examInsertData.book_group_id = bookGroupId;
@@ -1832,6 +1919,14 @@ async function saveEditedProblemsDirect(
           images: imagesArray,
           status: 'PENDING_REVIEW',
           source_number: edited.number || null,
+          // ★ 학교 기출 출처 배지 (2026-05-28) — "동래중 26·1 단원집 3" 같은 압축 표기
+          source_label: formatSourceLabel({
+            schoolName: resolvedSchoolMeta.schoolName,
+            examYear: resolvedSchoolMeta.examYear,
+            semester: resolvedSchoolMeta.semester,
+            examRound: resolvedSchoolMeta.examRound,
+            number: edited.number,
+          }),
           ai_analysis: {
             classification: {
               typeCode: edited.typeCode || '',
@@ -2076,7 +2171,9 @@ async function saveProblemsToDB(
   editedProblems?: Array<{ number: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; [key: string]: any }>,
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
   // ★ 사용자 명시 출처 카테고리 — exam INSERT 시 자동 태깅 override
-  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock' = 'auto'
+  sourceCategory: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock' = 'auto',
+  // ★ 학교 단원집 메타 (2026-05-28) — sourceCategory='school' 일 때 examInsertData 에 박힘
+  schoolMeta?: SchoolMetaInput,
 ): Promise<void> {
   // Use Admin Client to bypass RLS for background processing
   const supabase = supabaseAdmin;
@@ -2227,6 +2324,10 @@ async function saveProblemsToDB(
     job.fileName.replace(/\.[^/.]+$/, '')
   ) ? 'science' : 'math';
 
+  // ★ fileTitle / 학교 단원집 메타를 함수 스코프로 hoist (problems INSERT 루프에서도 사용)
+  const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
+  const resolvedSchoolMeta = fillSchoolMetaFromTitle(schoolMeta || {}, fileTitle);
+
   // 1. Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   // 003_exams.sql 마이그레이션 스키마 기준 컬럼만 사용
   let examId: string | null = null;
@@ -2275,7 +2376,7 @@ async function saveProblemsToDB(
     }
 
     // schema.sql 기준 컬럼만 사용 (공통 유틸 사용)
-    const fileTitle = job.fileName.replace(/\.[^/.]+$/, "");
+    // ★ fileTitle 은 함수 스코프 (위에서 hoist) — 여기 중복 선언 제거.
 
     // ★ DB 기반 중복 차단 — append 모드면 스킵 (의도적 추가)
     if (!examId) {
@@ -2301,6 +2402,7 @@ async function saveProblemsToDB(
       }
     }
 
+    // ★ resolvedSchoolMeta 는 함수 스코프 (위에서 hoist) — 여기 중복 선언 제거.
     // ★ append 모드면 새 exam INSERT 스킵 (examId 이미 set)
     if (!examId) {
       const diagnosticMeta = detectDiagnosticMetaFromTitle(fileTitle);
@@ -2323,6 +2425,13 @@ async function saveProblemsToDB(
         diagnostic_round: sourceOverride.diagnostic_round,
         diagnostic_difficulty: sourceOverride.diagnostic_difficulty,
         subject_track: subjectTrack,
+        // ★ 학교 기출 단원집 메타 (2026-05-28)
+        school_name: resolvedSchoolMeta.schoolName,
+        district: resolvedSchoolMeta.district,
+        semester: resolvedSchoolMeta.semester,
+        exam_year: resolvedSchoolMeta.examYear,
+        exam_round: resolvedSchoolMeta.examRound,
+        chapter: resolvedSchoolMeta.chapter,
       };
       if (diagnosticMeta.is_diagnostic) {
         console.log(`[DB] ★ 진단지 자동 태깅: ${diagnosticMeta.diagnostic_category}${diagnosticMeta.diagnostic_round ? `/${diagnosticMeta.diagnostic_round}` : ''}`);
@@ -2563,6 +2672,14 @@ async function saveProblemsToDB(
           images: imagesArray,
           status: 'PENDING_REVIEW',
           source_number: problemNum || null,
+          // ★ 학교 기출 출처 배지 (2026-05-28) — "동래중 26·1 단원집 3" 같은 압축 표기
+          source_label: formatSourceLabel({
+            schoolName: resolvedSchoolMeta.schoolName,
+            examYear: resolvedSchoolMeta.examYear,
+            semester: resolvedSchoolMeta.semester,
+            examRound: resolvedSchoolMeta.examRound,
+            number: problemNum,
+          }),
           ai_analysis: {
             classification: result.classification,
             solution: result.solution,
