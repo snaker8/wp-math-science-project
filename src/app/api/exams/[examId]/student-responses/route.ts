@@ -23,6 +23,7 @@ import {
   type ParsedStudent,
   type GradeProblemSpec,
 } from '@/lib/grading/parse-student-sheet';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -108,29 +109,12 @@ export async function POST(
     );
   }
 
-  // 4. 학생 등록 학원(institute) 결정
-  //    - 폼에 institute_id 명시 → 권한 검증 후 사용 (super_admin / ORG_ADMIN 다중 institute 케이스)
-  //    - 없으면 → 본인 institute (일반 강사)
-  const requestedInstituteId = (formData.get('institute_id') as string | null) || null;
-  let teacherInstituteId: string;
-  if (requestedInstituteId) {
-    if (scope.isSuperAdmin) {
-      teacherInstituteId = requestedInstituteId;
-    } else {
-      const accessible = scope.accessibleInstituteIds ?? [];
-      if (!accessible.includes(requestedInstituteId)) {
-        return NextResponse.json(
-          { error: '선택한 학원에 접근 권한이 없습니다.' },
-          { status: 403 }
-        );
-      }
-      teacherInstituteId = requestedInstituteId;
-    }
-  } else if (scope.instituteId) {
-    teacherInstituteId = scope.instituteId;
-  } else {
+  // 4. 학생 등록 학원(institute) 결정 — TopNav 활성 센터(쿠키) 기준
+  //    우선순위: 쿠키 > scope.instituteId
+  const teacherInstituteId = resolveActiveInstitute(scope);
+  if (!teacherInstituteId) {
     return NextResponse.json(
-      { error: '학원이 배정되지 않은 사용자입니다. 관리자에게 문의하세요.' },
+      { error: '학원이 배정되지 않은 사용자입니다. 우측 상단 센터를 먼저 선택하세요.' },
       { status: 403 }
     );
   }
