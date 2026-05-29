@@ -97,16 +97,7 @@ export async function POST(
     }
   }
 
-  // 3. 강사의 institute 결정 — roster 는 강사 본인 institute 에 박힘
-  const teacherInstituteId = scope.instituteId;
-  if (!teacherInstituteId) {
-    return NextResponse.json(
-      { error: '학원이 배정되지 않은 사용자입니다. 관리자에게 문의하세요.' },
-      { status: 403 }
-    );
-  }
-
-  // 4. multipart form 파싱
+  // 3. multipart form 파싱 (institute_id 필드 먼저 확인 필요)
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -114,6 +105,33 @@ export async function POST(
     return NextResponse.json(
       { error: 'multipart/form-data 파싱 실패', detail: String(err) },
       { status: 400 }
+    );
+  }
+
+  // 4. 학생 등록 학원(institute) 결정
+  //    - 폼에 institute_id 명시 → 권한 검증 후 사용 (super_admin / ORG_ADMIN 다중 institute 케이스)
+  //    - 없으면 → 본인 institute (일반 강사)
+  const requestedInstituteId = (formData.get('institute_id') as string | null) || null;
+  let teacherInstituteId: string;
+  if (requestedInstituteId) {
+    if (scope.isSuperAdmin) {
+      teacherInstituteId = requestedInstituteId;
+    } else {
+      const accessible = scope.accessibleInstituteIds ?? [];
+      if (!accessible.includes(requestedInstituteId)) {
+        return NextResponse.json(
+          { error: '선택한 학원에 접근 권한이 없습니다.' },
+          { status: 403 }
+        );
+      }
+      teacherInstituteId = requestedInstituteId;
+    }
+  } else if (scope.instituteId) {
+    teacherInstituteId = scope.instituteId;
+  } else {
+    return NextResponse.json(
+      { error: '학원이 배정되지 않은 사용자입니다. 관리자에게 문의하세요.' },
+      { status: 403 }
     );
   }
 

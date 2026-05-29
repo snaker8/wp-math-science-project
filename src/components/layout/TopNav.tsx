@@ -11,6 +11,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 import { TrackToggle } from '@/components/layout/TrackToggle';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import { useUserScope } from '@/hooks/useUserScope';
+import { useActiveInstitute } from '@/contexts/ActiveInstituteContext';
 import { trackHref } from '@/lib/track/href';
 import { withTrackGroups } from '@/lib/track/nav';
 import { DEFAULT_SUBJECT_TRACK } from '@/lib/subject-track';
@@ -144,8 +145,9 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* ── Right: 트랙 토글 + 설정 + 사용자 ── */}
+        {/* ── Right: 센터 선택 + 트랙 토글 + 설정 + 사용자 ── */}
         <div className="flex items-center gap-2">
+          <InstituteSwitcher />
           {/* 트랙 토글 — flag true + 다중 트랙일 때만 노출, 그 외엔 null */}
           <TrackToggle />
           <Link
@@ -449,6 +451,35 @@ function DbAssetizeTab({
       <group.icon size={16} />
       <span>{group.label}</span>
     </button>
+  );
+}
+
+// ============================================================================
+// InstituteSwitcher — 활성 센터 선택 (다중 institute 접근 가능자만 노출)
+//
+// super_admin / ORG_ADMIN 처럼 여러 센터 접근 가능한 사용자가 현재 작업할
+// 센터를 전환. 학생 채점·리포트 등 새 기능이 이 컨텍스트를 참조.
+// ============================================================================
+function InstituteSwitcher() {
+  const { activeInstituteId, setActiveInstituteId, institutes, canSwitch } =
+    useActiveInstitute();
+  if (!canSwitch) return null;
+  return (
+    <div className="hidden md:flex items-center gap-1.5 mr-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
+      <Building2 className="h-3 w-3 text-amber-400 shrink-0" />
+      <select
+        value={activeInstituteId}
+        onChange={(e) => setActiveInstituteId(e.target.value)}
+        className="bg-transparent text-[12px] font-bold text-amber-200 focus:outline-none cursor-pointer pr-1 max-w-[160px] truncate"
+        title="활성 센터 — 학생 채점 등 새 작업은 이 센터 기준"
+      >
+        {institutes.map((i) => (
+          <option key={i.id} value={i.id} className="bg-zinc-900 text-white">
+            {i.name}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

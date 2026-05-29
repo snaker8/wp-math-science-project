@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useActiveInstitute } from '@/contexts/ActiveInstituteContext';
 import {
   Upload,
   FileSpreadsheet,
@@ -77,6 +78,16 @@ export default function StudentsTab({ examId }: { examId: string }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // 전역 활성 센터 컨텍스트 — TopNav 드롭다운과 연동
+  const {
+    activeInstituteId: selectedInstituteId,
+    institutes,
+    canSwitch,
+  } = useActiveInstitute();
+  // 활성 센터 표시용 이름
+  const activeInstituteName =
+    institutes.find((i) => i.id === selectedInstituteId)?.name ?? '';
+
   // ----------- 학생 리스트 조회 -----------
   const fetchStudents = useCallback(async () => {
     if (!examId) return;
@@ -114,6 +125,10 @@ export default function StudentsTab({ examId }: { examId: string }) {
       try {
         const fd = new FormData();
         Array.from(files).forEach((f) => fd.append('files', f));
+        // ORG_ADMIN/super_admin 이 명시 선택한 institute_id (있을 때만)
+        if (selectedInstituteId) {
+          fd.append('institute_id', selectedInstituteId);
+        }
 
         const r = await fetch(`/api/exams/${examId}/student-responses`, {
           method: 'POST',
@@ -132,7 +147,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
         setUploadBusy(false);
       }
     },
-    [examId, fetchStudents]
+    [examId, fetchStudents, selectedInstituteId]
   );
 
   // ----------- 학생 삭제 (세션 삭제) -----------
@@ -187,6 +202,21 @@ export default function StudentsTab({ examId }: { examId: string }) {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+
+        {/* 활성 센터 표시 — 변경은 상단 TopNav 드롭다운에서 */}
+        {canSwitch && activeInstituteName && (
+          <div className="mb-4 flex items-center gap-2 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+            <span className="text-[12px] font-black text-amber-300 shrink-0">
+              ⚠ 등록 센터
+            </span>
+            <span className="text-[13px] font-bold text-amber-200">
+              {activeInstituteName}
+            </span>
+            <span className="text-[11px] text-zinc-500">
+              · 변경하려면 우측 상단 센터 드롭다운에서
+            </span>
+          </div>
+        )}
 
         <label
           onDragOver={(e) => {
