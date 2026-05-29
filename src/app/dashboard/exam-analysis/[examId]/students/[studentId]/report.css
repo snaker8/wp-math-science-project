@@ -46,6 +46,20 @@
   .student-report-no-print {
     display: none !important;
   }
+
+  /* dashboard layout(TopNav·main padding 등) 인쇄 시 모두 숨김 —
+     학생 리포트 페이지 mount 시 body.student-report-printing 클래스가 박힘 */
+  body.student-report-printing nav,
+  body.student-report-printing > div > div:not(:has(.student-report-root)) {
+    display: none !important;
+  }
+  body.student-report-printing main {
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+  body.student-report-printing main > div {
+    max-width: none !important;
+  }
   .student-report-root .a4-page {
     box-shadow: none;
     margin: 0;
