@@ -145,9 +145,8 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* ── Right: 센터 선택 + 트랙 토글 + 설정 + 사용자 ── */}
+        {/* ── Right: 트랙 토글 + 설정 + 사용자 ── */}
         <div className="flex items-center gap-2">
-          <InstituteSwitcher />
           {/* 트랙 토글 — flag true + 다중 트랙일 때만 노출, 그 외엔 null */}
           <TrackToggle />
           <Link
