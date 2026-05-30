@@ -724,6 +724,10 @@ export async function PUT(request: NextRequest) {
           console.warn(`[Upload PUT] ⚠ 문제 ${edited.number}번 problemNumber 매칭 실패 → 인덱스 ${i} 폴백 (server=${result.problemNumber})`);
         }
         if (result) {
+          // ★ #22 (2026-05-30): 사용자가 1차 OCR 화면에서 직접 수정한 문제 표시.
+          //   매칭된 result 참조에 직접 플래그 → saveProblemsToDB 의 비전 재교정이 사용자 수정을
+          //   덮어쓰는 회귀 차단. 번호 매칭 실패·인덱스 폴백과 무관하게 동작(같은 객체에 마킹).
+          if (edited.isEdited) (result as { __userEdited?: boolean }).__userEdited = true;
           if (edited.difficulty !== undefined) result.classification.difficulty = edited.difficulty as 1|2|3|4|5;
           if (edited.typeCode !== undefined) result.classification.typeCode = edited.typeCode;
           if (edited.cognitiveDomain !== undefined) result.classification.cognitiveDomain = edited.cognitiveDomain as 'CALCULATION'|'UNDERSTANDING'|'INFERENCE'|'PROBLEM_SOLVING';
@@ -1250,6 +1254,8 @@ async function saveEditedProblemsDirect(
     pageIndex?: number;
     // ★ figure 학습 데이터 — insertedImages 의 좌표만 (problem 크롭 0~1 기준)
     figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>;
+    // ★ 사용자가 1차 OCR 화면에서 직접 수정한 문제 (2026-05-30) — true 면 비전 재교정 스킵.
+    isEdited?: boolean;
   }>,
   bookGroupId: string | null,
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
@@ -1665,20 +1671,28 @@ async function saveEditedProblemsDirect(
 
       // ★ 비전 검증 + 자동 교정 (2026-05-27 단계 3 full 루프 Phase 1) — 원본 클론 자동화:
       //   원본 크롭 vs OCR 전체 본문 대조. 명확한 OCR 오인식만 자동 교정.
-      //   사용자 의도 = "분석 다르면 자동 수정 루프 완성". 사람 개입 0.
       //   비용: 자산화당 모든 문제 1 Flash 호출 (~$0.001). 25문항 ~$0.025/시험지.
-      //   Phase 2 (학습 누적 → 결정론적 룰 자동 승급) 는 INSERT 후 problemId 받은 시점에 추가 예정.
-      try {
-        const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(cropImageUrl, contentLatex);
-        if (!isMatch && correctedText) {
-          console.log(
-            `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
-            diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
-          );
-          contentLatex = correctedText;
+      //
+      // ★★ 사용자 수동 수정 보호 (2026-05-30) — isEdited=true 면 비전 재교정 스킵.
+      //   회귀 사고: 사용자가 1차 OCR 화면에서 ㉠·분수 등을 손으로 고쳐도, 자산화 시 이 비전
+      //   교정이 "원본 크롭 이미지" 기준으로 사용자 수정을 도로 덮어써서 "고쳐도 또 깨짐" 발생
+      //   (이미지엔 OCR 오인식 폰트가 그대로 보이므로). 사람이 고친 건 기계가 안 덮는다.
+      //   미수정(자동) 문제는 기존대로 자동 교정 유지.
+      if (edited.isEdited) {
+        console.log(`[Direct Save] 문제 ${edited.number}: 사용자 수정본 → 비전 재교정 스킵 (수정본 보존)`);
+      } else {
+        try {
+          const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(cropImageUrl, contentLatex);
+          if (!isMatch && correctedText) {
+            console.log(
+              `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
+              diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
+            );
+            contentLatex = correctedText;
+          }
+        } catch (e) {
+          console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
         }
-      } catch (e) {
-        console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
       }
 
 
@@ -2452,19 +2466,28 @@ async function saveProblemsToDB(
       }
 
       // ★ 비전 검증 + 자동 교정 (2026-05-27 단계 3 full 루프 Phase 1) — saveEditedProblemsDirect 와 동일.
-      try {
-        const _pNum = result.problemNumber || problemIndex;
-        const tmpCropUrl = imageUrlMap.get(_pNum);
-        const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(tmpCropUrl, contentWithMath);
-        if (!isMatch && correctedText) {
-          console.log(
-            `[DB] 문제 ${problemIndex}: 비전 교정 적용 (diff ${diffs.length}개)`,
-            diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
-          );
-          contentWithMath = correctedText;
+      //
+      // ★★ 사용자 수동 수정 보호 (#22, 2026-05-30) — result.__userEdited 면 비전 재교정 스킵.
+      //   PUT 오버라이드 루프(line ~726)에서 사용자 수정본은 result 에 __userEdited 플래그가 박힘.
+      //   saveEditedProblemsDirect(autoCrop 경로)와 동일 회귀를 OCR-results 경로에서도 차단
+      //   ("두 함수 동시 패치" — 한쪽만 막으면 results 채워진 경로로 사용자 수정이 또 덮어써짐).
+      if ((result as { __userEdited?: boolean }).__userEdited) {
+        console.log(`[DB] 문제 ${problemIndex}: 사용자 수정본 → 비전 재교정 스킵 (수정본 보존)`);
+      } else {
+        try {
+          const _pNum = result.problemNumber || problemIndex;
+          const tmpCropUrl = imageUrlMap.get(_pNum);
+          const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(tmpCropUrl, contentWithMath);
+          if (!isMatch && correctedText) {
+            console.log(
+              `[DB] 문제 ${problemIndex}: 비전 교정 적용 (diff ${diffs.length}개)`,
+              diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
+            );
+            contentWithMath = correctedText;
+          }
+        } catch (e) {
+          console.warn(`[DB] 문제 ${problemIndex}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
         }
-      } catch (e) {
-        console.warn(`[DB] 문제 ${problemIndex}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
       }
 
       // ★ 학습 규칙 자동 적용 (2026-05-19)
