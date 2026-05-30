@@ -19,12 +19,42 @@ export const maxDuration = 60;
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
+interface GenOptions {
+  length: 'short' | 'normal' | 'detailed';
+  tone: 'warm' | 'concise' | 'professional';
+  focus: string[]; // 'unit' | 'cognitive' | 'method' | 'nextexam'
+}
+
 interface AiCommentJson {
   strong: string;
   weak: string;
   method: string;
   generatedAt: string;
   model: string;
+  options?: GenOptions; // 생성 시 사용된 맞춤 설정 (없으면 기본값으로 생성됨)
+}
+
+const MAX_TOKENS_BY_LENGTH: Record<GenOptions['length'], number> = {
+  short: 800,
+  normal: 1500,
+  detailed: 2200,
+};
+
+function normalizeOptions(o?: {
+  length?: string;
+  tone?: string;
+  focus?: string[];
+}): GenOptions {
+  const length = (['short', 'normal', 'detailed'].includes(o?.length ?? '')
+    ? o!.length
+    : 'normal') as GenOptions['length'];
+  const tone = (['warm', 'concise', 'professional'].includes(o?.tone ?? '')
+    ? o!.tone
+    : 'warm') as GenOptions['tone'];
+  const focus = Array.isArray(o?.focus)
+    ? o!.focus.filter((f) => ['unit', 'cognitive', 'method', 'nextexam'].includes(f))
+    : [];
+  return { length, tone, focus };
 }
 
 interface UnitData {
@@ -79,7 +109,12 @@ export async function POST(
     );
   }
 
-  const { force } = (await req.json().catch(() => ({}))) as { force?: boolean };
+  const body = (await req.json().catch(() => ({}))) as {
+    force?: boolean;
+    options?: { length?: string; tone?: string; focus?: string[] };
+  };
+  const force = body.force;
+  const genOptions = normalizeOptions(body.options);
 
   // 1. 시험 접근 검증
   const { data: exam } = await supabaseAdmin
@@ -163,12 +198,13 @@ export async function POST(
     unitData,
     fineUnitStats: (report.fineUnitStats ?? []) as FineUnit[],
     cognitiveDomainStats: (report.cognitiveDomainStats ?? []) as CognitiveStat[],
+    options: genOptions,
   });
 
   // 7. Claude Sonnet 호출
   let aiResult: { strong: string; weak: string; method: string };
   try {
-    aiResult = await callSonnet(apiKey, prompt);
+    aiResult = await callSonnet(apiKey, prompt, MAX_TOKENS_BY_LENGTH[genOptions.length]);
   } catch (e) {
     return NextResponse.json(
       { error: 'AI 호출 실패', detail: e instanceof Error ? e.message : String(e) },
@@ -182,6 +218,7 @@ export async function POST(
     method: aiResult.method,
     generatedAt: new Date().toISOString(),
     model: ANTHROPIC_MODEL,
+    options: genOptions,
   };
 
   // 8. 캐시 저장
@@ -285,6 +322,7 @@ function buildPrompt(ctx: {
   unitData: UnitData[];
   fineUnitStats: FineUnit[];
   cognitiveDomainStats: CognitiveStat[];
+  options: GenOptions;
 }): string {
   const unitLines = ctx.unitData
     .map((u) => `  - ${u.name}: ${u.correct}/${u.total} (${u.pct}%)`)
@@ -308,6 +346,27 @@ function buildPrompt(ctx: {
       ? `반 ${ctx.classRank}등 / ${ctx.classSize}명 · 반 평균 ${ctx.classAvg ?? '-'}%`
       : '반 비교 데이터 없음';
 
+  // 맞춤 설정 → 프롬프트 지시문
+  const toneText = {
+    warm: '따뜻하고 친근한 어조로, 학부모가 안심하고 읽을 수 있게',
+    concise: '군더더기 없이 간결하고 명료한 어조로',
+    professional: '전문적이고 분석적인 어조로, 근거를 갖춰',
+  }[ctx.options.tone];
+  const lengthText = {
+    short: 'method 는 핵심만 2~3문장으로 짧게',
+    normal: 'method 는 3~5문장으로',
+    detailed: 'method 는 구체적으로 5~7문장으로',
+  }[ctx.options.length];
+  const focusMap: Record<string, string> = {
+    unit: '단원별 강·약점을 특히 구체적으로 짚을 것',
+    cognitive: '인지영역(계산·이해·추론·문제해결) 분석을 특히 강조할 것',
+    method: '실천 가능한 학습 방법·루틴을 특히 구체적으로 제시할 것',
+    nextexam: '다음 시험 대비 전략을 특히 강조할 것',
+  };
+  const focusText = ctx.options.focus.length
+    ? ctx.options.focus.map((f) => `  - ${focusMap[f] ?? f}`).join('\n')
+    : '  - (특별 강조 없음 — 균형 있게)';
+
   return `다음은 한 학생의 수학 시험 결과 데이터입니다. 학부모와 학생에게 전달할 맞춤형 학습 코멘트를 작성하세요.
 
 [학생/시험]
@@ -325,13 +384,19 @@ ${weakFine || '  - 전반적으로 양호 (80%+)'}
 [인지영역별 정답률 (계산/이해/추론/문제해결)]
 ${cogLines || '  - 데이터 없음'}
 
+[맞춤 설정 — 반드시 반영]
+- 어조: ${toneText}
+- 분량: ${lengthText}
+- 강조 포커스:
+${focusText}
+
 [작성 요구사항]
 1. 강점 단원/유형을 짚어 학생을 격려
 2. 보완할 단원/유형을 구체적으로 명시 (단원명 + 학습 방향)
 3. 인지영역별 약점이 있으면 어떤 훈련이 필요한지 (계산 약하면 연산 정확도, 이해 약하면 개념 정리, 추론 약하면 논리 단계, 문제해결 약하면 조건 해석 등)
 4. KICE 평가원 기준이 아닌, 이 학생 결과에 정확히 맞춤
-5. 학부모가 읽기 쉽게 따뜻하고 전문적인 어조
-6. method 항목에 학습 방법 3~5문장으로 구체 작성
+5. method 본문에는 별도의 제목/머리말(예: "학습 제안")을 넣지 말고 문장만 작성
+6. strong/weak 는 각각 한 줄로 간결하게
 
 다음 JSON 형식 그대로 응답 (다른 텍스트 X, 코드 블록 X):
 {
@@ -343,7 +408,8 @@ ${cogLines || '  - 데이터 없음'}
 
 async function callSonnet(
   apiKey: string,
-  prompt: string
+  prompt: string,
+  maxTokens = 1500
 ): Promise<{ strong: string; weak: string; method: string }> {
   const resp = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
@@ -354,7 +420,7 @@ async function callSonnet(
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       temperature: 0.4,
       messages: [{ role: 'user', content: prompt }],
     }),
