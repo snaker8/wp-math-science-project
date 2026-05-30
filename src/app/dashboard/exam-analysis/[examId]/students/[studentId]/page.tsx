@@ -121,6 +121,7 @@ interface ReportData {
   unitTrend?: UnitTrend | null;
   aiComment?: AiCommentJson | null;
   teacherComment?: TeacherCommentJson | null;
+  reportStyle?: 'legacy' | 'unified'; // 센터별 스타일 (unified=share/exam warm 톤)
   message?: string;
 }
 
@@ -882,7 +883,11 @@ export default function StudentReportPage() {
   // periodLabel/schoolBadge 는 위에서 useMemo 로 계산됨 (early return 이전, hooks 순서 안전)
 
   return (
-    <div className="student-report-root">
+    <div
+      className={`student-report-root ${
+        data.reportStyle === 'unified' ? 'report-theme-warm' : ''
+      }`}
+    >
       {/* 상단 액션 바 (인쇄 시 숨김) */}
       <div className="student-report-no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-[210mm] mx-auto px-4 py-3 flex items-center justify-between">

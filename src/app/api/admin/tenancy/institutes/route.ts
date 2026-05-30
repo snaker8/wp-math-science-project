@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   let q = supabaseAdmin
     .from('institutes')
-    .select('id, name, organization_id, created_at')
+    .select('id, name, organization_id, created_at, report_style')
     .order('created_at', { ascending: true });
 
   if (organizationId) {
@@ -106,4 +106,44 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ institute: data }, { status: 201 });
+}
+
+// PATCH — 센터 리포트 스타일 변경 (super_admin 만)
+//   body: { id, report_style: 'legacy' | 'unified' }
+export async function PATCH(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+  if (!scope.isSuperAdmin) {
+    return NextResponse.json({ error: 'Forbidden — super_admin only' }, { status: 403 });
+  }
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+  }
+
+  let body: { id?: string; report_style?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const id = body.id;
+  const reportStyle = body.report_style;
+  if (!id || (reportStyle !== 'legacy' && reportStyle !== 'unified')) {
+    return NextResponse.json(
+      { error: 'id 와 report_style(legacy|unified) 필수' },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabaseAdmin
+    .from('institutes')
+    .update({ report_style: reportStyle })
+    .eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }
