@@ -143,8 +143,11 @@ export async function getUserAccessScope(
   if (isSuperAdmin) {
     // 슈퍼관리자: 모든 institute (null sentinel)
     accessibleInstituteIds = null;
-  } else if (organizationId) {
-    // ORG_ADMIN: 자기 학원 산하 모든 institute
+  } else if (role === 'ORG_ADMIN' && organizationId) {
+    // ORG_ADMIN 만: 자기 학원 산하 모든 institute (여러 센터 통합 관리)
+    // ★ role 검사 필수 — 일반 강사/ADMIN 도 organization_id 가 박혀 있어,
+    //   role 안 보면 자기 학원 모든 센터로 전환·접근 가능해지는 격리 누수.
+    //   (TEACHER/ADMIN 은 아래 instituteId 분기로 자기 센터만)
     const { data: instRows, error: instErr } = await adminClient
       .from('institutes')
       .select('id')
@@ -159,7 +162,7 @@ export async function getUserAccessScope(
     }
     accessibleInstituteIds = ids;
   } else if (instituteId) {
-    // 일반 user: 자기 institute 만
+    // 일반 user (TEACHER/ADMIN 등): 자기 institute 만
     accessibleInstituteIds = [instituteId];
   } else {
     // 배정 안 된 신규 user: 접근 가능한 institute 0
