@@ -53,6 +53,7 @@ interface AnalyticsData {
     round_number: number; session_type: string;
     issued_at: string; completed_at: string | null;
     total: number; correct: number; pct: number | null;
+    report_student_id?: string | null;   // EX 세션이면 학생 리포트로 갈 roster id
   }>;
 }
 
@@ -526,13 +527,23 @@ export default function TutorAnalyticsPage() {
                           <span className="text-gray-400 ml-1">({s.correct}/{s.total})</span>
                         </td>
                         <td className="py-2 text-center">
-                          <Link
-                            href={`/grade/${s.id}`}
-                            target="_blank"
-                            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
-                          >
-                            <ExternalLink size={12} /> 채점
-                          </Link>
+                          {s.session_type === 'EX' && s.report_student_id && s.exam_id ? (
+                            <Link
+                              href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                            >
+                              <ExternalLink size={12} /> 리포트
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/grade/${s.id}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                            >
+                              <ExternalLink size={12} /> 채점
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     ))}

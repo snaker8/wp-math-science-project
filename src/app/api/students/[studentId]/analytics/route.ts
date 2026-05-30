@@ -31,6 +31,9 @@ interface NormalizedSession {
   round_number: number;
   date_iso: string;          // 발급/실시 시각 (정렬용)
   completed_at: string | null;
+  // EX(시험 채점) 세션의 리포트 링크용 diagnostics student_id(= roster id).
+  // print_sessions(QR/인쇄)에는 없음(undefined).
+  student_ref?: string;
 }
 
 interface NormalizedResult {
@@ -148,6 +151,59 @@ export async function GET(
         });
       }
     }
+
+    // 추가(2026-05-30): 이 정식 학생에 연결(promoted)된 roster 의 시험(EX) 데이터 합류.
+    //   채점 엑셀로 등록된 명단 학생을 기존 정식 학생과 연결(promoted_user_id)하면,
+    //   그 시험 채점 결과(diagnostics.sessions/items)도 정식 학생 분석에 보여야 함.
+    //   세션 student_id 는 roster id 그대로라 student_ref 에 담아 리포트 링크에 사용.
+    const { data: promotedRosters } = await sb
+      .from('roster_students')
+      .select('id')
+      .eq('promoted_user_id', studentId);
+    const rosterIds = (promotedRosters || []).map((r: { id: string }) => r.id);
+    if (rosterIds.length > 0) {
+      const { data: exSessRows } = await sb
+        .schema('diagnostics' as never)
+        .from('sessions')
+        .select('id, exam_id, session_type, round_no, conducted_at, student_id')
+        .in('student_id', rosterIds)
+        .order('conducted_at', { ascending: false });
+      const exSessions = (exSessRows || []) as Array<{
+        id: string; exam_id: string | null; session_type: string;
+        round_no: number | null; conducted_at: string | null; student_id: string;
+      }>;
+      for (const s of exSessions) {
+        sessionList.push({
+          id: s.id,
+          exam_id: s.exam_id ?? '',
+          session_type: s.session_type,
+          round_number: s.round_no ?? 1,
+          date_iso: s.conducted_at ?? '',
+          completed_at: s.conducted_at,
+          student_ref: s.student_id,   // roster id — 리포트 링크용
+        });
+      }
+      const exSessionIds = exSessions.map((s) => s.id);
+      if (exSessionIds.length > 0) {
+        const { data: exItems } = await sb
+          .schema('diagnostics' as never)
+          .from('items')
+          .select('session_id, is_correct, error_cause')
+          .in('session_id', exSessionIds);
+        const exDateMap = new Map<string, string>();
+        for (const s of exSessions) exDateMap.set(s.id, s.conducted_at ?? '');
+        for (const r of (exItems || []) as Array<{
+          session_id: string; is_correct: boolean; error_cause: string | null;
+        }>) {
+          allResults.push({
+            session_id: r.session_id,
+            is_correct: r.is_correct,
+            error_cause: r.error_cause,
+            occurred_at: exDateMap.get(r.session_id) ?? '',
+          });
+        }
+      }
+    }
   } else {
     // 자동등록 흐름 — diagnostics.sessions + items (session_type='EX')
     const { data: sessRows } = await sb
@@ -167,6 +223,7 @@ export async function GET(
         round_number: s.round_no ?? 1,
         date_iso: s.conducted_at ?? '',
         completed_at: s.conducted_at,
+        student_ref: studentId,   // roster id — 리포트 링크용
       });
     }
     const sessionIds = sessionList.map((s) => s.id);
@@ -291,22 +348,27 @@ export async function GET(
     console.warn('[students/analytics] pitfalls 집계 실패:', (e as Error).message);
   }
 
-  // 최근 세션 목록 (학생 카드)
-  const sessions = sessionList.slice(0, 20).map((s) => {
-    const r = sessionResultMap.get(s.id);
-    return {
-      id: s.id,
-      exam_id: s.exam_id,
-      exam_title: examMap.get(s.exam_id) || '',
-      round_number: s.round_number,
-      session_type: s.session_type,
-      issued_at: s.date_iso,
-      completed_at: s.completed_at,
-      total: r?.total ?? 0,
-      correct: r?.correct ?? 0,
-      pct: r && r.total > 0 ? Math.round((r.correct / r.total) * 1000) / 10 : null,
-    };
-  });
+  // 최근 세션 목록 (학생 카드) — print + EX 합쳐 최신순 20개
+  const sessions = [...sessionList]
+    .sort((a, b) => (b.date_iso || '').localeCompare(a.date_iso || ''))
+    .slice(0, 20)
+    .map((s) => {
+      const r = sessionResultMap.get(s.id);
+      return {
+        id: s.id,
+        exam_id: s.exam_id,
+        exam_title: examMap.get(s.exam_id) || '',
+        round_number: s.round_number,
+        session_type: s.session_type,
+        issued_at: s.date_iso,
+        completed_at: s.completed_at,
+        total: r?.total ?? 0,
+        correct: r?.correct ?? 0,
+        pct: r && r.total > 0 ? Math.round((r.correct / r.total) * 1000) / 10 : null,
+        // EX(시험 채점) 세션이면 학생 리포트로 직접 갈 roster id (그 외 null)
+        report_student_id: s.student_ref ?? null,
+      };
+    });
 
   return NextResponse.json({
     student: {
