@@ -112,6 +112,22 @@ export async function GET(
     }
   }
 
+  // 2-b. 센터별 리포트 스타일 — exam institute 우선, 없으면 학생 institute
+  //   legacy=기존 인디고(동부산 등), unified=share/exam warm 톤 통일
+  const styleInstituteId =
+    exam.institute_id ?? ((roster as { institute_id: string | null } | null)?.institute_id ?? null);
+  let reportStyle: 'legacy' | 'unified' = 'legacy';
+  if (styleInstituteId) {
+    const { data: inst } = await supabaseAdmin
+      .from('institutes')
+      .select('report_style')
+      .eq('id', styleInstituteId)
+      .maybeSingle();
+    if ((inst as { report_style?: string } | null)?.report_style === 'unified') {
+      reportStyle = 'unified';
+    }
+  }
+
   // 3. 세션 조회 (가장 최근 EX 세션)
   const { data: sessions } = await supabaseAdmin
     .schema('diagnostics')
@@ -139,6 +155,7 @@ export async function GET(
       totalPossible: 0,
       scorePct: 0,
       results: [],
+      reportStyle,
       message: '이 학생의 채점 기록이 없습니다.',
     });
   }
@@ -627,6 +644,7 @@ export async function GET(
     classSize,
     classAvg,
     unitTrend,
+    reportStyle,
     aiComment: session.ai_comment_json ?? null,
     teacherComment: session.teacher_comment_json ?? null,
   });

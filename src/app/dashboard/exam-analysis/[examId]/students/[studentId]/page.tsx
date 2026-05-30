@@ -121,6 +121,7 @@ interface ReportData {
   unitTrend?: UnitTrend | null;
   aiComment?: AiCommentJson | null;
   teacherComment?: TeacherCommentJson | null;
+  reportStyle?: 'legacy' | 'unified'; // 센터별 스타일 (unified=share/exam warm 톤)
   message?: string;
 }
 
@@ -600,6 +601,33 @@ export default function StudentReportPage() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // AI 맞춤 생성 설정 (팝오버) — 길이 / 어조 / 강조 포커스
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiLength, setAiLength] = useState<'short' | 'normal' | 'detailed'>('normal');
+  const [aiTone, setAiTone] = useState<'warm' | 'concise' | 'professional'>('warm');
+  const [aiFocus, setAiFocus] = useState<string[]>([]); // 'unit'|'cognitive'|'method'|'nextexam'
+
+  // 심화 분석(세부유형+인지영역, Page 3) 표시 토글 — 기본 끔, 선택 시에만 노출/인쇄
+  const [showDeepAnalysis, setShowDeepAnalysis] = useState(false);
+  useEffect(() => {
+    try {
+      setShowDeepAnalysis(localStorage.getItem('student-report.deepAnalysis') === '1');
+    } catch {
+      /* localStorage 비활성 환경 무시 */
+    }
+  }, []);
+  const toggleDeepAnalysis = () => {
+    setShowDeepAnalysis((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('student-report.deepAnalysis', next ? '1' : '0');
+      } catch {
+        /* 무시 */
+      }
+      return next;
+    });
+  };
+
   // 강사 코멘트 편집 상태
   const [teacherText, setTeacherText] = useState('');
   const [teacherSaving, setTeacherSaving] = useState(false);
@@ -668,13 +696,18 @@ export default function StudentReportPage() {
     if (!examId || !studentId || aiBusy) return;
     setAiBusy(true);
     setAiError(null);
+    setAiPanelOpen(false);
     try {
       const r = await fetch(
         `/api/exams/${examId}/students/${studentId}/report/ai-comment`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force }),
+          // 형식은 그대로 두고 본문 내용만 옵션에 맞춰 생성 (길이/어조/강조 포커스)
+          body: JSON.stringify({
+            force,
+            options: { length: aiLength, tone: aiTone, focus: aiFocus },
+          }),
         }
       );
       const d = await r.json();
@@ -682,13 +715,19 @@ export default function StudentReportPage() {
         setAiError(d.error || `HTTP ${r.status}`);
         return;
       }
-      // data 의 aiComment 만 갱신
+      // data 의 aiComment 만 갱신 — 점수/제목/레이아웃은 불변, 본문 텍스트만 교체
       setData((prev) => (prev ? { ...prev, aiComment: d.ai_comment } : prev));
     } catch (e) {
       setAiError(e instanceof Error ? e.message : String(e));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const toggleAiFocus = (key: string) => {
+    setAiFocus((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
   };
 
   const handleSaveTeacherComment = async () => {
@@ -844,7 +883,11 @@ export default function StudentReportPage() {
   // periodLabel/schoolBadge 는 위에서 useMemo 로 계산됨 (early return 이전, hooks 순서 안전)
 
   return (
-    <div className="student-report-root">
+    <div
+      className={`student-report-root ${
+        data.reportStyle === 'unified' ? 'report-theme-warm' : ''
+      }`}
+    >
       {/* 상단 액션 바 (인쇄 시 숨김) */}
       <div className="student-report-no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-[210mm] mx-auto px-4 py-3 flex items-center justify-between">
@@ -855,6 +898,17 @@ export default function StudentReportPage() {
             <ArrowLeft size={16} /> 시험 분석으로
           </button>
           <div className="flex items-center gap-2">
+            <button
+              onClick={toggleDeepAnalysis}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors border ${
+                showDeepAnalysis
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'
+              }`}
+              title="세부유형·인지영역 심화 분석 페이지 포함 여부 (데이터가 적으면 부정확할 수 있어 기본 꺼짐)"
+            >
+              <Layers size={16} /> 심화 분석 {showDeepAnalysis ? 'ON' : 'OFF'}
+            </button>
             <button
               onClick={() => window.print()}
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors"
@@ -996,24 +1050,113 @@ export default function StudentReportPage() {
                     </span>
                   )}
                 </h3>
-                <button
-                  type="button"
-                  className="student-report-no-print text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-white border border-indigo-200 hover:border-indigo-400 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
-                  onClick={() => handleGenerateAi(!!data.aiComment)}
-                  disabled={aiBusy}
-                  title={data.aiComment ? 'AI 코멘트 재생성' : 'AI 맞춤 코멘트 생성'}
-                >
-                  {aiBusy ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={12} />
+                <div className="student-report-no-print relative">
+                  <button
+                    type="button"
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-white border border-indigo-200 hover:border-indigo-400 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+                    onClick={() => setAiPanelOpen((v) => !v)}
+                    disabled={aiBusy}
+                    title="AI 맞춤 코멘트 생성 — 길이·어조·강조 설정"
+                  >
+                    {aiBusy ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={12} />
+                    )}
+                    {aiBusy
+                      ? '생성 중...'
+                      : data.aiComment
+                        ? 'AI 재생성'
+                        : 'AI 맞춤 생성'}
+                  </button>
+
+                  {aiPanelOpen && !aiBusy && (
+                    <div className="absolute right-0 top-full mt-1.5 z-50 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-3.5 text-left">
+                      <p className="text-[11px] font-black text-slate-700 mb-2">AI 맞춤 설정</p>
+
+                      {/* 길이 */}
+                      <div className="mb-2.5">
+                        <p className="text-[10px] font-bold text-slate-400 mb-1">길이</p>
+                        <div className="flex gap-1">
+                          {([['short', '요약'], ['normal', '보통'], ['detailed', '상세']] as const).map(
+                            ([v, label]) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => setAiLength(v)}
+                                className={`flex-1 text-[11px] font-bold py-1 rounded-md border ${
+                                  aiLength === v
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 어조 */}
+                      <div className="mb-2.5">
+                        <p className="text-[10px] font-bold text-slate-400 mb-1">어조</p>
+                        <div className="flex gap-1">
+                          {([['warm', '따뜻함'], ['concise', '간결'], ['professional', '전문']] as const).map(
+                            ([v, label]) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => setAiTone(v)}
+                                className={`flex-1 text-[11px] font-bold py-1 rounded-md border ${
+                                  aiTone === v
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 강조 포커스 (복수 선택) */}
+                      <div className="mb-3">
+                        <p className="text-[10px] font-bold text-slate-400 mb-1">강조 포커스 (복수)</p>
+                        <div className="grid grid-cols-2 gap-1">
+                          {([['unit', '단원'], ['cognitive', '인지영역'], ['method', '학습법'], ['nextexam', '다음 시험']] as const).map(
+                            ([v, label]) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => toggleAiFocus(v)}
+                                className={`text-[11px] font-bold py-1 rounded-md border ${
+                                  aiFocus.includes(v)
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateAi(true)}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-bold py-1.5 rounded-md flex items-center justify-center gap-1"
+                      >
+                        <Sparkles size={13} />{' '}
+                        {data.aiComment ? '이 설정으로 재생성' : '이 설정으로 생성'}
+                      </button>
+                      <p className="text-[10px] text-slate-400 mt-2 leading-snug">
+                        형식·점수는 그대로, 분석 본문만 설정에 맞춰 갱신됩니다.
+                      </p>
+                    </div>
                   )}
-                  {aiBusy
-                    ? '생성 중...'
-                    : data.aiComment
-                      ? 'AI 재생성'
-                      : 'AI 맞춤 생성'}
-                </button>
+                </div>
               </div>
 
               {(() => {
@@ -1059,8 +1202,7 @@ export default function StudentReportPage() {
                     </div>
                     <div className="text-[13.5px] text-slate-700 leading-relaxed font-medium bg-white p-4 rounded-xl border border-slate-100 shadow-sm whitespace-pre-wrap break-keep">
                       <span className="font-bold text-indigo-600 flex items-center gap-1 mb-2">
-                        <Lightbulb size={16} />{' '}
-                        {isAi ? 'AI 맞춤 학습 가이드' : '전문 학습 가이드'}
+                        <Lightbulb size={16} /> 전문 학습 가이드
                       </span>
                       {method}
                     </div>
@@ -1202,8 +1344,9 @@ export default function StudentReportPage() {
         {/* ============================================================== */}
         {/* Page 3 — 심화 분석 (세부유형 + 인지영역) */}
         {/* ============================================================== */}
-        {((data.fineUnitStats?.length ?? 0) > 0 ||
-          (data.cognitiveDomainStats?.length ?? 0) > 0) && (
+        {showDeepAnalysis &&
+          ((data.fineUnitStats?.length ?? 0) > 0 ||
+            (data.cognitiveDomainStats?.length ?? 0) > 0) && (
           <div className="a4-page bg-white flex flex-col print-page-auto">
             <div className="border-b-2 border-slate-200 pb-4 mb-6 flex items-center justify-between">
               <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2 tracking-tight">

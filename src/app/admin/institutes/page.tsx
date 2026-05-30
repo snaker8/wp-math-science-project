@@ -26,6 +26,7 @@ interface Institute {
   name: string;
   organization_id: string;
   memberCount: number;
+  report_style?: 'legacy' | 'unified';
 }
 
 export default function InstitutesAdminPage() {
@@ -106,6 +107,27 @@ export default function InstitutesAdminPage() {
       reload();
     } catch (e) { alert((e as Error).message); }
     finally { setInstBusy(false); }
+  };
+
+  // 센터별 리포트 스타일 변경 (legacy=기존 인디고 / unified=학부모공유 warm 톤)
+  const updateReportStyle = async (instId: string, style: 'legacy' | 'unified') => {
+    setInstitutes((prev) =>
+      prev.map((i) => (i.id === instId ? { ...i, report_style: style } : i))
+    );
+    try {
+      const res = await fetch('/api/admin/tenancy/institutes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: instId, report_style: style }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || '변경 실패');
+      }
+    } catch (e) {
+      alert((e as Error).message);
+      reload(); // 실패 시 서버 상태로 원복
+    }
   };
 
   if (permError) {
@@ -298,8 +320,33 @@ export default function InstitutesAdminPage() {
                         </div>
                         <div className="text-sm font-medium text-zinc-100">{inst.name}</div>
                       </div>
-                      <div className="text-xs text-zinc-500 flex items-center gap-1.5">
-                        <Users size={12} /> {inst.memberCount}명
+                      <div className="flex items-center gap-3">
+                        {/* 리포트 스타일 토글 */}
+                        <div className="flex items-center gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
+                          {(['legacy', 'unified'] as const).map((st) => (
+                            <button
+                              key={st}
+                              onClick={() => updateReportStyle(inst.id, st)}
+                              className={`text-[10px] font-bold px-2 py-1 rounded-md transition-colors ${
+                                (inst.report_style ?? 'legacy') === st
+                                  ? st === 'unified'
+                                    ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                  : 'text-zinc-500 hover:text-zinc-300'
+                              }`}
+                              title={
+                                st === 'unified'
+                                  ? '리포트를 학부모 공유 톤(warm)으로 통일'
+                                  : '기존 인디고 리포트 유지 (동부산 등)'
+                              }
+                            >
+                              {st === 'unified' ? '통일(warm)' : '기존'}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-xs text-zinc-500 flex items-center gap-1.5">
+                          <Users size={12} /> {inst.memberCount}명
+                        </div>
                       </div>
                     </div>
                   ))}
