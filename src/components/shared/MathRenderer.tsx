@@ -18,6 +18,23 @@ interface MathRendererProps {
 // ★ cases/array 안 행에서 분수·거듭제곱근 등 키 큰 수식 감지용 (모듈 스코프)
 const TALL_RE = /\\d?frac|\\dfrac|\\tfrac|\\sqrt|\\binom|\\overline|\\underline/;
 
+// ★ #23 (2026-05-30): cases(연립방정식) 안 분수 행 겹침 해결 — cases 만 대상(행렬 불변).
+//   KaTeX 는 cases 안 \frac 를 textstyle(작게) 로 렌더 → 이전엔 globals.css 의
+//   `.katex .mtable .mfrac{font-size:1.4em}` CSS 로 키웠지만, CSS 확대는 행을 절대위치
+//   (vlist)로 깔아 분모·분자가 겹쳤음(dev 렌더로 실증). \frac→\dfrac 로 바꾸면 KaTeX 가
+//   display 분수에 맞는 행간을 네이티브로 계산 → 겹침 0 + 분수 크게.
+//   ⚠ 2026-05-26 `\\[2pt]` 행간 주입 사고(inline 행렬식 렌더 깨짐)와 다름 — dfrac 은 표준
+//   명령이라 inline/block 모두 throwOnError 통과(검증 완료).
+//   ★ 범위 = cases 환경 안에서만. 행렬(pmatrix 등)·array·smallmatrix·첨자/단독 분수는
+//     미변환(보존). "행렬은 문제 없으니 건드리지 말 것" 사용자 지시 반영.
+//   globals.css 는 `.math-content .katex .mtable .col-align-l .mfrac{font-size:1em}` 로
+//   cases(왼쪽정렬=col-align-l) 확대만 무력화 → 행렬(col-align-c)은 1.4em 그대로 무손상.
+const CASES_ENV_RE = /\\begin\{cases\}([\s\S]*?)\\end\{cases\}/g;
+function dfracInCases(s: string): string {
+    return s.replace(CASES_ENV_RE, (_full, inner: string) =>
+        `\\begin{cases}${inner.replace(/\\frac(?![a-zA-Z])/g, '\\dfrac')}\\end{cases}`);
+}
+
 export function MathRenderer({ content, block = false, className }: MathRendererProps) {
     const html = useMemo(() => {
         try {
@@ -36,7 +53,8 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
             //   no-op 으로 변경 — DB 의 원본 LaTeX 그대로 KaTeX 호출.
             //   시각적으로 행간이 약간 좁아지지만 KaTeX 깨짐보다 훨씬 나음.
             const stretchArrays = (s: string): string => s;
-            const widened = stretchArrays(stripped);
+            // ★ #23: cases 안 \frac→\dfrac (행 겹침 해결, 위 dfracInCases 주석 참고). 행렬 불변.
+            const widened = dfracInCases(stretchArrays(stripped));
             const processedContent = block ? widened : `\\displaystyle ${widened}`;
 
             return katex.renderToString(processedContent, {
@@ -66,7 +84,8 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                     .replace(/^\s*\\displaystyle\s*/, '').trim();
                 if (!fallback) return '';
                 // ★ fallback 도 동일 — stretchArrays no-op (행 spacing 자동 추가 X, 2026-05-26)
-                const fallbackWidened = fallback;
+                //   #23: cases 안 \frac→\dfrac (행 겹침 해결) — 메인 경로와 동일. 행렬 불변.
+                const fallbackWidened = dfracInCases(fallback);
                 const fallbackContent = block ? fallbackWidened : `\\displaystyle ${fallbackWidened}`;
                 return katex.renderToString(fallbackContent, {
                     throwOnError: false,

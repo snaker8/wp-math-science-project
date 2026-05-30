@@ -149,9 +149,22 @@
 /* ★ cases/mtable 내부 분수만 — KaTeX 가 cases 안 분수를 textstyle (작게) 로 렌더해서
    가독성 떨어짐. mfrac 만 displaystyle 비슷한 크기로 키움.
    본문 텍스트 (x≠3, x=3 등) 는 그대로 → 분수만 크게.
-   1.2em 은 부족했다는 사용자 보고 → 1.4em 로 상향. */
+   1.2em 은 부족했다는 사용자 보고 → 1.4em 로 상향.
+   ※ 이 전역 확대는 dfrac 을 거치지 않는 경로(풀이박스 SolutionBoxRender, 인쇄/PDF,
+     수식 입력 모달·심볼 피커·에디터 등 직접 katex 호출)를 위해 유지. */
 .katex .mtable .mfrac {
   font-size: 1.4em;
+}
+/* ★ #23 (2026-05-30): MathRenderer 출력(.math-content) 안 "cases" 분수만 확대 무력화.
+   문제 카드 등 MathRenderer 경로의 cases 는 이제 \frac→\dfrac (MathRenderer.dfracInCases)로
+   KaTeX 가 display 분수를 네이티브 레이아웃 → 올바른 행간(겹침 0)으로 그림. 여기에 CSS
+   확대(1.4em)까지 겹치면 행이 절대위치라 다시 겹치므로 1em 으로 되돌림.
+   ★ 선택자를 `.col-align-l`(왼쪽정렬=cases·aligned 본문) 로 한정 → 행렬(pmatrix 등은
+     `.col-align-c` 가운데정렬)은 전혀 안 걸려 전역 1.4em 그대로 유지(무손상). dev 렌더로
+     행렬 .mfrac=1.4em / cases .mfrac=1em 수치 확인.
+   (dfrac 안 거치는 다른 경로·행렬은 위 1.4em 그대로 보존 — 영향 0.) */
+.math-content .katex .mtable .col-align-l .mfrac {
+  font-size: 1em;
 }
 .katex .base {
   vertical-align: baseline;
