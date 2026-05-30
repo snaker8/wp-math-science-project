@@ -41,6 +41,7 @@ interface UploadResultRow {
   gradedCount: number;
   ungraded: number;
   isNewRoster: boolean;
+  linkedUserId?: string | null;   // 기존 정식 학생(users)과 연결됐으면 그 user.id
   status: 'ok' | 'no_match' | 'error';
   message?: string;
 }
@@ -360,6 +361,16 @@ async function processStudent(args: {
     created_by: createdByUserId,
   });
 
+  // 1b. 기존 정식 학생(users)과 연결 — 채점으로 등록된 명단 학생이 이미 가입된
+  //     학생이면 한 사람으로 묶는다(promoted_user_id). 모호하면 연결 안 함.
+  //     연결되면 학습분석 드롭다운에서 중복 제거 + 정식 학생 분석에 EX 데이터 합류.
+  const linkedUserId = await linkRosterToExistingUser({
+    rosterId,
+    institute_id: teacherInstituteId,
+    full_name: student.name.trim(),
+    grade: student.grade,
+  });
+
   // 2. 같은 (exam_id, student_id, session_type='EX') 가 있으면 재사용 (재업로드 시 덮어쓰기)
   let sessionId: string;
   {
@@ -475,6 +486,7 @@ async function processStudent(args: {
     gradedCount,
     ungraded,
     isNewRoster: isNew,
+    linkedUserId,
     status: 'ok',
   };
 }
@@ -544,6 +556,85 @@ async function findOrCreateRoster(args: {
     throw new Error(`roster 생성 실패: ${insErr?.message ?? 'unknown'}`);
   }
   return { rosterId: created.id, isNew: true };
+}
+
+/**
+ * 채점으로 매칭/생성된 roster 학생을, 같은 학원의 기존 정식 학생(users)과
+ * 이름으로 연결한다(roster_students.promoted_user_id 채움).
+ *
+ * 목적: 정식 등록된 학생을 시험 채점으로 또 올려도 "다른 사람"으로 분리되지
+ *       않게 한다. 연결되면 /api/users/students 가 중복 제거하고(promoted dedup),
+ *       정식 학생 분석(/tutor/analytics)에 시험(EX) 데이터가 합류한다.
+ *
+ * 안전 가드:
+ *   - 이미 promoted_user_id 가 있으면 그대로 둠 (재연결 X).
+ *   - (institute, full_name) 후보가 정확히 1명일 때만 자동 연결.
+ *     동명이인이면 학년으로 좁혀 1명이 될 때만 연결, 그래도 모호하면 연결 안 함
+ *     — 엉뚱한 학생에게 채점 데이터가 붙는 사고 방지.
+ *   - session.student_id 는 roster.id 그대로 유지(호출부) → 채점·리포트 파이프라인
+ *     무변경. 이 함수는 "연결 관계만" 기록한다.
+ *   - users 이름 컬럼은 코드베이스상 full_name 이 표준 — full_name 기준 매칭.
+ *
+ * @returns 연결된 user.id, 연결 안 됐으면 null
+ */
+async function linkRosterToExistingUser(args: {
+  rosterId: string;
+  institute_id: string;
+  full_name: string;
+  grade?: number;
+}): Promise<string | null> {
+  if (!supabaseAdmin) return null;
+
+  // 이미 연결돼 있으면 skip
+  const { data: rosterRow } = await supabaseAdmin
+    .from('roster_students')
+    .select('promoted_user_id')
+    .eq('id', args.rosterId)
+    .maybeSingle();
+  if (rosterRow?.promoted_user_id) {
+    return rosterRow.promoted_user_id as string;
+  }
+
+  // 같은 학원의 정식 학생(users) 후보 — 이름 일치
+  const { data: candidates, error } = await supabaseAdmin
+    .from('users')
+    .select('id, grade')
+    .eq('role', 'STUDENT')
+    .is('deleted_at', null)
+    .eq('institute_id', args.institute_id)
+    .eq('full_name', args.full_name);
+
+  if (error || !candidates || candidates.length === 0) return null;
+
+  let matchedId: string | null = null;
+  if (candidates.length === 1) {
+    matchedId = (candidates[0] as { id: string }).id;
+  } else if (args.grade !== undefined) {
+    // 동명이인 — 학년으로 좁히기 (users.grade 가 숫자/숫자문자열일 때만 신뢰)
+    const byGrade = (candidates as Array<{ id: string; grade: unknown }>).filter((c) => {
+      const g = c.grade;
+      const gn =
+        typeof g === 'number'
+          ? g
+          : typeof g === 'string'
+            ? parseInt(g, 10)
+            : NaN;
+      return gn === args.grade;
+    });
+    if (byGrade.length === 1) matchedId = byGrade[0].id;
+  }
+
+  if (!matchedId) return null; // 모호 → 연결 안 함
+
+  const { error: updErr } = await supabaseAdmin
+    .from('roster_students')
+    .update({ promoted_user_id: matchedId, updated_at: new Date().toISOString() })
+    .eq('id', args.rosterId);
+  if (updErr) {
+    console.warn('[student-responses] roster→user 연결 실패:', updErr.message);
+    return null;
+  }
+  return matchedId;
 }
 
 /** problems.classifications.difficulty (1~10) → diagnostics.items.difficulty (1~5) */
