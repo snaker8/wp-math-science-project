@@ -2033,11 +2033,13 @@ function ExamPaperView({
         .exam-page .katex-display .mtable .col-align-r > .vlist-t > .vlist-r > .vlist > span {
           padding: 0.18em 0;
         }
-        /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화 */
+        /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화.
+           ★★ overflow-y: hidden 제거 (2026-05-31): 이게 cases 중괄호·분수 상하 잘림의 원인이었음
+           (하니스 측정: box 51 < content 56 → 5px 잘림). overflow:visible 로 박스가 내용에 맞게
+           커지게 함. 행간은 위 padding 0.18em 으로 확보. */
         .exam-page .katex-display {
           max-width: 100%;
-          overflow-x: auto;
-          overflow-y: hidden;
+          overflow: visible;
           margin: 0.5em 0;
         }
         .exam-page .katex-display > .katex {
@@ -2091,7 +2093,7 @@ function ExamPaperView({
           }
           #exam-print-root .katex-display {
             max-width: 100%;
-            overflow: hidden;
+            overflow: visible;   /* ★ hidden 제거 (2026-05-31) — 인쇄 시 cases/분수 상하 잘림 원인 */
             margin: 0.5em 0;
           }
           #exam-print-root .katex-display > .katex { max-width: 100%; }
@@ -2869,8 +2871,7 @@ function SolutionView({
         /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화 (시험지와 동일) */
         .solution-page .katex-display {
           max-width: 100%;
-          overflow-x: auto;
-          overflow-y: hidden;
+          overflow: visible;   /* ★ hidden 제거 (2026-05-31) — cases/분수 상하 잘림 원인 */
           margin: 0.5em 0;
         }
         /* 인라인 분수 위/아래 줄 침범 차단 — 시험지와 동일 */

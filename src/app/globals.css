@@ -155,11 +155,13 @@
 .katex .mtable .mfrac {
   font-size: 1.4em;
 }
-/* ★ #258 (2026-05-31): 시험지 출제/관리 화면(.exam-page)에서 cases(연립방정식)·분수가
-   위/아래로 잘리는 사고. cases·행렬 행은 KaTeX 가 절대위치(vlist)로 깔아서, 위 mfrac 1.4em
-   확대까지 겹치면 분자/분모가 윗행과 충돌해 잘림. cloud 페이지(styled-jsx)에만 있던 행간
-   보호 CSS 를 전역(.exam-page 한정)으로 끌어올려 exam-management 미리보기/인쇄에도 적용.
-   각 행에 padding 0.18em 으로 행간 확보 + 가로 긴 수식은 스크롤. .exam-page 밖 화면 영향 0. */
+/* ★ #258/#259 (2026-05-31): 시험지 출제/관리 화면(.exam-page)에서 cases(연립방정식)·분수가
+   위/아래로 잘리는 사고.
+   ★★ 원인 확정: `overflow-y: hidden` 이 잘림의 직접 원인. cases 의 중괄호·분수 분자/분모는
+   KaTeX line box 보다 위/아래로 약간 삐져나오는데 hidden 이 그걸 잘라냄(스크린샷 5x+4y=-7
+   상하 잘림). → overflow: visible 로 박스가 내용 높이에 맞게 커지게 함. 행 padding 0.18em 은
+   위/아래 행 충돌 완화용 유지. cloud 페이지(styled-jsx) 도 동일하게 visible 로 수정.
+   .exam-page 밖 화면 영향 0. */
 .exam-page .katex-display .mtable .col-align-l > .vlist-t > .vlist-r > .vlist > span,
 .exam-page .katex-display .mtable .col-align-c > .vlist-t > .vlist-r > .vlist > span,
 .exam-page .katex-display .mtable .col-align-r > .vlist-t > .vlist-r > .vlist > span {
@@ -167,8 +169,7 @@
 }
 .exam-page .katex-display {
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;   /* ★ hidden 금지 — cases/분수 상하 잘림 원인 */
   margin: 0.5em 0;
 }
 /* ★ #23 (2026-05-30): MathRenderer 출력(.math-content) 안 "cases" 분수만 확대 무력화.
