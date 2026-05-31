@@ -484,7 +484,7 @@ function ChoicesEditor({
   choiceLayout, onChoiceLayoutChange,
   isMultipleAnswer, onMultipleAnswerChange,
   choiceHeaders, onChoiceHeadersChange,
-  choiceImages, onClearChoiceImage,
+  choiceImages, onClearChoiceImage, onSetChoiceImage,
 }: {
   choices: string[];
   onChange: (choices: string[]) => void;
@@ -505,6 +505,9 @@ function ChoicesEditor({
   //   "이미지 후보" 픽커에서 채워지고, 빈 항목은 null. 텍스트와 동시 표시 가능.
   choiceImages: (string | null)[];
   onClearChoiceImage: (idx: number) => void;
+  // ★ 선택지별 이미지 설정 (2026-05-31) — 파일 업로드/붙여넣기. base64 dataUrl 로 저장
+  //   (1차 단계는 problemId 없어 Storage 미업로드 — 자산화 시 base64 → Storage 일괄 업로드).
+  onSetChoiceImage: (idx: number, base64: string) => void;
 }) {
   const circledNumbers = ['①', '②', '③', '④', '⑤'];
 
@@ -643,8 +646,10 @@ function ChoicesEditor({
                     onChange={(v) => handleChoiceChange(i, v)}
                     columnCount={columnCount}
                   />
-                  {/* ★ 그림 객관식: 선택지에 이미지가 있으면 인라인 썸네일 + 제거 버튼 */}
-                  {img && (
+                  {/* ★ 그림 객관식 (2026-05-31): 이미지 있으면 썸네일+제거, 없으면 파일/붙여넣기로 직접 삽입
+                      — 2차(ProblemEditModal) 와 동일하게 선택지마다 이미지 입력 가능. 1차는 problemId
+                      없어 base64 보관 → 자산화 시 Storage 일괄 업로드(기존 choiceImages 경로). */}
+                  {img ? (
                     <div className="ml-7 relative inline-block rounded border border-cyan-200 bg-cyan-50/30 p-1 self-start">
                       <img src={img} alt={`선택지 ${i + 1} 이미지`} className="max-h-16 max-w-full object-contain rounded" />
                       <button type="button"
@@ -653,6 +658,47 @@ function ChoicesEditor({
                         className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-800/70 text-white hover:bg-red-500 transition-colors flex items-center justify-center">
                         <X className="h-2.5 w-2.5" />
                       </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="ml-7 self-start"
+                      onPaste={(e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        for (const it of Array.from(items)) {
+                          if (it.type.startsWith('image/')) {
+                            const blob = it.getAsFile();
+                            if (blob) {
+                              e.preventDefault();
+                              const reader = new FileReader();
+                              reader.onload = () => onSetChoiceImage(i, String(reader.result));
+                              reader.readAsDataURL(blob);
+                              return;
+                            }
+                          }
+                        }
+                      }}
+                    >
+                      <label
+                        className="cursor-pointer text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-gray-300 text-gray-400 hover:text-emerald-600 hover:border-emerald-400 transition-colors"
+                        title="이미지 파일 선택 또는 여기에 붙여넣기(Ctrl+V)"
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              const reader = new FileReader();
+                              reader.onload = () => onSetChoiceImage(i, String(reader.result));
+                              reader.readAsDataURL(f);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                        + 이미지 (파일/붙여넣기)
+                      </label>
                     </div>
                   )}
                 </div>
@@ -1529,6 +1575,7 @@ export default function AnalyzeProblemEditModal({
                   onChoiceHeadersChange={setChoiceHeaders}
                   choiceImages={choiceImages}
                   onClearChoiceImage={handleClearChoiceImage}
+                  onSetChoiceImage={(idx, base64) => handleInsertFigureToChoice(base64, idx)}
                 />
 
                 {/* ★ Phase C-2c-2: 유형 분류 — 편집 가능 + 트리 picker */}
