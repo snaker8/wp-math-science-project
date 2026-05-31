@@ -12,9 +12,9 @@ import { Building2 } from 'lucide-react';
 
 export default function ActiveInstituteSwitcher() {
   const [activeId, setActiveId] = useState<string>('');
-  const [institutes, setInstitutes] = useState<{ id: string; name: string }[]>(
-    []
-  );
+  const [institutes, setInstitutes] = useState<
+    { id: string; name: string; organizationName?: string | null }[]
+  >([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -63,6 +63,10 @@ export default function ActiveInstituteSwitcher() {
     }
   };
 
+  // 여러 학원(organization)에 걸친 목록(super_admin)일 때만 학원명 함께 표기
+  const multiOrg =
+    new Set(institutes.map((i) => i.organizationName ?? '')).size > 1;
+
   return (
     <div className="hidden md:flex items-center gap-1.5 mr-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
       <Building2 className="h-3 w-3 text-amber-400 shrink-0" />
@@ -75,7 +79,7 @@ export default function ActiveInstituteSwitcher() {
       >
         {institutes.map((i) => (
           <option key={i.id} value={i.id} className="bg-zinc-900 text-white">
-            {i.name}
+            {multiOrg && i.organizationName ? `${i.name} · ${i.organizationName}` : i.name}
           </option>
         ))}
       </select>

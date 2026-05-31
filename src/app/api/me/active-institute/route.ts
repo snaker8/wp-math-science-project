@@ -42,22 +42,13 @@ async function fetchAccessibleInstitutes(
   let rows: InstituteRow[] = [];
 
   if (s.isSuperAdmin) {
-    // super_admin 이라도 자기 organization 산하만 기본 노출 (다른 학원 노이즈 제거)
-    // organization_id 없는 시스템 관리자만 모든 institute
-    if (s.organizationId) {
-      const { data } = await supabaseAdmin
-        .from('institutes')
-        .select(COLS)
-        .eq('organization_id', s.organizationId)
-        .order('name', { ascending: true });
-      rows = (data ?? []) as InstituteRow[];
-    } else {
-      const { data } = await supabaseAdmin
-        .from('institutes')
-        .select(COLS)
-        .order('name', { ascending: true });
-      rows = (data ?? []) as InstituteRow[];
-    }
+    // super_admin: 모든 학원(organization)의 모든 institute 노출 — 학원 간 전환 가능.
+    // (자기 organization 만 보이면 다른 학원 센터로 못 옮겨가는 문제 — 사용자 요구로 해제)
+    const { data } = await supabaseAdmin
+      .from('institutes')
+      .select(COLS)
+      .order('name', { ascending: true });
+    rows = (data ?? []) as InstituteRow[];
   } else {
     // ORG_ADMIN 또는 일반 user — accessibleInstituteIds 사용
     const ids = s.accessibleInstituteIds ?? [];
@@ -80,6 +71,21 @@ export async function GET() {
   const { scope } = authed.data;
 
   const list = await fetchAccessibleInstitutes(authed);
+
+  // 학원(organization) 이름 매핑 — super_admin 이 학원 간 이동 시 어느 학원 센터인지 구분
+  const orgIds = Array.from(
+    new Set(list.map((i) => i.organization_id).filter((v): v is string => !!v))
+  );
+  const orgNameById = new Map<string, string>();
+  if (orgIds.length > 0 && supabaseAdmin) {
+    const { data: orgs } = await supabaseAdmin
+      .from('organizations')
+      .select('id, name')
+      .in('id', orgIds);
+    for (const o of (orgs ?? []) as { id: string; name: string }[]) {
+      orgNameById.set(o.id, o.name);
+    }
+  }
 
   // 활성 ID 결정: 쿠키 우선 (권한 통과한 것만) → 본인 institute → 첫 항목
   const cookieVal = readActiveInstituteCookie();
@@ -105,6 +111,9 @@ export async function GET() {
       // 표시명 우선순위: display_name → name
       name: i.display_name ?? i.name,
       organizationId: i.organization_id,
+      organizationName: i.organization_id
+        ? (orgNameById.get(i.organization_id) ?? null)
+        : null,
     })),
     canSwitch: list.length > 1,
   });
