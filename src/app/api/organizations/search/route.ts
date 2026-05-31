@@ -34,9 +34,12 @@ export async function GET(request: NextRequest) {
 
   if (!rawQ) {
     // 빈 검색 — 전체 학원 목록 (최대 20개, 가입 폼 초기 노출용)
+    // ★ isolated_assets=true 인 비공개 학원(예: 엄궁차수학)은 공개 가입 검색에서 제외.
+    //   (null/false 만 노출 — IS NOT TRUE)
     const { data, error } = await sb
       .from('organizations')
       .select('id, name')
+      .not('isolated_assets', 'is', true)
       .order('name', { ascending: true })
       .limit(20);
 
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
     .from('organizations')
     .select('id, name')
     .ilike('name', `%${rawQ}%`)
+    .not('isolated_assets', 'is', true) // 비공개(격리) 학원은 가입 검색에서 제외
     .limit(100);
 
   if (error) {
