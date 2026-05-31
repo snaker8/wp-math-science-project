@@ -154,7 +154,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // public.users 동기화 — institute_id 는 tutor 기준
     const instituteId = tutorRow?.institute_id || cls.institute_id || null;
-    const { error: insertErr } = await supabaseAdmin.from('users').insert({
+    // ★ upsert(onConflict id) — auth.admin.createUser 시 handle_new_auth_user
+    //   트리거가 이미 public.users 행을 INSERT 함. 직접 .insert 면 users_pkey 충돌
+    //   ('duplicate key value violates unique constraint "users_pkey"' 사고).
+    //   트리거 행은 institute_id/grade/phone 이 비어 있으므로 ignoreDuplicates 대신
+    //   UPDATE(기본)로 올바른 값 덮어쓰기. (/api/students 와 동일 취지)
+    const { error: insertErr } = await supabaseAdmin.from('users').upsert({
       id: studentId,
       email,
       full_name: fullName,
@@ -162,7 +167,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       grade,
       role: 'STUDENT',
       institute_id: instituteId,
-    });
+    }, { onConflict: 'id' });
     if (insertErr) {
       // public.users 실패 → auth.users orphan 정리
       await supabaseAdmin.auth.admin.deleteUser(studentId).catch(() => {});
