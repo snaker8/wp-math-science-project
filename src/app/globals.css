@@ -172,6 +172,14 @@
   overflow: visible;   /* ★ hidden 금지 — cases/분수 상하 잘림 원인 */
   margin: 0.5em 0;
 }
+/* ★ cases/행렬 잘림 핵심 해결 (#259, 2026-05-31): .katex-display 박스가 cases 실제 높이보다
+   작아 내용이 위로 ~42px 솟구쳐 윗줄과 겹쳐 잘림(운영 화면 DOM 측정). padding-top 으로 솟음을
+   박스 안에 담음(측정: 42px→1px). :has(.mtable) 로 cases/행렬에만 → 일반 수식·카드뷰 영향 0.
+   :has 미지원 구형 브라우저는 무시되어 기존 동작 폴백(안 깨짐). */
+.exam-page .katex-display:has(.mtable) {
+  padding-top: 3em;
+  padding-bottom: 0.5em;
+}
 /* ★ #23 (2026-05-30): MathRenderer 출력(.math-content) 안 "cases" 분수만 확대 무력화.
    문제 카드 등 MathRenderer 경로의 cases 는 이제 \frac→\dfrac (MathRenderer.dfracInCases)로
    KaTeX 가 display 분수를 네이티브 레이아웃 → 올바른 행간(겹침 0)으로 그림. 여기에 CSS

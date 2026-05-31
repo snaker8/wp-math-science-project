@@ -2042,6 +2042,13 @@ function ExamPaperView({
           overflow: visible;
           margin: 0.5em 0;
         }
+        /* ★ cases/행렬 잘림 핵심 해결 (#259, 2026-05-31): .katex-display 박스가 cases 실제
+           높이보다 작아 내용이 위로 ~42px 솟구쳐 윗줄과 겹쳐 잘림(운영 DOM 측정 42px→1px).
+           :has(.mtable) 로 cases/행렬에만 → 일반 수식·카드뷰 영향 0. */
+        .exam-page .katex-display:has(.mtable) {
+          padding-top: 3em;
+          padding-bottom: 0.5em;
+        }
         .exam-page .katex-display > .katex {
           max-width: 100%;
         }
