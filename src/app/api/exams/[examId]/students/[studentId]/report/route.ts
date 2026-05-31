@@ -343,19 +343,27 @@ export async function GET(
 
     let status: 'O' | '△' | 'X' = 'X';
     let earned = 0;
-    // CSV 의 배점·점수가 있으면 우선 신뢰 (오르조 등 채점완료 CSV 시나리오)
-    // 없으면 시스템 problems.points 사용
+    // ★ 만점은 시스템 배점(exam_problems.points) 우선 (2026-05-31).
+    //   note 의 partial:earned/full 에서 "정/오 비율"만 취하고, 만점은 시스템 배점으로 환산.
+    //   매쓰플랫 CSV 배점이 1 로 깨져 저장된 기존 데이터(partial:1/1)도 재업로드 없이 정상화됨.
+    //   시스템 배점이 없으면(0/누락) note 의 CSV full 사용 → 무회귀(신곡중 2-1: 시스템 NULL).
     let effectiveFullScore = spec.fullScore;
 
     if (item) {
       if (item.note && item.note.startsWith('partial:')) {
         const m = item.note.match(/^partial:([0-9.]+)\/([0-9.]+)$/);
         if (m) {
-          earned = parseFloat(m[1]);
+          const noteEarned = parseFloat(m[1]);
           const csvFull = parseFloat(m[2]);
-          if (Number.isFinite(csvFull) && csvFull > 0) {
-            effectiveFullScore = csvFull;
-          }
+          const ratio = Number.isFinite(csvFull) && csvFull > 0 ? noteEarned / csvFull : 0;
+          // 시스템 배점 우선, 없으면 note 의 CSV full
+          effectiveFullScore =
+            spec.fullScore > 0
+              ? spec.fullScore
+              : Number.isFinite(csvFull) && csvFull > 0
+                ? csvFull
+                : spec.fullScore;
+          earned = Math.round(ratio * effectiveFullScore * 10) / 10;
           status =
             earned >= effectiveFullScore ? 'O' : earned > 0 ? '△' : 'X';
         }

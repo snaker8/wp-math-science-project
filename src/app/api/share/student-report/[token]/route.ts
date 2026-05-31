@@ -262,17 +262,25 @@ export async function GET(
 
     let status: 'O' | '△' | 'X' = 'X';
     let earned = 0;
+    // ★ 만점은 시스템 배점(exam_problems.points) 우선 (2026-05-31) — report/route.ts 와 동일.
+    //   note 의 정/오 비율만 취하고 만점은 시스템 배점으로 환산. 매쓰플랫 CSV 배점 1 깨짐 케이스
+    //   (partial:1/1) 도 재업로드 없이 정상화. 시스템 배점 없으면 CSV full 사용(무회귀).
     let effectiveFullScore = spec.fullScore;
 
     if (item) {
       if (item.note && item.note.startsWith('partial:')) {
         const m = item.note.match(/^partial:([0-9.]+)\/([0-9.]+)$/);
         if (m) {
-          earned = parseFloat(m[1]);
+          const noteEarned = parseFloat(m[1]);
           const csvFull = parseFloat(m[2]);
-          if (Number.isFinite(csvFull) && csvFull > 0) {
-            effectiveFullScore = csvFull;
-          }
+          const ratio = Number.isFinite(csvFull) && csvFull > 0 ? noteEarned / csvFull : 0;
+          effectiveFullScore =
+            spec.fullScore > 0
+              ? spec.fullScore
+              : Number.isFinite(csvFull) && csvFull > 0
+                ? csvFull
+                : spec.fullScore;
+          earned = Math.round(ratio * effectiveFullScore * 10) / 10;
           status =
             earned >= effectiveFullScore ? 'O' : earned > 0 ? '△' : 'X';
         }
