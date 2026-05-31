@@ -155,6 +155,31 @@
 .katex .mtable .mfrac {
   font-size: 1.4em;
 }
+/* ★ #258/#259 (2026-05-31): 시험지 출제/관리 화면(.exam-page)에서 cases(연립방정식)·분수가
+   위/아래로 잘리는 사고.
+   ★★ 원인 확정: `overflow-y: hidden` 이 잘림의 직접 원인. cases 의 중괄호·분수 분자/분모는
+   KaTeX line box 보다 위/아래로 약간 삐져나오는데 hidden 이 그걸 잘라냄(스크린샷 5x+4y=-7
+   상하 잘림). → overflow: visible 로 박스가 내용 높이에 맞게 커지게 함. 행 padding 0.18em 은
+   위/아래 행 충돌 완화용 유지. cloud 페이지(styled-jsx) 도 동일하게 visible 로 수정.
+   .exam-page 밖 화면 영향 0. */
+.exam-page .katex-display .mtable .col-align-l > .vlist-t > .vlist-r > .vlist > span,
+.exam-page .katex-display .mtable .col-align-c > .vlist-t > .vlist-r > .vlist > span,
+.exam-page .katex-display .mtable .col-align-r > .vlist-t > .vlist-r > .vlist > span {
+  padding: 0.18em 0;
+}
+.exam-page .katex-display {
+  max-width: 100%;
+  overflow: visible;   /* ★ hidden 금지 — cases/분수 상하 잘림 원인 */
+  margin: 0.5em 0;
+}
+/* ★ cases/행렬 잘림 핵심 해결 (#259, 2026-05-31): .katex-display 박스가 cases 실제 높이보다
+   작아 내용이 위로 ~42px 솟구쳐 윗줄과 겹쳐 잘림(운영 화면 DOM 측정). padding-top 으로 솟음을
+   박스 안에 담음(측정: 42px→1px). :has(.mtable) 로 cases/행렬에만 → 일반 수식·카드뷰 영향 0.
+   :has 미지원 구형 브라우저는 무시되어 기존 동작 폴백(안 깨짐). */
+.exam-page .katex-display:has(.mtable) {
+  padding-top: 3em;
+  padding-bottom: 0.5em;
+}
 /* ★ #23 (2026-05-30): MathRenderer 출력(.math-content) 안 "cases" 분수만 확대 무력화.
    문제 카드 등 MathRenderer 경로의 cases 는 이제 \frac→\dfrac (MathRenderer.dfracInCases)로
    KaTeX 가 display 분수를 네이티브 레이아웃 → 올바른 행간(겹침 0)으로 그림. 여기에 CSS
