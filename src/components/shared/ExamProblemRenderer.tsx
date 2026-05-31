@@ -21,6 +21,8 @@ export interface ExamRenderProblem {
   choiceHeaders?: string[];
   /** ★ 저장된 선택지 레이아웃 (1=1열, 2=2열, 5=가로) */
   choiceLayout?: number;
+  /** ★ 그림 객관식 — 선택지별 이미지 URL (index 0~4 = ①~⑤, null=텍스트 보기) */
+  choiceImages?: (string | null)[];
   figureData?: InterpretedFigure;
   figureSvg?: string;
   upscaledCropUrl?: string;
@@ -214,8 +216,14 @@ function ExamProblemRendererInner({
       content: cleanChoiceText(
         c.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\s*\d+\s*\)\s*/, '')
       ),
+      // ★ 그림 객관식 보기 이미지 (index 0~4 = ①~⑤). Storage URL 은 proxyUrl 로 변환.
+      imgUrl: (problem.choiceImages?.[ci] || null),
     }));
     const maxLen = Math.max(...items.map(c => c.content.replace(/\$[^$]*\$/g, 'XX').replace(/\\[a-z]+/gi, '').length + 2));
+
+    // ★ 그림 객관식 — 보기에 이미지가 하나라도 있으면 inline(가로) 회피하고 그리드/세로로.
+    //   이미지 보기는 텍스트가 비어 "(문제 내용 없음)" 으로 떨어지던 사고 → <img> 로 렌더.
+    const hasChoiceImage = items.some((it) => !!it.imgUrl);
 
     // ★ 저장된 choiceLayout 우선 적용 (1=1열, 2=2열, 3=3열, 5=가로)
     const savedLayout = problem.choiceLayout;
@@ -229,6 +237,28 @@ function ExamProblemRendererInner({
       if (maxLen <= 12) isInline = true;
       else if (maxLen <= 30) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2';
     }
+    // ★ 그림 객관식이면 inline 강제 해제 + 2열 그리드 기본 (그래프 보기는 폭이 커서 가로 부적합).
+    if (hasChoiceImage) {
+      isInline = false;
+      if (!savedLayout || savedLayout === 5) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2';
+    }
+
+    // ★ 보기 1개 렌더 — 이미지 있으면 <img>(+캡션), 없으면 텍스트.
+    const renderChoiceBody = (it: { content: string; imgUrl: string | null }) =>
+      it.imgUrl ? (
+        <div className="flex flex-col gap-0.5">
+          <img
+            src={proxyUrl(it.imgUrl)}
+            alt="보기"
+            className="max-w-full h-auto rounded border border-gray-200"
+            style={{ maxHeight: '170px' }}
+            loading="lazy"
+          />
+          {it.content && <MixedContentRenderer content={it.content} className="text-gray-700" />}
+        </div>
+      ) : (
+        <MixedContentRenderer content={it.content} className="text-gray-700" />
+      );
 
     if (isInline) {
       return (
@@ -236,7 +266,7 @@ function ExamProblemRendererInner({
           {items.map((it, ci) => (
             <div key={ci} className="flex items-center gap-2 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
-              <MixedContentRenderer content={it.content} className="text-gray-700" />
+              {renderChoiceBody(it)}
             </div>
           ))}
         </div>
@@ -247,7 +277,7 @@ function ExamProblemRendererInner({
         {items.map((it, ci) => (
           <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
             <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
-            <MixedContentRenderer content={it.content} className="text-gray-700" />
+            {renderChoiceBody(it)}
           </div>
         ))}
       </div>
