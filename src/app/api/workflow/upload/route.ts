@@ -19,7 +19,7 @@ import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
 import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
-import { verifyAndRepairWithVision, persistVisionDiffsForLearning } from '@/lib/ocr/vision-verifier';
+import { verifyAndRepairWithVision, persistVisionDiffsForLearning, applyVisionDiffs } from '@/lib/ocr/vision-verifier';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
@@ -1715,7 +1715,10 @@ async function saveEditedProblemsDirect(
               `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
               diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
             );
-            contentLatex = correctedText;
+            // ★ diff 만 적용 (2026-05-31) — correctedText(전체본) 통째 교체 금지. 모델이 짚은
+            //   from→to 토큰만 치환해 잘된 분석이 안 깨지게. (correctedText 는 변경 유무 신호로만 사용)
+            const { result: _diffApplied, appliedCount: _ac } = applyVisionDiffs(contentLatex, diffs);
+            if (_ac > 0) contentLatex = _diffApplied;
           }
         } catch (e) {
           console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
@@ -2497,7 +2500,9 @@ async function saveProblemsToDB(
               `[DB] 문제 ${problemIndex}: 비전 교정 적용 (diff ${diffs.length}개)`,
               diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
             );
-            contentWithMath = correctedText;
+            // ★ diff 만 적용 (2026-05-31) — saveEditedProblemsDirect 와 동일. 전체본 교체 금지.
+            const { result: _diffApplied2, appliedCount: _ac2 } = applyVisionDiffs(contentWithMath, diffs);
+            if (_ac2 > 0) contentWithMath = _diffApplied2;
           }
         } catch (e) {
           console.warn(`[DB] 문제 ${problemIndex}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
