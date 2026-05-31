@@ -241,19 +241,11 @@ function parseVerticalSingleStudent(
       /서술형|논술|풀이/.test(rawAnswer) || /필기|참조|사진/.test(rawStudent);
 
     if (isEssay) {
-      // 서술형: '점수' 컬럼이 진실 (이미 채점된 부분점수).
-      // ★ 점수 셀 라벨 = 출처 (2026-05-31): 매쓰플랫 export 는 "3학생"(학생 자가채점) /
-      //   "0선생님"(선생님 채점) 처럼 숫자 뒤에 출처를 붙임. "선생님" 점수는 학생 자가채점보다
-      //   우선하는 확정 점수다 (예: "0선생님" = 선생님이 0점 처리 → 학생이 맞다 해도 0점).
-      //   현재 export 는 한 칸에 출처 하나라 csvEarnedNum(숫자만 추출)으로 값은 맞지만,
-      //   향후 "3학생/0선생님" 동시 표기 대비 선생님 숫자를 우선 채택한다.
-      const teacherMatch = rawScore.match(/(-?\d+(?:\.\d+)?)\s*선생/);
-      const teacherScore = teacherMatch ? parseFloat(teacherMatch[1]) : NaN;
-      const essayEarned = Number.isFinite(teacherScore) ? teacherScore : csvEarnedNum;
-      if (Number.isFinite(essayEarned) && hasFull) {
+      // 서술형: '점수' 컬럼이 진실 (이미 채점된 부분점수)
+      if (Number.isFinite(csvEarnedNum) && hasFull) {
         responses[qNum] = {
           kind: 'partial',
-          earned: essayEarned,
+          earned: csvEarnedNum,
           studentFull: csvFull,
         };
       } else {
