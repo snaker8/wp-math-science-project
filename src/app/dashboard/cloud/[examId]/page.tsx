@@ -2096,6 +2096,11 @@ function ExamPaperView({
             overflow: visible;   /* ★ hidden 제거 (2026-05-31) — 인쇄 시 cases/분수 상하 잘림 원인 */
             margin: 0.5em 0;
           }
+          /* ★ cases/행렬 솟음 → 박스 안에 담기 (#259, 인쇄도 동일) */
+          #exam-print-root .katex-display:has(.mtable) {
+            padding-top: 3em;
+            padding-bottom: 0.5em;
+          }
           #exam-print-root .katex-display > .katex { max-width: 100%; }
           #exam-print-root table { max-width: 100%; table-layout: auto; }
           #exam-print-root img { max-width: 100%; height: auto; }
@@ -2873,6 +2878,11 @@ function SolutionView({
           max-width: 100%;
           overflow: visible;   /* ★ hidden 제거 (2026-05-31) — cases/분수 상하 잘림 원인 */
           margin: 0.5em 0;
+        }
+        /* ★ cases/행렬 솟음 → 박스 안에 담기 (#259, 시험지와 동일) */
+        .solution-page .katex-display:has(.mtable) {
+          padding-top: 3em;
+          padding-bottom: 0.5em;
         }
         /* 인라인 분수 위/아래 줄 침범 차단 — 시험지와 동일 */
         .solution-page .katex {
