@@ -474,34 +474,29 @@ export function gradeResponse(
     return { seq, fullScore, earnedScore: 0, status: 'X', isCorrect: false };
   }
 
-  // 3. 부분점수 (CSV 의 배점·점수 정보를 신뢰 — 시스템 배점으로 환산하지 않음)
-  //    오르조 CSV 처럼 채점 완료된 파일은 "배점 / 점수" 컬럼이 진실.
-  //    시스템 problems.points 와 다르더라도 CSV 가 정답.
+  // 3. 부분점수 — ★ 만점은 시스템 배점(exam_problems.points) 우선 (2026-05-31).
+  //    CSV 의 "정/오 비율"(csvEarned/csvFull)만 신뢰하고, 만점은 시스템 배점으로 환산한다.
+  //    이유: 매쓰플랫 export CSV 의 '배점' 컬럼이 전 문항 "1" 로 깨져 오는 케이스가 있어
+  //    (신곡중 2-2 등) CSV full 을 그대로 쓰면 "18점=18개" 가 됨. 문항 배점은
+  //    exam_problems 에 이미 정확히 있으므로(3·4·5··· 점) 그걸 만점으로 써야 한다.
+  //    - 시스템 배점(spec.fullScore) 이 있으면(>0) 그것을 만점으로, 비율 적용해 earned 환산.
+  //    - 시스템 배점이 없으면(0/누락) 기존처럼 CSV full 사용 → 무회귀(신곡중 2-1: 시스템 NULL).
   if (response.kind === 'partial') {
     const csvFull = response.studentFull;
     const csvEarned = response.earned;
-    if (csvFull <= 0) {
-      return { seq, fullScore: csvFull, earnedScore: 0, status: 'X', isCorrect: false };
+    const ratio = csvFull > 0 ? csvEarned / csvFull : 0;            // CSV 의 정/오 비율 (0~1)
+    const effFull = fullScore > 0 ? fullScore : csvFull;           // 시스템 배점 우선, 없으면 CSV
+    if (effFull <= 0) {
+      return { seq, fullScore: 0, earnedScore: 0, status: 'X', isCorrect: false };
     }
-    if (csvEarned >= csvFull) {
-      return {
-        seq,
-        fullScore: csvFull,
-        earnedScore: csvFull,
-        status: 'O',
-        isCorrect: true,
-      };
+    const earned = Math.round(ratio * effFull * 10) / 10;
+    if (earned >= effFull) {
+      return { seq, fullScore: effFull, earnedScore: effFull, status: 'O', isCorrect: true };
     }
-    if (csvEarned > 0) {
-      return {
-        seq,
-        fullScore: csvFull,
-        earnedScore: Math.round(csvEarned * 10) / 10,
-        status: '△',
-        isCorrect: true,
-      };
+    if (earned > 0) {
+      return { seq, fullScore: effFull, earnedScore: earned, status: '△', isCorrect: true };
     }
-    return { seq, fullScore: csvFull, earnedScore: 0, status: 'X', isCorrect: false };
+    return { seq, fullScore: effFull, earnedScore: 0, status: 'X', isCorrect: false };
   }
 
   // 4. 단일 숫자 — 만점 정보 없이 학생이 받은 점수만 적혀있는 경우
