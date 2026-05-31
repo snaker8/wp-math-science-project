@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
+import { phoneToStudentEmail, STUDENT_INITIAL_PASSWORD } from '@/lib/students/phone-id';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface RouteParams {
@@ -108,25 +109,54 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: '반 정원이 가득 찼습니다' }, { status: 400 });
   }
 
-  // 4) 학생 user 찾기 또는 새로 발급
-  const email = providedEmail || generateLocalEmail();
-  const password = providedPassword || generatePassword();
-  const emailGenerated = !providedEmail;
+  // 4) 자격 증명 — 학생 ID = 전화번호 (있으면). (/api/students 와 동일 규칙)
+  //   providedEmail 명시: 그대로 / phone 명시: phoneToStudentEmail / 둘 다 없음: 랜덤
+  let email: string;
+  let emailGenerated = false;
+  if (providedEmail) {
+    email = providedEmail;
+  } else if (phone) {
+    const phoneEmail = phoneToStudentEmail(phone);
+    if (!phoneEmail) {
+      return NextResponse.json(
+        { error: '전화번호 형식이 올바르지 않습니다 (예: 010-1234-5678)' },
+        { status: 400 },
+      );
+    }
+    email = phoneEmail;
+    emailGenerated = true;
+  } else {
+    email = generateLocalEmail();
+    emailGenerated = true;
+  }
+  // 전화번호 기반 학생은 초기 비번 '123456' (강사가 전달, 학생이 로그인 후 변경)
+  const password =
+    providedPassword || (phone && !providedEmail ? STUDENT_INITIAL_PASSWORD : generatePassword());
   const passwordGenerated = !providedPassword;
 
   let studentId: string | null = null;
   let createdNew = false;
 
-  // 4a) 이메일 입력했는데 이미 user 존재하는지 확인 (재등록 시나리오)
-  if (providedEmail) {
+  // 4a) 같은 ID(전화/이메일)로 이미 등록된 학생인지 확인 — 있으면 재사용 (중복/재등록 차단)
+  //   ★ providedEmail 뿐 아니라 전화 기반 email 도 검사 — 같은 전화 재등록 시
+  //     createUser 'already registered' 사고 방지. (/api/students 와 동일)
+  {
     const { data: existing } = await supabaseAdmin
       .from('users')
       .select('id, role')
-      .eq('email', providedEmail)
+      .eq('email', email)
       .maybeSingle();
     if (existing) {
       if (existing.role !== 'STUDENT') {
-        return NextResponse.json({ error: '해당 이메일은 학생 계정이 아닙니다' }, { status: 400 });
+        return NextResponse.json(
+          {
+            error:
+              phone && !providedEmail
+                ? '해당 전화번호는 이미 다른 역할(강사·관리자) 계정입니다'
+                : '해당 이메일은 학생 계정이 아닙니다',
+          },
+          { status: 400 },
+        );
       }
       studentId = existing.id;
     }
