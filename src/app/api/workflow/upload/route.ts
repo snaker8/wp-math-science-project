@@ -1234,6 +1234,46 @@ async function triggerAutoSolutionGeneration(examId: string, origin: string): Pr
  * AutoCrop 모드: editedProblems 기반으로 직접 DB에 저장
  * jobResults에 결과가 없는 경우 (수동 분석 모드)
  */
+/**
+ * 자산화 시 업로더 organization 의 격리 모드(isolated_assets) 여부.
+ *
+ * 기존엔 중첩 embed(institutes!inner(organizations!inner(...)))로 조회했는데
+ * 파싱이 취약해 누락되던 사고(2026-05-31: 엄궁차수학 업로드 25건이 공통풀로 유출).
+ * → 순차 admin 쿼리(users.organization_id → institute → organizations.isolated_assets)
+ *   로 견고화. organization_id 우선, 없으면 institute 로 역추적.
+ */
+async function isOrgIsolatedAssets(createdBy: string | null): Promise<boolean> {
+  if (!createdBy || !supabaseAdmin) return false;
+  try {
+    const { data: u } = await supabaseAdmin
+      .from('users')
+      .select('institute_id, organization_id')
+      .eq('id', createdBy)
+      .maybeSingle();
+    if (!u) return false;
+    let orgId = (u as { organization_id?: string | null }).organization_id ?? null;
+    const instId = (u as { institute_id?: string | null }).institute_id ?? null;
+    if (!orgId && instId) {
+      const { data: inst } = await supabaseAdmin
+        .from('institutes')
+        .select('organization_id')
+        .eq('id', instId)
+        .maybeSingle();
+      orgId = (inst as { organization_id?: string | null } | null)?.organization_id ?? null;
+    }
+    if (!orgId) return false;
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('isolated_assets')
+      .eq('id', orgId)
+      .maybeSingle();
+    return (org as { isolated_assets?: boolean } | null)?.isolated_assets === true;
+  } catch (e) {
+    console.warn('[isolation] organization isolated_assets 조회 실패:', (e as Error).message);
+    return false;
+  }
+}
+
 async function saveEditedProblemsDirect(
   jobId: string,
   job: UploadJob,
@@ -1352,22 +1392,9 @@ async function saveEditedProblemsDirect(
   //   예: 엄궁차수학(isolated_assets=true) → 자산화 problems 가 다른 학원에 안 보임.
   //   사용자 지시 (2026-05-16): "엄궁차수학에서 만들거나 올리는 데이터는 다른
   //   학원에서 조회 되지 않게".
-  let isolatedByOrg = false;
-  if (createdBy) {
-    try {
-      const { data: userOrgRow } = await supabase
-        .from('users')
-        .select('institute_id, institutes!inner(organization_id, organizations!inner(isolated_assets))')
-        .eq('id', createdBy)
-        .maybeSingle();
-      const orgRow = (userOrgRow as { institutes?: { organizations?: { isolated_assets?: boolean } } } | null)?.institutes?.organizations;
-      isolatedByOrg = orgRow?.isolated_assets === true;
-      if (isolatedByOrg) {
-        console.log('[Direct Save] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
-      }
-    } catch (e) {
-      console.warn('[Direct Save] organization isolated_assets 조회 실패 (기본 동작 진행):', (e as Error).message);
-    }
+  const isolatedByOrg = await isOrgIsolatedAssets(createdBy);
+  if (isolatedByOrg) {
+    console.log('[Direct Save] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
   }
 
   let instituteId: string | null;
@@ -2144,22 +2171,9 @@ async function saveProblemsToDB(
   // ★ 학원 단위 격리 우선 (organizations.isolated_assets=true)
   //   사용자 organization 이 격리 모드면 env 무시하고 institute_id 박음.
   //   예: 엄궁차수학(isolated_assets=true) → 자산화 problems 다른 학원 차단.
-  let isolatedByOrg = false;
-  if (createdBy) {
-    try {
-      const { data: userOrgRow } = await supabase
-        .from('users')
-        .select('institute_id, institutes!inner(organization_id, organizations!inner(isolated_assets))')
-        .eq('id', createdBy)
-        .maybeSingle();
-      const orgRow = (userOrgRow as { institutes?: { organizations?: { isolated_assets?: boolean } } } | null)?.institutes?.organizations;
-      isolatedByOrg = orgRow?.isolated_assets === true;
-      if (isolatedByOrg) {
-        console.log('[DB] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
-      }
-    } catch (e) {
-      console.warn('[DB] organization isolated_assets 조회 실패 (기본 동작 진행):', (e as Error).message);
-    }
+  const isolatedByOrg = await isOrgIsolatedAssets(createdBy);
+  if (isolatedByOrg) {
+    console.log('[DB] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
   }
 
   let instituteId: string | null;
