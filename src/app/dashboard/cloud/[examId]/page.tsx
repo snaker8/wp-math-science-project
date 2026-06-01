@@ -2042,10 +2042,11 @@ function ExamPaperView({
           overflow: visible;
           margin: 0.5em 0;
         }
-        /* ★ cases/행렬 잘림 핵심 해결 (#259, 2026-05-31): .katex-display 박스가 cases 실제
-           높이보다 작아 내용이 위로 ~42px 솟구쳐 윗줄과 겹쳐 잘림(운영 DOM 측정 42px→1px).
-           :has(.mtable) 로 cases/행렬에만 → 일반 수식·카드뷰 영향 0. */
-        .exam-page .katex-display:has(.mtable) {
+        /* ★ #259 의 cases padding-top:3em 을 cases 에서 제거 (2026-06-02, 브라우저 실측).
+           cases(col-align-l)는 dfracInCases + neutralizer 로 제 높이로 그려져 안 솟음
+           (실측: 분수 포함 cases 11개 전부 솟음 0) → 3em(+42px/개) 불필요·헛 패딩이라 제거.
+           단 행렬(col-align-c)은 1.4em 확대가 남아 솟을 수 있어 3em 보존(행렬 불변). */
+        .exam-page .katex-display:has(.col-align-c) {
           padding-top: 3em;
           padding-bottom: 0.5em;
         }
@@ -2103,8 +2104,8 @@ function ExamPaperView({
             overflow: visible;   /* ★ hidden 제거 (2026-05-31) — 인쇄 시 cases/분수 상하 잘림 원인 */
             margin: 0.5em 0;
           }
-          /* ★ cases/행렬 솟음 → 박스 안에 담기 (#259, 인쇄도 동일) */
-          #exam-print-root .katex-display:has(.mtable) {
+          /* ★ #259 cases 3em 제거 (인쇄도 화면과 동일). 행렬(col-align-c)만 3em 보존. */
+          #exam-print-root .katex-display:has(.col-align-c) {
             padding-top: 3em;
             padding-bottom: 0.5em;
           }
