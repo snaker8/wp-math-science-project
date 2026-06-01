@@ -318,10 +318,16 @@ function ExamProblemRendererInner({
         firstNewlineIdx = i;
       }
     }
-    // ★ '?' 없으면 첫 줄 끝(\n 직전)에 배지 — "…구하시오." 뒤 보기/서답형(15번 류)에서
-    //   배지가 보기 박스 아래로 떨어지던 사고 차단. ProblemCardView.splitAtQuestion 과 동일 순서.
-    if (firstNewlineIdx >= 0) {
-      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+    // ★ '?' 없을 때 — 첫 줄이 "질문 지시어(~시오/~하라 등)"로 끝나는 경우에만 첫 \n 직전에 배지.
+    //   (15번류: "…구하시오.\n<보기>" → 보기 박스 위에 배지.)
+    //   첫 줄이 지시어로 안 끝나면(3번류: "연립방정식{…}\n의 해는\n…구하시오." 처럼 cases가
+    //   먼저·질문이 뒤) 폴백하지 않고 false → isLastText 가 텍스트 끝(질문 뒤)에 배지 부착.
+    //   ※ 단순 첫-\n 폴백은 3번 배지를 "의 해는" 뒤(중간)로 보내는 회귀를 일으켰음(브라우저 실측).
+    if (firstNewlineIdx > 0) {
+      const before = text.slice(0, firstNewlineIdx).trimEnd();
+      if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
+        return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+      }
     }
     return [text, '', false];
   };

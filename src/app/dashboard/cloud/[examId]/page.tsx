@@ -328,8 +328,14 @@ function FigureMarkerRenderer({
         firstNewlineIdx = i;
       }
     }
-    if (firstNewlineIdx >= 0) {
-      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+    // ★ 첫 줄이 질문 지시어(~시오/~라)로 끝날 때만 첫 \n 직전에 배지(서답형 헤더/보기 케이스).
+    //   아니면(cases 먼저·질문이 뒤, 3번류) 폴백 안 함 → 텍스트 끝(질문 뒤)에 배지.
+    //   (ExamProblemRenderer·FigureMarkerRenderer 와 동기화 — 단순 첫-\n 폴백은 3번 배지를 중간으로 보냄)
+    if (firstNewlineIdx > 0) {
+      const before = text.slice(0, firstNewlineIdx).trimEnd();
+      if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
+        return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+      }
     }
     return [text, '', false];
   };
@@ -1179,9 +1185,14 @@ function ProblemCardView({
                       firstNewlineIdx = i;
                     }
                   }
-                  // '?' 못 찾았으면 첫 줄 끝에 배치
-                  if (firstNewlineIdx >= 0) {
-                    return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+                  // ★ '?' 없을 때 — 첫 줄이 질문 지시어(~시오/~라)로 끝나는 경우에만 첫 \n 직전에 배지
+                  //   (서답형 헤더 "…하시오.\n5-1.…" 케이스). 아니면(cases 먼저·질문 뒤) 폴백 안 함
+                  //   → 텍스트 끝에 배지. ExamProblemRenderer·ProblemCardView 와 동기화.
+                  if (firstNewlineIdx > 0) {
+                    const before = text.slice(0, firstNewlineIdx).trimEnd();
+                    if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
+                      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+                    }
                   }
                   return [text, '', false];
                 };
