@@ -783,46 +783,22 @@ export default function ExamManagementPage() {
     });
   }, [selectedExam, problems]);
 
-  // HWPX 다운로드 (HWP COM API 경유)
+  // HWPX 다운로드 — 순수 JS 생성기(서버, Vercel 작동). exam→problems 를 서버가 DB에서 조회.
   const [isDownloadingHwpx, setIsDownloadingHwpx] = useState(false);
   const handleDownloadHwpx = useCallback(async () => {
-    if (!selectedExam || problems.length === 0 || isDownloadingHwpx) return;
+    if (!selectedExamId || isDownloadingHwpx) return;
     setIsDownloadingHwpx(true);
     try {
-      const body = {
-        title: selectedExam.title,
-        subtitle: '',
-        config: {
-          showNameField: true,
-          showAnswerSheet: true,
-          showSolutions: true,
-        },
-        problems: problems.map(p => ({
-          number: p.number,
-          content: p.content,
-          choices: p.choices || [],
-          answer: p.answer,
-          solution: p.solution,
-          points: p.points,
-        })),
-      };
-
-      const res = await fetch('/api/export/hwpx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
+      const res = await fetch(`/api/exams/${selectedExamId}/export-hwp?withAnswer=true&withSolutions=true&columns=${columns}&gap=${gap}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'HWPX 생성 실패');
+        throw new Error(err.error || 'HWP 생성 실패');
       }
-
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${selectedExam.title}.hwpx`;
+      link.download = `${selectedExam?.title || '시험지'}.hwpx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -833,7 +809,7 @@ export default function ExamManagementPage() {
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [selectedExam, problems, isDownloadingHwpx]);
+  }, [selectedExamId, selectedExam, isDownloadingHwpx, columns, gap]);
 
   // 일괄 해설 생성
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
