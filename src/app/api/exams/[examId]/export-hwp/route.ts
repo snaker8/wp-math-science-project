@@ -96,7 +96,7 @@ export async function GET(
   // 시험지
   const { data: exam, error: examErr } = await sb
     .from('exams')
-    .select('id, title, grade, subject')
+    .select('id, title, grade, subject, exam_type')
     .eq('id', examId)
     .maybeSingle();
   if (examErr || !exam) {
@@ -146,15 +146,28 @@ export async function GET(
   const examTitle = (exam as { title?: string }).title || '시험지';
   const examGrade = (exam as { grade?: string }).grade || '';
   const examSubject = (exam as { subject?: string }).subject || '';
+  const examType = (exam as { exam_type?: string }).exam_type || '';
+
+  // ★ 헤더 표 메타 — exam-management(EditableExamHeader)와 동일 파생 → 화면·PDF·한글 폼 통일.
+  //   schoolName 은 제목에서 학교/학원명 추출(페이지와 동일 정규식). teacher/semester/시간 등은 미저장 → 빈칸.
+  const schoolMatch = examTitle.match(/([가-힣]{1,6}(?:고|중|초|학원))\d*/);
+  const headerMeta = {
+    schoolName: schoolMatch ? schoolMatch[1] : '',
+    examTitle,
+    teacher: '',
+    subject: examSubject || '공통수학1',
+    semester: '',
+    examType: examType || '학교기출',
+    grade: examGrade || '고1',
+  };
 
   const buf = (await generateHWPX(hwpProblems, {
     title: examTitle,
-    subtitle: [examGrade, examSubject].filter(Boolean).join(' · ') || undefined,
-    showNameField: true,
     showAnswerSheet: withAnswer,
     showSolutions: withSolutions,
     columns,
     problemGap,
+    header: headerMeta,
   })) as Buffer;
 
   const filename = `${examTitle}.hwpx`;

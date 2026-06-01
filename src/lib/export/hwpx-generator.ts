@@ -32,6 +32,21 @@ export interface HwpxProblem {
   points?: number;
 }
 
+// 시험지 헤더 메타 — 화면/인쇄(EditableExamHeader StaticFormView)와 동일 필드.
+//   값이 비면 빈 셀로 그려 화면·PDF·한글이 같은 폼을 유지한다.
+export interface HwpxHeaderMeta {
+  schoolName?: string;   // 학원/학교
+  examTitle?: string;    // 시험명
+  teacher?: string;      // 담당
+  subject?: string;      // 과목
+  semester?: string;     // 학기
+  examType?: string;     // 유형
+  grade?: string;        // 학년
+  timeLimit?: string;    // 시간
+  date?: string;         // 일시
+  totalScore?: string;   // 총점
+}
+
 export interface HwpxExamConfig {
   title: string;
   subtitle?: string;
@@ -43,6 +58,8 @@ export interface HwpxExamConfig {
   columns?: 1 | 2;       // 인쇄 모달 단 수 (기본 2). 1 = 단일칼럼(편집 친화)
   problemGap?: number;   // 인쇄 모달 문제 간격(px, 기본 ~30) → 문제 사이 여백
   perPage?: number;      // 인쇄 모달 '4문제 배열' 프리셋(4/6/8) → 문제 밀도(간격)
+  // ★ 시험지 헤더 표 — 있으면 제목/부제/이름란 대신 우리 헤더 표(학원/학교·시험명·과목·유형·학년)를 그린다.
+  header?: HwpxHeaderMeta;
 }
 
 // 매쓰플랫 실제 .hwpx 와 동일한 charPr/paraPr ID (header.xml 검증 템플릿 기준)
@@ -244,15 +261,15 @@ function parseContent(content: string): ContentSegment[] {
   // 1) 이미지(마크다운/HTML) 먼저 추출 → 마커로 치환 (HTML strip 전에)
   const imgs: string[] = [];
   let s = content
-    .replace(IMG_MD, (_m, url) => { imgs.push(url); return ` IMG${imgs.length - 1} `; })
-    .replace(IMG_HTML, (_m, url) => { imgs.push(url); return ` IMG${imgs.length - 1} `; });
+    .replace(IMG_MD, (_m, url) => { imgs.push(url); return ` IMG${imgs.length - 1} `; })
+    .replace(IMG_HTML, (_m, url) => { imgs.push(url); return ` IMG${imgs.length - 1} `; });
   // 2) 나머지 HTML 정리
   s = s.replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(?:p|div|span|strong|em|b|i|u|sup|sub|small|font|a|ul|ol|li|table|thead|tbody|tr|td|th)\b[^>]*>/gi, '')
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   // 3) 이미지 마커로 분할 → 텍스트부는 math 분리
   const segments: ContentSegment[] = [];
-  const parts = s.split(/ IMG(\d+) /);
+  const parts = s.split(/ IMG(\d+) /);
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 0) { if (parts[i]) segments.push(...parseTextMath(parts[i])); }
     else { const u = imgs[parseInt(parts[i], 10)]; if (u) segments.push({ type: 'image', value: u }); }
@@ -420,6 +437,65 @@ function segmentsToRuns(segments: ContentSegment[], charPrId: number, imageMap: 
 
 const CIRCLE = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
 
+// ----------------------------------------------------------------------------
+// 시험지 헤더 표 (EditableExamHeader StaticFormView 와 동일 구조)
+//   매쓰플랫 실측 구조: 전체폭(53839) 플로팅 표(treatAsChar=0, TOP_AND_BOTTOM)를
+//   secPr+colPr 뒤 첫 단락에 두면 → 표는 전체폭으로 위에 얹히고 문제는 그 아래 2단으로 흐른다.
+//   8열 고정 그리드. 라벨셀=borderFill 25(회색+테두리, CENTER) / 값셀=borderFill 4(흰색+테두리, LEFT Bold).
+const HDR_COLS = [5600, 9000, 5000, 7500, 4800, 7500, 4800, 9639]; // 합 53839 (본문 전체폭)
+const HDR_ROW_H = 2800;
+function hdrColW(col: number, span: number): number {
+  let w = 0; for (let i = 0; i < span; i++) w += HDR_COLS[col + i] || 0; return w;
+}
+function hdrCell(text: string, col: number, row: number, opts: { span?: number; label?: boolean } = {}): string {
+  const span = opts.span || 1;
+  const bf = opts.label ? 25 : 4;                       // 라벨=회색+테두리 / 값=흰색+테두리
+  const para = opts.label ? PARA.figure : PARA.body;    // figure(36)=CENTER 라벨 / body(62)=LEFT 값
+  const ch = opts.label ? CHAR.meta : CHAR.chapter;     // 값=h1200 Bold 강조
+  return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + `<hp:p id="0" paraPrIDRef="${para}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="${ch}"><hp:t>${escXml(text || '')}</hp:t></hp:run></hp:p>`
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="${row}"/><hp:cellSpan colSpan="${span}" rowSpan="1"/>`
+    + `<hp:cellSz width="${hdrColW(col, span)}" height="${HDR_ROW_H}"/>`
+    + `<hp:cellMargin left="510" right="510" top="141" bottom="141"/>`
+    + `</hp:tc>`;
+}
+function buildHeaderTable(h: HwpxHeaderMeta): string {
+  const rows: string[] = [];
+  // 1행: 학원/학교 | 시험명(span3) | 담당
+  rows.push('<hp:tr>'
+    + hdrCell('학원/학교', 0, 0, { label: true }) + hdrCell(h.schoolName || '', 1, 0)
+    + hdrCell('시험명', 2, 0, { label: true }) + hdrCell(h.examTitle || '', 3, 0, { span: 3 })
+    + hdrCell('담당', 6, 0, { label: true }) + hdrCell(h.teacher || '', 7, 0)
+    + '</hp:tr>');
+  // 2행: 과목 | 학기 | 유형 | 학년
+  rows.push('<hp:tr>'
+    + hdrCell('과목', 0, 1, { label: true }) + hdrCell(h.subject || '', 1, 1)
+    + hdrCell('학기', 2, 1, { label: true }) + hdrCell(h.semester || '', 3, 1)
+    + hdrCell('유형', 4, 1, { label: true }) + hdrCell(h.examType || '', 5, 1)
+    + hdrCell('학년', 6, 1, { label: true }) + hdrCell(h.grade || '', 7, 1)
+    + '</hp:tr>');
+  // 3행: 시간 | 일시 | 총점(span3) — 값 있을 때만 (StaticFormView 인쇄 로직과 동일)
+  const showRow3 = !!(h.timeLimit || h.date || (h.totalScore && h.totalScore !== '100'));
+  if (showRow3) {
+    rows.push('<hp:tr>'
+      + hdrCell('시간', 0, 2, { label: true }) + hdrCell(h.timeLimit || '', 1, 2)
+      + hdrCell('일시', 2, 2, { label: true }) + hdrCell(h.date || '', 3, 2)
+      + hdrCell('총점', 4, 2, { label: true }) + hdrCell(h.totalScore || '', 5, 2, { span: 3 })
+      + '</hp:tr>');
+  }
+  const rowCnt = showRow3 ? 3 : 2;
+  const id = nextId();
+  return `<hp:tbl id="${id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="8" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+    + `<hp:sz width="53839" widthRelTo="ABSOLUTE" height="${rowCnt * HDR_ROW_H}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="510" right="510" top="141" bottom="141"/>`
+    + rows.join('')
+    + `</hp:tbl>`;
+}
+
 function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap: ImageMap): string {
   const P: string[] = [];
 
@@ -432,13 +508,16 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   const spacerN = Math.max(1, Math.min(3, Math.round(gapPx / 30))); // 간격 보수적(과한 빈 줄 방지)
   const spacer = (): string => { let s = ''; for (let i = 0; i < spacerN; i++) s += paragraph(''); return s; };
 
-  // 부제/메타 (제목은 firstPara 에)
-  if (config.subtitle) P.push(paragraph(textRun(config.subtitle, CHAR.chapter), PARA.title));
-  if (config.instituteName) P.push(paragraph(textRun(config.instituteName, CHAR.meta), PARA.title));
-  if (config.showNameField !== false) {
-    P.push(paragraph(textRun('이름 : ________________      반 : ________      날짜 : ________', CHAR.meta), PARA.meta));
+  // 헤더: config.header 가 있으면 표는 firstPara 에 그리고 부제/이름란은 생략(폼 통일).
+  //   없으면(테스트 등) 기존 제목/부제/이름란 동작 유지.
+  if (!config.header) {
+    if (config.subtitle) P.push(paragraph(textRun(config.subtitle, CHAR.chapter), PARA.title));
+    if (config.instituteName) P.push(paragraph(textRun(config.instituteName, CHAR.meta), PARA.title));
+    if (config.showNameField !== false) {
+      P.push(paragraph(textRun('이름 : ________________      반 : ________      날짜 : ________', CHAR.meta), PARA.meta));
+    }
+    P.push(paragraph(''));  // 빈 줄
   }
-  P.push(paragraph(''));  // 빈 줄
 
   // 도형(이미지) 세그먼트는 텍스트 흐름에서 떼어 자기 단락으로 (인라인 X — 줄바꿈 방해 방지)
   const pushFigures = (segs: ContentSegment[]) => {
@@ -507,11 +586,15 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     + 'xmlns:epub="http://www.idpf.org/2007/ops" '
     + 'xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0"';
 
-  // 첫 단락 = 제목. run0 에 secPr + colPr(2단 NEWSPAPER+구분선) — 매쓰플랫 구조 동일.
+  // 첫 단락: run0 에 secPr + colPr(2단 NEWSPAPER+구분선) — 매쓰플랫 구조 동일.
+  //   header 있으면 전체폭 헤더 표(플로팅)를 같은 단락에 — 표 위, 문제는 2단으로 아래 흐름.
+  //   없으면 기존 제목 텍스트.
+  const headerBody = config.header
+    ? `<hp:run charPrIDRef="0">${buildHeaderTable(config.header)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+    : textRun(config.title, CHAR.title) + lineSeg(PARA.title);
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
     + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`
-    + textRun(config.title, CHAR.title)
-    + lineSeg(PARA.title)
+    + headerBody
     + `</hp:p>`;
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>`
