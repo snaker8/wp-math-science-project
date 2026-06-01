@@ -3848,18 +3848,49 @@ export default function AnalyzeJobPage() {
       const effectiveBookGroupId = jobData.bookGroupId || urlBookGroupId;
       console.log(`[자산화] bookGroupId 흐름: jobData=${jobData.bookGroupId}, url=${urlBookGroupId}, final=${effectiveBookGroupId}`);
 
-      const res = await fetch('/api/workflow/upload', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId,
-          editedProblems,
-          bookGroupId: effectiveBookGroupId,
-          pageImages,
-          // ★ 원본 한글 파일명 전달 (Storage 복원 경로의 sanitized 이름 대체)
-          fileName: jobData?.fileName,
-        }),
-      });
+      // ★ 자산화 PUT timeout 가드 (2026-06-01) — 문항 많은 파일(예: 67문항)에서 서버 처리가
+      //   길어지면 브라우저 fetch 가 먼저 끊겨 "딜레이 에러" 가 뜨는데, 서버는 백그라운드로
+      //   계속 돌아 일부(예: 52개)를 저장함. 그 상태로 사용자가 재시도하면 새 exam 이 또
+      //   생성되어 "한 시험이 둘로 분리" 사고 발생 (주례 기말 대수 사고, CLAUDE.md 가드 #5).
+      //   → AbortController(295s) 명시적 한도 + timeout 시 "재시도 금지, 클라우드 확인" 안내.
+      //   서버 maxDuration=300 이므로 295s 면 서버 완료 직전까지 기다림.
+      const ASSETIZE_TIMEOUT_MS = 295_000;
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(() => abortCtrl.abort(), ASSETIZE_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch('/api/workflow/upload', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId,
+            editedProblems,
+            bookGroupId: effectiveBookGroupId,
+            pageImages,
+            // ★ 원본 한글 파일명 전달 (Storage 복원 경로의 sanitized 이름 대체)
+            fileName: jobData?.fileName,
+          }),
+          signal: abortCtrl.signal,
+        });
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        // ★ AbortError(타임아웃) 또는 네트워크 끊김 — 서버는 계속 처리 중일 수 있음.
+        //   재시도하면 중복/분리 사고 → 사용자에게 "재시도 말고 클라우드 확인" 명시.
+        const aborted = fetchErr instanceof DOMException && fetchErr.name === 'AbortError';
+        alert(
+          aborted
+            ? `⏱️ 자산화 응답이 지연되고 있습니다 (문항이 많은 파일).\n\n` +
+              `⚠️ 서버는 계속 저장 중일 수 있습니다. 지금 다시 자산화하면 같은 시험이\n` +
+              `둘로 나뉘거나 중복 데이터가 쌓일 수 있습니다.\n\n` +
+              `👉 잠시 후 "${orgName}클라우드"에서 이 시험지가 생성됐는지 먼저 확인하세요.\n` +
+              `   생성됐으면 재시도하지 마시고, 누락분만 개별 작업하면 됩니다.`
+            : `❌ 자산화 요청이 끊겼습니다 (네트워크).\n원인: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}\n\n` +
+              `⚠️ 서버 저장 여부가 불확실하니, 재시도 전 클라우드에서 확인하세요.`
+        );
+        setIsSavingAll(false);
+        return;
+      }
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
