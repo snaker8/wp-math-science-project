@@ -136,11 +136,14 @@ function StaticFormView({
           기존엔 auto-layout 에서 '유형' 값의 nowrap 이 폭을 독차지 → 과목·시험명 값이
           0폭으로 짓눌려 글자마다 줄바꿈·헤더 비대(행 77px) 됐음. 8칸 정렬 + 폭 고정으로 해소. */}
       <table className="w-full border-collapse text-black" style={{ tableLayout: 'fixed' }}>
+        {/* 라벨 8% 고정. 값 칸은 비대칭: 유형(C6)은 값이 길어(진단평가B(...)) 30% 로 넓혀
+            2줄에 담고, 비거나 짧은 학기·일시(C4) 10% / 과목·학년(C2,C8) 14% 로 줄여
+            중간 행(유형 3줄→2줄) 높이를 낮춤. */}
         <colgroup>
-          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
-          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
-          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
-          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '14%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '10%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '30%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '14%' }} />
         </colgroup>
         <tbody>
           {/* 1행: 학원/학교 + 시험명(넓게 colSpan3) + 담당 */}
