@@ -1927,10 +1927,15 @@ function ExamPaperView({
         </div>
       </div>
 
-      {/* 숨겨진 측정 영역 */}
+      {/* 숨겨진 측정 영역
+          ★ className="exam-page" 필수 — .exam-page 자손 스코프 KaTeX 보정
+          (.katex font-size 1.05em / .mtable padding 0.18em / #259 :has(.mtable) padding-top 3em)
+          이 측정 subtree 에도 동일 적용되어야 실제 렌더와 높이가 일치 → 페이지 분할 정확.
+          누락 시 cases/행렬 문제가 ~3em 낮게 측정 → 과다 적재 → 인쇄 넘침·잘림. */}
       <div
         ref={measureRef}
         aria-hidden
+        className="exam-page"
         style={{
           position: 'absolute',
           visibility: 'hidden',
@@ -2791,10 +2796,14 @@ function SolutionView({
         </div>
       )}
 
-      {/* 숨겨진 측정 영역 */}
+      {/* 숨겨진 측정 영역
+          ★ className="solution-page" 필수 — .solution-page 자손 스코프 KaTeX 보정
+          (#259 :has(.mtable) padding-top 3em 등)이 측정 subtree 에도 적용되어야
+          실제 해설지 렌더와 높이 일치 → 페이지 분할 정확 (시험지 측정 영역과 동일 원리). */}
       <div
         ref={measureRef}
         aria-hidden
+        className="solution-page"
         style={{
           position: 'absolute',
           visibility: 'hidden',
