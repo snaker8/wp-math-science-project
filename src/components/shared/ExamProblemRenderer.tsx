@@ -84,7 +84,7 @@ function ExamProblemRendererInner({
   problem,
   gap = 20,
   textSize = '14px',
-  lineHeight = '1.85',
+  lineHeight = '1.5',
   maxFigureWidth = 240,
 }: {
   problem: ExamRenderProblem;

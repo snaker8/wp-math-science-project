@@ -1919,7 +1919,7 @@ function ExamPaperView({
           width: `${measureWidth}px`,
           fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
           fontSize: '14px',
-          lineHeight: '1.85',
+          lineHeight: '1.5',
         }}
       >
         {problems.map((problem, idx) => (
