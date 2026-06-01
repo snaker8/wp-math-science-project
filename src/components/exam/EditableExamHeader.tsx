@@ -127,43 +127,54 @@ function StaticFormView({
   meta: ExamMeta;
   examTitle: string;
 }) {
+  // ★ 셀 클래스 (라벨/값 공통) — 라벨은 nowrap(1줄 유지), 값은 break-words(자연 줄바꿈)
+  const L = "border border-gray-400 px-1 py-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 text-center whitespace-nowrap";
+  const V = "border border-gray-400 px-2 py-1.5 text-sm font-bold text-gray-900 break-words";
   return (
     <div className="border-b-2 border-gray-800 p-0 bg-white">
-      <table className="w-full border-collapse text-black">
+      {/* ★ table-layout: fixed + colgroup 으로 컬럼 폭 고정 (라벨 10% / 값 15%).
+          기존엔 auto-layout 에서 '유형' 값의 nowrap 이 폭을 독차지 → 과목·시험명 값이
+          0폭으로 짓눌려 글자마다 줄바꿈·헤더 비대(행 77px) 됐음. 8칸 정렬 + 폭 고정으로 해소. */}
+      <table className="w-full border-collapse text-black" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '17%' }} />
+        </colgroup>
         <tbody>
-          {/* 1행: 학원/학교명 + 시험명 + 담당 */}
+          {/* 1행: 학원/학교 + 시험명(넓게 colSpan3) + 담당 */}
           <tr>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학원/학교</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900">{meta.schoolName || ''}</td>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시험명</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900" colSpan={2}>{examTitle}</td>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">담당</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 w-20">{meta.teacher || ''}</td>
+            <td className={L}>학원/학교</td>
+            <td className={V}>{meta.schoolName || ''}</td>
+            <td className={L}>시험명</td>
+            <td className={V} colSpan={3}>{examTitle}</td>
+            <td className={L}>담당</td>
+            <td className={V}>{meta.teacher || ''}</td>
           </tr>
           {/* 2행: 과목 + 학기 + 유형 + 학년 */}
           <tr>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">과목</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900">{meta.subject || ''}</td>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학기</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900">{meta.semester || ''}</td>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 whitespace-nowrap" style={{ minWidth: '120px' }}>{meta.examType || ''}</td>
-            <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
-            <td className="border border-gray-400 px-2 py-2 text-sm font-bold text-gray-900 w-20">{meta.grade || ''}</td>
+            <td className={L}>과목</td>
+            <td className={V}>{meta.subject || ''}</td>
+            <td className={L}>학기</td>
+            <td className={V}>{meta.semester || ''}</td>
+            <td className={L}>유형</td>
+            <td className={V}>{meta.examType || ''}</td>
+            <td className={L}>학년</td>
+            <td className={V}>{meta.grade || ''}</td>
           </tr>
-          {/* 3행: 시간 + 일시 + 총점 — 인쇄 시 항상 표시, 화면에선 값 있을 때만 */}
+          {/* 3행: 시간 + 일시 + 총점(넓게 colSpan3) — 인쇄 시 항상 표시, 화면에선 값 있을 때만 */}
           {(() => {
             const hasAnyValue = Boolean(meta.timeLimit || meta.date || (meta.totalScore && meta.totalScore !== '100'));
-            // 값 있으면 항상 표시, 없으면 인쇄 전용으로만 표시 (화면에선 숨김)
             const trClass = hasAnyValue ? '' : 'hidden print:table-row';
             return (
               <tr className={trClass}>
-                <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시간</td>
-                <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900">{meta.timeLimit || ''}</td>
-                <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">일시</td>
-                <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900">{meta.date || ''}</td>
-                <td className="border border-gray-400 px-2 py-2 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">총점</td>
-                <td className="border border-gray-400 px-2 py-2 text-sm text-gray-900" colSpan={3}>{meta.totalScore || ''}</td>
+                <td className={L}>시간</td>
+                <td className={V.replace('font-bold ', '')}>{meta.timeLimit || ''}</td>
+                <td className={L}>일시</td>
+                <td className={V.replace('font-bold ', '')}>{meta.date || ''}</td>
+                <td className={L}>총점</td>
+                <td className={V.replace('font-bold ', '')} colSpan={3}>{meta.totalScore || ''}</td>
               </tr>
             );
           })()}
