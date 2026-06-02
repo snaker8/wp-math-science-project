@@ -1526,11 +1526,16 @@ async function saveEditedProblemsDirect(
     try {
       const { data: existingExam } = await supabase
         .from('exams')
-        .select('id')
+        .select('id, institute_id')
         .eq('id', job.appendToExamId)
         .is('deleted_at', null)
         .single();
-      if (existingExam) {
+      // ★ 멀티테넌시 격리 — 공통풀(institute_id NULL)은 누구나 append(공유 라이브러리),
+      //   특정 학원 시험지는 같은 학원(instituteId)만. 다르면 cross-tenant append 차단 →
+      //   기존과 동일하게 새 exam 생성으로 폴백(에러 X, orphan/중복 사고 없음).
+      const targetInst = (existingExam as { institute_id?: string | null } | null)?.institute_id ?? null;
+      const canAppend = !!existingExam && (targetInst === null || targetInst === instituteId);
+      if (existingExam && canAppend) {
         examId = existingExam.id;
         // 기존 exam_problems 의 max sequence_number 조회
         const { data: lastSeq } = await supabase
@@ -1544,6 +1549,8 @@ async function saveEditedProblemsDirect(
         const appendId = examId as string;  // 위에서 set 했지만 TS 가 narrow 못 함
         autoSavedExams.set(jobId, appendId);
         console.log(`[Direct Save] append 모드 — exam ${appendId.slice(0, 8)} 에 ${editedProblems.length}문제 추가, sequence ${sequenceOffset + 1} 부터`);
+      } else if (existingExam && !canAppend) {
+        console.warn(`[Direct Save] appendToExamId(${job.appendToExamId}) 격리 차단 — 다른 학원 시험지(institute=${targetInst}) — 새 exam 생성으로 폴백`);
       } else {
         console.warn(`[Direct Save] appendToExamId(${job.appendToExamId}) 무효(존재 X 또는 삭제됨) — 새 exam 생성으로 폴백`);
       }
@@ -2382,11 +2389,15 @@ async function saveProblemsToDB(
     try {
       const { data: existingExam } = await supabase
         .from('exams')
-        .select('id')
+        .select('id, institute_id')
         .eq('id', job.appendToExamId)
         .is('deleted_at', null)
         .single();
-      if (existingExam) {
+      // ★ 멀티테넌시 격리 — 공통풀(NULL)은 누구나 append, 특정 학원 시험지는 같은 학원만.
+      //   다르면 cross-tenant append 차단 → 새 exam 폴백(에러 X).
+      const targetInst = (existingExam as { institute_id?: string | null } | null)?.institute_id ?? null;
+      const canAppend = !!existingExam && (targetInst === null || targetInst === instituteId);
+      if (existingExam && canAppend) {
         examId = existingExam.id;
         const { data: lastSeq } = await supabase
           .from('exam_problems')
@@ -2398,6 +2409,8 @@ async function saveProblemsToDB(
         sequenceOffset = lastSeq?.sequence_number || 0;
         autoSavedExams.set(jobId, examId as string);
         console.log(`[DB] append 모드 — exam ${(examId as string).slice(0, 8)} 에 ${results.length}문제 추가, sequence ${sequenceOffset + 1} 부터`);
+      } else if (existingExam && !canAppend) {
+        console.warn(`[DB] appendToExamId(${job.appendToExamId}) 격리 차단 — 다른 학원 시험지(institute=${targetInst}) — 새 exam 생성으로 폴백`);
       } else {
         console.warn(`[DB] appendToExamId(${job.appendToExamId}) 무효 — 새 exam 생성으로 폴백`);
       }
