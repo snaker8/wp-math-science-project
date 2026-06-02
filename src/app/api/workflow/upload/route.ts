@@ -178,13 +178,16 @@ async function applyAnswerSheetFromBuffers(examId: string, jobId: string): Promi
       else if (u8[0] === 0xFF && u8[1] === 0xD8) { type = 'image/jpeg'; ext = 'jpg'; }
       return new File([ab], `${label}.${ext}`, { type });
     };
-    // 빠른답 + 정답해설 둘 다 — 해설 올려도 거기서 정답 추출돼 채워짐.
-    const files = [toFile(bufs.quickAnswer, 'quick-answer'), toFile(bufs.answer, 'answer-solution')]
-      .filter((f): f is File => f !== null);
-    if (files.length === 0) return;
-    const { applyQuickAnswerSheet } = await import('@/lib/ocr/apply-answer-sheet');
-    const r = await applyQuickAnswerSheet(supabaseAdmin, examId, files);
-    console.log(`[Upload] 빠른답/해설 자동 적용: applied=${r.applied}/${r.parsed}, coercedEmpty=${r.coercedToEmpty} (files=${files.length})`);
+    // 빠른답(답만) + 정답해설(답+해설). 둘 다 또는 하나.
+    const sheets: Array<{ file: File; kind: 'quick' | 'solution' }> = [];
+    const qf = toFile(bufs.quickAnswer, 'quick-answer');
+    const af = toFile(bufs.answer, 'answer-solution');
+    if (qf) sheets.push({ file: qf, kind: 'quick' });
+    if (af) sheets.push({ file: af, kind: 'solution' });
+    if (sheets.length === 0) return;
+    const { applyAnswerSheet } = await import('@/lib/ocr/apply-answer-sheet');
+    const r = await applyAnswerSheet(supabaseAdmin, examId, sheets);
+    console.log(`[Upload] 빠른답/해설 자동 적용: 답 ${r.answersApplied}/${r.parsedAnswers}, 해설 ${r.solutionsApplied}/${r.parsedSolutions}, 강등 ${r.coercedToEmpty} (files=${sheets.length})`);
   } catch (e) {
     console.warn('[Upload] 빠른답/해설 자동 적용 실패 (자산화는 정상):', e instanceof Error ? e.message : e);
   }
