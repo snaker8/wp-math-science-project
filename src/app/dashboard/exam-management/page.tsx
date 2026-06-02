@@ -48,6 +48,7 @@ import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
+import DeployExamModal from '@/components/exam/DeployExamModal';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { downloadExamDocx } from '@/lib/export/docx-generator';
 import type { DocxProblem } from '@/lib/export/docx-generator';
@@ -532,6 +533,8 @@ export default function ExamManagementPage() {
 
   // 출력 모달
   const [showPrintModal, setShowPrintModal] = useState(false);
+  // 출제(배포) 모달
+  const [showDeployModal, setShowDeployModal] = useState(false);
 
   // 출력 실행 — 클라우드 페이지와 완전 동일 방식 (원본 className/style 유지)
   const executePrint = useCallback(() => {
@@ -751,6 +754,48 @@ export default function ExamManagementPage() {
       setIsDeleting(false);
     }
   }, [selectedExamId, selectedExam, isDeleting, refetchExams]);
+
+  // ★ 유사 시험지 만들기 — 각 문항을 같은 유형의 다른 문항으로 교체 (은행 기반)
+  const [isCreatingSimilar, setIsCreatingSimilar] = useState(false);
+  const handleCreateSimilar = useCallback(async () => {
+    if (!selectedExamId || isCreatingSimilar) return;
+    setIsCreatingSimilar(true);
+    try {
+      const res = await fetch(`/api/exams/${selectedExamId}/create-similar`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok && res.status !== 207) {
+        alert(`❌ 유사 시험지 생성 실패: ${data.error || data.detail || '알 수 없는 오류'}`);
+        return;
+      }
+      await refetchExams();
+      if (data.examId) setSelectedExamId(data.examId);
+      alert(
+        `✅ 유사 시험지 생성 완료\n"${data.title || ''}"\n` +
+        `전체 ${data.total}문항 중 ${data.replaced}문항 교체` +
+        (data.keptOriginal ? ` (${data.keptOriginal}문항은 대체 문항이 없어 원본 유지)` : ''),
+      );
+    } catch (err) {
+      console.error('[ExamManagement] create-similar error:', err);
+      alert('❌ 유사 시험지 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsCreatingSimilar(false);
+    }
+  }, [selectedExamId, isCreatingSimilar, refetchExams]);
+
+  // ★ 출제 현황 — 이 시험지를 몇 명에게 출제했고 몇 명 완료했는지
+  const [deployStatus, setDeployStatus] = useState<{ total: number; done: number } | null>(null);
+  const refreshDeployStatus = useCallback(async (examId: string | null) => {
+    if (!examId) { setDeployStatus(null); return; }
+    try {
+      const res = await fetch(`/api/sessions?exam_id=${examId}&limit=200`);
+      const data = await res.json();
+      const sessions: Array<{ completed_at?: string | null }> = Array.isArray(data.sessions) ? data.sessions : [];
+      const total = sessions.length;
+      const done = sessions.filter((s) => s.completed_at).length;
+      setDeployStatus(total > 0 ? { total, done } : null);
+    } catch { setDeployStatus(null); }
+  }, []);
+  useEffect(() => { refreshDeployStatus(selectedExamId); }, [selectedExamId, refreshDeployStatus]);
 
   // DOCX 다운로드 (fallback)
   const handleDownloadDocx = useCallback(async () => {
@@ -1232,54 +1277,42 @@ export default function ExamManagementPage() {
 
           <div className="em-subbar-divider" />
 
-          <button
-            type="button"
-            className="em-action-btn"
-            title="PDF 다운로드"
-            onClick={handleDownloadPdf}
-          >
-            <Download />
+          {deployStatus && (
+            <span
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold"
+              style={{ background: 'rgba(8,145,178,0.13)', color: '#22d3ee', border: '1px solid rgba(8,145,178,0.35)' }}
+              title="이 시험지 출제 현황 (학생 수 · 채점 완료)"
+            >
+              <Send style={{ width: 12, height: 12 }} />
+              출제 {deployStatus.total}명{deployStatus.done > 0 ? ` · 완료 ${deployStatus.done}` : ''}
+            </span>
+          )}
+
+          <button type="button" className="em-action-btn" title="PDF 다운로드" onClick={handleDownloadPdf}>
+            <Download /><span className="em-action-label">PDF</span>
           </button>
-          <button
-            type="button"
-            className="em-action-btn"
-            title="한글 다운로드"
-            onClick={handleDownloadHwpx}
-            disabled={isDownloadingHwpx}
-          >
-            {isDownloadingHwpx ? <Loader2 className="animate-spin" /> : <FileDown />}
+          <button type="button" className="em-action-btn" title="한글(.hwpx) 다운로드" onClick={handleDownloadHwpx} disabled={isDownloadingHwpx}>
+            {isDownloadingHwpx ? <Loader2 className="animate-spin" /> : <FileDown />}<span className="em-action-label">한글</span>
           </button>
-          <button
-            type="button"
-            className="em-action-btn"
-            title="시험지 수정"
-            onClick={() => { if (selectedExamId) router.push(`/dashboard/cloud/${selectedExamId}`); }}
-          >
-            <Pencil />
+          <button type="button" className="em-action-btn" title="시험지 수정"
+            onClick={() => { if (selectedExamId) router.push(`/dashboard/cloud/${selectedExamId}`); }}>
+            <Pencil /><span className="em-action-label">수정</span>
           </button>
-          <button
-            type="button"
-            className="em-action-btn"
-            title="유형 분석"
-            onClick={() => { if (selectedExamId) router.push(`/dashboard/exam-analysis/${selectedExamId}`); }}
-            style={{ color: 'var(--brand-indigo-400)' }}
-          >
-            <BarChart3 />
+          <button type="button" className="em-action-btn" title="유형 분석"
+            onClick={() => { if (selectedExamId) router.push(`/dashboard/exam-analysis/${selectedExamId}`); }}>
+            <BarChart3 /><span className="em-action-label">분석</span>
           </button>
-          <button type="button" className="em-action-btn" title="유사 시험지 만들기">
-            <Copy />
+          <button type="button" className="em-action-btn" title="유사 시험지 만들기 (같은 유형 다른 문항)"
+            onClick={handleCreateSimilar} disabled={!selectedExamId || isCreatingSimilar}>
+            {isCreatingSimilar ? <Loader2 className="animate-spin" /> : <Copy />}<span className="em-action-label">유사</span>
           </button>
-          <button type="button" className="em-action-btn" title="배포">
-            <Send />
+          <button type="button" className="em-action-btn primary" title="출제(학생에게 배포)"
+            onClick={() => { if (selectedExamId) setShowDeployModal(true); }} disabled={!selectedExamId}>
+            <Send /><span className="em-action-label">출제</span>
           </button>
-          <button
-            type="button"
-            className="em-action-btn danger"
-            title="삭제"
-            onClick={handleDeleteExam}
-            disabled={isDeleting}
-          >
-            <Trash2 />
+          <button type="button" className="em-action-btn danger" title="시험지 삭제"
+            onClick={handleDeleteExam} disabled={isDeleting}>
+            <Trash2 /><span className="em-action-label">삭제</span>
           </button>
 
           <button
@@ -1907,6 +1940,14 @@ export default function ExamManagementPage() {
           </div>
         </div>
       )}
+
+      {/* 출제(배포) 모달 — 매쓰플랫 미러링: 학년/반 + 학생 트리 → POST /api/sessions(type=EX) */}
+      <DeployExamModal
+        isOpen={showDeployModal}
+        onClose={() => setShowDeployModal(false)}
+        exam={selectedExam ? { id: selectedExam.id, title: selectedExam.title || '시험지' } : null}
+        onDeployed={() => refreshDeployStatus(selectedExamId)}
+      />
     </div>
   );
 }

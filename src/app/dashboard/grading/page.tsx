@@ -50,6 +50,7 @@ interface Student {
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
   BS: '광역 스캔', DD: '정밀 진단', PT: '선수 추적', SC: '스팟 체크',
+  WS: '학습지', EX: '시험지',
 };
 
 const SESSION_TYPE_COLOR: Record<string, string> = {
@@ -57,6 +58,8 @@ const SESSION_TYPE_COLOR: Record<string, string> = {
   DD: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   PT: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   SC: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  WS: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+  EX: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
 };
 
 type StatusFilter = 'all' | 'pending' | 'done';

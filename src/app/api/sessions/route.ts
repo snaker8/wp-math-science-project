@@ -238,8 +238,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ sessions });
 }
 
-type SessionType = 'BS' | 'DD' | 'PT' | 'SC';
-const VALID_TYPES: SessionType[] = ['BS', 'DD', 'PT', 'SC'];
+// BS/DD/PT/SC = 진단 회차. WS/EX = 일반 출제(학습지/시험지) — 출제 공통 라인(Phase 1).
+type SessionType = 'BS' | 'DD' | 'PT' | 'SC' | 'WS' | 'EX';
+const VALID_TYPES: SessionType[] = ['BS', 'DD', 'PT', 'SC', 'WS', 'EX'];
 
 interface CreateBody {
   exam_id?: string;
@@ -268,7 +269,7 @@ export async function POST(request: NextRequest) {
   }
 
   const examId = body.exam_id;
-  const studentIds = Array.isArray(body.student_ids) ? body.student_ids.filter(s => typeof s === 'string') : [];
+  let studentIds = Array.isArray(body.student_ids) ? body.student_ids.filter(s => typeof s === 'string') : [];
   const roundNumber = Number.isInteger(body.round_number) && body.round_number! > 0 ? body.round_number! : 1;
   const sessionType: SessionType = VALID_TYPES.includes((body.session_type as SessionType)) ? (body.session_type as SessionType) : 'BS';
   const teacherNote = body.teacher_note || null;
@@ -287,6 +288,29 @@ export async function POST(request: NextRequest) {
     .single();
   if (examErr || !exam) {
     return NextResponse.json({ error: '시험지를 찾을 수 없습니다' }, { status: 404 });
+  }
+
+  // 1.5) ★ 학생 격리 가드 (CLAUDE.md #8) — super_admin 외에는 자기 스코프(학원) 학생만 출제 가능.
+  //   UI(DeployExamModal)는 이미 스코프 학생만 노출하지만, API 직접 호출로 타 학원 학생에게
+  //   출제하는 cross-tenant 누수를 차단(방어 심화).
+  if (!scope.isSuperAdmin) {
+    const allowedInst = new Set(scope.accessibleInstituteIds ?? []);
+    const { data: stuRows } = await sb
+      .from('users')
+      .select('id, institute_id')
+      .in('id', studentIds);
+    const okSet = new Set<string>();
+    for (const s of (stuRows || []) as Array<{ id: string; institute_id: string | null }>) {
+      if (s.institute_id && allowedInst.has(s.institute_id)) okSet.add(s.id);
+    }
+    const blocked = studentIds.filter((id) => !okSet.has(id));
+    if (blocked.length > 0) {
+      console.warn(`[sessions POST] 스코프 밖 학생 ${blocked.length}명 출제 차단 (user ${scope.userId.slice(0, 8)})`);
+    }
+    studentIds = studentIds.filter((id) => okSet.has(id));
+    if (studentIds.length === 0) {
+      return NextResponse.json({ error: '출제 권한이 있는(같은 학원) 학생이 없습니다.' }, { status: 403 });
+    }
   }
 
   // 2) exam_problems (sequence_number 순)

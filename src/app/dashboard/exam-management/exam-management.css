@@ -308,23 +308,33 @@
 }
 
 .em-action-btn {
-  width: 30px; height: 30px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 7px; color: var(--em-fg-3);
+  height: 32px; padding: 0 11px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 8px; color: var(--em-fg-2);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; line-height: 1;
   transition: all var(--em-dur);
-  border: 1px solid transparent;
-  background: none; cursor: pointer;
+  border: 1px solid var(--em-border-sub);
+  background: var(--em-bg-card); cursor: pointer;
 }
 .em-action-btn:hover {
-  background: var(--em-bg-card); color: var(--em-fg-1);
-  border-color: var(--em-border-sub);
+  background: var(--em-bg-chrome); color: var(--em-fg-1);
+  border-color: var(--em-border);
 }
+.em-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.em-action-btn:disabled:hover { background: var(--em-bg-card); color: var(--em-fg-2); border-color: var(--em-border-sub); }
+/* 주요 액션(출제) 강조 */
+.em-action-btn.primary {
+  color: #fff; background: #0891b2; border-color: #0e7490;
+}
+.em-action-btn.primary:hover { background: #06b6d4; border-color: #0891b2; color: #fff; }
+.em-action-btn.primary:disabled { background: #0891b2; }
+.em-action-btn.danger { color: #fb7185; }
 .em-action-btn.danger:hover {
-  color: #fb7185;
-  border-color: rgba(251, 113, 133, 0.2);
-  background: rgba(251, 113, 133, 0.08);
+  color: #fff; background: #e11d48;
+  border-color: rgba(251, 113, 133, 0.4);
 }
-.em-action-btn svg { width: 14px; height: 14px; }
+.em-action-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.em-action-btn .em-action-label { letter-spacing: -0.01em; }
 
 .em-subbar-divider {
   width: 1px; height: 20px;
