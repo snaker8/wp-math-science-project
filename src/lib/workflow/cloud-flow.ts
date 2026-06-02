@@ -518,9 +518,46 @@ function buildQuestionResult(
     }
   }
 
+  // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
+  const choices = parseChoicesFromText(group.choiceTexts.join('\n'));
+
+  // ★ 본문에서 보기 라인 제외 (2026-06-02) — 근본(1차) "객관식 보기 본문 중복" 차단.
+  //   보기는 choices 로 따로 저장되는데, 그동안 content_latex 를 group.lines 전체로 만들어
+  //   "보기 라인" 까지 본문에 넣어, 자산화 순간부터 본문+보기그리드 이중 노출(객관식 중복).
+  //
+  //   ★★ 서술형 보호 가드 (사용자 지적: "동그라미가 있다고 다 객관식이 아니다").
+  //   동그라미(①②③)가 "객관식 보기" 가 아니라 "서술형 풀이단계/조건/라벨" 인 경우가 있다
+  //   (#19: <조건> ① 양변을 나눈다 … ⑤ 제곱근을 구한다). 이걸 보기로 보고 본문에서 빼면
+  //   풀이단계가 통째로 사라지는 사고. → "서술형 신호" 가 있으면 본문 제거를 하지 않는다.
+  //     - 강한 구조 신호: [서답형]/[서술형]/[(서)논술]/<조건>  (보통 서술형은 헤더가 붙음)
+  //     - 서술 명령형: 쓰시오/구하시오/작성하시오/서술하시오/증명하시오/풀이 과정 …
+  //       (헤더가 빠진 서술형도 명령형으로 잡힘 — 헤더 하나에만 의존하지 않음)
+  //     - 배점(\d+점)은 객관식에도 흔해 신호에서 제외.
+  //   오탐(객관식→서술형) 비용은 "본문 제거만 안 함" → 데이터 손실 0 + 렌더 안전망
+  //   (useExamProblems.stripTrailingInlineChoices)이 표시 중복을 계속 커버. 반대로 미탐
+  //   (서술형→객관식)이 본문 삭제 사고이므로, 신호는 넉넉하게 잡아 안전쪽으로 기운다.
+  //   ※ choices 추출/ type 결정 로직은 그대로 — 이 가드는 "본문 제거" 만 게이트한다.
+  const groupTextForType = group.lines.map(l => l.text_display || l.text || '').join('\n');
+  const isDescriptive =
+    /\[\s*서\s*[답술]|\[\s*[(（]?\s*서?\s*[·.]?\s*논술|\[\s*논술|<\s*조건\s*>/.test(groupTextForType)
+    || /쓰시오|구하시오|구하여라|구해라|서술하시오|증명하시오|설명하시오|작성하시오|나타내시오|답하시오|완성하시오|보이시오|풀이\s*과정|과정을\s*쓰/.test(groupTextForType);
+
+  //   "확실한 보기 2개 이상" + "서술형 아님" 일 때만 본문에서 보기 라인 제외(텍스트 정확 일치).
+  //   기존 1971건 등 이미 본문에 보기 박힌 데이터는 렌더 안전망이 계속 커버.
+  const choiceLineSet = (!isDescriptive && choices.length >= 2)
+    ? new Set(group.choiceTexts.map(t => (t || '').trim()).filter(Boolean))
+    : new Set<string>();
+
   // Mathpix Markdown 텍스트 (수식 $...$ 인라인 포함)
   // diagram 라인은 텍스트가 비어있을 수 있으므로 [도형] 마커 삽입
   const rawContentMmd = group.lines
+    .filter(l => {
+      if (choiceLineSet.size === 0) return true; // 보기 미검출/불확실 → 본문 그대로 유지
+      const t = (l.text_display || l.text || '').trim();
+      // 보기로 판정된 라인이고 + "동그라미로 시작" 할 때만 제거.
+      // 문장 중간의 ①(예: "그림에서 ①,②,③ 영역의 …")은 라벨/본문일 수 있어 보존.
+      return !(choiceLineSet.has(t) && /^[①②③④⑤]/.test(t));
+    })
     .map(l => {
       if ((l.type === 'diagram' || l.type === 'figure') && !(l.text_display || l.text || '').trim()) {
         return '[도형]';
@@ -548,9 +585,6 @@ function buildQuestionResult(
   const halfWidthMmd = dollarDelim.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
   // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (content_latex에도 원문자 반영)
   const contentMmd = normalizeChoiceParensForCloudFlow(halfWidthMmd);
-
-  // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
-  const choices = parseChoicesFromText(group.choiceTexts.join('\n'));
 
   return {
     questionNumber: group.number,
