@@ -245,11 +245,17 @@ function toExamProblemData(
   const fullContent = problem.content_latex || '';
   const { content: extractedContent, choices: extractedChoices } = extractChoicesFromLatex(fullContent);
   const hasDbChoices = dbChoices.length > 0;
+  // ★ 서답형(short_answer) 가드 (2026-06-02): DB choices 가 없을 때 본문에서 ①~⑤를 객관식
+  //   보기로 추출하던 fallback 이, 서답형 문제의 "풀이 단계(①②③…)" 를 객관식 보기로 오인해
+  //   choices 에 채워 넣던 사고(서답형 19·21번: 단계가 객관식 보기/소문제 표로 붙음).
+  //   ① 분기(extractChoicesFromLatex)엔 (1)(2) 분기와 달리 서답형 가드가 없었음.
+  //   → 서답형이면 추출 금지(choices 비움) + 본문 전체 유지(①②③ 단계가 content 에 그대로 남음).
+  const isShortAnswer = answerJson.type === 'short_answer';
   // ★ LaTeX 정리 (공통 유틸 — 모든 페이지에 자동 적용)
-  const content = cleanLatexContent(hasDbChoices ? fullContent : extractedContent);
+  const content = cleanLatexContent((hasDbChoices || isShortAnswer) ? fullContent : extractedContent);
 
-  // DB에 저장된 선택지가 있으면 우선 사용 + LaTeX 정리
-  const rawChoices = hasDbChoices ? dbChoices : extractedChoices;
+  // DB choices 가 있으면 우선 사용. 없고 서답형이면 빈 배열(추출 금지), 객관식이면 본문 추출 fallback.
+  const rawChoices = hasDbChoices ? dbChoices : (isShortAnswer ? [] : extractedChoices);
   const choices = rawChoices.map(c => cleanChoiceText(c));
 
   // type_code → 표시용 짧은 코드 변환

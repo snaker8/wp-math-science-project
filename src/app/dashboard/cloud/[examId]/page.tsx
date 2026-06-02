@@ -625,12 +625,21 @@ function parseSubQuestions(
 
   // 2) 본문에 (1) (2) (3) ... 가 연속 + 서술형 키워드 포함 → 소문제로 인식
   const reParenBody = /\(([1-9])\)/g;
-  const parens: { number: string; index: number }[] = [];
+  const parensAll: { number: string; index: number }[] = [];
   while ((m = reParenBody.exec(content)) !== null) {
-    parens.push({ number: m[1], index: m.index });
+    parensAll.push({ number: m[1], index: m.index });
   }
-  // (1) (2) (3) 가 모두 있고 + 본문 어딘가에 서술형 키워드가 있으면 소문제
-  if (parens.length >= 2 && parens[0].number === '1' && subKeyword.test(content)) {
+  // ★ 순차(1,2,3…)인 것만 진짜 소문제로 인정 (2026-06-02).
+  //   "(2) … (1)의 상수 …" 처럼 본문 중간의 (1) 참조는 번호가 안 이어지므로 제외.
+  //   누락 사례: 서답형3(21번) = (1)(2) 인데 (2) 안의 "(1)의" 참조까지 잡혀 "1,2,1" 3행 +
+  //   (2) 본문이 그 참조에서 잘리던 사고.
+  const parens: { number: string; index: number }[] = [];
+  let expectedSub = 1;
+  for (const pp of parensAll) {
+    if (parseInt(pp.number, 10) === expectedSub) { parens.push(pp); expectedSub++; }
+  }
+  // (1) (2) (3) 가 순차로 있고 + 본문 어딘가에 서술형 키워드가 있으면 소문제
+  if (parens.length >= 2 && subKeyword.test(content)) {
     return parens.map((mt, i) => {
       const start = mt.index;
       const end = i + 1 < parens.length ? parens[i + 1].index : content.length;
