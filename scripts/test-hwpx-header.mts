@@ -15,6 +15,7 @@ const cfg = {
   showAnswerSheet: true,
   showSolutions: false,
   columns: 2 as const,
+  problemGap: 40, // 40px → space-before 3000 HWPUNIT
   header: {
     schoolName: '구덕고',
     examTitle: '26 구덕고 대수 1학기 중간',
@@ -53,6 +54,11 @@ const checks: [string, boolean][] = [
   ['13번 "이면" 보존(00이다 사고 없음)', sec.includes('이면')],
   ['13번 "<보기>" 보존', sec.includes('&lt;보기&gt;') || sec.includes('<보기>'.replace(/</g,'&lt;').replace(/>/g,'&gt;'))],
   ['NUL 바이트 없음', !sec.includes('\0') && !hdr.includes('\0')],
+  // 간격: space-before paraPr 90 주입 + 사용
+  ['header.xml 에 paraPr id=90 주입', hdr.includes('<hh:paraPr id="90"')],
+  ['paraPr 90 prev(위 간격)=3000', /<hh:paraPr id="90"[\s\S]*?<hc:prev value="3000"/.test(hdr)],
+  ['paraProperties itemCnt 67(66+1)', hdr.includes('itemCnt="67"')],
+  ['section0 문제(2번 이상)가 paraPrIDRef=90 사용', sec.includes('paraPrIDRef="90"')],
 ];
 let pass = 0;
 for (const [name, ok] of checks) { if (ok) pass++; console.log(`${ok ? 'OK ' : 'XX '} ${name}`); }

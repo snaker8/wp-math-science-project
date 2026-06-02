@@ -88,10 +88,12 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const withAnswer = searchParams.get('withAnswer') !== 'false'; // 기본 true
   const withSolutions = searchParams.get('withSolutions') === 'true';
-  // 인쇄 모달 설정 (단 수 / 문제 간격)
+  // 인쇄 모달 설정 (단 수 / 문제 간격 / N문제 배열)
   const columns: 1 | 2 = searchParams.get('columns') === '1' ? 1 : 2;
   const gapRaw = parseInt(searchParams.get('gap') || '', 10);
   const problemGap = Number.isFinite(gapRaw) && gapRaw > 0 ? gapRaw : undefined;
+  const perPageRaw = parseInt(searchParams.get('perPage') || '', 10);
+  const perPage = Number.isFinite(perPageRaw) && perPageRaw > 0 ? perPageRaw : undefined;
 
   // 시험지
   const { data: exam, error: examErr } = await sb
@@ -167,6 +169,7 @@ export async function GET(
     showSolutions: withSolutions,
     columns,
     problemGap,
+    perPage,
     header: headerMeta,
   })) as Buffer;
 

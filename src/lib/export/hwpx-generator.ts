@@ -504,9 +504,9 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   const colCtrl = cols === 2 ? COLPR_CTRL : '';
   // 본문 가로폭(HWPUNIT): A4 59528 - 좌우여백 2834*2 = 53860. 2단이면 (그 폭 - 단간격 2000)/2.
   _colWidth = cols === 2 ? Math.round((53860 - 2000) / 2) : 53860;
-  const gapPx = (config.problemGap && config.problemGap > 0) ? config.problemGap : 24;
-  const spacerN = Math.max(1, Math.min(3, Math.round(gapPx / 30))); // 간격 보수적(과한 빈 줄 방지)
-  const spacer = (): string => { let s = ''; for (let i = 0; i < spacerN; i++) s += paragraph(''); return s; };
+  // ★ 문제 간격은 빈 단락이 아니라 '문단 위 간격(space-before)' 으로 — 한글 네이티브 방식.
+  //   각 문제 첫 단락에 paraPr PARA_SPACED(90, prev=gap) 적용 → 편집해도 간격 유지, 컬럼 맨 위에선 자동 억제.
+  //   (paraPr 90 은 generateHWPX 가 gap 값으로 header.xml 에 주입)
 
   // 헤더: config.header 가 있으면 표는 firstPara 에 그리고 부제/이름란은 생략(폼 통일).
   //   없으면(테스트 등) 기존 제목/부제/이름란 동작 유지.
@@ -529,13 +529,14 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   };
 
   // 문제 (번호 인라인 + 본문, 매쓰플랫 paraPr/charPr)
-  for (const prob of problems) {
+  problems.forEach((prob, idx) => {
     const segs = parseContent(prob.content);
     const textSegs = segs.filter((s) => s.type !== 'image');
     const pts = prob.points ? `   [${prob.points}점]` : '';
     const runs = textRun(`${prob.number}. `, CHAR.number) + segmentsToRuns(textSegs, CHAR.body, imageMap)
       + (pts ? textRun(pts, CHAR.small) : '');
-    P.push(paragraph(runs, PARA.body));
+    // 첫 문제는 헤더 바로 아래라 위 간격 X. 이후 문제는 PARA_SPACED 로 문제 사이 간격.
+    P.push(paragraph(runs, idx === 0 ? PARA.body : PARA_SPACED));
     pushFigures(segs);  // 도형은 본문 아래 자기 단락에
 
     if (prob.choices && prob.choices.length > 0) {
@@ -546,8 +547,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
         pushFigures(cseg);  // 선택지 도형(드묾)도 자기 단락
       }
     }
-    P.push(spacer());  // 문제 간격 (모달 gap 반영)
-  }
+  });
 
   // 정답표
   if (config.showAnswerSheet !== false) {
@@ -622,6 +622,40 @@ function buildContentHpf(config: HwpxExamConfig, images: Array<{ id: string; ext
     + `</opf:package>`;
 }
 
+// ----------------------------------------------------------------------------
+// 문제 간격 — '문단 위 간격(space-before)' paraPr 를 header.xml 에 동적 주입.
+//   빈 단락보다 편집 안정적이고, 2단 컬럼 맨 위에선 한글이 자동 억제(상단 깔끔).
+// ----------------------------------------------------------------------------
+const PARA_SPACED = 90; // 문제 첫 단락용(위 간격). injectSpacingParaPr 가 정의 주입.
+
+function injectSpacingParaPr(header: string, gapHwpUnit: number): string {
+  // paraPr 62(body, LEFT) 복제 → id=PARA_SPACED, prev(문단 위 간격)=gapHwpUnit.
+  const i = header.indexOf('<hh:paraPr id="62"');
+  if (i < 0) return header;
+  const j = header.indexOf('</hh:paraPr>', i);
+  if (j < 0) return header;
+  let clone = header.slice(i, j + '</hh:paraPr>'.length);
+  clone = clone.replace('<hh:paraPr id="62"', `<hh:paraPr id="${PARA_SPACED}"`);
+  // case + default 두 군데의 prev(문단 위 간격) 0 → gapHwpUnit (next/left 등은 그대로)
+  clone = clone.replace(/<hc:prev value="0"/g, `<hc:prev value="${Math.max(0, Math.round(gapHwpUnit))}"`);
+  // paraProperties itemCnt +1
+  const out = header.replace(/(<hh:paraProperties\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+  const k = out.indexOf('</hh:paraProperties>');
+  if (k < 0) return header;
+  return out.slice(0, k) + clone + out.slice(k);
+}
+
+// gap(px) + perPage → space-before HWPUNIT (px 96dpi → ×75)
+function computeGapHwpUnit(config: HwpxExamConfig): number {
+  const gapPx = (config.problemGap && config.problemGap > 0) ? config.problemGap : 30;
+  if (config.perPage && config.perPage > 0) {
+    // N문제 배열: 페이지당 문제 수 적을수록 간격 ↑ (대략적 spread — 정밀 페이지채움은 후속)
+    const map: Record<number, number> = { 4: 4200, 6: 3000, 8: 2300 };
+    if (map[config.perPage]) return map[config.perPage];
+  }
+  return Math.round(gapPx * 75);
+}
+
 // ============================================================================
 // 메인 생성 / 다운로드
 // ============================================================================
@@ -647,7 +681,7 @@ export async function generateHWPX(
   zip.file('META-INF/container.xml', CONTAINER_XML);
   zip.file('META-INF/manifest.xml', MANIFEST_XML);
   zip.file('META-INF/container.rdf', CONTAINER_RDF);
-  zip.file('Contents/header.xml', HEADER_XML);
+  zip.file('Contents/header.xml', injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)));
 
   // BinData + manifest items
   const imageItems: Array<{ id: string; ext: string; mime: string }> = [];

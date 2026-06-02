@@ -789,7 +789,8 @@ export default function ExamManagementPage() {
     if (!selectedExamId || isDownloadingHwpx) return;
     setIsDownloadingHwpx(true);
     try {
-      const res = await fetch(`/api/exams/${selectedExamId}/export-hwp?withAnswer=true&withSolutions=true&columns=${columns}&gap=${gap}`);
+      const perPageQ = perPagePreset ? `&perPage=${perPagePreset}` : '';
+      const res = await fetch(`/api/exams/${selectedExamId}/export-hwp?withAnswer=true&withSolutions=true&columns=${columns}&gap=${gap}${perPageQ}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'HWP 생성 실패');
@@ -809,7 +810,7 @@ export default function ExamManagementPage() {
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [selectedExamId, selectedExam, isDownloadingHwpx, columns, gap]);
+  }, [selectedExamId, selectedExam, isDownloadingHwpx, columns, gap, perPagePreset]);
 
   // 일괄 해설 생성
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
