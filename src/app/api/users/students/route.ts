@@ -120,6 +120,7 @@ export async function GET(request: Request) {
       grade: gradeLabel(u.grade),
       className: classByStudent.get(u.id as string) || '',
       email: (u.email as string | null) || null,
+      phone: (u.phone as string | null) || null, // 학생 정보 수정(전화번호) 편집 폼 프리필용
       instituteId: (u.institute_id as string | null) || null,
       institute: u.institute_id ? (instMap.get(u.institute_id as string) || '') : '',
     }))
