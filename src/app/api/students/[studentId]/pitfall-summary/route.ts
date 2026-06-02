@@ -8,7 +8,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAuth } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertStudentAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +29,9 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ studentId: string }> }
 ) {
-  const auth = await requireAuth();
-  if (!auth.ok) return auth.response;
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
 
   const { studentId } = await params;
   if (!studentId) {
@@ -40,6 +42,10 @@ export async function GET(
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
   const sb = supabaseAdmin;
+
+  // ★ 학생 격리 — 다른 학원 학생 약점/함정 프로필 read 차단
+  const access = await assertStudentAccess(sb, studentId, scope);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   // 누적 빈도 — v_student_pitfall_summary 활용
   const { data: summaryData, error: sumErr } = await sb

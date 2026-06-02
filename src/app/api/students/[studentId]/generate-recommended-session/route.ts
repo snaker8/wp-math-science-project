@@ -10,9 +10,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireEditor } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertStudentAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
+
+const EDITOR_ROLES = ['ADMIN', 'TEACHER', 'TUTOR', 'ORG_ADMIN'];
 
 interface Body {
   problemIds?: string[];
@@ -23,8 +26,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ studentId: string }> }
 ) {
-  const guard = await requireEditor();
-  if (!guard.ok) return guard.response;
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+  if (!scope.isSuperAdmin && !EDITOR_ROLES.includes(scope.role || '')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const { studentId } = await params;
   if (!studentId) return NextResponse.json({ error: 'studentId required' }, { status: 400 });
@@ -33,6 +40,10 @@ export async function POST(
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
   const sb = supabaseAdmin;
+
+  // ★ 학생 격리 — 다른 학원 학생에게 세션 쓰기 차단
+  const access = await assertStudentAccess(sb, studentId, scope);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   let body: Body;
   try {
@@ -49,7 +60,7 @@ export async function POST(
     return NextResponse.json({ error: 'problemIds 최대 50개' }, { status: 400 });
   }
 
-  const teacherId = guard.user?.id || null;
+  const teacherId = user?.id || null;
   if (!teacherId) {
     return NextResponse.json({ error: '강사 인증 필요' }, { status: 401 });
   }

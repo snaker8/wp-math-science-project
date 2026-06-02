@@ -16,6 +16,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 import { extractSchoolName } from '@/lib/utils/school-extract';
 import { extractExamYear } from '@/lib/utils/year-extract';
 import { extractSemester, extractExamType } from '@/lib/utils/exam-meta-extract';
@@ -90,6 +92,10 @@ interface AiNarrative {
 }
 
 export async function GET(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
@@ -125,6 +131,8 @@ export async function GET(request: NextRequest) {
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
+  // ★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지, isolated org 만 격리
+  query = applyInstituteFilter(query, scope, { allowCommonPool: true });
   if (filterGrade) query = query.eq('grade', filterGrade);
 
   const { data: examsRaw, error: examsErr } = await query;

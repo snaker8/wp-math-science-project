@@ -422,6 +422,39 @@ export async function assertProblemAccess(
 }
 
 /**
+ * 학생 접근 가드 — studentId 가 scope 안(같은 학원)에 있는지 검증.
+ *   - super_admin → 통과
+ *   - 학생 본인 (scope.userId === studentId) → 통과 (self-scope)
+ *   - 그 외 → 학생의 users.institute_id 가 scope.accessibleInstituteIds 안에 있어야 통과
+ * 학생별 진단/성적/함정 라우트(students/[id]/*, sessions PDF 등)에서 cross-tenant 차단.
+ *
+ * @example
+ *   const guard = await assertStudentAccess(supabaseAdmin, studentId, scope);
+ *   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+ */
+export async function assertStudentAccess(
+  adminClient: SupabaseClient,
+  studentId: string,
+  scope: InstituteAccessScope
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (scope.isSuperAdmin) return { ok: true };
+  if (scope.userId === studentId) return { ok: true }; // 학생 본인
+  const { data: stu, error } = await adminClient
+    .from('users')
+    .select('institute_id')
+    .eq('id', studentId)
+    .maybeSingle();
+  if (error) return { ok: false, status: 500, error: error.message };
+  if (!stu) return { ok: false, status: 404, error: 'Student not found' };
+  try {
+    assertInstituteAccess(scope, (stu as { institute_id: string | null }).institute_id);
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
+}
+
+/**
  * 공통 풀 쓰기 가드 — instituteId === null 인 자료의 수정/삭제 시도 시
  * super_admin 이 아니면 throw.
  *

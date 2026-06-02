@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 import { extractSchoolName } from '@/lib/utils/school-extract';
 import { extractExamYear } from '@/lib/utils/year-extract';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
@@ -33,6 +35,10 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ school: string }> }
 ) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
@@ -40,12 +46,13 @@ export async function GET(
   const { school: rawSchool } = await params;
   const school = decodeURIComponent(rawSchool);
 
-  // 모든 시험지 조회 후 학교명 매칭
+  // 시험지 조회 후 학교명 매칭 (★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지)
   // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive
-  const { data: exams, error } = await supabaseAdmin
+  const baseQ = supabaseAdmin
     .from('exams')
     .select('id, title, grade, subject, total_points, ai_analysis, share_token, created_at, exam_problems(count)')
-    .is('deleted_at', null)
+    .is('deleted_at', null);
+  const { data: exams, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
     .order('created_at', { ascending: false });
 
   if (error) {

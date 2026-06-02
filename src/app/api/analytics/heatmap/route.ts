@@ -4,7 +4,9 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertStudentAccess } from '@/lib/security/institute-guard';
 import {
   createHeatmapData,
   generateMockHeatmapData,
@@ -49,6 +51,14 @@ export async function GET(request: NextRequest) {
 
     // 학생 ID 결정 (파라미터 또는 현재 사용자)
     const studentId = studentIdParam || user.id;
+
+    // ★ 학생 격리 — 타 학생(특히 타 학원) 히트맵 조회 차단. 본인 조회는 통과.
+    if (studentIdParam && studentIdParam !== user.id && supabaseAdmin) {
+      const authed = await requireAuthScope();
+      if (!authed.ok) return authed.response;
+      const access = await assertStudentAccess(supabaseAdmin, studentIdParam, authed.data.scope);
+      if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     // 기간 필터 계산
     let dateFilter: Date | null = null;

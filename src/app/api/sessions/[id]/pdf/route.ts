@@ -12,6 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertStudentAccess } from '@/lib/security/institute-guard';
 import { buildSessionUrl, generateQRSvg } from '@/lib/qr/generator';
 import katex from 'katex';
 
@@ -88,6 +90,10 @@ export async function GET(
 ) {
   const { id: sessionId } = await params;
 
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
@@ -106,6 +112,15 @@ export async function GET(
   if (sErr || !session) {
     return new NextResponse(`<p>세션을 찾을 수 없습니다.</p>`, {
       status: 404,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  }
+
+  // ★ 학생 격리 — 이 세션 학생이 호출자 학원 소속(또는 본인/super_admin)인지. PII·시험본문 노출 차단.
+  const access = await assertStudentAccess(sb, (session as { student_id: string }).student_id, scope);
+  if (!access.ok) {
+    return new NextResponse(`<p>접근 권한이 없습니다.</p>`, {
+      status: access.status,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }

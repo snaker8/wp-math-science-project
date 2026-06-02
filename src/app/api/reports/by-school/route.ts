@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { applyInstituteFilter } from '@/lib/security/institute-guard';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
 import { extractExamYear } from '@/lib/utils/year-extract';
 
@@ -25,16 +27,21 @@ interface SchoolCard {
 }
 
 export async function GET(_request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
 
-  // 시험지 + 분석/공유 상태 일괄 조회
+  // 시험지 + 분석/공유 상태 일괄 조회 (★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지)
   // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive (useExams.ts 동일 패턴)
-  const { data: exams, error } = await supabaseAdmin
+  const baseQ = supabaseAdmin
     .from('exams')
     .select('id, title, grade, subject, created_at, ai_analysis, share_token, exam_problems(count)')
-    .is('deleted_at', null)
+    .is('deleted_at', null);
+  const { data: exams, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
     .order('created_at', { ascending: false });
 
   if (error) {

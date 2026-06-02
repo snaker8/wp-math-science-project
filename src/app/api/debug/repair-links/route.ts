@@ -5,13 +5,13 @@
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAdmin } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
   // ★ ADMIN 전용 가드 (기존: 누구나 POST 가능 → DB 무단 변경 위험)
-  const guard = await requireAdmin();
+  const guard = await requireSuperAdmin();
   if (!guard.ok) return guard.response;
 
   if (!supabaseAdmin) {

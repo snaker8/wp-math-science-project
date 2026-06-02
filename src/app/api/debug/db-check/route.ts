@@ -4,13 +4,13 @@
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireAdmin } from '@/lib/auth/guard';
+import { requireSuperAdmin } from '@/lib/auth/guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   // ★ ADMIN 전용 가드 (기존: 누구나 접근 가능 → 정보 유출 위험)
-  const guard = await requireAdmin();
+  const guard = await requireSuperAdmin();
   if (!guard.ok) return guard.response;
 
   if (!supabaseAdmin) {

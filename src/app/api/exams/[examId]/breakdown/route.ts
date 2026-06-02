@@ -24,7 +24,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { requireEditor } from '@/lib/auth/guard';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertExamAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,8 +43,9 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
-  const guard = await requireEditor();
-  if (!guard.ok) return guard.response;
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -51,6 +53,10 @@ export async function GET(
   const sb = supabaseAdmin;
 
   const { examId } = await params;
+
+  // ★ exam 격리 — 다른 학원 시험지 단원/분류 트리 read 차단 (공통풀 NULL 은 통과)
+  const exGuard = await assertExamAccess(sb, examId, scope);
+  if (!exGuard.ok) return NextResponse.json({ error: exGuard.error }, { status: exGuard.status });
 
   // 1) exam 메타 (title 등)
   const { data: exam, error: examErr } = await sb

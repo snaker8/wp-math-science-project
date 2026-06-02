@@ -5,6 +5,8 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 interface RouteParams {
   params: Promise<{ enrollmentId: string }>;
@@ -13,19 +15,17 @@ interface RouteParams {
 // GET: 등록 상세 조회
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { enrollmentId } = await params;
-  const supabase = await createSupabaseServerClient();
 
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
+  const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
 
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { data: enrollment, error } = await supabase
       .from('class_enrollments')
       .select(`
@@ -38,6 +38,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     if (error || !enrollment) {
       return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+    }
+
+    // ★ 격리 — 본인(학생)·super_admin 외에는 같은 학원 enrollment 만. institute_id 없으면 RLS 백업.
+    const instId = (enrollment as { institute_id?: string | null }).institute_id ?? null;
+    const isOwnStudent = (enrollment as { student_id?: string }).student_id === user.id;
+    if (!scope.isSuperAdmin && !isOwnStudent && instId) {
+      try { assertInstituteAccess(scope, instId); }
+      catch { return NextResponse.json({ error: 'Forbidden' }, { status: 403 }); }
     }
 
     return NextResponse.json({ enrollment });

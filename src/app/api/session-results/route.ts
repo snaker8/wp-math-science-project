@@ -26,6 +26,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertStudentAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +47,10 @@ interface SaveBody {
 }
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
@@ -74,6 +80,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
   }
   const studentId = (session as { student_id?: string }).student_id || null;
+
+  // ★ 학생 격리 — 다른 학원 학생 세션에 채점 결과 쓰기 차단
+  if (studentId) {
+    const access = await assertStudentAccess(sb, studentId, scope);
+    if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  }
   const examId = (session as { exam_id?: string }).exam_id || null;
 
   // session_problems 로부터 sequence_number → problem_id 매핑 (problem_id 미지정 시 보조)

@@ -6,6 +6,8 @@
 
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 interface RouteParams {
   params: Promise<{ classId: string }>;
@@ -36,10 +38,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   // 1) 권한
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
 
   const { data: cls } = await supabase
     .from('classes')
@@ -55,8 +56,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     .select('role, institute_id')
     .eq('id', user.id)
     .maybeSingle();
-  if (cls.tutor_id !== user.id && tutorRow?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // ★ 담임이 아니면 같은 학원(institute) 관리자급만 — cross-tenant ADMIN 차단
+  const isTutor = cls.tutor_id === user.id;
+  if (!isTutor && !scope.isSuperAdmin) {
+    try { assertInstituteAccess(scope, cls.institute_id); }
+    catch { return NextResponse.json({ error: 'Forbidden' }, { status: 403 }); }
+    if (!['ADMIN', 'ORG_ADMIN', 'TEACHER', 'TUTOR'].includes(scope.role || '')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   // 2) 입력 파싱
