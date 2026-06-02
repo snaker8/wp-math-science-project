@@ -1988,7 +1988,15 @@ async function saveEditedProblemsDirect(
       // ★ YOLO 학습 데이터: detection_annotations 저장
       if (problem && edited.bbox && edited.bbox.w > 0.01 && edited.bbox.h > 0.01) {
         const pageNum = (edited.pageIndex ?? 0) + 1;
-        const pageImgInfo = pageImagePathMap.get(pageNum);
+        // ★ 2026-06-03 회귀 수정: page-images 는 계속 생성되는데(자동크롭+수동보정 흐름 정상)
+        //   annotation 만 4/26 이후 0건이던 사고 — pageImagePathMap 키 매칭 실패가 INSERT 를
+        //   조용히 스킵시킴. 클라가 항상 page-images/{jobId}/page-{n}.jpg 로 업로드하므로,
+        //   맵 미스 시 결정적 경로로 복원해 INSERT 를 보장한다(폭 0 = 미상, bbox 는 0~1 정규화라 무관).
+        let pageImgInfo = pageImagePathMap.get(pageNum);
+        if (!pageImgInfo) {
+          console.warn(`[Direct Save] 문제 ${edited.number} annotation: pageImagePathMap miss (size=${pageImagePathMap.size}, pageNum=${pageNum}) → 결정적 경로 폴백`);
+          pageImgInfo = { path: `page-images/${jobId}/page-${pageNum}.jpg`, width: 0, height: 0 };
+        }
         if (pageImgInfo) {
           try {
             // ★ 기존 레코드 삭제 후 insert (중복 방지)
@@ -2035,9 +2043,11 @@ async function saveEditedProblemsDirect(
             }
             await supabase.from('detection_annotations').insert(annotationsToInsert);
           } catch (annErr) {
-            console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패 (무시):`, annErr);
+            console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패:`, annErr);
           }
         }
+      } else if (problem) {
+        console.warn(`[Direct Save] 문제 ${edited.number} annotation 스킵: bbox 무효 (bbox=${JSON.stringify(edited.bbox)})`);
       }
     } catch (err) {
       console.error(`[Direct Save] 문제 ${edited.number}번 오류:`, err);
@@ -2697,7 +2707,13 @@ async function saveProblemsToDB(
 
         if (bbox && bbox.w > 0.01 && bbox.h > 0.01 && pageIdx !== undefined) {
           const pageNum = pageIdx + 1;
-          const pageImgInfo = pageImagePathMap.get(pageNum);
+          // ★ 2026-06-03 회귀 수정: 맵 미스 시 결정적 경로 폴백 (saveEditedProblemsDirect 와 동일).
+          //   page-images 는 계속 생성되는데 annotation 만 0건이던 사고 차단.
+          let pageImgInfo = pageImagePathMap.get(pageNum);
+          if (!pageImgInfo) {
+            console.warn(`[DB] 문제 ${problemNum} annotation: pageImagePathMap miss (size=${pageImagePathMap.size}, pageNum=${pageNum}) → 결정적 경로 폴백`);
+            pageImgInfo = { path: `page-images/${jobId}/page-${pageNum}.jpg`, width: 0, height: 0 };
+          }
           if (pageImgInfo) {
             try {
               // ★ 기존 레코드 삭제 후 insert (중복 방지)
@@ -2719,7 +2735,7 @@ async function saveProblemsToDB(
                 detection_source: editedBbox ? 'MANUAL' : 'MATHPIX',
               });
             } catch (annErr) {
-              console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패 (무시):`, annErr);
+              console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패:`, annErr);
             }
           }
         }
