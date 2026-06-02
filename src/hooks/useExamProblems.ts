@@ -176,6 +176,55 @@ function extractChoicesFromLatex(latex: string): { content: string; choices: str
 }
 
 // ============================================================================
+// 본문 끝의 인라인 보기 블록 제거 (중복 방지)
+// ============================================================================
+//
+// ★ 2026-06-02 사고: 일부 자산화 데이터(예: 6/1 자산화 시험지)는 content_latex "끝"에
+//   보기(① 4 ② 5 ③ 6 ④ 7 ⑤ 8)가 그대로 들어있고, answer_json.choices 에도 같은 보기가 있다.
+//   hasDbChoices 경로는 본문 cut 사고(2026-05-25) 회피 위해 fullContent 를 그대로 쓰므로,
+//   "본문(인라인 보기 포함) + 보기 그리드" 가 둘 다 렌더 → 보기가 화면에 중복으로 보임.
+//
+// 안전 원칙:
+//   - dbChoices 와 본문 "끝 블록" 이 실제로 일치할 때만 그 끝 블록을 제거한다(보기 그리드는 유지).
+//   - 마커 위치는 lastIndexOf 로 "맨 끝 런" 을 역추적 → 본문 중간의 ①(표·설명·보기 아닌 것)은
+//     보존. 텍스트가 dbChoices 와 안 맞으면(표 셀 등) 과반 미달로 절대 자르지 않는다.
+//   - 질문(head)이 거의 없으면(전체가 보기뿐) 위험하므로 패스.
+function stripTrailingInlineChoices(text: string, dbChoices: string[]): string {
+  const n = dbChoices.length;
+  if (n < 2 || n > 5) return text;
+  const markers = ['①', '②', '③', '④', '⑤'];
+  const pos = new Array<number>(n);
+  pos[n - 1] = text.lastIndexOf(markers[n - 1]);
+  if (pos[n - 1] === -1) return text;
+  for (let k = n - 2; k >= 0; k--) {
+    pos[k] = text.lastIndexOf(markers[k], pos[k + 1] - 1);
+    if (pos[k] === -1) return text; // 순서대로 못 찾음 → 끝 보기 런 아님
+  }
+  const start = pos[0];
+  const head = text.slice(0, start).trim();
+  if (head.length < 5) return text; // 질문이 사실상 없음 → 위험, 패스
+
+  // 마커·LaTeX 명령·공백·$·괄호·구두점 제거 후 비교 (본문 $11$ vs 보기 11 같은 차이 흡수)
+  const norm = (s: string) =>
+    s
+      .replace(/[①②③④⑤]/g, '')
+      .replace(/\\[a-zA-Z]+/g, '')
+      .replace(/[\s${}().,]/g, '')
+      .toLowerCase();
+
+  let matches = 0;
+  for (let k = 0; k < n; k++) {
+    const segEnd = k + 1 < n ? pos[k + 1] : text.length;
+    const segN = norm(text.slice(pos[k], segEnd));
+    const dbN = norm(dbChoices[k] || '');
+    if (segN && dbN && segN === dbN) matches++;
+  }
+  // 과반(60%) 이상 일치해야 "이 끝 블록 = 보기" 로 확신 → 제거
+  if (matches >= Math.ceil(n * 0.6)) return head;
+  return text;
+}
+
+// ============================================================================
 // answer_json에서 정답 번호 추출
 // ============================================================================
 
@@ -245,11 +294,24 @@ function toExamProblemData(
   const fullContent = problem.content_latex || '';
   const { content: extractedContent, choices: extractedChoices } = extractChoicesFromLatex(fullContent);
   const hasDbChoices = dbChoices.length > 0;
+  // ★ 서답형(short_answer) 가드 (2026-06-02): DB choices 가 없을 때 본문에서 ①~⑤를 객관식
+  //   보기로 추출하던 fallback 이, 서답형 문제의 "풀이 단계(①②③…)" 를 객관식 보기로 오인해
+  //   choices 에 채워 넣던 사고(서답형 19·21번: 단계가 객관식 보기/소문제 표로 붙음).
+  //   ① 분기(extractChoicesFromLatex)엔 (1)(2) 분기와 달리 서답형 가드가 없었음.
+  //   → 서답형이면 추출 금지(choices 비움) + 본문 전체 유지(①②③ 단계가 content 에 그대로 남음).
+  const isShortAnswer = answerJson.type === 'short_answer';
   // ★ LaTeX 정리 (공통 유틸 — 모든 페이지에 자동 적용)
-  const content = cleanLatexContent(hasDbChoices ? fullContent : extractedContent);
+  //   hasDbChoices: 본문 전체 사용(2026-05-25 cut 방지) 하되, 본문 끝에 보기가 인라인으로
+  //     중복돼 있으면(자산화 데이터) 그 끝 블록만 제거 → "본문 보기 + 보기 그리드" 중복 해소.
+  //     (dbChoices 와 실제 일치할 때만 제거 — 본문 중간 ① 표·설명은 보존)
+  const content = cleanLatexContent(
+    hasDbChoices
+      ? stripTrailingInlineChoices(fullContent, dbChoices)
+      : (isShortAnswer ? fullContent : extractedContent),
+  );
 
-  // DB에 저장된 선택지가 있으면 우선 사용 + LaTeX 정리
-  const rawChoices = hasDbChoices ? dbChoices : extractedChoices;
+  // DB choices 가 있으면 우선 사용. 없고 서답형이면 빈 배열(추출 금지), 객관식이면 본문 추출 fallback.
+  const rawChoices = hasDbChoices ? dbChoices : (isShortAnswer ? [] : extractedChoices);
   const choices = rawChoices.map(c => cleanChoiceText(c));
 
   // type_code → 표시용 짧은 코드 변환

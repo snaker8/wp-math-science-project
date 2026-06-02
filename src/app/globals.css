@@ -172,11 +172,11 @@
   overflow: visible;   /* ★ hidden 금지 — cases/분수 상하 잘림 원인 */
   margin: 0.5em 0;
 }
-/* ★ cases/행렬 잘림 핵심 해결 (#259, 2026-05-31): .katex-display 박스가 cases 실제 높이보다
-   작아 내용이 위로 ~42px 솟구쳐 윗줄과 겹쳐 잘림(운영 화면 DOM 측정). padding-top 으로 솟음을
-   박스 안에 담음(측정: 42px→1px). :has(.mtable) 로 cases/행렬에만 → 일반 수식·카드뷰 영향 0.
-   :has 미지원 구형 브라우저는 무시되어 기존 동작 폴백(안 깨짐). */
-.exam-page .katex-display:has(.mtable) {
+/* ★ #259 의 cases padding-top:3em 을 cases 에서 제거 (2026-06-02, 브라우저 실측). cases
+   (col-align-l)는 dfracInCases + neutralizer 로 제 높이로 그려져 안 솟음(실측: 시험지 cases
+   11개 — 분수 포함 — 전부 솟음 0) → 3em(+42px/개) 헛 패딩 제거 → 카드뷰처럼 촘촘.
+   단 행렬(col-align-c)은 1.4em 확대 유지라 솟을 수 있어 3em 보존(행렬 불변). */
+.exam-page .katex-display:has(.col-align-c) {
   padding-top: 3em;
   padding-bottom: 0.5em;
 }

@@ -84,7 +84,7 @@ function ExamProblemRendererInner({
   problem,
   gap = 20,
   textSize = '14px',
-  lineHeight = '1.85',
+  lineHeight = '1.5',
   maxFigureWidth = 240,
 }: {
   problem: ExamRenderProblem;
@@ -301,6 +301,7 @@ function ExamProblemRendererInner({
   const splitAtFirstQuestionMark = (text: string): [string, string, boolean] => {
     let inDollar = false;
     let inSingleDollar = false;
+    let firstNewlineIdx = -1;
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
       const next = text[i + 1];
@@ -308,9 +309,24 @@ function ExamProblemRendererInner({
       if (ch === '$' && next === '$') { inDollar = !inDollar; i++; continue; }
       // 단일 $ 진입/종료 (블록 모드 아닐 때만)
       if (ch === '$' && !inDollar) { inSingleDollar = !inSingleDollar; continue; }
-      // 수식 밖의 '?'만 매칭
+      // 수식 밖의 '?'만 매칭 — 있으면 그 뒤에 배지
       if (ch === '?' && !inDollar && !inSingleDollar) {
         return [text.slice(0, i + 1), text.slice(i + 1), true];
+      }
+      // 수식 밖 첫 줄바꿈 기억 (폴백용)
+      if (ch === '\n' && !inDollar && !inSingleDollar && firstNewlineIdx === -1) {
+        firstNewlineIdx = i;
+      }
+    }
+    // ★ '?' 없을 때 — 첫 줄이 "질문 지시어(~시오/~하라 등)"로 끝나는 경우에만 첫 \n 직전에 배지.
+    //   (15번류: "…구하시오.\n<보기>" → 보기 박스 위에 배지.)
+    //   첫 줄이 지시어로 안 끝나면(3번류: "연립방정식{…}\n의 해는\n…구하시오." 처럼 cases가
+    //   먼저·질문이 뒤) 폴백하지 않고 false → isLastText 가 텍스트 끝(질문 뒤)에 배지 부착.
+    //   ※ 단순 첫-\n 폴백은 3번 배지를 "의 해는" 뒤(중간)로 보내는 회귀를 일으켰음(브라우저 실측).
+    if (firstNewlineIdx > 0) {
+      const before = text.slice(0, firstNewlineIdx).trimEnd();
+      if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
+        return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
       }
     }
     return [text, '', false];
