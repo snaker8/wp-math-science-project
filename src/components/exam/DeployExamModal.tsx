@@ -12,7 +12,8 @@ import {
   ChevronRight, ChevronDown, Send, ExternalLink, Printer, QrCode,
 } from 'lucide-react';
 
-interface StudentOption { id: string; name: string; grade: string; className: string; }
+interface StudentOption { id: string; name: string; grade: string; className: string; institute?: string; instituteId?: string | null; }
+interface InstituteOption { id: string; name: string; }
 
 export interface DeployResult {
   created: Array<{ session_id: string; student_id: string; problem_count: number }>;
@@ -45,20 +46,34 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<DeployResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 학원(institute) 구분/선택 — super_admin·다중학원에서만 노출
+  const [institutes, setInstitutes] = useState<InstituteOption[]>([]);
+  const [selectedInstitute, setSelectedInstitute] = useState<string>(''); // '' = 전체
 
-  // 학생 로드 (모달 열릴 때)
+  // 모달 열릴 때 초기화
   useEffect(() => {
     if (!isOpen) return;
     setResult(null); setError(null); setSelected(new Set()); setSearch('');
+    setSelectedInstitute('');
+  }, [isOpen]);
+
+  // 학생 로드 (모달 열릴 때 + 학원 선택 변경 시)
+  useEffect(() => {
+    if (!isOpen) return;
     let cancelled = false;
     setLoading(true);
-    fetch('/api/users/students')
+    const qs = selectedInstitute ? `?institute_id=${encodeURIComponent(selectedInstitute)}` : '';
+    fetch(`/api/users/students${qs}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled && Array.isArray(d.students)) setStudents(d.students as StudentOption[]); })
+      .then((d) => {
+        if (cancelled) return;
+        if (Array.isArray(d.students)) setStudents(d.students as StudentOption[]);
+        if (Array.isArray(d.institutes)) setInstitutes(d.institutes as InstituteOption[]);
+      })
       .catch(() => { if (!cancelled) setError('학생 목록을 불러오지 못했습니다.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [isOpen]);
+  }, [isOpen, selectedInstitute]);
 
   const keyOf = (s: StudentOption) => (groupBy === 'grade' ? (s.grade || '미배정') : (s.className || '미배정'));
 
@@ -206,6 +221,23 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
           </div>
         ) : (
           <>
+            {/* 학원 선택 (super_admin·다중학원만) — 고르면 그 학원 학생만 */}
+            {institutes.length > 0 && (
+              <div className="px-5 pt-4">
+                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">학원</label>
+                <select
+                  value={selectedInstitute}
+                  onChange={(e) => { setSelectedInstitute(e.target.value); setSelected(new Set()); setOpenL(new Set()); setOpenR(new Set()); }}
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 text-sm text-white border border-zinc-700 outline-none focus:border-cyan-600"
+                >
+                  <option value="">전체 학원</option>
+                  {institutes.map((i) => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* 학년/반 토글 */}
             <div className="px-5 pt-4">
               <div className="flex rounded-lg bg-zinc-800 p-1">
@@ -258,6 +290,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                         <div key={s.id} className="flex items-center pl-8 pr-2.5 py-1.5 hover:bg-zinc-800/40">
                           <span className="text-sm text-zinc-300">{s.name}</span>
                           {s.className && <span className="ml-2 text-[11px] text-zinc-600">{s.className}</span>}
+                          {/* 학원 라벨 — '어디 학생인지' 구분 (전체 보기 시) */}
+                          {!selectedInstitute && s.institute && (
+                            <span className="ml-2 text-[10px] font-medium text-cyan-400/80 px-1 py-0.5 rounded bg-cyan-500/10">{s.institute}</span>
+                          )}
                           <button type="button" onClick={() => addMany([s.id])}
                             className="ml-auto p-0.5 rounded-full bg-cyan-600/80 hover:bg-cyan-500 text-white">
                             <Plus className="h-3 w-3" />

@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_ROLES = ['ADMIN', 'TEACHER', 'TUTOR', 'ORG_ADMIN'];
 
-export async function GET() {
+export async function GET(request: Request) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -33,14 +33,23 @@ export async function GET() {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
+  const sb = supabaseAdmin;
+
+  // 학원 선택 — 스코프 내(super_admin=임의 / 그 외=accessibleInstituteIds 내)일 때만 honor
+  const requested = new URL(request.url).searchParams.get('institute_id');
+  const canUseRequested = !!requested && (scope.isSuperAdmin || (scope.accessibleInstituteIds ?? []).includes(requested));
 
   // ★ supabaseAdmin(RLS 우회) + 앱 레벨 institute 격리
-  let query = supabaseAdmin
+  let query = sb
     .from('users')
     .select('*')
     .eq('role', 'STUDENT')
     .is('deleted_at', null); // soft delete 된 학생 제외
-  query = applyInstituteFilter(query, scope); // super_admin=전체 / ORG_ADMIN=학원 산하 / 일반=자기 institute
+  if (canUseRequested) {
+    query = query.eq('institute_id', requested); // 선택한 학원으로 좁힘
+  } else {
+    query = applyInstituteFilter(query, scope); // super_admin=전체 / ORG_ADMIN=학원 산하 / 일반=자기 institute
+  }
 
   // 트랙 격리 (수학/과학) — active_subject_track 기준
   if (scope.activeTrack === 'science') {
@@ -56,6 +65,16 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // 학생 소속 학원(institute) 이름 매핑 — super_admin/다중학원에서 "어디 학생인지" 구분용
+  const instIds = Array.from(
+    new Set((data || []).map((u: Record<string, unknown>) => u.institute_id as string | null).filter(Boolean)),
+  ) as string[];
+  const instMap = new Map<string, string>();
+  if (instIds.length > 0) {
+    const { data: insts } = await sb.from('institutes').select('id, name').in('id', instIds);
+    (insts || []).forEach((i: Record<string, unknown>) => instMap.set(i.id as string, (i.name as string) || ''));
+  }
+
   // 프론트 편의 shape (full_name / name 둘 다 지원)
   const students = (data || [])
     .map((u: Record<string, unknown>) => ({
@@ -68,8 +87,24 @@ export async function GET() {
       grade: (u.grade as string | null) || '',
       className: (u.class_name as string | null) || (u.className as string | null) || '',
       email: (u.email as string | null) || null,
+      instituteId: (u.institute_id as string | null) || null,
+      institute: u.institute_id ? (instMap.get(u.institute_id as string) || '') : '',
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
-  return NextResponse.json({ students });
+  // 선택 가능한 학원 목록 (super_admin=전체 / 다중 institute 스코프=자기 학원들). 단일/일반은 빈 배열.
+  let institutes: Array<{ id: string; name: string }> = [];
+  if (scope.isSuperAdmin) {
+    const { data: all } = await sb.from('institutes').select('id, name').order('name');
+    institutes = (all || []) as Array<{ id: string; name: string }>;
+  } else if ((scope.accessibleInstituteIds?.length ?? 0) > 1) {
+    const { data: mine } = await sb
+      .from('institutes')
+      .select('id, name')
+      .in('id', scope.accessibleInstituteIds as string[])
+      .order('name');
+    institutes = (mine || []) as Array<{ id: string; name: string }>;
+  }
+
+  return NextResponse.json({ students, institutes });
 }
