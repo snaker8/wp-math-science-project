@@ -41,6 +41,10 @@ export interface UploadJob {
   // ★ 학교 기출 단원집 메타 (2026-05-28) — sourceCategory='school' 일 때 폴더 업로드가 채움.
   //   부분 누락 허용: 빈 필드는 title 기반 자동 추출로 fallback.
   schoolMeta?: SchoolMetaInput;
+  // ★ 단원집 일련번호 모드 (2026-05-29) — 분할 자산화 시 각 청크가 OCR 번호를 1부터 재시작해
+  //   source_number 가 중복되는 문제 차단. true 면 source_number/source_label 을 시험지 내 누적
+  //   순번(exam_problems.sequence_number 와 동일)으로 부여 → 1~N 연속. 폴더 import 가 설정.
+  useSequenceNumbering?: boolean;
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +58,8 @@ export interface UploadJob {
 export interface SchoolMetaInput {
   /** 학교명 raw (예: "동래중학교"). DB 저장 직전 normalizeSchoolName() 적용. */
   schoolName?: string;
+  /** 학년 표기 — "중2" / "고1" 등. exams.grade 컬럼에 그대로 박힘. */
+  grade?: string;
   /** "부산 동래구" 같은 시도+시군구 조합. */
   district?: string;
   /** 1 또는 2. */

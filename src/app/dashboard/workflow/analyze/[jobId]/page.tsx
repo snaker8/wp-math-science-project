@@ -3727,7 +3727,7 @@ export default function AnalyzeJobPage() {
     };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
-      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }>; choiceImages?: Array<string | null>; choiceHeaders?: string[]; choiceLayout?: number }> = [];
+      const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }>; choiceImages?: Array<string | null>; choiceHeaders?: string[]; choiceLayout?: number; isEdited?: boolean }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
       for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
@@ -3759,6 +3759,10 @@ export default function AnalyzeJobPage() {
             }));
             editedProblems.push({
               number: globalProblemNumber, // ★ 전역 순번 사용 (p.number는 페이지별로 리셋되어 크롭 파일 충돌)
+              // ★ 사용자가 1차 OCR 화면에서 직접 수정한 문제 표시 (2026-05-30).
+              //   서버 자산화 시 verifyAndRepairWithVision(이미지 기준 재교정)이 사용자 수정을 덮어쓰는
+              //   회귀 방지 — isEdited=true 면 비전 재교정 스킵 (수정본 신뢰).
+              isEdited: p.status === 'edited',
               difficulty: p.difficulty,
               typeCode: p.typeCode,
               typeName: p.typeName, // ★ 카드 표시용 단원 경로

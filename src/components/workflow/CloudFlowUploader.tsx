@@ -93,6 +93,12 @@ export default function CloudFlowUploader({
   //   exam-create / cloud 의 5종 카테고리 + 'auto' (자동 태깅 시도, 기본값).
   type UploadSourceCategory = 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock';
   const [sourceCategory, setSourceCategory] = useState<UploadSourceCategory>('auto');
+  // ★ 학교기출 단원집 메타 (2026-05-29) — sourceCategory='school' 선택 시 입력. 수동 자산화 경로에서도
+  //   school_name/chapter 가 박히도록 POST 시 schoolMeta 로 전달 → job 저장 → PUT 자산화 시 적용.
+  const [schoolNameInput, setSchoolNameInput] = useState('');
+  const [schoolGradeInput, setSchoolGradeInput] = useState(''); // "중2" 등
+  const [schoolSemesterInput, setSchoolSemesterInput] = useState<'' | '1' | '2'>('');
+  const [schoolChapterInput, setSchoolChapterInput] = useState('');
   const [scienceSubject, setScienceSubject] = useState<ScienceSubjectCode>('IS1');
   const [curriculumVersion, setCurriculumVersion] = useState<CurriculumVersion>('2022');
 
@@ -262,6 +268,16 @@ export default function CloudFlowUploader({
       formData.append('subjectArea', subjectArea);
       // ★ 사용자 명시 출처 카테고리 (자동 태깅보다 우선) — 사용자 지시 (2026-05-16)
       formData.append('sourceCategory', sourceCategory);
+      // ★ 학교기출 단원집 메타 — school 선택 + 학교명 있으면 전달. 수동 자산화 경로에서도 박힘.
+      if (sourceCategory === 'school' && schoolNameInput.trim()) {
+        const meta: Record<string, unknown> = { schoolName: schoolNameInput.trim() };
+        if (schoolGradeInput.trim()) meta.grade = schoolGradeInput.trim();
+        if (schoolSemesterInput) meta.semester = Number(schoolSemesterInput);
+        if (schoolChapterInput.trim()) meta.chapter = schoolChapterInput.trim();
+        meta.examRound = '단원집';
+        formData.append('schoolMeta', JSON.stringify(meta));
+        formData.append('useSequenceNumbering', 'true'); // 단원집 일련번호 통일
+      }
 
       if (subjectArea === 'science') {
         formData.append('scienceSubject', scienceSubject);
@@ -572,6 +588,45 @@ export default function CloudFlowUploader({
           );
         })}
       </div>
+
+      {/* ★ 학교기출 단원집 메타 입력 (2026-05-29) — school 선택 시만 표시.
+            수동 자산화 경로(분석 페이지 편집 후 자산화)에서도 학교명/단원이 박히게 함. */}
+      {sourceCategory === 'school' && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
+          <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider mr-1">학교 정보</span>
+          <input
+            type="text"
+            value={schoolNameInput}
+            onChange={(e) => setSchoolNameInput(e.target.value)}
+            placeholder="학교명 (예: 동래중)"
+            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none w-32"
+          />
+          <input
+            type="text"
+            value={schoolGradeInput}
+            onChange={(e) => setSchoolGradeInput(e.target.value)}
+            placeholder="학년 (예: 중2)"
+            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none w-24"
+          />
+          <select
+            value={schoolSemesterInput}
+            onChange={(e) => setSchoolSemesterInput(e.target.value as '' | '1' | '2')}
+            className="px-2 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none"
+          >
+            <option value="">학기</option>
+            <option value="1">1학기</option>
+            <option value="2">2학기</option>
+          </select>
+          <input
+            type="text"
+            value={schoolChapterInput}
+            onChange={(e) => setSchoolChapterInput(e.target.value)}
+            placeholder="단원 (예: 수와 식)"
+            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none w-32"
+          />
+          <span className="text-[10px] text-zinc-500">입력하면 클라우드에서 학교별 폴더로 정리됩니다</span>
+        </div>
+      )}
 
       {/* ── 과학 세부 과목 선택 ── */}
       {subjectArea === 'science' && (

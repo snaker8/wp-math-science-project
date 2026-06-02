@@ -14,7 +14,7 @@ import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
-import { findAutoFolderForSubject } from '@/lib/utils/auto-folder';
+import { findAutoFolderForSubject, findOrCreateSchoolFolder } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
@@ -31,6 +31,7 @@ import { normalizeSchoolName, formatSourceLabel } from '@/lib/utils/school-norma
 //   - examRound: "중간"/"기말"/"단원집"/"수행" 키워드
 function fillSchoolMetaFromTitle(meta: SchoolMetaInput, title: string): {
   schoolName: string | null;
+  grade: string | null;
   district: string | null;
   semester: 1 | 2 | null;
   examYear: number | null;
@@ -42,6 +43,10 @@ function fillSchoolMetaFromTitle(meta: SchoolMetaInput, title: string): {
   if (!schoolName) {
     schoolName = normalizeSchoolName(extractSchoolName(title) || '');
   }
+
+  // grade: 명시값 우선 (폴더 import 가 "중2" 같은 표기 전달) → null 이면 caller 가
+  //   detectGradeFromTitle 로 fallback. 여기선 명시값만 통과시킴.
+  const grade: string | null = meta.grade && meta.grade.trim() ? meta.grade.trim() : null;
 
   // exam_year: 명시값 → title 패턴
   let examYear: number | null = typeof meta.examYear === 'number' ? meta.examYear : null;
@@ -81,7 +86,7 @@ function fillSchoolMetaFromTitle(meta: SchoolMetaInput, title: string): {
   const district = meta.district || null;
   const chapter = meta.chapter || null;
 
-  return { schoolName, district, semester, examYear, examRound, chapter };
+  return { schoolName, grade, district, semester, examYear, examRound, chapter };
 }
 
 // ★ 사용자 명시 출처 카테고리 → exam INSERT 메타 결정 헬퍼
@@ -224,6 +229,9 @@ export async function POST(request: NextRequest) {
         console.warn('[Upload] schoolMeta JSON parse 실패 — 무시:', e);
       }
     }
+    // ★ 단원집 일련번호 모드 (2026-05-29) — 폴더 import 분할 자산화 시 true.
+    //   source_number/source_label 을 시험지 내 누적 순번으로 부여 → 청크 분할에도 1~N 연속.
+    const useSequenceNumbering = formData.get('useSequenceNumbering') === 'true';
     const scienceSubject = formData.get('scienceSubject') as string | null;
     const curriculumVersion = (formData.get('curriculumVersion') as '2015' | '2022') || '2022';
     const scienceMode = (formData.get('scienceMode') as 'diagrams_only' | 'full') || 'full';
@@ -318,6 +326,7 @@ export async function POST(request: NextRequest) {
       curriculumVersion: subjectArea === 'science' ? curriculumVersion : undefined,
       sourceCategory,  // ★ 사용자 명시 출처 카테고리 — PUT 시점에 jobStore 에서 가져와 사용
       schoolMeta,      // ★ 학교 단원집 메타 — PUT 시점에 jobStore 에서 가져와 사용
+      useSequenceNumbering, // ★ 단원집 일련번호 모드 — 분할 자산화 source_number 연속성
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1326,6 +1335,8 @@ async function saveEditedProblemsDirect(
     pageIndex?: number;
     // ★ figure 학습 데이터 — insertedImages 의 좌표만 (problem 크롭 0~1 기준)
     figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>;
+    // ★ 사용자가 1차 OCR 화면에서 직접 수정한 문제 (2026-05-30) — true 면 비전 재교정 스킵.
+    isEdited?: boolean;
   }>,
   bookGroupId: string | null,
   pageImagePathMap: Map<number, { path: string; width: number; height: number }> = new Map(),
@@ -1591,7 +1602,7 @@ async function saveEditedProblemsDirect(
         time_limit_minutes: 50,
         subject: detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
-        grade: detectGradeFromTitle(fileTitle),
+        grade: resolvedSchoolMeta.grade ?? detectGradeFromTitle(fileTitle),
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
         is_diagnostic: sourceOverride.is_diagnostic,
         diagnostic_category: sourceOverride.diagnostic_category,
@@ -1608,6 +1619,20 @@ async function saveEditedProblemsDirect(
       };
       if (bookGroupId) {
         examInsertData.book_group_id = bookGroupId;
+      } else if (sourceCategory === 'school' && resolvedSchoolMeta.schoolName) {
+        // ★ 학교기출 — 학교명 폴더 자동 생성/배치 (2026-05-29). "동래중 (중2-1)" 폴더에 단원집 모음.
+        try {
+          const schoolFolderId = await findOrCreateSchoolFolder(
+            supabase, resolvedSchoolMeta.schoolName, resolvedSchoolMeta.grade,
+            resolvedSchoolMeta.semester, instituteId, createdBy,
+          );
+          if (schoolFolderId) {
+            examInsertData.book_group_id = schoolFolderId;
+            console.log(`[Direct Save] 학교 폴더 배치: "${resolvedSchoolMeta.schoolName}" → ${schoolFolderId}`);
+          }
+        } catch (e) {
+          console.warn('[Direct Save] 학교 폴더 배치 실패:', e);
+        }
       } else {
         // ★ 과목 기반 자동 폴더 배치 (fuzzy 매칭 — 폴더 rename에도 견고)
         const detectedSubject = examInsertData.subject || '';
@@ -1752,20 +1777,28 @@ async function saveEditedProblemsDirect(
 
       // ★ 비전 검증 + 자동 교정 (2026-05-27 단계 3 full 루프 Phase 1) — 원본 클론 자동화:
       //   원본 크롭 vs OCR 전체 본문 대조. 명확한 OCR 오인식만 자동 교정.
-      //   사용자 의도 = "분석 다르면 자동 수정 루프 완성". 사람 개입 0.
       //   비용: 자산화당 모든 문제 1 Flash 호출 (~$0.001). 25문항 ~$0.025/시험지.
-      //   Phase 2 (학습 누적 → 결정론적 룰 자동 승급) 는 INSERT 후 problemId 받은 시점에 추가 예정.
-      try {
-        const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(cropImageUrl, contentLatex);
-        if (!isMatch && correctedText) {
-          console.log(
-            `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
-            diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
-          );
-          contentLatex = correctedText;
+      //
+      // ★★ 사용자 수동 수정 보호 (2026-05-30) — isEdited=true 면 비전 재교정 스킵.
+      //   회귀 사고: 사용자가 1차 OCR 화면에서 ㉠·분수 등을 손으로 고쳐도, 자산화 시 이 비전
+      //   교정이 "원본 크롭 이미지" 기준으로 사용자 수정을 도로 덮어써서 "고쳐도 또 깨짐" 발생
+      //   (이미지엔 OCR 오인식 폰트가 그대로 보이므로). 사람이 고친 건 기계가 안 덮는다.
+      //   미수정(자동) 문제는 기존대로 자동 교정 유지.
+      if (edited.isEdited) {
+        console.log(`[Direct Save] 문제 ${edited.number}: 사용자 수정본 → 비전 재교정 스킵 (수정본 보존)`);
+      } else {
+        try {
+          const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(cropImageUrl, contentLatex);
+          if (!isMatch && correctedText) {
+            console.log(
+              `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
+              diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
+            );
+            contentLatex = correctedText;
+          }
+        } catch (e) {
+          console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
         }
-      } catch (e) {
-        console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
       }
 
 
@@ -1868,6 +1901,12 @@ async function saveEditedProblemsDirect(
         }
       }
 
+      // ★ 단원집 일련번호 (2026-05-29) — saveProblemsToDB 와 동일. 분할 자산화 시 OCR 번호 대신
+      //   시험지 내 누적 순번으로 통일. savedCount 는 line 2005 에서 ++ → 현재 순번 = savedCount + 1.
+      const useSeqNum = job.useSequenceNumbering === true;
+      const seqNo = sequenceOffset + savedCount + 1;
+      const editedLabelNumber = useSeqNum ? seqNo : (edited.number ?? null);
+
       const { data: problem, error: problemError } = await supabase
         .from('problems')
         .insert({
@@ -1918,14 +1957,15 @@ async function saveEditedProblemsDirect(
           })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
-          source_number: edited.number || null,
-          // ★ 학교 기출 출처 배지 (2026-05-28) — "동래중 26·1 단원집 3" 같은 압축 표기
+          source_number: useSeqNum ? seqNo : (edited.number || null),
+          // ★ 학교 기출 출처 배지 (2026-05-28) — "동래중 단원집 3" 같은 압축 표기
+          //   useSeqNum 이면 단원집 일련번호(연속), 아니면 OCR 번호.
           source_label: formatSourceLabel({
             schoolName: resolvedSchoolMeta.schoolName,
             examYear: resolvedSchoolMeta.examYear,
             semester: resolvedSchoolMeta.semester,
             examRound: resolvedSchoolMeta.examRound,
-            number: edited.number,
+            number: editedLabelNumber,
           }),
           ai_analysis: {
             classification: {
@@ -2418,7 +2458,7 @@ async function saveProblemsToDB(
         time_limit_minutes: 50,
         subject: detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
-        grade: detectGradeFromTitle(fileTitle),
+        grade: resolvedSchoolMeta.grade ?? detectGradeFromTitle(fileTitle),
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
         is_diagnostic: sourceOverride.is_diagnostic,
         diagnostic_category: sourceOverride.diagnostic_category,
@@ -2440,6 +2480,20 @@ async function saveProblemsToDB(
       // 북그룹 ID가 있으면 설정, 없으면 과목 기반 자동 폴더 배치 (fuzzy 매칭)
       if (bookGroupId) {
         examInsertData.book_group_id = bookGroupId;
+      } else if (sourceCategory === 'school' && resolvedSchoolMeta.schoolName) {
+        // ★ 학교기출 — 학교명 폴더 자동 생성/배치 (2026-05-29). saveEditedProblemsDirect 와 동일.
+        try {
+          const schoolFolderId = await findOrCreateSchoolFolder(
+            supabase, resolvedSchoolMeta.schoolName, resolvedSchoolMeta.grade,
+            resolvedSchoolMeta.semester, instituteId, createdBy,
+          );
+          if (schoolFolderId) {
+            examInsertData.book_group_id = schoolFolderId;
+            console.log(`[DB] 학교 폴더 배치: "${resolvedSchoolMeta.schoolName}" → ${schoolFolderId}`);
+          }
+        } catch (e) {
+          console.warn('[DB] 학교 폴더 배치 실패:', e);
+        }
       } else {
         const detectedSubject = examInsertData.subject || '';
         if (detectedSubject) {
@@ -2598,6 +2652,13 @@ async function saveProblemsToDB(
         ? [{ url: cropImageUrl, type: 'crop', label: `문제 ${problemNum} 크롭 이미지` }]
         : [];
 
+      // ★ 단원집 일련번호 (2026-05-29) — 분할 자산화 시 OCR 번호(청크별 1부터 재시작) 대신
+      //   시험지 내 누적 순번으로 통일. seqNo = exam_problems.sequence_number 와 동일 값.
+      //   savedCount 는 아래 line 2750 에서 ++ (현재 문제 저장 후) → 현재 순번 = savedCount + 1.
+      const useSeqNum = job.useSequenceNumbering === true;
+      const seqNo = sequenceOffset + savedCount + 1;
+      const labelNumber = useSeqNum ? seqNo : problemNum;
+
       // ★ 도형이 있는 문제: figureBbox를 분석하여 [도형] 마커를 적절한 위치에 자동 삽입
       if (result.hasFigure && result.figureBbox && !contentWithMath.includes('[도형]')) {
         contentWithMath = insertFigureMarker(contentWithMath, result.figureBbox);
@@ -2671,14 +2732,15 @@ async function saveProblemsToDB(
           })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
-          source_number: problemNum || null,
-          // ★ 학교 기출 출처 배지 (2026-05-28) — "동래중 26·1 단원집 3" 같은 압축 표기
+          source_number: useSeqNum ? seqNo : (problemNum || null),
+          // ★ 학교 기출 출처 배지 (2026-05-28) — "동래중 단원집 3" 같은 압축 표기
+          //   useSeqNum 이면 단원집 일련번호(연속), 아니면 OCR 번호.
           source_label: formatSourceLabel({
             schoolName: resolvedSchoolMeta.schoolName,
             examYear: resolvedSchoolMeta.examYear,
             semester: resolvedSchoolMeta.semester,
             examRound: resolvedSchoolMeta.examRound,
-            number: problemNum,
+            number: labelNumber,
           }),
           ai_analysis: {
             classification: result.classification,

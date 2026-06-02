@@ -38,6 +38,65 @@ const SUBJECT_KEYWORD_RULES: SubjectRule[] = [
 ];
 
 /**
+ * 학교 기출 단원집 → 학교명 기반 book_groups 폴더 찾기/생성 (2026-05-29).
+ *
+ * 클라우드 페이지 좌측 트리에 "동래중 (중2-1)" 같은 학교별 폴더를 만들어,
+ * 같은 학교 여러 단원집(수와 식·부등식·함수)을 한 폴더로 모은다.
+ * 폴더명: "{학교} ({학년}-{학기})" → 학년/학기 없으면 축약. 학기만 없으면 "{학교} ({학년})".
+ *
+ * @returns book_group_id or null
+ */
+export async function findOrCreateSchoolFolder(
+  supabase: SupabaseClient,
+  schoolName: string,
+  grade: string | null,
+  semester: number | null,
+  instituteId: string | null,
+  createdBy: string | null,
+): Promise<string | null> {
+  if (!schoolName) return null;
+
+  // 폴더명 구성 — "동래중 (중2-1)" / "동래중 (중2)" / "동래중"
+  let suffix = '';
+  if (grade && semester) suffix = ` (${grade}-${semester})`;
+  else if (grade) suffix = ` (${grade})`;
+  const folderName = `${schoolName}${suffix}`;
+
+  // 1) 기존 폴더 찾기 (institute 범위 일치)
+  let findQ = supabase
+    .from('book_groups')
+    .select('id')
+    .eq('name', folderName)
+    .is('deleted_at', null);
+  findQ = instituteId ? findQ.eq('institute_id', instituteId) : findQ.is('institute_id', null);
+  const { data: found } = await findQ.limit(1);
+  if (found && found.length > 0) return (found[0] as { id: string }).id;
+
+  // 2) 없으면 생성
+  try {
+    const { data: created, error } = await supabase
+      .from('book_groups')
+      .insert({
+        name: folderName,
+        institute_id: instituteId,
+        created_by: createdBy,
+        subject_track: 'math',
+      })
+      .select('id')
+      .single();
+    if (error) {
+      console.warn(`[학교폴더] "${folderName}" 생성 실패:`, error.message);
+      return null;
+    }
+    console.log(`[학교폴더] "${folderName}" 생성됨 (${created?.id})`);
+    return (created as { id: string } | null)?.id || null;
+  } catch (e) {
+    console.warn(`[학교폴더] "${folderName}" 생성 예외:`, e);
+    return null;
+  }
+}
+
+/**
  * 감지된 과목명에 대해 book_groups에서 가장 적절한 폴더 ID 찾기.
  * 사용자가 폴더 이름을 rename해도 키워드만 포함되면 매칭됨.
  * @returns matched group info or null

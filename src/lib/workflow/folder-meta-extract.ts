@@ -186,17 +186,21 @@ export function extractFolderMeta(
  */
 export function toSchoolMetaPayload(m: FolderMetaResult): {
   schoolName?: string;
+  grade?: string;
   district?: string;
   semester?: 1 | 2;
-  examYear?: number;
   examRound?: string;
   chapter?: string;
 } {
+  // ★ examYear 제외 (사용자 지시 2026-05-29): 단원집은 기출 모음이라 시험 년도 무의미.
+  //   파일명 앞 YYMMDD 는 업로드 날짜일 뿐 시험 년도가 아님. DB exam_year 는 null 유지.
   const payload: Record<string, unknown> = {};
   if (m.schoolName) payload.schoolName = m.schoolName;
+  // ★ grade 는 "중2" / "고1" 표기로 변환 (schoolLevel + grade). exams.grade 컬럼에 그대로 박힘.
+  //   누락 시 서버가 detectGradeFromTitle 로 fallback.
+  if (m.schoolLevel && m.grade != null) payload.grade = `${m.schoolLevel}${m.grade}`;
   if (m.district) payload.district = m.district;
   if (m.semester) payload.semester = m.semester;
-  if (m.examYear) payload.examYear = m.examYear;
   if (m.examRound) payload.examRound = m.examRound;
   if (m.chapter) payload.chapter = m.chapter;
   return payload as ReturnType<typeof toSchoolMetaPayload>;

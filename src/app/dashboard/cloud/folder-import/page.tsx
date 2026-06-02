@@ -143,17 +143,29 @@ export default function FolderImportPage() {
       setRows((prev) => prev.map((r, j) => (j === i ? { ...r, status: 'in_progress' } : r)));
 
       try {
+        // ★ title = "학교 - 단원" 형식으로 자동 생성 (사용자 지시 2026-05-29: 단원집은 년도 무의미).
+        const sch = row.meta.schoolNameNormalized;
+        const chap = row.meta.chapter;
+        const cleanName = (sch && chap)
+          ? `${sch} - ${chap}.pdf`
+          : (row.path.split('/').pop() || row.file.name);
+
+        // ★ 분할 제거 (2026-05-29) — PDF 통째 자산화. 분할(청크)이 페이지 경계 문제 누락 +
+        //   문제 번호 연속성 추적 단절로 인식 정확도를 떨어뜨려, 통째 OCR 로 되돌림.
+        //   timeout: 로컬 dev 는 maxDuration 무시라 완주. prod(maxDuration=300) 대용량은 별도 대응 필요.
         const formData = new FormData();
-        formData.append('file', row.file);
+        formData.append('file', row.file, cleanName);
         formData.append('documentType', 'PROBLEM');
         formData.append('autoClassify', 'true');
         formData.append('generateSolutions', 'false');
-        formData.append('sourceCategory', 'school');
         formData.append('subjectArea', 'math');
+        formData.append('sourceCategory', 'school');
         formData.append('schoolMeta', JSON.stringify(toSchoolMetaPayload(row.meta)));
+        // ★ 단원집 일련번호 모드 — OCR 인쇄번호가 불연속(01,03,..)이어도 시험지 내 1~N 연속으로 통일.
+        formData.append('useSequenceNumbering', 'true');
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 295_000); // CLAUDE.md #5 — 295s
+        const timeoutId = setTimeout(() => controller.abort(), 540_000); // 로컬 검증용 (prod maxDuration 별도)
         const res = await fetch('/api/workflow/upload', {
           method: 'POST',
           body: formData,
@@ -163,23 +175,22 @@ export default function FolderImportPage() {
 
         if (!res.ok) {
           const text = await res.text().catch(() => res.statusText);
-          throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 150)}`);
         }
-        const data = (await res.json()) as { autoSavedExamId?: string | null; jobId: string; classifyCompleted?: boolean };
+        const data = (await res.json()) as { autoSavedExamId?: string | null; jobId: string };
+        const examId = data.autoSavedExamId || undefined;
 
         setRows((prev) => prev.map((r, j) => (j === i ? {
           ...r,
-          status: data.autoSavedExamId ? 'success' : 'failed',
-          examId: data.autoSavedExamId || undefined,
-          error: data.autoSavedExamId ? undefined : '자동 자산화 실패 (수동 분석 필요)',
+          status: examId ? 'success' : 'failed',
+          examId: examId,
+          error: examId ? undefined : '자동 자산화 실패 (수동 분석 필요)',
         } : r)));
-
-        // 호흡 (CLAUDE.md #5)
-        await new Promise((resolve) => setTimeout(resolve, 300));
       } catch (e) {
         setRows((prev) => prev.map((r, j) => (j === i ? {
           ...r,
           status: 'failed',
+          chunkLabel: undefined,
           error: e instanceof Error ? e.message : String(e),
         } : r)));
       }
@@ -298,7 +309,6 @@ export default function FolderImportPage() {
                     <th className="px-3 py-2 text-left">학년·학기</th>
                     <th className="px-3 py-2 text-left">단원</th>
                     <th className="px-3 py-2 text-left">회차</th>
-                    <th className="px-3 py-2 text-left">년도</th>
                     <th className="px-3 py-2 text-left">지역</th>
                     <th className="px-3 py-2 text-left">종류</th>
                     <th className="px-3 py-2 text-left">상태</th>
@@ -350,14 +360,6 @@ export default function FolderImportPage() {
                           <option value="기말">기말</option>
                           <option value="수행평가">수행평가</option>
                         </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          value={r.meta.examYear || ''}
-                          onChange={(e) => updateRowMeta(i, { examYear: Number(e.target.value) || null })}
-                          className="bg-zinc-800 px-2 py-1 rounded w-20 border border-zinc-700"
-                        />
                       </td>
                       <td className="px-3 py-2 text-zinc-400 text-xs">{r.meta.district || '미감지'}</td>
                       <td className="px-3 py-2">
