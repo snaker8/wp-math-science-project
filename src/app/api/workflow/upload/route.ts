@@ -168,19 +168,25 @@ async function applyAnswerSheetFromBuffers(examId: string, jobId: string): Promi
   if (!supabaseAdmin) return;
   try {
     const bufs = fileBufferStore.get(jobId);
-    const ab = bufs?.quickAnswer || bufs?.answer; // 빠른답 우선, 없으면 정답해설
-    if (!ab) return;
-    // 버퍼 매직바이트로 타입 감지 (PDF/PNG/JPEG)
-    const u8 = new Uint8Array(ab.slice(0, 4));
-    let type = 'application/pdf', ext = 'pdf';
-    if (u8[0] === 0x89 && u8[1] === 0x50) { type = 'image/png'; ext = 'png'; }
-    else if (u8[0] === 0xFF && u8[1] === 0xD8) { type = 'image/jpeg'; ext = 'jpg'; }
-    const file = new File([ab], `answer-sheet.${ext}`, { type });
+    if (!bufs) return;
+    // 버퍼 → File (매직바이트로 PDF/PNG/JPEG 타입 감지)
+    const toFile = (ab: ArrayBuffer | undefined, label: string): File | null => {
+      if (!ab) return null;
+      const u8 = new Uint8Array(ab.slice(0, 4));
+      let type = 'application/pdf', ext = 'pdf';
+      if (u8[0] === 0x89 && u8[1] === 0x50) { type = 'image/png'; ext = 'png'; }
+      else if (u8[0] === 0xFF && u8[1] === 0xD8) { type = 'image/jpeg'; ext = 'jpg'; }
+      return new File([ab], `${label}.${ext}`, { type });
+    };
+    // 빠른답 + 정답해설 둘 다 — 해설 올려도 거기서 정답 추출돼 채워짐.
+    const files = [toFile(bufs.quickAnswer, 'quick-answer'), toFile(bufs.answer, 'answer-solution')]
+      .filter((f): f is File => f !== null);
+    if (files.length === 0) return;
     const { applyQuickAnswerSheet } = await import('@/lib/ocr/apply-answer-sheet');
-    const r = await applyQuickAnswerSheet(supabaseAdmin, examId, [file]);
-    console.log(`[Upload] 빠른답 자동 적용: applied=${r.applied}/${r.parsed}, coercedEmpty=${r.coercedToEmpty}`);
+    const r = await applyQuickAnswerSheet(supabaseAdmin, examId, files);
+    console.log(`[Upload] 빠른답/해설 자동 적용: applied=${r.applied}/${r.parsed}, coercedEmpty=${r.coercedToEmpty} (files=${files.length})`);
   } catch (e) {
-    console.warn('[Upload] 빠른답 자동 적용 실패 (자산화는 정상):', e instanceof Error ? e.message : e);
+    console.warn('[Upload] 빠른답/해설 자동 적용 실패 (자산화는 정상):', e instanceof Error ? e.message : e);
   }
 }
 
