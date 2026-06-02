@@ -161,6 +161,29 @@ const fileBufferStore = globalForJobs.__fileBufferStore ?? (globalForJobs.__file
 const autoSavedExams = globalForJobs.__autoSavedExams ?? (globalForJobs.__autoSavedExams = new Map<string, string>());
 const imagePipelineResults = globalForJobs.__imagePipelineResults ?? (globalForJobs.__imagePipelineResults = new Map<string, ImagePipelineResult>());
 
+// ★ 빠른답/정답표 자동 적용 — 첫 모달에서 답안 파일 같이 올리면 자산화 직후 정답 채움.
+//   클라우드 match-answers 와 동일 추출·적용 로직(lib applyQuickAnswerSheet) 재사용.
+//   best-effort: 실패해도 자산화는 정상(정답만 비고, 클라우드에서 수동 보정 가능).
+async function applyAnswerSheetFromBuffers(examId: string, jobId: string): Promise<void> {
+  if (!supabaseAdmin) return;
+  try {
+    const bufs = fileBufferStore.get(jobId);
+    const ab = bufs?.quickAnswer || bufs?.answer; // 빠른답 우선, 없으면 정답해설
+    if (!ab) return;
+    // 버퍼 매직바이트로 타입 감지 (PDF/PNG/JPEG)
+    const u8 = new Uint8Array(ab.slice(0, 4));
+    let type = 'application/pdf', ext = 'pdf';
+    if (u8[0] === 0x89 && u8[1] === 0x50) { type = 'image/png'; ext = 'png'; }
+    else if (u8[0] === 0xFF && u8[1] === 0xD8) { type = 'image/jpeg'; ext = 'jpg'; }
+    const file = new File([ab], `answer-sheet.${ext}`, { type });
+    const { applyQuickAnswerSheet } = await import('@/lib/ocr/apply-answer-sheet');
+    const r = await applyQuickAnswerSheet(supabaseAdmin, examId, [file]);
+    console.log(`[Upload] 빠른답 자동 적용: applied=${r.applied}/${r.parsed}, coercedEmpty=${r.coercedToEmpty}`);
+  } catch (e) {
+    console.warn('[Upload] 빠른답 자동 적용 실패 (자산화는 정상):', e instanceof Error ? e.message : e);
+  }
+}
+
 /**
  * POST /api/workflow/upload
  * 파일 업로드 및 백그라운드 처리 시작
@@ -2155,6 +2178,9 @@ async function saveEditedProblemsDirect(
     }, { status: 500 });
   }
 
+  // ★ 빠른답/정답표 자동 적용 (첫 모달에서 답안 파일 같이 올린 경우) — 해설 생성 전에
+  if (examId) await applyAnswerSheetFromBuffers(examId, jobId);
+
   // ★ 자산화 완료 즉시 해설 생성 자동 시작 (fire-and-forget)
   if (examId && requestOrigin) {
     triggerAutoSolutionGeneration(examId, requestOrigin);
@@ -2917,6 +2943,9 @@ async function saveProblemsToDB(
     autoSavedExams.set(jobId, examId);
     console.log(`[DB] 자동 자산화 기록: job ${jobId} → exam ${examId}`);
   }
+
+  // ★ 빠른답/정답표 자동 적용 (첫 모달에서 답안 파일 같이 올린 경우)
+  if (examId) await applyAnswerSheetFromBuffers(examId, jobId);
 
   // ★ 도형 포함 문제: 업스케일 우선 → AI Vision 폴백 (비동기, 실패해도 무시)
   // 원본 크롭이 쓸만하면 업스케일만으로 완료, 안되면 GPT-4o Vision으로 구조화된 도형 생성
