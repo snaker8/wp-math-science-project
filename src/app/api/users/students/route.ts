@@ -21,6 +21,16 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_ROLES = ['ADMIN', 'TEACHER', 'TUTOR', 'ORG_ADMIN'];
 
+// users.grade 는 integer (1~6=초, 7~9=중1~3, 10~12=고1~3) → 한국 학년 라벨로 변환
+function gradeLabel(g: unknown): string {
+  const n = typeof g === 'number' ? g : parseInt(String(g ?? ''), 10);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n >= 1 && n <= 6) return `초${n}`;
+  if (n >= 7 && n <= 9) return `중${n - 6}`;
+  if (n >= 10 && n <= 12) return `고${n - 9}`;
+  return String(n);
+}
+
 export async function GET(request: Request) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
@@ -84,7 +94,7 @@ export async function GET(request: Request) {
         (u.name as string) ||
         (u.email as string) ||
         '(이름 없음)',
-      grade: (u.grade as string | null) || '',
+      grade: gradeLabel(u.grade),
       className: (u.class_name as string | null) || (u.className as string | null) || '',
       email: (u.email as string | null) || null,
       instituteId: (u.institute_id as string | null) || null,

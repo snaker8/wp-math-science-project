@@ -289,6 +289,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                       {openL.has(g) && list.map((s) => (
                         <div key={s.id} className="flex items-center pl-8 pr-2.5 py-1.5 hover:bg-zinc-800/40">
                           <span className="text-sm text-zinc-300">{s.name}</span>
+                          {s.grade && <span className="ml-2 text-[11px] font-medium text-zinc-400 px-1 py-0.5 rounded bg-zinc-700/60">{s.grade}</span>}
                           {s.className && <span className="ml-2 text-[11px] text-zinc-600">{s.className}</span>}
                           {/* 학원 라벨 — '어디 학생인지' 구분 (전체 보기 시) */}
                           {!selectedInstitute && s.institute && (
@@ -333,6 +334,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                       {openR.has(g) && list.map((s) => (
                         <div key={s.id} className="flex items-center pl-8 pr-2.5 py-1.5 hover:bg-zinc-800/40">
                           <span className="text-sm text-zinc-300">{s.name}</span>
+                          {s.grade && <span className="ml-2 text-[11px] font-medium text-zinc-400 px-1 py-0.5 rounded bg-zinc-700/60">{s.grade}</span>}
+                          {!selectedInstitute && s.institute && (
+                            <span className="ml-2 text-[10px] font-medium text-cyan-400/80 px-1 py-0.5 rounded bg-cyan-500/10">{s.institute}</span>
+                          )}
                           <button type="button" onClick={() => removeMany([s.id])}
                             className="ml-auto p-0.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white">
                             <Minus className="h-3 w-3" />
