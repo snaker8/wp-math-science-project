@@ -85,6 +85,29 @@ export async function GET(request: Request) {
     (insts || []).forEach((i: Record<string, unknown>) => instMap.set(i.id as string, (i.name as string) || ''));
   }
 
+  // 반(class) 파생 — users 에 컬럼 없음. class_enrollments(ACCEPTED) → classes.name.
+  //   학생을 반에 등록하면 자동으로 반이 채워짐.
+  const studentIds = (data || []).map((u: Record<string, unknown>) => u.id as string);
+  const classByStudent = new Map<string, string>();
+  if (studentIds.length > 0) {
+    const { data: enr } = await sb
+      .from('class_enrollments')
+      .select('student_id, class_id')
+      .in('student_id', studentIds)
+      .eq('status', 'ACCEPTED');
+    const classIds = Array.from(new Set((enr || []).map((e: Record<string, unknown>) => e.class_id as string).filter(Boolean)));
+    const classNameById = new Map<string, string>();
+    if (classIds.length > 0) {
+      const { data: cls } = await sb.from('classes').select('id, name').in('id', classIds);
+      (cls || []).forEach((c: Record<string, unknown>) => classNameById.set(c.id as string, (c.name as string) || ''));
+    }
+    (enr || []).forEach((e: Record<string, unknown>) => {
+      const sid = e.student_id as string;
+      const cname = classNameById.get(e.class_id as string) || '';
+      if (sid && cname && !classByStudent.has(sid)) classByStudent.set(sid, cname); // 첫 ACCEPTED 반
+    });
+  }
+
   // 프론트 편의 shape (full_name / name 둘 다 지원)
   const students = (data || [])
     .map((u: Record<string, unknown>) => ({
@@ -95,7 +118,7 @@ export async function GET(request: Request) {
         (u.email as string) ||
         '(이름 없음)',
       grade: gradeLabel(u.grade),
-      className: (u.class_name as string | null) || (u.className as string | null) || '',
+      className: classByStudent.get(u.id as string) || '',
       email: (u.email as string | null) || null,
       instituteId: (u.institute_id as string | null) || null,
       institute: u.institute_id ? (instMap.get(u.institute_id as string) || '') : '',
