@@ -73,25 +73,19 @@ function trackFromReferer(refererHeader: string | null): SubjectTrack | null {
   }
 }
 
-async function passThroughApiWithTrackHeaders(request: NextRequest) {
-  // /api/* 는 인증 강제 안 함 (기존 동작 유지). 인증된 경우 트랙 헤더만 추가.
-  try {
-    const { supabase } = createSupabaseMiddlewareClient(request);
-    if (!supabase) return NextResponse.next();
-    const user = await getAuthUser(supabase, request);
-    if (!user) return NextResponse.next();
-
-    const headers = new Headers(request.headers);
-    headers.set('x-user-id', user.id);
-    headers.set('x-user-role', user.role);
-    headers.set('x-user-tracks', (user.subjectTracks ?? []).join(','));
-    const refererTrack = trackFromReferer(request.headers.get('referer'));
-    const effectiveTrack = refererTrack ?? user.activeSubjectTrack ?? null;
-    if (effectiveTrack) headers.set('x-user-active-track', effectiveTrack);
-    return NextResponse.next({ request: { headers } });
-  } catch {
-    return NextResponse.next();
-  }
+// ★ 2026-06-03 perf: /api/* 는 미들웨어에서 users DB 쿼리(getAuthUser)를 하지 않음.
+//   - 인가는 각 라우트가 getUserAccessScope 로 users 를 자체 재조회 → 미들웨어 쿼리는 중복.
+//   - x-user-* 헤더 소비처는 get-active-track.ts(x-user-active-track) 1곳뿐이며,
+//     헤더 없으면 세션 DB fallback 으로 동일 결과 (TRACK_SPLIT off 면 영향 0).
+//   - 토큰 갱신은 페이지 네비게이션·라우트 핸들러(createSupabaseServerClient)에서 계속 발생.
+//   → referer URL 기반 트랙만 헤더로 주입(DB 불필요). 소비처 없는 나머지 헤더는 생략.
+//     결과: API 호출당 Supabase 왕복 1회 제거 (페이지가 API n개 호출 시 n회 중복 제거).
+function passThroughApiWithTrackHeaders(request: NextRequest): NextResponse {
+  const refererTrack = trackFromReferer(request.headers.get('referer'));
+  if (!refererTrack) return NextResponse.next();
+  const headers = new Headers(request.headers);
+  headers.set('x-user-active-track', refererTrack);
+  return NextResponse.next({ request: { headers } });
 }
 
 export async function middleware(request: NextRequest) {
