@@ -18,6 +18,11 @@ export interface MonthlyExamCount {
     count: number;
 }
 
+interface StatsResult {
+    stats: DashboardStats | null;       // null = 503 (Supabase 미설정 → mock)
+    monthlyExams: MonthlyExamCount[];
+}
+
 // Mock 데이터 (Supabase 미연결 시)
 const mockStats: DashboardStats = {
     totalStudents: 0,
@@ -30,6 +35,33 @@ const mockStats: DashboardStats = {
     examsThisMonth: 0,
 };
 
+// ★ 2026-06-03 perf: in-flight dedup. 동일 화면에서 useDashboardStats 가 여러 번
+//   마운트되면 /api/dashboard/stats 가 각각 fetch (스샷 4s ×2). 진행 중 요청을
+//   공유해 1개로 합침. 데이터·신선도 불변 — 동시 중복 네트워크 호출만 제거.
+let inflightStats: Promise<StatsResult> | null = null;
+
+function fetchStatsOnce(): Promise<StatsResult> {
+    if (inflightStats) return inflightStats;
+    inflightStats = (async () => {
+        try {
+            const res = await fetch('/api/dashboard/stats', { cache: 'no-store' });
+            if (!res.ok) {
+                if (res.status === 503) {
+                    // Supabase 미설정 → mock 데이터 사용 (기존 동작 보존)
+                    console.log('[Dashboard] Supabase not configured, using mock stats');
+                    return { stats: null, monthlyExams: generateMockMonthlyData() };
+                }
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            return { stats: data.stats, monthlyExams: data.monthlyExams || [] };
+        } finally {
+            inflightStats = null; // 다음 마운트는 새로 refresh (기존 동작 유지)
+        }
+    })();
+    return inflightStats;
+}
+
 export function useDashboardStats() {
     const [stats, setStats] = useState<DashboardStats>(mockStats);
     const [monthlyExams, setMonthlyExams] = useState<MonthlyExamCount[]>([]);
@@ -37,36 +69,24 @@ export function useDashboardStats() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        async function fetchStats() {
-            try {
-                // ★ API 라우트(supabaseAdmin) 사용 → RLS 우회
-                const res = await fetch('/api/dashboard/stats', { cache: 'no-store' });
-
-                if (!res.ok) {
-                    // API 503 (Supabase 미설정) → mock 데이터 사용
-                    if (res.status === 503) {
-                        console.log('[Dashboard] Supabase not configured, using mock stats');
-                        setMonthlyExams(generateMockMonthlyData());
-                        setIsLoading(false);
-                        return;
-                    }
-                    throw new Error(`HTTP ${res.status}`);
-                }
-
-                const data = await res.json();
-
-                setStats(data.stats);
-                setMonthlyExams(data.monthlyExams || []);
-
-            } catch (err) {
+        let cancelled = false;
+        fetchStatsOnce()
+            .then((data) => {
+                if (cancelled) return;
+                if (data.stats !== null) setStats(data.stats);
+                setMonthlyExams(data.monthlyExams);
+            })
+            .catch((err) => {
+                if (cancelled) return;
                 console.error('[Dashboard] Failed to fetch stats:', err);
                 setError(err instanceof Error ? err.message : 'Failed to load stats');
-            } finally {
-                setIsLoading(false);
-            }
-        }
-
-        fetchStats();
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     return { stats, monthlyExams, isLoading, error };

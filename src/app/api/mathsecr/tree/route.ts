@@ -5,7 +5,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mathsecrTree from '../../../../../mathsecr_complete.json';
 
-export const dynamic = 'force-dynamic';
+// ★ 2026-06-03 perf: 정적 분류 트리(인증·DB 無, URL 의 ?subject 로만 분기) → CDN 캐싱.
+//   시드/재배포 시에만 변경 → 1일 fresh + 7일 stale-while-revalidate.
+//   force-dynamic 제거 필수(no-store 를 강제해 캐싱을 막으므로).
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+};
 
 interface TreeNode {
   t: string;
@@ -40,13 +45,13 @@ export async function GET(request: NextRequest) {
   }));
 
   if (!subjectCode) {
-    return NextResponse.json({ subjects });
+    return NextResponse.json({ subjects }, { headers: CACHE_HEADERS });
   }
 
   const subject = tree.find(s => s.c === subjectCode);
   if (!subject) {
-    return NextResponse.json({ subjects, tree: null, error: '과목을 찾을 수 없습니다.' });
+    return NextResponse.json({ subjects, tree: null, error: '과목을 찾을 수 없습니다.' }, { headers: CACHE_HEADERS });
   }
 
-  return NextResponse.json({ subjects, tree: subject });
+  return NextResponse.json({ subjects, tree: subject }, { headers: CACHE_HEADERS });
 }
