@@ -472,8 +472,8 @@ export default function PublicStudentReportPage() {
             </div>
           </div>
 
-          <div className="flex gap-6 mb-10">
-            <div className="w-1/3 bg-indigo-600 rounded-2xl p-6 text-white flex flex-col justify-center items-center relative overflow-hidden shadow-xl">
+          <div className="flex flex-col md:flex-row gap-4 md:gap-6 mb-8 md:mb-10">
+            <div className="w-full md:w-1/3 bg-indigo-600 rounded-2xl p-6 text-white flex flex-col justify-center items-center relative overflow-hidden shadow-xl">
               <Target size={120} className="absolute -right-4 -top-4 opacity-10" />
               <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest z-10">Total Score</span>
               <div className="flex items-baseline gap-1 z-10">
@@ -485,13 +485,13 @@ export default function PublicStudentReportPage() {
               </div>
             </div>
 
-            <div className="w-2/3 bg-slate-50 rounded-2xl border border-slate-200 p-6 flex flex-col justify-center shadow-sm">
+            <div className="w-full md:w-2/3 bg-slate-50 rounded-2xl border border-slate-200 p-6 flex flex-col justify-center shadow-sm">
               <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2 tracking-tight">
                 <Sparkles size={18} className="text-amber-500" />
                 학습 종합 분석
                 {isAi && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full ml-1">AI 맞춤</span>}
               </h3>
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
                 <div className="bg-white p-3 rounded-xl border border-emerald-100 flex items-start gap-3 shadow-sm">
                   <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 shrink-0"><TrendingUp size={18} /></div>
                   <div className="min-w-0 flex-1">
@@ -528,8 +528,8 @@ export default function PublicStudentReportPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-10 mb-8">
-            <div className="col-span-1 border-r border-slate-100 pr-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 mb-8">
+            <div className="col-span-1 md:border-r md:border-slate-100 md:pr-10">
               <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2 border-b-2 border-indigo-50 pb-2 tracking-tight">
                 <BarChart3 className="text-indigo-500" size={18} />
                 단원별 성취도
