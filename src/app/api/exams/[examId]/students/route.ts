@@ -78,20 +78,31 @@ export async function GET(
     return NextResponse.json({ students: [] });
   }
 
-  // 1-2. 활성 센터 필터 — 그 institute 에 등록된 roster 학생만 노출
+  // 1-2. 활성 센터 필터 — 그 institute 에 속한 학생만 노출
   //      (super_admin 도 자기 활성 센터 기준으로 보임)
+  //   ★ 2026-06-04: studentId 는 roster_students.id 또는 users.id(등록 학생) 둘 다 가능.
+  //      기존엔 roster_students 만 검사 → user-타입 학생(자사관 등록 등)이 institute 가
+  //      맞는데도 항상 제외돼 리포트가 "사라지는" 사고. users.institute_id 도 함께 검사.
   const activeInstituteId = resolveActiveInstitute(scope);
   let sessionList = rawSessionList;
   if (activeInstituteId) {
     const studentIds = Array.from(
       new Set(rawSessionList.map((s) => s.student_id as string))
     );
+    const allowedIds = new Set<string>();
     const { data: rosters } = await supabaseAdmin
       .from('roster_students')
       .select('id, institute_id')
       .in('id', studentIds)
       .eq('institute_id', activeInstituteId);
-    const allowedIds = new Set((rosters ?? []).map((r) => r.id as string));
+    (rosters ?? []).forEach((r) => allowedIds.add(r.id as string));
+    // user-타입 학생(roster 아님)도 동일하게 활성센터 검사
+    const { data: userStudents } = await supabaseAdmin
+      .from('users')
+      .select('id, institute_id')
+      .in('id', studentIds)
+      .eq('institute_id', activeInstituteId);
+    (userStudents ?? []).forEach((u) => allowedIds.add(u.id as string));
     sessionList = rawSessionList.filter((s) =>
       allowedIds.has(s.student_id as string)
     );
