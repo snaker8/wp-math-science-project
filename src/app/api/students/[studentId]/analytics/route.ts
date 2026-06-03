@@ -3,10 +3,17 @@
 //   학생 1명의 진단평가 4종 집계 — /tutor/analytics 가 호출.
 //
 // 응답: prescription/analytics 와 동일 스키마 (집계 대상만 학생 1명).
-//   { summary, performanceTrend, errorCauses, mathsecrHeatmap, pitfalls,
-//     sessions (최근 20개 — 학생 카드 list 용) }
+//   { student, summary, performanceTrend, errorCauses, mathsecrHeatmap, pitfalls,
+//     sessions (최근 20개 — 학생 카드 list 용), source: 'user' | 'roster' }
 //
 // 권한: ADMIN/TEACHER/TUTOR/ORG_ADMIN/super_admin — 학생 institute 격리.
+//
+// 데이터 소스 두 갈래 (2026-05-29 통합):
+//   - users.id     → diagnostics.print_sessions + session_results (QR/인쇄 라인)
+//   - roster_students.id → diagnostics.sessions + items (엑셀 일괄 채점 라인)
+//
+//   동일 응답 스키마로 정규화 — 호출자(/tutor/analytics)는 source 만 구분.
+//   roster 측은 mathsecrHeatmap / pitfalls 미지원 → 빈 배열 반환.
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,6 +23,25 @@ import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
+
+interface NormalizedSession {
+  id: string;
+  exam_id: string;
+  session_type: string;
+  round_number: number;
+  date_iso: string;          // 발급/실시 시각 (정렬용)
+  completed_at: string | null;
+  // EX(시험 채점) 세션의 리포트 링크용 diagnostics student_id(= roster id).
+  // print_sessions(QR/인쇄)에는 없음(undefined).
+  student_ref?: string;
+}
+
+interface NormalizedResult {
+  session_id: string;
+  is_correct: boolean;
+  error_cause: string | null;
+  occurred_at: string;        // graded_at(print) 또는 conducted_at(roster) — 최근 활동 계산용
+}
 
 export async function GET(
   _request: NextRequest,
@@ -36,50 +62,197 @@ export async function GET(
 
   const { studentId } = await params;
 
-  // 학생 본인 + institute 격리
-  const { data: student, error: stuErr } = await sb
+  // 학생 소스 자동 감지: users 먼저, 없으면 roster_students
+  let source: 'user' | 'roster' = 'user';
+  let studentName = '';
+  let studentGrade: number | null = null;
+  let studentInstituteId: string | null = null;
+
+  const { data: userStudent } = await sb
     .from('users')
     .select('id, full_name, grade, institute_id, email')
     .eq('id', studentId)
     .maybeSingle();
-  if (stuErr || !student) {
-    return NextResponse.json({ error: '학생을 찾을 수 없습니다' }, { status: 404 });
+
+  if (userStudent) {
+    const u = userStudent as {
+      id: string; full_name?: string | null; grade?: number | null;
+      institute_id?: string | null; email?: string | null;
+    };
+    studentName = u.full_name || u.email?.split('@')[0] || '(이름 없음)';
+    studentGrade = u.grade ?? null;
+    studentInstituteId = u.institute_id ?? null;
+  } else {
+    const { data: rosterStudent } = await sb
+      .from('roster_students')
+      .select('id, full_name, grade, institute_id')
+      .eq('id', studentId)
+      .maybeSingle();
+    if (!rosterStudent) {
+      return NextResponse.json({ error: '학생을 찾을 수 없습니다' }, { status: 404 });
+    }
+    source = 'roster';
+    const r = rosterStudent as {
+      id: string; full_name?: string | null; grade?: number | null;
+      institute_id?: string | null;
+    };
+    studentName = r.full_name || '(이름 없음)';
+    studentGrade = r.grade ?? null;
+    studentInstituteId = r.institute_id ?? null;
   }
+
   try {
-    assertInstituteAccess(scope, (student as { institute_id?: string }).institute_id ?? null);
+    assertInstituteAccess(scope, studentInstituteId);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 403 });
   }
 
-  const stu = student as { id: string; full_name?: string | null; grade?: number | null; email?: string | null };
-  const studentName = stu.full_name || stu.email?.split('@')[0] || '(이름 없음)';
+  // 세션 + 결과 정규화
+  const sessionList: NormalizedSession[] = [];
+  const allResults: NormalizedResult[] = [];
 
-  // print_sessions
-  const { data: psRows } = await sb
-    .schema('diagnostics' as never)
-    .from('print_sessions')
-    .select('id, exam_id, round_number, session_type, issued_at, started_at, completed_at')
-    .eq('student_id', studentId)
-    .order('issued_at', { ascending: false });
-  const sessionList = (psRows || []) as Array<{
-    id: string; exam_id: string; round_number: number; session_type: string;
-    issued_at: string; started_at: string | null; completed_at: string | null;
-  }>;
-  const sessionIds = sessionList.map((s) => s.id);
-
-  // session_results
-  const allResults: Array<{ session_id: string; is_correct: boolean; error_cause: string | null; graded_at: string; problem_id: string }> = [];
-  if (sessionIds.length > 0) {
-    const { data } = await sb
+  if (source === 'user') {
+    // 기존 흐름 — print_sessions + session_results
+    const { data: psRows } = await sb
       .schema('diagnostics' as never)
-      .from('session_results')
-      .select('session_id, is_correct, error_cause, graded_at, problem_id')
-      .in('session_id', sessionIds);
-    if (data) allResults.push(...(data as typeof allResults));
+      .from('print_sessions')
+      .select('id, exam_id, round_number, session_type, issued_at, started_at, completed_at')
+      .eq('student_id', studentId)
+      .order('issued_at', { ascending: false });
+    for (const s of (psRows || []) as Array<{
+      id: string; exam_id: string; round_number: number; session_type: string;
+      issued_at: string; completed_at: string | null;
+    }>) {
+      sessionList.push({
+        id: s.id,
+        exam_id: s.exam_id,
+        session_type: s.session_type,
+        round_number: s.round_number,
+        date_iso: s.issued_at,
+        completed_at: s.completed_at,
+      });
+    }
+    const sessionIds = sessionList.map((s) => s.id);
+    if (sessionIds.length > 0) {
+      const { data } = await sb
+        .schema('diagnostics' as never)
+        .from('session_results')
+        .select('session_id, is_correct, error_cause, graded_at')
+        .in('session_id', sessionIds);
+      for (const r of (data || []) as Array<{
+        session_id: string; is_correct: boolean;
+        error_cause: string | null; graded_at: string;
+      }>) {
+        allResults.push({
+          session_id: r.session_id,
+          is_correct: r.is_correct,
+          error_cause: r.error_cause,
+          occurred_at: r.graded_at,
+        });
+      }
+    }
+
+    // 추가(2026-05-30): 이 정식 학생에 연결(promoted)된 roster 의 시험(EX) 데이터 합류.
+    //   채점 엑셀로 등록된 명단 학생을 기존 정식 학생과 연결(promoted_user_id)하면,
+    //   그 시험 채점 결과(diagnostics.sessions/items)도 정식 학생 분석에 보여야 함.
+    //   세션 student_id 는 roster id 그대로라 student_ref 에 담아 리포트 링크에 사용.
+    const { data: promotedRosters } = await sb
+      .from('roster_students')
+      .select('id')
+      .eq('promoted_user_id', studentId);
+    const rosterIds = (promotedRosters || []).map((r: { id: string }) => r.id);
+    if (rosterIds.length > 0) {
+      const { data: exSessRows } = await sb
+        .schema('diagnostics' as never)
+        .from('sessions')
+        .select('id, exam_id, session_type, round_no, conducted_at, student_id')
+        .in('student_id', rosterIds)
+        .order('conducted_at', { ascending: false });
+      const exSessions = (exSessRows || []) as Array<{
+        id: string; exam_id: string | null; session_type: string;
+        round_no: number | null; conducted_at: string | null; student_id: string;
+      }>;
+      for (const s of exSessions) {
+        sessionList.push({
+          id: s.id,
+          exam_id: s.exam_id ?? '',
+          session_type: s.session_type,
+          round_number: s.round_no ?? 1,
+          date_iso: s.conducted_at ?? '',
+          completed_at: s.conducted_at,
+          student_ref: s.student_id,   // roster id — 리포트 링크용
+        });
+      }
+      const exSessionIds = exSessions.map((s) => s.id);
+      if (exSessionIds.length > 0) {
+        const { data: exItems } = await sb
+          .schema('diagnostics' as never)
+          .from('items')
+          .select('session_id, is_correct, error_cause')
+          .in('session_id', exSessionIds);
+        const exDateMap = new Map<string, string>();
+        for (const s of exSessions) exDateMap.set(s.id, s.conducted_at ?? '');
+        for (const r of (exItems || []) as Array<{
+          session_id: string; is_correct: boolean; error_cause: string | null;
+        }>) {
+          allResults.push({
+            session_id: r.session_id,
+            is_correct: r.is_correct,
+            error_cause: r.error_cause,
+            occurred_at: exDateMap.get(r.session_id) ?? '',
+          });
+        }
+      }
+    }
+  } else {
+    // 자동등록 흐름 — diagnostics.sessions + items (session_type='EX')
+    const { data: sessRows } = await sb
+      .schema('diagnostics' as never)
+      .from('sessions')
+      .select('id, exam_id, session_type, round_no, conducted_at')
+      .eq('student_id', studentId)
+      .order('conducted_at', { ascending: false });
+    for (const s of (sessRows || []) as Array<{
+      id: string; exam_id: string | null; session_type: string;
+      round_no: number | null; conducted_at: string | null;
+    }>) {
+      sessionList.push({
+        id: s.id,
+        exam_id: s.exam_id ?? '',
+        session_type: s.session_type,
+        round_number: s.round_no ?? 1,
+        date_iso: s.conducted_at ?? '',
+        completed_at: s.conducted_at,
+        student_ref: studentId,   // roster id — 리포트 링크용
+      });
+    }
+    const sessionIds = sessionList.map((s) => s.id);
+    if (sessionIds.length > 0) {
+      const { data } = await sb
+        .schema('diagnostics' as never)
+        .from('items')
+        .select('session_id, is_correct, error_cause')
+        .in('session_id', sessionIds);
+      // items 에는 graded_at 컬럼 없음 — session 의 conducted_at 으로 폴백
+      const sessionDateMap = new Map<string, string>();
+      for (const s of sessionList) sessionDateMap.set(s.id, s.date_iso);
+      for (const r of (data || []) as Array<{
+        session_id: string; is_correct: boolean; error_cause: string | null;
+      }>) {
+        allResults.push({
+          session_id: r.session_id,
+          is_correct: r.is_correct,
+          error_cause: r.error_cause,
+          occurred_at: sessionDateMap.get(r.session_id) ?? '',
+        });
+      }
+    }
   }
 
-  // exams 제목
-  const examIds = Array.from(new Set(sessionList.map((s) => s.exam_id)));
+  // exams 제목 (exam_id 빈 문자열 제외)
+  const examIds = Array.from(
+    new Set(sessionList.map((s) => s.exam_id).filter((id) => !!id))
+  );
   const { data: examsData } = examIds.length > 0
     ? await sb.from('exams').select('id, title').in('id', examIds)
     : { data: [] as Array<{ id: string; title: string }> };
@@ -106,7 +279,7 @@ export async function GET(
     .map((s) => {
       const r = sessionResultMap.get(s.id)!;
       return {
-        date: (s.issued_at || '').slice(0, 10),
+        date: (s.date_iso || '').slice(0, 10),
         sessionId: s.id,
         sessionType: s.session_type,
         roundNumber: s.round_number,
@@ -175,29 +348,35 @@ export async function GET(
     console.warn('[students/analytics] pitfalls 집계 실패:', (e as Error).message);
   }
 
-  // 최근 세션 목록 (학생 카드)
-  const sessions = sessionList.slice(0, 20).map((s) => {
-    const r = sessionResultMap.get(s.id);
-    return {
-      id: s.id,
-      exam_id: s.exam_id,
-      exam_title: examMap.get(s.exam_id) || '',
-      round_number: s.round_number,
-      session_type: s.session_type,
-      issued_at: s.issued_at,
-      completed_at: s.completed_at,
-      total: r?.total ?? 0,
-      correct: r?.correct ?? 0,
-      pct: r && r.total > 0 ? Math.round((r.correct / r.total) * 1000) / 10 : null,
-    };
-  });
+  // 최근 세션 목록 (학생 카드) — print + EX 합쳐 최신순 20개
+  const sessions = [...sessionList]
+    .sort((a, b) => (b.date_iso || '').localeCompare(a.date_iso || ''))
+    .slice(0, 20)
+    .map((s) => {
+      const r = sessionResultMap.get(s.id);
+      return {
+        id: s.id,
+        exam_id: s.exam_id,
+        exam_title: examMap.get(s.exam_id) || '',
+        round_number: s.round_number,
+        session_type: s.session_type,
+        issued_at: s.date_iso,
+        completed_at: s.completed_at,
+        total: r?.total ?? 0,
+        correct: r?.correct ?? 0,
+        pct: r && r.total > 0 ? Math.round((r.correct / r.total) * 1000) / 10 : null,
+        // EX(시험 채점) 세션이면 학생 리포트로 직접 갈 roster id (그 외 null)
+        report_student_id: s.student_ref ?? null,
+      };
+    });
 
   return NextResponse.json({
     student: {
-      id: stu.id,
+      id: studentId,
       name: studentName,
-      grade: stu.grade ?? null,
+      grade: studentGrade,
     },
+    source,
     summary: {
       totalSessions: sessionList.length,
       totalGraded,
@@ -205,7 +384,7 @@ export async function GET(
       uncategorizedWrong,
       avgScorePct,
       lastActiveAt: allResults.length > 0
-        ? allResults.reduce((max, r) => (r.graded_at > max ? r.graded_at : max), '')
+        ? allResults.reduce((max, r) => (r.occurred_at > max ? r.occurred_at : max), '')
         : null,
     },
     performanceTrend,

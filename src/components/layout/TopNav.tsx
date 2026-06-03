@@ -2,9 +2,16 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Settings, LogOut, HelpCircle, User, Building2 } from 'lucide-react';
+
+// dynamic import + ssr:false — 절대 SSR 안 함 → hydration mismatch 원천 차단
+const ActiveInstituteSwitcher = dynamic(
+  () => import('./ActiveInstituteSwitcher'),
+  { ssr: false }
+);
 import { BrandLogo } from '@/components/brand/Logo';
 import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -144,8 +151,9 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* ── Right: 트랙 토글 + 설정 + 사용자 ── */}
+        {/* ── Right: 센터 선택 + 트랙 토글 + 설정 + 사용자 ── */}
         <div className="flex items-center gap-2">
+          <ActiveInstituteSwitcher />
           {/* 트랙 토글 — flag true + 다중 트랙일 때만 노출, 그 외엔 null */}
           <TrackToggle />
           <Link
@@ -451,5 +459,7 @@ function DbAssetizeTab({
     </button>
   );
 }
+
+// ActiveInstituteSwitcher 는 별도 파일 — TopNav 상단에서 next/dynamic + ssr:false 로 import
 
 export default TopNav;

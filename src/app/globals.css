@@ -149,9 +149,47 @@
 /* ★ cases/mtable 내부 분수만 — KaTeX 가 cases 안 분수를 textstyle (작게) 로 렌더해서
    가독성 떨어짐. mfrac 만 displaystyle 비슷한 크기로 키움.
    본문 텍스트 (x≠3, x=3 등) 는 그대로 → 분수만 크게.
-   1.2em 은 부족했다는 사용자 보고 → 1.4em 로 상향. */
+   1.2em 은 부족했다는 사용자 보고 → 1.4em 로 상향.
+   ※ 이 전역 확대는 dfrac 을 거치지 않는 경로(풀이박스 SolutionBoxRender, 인쇄/PDF,
+     수식 입력 모달·심볼 피커·에디터 등 직접 katex 호출)를 위해 유지. */
 .katex .mtable .mfrac {
   font-size: 1.4em;
+}
+/* ★ #258/#259 (2026-05-31): 시험지 출제/관리 화면(.exam-page)에서 cases(연립방정식)·분수가
+   위/아래로 잘리는 사고.
+   ★★ 원인 확정: `overflow-y: hidden` 이 잘림의 직접 원인. cases 의 중괄호·분수 분자/분모는
+   KaTeX line box 보다 위/아래로 약간 삐져나오는데 hidden 이 그걸 잘라냄(스크린샷 5x+4y=-7
+   상하 잘림). → overflow: visible 로 박스가 내용 높이에 맞게 커지게 함. 행 padding 0.18em 은
+   위/아래 행 충돌 완화용 유지. cloud 페이지(styled-jsx) 도 동일하게 visible 로 수정.
+   .exam-page 밖 화면 영향 0. */
+.exam-page .katex-display .mtable .col-align-l > .vlist-t > .vlist-r > .vlist > span,
+.exam-page .katex-display .mtable .col-align-c > .vlist-t > .vlist-r > .vlist > span,
+.exam-page .katex-display .mtable .col-align-r > .vlist-t > .vlist-r > .vlist > span {
+  padding: 0.18em 0;
+}
+.exam-page .katex-display {
+  max-width: 100%;
+  overflow: visible;   /* ★ hidden 금지 — cases/분수 상하 잘림 원인 */
+  margin: 0.5em 0;
+}
+/* ★ #259 의 cases padding-top:3em 을 cases 에서 제거 (2026-06-02, 브라우저 실측). cases
+   (col-align-l)는 dfracInCases + neutralizer 로 제 높이로 그려져 안 솟음(실측: 시험지 cases
+   11개 — 분수 포함 — 전부 솟음 0) → 3em(+42px/개) 헛 패딩 제거 → 카드뷰처럼 촘촘.
+   단 행렬(col-align-c)은 1.4em 확대 유지라 솟을 수 있어 3em 보존(행렬 불변). */
+.exam-page .katex-display:has(.col-align-c) {
+  padding-top: 3em;
+  padding-bottom: 0.5em;
+}
+/* ★ #23 (2026-05-30): MathRenderer 출력(.math-content) 안 "cases" 분수만 확대 무력화.
+   문제 카드 등 MathRenderer 경로의 cases 는 이제 \frac→\dfrac (MathRenderer.dfracInCases)로
+   KaTeX 가 display 분수를 네이티브 레이아웃 → 올바른 행간(겹침 0)으로 그림. 여기에 CSS
+   확대(1.4em)까지 겹치면 행이 절대위치라 다시 겹치므로 1em 으로 되돌림.
+   ★ 선택자를 `.col-align-l`(왼쪽정렬=cases·aligned 본문) 로 한정 → 행렬(pmatrix 등은
+     `.col-align-c` 가운데정렬)은 전혀 안 걸려 전역 1.4em 그대로 유지(무손상). dev 렌더로
+     행렬 .mfrac=1.4em / cases .mfrac=1em 수치 확인.
+   (dfrac 안 거치는 다른 경로·행렬은 위 1.4em 그대로 보존 — 영향 0.) */
+.math-content .katex .mtable .col-align-l .mfrac {
+  font-size: 1em;
 }
 .katex .base {
   vertical-align: baseline;

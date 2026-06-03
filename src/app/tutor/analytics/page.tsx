@@ -26,10 +26,15 @@ interface StudentRow {
   name?: string | null;
   full_name?: string | null;
   grade?: number | null;
+  // 데이터 소스 (2026-05-29 통합):
+  //   'user'   — public.users 의 실 학생 (auth 가입)
+  //   'roster' — roster_students 의 자동등록 학생 (엑셀 일괄 채점)
+  source?: 'user' | 'roster';
 }
 
 interface AnalyticsData {
   student: { id: string; name: string; grade: number | null };
+  source?: 'user' | 'roster';
   summary: {
     totalSessions: number;
     totalGraded: number;
@@ -48,11 +53,13 @@ interface AnalyticsData {
     round_number: number; session_type: string;
     issued_at: string; completed_at: string | null;
     total: number; correct: number; pct: number | null;
+    report_student_id?: string | null;   // EX 세션이면 학생 리포트로 갈 roster id
   }>;
 }
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
   BS: '광역 스캔', DD: '정밀 진단', PT: '선수 추적', SC: '스팟 체크',
+  EX: '시험 분석',
 };
 
 const ERROR_CAUSE_COLORS: Record<string, string> = {
@@ -300,7 +307,17 @@ export default function TutorAnalyticsPage() {
                             selectedStudent === s.id ? 'bg-indigo-50 text-indigo-700' : ''
                           }`}
                         >
-                          <span className="truncate">{name}</span>
+                          <span className="truncate flex items-center gap-1.5">
+                            {name}
+                            {s.source === 'roster' && (
+                              <span
+                                className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0"
+                                title="엑셀 일괄 채점으로 자동등록된 학생 (auth 미연동)"
+                              >
+                                명단
+                              </span>
+                            )}
+                          </span>
                           {gradeIntToLabel(s.grade) && (
                             <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 flex-shrink-0">
                               {gradeIntToLabel(s.grade)}
@@ -510,13 +527,23 @@ export default function TutorAnalyticsPage() {
                           <span className="text-gray-400 ml-1">({s.correct}/{s.total})</span>
                         </td>
                         <td className="py-2 text-center">
-                          <Link
-                            href={`/grade/${s.id}`}
-                            target="_blank"
-                            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
-                          >
-                            <ExternalLink size={12} /> 채점
-                          </Link>
+                          {s.session_type === 'EX' && s.report_student_id && s.exam_id ? (
+                            <Link
+                              href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                            >
+                              <ExternalLink size={12} /> 리포트
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/grade/${s.id}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                            >
+                              <ExternalLink size={12} /> 채점
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -328,8 +328,14 @@ function FigureMarkerRenderer({
         firstNewlineIdx = i;
       }
     }
-    if (firstNewlineIdx >= 0) {
-      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+    // ★ 첫 줄이 질문 지시어(~시오/~라)로 끝날 때만 첫 \n 직전에 배지(서답형 헤더/보기 케이스).
+    //   아니면(cases 먼저·질문이 뒤, 3번류) 폴백 안 함 → 텍스트 끝(질문 뒤)에 배지.
+    //   (ExamProblemRenderer·FigureMarkerRenderer 와 동기화 — 단순 첫-\n 폴백은 3번 배지를 중간으로 보냄)
+    if (firstNewlineIdx > 0) {
+      const before = text.slice(0, firstNewlineIdx).trimEnd();
+      if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
+        return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+      }
     }
     return [text, '', false];
   };
@@ -619,12 +625,21 @@ function parseSubQuestions(
 
   // 2) 본문에 (1) (2) (3) ... 가 연속 + 서술형 키워드 포함 → 소문제로 인식
   const reParenBody = /\(([1-9])\)/g;
-  const parens: { number: string; index: number }[] = [];
+  const parensAll: { number: string; index: number }[] = [];
   while ((m = reParenBody.exec(content)) !== null) {
-    parens.push({ number: m[1], index: m.index });
+    parensAll.push({ number: m[1], index: m.index });
   }
-  // (1) (2) (3) 가 모두 있고 + 본문 어딘가에 서술형 키워드가 있으면 소문제
-  if (parens.length >= 2 && parens[0].number === '1' && subKeyword.test(content)) {
+  // ★ 순차(1,2,3…)인 것만 진짜 소문제로 인정 (2026-06-02).
+  //   "(2) … (1)의 상수 …" 처럼 본문 중간의 (1) 참조는 번호가 안 이어지므로 제외.
+  //   누락 사례: 서답형3(21번) = (1)(2) 인데 (2) 안의 "(1)의" 참조까지 잡혀 "1,2,1" 3행 +
+  //   (2) 본문이 그 참조에서 잘리던 사고.
+  const parens: { number: string; index: number }[] = [];
+  let expectedSub = 1;
+  for (const pp of parensAll) {
+    if (parseInt(pp.number, 10) === expectedSub) { parens.push(pp); expectedSub++; }
+  }
+  // (1) (2) (3) 가 순차로 있고 + 본문 어딘가에 서술형 키워드가 있으면 소문제
+  if (parens.length >= 2 && subKeyword.test(content)) {
     return parens.map((mt, i) => {
       const start = mt.index;
       const end = i + 1 < parens.length ? parens[i + 1].index : content.length;
@@ -1179,9 +1194,14 @@ function ProblemCardView({
                       firstNewlineIdx = i;
                     }
                   }
-                  // '?' 못 찾았으면 첫 줄 끝에 배치
-                  if (firstNewlineIdx >= 0) {
-                    return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+                  // ★ '?' 없을 때 — 첫 줄이 질문 지시어(~시오/~라)로 끝나는 경우에만 첫 \n 직전에 배지
+                  //   (서답형 헤더 "…하시오.\n5-1.…" 케이스). 아니면(cases 먼저·질문 뒤) 폴백 안 함
+                  //   → 텍스트 끝에 배지. ExamProblemRenderer·ProblemCardView 와 동기화.
+                  if (firstNewlineIdx > 0) {
+                    const before = text.slice(0, firstNewlineIdx).trimEnd();
+                    if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
+                      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
+                    }
                   }
                   return [text, '', false];
                 };
@@ -1919,7 +1939,7 @@ function ExamPaperView({
           width: `${measureWidth}px`,
           fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
           fontSize: '14px',
-          lineHeight: '1.85',
+          lineHeight: '1.5',
         }}
       >
         {problems.map((problem, idx) => (
@@ -2033,12 +2053,22 @@ function ExamPaperView({
         .exam-page .katex-display .mtable .col-align-r > .vlist-t > .vlist-r > .vlist > span {
           padding: 0.18em 0;
         }
-        /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화 */
+        /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화.
+           ★★ overflow-y: hidden 제거 (2026-05-31): 이게 cases 중괄호·분수 상하 잘림의 원인이었음
+           (하니스 측정: box 51 < content 56 → 5px 잘림). overflow:visible 로 박스가 내용에 맞게
+           커지게 함. 행간은 위 padding 0.18em 으로 확보. */
         .exam-page .katex-display {
           max-width: 100%;
-          overflow-x: auto;
-          overflow-y: hidden;
+          overflow: visible;
           margin: 0.5em 0;
+        }
+        /* ★ #259 의 cases padding-top:3em 을 cases 에서 제거 (2026-06-02, 브라우저 실측).
+           cases(col-align-l)는 dfracInCases + neutralizer 로 제 높이로 그려져 안 솟음
+           (실측: 분수 포함 cases 11개 전부 솟음 0) → 3em(+42px/개) 불필요·헛 패딩이라 제거.
+           단 행렬(col-align-c)은 1.4em 확대가 남아 솟을 수 있어 3em 보존(행렬 불변). */
+        .exam-page .katex-display:has(.col-align-c) {
+          padding-top: 3em;
+          padding-bottom: 0.5em;
         }
         .exam-page .katex-display > .katex {
           max-width: 100%;
@@ -2091,8 +2121,13 @@ function ExamPaperView({
           }
           #exam-print-root .katex-display {
             max-width: 100%;
-            overflow: hidden;
+            overflow: visible;   /* ★ hidden 제거 (2026-05-31) — 인쇄 시 cases/분수 상하 잘림 원인 */
             margin: 0.5em 0;
+          }
+          /* ★ #259 cases 3em 제거 (인쇄도 화면과 동일). 행렬(col-align-c)만 3em 보존. */
+          #exam-print-root .katex-display:has(.col-align-c) {
+            padding-top: 3em;
+            padding-bottom: 0.5em;
           }
           #exam-print-root .katex-display > .katex { max-width: 100%; }
           #exam-print-root table { max-width: 100%; table-layout: auto; }
@@ -2869,9 +2904,13 @@ function SolutionView({
         /* ★ KaTeX display 위/아래 — 분수·cases 위 텍스트 충돌 완화 (시험지와 동일) */
         .solution-page .katex-display {
           max-width: 100%;
-          overflow-x: auto;
-          overflow-y: hidden;
+          overflow: visible;   /* ★ hidden 제거 (2026-05-31) — cases/분수 상하 잘림 원인 */
           margin: 0.5em 0;
+        }
+        /* ★ cases/행렬 솟음 → 박스 안에 담기 (#259, 시험지와 동일) */
+        .solution-page .katex-display:has(.mtable) {
+          padding-top: 3em;
+          padding-bottom: 0.5em;
         }
         /* 인라인 분수 위/아래 줄 침범 차단 — 시험지와 동일 */
         .solution-page .katex {

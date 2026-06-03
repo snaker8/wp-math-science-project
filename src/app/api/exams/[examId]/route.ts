@@ -330,106 +330,48 @@ export async function DELETE(
 
   const { examId } = await params;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceKey) {
-    console.error('[API/exams] DELETE: env 미설정', { supabaseUrl: !!supabaseUrl, serviceKey: !!serviceKey });
+  if (!supabaseAdmin) {
+    console.error('[API/exams] DELETE: supabaseAdmin 미설정');
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  // 격리 가드 — supabaseAdmin 으로 exam 의 institute_id 확인 후 권한 체크
-  if (supabaseAdmin) {
-    const { data: existingExam } = await supabaseAdmin
-      .from('exams')
-      .select('institute_id')
-      .eq('id', examId)
-      .maybeSingle();
-    if (!existingExam) {
-      return NextResponse.json({ error: '해당 시험지를 찾을 수 없습니다.' }, { status: 404 });
-    }
-    try {
-      assertInstituteAccess(scope, (existingExam as { institute_id: string | null }).institute_id);
-    } catch {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  // 격리 가드 — exam 의 institute_id 확인 후 권한 체크 (cross-tenant 삭제 차단)
+  const { data: existingExam, error: lookupErr } = await supabaseAdmin
+    .from('exams')
+    .select('institute_id, title')
+    .eq('id', examId)
+    .maybeSingle();
+  if (lookupErr) {
+    console.error('[API/exams] DELETE lookup 실패:', lookupErr.message);
+    return NextResponse.json({ error: `DB 조회 실패: ${lookupErr.message}` }, { status: 500 });
+  }
+  if (!existingExam) {
+    return NextResponse.json({ error: '해당 시험지를 찾을 수 없습니다.' }, { status: 404 });
+  }
+  try {
+    assertInstituteAccess(scope, (existingExam as { institute_id: string | null }).institute_id);
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const headers = {
-    'apikey': serviceKey,
-    'Authorization': `Bearer ${serviceKey}`,
-    'Content-Type': 'application/json',
-  };
-
+  // ★ raw HTTP(PostgREST) 우회 제거 (2026-05-31): raw fetch SELECT 가 "DB 조회 실패"로
+  //   깨지는 사고. 동일 핸들러의 supabaseAdmin 단건 조회는 정상이므로 삭제도 supabaseAdmin
+  //   으로 통일. (DELETE 는 mutation 이라 Next.js Data Cache 영향 없음)
   try {
-    console.log(`[API/exams] DELETE 요청: examId="${examId}" (len=${examId.length})`);
-    // ★ 보안: 서비스 키 일부 노출 제거. supabaseUrl은 공개 호스트명이라 OK
-    console.log(`[API/exams] supabaseUrl host="${new URL(supabaseUrl).host}"`);
-
-    // 1) raw HTTP SELECT로 존재 확인 (cache: 'no-store'로 Next.js Data Cache 우회)
-    const listRes = await fetch(
-      `${supabaseUrl}/rest/v1/exams?select=id,title&limit=200`,
-      { method: 'GET', headers, cache: 'no-store' as RequestCache }
+    console.log(
+      `[API/exams] DELETE 요청: examId="${examId}" title="${(existingExam as { title?: string }).title ?? ''}"`,
     );
-
-    if (!listRes.ok) {
-      console.error(`[API/exams] raw SELECT 실패: status=${listRes.status}`);
-      const errText = await listRes.text();
-      console.error(`[API/exams] raw SELECT body: ${errText}`);
-      return NextResponse.json({ error: 'DB 조회 실패' }, { status: 500 });
-    }
-
-    const allExams: { id: string; title: string }[] = await listRes.json();
-    console.log(`[API/exams] raw SELECT: ${allExams.length}건 조회됨`);
-
-    const targetExam = allExams.find(e => e.id === examId);
-
-    if (!targetExam) {
-      console.log(`[API/exams] examId="${examId}" NOT found in ${allExams.length} exams`);
-      console.log(`[API/exams] DB IDs: [${allExams.map(e => e.id).join(', ')}]`);
+    const { error: delErr } = await supabaseAdmin
+      .from('exams')
+      .delete()
+      .eq('id', examId);
+    if (delErr) {
+      console.error('[API/exams] DELETE 실패:', delErr.message);
       return NextResponse.json(
-        { error: '해당 시험지를 찾을 수 없습니다.' },
-        { status: 404 }
+        { error: `삭제 실패: ${delErr.message}` },
+        { status: 500 },
       );
     }
-
-    console.log(`[API/exams] 삭제 대상: "${targetExam.title}" (${targetExam.id})`);
-
-    // 2) raw HTTP DELETE 실행
-    const deleteRes = await fetch(
-      `${supabaseUrl}/rest/v1/exams?id=eq.${examId}`,
-      {
-        method: 'DELETE',
-        headers: { ...headers, 'Prefer': 'return=representation' },
-      }
-    );
-
-    const deleteBody = await deleteRes.text();
-    console.log(`[API/exams] raw DELETE: status=${deleteRes.status}, body=${deleteBody.substring(0, 200)}`);
-
-    if (!deleteRes.ok) {
-      console.error(`[API/exams] raw DELETE 실패!`);
-      return NextResponse.json(
-        { error: `삭제 실패 (HTTP ${deleteRes.status})`, detail: deleteBody },
-        { status: 500 }
-      );
-    }
-
-    // 3) 삭제 확인: 다시 raw SELECT (cache: 'no-store')
-    const verifyRes = await fetch(
-      `${supabaseUrl}/rest/v1/exams?select=id&id=eq.${examId}`,
-      { method: 'GET', headers, cache: 'no-store' as RequestCache }
-    );
-    const verifyData: { id: string }[] = await verifyRes.json();
-
-    if (verifyData.length > 0) {
-      console.error(`[API/exams] ⚠ DELETE 후에도 행 존재! RLS가 DELETE를 차단하고 있을 가능성`);
-      return NextResponse.json(
-        { error: 'RLS 정책이 삭제를 차단합니다. Supabase 대시보드에서 exams 테이블 RLS를 확인하세요.' },
-        { status: 500 }
-      );
-    }
-
     console.log(`[API/exams] ✓ 삭제 완료: ${examId}`);
     return NextResponse.json({ success: true, examId });
   } catch (err) {

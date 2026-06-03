@@ -19,7 +19,7 @@ import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
 import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
-import { verifyAndRepairWithVision, persistVisionDiffsForLearning } from '@/lib/ocr/vision-verifier';
+import { verifyAndRepairWithVision, persistVisionDiffsForLearning, applyVisionDiffs } from '@/lib/ocr/vision-verifier';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 import { extractSchoolName } from '@/lib/utils/school-extract';
 import { normalizeSchoolName, formatSourceLabel } from '@/lib/utils/school-normalize';
@@ -841,6 +841,10 @@ export async function PUT(request: NextRequest) {
           console.warn(`[Upload PUT] ⚠ 문제 ${edited.number}번 problemNumber 매칭 실패 → 인덱스 ${i} 폴백 (server=${result.problemNumber})`);
         }
         if (result) {
+          // ★ #22 (2026-05-30): 사용자가 1차 OCR 화면에서 직접 수정한 문제 표시.
+          //   매칭된 result 참조에 직접 플래그 → saveProblemsToDB 의 비전 재교정이 사용자 수정을
+          //   덮어쓰는 회귀 차단. 번호 매칭 실패·인덱스 폴백과 무관하게 동작(같은 객체에 마킹).
+          if (edited.isEdited) (result as { __userEdited?: boolean }).__userEdited = true;
           if (edited.difficulty !== undefined) result.classification.difficulty = edited.difficulty as 1|2|3|4|5;
           if (edited.typeCode !== undefined) result.classification.typeCode = edited.typeCode;
           if (edited.cognitiveDomain !== undefined) result.classification.cognitiveDomain = edited.cognitiveDomain as 'CALCULATION'|'UNDERSTANDING'|'INFERENCE'|'PROBLEM_SOLVING';
@@ -1347,6 +1351,46 @@ async function triggerAutoSolutionGeneration(examId: string, origin: string): Pr
  * AutoCrop 모드: editedProblems 기반으로 직접 DB에 저장
  * jobResults에 결과가 없는 경우 (수동 분석 모드)
  */
+/**
+ * 자산화 시 업로더 organization 의 격리 모드(isolated_assets) 여부.
+ *
+ * 기존엔 중첩 embed(institutes!inner(organizations!inner(...)))로 조회했는데
+ * 파싱이 취약해 누락되던 사고(2026-05-31: 엄궁차수학 업로드 25건이 공통풀로 유출).
+ * → 순차 admin 쿼리(users.organization_id → institute → organizations.isolated_assets)
+ *   로 견고화. organization_id 우선, 없으면 institute 로 역추적.
+ */
+async function isOrgIsolatedAssets(createdBy: string | null): Promise<boolean> {
+  if (!createdBy || !supabaseAdmin) return false;
+  try {
+    const { data: u } = await supabaseAdmin
+      .from('users')
+      .select('institute_id, organization_id')
+      .eq('id', createdBy)
+      .maybeSingle();
+    if (!u) return false;
+    let orgId = (u as { organization_id?: string | null }).organization_id ?? null;
+    const instId = (u as { institute_id?: string | null }).institute_id ?? null;
+    if (!orgId && instId) {
+      const { data: inst } = await supabaseAdmin
+        .from('institutes')
+        .select('organization_id')
+        .eq('id', instId)
+        .maybeSingle();
+      orgId = (inst as { organization_id?: string | null } | null)?.organization_id ?? null;
+    }
+    if (!orgId) return false;
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('isolated_assets')
+      .eq('id', orgId)
+      .maybeSingle();
+    return (org as { isolated_assets?: boolean } | null)?.isolated_assets === true;
+  } catch (e) {
+    console.warn('[isolation] organization isolated_assets 조회 실패:', (e as Error).message);
+    return false;
+  }
+}
+
 async function saveEditedProblemsDirect(
   jobId: string,
   job: UploadJob,
@@ -1467,22 +1511,9 @@ async function saveEditedProblemsDirect(
   //   예: 엄궁차수학(isolated_assets=true) → 자산화 problems 가 다른 학원에 안 보임.
   //   사용자 지시 (2026-05-16): "엄궁차수학에서 만들거나 올리는 데이터는 다른
   //   학원에서 조회 되지 않게".
-  let isolatedByOrg = false;
-  if (createdBy) {
-    try {
-      const { data: userOrgRow } = await supabase
-        .from('users')
-        .select('institute_id, institutes!inner(organization_id, organizations!inner(isolated_assets))')
-        .eq('id', createdBy)
-        .maybeSingle();
-      const orgRow = (userOrgRow as { institutes?: { organizations?: { isolated_assets?: boolean } } } | null)?.institutes?.organizations;
-      isolatedByOrg = orgRow?.isolated_assets === true;
-      if (isolatedByOrg) {
-        console.log('[Direct Save] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
-      }
-    } catch (e) {
-      console.warn('[Direct Save] organization isolated_assets 조회 실패 (기본 동작 진행):', (e as Error).message);
-    }
+  const isolatedByOrg = await isOrgIsolatedAssets(createdBy);
+  if (isolatedByOrg) {
+    console.log('[Direct Save] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
   }
 
   let instituteId: string | null;
@@ -1833,7 +1864,10 @@ async function saveEditedProblemsDirect(
               `[Direct Save] 문제 ${edited.number}: 비전 교정 적용 (diff ${diffs.length}개)`,
               diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
             );
-            contentLatex = correctedText;
+            // ★ diff 만 적용 (2026-05-31) — correctedText(전체본) 통째 교체 금지. 모델이 짚은
+            //   from→to 토큰만 치환해 잘된 분석이 안 깨지게. (correctedText 는 변경 유무 신호로만 사용)
+            const { result: _diffApplied, appliedCount: _ac } = applyVisionDiffs(contentLatex, diffs);
+            if (_ac > 0) contentLatex = _diffApplied;
           }
         } catch (e) {
           console.warn(`[Direct Save] 문제 ${edited.number}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
@@ -2118,7 +2152,15 @@ async function saveEditedProblemsDirect(
       // ★ YOLO 학습 데이터: detection_annotations 저장
       if (problem && edited.bbox && edited.bbox.w > 0.01 && edited.bbox.h > 0.01) {
         const pageNum = (edited.pageIndex ?? 0) + 1;
-        const pageImgInfo = pageImagePathMap.get(pageNum);
+        // ★ 2026-06-03 회귀 수정: page-images 는 계속 생성되는데(자동크롭+수동보정 흐름 정상)
+        //   annotation 만 4/26 이후 0건이던 사고 — pageImagePathMap 키 매칭 실패가 INSERT 를
+        //   조용히 스킵시킴. 클라가 항상 page-images/{jobId}/page-{n}.jpg 로 업로드하므로,
+        //   맵 미스 시 결정적 경로로 복원해 INSERT 를 보장한다(폭 0 = 미상, bbox 는 0~1 정규화라 무관).
+        let pageImgInfo = pageImagePathMap.get(pageNum);
+        if (!pageImgInfo) {
+          console.warn(`[Direct Save] 문제 ${edited.number} annotation: pageImagePathMap miss (size=${pageImagePathMap.size}, pageNum=${pageNum}) → 결정적 경로 폴백`);
+          pageImgInfo = { path: `page-images/${jobId}/page-${pageNum}.jpg`, width: 0, height: 0 };
+        }
         if (pageImgInfo) {
           try {
             // ★ 기존 레코드 삭제 후 insert (중복 방지)
@@ -2165,9 +2207,11 @@ async function saveEditedProblemsDirect(
             }
             await supabase.from('detection_annotations').insert(annotationsToInsert);
           } catch (annErr) {
-            console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패 (무시):`, annErr);
+            console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패:`, annErr);
           }
         }
+      } else if (problem) {
+        console.warn(`[Direct Save] 문제 ${edited.number} annotation 스킵: bbox 무효 (bbox=${JSON.stringify(edited.bbox)})`);
       }
     } catch (err) {
       console.error(`[Direct Save] 문제 ${edited.number}번 오류:`, err);
@@ -2309,22 +2353,9 @@ async function saveProblemsToDB(
   // ★ 학원 단위 격리 우선 (organizations.isolated_assets=true)
   //   사용자 organization 이 격리 모드면 env 무시하고 institute_id 박음.
   //   예: 엄궁차수학(isolated_assets=true) → 자산화 problems 다른 학원 차단.
-  let isolatedByOrg = false;
-  if (createdBy) {
-    try {
-      const { data: userOrgRow } = await supabase
-        .from('users')
-        .select('institute_id, institutes!inner(organization_id, organizations!inner(isolated_assets))')
-        .eq('id', createdBy)
-        .maybeSingle();
-      const orgRow = (userOrgRow as { institutes?: { organizations?: { isolated_assets?: boolean } } } | null)?.institutes?.organizations;
-      isolatedByOrg = orgRow?.isolated_assets === true;
-      if (isolatedByOrg) {
-        console.log('[DB] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
-      }
-    } catch (e) {
-      console.warn('[DB] organization isolated_assets 조회 실패 (기본 동작 진행):', (e as Error).message);
-    }
+  const isolatedByOrg = await isOrgIsolatedAssets(createdBy);
+  if (isolatedByOrg) {
+    console.log('[DB] organization.isolated_assets=true → institute_id 박음 (격리 모드)');
   }
 
   let instituteId: string | null;
@@ -2663,19 +2694,30 @@ async function saveProblemsToDB(
       }
 
       // ★ 비전 검증 + 자동 교정 (2026-05-27 단계 3 full 루프 Phase 1) — saveEditedProblemsDirect 와 동일.
-      try {
-        const _pNum = result.problemNumber || problemIndex;
-        const tmpCropUrl = imageUrlMap.get(_pNum);
-        const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(tmpCropUrl, contentWithMath);
-        if (!isMatch && correctedText) {
-          console.log(
-            `[DB] 문제 ${problemIndex}: 비전 교정 적용 (diff ${diffs.length}개)`,
-            diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
-          );
-          contentWithMath = correctedText;
+      //
+      // ★★ 사용자 수동 수정 보호 (#22, 2026-05-30) — result.__userEdited 면 비전 재교정 스킵.
+      //   PUT 오버라이드 루프(line ~726)에서 사용자 수정본은 result 에 __userEdited 플래그가 박힘.
+      //   saveEditedProblemsDirect(autoCrop 경로)와 동일 회귀를 OCR-results 경로에서도 차단
+      //   ("두 함수 동시 패치" — 한쪽만 막으면 results 채워진 경로로 사용자 수정이 또 덮어써짐).
+      if ((result as { __userEdited?: boolean }).__userEdited) {
+        console.log(`[DB] 문제 ${problemIndex}: 사용자 수정본 → 비전 재교정 스킵 (수정본 보존)`);
+      } else {
+        try {
+          const _pNum = result.problemNumber || problemIndex;
+          const tmpCropUrl = imageUrlMap.get(_pNum);
+          const { isMatch, correctedText, diffs } = await verifyAndRepairWithVision(tmpCropUrl, contentWithMath);
+          if (!isMatch && correctedText) {
+            console.log(
+              `[DB] 문제 ${problemIndex}: 비전 교정 적용 (diff ${diffs.length}개)`,
+              diffs.slice(0, 3).map((d) => `${d.from}→${d.to}`).join(', ')
+            );
+            // ★ diff 만 적용 (2026-05-31) — saveEditedProblemsDirect 와 동일. 전체본 교체 금지.
+            const { result: _diffApplied2, appliedCount: _ac2 } = applyVisionDiffs(contentWithMath, diffs);
+            if (_ac2 > 0) contentWithMath = _diffApplied2;
+          }
+        } catch (e) {
+          console.warn(`[DB] 문제 ${problemIndex}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
         }
-      } catch (e) {
-        console.warn(`[DB] 문제 ${problemIndex}: 비전 검증 실패 (무시):`, e instanceof Error ? e.message : e);
       }
 
       // ★ 학습 규칙 자동 적용 (2026-05-19)
@@ -2882,7 +2924,13 @@ async function saveProblemsToDB(
 
         if (bbox && bbox.w > 0.01 && bbox.h > 0.01 && pageIdx !== undefined) {
           const pageNum = pageIdx + 1;
-          const pageImgInfo = pageImagePathMap.get(pageNum);
+          // ★ 2026-06-03 회귀 수정: 맵 미스 시 결정적 경로 폴백 (saveEditedProblemsDirect 와 동일).
+          //   page-images 는 계속 생성되는데 annotation 만 0건이던 사고 차단.
+          let pageImgInfo = pageImagePathMap.get(pageNum);
+          if (!pageImgInfo) {
+            console.warn(`[DB] 문제 ${problemNum} annotation: pageImagePathMap miss (size=${pageImagePathMap.size}, pageNum=${pageNum}) → 결정적 경로 폴백`);
+            pageImgInfo = { path: `page-images/${jobId}/page-${pageNum}.jpg`, width: 0, height: 0 };
+          }
           if (pageImgInfo) {
             try {
               // ★ 기존 레코드 삭제 후 insert (중복 방지)
@@ -2904,7 +2952,7 @@ async function saveProblemsToDB(
                 detection_source: editedBbox ? 'MANUAL' : 'MATHPIX',
               });
             } catch (annErr) {
-              console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패 (무시):`, annErr);
+              console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패:`, annErr);
             }
           }
         }

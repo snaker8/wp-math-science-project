@@ -1,0 +1,171 @@
+// ============================================================================
+// /api/me/active-institute
+//
+// GET  — 현재 활성 institute + 접근 가능 institute 목록 반환.
+//        쿠키와 서버측 resolveActiveInstitute() 가 어긋나는 경우 쿠키 자동 동기화.
+// POST — 활성 institute 변경 (쿠키 set, 권한 검증).
+//
+// 클라이언트는 POST 후 window.location.reload() 로 전체 새로고침
+// (client component 들의 자체 useEffect fetch 까지 모두 재실행).
+// 쿠키 이름: active_institute_id (lib/security/active-institute.ts 참조)
+// ============================================================================
+
+import { NextResponse, type NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { supabaseAdmin } from '@/lib/supabase/server';
+import {
+  ACTIVE_INSTITUTE_COOKIE,
+  canAccessInstitute,
+  readActiveInstituteCookie,
+} from '@/lib/security/active-institute';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+interface InstituteRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  hidden: boolean;
+  organization_id: string | null;
+}
+
+const COLS = 'id, name, display_name, hidden, organization_id';
+
+async function fetchAccessibleInstitutes(
+  scope: Awaited<ReturnType<typeof requireAuthScope>>
+): Promise<InstituteRow[]> {
+  if (!scope.ok || !supabaseAdmin) return [];
+  const s = scope.data.scope;
+
+  let rows: InstituteRow[] = [];
+
+  if (s.isSuperAdmin) {
+    // super_admin: 모든 학원(organization)의 모든 institute 노출 — 학원 간 전환 가능.
+    // (자기 organization 만 보이면 다른 학원 센터로 못 옮겨가는 문제 — 사용자 요구로 해제)
+    const { data } = await supabaseAdmin
+      .from('institutes')
+      .select(COLS)
+      .order('name', { ascending: true });
+    rows = (data ?? []) as InstituteRow[];
+  } else {
+    // ORG_ADMIN 또는 일반 user — accessibleInstituteIds 사용
+    const ids = s.accessibleInstituteIds ?? [];
+    if (ids.length === 0) return [];
+    const { data } = await supabaseAdmin
+      .from('institutes')
+      .select(COLS)
+      .in('id', ids)
+      .order('name', { ascending: true });
+    rows = (data ?? []) as InstituteRow[];
+  }
+
+  // hidden=true 인 institute 는 드롭다운에서 제외
+  return rows.filter((r) => !r.hidden);
+}
+
+export async function GET() {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
+  const list = await fetchAccessibleInstitutes(authed);
+
+  // 학원(organization) 이름 매핑 — super_admin 이 학원 간 이동 시 어느 학원 센터인지 구분
+  const orgIds = Array.from(
+    new Set(list.map((i) => i.organization_id).filter((v): v is string => !!v))
+  );
+  const orgNameById = new Map<string, string>();
+  if (orgIds.length > 0 && supabaseAdmin) {
+    const { data: orgs } = await supabaseAdmin
+      .from('organizations')
+      .select('id, name')
+      .in('id', orgIds);
+    for (const o of (orgs ?? []) as { id: string; name: string }[]) {
+      orgNameById.set(o.id, o.name);
+    }
+  }
+
+  // 활성 ID 결정: 쿠키 우선 (권한 통과한 것만) → 본인 institute → 첫 항목
+  const cookieVal = readActiveInstituteCookie();
+  let activeId: string | null = null;
+  if (cookieVal && canAccessInstitute(scope, cookieVal)) {
+    activeId = cookieVal;
+  } else if (scope.instituteId && list.some((i) => i.id === scope.instituteId)) {
+    activeId = scope.instituteId;
+  } else if (list.length > 0) {
+    activeId = list[0].id;
+  }
+
+  const activeInst = list.find((i) => i.id === activeId);
+  const activeName = activeInst
+    ? (activeInst.display_name ?? activeInst.name)
+    : null;
+
+  const res = NextResponse.json({
+    activeInstituteId: activeId,
+    activeInstituteName: activeName,
+    institutes: list.map((i) => ({
+      id: i.id,
+      // 표시명 우선순위: display_name → name
+      name: i.display_name ?? i.name,
+      organizationId: i.organization_id,
+      organizationName: i.organization_id
+        ? (orgNameById.get(i.organization_id) ?? null)
+        : null,
+    })),
+    canSwitch: list.length > 1,
+  });
+
+  // 쿠키 동기화 — UI 가 보여주는 activeId 와 서버측 resolveActiveInstitute() 가
+  // 항상 같은 값을 반환하도록 보장. 쿠키 부재 / 쿠키가 권한 잃은 institute 를
+  // 가리키는 경우 UI 와 데이터 격리가 어긋날 수 있어 매번 동기화.
+  if (activeId && activeId !== cookieVal) {
+    res.cookies.set(ACTIVE_INSTITUTE_COOKIE, activeId, {
+      httpOnly: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+
+  return res;
+}
+
+export async function POST(req: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { scope } = authed.data;
+
+  let body: { instituteId?: string };
+  try {
+    body = (await req.json()) as { instituteId?: string };
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const instituteId = (body.instituteId ?? '').trim();
+  if (!instituteId) {
+    return NextResponse.json(
+      { error: 'instituteId 필수' },
+      { status: 400 }
+    );
+  }
+  if (!canAccessInstitute(scope, instituteId)) {
+    return NextResponse.json(
+      { error: '해당 학원에 접근 권한이 없습니다.' },
+      { status: 403 }
+    );
+  }
+
+  // 쿠키 set — httpOnly=false (클라 표시용 fallback 필요 시 읽음), 1년
+  cookies().set(ACTIVE_INSTITUTE_COOKIE, instituteId, {
+    httpOnly: false,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+  });
+
+  return NextResponse.json({ ok: true, activeInstituteId: instituteId });
+}

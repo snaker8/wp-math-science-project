@@ -17,6 +17,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { apiError } from '@/lib/api/error';
+import {
+  readActiveInstituteCookie,
+  canAccessInstitute,
+} from '@/lib/security/active-institute';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,23 +33,36 @@ export async function GET() {
     return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   }
 
+  // 활성 institute_id 결정 — 쿠키(TopNav 활성 센터) 우선, 권한 검증 통과한 것만
+  let effectiveInstituteId: string | null = user.instituteId;
+  const cookieVal = readActiveInstituteCookie();
+  if (cookieVal && canAccessInstitute(scope, cookieVal)) {
+    effectiveInstituteId = cookieVal;
+  }
+
   let organizationId: string | null = null;
   let organizationName: string | null = null;
   let instituteName: string | null = null;
 
-  // institute → name + organization_id
-  if (user.instituteId) {
+  // institute → 표시명(display_name 우선) + organization_id
+  if (effectiveInstituteId) {
     const { data: inst, error: instErr } = await supabaseAdmin
       .from('institutes')
-      .select('name, organization_id')
-      .eq('id', user.instituteId)
+      .select('name, display_name, organization_id')
+      .eq('id', effectiveInstituteId)
       .maybeSingle();
     if (instErr) {
       return apiError('/api/me/scope', instErr, 'Failed to load institute', 500);
     }
     if (inst) {
-      instituteName = (inst as { name: string | null }).name;
-      organizationId = (inst as { organization_id: string | null }).organization_id;
+      const ii = inst as {
+        name: string | null;
+        display_name: string | null;
+        organization_id: string | null;
+      };
+      // display_name 있으면 우선 (예: "본원" → "엄궁차수학")
+      instituteName = ii.display_name ?? ii.name;
+      organizationId = ii.organization_id;
     }
   }
   // ORG_ADMIN 은 scope.organizationId 가 더 정확
@@ -71,7 +88,7 @@ export async function GET() {
   return NextResponse.json({
     organizationId,
     organizationName,
-    instituteId: user.instituteId,
+    instituteId: effectiveInstituteId,
     instituteName,
     role: user.role,
     isSuperAdmin: scope.isSuperAdmin,

@@ -26,8 +26,11 @@ import {
 import { useExamProblems, useExamList } from '@/hooks/useExamProblems';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { AIInsightTabs } from './AIInsightTabs';
+import StudentsTab from './StudentsTab';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 import './exam-analysis.css';
+
+type TopTab = 'analysis' | 'students';
 
 const DOMAIN_LABELS: Record<string, string> = {
   CALCULATION: '계산',
@@ -79,6 +82,9 @@ export default function ExamAnalysisPage() {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
+
+  // 상단 탭 — 유형 분석 vs 학생 채점
+  const [topTab, setTopTab] = useState<TopTab>('analysis');
 
   const exam = useMemo(() => exams.find((e) => e.id === examId), [exams, examId]);
 
@@ -447,31 +453,79 @@ export default function ExamAnalysisPage() {
           </button>
           <span className="sep">/</span>
           <span className="title">{exam.title}</span>
-          <span className="page-chip">유형 분석</span>
+          <div
+            style={{
+              display: 'inline-flex',
+              marginLeft: 12,
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 8,
+              padding: 2,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setTopTab('analysis')}
+              style={{
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+                borderRadius: 6,
+                background: topTab === 'analysis' ? '#4f46e5' : 'transparent',
+                color: topTab === 'analysis' ? '#fff' : 'rgba(255,255,255,0.6)',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+            >
+              유형 분석
+            </button>
+            <button
+              type="button"
+              onClick={() => setTopTab('students')}
+              style={{
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+                borderRadius: 6,
+                background: topTab === 'students' ? '#4f46e5' : 'transparent',
+                color: topTab === 'students' ? '#fff' : 'rgba(255,255,255,0.6)',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+            >
+              학생 채점
+            </button>
+          </div>
         </div>
         <div className="ea-subbar-actions">
-          <button type="button" className="ea-btn" onClick={handleCopyReportText}>
-            <Copy />
-            분석 데이터 복사
-          </button>
-          <button type="button" className="ea-btn" onClick={handleDownloadPng} disabled={isExporting}>
-            {isExporting ? <Loader2 className="animate-spin" /> : <ImageDown />}
-            {isExporting ? '저장 중…' : '이미지 저장'}
-          </button>
-          <button type="button" className="ea-btn" onClick={() => window.print()}>
-            <Printer />
-            인쇄
-          </button>
-          <button
-            type="button"
-            className="ea-btn"
-            onClick={handleShareParent}
-            disabled={isSharing}
-            title="학부모용 공개 분석 리포트 링크 생성/복사"
-          >
-            {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
-            {isSharing ? '생성 중...' : '학부모 공유'}
-          </button>
+          {topTab === 'analysis' && (
+            <>
+              <button type="button" className="ea-btn" onClick={handleCopyReportText}>
+                <Copy />
+                분석 데이터 복사
+              </button>
+              <button type="button" className="ea-btn" onClick={handleDownloadPng} disabled={isExporting}>
+                {isExporting ? <Loader2 className="animate-spin" /> : <ImageDown />}
+                {isExporting ? '저장 중…' : '이미지 저장'}
+              </button>
+              <button type="button" className="ea-btn" onClick={() => window.print()}>
+                <Printer />
+                인쇄
+              </button>
+              <button
+                type="button"
+                className="ea-btn"
+                onClick={handleShareParent}
+                disabled={isSharing}
+                title="학부모용 공개 분석 리포트 링크 생성/복사"
+              >
+                {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
+                {isSharing ? '생성 중...' : '학부모 공유'}
+              </button>
+            </>
+          )}
           <button
             type="button"
             className="ea-btn primary"
@@ -505,6 +559,12 @@ export default function ExamAnalysisPage() {
 
       {/* ═══════ BODY ═══════ */}
       <div className="ea-body">
+        {topTab === 'students' && (
+          <div style={{ padding: 24, maxWidth: 1280, margin: '0 auto' }}>
+            <StudentsTab examId={examId} />
+          </div>
+        )}
+        {topTab === 'analysis' && (
         <div className="ea-body-inner" ref={captureRef}>
           {/* Stats Row */}
           <div className="ea-stats">
@@ -735,6 +795,7 @@ export default function ExamAnalysisPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

@@ -143,8 +143,11 @@ export async function getUserAccessScope(
   if (isSuperAdmin) {
     // 슈퍼관리자: 모든 institute (null sentinel)
     accessibleInstituteIds = null;
-  } else if (organizationId) {
-    // ORG_ADMIN: 자기 학원 산하 모든 institute
+  } else if (role === 'ORG_ADMIN' && organizationId) {
+    // ORG_ADMIN 만: 자기 학원 산하 모든 institute (여러 센터 통합 관리)
+    // ★ role 검사 필수 — 일반 강사/ADMIN 도 organization_id 가 박혀 있어,
+    //   role 안 보면 자기 학원 모든 센터로 전환·접근 가능해지는 격리 누수.
+    //   (TEACHER/ADMIN 은 아래 instituteId 분기로 자기 센터만)
     const { data: instRows, error: instErr } = await adminClient
       .from('institutes')
       .select('id')
@@ -159,7 +162,7 @@ export async function getUserAccessScope(
     }
     accessibleInstituteIds = ids;
   } else if (instituteId) {
-    // 일반 user: 자기 institute 만
+    // 일반 user (TEACHER/ADMIN 등): 자기 institute 만
     accessibleInstituteIds = [instituteId];
   } else {
     // 배정 안 된 신규 user: 접근 가능한 institute 0
@@ -370,6 +373,21 @@ export interface AssertAccessOptions {
   requireWrite?: boolean;
 }
 
+const STAFF_ROLES = ['ADMIN', 'TEACHER', 'TUTOR', 'ORG_ADMIN'];
+
+/**
+ * 스태프(강사·관리자) 여부 — 공통풀(공유 라이브러리) 쓰기 허용 판정용.
+ * 학생/학부모는 제외(편집 엔드포인트 접근 불가지만 방어적 차단).
+ *
+ * 2026-05-31 정책: 공통풀 문제 수정을 super_admin 외 스태프에게도 허용.
+ *   이전엔 super_admin 만 → 강사가 공유 문제를 전혀 못 고치는 문제(사용자 보고).
+ *   (학원 간 콘텐츠 섞임은 organizations.isolated_assets 격리로 차단)
+ */
+function isStaffScope(scope: InstituteAccessScope): boolean {
+  if (scope.isSuperAdmin) return true;
+  return scope.role != null && STAFF_ROLES.includes(scope.role);
+}
+
 /**
  * problem 의 institute 가 scope 안에 있는지 한 번에 검증.
  *
@@ -404,10 +422,10 @@ export async function assertProblemAccess(
   if (!problem) return { ok: false, status: 404, error: 'Problem not found' };
   const targetInstituteId = (problem as { institute_id: string | null }).institute_id;
 
-  // 공통 풀 — 쓰기 시 super_admin 검증
+  // 공통 풀 — 쓰기 시 스태프(강사·관리자) 검증 (2026-05-31: super_admin 외 스태프 허용)
   if (targetInstituteId === null) {
-    if (options.requireWrite && !scope.isSuperAdmin) {
-      return { ok: false, status: 403, error: 'Common pool write requires super_admin' };
+    if (options.requireWrite && !isStaffScope(scope)) {
+      return { ok: false, status: 403, error: 'Common pool write requires staff role' };
     }
     return { ok: true, institute_id: null };
   }
@@ -468,7 +486,7 @@ export function assertCommonPoolWriteAccess(
   scope: InstituteAccessScope,
   instituteId: string | null
 ): void {
-  if (instituteId === null && !scope.isSuperAdmin) {
+  if (instituteId === null && !isStaffScope(scope)) {
     throw new Error('FORBIDDEN_COMMON_POOL_WRITE');
   }
 }

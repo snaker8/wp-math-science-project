@@ -78,6 +78,8 @@ interface ExamProblem {
   choices: string[];
   choiceHeaders?: string[];
   choiceLayout?: number;
+  /** ★ 그림 객관식 — 선택지별 이미지 URL (index 0~4 = ①~⑤, null=텍스트 보기) */
+  choiceImages?: (string | null)[];
   answer: number | string;
   solution: string;
   difficulty: number;
@@ -562,6 +564,7 @@ export default function ExamManagementPage() {
       choices: p.choices,
       choiceHeaders: p.choiceHeaders,
       choiceLayout: p.choiceLayout,
+      choiceImages: p.choiceImages,
       answer: p.answer,
       solution: p.solution,
       difficulty: p.difficulty,

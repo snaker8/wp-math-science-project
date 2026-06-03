@@ -159,6 +159,53 @@ ${ocrLatex}
 }
 
 /**
+ * ★ diff 만 적용 (2026-05-31) — 비전 모델이 짚은 from→to 토큰만 치환.
+ *
+ * 배경: 기존 호출부는 correctedText(전체 재작성본) 를 통째로 본문에 덮어써서,
+ *   한 토큰 고치려다 멀쩡한 본문까지 모델이 바꿔 "잘된 분석을 깨는" 사고가 반복됐다.
+ *   이 함수는 diffs 의 from 토큰이 원문에 "정확히 존재할 때만" to 로 치환한다.
+ *   → 모델이 명시적으로 지목한 곳만 바뀌고, 나머지 본문은 물리적으로 불변. 자동 유지 + 안전.
+ *
+ * 안전 가드:
+ *   - from 이 없거나 from===to → 스킵
+ *   - from 이 원문에 없으면 → 스킵 (no-op, 환각 방지)
+ *   - from 이 1글자면서 ASCII(흔한 문자) → 스킵 (예: "1" 전체 치환 같은 과잉치환 차단).
+ *     동그라미 기호(㉠①) 등 특수문자 1자는 허용 (실제 OCR 교정 대상).
+ *   - 한 호출에서 최대 8개 diff 만 적용 (그 이상이면 사실상 재작성 의심 → 초과분 무시 + 경고).
+ *
+ * @returns { result: 치환된 문자열, appliedCount: 실제 적용된 diff 수, skipped: 무시된 수 }
+ */
+export function applyVisionDiffs(
+  original: string,
+  diffs: Array<{ from: string; to: string }>
+): { result: string; appliedCount: number; skipped: number } {
+  if (!Array.isArray(diffs) || diffs.length === 0) {
+    return { result: original, appliedCount: 0, skipped: 0 };
+  }
+  const MAX_DIFFS = 8;
+  let result = original;
+  let appliedCount = 0;
+  let skipped = 0;
+  for (const d of diffs) {
+    if (appliedCount >= MAX_DIFFS) { skipped++; continue; }
+    const from = d?.from;
+    const to = d?.to;
+    if (typeof from !== 'string' || typeof to !== 'string') { skipped++; continue; }
+    if (!from || from === to) { skipped++; continue; }
+    // 1글자 + ASCII(영숫자/기호) from 은 과잉치환 위험 → 스킵. 비ASCII 특수기호 1자는 허용.
+    if (from.length < 2 && /^[\x00-\x7F]$/.test(from)) { skipped++; continue; }
+    if (!result.includes(from)) { skipped++; continue; } // 환각: 원문에 없으면 무시
+    const before = result;
+    result = result.split(from).join(to); // 정확 매치 전부 치환 (정규식 이스케이프 불필요)
+    if (result !== before) appliedCount++; else skipped++;
+  }
+  if (skipped > 0) {
+    console.log(`[vision-verifier] diff 적용 ${appliedCount}건, 무시 ${skipped}건 (안전 가드)`);
+  }
+  return { result, appliedCount, skipped };
+}
+
+/**
  * 교정 diff 를 latex_render_corrections 테이블에 자동 누적 (학습 회로 자동 닫힘).
  *
  * 누적 효과: 같은 diff (from→to) 반복 발견 시 occurrences 증가 → confidence 자동 승급
