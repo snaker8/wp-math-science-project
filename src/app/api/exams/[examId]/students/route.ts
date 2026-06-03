@@ -173,6 +173,17 @@ export async function GET(
     rosterMap.set((r as { id: string }).id, r as never);
   }
 
+  // 3-b. ★ 2026-06-04: roster 에 없는 user-타입 학생 이름/학년은 users 에서 채움
+  //      (안 그러면 user-타입 학생이 목록에서 "(미상)" 으로 표시되는 사고)
+  const { data: userStudents } = await supabaseAdmin
+    .from('users')
+    .select('id, full_name, grade')
+    .in('id', rosterIds);
+  const userMap = new Map<string, { full_name: string | null; grade: number | null }>();
+  for (const u of userStudents ?? []) {
+    userMap.set((u as { id: string }).id, u as never);
+  }
+
   // 4. 각 세션의 정/오/부분점수를 총점 정확 계산하려면 exam_problems.points 필요.
   //    학생 리스트 화면에서는 "정답률(%) + 정답/총문항"만 보여주면 충분 → items 기준으로 환산.
   //    더 정확한 총점은 리포트 페이지에서 계산.
@@ -180,6 +191,7 @@ export async function GET(
     const sid = s.id as string;
     const agg = itemAgg.get(sid);
     const r = rosterMap.get(s.student_id as string);
+    const um = userMap.get(s.student_id as string);
     const correct = agg?.correct ?? 0;
     const total = agg?.total ?? 0;
     const pct = total > 0 ? Math.round((correct * 100) / total) : 0;
@@ -187,8 +199,8 @@ export async function GET(
     return {
       rosterId: s.student_id as string,
       sessionId: sid,
-      fullName: r?.full_name ?? '(미상)',
-      grade: r?.grade ?? null,
+      fullName: r?.full_name ?? um?.full_name ?? '(미상)',
+      grade: r?.grade ?? um?.grade ?? null,
       classLabel: r?.class_label ?? null,
       isPromoted: !!r?.promoted_user_id,
       totalEarned: 0,           // 리포트 페이지에서 정확 계산
