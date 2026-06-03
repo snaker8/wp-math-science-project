@@ -81,6 +81,7 @@ interface PatchBody {
   fullName?: string;
   grade?: unknown;
   phone?: string | null;
+  school?: string | null;
 }
 
 export async function PATCH(
@@ -123,6 +124,11 @@ export async function PATCH(
 
   if (body.grade !== undefined) {
     updates.grade = normalizeGrade(body.grade);
+  }
+
+  if (body.school !== undefined) {
+    const v = (body.school ?? '').toString().trim();
+    updates.school = v || null; // 빈 문자열 → NULL
   }
 
   if (body.phone !== undefined) {

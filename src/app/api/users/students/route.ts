@@ -34,6 +34,7 @@ interface StudentRow {
   id: string;
   name: string;
   grade: string;
+  school: string | null;
   className: string;
   email: string | null;
   phone: string | null;
@@ -122,6 +123,7 @@ export async function GET(request: Request) {
     id: u.id as string,
     name: (u.full_name as string) || (u.name as string) || (u.email as string) || '(이름 없음)',
     grade: gradeLabel(u.grade),
+    school: (u.school as string | null) || null,
     className: classByStudent.get(u.id as string) || '',
     email: (u.email as string | null) || null,
     phone: (u.phone as string | null) || null, // 학생 정보 수정(전화번호) 편집 폼 프리필용
@@ -137,7 +139,7 @@ export async function GET(request: Request) {
   {
     let rosterQuery = sb
       .from('roster_students')
-      .select('id, full_name, grade, class_label, promoted_user_id, institute_id');
+      .select('id, full_name, grade, class_label, promoted_user_id, institute_id, school');
     if (pinnedInstitute) {
       rosterQuery = rosterQuery.eq('institute_id', pinnedInstitute);
     } else {
@@ -156,6 +158,7 @@ export async function GET(request: Request) {
           id: r.id as string,
           name: (r.full_name as string) || '(이름 없음)',
           grade: gradeLabel(r.grade),
+          school: (r.school as string | null) || null,
           className: (r.class_label as string | null) || '',
           email: null,
           phone: null,

@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
   const providedEmail = body.email ? String(body.email).trim().toLowerCase() : '';
   const providedPassword = body.password ? String(body.password) : '';
   const classId = body.classId ? String(body.classId) : null; // 옵션
+  const school = body.school ? String(body.school).trim() : null; // 소속 학교 (옵션)
+  const rosterId = body.rosterId ? String(body.rosterId) : null; // 특정 채점명단 promote (옵션)
 
   if (!fullName) {
     return NextResponse.json({ error: '이름은 필수입니다' }, { status: 400 });
@@ -154,6 +156,7 @@ export async function POST(request: NextRequest) {
         institute_id: instituteId,
         phone: phone || null,
         grade: grade != null ? String(grade) : null,
+        school: school || null,
       },
     });
     if (createErr || !created.user) {
@@ -186,6 +189,7 @@ export async function POST(request: NextRequest) {
         full_name: fullName,
         phone,
         grade,
+        school,
         role: 'STUDENT',
         institute_id: instituteId,
         subject_tracks: [studentTrack],
@@ -195,6 +199,90 @@ export async function POST(request: NextRequest) {
       // public.users 실패 → auth.users orphan 정리
       await supabaseAdmin.auth.admin.deleteUser(studentId).catch(() => {});
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
+  }
+
+  // ── 학교(school) 반영 ──────────────────────────────────────────────────────
+  //   handle_new_auth_user 트리거 + ignoreDuplicates upsert 경로로는 school 이
+  //   누락될 수 있어(트리거가 metadata 의 school 을 안 읽으면 NULL) 명시적 update.
+  //   신규 생성·기존 학생 재사용 양쪽 모두 적용. 빈값이면 건드리지 않음(기존값 보존).
+  if (school && studentId) {
+    const { error: schoolErr } = await supabaseAdmin
+      .from('users')
+      .update({ school })
+      .eq('id', studentId);
+    if (schoolErr) console.warn('[students POST] school 저장 실패:', schoolErr.message);
+  }
+
+  // ── roster 명시적 promote ──────────────────────────────────────────────────
+  //   UI 에서 "채점명단(roster) 학생" 행을 직접 수정→정식 등록할 때, 어느 roster
+  //   인지 id 로 콕 집어 머지(이름 매칭 모호성 회피). 격리 가드 필수.
+  let explicitMerged = false;
+  if (rosterId && studentId) {
+    const { data: rs } = await supabaseAdmin
+      .from('roster_students')
+      .select('id, institute_id, promoted_user_id')
+      .eq('id', rosterId)
+      .maybeSingle();
+    if (rs) {
+      try {
+        assertInstituteAccess(scope, (rs as { institute_id: string | null }).institute_id);
+        if (!(rs as { promoted_user_id: string | null }).promoted_user_id) {
+          const { error: mErr } = await supabaseAdmin.rpc('merge_roster_into_user', {
+            p_roster_id: rosterId,
+            p_user_id: studentId,
+          });
+          if (mErr) console.warn('[students POST] 명시적 roster 머지 실패:', mErr.message);
+          else {
+            explicitMerged = true;
+            console.log(`[students POST] 명시적 promote roster ${rosterId} → user ${studentId}`);
+          }
+        }
+      } catch {
+        /* 다른 학원 roster → 머지 거부, 등록은 정상 진행 */
+      }
+    }
+  }
+
+  // ── 채점 명단(roster_students) 자동 연결 (promote) ──────────────────────────
+  //   배경: 채점(엑셀 업로드)으로 먼저 명단(roster_students)에 오른 학생을 강사가
+  //   정식 등록(핸드폰 입력)하면, 기존 roster 를 이 user 와 머지해야 한다.
+  //   안 하면 학생 목록에 roster + user 가 "2명" 으로 뜨고(중복), 채점 이력
+  //   (diagnostics.sessions/status/plans) 이 roster_id 에 묶인 채 학생과 분리된다.
+  //   merge_roster_into_user(roster_id, user_id): diagnostics 의 student_id 를
+  //   roster_id → user_id 로 일괄 이전 + roster.promoted_user_id 박음(목록 dedup).
+  //   ★ 안전: 같은 학원+이름의 "미연결" roster 가 정확히 1건일 때만 자동 머지.
+  //     동명이인 여러 건이면 어느 학생인지 모호 → 학년까지 1건으로 좁혀질 때만,
+  //     그래도 모호하면 건너뛰고 로그만 (오연결로 남의 채점 이력 합쳐지는 사고 차단).
+  //   rosterId 로 이미 명시 머지했으면(explicitMerged) 이름 매칭은 건너뜀.
+  if (fullName && studentId && !explicitMerged) {
+    try {
+      const { data: rosterMatches } = await supabaseAdmin
+        .from('roster_students')
+        .select('id, grade')
+        .eq('institute_id', instituteId)
+        .eq('full_name', fullName)
+        .is('promoted_user_id', null);
+      const matches = (rosterMatches || []) as Array<{ id: string; grade: number | null }>;
+      let target: { id: string } | null = null;
+      if (matches.length === 1) {
+        target = matches[0];
+      } else if (matches.length > 1 && grade != null) {
+        const byGrade = matches.filter((r) => r.grade === grade);
+        if (byGrade.length === 1) target = byGrade[0];
+      }
+      if (target) {
+        const { error: mergeErr } = await supabaseAdmin.rpc('merge_roster_into_user', {
+          p_roster_id: target.id,
+          p_user_id: studentId,
+        });
+        if (mergeErr) console.warn('[students POST] roster 머지 실패(등록은 정상):', mergeErr.message);
+        else console.log(`[students POST] roster ${target.id} → user ${studentId} 머지 (채점 이력 이전 + 중복 해소)`);
+      } else if (matches.length > 1) {
+        console.warn(`[students POST] roster 동명이인 ${matches.length}건 ("${fullName}") — 자동 머지 보류(수동 확인 필요)`);
+      }
+    } catch (e) {
+      console.warn('[students POST] roster 머지 단계 예외(등록은 정상):', (e as Error).message);
     }
   }
 
@@ -256,6 +344,7 @@ export async function POST(request: NextRequest) {
       fullName,
       grade,
       phone,
+      school,
       createdNew,
     },
     credentials: createdNew ? { email, password, emailGenerated, passwordGenerated } : null,

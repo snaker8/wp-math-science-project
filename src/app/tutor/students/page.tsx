@@ -12,6 +12,7 @@ import {
   BarChart3,
   User,
   GraduationCap,
+  School,
   Filter,
   X,
   Loader2,
@@ -30,8 +31,10 @@ interface Student {
   email: string;
   phone: string | null;
   grade: string | null;
+  school: string | null;
   className: string | null;
   classId: string | null;
+  source: 'user' | 'roster'; // user=정식 등록, roster=채점 자동등록(promote 대상)
   status: 'ACCEPTED' | 'PENDING' | 'REJECTED';
   enrolledAt: string;
   lastActivity: string | null;
@@ -52,6 +55,7 @@ export default function TutorStudentsPage() {
   const [addForm, setAddForm] = useState({
     fullName: '',
     grade: '',
+    school: '',
     phone: '',
     email: '',
     password: '',
@@ -63,7 +67,7 @@ export default function TutorStudentsPage() {
   // ── 학생 관리 액션 ────────────────────────────────────────────────
   // 수정 모달
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [editForm, setEditForm] = useState({ fullName: '', grade: '', phone: '' });
+  const [editForm, setEditForm] = useState({ fullName: '', grade: '', school: '', phone: '' });
   const [editBusy, setEditBusy] = useState(false);
 
   // 비밀번호 초기화 결과 (간이 alert 대신)
@@ -75,6 +79,7 @@ export default function TutorStudentsPage() {
     setEditForm({
       fullName: s.name,
       grade: s.grade ? String(s.grade) : '',
+      school: s.school || '',
       phone: s.email
         ? s.email.replace(/@local\.suzag\.com$/i, '')
         : (s.phone || ''),
@@ -85,12 +90,50 @@ export default function TutorStudentsPage() {
     if (!editingStudent) return;
     setEditBusy(true);
     try {
+      // ── 채점명단(roster) 학생 → 정식 등록(promote) ──
+      //   roster id 는 users 에 없어 PATCH 가 404. 대신 POST /api/students 로
+      //   user 를 만들고 rosterId 로 이 roster 를 콕 집어 머지(채점 이력 이전 + 중복 해소).
+      //   전화번호 필수 — 학생 로그인 ID 가 되기 때문.
+      if (editingStudent.source === 'roster') {
+        const phone = editForm.phone.trim();
+        if (!phone) {
+          alert('정식 등록하려면 전화번호가 필요합니다 (학생 로그인 ID)');
+          setEditBusy(false);
+          return;
+        }
+        const res = await fetch('/api/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: editForm.fullName.trim(),
+            grade: editForm.grade || null,
+            school: editForm.school.trim() || null,
+            phone,
+            rosterId: editingStudent.id,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || '정식 등록 실패');
+        setEditingStudent(null);
+        if (json.credentials) {
+          alert(
+            `정식 등록 완료 — 학생 로그인 정보\n전화번호: ${String(json.credentials.email).replace(/@local\.suzag\.com$/i, '')}\n초기 비밀번호: ${json.credentials.password}`,
+          );
+        } else {
+          alert('정식 등록 완료 (기존 계정과 연결)');
+        }
+        loadStudents();
+        return;
+      }
+
+      // ── 정식(user) 학생 — 일반 정보 수정 ──
       const res = await fetch(`/api/students/${editingStudent.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName: editForm.fullName,
           grade: editForm.grade || null,
+          school: editForm.school || null,
           phone: editForm.phone || null,
         }),
       });
@@ -143,8 +186,10 @@ export default function TutorStudentsPage() {
           email: 'student1@example.com',
           phone: '010-1234-5678',
           grade: '고1',
+          school: '예시고등학교',
           className: 'A반',
           classId: 'class-1',
+          source: 'user',
           status: 'ACCEPTED',
           enrolledAt: new Date().toISOString(),
           lastActivity: new Date().toISOString(),
@@ -157,8 +202,10 @@ export default function TutorStudentsPage() {
           email: 'student2@example.com',
           phone: '010-2345-6789',
           grade: '고1',
+          school: '예시고등학교',
           className: 'A반',
           classId: 'class-1',
+          source: 'user',
           status: 'ACCEPTED',
           enrolledAt: new Date().toISOString(),
           lastActivity: new Date().toISOString(),
@@ -171,8 +218,10 @@ export default function TutorStudentsPage() {
           email: 'student3@example.com',
           phone: null,
           grade: '고2',
+          school: '예시중학교',
           className: 'B반',
           classId: 'class-2',
+          source: 'user',
           status: 'PENDING',
           enrolledAt: new Date().toISOString(),
           lastActivity: null,
@@ -233,7 +282,7 @@ export default function TutorStudentsPage() {
         }
       }
 
-      const studentList: Student[] = (apiStudents as Array<{ id: string; name: string; email: string; phone: string | null; grade: string }>).map((s) => {
+      const studentList: Student[] = (apiStudents as Array<{ id: string; name: string; email: string; phone: string | null; grade: string; school?: string | null; source?: 'user' | 'roster' }>).map((s) => {
         const enrollment = enrollmentMap.get(s.id);
         return {
           id: s.id,
@@ -241,8 +290,10 @@ export default function TutorStudentsPage() {
           email: s.email,
           phone: s.phone,
           grade: s.grade || null,
+          school: s.school || null,
           className: enrollment?.className || null,
           classId: enrollment?.classId || null,
+          source: s.source || 'user',
           status: (enrollment?.status as 'ACCEPTED' | 'PENDING' | 'REJECTED') || 'ACCEPTED',
           enrolledAt: enrollment?.enrolledAt || '',
           lastActivity: null,
@@ -374,11 +425,18 @@ export default function TutorStudentsPage() {
               <div className="student-info">
                 <div className="student-name">
                   <span>{student.name}</span>
-                  <span
-                    className={`status-badge ${student.status.toLowerCase()}`}
-                  >
-                    {student.status === 'ACCEPTED' ? '활성' : '대기중'}
-                  </span>
+                  {student.source === 'roster' ? (
+                    <span
+                      title="채점으로 자동 등록된 명단 학생 — 정식 등록(전화번호 입력) 전"
+                      style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}
+                    >
+                      채점명단
+                    </span>
+                  ) : (
+                    <span className={`status-badge ${student.status.toLowerCase()}`}>
+                      {student.status === 'ACCEPTED' ? '활성' : '대기중'}
+                    </span>
+                  )}
                 </div>
                 <div className="student-details">
                   {/* 학생 ID 표시 — '@local.suzag.com' 도메인 제거하고 전화번호만 노출 */}
@@ -393,6 +451,12 @@ export default function TutorStudentsPage() {
                     <span>
                       <Calendar size={14} />
                       {gradeIntToLabel(student.grade)}
+                    </span>
+                  )}
+                  {student.school && (
+                    <span>
+                      <School size={14} />
+                      {student.school}
                     </span>
                   )}
                   {student.className && (
@@ -425,54 +489,59 @@ export default function TutorStudentsPage() {
                 <button
                   type="button"
                   onClick={() => openEditModal(student)}
-                  title="정보 수정"
+                  title={student.source === 'roster' ? '정식 등록 (전화번호 입력→연결)' : '정보 수정'}
                   style={{
                     padding: '6px 8px',
-                    background: 'transparent',
-                    border: '1px solid #3f3f46',
+                    background: student.source === 'roster' ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    border: student.source === 'roster' ? '1px solid rgba(99,102,241,0.5)' : '1px solid #3f3f46',
                     borderRadius: 6,
-                    color: '#a1a1aa',
+                    color: student.source === 'roster' ? '#a5b4fc' : '#a1a1aa',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                   }}
                 >
-                  <Pencil size={14} />
+                  {student.source === 'roster' ? <UserPlus size={14} /> : <Pencil size={14} />}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleResetPassword(student)}
-                  title="비밀번호 초기화 (→ 123456)"
-                  style={{
-                    padding: '6px 8px',
-                    background: 'transparent',
-                    border: '1px solid #3f3f46',
-                    borderRadius: 6,
-                    color: '#fbbf24',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <KeyRound size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(student)}
-                  title="학생 삭제 (학습 이력 보존)"
-                  style={{
-                    padding: '6px 8px',
-                    background: 'transparent',
-                    border: '1px solid #7f1d1d',
-                    borderRadius: 6,
-                    color: '#f87171',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
+                {/* 비번 초기화·삭제는 정식(user) 학생만 — roster 는 계정이 없어 404. 먼저 정식 등록 필요. */}
+                {student.source !== 'roster' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleResetPassword(student)}
+                      title="비밀번호 초기화 (→ 123456)"
+                      style={{
+                        padding: '6px 8px',
+                        background: 'transparent',
+                        border: '1px solid #3f3f46',
+                        borderRadius: 6,
+                        color: '#fbbf24',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <KeyRound size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(student)}
+                      title="학생 삭제 (학습 이력 보존)"
+                      style={{
+                        padding: '6px 8px',
+                        background: 'transparent',
+                        border: '1px solid #7f1d1d',
+                        borderRadius: 6,
+                        color: '#f87171',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -484,12 +553,19 @@ export default function TutorStudentsPage() {
         <div className="modal-overlay" onClick={() => !editBusy && setEditingStudent(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 style={{ margin: 0 }}>학생 정보 수정 — {editingStudent.name}</h2>
+              <h2 style={{ margin: 0 }}>
+                {editingStudent.source === 'roster' ? '정식 등록' : '학생 정보 수정'} — {editingStudent.name}
+              </h2>
               <button type="button" onClick={() => !editBusy && setEditingStudent(null)} className="modal-close">
                 <X size={20} />
               </button>
             </div>
             <div style={{ padding: 16 }}>
+              {editingStudent.source === 'roster' && (
+                <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 12, color: '#a5b4fc', lineHeight: 1.5 }}>
+                  채점으로 자동 등록된 명단 학생입니다. <strong>전화번호를 입력해 저장하면 정식 학생으로 등록</strong>되고, 기존 채점 이력이 자동 연결됩니다.
+                </div>
+              )}
               <div className="form-group">
                 <label>이름 *</label>
                 <input
@@ -515,15 +591,27 @@ export default function TutorStudentsPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label>전화번호 (학생 로그인 ID)</label>
+                <label>학교</label>
+                <input
+                  type="text"
+                  value={editForm.school}
+                  onChange={(e) => setEditForm((f) => ({ ...f, school: e.target.value }))}
+                  placeholder="예: 엄궁중학교"
+                />
+              </div>
+              <div className="form-group">
+                <label>전화번호 (학생 로그인 ID){editingStudent.source === 'roster' ? ' *' : ''}</label>
                 <input
                   type="tel"
                   value={editForm.phone}
                   onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
                   placeholder="01012345678"
+                  required={editingStudent.source === 'roster'}
                 />
                 <p style={{ fontSize: 11, color: '#a78bfa', marginTop: 4 }}>
-                  전화번호를 변경하면 학생이 새 번호로 로그인해야 합니다.
+                  {editingStudent.source === 'roster'
+                    ? '전화번호를 입력해야 정식 등록(로그인 계정 생성)됩니다. 초기 비밀번호는 123456.'
+                    : '전화번호를 변경하면 학생이 새 번호로 로그인해야 합니다.'}
                 </p>
               </div>
               <div className="modal-actions">
@@ -539,9 +627,15 @@ export default function TutorStudentsPage() {
                   type="button"
                   className="btn-submit"
                   onClick={handleEditSave}
-                  disabled={editBusy || !editForm.fullName.trim()}
+                  disabled={
+                    editBusy ||
+                    !editForm.fullName.trim() ||
+                    (editingStudent.source === 'roster' && !editForm.phone.trim())
+                  }
                 >
-                  {editBusy ? <Loader2 size={14} className="spinner" /> : '저장'}
+                  {editBusy
+                    ? <Loader2 size={14} className="spinner" />
+                    : (editingStudent.source === 'roster' ? '정식 등록' : '저장')}
                 </button>
               </div>
             </div>
@@ -694,7 +788,7 @@ export default function TutorStudentsPage() {
                     className="btn-submit"
                     onClick={() => {
                       setCredentials(null);
-                      setAddForm({ fullName: '', grade: '', phone: '', email: '', password: '' });
+                      setAddForm({ fullName: '', grade: '', school: '', phone: '', email: '', password: '' });
                     }}
                   >
                     다른 학생 등록
@@ -705,7 +799,7 @@ export default function TutorStudentsPage() {
                     onClick={() => {
                       setShowDirectAdd(false);
                       setCredentials(null);
-                      setAddForm({ fullName: '', grade: '', phone: '', email: '', password: '' });
+                      setAddForm({ fullName: '', grade: '', school: '', phone: '', email: '', password: '' });
                     }}
                   >
                     닫기
@@ -729,6 +823,7 @@ export default function TutorStudentsPage() {
                       body: JSON.stringify({
                         fullName: addForm.fullName.trim(),
                         grade: addForm.grade || null,
+                        school: addForm.school.trim() || null,
                         phone: addForm.phone || null,
                         // 학생 ID = 전화번호 (서버에서 자동 변환).
                         // 이메일·비밀번호는 명시 안 함 — 서버가 phone→email + 초기비번 '123456' 자동 처리.
@@ -744,7 +839,7 @@ export default function TutorStudentsPage() {
                     } else {
                       alert('학생 등록 완료 (기존 계정 활용)');
                       setShowDirectAdd(false);
-                      setAddForm({ fullName: '', grade: '', phone: '', email: '', password: '' });
+                      setAddForm({ fullName: '', grade: '', school: '', phone: '', email: '', password: '' });
                     }
                     loadStudents();
                   } catch (err) {
@@ -778,6 +873,15 @@ export default function TutorStudentsPage() {
                     <option value="11">고2</option>
                     <option value="12">고3</option>
                   </select>
+                </div>
+                <div className="form-group">
+                  <label>학교</label>
+                  <input
+                    type="text"
+                    value={addForm.school}
+                    onChange={(e) => setAddForm((f) => ({ ...f, school: e.target.value }))}
+                    placeholder="예: 엄궁중학교"
+                  />
                 </div>
                 <div className="form-group">
                   <label>전화번호 * (학생 로그인 ID)</label>
