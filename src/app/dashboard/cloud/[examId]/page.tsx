@@ -1566,24 +1566,31 @@ function ExamPaperView({
       return result.length > 0 ? result : [[]];
     }
 
-    // ★ CSS columns(흐름식) 가정 — questi 양식: column-balance 좌측부터 채워 우측으로.
-    //   카드 wrapper 안에 풀이 공간이 들어가 한 카드 키 = 본문 + 풀이공간.
-    const colMult = columns === 2 ? 2 : 1;
+    // ★ 2026-06-04 2열 그리드(행 정렬) 분할 — 문제 2개씩 한 행, 행 높이 = 둘 중 큰 쪽.
+    //   행 단위로 페이지에 채워서 (a) 좌우가 같은 높이에서 시작(1·3, 2·4 정렬),
+    //   (b) 행이 페이지 하단에 안 들어가면 통째로 다음 페이지 → 잘림 차단.
+    //   (기존 sum/colMult 흐름 근사는 좌우 미정렬 + 하단 잘림 원인이었음)
+    const step = columns === 2 ? 2 : 1;
     const result: ProblemData[][] = [];
     let currentPage: ProblemData[] = [];
     let usedH = 0;
 
-    for (let i = 0; i < problems.length; i++) {
-      const h = (problemHeights[i] + gap) / colMult;
+    for (let i = 0; i < problems.length; i += step) {
+      const rowEnd = Math.min(i + step, problems.length);
+      // 행 높이 = 행에 든 문제들 중 최대 (+gap)
+      let rowH = 0;
+      for (let j = i; j < rowEnd; j++) {
+        rowH = Math.max(rowH, problemHeights[j] + gap);
+      }
       const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
 
-      if (currentPage.length > 0 && usedH + h > maxH) {
+      if (currentPage.length > 0 && usedH + rowH > maxH) {
         result.push(currentPage);
         currentPage = [];
         usedH = 0;
       }
-      currentPage.push(problems[i]);
-      usedH += h;
+      for (let j = i; j < rowEnd; j++) currentPage.push(problems[j]);
+      usedH += rowH;
     }
     if (currentPage.length > 0) result.push(currentPage);
     return result.length > 0 ? result : [[]];
@@ -1608,7 +1615,10 @@ function ExamPaperView({
 
       const availableSpace = colMult * maxH - totalH;
       const numProblems = pageProblems.length;
-      const autoGap = numProblems > 0 ? Math.max(8, Math.floor(availableSpace / numProblems)) : 20;
+      // ★ 2026-06-04: 자동분배 간격 상한 48px — 적게 든 페이지에서 빈 공간을
+      //   문제 사이로 과하게 벌리지 않게(그리드 행 정렬 후 "공간 너무 크다" 대응).
+      //   남는 공간은 페이지 하단에 두고, 문제는 위쪽에 촘촘히.
+      const autoGap = numProblems > 0 ? Math.min(48, Math.max(8, Math.floor(availableSpace / numProblems))) : 20;
       return autoGap;
     });
   }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H]);
@@ -1623,6 +1633,38 @@ function ExamPaperView({
     if (cLen < 200) return 160;
     return 220;
   }, []);
+
+  // ★ 2026-06-04: 프리셋(4문제 등) 모드 — 풀이공간을 페이지에 맞게 자동 조절.
+  //   4문제를 강제로 한 페이지에 넣을 때 고정 풀이공간(280)이 넘쳐 잘리던 문제 해결.
+  //   행별 content(풀이공간 제외) 높이 합을 빼고, 남는 공간을 행마다 풀이공간으로 분배.
+  //   → 빡빡하면 최소 24까지 줄여 잘림 차단, 여유 있으면 채움 = "자동 간격조절".
+  const presetAnswerSpaces = useMemo(() => {
+    if (!perPagePreset || !measured || problemHeights.length === 0) return null;
+    const numCols = columns === 2 ? 2 : 1;
+    let g = 0;
+    return pages.map((pageProblems, pageIdx) => {
+      const maxH = pageIdx === 0 ? FIRST_CONTENT_H : CONTENT_H;
+      const contentOnly = pageProblems.map((p, i) =>
+        Math.max(0, (problemHeights[g + i] ?? 0) - getWritingSpace(p))
+      );
+      g += pageProblems.length;
+      let rowSum = 0, rows = 0;
+      for (let i = 0; i < contentOnly.length; i += numCols) {
+        let m = 0;
+        for (let j = i; j < Math.min(i + numCols, contentOnly.length); j++) m = Math.max(m, contentOnly[j]);
+        rowSum += m; rows++;
+      }
+      return rows > 0 ? Math.max(24, Math.floor((maxH - rowSum) / rows)) : 120;
+    });
+  }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H, getWritingSpace]);
+
+  // 카드 아래 풀이공간 — 프리셋이면 자동(페이지 채움·잘림방지), 아니면 고정.
+  const getAnswerSpace = (problem: ProblemData, pageIdx: number) => {
+    if (presetAnswerSpaces && presetAnswerSpaces[pageIdx] !== undefined) {
+      return presetAnswerSpaces[pageIdx];
+    }
+    return getWritingSpace(problem);
+  };
 
   // 현재 유효 간격 (프리셋 모드면 자동, 아니면 슬라이더)
   const getEffectiveGap = (pageIdx: number) => {
@@ -1989,15 +2031,15 @@ function ExamPaperView({
               </div>
             )}
 
-            {/* 문제 영역 — 2단은 CSS columns column-balance (questi 양식) + 카드별 풀이 공간 */}
+            {/* 문제 영역 — 2단은 CSS Grid 2열 (행 정렬): 문제 2개씩 한 행, 행 높이=둘 중 큰 쪽
+                → 1·3, 2·4 가 같은 높이에서 시작. (기존 CSS columns balance 는 좌우 미정렬) */}
             {columns === 2 ? (
               <div
                 style={{
-                  columnCount: 2,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
                   columnGap: `${COLUMN_GAP}px`,
-                  // ★ column-balance — questi 처럼 좌측부터 균등 분배 (1·2 좌, 3·4 우)
-                  columnFill: 'balance',
-                  columnRule: '1px solid #e5e5e5',
+                  alignItems: 'start',
                 }}
               >
                 {pageProblems.map((problem) => (
@@ -2005,13 +2047,13 @@ function ExamPaperView({
                     key={problem.id}
                     className="break-inside-avoid"
                     style={{
-                      marginBottom: `${getEffectiveGap(pageIdx)}px`,
+                      marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
                       breakInside: 'avoid',
                       pageBreakInside: 'avoid',
                     }}
                   >
                     {renderProblem(problem)}
-                    <div style={{ height: `${getWritingSpace(problem)}px` }} aria-hidden />
+                    <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
                   </div>
                 ))}
               </div>
@@ -2021,10 +2063,10 @@ function ExamPaperView({
                   <div
                     key={problem.id}
                     className="break-inside-avoid"
-                    style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
+                    style={{ marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px` }}
                   >
                     {renderProblem(problem)}
-                    <div style={{ height: `${getWritingSpace(problem)}px` }} aria-hidden />
+                    <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
                   </div>
                 ))}
               </div>
@@ -2084,6 +2126,20 @@ function ExamPaperView({
         .exam-page img {
           max-width: 100%;
           height: auto;
+          /* ★ 2026-06-04: 과도하게 큰 문제 그림(24번 등) 높이 상한 — 행이 너무 커져
+             앞 페이지에 빈 공간이 생기는 것 방지. 비율 유지하며 축소. */
+          max-height: 280px;
+          object-fit: contain;
+        }
+        /* ★ 2026-06-04: 그림이 <img> 가 아니라 FigureRenderer 의 SVG 컨테이너로
+           그려지는 경우도 동일 높이 상한 — viewBox 가 있어 비율 유지하며 축소. */
+        .exam-page .figure-svg-container > svg,
+        .exam-page .figure-graph-container > svg {
+          max-height: 280px !important;
+        }
+        .exam-page .figure-svg-container,
+        .exam-page .figure-graph-container {
+          max-height: 280px;
         }
 
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */
@@ -2110,7 +2166,10 @@ function ExamPaperView({
             min-height: 297mm !important;
             max-height: 297mm !important;
             margin: 0 !important;
-            padding: 15mm !important;
+            /* ★ 2026-06-04: 인쇄 패딩을 화면·측정과 동일한 ${PAGE_PAD}px 로 통일.
+               기존 15mm(≈57px)가 화면 38px 보다 커서 인쇄 컬럼이 좁고 짧아 → 같은 내용이
+               인쇄에서 297mm 넘쳐 잘리던 근본 원인(측정↔인쇄 기하 불일치). */
+            padding: ${PAGE_PAD}px !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             page-break-after: always;
@@ -2136,7 +2195,7 @@ function ExamPaperView({
           }
           #exam-print-root .katex-display > .katex { max-width: 100%; }
           #exam-print-root table { max-width: 100%; table-layout: auto; }
-          #exam-print-root img { max-width: 100%; height: auto; }
+          #exam-print-root img { max-width: 100%; height: auto; max-height: 280px; object-fit: contain; }
           /* 해설지 자연 흐름 */
           #exam-print-root .exam-page.solution-page {
             height: auto !important;
