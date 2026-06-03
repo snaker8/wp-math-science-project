@@ -880,7 +880,7 @@ export default function TutorStudentsPage() {
                     type="text"
                     value={addForm.school}
                     onChange={(e) => setAddForm((f) => ({ ...f, school: e.target.value }))}
-                    placeholder="예: 엄궁중학교"
+                    placeholder="학교명"
                   />
                 </div>
                 <div className="form-group">
