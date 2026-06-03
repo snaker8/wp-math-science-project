@@ -1432,8 +1432,11 @@ export async function analyzeProblemWithLLM(
       }
     }
 
+    // ★ 2026-06-03 fix: 학년(중2/고1 등)은 참고하되 학기는 강제하지 않음.
+    //   "반드시 해당 학기 범위 내 분류" 강제 문구 제거 → 문제 내용 우선.
+    //   파일명이 "2-1"이어도 실제 문제가 2-2 단원(평행사변형 등)이면 2-2로 분류.
     const gradeContext = gradeHint
-      ? `\n\n★★ 중요: 이 문제는 "${gradeHint}" 시험지의 문제입니다. 반드시 해당 학년/과목 교육과정 범위 내에서 분류하세요.\n- 해당 학년에서 배우지 않는 상위 과정 단원으로 분류하지 마세요.`
+      ? `\n\n참고: 이 문제는 "${gradeHint}" 수준의 시험지입니다. 단, 학기(1학기/2학기)는 **문제 내용을 보고 직접 판단**하세요 — 파일명의 학기 표시에 구애받지 말고, 실제 문제가 어느 단원에 해당하는지 내용 기준으로 분류하세요.`
       : '';
 
     const finalPrompt = prompt
@@ -2214,8 +2217,13 @@ export async function processUploadJob(
       // ★ 과목 감지: auto-fix와 동일 로직(title-detect) 사용하여 구체적 값 획득
       //   ("수학" 같은 generic 대신 "공통수학1", "수학II" 등으로 resolveSubjectCode 매칭 확실)
       const { detectSubjectFromTitle, detectGradeFromTitle } = await import('./title-detect');
-      const titleSubject = detectSubjectFromTitle(job.fileName || '');
+      const titleSubjectRaw = detectSubjectFromTitle(job.fileName || '');
       const titleGrade = detectGradeFromTitle(job.fileName || '');
+      // ★ 2026-06-03 fix: 파일명의 학기(1학기/2학기)를 subject에서 제거.
+      //   "중2-1 수학" → "중2 수학" — resolveSubjectCode 가 ['03','04'] 배열 반환 →
+      //   두 학기 테이블을 모두 LLM에 제공 → 문제 내용으로 학기 직접 판단.
+      //   "사직여중 2-1 진단평가" 제목인데 2-2 내용(평행사변형 등)이 섞인 경우 대응.
+      const titleSubject = titleSubjectRaw.replace(/중([1-3])-([12])\s*수학/, '중$1 수학');
 
       const jobSubject = job.subjectArea === 'science'
         ? (job.scienceSubject || '과학')
