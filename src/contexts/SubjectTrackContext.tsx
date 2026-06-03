@@ -33,6 +33,42 @@ interface SubjectTrackContextValue {
 
 const SubjectTrackContext = createContext<SubjectTrackContextValue | null>(null);
 
+// ★ 2026-06-03 perf: in-flight dedup. SubjectTrackProvider 가 다중 마운트
+//   (RootProviders + (tracks)/[track]/dashboard/layout) + StrictMode 이중 호출로
+//   /api/users/me/track 이 화면당 4회 호출 (스샷 3s ×4). 진행 중 요청을 공유.
+//   flag false 일 때는 fetch 자체를 안 함 → 영향 0 (기존 가드 유지).
+interface TrackFetchResult {
+  tracks: SubjectTrack[];
+  active: SubjectTrack;
+}
+let inflightTrack: Promise<TrackFetchResult | null> | null = null;
+
+function fetchTrackOnce(): Promise<TrackFetchResult | null> {
+  if (inflightTrack) return inflightTrack;
+  inflightTrack = (async () => {
+    try {
+      const res = await fetch('/api/users/me/track', { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const tracks = Array.isArray(data?.subject_tracks)
+        ? (data.subject_tracks as unknown[]).filter(isSubjectTrack)
+        : [DEFAULT_SUBJECT_TRACK];
+      const active = isSubjectTrack(data?.active_subject_track)
+        ? (data.active_subject_track as SubjectTrack)
+        : DEFAULT_SUBJECT_TRACK;
+      return {
+        tracks: tracks.length > 0 ? tracks : [DEFAULT_SUBJECT_TRACK],
+        active,
+      };
+    } catch {
+      return null; // 네트워크 에러 — 기본값 유지
+    } finally {
+      inflightTrack = null;
+    }
+  })();
+  return inflightTrack;
+}
+
 interface SubjectTrackProviderProps {
   children: React.ReactNode;
   /**
@@ -66,31 +102,17 @@ export function SubjectTrackProvider({
     if (initialActiveTrack && initialAccessibleTracks) return; // SSR 으로 hydrate 끝
 
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/users/me/track', { credentials: 'include' });
-        if (!res.ok) {
-          if (!cancelled) setIsLoading(false);
-          return;
-        }
-        const data = await res.json();
+    fetchTrackOnce()
+      .then((result) => {
         if (cancelled) return;
-
-        const tracks = Array.isArray(data?.subject_tracks)
-          ? (data.subject_tracks as unknown[]).filter(isSubjectTrack)
-          : [DEFAULT_SUBJECT_TRACK];
-        const active = isSubjectTrack(data?.active_subject_track)
-          ? (data.active_subject_track as SubjectTrack)
-          : DEFAULT_SUBJECT_TRACK;
-
-        setAccessibleTracks(tracks.length > 0 ? tracks : [DEFAULT_SUBJECT_TRACK]);
-        setActiveTrackState(active);
-      } catch {
-        // 네트워크 에러 — 기본값 유지
-      } finally {
+        if (result) {
+          setAccessibleTracks(result.tracks);
+          setActiveTrackState(result.active);
+        }
+      })
+      .finally(() => {
         if (!cancelled) setIsLoading(false);
-      }
-    })();
+      });
 
     return () => {
       cancelled = true;
