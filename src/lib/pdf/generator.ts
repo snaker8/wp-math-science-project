@@ -3,8 +3,9 @@
 // html2canvas + jsPDF를 사용한 고품질 PDF 생성
 // ============================================================================
 
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+// ★ 무거운 PDF 라이브러리(jspdf ~350KB, html2canvas ~200KB)는 export 시점에만
+//   동적 로드 — 이 모듈을 import 하는 모든 클라이언트 라우트의 진입 번들에서 제외.
+//   런타임 동작·PDF 결과물은 완전히 동일.
 import type { PDFExamConfig } from '@/types/pdf';
 
 interface GeneratePDFOptions {
@@ -20,6 +21,12 @@ export async function generatePDF({
   filename = 'exam.pdf',
   onProgress,
 }: GeneratePDFOptions): Promise<Blob> {
+  // ★ 동적 로드 (default export) — 호출 시점에만 청크 fetch
+  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
+
   onProgress?.(10);
 
   // 1. 수식이 완전히 렌더링될 때까지 대기

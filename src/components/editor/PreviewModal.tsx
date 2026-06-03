@@ -4,8 +4,7 @@ import { motion } from 'framer-motion';
 import { X, Smartphone, Printer, FileText, Download, Loader2, Hexagon } from 'lucide-react';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { useState } from 'react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+// ★ jspdf/html2canvas 는 Download 클릭 시점에만 동적 로드 (모달 진입 번들 경량화)
 
 interface PreviewModalProps {
     isOpen: boolean;
@@ -30,6 +29,12 @@ export function PreviewModal({ isOpen, onClose, content }: PreviewModalProps) {
             }
 
             setIsGenerating(true);
+
+            // ★ 무거운 PDF 라이브러리 동적 로드 (default export)
+            const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+                import('html2canvas'),
+                import('jspdf'),
+            ]);
 
             // Wait for mode switch render if needed
             await new Promise(resolve => setTimeout(resolve, 100));

@@ -1,12 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // ★ Production source map 활성화 (2026-05-25):
-  //   React minified error #418/#423 hydration mismatch 정확한 소스 라인 진단용.
-  //   영향: client JS bundle 옆에 .map 파일 추가 배포 (배포 시간/용량 약간 증가).
-  //   보안: 코드는 어차피 client 에 가니 source map 추가 위험 미미 (난독화 의도 없음).
-  //   진단 완료 후 false 로 되돌릴지 결정.
-  productionBrowserSourceMaps: true,
+  // ★ Production source map (2026-05-25 진단용 활성 → 2026-06-03 비활성 복귀):
+  //   React minified error #418/#423 hydration 진단 목적이었으나, .map 을 모든
+  //   client chunk 옆에 배포해 JS 업로드 용량/배포 시간을 약 2배로 늘림.
+  //   진단 종료 → false 복귀로 배포 경량화. 재진단 필요 시 임시로 true 로.
+  productionBrowserSourceMaps: false,
   images: {
     domains: ['api.mathpix.com', 'www.desmos.com'],
   },
@@ -21,6 +20,10 @@ const nextConfig = {
     },
     // ★ useSearchParams() Suspense 없이 허용 (프리렌더 에러 회피)
     missingSuspenseWithCSRBailout: false,
+    // ★ barrel import 트리셰이킹 (2026-06-03):
+    //   런타임 동작 불변 — 컴파일 시 사용 아이콘/컴포넌트만 번들에 포함.
+    //   lucide(143곳)/recharts(12곳)/framer-motion(38곳) 라우트 진입 JS 감소.
+    optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],
   },
   // ★ 프로덕션 빌드 시 ESLint/TS 체크 건너뛰기 (배포용 빠른 빌드)
   eslint: {
