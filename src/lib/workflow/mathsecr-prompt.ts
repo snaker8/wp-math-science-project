@@ -15,11 +15,18 @@ interface TreeNode {
 }
 
 // 과목명 → subject_code 매핑
-const SUBJECT_CODE_MAP: Record<string, string> = {
-  // 중학교
-  '중1': '01', '중1-1': '01', '중1-2': '02',
-  '중2': '03', '중2-1': '03', '중2-2': '04',
-  '중3': '05', '중3-1': '05', '중3-2': '06',
+// ★ 학기가 명시된 경우(중2-1, 중2-2)는 단일 코드,
+//   학기 불명(중2, 중2 수학)은 배열 — 두 학기 테이블 모두 LLM에 제공하여
+//   문제 내용으로 학기 직접 판단하도록 함 (파일명 "2-1"인 시험지에 2-2 내용 섞인 경우 대응).
+const SUBJECT_CODE_MAP: Record<string, string | string[]> = {
+  // 중학교 — 학기 명시
+  '중1-1': '01', '중1-2': '02',
+  '중2-1': '03', '중2-2': '04',
+  '중3-1': '05', '중3-2': '06',
+  // 중학교 — 학기 불명 → 두 학기 테이블 모두 제공
+  '중1': ['01', '02'], '중1 수학': ['01', '02'],
+  '중2': ['03', '04'], '중2 수학': ['03', '04'],
+  '중3': ['05', '06'], '중3 수학': ['05', '06'],
   // 고등학교
   '고1': '07', '공통수학': '07', '공통수학1': '07', '공통수학2': '08',
   '공수1': '07', '공수2': '08',
@@ -39,7 +46,6 @@ const SUBJECT_CODE_MAP: Record<string, string> = {
   '고등 미적분': '12', '고등 확률과 통계': '11', '고등 기하': '13',
   '고등 공통수학': '07',
   '고1 수학': '07', '고2 수학': '10', '고3 수학': '12',
-  '중1 수학': '01', '중2 수학': '03', '중3 수학': '05',
 };
 
 // 과목 코드 → 과목명 매핑
@@ -61,19 +67,20 @@ function loadTree(): TreeNode[] {
 }
 
 /**
- * gradeHint(예: "고1 수학")와 subject(예: "수학II")로부터 과목 코드를 추출
+ * gradeHint(예: "고1 수학")와 subject(예: "수학II")로부터 과목 코드를 추출.
+ * ★ 반환값: 단일 코드 문자열 또는 코드 배열(학기 불명인 경우 두 학기 모두).
+ *   - "중2-1 수학" → '03' (단일)
+ *   - "중2 수학" → ['03','04'] (두 학기 테이블 모두 LLM에 제공 — 파일명 학기와
+ *     실제 문제 학기가 다른 "특이 진도" 시험지 대응, 2026-06-03 사고 fix)
  * ★ subject가 더 구체적이므로 먼저 시도. 실패 시 gradeHint 시도.
- *   이전엔 gradeHint 우선이었는데 "고1" 같은 값은 SUBJECT_CODE_MAP에
- *   매칭되지 않아 null 반환 → typeTable 비어 Gemini가 임의 코드 생성하던 버그.
  */
-export function resolveSubjectCode(gradeHint?: string, subject?: string): string | null {
+export function resolveSubjectCode(gradeHint?: string, subject?: string): string | string[] | null {
   // ★ 긴 key부터 매칭 — "수학II".includes("수학I")이 true라 "수학I"가 먼저 매치되던 버그 수정.
-  //   '수학II'(4) vs '수학I'(3) 같이 prefix 관계인 key들에서 긴 것이 우선돼야 정확.
   const sortedEntries = Object.entries(SUBJECT_CODE_MAP).sort((a, b) => b[0].length - a[0].length);
   for (const hint of [subject, gradeHint]) {
     if (!hint) continue;
     for (const [key, code] of sortedEntries) {
-      if (hint.includes(key)) return code;
+      if (hint.includes(key)) return code; // 단일 string 또는 string[]
     }
   }
   return null;
@@ -172,22 +179,28 @@ export function buildL3L4Table(subjectCode: string, l1Code: string, l2Code: stri
 }
 
 /**
- * 분류 프롬프트에 주입할 수학비서 유형 체계 텍스트 생성
+ * 분류 프롬프트에 주입할 수학비서 유형 체계 텍스트 생성.
+ * ★ subjectCode 가 배열이면 여러 학기 테이블을 합산하여 반환
+ *   (예: ['03','04'] → 중2-1 + 중2-2 단원 모두 제공 → LLM이 문제 내용으로 학기 직접 판단).
  */
-export function buildMathsecrPromptSection(subjectCode: string): string {
-  const subjectName = CODE_TO_NAME[subjectCode] || '수학';
-  const typeTable = buildTypeTable(subjectCode);
+export function buildMathsecrPromptSection(subjectCode: string | string[]): string {
+  const codes = Array.isArray(subjectCode) ? subjectCode : [subjectCode];
+  const subjectName = codes.map(c => CODE_TO_NAME[c] || '수학').join(' + ');
+  const typeTable = codes.map(c => buildTypeTable(c)).filter(Boolean).join('\n');
 
   if (!typeTable) return '';
+
+  const codePrefix = codes.map(c => `"MS${c}-"`).join(' 또는 ');
 
   return `
 ■ 수학비서 유형 분류 체계 (${subjectName})
 아래 테이블에서 문제에 가장 적합한 유형 코드(typeCode)를 선택하세요.
 typeCode는 반드시 아래 목록에 있는 코드 중 하나여야 합니다.
+★ 학기가 여러 개 제공된 경우 — **문제 내용을 보고** 맞는 학기 코드를 선택하세요. 파일명의 학기 표시는 무시하세요.
 
 ${typeTable}
 
-★ typeCode는 반드시 "MS${subjectCode}-" 로 시작하는 위 코드 중 하나를 선택하세요.
+★ typeCode는 반드시 ${codePrefix} 로 시작하는 위 코드 중 하나를 선택하세요.
 ★ 가능한 가장 구체적인 레벨(세부유형이 있으면 5-세그먼트 코드)을 선택하세요.
 ★ typeName에는 "대단원 > 중단원 > 소단원 > 세부유형" 형태로 기재하세요. 세부유형이 "—"인 경우엔 "대단원 > 중단원 > 소단원"만 적으세요.
 `;
