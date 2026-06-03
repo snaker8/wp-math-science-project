@@ -2099,17 +2099,24 @@ function ExamPaperView({
             height: auto !important;
             overflow: visible !important;
           }
+          /* ★ 시험지 인쇄도 해설지처럼 자연 흐름 (시중 문제은행 방식).
+             기존 height:297mm 고정 + overflow:hidden 이 한 페이지를 넘는 내용을
+             "잘라내던" 사고(8번 등 cases 많은 문제 / 답안표 빈 페이지 / 삐져나옴)의 근본 원인.
+             → height:auto + overflow:visible + page-break-inside:auto 로, 넘치면 잘리지 않고
+             다음 페이지로 흐름. 카드(break-inside:avoid)는 페이지 중간에서 안 쪼개짐.
+             page-break-after:always 는 유지 → 시험지/답안표/해설지 구획은 그대로 분리. */
           #exam-print-root .exam-page {
             width: 210mm !important;
-            height: 297mm !important;
-            min-height: 297mm !important;
-            max-height: 297mm !important;
+            height: auto !important;
+            min-height: auto !important;
+            max-height: none !important;
             margin: 0 !important;
             padding: 15mm !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             page-break-after: always;
-            overflow: hidden !important;
+            page-break-inside: auto;
+            overflow: visible !important;
             background: white !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
