@@ -82,6 +82,8 @@ export async function GET(
   let studentName = '(미상)';
   let studentGrade: number | null = null;
   let studentClass: string | null = null;
+  // ★ 2026-06-04: user-타입 학생의 institute — report_style 결정에 사용 (roster 없을 때)
+  let userInstituteId: string | null = null;
 
   const { data: roster } = await supabaseAdmin
     .from('roster_students')
@@ -103,19 +105,20 @@ export async function GET(
   } else {
     const { data: u } = await supabaseAdmin
       .from('users')
-      .select('full_name, grade')
+      .select('full_name, grade, institute_id')
       .eq('id', studentId)
       .maybeSingle();
     if (u) {
       studentName = (u as { full_name: string }).full_name;
       studentGrade = (u as { grade: number | null }).grade;
+      userInstituteId = (u as { institute_id: string | null }).institute_id ?? null;
     }
   }
 
   // 2-b. 센터별 리포트 스타일 — exam institute 우선, 없으면 학생 institute
   //   legacy=기존 인디고(동부산 등), unified=share/exam warm 톤 통일
   const styleInstituteId =
-    exam.institute_id ?? ((roster as { institute_id: string | null } | null)?.institute_id ?? null);
+    exam.institute_id ?? ((roster as { institute_id: string | null } | null)?.institute_id ?? userInstituteId);
   let reportStyle: 'legacy' | 'unified' = 'legacy';
   if (styleInstituteId) {
     const { data: inst } = await supabaseAdmin
