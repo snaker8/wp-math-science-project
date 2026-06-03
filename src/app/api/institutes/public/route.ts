@@ -12,7 +12,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { apiError } from '@/lib/api/error';
 
-export const dynamic = 'force-dynamic';
+// ★ 2026-06-03 perf: 공개(인증 無) 센터 목록 → CDN 캐싱. 신규 센터는 최대 5분 후 노출.
+//   5분 fresh + 1시간 stale-while-revalidate. force-dynamic 제거 필수(no-store 강제).
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600',
+};
 
 export async function GET(request: NextRequest) {
   if (!supabaseAdmin) {
@@ -44,5 +48,5 @@ export async function GET(request: NextRequest) {
       name: i.name,
       organization_id: i.organization_id,
     })),
-  });
+  }, { headers: CACHE_HEADERS });
 }

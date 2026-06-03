@@ -3,6 +3,12 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { toExpandedMathType, buildTypeTree } from '@/types/expanded-types';
 import type { ExpandedMathTypeRow } from '@/types/expanded-types';
 
+// ★ 2026-06-03 perf: 전역 taxonomy(인증·테넌트 無, 마이그레이션 시에만 변경) → CDN 캐싱.
+//   1시간 fresh + 1일 stale-while-revalidate. 성공 응답에만 적용(에러는 캐시 X).
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+};
+
 /**
  * GET /api/expanded-types/tree
  * 계층 트리 구조로 반환 (Level → Domain → Standard → Types)
@@ -53,5 +59,5 @@ export async function GET(request: NextRequest) {
     tree,
     totalTypes: types.length,
     totalStandards: new Set(types.map(t => t.standardCode)).size,
-  });
+  }, { headers: CACHE_HEADERS });
 }
