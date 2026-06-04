@@ -17,10 +17,17 @@ function rangeOf(setTitle: string): string {
   return (setTitle || '').replace(/진단평가.*$/, '').trim() || setTitle || '';
 }
 
+// ★ og:image 절대 URL 을 "프로덕션 도메인" 으로 고정.
+//   미설정 시 Next 가 배포별 보호 URL(VERCEL_URL=*-xxxx.vercel.app, 401)을 써서
+//   카톡 등 크롤러가 썸네일을 못 가져옴. VERCEL_PROJECT_PRODUCTION_URL = 공개 프로덕션 도메인.
+const PROD_HOST = process.env.VERCEL_PROJECT_PRODUCTION_URL || 'wp-math-science-project.vercel.app';
+const METADATA_BASE = new URL(`https://${PROD_HOST}`);
+
 export async function generateMetadata(
   { params }: { params: { token: string } },
 ): Promise<Metadata> {
   const fallback: Metadata = {
+    metadataBase: METADATA_BASE,
     title: '진단평가 종합 리포트',
     description: 'A·B·C 진단 결과를 합산한 시험대비 처방 리포트 — 과사람 수학',
     robots: { index: false, follow: false },
@@ -48,6 +55,7 @@ export async function generateMetadata(
     const description = `${range} · ${pctStr} · A·B·C ${set.gradedVariantCount}/${set.variantCount} 채점 — 과사람 수학`;
 
     return {
+      metadataBase: METADATA_BASE,
       title,
       description,
       openGraph: { title, description, type: 'website', locale: 'ko_KR' },
