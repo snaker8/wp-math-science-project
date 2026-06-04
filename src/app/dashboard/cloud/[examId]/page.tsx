@@ -1708,7 +1708,14 @@ function ExamPaperView({
 
     document.body.appendChild(printRoot);
 
+    // ★ 브라우저 PDF 저장 파일명 = document.title. 인쇄 동안만 시험지명으로 바꾸고 복원.
+    //   (전역 'Math×Sci Bank' 가 파일명으로 나오던 문제 방지)
+    const prevTitle = document.title;
+    document.title = (examTitle || '시험지')
+      .replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() || '시험지';
+
     const cleanup = () => {
+      document.title = prevTitle;
       try { document.body.removeChild(printRoot); } catch { /* already removed */ }
       window.removeEventListener('afterprint', cleanup);
     };
@@ -1722,7 +1729,7 @@ function ExamPaperView({
     } else {
       runPrint();
     }
-  }, [printSections]);
+  }, [printSections, examTitle]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   const renderProblem = (problem: ProblemData) => (
