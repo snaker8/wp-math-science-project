@@ -518,6 +518,13 @@ function PrescriptionContent() {
                         <span>QR 채점 세션 생성</span>
                       </button>
                       <Link
+                        href="/dashboard/prescription/report"
+                        className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-cyan-600/90 text-content-primary hover:bg-cyan-500 shadow-lg shadow-cyan-500/20 transition-all"
+                      >
+                        <Activity size={18} />
+                        <span>진단 종합 리포트 (A·B·C)</span>
+                      </Link>
+                      <Link
                         href={`/dashboard/prescription/entry${student ? `?studentId=${student.id}` : ''}`}
                         className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-white/5 text-content-primary border border-white/10 hover:bg-white/10 transition-all"
                       >
