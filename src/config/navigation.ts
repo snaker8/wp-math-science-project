@@ -193,7 +193,8 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    href: '/dashboard/prescription/entry',
+    // 채점 허브로 통합 — 수동 입력은 /dashboard/grading 의 탭. (prescription/entry 라우트도 백워드 호환 유지)
+    href: '/dashboard/grading?tab=manual',
     icon: ClipboardCheck,
     label: '수동 채점 입력',
     description: '시험·진단지 채점 결과 수동 입력',

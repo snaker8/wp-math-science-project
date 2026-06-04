@@ -21,6 +21,9 @@ import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import GradingSheetUpload from '@/components/grading/GradingSheetUpload';
 // 채점 허브 통합 — 수동 입력 폼 (진단/시험지 공통, 같은 컴포넌트 재사용)
 import { ManualGradingEntry } from '@/app/dashboard/prescription/entry/page';
+// 채점 허브 통합 — 엑셀 일괄 채점 (시험지 선택 → 학생 답안 엑셀 업로드, 같은 컴포넌트 재사용)
+import StudentsTab from '@/app/dashboard/exam-analysis/[examId]/StudentsTab';
+import { useExamList } from '@/hooks/useExamProblems';
 
 // ============================================================================
 // Types
@@ -84,8 +87,17 @@ export default function GradingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 채점 허브 탭 — QR 세션 채점 / 수동 입력 (엑셀 채점은 후속)
-  const [activeTab, setActiveTab] = useState<'qr' | 'manual'>('qr');
+  // 채점 허브 탭 — QR 세션 채점 / 수동 입력 / 엑셀 채점
+  const [activeTab, setActiveTab] = useState<'qr' | 'manual' | 'excel'>('qr');
+  // 엑셀 채점 — 시험지 선택 (StudentsTab 은 examId 필요)
+  const { exams: examList } = useExamList();
+  const [excelExamId, setExcelExamId] = useState<string>('');
+
+  // ?tab= 으로 초기 탭 진입 (네비 "수동 채점 입력" → /dashboard/grading?tab=manual)
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'manual' || t === 'excel') setActiveTab(t);
+  }, []);
 
   // 필터
   const [studentFilter, setStudentFilter] = useState<string>('');
@@ -254,7 +266,7 @@ export default function GradingPage() {
 
         {/* 채점 모드 탭 — QR 세션 채점 / 수동 입력 */}
         <div className="flex gap-1 border-b border-white/10 mb-6">
-          {([['qr', 'QR 세션 채점'], ['manual', '수동 입력']] as const).map(([t, label]) => (
+          {([['qr', 'QR 세션 채점'], ['manual', '수동 입력'], ['excel', '엑셀 채점']] as const).map(([t, label]) => (
             <button
               key={t}
               type="button"
@@ -352,6 +364,32 @@ export default function GradingPage() {
         {activeTab === 'manual' && (
           <div className="-mx-6 -mb-8">
             <ManualGradingEntry />
+          </div>
+        )}
+
+        {/* 엑셀 채점 탭 — 시험지 선택 → 학생 답안 엑셀 일괄 업로드 (StudentsTab 재사용) */}
+        {activeTab === 'excel' && (
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-5">
+              <span className="text-sm text-content-tertiary">시험지 선택</span>
+              <select
+                value={excelExamId}
+                onChange={(e) => setExcelExamId(e.target.value)}
+                className="min-w-[280px] px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+              >
+                <option value="">— 채점할 시험지를 고르세요 —</option>
+                {examList.map((ex) => (
+                  <option key={ex.id} value={ex.id}>{ex.title}</option>
+                ))}
+              </select>
+            </div>
+            {excelExamId ? (
+              <StudentsTab examId={excelExamId} />
+            ) : (
+              <div className="text-center text-content-tertiary py-20">
+                시험지를 선택하면 학생 답안 엑셀을 업로드해 일괄 채점할 수 있습니다.
+              </div>
+            )}
           </div>
         )}
       </div>
