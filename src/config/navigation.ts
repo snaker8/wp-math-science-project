@@ -240,6 +240,15 @@ export const tutorNavItems: NavItem[] = [
     activeColor: 'bg-cyan-500/10 text-cyan-400',
     group: 'tutor',
   },
+  {
+    // ★ 인덱스 [10] — 배열 끝에 append 필수 (topNavGroups 가 인덱스 참조).
+    href: '/dashboard/prescription/report',
+    icon: Layers,
+    label: '진단 종합 리포트',
+    description: 'A/B/C 진단 합산 · 시험대비 처방 · 학부모 공유',
+    activeColor: 'bg-cyan-500/10 text-cyan-400',
+    group: 'tutor',
+  },
 ];
 
 // 시스템 메뉴
@@ -357,8 +366,9 @@ export const topNavGroups: NavGroup[] = [
     label: '진단',
     icon: Stethoscope,
     children: [
-      tutorNavItems[5], // 학생 진단 (/dashboard/prescription)
-      tutorNavItems[6], // 클리닉시험지
+      tutorNavItems[5],  // 학생 진단 (/dashboard/prescription)
+      tutorNavItems[10], // 진단 종합 리포트 (/dashboard/prescription/report)
+      tutorNavItems[6],  // 클리닉시험지
     ],
   },
   // ★ [분석] — 통계·리포트. 학생·학교 단위.
