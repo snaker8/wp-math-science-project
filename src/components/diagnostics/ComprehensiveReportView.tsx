@@ -8,10 +8,9 @@
 // ============================================================================
 
 import React, { useMemo } from 'react';
-import Link from 'next/link';
 import {
   Layers, TrendingUp, AlertTriangle, CheckCircle2, ClipboardList,
-  ChevronDown, Target, Pin, Sparkles, ChevronRight,
+  ChevronDown, Target, Pin, Sparkles,
 } from 'lucide-react';
 import { DIFFICULTY_BANDS, difficultyToBand, difficultyHueClasses } from '@/lib/utils/difficulty-label';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
@@ -99,8 +98,8 @@ export function ComprehensiveReportView({ report, actionSlot }: { report: Compre
         : narrative.readiness.level === 'caution' ? 'from-amber-900/20 via-zinc-900/40 to-zinc-900/40'
         : 'from-emerald-900/20 via-zinc-900/40 to-zinc-900/40'
       } p-5`}>
-        <div className="flex flex-wrap items-center gap-5">
-          <Gauge pct={overall.pct} stroke={tone.stroke} />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
+          <div className="mx-auto sm:mx-0 flex-shrink-0"><Gauge pct={overall.pct} stroke={tone.stroke} /></div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-2xl font-bold">{student.name}</h2>
@@ -177,12 +176,12 @@ export function ComprehensiveReportView({ report, actionSlot }: { report: Compre
             const hue = difficultyHueClasses(band.hue);
             const has = total > 0;
             return (
-              <div key={band.label} className="flex items-center gap-2 text-xs">
-                <div className={`w-28 text-right font-semibold ${has ? hue.text : 'text-zinc-600'}`}>{band.label}</div>
+              <div key={band.label} className="flex items-center gap-2 text-[11px] sm:text-xs">
+                <div className={`w-16 sm:w-28 shrink-0 text-right font-semibold leading-tight ${has ? hue.text : 'text-zinc-600'}`}>{band.label}</div>
                 <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
                   <div className={`h-2.5 rounded-full ${has ? hue.bar : 'bg-transparent'}`} style={{ width: `${has && pct != null ? Math.max(3, pct) : 0}%` }} />
                 </div>
-                <div className="w-20 text-right tabular-nums text-zinc-400">{has ? `${correct}/${total}·${pct}%` : '–'}</div>
+                <div className="w-16 sm:w-20 shrink-0 text-right tabular-nums text-zinc-400">{has ? `${correct}/${total}·${pct}%` : '–'}</div>
               </div>
             );
           })}
@@ -221,18 +220,10 @@ export function ComprehensiveReportView({ report, actionSlot }: { report: Compre
             </li>
           ))}
         </ol>
-        <div className="mt-4 pt-4 border-t border-zinc-800 flex flex-wrap gap-2">
-          <Link href="/tutor/clinic" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-200 border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:bg-indigo-500/20">
-            클리닉 학습지 생성 <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
-          <Link href={`/dashboard/prescription?studentId=${student.id}`} className="inline-flex items-center gap-1 text-xs font-bold text-zinc-300 border border-zinc-700 px-3 py-1.5 rounded-lg hover:bg-zinc-800">
-            정밀 진단 보기 <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
       </Panel>
 
       {/* ⑥ 시험지별 세부 진단 */}
-      <Panel title="시험지별 세부 진단 (A·B·C)" icon={<Layers className="h-4 w-4 text-cyan-400" />} hint="펼치면 단원·문항 상세">
+      <Panel title="시험지별 세부 진단 (A·B·C)" icon={<Layers className="h-4 w-4 text-cyan-400" />} hint="시험지 제목을 누르면 접을 수 있어요">
         <div className="space-y-2.5">
           {variants.map((v) => <VariantDetail key={v.examId} v={v} />)}
         </div>
@@ -254,7 +245,7 @@ function VariantDetail({ v }: { v: VariantResult }) {
     );
   }
   return (
-    <details className="group rounded-lg border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+    <details open className="group rounded-lg border border-zinc-800 bg-zinc-900/40 overflow-hidden">
       <summary className="cursor-pointer list-none px-4 py-3 flex items-center gap-3 hover:bg-zinc-900/70">
         <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex-shrink-0">{VARIANT_LABEL(v.variant)}</span>
         <span className="text-sm text-zinc-300 truncate flex-1" title={v.title}>{v.title}</span>
@@ -270,11 +261,11 @@ function VariantDetail({ v }: { v: VariantResult }) {
                 const bar = u.pct >= 80 ? 'bg-emerald-500' : u.pct >= 60 ? 'bg-amber-500' : 'bg-rose-500';
                 return (
                   <div key={u.code} className="flex items-center gap-2 text-[11px]">
-                    <div className="w-32 truncate text-zinc-300 text-right" title={u.name}>{unitShortName(u.name)}</div>
+                    <div className="w-20 sm:w-32 shrink-0 truncate text-zinc-300 text-right" title={u.name}>{unitShortName(u.name)}</div>
                     <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
                       <div className={`h-2 rounded-full ${bar}`} style={{ width: `${Math.max(3, u.pct)}%` }} />
                     </div>
-                    <div className="w-16 text-right tabular-nums text-zinc-400">{u.correct}/{u.total}·{u.pct}%</div>
+                    <div className="w-14 sm:w-16 shrink-0 text-right tabular-nums text-zinc-400">{u.correct}/{u.total}·{u.pct}%</div>
                   </div>
                 );
               })}

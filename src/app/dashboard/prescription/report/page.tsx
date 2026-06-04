@@ -87,7 +87,7 @@ function ReportContent() {
 
   return (
     <div className="min-h-screen bg-black text-white font-sans">
-      <header className="border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/40 via-cyan-900/30 to-zinc-900/30 px-6 py-5">
+      <header className="border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/40 via-cyan-900/30 to-zinc-900/30 px-4 sm:px-6 py-5">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/15 bg-white/10">
             <BarChart3 className="h-6 w-6 text-cyan-300" />
@@ -102,7 +102,7 @@ function ReportContent() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         {/* 선택기 */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
