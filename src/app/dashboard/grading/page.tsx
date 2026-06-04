@@ -99,6 +99,26 @@ export default function GradingPage() {
     if (t === 'manual' || t === 'excel') setActiveTab(t);
   }, []);
 
+  // 엑셀 채점 — 시험지 검색·분류 필터
+  const [excelSearch, setExcelSearch] = useState('');
+  const [excelSubject, setExcelSubject] = useState('전체');
+  const [excelType, setExcelType] = useState('전체');
+  const [excelGrade, setExcelGrade] = useState('전체');
+  const distinct = (vals: (string | null)[]) =>
+    ['전체', ...Array.from(new Set(vals.filter((v): v is string => !!v)))];
+  const excelSubjects = useMemo(() => distinct(examList.map((e) => e.subject)), [examList]);
+  const excelTypes = useMemo(() => distinct(examList.map((e) => e.examType)), [examList]);
+  const excelGrades = useMemo(() => distinct(examList.map((e) => e.grade)), [examList]);
+  const excelFilteredExams = useMemo(() => {
+    const q = excelSearch.trim().toLowerCase();
+    return examList.filter((e) =>
+      (excelSubject === '전체' || e.subject === excelSubject) &&
+      (excelType === '전체' || e.examType === excelType) &&
+      (excelGrade === '전체' || e.grade === excelGrade) &&
+      (!q || (e.title || '').toLowerCase().includes(q)),
+    );
+  }, [examList, excelSearch, excelSubject, excelType, excelGrade]);
+
   // 필터
   const [studentFilter, setStudentFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -367,26 +387,61 @@ export default function GradingPage() {
           </div>
         )}
 
-        {/* 엑셀 채점 탭 — 시험지 선택 → 학생 답안 엑셀 일괄 업로드 (StudentsTab 재사용) */}
+        {/* 엑셀 채점 탭 — 시험지 검색·분류 → 선택 → 학생 답안 엑셀 일괄 업로드 (StudentsTab 재사용) */}
         {activeTab === 'excel' && (
           <div>
-            <div className="flex flex-wrap items-center gap-2 mb-5">
-              <span className="text-sm text-content-tertiary">시험지 선택</span>
-              <select
-                value={excelExamId}
-                onChange={(e) => setExcelExamId(e.target.value)}
-                className="min-w-[280px] px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
-              >
-                <option value="">— 채점할 시험지를 고르세요 —</option>
-                {examList.map((ex) => (
-                  <option key={ex.id} value={ex.id}>{ex.title}</option>
-                ))}
+            {/* 검색 + 분류 필터 */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-tertiary" />
+                <input
+                  type="text"
+                  placeholder="시험지명 검색"
+                  value={excelSearch}
+                  onChange={(e) => setExcelSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+                />
+              </div>
+              <select value={excelSubject} onChange={(e) => setExcelSubject(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none">
+                {excelSubjects.map((s) => <option key={s} value={s}>{s === '전체' ? '과목 전체' : s}</option>)}
+              </select>
+              <select value={excelType} onChange={(e) => setExcelType(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none">
+                {excelTypes.map((s) => <option key={s} value={s}>{s === '전체' ? '유형 전체' : s}</option>)}
+              </select>
+              <select value={excelGrade} onChange={(e) => setExcelGrade(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none">
+                {excelGrades.map((s) => <option key={s} value={s}>{s === '전체' ? '학년 전체' : s}</option>)}
               </select>
             </div>
+
+            {/* 시험지 리스트 (클릭 선택) */}
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 divide-y divide-white/5 mb-5">
+              {excelFilteredExams.length === 0 ? (
+                <div className="text-center text-content-tertiary py-10 text-sm">조건에 맞는 시험지가 없습니다.</div>
+              ) : excelFilteredExams.map((ex) => (
+                <button
+                  key={ex.id}
+                  type="button"
+                  onClick={() => setExcelExamId(ex.id)}
+                  className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition ${
+                    excelExamId === ex.id ? 'bg-indigo-500/15' : ''
+                  }`}
+                >
+                  <span className="text-sm text-content-primary truncate">{ex.title}</span>
+                  <span className="text-[11px] text-content-tertiary flex-shrink-0">
+                    {[ex.subject, ex.grade, ex.examType].filter(Boolean).join(' · ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* 선택된 시험지 엑셀 채점 */}
             {excelExamId ? (
               <StudentsTab examId={excelExamId} />
             ) : (
-              <div className="text-center text-content-tertiary py-20">
+              <div className="text-center text-content-tertiary py-12">
                 시험지를 선택하면 학생 답안 엑셀을 업로드해 일괄 채점할 수 있습니다.
               </div>
             )}
