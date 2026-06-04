@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
   Search,
@@ -21,9 +21,11 @@ import {
   Pencil,
   KeyRound,
   Trash2,
+  ClipboardList,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
+import { MOCK_EXAM_TYPES, MOCK_EXAM_LABELS, type MockExamType } from '@/lib/students/mock-exam-types';
 
 interface Student {
   id: string;
@@ -41,6 +43,25 @@ interface Student {
   totalProblems: number;
   correctRate: number;
 }
+
+// 모의고사 점수 입력 폼 (4종 × 점수/날짜/메모) — 자사관 플래너 연동
+type ExamScoreRowForm = { score: string; date: string; note: string };
+const emptyExamScoreForm = (): Record<MockExamType, ExamScoreRowForm> => ({
+  mockFinal1: { score: '', date: '', note: '' },
+  mockFinal2: { score: '', date: '', note: '' },
+  mock1: { score: '', date: '', note: '' },
+  mock2: { score: '', date: '', note: '' },
+});
+
+const examInputStyle: CSSProperties = {
+  width: '100%',
+  background: '#18181b',
+  border: '1px solid #3f3f46',
+  borderRadius: 6,
+  padding: '6px 8px',
+  color: '#fff',
+  fontSize: 13,
+};
 
 export default function TutorStudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -72,6 +93,12 @@ export default function TutorStudentsPage() {
 
   // 비밀번호 초기화 결과 (간이 alert 대신)
   const [resetResult, setResetResult] = useState<{ name: string; password: string } | null>(null);
+
+  // 모의고사 점수 모달 — 자사관 플래너 연동 (student_exam_scores)
+  const [examStudent, setExamStudent] = useState<Student | null>(null);
+  const [examForm, setExamForm] = useState<Record<MockExamType, ExamScoreRowForm>>(emptyExamScoreForm());
+  const [examLoading, setExamLoading] = useState(false);
+  const [examBusy, setExamBusy] = useState(false);
 
   // 액션 핸들러들
   const openEditModal = (s: Student) => {
@@ -169,6 +196,70 @@ export default function TutorStudentsPage() {
       loadStudents();
     } catch (e) {
       alert((e as Error).message);
+    }
+  };
+
+  // ── 모의고사 점수 (자사관 플래너 연동) ──────────────────────────────
+  const openExamModal = async (s: Student) => {
+    setExamStudent(s);
+    setExamForm(emptyExamScoreForm());
+    setExamLoading(true);
+    try {
+      const res = await fetch(`/api/students/${s.id}/exam-scores`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '점수 조회 실패');
+      // DB 저장값으로 폼 초기화 (UI 상태 저장/복원 패턴)
+      const next = emptyExamScoreForm();
+      for (const row of (json.scores || []) as Array<{ examType: string; score: number; examDate: string | null; note: string | null }>) {
+        if ((MOCK_EXAM_TYPES as readonly string[]).includes(row.examType)) {
+          next[row.examType as MockExamType] = {
+            score: row.score != null ? String(row.score) : '',
+            date: row.examDate || '',
+            note: row.note || '',
+          };
+        }
+      }
+      setExamForm(next);
+    } catch (e) {
+      alert((e as Error).message);
+      setExamStudent(null);
+    } finally {
+      setExamLoading(false);
+    }
+  };
+
+  const handleExamSave = async () => {
+    if (!examStudent) return;
+    // 점수 검증 — 빈값은 "삭제", 값이 있으면 0~100
+    for (const t of MOCK_EXAM_TYPES) {
+      const v = examForm[t].score.trim();
+      if (!v) continue;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        alert(`${MOCK_EXAM_LABELS[t]} 점수는 0~100 사이여야 합니다`);
+        return;
+      }
+    }
+    setExamBusy(true);
+    try {
+      const scores = MOCK_EXAM_TYPES.map((t) => ({
+        examType: t,
+        score: examForm[t].score.trim() === '' ? null : Number(examForm[t].score.trim()),
+        examDate: examForm[t].date || null,
+        note: examForm[t].note.trim() || null,
+      }));
+      const res = await fetch(`/api/students/${examStudent.id}/exam-scores`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scores }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '저장 실패');
+      setExamStudent(null);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExamBusy(false);
     }
   };
 
@@ -503,9 +594,26 @@ export default function TutorStudentsPage() {
                 >
                   {student.source === 'roster' ? <UserPlus size={14} /> : <Pencil size={14} />}
                 </button>
-                {/* 비번 초기화·삭제는 정식(user) 학생만 — roster 는 계정이 없어 404. 먼저 정식 등록 필요. */}
+                {/* 모의고사 점수·비번 초기화·삭제는 정식(user) 학생만 — roster 는 계정이 없어 404. 먼저 정식 등록 필요. */}
                 {student.source !== 'roster' && (
                   <>
+                    <button
+                      type="button"
+                      onClick={() => openExamModal(student)}
+                      title="모의고사 점수 입력 (자사관 플래너 연동)"
+                      style={{
+                        padding: '6px 8px',
+                        background: 'transparent',
+                        border: '1px solid #3f3f46',
+                        borderRadius: 6,
+                        color: '#34d399',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <ClipboardList size={14} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleResetPassword(student)}
@@ -636,6 +744,85 @@ export default function TutorStudentsPage() {
                   {editBusy
                     ? <Loader2 size={14} className="spinner" />
                     : (editingStudent.source === 'roster' ? '정식 등록' : '저장')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 모의고사 점수 모달 — 자사관 플래너 연동 */}
+      {examStudent && (
+        <div className="modal-overlay" onClick={() => !examBusy && setExamStudent(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
+            <div className="modal-header">
+              <h2 style={{ margin: 0 }}>모의고사 점수 — {examStudent.name}</h2>
+              <button type="button" onClick={() => !examBusy && setExamStudent(null)} className="modal-close">
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <div style={{ background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.3)', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 12, color: '#6ee7b7', lineHeight: 1.5 }}>
+                자사관 내신 플래너가 이 점수를 동기화합니다. <strong>점수를 비우고 저장하면 해당 회차가 삭제</strong>됩니다.
+              </div>
+              {examLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '28px 0' }}>
+                  <Loader2 size={22} className="spinner" />
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '128px 76px 140px 1fr', gap: 8, fontSize: 11, color: '#a1a1aa', marginBottom: 6, padding: '0 2px' }}>
+                    <span />
+                    <span>점수</span>
+                    <span>날짜</span>
+                    <span>메모</span>
+                  </div>
+                  {MOCK_EXAM_TYPES.map((t) => (
+                    <div key={t} style={{ display: 'grid', gridTemplateColumns: '128px 76px 140px 1fr', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, color: '#e4e4e7' }}>{MOCK_EXAM_LABELS[t]}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        value={examForm[t].score}
+                        onChange={(e) => setExamForm((f) => ({ ...f, [t]: { ...f[t], score: e.target.value } }))}
+                        placeholder="—"
+                        style={examInputStyle}
+                      />
+                      <input
+                        type="date"
+                        value={examForm[t].date}
+                        onChange={(e) => setExamForm((f) => ({ ...f, [t]: { ...f[t], date: e.target.value } }))}
+                        style={examInputStyle}
+                      />
+                      <input
+                        type="text"
+                        value={examForm[t].note}
+                        onChange={(e) => setExamForm((f) => ({ ...f, [t]: { ...f[t], note: e.target.value } }))}
+                        placeholder="메모"
+                        style={examInputStyle}
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setExamStudent(null)}
+                  disabled={examBusy}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="btn-submit"
+                  onClick={handleExamSave}
+                  disabled={examBusy || examLoading}
+                >
+                  {examBusy ? <Loader2 size={14} className="spinner" /> : '저장'}
                 </button>
               </div>
             </div>
