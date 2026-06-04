@@ -17,6 +17,21 @@ function sanitizeTitle(t: string | null | undefined): string {
   return (t || '시험지').replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() || '시험지';
 }
 
+/** 인쇄 구성에 따른 접미사 — 문제지 / 해설 / 빠른답. */
+function sectionSuffix(s: PrintSections): string {
+  if (s.exam) return '문제지';
+  if (s.solution) return '해설';
+  if (s.answer) return '빠른답';
+  return '문제지';
+}
+
+/** "시험지명 + 접미사" 파일명. 이미 접미사로 끝나면 중복 안 붙임. */
+function buildPrintTitle(title: string | null | undefined, sections: PrintSections): string {
+  const base = sanitizeTitle(title);
+  const suffix = sectionSuffix(sections);
+  return base.endsWith(suffix) ? base : `${base} ${suffix}`;
+}
+
 export function executeExamPrint(printSections: PrintSections, title?: string): boolean {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
 
@@ -89,7 +104,7 @@ export function executeExamPrint(printSections: PrintSections, title?: string): 
   document.body.appendChild(printRoot);
   // ★ 브라우저 PDF 저장 파일명 = document.title. 인쇄 동안만 시험지명으로 바꾸고 복원.
   const prevTitle = document.title;
-  document.title = sanitizeTitle(title);
+  document.title = buildPrintTitle(title, printSections);
   try {
     window.print();
   } finally {
