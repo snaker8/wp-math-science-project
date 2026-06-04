@@ -541,8 +541,10 @@ export default function ExamManagementPage() {
   // 출력 실행 — 클라우드 페이지와 완전 동일 방식 (원본 className/style 유지)
   const executePrint = useCallback(() => {
     setShowPrintModal(false);
-    executeExamPrint(printSections);
-  }, [printSections]);
+    // ★ 인쇄(PDF 저장) 파일명 = 시험지명 (전역 'Math×Sci Bank' 방지).
+    //   editExamTitle 은 시험 선택 시 제목으로 동기화됨(빈값이면 유틸이 '시험지' 폴백).
+    executeExamPrint(printSections, editExamTitle);
+  }, [printSections, editExamTitle]);
 
   // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
   const handleDownloadPdf = useCallback(() => {

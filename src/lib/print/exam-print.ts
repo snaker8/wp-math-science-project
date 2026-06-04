@@ -12,7 +12,12 @@ export interface PrintSections {
   solution: boolean;
 }
 
-export function executeExamPrint(printSections: PrintSections): boolean {
+/** 파일명/탭제목 안전화 — 금지문자 제거, 한글 유지. */
+function sanitizeTitle(t: string | null | undefined): string {
+  return (t || '시험지').replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() || '시험지';
+}
+
+export function executeExamPrint(printSections: PrintSections, title?: string): boolean {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
 
   const printRoot = document.createElement('div');
@@ -82,7 +87,14 @@ export function executeExamPrint(printSections: PrintSections): boolean {
   if (printRoot.children.length === 0) return false;
 
   document.body.appendChild(printRoot);
-  window.print();
-  document.body.removeChild(printRoot);
+  // ★ 브라우저 PDF 저장 파일명 = document.title. 인쇄 동안만 시험지명으로 바꾸고 복원.
+  const prevTitle = document.title;
+  document.title = sanitizeTitle(title);
+  try {
+    window.print();
+  } finally {
+    document.title = prevTitle;
+    document.body.removeChild(printRoot);
+  }
   return true;
 }
