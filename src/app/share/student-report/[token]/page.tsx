@@ -94,6 +94,7 @@ interface ReportData {
   results: ResultRow[];
   fineUnitStats?: FineUnitStat[];
   cognitiveDomainStats?: CognitiveStat[];
+  reportStyle?: 'legacy' | 'unified'; // 센터별 스타일 (unified=warm). 강사 페이지와 동일.
   aiComment?: AiCommentJson | null;
   teacherComment?: TeacherCommentJson | null;
 }
@@ -437,7 +438,7 @@ export default function PublicStudentReportPage() {
   const weakOk = weak.includes('완벽함') || weak.includes('양호함') || weak.includes('우수함');
 
   return (
-    <div className="student-report-root">
+    <div className={`student-report-root ${data.reportStyle === 'unified' ? 'report-theme-warm' : ''}`}>
       <div className="student-report-no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-[210mm] mx-auto px-4 py-3 flex items-center justify-between">
           <span className="text-slate-500 text-sm font-bold flex items-center gap-2">

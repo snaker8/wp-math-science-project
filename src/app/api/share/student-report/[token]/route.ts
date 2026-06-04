@@ -71,7 +71,7 @@ export async function GET(
   // 시험 정보
   const { data: exam } = await supabaseAdmin
     .from('exams')
-    .select('id, title')
+    .select('id, title, institute_id')
     .eq('id', session.exam_id)
     .maybeSingle();
   if (!exam) {
@@ -82,24 +82,44 @@ export async function GET(
   let studentName = '(미상)';
   let studentGrade: number | null = null;
   let studentClass: string | null = null;
+  // ★ 센터별 리포트 스타일 결정용 — exam institute 우선, 없으면 학생 institute
+  let studentInstituteId: string | null = null;
   const { data: roster } = await supabaseAdmin
     .from('roster_students')
-    .select('full_name, grade, class_label')
+    .select('full_name, grade, class_label, institute_id')
     .eq('id', session.student_id)
     .maybeSingle();
   if (roster) {
     studentName = (roster as { full_name: string }).full_name;
     studentGrade = (roster as { grade: number | null }).grade;
     studentClass = (roster as { class_label: string | null }).class_label;
+    studentInstituteId = (roster as { institute_id: string | null }).institute_id ?? null;
   } else {
     const { data: u } = await supabaseAdmin
       .from('users')
-      .select('full_name, grade')
+      .select('full_name, grade, institute_id')
       .eq('id', session.student_id)
       .maybeSingle();
     if (u) {
       studentName = (u as { full_name: string }).full_name;
       studentGrade = (u as { grade: number | null }).grade;
+      studentInstituteId = (u as { institute_id: string | null }).institute_id ?? null;
+    }
+  }
+
+  // ★ 센터별 리포트 스타일 — 대시보드 report/route.ts 와 동일 로직 (legacy=인디고, unified=warm).
+  //   학부모 공유 경로에 이 분기가 빠져 자사관(unified) 학생도 legacy 로 나오던 버그 수정.
+  const styleInstituteId =
+    (exam as { institute_id: string | null }).institute_id ?? studentInstituteId;
+  let reportStyle: 'legacy' | 'unified' = 'legacy';
+  if (styleInstituteId) {
+    const { data: inst } = await supabaseAdmin
+      .from('institutes')
+      .select('report_style')
+      .eq('id', styleInstituteId)
+      .maybeSingle();
+    if ((inst as { report_style?: string } | null)?.report_style === 'unified') {
+      reportStyle = 'unified';
     }
   }
 
@@ -375,6 +395,7 @@ export async function GET(
     results,
     fineUnitStats,
     cognitiveDomainStats,
+    reportStyle,
     // 학부모용은 반 백분위·시계열 추이 제외 (학원 데이터 보호)
     aiComment: session.ai_comment_json ?? null,
     teacherComment: session.teacher_comment_json ?? null,
