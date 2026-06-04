@@ -60,7 +60,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
       (
         <div style={{
           width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+          background: 'radial-gradient(120% 120% at 0% 0%, #131a2e 0%, #0a0d18 55%, #070a14 100%)',
           fontFamily: 'sans-serif', fontSize: 60, color: '#a5b4fc', fontWeight: 800,
         }}>
           진단평가 종합 리포트
@@ -70,41 +70,88 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
     );
   }
 
+  const pct = data.pct;
+  const ring =
+    pct == null ? '#64748b' : pct >= 80 ? '#34d399' : pct >= 60 ? '#22d3ee' : pct >= 40 ? '#fbbf24' : '#fb7185';
+  const R = 110;
+  const C = 2 * Math.PI * R;
+  const dash = pct != null ? (Math.max(0, Math.min(100, pct)) / 100) * C : 0;
+
   return new ImageResponse(
     (
       <div style={{
-        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-        background: 'linear-gradient(135deg, #0a0a0a 0%, #11182f 55%, #0e2230 100%)',
-        fontFamily: 'sans-serif', padding: 64, position: 'relative',
+        width: '100%', height: '100%', display: 'flex', position: 'relative', overflow: 'hidden',
+        background: '#080b16', fontFamily: 'sans-serif',
       }}>
-        {/* 상단: 라벨 + 브랜드 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 36 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', padding: '10px 22px',
-            background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)',
-            borderRadius: 999, fontSize: 22, fontWeight: 700, color: '#67e8f9', letterSpacing: '0.06em',
-          }}>
-            DIAGNOSTIC REPORT
+        {/* 배경 글로우 */}
+        <div style={{ position: 'absolute', top: -180, left: -120, width: 560, height: 560, borderRadius: 9999,
+          background: 'radial-gradient(circle, rgba(34,211,238,0.20) 0%, rgba(34,211,238,0) 68%)' }} />
+        <div style={{ position: 'absolute', bottom: -220, right: 200, width: 680, height: 680, borderRadius: 9999,
+          background: 'radial-gradient(circle, rgba(99,102,241,0.22) 0%, rgba(99,102,241,0) 68%)' }} />
+
+        {/* 좌측 콘텐츠 */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: 64, justifyContent: 'space-between', zIndex: 1 }}>
+          {/* 브랜드 행 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', padding: '9px 22px',
+              background: 'rgba(34,211,238,0.10)', border: '1px solid rgba(34,211,238,0.40)',
+              borderRadius: 9999, fontSize: 21, fontWeight: 700, color: '#67e8f9', letterSpacing: '0.14em',
+            }}>
+              DIAGNOSTIC REPORT
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', width: 16, height: 16, borderRadius: 5, marginRight: 12,
+                background: 'linear-gradient(135deg, #22d3ee, #6366f1)' }} />
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#e5e7eb', letterSpacing: '-0.01em' }}>과사람 수학</div>
+            </div>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#e5e7eb', letterSpacing: -0.5 }}>
-            Math×Sci Bank
+
+          {/* 중앙: 학생 + 범위 */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', fontSize: 30, color: '#8aa0bf', fontWeight: 600, marginBottom: 14 }}>
+              진단평가 종합 리포트 · A·B·C 합산
+            </div>
+            <div style={{ display: 'flex', fontSize: 96, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 18 }}>
+              {data.name}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', width: 34, height: 5, borderRadius: 9999, marginRight: 16, background: ring }} />
+              <div style={{ display: 'flex', fontSize: 38, color: '#cbd5e1', fontWeight: 500 }}>{data.range}</div>
+            </div>
+          </div>
+
+          {/* 하단: 칩 */}
+          <div style={{ display: 'flex', gap: 22 }}>
+            <Chip label="채점 변형" value={`${data.graded} / ${data.variants}`} accent="#818cf8" />
+            <Chip label="총 문항" value={`${data.total}문항`} accent="#34d399" />
           </div>
         </div>
 
-        {/* 메인: 학생 + 범위 */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
-          <div style={{ fontSize: 34, color: '#94a3b8', fontWeight: 600, marginBottom: 10 }}>진단평가 종합 리포트 (A·B·C)</div>
-          <div style={{ fontSize: 88, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1.05, marginBottom: 16 }}>
-            {data.name}
+        {/* 우측: 게이지 패널 */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          width: 430, zIndex: 1, borderLeft: '1px solid rgba(255,255,255,0.06)',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
+        }}>
+          <div style={{ position: 'relative', display: 'flex', width: 280, height: 280, alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="280" height="280" viewBox="0 0 280 280">
+              <circle cx="140" cy="140" r={R} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="22" />
+              <circle cx="140" cy="140" r={R} fill="none" stroke={ring} strokeWidth="22" strokeLinecap="round"
+                strokeDasharray={`${dash} ${C}`} transform="rotate(-90 140 140)" />
+            </svg>
+            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', color: '#ffffff' }}>
+                <div style={{ display: 'flex', fontSize: 92, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.04em' }}>
+                  {pct != null ? `${pct}` : '-'}
+                </div>
+                <div style={{ display: 'flex', fontSize: 38, fontWeight: 800, marginTop: 10, marginLeft: 4, color: ring }}>%</div>
+              </div>
+            </div>
           </div>
-          <div style={{ fontSize: 36, color: '#cbd5e1', fontWeight: 500 }}>{data.range}</div>
-        </div>
-
-        {/* 하단: 통계 칩 */}
-        <div style={{ display: 'flex', gap: 24, marginTop: 36 }}>
-          <Chip label="합산 정답률" value={data.pct != null ? `${data.pct}%` : '-'} accent="#22d3ee" />
-          <Chip label="채점 변형" value={`${data.graded}/${data.variants}`} accent="#818cf8" />
-          <Chip label="총 문항" value={`${data.total}문항`} accent="#34d399" />
+          <div style={{ display: 'flex', fontSize: 26, fontWeight: 700, color: '#94a3b8', marginTop: 18, letterSpacing: '0.02em' }}>
+            합산 정답률
+          </div>
         </div>
       </div>
     ),
@@ -116,11 +163,11 @@ function Chip({ label, value, accent }: { label: string; value: string; accent: 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', padding: '20px 34px',
-      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)',
       borderRadius: 20, borderLeft: `6px solid ${accent}`,
     }}>
-      <div style={{ fontSize: 18, color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 40, color: '#ffffff', fontWeight: 800 }}>{value}</div>
+      <div style={{ display: 'flex', fontSize: 18, color: '#94a3b8', fontWeight: 600, marginBottom: 8 }}>{label}</div>
+      <div style={{ display: 'flex', fontSize: 40, color: '#ffffff', fontWeight: 800 }}>{value}</div>
     </div>
   );
 }

@@ -1708,11 +1708,13 @@ function ExamPaperView({
 
     document.body.appendChild(printRoot);
 
-    // ★ 브라우저 PDF 저장 파일명 = document.title. 인쇄 동안만 시험지명으로 바꾸고 복원.
-    //   (전역 'Math×Sci Bank' 가 파일명으로 나오던 문제 방지)
+    // ★ 브라우저 PDF 저장 파일명 = document.title. 인쇄 동안만 "시험지명 + 접미사"로 바꾸고 복원.
+    //   (전역 'Math×Sci Bank' 가 파일명으로 나오던 문제 방지 / 접미사: 문제지·해설·빠른답)
     const prevTitle = document.title;
-    document.title = (examTitle || '시험지')
+    const baseTitle = (examTitle || '시험지')
       .replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() || '시험지';
+    const suffix = printSections.exam ? '문제지' : printSections.solution ? '해설' : printSections.answer ? '빠른답' : '문제지';
+    document.title = baseTitle.endsWith(suffix) ? baseTitle : `${baseTitle} ${suffix}`;
 
     const cleanup = () => {
       document.title = prevTitle;
