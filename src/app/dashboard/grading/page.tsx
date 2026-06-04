@@ -19,6 +19,8 @@ import {
 import { gradeIntToLabel } from '@/lib/students/grade-label';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import GradingSheetUpload from '@/components/grading/GradingSheetUpload';
+// 채점 허브 통합 — 수동 입력 폼 (진단/시험지 공통, 같은 컴포넌트 재사용)
+import { ManualGradingEntry } from '@/app/dashboard/prescription/entry/page';
 
 // ============================================================================
 // Types
@@ -81,6 +83,9 @@ export default function GradingPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 채점 허브 탭 — QR 세션 채점 / 수동 입력 (엑셀 채점은 후속)
+  const [activeTab, setActiveTab] = useState<'qr' | 'manual'>('qr');
 
   // 필터
   const [studentFilter, setStudentFilter] = useState<string>('');
@@ -224,27 +229,48 @@ export default function GradingPage() {
               QR 채점 세션을 만들고 학생 답안을 채점합니다 — 학생용 PDF 의 QR 로 학생 직접 입력, 강사용 페이지에서 O/X 확인.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleBackfillNames}
-              disabled={backfilling}
-              className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-content-secondary text-xs flex items-center gap-2 disabled:opacity-50"
-              title="(이름 없음) 학생들의 이름을 auth metadata 에서 일괄 복구"
-            >
-              {backfilling ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
-              이름 일괄 복구
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30"
-            >
-              <Plus size={16} /> QR 채점 세션 생성
-            </button>
-          </div>
+          {activeTab === 'qr' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleBackfillNames}
+                disabled={backfilling}
+                className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-content-secondary text-xs flex items-center gap-2 disabled:opacity-50"
+                title="(이름 없음) 학생들의 이름을 auth metadata 에서 일괄 복구"
+              >
+                {backfilling ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
+                이름 일괄 복구
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+              >
+                <Plus size={16} /> QR 채점 세션 생성
+              </button>
+            </div>
+          )}
         </div>
 
+        {/* 채점 모드 탭 — QR 세션 채점 / 수동 입력 */}
+        <div className="flex gap-1 border-b border-white/10 mb-6">
+          {([['qr', 'QR 세션 채점'], ['manual', '수동 입력']] as const).map(([t, label]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setActiveTab(t)}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
+                activeTab === t
+                  ? 'border-emerald-400 text-content-primary'
+                  : 'border-transparent text-content-tertiary hover:text-content-secondary'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'qr' && (<>
         {/* 통계 카드 */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           <StatCard label="전체 세션" value={stats.total} icon={ClipboardCheck} color="text-content-primary" />
@@ -318,6 +344,14 @@ export default function GradingPage() {
                 isDeleting={deletingId === s.id}
               />
             ))}
+          </div>
+        )}
+        </>)}
+
+        {/* 수동 입력 탭 — 진단/시험지 수동 채점 (같은 컴포넌트 재사용) */}
+        {activeTab === 'manual' && (
+          <div className="-mx-6 -mb-8">
+            <ManualGradingEntry />
           </div>
         )}
       </div>

@@ -1,7 +1,8 @@
 // src/app/dashboard/prescription/lib/types.ts
 // Supabase diagnostics 스키마 + public.mathsecr_types 매핑 타입
 
-export type SessionType = 'BS' | 'DD' | 'PT' | 'SC';
+// BS/DD/PT/SC = 진단 회차. WS/EX = 일반 출제(학습지/시험지) 수동 채점 — 채점 공통 라인.
+export type SessionType = 'BS' | 'DD' | 'PT' | 'SC' | 'WS' | 'EX';
 export type NodeStatus = 'alpha' | 'beta' | 'gamma' | 'unknown';
 export type ErrorCause = '개념' | '유형' | '계산' | '문장제' | '시간';
 

@@ -48,6 +48,8 @@ const DEFAULT_ITEM_COUNT: Record<SessionType, number> = {
   DD: 8,
   PT: 11,
   SC: 7,
+  EX: 25, // 시험지
+  WS: 20, // 학습지
 };
 
 function emptyRow(seq: number): ItemRow {
@@ -67,7 +69,9 @@ function selectedCode(r: ItemRow): string {
   return r.sel5 || r.sel4 || r.sel3 || r.sel2 || r.sel1 || '';
 }
 
-export default function EntryPage() {
+// ★ 채점 허브(/dashboard/grading) "수동 입력" 탭에서도 재사용하도록 named export.
+//   /dashboard/prescription/entry 라우트는 아래 thin default wrapper 로 백워드 호환 유지.
+export function ManualGradingEntry() {
   const [subjects, setSubjects] = useState<MathsecrNode[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
 
@@ -307,6 +311,8 @@ export default function EntryPage() {
                 onChange={(e) => setSessionType(e.target.value as SessionType)}
                 className={selectCls}
               >
+                <option value="EX">EX — 시험지</option>
+                <option value="WS">WS — 학습지</option>
                 <option value="BS">BS — 1회차 광역 스캔</option>
                 <option value="DD">DD — 2회차 정밀 진단</option>
                 <option value="PT">PT — 3회차 선수 추적</option>
@@ -545,3 +551,8 @@ const inputCls =
 
 const selectCls =
   'w-full bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-sm text-content-primary focus:border-indigo-500 focus:outline-none transition';
+
+// /dashboard/prescription/entry 라우트 — 백워드 호환 (채점 허브 탭과 동일 컴포넌트).
+export default function EntryPage() {
+  return <ManualGradingEntry />;
+}
