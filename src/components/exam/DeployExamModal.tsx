@@ -163,7 +163,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 <button
                   type="button"
                   onClick={() => result.created.forEach((c, i) => setTimeout(
-                    () => window.open(`/api/sessions/${c.session_id}/pdf?variant=student`, '_blank'),
+                    () => window.open(`/print/session/${c.session_id}?variant=student`, '_blank'),
                     i * 150,
                   ))}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-600/50 text-cyan-300 hover:bg-cyan-600/15 text-xs font-semibold"
@@ -181,7 +181,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                     <span className="text-white font-medium">{s?.name || c.student_id.slice(0, 8)}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-zinc-500">{c.problem_count}문항</span>
-                      <a href={`/api/sessions/${c.session_id}/pdf?variant=student`} target="_blank" rel="noreferrer"
+                      <a href={`/print/session/${c.session_id}?variant=student`} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300">
                         <Printer className="h-3.5 w-3.5" />출력
                       </a>
