@@ -68,13 +68,16 @@ export async function GET(
 
   const variant = new URL(request.url).searchParams.get('variant') === 'teacher' ? 'teacher' : 'student';
   const origin = request.nextUrl.origin;
-  const qrUrl = buildSessionUrl(sessionId, origin, variant === 'student' ? 'answer' : 'grade');
-  let qrSvg = '';
-  try {
-    qrSvg = (await generateQRSvg(qrUrl)).replace(/\s(width|height)="[^"]*"/g, '');
-  } catch {
-    qrSvg = '';
-  }
+  // ★ 두 변형 QR 모두 생성 — 인쇄 페이지에서 대상(학생 답안 입력 / 강사 채점) 을
+  //   토글할 수 있게(매쓰플랫 qrAvailable 모델). URL 은 buildSessionUrl 로 정확히
+  //   {origin}/answer/{id} · {origin}/grade/{id} 를 인코딩.
+  const answerUrl = buildSessionUrl(sessionId, origin, 'answer');
+  const gradeUrl = buildSessionUrl(sessionId, origin, 'grade');
+  const stripDim = (svg: string) => svg.replace(/\s(width|height)="[^"]*"/g, '');
+  let qrAnswerSvg = '';
+  let qrGradeSvg = '';
+  try { qrAnswerSvg = stripDim(await generateQRSvg(answerUrl)); } catch { qrAnswerSvg = ''; }
+  try { qrGradeSvg = stripDim(await generateQRSvg(gradeUrl)); } catch { qrGradeSvg = ''; }
 
   return NextResponse.json({
     examId: (session as { exam_id: string }).exam_id,
@@ -84,7 +87,7 @@ export async function GET(
     sessionType: (session as { session_type: string }).session_type,
     roundNumber: (session as { round_number: number }).round_number,
     variant,
-    qrSvg,
-    qrUrl,
+    qrAnswer: { svg: qrAnswerSvg, url: answerUrl },
+    qrGrade: { svg: qrGradeSvg, url: gradeUrl },
   });
 }

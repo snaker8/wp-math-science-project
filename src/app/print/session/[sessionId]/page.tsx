@@ -23,6 +23,7 @@ const SESSION_TYPE_LABEL: Record<string, string> = {
   BS: '광역 스캔', DD: '정밀 진단', PT: '선수 추적', SC: '스팟 체크', WS: '학습지', EX: '시험지',
 };
 
+interface QrVariant { svg: string; url: string; }
 interface PrintMeta {
   examId: string;
   examTitle: string;
@@ -31,8 +32,8 @@ interface PrintMeta {
   sessionType: string;
   roundNumber: number;
   variant: 'student' | 'teacher';
-  qrSvg: string;
-  qrUrl: string;
+  qrAnswer: QrVariant;
+  qrGrade: QrVariant;
 }
 
 // ── A4 상수 (px, 96dpi) — exam-management 와 동일 ────────────────────────────
@@ -53,6 +54,9 @@ function SessionPrintInner() {
   const [metaErr, setMetaErr] = useState<string | null>(null);
   const [columns, setColumns] = useState<1 | 2>(2);
   const gap = 30; // exam-management 기본 간격
+  // QR 인쇄 옵션 (매쓰플랫 qrAvailable 모델) — 표시 on/off + 대상(학생 답안/강사 채점)
+  const [showQr, setShowQr] = useState(true);
+  const [qrTarget, setQrTarget] = useState<'answer' | 'grade'>(variant === 'teacher' ? 'grade' : 'answer');
 
   // 헤더/QR 메타
   useEffect(() => {
@@ -188,7 +192,25 @@ function SessionPrintInner() {
           {meta ? ` · ${meta.studentName}` : ''}
         </span>
         <div className="toolbar-actions">
-          <div className="col-toggle">
+          <label className="qr-switch" title="시험지에 QR 표시/숨김">
+            <input type="checkbox" checked={showQr} onChange={(e) => setShowQr(e.target.checked)} />
+            QR
+          </label>
+          {showQr && (
+            <div className="col-toggle" title="QR을 스캔하면 갈 곳">
+              {([['answer', '학생 답안'], ['grade', '강사 채점']] as const).map(([t, label]) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setQrTarget(t)}
+                  className={qrTarget === t ? 'active' : ''}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="col-toggle" title="단 수">
             {([2, 1] as const).map((c) => (
               <button
                 key={c}
@@ -226,9 +248,16 @@ function SessionPrintInner() {
                       <span className="hdr-name">{meta?.studentName || ''}</span>
                     </div>
                   </div>
-                  {meta?.qrSvg ? (
-                    <div className="hdr-qr" title={meta.qrUrl} dangerouslySetInnerHTML={{ __html: meta.qrSvg }} />
-                  ) : null}
+                  {showQr && meta && (() => {
+                    const cur = qrTarget === 'grade' ? meta.qrGrade : meta.qrAnswer;
+                    if (!cur?.svg) return null;
+                    return (
+                      <div className="hdr-qr">
+                        <div className="hdr-qr-img" title={cur.url} dangerouslySetInnerHTML={{ __html: cur.svg }} />
+                        <div className="hdr-qr-cap">{qrTarget === 'grade' ? '강사 채점' : '학생 답안'}</div>
+                      </div>
+                    );
+                  })()}
                 </header>
               )}
 
@@ -278,8 +307,10 @@ function SessionPrintInner() {
         .exam-meta-header .hdr-student { margin-top: 8px; display: flex; align-items: baseline; gap: 10px; }
         .exam-meta-header .hdr-school { font-size: 13px; color: #555; }
         .exam-meta-header .hdr-name { font-size: 18px; font-weight: 800; }
-        .exam-meta-header .hdr-qr { width: 76px; height: 76px; flex-shrink: 0; }
-        .exam-meta-header .hdr-qr svg { width: 100%; height: 100%; display: block; }
+        .exam-meta-header .hdr-qr { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+        .exam-meta-header .hdr-qr-img { width: 76px; height: 76px; }
+        .exam-meta-header .hdr-qr-img svg { width: 100%; height: 100%; display: block; }
+        .exam-meta-header .hdr-qr-cap { font-size: 9px; color: #555; font-weight: 700; letter-spacing: -0.2px; }
         .exam-cols { display: flex; gap: 16px; padding-top: 4px; }
         .exam-cols .col { flex: 1; min-width: 0; }
         .exam-cols .col-left { border-right: 1px solid #e5e7eb; padding-right: 14px; }
@@ -297,6 +328,8 @@ function SessionPrintInner() {
         }
         .print-toolbar .toolbar-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .print-toolbar .toolbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .print-toolbar .qr-switch { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: #d4d4d8; cursor: pointer; user-select: none; }
+        .print-toolbar .qr-switch input { width: 14px; height: 14px; accent-color: #0891b2; cursor: pointer; }
         .print-toolbar .col-toggle { display: flex; background: #27272a; border-radius: 6px; padding: 2px; }
         .print-toolbar .col-toggle button {
           border: none; background: transparent; color: #a1a1aa; padding: 4px 10px;
