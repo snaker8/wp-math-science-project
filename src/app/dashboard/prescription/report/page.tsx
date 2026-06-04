@@ -151,6 +151,7 @@ function ReportContent() {
         ) : report ? (
           <ComprehensiveReportView
             report={report}
+            showStaffActions
             actionSlot={<ParentLinkBar studentId={report.student.id} setKey={report.set.setKey} />}
           />
         ) : null}

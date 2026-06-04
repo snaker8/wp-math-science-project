@@ -8,9 +8,10 @@
 // ============================================================================
 
 import React, { useMemo } from 'react';
+import Link from 'next/link';
 import {
   Layers, TrendingUp, AlertTriangle, CheckCircle2, ClipboardList,
-  ChevronDown, Target, Pin, Sparkles,
+  ChevronDown, Target, Pin, Sparkles, ChevronRight,
 } from 'lucide-react';
 import { DIFFICULTY_BANDS, difficultyToBand, difficultyHueClasses } from '@/lib/utils/difficulty-label';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
@@ -68,7 +69,9 @@ function Gauge({ pct, stroke }: { pct: number | null; stroke: string }) {
   );
 }
 
-export function ComprehensiveReportView({ report, actionSlot }: { report: ComprehensiveReportPayload; actionSlot?: React.ReactNode }) {
+export function ComprehensiveReportView({ report, actionSlot, showStaffActions = false }: {
+  report: ComprehensiveReportPayload; actionSlot?: React.ReactNode; showStaffActions?: boolean;
+}) {
   const { student, set, overall, variants, byDifficulty, byUnit, byType } = report;
   const partial = set.gradedVariantCount < set.variantCount;
 
@@ -220,6 +223,16 @@ export function ComprehensiveReportView({ report, actionSlot }: { report: Compre
             </li>
           ))}
         </ol>
+        {showStaffActions && (
+          <div className="mt-4 pt-4 border-t border-zinc-800 flex flex-wrap gap-2">
+            <Link href="/tutor/clinic" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-200 border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:bg-indigo-500/20">
+              클리닉 학습지 생성 <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+            <Link href={`/dashboard/prescription?studentId=${student.id}`} className="inline-flex items-center gap-1 text-xs font-bold text-zinc-300 border border-zinc-700 px-3 py-1.5 rounded-lg hover:bg-zinc-800">
+              정밀 진단 보기 <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
       </Panel>
 
       {/* ⑥ 시험지별 세부 진단 */}
