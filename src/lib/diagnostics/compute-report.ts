@@ -44,6 +44,9 @@ export async function computeComprehensiveReport(
   sb: SupabaseClient,
   studentId: string,
   setKey: string,
+  // ★ 자유 조합(③): 명시된 시험지 id 들이 주어지면 세트(setKey) 대신 그 조합으로 합산.
+  //   기존 세트 리포트 호출자(setKey만 전달)는 영향 없음(백워드 호환).
+  examIdsOverride?: string[],
 ): Promise<ComputeResult> {
   const sepIdx = setKey.indexOf('::');
   if (sepIdx < 0) return { ok: false, status: 400, error: 'setKey 형식 오류' };
@@ -82,12 +85,23 @@ export async function computeComprehensiveReport(
     studentSource = 'roster';
   }
 
-  // ── 2) 세트 변형 exam 해석 (진단 exam 은 공통 풀 NULL) ──
-  let examQuery = sb.from('exams').select('id, title, book_group_id, institute_id').eq('is_diagnostic', true);
-  examQuery = bookGroupId ? examQuery.eq('book_group_id', bookGroupId) : examQuery.is('book_group_id', null);
-  const { data: examRows } = await examQuery;
-  const variantExams = ((examRows ?? []) as DiagnosticExamRow[]).filter((e) => normalizeSetTitle(e.title) === setTitle);
-  if (variantExams.length === 0) return { ok: false, status: 404, error: '세트를 찾을 수 없습니다' };
+  // ── 2) 변형 exam 해석 ──
+  //   자유 조합: examIdsOverride 의 시험지들(is_diagnostic 무관 — 임의 시험지 허용).
+  //   세트: setKey(book_group + 정규화 제목) 매칭 진단 exam.
+  let variantExams: DiagnosticExamRow[];
+  if (examIdsOverride && examIdsOverride.length > 0) {
+    const { data: examRows } = await sb
+      .from('exams')
+      .select('id, title, book_group_id, institute_id')
+      .in('id', examIdsOverride);
+    variantExams = (examRows ?? []) as DiagnosticExamRow[];
+  } else {
+    let examQuery = sb.from('exams').select('id, title, book_group_id, institute_id').eq('is_diagnostic', true);
+    examQuery = bookGroupId ? examQuery.eq('book_group_id', bookGroupId) : examQuery.is('book_group_id', null);
+    const { data: examRows } = await examQuery;
+    variantExams = ((examRows ?? []) as DiagnosticExamRow[]).filter((e) => normalizeSetTitle(e.title) === setTitle);
+  }
+  if (variantExams.length === 0) return { ok: false, status: 404, error: '시험지를 찾을 수 없습니다' };
 
   const examIdToVariant = new Map<string, string | null>();
   for (const e of variantExams) examIdToVariant.set(e.id, extractVariant(e.title));

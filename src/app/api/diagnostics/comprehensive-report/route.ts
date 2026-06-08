@@ -31,12 +31,19 @@ export async function GET(request: NextRequest) {
   }
 
   const studentId = request.nextUrl.searchParams.get('studentId');
-  const setKey = request.nextUrl.searchParams.get('setKey');
-  if (!studentId || !setKey) {
-    return NextResponse.json({ error: 'studentId, setKey 필수' }, { status: 400 });
+  const setKey = request.nextUrl.searchParams.get('setKey') || '';
+  // 자유 조합(③) — examIds 콤마구분. 주어지면 세트 대신 그 시험지 조합으로 합산.
+  const examIdsParam = request.nextUrl.searchParams.get('examIds') || '';
+  const examIds = examIdsParam ? examIdsParam.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  if (!studentId || (!setKey && examIds.length === 0)) {
+    return NextResponse.json({ error: 'studentId + (setKey 또는 examIds) 필수' }, { status: 400 });
   }
 
-  const result = await computeComprehensiveReport(supabaseAdmin, studentId, setKey);
+  const effectiveSetKey = setKey || 'none::자유 조합';
+  const result = await computeComprehensiveReport(
+    supabaseAdmin, studentId, effectiveSetKey,
+    examIds.length > 0 ? examIds : undefined,
+  );
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
