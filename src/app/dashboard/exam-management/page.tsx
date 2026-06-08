@@ -523,12 +523,10 @@ export default function ExamManagementPage() {
 
   // A4 상수 (px 기준, 96dpi)
   const A4_H = 1123;
-  // ★ 상하 여백 측정값 — 시중 시험지 표준 ~20mm(76px). 좌우는 인쇄/미리보기 CSS 15mm.
-  //   CONTENT_H 가 상하 20mm 를 반영해 페이지당 문항 자동 보정 → 하단 잘림 없음.
-  const PAGE_PAD_Y = 76; // ~20mm (상하)
+  const PAGE_PAD = 57; // ~15mm
   const FOOTER_H = 36;
   const HEADER_H = 130;
-  const CONTENT_H = A4_H - PAGE_PAD_Y * 2 - FOOTER_H;
+  const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
 
   const togglePrintSection = useCallback((key: 'exam' | 'answer' | 'solution') => {
@@ -1458,7 +1456,7 @@ export default function ExamManagementPage() {
                           style={{
                             width: '794px',
                             minHeight: `${A4_H}px`,
-                            padding: '20mm 15mm', /* 상하 20mm(시중 표준)·좌우 15mm */
+                            padding: '15mm',
                             marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
                             boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
                             borderRadius: '4px',
@@ -1790,7 +1788,7 @@ export default function ExamManagementPage() {
             min-height: 297mm !important;
             max-height: 297mm !important;
             margin: 0 !important;
-            padding: 20mm 15mm !important; /* 상하 20mm(시중 표준)·좌우 15mm */
+            padding: 15mm !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             page-break-after: always;
@@ -1814,8 +1812,8 @@ export default function ExamManagementPage() {
             overflow: visible !important;
             page-break-after: auto;
             page-break-inside: auto;
-            padding-top: 18mm !important;
-            padding-bottom: 18mm !important;
+            padding-top: 12mm !important;
+            padding-bottom: 12mm !important;
           }
           #exam-print-root .exam-page.solution-page .break-inside-avoid {
             break-inside: avoid;
