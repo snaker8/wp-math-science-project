@@ -105,6 +105,7 @@ export async function getStudentPrintSessions(studentId: string): Promise<Diagno
     session_type: r.session_type,
     round_no: r.round_number,
     target_grade: null,
+    exam_id: r.exam_id,
     mathflat_sheet_id: r.exam_id,
     mathflat_sheet_name: r.exam_id ? (titleById.get(r.exam_id) ?? null) : null,
     conducted_at: r.completed_at || r.issued_at,

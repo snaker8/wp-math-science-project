@@ -779,7 +779,7 @@ function PrescriptionContent() {
                       <Calendar size={18} className="text-indigo-400" />
                       진단 이력
                     </h3>
-                    <div className="text-xs text-content-tertiary">{sessions.length}건</div>
+                    <div className="text-xs text-content-tertiary">{sessions.length}건 · 클릭 → 리포트</div>
                   </div>
                   {sessions.length === 0 ? (
                     <div className="text-center py-6 text-content-tertiary text-sm">
@@ -787,24 +787,36 @@ function PrescriptionContent() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {sessions.slice(0, 8).map(s => (
-                        <div key={s.id} className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs">
-                          <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold flex-shrink-0 ${SESSION_TYPE_COLOR[s.session_type] || ''}`}>
-                            {SESSION_TYPE_LABEL[s.session_type] || s.session_type}
-                            {s.round_no != null ? ` ${s.round_no}회차` : ''}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-content-secondary truncate">
-                              {s.mathflat_sheet_name || s.note || '(세부 정보 없음)'}
+                      {sessions.slice(0, 8).map(s => {
+                        const examId = (s as { exam_id?: string | null }).exam_id
+                          || (s as { mathflat_sheet_id?: string | null }).mathflat_sheet_id || null;
+                        const rowCls = `flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs ${examId ? 'hover:bg-white/10 transition cursor-pointer' : ''}`;
+                        const inner = (
+                          <>
+                            <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold flex-shrink-0 ${SESSION_TYPE_COLOR[s.session_type] || ''}`}>
+                              {SESSION_TYPE_LABEL[s.session_type] || s.session_type}
+                              {s.round_no != null ? ` ${s.round_no}회차` : ''}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-content-secondary truncate">
+                                {s.mathflat_sheet_name || s.note || '(세부 정보 없음)'}
+                              </div>
+                              <div className="text-[10px] text-content-tertiary mt-0.5">
+                                {formatDate(s.conducted_at)}
+                                {s.duration_min != null ? ` · ${s.duration_min}분` : ''}
+                              </div>
                             </div>
-                            <div className="text-[10px] text-content-tertiary mt-0.5">
-                              {formatDate(s.conducted_at)}
-                              {s.duration_min != null ? ` · ${s.duration_min}분` : ''}
-                            </div>
-                          </div>
-                          <ChevronRight size={14} className="text-content-tertiary flex-shrink-0" />
-                        </div>
-                      ))}
+                            <ChevronRight size={14} className="text-content-tertiary flex-shrink-0" />
+                          </>
+                        );
+                        return examId && student?.id ? (
+                          <Link key={s.id} href={`/dashboard/exam-analysis/${examId}/students/${student.id}`} className={rowCls}>
+                            {inner}
+                          </Link>
+                        ) : (
+                          <div key={s.id} className={rowCls}>{inner}</div>
+                        );
+                      })}
                     </div>
                   )}
                 </ClinicCard>
