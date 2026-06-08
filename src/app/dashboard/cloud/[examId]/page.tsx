@@ -1461,6 +1461,11 @@ function ProblemCardView({
 
 // (MOCK_ANSWERS/MOCK_SOLUTIONS 제거됨 - ProblemData.answer/solution 사용)
 
+// ★ 인쇄 상하 여백 — 시중 시험지 표준 ~20mm(76px @96dpi). 모듈 레벨이라 ExamPaperView·
+//   SolutionView 등 모든 컴포넌트에서 참조 가능(컴포넌트별 PAGE_PAD 와 달리 스코프 안전).
+//   좌우 여백은 각 컴포넌트의 PAGE_PAD 유지. CONTENT_H 가 이 값을 반영해 페이지 분할 → 하단 잘림 없음.
+const PRINT_PAD_Y = 76; // ~20mm
+
 // ============================================================================
 // Exam Paper View (시험지)
 // ============================================================================
@@ -1542,7 +1547,7 @@ function ExamPaperView({
   const PAGE_PAD = pagePad;
   const FOOTER_H = 36;
   const HEADER_H = 130;
-  const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
+  const CONTENT_H = A4_H - PRINT_PAD_Y * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
 
   // 페이지 분할
@@ -2016,7 +2021,7 @@ function ExamPaperView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: `${PAGE_PAD}px`,
+              padding: `${PRINT_PAD_Y}px ${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
@@ -2175,10 +2180,9 @@ function ExamPaperView({
             min-height: 297mm !important;
             max-height: 297mm !important;
             margin: 0 !important;
-            /* ★ 2026-06-04: 인쇄 패딩을 화면·측정과 동일한 ${PAGE_PAD}px 로 통일.
-               기존 15mm(≈57px)가 화면 38px 보다 커서 인쇄 컬럼이 좁고 짧아 → 같은 내용이
-               인쇄에서 297mm 넘쳐 잘리던 근본 원인(측정↔인쇄 기하 불일치). */
-            padding: ${PAGE_PAD}px !important;
+            /* ★ 화면·측정과 동일: 좌우 ${PAGE_PAD}px, 상하 ${PRINT_PAD_Y}px(~20mm 시중 표준).
+               CONTENT_H 가 상하 ${PRINT_PAD_Y}px 반영해 분할 → 인쇄 297mm 초과 잘림 없음. */
+            padding: ${PRINT_PAD_Y}px ${PAGE_PAD}px !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             page-break-after: always;
@@ -2508,7 +2512,7 @@ function SolutionView({
   const PAGE_PAD = 57;
   const FOOTER_H = 36;
   const HEADER_H = 80;
-  const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
+  const CONTENT_H = A4_H - PRINT_PAD_Y * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
   const COLUMN_GAP = 28;
 
@@ -2899,7 +2903,7 @@ function SolutionView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: `${PAGE_PAD}px`,
+              padding: `${PRINT_PAD_Y}px ${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
