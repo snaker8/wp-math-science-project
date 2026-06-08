@@ -1,0 +1,25 @@
+name: YOLO keep-warm
+
+# HF Spaces(무료) YOLO 서버가 미사용 시 sleep → 자산화 첫 요청 콜드스타트 실패 방지.
+# 6시간마다 앱의 keep-warm 라우트를 핑 → 라우트가 YOLO /health 를 깨움.
+# (Vercel Cron 은 Hobby 플랜에서 sub-daily 불가 → 플랜 무관한 GitHub Actions 사용)
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # 매 6시간 (UTC) — HF sleep 임계값보다 짧게
+  workflow_dispatch: {} # 수동 실행 가능
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping YOLO keep-warm route
+        run: |
+          echo "Pinging YOLO keep-warm route..."
+          code=$(curl -sS -m 175 -o /tmp/resp.json -w '%{http_code}' \
+            "https://wp-math-science-project.vercel.app/api/cron/yolo-warm" || echo "000")
+          echo "HTTP $code"
+          cat /tmp/resp.json 2>/dev/null || true
+          # 콜드스타트 타임아웃이어도 깨우는 트리거는 전송됨 → 실패로 처리하지 않음
+          exit 0
