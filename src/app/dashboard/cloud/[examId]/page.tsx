@@ -1538,11 +1538,14 @@ function ExamPaperView({
   // A4 상수
   const A4_W = 794;
   const A4_H = 1123;
-  // ★ pagePad state 사용 (사용자 조절 가능, 기본 38px ≈ 10mm)
+  // ★ pagePad state = 좌우 여백 (사용자 조절, 기본 38px ≈ 10mm)
   const PAGE_PAD = pagePad;
+  // ★ 상하 여백은 좌우와 분리 — 시중 시험지 표준 ~20mm (76px). CONTENT_H 가 이를 반영해
+  //   페이지당 문항 수 자동 보정 → 위아래 넉넉해도 하단 잘림 없음.
+  const PAGE_PAD_Y = 76; // ~20mm (상하)
   const FOOTER_H = 36;
   const HEADER_H = 130;
-  const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
+  const CONTENT_H = A4_H - PAGE_PAD_Y * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
 
   // 페이지 분할
@@ -2016,7 +2019,7 @@ function ExamPaperView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: `${PAGE_PAD}px`,
+              padding: `${PAGE_PAD_Y}px ${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
@@ -2175,10 +2178,9 @@ function ExamPaperView({
             min-height: 297mm !important;
             max-height: 297mm !important;
             margin: 0 !important;
-            /* ★ 2026-06-04: 인쇄 패딩을 화면·측정과 동일한 ${PAGE_PAD}px 로 통일.
-               기존 15mm(≈57px)가 화면 38px 보다 커서 인쇄 컬럼이 좁고 짧아 → 같은 내용이
-               인쇄에서 297mm 넘쳐 잘리던 근본 원인(측정↔인쇄 기하 불일치). */
-            padding: ${PAGE_PAD}px !important;
+            /* ★ 화면·측정과 동일: 좌우 ${PAGE_PAD}px, 상하 ${PAGE_PAD_Y}px(~20mm 시중 표준).
+               CONTENT_H 가 상하 ${PAGE_PAD_Y}px 반영해 분할하므로 인쇄 297mm 초과 잘림 없음. */
+            padding: ${PAGE_PAD_Y}px ${PAGE_PAD}px !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             page-break-after: always;
@@ -2899,7 +2901,7 @@ function SolutionView({
             style={{
               width: `${A4_W}px`,
               minHeight: `${A4_H}px`,
-              padding: `${PAGE_PAD}px`,
+              padding: `${PAGE_PAD_Y}px ${PAGE_PAD}px`,
               marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
               boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
               borderRadius: '4px',
