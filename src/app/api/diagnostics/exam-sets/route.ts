@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter } from '@/lib/security/institute-guard';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 import {
   groupExamsIntoSets,
   type DiagnosticExamRow,
@@ -155,22 +156,22 @@ export async function GET() {
     ...sessions.map((s) => s.student_id),
     ...printSessions.map((p) => p.student_id),
   ]));
-  const userById = new Map<string, { name: string; grade: number | null }>();
-  const rosterById = new Map<string, { name: string; grade: number | null; promotedTo: string | null }>();
+  const userById = new Map<string, { name: string; grade: number | null; instituteId: string | null }>();
+  const rosterById = new Map<string, { name: string; grade: number | null; promotedTo: string | null; instituteId: string | null }>();
   if (studentIds.length > 0) {
     const { data: userRows } = await sb
       .from('users')
-      .select('id, full_name, email, grade')
+      .select('id, full_name, email, grade, institute_id')
       .in('id', studentIds);
-    for (const u of (userRows ?? []) as Array<{ id: string; full_name: string | null; email: string | null; grade: number | null }>) {
-      userById.set(u.id, { name: u.full_name || u.email?.split('@')[0] || '(이름 없음)', grade: u.grade ?? null });
+    for (const u of (userRows ?? []) as Array<{ id: string; full_name: string | null; email: string | null; grade: number | null; institute_id: string | null }>) {
+      userById.set(u.id, { name: u.full_name || u.email?.split('@')[0] || '(이름 없음)', grade: u.grade ?? null, instituteId: u.institute_id ?? null });
     }
     const { data: rosterRows } = await sb
       .from('roster_students')
-      .select('id, full_name, grade, promoted_user_id')
+      .select('id, full_name, grade, promoted_user_id, institute_id')
       .in('id', studentIds);
-    for (const r of (rosterRows ?? []) as Array<{ id: string; full_name: string | null; grade: number | null; promoted_user_id: string | null }>) {
-      rosterById.set(r.id, { name: r.full_name || '(이름 없음)', grade: r.grade ?? null, promotedTo: r.promoted_user_id ?? null });
+    for (const r of (rosterRows ?? []) as Array<{ id: string; full_name: string | null; grade: number | null; promoted_user_id: string | null; institute_id: string | null }>) {
+      rosterById.set(r.id, { name: r.full_name || '(이름 없음)', grade: r.grade ?? null, promotedTo: r.promoted_user_id ?? null, instituteId: r.institute_id ?? null });
     }
     // promoted 대상 user 가 sessions 에 안 끼어 있을 수도 → 추가 조회
     const promotedTargets = Array.from(rosterById.values())
@@ -179,24 +180,34 @@ export async function GET() {
     if (promotedTargets.length > 0) {
       const { data: extraUsers } = await sb
         .from('users')
-        .select('id, full_name, email, grade')
+        .select('id, full_name, email, grade, institute_id')
         .in('id', Array.from(new Set(promotedTargets)));
-      for (const u of (extraUsers ?? []) as Array<{ id: string; full_name: string | null; email: string | null; grade: number | null }>) {
-        userById.set(u.id, { name: u.full_name || u.email?.split('@')[0] || '(이름 없음)', grade: u.grade ?? null });
+      for (const u of (extraUsers ?? []) as Array<{ id: string; full_name: string | null; email: string | null; grade: number | null; institute_id: string | null }>) {
+        userById.set(u.id, { name: u.full_name || u.email?.split('@')[0] || '(이름 없음)', grade: u.grade ?? null, instituteId: u.institute_id ?? null });
       }
     }
   }
 
-  // 식별자 → 정식(canonical) 매핑 + 메타
+  // ★ active 학원 필터 — 자사관(활성 센터) 선택 시 그 학원 학생만 (super_admin 도 동일).
+  //   activeInstituteId 가 null(미선택)이면 필터 안 함(기존 동작). 다른 학원은 학원 전환으로 봐야 함.
+  //   (성적/리포트 페이지에서 모든 학원 학생이 다 뜨던 누수 차단.)
+  const activeInstituteId = resolveActiveInstitute(scope);
+
+  // 식별자 → 정식(canonical) 매핑 + 메타 (active 학원 밖 학생은 null → 집계 제외)
   function resolveCanonical(studentId: string): { id: string; name: string; grade: number | null; source: 'user' | 'roster' } | null {
     const u = userById.get(studentId);
-    if (u) return { id: studentId, name: u.name, grade: u.grade, source: 'user' };
+    if (u) {
+      if (activeInstituteId && u.instituteId !== activeInstituteId) return null;
+      return { id: studentId, name: u.name, grade: u.grade, source: 'user' };
+    }
     const r = rosterById.get(studentId);
     if (r) {
       if (r.promotedTo && userById.has(r.promotedTo)) {
         const pu = userById.get(r.promotedTo)!;
+        if (activeInstituteId && pu.instituteId !== activeInstituteId) return null;
         return { id: r.promotedTo, name: pu.name, grade: pu.grade, source: 'user' };
       }
+      if (activeInstituteId && r.instituteId !== activeInstituteId) return null;
       return { id: studentId, name: r.name, grade: r.grade, source: 'roster' };
     }
     return null;
