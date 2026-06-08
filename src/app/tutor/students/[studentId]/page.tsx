@@ -13,9 +13,13 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, FileText, BarChart3, Brain, Settings, LayoutDashboard,
-  ExternalLink, Loader2, AlertTriangle, Activity, Target, Calendar,
+  ExternalLink, Loader2, AlertTriangle, Activity, Target, Calendar, TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell,
+} from 'recharts';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
 
 interface SessionRow {
@@ -41,11 +45,21 @@ interface AnalyticsData {
     lastActiveAt: string | null;
   };
   errorCauses: Record<string, number>;
+  performanceTrend: Array<{
+    date: string; sessionId: string; sessionType: string; roundNumber: number;
+    total: number; correct: number; pct: number;
+  }>;
+  mathsecrHeatmap: Array<Record<string, unknown>>;
+  pitfalls: Array<{ pitfall_code: string; hitCount: number; recent: string }>;
   sessions: SessionRow[];
 }
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
   BS: '광역 스캔', DD: '정밀 진단', PT: '선수 추적', SC: '스팟 체크', EX: '시험 분석',
+};
+
+const ERROR_CAUSE_COLORS: Record<string, string> = {
+  개념: '#6366f1', 유형: '#8b5cf6', 계산: '#ec4899', 문장제: '#f59e0b', 시간: '#10b981',
 };
 
 const TABS: Array<{ key: string; label: string; icon: LucideIcon }> = [
@@ -79,6 +93,20 @@ function StatCell({ label, value, sub, icon: Icon }: {
   );
 }
 
+function Card({ children, title, icon: Icon, className = '' }: {
+  children: React.ReactNode; title: string; icon?: LucideIcon; className?: string;
+}) {
+  return (
+    <div className={`bg-white border border-gray-200 rounded-2xl p-5 ${className}`}>
+      <div className="flex items-center gap-2 mb-4 text-gray-500">
+        {Icon && <Icon size={16} />}
+        <h3 className="font-bold text-xs uppercase tracking-wider">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function StudentHubPage() {
   const params = useParams();
   const router = useRouter();
@@ -108,6 +136,12 @@ export default function StudentHubPage() {
   // 개별 리포트 — exam_id 있는 시험지 세션 (최신순)
   const reportSessions = useMemo(
     () => (data?.sessions || []).filter((s) => !!s.exam_id),
+    [data],
+  );
+  const errorCauseChart = useMemo(
+    () => Object.entries(data?.errorCauses || {})
+      .filter(([, v]) => v > 0)
+      .map(([cause, value]) => ({ cause, value })),
     [data],
   );
 
@@ -234,23 +268,162 @@ export default function StudentHubPage() {
               </div>
             )}
 
-            {/* ── 성적 (후속 단계: /tutor/analytics 이식) ── */}
+            {/* ── 성적 (정답률 추이 + 최근 세션) ── */}
             {tab === 'grades' && (
-              <div className="py-12 text-center">
-                <p className="text-sm text-gray-500 mb-3">통합 성적표는 다음 단계에서 이 탭으로 이식됩니다.</p>
-                <Link href="/tutor/analytics" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
-                  <ExternalLink size={14} /> 현재 성적 분석 페이지 열기
-                </Link>
+              <div className="space-y-4">
+                <Card title="세션별 정답률 추이" icon={TrendingUp}>
+                  <div className="h-[280px]">
+                    {data.performanceTrend.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                        채점된 세션이 누적되면 차트가 표시됩니다.
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={data.performanceTrend}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" stroke="#6b7280" tickFormatter={(d) => String(d).slice(5)} />
+                          <YAxis stroke="#6b7280" domain={[0, 100]} unit="%" />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }}
+                            formatter={(value) => `${value}%`}
+                            labelFormatter={(label, payload) => {
+                              const p = payload?.[0]?.payload as { sessionType?: string; roundNumber?: number };
+                              return `${label} (${p?.sessionType || ''} R${p?.roundNumber || '-'})`;
+                            }}
+                          />
+                          <Line type="monotone" dataKey="pct" name="정답률" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1' }} activeDot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </Card>
+
+                <Card title="최근 세션" icon={Calendar}>
+                  {data.sessions.length === 0 ? (
+                    <div className="py-6 text-center text-gray-400 text-sm">채점된 세션이 없습니다.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-gray-400 text-xs uppercase tracking-wider text-left">
+                            <th className="py-2 pr-3">시험지</th>
+                            <th className="py-2 pr-3">유형</th>
+                            <th className="py-2 pr-3">일자</th>
+                            <th className="py-2 pr-3 text-right">정답률</th>
+                            <th className="py-2 text-center">리포트</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.sessions.map((s) => (
+                            <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50">
+                              <td className="py-2 pr-3 text-zinc-700 truncate max-w-xs">{s.exam_title || '(제목 없음)'}</td>
+                              <td className="py-2 pr-3 text-zinc-500">{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</td>
+                              <td className="py-2 pr-3 text-zinc-500">{fmtDate(s.issued_at)}</td>
+                              <td className="py-2 pr-3 text-right text-zinc-700">
+                                {s.pct != null ? <span className="font-bold text-indigo-600">{s.pct}%</span> : '-'}
+                                <span className="text-gray-400 ml-1">({s.correct}/{s.total})</span>
+                              </td>
+                              <td className="py-2 text-center">
+                                {s.exam_id ? (
+                                  <Link href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`} target="_blank" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                                    <ExternalLink size={12} /> 리포트
+                                  </Link>
+                                ) : (
+                                  <Link href={`/grade/${s.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600">채점</Link>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
               </div>
             )}
 
-            {/* ── 진단 (후속 단계: prescription 이식) ── */}
+            {/* ── 진단 (오답 원인 + 대단원 히트맵 + 함정) ── */}
             {tab === 'diagnostics' && (
-              <div className="py-12 text-center">
-                <p className="text-sm text-gray-500 mb-3">히트맵·단원 상태·약점 체인은 다음 단계에서 이 탭으로 이식됩니다.</p>
-                <Link href="/dashboard/prescription" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
-                  <ExternalLink size={14} /> 현재 학생 진단 페이지 열기
-                </Link>
+              <div className="space-y-4">
+                <Card title="오답 원인 분포" icon={Brain}>
+                  <div className="h-[240px]">
+                    {errorCauseChart.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                        오답 원인이 태깅된 채점이 없습니다.
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={errorCauseChart} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                          <XAxis type="number" stroke="#6b7280" />
+                          <YAxis dataKey="cause" type="category" stroke="#374151" width={60} />
+                          <Tooltip cursor={{ fill: '#00000010' }} contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }} />
+                          <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={26}>
+                            {errorCauseChart.map((d) => (
+                              <Cell key={d.cause} fill={ERROR_CAUSE_COLORS[d.cause] || '#8b5cf6'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </Card>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <Card title="수학비서 대단원 정답률" icon={BarChart3}>
+                    {data.mathsecrHeatmap.length === 0 ? (
+                      <div className="py-8 text-center text-gray-400 text-sm">
+                        diagnostics.items 가 누적되면 대단원별 α·β·γ 가 표시됩니다.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-500 uppercase tracking-wider text-left">
+                              <th className="py-2 pr-3">과목</th>
+                              <th className="py-2 pr-3">대단원</th>
+                              <th className="py-2 pr-3 text-right">정답률</th>
+                              <th className="py-2 text-center">상태</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {data.mathsecrHeatmap.slice(0, 20).map((row, i) => {
+                              const r = row as Record<string, unknown>;
+                              const rate = Number(r.correct_rate ?? r.correctRate ?? r.pct ?? 0);
+                              const state = rate >= 80 ? 'α' : rate >= 60 ? 'β' : 'γ';
+                              const stateColor = rate >= 80 ? 'text-emerald-600' : rate >= 60 ? 'text-amber-600' : 'text-rose-600';
+                              return (
+                                <tr key={i} className="border-t border-gray-100">
+                                  <td className="py-2 pr-3 text-zinc-600">{String(r.subject ?? '')}</td>
+                                  <td className="py-2 pr-3 text-zinc-700">{String(r.level1 ?? r.major_unit ?? '')}</td>
+                                  <td className="py-2 pr-3 text-right text-zinc-700">{rate ? `${rate}%` : '-'}</td>
+                                  <td className={`py-2 text-center font-bold ${stateColor}`}>{state}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Card>
+
+                  <Card title="반복 함정 Top 10" icon={AlertTriangle}>
+                    {data.pitfalls.length === 0 ? (
+                      <div className="py-8 text-center text-gray-400 text-sm">
+                        오답 시 자동 누적되는 함정 기록이 없습니다.
+                      </div>
+                    ) : (
+                      <ul className="space-y-2">
+                        {data.pitfalls.map((p) => (
+                          <li key={p.pitfall_code} className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-gray-50 border border-gray-100">
+                            <div className="font-mono text-xs text-zinc-700">{p.pitfall_code}</div>
+                            <span className="text-rose-600 font-bold text-xs">{p.hitCount}회</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                </div>
               </div>
             )}
 
