@@ -31,7 +31,7 @@ interface SetStudent {
   name: string;
   grade: number | null;
   source: 'user' | 'roster';
-  variantsTaken: Array<'A' | 'B' | 'C' | null>;
+  variantsTaken: Array<string | null>;
 }
 
 export async function GET() {
@@ -85,7 +85,7 @@ export async function GET() {
   const sets = groupExamsIntoSets(exams, bookGroupNameById);
 
   // 4) 모든 변형 exam 의 채점 세션 → 세트별 학생 집계
-  const examIdToVariant = new Map<string, 'A' | 'B' | 'C' | null>();
+  const examIdToVariant = new Map<string, string | null>();
   const examIdToSetKey = new Map<string, string>();
   for (const set of sets) {
     for (const v of set.variants) {

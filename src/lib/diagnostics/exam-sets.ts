@@ -13,17 +13,21 @@
 //     (analytics route 와 동일 정책)
 // ============================================================================
 
-/** 진단평가 제목에서 변형 글자(A/B/C)를 제거한 "세트 정규화 제목". */
+// ★ 변형 글자 일반화 (③): A/B/C 하드코딩 제거 → 단일 영문 대문자 또는 숫자 변형 허용.
+//   "진단평가A/B/C" 뿐 아니라 "진단평가D", "진단평가1/2/3" 등도 한 세트의 변형으로 묶임.
+//   (?![가-힣]) 로 "진단평가1차" 같이 뒤에 한글이 붙는 경우는 변형으로 안 봄.
+const VARIANT_RE = /진단평가\s*([A-Z0-9])(?![가-힣])/u;
+
+/** 진단평가 제목에서 변형 글자(A/B/C/D/1/2…)를 제거한 "세트 정규화 제목". */
 export function normalizeSetTitle(title: string): string {
   // "중2-1 F 진단평가A(...)" → "중2-1 F 진단평가(...)"
-  // "[사직여중][2-1-F]진단평가B(특이진도)" → "[사직여중][2-1-F]진단평가(특이진도)"
-  return (title || '').replace(/진단평가\s*[ABC](?![가-힣])/u, '진단평가').trim();
+  return (title || '').replace(VARIANT_RE, '진단평가').trim();
 }
 
-/** 진단평가 제목에서 변형 글자(A/B/C) 추출. 없으면 null. */
-export function extractVariant(title: string): 'A' | 'B' | 'C' | null {
-  const m = (title || '').match(/진단평가\s*([ABC])(?![가-힣])/u);
-  return (m?.[1] as 'A' | 'B' | 'C' | undefined) ?? null;
+/** 진단평가 제목에서 변형 글자 추출. 없으면 null. (A/B/C 외 임의 변형 허용) */
+export function extractVariant(title: string): string | null {
+  const m = (title || '').match(VARIANT_RE);
+  return m?.[1] ?? null;
 }
 
 /** 세트 키 — book_group_id 와 정규화 제목 결합 (URL/식별 안전). */
@@ -40,7 +44,7 @@ export interface DiagnosticExamRow {
 
 export interface ExamSetVariant {
   examId: string;
-  variant: 'A' | 'B' | 'C' | null;
+  variant: string | null; // A/B/C/D/1/2… (일반화) 또는 null(변형 표기 없음)
   title: string;
 }
 
@@ -77,12 +81,12 @@ export function groupExamsIntoSets(
     }
     set.variants.push({ examId: e.id, variant: extractVariant(e.title), title: e.title });
   }
-  const variantRank: Record<string, number> = { A: 0, B: 1, C: 2 };
+  // 변형 정렬 — 변형 글자 사전순(A<B<C<D, 0<1<2), 변형 없는 것(null)은 뒤로.
   for (const set of map.values()) {
     set.variants.sort((a, b) => {
-      const ra = a.variant ? variantRank[a.variant] : 9;
-      const rb = b.variant ? variantRank[b.variant] : 9;
-      if (ra !== rb) return ra - rb;
+      if (a.variant && b.variant) return a.variant.localeCompare(b.variant);
+      if (a.variant) return -1;
+      if (b.variant) return 1;
       return a.title.localeCompare(b.title);
     });
   }

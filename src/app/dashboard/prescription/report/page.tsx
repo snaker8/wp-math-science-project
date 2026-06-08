@@ -15,9 +15,9 @@ import { ComprehensiveReportView, type ComprehensiveReportPayload } from '@/comp
 
 interface SetStudent {
   id: string; name: string; grade: number | null;
-  source: 'user' | 'roster'; variantsTaken: Array<'A' | 'B' | 'C' | null>;
+  source: 'user' | 'roster'; variantsTaken: Array<string | null>;
 }
-interface ExamSetVariant { examId: string; variant: 'A' | 'B' | 'C' | null; title: string; }
+interface ExamSetVariant { examId: string; variant: string | null; title: string; }
 interface ExamSetListItem {
   setKey: string; bookGroupId: string | null; bookGroupName: string | null;
   setTitle: string; variants: ExamSetVariant[]; gradedStudentCount: number; students: SetStudent[];

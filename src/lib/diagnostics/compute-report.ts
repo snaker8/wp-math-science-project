@@ -22,7 +22,7 @@ export interface VariantItem {
 }
 export interface VariantUnitStat { code: string; name: string; total: number; correct: number; pct: number; }
 export interface VariantResult {
-  variant: 'A' | 'B' | 'C' | null; examId: string; title: string;
+  variant: string | null; examId: string; title: string;
   graded: boolean; total: number; correct: number; pct: number | null;
   items: VariantItem[]; byUnit: VariantUnitStat[];
 }
@@ -89,7 +89,7 @@ export async function computeComprehensiveReport(
   const variantExams = ((examRows ?? []) as DiagnosticExamRow[]).filter((e) => normalizeSetTitle(e.title) === setTitle);
   if (variantExams.length === 0) return { ok: false, status: 404, error: '세트를 찾을 수 없습니다' };
 
-  const examIdToVariant = new Map<string, 'A' | 'B' | 'C' | null>();
+  const examIdToVariant = new Map<string, string | null>();
   for (const e of variantExams) examIdToVariant.set(e.id, extractVariant(e.title));
   const variantExamIds = variantExams.map((e) => e.id);
 
