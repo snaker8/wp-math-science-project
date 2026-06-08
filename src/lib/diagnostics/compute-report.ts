@@ -162,6 +162,51 @@ export async function computeComprehensiveReport(
     }
   }
 
+  // ── 4b) QR/인쇄 채점(print_sessions + session_results) 합산 ──
+  //   print_sessions.student_id = users.id(uuid). identityIds 로 매칭(roster id 는 매칭 안 됨).
+  //   단원코드는 session_problems.type_code_snapshot(=MS 코드). 보류 문항 제외(히트맵과 동일).
+  const qrItemsByExam = new Map<string, Array<{ seq: number; is_correct: boolean; mathsecr_code: string | null }>>();
+  {
+    const { data: psRows } = await sb
+      .schema('diagnostics' as never)
+      .from('print_sessions')
+      .select('id, exam_id, student_id, issued_at, completed_at')
+      .in('student_id', identityIds)
+      .in('exam_id', variantExamIds);
+    const psList = (psRows ?? []) as Array<{ id: string; exam_id: string; completed_at: string | null; issued_at: string | null }>;
+    // exam 당 최신 print_session 1건
+    const psByExam = new Map<string, string>(); // exam_id → session_id
+    const examBySession = new Map<string, string>(); // session_id → exam_id
+    for (const p of psList) {
+      if (!psByExam.has(p.exam_id)) {
+        psByExam.set(p.exam_id, p.id);
+        examBySession.set(p.id, p.exam_id);
+      }
+    }
+    const psIds = Array.from(psByExam.values());
+    if (psIds.length > 0) {
+      const [{ data: srRows }, { data: spRows }] = await Promise.all([
+        sb.schema('diagnostics' as never).from('session_results')
+          .select('session_id, sequence_number, is_correct, teacher_note').in('session_id', psIds),
+        sb.schema('diagnostics' as never).from('session_problems')
+          .select('session_id, sequence_number, type_code_snapshot').in('session_id', psIds),
+      ]);
+      const codeBySessionSeq = new Map<string, string | null>();
+      for (const sp of (spRows ?? []) as Array<{ session_id: string; sequence_number: number; type_code_snapshot: string | null }>) {
+        codeBySessionSeq.set(`${sp.session_id}:${sp.sequence_number}`, sp.type_code_snapshot ?? null);
+      }
+      for (const sr of (srRows ?? []) as Array<{ session_id: string; sequence_number: number; is_correct: boolean; teacher_note: string | null }>) {
+        if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외
+        const examId = examBySession.get(sr.session_id);
+        if (!examId) continue;
+        const code = codeBySessionSeq.get(`${sr.session_id}:${sr.sequence_number}`) ?? null;
+        const arr = qrItemsByExam.get(examId) ?? [];
+        arr.push({ seq: sr.sequence_number, is_correct: sr.is_correct, mathsecr_code: code });
+        qrItemsByExam.set(examId, arr);
+      }
+    }
+  }
+
   // ── 5) 집계 ──
   const diffBuckets = new Map<number, { total: number; correct: number }>();
   for (let d = 1; d <= 10; d++) diffBuckets.set(d, { total: 0, correct: 0 });
@@ -174,11 +219,14 @@ export async function computeComprehensiveReport(
   for (const e of variantExams) {
     const sess = sessionByVariantExam.get(e.id);
     const variant = examIdToVariant.get(e.id) ?? null;
-    if (!sess) {
+    // 진단/엑셀(items) + QR(session_results) 합산
+    const diagItems = sess ? (itemsBySession.get(sess.id) ?? []) : [];
+    const qrItems = qrItemsByExam.get(e.id) ?? [];
+    const items = [...diagItems, ...qrItems];
+    if (items.length === 0) {
       variantResults.push({ variant, examId: e.id, title: e.title, graded: false, total: 0, correct: 0, pct: null, items: [], byUnit: [] });
       continue;
     }
-    const items = itemsBySession.get(sess.id) ?? [];
     const seqMap = seqMetaByExam.get(e.id) ?? new Map<number, SeqMeta>();
     const variantItems: VariantItem[] = [];
     const variantUnitBuckets = new Map<string, { total: number; correct: number }>();
