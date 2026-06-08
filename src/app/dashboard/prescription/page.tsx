@@ -18,6 +18,7 @@ import {
 import { motion } from 'framer-motion';
 import {
   getStudentSessions,
+  getStudentPrintSessions,
   getStudentNodeStatus,
   getStudentHeatmap,
   getStudentErrorProfile,
@@ -190,8 +191,9 @@ function PrescriptionContent() {
         //   1) diagnostics.v_student_error_profile — 담임 진단 수동 입력 (prescription/entry)
         //   2) diagnostics.session_results.error_cause — QR 채점 결과
         //   기존엔 1번만 봐서 QR 채점만 받은 학생 → "총 0건" 표시 사고 (2026-05-16).
-        const [s, n, h, e, analyticsRes] = await Promise.all([
+        const [s, ps, n, h, e, analyticsRes] = await Promise.all([
           getStudentSessions(student.id).catch(() => []),
+          getStudentPrintSessions(student.id).catch(() => []), // QR/인쇄 채점 세션도 진단 이력에
           getStudentNodeStatus(student.id).catch(() => []),
           getStudentHeatmap(student.id).catch(() => []),
           getStudentErrorProfile(student.id).catch(() => []),
@@ -226,7 +228,11 @@ function PrescriptionContent() {
         }));
 
         if (!cancelled) {
-          setSessions(s);
+          // 진단(수동/엑셀) + QR/인쇄 세션 합쳐 최신순
+          setSessions([...s, ...ps].sort((a, b) =>
+            new Date((b as { conducted_at?: string }).conducted_at || 0).getTime()
+            - new Date((a as { conducted_at?: string }).conducted_at || 0).getTime()
+          ));
           setNodeStatus(n);
           setHeatmap(h);
           setErrorProfile(mergedProfile);
@@ -817,7 +823,13 @@ function PrescriptionContent() {
         onCreated={() => {
           // 세션 생성 후 진단 이력 재조회
           if (student?.id) {
-            getStudentSessions(student.id).then(setSessions).catch(() => {});
+            Promise.all([
+              getStudentSessions(student.id).catch(() => []),
+              getStudentPrintSessions(student.id).catch(() => []),
+            ]).then(([a, b]) => setSessions([...a, ...b].sort((x, y) =>
+              new Date((y as { conducted_at?: string }).conducted_at || 0).getTime()
+              - new Date((x as { conducted_at?: string }).conducted_at || 0).getTime()
+            ))).catch(() => {});
           }
         }}
       />

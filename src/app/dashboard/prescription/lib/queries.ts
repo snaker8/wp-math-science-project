@@ -76,6 +76,44 @@ export async function getStudentSessions(studentId: string): Promise<DiagnosisSe
   return (data ?? []) as unknown as DiagnosisSession[];
 }
 
+/**
+ * QR/인쇄 채점 세션(diagnostics.print_sessions)을 진단 이력 형태(DiagnosisSession)로 정규화.
+ * diagnostics.sessions(수동입력/엑셀 라인)와 별개 라인이라, 진단 페이지 이력에 합쳐 보이기 위함.
+ * (시험지 제목은 public.exams 에서 일괄 매핑 → mathflat_sheet_name 자리에 노출)
+ */
+export async function getStudentPrintSessions(studentId: string): Promise<DiagnosisSession[]> {
+  const { data, error } = await diag()
+    .from('print_sessions')
+    .select('id, exam_id, session_type, round_number, issued_at, completed_at, duration_minutes')
+    .eq('student_id', studentId)
+    .order('issued_at', { ascending: false });
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{
+    id: string; exam_id: string | null; session_type: string;
+    round_number: number | null; issued_at: string | null;
+    completed_at: string | null; duration_minutes: number | null;
+  }>;
+  const examIds = Array.from(new Set(rows.map((r) => r.exam_id).filter(Boolean))) as string[];
+  const titleById = new Map<string, string>();
+  if (examIds.length > 0) {
+    const { data: exams } = await pub().from('exams').select('id, title').in('id', examIds);
+    for (const ex of (exams ?? []) as Array<{ id: string; title: string }>) titleById.set(ex.id, ex.title);
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    student_id: studentId,
+    session_type: r.session_type,
+    round_no: r.round_number,
+    target_grade: null,
+    mathflat_sheet_id: r.exam_id,
+    mathflat_sheet_name: r.exam_id ? (titleById.get(r.exam_id) ?? null) : null,
+    conducted_at: r.completed_at || r.issued_at,
+    conducted_by: null,
+    duration_min: r.duration_minutes,
+    note: null,
+  })) as unknown as DiagnosisSession[];
+}
+
 export async function getStudentNodeStatus(studentId: string): Promise<StudentNodeStatus[]> {
   const { data, error } = await diag()
     .from('student_node_status')
