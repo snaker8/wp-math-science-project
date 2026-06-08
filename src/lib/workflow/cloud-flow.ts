@@ -1303,7 +1303,10 @@ JSON 형식으로 응답해주세요.`;
 /** 파일명에서 학년/과목 힌트 추출 — GPT 분류 정확도 향상용 */
 function detectGradeFromFileName(fileName?: string): string {
   if (!fileName) return '';
-  const f = fileName;
+  // ★ Mac(NFD) 파일명 정규화 — 맥 업로드 파일명은 한글이 NFD(자모 분해)라
+  //   /중2/·/중/ 등 NFC 정규식에 전부 false → 학년/과목 힌트 깨짐(맥에서만, 같은 파일 윈도우 정상).
+  //   NFC 정규화는 이미 NFC인 윈도우 문자열엔 무변화(멱등) → 윈도우 영향 0.
+  const f = fileName.normalize('NFC');
   // 중등
   if (/중1|1-1|1-2/.test(f) && /중/.test(f)) return '중1 수학';
   if (/2-1/.test(f) && /중/.test(f)) return '중2-1 수학';
