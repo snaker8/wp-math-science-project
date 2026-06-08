@@ -570,9 +570,9 @@ export default function TutorStudentsPage() {
                 </div>
               </div>
 
-              <Link href={`/tutor/analytics?student=${student.id}`} className="view-analytics">
+              <Link href={`/tutor/students/${student.id}`} className="view-analytics">
                 <BarChart3 size={16} />
-                분석 보기
+                상세 보기
               </Link>
 
               {/* 학생 관리 액션 — 수정/비번초기화/삭제 */}
