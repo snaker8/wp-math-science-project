@@ -782,8 +782,21 @@ function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: num
  * - \begin{aligned}...\end{aligned} → $$\begin{aligned}...\end{aligned}$$
  * - \textbf{...} bare → **...**
  */
+// ★ 초성 자모(U+1100~1112, 결합형) → 호환 자모(U+3131~, 자판으로 치는 형태) 매핑.
+//   NFC 로도 "단독" 초성은 안 바뀌므로 명시 매핑 필요. (보기/객관식 ㄱㄴㄷ 통일용)
+const CHOSEONG_TO_COMPAT: Record<string, string> = {
+  'ᄀ': 'ㄱ', 'ᄁ': 'ㄲ', 'ᄂ': 'ㄴ', 'ᄃ': 'ㄷ', 'ᄄ': 'ㄸ',
+  'ᄅ': 'ㄹ', 'ᄆ': 'ㅁ', 'ᄇ': 'ㅂ', 'ᄈ': 'ㅃ', 'ᄉ': 'ㅅ',
+  'ᄊ': 'ㅆ', 'ᄋ': 'ㅇ', 'ᄌ': 'ㅈ', 'ᄍ': 'ㅉ', 'ᄎ': 'ㅊ',
+  'ᄏ': 'ㅋ', 'ᄐ': 'ㅌ', 'ᄑ': 'ㅍ', 'ᄒ': 'ㅎ',
+};
+
 function preprocessMathpixContent(text: string): string {
-  let result = text;
+  // ★ 한글 자모 통일 (Mac/OCR 결합형 ↔ 자판형) — 보기/객관식 ㄱㄴㄷ 라벨이 초성자모
+  //   (U+1100~, 결합형)로 들어와 호환자모(U+3131~, 자판형)와 섞여 "왔다갔다"·다르게
+  //   렌더되던 사고. ① NFC 로 분해된 한글 음절(중=중) 먼저 재결합 → 음절 안 깨짐.
+  //   ② 남은 "단독" 초성자모만 호환자모로 매핑 → 모든 ㄱㄴㄷ 자판형 통일([ㄱ-ㅎ] 일관 매칭).
+  let result = text.normalize('NFC').replace(/[ᄀ-ᄒ]/g, (c) => CHOSEONG_TO_COMPAT[c] || c);
 
   // ═══ Phase 0a: 단독 \ 줄 제거 (조건박스 구분자 — 렌더링 불필요) ═══
   result = result.replace(/^\s*\\+\s*$/gm, '');
