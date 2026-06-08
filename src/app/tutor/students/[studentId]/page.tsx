@@ -132,6 +132,11 @@ export default function StudentHubPage() {
   const [error, setError] = useState<string | null>(null);
   const [manageStudent, setManageStudent] = useState<ManageStudent | null>(null);
   const [manageLoading, setManageLoading] = useState(false);
+  // 세트 리포트(진단평가 종합) — 학생이 속한 세트
+  const [diagSets, setDiagSets] = useState<Array<{
+    setKey: string; setTitle: string; bookGroupName: string | null; studentIdInSet: string; variants: number;
+  }> | null>(null);
+  const [diagSetsLoading, setDiagSetsLoading] = useState(false);
 
   useEffect(() => {
     if (!studentId) return;
@@ -165,6 +170,35 @@ export default function StudentHubPage() {
       .finally(() => { if (!cancelled) setManageLoading(false); });
     return () => { cancelled = true; };
   }, [tab, manageStudent, studentId]);
+
+  // 세트 리포트 — 학생이 속한 진단평가 세트 지연 로드 (exam-sets API 재사용)
+  useEffect(() => {
+    if (tab !== 'reports' || diagSets !== null || !studentId) return;
+    let cancelled = false;
+    setDiagSetsLoading(true);
+    // 신원 후보 — 본인 id + 세션의 report_student_id(roster id) 까지 매칭(promoted 대응)
+    const candidateIds = new Set<string>([studentId]);
+    (data?.sessions || []).forEach((s) => { if (s.report_student_id) candidateIds.add(s.report_student_id); });
+    fetch('/api/diagnostics/exam-sets')
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const out: Array<{ setKey: string; setTitle: string; bookGroupName: string | null; studentIdInSet: string; variants: number }> = [];
+        for (const set of (j.sets || []) as Array<{ setKey: string; setTitle: string; bookGroupName: string | null; students?: Array<{ id: string; variantsTaken?: unknown[] }> }>) {
+          const stu = (set.students || []).find((s) => candidateIds.has(s.id));
+          if (stu) {
+            out.push({
+              setKey: set.setKey, setTitle: set.setTitle, bookGroupName: set.bookGroupName,
+              studentIdInSet: stu.id, variants: (stu.variantsTaken || []).length,
+            });
+          }
+        }
+        setDiagSets(out);
+      })
+      .catch(() => { if (!cancelled) setDiagSets([]); })
+      .finally(() => { if (!cancelled) setDiagSetsLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, diagSets, studentId, data]);
 
   // 개별 리포트 — exam_id 있는 시험지 세션 (최신순)
   const reportSessions = useMemo(
@@ -263,41 +297,77 @@ export default function StudentHubPage() {
               </div>
             )}
 
-            {/* ── 개별 리포트 (2단계 핵심) ── */}
+            {/* ── 리포트 (세트 리포트 + 개별 리포트 분리) ── */}
             {tab === 'reports' && (
-              <div>
-                {reportSessions.length === 0 ? (
-                  <div className="py-16 text-center text-gray-400 text-sm">
-                    채점된 시험지가 없습니다.
-                  </div>
-                ) : (
-                  <div className="grid gap-3">
-                    {reportSessions.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
-                        <div className="min-w-0">
-                          <div className="font-bold text-zinc-800 truncate">{s.exam_title || '(제목 없음)'}</div>
-                          <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
-                            <span>{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</span>
-                            <span>· {fmtDate(s.issued_at)}</span>
-                            <span>·{' '}
-                              {s.pct != null ? (
-                                <span className="font-bold text-indigo-600">{s.pct}%</span>
-                              ) : '-'}
-                              <span className="text-gray-400"> ({s.correct}/{s.total})</span>
-                            </span>
+              <div className="space-y-6">
+                {/* 세트 리포트 (진단평가 종합) */}
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-700 mb-2.5 flex items-center gap-1.5">
+                    <FileText size={15} className="text-violet-500" /> 세트 리포트 <span className="text-xs font-normal text-gray-400">진단평가 종합</span>
+                  </h3>
+                  {diagSetsLoading ? (
+                    <div className="py-4 text-gray-400 text-sm"><Loader2 className="animate-spin inline mr-2" size={14} />불러오는 중…</div>
+                  ) : !diagSets || diagSets.length === 0 ? (
+                    <div className="text-xs text-gray-400 py-3 px-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50">
+                      이 학생이 속한 진단평가 세트가 없습니다.
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {diagSets.map((sr) => (
+                        <div key={sr.setKey} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-violet-200 bg-violet-50/40 hover:border-violet-300 hover:shadow-sm transition-all">
+                          <div className="min-w-0">
+                            <div className="font-bold text-zinc-800 truncate">{sr.setTitle}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{sr.bookGroupName || ''}{sr.bookGroupName ? ' · ' : ''}응시 {sr.variants}회</div>
                           </div>
+                          <Link
+                            href={`/dashboard/prescription/report?setKey=${encodeURIComponent(sr.setKey)}&studentId=${encodeURIComponent(sr.studentIdInSet)}`}
+                            target="_blank"
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700"
+                          >
+                            <FileText size={14} /> 세트 리포트 보기
+                          </Link>
                         </div>
-                        <Link
-                          href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`}
-                          target="_blank"
-                          className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
-                        >
-                          <FileText size={14} /> 리포트 보기
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 개별 리포트 (시험지별) */}
+                <div className="border-t border-gray-200 pt-5">
+                  <h3 className="text-sm font-bold text-zinc-700 mb-2.5 flex items-center gap-1.5">
+                    <FileText size={15} className="text-indigo-500" /> 개별 리포트 <span className="text-xs font-normal text-gray-400">시험지별</span>
+                  </h3>
+                  {reportSessions.length === 0 ? (
+                    <div className="py-8 text-center text-gray-400 text-sm">채점된 시험지가 없습니다.</div>
+                  ) : (
+                    <div className="grid gap-3">
+                      {reportSessions.map((s) => (
+                        <div key={s.id} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
+                          <div className="min-w-0">
+                            <div className="font-bold text-zinc-800 truncate">{s.exam_title || '(제목 없음)'}</div>
+                            <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
+                              <span>{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</span>
+                              <span>· {fmtDate(s.issued_at)}</span>
+                              <span>·{' '}
+                                {s.pct != null ? (
+                                  <span className="font-bold text-indigo-600">{s.pct}%</span>
+                                ) : '-'}
+                                <span className="text-gray-400"> ({s.correct}/{s.total})</span>
+                              </span>
+                            </div>
+                          </div>
+                          <Link
+                            href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`}
+                            target="_blank"
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                          >
+                            <FileText size={14} /> 리포트 보기
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
