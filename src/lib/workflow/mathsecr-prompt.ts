@@ -76,9 +76,15 @@ function loadTree(): TreeNode[] {
  */
 export function resolveSubjectCode(gradeHint?: string, subject?: string): string | string[] | null {
   // ★ 긴 key부터 매칭 — "수학II".includes("수학I")이 true라 "수학I"가 먼저 매치되던 버그 수정.
-  const sortedEntries = Object.entries(SUBJECT_CODE_MAP).sort((a, b) => b[0].length - a[0].length);
-  for (const hint of [subject, gradeHint]) {
-    if (!hint) continue;
+  // ★ Mac(NFD) vs Windows(NFC) 한글 정규화 — Mac 업로드 파일명/메타는 한글이 NFD(자모 분해)라
+  //   "중2"(NFD ㅈㅜㅇ2)가 NFC 키 '중2'와 바이트 불일치 → 과목 해석 실패 → 공통수학1 오분류
+  //   되던 사고(맥에서만 발생, 윈도우 정상). hint·key 모두 NFC 로 통일해 매칭.
+  const sortedEntries = Object.entries(SUBJECT_CODE_MAP)
+    .map(([k, v]) => [k.normalize('NFC'), v] as [string, string | string[]])
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const hintRaw of [subject, gradeHint]) {
+    if (!hintRaw) continue;
+    const hint = hintRaw.normalize('NFC');
     for (const [key, code] of sortedEntries) {
       if (hint.includes(key)) return code; // 단일 string 또는 string[]
     }
