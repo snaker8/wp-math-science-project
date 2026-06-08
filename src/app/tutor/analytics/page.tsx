@@ -20,6 +20,7 @@ import {
   BarChart, Bar, Cell,
 } from 'recharts';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
+import GradeRosterTable from '@/components/grades/GradeRosterTable';
 
 interface StudentRow {
   id: string;
@@ -234,13 +235,19 @@ export default function TutorAnalyticsPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BarChart3 size={26} className="text-indigo-600" />
-            학생 학습 분석
+            학생 성적
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            학생을 선택하면 진단평가 4종 집계 (정답률 추이 · 오답 원인 · 단원별 정답률 · 함정 누적) 가 표시됩니다.
+            학년별 성적 일람표(내신 · 모의고사 · 진단 · 시험)에서 학생을 선택하면 진단평가 상세 분석이 표시됩니다.
           </p>
         </div>
       </div>
+
+      {/* 학년별 성적 일람표 */}
+      <GradeRosterTable
+        selectedStudentId={selectedStudent}
+        onSelectStudent={(id) => { setSelectedStudent(id); setDropdownOpen(false); }}
+      />
 
       {/* 학생 선택 */}
       <Card title="학생 선택" icon={Users}>
