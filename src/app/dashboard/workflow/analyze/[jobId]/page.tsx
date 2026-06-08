@@ -1747,7 +1747,7 @@ function ProblemDetailPanel({
   isReanalyzing: boolean;
   insertImageMode?: boolean;
   onToggleInsertImage?: () => void;
-  onCropImageDragSelect?: (rect: { x: number; y: number; w: number; h: number }) => void;
+  onCropImageDragSelect?: (rect: { x: number; y: number; w: number; h: number }, target?: 'body' | number) => void;
   onDeleteLastImage?: () => void;
   mergeMode?: boolean;
   mergeTargetId?: string | null;
@@ -1770,6 +1770,8 @@ function ProblemDetailPanel({
   const [isCropDragging, setIsCropDragging] = useState(false);
   const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number } | null>(null);
   const [cropDragRect, setCropDragRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  // ★ 드래그 크롭 타깃 — 'body'(본문, 기본) 또는 선택지 index(0~4). 객관식 이미지 수동크롭용.
+  const [cropTarget, setCropTarget] = useState<'body' | number>('body');
   const circledNumbers = ['', '①', '②', '③', '④', '⑤'];
 
   useEffect(() => {
@@ -1885,8 +1887,8 @@ function ProblemDetailPanel({
                 h: cropDragRect.h / ch,
               };
 
-              console.log('[CropDrag] 선택 영역 (0-1):', normalizedRect);
-              onCropImageDragSelect?.(normalizedRect);
+              console.log('[CropDrag] 선택 영역 (0-1):', normalizedRect, 'target:', cropTarget);
+              onCropImageDragSelect?.(normalizedRect, cropTarget);
               setCropDragRect(null);
             }}
             onMouseLeave={() => {
@@ -1926,7 +1928,7 @@ function ProblemDetailPanel({
                 }}
               >
                 <span className="absolute bottom-0.5 right-1 text-[9px] bg-blue-600/90 text-white px-1 py-0.5 rounded">
-                  📷 이미지 선택
+                  📷 {cropTarget === 'body' ? '본문' : `선택지 ${(cropTarget as number) + 1}`}에 삽입
                 </span>
               </div>
             )}
@@ -1965,16 +1967,40 @@ function ProblemDetailPanel({
             <Sparkles className="h-3.5 w-3.5" />
             고급 분석
           </button>
-          <button type="button" onClick={onToggleInsertImage}
+          <button type="button"
+            onClick={() => {
+              if (insertImageMode && cropTarget === 'body') { onToggleInsertImage?.(); }
+              else { setCropTarget('body'); if (!insertImageMode) onToggleInsertImage?.(); }
+            }}
             disabled={!problem.bbox && !problem.cropImageBase64}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              insertImageMode
+              insertImageMode && cropTarget === 'body'
                 ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-500/30'
                 : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100'
             }`}>
-            <ImagePlus className={`h-3.5 w-3.5 ${insertImageMode ? 'text-white' : 'text-blue-600'}`} />
-            📷 {insertImageMode ? '삽입 취소' : '이미지 삽입'}
+            <ImagePlus className={`h-3.5 w-3.5 ${insertImageMode && cropTarget === 'body' ? 'text-white' : 'text-blue-600'}`} />
+            📷 {insertImageMode && cropTarget === 'body' ? '삽입 취소' : '본문 이미지'}
           </button>
+          {/* ★ 객관식 이미지 수동 크롭 (2026-06-08): 본문처럼 드래그 크롭 → 그 선택지 choiceImages 로.
+              본문 경로 불변, 가산만. 4x 업스케일 동일. 객관식(choices) 있는 문제에서만 노출. */}
+          {problem.choices && problem.choices.length > 0 && (
+            <div className="flex items-center gap-1 rounded-lg border border-cyan-200 bg-cyan-50/40 px-1.5 py-1">
+              <span className="text-[10px] font-bold text-cyan-600 px-0.5">객관식</span>
+              {['①', '②', '③', '④', '⑤'].slice(0, problem.choices.length).map((cn, i) => (
+                <button key={i} type="button"
+                  onClick={() => { setCropTarget(i); if (!insertImageMode) onToggleInsertImage?.(); }}
+                  disabled={!problem.bbox && !problem.cropImageBase64}
+                  title={`${cn} 선택지에 이미지 크롭 — 드래그로 영역 선택`}
+                  className={`w-6 h-6 rounded text-xs font-bold border transition-colors disabled:opacity-40 ${
+                    insertImageMode && cropTarget === i
+                      ? 'border-cyan-500 bg-cyan-600 text-white shadow shadow-cyan-500/30'
+                      : 'border-cyan-300 bg-white text-cyan-700 hover:bg-cyan-100'
+                  }`}>
+                  {cn}
+                </button>
+              ))}
+            </div>
+          )}
           {problem.insertedImages && problem.insertedImages.length > 0 && (
             <button type="button" onClick={onDeleteLastImage}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 transition-colors shadow-sm">
@@ -4299,7 +4325,11 @@ export default function AnalyzeJobPage() {
   }, [jobData?.pdfUrl]);
 
   // ★ 이미지 삽입: 크롭 이미지 내 드래그 영역 → PDF 좌표 변환 → 고화질(4x) 크롭 → content에 삽입
-  const handleInsertImageCrop = useCallback(async (cropRelativeRect: { x: number; y: number; w: number; h: number }) => {
+  //   target='body'(기본): 본문 insertedImages (기존). target=숫자: 그 선택지 choiceImages[i] (가산).
+  const handleInsertImageCrop = useCallback(async (
+    cropRelativeRect: { x: number; y: number; w: number; h: number },
+    target: 'body' | number = 'body',
+  ) => {
     if (!selectedProblem || !jobData?.pdfUrl || !selectedProblem.bbox) {
       setInsertImageMode(false);
       return;
@@ -4352,6 +4382,33 @@ export default function AnalyzeJobPage() {
 
       cropCtx.drawImage(fullCanvas, sx, sy, sw, sh, 0, 0, cropCanvas.width, cropCanvas.height);
       const base64 = cropCanvas.toDataURL('image/png');
+
+      // ★ 객관식 타깃: 본문 경로 안 타고 그 선택지 choiceImages[i] 로만 세팅 (본문 코드 완전 불변).
+      //   업스케일(4x)·크롭은 본문과 동일. 자산화 시 base64 → Storage 업로드(기존 choiceImages 경로).
+      if (typeof target === 'number') {
+        const setChoice = (problems: AnalyzedProblem[]) =>
+          problems.map(p => {
+            if (p.id !== selectedProblem.id) return p;
+            const arr = p.choiceImages ? [...p.choiceImages] : [null, null, null, null, null];
+            while (arr.length <= target) arr.push(null);
+            arr[target] = base64;
+            return { ...p, choiceImages: arr, status: 'edited' as const };
+          });
+        if (useAutoCropMode || autoCropProblems.size > 0) {
+          setAutoCropProblems(prev => {
+            const next = new Map(prev);
+            for (const [pageIdx, probs] of next.entries()) {
+              if (probs.some(p => p.id === selectedProblem.id)) { next.set(pageIdx, setChoice(probs)); break; }
+            }
+            return next;
+          });
+        } else {
+          setJobData(prev => prev ? { ...prev, pages: prev.pages.map(pg => ({ ...pg, problems: setChoice(pg.problems) })) } : prev);
+        }
+        console.log(`[InsertImage] 문제 ${selectedProblem.number} 선택지 ${target + 1}에 고화질(4x) 이미지 삽입`);
+        setInsertImageMode(false);
+        return;
+      }
 
       // ★ content에서 표 패턴을 찾아 이미지로 대체 (중복 방지)
       const imageMarkdown = `![이미지](${base64})`;

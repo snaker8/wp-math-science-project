@@ -680,8 +680,8 @@ function ChoicesEditor({
                       }}
                     >
                       <label
-                        className="cursor-pointer text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-gray-300 text-gray-400 hover:text-emerald-600 hover:border-emerald-400 transition-colors"
-                        title="이미지 파일 선택 또는 여기에 붙여넣기(Ctrl+V)"
+                        className="cursor-pointer text-[11px] font-bold inline-flex items-center gap-1 px-2 py-1 rounded-md border border-cyan-300 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 hover:border-cyan-400 transition-colors"
+                        title="이 선택지에 이미지 넣기 — 파일 선택 또는 여기에 붙여넣기(Ctrl+V)"
                       >
                         <input
                           type="file"
@@ -697,7 +697,7 @@ function ChoicesEditor({
                             e.target.value = '';
                           }}
                         />
-                        + 이미지 (파일/붙여넣기)
+                        <ImageIcon className="h-3 w-3" /> 이미지 넣기
                       </label>
                     </div>
                   )}
