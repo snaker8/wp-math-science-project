@@ -50,7 +50,7 @@ function Hero() {
 
           <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             Math×Sci Bank 는 단순한 문제은행이 아닙니다. <br className="hidden md:block" />
-            가맹 학원이 함께 만드는 자산, AI 정밀 채점과 완전무결한 오답 관리 루프로 수학·과학 교육의 본질을 혁신합니다.
+            함께 만드는 자산, AI 정밀 채점과 완전무결한 오답 관리 루프로 수학·과학 교육의 본질을 혁신합니다.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

@@ -14,7 +14,7 @@ import React from 'react';
 export interface BrandLogoProps {
   /** 글자 크기 */
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-  /** 부제 ("가맹 학원이 함께 만드는 수학·과학 문제은행") 표시 */
+  /** 부제 ("함께 만드는 수학·과학 문제은행") 표시 */
   showTagline?: boolean;
   /** "Math×Sci Bank" 워드마크 대신 압축 마크 ("M×S") 만 보일지 */
   mark?: boolean;
@@ -77,7 +77,7 @@ export function BrandLogo({
       </span>
       {showTagline && (
         <p className={`${taglineSize} ${taglineColor} mt-2 tracking-wide`}>
-          가맹 학원이 함께 만드는 수학·과학 문제은행
+          함께 만드는 수학·과학 문제은행
         </p>
       )}
     </div>
