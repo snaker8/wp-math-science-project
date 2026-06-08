@@ -182,8 +182,8 @@ export default function StudentHubPage() {
   const gradeLabel = data?.student.grade != null ? gradeIntToLabel(data.student.grade) : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-zinc-900">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gray-50 text-zinc-900 font-sans">
+      <div className="p-6 md:p-8">
         {/* 헤더 */}
         <div className="flex items-center gap-3 mb-5">
           <button
