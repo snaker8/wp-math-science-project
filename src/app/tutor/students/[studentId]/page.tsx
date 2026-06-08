@@ -107,6 +107,20 @@ function Card({ children, title, icon: Icon, className = '' }: {
   );
 }
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
+      <div className="w-20 text-xs font-semibold text-gray-400 shrink-0">{label}</div>
+      <div className="text-sm text-zinc-800">{value}</div>
+    </div>
+  );
+}
+
+interface ManageStudent {
+  name?: string; school?: string | null; className?: string | null;
+  email?: string | null; phone?: string | null; status?: string; source?: string;
+}
+
 export default function StudentHubPage() {
   const params = useParams();
   const router = useRouter();
@@ -116,6 +130,8 @@ export default function StudentHubPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [manageStudent, setManageStudent] = useState<ManageStudent | null>(null);
+  const [manageLoading, setManageLoading] = useState(false);
 
   useEffect(() => {
     if (!studentId) return;
@@ -132,6 +148,23 @@ export default function StudentHubPage() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [studentId]);
+
+  // 관리 탭 — 학생 정보(학교·반·연락처) 지연 로드 (기존 /api/users/students 재사용)
+  useEffect(() => {
+    if (tab !== 'manage' || manageStudent || !studentId) return;
+    let cancelled = false;
+    setManageLoading(true);
+    fetch('/api/users/students')
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const found = (j.students || []).find((s: { id: string }) => s.id === studentId);
+        setManageStudent((found as ManageStudent) || {});
+      })
+      .catch(() => { if (!cancelled) setManageStudent({}); })
+      .finally(() => { if (!cancelled) setManageLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, manageStudent, studentId]);
 
   // 개별 리포트 — exam_id 있는 시험지 세션 (최신순)
   const reportSessions = useMemo(
@@ -427,14 +460,37 @@ export default function StudentHubPage() {
               </div>
             )}
 
-            {/* ── 관리 (후속 단계: /tutor/students 편집 이식) ── */}
+            {/* ── 관리 (학생 정보 + 수정 링크) ── */}
             {tab === 'manage' && (
-              <div className="py-12 text-center">
-                <p className="text-sm text-gray-500 mb-3">학교·학년·반·연락처 편집은 다음 단계에서 이 탭으로 이식됩니다.</p>
-                <Link href="/tutor/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
-                  <ExternalLink size={14} /> 학생 관리 페이지 열기
-                </Link>
-              </div>
+              <Card title="학생 정보" icon={Settings}>
+                {manageLoading ? (
+                  <div className="py-8 text-center text-gray-400 text-sm">
+                    <Loader2 className="animate-spin inline mr-2" size={16} /> 불러오는 중…
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <InfoRow label="이름" value={manageStudent?.name || studentName} />
+                    <InfoRow label="학년" value={gradeLabel || '-'} />
+                    <InfoRow label="학교" value={manageStudent?.school || '-'} />
+                    <InfoRow label="반" value={manageStudent?.className || '-'} />
+                    <InfoRow
+                      label="연락처"
+                      value={manageStudent?.email?.replace(/@local\.suzag\.com$/i, '') || manageStudent?.phone || '-'}
+                    />
+                    <InfoRow
+                      label="상태"
+                      value={manageStudent?.source === 'roster'
+                        ? '채점명단 (정식 등록 전)'
+                        : (manageStudent?.status === 'ACCEPTED' ? '활성' : manageStudent?.status === 'PENDING' ? '대기중' : '-')}
+                    />
+                    <div className="pt-4">
+                      <Link href="/tutor/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
+                        <Settings size={14} /> 학생 관리에서 정보 수정
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </Card>
             )}
           </>
         )}
