@@ -121,8 +121,40 @@ export async function GET() {
     }
   }
 
-  // 5) 학생 신원 해석 (users / roster_students)
-  const studentIds = Array.from(new Set(sessions.map((s) => s.student_id)));
+  // 4b) QR/인쇄 채점(print_sessions + session_results) — 세트 학생 목록에 합산.
+  //   compute-report 와 동일 데이터원. diagnostics.sessions(수동/엑셀) 외 QR 로만 채점한
+  //   학생이 세트→학생 선택기에서 누락되던 문제 차단(compute-report 는 합산하는데 여기만 빠져
+  //   "학생별로 안 보임" 사고). print_sessions.student_id = users.id / roster id.
+  const { data: psRows } = await sb
+    .schema('diagnostics' as never)
+    .from('print_sessions')
+    .select('id, student_id, exam_id')
+    .in('exam_id', allExamIds);
+  const printSessions = (psRows ?? []) as Array<{ id: string; student_id: string; exam_id: string | null }>;
+
+  // 채점된(session_results 있는) print_session 만 인정 — 보류 문항만 있는 세션 제외
+  const psIds = printSessions.map((p) => p.id);
+  const gradedPrintSessionIds = new Set<string>();
+  if (psIds.length > 0) {
+    for (let i = 0; i < psIds.length; i += 500) {
+      const chunk = psIds.slice(i, i + 500);
+      const { data: srRows } = await sb
+        .schema('diagnostics' as never)
+        .from('session_results')
+        .select('session_id, teacher_note')
+        .in('session_id', chunk);
+      for (const sr of (srRows ?? []) as Array<{ session_id: string; teacher_note: string | null }>) {
+        if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외(히트맵/리포트와 동일)
+        gradedPrintSessionIds.add(sr.session_id);
+      }
+    }
+  }
+
+  // 5) 학생 신원 해석 (users / roster_students) — diagnostics + QR 양쪽 student_id 포함
+  const studentIds = Array.from(new Set([
+    ...sessions.map((s) => s.student_id),
+    ...printSessions.map((p) => p.student_id),
+  ]));
   const userById = new Map<string, { name: string; grade: number | null }>();
   const rosterById = new Map<string, { name: string; grade: number | null; promotedTo: string | null }>();
   if (studentIds.length > 0) {
@@ -179,6 +211,23 @@ export async function GET() {
     const canon = resolveCanonical(s.student_id);
     if (!canon) continue;
     const variant = examIdToVariant.get(s.exam_id) ?? null;
+    let perSet = setStudents.get(setKey);
+    if (!perSet) { perSet = new Map(); setStudents.set(setKey, perSet); }
+    let stu = perSet.get(canon.id);
+    if (!stu) {
+      stu = { id: canon.id, name: canon.name, grade: canon.grade, source: canon.source, variantsTaken: [] };
+      perSet.set(canon.id, stu);
+    }
+    if (!stu.variantsTaken.includes(variant)) stu.variantsTaken.push(variant);
+  }
+  // QR/인쇄 채점 학생도 동일 집계에 합산 (위 diagnostics 루프와 같은 규칙)
+  for (const p of printSessions) {
+    if (!gradedPrintSessionIds.has(p.id) || !p.exam_id) continue;
+    const setKey = examIdToSetKey.get(p.exam_id);
+    if (!setKey) continue;
+    const canon = resolveCanonical(p.student_id);
+    if (!canon) continue;
+    const variant = examIdToVariant.get(p.exam_id) ?? null;
     let perSet = setStudents.get(setKey);
     if (!perSet) { perSet = new Map(); setStudents.set(setKey, perSet); }
     let stu = perSet.get(canon.id);

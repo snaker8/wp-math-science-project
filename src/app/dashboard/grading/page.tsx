@@ -334,7 +334,7 @@ export default function GradingPage() {
             <option value="">전체</option>
             {students.map(s => (
               <option key={s.id} value={s.id}>
-                {s.name}{s.grade ? ` (${s.grade})` : ''}
+                {s.name}{gradeIntToLabel(s.grade) ? ` (${gradeIntToLabel(s.grade)})` : ''}
               </option>
             ))}
           </select>

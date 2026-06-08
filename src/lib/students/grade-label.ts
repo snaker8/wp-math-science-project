@@ -16,6 +16,13 @@ export function gradeIntToLabel(
   fallback: string = '',
 ): string {
   if (grade == null) return fallback;
+  // 이미 한글 라벨("중2" 등)로 들어온 경우 그대로 통과.
+  //   소스 혼재: 일부 API(/api/users/students)는 grade 를 정수가 아니라 변환된 라벨
+  //   문자열로 반환한다. 이를 다시 변환하면 parseInt 실패로 라벨이 blank 되던 회귀 차단.
+  if (typeof grade === 'string') {
+    const t = grade.trim();
+    if (/^(초[1-6]|중[1-3]|고[1-3])$/.test(t)) return t;
+  }
   const n = typeof grade === 'number' ? grade : parseInt(String(grade), 10);
   if (!Number.isInteger(n)) return fallback;
   if (n >= 1 && n <= 6) return `초${n}`;

@@ -25,6 +25,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { gradeIntToLabel } from '@/lib/students/grade-label';
 
 interface ClassData {
   id: string;
@@ -256,7 +257,7 @@ export default function ClassDetailPage() {
                           </span>
                         )}
                       </div>
-                      {s.grade && <div className="mt-0.5 text-xs text-zinc-500">{s.grade}</div>}
+                      {gradeIntToLabel(s.grade) && <div className="mt-0.5 text-xs text-zinc-500">{gradeIntToLabel(s.grade)}</div>}
                     </div>
                     <button
                       onClick={() => handleRemoveEnrollment(e.id, s.full_name)}

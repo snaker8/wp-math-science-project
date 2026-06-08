@@ -190,7 +190,7 @@ function ReportContent() {
                 <select value={freeStudentId} onChange={(e) => setFreeStudentId(e.target.value)}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none">
                   <option value="">학생 선택…</option>
-                  {freeStudents.map((s) => <option key={s.id} value={s.id}>{s.name}{s.grade ? ` (${s.grade})` : ''}</option>)}
+                  {freeStudents.map((s) => <option key={s.id} value={s.id}>{s.name}{gradeIntToLabel(s.grade) ? ` (${gradeIntToLabel(s.grade)})` : ''}</option>)}
                 </select>
               </div>
               <div>
