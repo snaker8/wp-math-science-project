@@ -33,7 +33,9 @@
   --em-ease: var(--ease-out-expo);
 
   display: grid;
-  grid-template-columns: 280px 1fr 320px;
+  /* ★ 중앙을 minmax(0,1fr) 로 — A4 미리보기 min-content 가 grid 를 밀어내 우측 옵션(320px) 패널이
+     뷰포트 밖으로 잘리던 문제 차단. 중앙은 .em-main(overflow:auto) 내부에서 스크롤. */
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
   grid-template-rows: 56px 44px 1fr;
   grid-template-areas:
     'sidebar  subbar    options'
