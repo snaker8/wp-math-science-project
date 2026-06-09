@@ -327,7 +327,14 @@ ${content.slice(0, 1500)}`;
   //   예: 공통수학1 시험지면 MS07, MS08(COMBINED) 만 허용
   //   Gemini가 다른 과목(MS02 중1-2 등) 코드 생성하면 거부 → null 반환
   if (resolvedCode) {
-    const allowed = new Set([resolvedCode, ...(COMBINED_SUBJECTS[resolvedCode] || [])]);
+    // ★ resolvedCode 가 배열(학기 불명 — 예 ['03','04'])일 수 있어 정규화 후 Set 구성.
+    //   배열을 그대로 Set 에 넣으면 codeSubject('04') 매칭 실패로 정상 결과를 거부 → 폴백 212K 폭발하던 버그.
+    const rcodes = Array.isArray(resolvedCode) ? resolvedCode : [resolvedCode];
+    const allowed = new Set<string>();
+    for (const c of rcodes) {
+      allowed.add(c);
+      for (const ex of (COMBINED_SUBJECTS[c] || [])) allowed.add(ex);
+    }
     const codeSubjectMatch = typeCode.match(/^MS(\d{2})/);
     const codeSubject = codeSubjectMatch?.[1] || '';
     if (codeSubject && !allowed.has(codeSubject)) {
@@ -491,13 +498,18 @@ async function fetchSimilarCorrections(
 async function classifyWithClaudeTwoStage(params: {
   apiKey: string;
   model: string;
-  subjectCode: string;
+  subjectCode: string | string[];
   examSubject: string;
   examGrade: string;
   content: string;
   label: string;
 }): Promise<Record<string, unknown> | null> {
   const { apiKey, model, subjectCode, examSubject, examGrade, content, label } = params;
+
+  // ★ subjectCode 가 배열(학기 불명)일 수 있어 표시·예시용 문자열 파생.
+  const codeArr = Array.isArray(subjectCode) ? subjectCode : [subjectCode];
+  const msLabel = codeArr.map((c) => 'MS' + c).join('/');       // "MS03/MS04"
+  const codeExample = `MS${codeArr[0]}-??-??`;                  // 형식 예시 (실제 값은 테이블에서)
 
   // ── Stage 1: L1 + L2 선택 ──
   const l1l2Table = buildL1L2Table(subjectCode);
@@ -516,7 +528,7 @@ async function classifyWithClaudeTwoStage(params: {
 - 시그마(Σ)·누적합 = 수열. 극한·연속·미분·적분 = 미적분.
 - 시험지 과목 일관성: 시험지가 "${examSubject}" 범위면 그 과목 안의 단원으로 분류. 다른 과목 단원으로 빠지지 마세요.
 
-참조 테이블 (MS${subjectCode} = ${examSubject}):
+참조 테이블 (${msLabel} = ${examSubject}):
 ${l1l2Table}`;
   const stage1User = `시험지 과목: ${examSubject}
 학년: ${examGrade}
@@ -526,7 +538,7 @@ ${content.slice(0, 1500)}
 
 위 문제에 가장 적합한 "1단계코드" (대단원+중단원)를 고르세요.
 ※ 본문의 핵심 단서(log 보조값·시그마·미분 기호·정의역 조건 등)를 출제 의도로 보고, 풀이 가능 여부보다 의도를 우선.
-JSON: {"stage1Code":"MS${subjectCode}-??-??"}`;
+JSON: {"stage1Code":"${codeExample}"}`;
 
   const stage1Raw = await callClaudeOnce({
     apiKey, model, systemPrompt: stage1System, userPrompt: stage1User,
@@ -694,16 +706,21 @@ async function callClaudeOnce(params: {
   return null;
 }
 
-function extractStage1Code(raw: string, subjectCode: string): string | null {
-  // 1) JSON 파싱
+function extractStage1Code(raw: string, subjectCode: string | string[]): string | null {
+  const codes = Array.isArray(subjectCode) ? subjectCode : [subjectCode];
+  // 1) JSON 파싱 — 반환 코드의 과목(MS\d{2})이 허용 코드 중 하나인지 확인
   try {
     const parsed = JSON.parse(raw);
-    if (typeof parsed.stage1Code === 'string' && /^MS\d{2}-\d{2}-\d{2}$/.test(parsed.stage1Code)) {
+    if (
+      typeof parsed.stage1Code === 'string' &&
+      /^MS\d{2}-\d{2}-\d{2}$/.test(parsed.stage1Code) &&
+      codes.includes(parsed.stage1Code.slice(2, 4))
+    ) {
       return parsed.stage1Code;
     }
   } catch { /* ignore */ }
-  // 2) 정규식 폴백
-  const re = new RegExp(`MS${subjectCode}-\\d{2}-\\d{2}`);
+  // 2) 정규식 폴백 — 허용 과목 코드 중 하나로 시작
+  const re = new RegExp(`MS(?:${codes.join('|')})-\\d{2}-\\d{2}`);
   const m = raw.match(re);
   return m ? m[0] : null;
 }
