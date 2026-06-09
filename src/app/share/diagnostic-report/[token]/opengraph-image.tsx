@@ -51,6 +51,10 @@ async function fetchOgData(token: string): Promise<OgData | null> {
   };
 }
 
+// 동적 OG 이미지 CDN 캐시 — 토큰별 결정적이라 캐시 안전. 보수적 크롤러(시놀로지 챗 등)의
+// 즉석 생성 타임아웃 회피 + 전반적 미리보기 속도 개선.
+const OG_IMAGE_CACHE = { 'cache-control': 'public, max-age=86400, s-maxage=86400, immutable, no-transform' } as const;
+
 export default async function OgImage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const data = await fetchOgData(token);
@@ -66,7 +70,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
           진단평가 종합 리포트
         </div>
       ),
-      { ...size },
+      { ...size, headers: OG_IMAGE_CACHE },
     );
   }
 
@@ -155,7 +159,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
         </div>
       </div>
     ),
-    { ...size },
+    { ...size, headers: OG_IMAGE_CACHE },
   );
 }
 
