@@ -86,7 +86,8 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
           시험지 분석 리포트
         </div>
       ),
-      { ...size }
+      // 동적 OG 이미지 CDN 캐시 — 보수적 크롤러(시놀로지 챗 등) 타임아웃 회피 + 미리보기 속도
+      { ...size, headers: { 'cache-control': 'public, max-age=86400, s-maxage=86400, immutable, no-transform' } }
     );
   }
 
@@ -198,7 +199,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
         </div>
       </div>
     ),
-    { ...size }
+    { ...size, headers: { 'cache-control': 'public, max-age=86400, s-maxage=86400, immutable, no-transform' } }
   );
 }
 
