@@ -108,16 +108,22 @@ export async function GET() {
   const sessionIds = sessions.map((s) => s.id);
   const gradedSessionIds = new Set<string>();
   if (sessionIds.length > 0) {
-    // chunk 로 안전하게 (in 1000 제한 회피)
-    for (let i = 0; i < sessionIds.length; i += 500) {
-      const chunk = sessionIds.slice(i, i + 500);
-      const { data: itemRows } = await sb
-        .schema('diagnostics' as never)
-        .from('items')
-        .select('session_id')
-        .in('session_id', chunk);
-      for (const it of (itemRows ?? []) as Array<{ session_id: string }>) {
-        gradedSessionIds.add(it.session_id);
+    // ★ chunk(세션id) + range(행) 이중 페이지네이션.
+    //   Supabase 기본 1000행 한계 — items 가 1000개 초과면 잘려서 일부 채점 세션이
+    //   gradedSessionIds 에서 누락 → 변형 A·B·C 채점인데 드롭다운엔 A·B 만 표시되던 사고
+    //   (이원준: 81세션·2135 items, C 세션 items 가 1000행 밖이라 누락). [[feedback_supabase_select_limit]]
+    for (let i = 0; i < sessionIds.length; i += 300) {
+      const chunk = sessionIds.slice(i, i + 300);
+      for (let from = 0; ; from += 1000) {
+        const { data: itemRows } = await sb
+          .schema('diagnostics' as never)
+          .from('items')
+          .select('session_id')
+          .in('session_id', chunk)
+          .range(from, from + 999);
+        const rows = (itemRows ?? []) as Array<{ session_id: string }>;
+        for (const it of rows) gradedSessionIds.add(it.session_id);
+        if (rows.length < 1000) break;
       }
     }
   }
@@ -137,16 +143,22 @@ export async function GET() {
   const psIds = printSessions.map((p) => p.id);
   const gradedPrintSessionIds = new Set<string>();
   if (psIds.length > 0) {
-    for (let i = 0; i < psIds.length; i += 500) {
-      const chunk = psIds.slice(i, i + 500);
-      const { data: srRows } = await sb
-        .schema('diagnostics' as never)
-        .from('session_results')
-        .select('session_id, teacher_note')
-        .in('session_id', chunk);
-      for (const sr of (srRows ?? []) as Array<{ session_id: string; teacher_note: string | null }>) {
-        if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외(히트맵/리포트와 동일)
-        gradedPrintSessionIds.add(sr.session_id);
+    // chunk + range 페이지네이션 (items 와 동일 — 1000행 한계로 결과 잘림 방지)
+    for (let i = 0; i < psIds.length; i += 300) {
+      const chunk = psIds.slice(i, i + 300);
+      for (let from = 0; ; from += 1000) {
+        const { data: srRows } = await sb
+          .schema('diagnostics' as never)
+          .from('session_results')
+          .select('session_id, teacher_note')
+          .in('session_id', chunk)
+          .range(from, from + 999);
+        const rows = (srRows ?? []) as Array<{ session_id: string; teacher_note: string | null }>;
+        for (const sr of rows) {
+          if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외(히트맵/리포트와 동일)
+          gradedPrintSessionIds.add(sr.session_id);
+        }
+        if (rows.length < 1000) break;
       }
     }
   }
