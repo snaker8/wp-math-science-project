@@ -298,6 +298,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ★ Mac(NFD) 파일명 정규화 — 맥 업로드 파일명은 한글 NFD(자모 분해)라 학년/과목 힌트
+    //   정규식·DB 제목이 깨짐(맥에서만). NFC 정규화는 이미 NFC인 윈도우 문자열엔 무변화(멱등).
+    mainFileName = mainFileName.normalize('NFC');
+
     // 파일 유형 검증
     const fileType = getFileType(mainFileName);
     if (!fileType) {
@@ -537,6 +541,7 @@ export async function GET(request: NextRequest) {
       if (fileName === encodedName) {
         try { fileName = decodeURIComponent(encodedName); } catch { /* 구버전 호환 */ }
       }
+      fileName = fileName.normalize('NFC'); // ★ Mac(NFD) 정규화 — 윈도우(NFC)는 무변화(멱등)
       const storagePath = `uploads/${mainFile.name}`;
       job = {
         id: jobId,

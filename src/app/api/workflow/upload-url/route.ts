@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
     if (!suffix) {
       try {
         const metaPath = `uploads/${jobId}.meta.json`;
-        const metaBody = JSON.stringify({ originalFilename: fileName, createdAt: new Date().toISOString() });
+        // ★ Mac(NFD) 파일명 정규화 후 저장 — 복원 시 한글 힌트/제목 깨짐 방지 (윈도우 NFC는 무변화)
+        const metaBody = JSON.stringify({ originalFilename: fileName.normalize('NFC'), createdAt: new Date().toISOString() });
         await supabaseAdmin.storage
           .from('source-files')
           .upload(metaPath, new Blob([metaBody], { type: 'application/json' }), { upsert: true });
