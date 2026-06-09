@@ -2194,11 +2194,14 @@ function ProblemDetailPanel({
 
         {/* ===== 자산화된 문제: OCR 텍스트 + 원본 이미지 + 선택지 ===== */}
         {problem.content && problem.status !== 'pending' && (() => {
+          // ★ content 가 문자열이 아닐 수 있음(재OCR 실패/배치 에러 경로에서 객체 등) → 강제 문자열화.
+          //   안 하면 content.includes/replace 에서 "includes is not a function" 으로 페이지 전체 크래시.
+          const rawContent = typeof problem.content === 'string' ? problem.content : String(problem.content ?? '');
           // OCR 텍스트 전처리
-          if (problem.content.includes('displaystyle')) {
-            console.log(`[DEBUG] 문제 ${problem.number} displaystyle 포함:`, JSON.stringify(problem.content.substring(0, 300)));
+          if (rawContent.includes('displaystyle')) {
+            console.log(`[DEBUG] 문제 ${problem.number} displaystyle 포함:`, JSON.stringify(rawContent.substring(0, 300)));
           }
-          let displayContent = problem.content
+          let displayContent = rawContent
             .replace(/\n{3,}/g, '\n\n').trim();
           // ★ $ 밖의 \displaystyle 수식을 $$...$$ 로 감싸기 (여러 줄 지원)
           // 괄호가 모두 닫힐 때까지 수집
