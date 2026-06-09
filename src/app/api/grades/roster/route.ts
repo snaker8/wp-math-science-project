@@ -21,6 +21,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter } from '@/lib/security/institute-guard';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -48,13 +49,18 @@ export async function GET() {
   }
   const sb = supabaseAdmin;
 
-  // 1) 학원 내 학생(users) 목록
+  // 1) 학생(users) 목록 — 활성 센터(자사관) 선택 시 그 센터 학생만 (super_admin 포함).
+  //   /api/users/students 와 동일 규칙: activeInstituteId 있으면 핀, 없으면 scope 기본 필터.
+  //   (super_admin 이라도 센터 선택돼 있으면 전 학원 섞임 차단. 다른 학원은 센터 전환으로.)
+  const activeInstituteId = resolveActiveInstitute(scope);
   const studentsQuery = sb
     .from('users')
     .select('id, full_name, email, grade')
     .eq('role', 'STUDENT')
     .is('deleted_at', null);
-  const { data: stuRows, error: stuErr } = await applyInstituteFilter(studentsQuery, scope);
+  const { data: stuRows, error: stuErr } = activeInstituteId
+    ? await studentsQuery.eq('institute_id', activeInstituteId)
+    : await applyInstituteFilter(studentsQuery, scope);
   if (stuErr) {
     return NextResponse.json({ error: stuErr.message }, { status: 500 });
   }
