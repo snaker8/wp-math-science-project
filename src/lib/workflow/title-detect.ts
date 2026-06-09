@@ -15,6 +15,9 @@ export const MIDDLE_SCHOOL_PATTERN = /[가-힣]{1,6}중(?:학교)?(?!\d)(?!간|�
  */
 export function detectSubjectFromTitle(title: string): string {
   if (!title) return '';
+  // ★ Mac(NFD) 제목/파일명 정규화 — 맥 한글은 NFD(자모 분해)라 /중/·/수학/ 등 NFC 정규식이
+  //   전부 false → 과목 오감지(맥에서만, 같은 파일 윈도우 정상). NFC 는 윈도우 문자열엔 무변화(멱등).
+  title = title.normalize('NFC');
 
   // ★ 중학교 이름 감지: "사직중", "여명중", "OO중학교" 등
   // "고등학교"가 명시되어 있으면 중학교 아님
@@ -91,6 +94,7 @@ export function detectSubjectFromTitle(title: string): string {
  */
 export function detectGradeFromTitle(title: string): string {
   if (!title) return '';
+  title = title.normalize('NFC'); // ★ Mac(NFD) 정규화 — 윈도우(NFC)는 무변화(멱등)
 
   // ★ 중학교 이름 감지 ("고등학교" 있으면 제외)
   const hasHighSchool = /고등학교|고등/.test(title);
@@ -204,6 +208,7 @@ const DIFFICULTY_KEYWORDS: Array<{ key: RegExp; value: string }> = [
  */
 export function detectDiagnosticMetaFromTitle(title: string): DiagnosticMeta {
   if (!title) return EMPTY_DIAG;
+  title = title.normalize('NFC'); // ★ Mac(NFD) 정규화 — 윈도우(NFC)는 무변화(멱등)
 
   const m = title.match(DIAG_PATTERN);
   if (!m) return EMPTY_DIAG;
