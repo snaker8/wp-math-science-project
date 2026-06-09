@@ -43,6 +43,8 @@ const FOOTER_H = 36;
 const HEADER_H = 130; // 페이지1 시험명/학생/QR 헤더 예약 높이
 const CONTENT_H = A4_H - PAGE_PAD * 2 - FOOTER_H;
 const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
+const COLUMN_GAP = 16; // 2단 컬럼 간격 (px) — 측정폭·렌더 동일 사용
+const CONTENT_W = 794 - PAGE_PAD * 2; // 페이지 본문 폭
 
 function SessionPrintInner() {
   const params = useParams();
@@ -144,6 +146,13 @@ function SessionPrintInner() {
     return () => { cancelled = true; };
   }, [problems, measured, cacheKeyFor]);
 
+  // 측정폭 — 숨김 측정 패스에서 각 문제를 "컬럼 폭"으로 렌더해 자연 높이를 잰다.
+  const measureWidth = columns === 2 ? (CONTENT_W - COLUMN_GAP) / 2 : CONTENT_W;
+
+  // 페이지 분할 — ★ cloud 인쇄와 동일 "2열 그리드(행 정렬)" 방식.
+  //   문제 2개씩 한 행, 행 높이 = 둘 중 큰 쪽(+gap). 행 단위로 페이지 채움 →
+  //   (a) 좌우(1·2) 같은 높이에서 시작, (b) 행이 하단에 안 들어가면 통째로 다음 페이지(잘림 차단).
+  //   (옛 sum/colMult 근사는 좌우 미정렬 + 페이지당 과소 적재[가로로 2개만]의 원인이었음.)
   const pages = useMemo(() => {
     if (!measured || problemHeights.length === 0) {
       const perPage = columns === 2 ? 10 : 5;
@@ -151,16 +160,18 @@ function SessionPrintInner() {
       for (let i = 0; i < problems.length; i += perPage) result.push(problems.slice(i, i + perPage));
       return result.length > 0 ? result : [[]];
     }
-    const colMult = columns === 2 ? 2 : 1;
+    const step = columns === 2 ? 2 : 1;
     const result: ExamRenderProblem[][] = [];
     let cur: ExamRenderProblem[] = [];
     let usedH = 0;
-    for (let i = 0; i < problems.length; i++) {
-      const h = (problemHeights[i] + gap) / colMult;
+    for (let i = 0; i < problems.length; i += step) {
+      const rowEnd = Math.min(i + step, problems.length);
+      let rowH = 0;
+      for (let j = i; j < rowEnd; j++) rowH = Math.max(rowH, problemHeights[j] + gap);
       const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
-      if (cur.length > 0 && usedH + h > maxH) { result.push(cur); cur = []; usedH = 0; }
-      cur.push(problems[i]);
-      usedH += h;
+      if (cur.length > 0 && usedH + rowH > maxH) { result.push(cur); cur = []; usedH = 0; }
+      for (let j = i; j < rowEnd; j++) cur.push(problems[j]);
+      usedH += rowH;
     }
     if (cur.length > 0) result.push(cur);
     return result.length > 0 ? result : [[]];
@@ -227,14 +238,23 @@ function SessionPrintInner() {
       </div>
 
       {/* 시험지 페이지들 */}
-      <div ref={measureRef} className="pages-host">
+      {/* 숨겨진 측정 영역 — 각 문제를 컬럼 폭으로 독립 렌더해 자연 높이 측정 (cloud 인쇄와 동일).
+          className="exam-page" 필수: KaTeX 스코프 보정(cases/행렬)이 측정에도 적용돼야 실제 렌더와
+          높이 일치 → 페이지 분할 정확(넘침·잘림 차단). 보이는 렌더(grid 셀 stretch)를 측정하면 왜곡됨. */}
+      <div
+        ref={measureRef}
+        aria-hidden
+        className="exam-page"
+        style={{ position: 'absolute', visibility: 'hidden', top: -99999, left: -99999, width: `${measureWidth}px` }}
+      >
+        {problems.map((problem, idx) => renderProblem(problem, idx))}
+      </div>
+
+      <div className="pages-host">
         {pages.map((pageProblems, pageIdx) => {
           let globalStartIdx = 0;
           for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].length;
           const useManualColumns = columns === 2;
-          const half = Math.ceil(pageProblems.length / 2);
-          const leftProblems = useManualColumns ? pageProblems.slice(0, half) : pageProblems;
-          const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
 
           return (
             <div key={pageIdx} className="preview-exam-page exam-page">
@@ -262,13 +282,8 @@ function SessionPrintInner() {
               )}
 
               {useManualColumns ? (
-                <div className="exam-cols">
-                  <div className="col col-left">
-                    {leftProblems.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
-                  </div>
-                  <div className="col col-right">
-                    {rightProblems.map((problem, i) => renderProblem(problem, globalStartIdx + half + i))}
-                  </div>
+                <div className="exam-grid">
+                  {pageProblems.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
                 </div>
               ) : (
                 <div className="exam-single">
@@ -311,10 +326,10 @@ function SessionPrintInner() {
         .exam-meta-header .hdr-qr-img { width: 76px; height: 76px; }
         .exam-meta-header .hdr-qr-img svg { width: 100%; height: 100%; display: block; }
         .exam-meta-header .hdr-qr-cap { font-size: 9px; color: #555; font-weight: 700; letter-spacing: -0.2px; }
-        .exam-cols { display: flex; gap: 16px; padding-top: 4px; }
-        .exam-cols .col { flex: 1; min-width: 0; }
-        .exam-cols .col-left { border-right: 1px solid #e5e7eb; padding-right: 14px; }
-        .exam-cols .col-right { padding-left: 4px; }
+        /* ★ 2단 = CSS Grid 2열(행 정렬): 문제 2개씩 한 행, 행 높이=둘 중 큰 쪽 → 1·2 같은 높이 시작.
+           (옛 flex 2칸 + 좌우 half-slice 는 측정 왜곡으로 페이지당 2개만 → 가로 배치 사고) */
+        .exam-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: ${COLUMN_GAP}px; align-items: start; padding-top: 4px; }
+        .exam-grid > * { min-width: 0; }
         .exam-single { padding-top: 4px; }
         .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
 
