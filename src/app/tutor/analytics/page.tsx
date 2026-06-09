@@ -22,6 +22,7 @@ import {
 } from 'recharts';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
 import GradeRosterTable from '@/components/grades/GradeRosterTable';
+import StudentDetailModal from '@/components/students/StudentDetailModal';
 
 interface StudentRow {
   id: string;
@@ -111,6 +112,7 @@ export default function TutorAnalyticsPage() {
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
   const router = useRouter();
+  const [modalStudentId, setModalStudentId] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -248,8 +250,13 @@ export default function TutorAnalyticsPage() {
       {/* 학년별 성적 일람표 */}
       <GradeRosterTable
         selectedStudentId={selectedStudent}
-        onSelectStudent={(id) => router.push(`/tutor/students/${id}`)}
+        onSelectStudent={(id) => setModalStudentId(id)}
       />
+
+      {/* 학생 상세 팝업 — 성적 일람표·검색에서 학생 클릭 시 (밑에 인라인 대신 모달) */}
+      {modalStudentId && (
+        <StudentDetailModal studentId={modalStudentId} onClose={() => setModalStudentId(null)} />
+      )}
 
       {/* 학생 선택 */}
       <Card title="학생 선택" icon={Users}>
@@ -310,7 +317,7 @@ export default function TutorAnalyticsPage() {
                           onClick={() => {
                             setDropdownOpen(false);
                             setSearchQuery('');
-                            router.push(`/tutor/students/${s.id}`);
+                            setModalStudentId(s.id);
                           }}
                           className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 ${
                             selectedStudent === s.id ? 'bg-indigo-50 text-indigo-700' : ''
