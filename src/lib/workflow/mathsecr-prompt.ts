@@ -96,7 +96,12 @@ export function resolveSubjectCode(gradeHint?: string, subject?: string): string
  * 과목 코드에 해당하는 소단원(L3) 테이블을 프롬프트 문자열로 반환
  * AI가 typeCode를 선택할 수 있도록 코드 + 경로 형태
  */
-export function buildTypeTable(subjectCode: string): string {
+export function buildTypeTable(subjectCode: string | string[]): string {
+  // ★ 학기 불명 등으로 배열(['03','04'])이 들어오면 각 학기 테이블을 합산.
+  //   문자열 단일 호출은 아래 로직 그대로 — 기존 출력 불변.
+  if (Array.isArray(subjectCode)) {
+    return subjectCode.map((c) => buildTypeTable(c)).filter(Boolean).join('\n\n');
+  }
   const tree = loadTree();
   const subject = tree.find(s => s.c === subjectCode);
   if (!subject) return '';
@@ -132,7 +137,12 @@ export function buildTypeTable(subjectCode: string): string {
  * 일반적으로 한 과목당 3~10K 토큰 수준 (기존 251K의 1/25~1/50).
  * 캐시 만료돼도 write 비용 미미.
  */
-export function buildL1L2Table(subjectCode: string): string {
+export function buildL1L2Table(subjectCode: string | string[]): string {
+  // ★ 배열(학기 불명)이면 각 학기 L1L2 합산. 각 행 코드의 MS{과목} prefix로 학기 구분됨.
+  //   → 2단계 분류가 배열에서도 작동 (예전엔 빈 테이블 반환 → 212K 폴백 폭발 버그).
+  if (Array.isArray(subjectCode)) {
+    return subjectCode.map((c) => buildL1L2Table(c)).filter(Boolean).join('\n');
+  }
   const tree = loadTree();
   const subject = tree.find(s => s.c === subjectCode);
   if (!subject) return '';
