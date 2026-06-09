@@ -678,6 +678,18 @@ const GROUP_TYPES = [
   { id: 'mock', label: '모의고사', desc: '실제 시험과 동일한 구성의 모의고사', icon: GraduationCap },
 ] as const;
 
+// ★ 상단 출처 카테고리 ↔ 같은 이름의 최상위 폴더 연결.
+//   해당 이름의 최상위 폴더가 있으면 그 카테고리는 "폴더 기준"으로 동작
+//   (좌측 = 그 폴더의 하위 트리(빈 학년 폴더 포함), 우측 = 그 폴더+하위 시험지).
+//   없으면(모의고사·성취도 등 폴더 미생성) 기존 exam-type 기준 유지.
+const CATEGORY_FOLDER_NAME: Record<string, string> = {
+  diagnostic: '진단평가',
+  achievement: '성취도평가',
+  school: '학교기출',
+  textbook: '시중교재',
+  mock: '모의고사',
+};
+
 const CreateGroupModal: React.FC<{
   parentId: string | null; // null이면 최상위 그룹
   onSave: (data: { name: string; groupType: string; parentId: string | null }) => Promise<void>;
@@ -1204,6 +1216,13 @@ export default function CloudPage() {
     return null;
   }, []);
 
+  // ★ 카테고리(sourceCategory)에 대응하는 최상위 폴더 노드 (이름 일치). 없으면 null → 기존 type 기준.
+  const findCategoryRoot = useCallback((cat: string): TreeNode | null => {
+    const nm = CATEGORY_FOLDER_NAME[cat];
+    if (!nm) return null;
+    return treeNodes.find((n) => !n.isVirtual && n.parentId === null && n.name === nm) || null;
+  }, [treeNodes]);
+
   // 과목 필터 적용된 시험지
   const subjectFilteredExams = useMemo(() => {
     if (subject === '전체') return dbExams;
@@ -1218,6 +1237,12 @@ export default function CloudPage() {
   //   exam-create 의 SOURCE_TABS 분류와 동일 — 한 화면 일관성.
   const categoryFilteredExams = useMemo(() => {
     if (sourceCategory === 'all') return subjectFilteredExams;
+    // ★ 같은 이름 최상위 폴더가 있으면 그 폴더(+하위)에 든 시험지로 스코프 (폴더 기준)
+    const catRoot = findCategoryRoot(sourceCategory);
+    if (catRoot) {
+      const ids = new Set(collectGroupIds(catRoot));
+      return subjectFilteredExams.filter((e) => e.bookGroupId && ids.has(e.bookGroupId));
+    }
     return subjectFilteredExams.filter((e) => {
       const titleStr = e.title || e.fileName || '';
       switch (sourceCategory) {
@@ -1241,7 +1266,7 @@ export default function CloudPage() {
           return true;
       }
     });
-  }, [subjectFilteredExams, sourceCategory]);
+  }, [subjectFilteredExams, sourceCategory, findCategoryRoot]);
 
   // ★ Sub-필터 적용 후 최종 examPool — 진단평가: BS/DD/PT/SC + 회차, 모의고사: 연도
   const subFilteredExams = useMemo(() => {
@@ -1314,7 +1339,7 @@ export default function CloudPage() {
       }
     }
 
-    const rebuild = (nodes: TreeNode[]): TreeNode[] => {
+    const rebuild = (nodes: TreeNode[], hideEmpty: boolean): TreeNode[] => {
       const result: TreeNode[] = [];
       for (const n of nodes) {
         if (n.id === 'all') {
@@ -1327,21 +1352,40 @@ export default function CloudPage() {
           }
           continue;
         }
-        const children = rebuild(n.children);
+        const children = rebuild(n.children, hideEmpty);
         const directCount = examCountMap.get(n.id) || 0;
         const childExamSum = children.reduce((sum, c) => {
           if (c.id === 'all' || c.id === 'unclassified') return sum;
           return sum + c.examCount;
         }, 0);
         const totalCount = directCount + childExamSum;
-        if (sourceCategory !== 'all' && totalCount === 0) continue;
+        if (hideEmpty && totalCount === 0) continue;
         result.push({ ...n, examCount: directCount, children });
       }
       return result;
     };
 
-    return rebuild(treeNodes);
-  }, [treeNodes, subFilteredExams, sourceCategory]);
+    // ★ 카테고리↔폴더: 같은 이름 최상위 폴더가 있으면 그 폴더의 하위 트리만 표시(빈 학년 폴더 포함).
+    //   상단 버튼 = 그 폴더 선택과 동일하게 좌측이 따라옴.
+    const catRoot = findCategoryRoot(sourceCategory);
+    if (catRoot) {
+      const allNode: TreeNode = {
+        id: 'all', name: '전체 시험지', parentId: null, subject: null,
+        children: [], isExpanded: true, examCount: subFilteredExams.length, isVirtual: true,
+      };
+      const children = rebuild(catRoot.children, false); // 빈 폴더도 표시 (파일링용)
+      const result: TreeNode[] = [allNode, ...children];
+      if (unclassifiedCount > 0) {
+        result.push({
+          id: 'unclassified', name: '미분류', parentId: null, subject: null,
+          children: [], isExpanded: false, examCount: unclassifiedCount, isVirtual: true,
+        });
+      }
+      return result;
+    }
+
+    return rebuild(treeNodes, sourceCategory !== 'all');
+  }, [treeNodes, subFilteredExams, sourceCategory, findCategoryRoot]);
 
   const exams: ExamFile[] = useMemo(() => {
     if (!selectedId || subFilteredExams.length === 0) return [];
@@ -1590,8 +1634,14 @@ export default function CloudPage() {
           <div className="flex items-center gap-1 border-l border-subtle/50 pl-3">
             {SOURCE_CATEGORIES.map((cat) => {
               const isActive = sourceCategory === cat.id;
+              const catRootForCount = cat.id === 'all' ? null : findCategoryRoot(cat.id);
               const count = cat.id === 'all'
                 ? subjectFilteredExams.length
+                : catRootForCount
+                ? (() => {
+                    const ids = new Set(collectGroupIds(catRootForCount));
+                    return subjectFilteredExams.filter((e) => e.bookGroupId && ids.has(e.bookGroupId)).length;
+                  })()
                 : subjectFilteredExams.filter((e) => {
                     const titleStr = e.title || e.fileName || '';
                     switch (cat.id) {
