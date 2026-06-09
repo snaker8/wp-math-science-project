@@ -99,6 +99,22 @@ export async function GET() {
     }
   }
 
+  // 4-pre) promoted roster 확장 — 엑셀 채점 세션은 roster id 로 키됨.
+  //   roster_students.promoted_user_id = users.id 로 연결된 roster 의 세션도 그 정식 user 성적에
+  //   합류해야 함(직접 user.id 매칭만 하면 promoted 학생 진단/EX 가 통째로 누락). analytics 와 동일.
+  const rosterToUser = new Map<string, string>();
+  {
+    const { data: prRows } = await sb
+      .from('roster_students')
+      .select('id, promoted_user_id')
+      .in('promoted_user_id', ids);
+    for (const r of (prRows ?? []) as Array<{ id: string; promoted_user_id: string }>) {
+      if (r.promoted_user_id) rosterToUser.set(r.id, r.promoted_user_id);
+    }
+  }
+  const queryIds = ids.concat(Array.from(rosterToUser.keys())); // 세션 조회용 확장 id
+  const canonId = (sid: string): string => rosterToUser.get(sid) ?? sid; // roster id → 정식 user id
+
   // 4) 진단 / EX — diagnostics.sessions + items
   const diagAgg = new Map<string, ProgressAgg>();
   const exAgg = new Map<string, ProgressAgg>();
@@ -113,7 +129,7 @@ export async function GET() {
     .schema('diagnostics' as never)
     .from('sessions')
     .select('id, student_id, session_type, conducted_at')
-    .in('student_id', ids);
+    .in('student_id', queryIds);
   const sessions = (sessRows ?? []) as Array<{ id: string; student_id: string; session_type: string; conducted_at: string | null }>;
   const sessById = new Map(sessions.map((s) => [s.id, s]));
   if (sessions.length > 0) {
@@ -136,7 +152,7 @@ export async function GET() {
       const s = sessById.get(sid); if (!s) continue;
       const isDiag = DIAG_TYPES.has(s.session_type);
       const m = isDiag ? diagAgg : exAgg;
-      const a = ensure(m, s.student_id);
+      const a = ensure(m, canonId(s.student_id));
       a.correct += p.correct; a.total += p.total;
       const when = s.conducted_at ?? null;
       if (!isDiag && when && (!a.latestAt || when > a.latestAt)) { a.latestAt = when; a.latestPct = pct(p.correct, p.total); }
@@ -148,7 +164,7 @@ export async function GET() {
     .schema('diagnostics' as never)
     .from('print_sessions')
     .select('id, student_id, session_type, completed_at, issued_at')
-    .in('student_id', ids);
+    .in('student_id', queryIds);
   const printSessions = (psRows ?? []) as Array<{ id: string; student_id: string; session_type: string; completed_at: string | null; issued_at: string | null }>;
   const psById = new Map(printSessions.map((p) => [p.id, p]));
   if (printSessions.length > 0) {
@@ -172,7 +188,7 @@ export async function GET() {
       const ps = psById.get(sid); if (!ps) continue;
       const isDiag = DIAG_TYPES.has(ps.session_type);
       const m = isDiag ? diagAgg : exAgg;
-      const a = ensure(m, ps.student_id);
+      const a = ensure(m, canonId(ps.student_id));
       a.correct += p.correct; a.total += p.total;
       const when = ps.completed_at ?? ps.issued_at ?? null;
       if (!isDiag && when && (!a.latestAt || when > a.latestAt)) { a.latestAt = when; a.latestPct = pct(p.correct, p.total); }
