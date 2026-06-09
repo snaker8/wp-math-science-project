@@ -405,9 +405,11 @@ export default function TutorStudentsPage() {
   const statuses = ['전체', 'ACCEPTED', 'PENDING'];
 
   const filteredStudents = students.filter((student) => {
+    // ★ name/email 이 null 일 수 있음(명단 학생은 email 없음) → null 가드 (검색 시 toLowerCase 크래시 차단)
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (student.name || '').toLowerCase().includes(q) ||
+      (student.email || '').toLowerCase().includes(q);
     const matchesClass = filterClass === '전체' || student.className === filterClass;
     const matchesStatus = filterStatus === '전체' || student.status === filterStatus;
 
