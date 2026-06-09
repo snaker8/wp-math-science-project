@@ -149,32 +149,48 @@ function SessionPrintInner() {
   // 측정폭 — 숨김 측정 패스에서 각 문제를 "컬럼 폭"으로 렌더해 자연 높이를 잰다.
   const measureWidth = columns === 2 ? (CONTENT_W - COLUMN_GAP) / 2 : CONTENT_W;
 
-  // 페이지 분할 — ★ cloud 인쇄와 동일 "2열 그리드(행 정렬)" 방식.
-  //   문제 2개씩 한 행, 행 높이 = 둘 중 큰 쪽(+gap). 행 단위로 페이지 채움 →
-  //   (a) 좌우(1·2) 같은 높이에서 시작, (b) 행이 하단에 안 들어가면 통째로 다음 페이지(잘림 차단).
-  //   (옛 sum/colMult 근사는 좌우 미정렬 + 페이지당 과소 적재[가로로 2개만]의 원인이었음.)
-  const pages = useMemo(() => {
+  // 페이지 분할 — ★ "열 우선(세로) 채움": 왼쪽 칸을 위→아래로 꽉 채우고(1,2,3…), 다 차면
+  //   오른쪽 칸(다음 번호 계속 아래로) → 한국 시험지 표준 읽기 순서. 각 칸 높이 ≤ maxH (잘림 차단).
+  //   페이지는 {left, right} 로 보관 → 렌더에서 좌/우 칼럼에 그대로.
+  const pages = useMemo<{ left: ExamRenderProblem[]; right: ExamRenderProblem[] }[]>(() => {
+    // 측정 전 폴백 — 순차 분할 후 좌/우 균등
     if (!measured || problemHeights.length === 0) {
       const perPage = columns === 2 ? 10 : 5;
-      const result: ExamRenderProblem[][] = [];
-      for (let i = 0; i < problems.length; i += perPage) result.push(problems.slice(i, i + perPage));
-      return result.length > 0 ? result : [[]];
+      const res: { left: ExamRenderProblem[]; right: ExamRenderProblem[] }[] = [];
+      for (let i = 0; i < problems.length; i += perPage) {
+        const chunk = problems.slice(i, i + perPage);
+        if (columns === 2) {
+          const half = Math.ceil(chunk.length / 2);
+          res.push({ left: chunk.slice(0, half), right: chunk.slice(half) });
+        } else {
+          res.push({ left: chunk, right: [] });
+        }
+      }
+      return res.length > 0 ? res : [{ left: [], right: [] }];
     }
-    const step = columns === 2 ? 2 : 1;
-    const result: ExamRenderProblem[][] = [];
-    let cur: ExamRenderProblem[] = [];
-    let usedH = 0;
-    for (let i = 0; i < problems.length; i += step) {
-      const rowEnd = Math.min(i + step, problems.length);
-      let rowH = 0;
-      for (let j = i; j < rowEnd; j++) rowH = Math.max(rowH, problemHeights[j] + gap);
-      const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
-      if (cur.length > 0 && usedH + rowH > maxH) { result.push(cur); cur = []; usedH = 0; }
-      for (let j = i; j < rowEnd; j++) cur.push(problems[j]);
-      usedH += rowH;
+
+    const res: { left: ExamRenderProblem[]; right: ExamRenderProblem[] }[] = [];
+    let left: ExamRenderProblem[] = [], right: ExamRenderProblem[] = [];
+    let leftH = 0, rightH = 0, fillingRight = false;
+    const flush = () => { res.push({ left, right }); left = []; right = []; leftH = 0; rightH = 0; fillingRight = false; };
+    for (let i = 0; i < problems.length; i++) {
+      const h = problemHeights[i] + gap;
+      const maxH = res.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
+      if (columns === 1) {
+        if (left.length > 0 && leftH + h > maxH) flush();
+        left.push(problems[i]); leftH += h;
+        continue;
+      }
+      if (!fillingRight) {
+        if (left.length === 0 || leftH + h <= maxH) { left.push(problems[i]); leftH += h; }
+        else { fillingRight = true; i--; } // 왼쪽 꽉 참 → 같은 문제를 오른쪽에서 재시도
+      } else {
+        if (right.length === 0 || rightH + h <= maxH) { right.push(problems[i]); rightH += h; }
+        else { flush(); i--; } // 오른쪽도 꽉 참 → 새 페이지에서 재시도
+      }
     }
-    if (cur.length > 0) result.push(cur);
-    return result.length > 0 ? result : [[]];
+    if (left.length > 0 || right.length > 0) flush();
+    return res.length > 0 ? res : [{ left: [], right: [] }];
   }, [problems, problemHeights, measured, columns, gap]);
 
   if (metaErr) {
@@ -251,9 +267,9 @@ function SessionPrintInner() {
       </div>
 
       <div className="pages-host">
-        {pages.map((pageProblems, pageIdx) => {
+        {pages.map((page, pageIdx) => {
           let globalStartIdx = 0;
-          for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].length;
+          for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].left.length + pages[p].right.length;
           const useManualColumns = columns === 2;
 
           return (
@@ -282,12 +298,17 @@ function SessionPrintInner() {
               )}
 
               {useManualColumns ? (
-                <div className="exam-grid">
-                  {pageProblems.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
+                <div className="exam-cols">
+                  <div className="col col-left">
+                    {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
+                  </div>
+                  <div className="col col-right">
+                    {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i))}
+                  </div>
                 </div>
               ) : (
                 <div className="exam-single">
-                  {pageProblems.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
+                  {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
                 </div>
               )}
             </div>
@@ -326,10 +347,12 @@ function SessionPrintInner() {
         .exam-meta-header .hdr-qr-img { width: 76px; height: 76px; }
         .exam-meta-header .hdr-qr-img svg { width: 100%; height: 100%; display: block; }
         .exam-meta-header .hdr-qr-cap { font-size: 9px; color: #555; font-weight: 700; letter-spacing: -0.2px; }
-        /* ★ 2단 = CSS Grid 2열(행 정렬): 문제 2개씩 한 행, 행 높이=둘 중 큰 쪽 → 1·2 같은 높이 시작.
-           (옛 flex 2칸 + 좌우 half-slice 는 측정 왜곡으로 페이지당 2개만 → 가로 배치 사고) */
-        .exam-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: ${COLUMN_GAP}px; align-items: start; padding-top: 4px; }
-        .exam-grid > * { min-width: 0; }
+        /* ★ 2단 = 좌/우 칼럼(열 우선 세로 채움) + 가운데 구분선. 왼쪽 칸에 1,2,3… 위→아래로,
+           꽉 차면 오른쪽 칸. align-items:stretch 로 구분선이 더 긴 칸 높이까지 내려감. */
+        .exam-cols { display: flex; gap: ${COLUMN_GAP}px; padding-top: 4px; align-items: stretch; }
+        .exam-cols .col { flex: 1; min-width: 0; }
+        .exam-cols .col-left { border-right: 1px solid #cbd5e1; padding-right: ${COLUMN_GAP}px; }
+        .exam-cols .col-right { padding-left: 2px; }
         .exam-single { padding-top: 4px; }
         .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
 
