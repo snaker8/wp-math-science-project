@@ -480,7 +480,7 @@ export default function ExamManagementPage() {
     '수학': ['전체', '중1 수학', '중1-1 수학', '중1-2 수학', '중2 수학', '중2-1 수학', '중2-2 수학', '중3 수학', '중3-1 수학', '중3-2 수학', '공통수학1', '공통수학2', '수학1', '수학2', '미적분', '확률과통계', '기하', '중등 수학'],
     '과학': ['전체', '공통과학1', '공통과학2', '물리학1', '물리학2', '화학1', '화학2', '생명과학1', '생명과학2', '지구과학1', '지구과학2'],
   } as const;
-  const EXAM_TYPES = ['전체', '모의고사', '학교기출'] as const;
+  const EXAM_TYPES = ['전체', '학교기출', '진단평가', '성취도 평가', '모의고사'] as const;
   const GRADES = ['전체', '중1', '중2', '중3', '고1', '고2', '고3'] as const;
   // PR-T10 — 활성 트랙으로 카테고리 강제. flag false 또는 Provider 없으면 '수학' fallback.
   const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
@@ -594,8 +594,12 @@ export default function ExamManagementPage() {
       if (subjectCategory === '수학' && isScienceSubject) return false;
       // 세부과목 필터 (전체가 아닐 때만)
       if (subjectFilter !== '전체' && subj !== subjectFilter) return false;
-      // 유형
-      if (examTypeFilter !== '전체' && (e.examType || '학교기출') !== examTypeFilter) return false;
+      // 유형 (진단평가는 변형 제목[진단평가A/B/C, 기말대비-진단평가 등]까지 prefix 로 포함)
+      if (examTypeFilter !== '전체') {
+        const et = e.examType || '학교기출';
+        const typeMatch = examTypeFilter === '진단평가' ? et.includes('진단평가') : et === examTypeFilter;
+        if (!typeMatch) return false;
+      }
       // 학년
       if (gradeFilter !== '전체') {
         const examGrade = e.grade || '';
