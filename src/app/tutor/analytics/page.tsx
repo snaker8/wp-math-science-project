@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -109,6 +110,7 @@ export default function TutorAnalyticsPage() {
   const [studentsLoading, setStudentsLoading] = useState(true);
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
+  const router = useRouter();
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -246,7 +248,7 @@ export default function TutorAnalyticsPage() {
       {/* 학년별 성적 일람표 */}
       <GradeRosterTable
         selectedStudentId={selectedStudent}
-        onSelectStudent={(id) => { setSelectedStudent(id); setDropdownOpen(false); }}
+        onSelectStudent={(id) => router.push(`/tutor/students/${id}`)}
       />
 
       {/* 학생 선택 */}
@@ -306,9 +308,9 @@ export default function TutorAnalyticsPage() {
                           key={s.id}
                           type="button"
                           onClick={() => {
-                            setSelectedStudent(s.id);
                             setDropdownOpen(false);
                             setSearchQuery('');
+                            router.push(`/tutor/students/${s.id}`);
                           }}
                           className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 ${
                             selectedStudent === s.id ? 'bg-indigo-50 text-indigo-700' : ''
