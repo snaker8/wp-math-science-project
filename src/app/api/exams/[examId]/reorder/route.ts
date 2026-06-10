@@ -12,6 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertExamAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +21,16 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> },
 ) {
+  // ★ 인증 + 멀티테넌시 가드 — 비로그인/타 학원 사용자의 임의 순서 변경 차단
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   const { examId } = await params;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   const sb = supabaseAdmin;
 
   let body: { orderedProblemIds?: unknown };

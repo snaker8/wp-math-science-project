@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "db:generate": "supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/database.ts",
     "db:push": "supabase db push"
   },
@@ -76,6 +78,7 @@
     "eslint-config-next": "14.1.0",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.8"
   }
 }

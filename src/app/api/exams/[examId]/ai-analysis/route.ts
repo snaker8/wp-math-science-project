@@ -149,7 +149,7 @@ export async function POST(
     .select('problem_id, type_code, expanded_type_code, difficulty, cognitive_domain')
     .in('problem_id', problemIds);
 
-  const classByProblem = new Map<string, (typeof classifications)[number]>();
+  const classByProblem = new Map<string, NonNullable<typeof classifications>[number]>();
   (classifications || []).forEach((c) => {
     if (c.problem_id) classByProblem.set(c.problem_id, c);
   });

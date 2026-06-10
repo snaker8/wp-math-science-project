@@ -25,7 +25,7 @@ const LEVEL_TONE: Record<Achievement, { text: string; bar: string; bg: string; b
   caution: { text: 'text-amber-300',   bar: 'bg-amber-500',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   stroke: '#f59e0b', emoji: '🟡' },
   weak:    { text: 'text-rose-300',    bar: 'bg-rose-500',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    stroke: '#f43f5e', emoji: '🔴' },
 };
-const VARIANT_LABEL = (v: 'A' | 'B' | 'C' | null) => (v ? `${v}형` : '기타');
+const VARIANT_LABEL = (v: string | null) => (v ? `${v}형` : '기타');
 
 function Panel({ title, icon, hint, children, className = '' }: {
   title: string; icon?: React.ReactNode; hint?: string; children: React.ReactNode; className?: string;

@@ -20,7 +20,7 @@ import { gradeIntToLabel } from '@/lib/students/grade-label';
 import CreateSessionsModal from '@/components/prescription/CreateSessionsModal';
 import GradingSheetUpload from '@/components/grading/GradingSheetUpload';
 // 채점 허브 통합 — 수동 입력 폼 (진단/시험지 공통, 같은 컴포넌트 재사용)
-import { ManualGradingEntry } from '@/app/dashboard/prescription/entry/page';
+import { ManualGradingEntry } from '@/app/dashboard/prescription/entry/ManualGradingEntry';
 // 채점 허브 통합 — 엑셀 일괄 채점 (시험지 선택 → 학생 답안 엑셀 업로드, 같은 컴포넌트 재사용)
 import StudentsTab from '@/app/dashboard/exam-analysis/[examId]/StudentsTab';
 import { useExamList } from '@/hooks/useExamProblems';
