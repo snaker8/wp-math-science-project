@@ -187,6 +187,49 @@ async function main() {
     for (const r of rows) examTitle.set(r.id, r.title);
   }
 
+  // 4.5) 개별수업(homeroom 흡수분, PR #297) — 반 등록·주간 플랜·최근 수업 기록
+  //      테이블 미존재(마이그 전) 시에도 전체 내보내기가 죽지 않도록 try 묶음.
+  interface DiagEnroll {
+    student_id: string; class_id: string; stage: number; care_weight: number; note: string | null;
+  }
+  interface DiagPlan { student_id: string; week_start: string; target_units: string[]; goals: string | null; notes: string | null }
+  interface DiagAtt { student_id: string; meeting_id: string; attendance: string; target_units: string[]; homeroom_note: string | null }
+  let lessonEnrolls: DiagEnroll[] = [];
+  const lessonClassName = new Map<string, string>();
+  let lessonPlans: DiagPlan[] = [];
+  let lessonAtts: DiagAtt[] = [];
+  const meetingDate = new Map<string, string>();
+  try {
+    lessonEnrolls = await fetchAll<DiagEnroll>(
+      (f, t) => sb.from('diag_enrollments')
+        .select('student_id, class_id, stage, care_weight, note')
+        .is('ended_at', null).range(f, t),
+      'diag_enrollments',
+    );
+    const lessonClasses = await fetchAll<{ id: string; name: string }>(
+      (f, t) => sb.from('diag_classes').select('id, name').range(f, t), 'diag_classes',
+    );
+    for (const r of lessonClasses) lessonClassName.set(r.id, r.name);
+    lessonPlans = await fetchAll<DiagPlan>(
+      (f, t) => sb.from('diag_lesson_plans')
+        .select('student_id, week_start, target_units, goals, notes')
+        .order('week_start', { ascending: false }).range(f, t),
+      'diag_lesson_plans',
+    );
+    lessonAtts = await fetchAll<DiagAtt>(
+      (f, t) => sb.from('diag_meeting_attendances')
+        .select('student_id, meeting_id, attendance, target_units, homeroom_note')
+        .range(f, t),
+      'diag_meeting_attendances',
+    );
+    const lessonMeetings = await fetchAll<{ id: string; meet_date: string }>(
+      (f, t) => sb.from('diag_class_meetings').select('id, meet_date').range(f, t), 'diag_class_meetings',
+    );
+    for (const r of lessonMeetings) meetingDate.set(r.id, r.meet_date);
+  } catch (e) {
+    console.warn('[export] 개별수업 테이블 조회 실패 (마이그 전이면 정상):', (e as Error).message);
+  }
+
   // 5) 단원 상태 (α/β/γ)
   const nodeStats = await fetchAll<NodeStat>(
     (f, t) => diag().from('student_node_status')
@@ -251,6 +294,20 @@ async function main() {
     m.set(it.error_cause, (m.get(it.error_cause) || 0) + 1);
     byStudent.errors.set(sid, m);
   }
+  // 개별수업 인덱스
+  const lessonEnrollBy = new Map<string, DiagEnroll[]>();
+  for (const e of lessonEnrolls) {
+    (lessonEnrollBy.get(e.student_id) ?? lessonEnrollBy.set(e.student_id, []).get(e.student_id)!).push(e);
+  }
+  const lessonPlanBy = new Map<string, DiagPlan[]>();
+  for (const p of lessonPlans) {
+    (lessonPlanBy.get(p.student_id) ?? lessonPlanBy.set(p.student_id, []).get(p.student_id)!).push(p);
+  }
+  const lessonAttBy = new Map<string, DiagAtt[]>();
+  for (const a of lessonAtts) {
+    (lessonAttBy.get(a.student_id) ?? lessonAttBy.set(a.student_id, []).get(a.student_id)!).push(a);
+  }
+  const ATT_KO: Record<string, string> = { present: '출석', late: '지각', absent: '결석', makeup: '보강' };
 
   // ─── 학생 노트 생성 ───
   ensureDir(VAULT);
@@ -329,6 +386,33 @@ async function main() {
     if (errProfile.length > 0) {
       lines.push('## 오답 원인 프로필');
       lines.push(errProfile.map(([c, n]) => `**${c}** ${n}회`).join(' · '));
+      lines.push('');
+    }
+
+    // 개별수업 (homeroom 흡수분 — 데이터 있을 때만)
+    const myEnrolls = lessonEnrollBy.get(st.id) || [];
+    const myPlans = (lessonPlanBy.get(st.id) || []).slice(0, 2);
+    const myAtts = (lessonAttBy.get(st.id) || [])
+      .map((a) => ({ ...a, d: meetingDate.get(a.meeting_id) || '' }))
+      .sort((a, b) => b.d.localeCompare(a.d))
+      .slice(0, 5);
+    if (myEnrolls.length + myPlans.length + myAtts.length > 0) {
+      lines.push('## 개별수업');
+      for (const e of myEnrolls) {
+        lines.push(`- **${lessonClassName.get(e.class_id) || '반 미상'}** · 단계 S${e.stage} · 케어 ${e.care_weight}${e.note ? ` · ${e.note}` : ''}`);
+      }
+      for (const p of myPlans) {
+        const units = (p.target_units || []).join(', ');
+        lines.push(`- 주간 플랜(${p.week_start}): ${p.goals || '-'}${units ? ` — ${units}` : ''}${p.notes ? ` _(${p.notes})_` : ''}`);
+      }
+      if (myAtts.length > 0) {
+        lines.push('');
+        lines.push('| 일자 | 출결 | 단원 | 수업 메모 |');
+        lines.push('|------|------|------|----------|');
+        for (const a of myAtts) {
+          lines.push(`| ${a.d || '-'} | ${ATT_KO[a.attendance] || a.attendance} | ${(a.target_units || []).join(', ') || '-'} | ${(a.homeroom_note || '-').replace(/\|/g, '·').replace(/\n/g, ' ')} |`);
+        }
+      }
       lines.push('');
     }
 
