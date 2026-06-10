@@ -6,6 +6,7 @@
 // ==========================================================================
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { requireAuthScope } from '@/lib/auth/guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,9 @@ function inferFigureTypeFromSvg(svg: string): string | null {
 
 // ── POST: 교정 기록 저장 ──
 export async function POST(request: NextRequest) {
+  // ★ 인증 필수 — 비로그인 임의 기록 차단 (호출처는 모두 로그인 대시보드)
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'DB not configured' }, { status: 500 });
   }
@@ -130,7 +134,10 @@ export async function POST(request: NextRequest) {
 }
 
 // ── GET: 유사 교정 사례 검색 (few-shot 예시용) ──
+// ※ 서버 파이프라인은 이 라우트가 아닌 lib/vision/correction-examples.ts 로 DB 직접 조회 — 인증 영향 없음.
 export async function GET(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'DB not configured' }, { status: 500 });
   }
