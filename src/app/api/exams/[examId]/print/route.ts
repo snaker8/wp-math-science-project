@@ -46,6 +46,22 @@ function extractAnswerValue(answerJson: Record<string, unknown>): unknown {
   return undefined;
 }
 
+/**
+ * 복수정답("모두 고르기"형) 표시 — "③④"/"③, ④" → "③④".
+ *   isMC 일 때만 "3,4" 같은 숫자+구분자도 원형숫자로 변환. 단일/주관식이면 null → 기존 단일 처리.
+ */
+function multiObjectiveKey(str: string, isMC: boolean): string | null {
+  let nums: number[] = [];
+  const circled = str.match(/[①②③④⑤]/g);
+  if (circled && circled.length) {
+    nums = circled.map((c) => '①②③④⑤'.indexOf(c) + 1);
+  } else if (isMC && /^[1-5]\s*번?(?:[\s,，、]+[1-5]\s*번?)+$/.test(str.trim())) {
+    nums = (str.match(/[1-5]/g) || []).map(Number);
+  }
+  const uniq = Array.from(new Set(nums)).filter((n) => n >= 1 && n <= 5).sort((a, b) => a - b);
+  return uniq.length >= 2 ? uniq.map((n) => CIRCLED_NUMS[n]).join('') : null;
+}
+
 function formatAnswerToHtml(
   answerJson: Record<string, unknown>,
   choices: string[]
@@ -60,6 +76,9 @@ function formatAnswerToHtml(
   if (!str || str === '-') return '<span class="empty-ans">-</span>';
 
   if (isMC) {
+    // 복수정답("모두 고르기"형) — "③④"/"3,4" → "③④" 모두 표시
+    const multi = multiObjectiveKey(str, true);
+    if (multi) return multi;
     if (/^[1-5]$/.test(str)) return CIRCLED_NUMS[parseInt(str, 10)];
     if (/^[①②③④⑤]$/.test(str)) return str;
     const circledPrefix = str.match(/^([①②③④⑤])/);
@@ -74,22 +93,31 @@ function formatAnswerToHtml(
 
   // 단답·서답 — 길면 결론부 추출
   let display = str;
-  const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
-  const conclusion = str.match(
-    /(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/
-  );
-  if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
-    display = tailEq[1].trim();
-  } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
-    display = conclusion[1].trim();
-  }
+  // ★ 다부분 서답형((1)(2)(3))·여러 줄·연립({cases}) 답은 결론부 추출/$강제래핑이
+  //   답을 망가뜨린다 (예: "...y=125$ (3) 빨래..."에서 "125$ (3)..."만 잘려 + 닫는 $ 고아).
+  //   → 구조형이면 추출/래핑 모두 건너뛰고 원문 그대로 렌더.
+  const isMultiPart =
+    /\(\s*[1-9]\s*\)[\s\S]*\(\s*[2-9]\s*\)/.test(str) ||
+    /\n/.test(str) ||
+    /\\begin\{(?:cases|aligned|array)\}/.test(str);
+  if (!isMultiPart) {
+    const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
+    const conclusion = str.match(
+      /(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/
+    );
+    if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
+      display = tailEq[1].trim();
+    } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
+      display = conclusion[1].trim();
+    }
 
-  // 수식 자동 래핑 (KaTeX 렌더링 보장)
-  const hasDollar = /\$/.test(display);
-  const looksLikeMath =
-    /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
-  if (!hasDollar && looksLikeMath) {
-    display = `$${display}$`;
+    // 수식 자동 래핑 (KaTeX 렌더링 보장)
+    const hasDollar = /\$/.test(display);
+    const looksLikeMath =
+      /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
+    if (!hasDollar && looksLikeMath) {
+      display = `$${display}$`;
+    }
   }
   return renderMixedContent(display);
 }
@@ -277,7 +305,13 @@ export async function GET(
         const choices = Array.isArray((aj as { choices?: string[] }).choices)
           ? ((aj as { choices: string[] }).choices)
           : [];
-        return formatAnswerToHtml(aj, choices);
+        const html = formatAnswerToHtml(aj, choices);
+        // 서답형(객관식 아님)은 다줄 답이 들어갈 수 있어 세로 여유를 준다.
+        //   답이 실제로 있을 때만 — 빈칸('-')은 콤팩트하게 둔다.
+        if (choices.length < 2 && !html.includes('empty-ans')) {
+          return `<div class="sa-room">${html}</div>`;
+        }
+        return html;
       };
       rows.push(`
         <tr>
@@ -436,6 +470,11 @@ export async function GET(
   table.answer-table .num-cell { width: 12%; font-weight: 700; }
   table.answer-table .ans-cell { width: 38%; color: #1d4ed8; font-weight: 700; }
   table.answer-table .empty-ans { color: #999; }
+  /* 서답형 답 — 다줄 답이 좁게 들어가지 않도록 세로 여유 확보 */
+  table.answer-table .sa-room {
+    min-height: 2.8em; line-height: 1.55;
+    display: flex; align-items: center; justify-content: center;
+  }
   .solution {
     padding: 8px 0 10px;
     border-bottom: 1px dashed #ddd;

@@ -2236,6 +2236,23 @@ function ExamPaperView({
 // Quick Answer View (빠른정답)
 // ============================================================================
 
+/**
+ * 복수정답("모두 고르기"형) 표시 — "③④"/"③, ④" → "③④".
+ *   isMC 일 때만 "3,4" 같은 숫자+구분자도 원형숫자로 변환(주관식 값 나열 오인 방지).
+ *   단일정답·주관식이면 null → 호출부의 기존 단일 처리로 폴백(동작 불변).
+ */
+function multiObjectiveDisplay(str: string, isMC: boolean): string | null {
+  let nums: number[] = [];
+  const circled = str.match(/[①②③④⑤]/g);
+  if (circled && circled.length) {
+    nums = circled.map((c) => '①②③④⑤'.indexOf(c) + 1);
+  } else if (isMC && /^[1-5]\s*번?(?:[\s,，、]+[1-5]\s*번?)+$/.test(str.trim())) {
+    nums = (str.match(/[1-5]/g) || []).map(Number);
+  }
+  const uniq = Array.from(new Set(nums)).filter((n) => n >= 1 && n <= 5).sort((a, b) => a - b);
+  return uniq.length >= 2 ? uniq.map((n) => '①②③④⑤'[n - 1]).join('') : null;
+}
+
 function QuickAnswerView({
   problems,
   examTitle,
@@ -2298,6 +2315,9 @@ function QuickAnswerView({
                 const str = String(ans).trim();
                 // ★ 객관식일 때만 원형숫자/번호 변환 시도
                 if (isMC) {
+                  // 복수정답("모두 고르기"형) — "③④"/"3,4" → "③④" 모두 표시
+                  const multi = multiObjectiveDisplay(str, true);
+                  if (multi) return multi;
                   if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
                   if (/^[①②③④⑤]$/.test(str)) return str;
                   const circledPrefix = str.match(/^([①②③④⑤])/);
@@ -2314,21 +2334,34 @@ function QuickAnswerView({
                 //   빠른정답은 수식 LaTeX 그대로 노출돼선 안 되고 KaTeX로 정식 렌더돼야 함
                 if (!isMC) {
                   let display = str;
-                  const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
-                  const conclusion = str.match(/(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/);
-                  if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
-                    display = tailEq[1].trim();
-                  } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
-                    display = conclusion[1].trim();
+                  // ★ 다부분 서답형((1)(2)(3))·여러 줄·연립({cases}) 답은 결론부 추출/$강제래핑이
+                  //   답을 망가뜨린다 (예: "...y=125$ (3) 빨래..."에서 "125$ (3)..."만 잘려 + 닫는 $ 고아).
+                  //   → 구조형이면 추출/래핑 모두 건너뛰고 원문 그대로 렌더.
+                  const isMultiPart = /\(\s*[1-9]\s*\)[\s\S]*\(\s*[2-9]\s*\)/.test(str)
+                    || /\n/.test(str)
+                    || /\\begin\{(?:cases|aligned|array)\}/.test(str);
+                  if (!isMultiPart) {
+                    const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
+                    const conclusion = str.match(/(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/);
+                    if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
+                      display = tailEq[1].trim();
+                    } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
+                      display = conclusion[1].trim();
+                    }
+                    // ★ $ 래핑 없으면 수식 기호 탐지해 자동 래핑 (KaTeX 렌더링 보장)
+                    //   예: "b^{-4}" → "$b^{-4}$", "6x^5y^8" → "$6x^5y^8$", "x=5" → "$x=5$"
+                    const hasDollar = /\$/.test(display);
+                    const looksLikeMath = /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
+                    if (!hasDollar && looksLikeMath) {
+                      display = `$${display}$`;
+                    }
                   }
-                  // ★ $ 래핑 없으면 수식 기호 탐지해 자동 래핑 (KaTeX 렌더링 보장)
-                  //   예: "b^{-4}" → "$b^{-4}$", "6x^5y^8" → "$6x^5y^8$", "x=5" → "$x=5$"
-                  const hasDollar = /\$/.test(display);
-                  const looksLikeMath = /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
-                  if (!hasDollar && looksLikeMath) {
-                    display = `$${display}$`;
-                  }
-                  return <MixedContentRenderer content={display} className="text-blue-700" />;
+                  // ★ 서답형은 다줄 답이 좁게 들어가지 않도록 세로 여유 확보 (빠른답 행 간격)
+                  return (
+                    <div className="flex items-center justify-center min-h-[2.6em] leading-relaxed">
+                      <MixedContentRenderer content={display} className="text-blue-700" />
+                    </div>
+                  );
                 }
 
                 // 수식 포함 → LaTeX 렌더
@@ -2554,6 +2587,9 @@ function SolutionView({
     if (ans === undefined || ans === '-') return '-';
     if (typeof ans === 'number' && ans >= 1 && ans <= 5) return circledNumbers[ans];
     const str = String(ans).trim();
+    // ★ 복수정답("모두 고르기"형) — "③④" 등 원형숫자 2개 이상이면 모두 표시
+    const multi = multiObjectiveDisplay(str, false);
+    if (multi) return multi;
     // ★ 이미 원형숫자
     if (/^[①②③④⑤]$/.test(str)) return str;
     // ★ 순수 숫자 1~5
