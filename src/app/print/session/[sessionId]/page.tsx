@@ -52,7 +52,7 @@ function SessionPrintInner() {
   const sessionId = String(params?.sessionId || '');
   const variant = search?.get('variant') === 'teacher' ? 'teacher' : 'student';
 
-  const [meta, setMeta] = useState<PrintMeta | null>(null);
+  const [metas, setMetas] = useState<PrintMeta[]>([]);
   const [metaErr, setMetaErr] = useState<string | null>(null);
   const [columns, setColumns] = useState<1 | 2>(2);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동(밀집), 4/6/8=페이지당 고정
@@ -61,20 +61,33 @@ function SessionPrintInner() {
   const [showQr, setShowQr] = useState(true);
   const [qrTarget, setQrTarget] = useState<'answer' | 'grade'>(variant === 'teacher' ? 'grade' : 'answer');
 
-  // 헤더/QR 메타
+  // ★ 인쇄 대상 세션 id 목록 — ?ids=a,b,c 면 전원(묶음 인쇄), 없으면 경로의 단일 세션.
+  const idList = useMemo(() => {
+    const idsParam = search?.get('ids');
+    const list = idsParam ? idsParam.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    return list.length > 0 ? list : (sessionId ? [sessionId] : []);
+  }, [search, sessionId]);
+
+  // 헤더/QR 메타 — 대상 전원 (학생마다 이름·QR 다름, 시험·문제는 동일)
   useEffect(() => {
-    if (!sessionId) return;
+    if (idList.length === 0) return;
     let cancelled = false;
-    fetch(`/api/sessions/${sessionId}/print-meta?variant=${variant}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        if (d.error) setMetaErr(d.error);
-        else setMeta(d as PrintMeta);
-      })
-      .catch(() => { if (!cancelled) setMetaErr('세션 정보를 불러오지 못했습니다.'); });
+    Promise.all(
+      idList.map((id) =>
+        fetch(`/api/sessions/${id}/print-meta?variant=${variant}`)
+          .then((r) => r.json())
+          .catch(() => ({ error: 'fetch' })),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const valid = results.filter((d): d is PrintMeta => d && !d.error);
+      if (valid.length === 0) setMetaErr((results[0] as { error?: string })?.error || '세션 정보를 불러오지 못했습니다.');
+      else setMetas(valid);
+    });
     return () => { cancelled = true; };
-  }, [sessionId, variant]);
+  }, [idList, variant]);
+
+  const meta = metas[0] || null; // 시험·문제·제목 공통 (모두 같은 시험)
 
   // 문제 본문 — 시험지 관리와 동일 훅 (동일 렌더 보장)
   const { problems: dbProblems } = useExamProblems(meta?.examId || null);
@@ -311,55 +324,61 @@ function SessionPrintInner() {
       </div>
 
       <div className="pages-host">
-        {pages.map((page, pageIdx) => {
-          let globalStartIdx = 0;
-          for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].left.length + pages[p].right.length;
-          const useManualColumns = columns === 2;
-          const mb = pageAutoGaps?.[pageIdx] ?? gap; // 프리셋 모드면 자동 분배 간격
+        {metas.map((studentMeta, si) =>
+          pages.map((page, pageIdx) => {
+            let globalStartIdx = 0;
+            for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].left.length + pages[p].right.length;
+            const useManualColumns = columns === 2;
+            const mb = pageAutoGaps?.[pageIdx] ?? gap; // 프리셋 모드면 자동 분배 간격
 
-          return (
-            <div key={pageIdx} className="preview-exam-page exam-page">
-              {pageIdx === 0 && (
-                <header className="exam-meta-header">
-                  <div className="hdr-left">
-                    {headerLabel && <div className="hdr-meta">{headerLabel}</div>}
-                    <div className="hdr-title">{meta?.examTitle || '시험지'}</div>
-                    <div className="hdr-student">
-                      {meta?.studentSchool ? <span className="hdr-school">{meta.studentSchool}</span> : null}
-                      <span className="hdr-name">{meta?.studentName || ''}</span>
+            return (
+              <div
+                key={`${si}-${pageIdx}`}
+                className="preview-exam-page exam-page"
+                style={si > 0 && pageIdx === 0 ? { breakBefore: 'page', pageBreakBefore: 'always' } : undefined}
+              >
+                {pageIdx === 0 && (
+                  <header className="exam-meta-header">
+                    <div className="hdr-left">
+                      {headerLabel && <div className="hdr-meta">{headerLabel}</div>}
+                      <div className="hdr-title">{studentMeta?.examTitle || '시험지'}</div>
+                      <div className="hdr-student">
+                        {studentMeta?.studentSchool ? <span className="hdr-school">{studentMeta.studentSchool}</span> : null}
+                        <span className="hdr-name">{studentMeta?.studentName || ''}</span>
+                      </div>
+                    </div>
+                    {showQr && studentMeta && (() => {
+                      const cur = qrTarget === 'grade' ? studentMeta.qrGrade : studentMeta.qrAnswer;
+                      if (!cur?.svg) return null;
+                      return (
+                        <div className="hdr-qr">
+                          <div className="hdr-qr-img" title={cur.url} dangerouslySetInnerHTML={{ __html: cur.svg }} />
+                          <div className="hdr-qr-cap">{qrTarget === 'grade' ? '강사 채점' : '학생 답안'}</div>
+                        </div>
+                      );
+                    })()}
+                  </header>
+                )}
+
+                {useManualColumns ? (
+                  <div className="exam-cols">
+                    <div className="col col-left">
+                      {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
+                    </div>
+                    <div className="col col-right">
+                      {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i, mb))}
                     </div>
                   </div>
-                  {showQr && meta && (() => {
-                    const cur = qrTarget === 'grade' ? meta.qrGrade : meta.qrAnswer;
-                    if (!cur?.svg) return null;
-                    return (
-                      <div className="hdr-qr">
-                        <div className="hdr-qr-img" title={cur.url} dangerouslySetInnerHTML={{ __html: cur.svg }} />
-                        <div className="hdr-qr-cap">{qrTarget === 'grade' ? '강사 채점' : '학생 답안'}</div>
-                      </div>
-                    );
-                  })()}
-                </header>
-              )}
-
-              {useManualColumns ? (
-                <div className="exam-cols">
-                  <div className="col col-left">
+                ) : (
+                  <div className="exam-single">
                     {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
                   </div>
-                  <div className="col col-right">
-                    {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i, mb))}
-                  </div>
-                </div>
-              ) : (
-                <div className="exam-single">
-                  {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {meta && problems.length === 0 && (
+                )}
+              </div>
+            );
+          }),
+        )}
+        {metas.length > 0 && problems.length === 0 && (
           <div style={{ padding: 40, color: '#6b7280', fontFamily: 'sans-serif' }}>문항을 불러오는 중…</div>
         )}
       </div>

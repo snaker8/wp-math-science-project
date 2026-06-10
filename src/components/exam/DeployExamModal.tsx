@@ -163,12 +163,15 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
               {result.created.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => result.created.forEach((c, i) => setTimeout(
-                    () => window.open(`/print/session/${c.session_id}?variant=student`, '_blank'),
-                    i * 150,
-                  ))}
+                  onClick={() => {
+                    const ids = result.created.map((c) => c.session_id);
+                    if (ids.length === 0) return;
+                    // ★ 학생마다 새 탭(팝업 차단으로 1명만 열림) 대신 한 탭에 전원 묶음
+                    //   → Ctrl+P 한 번에 전체 학생지 PDF (학생마다 페이지 나뉨).
+                    window.open(`/print/session/${ids[0]}?variant=student&ids=${ids.join(',')}`, '_blank');
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-600/50 text-cyan-300 hover:bg-cyan-600/15 text-xs font-semibold"
-                  title="출제된 전체 학생지 PDF를 새 탭으로 엽니다"
+                  title="출제된 전체 학생지를 한 탭에 묶어서 — Ctrl+P 한 번에 전체 PDF"
                 >
                   <Printer className="h-3.5 w-3.5" /> 전체 학생지 PDF
                 </button>
