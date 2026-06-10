@@ -1,0 +1,78 @@
+# ============================================================================
+# .vercelignore — Vercel 배포 시 업로드 제외 패턴 (.gitignore 와 별도 필요).
+#   특히 `--archive=tgz` 사용 시 이 파일이 없으면 working tree 전체가 압축되어
+#   GB 단위 업로드 발생. 2026-06-03 운영 사고로 추가.
+# ============================================================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build artifacts
+.next/
+out/
+build/
+dist/
+
+# Testing
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env (Vercel 대시보드에서 별도 관리)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+nul
+
+# TypeScript / Misc
+*.tsbuildinfo
+.claude/
+
+# Graphify
+graphify-out/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# 로컬 도식 (3.1GB — Supabase Storage 로 이관됨)
+image-pipeline/dasaram_diagram_db/
+
+# 교재 해설 (크기/라이선스)
+curriculum_data/textbook_solutions/
+
+# 진단 시스템 웹챗 원본
+개별맞춤학생프로젝트/
+
+# Git 메타
+.git/
+.gitignore
+
+# Vercel 자체
+.vercel/
+
+# ============================================================================
+# Vercel 빌드에 불필요 — 별도 호스팅 (Vercel 환경 Python 미사용)
+#   yolo-server: HuggingFace Spaces (snaker1107/gwasaram-yolo)
+#   image-pipeline: Railway 또는 별도 호스팅
+# ============================================================================
+yolo-server/
+image-pipeline/
