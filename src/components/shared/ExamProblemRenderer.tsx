@@ -84,7 +84,7 @@ function ExamProblemRendererInner({
   problem,
   gap = 20,
   textSize = '14px',
-  lineHeight = '1.5',
+  lineHeight = '1.65',
   maxFigureWidth = 240,
 }: {
   problem: ExamRenderProblem;
@@ -231,16 +231,16 @@ function ExamProblemRendererInner({
     let isInline = false;
     if (savedLayout) {
       if (savedLayout === 5) { isInline = true; }
-      else if (savedLayout === 3) { gridClass = 'mt-2.5 grid grid-cols-3 gap-x-4 gap-y-2'; }
-      else if (savedLayout === 2) { gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2'; }
+      else if (savedLayout === 3) { gridClass = 'mt-2.5 grid grid-cols-3 gap-x-6 gap-y-2.5'; }
+      else if (savedLayout === 2) { gridClass = 'mt-2.5 grid grid-cols-2 gap-x-8 gap-y-2.5'; }
     } else {
       if (maxLen <= 12) isInline = true;
-      else if (maxLen <= 30) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2';
+      else if (maxLen <= 24) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-8 gap-y-2.5';
     }
     // ★ 그림 객관식이면 inline 강제 해제 + 2열 그리드 기본 (그래프 보기는 폭이 커서 가로 부적합).
     if (hasChoiceImage) {
       isInline = false;
-      if (!savedLayout || savedLayout === 5) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2';
+      if (!savedLayout || savedLayout === 5) gridClass = 'mt-2.5 grid grid-cols-2 gap-x-8 gap-y-2.5';
     }
 
     // ★ 보기 1개 렌더 — 이미지 있으면 <img>(+캡션), 없으면 텍스트.
@@ -262,7 +262,7 @@ function ExamProblemRendererInner({
 
     if (isInline) {
       return (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-7 gap-y-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-9 gap-y-2">
           {items.map((it, ci) => (
             <div key={ci} className="flex items-center gap-2 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
@@ -431,8 +431,8 @@ function ExamProblemRendererInner({
   };
 
   return (
-    <div className="flex gap-2.5">
-      <span className="font-bold text-gray-900 flex-shrink-0" style={{ fontSize: textSize, minWidth: '24px', lineHeight }}>
+    <div className="flex gap-2.5 items-start">
+      <span className="font-bold text-gray-300 flex-shrink-0" style={{ fontSize: `calc(${textSize} + 7px)`, minWidth: '30px', lineHeight }}>
         {problem.number}.
       </span>
       <div className="flex-1 min-w-0">
