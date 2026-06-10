@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import { useOrganizationName } from '@/hooks/useUserScope';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import {
   ChevronDown,
   ChevronRight,
@@ -44,7 +45,8 @@ import {
   AlertTriangle,
   KeyRound,
 } from 'lucide-react';
-import CloudFlowUploader from '@/components/workflow/CloudFlowUploader';
+// ★ 업로드 모달 안에서만 쓰는 무거운 업로더 — dynamic import (열 때만 로드)
+const CloudFlowUploader = dynamic(() => import('@/components/workflow/CloudFlowUploader'), { ssr: false });
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { extractSchoolName } from '@/lib/utils/school-extract';
 
