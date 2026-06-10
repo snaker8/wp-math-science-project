@@ -80,53 +80,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '문항수를 설정해주세요.' }, { status: 400 });
     }
 
-    // ---- 1. 격리 — 자기 institute + 공통 풀 problems 만 사용 가능 ----
-    // classifications 는 institute_id 없으므로 problems → classifications 두 단계.
-    const accessibleProbsBase = supabaseAdmin
-      .from('problems')
-      .select('id')
-      .is('deleted_at', null);
-    const { data: accessibleProbs, error: accErr } = await applyInstituteFilter(
-      accessibleProbsBase,
-      scope,
-      { allowCommonPool: true }
-    );
-    if (accErr) {
-      return NextResponse.json({ error: '문제 조회 실패', detail: accErr.message }, { status: 500 });
-    }
-    const accessibleIds = (accessibleProbs || []).map((p: { id: string }) => p.id);
-    if (accessibleIds.length === 0) {
-      return NextResponse.json({ error: '접근 가능한 문제가 없습니다.' }, { status: 404 });
-    }
-
-    // ---- 2. classifications 에서 type_code 매칭 + 격리 문제만 ----
-    let candidateQuery = supabaseAdmin
-      .from('classifications')
-      .select('problem_id, type_code, difficulty, cognitive_domain')
-      .not('problem_id', 'is', null)
-      .in('problem_id', accessibleIds);
-
-    // type_code 필터: typeCodes 배열에 정확히 매칭되는 것들 또는 prefix 매칭
-    if (typeCodes.length > 0) {
-      const orFilters = typeCodes.map(tc => `type_code.like.${tc}%`).join(',');
-      candidateQuery = candidateQuery.or(orFilters);
+    // ---- 1. classifications 에서 type_code 매칭 (선택적 필터 먼저 — 후보 축소) ----
+    //   ★ 과거: accessible problem_id 전체(.select 1000행 cap)를 먼저 받아 .in() 했더니
+    //     공통 풀이 3천 개를 넘기며 1000개만 잡혀 출제 후보가 통째로 누락되던 사고 (2026-06-10).
+    //     → 순서를 뒤집어, 선택적인 type_code 필터로 후보를 먼저 좁힌 뒤(보통 수백 개)
+    //       그 후보만 institute 접근성 검사. 1000행 cap·거대 IN 절 둘 다 회피.
+    //   classifications 페이지네이션 — type 범위가 넓으면 1000행 초과 가능하므로 range 루프.
+    type ClassRow = { problem_id: string; type_code: string; difficulty: unknown; cognitive_domain: unknown };
+    const allClassRows: ClassRow[] = [];
+    {
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        let cq = supabaseAdmin
+          .from('classifications')
+          .select('problem_id, type_code, difficulty, cognitive_domain')
+          .not('problem_id', 'is', null);
+        if (typeCodes.length > 0) {
+          const orFilters = typeCodes.map(tc => `type_code.like.${tc}%`).join(',');
+          cq = cq.or(orFilters);
+        }
+        const { data: page, error: pageErr } = await cq.range(from, from + PAGE - 1);
+        if (pageErr) {
+          console.error('[Generate] Classifications query error:', pageErr.message);
+          return NextResponse.json({ error: 'DB 조회 실패', detail: pageErr.message }, { status: 500 });
+        }
+        if (!page || page.length === 0) break;
+        allClassRows.push(...(page as ClassRow[]));
+        if (page.length < PAGE) break;
+      }
     }
 
-    const { data: classRows, error: classError } = await candidateQuery.limit(5000);
-
-    if (classError) {
-      console.error('[Generate] Classifications query error:', classError.message);
-      return NextResponse.json({ error: 'DB 조회 실패', detail: classError.message }, { status: 500 });
-    }
-
-    if (!classRows || classRows.length === 0) {
+    if (allClassRows.length === 0) {
       return NextResponse.json(
         { error: '선택한 범위에 등록된 문제가 없습니다.' },
         { status: 404 }
       );
     }
 
-    console.log(`[Generate] Found ${classRows.length} candidate classifications`);
+    // ---- 2. 후보 problem_id 중 접근 가능(자기 institute + 공통 풀)한 것만 남김 ----
+    //   classifications 에는 institute_id 가 없으므로 problems 로 확인. 후보 ID 를 chunk 로
+    //   나눠 .in() (거대 IN 절·URL 길이 한계 회피) + institute 필터.
+    const candidateIds = [...new Set(allClassRows.map(r => r.problem_id))];
+    const accessibleSet = new Set<string>();
+    const ID_CHUNK = 300;
+    for (let i = 0; i < candidateIds.length; i += ID_CHUNK) {
+      const slice = candidateIds.slice(i, i + ID_CHUNK);
+      const base = supabaseAdmin
+        .from('problems')
+        .select('id')
+        .is('deleted_at', null)
+        .in('id', slice);
+      const { data: accRows, error: accErr } = await applyInstituteFilter(base, scope, { allowCommonPool: true });
+      if (accErr) {
+        return NextResponse.json({ error: '문제 조회 실패', detail: accErr.message }, { status: 500 });
+      }
+      for (const r of (accRows || []) as { id: string }[]) accessibleSet.add(r.id);
+    }
+
+    const classRows = allClassRows.filter(r => accessibleSet.has(r.problem_id));
+    if (classRows.length === 0) {
+      return NextResponse.json({ error: '접근 가능한 문제가 없습니다.' }, { status: 404 });
+    }
+
+    console.log(`[Generate] candidates=${candidateIds.length} accessible=${accessibleSet.size} classRows=${classRows.length}`);
 
     // ---- 2. 난이도별 그룹화 ----
     const diffMap: Record<string, string> = {
