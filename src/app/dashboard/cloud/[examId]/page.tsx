@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import {
   ArrowLeft,
   ShoppingCart,
@@ -58,15 +59,15 @@ import { FigureRenderer, figureTypeLabel } from '@/components/shared/FigureRende
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ImagePositionEditor } from '@/components/shared/ImagePositionEditor';
 import { useOrganizationName } from '@/hooks/useUserScope';
-import { TwinProblemModal } from '@/components/papers/TwinProblemModal';
-import { ExamStatsModal } from '@/components/papers/ExamStatsModal';
-import { ProblemEditModal } from '@/components/papers/ProblemEditModal';
-import dynamic from 'next/dynamic';
+// ★ 무거운 모달은 dynamic import (열 때만 로드) — 페이지 청크 축소·전환 가속. 동작 변화 없음.
+const TwinProblemModal = dynamic(() => import('@/components/papers/TwinProblemModal').then(m => m.TwinProblemModal), { ssr: false });
+const ExamStatsModal = dynamic(() => import('@/components/papers/ExamStatsModal').then(m => m.ExamStatsModal), { ssr: false });
+const ProblemEditModal = dynamic(() => import('@/components/papers/ProblemEditModal').then(m => m.ProblemEditModal), { ssr: false });
 const AddProblemsModal = dynamic(() => import('@/components/papers/AddProblemsModal'), { ssr: false });
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
-import { AnswerMatchModal } from '@/components/exam/AnswerMatchModal';
+const AnswerMatchModal = dynamic(() => import('@/components/exam/AnswerMatchModal').then(m => m.AnswerMatchModal), { ssr: false });
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
