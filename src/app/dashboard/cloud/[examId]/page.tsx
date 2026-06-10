@@ -1571,35 +1571,65 @@ function ExamPaperView({
       return result.length > 0 ? result : [[]];
     }
 
-    // ★ 2026-06-04 2열 그리드(행 정렬) 분할 — 문제 2개씩 한 행, 행 높이 = 둘 중 큰 쪽.
-    //   행 단위로 페이지에 채워서 (a) 좌우가 같은 높이에서 시작(1·3, 2·4 정렬),
-    //   (b) 행이 페이지 하단에 안 들어가면 통째로 다음 페이지 → 잘림 차단.
-    //   (기존 sum/colMult 흐름 근사는 좌우 미정렬 + 하단 잘림 원인이었음)
-    const step = columns === 2 ? 2 : 1;
+    // ★ 세로(열 우선) 균형 분할 — 한 페이지 = "좌·우 칼럼 높이 모두 ≤ maxH" 인 최대 문제 묶음.
+    //   페이지 내 문제는 순서 유지(좌=앞부분, 우=뒤부분) → 1·2·3 좌, 4·5·6 우 (세로 읽기).
+    //   균형 최대칼럼높이 = min_k max(앞 k개 합, 나머지 합). 이 값이 maxH 넘으면 다음 페이지.
+    //   (2026-06-04 그리드 "행 정렬"은 1·3/2·4 가로 읽기라 회귀 → 세로 복원. 측정·렌더 동시 변경.)
+    const balancedMaxCol = (hs: number[]): number => {
+      const n = hs.length;
+      if (n === 0) return 0;
+      if (columns === 1) return hs.reduce((s, h) => s + h, 0);
+      if (n === 1) return hs[0];
+      const total = hs.reduce((s, h) => s + h, 0);
+      let prefix = 0;
+      let best = Infinity;
+      for (let k = 1; k < n; k++) {
+        prefix += hs[k - 1];
+        best = Math.min(best, Math.max(prefix, total - prefix));
+      }
+      return best;
+    };
     const result: ProblemData[][] = [];
-    let currentPage: ProblemData[] = [];
-    let usedH = 0;
-
-    for (let i = 0; i < problems.length; i += step) {
-      const rowEnd = Math.min(i + step, problems.length);
-      // 행 높이 = 행에 든 문제들 중 최대 (+gap)
-      let rowH = 0;
-      for (let j = i; j < rowEnd; j++) {
-        rowH = Math.max(rowH, problemHeights[j] + gap);
-      }
+    let pageItems: ProblemData[] = [];
+    let pageHs: number[] = [];
+    for (let i = 0; i < problems.length; i++) {
+      const h = problemHeights[i] + gap;
       const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
-
-      if (currentPage.length > 0 && usedH + rowH > maxH) {
-        result.push(currentPage);
-        currentPage = [];
-        usedH = 0;
+      if (pageItems.length > 0 && balancedMaxCol([...pageHs, h]) > maxH) {
+        result.push(pageItems);
+        pageItems = [];
+        pageHs = [];
       }
-      for (let j = i; j < rowEnd; j++) currentPage.push(problems[j]);
-      usedH += rowH;
+      pageItems.push(problems[i]);
+      pageHs.push(h);
     }
-    if (currentPage.length > 0) result.push(currentPage);
+    if (pageItems.length > 0) result.push(pageItems);
     return result.length > 0 ? result : [[]];
   }, [problems, problemHeights, measured, columns, gap, perPagePreset, FIRST_CONTENT_H, CONTENT_H]);
+
+  // ★ 세로 칼럼 분할 인덱스 — 각 페이지를 좌(앞부분)/우(뒤부분)로 나누는 지점(= 좌 칼럼 문제 수).
+  //   left = page.slice(0, k), right = page.slice(k) → 1·2·3 좌, 4·5·6 우 (세로 읽기).
+  //   측정되면 두 칼럼 높이가 가장 균형이 되는 k, 아니면 개수 절반.
+  const pageSplits = useMemo<number[]>(() => {
+    return pages.map((pageProblems, pageIdx) => {
+      const n = pageProblems.length;
+      if (columns !== 2 || n <= 1) return n; // 1단이거나 1문제면 전부 좌(우 빈칸)
+      if (!measured || problemHeights.length === 0) return Math.ceil(n / 2);
+      let gi = 0;
+      for (let p = 0; p < pageIdx; p++) gi += pages[p].length;
+      const hs = pageProblems.map((_, i) => (problemHeights[gi + i] ?? 0) + gap);
+      const total = hs.reduce((s, h) => s + h, 0);
+      let prefix = 0;
+      let bestK = Math.ceil(n / 2);
+      let bestMax = Infinity;
+      for (let k = 1; k < n; k++) {
+        prefix += hs[k - 1];
+        const mx = Math.max(prefix, total - prefix);
+        if (mx < bestMax) { bestMax = mx; bestK = k; }
+      }
+      return bestK;
+    });
+  }, [pages, problemHeights, measured, columns, gap]);
 
   // === 프리셋 모드: 페이지별 자동 간격 계산 ===
   const pageAutoGaps = useMemo(() => {
@@ -2045,31 +2075,43 @@ function ExamPaperView({
               </div>
             )}
 
-            {/* 문제 영역 — 2단은 CSS Grid 2열 (행 정렬): 문제 2개씩 한 행, 행 높이=둘 중 큰 쪽
-                → 1·3, 2·4 가 같은 높이에서 시작. (기존 CSS columns balance 는 좌우 미정렬) */}
+            {/* 문제 영역 — 2단은 좌/우 flex 칼럼(열 우선 세로 읽기): 좌=앞부분(1·2·3),
+                우=뒤부분(4·5·6). pageSplits[pageIdx] 가 좌 칼럼 문제 수.
+                (2026-06-04 그리드 "행 정렬"은 1·3/2·4 가로 읽기 → 세로 복원, 측정과 동기) */}
             {columns === 2 ? (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  columnGap: `${COLUMN_GAP}px`,
-                  alignItems: 'start',
-                }}
-              >
-                {pageProblems.map((problem) => (
-                  <div
-                    key={problem.id}
-                    className="break-inside-avoid"
-                    style={{
-                      marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
-                      breakInside: 'avoid',
-                      pageBreakInside: 'avoid',
-                    }}
-                  >
-                    {renderProblem(problem)}
-                    <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
-                  </div>
-                ))}
+              <div style={{ display: 'flex', columnGap: `${COLUMN_GAP}px`, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {pageProblems.slice(0, pageSplits[pageIdx] ?? Math.ceil(pageProblems.length / 2)).map((problem) => (
+                    <div
+                      key={problem.id}
+                      className="break-inside-avoid"
+                      style={{
+                        marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
+                        breakInside: 'avoid',
+                        pageBreakInside: 'avoid',
+                      }}
+                    >
+                      {renderProblem(problem)}
+                      <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {pageProblems.slice(pageSplits[pageIdx] ?? Math.ceil(pageProblems.length / 2)).map((problem) => (
+                    <div
+                      key={problem.id}
+                      className="break-inside-avoid"
+                      style={{
+                        marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
+                        breakInside: 'avoid',
+                        pageBreakInside: 'avoid',
+                      }}
+                    >
+                      {renderProblem(problem)}
+                      <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <div>
