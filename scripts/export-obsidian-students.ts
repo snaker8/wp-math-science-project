@@ -50,6 +50,18 @@ const sb: SupabaseClient = createClient(SUPABASE_URL, SERVICE_KEY, {
 });
 const diag = () => sb.schema('diagnostics' as never);
 
+// ─── rcc(개별수업, private-manage.vercel.app) Supabase — 읽기 전용 소스 ───
+//   본 프로젝트와 별개 DB(qplwkourldbiqnpjesyj). student_id 가 전화번호라
+//   본 users.phone 정규화 매칭으로 연결. 키 없으면 개별수업 섹션만 생략.
+const RCC_URL = 'https://qplwkourldbiqnpjesyj.supabase.co';
+const RCC_KEY = process.env.RCC_SUPABASE_SERVICE_KEY || '';
+const rcc: SupabaseClient | null = RCC_KEY
+  ? createClient(RCC_URL, RCC_KEY, { auth: { persistSession: false } })
+  : null;
+
+/** 전화번호 정규화 — 숫자만 남김 (010-1234-5678 / 01012345678 동일 취급) */
+const normPhone = (p: string | null | undefined): string => (p || '').replace(/[^0-9]/g, '');
+
 // ─── 공용 헬퍼: 1000행 한계 페이지네이션 ───
 async function fetchAll<T>(
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
@@ -187,47 +199,61 @@ async function main() {
     for (const r of rows) examTitle.set(r.id, r.title);
   }
 
-  // 4.5) 개별수업(homeroom 흡수분, PR #297) — 반 등록·주간 플랜·최근 수업 기록
-  //      테이블 미존재(마이그 전) 시에도 전체 내보내기가 죽지 않도록 try 묶음.
+  // 4.5) 개별수업(rcc · private-manage.vercel.app) — 별개 Supabase 읽기 전용 연동.
+  //      student_id = 전화번호 → 본 users.phone 정규화 매칭. 키 없으면 섹션 생략.
+  //      ※ 인덱싱 키는 항상 normPhone(student_id).
   interface DiagEnroll {
-    student_id: string; class_id: string; stage: number; care_weight: number; note: string | null;
+    student_id: string; student_name?: string | null; class_id: string;
+    stage: number; care_weight: number; note: string | null;
   }
   interface DiagPlan { student_id: string; week_start: string; target_units: string[]; goals: string | null; notes: string | null }
   interface DiagAtt { student_id: string; meeting_id: string; attendance: string; target_units: string[]; homeroom_note: string | null }
+  interface DiagScore { student_id: string; meeting_id: string; mathsecr_code: string; score: number }
   let lessonEnrolls: DiagEnroll[] = [];
   const lessonClassName = new Map<string, string>();
   let lessonPlans: DiagPlan[] = [];
   let lessonAtts: DiagAtt[] = [];
+  let lessonScores: DiagScore[] = [];
   const meetingDate = new Map<string, string>();
-  try {
-    lessonEnrolls = await fetchAll<DiagEnroll>(
-      (f, t) => sb.from('diag_enrollments')
-        .select('student_id, class_id, stage, care_weight, note')
-        .is('ended_at', null).range(f, t),
-      'diag_enrollments',
-    );
-    const lessonClasses = await fetchAll<{ id: string; name: string }>(
-      (f, t) => sb.from('diag_classes').select('id, name').range(f, t), 'diag_classes',
-    );
-    for (const r of lessonClasses) lessonClassName.set(r.id, r.name);
-    lessonPlans = await fetchAll<DiagPlan>(
-      (f, t) => sb.from('diag_lesson_plans')
-        .select('student_id, week_start, target_units, goals, notes')
-        .order('week_start', { ascending: false }).range(f, t),
-      'diag_lesson_plans',
-    );
-    lessonAtts = await fetchAll<DiagAtt>(
-      (f, t) => sb.from('diag_meeting_attendances')
-        .select('student_id, meeting_id, attendance, target_units, homeroom_note')
-        .range(f, t),
-      'diag_meeting_attendances',
-    );
-    const lessonMeetings = await fetchAll<{ id: string; meet_date: string }>(
-      (f, t) => sb.from('diag_class_meetings').select('id, meet_date').range(f, t), 'diag_class_meetings',
-    );
-    for (const r of lessonMeetings) meetingDate.set(r.id, r.meet_date);
-  } catch (e) {
-    console.warn('[export] 개별수업 테이블 조회 실패 (마이그 전이면 정상):', (e as Error).message);
+  if (rcc) {
+    try {
+      lessonEnrolls = await fetchAll<DiagEnroll>(
+        (f, t) => rcc.from('diag_enrollments')
+          .select('student_id, student_name, class_id, stage, care_weight, note')
+          .is('ended_at', null).range(f, t),
+        'rcc.diag_enrollments',
+      );
+      const lessonClasses = await fetchAll<{ id: string; name: string }>(
+        (f, t) => rcc.from('diag_classes').select('id, name').range(f, t), 'rcc.diag_classes',
+      );
+      for (const r of lessonClasses) lessonClassName.set(r.id, r.name);
+      lessonPlans = await fetchAll<DiagPlan>(
+        (f, t) => rcc.from('diag_lesson_plans')
+          .select('student_id, week_start, target_units, goals, notes')
+          .order('week_start', { ascending: false }).range(f, t),
+        'rcc.diag_lesson_plans',
+      );
+      lessonAtts = await fetchAll<DiagAtt>(
+        (f, t) => rcc.from('diag_meeting_attendances')
+          .select('student_id, meeting_id, attendance, target_units, homeroom_note')
+          .range(f, t),
+        'rcc.diag_meeting_attendances',
+      );
+      lessonScores = await fetchAll<DiagScore>(
+        (f, t) => rcc.from('diag_unit_scores')
+          .select('student_id, meeting_id, mathsecr_code, score').range(f, t),
+        'rcc.diag_unit_scores',
+      );
+      const lessonMeetings = await fetchAll<{ id: string; meet_date: string }>(
+        (f, t) => rcc.from('diag_class_meetings').select('id, meet_date').range(f, t), 'rcc.diag_class_meetings',
+      );
+      for (const r of lessonMeetings) meetingDate.set(r.id, r.meet_date);
+      console.log(`[export] rcc 연동: 등록 ${lessonEnrolls.length} · 플랜 ${lessonPlans.length} · 출결 ${lessonAtts.length} · 단원점수 ${lessonScores.length}`);
+    } catch (e) {
+      console.warn('[export] rcc(개별수업) 조회 실패 — 섹션 생략:', (e as Error).message);
+    }
+  } else {
+    console.log('[export] RCC_SUPABASE_SERVICE_KEY 없음 — 개별수업 섹션 생략');
   }
 
   // 5) 단원 상태 (α/β/γ)
@@ -238,10 +264,11 @@ async function main() {
     'diag.student_node_status',
   );
 
-  // 6) 등장하는 mathsecr 코드의 이름 조회
+  // 6) 등장하는 mathsecr 코드의 이름 조회 (rcc 단원점수 코드 포함)
   const codes = Array.from(new Set([
     ...nodeStats.map((n) => n.mathsecr_code),
     ...items.map((i) => i.mathsecr_code),
+    ...lessonScores.map((s) => s.mathsecr_code),
   ].filter(Boolean)));
   const msNodes = new Map<string, MsNode>();
   for (const ids of chunk(codes, 100)) {
@@ -294,20 +321,30 @@ async function main() {
     m.set(it.error_cause, (m.get(it.error_cause) || 0) + 1);
     byStudent.errors.set(sid, m);
   }
-  // 개별수업 인덱스
+  // 개별수업 인덱스 — 키는 정규화 전화번호 (rcc student_id)
   const lessonEnrollBy = new Map<string, DiagEnroll[]>();
   for (const e of lessonEnrolls) {
-    (lessonEnrollBy.get(e.student_id) ?? lessonEnrollBy.set(e.student_id, []).get(e.student_id)!).push(e);
+    const k = normPhone(e.student_id); if (!k) continue;
+    (lessonEnrollBy.get(k) ?? lessonEnrollBy.set(k, []).get(k)!).push(e);
   }
   const lessonPlanBy = new Map<string, DiagPlan[]>();
   for (const p of lessonPlans) {
-    (lessonPlanBy.get(p.student_id) ?? lessonPlanBy.set(p.student_id, []).get(p.student_id)!).push(p);
+    const k = normPhone(p.student_id); if (!k) continue;  // 데모 시드(STU0xxx)는 숫자 없음 → 자동 제외
+    (lessonPlanBy.get(k) ?? lessonPlanBy.set(k, []).get(k)!).push(p);
   }
   const lessonAttBy = new Map<string, DiagAtt[]>();
   for (const a of lessonAtts) {
-    (lessonAttBy.get(a.student_id) ?? lessonAttBy.set(a.student_id, []).get(a.student_id)!).push(a);
+    const k = normPhone(a.student_id); if (!k) continue;
+    (lessonAttBy.get(k) ?? lessonAttBy.set(k, []).get(k)!).push(a);
+  }
+  const lessonScoreBy = new Map<string, DiagScore[]>();
+  for (const s of lessonScores) {
+    const k = normPhone(s.student_id); if (!k) continue;
+    (lessonScoreBy.get(k) ?? lessonScoreBy.set(k, []).get(k)!).push(s);
   }
   const ATT_KO: Record<string, string> = { present: '출석', late: '지각', absent: '결석', makeup: '보강' };
+  // rcc 매칭 추적 — 본 users 전화와 매칭된 전화 집합 (HOME 미매칭 리포트용)
+  const matchedRccPhones = new Set<string>();
 
   // ─── 학생 노트 생성 ───
   ensureDir(VAULT);
@@ -389,15 +426,19 @@ async function main() {
       lines.push('');
     }
 
-    // 개별수업 (homeroom 흡수분 — 데이터 있을 때만)
-    const myEnrolls = lessonEnrollBy.get(st.id) || [];
-    const myPlans = (lessonPlanBy.get(st.id) || []).slice(0, 2);
-    const myAtts = (lessonAttBy.get(st.id) || [])
+    // 개별수업 (rcc 연동 — 전화번호 매칭, 데이터 있을 때만)
+    const phoneKey = normPhone(st.phone);
+    const myEnrolls = phoneKey ? (lessonEnrollBy.get(phoneKey) || []) : [];
+    const myPlans = phoneKey ? (lessonPlanBy.get(phoneKey) || []).slice(0, 3) : [];
+    const myScores = phoneKey ? (lessonScoreBy.get(phoneKey) || []) : [];
+    const myAtts = (phoneKey ? (lessonAttBy.get(phoneKey) || []) : [])
       .map((a) => ({ ...a, d: meetingDate.get(a.meeting_id) || '' }))
       .sort((a, b) => b.d.localeCompare(a.d))
-      .slice(0, 5);
-    if (myEnrolls.length + myPlans.length + myAtts.length > 0) {
-      lines.push('## 개별수업');
+      .slice(0, 6);
+    myScores.forEach((s) => usedCodes.add(s.mathsecr_code));
+    if (myEnrolls.length + myPlans.length + myAtts.length + myScores.length > 0) {
+      if (phoneKey) matchedRccPhones.add(phoneKey);
+      lines.push('## 개별수업 (rcc)');
       for (const e of myEnrolls) {
         lines.push(`- **${lessonClassName.get(e.class_id) || '반 미상'}** · 단계 S${e.stage} · 케어 ${e.care_weight}${e.note ? ` · ${e.note}` : ''}`);
       }
@@ -405,8 +446,23 @@ async function main() {
         const units = (p.target_units || []).join(', ');
         lines.push(`- 주간 플랜(${p.week_start}): ${p.goals || '-'}${units ? ` — ${units}` : ''}${p.notes ? ` _(${p.notes})_` : ''}`);
       }
+      // 단원별 점수 (rcc diag_unit_scores) — 최근 회차 우선
+      if (myScores.length > 0) {
+        const scored = myScores
+          .map((s) => ({ ...s, d: meetingDate.get(s.meeting_id) || '' }))
+          .sort((a, b) => b.d.localeCompare(a.d))
+          .slice(0, 12);
+        lines.push('');
+        lines.push('**단원별 점수**');
+        lines.push('| 일자 | 단원 | 점수 |');
+        lines.push('|------|------|------|');
+        for (const s of scored) {
+          lines.push(`| ${s.d || '-'} | [[${unitFile(s.mathsecr_code)}\\|${msName(s.mathsecr_code)}]] | ${s.score}점 |`);
+        }
+      }
       if (myAtts.length > 0) {
         lines.push('');
+        lines.push('**수업 기록**');
         lines.push('| 일자 | 출결 | 단원 | 수업 메모 |');
         lines.push('|------|------|------|----------|');
         for (const a of myAtts) {
@@ -496,11 +552,24 @@ async function main() {
     ];
     fs.writeFileSync(p, lines.join('\n'), 'utf-8');
   }
+  // rcc 미매칭 학생 — 본 users 에 전화번호 일치가 없어 노트에 못 붙은 등록
+  const rccUnmatched: string[] = [];
+  if (rcc) {
+    const seen = new Set<string>();
+    for (const e of lessonEnrolls) {
+      const k = normPhone(e.student_id);
+      if (!k || matchedRccPhones.has(k) || seen.has(k)) continue;
+      seen.add(k);
+      const ename = (e as DiagEnroll & { student_name?: string }).student_name;
+      rccUnmatched.push(`${ename || '이름?'} (${e.student_id})`);
+    }
+  }
+
   const home = [
     '---', 'tags: [홈]', `갱신일: ${today}`, '---', '',
     '# 과사람 학생 위키', '',
     `- 학생 ${written}명 · 단원 노트 ${unitCount}개 · 갱신 ${today}`,
-    '- 데이터 수정은 웹 대시보드에서. 이 볼트는 읽기 전용 + ✍️ 수동 메모.',
+    '- 데이터 수정은 웹 대시보드(또는 rcc 개별수업 앱)에서. 이 볼트는 읽기 전용 + ✍️ 수동 메모.',
     '',
     '## 센터',
     ...Array.from(centerStudents.keys()).sort().map((k) => {
@@ -508,6 +577,13 @@ async function main() {
       return `- ${o} / [[${o}/${i}/_센터요약\\|${i}]] (${centerStudents.get(k)!.length}명)`;
     }),
     '',
+    ...(rccUnmatched.length > 0 ? [
+      '## ⚠️ rcc 개별수업 — 전화번호 미매칭',
+      '아래 학생은 rcc(개별수업)에 등록돼 있으나 본 시스템 users 에 같은 전화번호가 없어 노트에 연결되지 못했습니다. 웹에서 해당 학생 연락처를 맞추면 다음 갱신부터 자동 연결됩니다.',
+      '',
+      ...rccUnmatched.map((s) => `- ${s}`),
+      '',
+    ] : []),
   ];
   fs.writeFileSync(path.join(VAULT, 'HOME.md'), home.join('\n'), 'utf-8');
 
