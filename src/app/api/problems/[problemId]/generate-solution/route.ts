@@ -27,6 +27,24 @@ const SONNET_TIMEOUT_MS = Number(process.env.SONNET_TIMEOUT_MS || 90_000);
 // 분류 정확도가 개선되기 전까지는 난이도 기반 Opus 자동 발동을 끔 (False Positive 다수)
 const OPUS_DIFFICULTY_THRESHOLD = Number(process.env.OPUS_DIFFICULTY_THRESHOLD || 10);
 
+/**
+ * 임의 답 문자열 → 정렬·중복제거한 원형숫자 세트 "③④". 원형숫자 우선, 없으면 숫자 1~5 추출.
+ * "모두 고르기"형(isSelectAll) 정답 보존 전용 — 단일정답 경로에서는 호출하지 않는다.
+ */
+function toCircledSet(raw: string): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  let nums: number[];
+  const circled = s.match(/[①②③④⑤]/g);
+  if (circled && circled.length) {
+    nums = circled.map((c) => '①②③④⑤'.indexOf(c) + 1);
+  } else {
+    nums = (s.match(/[1-5]/g) || []).map(Number);
+  }
+  const uniq = Array.from(new Set(nums)).filter((n) => n >= 1 && n <= 5).sort((a, b) => a - b);
+  return uniq.map((n) => '①②③④⑤'[n - 1]).join('');
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
@@ -126,6 +144,9 @@ export async function POST(
       : '';
 
     const isObjective = choicesForPrompt.length > 0;
+    // ★ "모두 고르시오"형 객관식 — 정답 선택지가 여럿일 수 있음. 이 신호가 있을 때만 복수 답 보존.
+    //   단일정답 객관식(신호 없음)은 기존 "①~⑤ 하나" 로직 100% 유지 → 데이터 오염 0.
+    const isSelectAll = isObjective && /모두\s*(?:고르|골라|찾)|있는\s*대로\s*(?:고르|골라)|모두\s*고른|옳은\s*것을?\s*모두|맞는\s*것을?\s*모두|틀린\s*것을?\s*모두/.test(problemText);
 
     // ★ 학년/과목 컨텍스트 구성
     const curriculumParts: string[] = [];
@@ -352,7 +373,9 @@ ${problemText}${choicesSection}${imageContext}${levelInstruction}${userAnswerHin
 3. 첫 단계에서 사용할 개념/공식만 짧게 언급.
 4. 수식: $...$로 인라인.
 5. ★★★ finalAnswer 규칙 (반드시 준수):
-   ${isObjective
+   ${isSelectAll
+     ? '- "옳은(틀린) 것을 **모두** 고르시오" 형이므로 정답인 선택지 번호를 **모두** 원형숫자로 작성.\n   - 정답이 ②와 ④이면 → finalAnswer: "②④" (붙여서, 오름차순). 정답이 하나뿐이면 "②" 한 글자.\n   - ①②③④⑤ 만 사용. 공백·쉼표 없이 붙여 쓸 것 (예: "①③⑤").\n   - 옳지 않은(조건 불충족) 선택지는 절대 포함 금지. 부가 설명 금지.\n   - 각 선택지가 조건을 만족하는지 하나씩 판정한 뒤, 만족하는 번호만 모아 작성.'
+     : isObjective
      ? '- 객관식 문제이므로 **반드시 ①, ②, ③, ④, ⑤ 중 하나만** 작성.\n   - 선택지 중 정답의 **번호**를 작성 (선택지 값이 아님).\n   - 예: 정답이 3번 선택지 "9"이면 → finalAnswer: "③" (✅) / "9" (❌) / "③ 9" (❌).\n   - 반드시 원형숫자 한 글자만. 부가 설명 금지.\n   - ❌ "(가)", "(나)", "(다)", "1", "2", "가", "나" 등 기타 형식 절대 금지.\n   - 선택지에 (가)(나)(다) 라벨이 있어도 정답은 무조건 ①②③④⑤ 중 하나로 작성.\n\n   ★★★ [최종 대조 절대 규칙] finalAnswer 결정 전 반드시 수행 ★★★\n   (A) 당신이 계산한 값(예: 순환마디 "132", 넓이 "12π")을 한 글자씩 또박또박 적어라.\n   (B) 정답 후보 선택지에 **원문으로 적힌 값**(예: "213", "12π")을 한 글자씩 또박또박 적어라.\n   (C) (A)와 (B)가 **문자·순서까지 완전히 동일**한지 확인하라. "132" vs "213"은 다른 값이다.\n   (D) 다르면 그 선택지는 오답이다. 모든 선택지를 다시 (A)~(C) 방식으로 스캔하여 **문자·순서까지 일치**하는 선택지만 정답이다.\n   (E) 일치 선택지가 0개면 해설 중 자신의 계산이 틀렸다는 뜻 — 처음부터 재계산.\n   ★ "비슷하다", "같은 숫자 조합이다"는 금지 — 순서가 다르면 다른 값이다.'
      : '- 서술형/단답형이므로 **대입·계산이 완료된 최종 수치/식**만 제시.\n   - ❌ 일반화된 파라미터 형태 절대 금지 (예: "x^2 - (a-2)x + (b-1) = 0", "y = ax + b", "α+β의 값")\n   - ✅ 구체적 수치/식 (예: "x^2 + 4x + 1 = 0", "3", "a=2, b=1", "(-1, 3)")\n   - 풀이 마지막의 "∴" 또는 "따라서" 뒤에 나오는 최종 결론값을 그대로 옮길 것.\n   - finalAnswer에 변수 a, b, k, α, β 등 미지수가 남아있으면 틀린 것임.'}
    - 빈 문자열 불가.
@@ -388,7 +411,11 @@ JSON:
   "tip": "핵심 팁 (1줄, 선택)"
 }
 
-${isObjective ? `★ per_choice_check 필수 작성 규칙:
+${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"형):
+- 각 선택지가 문제 조건을 만족하는지 하나씩 판정해 match(true/false)를 기록.
+- "모두 고르기"형은 match: true 가 **여러 개일 수 있다**. finalAnswer는 match=true 인 번호를 모두 모은 것(예: "②④").
+- 조건을 만족하는 선택지가 정확히 몇 개인지 신중히 — 빠뜨리거나 더하지 말 것.`
+  : isObjective ? `★ per_choice_check 필수 작성 규칙:
 - 각 선택지 원문에서 제시된 값(stated)을 그대로 옮겨 적고, 당신이 독립 계산한 값(expected)과 문자 단위로 비교해 match를 판정.
 - "비슷하다"가 아니라 "문자·순서 완전 일치"만 true. "132" vs "213"은 false.
 - match: true 가 정확히 한 개여야 함. finalAnswer는 그 선택지 번호와 반드시 일치.
@@ -636,8 +663,28 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
     }
     console.log(`[generate-solution] ✅ 최종 사용 모델: ${usedModel} (problem ${problemId})`);
 
-    // ★ 객관식 finalAnswer 정규화 — 무조건 ①~⑤ 원형숫자로 변환
-    if (isObjective && solution.finalAnswer) {
+    // ★ "모두 고르기"형 — 정답 선택지 번호를 모두 보존 (단일 정규화·per_choice·교차검증 스킵)
+    if (isSelectAll && solution.finalAnswer) {
+      let setStr = toCircledSet(String(solution.finalAnswer));
+      // finalAnswer 가 비거나 부족하면 per_choice_check 의 match=true 합집합으로 보강
+      const pcc = Array.isArray(solution.per_choice_check) ? solution.per_choice_check : [];
+      const pccTrue: number[] = pcc
+        .filter((c: any) => c && (c.match === true || c.match === 'true'))
+        .map((c: any) => Number(c.index))
+        .filter((n: number) => n >= 1 && n <= 5);
+      if (!setStr && pccTrue.length > 0) {
+        setStr = Array.from(new Set<number>(pccTrue)).sort((a, b) => a - b)
+          .map((n) => '①②③④⑤'[n - 1]).join('');
+      }
+      if (setStr) {
+        if (setStr !== String(solution.finalAnswer).trim()) {
+          console.log(`[generate-solution] ★ 모두 고르기형 정답 보존: "${solution.finalAnswer}" → "${setStr}"`);
+        }
+        solution.finalAnswer = setStr;
+      }
+    }
+    // ★ 객관식 finalAnswer 정규화 — 무조건 ①~⑤ 원형숫자로 변환 (단일정답 객관식만)
+    else if (isObjective && solution.finalAnswer) {
       const originalAns = String(solution.finalAnswer).trim();
       const CIRCLED = ['①','②','③','④','⑤'];
 
@@ -797,7 +844,7 @@ ${isObjective ? `★ per_choice_check 필수 작성 규칙:
       const verifyPrompt = `당신은 독립 검산자입니다. 다음 한국 수학 문제를 처음부터 본인의 풀이로 정답을 구하세요.
 (다른 사람의 풀이는 참고하지 말고 본인이 직접 풀이 과정을 수립해 답을 도출)
 
-- 객관식이면 finalAnswer는 반드시 ①~⑤ 중 하나
+${isSelectAll ? '- "옳은(틀린) 것을 모두 고르시오"형이므로 옳은 선택지 번호를 모두 (예: "②④", 정답 하나면 "②")' : '- 객관식이면 finalAnswer는 반드시 ①~⑤ 중 하나'}
 - 서술형/단답형이면 최종 수치/식 (예: "3", "\\\\frac{1}{2}", "a=2, b=1")
 - JSON만 응답 (설명 금지)
 
@@ -836,7 +883,12 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
           const sonnetAnswer = String(solution.finalAnswer || '').trim();
           // 느슨한 매칭 사용: 엄격 정규화 + 끝숫자/등호뒤 값 비교로 표현 차이 흡수
           // (예: "$m^2+n^2=32$" vs "32", "개수는 134이다" vs "134" 같은 케이스)
-          const match = !!verifyAnswer && answersMatch(verifyAnswer, sonnetAnswer);
+          // ★ "모두 고르기"형은 원형숫자 세트 비교 (부분일치 방지) — 같은 집합이면 일치
+          const match = !!verifyAnswer && (
+            isSelectAll
+              ? toCircledSet(verifyAnswer) !== '' && toCircledSet(verifyAnswer) === toCircledSet(sonnetAnswer)
+              : answersMatch(verifyAnswer, sonnetAnswer)
+          );
 
           console.log(`[generate-solution] Sonnet 자체 검산: ${match ? '✅ MATCH' : '⚠️ MISMATCH'} — Primary: "${sonnetAnswer}" vs Verify: "${verifyAnswer}"`);
 
@@ -949,7 +1001,24 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
     const solutionUserEdited = (problem.answer_json as Record<string, any>)?.solution_user_edited === true;
 
     let finalAnswerToSave: string;
-    if (answerUserEdited && userEnteredAnswer) {
+    if (isSelectAll) {
+      // ★ "모두 고르기"형 — 복수 정답 보존. 우선순위: 사용자 편집 > AI 정규화 결과 > 기존.
+      //   원형숫자 세트("②④")만 신뢰 — 다른 형식은 toCircledSet 으로 정규화, 없으면 빈값.
+      const userSet = toCircledSet(userEnteredAnswer);
+      const aiSet = toCircledSet(String(solution.finalAnswer || ''));
+      if (answerUserEdited && userSet) {
+        finalAnswerToSave = userSet;
+        console.log(`[generate-solution] ★ 모두 고르기형 사용자 편집 정답 보존: "${finalAnswerToSave}"`);
+      } else if (aiSet) {
+        finalAnswerToSave = aiSet;
+        if (userEnteredAnswer && toCircledSet(userEnteredAnswer) !== aiSet) {
+          console.log(`[generate-solution] ★ 모두 고르기형 정답 덮어쓰기: 기존 "${userEnteredAnswer}" → AI "${aiSet}"`);
+        }
+      } else {
+        finalAnswerToSave = userSet || '';
+        console.warn(`[generate-solution] ⚠ 모두 고르기형 정답 추출 실패 → 기존 유지: "${finalAnswerToSave}"`);
+      }
+    } else if (answerUserEdited && userEnteredAnswer) {
       // ★ 사용자 편집 보존 — 단, 객관식이면 ①~⑤ 만 신뢰. 모호값(0/숫자/'5번' 등)은 폐기.
       //   메모리 CLAUDE.md ★ 안전 가드 #3. 이 분기에 가드가 빠져 있어 "0" 영구 박힘
       //   사고가 양운중 26 중2-1 등에서 재발 (사용자 보고).

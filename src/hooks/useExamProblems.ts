@@ -230,6 +230,22 @@ function stripTrailingInlineChoices(text: string, dbChoices: string[]): string {
 
 /** ①~⑤ → 1~5 매핑 */
 const CIRCLED_TO_NUM: Record<string, number> = { '①': 1, '②': 2, '③': 3, '④': 4, '⑤': 5 };
+/** 1~5 → ①~⑤ */
+const NUM_TO_CIRCLED = ['', '①', '②', '③', '④', '⑤'];
+
+/**
+ * 복수정답("모두 고르기"형) 감지 — 원형숫자가 2개 이상이면 정렬·중복제거한 "③④" 반환, 아니면 ''.
+ * ★ 원형숫자(①~⑤)만 신뢰 — 주관식 답("3, 4" 같은 값 나열)을 객관식 복수정답으로 오인하지 않도록
+ *   숫자+쉼표 형식은 여기서 다루지 않는다(그 형식은 기존대로 문자열로 통과). 단일은 '' → 기존 경로 유지.
+ */
+function toMultiCircledKey(s: string): string {
+  const circled = s.match(/[①②③④⑤]/g);
+  if (!circled || circled.length < 2) return '';
+  const uniq = Array.from(new Set(circled.map((c) => CIRCLED_TO_NUM[c])))
+    .filter((n) => n >= 1 && n <= 5)
+    .sort((a, b) => a - b);
+  return uniq.length >= 2 ? uniq.map((n) => NUM_TO_CIRCLED[n]).join('') : '';
+}
 
 function extractAnswerNumber(answerJson: Record<string, unknown>): number | string {
   // 다양한 포맷 지원 (우선순위 순)
@@ -243,6 +259,10 @@ function extractAnswerNumber(answerJson: Record<string, unknown>): number | stri
       }
       if (typeof ans === 'string' && ans.trim()) {
         const trimmed = ans.trim();
+        // ★ 복수정답("모두 고르기"형): "③④" / "③, ④" → 정렬된 "③④" 문자열 보존.
+        //   (단일정답은 '' 반환 → 아래 기존 경로 그대로 — 동작 불변)
+        const multi = toMultiCircledKey(trimmed);
+        if (multi) return multi;
         // ★ ①~⑤로 시작하면 객관식 답번호 추출 (선택지 텍스트 포함 시)
         const firstChar = trimmed.charAt(0);
         if (CIRCLED_TO_NUM[firstChar]) return CIRCLED_TO_NUM[firstChar];
