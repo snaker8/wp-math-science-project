@@ -173,11 +173,7 @@ export async function POST(request: NextRequest) {
 
       clinicExam = createClinicExam(examData, pdfUrl);
 
-      // DB에 저장 (선택적)
-      if (supabase) {
-        // clinic_exams 테이블이 있다면 저장
-        // await supabase.from('clinic_exams').insert(clinicExam);
-      }
+      // DB 저장은 clinic_exams 테이블 도입 시 구현 (현재 미저장)
     }
 
     return NextResponse.json({

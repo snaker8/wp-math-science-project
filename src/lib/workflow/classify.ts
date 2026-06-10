@@ -83,12 +83,21 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
 
   // ─── typeTable 준비 ───
   let mathsecrTypeTable = '';
-  let resolvedCode = '';
+  let resolvedCode: string | string[] = '';
   try {
     resolvedCode = resolveSubjectCode(examGrade, examSubject) || '';
     if (resolvedCode) {
       mathsecrTypeTable = buildTypeTable(resolvedCode);
-      const extras = COMBINED_SUBJECTS[resolvedCode] || [];
+      // ★ resolvedCode 가 배열(학기 불명 — 예 ['03','04'])일 수 있음 — COMBINED 병합은 코드별로.
+      //   (배열로 COMBINED_SUBJECTS 인덱싱하면 항상 undefined → 병합 누락. 현재 배열은
+      //    중등 코드뿐이라 COMBINED 해당 없음 = 동작 불변, 타입·향후 안전만 확보.)
+      const rcodes = Array.isArray(resolvedCode) ? resolvedCode : [resolvedCode];
+      const extras = new Set<string>();
+      for (const c of rcodes) {
+        for (const ex of COMBINED_SUBJECTS[c] || []) {
+          if (!rcodes.includes(ex)) extras.add(ex);
+        }
+      }
       for (const extra of extras) {
         mathsecrTypeTable += '\n\n' + buildTypeTable(extra);
       }

@@ -31,12 +31,14 @@ interface DesmosCalculatorOptions {
   showGrid?: boolean;
   border?: boolean;
   lockViewport?: boolean;
+  fontSize?: number;
 }
 
 interface DesmosCalculator {
-  setExpression: (expr: { id: string; latex?: string; color?: string; hidden?: boolean; dragMode?: number; pointSize?: number; pointStyle?: string; style?: unknown; lineWidth?: number; parametricDomain?: { min: string; max: string } }) => void;
+  setExpression: (expr: { id: string; latex?: string; color?: string; hidden?: boolean; dragMode?: number | string; pointSize?: number; pointStyle?: string; style?: unknown; lineWidth?: number; parametricDomain?: { min: string; max: string }; label?: string; showLabel?: boolean; labelSize?: string; labelOrientation?: string }) => void;
   removeExpression: (expr: { id: string }) => void;
-  getState: () => { expressions: { list: Array<{ id: string; latex?: string; color?: string }> } };
+  getState: () => { expressions: { list: Array<{ id: string; latex?: string; color?: string; label?: string; type?: string }> } };
+  updateSettings: (settings: { fontSize?: number }) => void;
   setState: (state: unknown) => void;
   setMathBounds: (bounds: { left: number; right: number; bottom: number; top: number }) => void;
   graphpaperBounds: { left: number; right: number; bottom: number; top: number };
@@ -284,7 +286,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
             latex: `(${xVar}, t)`,
             parametricDomain: { min: '0', max: yVar },
             color: '#888888',
-            style: (window.Desmos as Record<string, unknown>)?.Styles?.DASHED ?? undefined,
+            style: (window.Desmos as unknown as { Styles?: { DASHED?: string } })?.Styles?.DASHED ?? undefined,
             lineWidth: 1.5,
             hidden: !showProjections,
           });
@@ -295,7 +297,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
             latex: `(t, ${yVar})`,
             parametricDomain: { min: '0', max: xVar },
             color: '#888888',
-            style: (window.Desmos as Record<string, unknown>)?.Styles?.DASHED ?? undefined,
+            style: (window.Desmos as unknown as { Styles?: { DASHED?: string } })?.Styles?.DASHED ?? undefined,
             lineWidth: 1.5,
             hidden: !showProjections,
           });
@@ -304,7 +306,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
     }
 
     // ★ segments → polygon 선분
-    if (initialGraphData.segments && initialGraphData.points) {
+    if (initialGraphData?.segments && initialGraphData.points) {
       const ptMap = new Map<string, { x: number; y: number }>();
       initialGraphData.points.forEach(p => { if (p.label) ptMap.set(p.label, { x: p.x, y: p.y }); });
       initialGraphData.segments.forEach((seg, i) => {
@@ -321,7 +323,7 @@ const GraphModal: React.FC<GraphModalProps> = ({
     }
 
     // ★ shadedRegions → polygon 채움
-    if (initialGraphData.shadedRegions && initialGraphData.points) {
+    if (initialGraphData?.shadedRegions && initialGraphData.points) {
       const ptMap = new Map<string, { x: number; y: number }>();
       initialGraphData.points.forEach(p => { if (p.label) ptMap.set(p.label, { x: p.x, y: p.y }); });
       initialGraphData.shadedRegions.forEach((region, i) => {
