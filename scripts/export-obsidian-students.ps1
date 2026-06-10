@@ -2,6 +2,8 @@
 # 등록: schtasks /Create /SC DAILY /ST 06:00 /TN "과사람 학생볼트 내보내기"
 #       /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File <이 파일 절대경로>"
 $ErrorActionPreference = 'Continue'
+# node(UTF-8) 출력이 로그에 CP949 로 깨져 기록되는 것 방지
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Set-Location "C:\과사람 프로젝트\과사람 수학프로그램"
 $vault = Join-Path $env:USERPROFILE "Documents\과사람학생볼트"
 New-Item -ItemType Directory -Force $vault | Out-Null
