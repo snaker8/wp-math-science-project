@@ -5,6 +5,7 @@
 
 import {
   LayoutDashboard,
+  CalendarClock,
   FolderOpen,
   SquarePen,
   BookOpen,
@@ -250,6 +251,15 @@ export const tutorNavItems: NavItem[] = [
     activeColor: 'bg-cyan-500/10 text-cyan-400',
     group: 'tutor',
   },
+  {
+    // ★ 인덱스 [11] — 개별수업 담임 운영 (homeroom 앱 포팅, 2026-06-10).
+    href: '/dashboard/lessons/classes',
+    icon: CalendarClock,
+    label: '개별수업',
+    description: '개별수업 반 운영 · 1:1 코칭 슬롯 · 수업 준비 시트',
+    activeColor: 'bg-amber-500/10 text-amber-500',
+    group: 'tutor',
+  },
 ];
 
 // 시스템 메뉴
@@ -347,8 +357,9 @@ export const topNavGroups: NavGroup[] = [
     icon: Users,
     // ★ 채점하기는 별도 [채점] 그룹으로 분리 (2026-05-12).
     children: [
-      tutorNavItems[1], // 반 관리
-      tutorNavItems[2], // 학생 관리
+      tutorNavItems[1],  // 반 관리
+      tutorNavItems[2],  // 학생 관리
+      tutorNavItems[11], // 개별수업 (/dashboard/lessons/classes)
     ],
   },
   // ★ [채점] — 매일 워크플로우 1급 시민. 학생 답 자동채점·수동 입력 한자리.

@@ -259,4 +259,58 @@ GRANT ALL ON public.diag_classes, public.diag_enrollments,
 GRANT SELECT ON public.v_class_prep_brief TO authenticated;
 GRANT EXECUTE ON FUNCTION public.next_coaching_slot(UUID) TO authenticated;
 
+-- ─────────────────────────────────────────────────────
+-- 6) overview 용 반 통계 뷰 (homeroom 원격 DB ad-hoc 뷰 재현)
+--    ★ prod 에는 별도 마이그레이션(homeroom_v_class_stats)으로 적용됨
+-- ─────────────────────────────────────────────────────
+CREATE VIEW public.v_class_stats
+WITH (security_invoker = true) AS
+SELECT
+  c.id AS class_id,
+  c.name AS class_name,
+  c.campus,
+  c.start_time,
+  c.weekdays,
+  c.capacity,
+  c.stage_min,
+  c.stage_max,
+  c.homeroom_id,
+  c.active,
+  COALESCE(m.total_meetings, 0)::INT AS total_meetings,
+  COALESCE(m.recent_meetings_28d, 0)::INT AS recent_meetings_28d,
+  att.attendance_rate_pct,
+  m.last_meet_date,
+  COALESCE(m.memo_count, 0)::INT AS memo_count,
+  COALESCE(e.enrolled_count, 0)::INT AS enrolled_count,
+  COALESCE(e.care_total, 0)::NUMERIC AS care_total
+FROM public.diag_classes c
+LEFT JOIN (
+  SELECT class_id,
+         COUNT(*) AS total_meetings,
+         COUNT(*) FILTER (WHERE meet_date >= CURRENT_DATE - 28) AS recent_meetings_28d,
+         MAX(meet_date) AS last_meet_date,
+         COUNT(*) FILTER (WHERE homeroom_note IS NOT NULL AND homeroom_note <> '') AS memo_count
+  FROM public.diag_class_meetings
+  WHERE meet_status <> 'cancelled'
+  GROUP BY class_id
+) m ON m.class_id = c.id
+LEFT JOIN (
+  SELECT class_id,
+         COUNT(*) AS enrolled_count,
+         SUM(care_weight) AS care_total
+  FROM public.diag_enrollments
+  WHERE ended_at IS NULL
+  GROUP BY class_id
+) e ON e.class_id = c.id
+LEFT JOIN (
+  SELECT mt.class_id,
+         ROUND(100.0 * COUNT(*) FILTER (WHERE a.attendance IN ('present','late','makeup'))
+               / NULLIF(COUNT(*), 0), 0) AS attendance_rate_pct
+  FROM public.diag_meeting_attendances a
+  JOIN public.diag_class_meetings mt ON mt.id = a.meeting_id
+  GROUP BY mt.class_id
+) att ON att.class_id = c.id;
+
+GRANT SELECT ON public.v_class_stats TO authenticated;
+
 NOTIFY pgrst, 'reload schema';
