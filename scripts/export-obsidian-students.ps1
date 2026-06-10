@@ -1,4 +1,4 @@
-# 학생 옵시디언 볼트 매일 자동 내보내기 (Windows 작업 스케줄러용 래퍼)
+﻿# 학생 옵시디언 볼트 매일 자동 내보내기 (Windows 작업 스케줄러용 래퍼)
 # 등록: schtasks /Create /SC DAILY /ST 06:00 /TN "과사람 학생볼트 내보내기"
 #       /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File <이 파일 절대경로>"
 $ErrorActionPreference = 'Continue'
