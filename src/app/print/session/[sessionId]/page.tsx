@@ -55,6 +55,7 @@ function SessionPrintInner() {
   const [meta, setMeta] = useState<PrintMeta | null>(null);
   const [metaErr, setMetaErr] = useState<string | null>(null);
   const [columns, setColumns] = useState<1 | 2>(2);
+  const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동(밀집), 4/6/8=페이지당 고정
   const gap = 30; // exam-management 기본 간격
   // QR 인쇄 옵션 (매쓰플랫 qrAvailable 모델) — 표시 on/off + 대상(학생 답안/강사 채점)
   const [showQr, setShowQr] = useState(true);
@@ -153,6 +154,20 @@ function SessionPrintInner() {
   //   오른쪽 칸(다음 번호 계속 아래로) → 한국 시험지 표준 읽기 순서. 각 칸 높이 ≤ maxH (잘림 차단).
   //   페이지는 {left, right} 로 보관 → 렌더에서 좌/우 칼럼에 그대로.
   const pages = useMemo<{ left: ExamRenderProblem[]; right: ExamRenderProblem[] }[]>(() => {
+    // ★ 프리셋 모드: 페이지당 N문제 고정 ("4/6/8문제 배열"). 측정 무관 — N개씩 묶고 좌/우 균등.
+    if (perPagePreset && perPagePreset > 0) {
+      const res: { left: ExamRenderProblem[]; right: ExamRenderProblem[] }[] = [];
+      for (let i = 0; i < problems.length; i += perPagePreset) {
+        const chunk = problems.slice(i, i + perPagePreset);
+        if (columns === 2) {
+          const half = Math.ceil(chunk.length / 2);
+          res.push({ left: chunk.slice(0, half), right: chunk.slice(half) });
+        } else {
+          res.push({ left: chunk, right: [] });
+        }
+      }
+      return res.length > 0 ? res : [{ left: [], right: [] }];
+    }
     // 측정 전 폴백 — 순차 분할 후 좌/우 균등
     if (!measured || problemHeights.length === 0) {
       const perPage = columns === 2 ? 10 : 5;
@@ -191,7 +206,24 @@ function SessionPrintInner() {
     }
     if (left.length > 0 || right.length > 0) flush();
     return res.length > 0 ? res : [{ left: [], right: [] }];
-  }, [problems, problemHeights, measured, columns, gap]);
+  }, [problems, problemHeights, measured, columns, gap, perPagePreset]);
+
+  // ★ 프리셋 모드 페이지별 자동 간격 — 적게 든 페이지의 빈 공간을 문제 사이로 분배해
+  //   "4문제 배열"이 위에 붙지 않고 여유 있게 퍼지도록. (자동 모드는 null → 고정 gap)
+  const pageAutoGaps = useMemo<number[] | null>(() => {
+    if (!perPagePreset || !measured || problemHeights.length === 0) return null;
+    let gi = 0;
+    return pages.map((pg, pi) => {
+      const maxH = pi === 0 ? FIRST_CONTENT_H : CONTENT_H;
+      const leftSum = pg.left.reduce((s, _p, k) => s + (problemHeights[gi + k] || 0), 0);
+      const rightSum = pg.right.reduce((s, _p, k) => s + (problemHeights[gi + pg.left.length + k] || 0), 0);
+      const colCount = Math.max(pg.left.length, pg.right.length);
+      gi += pg.left.length + pg.right.length;
+      const avail = maxH - Math.max(leftSum, rightSum);
+      // 문제 사이 간격(=colCount-1 군데)에 분배. 8~80px 사이로 제한(너무 벌어지지 않게).
+      return colCount > 1 ? Math.min(80, Math.max(8, Math.floor(avail / (colCount - 1)))) : gap;
+    });
+  }, [perPagePreset, measured, problemHeights, pages, FIRST_CONTENT_H, CONTENT_H, gap]);
 
   if (metaErr) {
     return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#b91c1c' }}>{metaErr}</div>;
@@ -201,8 +233,8 @@ function SessionPrintInner() {
     ? `${SESSION_TYPE_LABEL[meta.sessionType] || meta.sessionType} · ${meta.roundNumber}회차`
     : '';
 
-  const renderProblem = (problem: ExamRenderProblem, idx: number) => (
-    <div key={problem.id} data-problem-idx={idx} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
+  const renderProblem = (problem: ExamRenderProblem, idx: number, mb: number = gap) => (
+    <div key={problem.id} data-problem-idx={idx} className="break-inside-avoid" style={{ marginBottom: `${mb}px` }}>
       <ExamProblemRenderer problem={problem} />
     </div>
   );
@@ -237,6 +269,18 @@ function SessionPrintInner() {
               ))}
             </div>
           )}
+          <div className="col-toggle" title="페이지당 문제 수 (배열) — 자동은 빽빽이, 4/6/8은 여유있게">
+            {([['자동', null], ['4', 4], ['6', 6], ['8', 8]] as const).map(([label, v]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setPerPagePreset(v as number | null)}
+                className={perPagePreset === v ? 'active' : ''}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="col-toggle" title="단 수">
             {([2, 1] as const).map((c) => (
               <button
@@ -271,6 +315,7 @@ function SessionPrintInner() {
           let globalStartIdx = 0;
           for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].left.length + pages[p].right.length;
           const useManualColumns = columns === 2;
+          const mb = pageAutoGaps?.[pageIdx] ?? gap; // 프리셋 모드면 자동 분배 간격
 
           return (
             <div key={pageIdx} className="preview-exam-page exam-page">
@@ -300,15 +345,15 @@ function SessionPrintInner() {
               {useManualColumns ? (
                 <div className="exam-cols">
                   <div className="col col-left">
-                    {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
+                    {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
                   </div>
                   <div className="col col-right">
-                    {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i))}
+                    {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i, mb))}
                   </div>
                 </div>
               ) : (
                 <div className="exam-single">
-                  {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i))}
+                  {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
                 </div>
               )}
             </div>
