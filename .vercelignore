@@ -54,7 +54,8 @@ __pycache__/
 *.pyo
 
 # 로컬 도식 (3.1GB — Supabase Storage 로 이관됨)
-image-pipeline/dasaram_diagram_db/
+# ★ 반드시 leading slash 로 루트 앵커 — 없으면 src/lib/image-pipeline/ 도 매칭돼 배포 누락
+/image-pipeline/dasaram_diagram_db/
 
 # 교재 해설 (크기/라이선스)
 curriculum_data/textbook_solutions/
@@ -73,6 +74,8 @@ curriculum_data/textbook_solutions/
 # Vercel 빌드에 불필요 — 별도 호스팅 (Vercel 환경 Python 미사용)
 #   yolo-server: HuggingFace Spaces (snaker1107/gwasaram-yolo)
 #   image-pipeline: Railway 또는 별도 호스팅
+# ★ leading slash 필수 — 앵커 없으면 src/lib/image-pipeline/(앱이 import 하는 TS)
+#   까지 제외돼 "Module not found: @/lib/image-pipeline/*" 로 빌드 실패 (운영 사고 2026-06-10).
 # ============================================================================
-yolo-server/
-image-pipeline/
+/yolo-server/
+/image-pipeline/
