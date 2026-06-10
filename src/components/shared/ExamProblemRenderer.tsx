@@ -334,7 +334,10 @@ function ExamProblemRendererInner({
 
   /** 배지가 이미 삽입됐는지 추적 (첫 번째 텍스트 파트에만 삽입) */
   let badgeInserted = false;
-  const renderTextWithBadge = (text: string, key: string, isLastText = false) => {
+  const renderTextWithBadge = (rawText: string, key: string, isLastText = false) => {
+    // ★ 도형/보기 주변 텍스트 파트의 선행·후행 빈 줄 제거 — 질문↔도형↔보기 과한 세로 간격 차단.
+    //   (내부 \n 은 보존 → 줄바꿈·배지 \n 폴백 로직 불변)
+    const text = rawText.replace(/^\s*\n+\s*/, '').replace(/\s*\n+\s*$/, '');
     if (!hasPoints || badgeInserted) {
       return <MixedContentRenderer key={key} content={text} className="text-gray-800" />;
     }
@@ -388,7 +391,7 @@ function ExamProblemRendererInner({
                 : null
             )}
             <div>
-              <div className={`${side} mb-2`} style={{ width: `${wPct}%`, maxWidth: `${maxFigureWidth}px` }}>
+              <div className={`${side} mb-1`} style={{ width: `${wPct}%`, maxWidth: `${maxFigureWidth}px` }}>
                 {renderFigure(0)}
               </div>
               {after.map((p, pi) =>
@@ -410,7 +413,7 @@ function ExamProblemRendererInner({
         part.type === 'text' ? (
           renderTextWithBadge(part.text, String(pi), pi === lastTextIdx)
         ) : (
-          <div key={pi} className="my-2 flex justify-center">
+          <div key={pi} className="my-1 flex justify-center">
             {renderFigure(figCounter++)}
           </div>
         )
@@ -422,7 +425,7 @@ function ExamProblemRendererInner({
       <>
         {renderTextWithBadge(cleanContent, 'main', true)}
         {hasFigureSource && (
-          <div className="mt-2 flex justify-center">
+          <div className="mt-1 flex justify-center">
             {renderFigure(0)}
           </div>
         )}
@@ -432,7 +435,7 @@ function ExamProblemRendererInner({
 
   return (
     <div className="flex gap-2.5 items-start">
-      <span className="font-bold text-gray-300 flex-shrink-0" style={{ fontSize: `calc(${textSize} + 7px)`, minWidth: '30px', lineHeight }}>
+      <span className="font-bold text-gray-500 flex-shrink-0" style={{ fontSize: `calc(${textSize} + 7px)`, minWidth: '30px', lineHeight: 1.1 }}>
         {problem.number}.
       </span>
       <div className="flex-1 min-w-0">
