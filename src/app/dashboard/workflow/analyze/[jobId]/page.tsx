@@ -2271,7 +2271,15 @@ function ProblemDetailPanel({
                         choiceText = choiceText.replace(/\\\((.+)$/s, (_: string, inner: string) => `$${inner.trim()}$`);
                         choiceText = choiceText.replace(/^(.+?)\\\)(\s*)$/s, (_: string, inner: string) => `$${inner.trim()}$`);
                         choiceText = choiceText.replace(/\\\[(.+?)\\\]/gs, (_, inner: string) => `$$${inner.trim()}$$`);
-                        if (!choiceText.includes('$') && /[\\^_{}]/.test(choiceText) && !/[가-힣]/.test(choiceText)) {
+                        // ★ 보기 폰트 통일: 분수(\frac 등 LaTeX)는 KaTeX 로 가는데 정수("3","12")는
+                        //   평문이라 같은 문제 안에서 폰트가 달라 보이던 사고 (2026-06-10).
+                        //   → 한글 없는 "순수 숫자/단순 수식" 보기도 $...$ 로 감싸 KaTeX 폰트로 통일.
+                        //   표 객관식('|' 분리)은 숫자 정규식에 '|' 가 없어 매칭 X → 영향 없음.
+                        const noKorean = !/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(choiceText);
+                        if (
+                          !choiceText.includes('$') && noKorean &&
+                          (/[\\^_{}]/.test(choiceText) || /^[+\-]?[\d\s.,/]+$/.test(choiceText))
+                        ) {
                           choiceText = `$${choiceText.trim()}$`;
                         }
                         if (!choiceText) return null;
