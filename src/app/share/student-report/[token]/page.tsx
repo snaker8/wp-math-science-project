@@ -445,7 +445,7 @@ export default function PublicStudentReportPage() {
   if (data.reportStyle === 'unified') {
     return (
       <div className="report-dark-root min-h-screen bg-zinc-950 text-white">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
+        <div className="report-print-pad mx-auto max-w-5xl px-4 sm:px-6 py-6">
           <div className="mb-4 flex items-center justify-between gap-2 print:hidden">
             <span className="inline-flex items-center gap-1.5 text-sm font-bold text-zinc-300">
               <Sparkles size={16} className="text-indigo-400" /> 학습 분석 리포트

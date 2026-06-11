@@ -5,7 +5,10 @@
    ============================================================================ */
 
 @media print {
-  @page { size: A4; margin: 12mm; }
+  /* margin:0 → 브라우저 기본 머리글/바닥글(날짜·제목·URL·페이지번호) 제거.
+     실제 인쇄 여백은 .report-print-pad 로 콘텐츠에 부여. */
+  @page { size: A4; margin: 0; }
+  .report-print-pad { padding: 9mm 11mm !important; }
 
   /* 배경 — 다크/그라데이션 전부 흰색 */
   .report-dark-root,
