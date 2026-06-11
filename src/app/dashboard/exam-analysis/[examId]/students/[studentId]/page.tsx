@@ -891,7 +891,7 @@ export default function StudentReportPage() {
   if (data.reportStyle === 'unified') {
     const ai = data.aiComment;
     return (
-      <div className="min-h-screen bg-zinc-950 text-white">
+      <div className="report-dark-root min-h-screen bg-zinc-950 text-white">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
           {/* 툴바 (인쇄 시 숨김) */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">

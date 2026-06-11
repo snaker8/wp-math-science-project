@@ -21,6 +21,7 @@ import {
 } from '@/lib/diagnostics/report-narrative';
 import { LEVEL_TONE, Panel, StatCard, Gauge } from '@/components/diagnostics/report-primitives';
 import { resolveReportKind, REPORT_KIND_LABEL, readinessLabelFor, narrativeFraming, ACTION_PLAN_TITLE } from '@/lib/report/report-kind';
+import './report-dark.css';
 
 // ── 입력 타입 (개별 리포트 API 응답의 부분집합) ─────────────────────────────
 export interface StudentReportResult {
@@ -165,7 +166,7 @@ export function StudentExamReportDark({ data, staffSlot, commentSlot }: {
     : data.classAvg != null ? `반 평균 ${data.classAvg}%` : '비교 데이터 없음';
 
   return (
-    <div className="space-y-5">
+    <div className="report-dark-root space-y-5">
       {/* 레버1 — 학부모용 성격 라벨 ("이 리포트는 무슨 분석인지") */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800/70 px-3 py-1 text-xs font-bold text-zinc-200">
