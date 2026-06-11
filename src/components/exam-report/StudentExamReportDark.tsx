@@ -20,7 +20,7 @@ import {
   type DiffStat, type UnitStat, type TypeStat,
 } from '@/lib/diagnostics/report-narrative';
 import { LEVEL_TONE, Panel, StatCard, Gauge } from '@/components/diagnostics/report-primitives';
-import { resolveReportKind, REPORT_KIND_LABEL, readinessLabelFor } from '@/lib/report/report-kind';
+import { resolveReportKind, REPORT_KIND_LABEL, readinessLabelFor, narrativeFraming, ACTION_PLAN_TITLE } from '@/lib/report/report-kind';
 
 // ── 입력 타입 (개별 리포트 API 응답의 부분집합) ─────────────────────────────
 export interface StudentReportResult {
@@ -131,11 +131,14 @@ export function StudentExamReportDark({ data, staffSlot, commentSlot }: {
   /** 하단 AI/강사 코멘트 (페이지가 핸들러와 함께 주입) */
   commentSlot?: React.ReactNode;
 }) {
-  const narrative = useMemo(() => buildNarrative(adaptNarrativeInput(data)), [data]);
-  const tone = LEVEL_TONE[narrative.readiness.level];
-  // 시험지 성격(진단/내신/모의/교재/학습지) — 레버1(라벨)·레버2(신호등 의미)
+  // 시험지 성격(진단/내신/모의/교재/학습지) — 레버1(라벨)·레버2(신호등)·레버3(프레이밍)·레버4(섹션)
   const kind = resolveReportKind({ isDiagnostic: data.isDiagnostic, examType: data.examType });
   const kindLabel = REPORT_KIND_LABEL[kind];
+  const narrative = useMemo(
+    () => buildNarrative({ ...adaptNarrativeInput(data), framing: narrativeFraming(kind) }),
+    [data, kind],
+  );
+  const tone = LEVEL_TONE[narrative.readiness.level];
   const readinessLabel = readinessLabelFor(kind, narrative.readiness.level);
 
   const bandSummary = useMemo(() => {
@@ -334,8 +337,8 @@ export function StudentExamReportDark({ data, staffSlot, commentSlot }: {
         </Panel>
       )}
 
-      {/* ⑦ 액션플랜 */}
-      <Panel title="학습 액션플랜" icon={<ClipboardList className="h-4 w-4 text-indigo-400" />} hint="취약 우선 순서">
+      {/* ⑦ 액션플랜 (제목 성격별 — 레버4) */}
+      <Panel title={ACTION_PLAN_TITLE[kind]} icon={<ClipboardList className="h-4 w-4 text-indigo-400" />} hint="취약 우선 순서">
         <ol className="space-y-2.5">
           {narrative.actionPlan.map((step, i) => (
             <li key={i} className="flex gap-3 text-sm text-zinc-200 leading-relaxed">

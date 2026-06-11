@@ -7,7 +7,7 @@
 //   Phase 1.6 예정: 레버3(narrative 톤·시제) + 레버4(섹션 강조).
 // ============================================================================
 
-import type { Achievement } from '@/lib/diagnostics/report-narrative';
+import type { Achievement, NarrativeFraming } from '@/lib/diagnostics/report-narrative';
 
 export type ReportKind = 'diagnostic' | 'school' | 'mock' | 'textbook' | 'worksheet';
 
@@ -44,3 +44,19 @@ const READINESS_LABEL: Record<ReportKind, Record<Achievement, string>> = {
 export function readinessLabelFor(kind: ReportKind, level: Achievement): string {
   return READINESS_LABEL[kind][level];
 }
+
+// ── 레버3 — narrative 톤·시제 프레이밍 (진단=대비 / 내신·모의=결과 회고 / 교재·학습지=연습) ──
+export function narrativeFraming(kind: ReportKind): NarrativeFraming {
+  if (kind === 'diagnostic') return 'predict';
+  if (kind === 'school' || kind === 'mock') return 'result';
+  return 'practice';
+}
+
+// ── 레버4 — 섹션 강조: 액션플랜 제목을 성격에 맞게 ──────────────────────────
+export const ACTION_PLAN_TITLE: Record<ReportKind, string> = {
+  diagnostic: '시험 대비 액션플랜',
+  school:     '다음 시험 대비 플랜',
+  mock:       '다음 시험 대비 플랜',
+  textbook:   '추가 학습 제안',
+  worksheet:  '추가 학습 제안',
+};
