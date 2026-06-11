@@ -12,6 +12,7 @@ import Link from 'next/link';
 import {
   Users, Search, ChevronRight, ChevronDown, Loader2, RefreshCw,
   Printer, ExternalLink, ListChecks, History, PieChart, FileBarChart, TrendingUp,
+  Layers, Share2, Copy, Check, Ban,
 } from 'lucide-react';
 
 interface Student {
@@ -20,9 +21,27 @@ interface Student {
 interface Assignment {
   id: string; source: 'qr' | 'manual';
   student_id: string; student_name: string; grade: string;
+  exam_id: string | null;
   title: string; tag: string; issued_at: string | null;
   completed: boolean; problems_total: number; correct_cnt: number; score_pct: number | null;
 }
+// 진단 세트 (exam-sets API) — 보고서 탭의 "세트 리포트 보기" 딥링크용
+interface ExamSetLite {
+  setKey: string; setTitle: string; bookGroupName: string | null;
+  variants: Array<{ examId: string; variant: string | null; title: string }>;
+  students: Array<{ id: string; variantsTaken: Array<string | null> }>;
+}
+// 학부모 공유링크 발급 내역 (report-tokens API)
+interface ShareTokenItem {
+  kind: 'diagnostic_set' | 'pitfall' | 'exam';
+  path: string; title: string; label: string | null;
+  createdAt: string | null; expiresAt: string | null;
+  isActive: boolean; lastViewedAt: string | null;
+  revokeKind: 'parent_token' | 'exam_session'; revokeRef: string;
+}
+const TOKEN_KIND_LABEL: Record<ShareTokenItem['kind'], string> = {
+  diagnostic_set: '세트 리포트', pitfall: '함정 리포트', exam: '시험 리포트',
+};
 
 // 학년 정렬 순서 (초1 → 고3)
 const GRADE_ORDER: Record<string, number> = {};
@@ -58,6 +77,68 @@ export default function AssignmentsPage() {
   // 본문 상단 탭 (매쓰플랫 수업: 학습내역 | 학습지 | 보고서 + 유형분석 링크아웃)
   //   보고서 = 학생별 학습지 리포트(이 페이지 데이터로 구성). 유형분석은 기존 히트맵으로 연결.
   const [tab, setTab] = useState<'history' | 'worksheet' | 'report'>('worksheet');
+
+  // ── 보고서 탭 허브 데이터 — 진단 세트(딥링크) + 공유링크 발급 내역 ──
+  const [examSets, setExamSets] = useState<ExamSetLite[] | null>(null); // null = 미로드
+  const [shareTokens, setShareTokens] = useState<ShareTokenItem[] | null>(null);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [copiedRef, setCopiedRef] = useState<string | null>(null);
+
+  // 세트 목록 — 보고서 탭 첫 진입 시 1회 로드 (학생 무관 공용)
+  useEffect(() => {
+    if (tab !== 'report' || examSets !== null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/diagnostics/exam-sets', { cache: 'no-store' });
+        const data = await res.json();
+        if (!cancelled) setExamSets(res.ok ? (data.sets || []) : []);
+      } catch { if (!cancelled) setExamSets([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [tab, examSets]);
+
+  // 공유링크 내역 — 보고서 탭 + 학생 선택 시 학생별 로드
+  const loadShareTokens = async (studentId: string) => {
+    setTokensLoading(true);
+    try {
+      const res = await fetch(`/api/diagnostics/report-tokens?studentId=${encodeURIComponent(studentId)}`, { cache: 'no-store' });
+      const data = await res.json();
+      setShareTokens(res.ok ? (data.tokens || []) : []);
+    } catch { setShareTokens([]); } finally { setTokensLoading(false); }
+  };
+  useEffect(() => {
+    if (tab !== 'report' || !selStudent) { setShareTokens(null); return; }
+    void loadShareTokens(selStudent);
+  }, [tab, selStudent]);
+
+  const copyShareUrl = async (item: ShareTokenItem) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${item.path}`);
+      setCopiedRef(item.revokeRef);
+      setTimeout(() => setCopiedRef(null), 1500);
+    } catch { /* clipboard 거부 — 무시 */ }
+  };
+  const revokeToken = async (item: ShareTokenItem) => {
+    if (!selStudent) return;
+    if (!window.confirm('이 공유링크를 회수할까요? 학부모가 더 이상 열 수 없게 됩니다.')) return;
+    try {
+      const res = await fetch('/api/diagnostics/report-tokens', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: item.revokeKind, ref: item.revokeRef }),
+      });
+      if (res.ok) void loadShareTokens(selStudent);
+    } catch { /* 실패 시 목록 유지 */ }
+  };
+
+  // 선택 학생이 응시한 진단 세트 (세트 리포트 딥링크 카드)
+  const studentSets = useMemo(() => {
+    if (!selStudent || !examSets) return [];
+    return examSets
+      .map(s => ({ set: s, me: s.students.find(st => st.id === selStudent) }))
+      .filter((x): x is { set: ExamSetLite; me: { id: string; variantsTaken: Array<string | null> } } => !!x.me);
+  }, [examSets, selStudent]);
 
   const load = async () => {
     setLoading(true);
@@ -533,13 +614,41 @@ export default function AssignmentsPage() {
                       </div>
                       <div className="mt-4 flex items-center gap-2">
                         <Link href={`/dashboard/prescription/report?studentId=${selStudent}`} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
-                          <FileBarChart size={13} /> 진단 종합 리포트 <ExternalLink size={10} className="opacity-50" />
+                          <FileBarChart size={13} /> 리포트 생성 도구 <ExternalLink size={10} className="opacity-50" />
                         </Link>
                         <Link href={`/tutor/analytics?studentId=${selStudent}`} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
                           <PieChart size={13} /> 단원 히트맵 <ExternalLink size={10} className="opacity-50" />
                         </Link>
                       </div>
                     </div>
+
+                    {/* 진단 세트 리포트 — 응시 세트 자동 감지 → setKey 딥링크로 바로 보기 */}
+                    {studentSets.length > 0 && (
+                      <div className="rounded-2xl border border-white/10 p-5">
+                        <div className="flex items-center gap-2 text-sm font-bold mb-3">
+                          <Layers size={15} className="text-violet-400" /> 진단 세트 리포트
+                        </div>
+                        <div className="space-y-1.5">
+                          {studentSets.map(({ set, me }) => (
+                            <div key={set.setKey} className="flex items-center gap-3 text-sm">
+                              <span className="flex-1 truncate" title={set.setTitle}>
+                                {set.setTitle}
+                                {set.bookGroupName && <span className="text-content-tertiary text-xs ml-1.5">{set.bookGroupName}</span>}
+                              </span>
+                              <span className="text-[11px] text-content-tertiary">
+                                {me.variantsTaken.map(v => v || '-').join('·')} 응시
+                              </span>
+                              <Link
+                                href={`/dashboard/prescription/report?setKey=${encodeURIComponent(set.setKey)}&studentId=${encodeURIComponent(selStudent!)}`}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300 hover:bg-violet-500/20 flex items-center gap-1 flex-shrink-0"
+                              >
+                                세트 리포트 보기 <ExternalLink size={10} className="opacity-60" />
+                              </Link>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* 점수 추이 */}
                     <div className="rounded-2xl border border-white/10 p-5">
@@ -590,9 +699,77 @@ export default function AssignmentsPage() {
                                 <span className={`font-bold tabular-nums ${tone(r.score_pct)}`}>{r.score_pct}점</span>
                               ) : <span className="text-xs text-content-tertiary">{r.completed ? '채점대기' : '미응시'}</span>}
                             </span>
+                            {/* 개별 시험지 리포트 — 채점된 시험만 (exam 연결 + 점수 존재) */}
+                            <span className="w-14 text-right flex-shrink-0">
+                              {r.exam_id && r.score_pct != null ? (
+                                <Link
+                                  href={`/dashboard/exam-analysis/${r.exam_id}/students/${r.student_id}`}
+                                  className="text-[11px] px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20"
+                                >
+                                  리포트
+                                </Link>
+                              ) : null}
+                            </span>
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    {/* 학부모 공유링크 발급 내역 */}
+                    <div className="rounded-2xl border border-white/10 p-5">
+                      <div className="flex items-center gap-2 text-sm font-bold mb-3">
+                        <Share2 size={15} className="text-emerald-400" /> 학부모 공유링크 내역
+                        {shareTokens && <span className="text-xs font-normal text-content-tertiary">({shareTokens.length})</span>}
+                      </div>
+                      {tokensLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-content-tertiary py-3">
+                          <Loader2 size={13} className="animate-spin" /> 불러오는 중...
+                        </div>
+                      ) : !shareTokens || shareTokens.length === 0 ? (
+                        <div className="text-xs text-content-tertiary py-2">
+                          발급된 공유링크가 없습니다. 세트 리포트 화면 또는 개별 시험 리포트에서 학부모 링크를 발급할 수 있습니다.
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {shareTokens.map((t) => (
+                            <div key={`${t.revokeKind}-${t.revokeRef}`} className={`flex items-center gap-3 text-sm ${t.isActive ? '' : 'opacity-50'}`}>
+                              <span className={`text-[11px] font-medium w-16 flex-shrink-0 ${
+                                t.kind === 'diagnostic_set' ? 'text-violet-300' : t.kind === 'exam' ? 'text-sky-300' : 'text-amber-300'
+                              }`}>{TOKEN_KIND_LABEL[t.kind]}</span>
+                              <span className="flex-1 truncate" title={t.title}>
+                                {t.title}
+                                {t.label && <span className="text-content-tertiary text-xs ml-1.5">{t.label}</span>}
+                              </span>
+                              <span className="text-[11px] text-content-tertiary w-14 text-right tabular-nums">{fmtDate(t.createdAt)}</span>
+                              <span className="text-[11px] w-16 text-right flex-shrink-0">
+                                {!t.isActive ? <span className="text-rose-300">회수/만료</span>
+                                  : t.lastViewedAt ? <span className="text-emerald-300" title={`열람 ${fmtDate(t.lastViewedAt)}`}>열람됨</span>
+                                  : <span className="text-content-tertiary">미열람</span>}
+                              </span>
+                              <span className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => void copyShareUrl(t)}
+                                  disabled={!t.isActive}
+                                  title="링크 복사"
+                                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  {copiedRef === t.revokeRef ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void revokeToken(t)}
+                                  disabled={!t.isActive}
+                                  title="링크 회수"
+                                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-rose-500/20 hover:border-rose-500/40 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <Ban size={12} />
+                                </button>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

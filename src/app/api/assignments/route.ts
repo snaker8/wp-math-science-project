@@ -120,6 +120,7 @@ export async function GET(_request: NextRequest) {
   type Assignment = {
     id: string; source: 'qr' | 'manual';
     student_id: string; student_name: string; grade: string;
+    exam_id: string | null; // 개별 시험지 리포트 딥링크용 (보고서 탭)
     title: string; tag: string; issued_at: string | null;
     completed: boolean; problems_total: number; correct_cnt: number; score_pct: number | null;
   };
@@ -198,6 +199,7 @@ export async function GET(_request: NextRequest) {
     assignments.push({
       id: r.id, source: 'qr',
       student_id: stu.canonId, student_name: stu.name, grade: stu.grade,
+      exam_id: r.exam_id,
       title: (r.exam_id ? examTitle.get(r.exam_id) : '') || '(제목 없음)',
       tag: typeTag(r.session_type) + (r.round_number ? ` R${r.round_number}` : ''),
       issued_at: r.issued_at,
@@ -215,6 +217,7 @@ export async function GET(_request: NextRequest) {
     assignments.push({
       id: r.id, source: 'manual',
       student_id: stu.canonId, student_name: stu.name, grade: stu.grade,
+      exam_id: r.exam_id,
       title: r.mathflat_sheet_name || (r.exam_id ? examTitle.get(r.exam_id) : '') || '(제목 없음)',
       tag: typeTag(r.session_type) + (r.round_no ? ` R${r.round_no}` : ''),
       issued_at: r.conducted_at,
