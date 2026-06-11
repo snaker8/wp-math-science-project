@@ -55,9 +55,9 @@ export default function AssignmentsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selStudent, setSelStudent] = useState<string | null>(null); // null = 전체
   const [titleSearch, setTitleSearch] = useState('');
-  // 본문 상단 탭 (매쓰플랫 수업: 학습내역 | 학습지 | 유형분석 | 보고서)
-  //   유형분석·보고서는 기존 페이지(/tutor/analytics, 진단 종합 리포트)로 연결 — 중복 구현 회피.
-  const [tab, setTab] = useState<'history' | 'worksheet'>('worksheet');
+  // 본문 상단 탭 (매쓰플랫 수업: 학습내역 | 학습지 | 보고서 + 유형분석 링크아웃)
+  //   보고서 = 학생별 학습지 리포트(이 페이지 데이터로 구성). 유형분석은 기존 히트맵으로 연결.
+  const [tab, setTab] = useState<'history' | 'worksheet' | 'report'>('worksheet');
 
   const load = async () => {
     setLoading(true);
@@ -180,7 +180,7 @@ export default function AssignmentsPage() {
       <aside className="w-72 flex-shrink-0 border-r border-white/10 flex flex-col bg-surface-raised/30">
         <div className="px-4 py-3 border-b border-white/10">
           <div className="flex items-center gap-2 font-bold">
-            <Users size={18} className="text-sky-400" /> 출제 관리
+            <Users size={18} className="text-sky-400" /> 수업
           </div>
         </div>
         {/* 학년/반 탭 */}
@@ -324,20 +324,23 @@ export default function AssignmentsPage() {
           >
             <ListChecks size={14} /> 학습지
           </button>
-          {/* 유형분석·보고서 — 기존 페이지로 연결(중복 구현 회피) */}
+          {/* 보고서 — 학생별 학습지 리포트 (이 페이지 데이터로 구성). in-page 탭. */}
+          <button
+            type="button"
+            onClick={() => setTab('report')}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'report' ? 'text-sky-300 border-sky-400' : 'text-content-tertiary border-transparent hover:text-content-primary'
+            }`}
+          >
+            <FileBarChart size={14} /> 보고서
+          </button>
+          {/* 유형분석 — 기존 히트맵으로 연결(중복 구현 회피). 진단 상세는 보고서 안에서 링크. */}
           <Link
             href={selStudent ? `/tutor/analytics?studentId=${selStudent}` : '/tutor/analytics'}
             className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium text-content-tertiary border-b-2 border-transparent hover:text-content-primary"
             title="학생 성적·히트맵 페이지로 이동"
           >
             <PieChart size={14} /> 유형분석 <ExternalLink size={11} className="opacity-50" />
-          </Link>
-          <Link
-            href={selStudent ? `/dashboard/prescription/report?studentId=${selStudent}` : '/dashboard/prescription/report'}
-            className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium text-content-tertiary border-b-2 border-transparent hover:text-content-primary"
-            title="진단 종합 리포트로 이동"
-          >
-            <FileBarChart size={14} /> 보고서 <ExternalLink size={11} className="opacity-50" />
           </Link>
         </div>
 
@@ -419,7 +422,7 @@ export default function AssignmentsPage() {
               )}
             </div>
           </div>
-        ) : (
+        ) : tab === 'history' ? (
           /* ===== 학습내역 탭 ===== */
           <div className="flex-1 overflow-y-auto p-6">
             {selStudent ? (
@@ -483,6 +486,117 @@ export default function AssignmentsPage() {
                   )}
                 </div>
               </div>
+            )}
+          </div>
+        ) : (
+          /* ===== 보고서 탭 — 학생별 학습지 리포트 ===== */
+          <div className="flex-1 overflow-y-auto p-6">
+            {!selStudent ? (
+              <div className="text-center py-24 text-content-tertiary text-sm">
+                <FileBarChart size={28} className="mx-auto mb-3 opacity-40" />
+                왼쪽에서 학생을 선택하면 그 학생의 <b className="text-content-secondary">학습 보고서</b>가 표시됩니다.
+              </div>
+            ) : studentTimeline.length === 0 ? (
+              <div className="text-center py-24 text-content-tertiary text-sm">{selStudentName} 학생 출제 내역이 없어 보고서를 만들 수 없습니다.</div>
+            ) : (
+              (() => {
+                const rows = studentTimeline;
+                const scored = rows.filter(r => r.score_pct != null);
+                const avg = scored.length ? Math.round(scored.reduce((s, r) => s + (r.score_pct || 0), 0) / scored.length) : null;
+                const doneN = rows.filter(r => r.completed).length;
+                // 약점 = 점수 낮은 순 상위 5 (60점 미만 우선)
+                const weak = [...scored].sort((a, b) => (a.score_pct || 0) - (b.score_pct || 0)).slice(0, 5);
+                const tone = (p: number) => p >= 80 ? 'text-emerald-300' : p >= 60 ? 'text-amber-300' : 'text-rose-300';
+                const bar = (p: number) => p >= 80 ? 'bg-emerald-500' : p >= 60 ? 'bg-amber-500' : 'bg-rose-500';
+                const stuMeta = students.find(s => s.id === selStudent);
+                return (
+                  <div className="max-w-3xl mx-auto space-y-5">
+                    {/* 헤더 카드 */}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                      <div className="flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                          <div className="text-xl font-bold">{selStudentName} 학습 보고서</div>
+                          <div className="text-xs text-content-tertiary mt-0.5">
+                            {stuMeta?.grade || ''}{stuMeta?.className ? ` · ${stuMeta.className}` : ''} · 출제 {rows.length}건
+                          </div>
+                        </div>
+                        <div className="flex gap-3 text-center">
+                          <div>
+                            <div className={`text-2xl font-bold tabular-nums ${avg != null ? tone(avg) : 'text-content-tertiary'}`}>{avg != null ? `${avg}점` : '-'}</div>
+                            <div className="text-[10px] text-content-tertiary uppercase tracking-wide">평균</div>
+                          </div>
+                          <div>
+                            <div className="text-2xl font-bold tabular-nums text-content-secondary">{doneN}/{rows.length}</div>
+                            <div className="text-[10px] text-content-tertiary uppercase tracking-wide">완료</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <Link href={`/dashboard/prescription/report?studentId=${selStudent}`} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
+                          <FileBarChart size={13} /> 진단 종합 리포트 <ExternalLink size={10} className="opacity-50" />
+                        </Link>
+                        <Link href={`/tutor/analytics?studentId=${selStudent}`} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
+                          <PieChart size={13} /> 단원 히트맵 <ExternalLink size={10} className="opacity-50" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* 점수 추이 */}
+                    <div className="rounded-2xl border border-white/10 p-5">
+                      <div className="flex items-center gap-2 text-sm font-bold mb-4"><TrendingUp size={15} className="text-sky-400" /> 점수 추이</div>
+                      {scored.length === 0 ? (
+                        <div className="text-xs text-content-tertiary">채점된 출제가 없습니다.</div>
+                      ) : (
+                        <div className="flex items-end gap-1.5 h-32">
+                          {scored.map((r) => (
+                            <div key={`${r.source}-${r.id}`} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0" title={`${r.title} · ${r.score_pct}점`}>
+                              <span className={`text-[10px] tabular-nums ${tone(r.score_pct || 0)}`}>{r.score_pct}</span>
+                              <div className={`w-full rounded-t ${bar(r.score_pct || 0)}`} style={{ height: `${Math.max(4, (r.score_pct || 0) * 0.9)}%` }} />
+                              <span className="text-[9px] text-content-tertiary truncate w-full text-center">{fmtDate(r.issued_at).slice(3)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 약점 (점수 낮은 출제) */}
+                    {weak.length > 0 && (
+                      <div className="rounded-2xl border border-white/10 p-5">
+                        <div className="flex items-center gap-2 text-sm font-bold mb-3"><History size={15} className="text-rose-400" /> 보완 필요 — 점수 낮은 출제</div>
+                        <div className="space-y-1.5">
+                          {weak.map((r) => (
+                            <div key={`w-${r.source}-${r.id}`} className="flex items-center gap-3 text-sm">
+                              <span className={`text-xs font-medium w-14 ${TAG_COLOR(r.tag)}`}>{r.tag}</span>
+                              <span className="flex-1 truncate" title={r.title}>{r.title}</span>
+                              <span className="text-[11px] text-content-tertiary w-14 text-right">{fmtDate(r.issued_at)}</span>
+                              <span className={`text-sm font-bold tabular-nums w-12 text-right ${tone(r.score_pct || 0)}`}>{r.score_pct}점</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 전체 출제 목록 */}
+                    <div className="rounded-2xl border border-white/10 overflow-hidden">
+                      <div className="px-5 py-3 text-sm font-bold border-b border-white/10 bg-white/[0.02]">전체 출제 ({rows.length})</div>
+                      <div className="divide-y divide-white/5">
+                        {[...rows].reverse().map((r) => (
+                          <div key={`all-${r.source}-${r.id}`} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                            <span className="text-[11px] text-content-tertiary w-14 tabular-nums">{fmtDate(r.issued_at)}</span>
+                            <span className={`text-xs font-medium w-14 ${TAG_COLOR(r.tag)}`}>{r.tag}</span>
+                            <span className="flex-1 truncate" title={r.title}>{r.title}</span>
+                            <span className="w-16 text-right">
+                              {r.score_pct != null ? (
+                                <span className={`font-bold tabular-nums ${tone(r.score_pct)}`}>{r.score_pct}점</span>
+                              ) : <span className="text-xs text-content-tertiary">{r.completed ? '채점대기' : '미응시'}</span>}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
         )}
