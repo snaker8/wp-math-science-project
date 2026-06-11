@@ -1551,31 +1551,11 @@ function ExamPaperView({
   const CONTENT_H = A4_H - PRINT_PAD_Y * 2 - FOOTER_H;
   const FIRST_CONTENT_H = CONTENT_H - HEADER_H;
 
-  // 페이지 분할
+    // 페이지 분할
   const pages = useMemo(() => {
-    // 프리셋 모드: 지정된 문제 수로 강제 분할
-    if (perPagePreset) {
-      const result: ProblemData[][] = [];
-      for (let i = 0; i < problems.length; i += perPagePreset) {
-        result.push(problems.slice(i, i + perPagePreset));
-      }
-      return result.length > 0 ? result : [[]];
-    }
-
-    if (!measured || problemHeights.length === 0) {
-      // 폴백: 대략 분할
-      const perPage = columns === 2 ? 10 : 5;
-      const result: ProblemData[][] = [];
-      for (let i = 0; i < problems.length; i += perPage) {
-        result.push(problems.slice(i, i + perPage));
-      }
-      return result.length > 0 ? result : [[]];
-    }
-
     // ★ 세로(열 우선) + 줄 정렬 — grid-auto-flow:column 으로 좌=앞부분(1·2), 우=뒤부분(3·4)이면서
     //   같은 줄(1·3, 2·4)이 정렬된다. 페이지 분할도 그 짝((r, r+R), R=ceil(n/2))으로 측정해야 일치.
     //   페이지 높이 = Σ_r max(좌행, 우행) ≤ maxH → 잘림 차단. (1단은 단순 합)
-    //   (2026-06-04 그리드는 1·3/2·4 가로 읽기로 회귀 → auto-flow:column 으로 세로 복원 + 줄 정렬 유지.)
     const colFlowTotal = (hs: number[]): number => {
       const n = hs.length;
       if (n === 0) return 0;
@@ -1589,6 +1569,60 @@ function ExamPaperView({
       }
       return t;
     };
+    // 풀이공간 추정 (getWritingSpace 동일 — 아래 정의보다 먼저 쓰여 TDZ 회피 위해 인라인)
+    const writingSpaceOf = (p: ProblemData): number => {
+      const isMC = (p.choices?.length ?? 0) > 0;
+      const cLen = (p.content || '').length;
+      if (!isMC) return 280;
+      if (cLen < 80) return 100;
+      if (cLen < 200) return 160;
+      return 220;
+    };
+
+    // 프리셋 모드: 페이지당 최대 N문제 — 단, content(풀이공간 최소화)만으로도 넘치면 조기 분할.
+    //   ★ 2026-06-11: 과거엔 무조건 N개 chunk 라 키 큰 문제 4개가 한 페이지에 들어가 잘림.
+    //   이제 측정 높이 기준으로 N 도달 OR 넘침 중 먼저인 지점에서 끊음. 추정 오차는 "조금 일찍
+    //   끊김"(여백↑) 쪽으로만 빗나가 잘림 0. 미측정 시엔 기존 블라인드 chunk 폴백.
+    if (perPagePreset) {
+      if (!measured || problemHeights.length === 0) {
+        const result: ProblemData[][] = [];
+        for (let i = 0; i < problems.length; i += perPagePreset) {
+          result.push(problems.slice(i, i + perPagePreset));
+        }
+        return result.length > 0 ? result : [[]];
+      }
+      const MIN_ANSWER = 24; // presetAnswerSpaces 최소 풀이공간과 동일
+      const result: ProblemData[][] = [];
+      let pageItems: ProblemData[] = [];
+      let pageHs: number[] = [];
+      for (let i = 0; i < problems.length; i++) {
+        // content-only(풀이공간 제외) + 최소 풀이공간 — presetAnswerSpaces 모델과 일치.
+        const ch = Math.max(0, (problemHeights[i] ?? 0) - writingSpaceOf(problems[i])) + MIN_ANSWER;
+        const maxH = result.length === 0 ? FIRST_CONTENT_H : CONTENT_H;
+        const atCap = pageItems.length >= perPagePreset;
+        const overflow = pageItems.length > 0 && colFlowTotal([...pageHs, ch]) > maxH;
+        if (pageItems.length > 0 && (atCap || overflow)) {
+          result.push(pageItems);
+          pageItems = [];
+          pageHs = [];
+        }
+        pageItems.push(problems[i]);
+        pageHs.push(ch);
+      }
+      if (pageItems.length > 0) result.push(pageItems);
+      return result.length > 0 ? result : [[]];
+    }
+
+    if (!measured || problemHeights.length === 0) {
+      // 폴백: 대략 분할
+      const perPage = columns === 2 ? 10 : 5;
+      const result: ProblemData[][] = [];
+      for (let i = 0; i < problems.length; i += perPage) {
+        result.push(problems.slice(i, i + perPage));
+      }
+      return result.length > 0 ? result : [[]];
+    }
+
     const result: ProblemData[][] = [];
     let pageItems: ProblemData[] = [];
     let pageHs: number[] = [];

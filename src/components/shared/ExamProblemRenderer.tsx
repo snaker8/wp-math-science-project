@@ -264,7 +264,9 @@ function ExamProblemRendererInner({
       return (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-9 gap-y-2">
           {items.map((it, ci) => (
-            <div key={ci} className="flex items-center gap-2 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+            // ★ word-break: keep-all — 한글 보기가 음절 중간("제1사분/면")에서 끊기던 것 차단.
+            //   띄어쓰기에서만 줄바꿈 → 보기 단어 보존. 좁은 2단 인쇄 어색함 해소.
+            <div key={ci} className="flex items-center gap-2 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65', wordBreak: 'keep-all' }}>
               <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
               {renderChoiceBody(it)}
             </div>
@@ -275,7 +277,7 @@ function ExamProblemRendererInner({
     return (
       <div className={gridClass}>
         {items.map((it, ci) => (
-          <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65' }}>
+          <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65', wordBreak: 'keep-all' }}>
             <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
             {renderChoiceBody(it)}
           </div>
