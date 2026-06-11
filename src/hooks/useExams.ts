@@ -117,15 +117,25 @@ export function useExams() {
                 return;
             }
 
-            // RLS가 자동으로 필터링하므로, 모든 접근 가능한 시험지를 조회
-            // 003_exams.sql RLS: created_by = auth.uid()
-            // schema.sql RLS: institute_id = user's institute_id
-            const { data, error: fetchError } = await supabaseBrowser
-                .from('exams')
-                .select('*, exam_problems(count)')
-                .is('deleted_at', null)
-                .order('created_at', { ascending: false })
-                .limit(100);
+            // RLS가 자동으로 필터링 — 공통 풀(institute_id NULL) + 자기 센터 시험지.
+            // (마이그 20260611_001: exams SELECT 정책에 공통 풀 포함)
+            // ★ .limit(100) 하드캡으로 시험지 100건 초과 시 뒷부분이 잘리던 사고
+            //   → range 페이지네이션 (Supabase 기본 1000행 한계도 동시 대응).
+            const PAGE = 500;
+            const data: any[] = [];
+            let fetchError: { message: string } | null = null;
+            for (let from = 0; ; from += PAGE) {
+                const { data: page, error: pageErr } = await supabaseBrowser
+                    .from('exams')
+                    .select('*, exam_problems(count)')
+                    .is('deleted_at', null)
+                    .order('created_at', { ascending: false })
+                    .range(from, from + PAGE - 1);
+                if (pageErr) { fetchError = pageErr; break; }
+                if (!page || page.length === 0) break;
+                data.push(...page);
+                if (page.length < PAGE) break;
+            }
 
             if (fetchError) {
                 console.error('[Exams] Fetch error:', fetchError.message);
