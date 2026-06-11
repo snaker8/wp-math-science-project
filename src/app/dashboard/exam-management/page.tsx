@@ -1267,27 +1267,8 @@ export default function ExamManagementPage() {
         </div>
 
         <div className="em-subbar-actions">
-          <div className="em-ppp">
-            <span className="em-ppp-label">페이지당</span>
-            {[
-              { value: null, label: '자동' },
-              { value: 4, label: '4' },
-              { value: 6, label: '6' },
-              { value: 8, label: '8' },
-            ].map(({ value, label }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setPerPagePreset(value)}
-                className={perPagePreset === value ? 'active' : ''}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="em-subbar-divider" />
-
+          {/* ★ 페이지당 프리셋은 우측 옵션 패널 "레이아웃" 으로 이동 (2026-06-11) —
+              좁은 화면에서 SUBBAR 버튼들이 제목을 가리던 겹침 완화 */}
           {deployStatus && (
             <span
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold"
@@ -1636,6 +1617,28 @@ export default function ExamManagementPage() {
               </div>
               <span className="em-col-label">2단</span>
             </button>
+          </div>
+
+          {/* 페이지당 문제 수 — SUBBAR 에서 이동 (좁은 화면 겹침 완화) */}
+          <div className="em-slider-row" style={{ marginTop: 12 }}>
+            <span>페이지당 문제 수</span>
+          </div>
+          <div className="em-ppp em-ppp-block">
+            {[
+              { value: null, label: '자동' },
+              { value: 4, label: '4' },
+              { value: 6, label: '6' },
+              { value: 8, label: '8' },
+            ].map(({ value, label }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setPerPagePreset(value)}
+                className={perPagePreset === value ? 'active' : ''}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
