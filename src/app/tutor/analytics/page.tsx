@@ -73,8 +73,8 @@ function Card({ children, title, icon: Icon, className = '' }: {
   children: React.ReactNode; title: string; icon?: LucideIcon; className?: string;
 }) {
   return (
-    <div className={`bg-white border border-gray-200 rounded-2xl p-5 ${className}`}>
-      <div className="flex items-center gap-2 mb-4 text-gray-500">
+    <div className={`bg-surface-card border border-white/10 rounded-2xl p-5 ${className}`}>
+      <div className="flex items-center gap-2 mb-4 text-content-tertiary">
         {Icon && <Icon size={16} />}
         <h3 className="font-bold text-xs uppercase tracking-wider">{title}</h3>
       </div>
@@ -87,12 +87,12 @@ function StatCell({ label, value, sub, icon: Icon }: {
   label: string; value: string | number; sub?: string; icon: LucideIcon;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-gray-500 text-xs mb-2">
+    <div className="bg-surface-card border border-white/10 rounded-2xl p-4">
+      <div className="flex items-center gap-2 text-content-tertiary text-xs mb-2">
         <Icon size={14} /> {label}
       </div>
-      <div className="text-2xl font-bold text-zinc-900">{value}</div>
-      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+      <div className="text-2xl font-bold text-content-primary">{value}</div>
+      {sub && <div className="text-xs text-content-tertiary mt-1">{sub}</div>}
     </div>
   );
 }
@@ -233,15 +233,15 @@ export default function TutorAnalyticsPage() {
   }, [data, errorCauseChart]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-zinc-900 p-6 md:p-8 space-y-6 font-sans">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BarChart3 size={26} className="text-indigo-600" />
+            <BarChart3 size={26} className="text-indigo-400" />
             학생 성적
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-content-tertiary mt-1">
             학년별 성적 일람표(내신 · 모의고사 · 진단 · 시험)에서 학생을 선택하면 진단평가 상세 분석이 표시됩니다.
           </p>
         </div>
@@ -261,40 +261,40 @@ export default function TutorAnalyticsPage() {
       {/* 학생 선택 */}
       <Card title="학생 선택" icon={Users}>
         {studentsLoading ? (
-          <div className="flex items-center gap-2 text-gray-500 text-sm py-3">
+          <div className="flex items-center gap-2 text-content-tertiary text-sm py-3">
             <Loader2 size={16} className="animate-spin" /> 학생 목록 불러오는 중…
           </div>
         ) : studentsError ? (
-          <div className="flex items-start gap-2 p-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm">
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">
             <AlertTriangle size={14} className="mt-0.5" /> {studentsError}
           </div>
         ) : students.length === 0 ? (
-          <div className="text-sm text-gray-500 py-3">등록된 학생이 없습니다.</div>
+          <div className="text-sm text-content-tertiary py-3">등록된 학생이 없습니다.</div>
         ) : (
           <div className="relative">
             <button
               type="button"
               onClick={() => setDropdownOpen((v) => !v)}
-              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-gray-300 bg-white hover:border-indigo-400 text-sm"
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-white/10 bg-surface-card hover:border-indigo-400 text-sm"
             >
               {selectedInfo ? (
                 <span className="flex items-center gap-2">
                   <span className="font-semibold">{selectedName}</span>
                   {gradeIntToLabel(selectedInfo.grade) && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-content-secondary">
                       {gradeIntToLabel(selectedInfo.grade)}
                     </span>
                   )}
                 </span>
               ) : (
-                <span className="text-gray-400">학생을 선택하세요…</span>
+                <span className="text-content-tertiary">학생을 선택하세요…</span>
               )}
-              <ChevronDown size={16} className={`text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={16} className={`text-content-tertiary transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {dropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-hidden">
-                <div className="p-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
-                  <Search size={14} className="text-gray-400" />
+              <div className="absolute z-10 mt-1 w-full bg-surface-card border border-white/10 rounded-lg shadow-lg max-h-80 overflow-hidden">
+                <div className="p-2 border-b border-white/5 flex items-center gap-2 bg-white/5">
+                  <Search size={14} className="text-content-tertiary" />
                   <input
                     type="text"
                     autoFocus
@@ -306,7 +306,7 @@ export default function TutorAnalyticsPage() {
                 </div>
                 <div className="overflow-y-auto max-h-60">
                   {filteredStudents.length === 0 ? (
-                    <div className="text-center py-4 text-sm text-gray-400">검색 결과 없음</div>
+                    <div className="text-center py-4 text-sm text-content-tertiary">검색 결과 없음</div>
                   ) : (
                     filteredStudents.map((s) => {
                       const name = s.full_name || s.name || '(이름 없음)';
@@ -319,15 +319,15 @@ export default function TutorAnalyticsPage() {
                             setSearchQuery('');
                             setModalStudentId(s.id);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 ${
-                            selectedStudent === s.id ? 'bg-indigo-50 text-indigo-700' : ''
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-500/10 flex items-center justify-between gap-2 ${
+                            selectedStudent === s.id ? 'bg-indigo-500/15 text-indigo-300' : ''
                           }`}
                         >
                           <span className="truncate flex items-center gap-1.5">
                             {name}
                             {s.source === 'roster' && (
                               <span
-                                className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0"
+                                className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-300 flex-shrink-0"
                                 title="엑셀 일괄 채점으로 자동등록된 학생 (auth 미연동)"
                               >
                                 명단
@@ -335,7 +335,7 @@ export default function TutorAnalyticsPage() {
                             )}
                           </span>
                           {gradeIntToLabel(s.grade) && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 flex-shrink-0">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-content-secondary flex-shrink-0">
                               {gradeIntToLabel(s.grade)}
                             </span>
                           )}
@@ -351,21 +351,21 @@ export default function TutorAnalyticsPage() {
       </Card>
 
       {!selectedStudent && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
-          <Users size={36} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-zinc-700 font-semibold">학생을 선택해주세요</p>
-          <p className="text-sm text-gray-500 mt-1">선택하면 진단평가 분석이 표시됩니다.</p>
+        <div className="bg-surface-card border border-white/10 rounded-2xl p-12 text-center">
+          <Users size={36} className="mx-auto text-content-tertiary mb-3" />
+          <p className="text-content-secondary font-semibold">학생을 선택해주세요</p>
+          <p className="text-sm text-content-tertiary mt-1">선택하면 진단평가 분석이 표시됩니다.</p>
         </div>
       )}
 
       {loading && (
-        <div className="flex items-center justify-center py-16 text-gray-500 gap-2">
+        <div className="flex items-center justify-center py-16 text-content-tertiary gap-2">
           <Loader2 size={18} className="animate-spin" /> 분석 데이터 불러오는 중…
         </div>
       )}
 
       {error && !loading && (
-        <div className="flex items-start gap-2 p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm">
+        <div className="flex items-start gap-2 p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">
           <AlertTriangle size={16} className="mt-0.5" /> {error}
         </div>
       )}
@@ -389,21 +389,21 @@ export default function TutorAnalyticsPage() {
             <Card title="세션별 정답률 추이" icon={TrendingUp} className="lg:col-span-2">
               <div className="h-[280px]">
                 {data.performanceTrend.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                  <div className="h-full flex items-center justify-center text-content-tertiary text-sm">
                     채점된 세션이 누적되면 차트가 표시됩니다.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={data.performanceTrend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
                       <XAxis
                         dataKey="date"
-                        stroke="#6b7280"
+                        stroke="#9ca3af"
                         tickFormatter={(d) => d.slice(5)}
                       />
-                      <YAxis stroke="#6b7280" domain={[0, 100]} unit="%" />
+                      <YAxis stroke="#9ca3af" domain={[0, 100]} unit="%" />
                       <Tooltip
-                        contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }}
+                        contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', color: '#fff' }}
                         formatter={(value) => `${value}%`}
                         labelFormatter={(label, payload) => {
                           const p = payload?.[0]?.payload as { sessionType?: string; roundNumber?: number };
@@ -429,16 +429,16 @@ export default function TutorAnalyticsPage() {
             <Card title="오답 원인 분포" icon={Brain}>
               <div className="h-[280px]">
                 {errorCauseChart.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                  <div className="h-full flex items-center justify-center text-content-tertiary text-sm">
                     오답 원인이 태깅된 채점이 없습니다.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={errorCauseChart} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                      <XAxis type="number" stroke="#6b7280" />
-                      <YAxis dataKey="cause" type="category" stroke="#374151" width={60} />
-                      <Tooltip cursor={{ fill: '#00000010' }} contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" horizontal={false} />
+                      <XAxis type="number" stroke="#9ca3af" />
+                      <YAxis dataKey="cause" type="category" stroke="#9ca3af" width={60} />
+                      <Tooltip cursor={{ fill: '#ffffff10' }} contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', color: '#fff' }} />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={28}>
                         {errorCauseChart.map((d) => (
                           <Cell key={d.cause} fill={ERROR_CAUSE_COLORS[d.cause] || '#8b5cf6'} />
@@ -455,14 +455,14 @@ export default function TutorAnalyticsPage() {
             {/* 단원별 정답률 (히트맵) */}
             <Card title="수학비서 대단원 정답률" icon={Brain}>
               {data.mathsecrHeatmap.length === 0 ? (
-                <div className="py-8 text-center text-gray-400 text-sm">
+                <div className="py-8 text-center text-content-tertiary text-sm">
                   diagnostics.items 가 누적되면 대단원별 α·β·γ 가 표시됩니다.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-gray-500 uppercase tracking-wider">
+                      <tr className="text-content-tertiary uppercase tracking-wider">
                         <th className="text-left py-2 pr-3">과목</th>
                         <th className="text-left py-2 pr-3">대단원</th>
                         <th className="text-right py-2 pr-3">정답률</th>
@@ -474,12 +474,12 @@ export default function TutorAnalyticsPage() {
                         const r = row as Record<string, any>;
                         const rate = Number(r.correct_rate ?? r.correctRate ?? r.pct ?? 0);
                         const state = rate >= 80 ? 'α' : rate >= 60 ? 'β' : 'γ';
-                        const stateColor = rate >= 80 ? 'text-emerald-600' : rate >= 60 ? 'text-amber-600' : 'text-rose-600';
+                        const stateColor = rate >= 80 ? 'text-emerald-300' : rate >= 60 ? 'text-amber-300' : 'text-rose-300';
                         return (
-                          <tr key={i} className="border-t border-gray-100">
-                            <td className="py-2 pr-3 text-zinc-600">{String(r.subject ?? '')}</td>
-                            <td className="py-2 pr-3 text-zinc-700">{String(r.level1 ?? r.major_unit ?? '')}</td>
-                            <td className="py-2 pr-3 text-right text-zinc-700">{rate ? `${rate}%` : '-'}</td>
+                          <tr key={i} className="border-t border-white/5">
+                            <td className="py-2 pr-3 text-content-secondary">{String(r.subject ?? '')}</td>
+                            <td className="py-2 pr-3 text-content-secondary">{String(r.level1 ?? r.major_unit ?? '')}</td>
+                            <td className="py-2 pr-3 text-right text-content-secondary">{rate ? `${rate}%` : '-'}</td>
                             <td className={`py-2 text-center font-bold ${stateColor}`}>{state}</td>
                           </tr>
                         );
@@ -493,7 +493,7 @@ export default function TutorAnalyticsPage() {
             {/* 함정 누적 */}
             <Card title="반복 함정 Top 10" icon={AlertTriangle}>
               {data.pitfalls.length === 0 ? (
-                <div className="py-8 text-center text-gray-400 text-sm">
+                <div className="py-8 text-center text-content-tertiary text-sm">
                   오답 시 자동 누적되는 함정 기록이 없습니다.
                 </div>
               ) : (
@@ -501,10 +501,10 @@ export default function TutorAnalyticsPage() {
                   {data.pitfalls.map((p) => (
                     <li
                       key={p.pitfall_code}
-                      className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-gray-50 border border-gray-100"
+                      className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-white/[0.03] border border-white/5"
                     >
-                      <div className="font-mono text-xs text-zinc-700">{p.pitfall_code}</div>
-                      <span className="text-rose-600 font-bold text-xs">{p.hitCount}회</span>
+                      <div className="font-mono text-xs text-content-secondary">{p.pitfall_code}</div>
+                      <span className="text-rose-300 font-bold text-xs">{p.hitCount}회</span>
                     </li>
                   ))}
                 </ul>
@@ -515,14 +515,14 @@ export default function TutorAnalyticsPage() {
           {/* 최근 세션 카드 */}
           <Card title="최근 세션" icon={Calendar}>
             {data.sessions.length === 0 ? (
-              <div className="py-6 text-center text-gray-400 text-sm">
+              <div className="py-6 text-center text-content-tertiary text-sm">
                 채점된 세션이 없습니다.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-gray-500 uppercase tracking-wider">
+                    <tr className="text-content-tertiary uppercase tracking-wider">
                       <th className="text-left py-2 pr-3">시험지</th>
                       <th className="text-left py-2 pr-3">유형 · 회차</th>
                       <th className="text-left py-2 pr-3">발급일</th>
@@ -532,22 +532,22 @@ export default function TutorAnalyticsPage() {
                   </thead>
                   <tbody>
                     {data.sessions.map((s) => (
-                      <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="py-2 pr-3 text-zinc-700 truncate max-w-xs">{s.exam_title || '(제목 없음)'}</td>
-                        <td className="py-2 pr-3 text-zinc-500">
+                      <tr key={s.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                        <td className="py-2 pr-3 text-content-secondary truncate max-w-xs">{s.exam_title || '(제목 없음)'}</td>
+                        <td className="py-2 pr-3 text-content-tertiary">
                           {SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}
                         </td>
-                        <td className="py-2 pr-3 text-zinc-500">{fmtDate(s.issued_at)}</td>
-                        <td className="py-2 pr-3 text-right text-zinc-700">
-                          {s.pct != null ? <span className="font-bold text-indigo-600">{s.pct}%</span> : '-'}
-                          <span className="text-gray-400 ml-1">({s.correct}/{s.total})</span>
+                        <td className="py-2 pr-3 text-content-tertiary">{fmtDate(s.issued_at)}</td>
+                        <td className="py-2 pr-3 text-right text-content-secondary">
+                          {s.pct != null ? <span className="font-bold text-indigo-400">{s.pct}%</span> : '-'}
+                          <span className="text-content-tertiary ml-1">({s.correct}/{s.total})</span>
                         </td>
                         <td className="py-2 text-center">
                           {s.session_type === 'EX' && s.report_student_id && s.exam_id ? (
                             <Link
                               href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
                             >
                               <ExternalLink size={12} /> 리포트
                             </Link>
@@ -555,7 +555,7 @@ export default function TutorAnalyticsPage() {
                             <Link
                               href={`/grade/${s.id}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
                             >
                               <ExternalLink size={12} /> 채점
                             </Link>
@@ -570,22 +570,22 @@ export default function TutorAnalyticsPage() {
           </Card>
 
           {/* AI 인사이트 */}
-          <Card title="AI 진단 인사이트" icon={Brain} className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
+          <Card title="AI 진단 인사이트" icon={Brain} className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-indigo-500/30">
             <div className="space-y-3">
               {insights.map((it, i) => (
                 <div key={i} className="flex gap-3">
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      it.kind === 'good' ? 'bg-indigo-100 text-indigo-600' : 'bg-rose-100 text-rose-600'
+                      it.kind === 'good' ? 'bg-indigo-500/15 text-indigo-300' : 'bg-rose-500/15 text-rose-300'
                     }`}
                   >
                     {it.kind === 'good' ? <TrendingUp size={20} /> : <AlertTriangle size={20} />}
                   </div>
                   <div>
-                    <h4 className={`font-semibold text-sm ${it.kind === 'good' ? 'text-indigo-900' : 'text-rose-900'}`}>
+                    <h4 className={`font-semibold text-sm ${it.kind === 'good' ? 'text-indigo-200' : 'text-rose-200'}`}>
                       {it.title}
                     </h4>
-                    <p className="text-gray-600 text-xs leading-relaxed mt-1">{it.body}</p>
+                    <p className="text-content-tertiary text-xs leading-relaxed mt-1">{it.body}</p>
                   </div>
                 </div>
               ))}

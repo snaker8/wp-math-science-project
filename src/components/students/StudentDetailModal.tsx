@@ -17,11 +17,11 @@ export default function StudentDetailModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-gray-50 rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-200 my-auto"
+        className="bg-surface-card rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl border border-white/10 my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <StudentDetailContent studentId={studentId} onClose={onClose} />

@@ -83,12 +83,12 @@ function StatCell({ label, value, sub, icon: Icon }: {
   label: string; value: string | number; sub?: string; icon: LucideIcon;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-gray-500 text-xs mb-2">
+    <div className="bg-surface-card border border-white/10 rounded-2xl p-4">
+      <div className="flex items-center gap-2 text-content-tertiary text-xs mb-2">
         <Icon size={14} /> {label}
       </div>
-      <div className="text-2xl font-bold text-zinc-900">{value}</div>
-      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+      <div className="text-2xl font-bold text-content-primary">{value}</div>
+      {sub && <div className="text-xs text-content-tertiary mt-1">{sub}</div>}
     </div>
   );
 }
@@ -97,8 +97,8 @@ function Card({ children, title, icon: Icon, className = '' }: {
   children: React.ReactNode; title: string; icon?: LucideIcon; className?: string;
 }) {
   return (
-    <div className={`bg-white border border-gray-200 rounded-2xl p-5 ${className}`}>
-      <div className="flex items-center gap-2 mb-4 text-gray-500">
+    <div className={`bg-surface-card border border-white/10 rounded-2xl p-5 ${className}`}>
+      <div className="flex items-center gap-2 mb-4 text-content-tertiary">
         {Icon && <Icon size={16} />}
         <h3 className="font-bold text-xs uppercase tracking-wider">{title}</h3>
       </div>
@@ -109,9 +109,9 @@ function Card({ children, title, icon: Icon, className = '' }: {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
-      <div className="w-20 text-xs font-semibold text-gray-400 shrink-0">{label}</div>
-      <div className="text-sm text-zinc-800">{value}</div>
+    <div className="flex items-center gap-4 py-2 border-b border-white/5 last:border-0">
+      <div className="w-20 text-xs font-semibold text-content-tertiary shrink-0">{label}</div>
+      <div className="text-sm text-content-secondary">{value}</div>
     </div>
   );
 }
@@ -214,14 +214,14 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
   const gradeLabel = data?.student.grade != null ? gradeIntToLabel(data.student.grade) : null;
 
   return (
-    <div className="text-zinc-900 font-sans">
+    <div className="text-content-primary font-sans">
       <div className="p-6 md:p-8">
         {/* 헤더 */}
         <div className="flex items-center gap-3 mb-5">
           <button
             type="button"
             onClick={onClose ?? (() => router.push('/tutor/students'))}
-            className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+            className="p-2 rounded-lg border border-white/10 bg-surface-card text-content-tertiary hover:text-content-primary hover:bg-white/10"
             title={onClose ? '닫기' : '학생 목록'}
           >
             {onClose ? <X size={18} /> : <ArrowLeft size={18} />}
@@ -230,22 +230,22 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold truncate">{studentName}</h1>
               {gradeLabel && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
                   {gradeLabel}
                 </span>
               )}
               {data?.source && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-content-tertiary border border-white/10">
                   {data.source === 'roster' ? '채점명단' : '정식'}
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">학생 통합 상세 — 성적·진단·개별 리포트·관리</p>
+            <p className="text-xs text-content-tertiary mt-0.5">학생 통합 상세 — 성적·진단·개별 리포트·관리</p>
           </div>
         </div>
 
         {/* 탭 */}
-        <div className="flex items-center gap-1 border-b border-gray-200 mb-5 overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-white/10 mb-5 overflow-x-auto">
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
@@ -256,8 +256,8 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                   active
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-400 hover:text-gray-700'
+                    ? 'border-indigo-500 text-indigo-400'
+                    : 'border-transparent text-content-tertiary hover:text-content-secondary'
                 }`}
               >
                 <Icon size={15} /> {t.label}
@@ -268,11 +268,11 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
 
         {/* 본문 */}
         {loading ? (
-          <div className="flex items-center justify-center py-24 text-gray-400">
+          <div className="flex items-center justify-center py-24 text-content-tertiary">
             <Loader2 className="animate-spin mr-2" size={18} /> 불러오는 중…
           </div>
         ) : error ? (
-          <div className="flex items-center gap-2 p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 text-sm">
+          <div className="flex items-center gap-2 p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">
             <AlertTriangle size={16} /> {error}
           </div>
         ) : !data ? null : (
@@ -288,7 +288,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                   <button onClick={() => setTab('reports')} className="text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                     개별 리포트 보기 ({reportSessions.length})
                   </button>
-                  <button onClick={() => setTab('diagnostics')} className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100">
+                  <button onClick={() => setTab('diagnostics')} className="text-sm font-semibold px-4 py-2 rounded-lg border border-white/10 bg-surface-card text-content-secondary hover:bg-white/10">
                     진단 보기
                   </button>
                 </div>
@@ -300,22 +300,22 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
               <div className="space-y-6">
                 {/* 세트 리포트 (진단평가 종합) */}
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-700 mb-2.5 flex items-center gap-1.5">
-                    <FileText size={15} className="text-violet-500" /> 세트 리포트 <span className="text-xs font-normal text-gray-400">진단평가 종합</span>
+                  <h3 className="text-sm font-bold text-content-secondary mb-2.5 flex items-center gap-1.5">
+                    <FileText size={15} className="text-violet-500" /> 세트 리포트 <span className="text-xs font-normal text-content-tertiary">진단평가 종합</span>
                   </h3>
                   {diagSetsLoading ? (
-                    <div className="py-4 text-gray-400 text-sm"><Loader2 className="animate-spin inline mr-2" size={14} />불러오는 중…</div>
+                    <div className="py-4 text-content-tertiary text-sm"><Loader2 className="animate-spin inline mr-2" size={14} />불러오는 중…</div>
                   ) : !diagSets || diagSets.length === 0 ? (
-                    <div className="text-xs text-gray-400 py-3 px-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50">
+                    <div className="text-xs text-content-tertiary py-3 px-4 rounded-xl border border-dashed border-white/10 bg-white/[0.02]">
                       이 학생이 속한 진단평가 세트가 없습니다.
                     </div>
                   ) : (
                     <div className="grid gap-2">
                       {diagSets.map((sr) => (
-                        <div key={sr.setKey} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-violet-200 bg-violet-50/40 hover:border-violet-300 hover:shadow-sm transition-all">
+                        <div key={sr.setKey} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-violet-500/30 bg-violet-500/10 hover:border-violet-500/50 hover:shadow-sm transition-all">
                           <div className="min-w-0">
-                            <div className="font-bold text-zinc-800 truncate">{sr.setTitle}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">{sr.bookGroupName || ''}{sr.bookGroupName ? ' · ' : ''}응시 {sr.variants}회</div>
+                            <div className="font-bold text-content-secondary truncate">{sr.setTitle}</div>
+                            <div className="text-xs text-content-tertiary mt-0.5">{sr.bookGroupName || ''}{sr.bookGroupName ? ' · ' : ''}응시 {sr.variants}회</div>
                           </div>
                           <Link
                             href={`/dashboard/prescription/report?setKey=${encodeURIComponent(sr.setKey)}&studentId=${encodeURIComponent(sr.studentIdInSet)}`}
@@ -331,26 +331,26 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 </div>
 
                 {/* 개별 리포트 (시험지별) */}
-                <div className="border-t border-gray-200 pt-5">
-                  <h3 className="text-sm font-bold text-zinc-700 mb-2.5 flex items-center gap-1.5">
-                    <FileText size={15} className="text-indigo-500" /> 개별 리포트 <span className="text-xs font-normal text-gray-400">시험지별</span>
+                <div className="border-t border-white/10 pt-5">
+                  <h3 className="text-sm font-bold text-content-secondary mb-2.5 flex items-center gap-1.5">
+                    <FileText size={15} className="text-indigo-500" /> 개별 리포트 <span className="text-xs font-normal text-content-tertiary">시험지별</span>
                   </h3>
                   {reportSessions.length === 0 ? (
-                    <div className="py-8 text-center text-gray-400 text-sm">채점된 시험지가 없습니다.</div>
+                    <div className="py-8 text-center text-content-tertiary text-sm">채점된 시험지가 없습니다.</div>
                   ) : (
                     <div className="grid gap-3">
                       {reportSessions.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
+                        <div key={s.id} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-white/10 bg-surface-card hover:border-indigo-500/40 hover:shadow-sm transition-all">
                           <div className="min-w-0">
-                            <div className="font-bold text-zinc-800 truncate">{s.exam_title || '(제목 없음)'}</div>
-                            <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
+                            <div className="font-bold text-content-secondary truncate">{s.exam_title || '(제목 없음)'}</div>
+                            <div className="text-xs text-content-tertiary mt-0.5 flex flex-wrap items-center gap-x-2">
                               <span>{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</span>
                               <span>· {fmtDate(s.issued_at)}</span>
                               <span>·{' '}
                                 {s.pct != null ? (
-                                  <span className="font-bold text-indigo-600">{s.pct}%</span>
+                                  <span className="font-bold text-indigo-400">{s.pct}%</span>
                                 ) : '-'}
-                                <span className="text-gray-400"> ({s.correct}/{s.total})</span>
+                                <span className="text-content-tertiary"> ({s.correct}/{s.total})</span>
                               </span>
                             </div>
                           </div>
@@ -375,17 +375,17 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 <Card title="세션별 정답률 추이" icon={TrendingUp}>
                   <div className="h-[280px]">
                     {data.performanceTrend.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                      <div className="h-full flex items-center justify-center text-content-tertiary text-sm">
                         채점된 세션이 누적되면 차트가 표시됩니다.
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data.performanceTrend}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="date" stroke="#6b7280" tickFormatter={(d) => String(d).slice(5)} />
-                          <YAxis stroke="#6b7280" domain={[0, 100]} unit="%" />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+                          <XAxis dataKey="date" stroke="#9ca3af" tickFormatter={(d) => String(d).slice(5)} />
+                          <YAxis stroke="#9ca3af" domain={[0, 100]} unit="%" />
                           <Tooltip
-                            contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }}
+                            contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', color: '#fff' }}
                             formatter={(value) => `${value}%`}
                             labelFormatter={(label, payload) => {
                               const p = payload?.[0]?.payload as { sessionType?: string; roundNumber?: number };
@@ -401,12 +401,12 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
 
                 <Card title="최근 세션" icon={Calendar}>
                   {data.sessions.length === 0 ? (
-                    <div className="py-6 text-center text-gray-400 text-sm">채점된 세션이 없습니다.</div>
+                    <div className="py-6 text-center text-content-tertiary text-sm">채점된 세션이 없습니다.</div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-gray-400 text-xs uppercase tracking-wider text-left">
+                          <tr className="text-content-tertiary text-xs uppercase tracking-wider text-left">
                             <th className="py-2 pr-3">시험지</th>
                             <th className="py-2 pr-3">유형</th>
                             <th className="py-2 pr-3">일자</th>
@@ -416,21 +416,21 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                         </thead>
                         <tbody>
                           {data.sessions.map((s) => (
-                            <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50">
-                              <td className="py-2 pr-3 text-zinc-700 truncate max-w-xs">{s.exam_title || '(제목 없음)'}</td>
-                              <td className="py-2 pr-3 text-zinc-500">{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</td>
-                              <td className="py-2 pr-3 text-zinc-500">{fmtDate(s.issued_at)}</td>
-                              <td className="py-2 pr-3 text-right text-zinc-700">
-                                {s.pct != null ? <span className="font-bold text-indigo-600">{s.pct}%</span> : '-'}
-                                <span className="text-gray-400 ml-1">({s.correct}/{s.total})</span>
+                            <tr key={s.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                              <td className="py-2 pr-3 text-content-secondary truncate max-w-xs">{s.exam_title || '(제목 없음)'}</td>
+                              <td className="py-2 pr-3 text-content-tertiary">{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</td>
+                              <td className="py-2 pr-3 text-content-tertiary">{fmtDate(s.issued_at)}</td>
+                              <td className="py-2 pr-3 text-right text-content-secondary">
+                                {s.pct != null ? <span className="font-bold text-indigo-400">{s.pct}%</span> : '-'}
+                                <span className="text-content-tertiary ml-1">({s.correct}/{s.total})</span>
                               </td>
                               <td className="py-2 text-center">
                                 {s.exam_id ? (
-                                  <Link href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`} target="_blank" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                                  <Link href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`} target="_blank" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300">
                                     <ExternalLink size={12} /> 리포트
                                   </Link>
                                 ) : (
-                                  <Link href={`/grade/${s.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600">채점</Link>
+                                  <Link href={`/grade/${s.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-content-tertiary hover:text-content-secondary">채점</Link>
                                 )}
                               </td>
                             </tr>
@@ -449,16 +449,16 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 <Card title="오답 원인 분포" icon={Brain}>
                   <div className="h-[240px]">
                     {errorCauseChart.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                      <div className="h-full flex items-center justify-center text-content-tertiary text-sm">
                         오답 원인이 태깅된 채점이 없습니다.
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={errorCauseChart} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                          <XAxis type="number" stroke="#6b7280" />
-                          <YAxis dataKey="cause" type="category" stroke="#374151" width={60} />
-                          <Tooltip cursor={{ fill: '#00000010' }} contentStyle={{ backgroundColor: 'white', borderColor: '#e5e7eb' }} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" horizontal={false} />
+                          <XAxis type="number" stroke="#9ca3af" />
+                          <YAxis dataKey="cause" type="category" stroke="#9ca3af" width={60} />
+                          <Tooltip cursor={{ fill: '#ffffff10' }} contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', color: '#fff' }} />
                           <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={26}>
                             {errorCauseChart.map((d) => (
                               <Cell key={d.cause} fill={ERROR_CAUSE_COLORS[d.cause] || '#8b5cf6'} />
@@ -473,14 +473,14 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <Card title="수학비서 대단원 정답률" icon={BarChart3}>
                     {data.mathsecrHeatmap.length === 0 ? (
-                      <div className="py-8 text-center text-gray-400 text-sm">
+                      <div className="py-8 text-center text-content-tertiary text-sm">
                         diagnostics.items 가 누적되면 대단원별 α·β·γ 가 표시됩니다.
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="text-gray-500 uppercase tracking-wider text-left">
+                            <tr className="text-content-tertiary uppercase tracking-wider text-left">
                               <th className="py-2 pr-3">과목</th>
                               <th className="py-2 pr-3">대단원</th>
                               <th className="py-2 pr-3 text-right">정답률</th>
@@ -492,12 +492,12 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                               const r = row as Record<string, unknown>;
                               const rate = Number(r.correct_rate ?? r.correctRate ?? r.pct ?? 0);
                               const state = rate >= 80 ? 'α' : rate >= 60 ? 'β' : 'γ';
-                              const stateColor = rate >= 80 ? 'text-emerald-600' : rate >= 60 ? 'text-amber-600' : 'text-rose-600';
+                              const stateColor = rate >= 80 ? 'text-emerald-300' : rate >= 60 ? 'text-amber-300' : 'text-rose-300';
                               return (
-                                <tr key={i} className="border-t border-gray-100">
-                                  <td className="py-2 pr-3 text-zinc-600">{String(r.subject ?? '')}</td>
-                                  <td className="py-2 pr-3 text-zinc-700">{String(r.level1 ?? r.major_unit ?? '')}</td>
-                                  <td className="py-2 pr-3 text-right text-zinc-700">{rate ? `${rate}%` : '-'}</td>
+                                <tr key={i} className="border-t border-white/5">
+                                  <td className="py-2 pr-3 text-content-tertiary">{String(r.subject ?? '')}</td>
+                                  <td className="py-2 pr-3 text-content-secondary">{String(r.level1 ?? r.major_unit ?? '')}</td>
+                                  <td className="py-2 pr-3 text-right text-content-secondary">{rate ? `${rate}%` : '-'}</td>
                                   <td className={`py-2 text-center font-bold ${stateColor}`}>{state}</td>
                                 </tr>
                               );
@@ -510,15 +510,15 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
 
                   <Card title="반복 함정 Top 10" icon={AlertTriangle}>
                     {data.pitfalls.length === 0 ? (
-                      <div className="py-8 text-center text-gray-400 text-sm">
+                      <div className="py-8 text-center text-content-tertiary text-sm">
                         오답 시 자동 누적되는 함정 기록이 없습니다.
                       </div>
                     ) : (
                       <ul className="space-y-2">
                         {data.pitfalls.map((p) => (
-                          <li key={p.pitfall_code} className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-gray-50 border border-gray-100">
-                            <div className="font-mono text-xs text-zinc-700">{p.pitfall_code}</div>
-                            <span className="text-rose-600 font-bold text-xs">{p.hitCount}회</span>
+                          <li key={p.pitfall_code} className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-white/5 border border-white/5">
+                            <div className="font-mono text-xs text-content-secondary">{p.pitfall_code}</div>
+                            <span className="text-rose-300 font-bold text-xs">{p.hitCount}회</span>
                           </li>
                         ))}
                       </ul>
@@ -532,7 +532,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
             {tab === 'manage' && (
               <Card title="학생 정보" icon={Settings}>
                 {manageLoading ? (
-                  <div className="py-8 text-center text-gray-400 text-sm">
+                  <div className="py-8 text-center text-content-tertiary text-sm">
                     <Loader2 className="animate-spin inline mr-2" size={16} /> 불러오는 중…
                   </div>
                 ) : (
@@ -552,7 +552,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                         : (manageStudent?.status === 'ACCEPTED' ? '활성' : manageStudent?.status === 'PENDING' ? '대기중' : '-')}
                     />
                     <div className="pt-4">
-                      <Link href="/tutor/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
+                      <Link href="/tutor/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-400 hover:text-indigo-300">
                         <Settings size={14} /> 학생 관리에서 정보 수정
                       </Link>
                     </div>
