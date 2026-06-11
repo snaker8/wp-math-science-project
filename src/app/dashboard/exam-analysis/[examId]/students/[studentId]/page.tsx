@@ -773,6 +773,17 @@ export default function StudentReportPage() {
     };
   }, []);
 
+  // ★ PDF 저장 파일명 = document.title → "학생이름 시험명 리포트" (전역 'Math×Sci Bank' 방지)
+  useEffect(() => {
+    if (!data) return;
+    const prev = document.title;
+    const clean = (s: string) => (s || '').replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+    const name = clean(data.student.name) || '학생';
+    const exam = clean(data.exam.title);
+    document.title = `${name}${exam ? ` ${exam}` : ''} 리포트`.replace(/\s+/g, ' ').trim();
+    return () => { document.title = prev; };
+  }, [data]);
+
   useEffect(() => {
     if (!examId || !studentId) return;
     let cancelled = false;
