@@ -392,6 +392,17 @@ export default function PublicStudentReportPage() {
     return () => { cancelled = true };
   }, [token]);
 
+  // ★ PDF 저장 파일명 = document.title → "학생이름 시험명 리포트" (전역 'Math×Sci Bank' 방지)
+  useEffect(() => {
+    if (!data) return;
+    const prev = document.title;
+    const clean = (s: string) => (s || '').replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+    const name = clean(data.student.name) || '학생';
+    const exam = clean(data.exam.title);
+    document.title = `${name}${exam ? ` ${exam}` : ''} 리포트`.replace(/\s+/g, ' ').trim();
+    return () => { document.title = prev; };
+  }, [data]);
+
   const { unitData, diffData, typeStats, comments } = useMemo(() => {
     if (!data) return { unitData: [], diffData: [], typeStats: {}, comments: { strong: '-', weak: '-', method: '' } };
     const stats = computeStats(data.results);

@@ -89,6 +89,18 @@ function SessionPrintInner() {
 
   const meta = metas[0] || null; // 시험·문제·제목 공통 (모두 같은 시험)
 
+  // ★ 브라우저 PDF 저장 파일명 = document.title → "시험지명 + 학생이름" (cloud 인쇄와 동일 규약).
+  //   전역 'Math×Sci Bank' 가 파일명으로 나오던 문제 방지. 묶음 인쇄면 "시험지명 전체".
+  useEffect(() => {
+    if (metas.length === 0) return;
+    const prev = document.title;
+    const sanitize = (s: string) => (s || '').replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+    const exam = sanitize(metas[0]?.examTitle || '') || '시험지';
+    const who = metas.length === 1 ? sanitize(metas[0]?.studentName || '') : '전체';
+    document.title = `${exam}${who ? ` ${who}` : ''}`.trim();
+    return () => { document.title = prev; };
+  }, [metas]);
+
   // 문제 본문 — 시험지 관리와 동일 훅 (동일 렌더 보장)
   const { problems: dbProblems } = useExamProblems(meta?.examId || null);
   const problems = useMemo(() => (dbProblems || []) as unknown as ExamRenderProblem[], [dbProblems]);
