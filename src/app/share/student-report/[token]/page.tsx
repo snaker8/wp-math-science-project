@@ -29,6 +29,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import '@/app/dashboard/exam-analysis/[examId]/students/[studentId]/report.css';
+import { StudentExamReportDark } from '@/components/exam-report/StudentExamReportDark';
+import { Panel } from '@/components/diagnostics/report-primitives';
 
 // ============================================================================
 // Types — 강사 페이지와 동일 (API 응답 형식 일치)
@@ -88,13 +90,15 @@ interface ReportData {
     classLabel: string | null;
   };
   exam: { id: string; title: string };
+  examType?: string | null;
+  isDiagnostic?: boolean;
   totalEarned: number;
   totalPossible: number;
   scorePct: number;
   results: ResultRow[];
   fineUnitStats?: FineUnitStat[];
   cognitiveDomainStats?: CognitiveStat[];
-  reportStyle?: 'legacy' | 'unified'; // 센터별 스타일 (unified=warm). 강사 페이지와 동일.
+  reportStyle?: 'legacy' | 'unified'; // 센터별 스타일 (unified=다크 통일). 강사 페이지와 동일.
   aiComment?: AiCommentJson | null;
   teacherComment?: TeacherCommentJson | null;
 }
@@ -437,8 +441,47 @@ export default function PublicStudentReportPage() {
   const method = isAi ? data.aiComment!.method : comments.method;
   const weakOk = weak.includes('완벽함') || weak.includes('양호함') || weak.includes('우수함');
 
+  // ── unified 센터: 다크 통일 뷰 (legacy=동부산은 아래 기존 라이트 A4) — 인쇄는 라이트 전환 ──
+  if (data.reportStyle === 'unified') {
+    return (
+      <div className="report-dark-root min-h-screen bg-zinc-950 text-white">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
+          <div className="mb-4 flex items-center justify-between gap-2 print:hidden">
+            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-zinc-300">
+              <Sparkles size={16} className="text-indigo-400" /> 학습 분석 리포트
+            </span>
+            <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800">
+              <Printer size={14} /> A4 인쇄
+            </button>
+          </div>
+          <StudentExamReportDark
+            data={data}
+            commentSlot={
+              <div className="space-y-3">
+                {data.aiComment && (
+                  <Panel title="AI 학습 가이드">
+                    <div className="space-y-3 text-sm leading-relaxed">
+                      <div><span className="text-emerald-300 font-bold">강점 </span><span className="text-zinc-200">{data.aiComment.strong}</span></div>
+                      <div><span className="text-rose-300 font-bold">보완 </span><span className="text-zinc-200">{data.aiComment.weak}</span></div>
+                      <div><span className="text-indigo-300 font-bold">학습법 </span><span className="text-zinc-200">{data.aiComment.method}</span></div>
+                    </div>
+                  </Panel>
+                )}
+                {data.teacherComment?.text && (
+                  <Panel title="강사 한마디">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{data.teacherComment.text}</p>
+                  </Panel>
+                )}
+              </div>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`student-report-root ${data.reportStyle === 'unified' ? 'report-theme-warm' : ''}`}>
+    <div className="student-report-root">
       <div className="student-report-no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-[210mm] mx-auto px-4 py-3 flex items-center justify-between">
           <span className="text-slate-500 text-sm font-bold flex items-center gap-2">

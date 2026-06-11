@@ -1,0 +1,70 @@
+/* ============================================================================
+   다크 리포트 인쇄 → 라이트 전환 (같은 레이아웃, 색만 흰 배경으로).
+   화면은 다크 유지. 인쇄 시 잉크 절약·가독성. .report-dark-root 로 스코프.
+   Tailwind 유틸 클래스를 속성선택자[class*=...]로 잡아 !important 로 덮음.
+   ============================================================================ */
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+
+  /* 배경 — 다크/그라데이션 전부 흰색 */
+  .report-dark-root,
+  .report-dark-root [class*="bg-zinc"],
+  .report-dark-root [class*="bg-black"],
+  .report-dark-root [class*="bg-gradient"] {
+    background: #fff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+  /* 카드/패널 — 옅은 회색으로 구분 (general 규칙 뒤에 와야 우선) */
+  .report-dark-root [class*="bg-zinc-900"],
+  .report-dark-root [class*="bg-zinc-800"] {
+    background: #f6f6f7 !important;
+  }
+
+  /* 텍스트 — 흰/밝은 회색 → 진한 회색 */
+  .report-dark-root,
+  .report-dark-root [class*="text-white"],
+  .report-dark-root [class*="text-zinc-2"],
+  .report-dark-root [class*="text-zinc-3"],
+  .report-dark-root [class*="text-zinc-4"] {
+    color: #1a1a1a !important;
+  }
+  .report-dark-root [class*="text-zinc-5"],
+  .report-dark-root [class*="text-zinc-6"] {
+    color: #6b7280 !important;
+  }
+
+  /* 보더 — 옅은 회색 */
+  .report-dark-root [class*="border-zinc"],
+  .report-dark-root [class*="border-white"] {
+    border-color: #d4d4d8 !important;
+  }
+
+  /* SVG 게이지 텍스트 (fill-white/fill-zinc) */
+  .report-dark-root [class*="fill-white"] { fill: #1a1a1a !important; }
+  .report-dark-root [class*="fill-zinc"]  { fill: #6b7280 !important; }
+
+  /* 액센트 텍스트 — 다크용 밝은 색 → 인쇄용 진한 색 (가독성) */
+  .report-dark-root [class*="text-emerald"] { color: #047857 !important; }
+  .report-dark-root [class*="text-rose"]    { color: #be123c !important; }
+  .report-dark-root [class*="text-amber"]   { color: #b45309 !important; }
+  .report-dark-root [class*="text-sky"],
+  .report-dark-root [class*="text-cyan"]    { color: #0369a1 !important; }
+  .report-dark-root [class*="text-violet"]  { color: #6d28d9 !important; }
+  .report-dark-root [class*="text-orange"]  { color: #c2410c !important; }
+  .report-dark-root [class*="text-indigo"]  { color: #4338ca !important; }
+
+  /* 채워진 막대·배지 컬러 배경은 그대로 출력 (정답률 시각화 유지) */
+  .report-dark-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 페이지 잘림 방지 */
+  .report-dark-root [class*="rounded-xl"],
+  .report-dark-root [class*="rounded-lg"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

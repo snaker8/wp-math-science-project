@@ -71,7 +71,7 @@ export async function GET(
   // 시험 정보
   const { data: exam } = await supabaseAdmin
     .from('exams')
-    .select('id, title, institute_id')
+    .select('id, title, institute_id, exam_type, is_diagnostic')
     .eq('id', session.exam_id)
     .maybeSingle();
   if (!exam) {
@@ -389,6 +389,8 @@ export async function GET(
       id: session.exam_id,
       title: exam.title,
     },
+    examType: (exam as { exam_type?: string | null }).exam_type ?? null,
+    isDiagnostic: (exam as { is_diagnostic?: boolean | null }).is_diagnostic ?? false,
     totalEarned: Math.round(totalEarned * 10) / 10,
     totalPossible: Math.round(totalPossible * 10) / 10,
     scorePct,
