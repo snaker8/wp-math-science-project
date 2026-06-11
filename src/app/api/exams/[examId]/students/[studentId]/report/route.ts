@@ -65,7 +65,7 @@ export async function GET(
   // 1. 시험 접근 검증
   const { data: exam, error: examErr } = await supabaseAdmin
     .from('exams')
-    .select('id, institute_id, title')
+    .select('id, institute_id, title, exam_type, is_diagnostic')
     .eq('id', examId)
     .maybeSingle();
   if (examErr) return NextResponse.json({ error: examErr.message }, { status: 500 });
@@ -698,6 +698,8 @@ export async function GET(
       id: examId,
       title: exam.title,
     },
+    examType: (exam as { exam_type?: string | null }).exam_type ?? null,
+    isDiagnostic: (exam as { is_diagnostic?: boolean | null }).is_diagnostic ?? false,
     totalEarned: Math.round(totalEarned * 10) / 10,
     totalPossible: Math.round(totalPossible * 10) / 10,
     scorePct,
