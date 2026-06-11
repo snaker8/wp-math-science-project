@@ -316,18 +316,22 @@ export interface NavGroup {
   roles?: string[];
 }
 
+// ★ 2026-06-11 IA 통합 (PLAN_IA_CONSOLIDATION.md, 매쓰플랫 워크플로우 기반):
+//   8그룹에 흩어진 메뉴를 흐름 순(자산화→제작→출제→채점→학생결과→관리)으로 수렴.
+//   - 학생 흩어진 화면(출제관리·학생진단·학생성적·종합리포트·클리닉·반/학생관리)을 [수업] 한 그룹으로.
+//   - 채점 중복 제거: "수동 채점 입력" 메뉴(=채점하기 ?tab=manual 탭)는 미노출. 채점하기 단일.
+//   - 단일 항목 그룹(채점·분석)은 드롭다운 없이 직접 링크.
+//   ※ 페이지 라우트는 전부 유지 — nav 재배치만(롤백 쉬움). Phase 2 에서 [수업] 허브 페이지화.
+//   ※ 대시보드 단독 메뉴 없음 — 로고 클릭으로 /dashboard 진입.
 export const topNavGroups: NavGroup[] = [
-  // ★ 대시보드 단독 메뉴 제거 — 로고 클릭으로 /dashboard 진입 가능
-  //   (TopNav.tsx 의 <Link href="/dashboard" ...> 로고 link 가 처리).
-  //   사용자 지시 (2026-05-16): "대시보드 굳이 필요없을거 같은데 로고 누르면 대시보드로 가게 하면".
+  // ── 1) 재료: 문제·자료 ──
   {
     id: 'repository',
     label: '문제은행',
     icon: FolderOpen,
     children: [
-      // ★ tutorNavItems[0] (DB 자산화)는 별도 단독 탭으로 분리 (사용자 요청 — 드롭다운 안 들어가게)
-      dashboardNavItems[1], // 시험지저장소
       dashboardNavItems[7], // 과사람클라우드
+      dashboardNavItems[1], // 시험지저장소
       dashboardNavItems[6], // 유형/문제관리
       dashboardNavItems[5], // 출판교재유사
     ],
@@ -341,60 +345,48 @@ export const topNavGroups: NavGroup[] = [
       dashboardNavItems[4], // 도식 갤러리
     ],
   },
+  // ── 2) 제작 + 배포: 출제 ──
   {
     id: 'exams',
-    label: '시험지',
+    label: '출제',
     icon: SquarePen,
     children: [
       dashboardNavItems[2], // 시험지출제
-      dashboardNavItems[8], // 시험지관리
-      tutorNavItems[7],     // AI 자동 출제 (이전 AI 오토큐레이션)
+      tutorNavItems[7],     // AI 자동 출제
+      dashboardNavItems[8], // 시험지관리 (배포 포함)
     ],
   },
-  {
-    id: 'teaching',
-    label: '수업관리',
-    icon: Users,
-    // ★ 채점하기는 별도 [채점] 그룹으로 분리 (2026-05-12).
-    children: [
-      tutorNavItems[1], // 반 관리
-      tutorNavItems[2], // 학생 관리
-    ],
-  },
-  // ★ [채점] — 매일 워크플로우 1급 시민. 학생 답 자동채점·수동 입력 한자리.
+  // ── 3) 채점 — 단일 페이지(QR/수동/엑셀 탭 내장). 직접 링크. ──
   {
     id: 'grading',
     label: '채점',
     icon: ClipboardCheck,
-    children: [
-      tutorNavItems[3],  // 채점하기 (/dashboard/grading)
-      tutorNavItems[4],  // 수동 채점 입력 (/dashboard/prescription/entry)
-      tutorNavItems[11], // 출제 관리 (/dashboard/assignments)
-    ],
+    href: '/dashboard/grading',
   },
-  // ★ [진단] — 학생별 약점 분석·처방. 클리닉 PDF 까지 처방 결과물 묶음.
+  // ── 4) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러).
+  //   채점/진단/분석에 흩어졌던 학생 화면을 모음. Phase 2 에서 허브 페이지로 통합. ──
   {
-    id: 'diagnosis',
-    label: '진단',
-    icon: Stethoscope,
+    id: 'class',
+    label: '수업',
+    icon: Users,
     children: [
-      tutorNavItems[5],  // 학생 진단 (/dashboard/prescription)
-      tutorNavItems[10], // 진단 종합 리포트 (/dashboard/prescription/report)
+      tutorNavItems[11], // 출제 관리 (/dashboard/assignments) — 학생별 학습내역·점수
+      tutorNavItems[8],  // 학생 성적
+      tutorNavItems[5],  // 학생 진단
+      tutorNavItems[10], // 진단 종합 리포트
       tutorNavItems[6],  // 클리닉시험지
+      tutorNavItems[1],  // 반 관리
+      tutorNavItems[2],  // 학생 관리
     ],
   },
-  // ★ [분석] — 통계·리포트. 학생·학교 단위.
+  // ── 5) 분석 — 학원·학교 단위(학생 단위는 [수업]). 단일 → 직접 링크. ──
   {
     id: 'analytics',
     label: '분석',
     icon: BarChart3,
-    children: [
-      tutorNavItems[8], // 학생 성적
-      tutorNavItems[9], // 학교별 리포트
-    ],
+    href: '/dashboard/reports',
   },
-  // ★ DB 자산화 — 단독 탭 (드롭다운 X). 한 번 클릭으로 클라우드 페이지 + 업로드 모달 자동 오픈.
-  //   사용자 요청: 다른 메뉴와 분리해서 네비게이션 맨 오른쪽에 즉시 진입 가능하게.
+  // ── DB 자산화 — 단독 탭(빠른 진입). 클라우드 + 업로드 모달 자동 오픈. ──
   {
     id: 'db-assetize',
     label: 'DB 자산화',
