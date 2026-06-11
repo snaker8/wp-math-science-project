@@ -32,6 +32,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import './report.css';
+import { StudentExamReportDark } from '@/components/exam-report/StudentExamReportDark';
+import { Panel } from '@/components/diagnostics/report-primitives';
 
 // ============================================================================
 // Types — API 응답 그대로
@@ -108,6 +110,8 @@ interface ReportData {
     classLabel: string | null;
   };
   exam: { id: string; title: string };
+  examType?: string | null;
+  isDiagnostic?: boolean;
   totalEarned: number;
   totalPossible: number;
   scorePct: number;
@@ -882,11 +886,81 @@ export default function StudentReportPage() {
 
   // periodLabel/schoolBadge 는 위에서 useMemo 로 계산됨 (early return 이전, hooks 순서 안전)
 
+  // ── unified 센터: 진단 세트 리포트와 동일한 다크 통일 뷰 ──
+  //   legacy(동부산 등)는 아래 기존 A4 라이트 그대로 유지 (무영향).
+  if (data.reportStyle === 'unified') {
+    const ai = data.aiComment;
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
+          {/* 툴바 (인쇄 시 숨김) */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
+            <button onClick={() => router.push(examAnalysisHref)} className="inline-flex items-center gap-1.5 text-sm text-zinc-300 hover:text-white">
+              <ArrowLeft size={16} /> 시험 분석
+            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => handleGenerateAi(true)} disabled={aiBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50">
+                <Sparkles size={14} /> {aiBusy ? '생성 중…' : 'AI 코멘트 생성'}
+              </button>
+              <button onClick={handleShareParent} disabled={shareBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                <Share2 size={14} /> 학부모 공유
+              </button>
+              <button onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800">
+                <Printer size={14} /> 인쇄
+              </button>
+            </div>
+          </div>
+
+          {aiError && <div className="mb-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 print:hidden">{aiError}</div>}
+          {shareUrl && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs print:hidden">
+              <span className="text-zinc-400">학부모 링크</span>
+              <input readOnly value={shareUrl} className="min-w-0 flex-1 bg-transparent text-zinc-200 outline-none" />
+              <button onClick={handleCopyShareUrl} className="rounded border border-zinc-700 px-2 py-1 text-zinc-200 hover:bg-zinc-800">{shareCopied ? '복사됨' : '복사'}</button>
+              <button onClick={handleRevokeShare} className="rounded border border-rose-500/40 px-2 py-1 text-rose-300 hover:bg-rose-500/10">무효화</button>
+            </div>
+          )}
+
+          <StudentExamReportDark
+            data={data}
+            commentSlot={
+              <div className="space-y-3">
+                <Panel title="AI 학습 가이드" hint={ai ? '' : '상단 “AI 코멘트 생성”으로 생성'}>
+                  {ai ? (
+                    <div className="space-y-3 text-sm leading-relaxed">
+                      <div><span className="text-emerald-300 font-bold">강점 </span><span className="text-zinc-200">{ai.strong}</span></div>
+                      <div><span className="text-rose-300 font-bold">보완 </span><span className="text-zinc-200">{ai.weak}</span></div>
+                      <div><span className="text-indigo-300 font-bold">학습법 </span><span className="text-zinc-200">{ai.method}</span></div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500">아직 생성된 AI 코멘트가 없습니다.</p>
+                  )}
+                </Panel>
+                <Panel title="강사 한마디" hint={teacherSaved ?? ''}>
+                  <textarea value={teacherText} onChange={(e) => setTeacherText(e.target.value)} rows={3}
+                    placeholder="학생/학부모에게 전할 한마디를 입력하세요."
+                    className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 print:border-transparent print:bg-transparent" />
+                  <div className="mt-2 flex justify-end print:hidden">
+                    <button onClick={handleSaveTeacherComment} disabled={teacherSaving}
+                      className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50">
+                      {teacherSaving ? '저장 중…' : '저장'}
+                    </button>
+                  </div>
+                </Panel>
+              </div>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`student-report-root ${
-        data.reportStyle === 'unified' ? 'report-theme-warm' : ''
-      }`}
+      className="student-report-root"
     >
       {/* 상단 액션 바 (인쇄 시 숨김) */}
       <div className="student-report-no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
