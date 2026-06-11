@@ -36,7 +36,9 @@
   /* ★ 중앙을 minmax(0,1fr) 로 — A4 미리보기 min-content 가 grid 를 밀어내 우측 옵션(320px) 패널이
      뷰포트 밖으로 잘리던 문제 차단. 중앙은 .em-main(overflow:auto) 내부에서 스크롤. */
   grid-template-columns: 280px minmax(0, 1fr) 320px;
-  grid-template-rows: 56px 44px 1fr;
+  /* ★ subbar 행 auto — 좁은 뷰포트에서 SUBBAR 가 두 줄로 감싸질 수 있게 (고정 56px 이면
+     내용이 행 높이를 못 늘려 아래 요소와 겹침). 한 줄일 땐 min-height 56px 로 기존과 동일. */
+  grid-template-rows: auto 44px 1fr;
   grid-template-areas:
     'sidebar  subbar    options'
     'sidebar  tabs      options'
@@ -236,15 +238,18 @@
   background: var(--em-bg-chrome);
   border-bottom: 1px solid var(--em-border-sub);
   display: flex; align-items: center;
-  padding: 0 24px;
-  gap: 16px;
-  min-height: 48px;
+  padding: 4px 24px;
+  gap: 8px 16px;
+  min-height: 56px;
   overflow: visible;
-  flex-wrap: nowrap;
+  /* ★ 좁은 뷰포트(우측 옵션 320px + 사이드바 280px 제외 후 중앙이 좁을 때)에서
+     액션 버튼들이 제목/페이지당 위로 겹치던 사고 — 두 줄로 자연 줄바꿈. */
+  flex-wrap: wrap;
 }
 .em-breadcrumb {
   display: flex; align-items: center; gap: 6px;
   font-size: 11.5px; color: var(--em-fg-4);
+  white-space: nowrap; flex-shrink: 0; /* "전체" 가 세로로 꺾이지 않게 */
 }
 .em-breadcrumb a, .em-breadcrumb span { color: var(--em-fg-3); cursor: default; }
 .em-breadcrumb svg { width: 11px; height: 11px; }
@@ -278,6 +283,7 @@
   display: flex; align-items: center; gap: 4px;
   font-size: 11px; color: var(--em-fg-4);
   font-family: var(--em-font-mono);
+  white-space: nowrap; flex-shrink: 0; /* "25문항" 이 버튼 아래로 겹치지 않게 */
 }
 
 .em-subbar-actions {
