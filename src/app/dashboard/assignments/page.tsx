@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Users, Search, ChevronRight, ChevronDown, Loader2, RefreshCw,
-  Printer, ExternalLink, ListChecks,
+  Printer, ExternalLink, ListChecks, History, PieChart, FileBarChart, TrendingUp,
 } from 'lucide-react';
 
 interface Student {
@@ -55,6 +55,9 @@ export default function AssignmentsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selStudent, setSelStudent] = useState<string | null>(null); // null = 전체
   const [titleSearch, setTitleSearch] = useState('');
+  // 본문 상단 탭 (매쓰플랫 수업: 학습내역 | 학습지 | 유형분석 | 보고서)
+  //   유형분석·보고서는 기존 페이지(/tutor/analytics, 진단 종합 리포트)로 연결 — 중복 구현 회피.
+  const [tab, setTab] = useState<'history' | 'worksheet'>('worksheet');
 
   const load = async () => {
     setLoading(true);
@@ -138,6 +141,38 @@ export default function AssignmentsPage() {
     const avg = scored.length ? Math.round(scored.reduce((s, a) => s + (a.score_pct || 0), 0) / scored.length) : null;
     return { total, done, avg };
   }, [filtered]);
+
+  // 학습내역 — 전체: 학생별 요약(출제수·완료·평균·최근). 선택 시: 그 학생 시간순(filtered 재사용).
+  const historyByStudent = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; grade: string; rows: Assignment[] }>();
+    for (const a of assignments) {
+      const cur = map.get(a.student_id) || { id: a.student_id, name: a.student_name, grade: a.grade, rows: [] };
+      cur.rows.push(a);
+      map.set(a.student_id, cur);
+    }
+    return Array.from(map.values())
+      .map((s) => {
+        const scored = s.rows.filter(r => r.score_pct != null);
+        const avg = scored.length ? Math.round(scored.reduce((x, r) => x + (r.score_pct || 0), 0) / scored.length) : null;
+        const recent = [...s.rows].sort((a, b) => (b.issued_at || '').localeCompare(a.issued_at || ''));
+        return {
+          id: s.id, name: s.name, grade: s.grade,
+          count: s.rows.length,
+          done: s.rows.filter(r => r.completed).length,
+          avg,
+          last: recent[0] || null,
+        };
+      })
+      .sort((a, b) => (gradeRank(a.grade) - gradeRank(b.grade)) || a.name.localeCompare(b.name, 'ko'));
+  }, [assignments]);
+
+  // 선택 학생 시간순 (학습내역 타임라인) + 누적 평균 추이
+  const studentTimeline = useMemo(() => {
+    if (!selStudent) return [];
+    return assignments
+      .filter(a => a.student_id === selStudent)
+      .sort((a, b) => (a.issued_at || '').localeCompare(b.issued_at || ''));
+  }, [assignments, selStudent]);
 
   return (
     <div className="flex h-[calc(100vh-7rem)] rounded-2xl border border-white/10 overflow-hidden bg-surface-card text-content-primary">
@@ -269,6 +304,43 @@ export default function AssignmentsPage() {
           </div>
         </div>
 
+        {/* 본문 상단 탭 — 매쓰플랫 수업 (학습내역 | 학습지 | 유형분석 | 보고서) */}
+        <div className="flex items-center gap-1 px-6 border-b border-white/10">
+          <button
+            type="button"
+            onClick={() => setTab('history')}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'history' ? 'text-sky-300 border-sky-400' : 'text-content-tertiary border-transparent hover:text-content-primary'
+            }`}
+          >
+            <History size={14} /> 학습내역
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('worksheet')}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'worksheet' ? 'text-sky-300 border-sky-400' : 'text-content-tertiary border-transparent hover:text-content-primary'
+            }`}
+          >
+            <ListChecks size={14} /> 학습지
+          </button>
+          {/* 유형분석·보고서 — 기존 페이지로 연결(중복 구현 회피) */}
+          <Link
+            href={selStudent ? `/tutor/analytics?studentId=${selStudent}` : '/tutor/analytics'}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium text-content-tertiary border-b-2 border-transparent hover:text-content-primary"
+            title="학생 성적·히트맵 페이지로 이동"
+          >
+            <PieChart size={14} /> 유형분석 <ExternalLink size={11} className="opacity-50" />
+          </Link>
+          <Link
+            href={selStudent ? `/dashboard/prescription/report?studentId=${selStudent}` : '/dashboard/prescription/report'}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium text-content-tertiary border-b-2 border-transparent hover:text-content-primary"
+            title="진단 종합 리포트로 이동"
+          >
+            <FileBarChart size={14} /> 보고서 <ExternalLink size={11} className="opacity-50" />
+          </Link>
+        </div>
+
         {error && (
           <div className="mx-6 mt-4 px-4 py-3 rounded-xl bg-red-900/20 border border-red-500/30 text-red-300 text-sm">{error}</div>
         )}
@@ -277,7 +349,7 @@ export default function AssignmentsPage() {
           <div className="flex-1 flex items-center justify-center text-content-tertiary">
             <Loader2 className="animate-spin mr-2" size={18} /> 불러오는 중…
           </div>
-        ) : (
+        ) : tab === 'worksheet' ? (
           <div className="flex-1 overflow-y-auto">
             {/* 테이블 헤더 */}
             <div className="sticky top-0 z-10 grid grid-cols-[60px_72px_1fr_84px_84px_100px_120px] gap-3 px-6 py-2.5 bg-surface-base/95 backdrop-blur border-b border-white/10 text-[11px] uppercase tracking-wide text-content-tertiary font-medium">
@@ -346,6 +418,72 @@ export default function AssignmentsPage() {
                 </div>
               )}
             </div>
+          </div>
+        ) : (
+          /* ===== 학습내역 탭 ===== */
+          <div className="flex-1 overflow-y-auto p-6">
+            {selStudent ? (
+              // 선택 학생 — 시간순 타임라인 + 누적 평균
+              studentTimeline.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-content-tertiary mb-3">
+                    <TrendingUp size={15} className="text-sky-400" />
+                    <span>{selStudentName} 학생 — 출제 {studentTimeline.length}건 · 시간순</span>
+                  </div>
+                  {studentTimeline.map((a, i) => (
+                    <div key={`${a.source}-${a.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+                      <span className="text-[11px] text-content-tertiary w-16 tabular-nums">{fmtDate(a.issued_at)}</span>
+                      <span className={`text-xs font-medium w-16 ${TAG_COLOR(a.tag)}`}>{a.tag}</span>
+                      <span className="text-sm flex-1 truncate" title={a.title}>{a.title}</span>
+                      <span className="text-[11px] text-content-tertiary w-14 text-right">{a.problems_total > 0 ? `${a.problems_total}문제` : '-'}</span>
+                      <span className="w-20 text-right">
+                        {a.score_pct != null ? (
+                          <span className={`text-sm font-bold tabular-nums ${a.score_pct >= 80 ? 'text-emerald-300' : a.score_pct >= 60 ? 'text-amber-300' : 'text-rose-300'}`}>{a.score_pct}점</span>
+                        ) : (
+                          <span className="text-xs text-content-tertiary">{a.completed ? '채점대기' : '미응시'}</span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-content-tertiary w-6 text-right">#{i + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20 text-content-tertiary text-sm">{selStudentName} 학생 학습내역이 없습니다.</div>
+              )
+            ) : (
+              // 전체 — 학생별 요약표
+              <div className="rounded-2xl border border-white/10 overflow-hidden">
+                <div className="grid grid-cols-[1fr_60px_90px_90px_90px_1fr] gap-3 px-4 py-2.5 bg-white/[0.03] border-b border-white/10 text-[11px] uppercase tracking-wide text-content-tertiary font-medium">
+                  <span>학생</span><span>학년</span><span className="text-center">출제</span><span className="text-center">완료</span><span className="text-right">평균</span><span>최근 출제</span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {historyByStudent.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelStudent(s.id)}
+                      className="w-full grid grid-cols-[1fr_60px_90px_90px_90px_1fr] gap-3 px-4 py-3 items-center hover:bg-white/[0.03] text-left"
+                    >
+                      <span className="text-sm font-medium truncate">{s.name}</span>
+                      <span className="text-xs text-content-tertiary">{s.grade || '-'}</span>
+                      <span className="text-sm text-center tabular-nums">{s.count}</span>
+                      <span className="text-sm text-center tabular-nums text-emerald-300/80">{s.done}</span>
+                      <span className="text-right">
+                        {s.avg != null ? (
+                          <span className={`text-sm font-bold tabular-nums ${s.avg >= 80 ? 'text-emerald-300' : s.avg >= 60 ? 'text-amber-300' : 'text-rose-300'}`}>{s.avg}점</span>
+                        ) : <span className="text-xs text-content-tertiary">-</span>}
+                      </span>
+                      <span className="text-xs text-content-tertiary truncate" title={s.last?.title || ''}>
+                        {s.last ? `${fmtDate(s.last.issued_at)} · ${s.last.title}` : '-'}
+                      </span>
+                    </button>
+                  ))}
+                  {historyByStudent.length === 0 && (
+                    <div className="text-center py-16 text-content-tertiary text-sm">출제된 학습내역이 없습니다.</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
