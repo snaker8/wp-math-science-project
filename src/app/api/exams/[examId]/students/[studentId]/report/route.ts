@@ -150,17 +150,19 @@ export async function GET(
         teacher_comment_json: Record<string, unknown> | null;
       }
     | undefined;
-  if (!session) {
-    return NextResponse.json({
-      student: { id: studentId, name: studentName, grade: studentGrade, classLabel: studentClass },
-      exam: { id: examId, title: exam.title },
-      totalEarned: 0,
-      totalPossible: 0,
-      scorePct: 0,
-      results: [],
-      reportStyle,
-      message: '이 학생의 채점 기록이 없습니다.',
-    });
+  // ★ 채점 라인 2개: EX 세션(items) + QR/수동 채점(session_results). 세트 리포트(compute-report 4b)와
+  //   동일하게 둘 다 읽는다. EX 세션이 없어도 session_results 가 있으면 리포트를 만든다
+  //   → "채점 기록 없음" 판정은 itemBySeq 를 채운 뒤(아래)로 미룬다.
+  // print_sessions.student_id = users.id → studentId(roster id 가능)를 신원 병합해 매칭.
+  const identityIds = new Set<string>([studentId]);
+  {
+    const { data: rosterSelf } = await supabaseAdmin
+      .from('roster_students').select('promoted_user_id').eq('id', studentId).maybeSingle();
+    const pu = (rosterSelf as { promoted_user_id: string | null } | null)?.promoted_user_id;
+    if (pu) identityIds.add(pu);
+    const { data: rostersForUser } = await supabaseAdmin
+      .from('roster_students').select('id').eq('promoted_user_id', studentId);
+    for (const r of (rostersForUser ?? []) as Array<{ id: string }>) identityIds.add(r.id);
   }
 
   // 4. 시험 문제 목록 (qNum → spec)
@@ -212,6 +214,8 @@ export async function GET(
   const examProblems = (examProblemsRaw ?? []) as unknown as ExamProblemJoinRow[];
   const specMap = new Map<number, ProblemSpec>();
   const allTypeCodes = new Set<string>();
+  // session_results.sequence_number(배포 순번) → qNum(문항번호) 매핑 — 라인 B 채점 병합용
+  const qNumBySeqNum = new Map<number, number>();
 
   for (const row of examProblems) {
     const p = row.problems;
@@ -220,6 +224,7 @@ export async function GET(
     const qNum =
       (typeof p.source_number === 'number' ? p.source_number : null) ?? row.sequence_number;
     if (!qNum) continue;
+    qNumBySeqNum.set(row.sequence_number, qNum);
 
     const fullScore =
       typeof row.points === 'number'
@@ -307,20 +312,68 @@ export async function GET(
     }
   }
 
-  // 6. items 조회 (이 학생 세션의 응답)
-  const { data: items } = await supabaseAdmin
-    .schema('diagnostics')
-    .from('items')
-    .select('seq, mathsecr_code, is_correct, note')
-    .eq('session_id', session.id);
-
+  // 6. 채점 조립 — 라인 A: EX 세션 items, 라인 B: QR/수동 session_results. (세트 리포트와 동일 소스)
   const itemBySeq = new Map<
     number,
     { isCorrect: boolean; note: string | null }
   >();
-  for (const it of items ?? []) {
-    const tt = it as { seq: number; is_correct: boolean; note: string | null };
-    itemBySeq.set(tt.seq, { isCorrect: tt.is_correct, note: tt.note });
+
+  // 라인 A — EX 세션 items (seq = qNum)
+  if (session) {
+    const { data: items } = await supabaseAdmin
+      .schema('diagnostics')
+      .from('items')
+      .select('seq, mathsecr_code, is_correct, note')
+      .eq('session_id', session.id);
+    for (const it of items ?? []) {
+      const tt = it as { seq: number; is_correct: boolean; note: string | null };
+      itemBySeq.set(tt.seq, { isCorrect: tt.is_correct, note: tt.note });
+    }
+  }
+
+  // 라인 B — QR/인쇄 수동 채점 (print_sessions + session_results).
+  //   EX items 에 없는 문항만 채움(중복 방지). sequence_number → qNum 매핑. 자동채점 보류 문항 제외.
+  {
+    const { data: psRows } = await supabaseAdmin
+      .schema('diagnostics')
+      .from('print_sessions')
+      .select('id, completed_at')
+      .eq('exam_id', examId)
+      .in('student_id', Array.from(identityIds))
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(1);
+    const ps = (psRows ?? [])[0] as { id: string } | undefined;
+    if (ps) {
+      const { data: srRows } = await supabaseAdmin
+        .schema('diagnostics')
+        .from('session_results')
+        .select('sequence_number, is_correct, teacher_note')
+        .eq('session_id', ps.id);
+      for (const sr of (srRows ?? []) as Array<{
+        sequence_number: number;
+        is_correct: boolean;
+        teacher_note: string | null;
+      }>) {
+        if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue;
+        const qn = qNumBySeqNum.get(sr.sequence_number);
+        if (qn == null || itemBySeq.has(qn)) continue;
+        itemBySeq.set(qn, { isCorrect: sr.is_correct, note: null });
+      }
+    }
+  }
+
+  // 두 라인 모두 비면 채점 기록 없음
+  if (itemBySeq.size === 0) {
+    return NextResponse.json({
+      student: { id: studentId, name: studentName, grade: studentGrade, classLabel: studentClass },
+      exam: { id: examId, title: exam.title },
+      totalEarned: 0,
+      totalPossible: 0,
+      scorePct: 0,
+      results: [],
+      reportStyle,
+      message: '이 학생의 채점 기록이 없습니다.',
+    });
   }
 
   // 7. results 조립 + 합계
@@ -495,7 +548,7 @@ export async function GET(
       scores.sort((a, b) => b.pct - a.pct);
 
       // 본인 세션의 순위
-      const idx = scores.findIndex((s) => s.sessionId === session.id);
+      const idx = scores.findIndex((s) => s.sessionId === session?.id);
       if (idx >= 0) {
         classRank = idx + 1;
         classPercentile = Math.max(
@@ -529,14 +582,15 @@ export async function GET(
 
   let unitTrend: UnitTrend = null;
   {
-    // 같은 학생의 다른 EX 세션 (가장 최근 1개)
-    const { data: otherSessions } = await supabaseAdmin
+    // 같은 학생의 다른 EX 세션 (가장 최근 1개). 현재 EX 세션이 있으면 그것만 제외.
+    let otherSessionsQ = supabaseAdmin
       .schema('diagnostics')
       .from('sessions')
       .select('id, exam_id, conducted_at')
       .eq('student_id', studentId)
-      .eq('session_type', 'EX')
-      .neq('id', session.id)
+      .eq('session_type', 'EX');
+    if (session) otherSessionsQ = otherSessionsQ.neq('id', session.id);
+    const { data: otherSessions } = await otherSessionsQ
       .order('conducted_at', { ascending: false })
       .limit(1);
 
@@ -656,8 +710,8 @@ export async function GET(
     classAvg,
     unitTrend,
     reportStyle,
-    aiComment: session.ai_comment_json ?? null,
-    teacherComment: session.teacher_comment_json ?? null,
+    aiComment: session?.ai_comment_json ?? null,
+    teacherComment: session?.teacher_comment_json ?? null,
   });
 }
 
