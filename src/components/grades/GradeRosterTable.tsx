@@ -24,18 +24,18 @@ interface RosterStudent {
 }
 
 function pctColor(p: number | null): string {
-  if (p == null) return 'text-gray-300';
-  if (p >= 80) return 'text-emerald-600';
-  if (p >= 60) return 'text-amber-600';
-  return 'text-rose-600';
+  if (p == null) return 'text-content-tertiary';
+  if (p >= 80) return 'text-emerald-300';
+  if (p >= 60) return 'text-amber-300';
+  return 'text-rose-300';
 }
 
 function ScoreCell({ value, suffix = '점', sub }: { value: number | null; suffix?: string; sub?: string }) {
-  if (value == null) return <span className="text-gray-300">-</span>;
+  if (value == null) return <span className="text-content-tertiary">-</span>;
   return (
     <span className="inline-flex flex-col leading-tight">
-      <span className="font-bold text-zinc-800">{value}{suffix}</span>
-      {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
+      <span className="font-bold text-content-primary">{value}{suffix}</span>
+      {sub && <span className="text-[10px] text-content-tertiary">{sub}</span>}
     </span>
   );
 }
@@ -90,15 +90,15 @@ export default function GradeRosterTable({
   }, [filtered]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-100">
+    <div className="bg-surface-card border border-white/10 rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between gap-3 p-4 border-b border-white/5">
         <div className="flex items-center gap-2">
-          <ListChecks size={18} className="text-indigo-600" />
-          <h2 className="font-bold text-zinc-800">학생 성적 일람표</h2>
-          <span className="text-xs text-gray-400">학년별 · 최근 점수</span>
+          <ListChecks size={18} className="text-indigo-400" />
+          <h2 className="font-bold text-content-primary">학생 성적 일람표</h2>
+          <span className="text-xs text-content-tertiary">학년별 · 최근 점수</span>
         </div>
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50">
-          <Search size={14} className="text-gray-400" />
+        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5">
+          <Search size={14} className="text-content-tertiary" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -109,20 +109,20 @@ export default function GradeRosterTable({
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-gray-500 text-sm">
+        <div className="flex items-center justify-center gap-2 py-12 text-content-tertiary text-sm">
           <Loader2 size={16} className="animate-spin" /> 성적 불러오는 중…
         </div>
       ) : error ? (
-        <div className="m-4 flex items-start gap-2 p-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm">
+        <div className="m-4 flex items-start gap-2 p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">
           <AlertTriangle size={14} className="mt-0.5" /> {error}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-sm">표시할 학생이 없습니다.</div>
+        <div className="py-12 text-center text-content-tertiary text-sm">표시할 학생이 없습니다.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-gray-500 text-xs uppercase tracking-wider bg-gray-50/60">
+              <tr className="text-content-tertiary text-xs uppercase tracking-wider bg-white/[0.03]">
                 <th className="text-left py-2.5 px-4">학생</th>
                 <th className="text-right py-2.5 px-3">내신 (최근)</th>
                 <th className="text-right py-2.5 px-3">모의고사 (최근)</th>
@@ -134,8 +134,8 @@ export default function GradeRosterTable({
             <tbody>
               {groups.map(([gradeLabel, list]) => (
                 <React.Fragment key={gradeLabel}>
-                  <tr className="bg-indigo-50/40">
-                    <td colSpan={6} className="py-1.5 px-4 text-xs font-bold text-indigo-700">
+                  <tr className="bg-indigo-500/10">
+                    <td colSpan={6} className="py-1.5 px-4 text-xs font-bold text-indigo-300">
                       {gradeLabel} <span className="text-indigo-400 font-normal">({list.length}명)</span>
                     </td>
                   </tr>
@@ -149,14 +149,14 @@ export default function GradeRosterTable({
                       <tr
                         key={r.id}
                         onClick={() => onSelectStudent(r.id)}
-                        className={`border-t border-gray-100 cursor-pointer hover:bg-indigo-50/50 ${selected ? 'bg-indigo-50' : ''}`}
+                        className={`border-t border-white/5 cursor-pointer hover:bg-indigo-500/10 ${selected ? 'bg-indigo-500/15' : ''}`}
                       >
-                        <td className="py-2.5 px-4 font-semibold text-zinc-800">{r.name}</td>
+                        <td className="py-2.5 px-4 font-semibold text-content-primary">{r.name}</td>
                         <td className="py-2.5 px-3 text-right"><ScoreCell value={r.school?.score ?? null} sub={schoolSub} /></td>
                         <td className="py-2.5 px-3 text-right"><ScoreCell value={r.mock?.score ?? null} sub={mockLabel} /></td>
                         <td className={`py-2.5 px-3 text-right font-bold ${pctColor(r.diagPct)}`}>{r.diagPct != null ? `${r.diagPct}%` : '-'}</td>
                         <td className={`py-2.5 px-3 text-right font-bold ${pctColor(r.exLatestPct)}`}>{r.exLatestPct != null ? `${r.exLatestPct}%` : '-'}</td>
-                        <td className="py-2.5 px-3 text-gray-300"><ChevronRight size={14} /></td>
+                        <td className="py-2.5 px-3 text-content-tertiary"><ChevronRight size={14} /></td>
                       </tr>
                     );
                   })}
