@@ -79,8 +79,43 @@ export async function GET(_request: NextRequest) {
     const name = u.full_name || (u.email ? u.email.split('@')[0] : '') || '(이름 없음)';
     userMeta.set(u.id, { name, grade: gradeLabel(u.grade) });
   }
-  if (studentIds.length === 0) return NextResponse.json({ assignments: [] });
-  const studentSet = new Set(studentIds);
+
+  // ── 1.5) roster_students (엑셀 일괄 채점 자동등록 명단) — diagnostics.sessions 대부분이
+  //   roster id 로 박혀 있음(엑셀 EX 채점). promoted_user_id 있으면 그 user 로 귀속(canonId).
+  //   ★ 이거 빠뜨려 엑셀/수동 채점이 학습지 목록에 안 잡히던 사고 (2026-06-11).
+  const rosterMeta = new Map<string, { name: string; grade: string; promoted: string | null }>();
+  {
+    let rq = sb.from('roster_students').select('id, full_name, grade, promoted_user_id, institute_id');
+    if (activeInstituteId) {
+      rq = rq.eq('institute_id', activeInstituteId);
+    } else if (!scope.isSuperAdmin) {
+      rq = rq.in('institute_id', scope.accessibleInstituteIds ?? []);
+    }
+    const { data: roster } = await rq;
+    for (const r of (roster || []) as Array<{ id: string; full_name?: string; grade?: number; promoted_user_id?: string | null }>) {
+      rosterMeta.set(r.id, { name: r.full_name || '(이름 없음)', grade: gradeLabel(r.grade), promoted: r.promoted_user_id || null });
+    }
+  }
+
+  // student_id(세션) → canonId(트리 학생 id) + 이름/학년 해석.
+  //   user.id → 그대로. roster.id → promoted user 있으면 그 user, 없으면 roster.id.
+  const resolveStudent = (sid: string): { canonId: string; name: string; grade: string } | null => {
+    const u = userMeta.get(sid);
+    if (u) return { canonId: sid, name: u.name, grade: u.grade };
+    const r = rosterMeta.get(sid);
+    if (r) {
+      if (r.promoted && userMeta.has(r.promoted)) {
+        const pu = userMeta.get(r.promoted)!;
+        return { canonId: r.promoted, name: pu.name || r.name, grade: pu.grade || r.grade };
+      }
+      return { canonId: sid, name: r.name, grade: r.grade };
+    }
+    return null; // 이 센터 소속 아님 → 제외
+  };
+
+  // diagnostics.sessions .in() 필터용 — user + roster 양쪽 id
+  const diagStudentIds = [...studentIds, ...rosterMeta.keys()];
+  if (studentIds.length === 0 && rosterMeta.size === 0) return NextResponse.json({ assignments: [] });
 
   type Assignment = {
     id: string; source: 'qr' | 'manual';
@@ -122,16 +157,16 @@ export async function GET(_request: NextRequest) {
     }
   }
 
-  // ── 3) 수동/엑셀 — diagnostics.sessions ──
+  // ── 3) 수동/엑셀 — diagnostics.sessions (user + roster id 양쪽) ──
   const mRows: Array<{ id: string; student_id: string; exam_id: string | null; session_type: string | null; round_no: number | null; mathflat_sheet_name: string | null; conducted_at: string | null }> = [];
-  for (const ids of chunk(studentIds, 200)) {
+  for (const ids of chunk(diagStudentIds, 200)) {
+    if (ids.length === 0) continue;
     const { data, error } = await diag()
       .from('sessions')
       .select('id, student_id, exam_id, session_type, round_no, mathflat_sheet_name, conducted_at')
       .in('student_id', ids);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     for (const r of (data || []) as typeof mRows) {
-      if (!studentSet.has(r.student_id)) continue;
       mRows.push(r);
       if (r.exam_id) collectExamIds.add(r.exam_id);
     }
@@ -153,15 +188,16 @@ export async function GET(_request: NextRequest) {
     for (const e of (data || []) as Array<{ id: string; title: string }>) examTitle.set(e.id, e.title || '');
   }
 
-  // ── 5) 병합 ──
+  // ── 5) 병합 (student_id → canonId 해석. 센터 소속 아니면 제외) ──
   const assignments: Assignment[] = [];
   for (const r of qrRows) {
-    const meta = userMeta.get(r.student_id);
+    const stu = resolveStudent(r.student_id);
+    if (!stu) continue;
     const graded = qrGraded.get(r.id) || 0;
     const correct = qrCorrect.get(r.id) || 0;
     assignments.push({
       id: r.id, source: 'qr',
-      student_id: r.student_id, student_name: meta?.name || '(이름 없음)', grade: meta?.grade || '',
+      student_id: stu.canonId, student_name: stu.name, grade: stu.grade,
       title: (r.exam_id ? examTitle.get(r.exam_id) : '') || '(제목 없음)',
       tag: typeTag(r.session_type) + (r.round_number ? ` R${r.round_number}` : ''),
       issued_at: r.issued_at,
@@ -172,12 +208,13 @@ export async function GET(_request: NextRequest) {
     });
   }
   for (const r of mRows) {
-    const meta = userMeta.get(r.student_id);
+    const stu = resolveStudent(r.student_id);
+    if (!stu) continue;
     const total = mTotal.get(r.id) || 0;
     const correct = mCorrect.get(r.id) || 0;
     assignments.push({
       id: r.id, source: 'manual',
-      student_id: r.student_id, student_name: meta?.name || '(이름 없음)', grade: meta?.grade || '',
+      student_id: stu.canonId, student_name: stu.name, grade: stu.grade,
       title: r.mathflat_sheet_name || (r.exam_id ? examTitle.get(r.exam_id) : '') || '(제목 없음)',
       tag: typeTag(r.session_type) + (r.round_no ? ` R${r.round_no}` : ''),
       issued_at: r.conducted_at,
