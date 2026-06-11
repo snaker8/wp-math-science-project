@@ -65,6 +65,43 @@ function bandPct(byDifficulty: DiffStat[], lo: number, hi: number): number | nul
   return t > 0 ? Math.round((c / t) * 100) : null;
 }
 
+// 성격별 서술 프레이밍 — predict(진단·대비) / result(내신·모의 결과 회고) / practice(교재·학습지 연습)
+export type NarrativeFraming = 'predict' | 'result' | 'practice';
+const FRAME: Record<NarrativeFraming, {
+  lead: string; ctx: string; weakTail: string; none: string; oneLine: Record<Achievement, string>;
+}> = {
+  predict: {
+    lead: '', ctx: '범위 진단에서 합산 정답률',
+    weakTail: '에서 정답률이 낮아 시험 전 집중 보강이 필요합니다.',
+    none: '두드러진 취약 단원은 없으나, 실전 문제로 마무리 점검을 권장합니다.',
+    oneLine: {
+      strong: '전반적으로 잘 준비되어 있습니다. 실전 마무리에 집중하세요.',
+      caution: '기본은 되어 있으나 일부 단원·유형 보강이 필요합니다.',
+      weak: '시험 전 취약 단원의 개념부터 다시 다질 필요가 있습니다.',
+    },
+  },
+  result: {
+    lead: '이번 ', ctx: '시험에서 정답률',
+    weakTail: '에서 실점이 많아 다음 시험 전 보완이 필요합니다.',
+    none: '두드러진 취약 단원 없이 고르게 받았습니다.',
+    oneLine: {
+      strong: '이번 시험을 안정적으로 치렀습니다. 강점을 유지하세요.',
+      caution: '대체로 잘 봤으나 일부 단원 보완이 필요합니다.',
+      weak: '취약 단원의 개념부터 다시 다질 필요가 있습니다.',
+    },
+  },
+  practice: {
+    lead: '이번 ', ctx: '학습에서 정답률',
+    weakTail: '이 약해 추가 학습이 필요합니다.',
+    none: '두드러진 약점 없이 고르게 학습했습니다.',
+    oneLine: {
+      strong: '학습 상태가 안정적입니다. 다음 단계로 나아가세요.',
+      caution: '기본은 되어 있으나 일부 단원 보완이 필요합니다.',
+      weak: '약한 단원의 개념부터 다시 학습할 필요가 있습니다.',
+    },
+  },
+};
+
 export function buildNarrative(input: {
   studentName: string;
   setTitle: string;
@@ -72,8 +109,10 @@ export function buildNarrative(input: {
   byDifficulty: DiffStat[];
   byUnit: UnitStat[];
   byType: TypeStat[];
+  framing?: NarrativeFraming;
 }): ReportNarrative {
-  const { studentName, setTitle, overallPct, byDifficulty, byUnit, byType } = input;
+  const { studentName, setTitle, overallPct, byDifficulty, byUnit, byType, framing = 'predict' } = input;
+  const F = FRAME[framing];
   const range = extractRange(setTitle);
   const name = studentName?.trim() || '학생';
 
@@ -98,10 +137,10 @@ export function buildNarrative(input: {
     readinessLevel = 'caution';
   }
   const readinessMeta = {
-    strong: { label: '시험 준비 안정', emoji: '🟢', oneLine: '전반적으로 잘 준비되어 있습니다. 실전 마무리에 집중하세요.' },
-    caution: { label: '부분 보강 필요', emoji: '🟡', oneLine: '기본은 되어 있으나 일부 단원·유형 보강이 필요합니다.' },
-    weak: { label: '집중 보강 필요', emoji: '🔴', oneLine: '시험 전 취약 단원의 개념부터 다시 다질 필요가 있습니다.' },
-  }[readinessLevel];
+    label: { strong: '시험 준비 안정', caution: '부분 보강 필요', weak: '집중 보강 필요' }[readinessLevel],
+    emoji: { strong: '🟢', caution: '🟡', weak: '🔴' }[readinessLevel],
+    oneLine: F.oneLine[readinessLevel],
+  };
 
   // ── 총평 단락 ──
   const parts: string[] = [];
@@ -111,7 +150,7 @@ export function buildNarrative(input: {
   else if (basicPct >= 85) basicClause = '기초 개념과 계산은 안정적입니다';
   else if (basicPct >= 70) basicClause = '기초는 대체로 갖췄습니다';
   else basicClause = '기초 개념부터 다시 다질 필요가 있습니다';
-  parts.push(`${name} 학생은 『${range}』 범위 진단에서 합산 정답률 ${overallStr}로, ${basicClause}.`);
+  parts.push(`${name} 학생은 ${F.lead}『${range}』 ${F.ctx} ${overallStr}로, ${basicClause}.`);
 
   // 변별 + 취약 단원
   const weakNames = [...weak, ...caution].slice(0, 2).map((u) => shortName(u.name));
@@ -120,11 +159,11 @@ export function buildNarrative(input: {
     if (advPct != null && basicPct != null && advPct + 15 < basicPct) {
       advClause = ' 기본기에 비해 변별력 있는 응용·심화 문항에서 실점이 두드러지며,';
     }
-    parts.push(`${advClause} 특히 ${weakNames.join(', ')} 단원에서 정답률이 낮아 시험 전 집중 보강이 필요합니다.`.trim());
+    parts.push(`${advClause} 특히 ${weakNames.join(', ')} 단원${F.weakTail}`.trim());
   } else if (advPct != null && advPct >= 80) {
     parts.push('응용·심화 문항까지 무난히 해결해 전반적으로 안정적입니다.');
   } else {
-    parts.push('두드러진 취약 단원은 없으나, 실전 문제로 마무리 점검을 권장합니다.');
+    parts.push(F.none);
   }
   const summary = parts.join(' ');
 
@@ -143,6 +182,7 @@ export function buildNarrative(input: {
   } else {
     difficultyInsight = '난이도 분류된 문항이 충분하지 않아 난이도 분석은 제한적입니다.';
   }
+  if (framing === 'practice') difficultyInsight = difficultyInsight.replace('내신 고득점을 위해', '더 탄탄한 학습을 위해');
 
   // ── 단원별 처방 ──
   function typeForUnit(unitCode: string): TypeStat | null {
@@ -172,7 +212,9 @@ export function buildNarrative(input: {
     actionPlan.push(`${actionPlan.length + 1}. 변별 난이도(6+) 응용·심화 문제로 실전 감각 끌어올리기.`);
   }
   if (actionPlan.length === 0) {
-    actionPlan.push('현재 수준이 안정적입니다. 기출·실전 모의로 마무리 점검하세요.');
+    actionPlan.push(framing === 'practice'
+      ? '현재 학습 상태가 좋습니다. 추가 문제로 점검하세요.'
+      : '현재 수준이 안정적입니다. 기출·실전 모의로 마무리 점검하세요.');
   }
 
   return {
