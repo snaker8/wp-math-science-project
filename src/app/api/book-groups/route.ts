@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { applyInstituteFilter, applyTrackFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { applyInstituteFilter, applyTrackFilter, resolveSharedLibraryInstituteId } from '@/lib/security/institute-guard';
 
 export async function GET(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -81,10 +81,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // INSERT institute_id 결정 — 명시 instituteId 가 scope 안이면 사용, 아니면 자기 institute
-    let insertInstituteId: string;
+    // INSERT institute_id 결정 — 시험지 자산화와 동일 정책.
+    //   비격리 org + SHARED_LIBRARY_MODE → NULL(공통). 격리 org(엄궁차수학) → 자기 institute.
+    //   ★ 폴더와 시험지의 institute_id 가 어긋나면 "공통 시험지가 격리 폴더에 박혀 다른 학원
+    //     폴더 트리에서 안 보이는" 사고 — 둘 다 같은 헬퍼로 결정해 재발 차단.
+    let insertInstituteId: string | null;
     try {
-      insertInstituteId = resolveInsertInstituteId(scope, instituteId);
+      insertInstituteId = await resolveSharedLibraryInstituteId(supabaseAdmin, scope, instituteId);
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 403 });
     }
