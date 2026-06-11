@@ -321,6 +321,56 @@ export function resolveInsertInstituteId(
   return scope.instituteId;
 }
 
+/**
+ * 사용자 organization 이 자산 격리 모드(isolated_assets=true)인지.
+ *   organization_id 우선, 없으면 institute → organizations 로 역추적.
+ *   (upload route 의 동명 헬퍼와 동일 로직 — 공통 라이브러리 INSERT institute_id 결정용)
+ */
+export async function isOrgIsolatedAssets(
+  adminClient: SupabaseClient,
+  userId: string | null
+): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const { data: u } = await adminClient
+      .from('users').select('institute_id, organization_id').eq('id', userId).maybeSingle();
+    if (!u) return false;
+    let orgId = (u as { organization_id?: string | null }).organization_id ?? null;
+    const instId = (u as { institute_id?: string | null }).institute_id ?? null;
+    if (!orgId && instId) {
+      const { data: inst } = await adminClient
+        .from('institutes').select('organization_id').eq('id', instId).maybeSingle();
+      orgId = (inst as { organization_id?: string | null } | null)?.organization_id ?? null;
+    }
+    if (!orgId) return false;
+    const { data: org } = await adminClient
+      .from('organizations').select('isolated_assets').eq('id', orgId).maybeSingle();
+    return (org as { isolated_assets?: boolean } | null)?.isolated_assets === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 공통 라이브러리(exams/book_groups 등) INSERT 시 institute_id 결정 — 시험지 자산화와 동일 정책.
+ *   - 격리 org(isolated_assets=true, 예: 엄궁차수학) → 자기 institute 박음(격리).
+ *   - 비격리 org + SHARED_LIBRARY_MODE → NULL(본부 공통 풀, 모든 학원 공유).
+ *   - shared off → 기존 resolveInsertInstituteId.
+ * 폴더(book_group)와 시험지(exam)의 institute_id 가 어긋나 "공통 시험지가 격리 폴더에 박혀
+ *   다른 학원 폴더 트리에서 안 보이던 사고" 방지 — 둘 다 이 함수로 결정.
+ */
+export async function resolveSharedLibraryInstituteId(
+  adminClient: SupabaseClient,
+  scope: InstituteAccessScope,
+  requestedInstituteId?: string | null
+): Promise<string | null> {
+  const isolated = await isOrgIsolatedAssets(adminClient, scope.userId);
+  if (isSharedLibraryMode() && !isolated) {
+    return null; // 공통 풀
+  }
+  return resolveInsertInstituteId(scope, requestedInstituteId);
+}
+
 // ============================================================================
 // 5. 편의: examId 접근 가드 (자주 쓰이는 패턴)
 // ============================================================================
