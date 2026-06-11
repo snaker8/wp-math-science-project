@@ -93,6 +93,17 @@ function SessionPrintInner() {
   const { problems: dbProblems } = useExamProblems(meta?.examId || null);
   const problems = useMemo(() => (dbProblems || []) as unknown as ExamRenderProblem[], [dbProblems]);
 
+  // ★ 카드별 풀이 빈칸 높이 (cloud 인쇄와 동일 규칙) — 객관식 짧은 100 / 보통 160 / 김 220 / 서답형 280px.
+  //   학생이 시험지에 손으로 풀이를 쓰는 공간. 측정·렌더 양쪽에 동일 적용해야 페이지 분할이 정확.
+  const getWritingSpace = useCallback((problem: ExamRenderProblem): number => {
+    const isMC = (problem.choices?.length ?? 0) > 0;
+    const cLen = (problem.content || '').length;
+    if (!isMC) return 280;
+    if (cLen < 80) return 100;
+    if (cLen < 200) return 160;
+    return 220;
+  }, []);
+
   // ── 측정 + 페이지 분할 (exam-management 로직 이식) ──────────────────────────
   const measureRef = useRef<HTMLDivElement>(null);
   const [problemHeights, setProblemHeights] = useState<number[]>([]);
@@ -221,22 +232,25 @@ function SessionPrintInner() {
     return res.length > 0 ? res : [{ left: [], right: [] }];
   }, [problems, problemHeights, measured, columns, gap, perPagePreset]);
 
-  // ★ 프리셋 모드 페이지별 자동 간격 — 적게 든 페이지의 빈 공간을 문제 사이로 분배해
-  //   "4문제 배열"이 위에 붙지 않고 여유 있게 퍼지도록. (자동 모드는 null → 고정 gap)
-  const pageAutoGaps = useMemo<number[] | null>(() => {
+  // ★ 프리셋(4/6/8) 모드 풀이공간 자동 조절 (cloud 인쇄와 동일 개념) — 고정 풀이공간(getWritingSpace)을
+  //   페이지에 맞춰 늘려/줄여 채운다. 측정높이에서 풀이공간을 뺀 "본문만 높이" 합을 maxH 에서 빼고,
+  //   남는 공간을 칼럼의 문제 수로 나눠 각 문제 아래 풀이 빈칸으로 분배. 좌/우 칼럼 독립(flex 세로채움 구조).
+  //   빡빡하면 최소 24px 까지 줄여 잘림 차단, 여유 있으면 페이지를 꽉 채움.
+  const presetAnswerSpaces = useMemo<{ left: number; right: number }[] | null>(() => {
     if (!perPagePreset || !measured || problemHeights.length === 0) return null;
     let gi = 0;
     return pages.map((pg, pi) => {
       const maxH = pi === 0 ? FIRST_CONTENT_H : CONTENT_H;
-      const leftSum = pg.left.reduce((s, _p, k) => s + (problemHeights[gi + k] || 0), 0);
-      const rightSum = pg.right.reduce((s, _p, k) => s + (problemHeights[gi + pg.left.length + k] || 0), 0);
-      const colCount = Math.max(pg.left.length, pg.right.length);
+      const leftContent = pg.left.reduce(
+        (s, p, k) => s + Math.max(0, (problemHeights[gi + k] ?? 0) - getWritingSpace(p)), 0);
+      const rightContent = pg.right.reduce(
+        (s, p, k) => s + Math.max(0, (problemHeights[gi + pg.left.length + k] ?? 0) - getWritingSpace(p)), 0);
       gi += pg.left.length + pg.right.length;
-      const avail = maxH - Math.max(leftSum, rightSum);
-      // 문제 사이 간격(=colCount-1 군데)에 분배. 8~80px 사이로 제한(너무 벌어지지 않게).
-      return colCount > 1 ? Math.min(80, Math.max(8, Math.floor(avail / (colCount - 1)))) : gap;
+      const fill = (contentSum: number, count: number) =>
+        count > 0 ? Math.max(24, Math.floor((maxH - contentSum) / count)) : 0;
+      return { left: fill(leftContent, pg.left.length), right: fill(rightContent, pg.right.length) };
     });
-  }, [perPagePreset, measured, problemHeights, pages, FIRST_CONTENT_H, CONTENT_H, gap]);
+  }, [perPagePreset, measured, problemHeights, pages, getWritingSpace]);
 
   if (metaErr) {
     return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#b91c1c' }}>{metaErr}</div>;
@@ -246,9 +260,11 @@ function SessionPrintInner() {
     ? `${SESSION_TYPE_LABEL[meta.sessionType] || meta.sessionType} · ${meta.roundNumber}회차`
     : '';
 
-  const renderProblem = (problem: ExamRenderProblem, idx: number, mb: number = gap) => (
+  const renderProblem = (problem: ExamRenderProblem, idx: number, mb: number = gap, writingSpace = 0) => (
     <div key={problem.id} data-problem-idx={idx} className="break-inside-avoid" style={{ marginBottom: `${mb}px` }}>
       <ExamProblemRenderer problem={problem} />
+      {/* ★ 카드 아래 풀이 빈칸 — 측정·렌더 동일 높이여야 분할 정확 (측정 패스에도 동일 삽입) */}
+      {writingSpace > 0 && <div style={{ height: `${writingSpace}px` }} aria-hidden />}
     </div>
   );
 
@@ -282,7 +298,7 @@ function SessionPrintInner() {
               ))}
             </div>
           )}
-          <div className="col-toggle" title="페이지당 문제 수 (배열) — 자동은 빽빽이, 4/6/8은 여유있게">
+          <div className="col-toggle" title="페이지당 문제 수 (배열) — 모두 문제 아래 풀이 빈칸 포함. 자동=꽉 채워 밀집, 4/6/8=페이지당 고정">
             {([['자동', null], ['4', 4], ['6', 6], ['8', 8]] as const).map(([label, v]) => (
               <button
                 key={label}
@@ -320,7 +336,7 @@ function SessionPrintInner() {
         className="exam-page"
         style={{ position: 'absolute', visibility: 'hidden', top: -99999, left: -99999, width: `${measureWidth}px` }}
       >
-        {problems.map((problem, idx) => renderProblem(problem, idx))}
+        {problems.map((problem, idx) => renderProblem(problem, idx, gap, getWritingSpace(problem)))}
       </div>
 
       <div className="pages-host">
@@ -329,7 +345,11 @@ function SessionPrintInner() {
             let globalStartIdx = 0;
             for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].left.length + pages[p].right.length;
             const useManualColumns = columns === 2;
-            const mb = pageAutoGaps?.[pageIdx] ?? gap; // 프리셋 모드면 자동 분배 간격
+            // 프리셋이면 칼럼별 풀이공간(페이지 채움), 자동이면 문제별 고정 풀이공간.
+            const spaces = presetAnswerSpaces?.[pageIdx];
+            const mb = spaces ? 0 : gap; // 프리셋: 빈칸 div 가 간격 담당(margin 0) / 자동: 고정 gap
+            const wsLeft = (p: ExamRenderProblem) => (spaces ? spaces.left : getWritingSpace(p));
+            const wsRight = (p: ExamRenderProblem) => (spaces ? spaces.right : getWritingSpace(p));
 
             return (
               <div
@@ -363,15 +383,15 @@ function SessionPrintInner() {
                 {useManualColumns ? (
                   <div className="exam-cols">
                     <div className="col col-left">
-                      {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
+                      {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb, wsLeft(problem)))}
                     </div>
                     <div className="col col-right">
-                      {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i, mb))}
+                      {page.right.map((problem, i) => renderProblem(problem, globalStartIdx + page.left.length + i, mb, wsRight(problem)))}
                     </div>
                   </div>
                 ) : (
                   <div className="exam-single">
-                    {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb))}
+                    {page.left.map((problem, i) => renderProblem(problem, globalStartIdx + i, mb, wsLeft(problem)))}
                   </div>
                 )}
               </div>
