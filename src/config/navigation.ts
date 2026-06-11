@@ -23,6 +23,7 @@ import {
   User,
   CreditCard,
   Sparkles,
+  ListChecks,
   HelpCircle,
   ImageIcon,
   Building2,
@@ -250,6 +251,15 @@ export const tutorNavItems: NavItem[] = [
     activeColor: 'bg-cyan-500/10 text-cyan-400',
     group: 'tutor',
   },
+  {
+    // ★ 인덱스 [11] — 출제 관리 (매쓰플랫 수업>학습지 미러, 2026-06-11)
+    href: '/dashboard/assignments',
+    icon: ListChecks,
+    label: '출제 관리',
+    description: '학년·학생별 출제 현황 · 점수 (QR+수동 합산)',
+    activeColor: 'bg-sky-500/10 text-sky-400',
+    group: 'tutor',
+  },
 ];
 
 // 시스템 메뉴
@@ -357,8 +367,9 @@ export const topNavGroups: NavGroup[] = [
     label: '채점',
     icon: ClipboardCheck,
     children: [
-      tutorNavItems[3], // 채점하기 (/dashboard/grading)
-      tutorNavItems[4], // 수동 채점 입력 (/dashboard/prescription/entry)
+      tutorNavItems[3],  // 채점하기 (/dashboard/grading)
+      tutorNavItems[4],  // 수동 채점 입력 (/dashboard/prescription/entry)
+      tutorNavItems[11], // 출제 관리 (/dashboard/assignments)
     ],
   },
   // ★ [진단] — 학생별 약점 분석·처방. 클리닉 PDF 까지 처방 결과물 묶음.
