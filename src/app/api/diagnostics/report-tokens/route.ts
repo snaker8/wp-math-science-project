@@ -86,25 +86,55 @@ export async function GET(request: NextRequest) {
 
   const tokens: ShareTokenItem[] = [];
 
-  // ── 1) parent_share_tokens (세트 종합 / 함정) ──
+  // ── 1) parent_share_tokens (세트 종합 / 함정 / 개별 시험[라인B]) ──
   const { data: pstRows, error: pstErr } = await sb
     .from('parent_share_tokens')
-    .select('token, student_id, label, is_active, expires_at, created_at, last_viewed_at, set_key, report_kind')
+    .select('token, student_id, label, is_active, expires_at, created_at, last_viewed_at, set_key, report_kind, exam_id')
     .in('student_id', idSet)
     .order('created_at', { ascending: false });
   if (pstErr) return NextResponse.json({ error: pstErr.message }, { status: 500 });
-  for (const t of (pstRows || []) as Array<{
+  const pst = (pstRows || []) as Array<{
     token: string; label: string | null; is_active: boolean | null; expires_at: string | null;
-    created_at: string | null; last_viewed_at: string | null; set_key: string | null; report_kind: string | null;
-  }>) {
-    const kind = t.report_kind === 'diagnostic_set' ? 'diagnostic_set' as const : 'pitfall' as const;
+    created_at: string | null; last_viewed_at: string | null; set_key: string | null;
+    report_kind: string | null; exam_id: string | null;
+  }>;
+
+  // ── 2) diagnostics.sessions.share_token (개별 시험지 리포트 — 라인A 레거시) ──
+  const { data: sessRows, error: sessErr } = await sb
+    .schema('diagnostics' as never)
+    .from('sessions')
+    .select('id, exam_id, share_token, conducted_at')
+    .in('student_id', idSet)
+    .not('share_token', 'is', null);
+  if (sessErr) return NextResponse.json({ error: sessErr.message }, { status: 500 });
+  const sessions = (sessRows || []) as Array<{ id: string; exam_id: string | null; share_token: string; conducted_at: string | null }>;
+
+  // 시험 제목 일괄 (라인A 세션 + 라인B exam 토큰)
+  const examIds = Array.from(new Set([
+    ...sessions.map(s => s.exam_id),
+    ...pst.filter(t => t.report_kind === 'exam').map(t => t.exam_id),
+  ].filter((x): x is string => !!x)));
+  const examTitle = new Map<string, string>();
+  if (examIds.length > 0) {
+    const { data: exams } = await sb.from('exams').select('id, title').in('id', examIds);
+    for (const e of (exams || []) as Array<{ id: string; title: string }>) examTitle.set(e.id, e.title || '');
+  }
+
+  for (const t of pst) {
+    const kind = t.report_kind === 'diagnostic_set' ? 'diagnostic_set' as const
+      : t.report_kind === 'exam' ? 'exam' as const
+      : 'pitfall' as const;
     // setKey = bookGroupId::정규화제목 → 표시용은 제목 부분
     const setTitle = t.set_key ? (t.set_key.split('::')[1] || t.set_key) : '';
     const expired = !!t.expires_at && new Date(t.expires_at).getTime() < Date.now();
     tokens.push({
       kind,
-      path: kind === 'diagnostic_set' ? `/share/diagnostic-report/${t.token}` : `/parent/${t.token}`,
-      title: kind === 'diagnostic_set' ? (setTitle || '진단 세트 종합 리포트') : '함정 종합 리포트',
+      path: kind === 'diagnostic_set' ? `/share/diagnostic-report/${t.token}`
+        : kind === 'exam' ? `/share/student-report/${t.token}`
+        : `/parent/${t.token}`,
+      title: kind === 'diagnostic_set' ? (setTitle || '진단 세트 종합 리포트')
+        : kind === 'exam' ? ((t.exam_id ? examTitle.get(t.exam_id) : '') || '개별 시험 리포트')
+        : '함정 종합 리포트',
       label: t.label,
       createdAt: t.created_at,
       expiresAt: t.expires_at,
@@ -115,21 +145,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // ── 2) diagnostics.sessions.share_token (개별 시험지 리포트) ──
-  const { data: sessRows, error: sessErr } = await sb
-    .schema('diagnostics' as never)
-    .from('sessions')
-    .select('id, exam_id, share_token, conducted_at')
-    .in('student_id', idSet)
-    .not('share_token', 'is', null);
-  if (sessErr) return NextResponse.json({ error: sessErr.message }, { status: 500 });
-  const sessions = (sessRows || []) as Array<{ id: string; exam_id: string | null; share_token: string; conducted_at: string | null }>;
-  const examIds = Array.from(new Set(sessions.map(s => s.exam_id).filter((x): x is string => !!x)));
-  const examTitle = new Map<string, string>();
-  if (examIds.length > 0) {
-    const { data: exams } = await sb.from('exams').select('id, title').in('id', examIds);
-    for (const e of (exams || []) as Array<{ id: string; title: string }>) examTitle.set(e.id, e.title || '');
-  }
   for (const s of sessions) {
     tokens.push({
       kind: 'exam',
