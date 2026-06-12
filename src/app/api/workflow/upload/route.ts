@@ -2818,12 +2818,16 @@ async function saveProblemsToDB(
               }
             }
             const safeAns = isObj ? normalizeObjectiveAnswer(rawAns) : rawAns;
-            return {
+            const aj: Record<string, unknown> = {
               finalAnswer: safeAns,
               type: isObj ? 'multiple_choice' : 'short_answer',
               correct_answer: safeAns,
               choices: result.choices || [],
             };
+            // ★ 원본 보기 배치 감지값 → answer_json.choiceLayout 기본값 (원본과 같게, 2026-06-12)
+            const cl = (result as { choiceLayout?: number }).choiceLayout;
+            if (typeof cl === 'number') { aj.choiceLayout = cl; }
+            return aj;
           })(),
           images: imagesArray,
           status: 'PENDING_REVIEW',
