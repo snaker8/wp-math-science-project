@@ -78,6 +78,7 @@ export default function ClassDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showExistingModal, setShowExistingModal] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!classId || !supabaseBrowser) return;
@@ -215,15 +216,28 @@ export default function ClassDetailPage() {
               <span className="ml-2 text-xs font-normal text-amber-400">+ {pending.length}명 대기</span>
             )}
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            disabled={accepted.length >= classData.maxStudents}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-bold text-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/40 disabled:text-zinc-600"
-            title={accepted.length >= classData.maxStudents ? '정원 초과' : '학생 직접 등록'}
-          >
-            <UserPlus size={14} />
-            학생 추가
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 가입(재원) 학생을 이 반에 배정 */}
+            <button
+              onClick={() => setShowExistingModal(true)}
+              disabled={accepted.length >= classData.maxStudents}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-sm font-bold text-violet-300 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/40 disabled:text-zinc-600"
+              title={accepted.length >= classData.maxStudents ? '정원 초과' : '가입한 학생을 이 반에 추가'}
+            >
+              <Users size={14} />
+              학생 추가
+            </button>
+            {/* 신규 학생 계정 발급 + 이 반 등록 */}
+            <button
+              onClick={() => setShowAddModal(true)}
+              disabled={accepted.length >= classData.maxStudents}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-bold text-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/40 disabled:text-zinc-600"
+              title={accepted.length >= classData.maxStudents ? '정원 초과' : '신규 학생 계정 발급 + 등록'}
+            >
+              <UserPlus size={14} />
+              등록
+            </button>
+          </div>
         </div>
 
         {/* 학생 카드 그리드 */}
@@ -231,7 +245,7 @@ export default function ClassDetailPage() {
           <div className="rounded-xl border border-white/5 bg-zinc-900/40 px-6 py-12 text-center text-zinc-500">
             <UserPlus className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
             <p className="mb-1 text-base font-semibold text-zinc-300">아직 등록된 학생이 없습니다</p>
-            <p className="text-sm">"학생 추가" 버튼을 눌러 첫 학생을 등록하세요</p>
+            <p className="text-sm">"학생 추가"(가입 학생 배정) 또는 "등록"(신규 발급) 버튼으로 학생을 추가하세요</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -302,6 +316,201 @@ export default function ClassDetailPage() {
           }}
         />
       )}
+
+      {showExistingModal && (
+        <AddExistingStudentModal
+          classId={classData.id}
+          enrolledIds={new Set(enrollments.map((e) => e.student?.id).filter((x): x is string => !!x))}
+          onClose={() => setShowExistingModal(false)}
+          onAdded={() => {
+            setShowExistingModal(false);
+            loadAll();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── 가입(재원) 학생 추가 모달 — 기존 계정 학생을 이 반에 즉시 배정 ──────────
+function AddExistingStudentModal({
+  classId,
+  enrolledIds,
+  onClose,
+  onAdded,
+}: {
+  classId: string;
+  enrolledIds: Set<string>;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [students, setStudents] = useState<Array<{ id: string; name: string; grade: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/users/students', { cache: 'no-store' });
+        const d = await r.json();
+        if (cancelled) return;
+        const list = (Array.isArray(d.students) ? d.students : [])
+          .map((s: { id: string; name?: string; grade?: string }) => ({
+            id: s.id,
+            name: s.name || '(이름 없음)',
+            grade: s.grade || '',
+          }))
+          .filter((s: { id: string }) => !enrolledIds.has(s.id));
+        setStudents(list);
+      } catch {
+        if (!cancelled) setError('학생 목록을 불러오지 못했습니다');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // enrolledIds 는 모달 오픈 시점 고정 — 의도적으로 deps 제외
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filtered = search.trim()
+    ? students.filter((s) => s.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : students;
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (selected.size === 0) return;
+    setSubmitting(true);
+    setError(null);
+    const failed: string[] = [];
+    for (const sid of selected) {
+      try {
+        const r = await fetch(`/api/classes/${classId}/enrollments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: sid, direct: true }),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          // 이미 등록된 학생(409)은 성공 취급
+          if (r.status !== 409) {
+            const name = students.find((s) => s.id === sid)?.name || sid;
+            failed.push(`${name}: ${d.error || `HTTP ${r.status}`}`);
+          }
+        }
+      } catch {
+        const name = students.find((s) => s.id === sid)?.name || sid;
+        failed.push(`${name}: 네트워크 오류`);
+      }
+    }
+    setSubmitting(false);
+    if (failed.length > 0) {
+      setError(failed.join('\n'));
+    } else {
+      onAdded();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">학생 추가</h2>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-zinc-400">
+          가입되어 있는 학생을 선택해 이 반에 바로 추가합니다. (신규 학생은 "등록" 버튼 사용)
+        </p>
+
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="학생 이름 검색"
+          autoFocus
+          className="mb-3 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none"
+        />
+
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/5 bg-black/20">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-zinc-500">
+              <Loader2 size={15} className="animate-spin" /> 학생 목록 불러오는 중...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-10 text-center text-sm text-zinc-500">
+              {students.length === 0 ? '추가할 수 있는 학생이 없습니다 (모두 등록됨)' : '검색 결과가 없습니다'}
+            </div>
+          ) : (
+            filtered.map((s) => {
+              const checked = selected.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggle(s.id)}
+                  className={`flex w-full items-center gap-3 border-b border-white/5 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 ${
+                    checked ? 'bg-cyan-500/10 text-cyan-200' : 'text-zinc-300 hover:bg-white/5'
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${
+                      checked ? 'border-cyan-400 bg-cyan-500/30' : 'border-zinc-600'
+                    }`}
+                  >
+                    {checked && <Check size={11} />}
+                  </span>
+                  <span className="flex-1 truncate font-medium">{s.name}</span>
+                  {s.grade && <span className="text-xs text-zinc-500">{s.grade}</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-3 whitespace-pre-line rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-white/10 bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-zinc-700"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || selected.size === 0}
+            className="flex-1 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-black hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+          >
+            {submitting ? (
+              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+            ) : (
+              `${selected.size}명 추가`
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

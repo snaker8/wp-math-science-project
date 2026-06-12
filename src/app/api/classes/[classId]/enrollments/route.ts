@@ -134,7 +134,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { studentId, studentEmail, message } = body;
+    const { studentId, studentEmail, message, direct } = body;
+    // direct=true → 초대(PENDING+코드) 대신 즉시 ACCEPTED 배정 (학원장이 가입 학생을 반에 직접 추가).
+    //   기본값 false — 기존 초대 플로우 동작 불변.
 
     // studentId 또는 studentEmail 로 학생 찾기
     let targetStudentId: string | undefined = studentId;
@@ -219,21 +221,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    const invitationCode = generateInvitationCode();
-
     const { data: enrollment, error: enrollError } = await supabaseAdmin
       .from('class_enrollments')
       .upsert(
-        {
-          class_id: classId,
-          student_id: targetStudentId,
-          status: 'PENDING',
-          invited_by: user.id,
-          invited_at: new Date().toISOString(),
-          invitation_message: message || null,
-          invitation_code: invitationCode,
-          responded_at: null,
-        },
+        direct
+          ? {
+              class_id: classId,
+              student_id: targetStudentId,
+              status: 'ACCEPTED',
+              invited_by: user.id,
+              invited_at: new Date().toISOString(),
+              enrolled_at: new Date().toISOString(),
+              invitation_message: message || null,
+              invitation_code: null,
+              responded_at: new Date().toISOString(),
+            }
+          : {
+              class_id: classId,
+              student_id: targetStudentId,
+              status: 'PENDING',
+              invited_by: user.id,
+              invited_at: new Date().toISOString(),
+              invitation_message: message || null,
+              invitation_code: generateInvitationCode(),
+              responded_at: null,
+            },
         { onConflict: 'class_id,student_id' }
       )
       .select(

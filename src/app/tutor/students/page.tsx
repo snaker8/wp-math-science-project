@@ -81,6 +81,21 @@ export default function TutorStudentsPage() {
     email: '',
     password: '',
   });
+  // 등록 시 반 배정 (옵션) — /api/students 가 classId 받으면 즉시 ACCEPTED enrollment
+  const [addClassId, setAddClassId] = useState('');
+  const [classOptions, setClassOptions] = useState<Array<{ id: string; name: string }> | null>(null);
+  useEffect(() => {
+    if (!showDirectAdd || classOptions !== null) return;
+    fetch('/api/classes')
+      .then((r) => r.json())
+      .then((d) => {
+        const list = ((d.classes || []) as Array<{ id: string; name: string; is_active?: boolean }>)
+          .filter((c) => c.is_active !== false)
+          .map((c) => ({ id: c.id, name: c.name }));
+        setClassOptions(list);
+      })
+      .catch(() => setClassOptions([]));
+  }, [showDirectAdd, classOptions]);
   // 등록 후 자격증명 표시
   const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -989,6 +1004,7 @@ export default function TutorStudentsPage() {
                       setShowDirectAdd(false);
                       setCredentials(null);
                       setAddForm({ fullName: '', grade: '', school: '', phone: '', email: '', password: '' });
+                      setAddClassId('');
                     }}
                   >
                     닫기
@@ -1014,6 +1030,7 @@ export default function TutorStudentsPage() {
                         grade: addForm.grade || null,
                         school: addForm.school.trim() || null,
                         phone: addForm.phone || null,
+                        classId: addClassId || undefined, // 반 배정 (옵션) — 즉시 ACCEPTED
                         // 학생 ID = 전화번호 (서버에서 자동 변환).
                         // 이메일·비밀번호는 명시 안 함 — 서버가 phone→email + 초기비번 '123456' 자동 처리.
                       }),
@@ -1029,6 +1046,7 @@ export default function TutorStudentsPage() {
                       alert('학생 등록 완료 (기존 계정 활용)');
                       setShowDirectAdd(false);
                       setAddForm({ fullName: '', grade: '', school: '', phone: '', email: '', password: '' });
+                      setAddClassId('');
                     }
                     loadStudents();
                   } catch (err) {
@@ -1084,6 +1102,18 @@ export default function TutorStudentsPage() {
                   <p style={{ fontSize: 11, color: '#a78bfa', marginTop: 4 }}>
                     학생은 이 전화번호로 로그인합니다 (하이픈 자동 처리).
                     초기 비밀번호는 <strong>123456</strong> — 로그인 후 학생이 직접 변경.
+                  </p>
+                </div>
+                <div className="form-group">
+                  <label>반 배정 (선택)</label>
+                  <select value={addClassId} onChange={(e) => setAddClassId(e.target.value)}>
+                    <option value="">배정 안 함</option>
+                    {(classOptions || []).map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p style={{ fontSize: 11, color: '#71717a', marginTop: 4 }}>
+                    선택하면 등록과 동시에 해당 반에 배정됩니다.
                   </p>
                 </div>
                 <div className="modal-actions">
