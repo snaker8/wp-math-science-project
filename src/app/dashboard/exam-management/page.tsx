@@ -481,7 +481,8 @@ export default function ExamManagementPage() {
     '과학': ['전체', '공통과학1', '공통과학2', '물리학1', '물리학2', '화학1', '화학2', '생명과학1', '생명과학2', '지구과학1', '지구과학2'],
   } as const;
   const EXAM_TYPES = ['전체', '학교기출', '진단평가', '성취도 평가', '모의고사'] as const;
-  const GRADES = ['전체', '중1', '중2', '중3', '고1', '고2', '고3'] as const;
+  // ★ 학년(GRADES) 필터 제거 — 과목 드롭다운이 이미 학년 포함("중2-1 수학", "공통수학1"=고1)이라
+  //   중복·충돌(과목=공통수학1 + 학년=중2 → 0건)만 일으켜 시험지가 안 보이던 사고. 과목+유형 2개로.
   // PR-T10 — 활성 트랙으로 카테고리 강제. flag false 또는 Provider 없으면 '수학' fallback.
   const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
   const initialCategory: '수학' | '과학' =
@@ -495,7 +496,6 @@ export default function ExamManagementPage() {
   }, [activeTrack, trackSplitEnabled]);
   const [subjectFilter, setSubjectFilter] = useState('전체');
   const [examTypeFilter, setExamTypeFilter] = useState('전체');
-  const [gradeFilter, setGradeFilter] = useState('전체');
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
   const printRef = useRef<HTMLDivElement>(null);
@@ -600,14 +600,9 @@ export default function ExamManagementPage() {
         const typeMatch = examTypeFilter === '진단평가' ? et.includes('진단평가') : et === examTypeFilter;
         if (!typeMatch) return false;
       }
-      // 학년
-      if (gradeFilter !== '전체') {
-        const examGrade = e.grade || '';
-        if (examGrade !== gradeFilter) return false;
-      }
       return true;
     });
-  }, [dbExams, subjectCategory, subjectFilter, examTypeFilter, gradeFilter]);
+  }, [dbExams, subjectCategory, subjectFilter, examTypeFilter]);
 
   // 선택된 시험지 목록 (그룹 필터링 — 자식 그룹 포함)
   const groupExams = useMemo(() => {
@@ -639,7 +634,7 @@ export default function ExamManagementPage() {
   // 필터 변경 시 선택 초기화
   useEffect(() => {
     setSelectedExamId(null);
-  }, [subjectCategory, subjectFilter, examTypeFilter, gradeFilter]);
+  }, [subjectCategory, subjectFilter, examTypeFilter]);
 
   // 첫 시험지 자동 선택
   useEffect(() => {
@@ -1138,7 +1133,7 @@ export default function ExamManagementPage() {
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-2 gap-1">
             <select
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
@@ -1157,16 +1152,6 @@ export default function ExamManagementPage() {
             >
               {EXAM_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <select
-              value={gradeFilter}
-              onChange={(e) => setGradeFilter(e.target.value)}
-              className="em-select text-[11px]"
-              style={{ padding: '4px 18px 4px 6px' }}
-            >
-              {GRADES.map((g) => (
-                <option key={g} value={g}>{g}</option>
               ))}
             </select>
           </div>
