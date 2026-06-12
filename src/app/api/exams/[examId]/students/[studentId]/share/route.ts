@@ -3,7 +3,14 @@
 //   학부모 공유 토큰 발급 (없으면 생성, 있으면 기존 반환)
 //
 // DELETE /api/exams/[examId]/students/[studentId]/share
-//   토큰 회수 (share_token = NULL)
+//   토큰 회수
+//
+// ★ 채점 라인 2개 대응 (2026-06-12):
+//   라인 A — diagnostics.sessions(EX) + items   → 토큰을 sessions.share_token 에 저장 (레거시 유지)
+//   라인 B — print_sessions + session_results   → 토큰을 parent_share_tokens(report_kind='exam') 에 저장
+//   기존엔 라인 A 만 봐서 QR/수동 채점만 있는 학생은 발급이 404
+//   ("이 학생의 채점 기록이 없습니다") 로 실패. 리포트 본문(report/route.ts)과
+//   동일하게 신원 병합(user↔roster) + 두 라인 모두 확인한다.
 // ============================================================================
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -18,18 +25,73 @@ function genToken(): string {
   return randomBytes(18).toString('base64url'); // ~24 chars, URL-safe
 }
 
-async function loadSession(examId: string, studentId: string) {
+// 신원 병합 — studentId(user 또는 roster id) + 연결된 반대편 id 들 (report/route.ts 와 동일 규칙)
+async function resolveIdentityIds(studentId: string): Promise<string[]> {
+  const ids = new Set<string>([studentId]);
+  if (!supabaseAdmin) return Array.from(ids);
+  const { data: rosterSelf } = await supabaseAdmin
+    .from('roster_students').select('promoted_user_id').eq('id', studentId).maybeSingle();
+  const pu = (rosterSelf as { promoted_user_id: string | null } | null)?.promoted_user_id;
+  if (pu) ids.add(pu);
+  const { data: rostersForUser } = await supabaseAdmin
+    .from('roster_students').select('id').eq('promoted_user_id', studentId);
+  for (const r of (rostersForUser ?? []) as Array<{ id: string }>) ids.add(r.id);
+  return Array.from(ids);
+}
+
+// 라인 A — 가장 최근 EX 세션 (신원 병합 포함)
+async function loadSession(examId: string, identityIds: string[]) {
   if (!supabaseAdmin) return null;
   const { data } = await supabaseAdmin
     .schema('diagnostics')
     .from('sessions')
     .select('id, share_token')
     .eq('exam_id', examId)
-    .eq('student_id', studentId)
+    .in('student_id', identityIds)
     .eq('session_type', 'EX')
     .order('conducted_at', { ascending: false })
     .limit(1);
   return data?.[0] as { id: string; share_token: string | null } | undefined;
+}
+
+// 라인 B — 채점된(session_results 존재, 보류 제외) print_session 이 있는가
+async function hasGradedPrintSession(examId: string, identityIds: string[]): Promise<boolean> {
+  if (!supabaseAdmin) return false;
+  const { data: psRows } = await supabaseAdmin
+    .schema('diagnostics')
+    .from('print_sessions')
+    .select('id')
+    .eq('exam_id', examId)
+    .in('student_id', identityIds);
+  const psIds = ((psRows ?? []) as Array<{ id: string }>).map((p) => p.id);
+  if (psIds.length === 0) return false;
+  const { data: srRows } = await supabaseAdmin
+    .schema('diagnostics')
+    .from('session_results')
+    .select('session_id, teacher_note')
+    .in('session_id', psIds)
+    .limit(100);
+  return ((srRows ?? []) as Array<{ teacher_note: string | null }>).some(
+    (sr) => !(sr.teacher_note ?? '').includes('자동채점 보류')
+  );
+}
+
+// 라인 B 토큰 — parent_share_tokens(report_kind='exam') 활성 토큰 조회
+async function loadExamToken(examId: string, identityIds: string[]) {
+  if (!supabaseAdmin) return null;
+  const { data } = await supabaseAdmin
+    .from('parent_share_tokens')
+    .select('token, is_active, expires_at')
+    .eq('report_kind', 'exam')
+    .eq('exam_id', examId)
+    .in('student_id', identityIds)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  const row = data?.[0] as { token: string; expires_at: string | null } | undefined;
+  if (!row) return null;
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) return null;
+  return row.token;
 }
 
 async function assertExamAccess(scope: Awaited<ReturnType<typeof requireAuthScope>>, examId: string) {
@@ -67,37 +129,60 @@ export async function POST(
     return NextResponse.json({ error: 'Supabase admin 미설정' }, { status: 500 });
   }
 
-  const sess = await loadSession(examId, studentId);
-  if (!sess) {
+  const identityIds = await resolveIdentityIds(studentId);
+
+  // ── 라인 A: EX 세션이 있으면 기존 방식 (sessions.share_token) ──
+  const sess = await loadSession(examId, identityIds);
+  if (sess) {
+    if (sess.share_token) {
+      return NextResponse.json({ token: sess.share_token, created: false });
+    }
+    let token = genToken();
+    for (let i = 0; i < 3; i++) {
+      const { error } = await supabaseAdmin
+        .schema('diagnostics')
+        .from('sessions')
+        .update({ share_token: token })
+        .eq('id', sess.id);
+      if (!error) {
+        return NextResponse.json({ token, created: true });
+      }
+      if (!/duplicate|23505/i.test(error.message)) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      token = genToken();
+    }
+    return NextResponse.json({ error: '토큰 발급 실패' }, { status: 500 });
+  }
+
+  // ── 라인 B: QR/수동 채점만 있는 학생 → parent_share_tokens(report_kind='exam') ──
+  const graded = await hasGradedPrintSession(examId, identityIds);
+  if (!graded) {
     return NextResponse.json(
       { error: '이 학생의 채점 기록이 없습니다.' },
       { status: 404 }
     );
   }
 
-  if (sess.share_token) {
-    return NextResponse.json({ token: sess.share_token, created: false });
+  const existing = await loadExamToken(examId, identityIds);
+  if (existing) {
+    return NextResponse.json({ token: existing, created: false });
   }
 
-  // 새 토큰 발급
-  let token = genToken();
-  // 충돌 시 재시도 (최대 3회)
-  for (let i = 0; i < 3; i++) {
-    const { error } = await supabaseAdmin
-      .schema('diagnostics')
-      .from('sessions')
-      .update({ share_token: token })
-      .eq('id', sess.id);
-    if (!error) {
-      return NextResponse.json({ token, created: true });
-    }
-    // duplicate token (희박) → 다시 시도
-    if (!/duplicate|23505/i.test(error.message)) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    token = genToken();
+  const token = genToken();
+  const { error: insErr } = await supabaseAdmin.from('parent_share_tokens').insert({
+    token,
+    student_id: studentId,
+    exam_id: examId,
+    report_kind: 'exam',
+    is_active: true,
+    created_by: authed.data.user.id || null,
+  });
+  if (insErr) {
+    console.error('[exam share] parent_share_tokens insert error:', insErr.message);
+    return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
-  return NextResponse.json({ error: '토큰 발급 실패' }, { status: 500 });
+  return NextResponse.json({ token, created: true });
 }
 
 export async function DELETE(
@@ -114,20 +199,29 @@ export async function DELETE(
     return NextResponse.json({ error: 'Supabase admin 미설정' }, { status: 500 });
   }
 
-  const sess = await loadSession(examId, studentId);
-  if (!sess) {
-    return NextResponse.json({ ok: true });
+  const identityIds = await resolveIdentityIds(studentId);
+
+  // 라인 A 토큰 회수
+  const sess = await loadSession(examId, identityIds);
+  if (sess?.share_token) {
+    const { error } = await supabaseAdmin
+      .schema('diagnostics')
+      .from('sessions')
+      .update({ share_token: null })
+      .eq('id', sess.id);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
   }
 
-  const { error } = await supabaseAdmin
-    .schema('diagnostics')
-    .from('sessions')
-    .update({ share_token: null })
-    .eq('id', sess.id);
+  // 라인 B 토큰 회수 (있으면 — 멱등)
+  await supabaseAdmin
+    .from('parent_share_tokens')
+    .update({ is_active: false })
+    .eq('report_kind', 'exam')
+    .eq('exam_id', examId)
+    .in('student_id', identityIds);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
   return NextResponse.json({ ok: true });
 }
 
@@ -142,6 +236,11 @@ export async function GET(
   const accessErr = await assertExamAccess(authed, examId);
   if (accessErr) return accessErr;
 
-  const sess = await loadSession(examId, studentId);
-  return NextResponse.json({ token: sess?.share_token ?? null });
+  const identityIds = await resolveIdentityIds(studentId);
+  const sess = await loadSession(examId, identityIds);
+  if (sess?.share_token) {
+    return NextResponse.json({ token: sess.share_token });
+  }
+  const examToken = await loadExamToken(examId, identityIds);
+  return NextResponse.json({ token: examToken });
 }

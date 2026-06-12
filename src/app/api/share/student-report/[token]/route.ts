@@ -3,6 +3,11 @@
 //
 // 학부모 공유 페이지용 공개 데이터 (인증 불필요).
 // token 으로 diagnostics.sessions 조회 → 기존 report API 와 동일 형식 응답.
+//
+// ★ 채점 라인 2개 대응 (2026-06-12):
+//   토큰 해석 — 라인 A: sessions.share_token (레거시) / 라인 B: parent_share_tokens(report_kind='exam')
+//   채점 조립 — 라인 A(items) + 라인 B(print_sessions+session_results) 병합.
+//   대시보드 report/route.ts 와 동일 소스 — QR/수동 채점만 있는 학생도 학부모 페이지가 동일하게 나온다.
 // ============================================================================
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -39,7 +44,16 @@ export async function GET(
     return NextResponse.json({ error: 'Supabase admin 미설정' }, { status: 500 });
   }
 
-  // 토큰으로 세션 찾기
+  type SessionRow = {
+    id: string;
+    exam_id: string;
+    student_id: string;
+    conducted_at: string | null;
+    ai_comment_json: Record<string, unknown> | null;
+    teacher_comment_json: Record<string, unknown> | null;
+  };
+
+  // ── 토큰 해석 — 라인 A: sessions.share_token (레거시) ──
   const { data: sessions } = await supabaseAdmin
     .schema('diagnostics')
     .from('sessions')
@@ -50,29 +64,68 @@ export async function GET(
     .eq('session_type', 'EX')
     .limit(1);
 
-  const session = sessions?.[0] as
-    | {
-        id: string;
-        exam_id: string;
-        student_id: string;
-        conducted_at: string | null;
-        ai_comment_json: Record<string, unknown> | null;
-        teacher_comment_json: Record<string, unknown> | null;
-      }
-    | undefined;
+  let session = sessions?.[0] as SessionRow | undefined;
+  let examId = session?.exam_id ?? null;
+  let baseStudentId = session?.student_id ?? null;
 
+  // ── 라인 B: parent_share_tokens(report_kind='exam') ──
   if (!session) {
+    const { data: pstRows } = await supabaseAdmin
+      .from('parent_share_tokens')
+      .select('student_id, exam_id, is_active, expires_at')
+      .eq('token', token)
+      .eq('report_kind', 'exam')
+      .limit(1);
+    const pst = pstRows?.[0] as
+      | { student_id: string; exam_id: string | null; is_active: boolean | null; expires_at: string | null }
+      | undefined;
+    const expired = !!pst?.expires_at && new Date(pst.expires_at).getTime() < Date.now();
+    if (pst && pst.exam_id && pst.is_active !== false && !expired) {
+      examId = pst.exam_id;
+      baseStudentId = pst.student_id;
+    }
+  }
+
+  if (!examId || !baseStudentId) {
     return NextResponse.json(
       { error: '유효하지 않은 공유 링크입니다.' },
       { status: 404 }
     );
   }
 
+  // 신원 병합 (user↔roster) — report/route.ts 와 동일 규칙
+  const identityIds = new Set<string>([baseStudentId]);
+  {
+    const { data: rosterSelf } = await supabaseAdmin
+      .from('roster_students').select('promoted_user_id').eq('id', baseStudentId).maybeSingle();
+    const pu = (rosterSelf as { promoted_user_id: string | null } | null)?.promoted_user_id;
+    if (pu) identityIds.add(pu);
+    const { data: rostersForUser } = await supabaseAdmin
+      .from('roster_students').select('id').eq('promoted_user_id', baseStudentId);
+    for (const r of (rostersForUser ?? []) as Array<{ id: string }>) identityIds.add(r.id);
+  }
+
+  // 라인 B 토큰으로 들어온 경우에도 EX 세션이 있으면 items·AI 코멘트에 활용
+  if (!session) {
+    const { data: exSessions } = await supabaseAdmin
+      .schema('diagnostics')
+      .from('sessions')
+      .select(
+        'id, exam_id, student_id, conducted_at, ai_comment_json, teacher_comment_json'
+      )
+      .eq('exam_id', examId)
+      .in('student_id', Array.from(identityIds))
+      .eq('session_type', 'EX')
+      .order('conducted_at', { ascending: false })
+      .limit(1);
+    session = exSessions?.[0] as SessionRow | undefined;
+  }
+
   // 시험 정보
   const { data: exam } = await supabaseAdmin
     .from('exams')
     .select('id, title, institute_id, exam_type, is_diagnostic')
-    .eq('id', session.exam_id)
+    .eq('id', examId)
     .maybeSingle();
   if (!exam) {
     return NextResponse.json({ error: 'exam not found' }, { status: 404 });
@@ -87,7 +140,7 @@ export async function GET(
   const { data: roster } = await supabaseAdmin
     .from('roster_students')
     .select('full_name, grade, class_label, institute_id')
-    .eq('id', session.student_id)
+    .eq('id', baseStudentId)
     .maybeSingle();
   if (roster) {
     studentName = (roster as { full_name: string }).full_name;
@@ -98,7 +151,7 @@ export async function GET(
     const { data: u } = await supabaseAdmin
       .from('users')
       .select('full_name, grade, institute_id')
-      .eq('id', session.student_id)
+      .eq('id', baseStudentId)
       .maybeSingle();
     if (u) {
       studentName = (u as { full_name: string }).full_name;
@@ -131,7 +184,7 @@ export async function GET(
        problems ( source_number, answer_json,
          classifications ( type_code, difficulty, cognitive_domain ) )`
     )
-    .eq('exam_id', session.exam_id)
+    .eq('exam_id', examId)
     .order('sequence_number', { ascending: true });
 
   type Row = {
@@ -167,6 +220,8 @@ export async function GET(
 
   const specMap = new Map<number, Spec>();
   const allTypeCodes = new Set<string>();
+  // session_results.sequence_number(배포 순번) → qNum(문항번호) 매핑 — 라인 B 채점 병합용
+  const qNumBySeqNum = new Map<number, number>();
 
   for (const row of (epRaw ?? []) as unknown as Row[]) {
     const p = row.problems;
@@ -178,6 +233,7 @@ export async function GET(
       (typeof p.source_number === 'number' ? p.source_number : null) ??
       row.sequence_number;
     if (!qNum) continue;
+    qNumBySeqNum.set(row.sequence_number, qNum);
 
     const aj = p.answer_json ?? {};
     const fullScore =
@@ -227,20 +283,62 @@ export async function GET(
     }
   }
 
-  // items
-  const { data: items } = await supabaseAdmin
-    .schema('diagnostics')
-    .from('items')
-    .select('seq, mathsecr_code, is_correct, note')
-    .eq('session_id', session.id);
-
+  // 채점 조립 — 라인 A: EX 세션 items, 라인 B: QR/수동 session_results. (대시보드 report 와 동일 소스)
   const itemBySeq = new Map<
     number,
     { isCorrect: boolean; note: string | null }
   >();
-  for (const it of items ?? []) {
-    const tt = it as { seq: number; is_correct: boolean; note: string | null };
-    itemBySeq.set(tt.seq, { isCorrect: tt.is_correct, note: tt.note });
+
+  // 라인 A — EX 세션 items (seq = qNum)
+  if (session) {
+    const { data: items } = await supabaseAdmin
+      .schema('diagnostics')
+      .from('items')
+      .select('seq, mathsecr_code, is_correct, note')
+      .eq('session_id', session.id);
+    for (const it of items ?? []) {
+      const tt = it as { seq: number; is_correct: boolean; note: string | null };
+      itemBySeq.set(tt.seq, { isCorrect: tt.is_correct, note: tt.note });
+    }
+  }
+
+  // 라인 B — QR/인쇄 수동 채점 (print_sessions + session_results).
+  //   EX items 에 없는 문항만 채움(중복 방지). sequence_number → qNum 매핑. 자동채점 보류 제외.
+  {
+    const { data: psRows } = await supabaseAdmin
+      .schema('diagnostics')
+      .from('print_sessions')
+      .select('id, completed_at')
+      .eq('exam_id', examId)
+      .in('student_id', Array.from(identityIds))
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(1);
+    const ps = (psRows ?? [])[0] as { id: string } | undefined;
+    if (ps) {
+      const { data: srRows } = await supabaseAdmin
+        .schema('diagnostics')
+        .from('session_results')
+        .select('sequence_number, is_correct, teacher_note')
+        .eq('session_id', ps.id);
+      for (const sr of (srRows ?? []) as Array<{
+        sequence_number: number;
+        is_correct: boolean;
+        teacher_note: string | null;
+      }>) {
+        if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue;
+        const qn = qNumBySeqNum.get(sr.sequence_number);
+        if (qn == null || itemBySeq.has(qn)) continue;
+        itemBySeq.set(qn, { isCorrect: sr.is_correct, note: null });
+      }
+    }
+  }
+
+  // 두 라인 모두 비면 채점 기록 없음
+  if (itemBySeq.size === 0) {
+    return NextResponse.json(
+      { error: '이 학생의 채점 기록이 없습니다.' },
+      { status: 404 }
+    );
   }
 
   const defaultUnit: UnitInfo = {
@@ -380,13 +478,13 @@ export async function GET(
 
   return NextResponse.json({
     student: {
-      id: session.student_id,
+      id: baseStudentId,
       name: studentName,
       grade: studentGrade,
       classLabel: studentClass,
     },
     exam: {
-      id: session.exam_id,
+      id: examId,
       title: exam.title,
     },
     examType: (exam as { exam_type?: string | null }).exam_type ?? null,
@@ -399,8 +497,8 @@ export async function GET(
     cognitiveDomainStats,
     reportStyle,
     // 학부모용은 반 백분위·시계열 추이 제외 (학원 데이터 보호)
-    aiComment: session.ai_comment_json ?? null,
-    teacherComment: session.teacher_comment_json ?? null,
+    aiComment: session?.ai_comment_json ?? null,
+    teacherComment: session?.teacher_comment_json ?? null,
   });
 
   // suppress unused
