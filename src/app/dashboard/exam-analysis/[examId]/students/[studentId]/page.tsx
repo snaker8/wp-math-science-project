@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Printer,
   Share2,
+  Check,
   Loader2,
   AlertCircle,
   TrendingUp,
@@ -642,6 +643,7 @@ export default function StudentReportPage() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
 
+  // 발급 + 즉시 클립보드 복사 — 세트 리포트(ParentLinkBar)와 동일 원클릭 UX
   const handleShareParent = async () => {
     if (!examId || !studentId || shareBusy) return;
     setShareBusy(true);
@@ -657,7 +659,14 @@ export default function StudentReportPage() {
       }
       const url = `${window.location.origin}/share/student-report/${d.token}`;
       setShareUrl(url);
-      setShareCopied(false);
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      } catch {
+        // 클립보드 차단 시 아래 URL 바에서 수동 복사
+        setShareCopied(false);
+      }
     } finally {
       setShareBusy(false);
     }
@@ -915,8 +924,9 @@ export default function StudentReportPage() {
                 <Sparkles size={14} /> {aiBusy ? '생성 중…' : 'AI 코멘트 생성'}
               </button>
               <button onClick={handleShareParent} disabled={shareBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
-                <Share2 size={14} /> 학부모 공유
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50">
+                {shareBusy ? <Loader2 size={14} className="animate-spin" /> : shareCopied ? <Check size={14} /> : <Share2 size={14} />}
+                {shareBusy ? '발급 중…' : shareCopied ? '복사됨!' : '학부모 링크 복사'}
               </button>
               <button onClick={() => window.print()}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800">
