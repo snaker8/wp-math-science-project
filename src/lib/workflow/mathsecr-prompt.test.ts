@@ -7,9 +7,9 @@ import { describe, it, expect } from 'vitest';
 import { resolveSubjectCode, buildTypeTable, buildL1L2Table } from './mathsecr-prompt';
 
 describe('resolveSubjectCode', () => {
-  it('학기 명시 중등 → 단일 코드', () => {
-    expect(resolveSubjectCode('중2-1 수학')).toBe('03');
-    expect(resolveSubjectCode('중3-2')).toBe('06');
+  it('★ 학기 명시 중등도 양 학기 배열 — 제목 학기 불신(제목 2-1+내용 2-2 평행사변형 오분류 fix, 2026-06-12)', () => {
+    expect(resolveSubjectCode('중2-1 수학')).toEqual(['03', '04']);
+    expect(resolveSubjectCode('중3-2')).toEqual(['05', '06']);
   });
 
   it('★ 학기 불명 중등 → 두 학기 배열 (212K 사고 fix 핵심)', () => {
@@ -23,7 +23,7 @@ describe('resolveSubjectCode', () => {
   });
 
   it('★ NFD(맥 자모 분해) 한글도 매치 — 공통수학1 오분류 사고 방어', () => {
-    expect(resolveSubjectCode('중2-1 수학'.normalize('NFD'))).toBe('03');
+    expect(resolveSubjectCode('중2-1 수학'.normalize('NFD'))).toEqual(['03', '04']);
     expect(resolveSubjectCode(undefined, '수학II'.normalize('NFD'))).toBe('10');
   });
 

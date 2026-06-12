@@ -84,7 +84,11 @@ export function resolveSubjectCode(gradeHint?: string, subject?: string): string
     .sort((a, b) => b[0].length - a[0].length);
   for (const hintRaw of [subject, gradeHint]) {
     if (!hintRaw) continue;
-    const hint = hintRaw.normalize('NFC');
+    // ★ 학기(1/2학기) 흡수 — "중2-1 수학"→"중2 수학" 로 정규화해 항상 양 학기 코드(['03','04']) 반환.
+    //   파일명 학기와 실제 문제 학기가 다른 "특이 진도" 시험지(제목 2-1, 내용 2-2 평행사변형 등) 대응.
+    //   call site(cloud-flow)마다 strip 하다 reanalyze·auto-fix 에서 누락되어 단일 학기로 박히던 사고
+    //   → 중앙에서 흡수해 전 분류 경로(업로드/다시분석/고급분석/auto-fix) 일관 (2026-06-12).
+    const hint = hintRaw.normalize('NFC').replace(/중([1-3])-[12]/g, '중$1');
     for (const [key, code] of sortedEntries) {
       if (hint.includes(key)) return code; // 단일 string 또는 string[]
     }
