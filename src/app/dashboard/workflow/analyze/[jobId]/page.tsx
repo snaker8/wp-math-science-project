@@ -3543,6 +3543,10 @@ export default function AnalyzeJobPage() {
           number: isEdited ? (prevProblem.number ?? idx + 1) : (idx + 1),
           content: isEdited ? prevProblem.content : contentSource,
           choices: isEdited ? prevProblem.choices : (result.choices || result.answer_json?.choices || []),
+          // ★ 원본 보기 배치 감지값 → 모달 choiceLayout 기본값 + 자산화 answer_json (원본과 같게, 2026-06-12)
+          choiceLayout: isEdited
+            ? (prevProblem as { choiceLayout?: number }).choiceLayout
+            : ((result as { choiceLayout?: number }).choiceLayout ?? result.answer_json?.choiceLayout),
           answer: isEdited ? prevProblem.answer : (result.solution?.finalAnswer || result.answer_json?.correct_answer || ''),
           solution: isEdited ? prevProblem.solution : serverSolution,
           difficulty: isEdited ? (prevProblem.difficulty ?? (result.classification?.difficulty || 3)) : ((result.classification?.difficulty || 3) as 1|2|3|4|5),

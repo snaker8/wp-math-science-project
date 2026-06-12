@@ -272,6 +272,7 @@ function groupLinesIntoQuestions(
   bbox: { x: number; y: number; w: number; h: number };
   contentMmd: string;
   choices: string[];
+  choiceLayout?: number; // ★ 원본 보기 배치 감지값
   hasFigure: boolean;
   figureBbox: { x: number; y: number; w: number; h: number } | null;
 }> {
@@ -281,6 +282,7 @@ function groupLinesIntoQuestions(
     bbox: { x: number; y: number; w: number; h: number };
     contentMmd: string;
     choices: string[];
+    choiceLayout?: number; // ★ 원본 보기 배치 감지값
     hasFigure: boolean;
     figureBbox: { x: number; y: number; w: number; h: number } | null;
   }> = [];
@@ -456,6 +458,8 @@ function buildQuestionResult(
   bbox: { x: number; y: number; w: number; h: number };
   contentMmd: string;
   choices: string[];
+  /** ★ 원본 보기 배치 감지값 (1=세로/2=2열/3=3열/5=가로). 자산화·수정모달 choiceLayout 기본값용. undefined=불명. */
+  choiceLayout?: number;
   hasFigure: boolean;
   figureBbox: { x: number; y: number; w: number; h: number } | null;
 } {
@@ -520,6 +524,29 @@ function buildQuestionResult(
 
   // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
   const choices = parseChoicesFromText(group.choiceTexts.join('\n'));
+
+  // ★ 원본 보기 배치 감지 (2026-06-12) — OCR 보기 라인의 "한 줄당 마커 개수" 로 원본 열 수 추정.
+  //   가로(한 줄 4~5개)=5, 3열=3, 2열=2, 보기마다 줄바꿈=세로. 자산화·1차/2차 수정모달의
+  //   choiceLayout 기본값으로 흘러가 "기본 세팅이 원본과 같게". 수동 변경은 그대로 우선.
+  //   한 줄 1개 + 짧은 보기는 가로/세로 구분 불가 → undefined(기존 기본값 유지).
+  let choiceLayout: number | undefined;
+  {
+    const cLines = group.choiceTexts.map(t => (t || '').trim()).filter(t => /[①②③④⑤]|\([1-5]\)/.test(t));
+    if (cLines.length > 0) {
+      let maxPerLine = 0;
+      for (const l of cLines) {
+        const n = (l.match(/[①②③④⑤]|\([1-5]\)/g) || []).length;
+        if (n > maxPerLine) maxPerLine = n;
+      }
+      if (maxPerLine >= 4) choiceLayout = 5;
+      else if (maxPerLine === 3) choiceLayout = 3;
+      else if (maxPerLine === 2) choiceLayout = 2;
+      else if (maxPerLine === 1) {
+        const avgLen = cLines.reduce((s, l) => s + l.length, 0) / cLines.length;
+        if (avgLen > 25) choiceLayout = 1; // 긴 보기 = 세로 확신
+      }
+    }
+  }
 
   // ★ 본문에서 보기 라인 제외 (2026-06-02) — 근본(1차) "객관식 보기 본문 중복" 차단.
   //   보기는 choices 로 따로 저장되는데, 그동안 content_latex 를 group.lines 전체로 만들어
@@ -592,6 +619,7 @@ function buildQuestionResult(
     bbox,
     contentMmd,
     choices,
+    choiceLayout,
     hasFigure,
     figureBbox,
   };
@@ -2140,6 +2168,7 @@ export async function processUploadJob(
       bbox?: { x: number; y: number; w: number; h: number };
       contentMmd?: string;  // Mathpix Markdown (수식 인라인)
       choicesFromOCR?: string[];
+      choiceLayout?: number; // ★ 원본 보기 배치 감지값 (자산화 answer_json 기본값용)
       // 도형/그래프 감지
       hasFigure?: boolean;
       figureBbox?: { x: number; y: number; w: number; h: number } | null;
@@ -2166,6 +2195,7 @@ export async function processUploadJob(
             lq.choices.length > 0 ? lq.choices
               : parsedMatch?.choices?.map(c => `${c.label}) ${c.content_latex}`) || []
           ),
+          choiceLayout: lq.choiceLayout, // ★ 원본 보기 배치 감지값
           hasFigure: lq.hasFigure,
           figureBbox: lq.figureBbox,
         };
@@ -2187,6 +2217,7 @@ export async function processUploadJob(
             lineMatch?.choices.length ? lineMatch.choices
               : q.choices?.map(c => `${c.label}) ${c.content_latex}`) || []
           ),
+          choiceLayout: lineMatch?.choiceLayout, // ★ 원본 보기 배치 감지값
           hasFigure: lineMatch?.hasFigure,
           figureBbox: lineMatch?.figureBbox,
         };
@@ -2267,6 +2298,10 @@ export async function processUploadJob(
       }
       if (question.choicesFromOCR && question.choicesFromOCR.length > 0) {
         analysis.choices = question.choicesFromOCR;
+      }
+      // ★ 원본 보기 배치 감지값 → 자산화 answer_json.choiceLayout 기본값으로 (원본과 같게)
+      if (typeof question.choiceLayout === 'number') {
+        analysis.choiceLayout = question.choiceLayout;
       }
 
       // ★ 도형/그래프 감지 정보 저장
