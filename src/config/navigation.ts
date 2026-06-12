@@ -62,8 +62,8 @@ export const dashboardNavItems: NavItem[] = [
   {
     href: '/dashboard/create',
     icon: SquarePen,
-    label: '시험지출제',
-    description: '새 시험지 만들기',
+    label: '유형별 출제',
+    description: '단원·유형·난이도로 문제를 골라 새 시험지 제작',
     activeColor: 'bg-pink-500/10 text-pink-500',
     group: 'main',
   },
@@ -110,8 +110,8 @@ export const dashboardNavItems: NavItem[] = [
   {
     href: '/dashboard/exam-management',
     icon: ClipboardCheck,
-    label: '시험지관리',
-    description: '시험지 그룹 관리',
+    label: '자산 시험지 출제',
+    description: '자산화된 시험지 그대로 인쇄·배포·출제',
     activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'main',
   },
@@ -317,14 +317,18 @@ export interface NavGroup {
 }
 
 // ★ 2026-06-11 IA 통합 (PLAN_IA_CONSOLIDATION.md, 매쓰플랫 워크플로우 기반):
-//   8그룹에 흩어진 메뉴를 흐름 순(자산화→제작→출제→채점→학생결과→관리)으로 수렴.
-//   - 학생 흩어진 화면(출제관리·학생진단·학생성적·종합리포트·클리닉·반/학생관리)을 [수업] 한 그룹으로.
+//   8그룹에 흩어진 메뉴를 흐름 순으로 수렴.
+//   - 학생 흩어진 화면(학생진단·학생성적·종합리포트·클리닉·반/학생관리)을 [수업] 한 그룹으로.
 //   - 채점 중복 제거: "수동 채점 입력" 메뉴(=채점하기 ?tab=manual 탭)는 미노출. 채점하기 단일.
 //   - 단일 항목 그룹(채점·분석)은 드롭다운 없이 직접 링크.
 //   ※ 페이지 라우트는 전부 유지 — nav 재배치만(롤백 쉬움). Phase 2 에서 [수업] 허브 페이지화.
 //   ※ 대시보드 단독 메뉴 없음 — 로고 클릭으로 /dashboard 진입.
+// ★ 2026-06-12 순서·소속 조정 (사용자 요청):
+//   - 순서: 문제은행 → 수업 → 출제 → 채점 → 분석 → 학원자료 → DB 자산화.
+//   - [출제 관리]를 수업 → 출제 그룹으로 이동 (출제 현황·점수는 출제 흐름의 끝).
+//   - 출제 그룹 라벨 명확화: 유형별 출제(문제 골라 제작) vs 자산 시험지 출제(자산화 시험지 그대로).
 export const topNavGroups: NavGroup[] = [
-  // ── 1) 재료: 문제·자료 ──
+  // ── 1) 재료: 문제은행 ──
   {
     id: 'repository',
     label: '문제은행',
@@ -336,6 +340,47 @@ export const topNavGroups: NavGroup[] = [
       dashboardNavItems[5], // 출판교재유사
     ],
   },
+  // ── 2) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러). ──
+  {
+    id: 'class',
+    label: '수업',
+    icon: Users,
+    children: [
+      tutorNavItems[8],  // 학생 성적
+      tutorNavItems[5],  // 학생 진단
+      tutorNavItems[10], // 진단 종합 리포트
+      tutorNavItems[6],  // 클리닉시험지
+      tutorNavItems[1],  // 반 관리
+      tutorNavItems[2],  // 학생 관리
+    ],
+  },
+  // ── 3) 제작 + 배포 + 현황: 출제 ──
+  {
+    id: 'exams',
+    label: '출제',
+    icon: SquarePen,
+    children: [
+      dashboardNavItems[2], // 유형별 출제 (문제 골라 새 시험지 제작)
+      tutorNavItems[7],     // AI 자동 출제
+      dashboardNavItems[8], // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
+      tutorNavItems[11],    // 출제 관리 (학생별 출제 현황·점수) — 수업에서 이동
+    ],
+  },
+  // ── 4) 채점 — 단일 페이지(QR/수동/엑셀 탭 내장). 직접 링크. ──
+  {
+    id: 'grading',
+    label: '채점',
+    icon: ClipboardCheck,
+    href: '/dashboard/grading',
+  },
+  // ── 5) 분석 — 학원·학교 단위(학생 단위는 [수업]). 단일 → 직접 링크. ──
+  {
+    id: 'analytics',
+    label: '분석',
+    icon: BarChart3,
+    href: '/dashboard/reports',
+  },
+  // ── 6) 학원자료 — DB 자산화 바로 앞 (자료 → 자산화 흐름) ──
   {
     id: 'materials',
     label: '학원자료',
@@ -345,48 +390,7 @@ export const topNavGroups: NavGroup[] = [
       dashboardNavItems[4], // 도식 갤러리
     ],
   },
-  // ── 2) 제작 + 배포: 출제 ──
-  {
-    id: 'exams',
-    label: '출제',
-    icon: SquarePen,
-    children: [
-      dashboardNavItems[2], // 시험지출제
-      tutorNavItems[7],     // AI 자동 출제
-      dashboardNavItems[8], // 시험지관리 (배포 포함)
-    ],
-  },
-  // ── 3) 채점 — 단일 페이지(QR/수동/엑셀 탭 내장). 직접 링크. ──
-  {
-    id: 'grading',
-    label: '채점',
-    icon: ClipboardCheck,
-    href: '/dashboard/grading',
-  },
-  // ── 4) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러).
-  //   채점/진단/분석에 흩어졌던 학생 화면을 모음. Phase 2 에서 허브 페이지로 통합. ──
-  {
-    id: 'class',
-    label: '수업',
-    icon: Users,
-    children: [
-      tutorNavItems[11], // 출제 관리 (/dashboard/assignments) — 학생별 학습내역·점수
-      tutorNavItems[8],  // 학생 성적
-      tutorNavItems[5],  // 학생 진단
-      tutorNavItems[10], // 진단 종합 리포트
-      tutorNavItems[6],  // 클리닉시험지
-      tutorNavItems[1],  // 반 관리
-      tutorNavItems[2],  // 학생 관리
-    ],
-  },
-  // ── 5) 분석 — 학원·학교 단위(학생 단위는 [수업]). 단일 → 직접 링크. ──
-  {
-    id: 'analytics',
-    label: '분석',
-    icon: BarChart3,
-    href: '/dashboard/reports',
-  },
-  // ── DB 자산화 — 단독 탭(빠른 진입). 클라우드 + 업로드 모달 자동 오픈. ──
+  // ── 7) DB 자산화 — 단독 탭(빠른 진입). 클라우드 + 업로드 모달 자동 오픈. ──
   {
     id: 'db-assetize',
     label: 'DB 자산화',
