@@ -1779,8 +1779,10 @@ function ExamPaperView({
   }, [printSections, examTitle]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
+  //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
+  //   textSize 13.5px: 기본 14px 보다 아주 조금 작게(사용자 요청). 측정·렌더 같은 헬퍼라 분할 일치.
   const renderProblem = (problem: ProblemData) => (
-    <ExamProblemRenderer problem={problem} gap={gap} />
+    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" />
   );
 
   // 측정용 컬럼 너비 (고정 컬럼 간격 사용)

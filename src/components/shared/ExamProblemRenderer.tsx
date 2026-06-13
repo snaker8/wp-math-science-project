@@ -86,12 +86,15 @@ function ExamProblemRendererInner({
   textSize = '14px',
   lineHeight = '1.65',
   maxFigureWidth = 240,
+  numberOnTop = false,
 }: {
   problem: ExamRenderProblem;
   gap?: number;
   textSize?: string;
   lineHeight?: string;
   maxFigureWidth?: number;
+  // ★ true: 문제 번호를 본문 위 별도 줄에 올리고 본문을 전체 폭으로(넓게). cloud 시험지 인쇄용.
+  numberOnTop?: boolean;
 }) {
   // 도형 소스 준비
   const figureCrops = problem.images?.filter(img => img.type === 'figure_crop') || [];
@@ -435,18 +438,37 @@ function ExamProblemRendererInner({
     );
   };
 
+  const bodyEl = (
+    <>
+      <div className="text-gray-800 whitespace-pre-line" style={{ fontSize: textSize, lineHeight }}>
+        {renderContentWithFigures()}
+        {/* '?' 없는 경우 fallback: 콘텐츠 끝에 표시 */}
+        {hasPoints && !badgeInserted && pointsBadge}
+      </div>
+      {renderChoices()}
+    </>
+  );
+
+  // ★ 번호 위 + 본문 전체 폭 (cloud 시험지 인쇄) — 번호가 좌측 칼럼을 안 먹어 문제를 넓게 씀
+  if (numberOnTop) {
+    return (
+      <div>
+        <div className="font-bold text-gray-500" style={{ fontSize: `calc(${textSize} + 6px)`, lineHeight: 1.2, marginBottom: '3px' }}>
+          {problem.number}.
+        </div>
+        {bodyEl}
+      </div>
+    );
+  }
+
+  // 기본: 번호를 본문 좌측에 배치 (exam-management 등)
   return (
     <div className="flex gap-2.5 items-start">
       <span className="font-bold text-gray-500 flex-shrink-0" style={{ fontSize: `calc(${textSize} + 7px)`, minWidth: '30px', lineHeight: 1.1 }}>
         {problem.number}.
       </span>
       <div className="flex-1 min-w-0">
-        <div className="text-gray-800 whitespace-pre-line" style={{ fontSize: textSize, lineHeight }}>
-          {renderContentWithFigures()}
-          {/* '?' 없는 경우 fallback: 콘텐츠 끝에 표시 */}
-          {hasPoints && !badgeInserted && pointsBadge}
-        </div>
-        {renderChoices()}
+        {bodyEl}
       </div>
     </div>
   );
@@ -456,6 +478,8 @@ function ExamProblemRendererInner({
 export const ExamProblemRenderer = memo(ExamProblemRendererInner, (prev, next) => {
   return (
     prev.problem === next.problem &&
-    prev.gap === next.gap
+    prev.gap === next.gap &&
+    prev.textSize === next.textSize &&
+    prev.numberOnTop === next.numberOnTop
   );
 });
