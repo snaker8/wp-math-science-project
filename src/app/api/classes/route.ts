@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { resolveActiveInstitute } from '@/lib/security/active-institute';
 
 // GET: 반 목록 조회
 export async function GET() {
@@ -45,22 +46,56 @@ export async function GET() {
     // ★ 격리 필터 — 자기 institute (또는 ORG_ADMIN: 학원 산하)
     baseQuery = applyInstituteFilter(baseQuery, scope);
 
-    // 강사는 자기 반만 추가 필터링 (super_admin / ADMIN / ORG_ADMIN 제외)
-    if (
-      !scope.isSuperAdmin &&
-      user.role !== 'ADMIN' &&
-      user.role !== 'ORG_ADMIN' &&
-      (user.role === 'TEACHER' || user.role === 'TUTOR')
-    ) {
+    // ★ 활성 학원 핀 — "학원마다 들어가면" 그 학원 반만. super_admin/ORG_ADMIN 이 여러 학원을
+    //   가질 때 전체가 섞이지 않게(학생목록 API 와 동일 규칙). 미선택(null)이면 기존 동작.
+    const activeInstituteId = resolveActiveInstitute(scope);
+    if (activeInstituteId) {
+      baseQuery = baseQuery.eq('institute_id', activeInstituteId);
+    }
+
+    // ★ 권한별 가시성:
+    //   - 관리자(super_admin / ADMIN / ORG_ADMIN): 학원 내 모든 반(다른 선생님이 만든 반 포함).
+    //   - 일반 강사(TEACHER / TUTOR): 자기가 만든 반만.
+    const isManager =
+      scope.isSuperAdmin || user.role === 'ADMIN' || user.role === 'ORG_ADMIN';
+    if (!isManager && (user.role === 'TEACHER' || user.role === 'TUTOR')) {
       baseQuery = baseQuery.eq('tutor_id', user.id);
     }
 
-    const { data: classes, error } = await baseQuery;
+    const { data: classesRaw, error } = await baseQuery;
 
     if (error) {
       console.error('[classes/GET] query error:', error.message);
       return NextResponse.json({ error: 'Query failed' }, { status: 500 });
     }
+    const classRows = (classesRaw ?? []) as Array<{ id: string }>;
+
+    // ★ 반별 등원/대기 인원 카운트 (서버 집계 — 다른 선생님 반도 RLS 우회해 정확히 셈).
+    //   class_enrollments 를 한 번에 in() 조회 후 JS 집계. 1000행 한계 대비 range 페이지네이션.
+    const enrolledCountById = new Map<string, number>();
+    const pendingCountById = new Map<string, number>();
+    const classIds = classRows.map((c) => c.id);
+    if (classIds.length > 0) {
+      for (let from = 0; ; from += 1000) {
+        const { data: enr } = await supabaseAdmin
+          .from('class_enrollments')
+          .select('class_id, status')
+          .in('class_id', classIds)
+          .range(from, from + 999);
+        const rows = (enr ?? []) as Array<{ class_id: string; status: string }>;
+        for (const r of rows) {
+          if (r.status === 'ACCEPTED') enrolledCountById.set(r.class_id, (enrolledCountById.get(r.class_id) || 0) + 1);
+          else if (r.status === 'PENDING') pendingCountById.set(r.class_id, (pendingCountById.get(r.class_id) || 0) + 1);
+        }
+        if (rows.length < 1000) break;
+      }
+    }
+
+    const classes = classRows.map((c) => ({
+      ...c,
+      enrolledCount: enrolledCountById.get(c.id) || 0,
+      pendingCount: pendingCountById.get(c.id) || 0,
+    }));
 
     return NextResponse.json({ classes });
   } catch (error) {
