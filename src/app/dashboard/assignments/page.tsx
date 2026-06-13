@@ -10,14 +10,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Users, Search, ChevronRight, ChevronDown, Loader2, RefreshCw,
+  Users, Search, Loader2, RefreshCw,
   Printer, ExternalLink, ListChecks, History, PieChart, FileBarChart, TrendingUp,
-  Layers, Share2, Copy, Check, Ban,
 } from 'lucide-react';
+import { StudentTreePanel, gradeRank, type RosterStudent } from '@/components/class/StudentTreePanel';
+import { StudentLearningReport } from '@/components/class/StudentLearningReport';
 
-interface Student {
-  id: string; name: string; grade: string; className: string;
-}
+type Student = RosterStudent;
 interface Assignment {
   id: string; source: 'qr' | 'manual';
   student_id: string; student_name: string; grade: string;
@@ -25,29 +24,6 @@ interface Assignment {
   title: string; tag: string; issued_at: string | null;
   completed: boolean; problems_total: number; correct_cnt: number; score_pct: number | null;
 }
-// 진단 세트 (exam-sets API) — 보고서 탭의 "세트 리포트 보기" 딥링크용
-interface ExamSetLite {
-  setKey: string; setTitle: string; bookGroupName: string | null;
-  variants: Array<{ examId: string; variant: string | null; title: string }>;
-  students: Array<{ id: string; variantsTaken: Array<string | null> }>;
-}
-// 학부모 공유링크 발급 내역 (report-tokens API)
-interface ShareTokenItem {
-  kind: 'diagnostic_set' | 'pitfall' | 'exam';
-  path: string; title: string; label: string | null;
-  createdAt: string | null; expiresAt: string | null;
-  isActive: boolean; lastViewedAt: string | null;
-  revokeKind: 'parent_token' | 'exam_session'; revokeRef: string;
-}
-const TOKEN_KIND_LABEL: Record<ShareTokenItem['kind'], string> = {
-  diagnostic_set: '세트 리포트', pitfall: '함정 리포트', exam: '시험 리포트',
-};
-
-// 학년 정렬 순서 (초1 → 고3)
-const GRADE_ORDER: Record<string, number> = {};
-['초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3']
-  .forEach((g, i) => { GRADE_ORDER[g] = i; });
-const gradeRank = (g: string) => (g in GRADE_ORDER ? GRADE_ORDER[g] : 99);
 
 const TAG_COLOR = (tag: string): string => {
   if (tag.startsWith('시험지')) return 'text-rose-400';
@@ -69,76 +45,11 @@ export default function AssignmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [leftTab, setLeftTab] = useState<'grade' | 'class'>('grade');
-  const [studentSearch, setStudentSearch] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selStudent, setSelStudent] = useState<string | null>(null); // null = 전체
   const [titleSearch, setTitleSearch] = useState('');
   // 본문 상단 탭 (매쓰플랫 수업: 학습내역 | 학습지 | 보고서 + 유형분석 링크아웃)
-  //   보고서 = 학생별 학습지 리포트(이 페이지 데이터로 구성). 유형분석은 기존 히트맵으로 연결.
+  //   보고서 = 학생별 학습지 리포트(StudentLearningReport 공용 컴포넌트 — 수업 허브와 공유).
   const [tab, setTab] = useState<'history' | 'worksheet' | 'report'>('worksheet');
-
-  // ── 보고서 탭 허브 데이터 — 진단 세트(딥링크) + 공유링크 발급 내역 ──
-  const [examSets, setExamSets] = useState<ExamSetLite[] | null>(null); // null = 미로드
-  const [shareTokens, setShareTokens] = useState<ShareTokenItem[] | null>(null);
-  const [tokensLoading, setTokensLoading] = useState(false);
-  const [copiedRef, setCopiedRef] = useState<string | null>(null);
-
-  // 세트 목록 — 보고서 탭 첫 진입 시 1회 로드 (학생 무관 공용)
-  useEffect(() => {
-    if (tab !== 'report' || examSets !== null) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/diagnostics/exam-sets', { cache: 'no-store' });
-        const data = await res.json();
-        if (!cancelled) setExamSets(res.ok ? (data.sets || []) : []);
-      } catch { if (!cancelled) setExamSets([]); }
-    })();
-    return () => { cancelled = true; };
-  }, [tab, examSets]);
-
-  // 공유링크 내역 — 보고서 탭 + 학생 선택 시 학생별 로드
-  const loadShareTokens = async (studentId: string) => {
-    setTokensLoading(true);
-    try {
-      const res = await fetch(`/api/diagnostics/report-tokens?studentId=${encodeURIComponent(studentId)}`, { cache: 'no-store' });
-      const data = await res.json();
-      setShareTokens(res.ok ? (data.tokens || []) : []);
-    } catch { setShareTokens([]); } finally { setTokensLoading(false); }
-  };
-  useEffect(() => {
-    if (tab !== 'report' || !selStudent) { setShareTokens(null); return; }
-    void loadShareTokens(selStudent);
-  }, [tab, selStudent]);
-
-  const copyShareUrl = async (item: ShareTokenItem) => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}${item.path}`);
-      setCopiedRef(item.revokeRef);
-      setTimeout(() => setCopiedRef(null), 1500);
-    } catch { /* clipboard 거부 — 무시 */ }
-  };
-  const revokeToken = async (item: ShareTokenItem) => {
-    if (!selStudent) return;
-    if (!window.confirm('이 공유링크를 회수할까요? 학부모가 더 이상 열 수 없게 됩니다.')) return;
-    try {
-      const res = await fetch('/api/diagnostics/report-tokens', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: item.revokeKind, ref: item.revokeRef }),
-      });
-      if (res.ok) void loadShareTokens(selStudent);
-    } catch { /* 실패 시 목록 유지 */ }
-  };
-
-  // 선택 학생이 응시한 진단 세트 (세트 리포트 딥링크 카드)
-  const studentSets = useMemo(() => {
-    if (!selStudent || !examSets) return [];
-    return examSets
-      .map(s => ({ set: s, me: s.students.find(st => st.id === selStudent) }))
-      .filter((x): x is { set: ExamSetLite; me: { id: string; variantsTaken: Array<string | null> } } => !!x.me);
-  }, [examSets, selStudent]);
 
   const load = async () => {
     setLoading(true);
@@ -176,24 +87,6 @@ export default function AssignmentsPage() {
     return m;
   }, [assignments]);
 
-  // 좌측 트리 그룹 (학년 또는 반)
-  const groups = useMemo(() => {
-    const sq = studentSearch.trim().toLowerCase();
-    const visible = sq ? students.filter(s => s.name.toLowerCase().includes(sq)) : students;
-    const map = new Map<string, Student[]>();
-    for (const s of visible) {
-      const key = leftTab === 'grade' ? (s.grade || '미지정') : (s.className || '미배정');
-      (map.get(key) ?? map.set(key, []).get(key)!).push(s);
-    }
-    return Array.from(map.entries())
-      .map(([key, list]) => ({ key, list: list.sort((a, b) => a.name.localeCompare(b.name, 'ko')) }))
-      .sort((a, b) =>
-        leftTab === 'grade'
-          ? (gradeRank(a.key) - gradeRank(b.key)) || a.key.localeCompare(b.key, 'ko')
-          : a.key.localeCompare(b.key, 'ko'),
-      );
-  }, [students, studentSearch, leftTab]);
-
   // 본문 필터: 선택 학생 + 제목 검색
   const filtered = useMemo(() => {
     let rows = assignments;
@@ -206,14 +99,6 @@ export default function AssignmentsPage() {
   const selStudentName = selStudent
     ? (students.find(s => s.id === selStudent)?.name || '학생')
     : null;
-
-  const toggleGroup = (key: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
 
   const summary = useMemo(() => {
     const total = filtered.length;
@@ -257,96 +142,14 @@ export default function AssignmentsPage() {
 
   return (
     <div className="flex h-[calc(100vh-7rem)] rounded-2xl border border-white/10 overflow-hidden bg-surface-card text-content-primary">
-      {/* ===== 좌측: 학년/반 트리 ===== */}
-      <aside className="w-72 flex-shrink-0 border-r border-white/10 flex flex-col bg-surface-raised/30">
-        <div className="px-4 py-3 border-b border-white/10">
-          <div className="flex items-center gap-2 font-bold">
-            <Users size={18} className="text-sky-400" /> 수업
-          </div>
-        </div>
-        {/* 학년/반 탭 */}
-        <div className="flex border-b border-white/10">
-          {([['grade', '학년'], ['class', '반']] as const).map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setLeftTab(v)}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                leftTab === v ? 'text-sky-300 border-b-2 border-sky-400' : 'text-content-tertiary hover:text-content-primary'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {/* 학생 검색 */}
-        <div className="p-3">
-          <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-tertiary" />
-            <input
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-              placeholder="학생 이름 검색"
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm focus:border-sky-500 focus:outline-none"
-            />
-          </div>
-        </div>
-        {/* 전체 + 트리 */}
-        <div className="flex-1 overflow-y-auto px-2 pb-4">
-          <button
-            type="button"
-            onClick={() => setSelStudent(null)}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold mb-1 ${
-              selStudent === null ? 'bg-sky-500/15 text-sky-300' : 'hover:bg-white/5 text-content-secondary'
-            }`}
-          >
-            <span className="flex items-center gap-1.5"><Users size={14} /> 전체</span>
-            <span className="text-xs text-content-tertiary">{students.length}명</span>
-          </button>
-
-          {groups.map(({ key, list }) => {
-            const open = expanded.has(key) || !!studentSearch.trim();
-            return (
-              <div key={key} className="mb-0.5">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(key)}
-                  className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/5 text-sm"
-                >
-                  <span className="flex items-center gap-1">
-                    {open ? <ChevronDown size={14} className="text-content-tertiary" /> : <ChevronRight size={14} className="text-content-tertiary" />}
-                    <span className="font-semibold">{key}</span>
-                  </span>
-                  <span className="text-xs text-content-tertiary">{list.length}명</span>
-                </button>
-                {open && (
-                  <div className="ml-4 border-l border-white/10">
-                    {list.map((s) => {
-                      const cnt = countByStudent.get(s.id) || 0;
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setSelStudent(s.id)}
-                          className={`w-full flex items-center justify-between pl-3 pr-2 py-1.5 text-sm rounded-r-lg ${
-                            selStudent === s.id ? 'bg-sky-500/15 text-sky-300 font-medium' : 'hover:bg-white/5 text-content-secondary'
-                          }`}
-                        >
-                          <span className="truncate">{s.name}</span>
-                          {cnt > 0 && <span className="text-[10px] text-content-tertiary tabular-nums">{cnt}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {groups.length === 0 && (
-            <div className="text-center text-xs text-content-tertiary py-8">학생이 없습니다.</div>
-          )}
-        </div>
-      </aside>
+      {/* ===== 좌측: 학년/반 트리 (공용 컴포넌트 — 수업 허브와 공유) ===== */}
+      <StudentTreePanel
+        header={<><ListChecks size={18} className="text-sky-400" /> 출제 관리</>}
+        students={students}
+        counts={countByStudent}
+        selected={selStudent}
+        onSelect={setSelStudent}
+      />
 
       {/* ===== 본문: 학습지 목록 ===== */}
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -580,200 +383,15 @@ export default function AssignmentsPage() {
             ) : studentTimeline.length === 0 ? (
               <div className="text-center py-24 text-content-tertiary text-sm">{selStudentName} 학생 출제 내역이 없어 보고서를 만들 수 없습니다.</div>
             ) : (
-              (() => {
-                const rows = studentTimeline;
-                const scored = rows.filter(r => r.score_pct != null);
-                const avg = scored.length ? Math.round(scored.reduce((s, r) => s + (r.score_pct || 0), 0) / scored.length) : null;
-                const doneN = rows.filter(r => r.completed).length;
-                // 약점 = 점수 낮은 순 상위 5 (60점 미만 우선)
-                const weak = [...scored].sort((a, b) => (a.score_pct || 0) - (b.score_pct || 0)).slice(0, 5);
-                const tone = (p: number) => p >= 80 ? 'text-emerald-300' : p >= 60 ? 'text-amber-300' : 'text-rose-300';
-                const bar = (p: number) => p >= 80 ? 'bg-emerald-500' : p >= 60 ? 'bg-amber-500' : 'bg-rose-500';
-                const stuMeta = students.find(s => s.id === selStudent);
-                return (
-                  <div className="max-w-3xl mx-auto space-y-5">
-                    {/* 헤더 카드 */}
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-                      <div className="flex items-center justify-between flex-wrap gap-3">
-                        <div>
-                          <div className="text-xl font-bold">{selStudentName} 학습 보고서</div>
-                          <div className="text-xs text-content-tertiary mt-0.5">
-                            {stuMeta?.grade || ''}{stuMeta?.className ? ` · ${stuMeta.className}` : ''} · 출제 {rows.length}건
-                          </div>
-                        </div>
-                        <div className="flex gap-3 text-center">
-                          <div>
-                            <div className={`text-2xl font-bold tabular-nums ${avg != null ? tone(avg) : 'text-content-tertiary'}`}>{avg != null ? `${avg}점` : '-'}</div>
-                            <div className="text-[10px] text-content-tertiary uppercase tracking-wide">평균</div>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold tabular-nums text-content-secondary">{doneN}/{rows.length}</div>
-                            <div className="text-[10px] text-content-tertiary uppercase tracking-wide">완료</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2">
-                        <Link href={`/dashboard/prescription/report?studentId=${selStudent}`} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
-                          <FileBarChart size={13} /> 리포트 생성 도구 <ExternalLink size={10} className="opacity-50" />
-                        </Link>
-                        <Link href={`/tutor/analytics?studentId=${selStudent}`} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
-                          <PieChart size={13} /> 단원 히트맵 <ExternalLink size={10} className="opacity-50" />
-                        </Link>
-                      </div>
-                    </div>
-
-                    {/* 진단 세트 리포트 — 응시 세트 자동 감지 → setKey 딥링크로 바로 보기 */}
-                    {studentSets.length > 0 && (
-                      <div className="rounded-2xl border border-white/10 p-5">
-                        <div className="flex items-center gap-2 text-sm font-bold mb-3">
-                          <Layers size={15} className="text-violet-400" /> 진단 세트 리포트
-                        </div>
-                        <div className="space-y-1.5">
-                          {studentSets.map(({ set, me }) => (
-                            <div key={set.setKey} className="flex items-center gap-3 text-sm">
-                              <span className="flex-1 truncate" title={set.setTitle}>
-                                {set.setTitle}
-                                {set.bookGroupName && <span className="text-content-tertiary text-xs ml-1.5">{set.bookGroupName}</span>}
-                              </span>
-                              <span className="text-[11px] text-content-tertiary">
-                                {me.variantsTaken.map(v => v || '-').join('·')} 응시
-                              </span>
-                              <Link
-                                href={`/dashboard/prescription/report?setKey=${encodeURIComponent(set.setKey)}&studentId=${encodeURIComponent(selStudent!)}`}
-                                className="text-xs px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300 hover:bg-violet-500/20 flex items-center gap-1 flex-shrink-0"
-                              >
-                                세트 리포트 보기 <ExternalLink size={10} className="opacity-60" />
-                              </Link>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 점수 추이 */}
-                    <div className="rounded-2xl border border-white/10 p-5">
-                      <div className="flex items-center gap-2 text-sm font-bold mb-4"><TrendingUp size={15} className="text-sky-400" /> 점수 추이</div>
-                      {scored.length === 0 ? (
-                        <div className="text-xs text-content-tertiary">채점된 출제가 없습니다.</div>
-                      ) : (
-                        <div className="flex items-end gap-1.5 h-32">
-                          {scored.map((r) => (
-                            <div key={`${r.source}-${r.id}`} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0" title={`${r.title} · ${r.score_pct}점`}>
-                              <span className={`text-[10px] tabular-nums ${tone(r.score_pct || 0)}`}>{r.score_pct}</span>
-                              <div className={`w-full rounded-t ${bar(r.score_pct || 0)}`} style={{ height: `${Math.max(4, (r.score_pct || 0) * 0.9)}%` }} />
-                              <span className="text-[9px] text-content-tertiary truncate w-full text-center">{fmtDate(r.issued_at).slice(3)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 약점 (점수 낮은 출제) */}
-                    {weak.length > 0 && (
-                      <div className="rounded-2xl border border-white/10 p-5">
-                        <div className="flex items-center gap-2 text-sm font-bold mb-3"><History size={15} className="text-rose-400" /> 보완 필요 — 점수 낮은 출제</div>
-                        <div className="space-y-1.5">
-                          {weak.map((r) => (
-                            <div key={`w-${r.source}-${r.id}`} className="flex items-center gap-3 text-sm">
-                              <span className={`text-xs font-medium w-14 ${TAG_COLOR(r.tag)}`}>{r.tag}</span>
-                              <span className="flex-1 truncate" title={r.title}>{r.title}</span>
-                              <span className="text-[11px] text-content-tertiary w-14 text-right">{fmtDate(r.issued_at)}</span>
-                              <span className={`text-sm font-bold tabular-nums w-12 text-right ${tone(r.score_pct || 0)}`}>{r.score_pct}점</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 전체 출제 목록 */}
-                    <div className="rounded-2xl border border-white/10 overflow-hidden">
-                      <div className="px-5 py-3 text-sm font-bold border-b border-white/10 bg-white/[0.02]">전체 출제 ({rows.length})</div>
-                      <div className="divide-y divide-white/5">
-                        {[...rows].reverse().map((r) => (
-                          <div key={`all-${r.source}-${r.id}`} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-                            <span className="text-[11px] text-content-tertiary w-14 tabular-nums">{fmtDate(r.issued_at)}</span>
-                            <span className={`text-xs font-medium w-14 ${TAG_COLOR(r.tag)}`}>{r.tag}</span>
-                            <span className="flex-1 truncate" title={r.title}>{r.title}</span>
-                            <span className="w-16 text-right">
-                              {r.score_pct != null ? (
-                                <span className={`font-bold tabular-nums ${tone(r.score_pct)}`}>{r.score_pct}점</span>
-                              ) : <span className="text-xs text-content-tertiary">{r.completed ? '채점대기' : '미응시'}</span>}
-                            </span>
-                            {/* 개별 시험지 리포트 — 채점된 시험만 (exam 연결 + 점수 존재) */}
-                            <span className="w-14 text-right flex-shrink-0">
-                              {r.exam_id && r.score_pct != null ? (
-                                <Link
-                                  href={`/dashboard/exam-analysis/${r.exam_id}/students/${r.student_id}`}
-                                  className="text-[11px] px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20"
-                                >
-                                  리포트
-                                </Link>
-                              ) : null}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 학부모 공유링크 발급 내역 */}
-                    <div className="rounded-2xl border border-white/10 p-5">
-                      <div className="flex items-center gap-2 text-sm font-bold mb-3">
-                        <Share2 size={15} className="text-emerald-400" /> 학부모 공유링크 내역
-                        {shareTokens && <span className="text-xs font-normal text-content-tertiary">({shareTokens.length})</span>}
-                      </div>
-                      {tokensLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-content-tertiary py-3">
-                          <Loader2 size={13} className="animate-spin" /> 불러오는 중...
-                        </div>
-                      ) : !shareTokens || shareTokens.length === 0 ? (
-                        <div className="text-xs text-content-tertiary py-2">
-                          발급된 공유링크가 없습니다. 세트 리포트 화면 또는 개별 시험 리포트에서 학부모 링크를 발급할 수 있습니다.
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {shareTokens.map((t) => (
-                            <div key={`${t.revokeKind}-${t.revokeRef}`} className={`flex items-center gap-3 text-sm ${t.isActive ? '' : 'opacity-50'}`}>
-                              <span className={`text-[11px] font-medium w-16 flex-shrink-0 ${
-                                t.kind === 'diagnostic_set' ? 'text-violet-300' : t.kind === 'exam' ? 'text-sky-300' : 'text-amber-300'
-                              }`}>{TOKEN_KIND_LABEL[t.kind]}</span>
-                              <span className="flex-1 truncate" title={t.title}>
-                                {t.title}
-                                {t.label && <span className="text-content-tertiary text-xs ml-1.5">{t.label}</span>}
-                              </span>
-                              <span className="text-[11px] text-content-tertiary w-14 text-right tabular-nums">{fmtDate(t.createdAt)}</span>
-                              <span className="text-[11px] w-16 text-right flex-shrink-0">
-                                {!t.isActive ? <span className="text-rose-300">회수/만료</span>
-                                  : t.lastViewedAt ? <span className="text-emerald-300" title={`열람 ${fmtDate(t.lastViewedAt)}`}>열람됨</span>
-                                  : <span className="text-content-tertiary">미열람</span>}
-                              </span>
-                              <span className="flex items-center gap-1 flex-shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => void copyShareUrl(t)}
-                                  disabled={!t.isActive}
-                                  title="링크 복사"
-                                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  {copiedRef === t.revokeRef ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void revokeToken(t)}
-                                  disabled={!t.isActive}
-                                  title="링크 회수"
-                                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-rose-500/20 hover:border-rose-500/40 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  <Ban size={12} />
-                                </button>
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()
+              <StudentLearningReport
+                student={{
+                  id: selStudent,
+                  name: selStudentName || '학생',
+                  grade: students.find(s => s.id === selStudent)?.grade,
+                  className: students.find(s => s.id === selStudent)?.className,
+                }}
+                rows={studentTimeline}
+              />
             )}
           </div>
         )}

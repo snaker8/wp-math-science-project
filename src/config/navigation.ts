@@ -260,6 +260,15 @@ export const tutorNavItems: NavItem[] = [
     activeColor: 'bg-sky-500/10 text-sky-400',
     group: 'tutor',
   },
+  {
+    // ★ 인덱스 [12] — 수업 허브 (IA Phase 2, 2026-06-12). 배열 끝 append 필수.
+    href: '/dashboard/class',
+    icon: Users,
+    label: '수업 홈',
+    description: '학생별 종합 — 학습 보고서·진단 리포트·공유링크 한 곳',
+    activeColor: 'bg-sky-500/10 text-sky-400',
+    group: 'tutor',
+  },
 ];
 
 // 시스템 메뉴
@@ -340,12 +349,14 @@ export const topNavGroups: NavGroup[] = [
       dashboardNavItems[5], // 출판교재유사
     ],
   },
-  // ── 2) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러). ──
+  // ── 2) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러).
+  //   수업 홈(/dashboard/class) = Phase 2 허브 — 학생 선택 시 보고서·진단·공유 한 화면. ──
   {
     id: 'class',
     label: '수업',
     icon: Users,
     children: [
+      tutorNavItems[12], // ★ 수업 홈 (허브)
       tutorNavItems[8],  // 학생 성적
       tutorNavItems[5],  // 학생 진단
       tutorNavItems[10], // 진단 종합 리포트
