@@ -20,7 +20,6 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-react';
-import { supabaseBrowser } from '@/lib/supabase/client';
 
 interface ClassItem {
   id: string;
@@ -47,49 +46,26 @@ export default function ClassesPage() {
   }, []);
 
   const loadClasses = async () => {
-    if (!supabaseBrowser) {
-      setLoading(false);
-      return;
-    }
     try {
-      const { data: { user } } = await supabaseBrowser.auth.getUser();
-      if (!user) return;
-
-      const { data: classesData } = await supabaseBrowser
-        .from('classes')
-        .select('*')
-        .eq('tutor_id', user.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      const classesWithStats: ClassItem[] = [];
-      for (const cls of classesData || []) {
-        const { count: enrolledCount } = await supabaseBrowser
-          .from('class_enrollments')
-          .select('*', { count: 'exact', head: true })
-          .eq('class_id', cls.id)
-          .eq('status', 'ACCEPTED');
-
-        const { count: pendingCount } = await supabaseBrowser
-          .from('class_enrollments')
-          .select('*', { count: 'exact', head: true })
-          .eq('class_id', cls.id)
-          .eq('status', 'PENDING');
-
-        classesWithStats.push({
-          id: cls.id,
-          name: cls.name,
-          description: cls.description,
-          subject: cls.subject,
-          grade: cls.grade,
-          maxStudents: cls.max_students,
-          isActive: cls.is_active,
-          enrolledCount: enrolledCount || 0,
-          pendingCount: pendingCount || 0,
-          createdAt: cls.created_at,
-        });
-      }
-      setClasses(classesWithStats);
+      // ★ 역할 인지 API — 관리자(원장/super_admin/ORG_ADMIN)는 학원 내 모든 반(다른 선생님 반 포함),
+      //   강사는 자기 반만. 인원 카운트·활성학원 핀은 서버가 처리. (기존 supabaseBrowser 직접 쿼리는
+      //   role 무시하고 tutor_id=본인 으로 고정돼 관리자도 자기 반만 보이던 문제.)
+      const res = await fetch('/api/classes', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const rows = (data.classes || []) as Array<Record<string, unknown>>;
+      setClasses(rows.map((cls) => ({
+        id: cls.id as string,
+        name: cls.name as string,
+        description: (cls.description as string | null) ?? null,
+        subject: (cls.subject as string | null) ?? null,
+        grade: (cls.grade as number | null) ?? null,
+        maxStudents: (cls.max_students as number) ?? 30,
+        isActive: cls.is_active !== false,
+        enrolledCount: (cls.enrolledCount as number) || 0,
+        pendingCount: (cls.pendingCount as number) || 0,
+        createdAt: cls.created_at as string,
+      })));
     } catch (error) {
       console.error('Classes load error:', error);
     } finally {
@@ -99,12 +75,13 @@ export default function ClassesPage() {
 
   const handleDeleteClass = async (classId: string) => {
     if (!confirm('정말 이 반을 삭제하시겠습니까?')) return;
-    if (!supabaseBrowser) return;
     try {
-      await supabaseBrowser
-        .from('classes')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', classId);
+      // ★ 역할 가드 있는 DELETE API — 관리자는 다른 선생님 반도 삭제 가능(RLS 직접 update 는 막힘).
+      const res = await fetch(`/api/classes/${classId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
       setClasses((prev) => prev.filter((c) => c.id !== classId));
       setMenuOpenId(null);
     } catch (error) {
