@@ -306,7 +306,6 @@ function ExamProblemRendererInner({
   const splitAtFirstQuestionMark = (text: string): [string, string, boolean] => {
     let inDollar = false;
     let inSingleDollar = false;
-    let firstNewlineIdx = -1;
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
       const next = text[i + 1];
@@ -318,21 +317,19 @@ function ExamProblemRendererInner({
       if (ch === '?' && !inDollar && !inSingleDollar) {
         return [text.slice(0, i + 1), text.slice(i + 1), true];
       }
-      // 수식 밖 첫 줄바꿈 기억 (폴백용)
-      if (ch === '\n' && !inDollar && !inSingleDollar && firstNewlineIdx === -1) {
-        firstNewlineIdx = i;
-      }
     }
-    // ★ '?' 없을 때 — 첫 줄이 "질문 지시어(~시오/~하라 등)"로 끝나는 경우에만 첫 \n 직전에 배지.
-    //   (15번류: "…구하시오.\n<보기>" → 보기 박스 위에 배지.)
-    //   첫 줄이 지시어로 안 끝나면(3번류: "연립방정식{…}\n의 해는\n…구하시오." 처럼 cases가
-    //   먼저·질문이 뒤) 폴백하지 않고 false → isLastText 가 텍스트 끝(질문 뒤)에 배지 부착.
-    //   ※ 단순 첫-\n 폴백은 3번 배지를 "의 해는" 뒤(중간)로 보내는 회귀를 일으켰음(브라우저 실측).
-    if (firstNewlineIdx > 0) {
-      const before = text.slice(0, firstNewlineIdx).trimEnd();
-      if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
-        return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
-      }
+    // ★ '?' 없을 때 — 본문 어디서든 "지시어(~시오/하라/여라/구하라)로 끝나는 문장"이 줄끝/텍스트끝인
+    //   첫 위치 뒤에 배지를 붙인다.
+    //   - 15번류 "…구하시오.\n<보기>" → 보기 박스 위(명령문 뒤).
+    //   - ★ 논술형류 "…서술하시오.\n(i)…(가)…따라서…" → 명령문이 본문 중간이고 뒤에 증명 템플릿이
+    //     따라오는 경우, 배지가 맨 끝(따라서…결론줄)이 아니라 명령문 뒤에 붙음(사용자 보고 수정).
+    //   - 3번류 "연립방정식{…}\n의 해는\n…구하시오." → 지시어가 맨 끝이라 결과적으로 텍스트 끝에 부착(불변).
+    //   '지시어+줄끝/텍스트끝' 조건이라 "의 해는" 같은 비지시어 뒤 오삽입 회귀 없음(단순 첫-\n 폴백 금지).
+    const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/;
+    const dm = directiveRe.exec(text);
+    if (dm) {
+      const end = dm.index + dm[0].length;
+      return [text.slice(0, end), text.slice(end), true];
     }
     return [text, '', false];
   };
