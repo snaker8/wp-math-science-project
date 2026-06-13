@@ -2071,9 +2071,10 @@ function ExamPaperView({
               fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
             }}
           >
-            {/* 헤더 — 첫 페이지만 */}
+            {/* 헤더 — 첫 페이지만. 가운데 구분선(page-anchored)이 헤더 위로 지나가지 않도록
+                흰 배경 + z-index 로 선을 덮음. */}
             {pageIdx === 0 && (
-              <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '16px', position: 'relative', zIndex: 2, background: '#fff' }}>
                 <EditableExamHeader
                   templateId={templateId}
                   meta={examMeta}
@@ -2097,22 +2098,8 @@ function ExamPaperView({
                   gridAutoFlow: 'column',
                   columnGap: `${COLUMN_GAP}px`,
                   alignItems: 'start',
-                  position: 'relative',
                 }}
               >
-                {/* 가운데 세로 구분선 — Grid 는 column-rule 불가 → absolute 세로선.
-                    out-of-flow(width 0)라 측정/분할 기하에 영향 없음. border 라 배경 인쇄 설정과 무관하게 출력됨 */}
-                <div
-                  aria-hidden
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    bottom: 0,
-                    left: '50%',
-                    width: 0,
-                    borderLeft: '1px solid #d4d4d4',
-                  }}
-                />
                 {pageProblems.map((problem) => (
                   <div
                     key={problem.id}
@@ -2141,6 +2128,26 @@ function ExamPaperView({
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* ★ 가운데 세로 구분선 — 2단일 때 페이지 하단까지.
+                ★★ 그리드/내용이 아니라 페이지(.exam-page, 고정 높이) 자체에 앵커한 독립 absolute 선.
+                   top/bottom = PRINT_PAD_Y(내용영역 상·하단)라 내용 길이와 무관하게 항상 끝까지 내려감.
+                   width:0 out-of-flow → 측정·페이지분할·KaTeX 레이아웃에 일절 영향 없음(수식 회귀 차단).
+                   border 라 브라우저 '배경 그래픽' 설정과 무관하게 인쇄됨. 헤더(z-index:2 흰배경)가 윗부분을 덮음. */}
+            {columns === 2 && (
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: `${PRINT_PAD_Y}px`,
+                  bottom: `${PRINT_PAD_Y}px`,
+                  width: 0,
+                  borderLeft: '1px solid #d4d4d4',
+                  zIndex: 1,
+                }}
+              />
             )}
 
             {/* 페이지 번호 */}
