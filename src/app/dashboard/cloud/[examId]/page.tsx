@@ -2093,7 +2093,10 @@ function ExamPaperView({
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
+                  // ★ minmax(0,1fr) — 정확히 반반 고정. '1fr'(=minmax(auto,1fr))은 넓은 내용
+                  //   (18번 cases 등)이 든 칸을 늘려 좌우 폭이 틀어지고 가운데 선이 칸 중앙을 벗어났음.
+                  //   measureWidth=(A4_W-PAGE_PAD*2-COLUMN_GAP)/2 와도 일치 → 측정·분할 정확.
+                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
                   gridTemplateRows: `repeat(${Math.max(1, Math.ceil(pageProblems.length / 2))}, auto)`,
                   gridAutoFlow: 'column',
                   columnGap: `${COLUMN_GAP}px`,
