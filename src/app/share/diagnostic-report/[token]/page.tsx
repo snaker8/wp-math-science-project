@@ -49,7 +49,7 @@ export default function Page() {
               <h1 className="text-xl font-bold">진단평가 종합 리포트</h1>
               <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">학부모 공유</span>
             </div>
-            <p className="mt-0.5 text-xs text-zinc-400">과사람 수학 · 자녀의 진단평가 결과를 분석한 리포트입니다</p>
+            <p className="mt-0.5 text-xs text-zinc-400">{report?.instituteName || '과사람 수학'} · 자녀의 진단평가 결과를 분석한 리포트입니다</p>
           </div>
         </div>
       </header>

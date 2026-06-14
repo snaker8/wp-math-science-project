@@ -205,7 +205,7 @@ export function ComprehensiveReportView({ report, actionSlot, showStaffActions =
         </div>
       </Panel>
 
-      <p className="text-center text-[10px] text-zinc-600 pt-1">과사람 수학 · 진단평가 종합 리포트</p>
+      <p className="text-center text-[10px] text-zinc-600 pt-1">{report.instituteName || '과사람 수학'} · 진단평가 종합 리포트</p>
     </div>
   );
 }

@@ -21,6 +21,7 @@ interface OgData {
   graded: number;
   variants: number;
   total: number;
+  brand: string;
 }
 
 function rangeOf(setTitle: string): string {
@@ -45,7 +46,7 @@ async function fetchOgData(token: string): Promise<OgData | null> {
     examIds.length > 0 ? examIds : undefined,
   );
   if (!result.ok) return null;
-  const { student, set, overall } = result.payload;
+  const { student, set, overall, instituteName } = result.payload;
   return {
     name: student.name,
     range: rangeOf(set.setTitle),
@@ -53,6 +54,7 @@ async function fetchOgData(token: string): Promise<OgData | null> {
     graded: set.gradedVariantCount,
     variants: set.variantCount,
     total: overall.total,
+    brand: instituteName || '과사람 수학',
   };
 }
 
@@ -112,7 +114,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ display: 'flex', width: 16, height: 16, borderRadius: 5, marginRight: 12,
                 background: 'linear-gradient(135deg, #22d3ee, #6366f1)' }} />
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#e5e7eb', letterSpacing: '-0.01em' }}>과사람 수학</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#e5e7eb', letterSpacing: '-0.01em' }}>{data.brand}</div>
             </div>
           </div>
 

@@ -54,10 +54,11 @@ export async function generateMetadata(
     if (!result.ok) return fallback;
     const { student, set, overall } = result.payload;
 
+    const brand = result.payload.instituteName || '과사람 수학';
     const range = rangeOf(set.setTitle);
     const title = `${student.name} · 진단평가 종합 리포트`;
     const pctStr = overall.pct != null ? `합산 정답률 ${overall.pct}%` : '채점 진행 중';
-    const description = `${range} · ${pctStr} · A·B·C ${set.gradedVariantCount}/${set.variantCount} 채점 — 과사람 수학`;
+    const description = `${range} · ${pctStr} · A·B·C ${set.gradedVariantCount}/${set.variantCount} 채점 — ${brand}`;
 
     return {
       metadataBase: METADATA_BASE,
