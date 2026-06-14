@@ -99,10 +99,19 @@ export async function PATCH(
     if (answer_json && typeof answer_json === 'object') {
       const aj = answer_json as Record<string, any>;
       if (aj.type === 'multiple_choice') {
-        const { normalizeObjectiveAnswer, isEmptyAnswer, isValidObjectiveAnswer } = await import('@/lib/validation/objective-answer');
+        const { isEmptyAnswer, isValidObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const ans = aj.correct_answer ?? aj.finalAnswer;
-        if (!isEmptyAnswer(ans) && !isValidObjectiveAnswer(ans)) {
-          // 단답형 misclassification — type 보정 + 답 원본 보존
+        // ★★ 객관식 미선택 sentinel(숫자 0 / "0") → 빈값. (2026-06-12)
+        //   객관식 정답은 ①~⑤(1~5)뿐 — 0 은 "미선택" 이지 단답형 답이 아니다.
+        //   기존엔 0 이 isEmptyAnswer=false·isValidObjective=false 라 아래 misclassification 분기에
+        //   걸려 short_answer 로 flip + 0 보존 → 빠른답에 "0" 박힘 사고. (모달이 동그라미 답을
+        //   못 읽어 0 으로 저장하던 버그와 합쳐져 발생)
+        if (ans === 0 || ans === '0') {
+          aj.correct_answer = '';
+          aj.finalAnswer = '';
+          console.log(`[API/problems] 객관식 미선택(0) → 빈값: ${problemId.slice(0, 8)}`);
+        } else if (!isEmptyAnswer(ans) && !isValidObjectiveAnswer(ans)) {
+          // 단답형 misclassification — type 보정 + 답 원본 보존 (문자열 "13" 등)
           aj.type = 'short_answer';
           // correct_answer/finalAnswer 는 이미 원본 — 그대로 둠
           console.log(`[API/problems] type misclassification 보정: ${problemId.slice(0, 8)} multiple_choice → short_answer (ans=${JSON.stringify(ans)})`);
