@@ -231,7 +231,7 @@ function ReportContent() {
           <ComprehensiveReportView
             report={report}
             showStaffActions
-            actionSlot={<ParentLinkBar studentId={report.student.id} setKey={report.set.setKey} />}
+            actionSlot={<ParentLinkBar studentId={report.student.id} setKey={report.set.setKey} examIds={examIdsParam ? examIdsParam.split(',').map((s) => s.trim()).filter(Boolean) : undefined} />}
           />
         ) : null}
       </div>
@@ -240,7 +240,7 @@ function ReportContent() {
 }
 
 // 학부모 링크 발급 + 복사
-function ParentLinkBar({ studentId, setKey }: { studentId: string; setKey: string }) {
+function ParentLinkBar({ studentId, setKey, examIds }: { studentId: string; setKey: string; examIds?: string[] }) {
   const [issuing, setIssuing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
@@ -252,7 +252,8 @@ function ParentLinkBar({ studentId, setKey }: { studentId: string; setKey: strin
       const res = await fetch('/api/diagnostics/report/issue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, setKey }),
+        // ★ 자유 조합이면 examIds 동봉 — 공유 토큰이 그 조합으로 재계산되도록(set_key 만으론 못 찾음).
+        body: JSON.stringify({ studentId, setKey, examIds: examIds && examIds.length > 0 ? examIds : undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -269,7 +270,7 @@ function ParentLinkBar({ studentId, setKey }: { studentId: string; setKey: strin
     } finally {
       setIssuing(false);
     }
-  }, [studentId, setKey]);
+  }, [studentId, setKey, examIds]);
 
   return (
     <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex flex-wrap items-center justify-between gap-3">

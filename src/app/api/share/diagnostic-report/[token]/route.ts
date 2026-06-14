@@ -23,21 +23,26 @@ export async function GET(
 
   const { data: tokenRow, error: tErr } = await sb
     .from('parent_share_tokens')
-    .select('token, student_id, set_key, report_kind, is_active, expires_at, label')
+    .select('token, student_id, set_key, exam_ids, report_kind, is_active, expires_at, label')
     .eq('token', token)
     .maybeSingle();
   if (tErr || !tokenRow) return NextResponse.json({ error: '유효하지 않은 링크입니다' }, { status: 404 });
 
-  const t = tokenRow as { student_id: string; set_key: string | null; report_kind: string; is_active: boolean; expires_at: string | null; label: string | null };
+  const t = tokenRow as { student_id: string; set_key: string | null; exam_ids: string | null; report_kind: string; is_active: boolean; expires_at: string | null; label: string | null };
   if (!t.is_active) return NextResponse.json({ error: '비활성화된 링크입니다' }, { status: 403 });
   if (t.expires_at && new Date(t.expires_at).getTime() < Date.now()) {
     return NextResponse.json({ error: '만료된 링크입니다' }, { status: 403 });
   }
-  if (t.report_kind !== 'diagnostic_set' || !t.set_key) {
+  // ★ 자유 조합(exam_ids) 토큰은 set_key 가 'none::자유 조합' 합성값이라 examIds 로 계산.
+  const examIds = t.exam_ids ? t.exam_ids.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  if (t.report_kind !== 'diagnostic_set' || (!t.set_key && examIds.length === 0)) {
     return NextResponse.json({ error: '진단 종합 리포트 링크가 아닙니다' }, { status: 400 });
   }
 
-  const result = await computeComprehensiveReport(sb, t.student_id, t.set_key);
+  const result = await computeComprehensiveReport(
+    sb, t.student_id, t.set_key || 'none::자유 조합',
+    examIds.length > 0 ? examIds : undefined,
+  );
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
   // last_viewed_at 갱신 (백그라운드)
