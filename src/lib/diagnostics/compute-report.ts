@@ -27,6 +27,8 @@ export interface VariantResult {
   items: VariantItem[]; byUnit: VariantUnitStat[];
 }
 export interface ComprehensiveReportPayload {
+  // ★ 소속(학원) 표시명 — 학부모 리포트 상단/썸네일 브랜드. null 이면 소비자가 '과사람 수학' 폴백.
+  instituteName: string | null;
   student: { id: string; name: string; grade: number | null; source: 'user' | 'roster' };
   set: { setKey: string; bookGroupId: string | null; setTitle: string; variantCount: number; gradedVariantCount: number };
   overall: { total: number; correct: number; pct: number | null };
@@ -307,7 +309,28 @@ export async function computeComprehensiveReport(
   variantResults.sort((a, b) => (variantRank[a.variant ?? 'Z'] ?? 9) - (variantRank[b.variant ?? 'Z'] ?? 9));
   const gradedVariantCount = variantResults.filter((v) => v.graded).length;
 
+  // ── 소속(학원) 표시명 — display_name > 학원명(organization) > institute.name.
+  //   엄궁차수학/본원 처럼 institute.name 이 일반적('본원')이면 학원명(org)이 더 적절하므로 org 우선 폴백.
+  let instituteName: string | null = null;
+  if (studentInstituteId) {
+    const { data: inst } = await sb
+      .from('institutes')
+      .select('name, display_name, organization_id')
+      .eq('id', studentInstituteId)
+      .maybeSingle();
+    if (inst) {
+      const ii = inst as { name: string | null; display_name: string | null; organization_id: string | null };
+      let orgName: string | null = null;
+      if (!ii.display_name && ii.organization_id) {
+        const { data: org } = await sb.from('organizations').select('name').eq('id', ii.organization_id).maybeSingle();
+        orgName = (org as { name: string | null } | null)?.name ?? null;
+      }
+      instituteName = ii.display_name || orgName || ii.name || null;
+    }
+  }
+
   const payload: ComprehensiveReportPayload = {
+    instituteName,
     student: { id: studentId, name: studentName, grade: studentGrade, source: studentSource },
     set: { setKey: makeSetKey(bookGroupId, setTitle), bookGroupId, setTitle, variantCount: variantExams.length, gradedVariantCount },
     overall: { total: overallTotal, correct: overallCorrect, pct: overallTotal > 0 ? Math.round((overallCorrect / overallTotal) * 1000) / 10 : null },
