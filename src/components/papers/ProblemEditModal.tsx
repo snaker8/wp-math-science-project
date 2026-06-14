@@ -1011,13 +1011,24 @@ export function ProblemEditModal({
   });
   const [correctAnswer, setCorrectAnswer] = useState<number>(() => {
     const ans = initialAnswer?.correct_answer || initialAnswer?.finalAnswer;
-    if (typeof ans === 'number') return ans;
-    if (typeof ans === 'string' && /^\d$/.test(ans)) return Number(ans);
+    if (typeof ans === 'number') return ans >= 1 && ans <= 5 ? ans : 0;
+    if (typeof ans === 'string') {
+      const s = ans.trim();
+      // ★ 동그라미 객관식 답(①~⑤) 복원 — 안 하면 0 으로 기본값 → 저장 시 업로드 답이 0 으로 덮임.
+      const circ = ['①', '②', '③', '④', '⑤'].indexOf(s);
+      if (circ >= 0) return circ + 1;
+      if (/^[1-5]$/.test(s)) return Number(s);
+    }
     return 0;
   });
   const [subjectiveAnswer, setSubjectiveAnswer] = useState<string>(() => {
     const ans = initialAnswer?.correct_answer || initialAnswer?.finalAnswer;
-    if (typeof ans === 'string' && !/^\d$/.test(ans)) return ans;
+    // 객관식(동그라미/1~5)은 subjective 가 아님 — 그 외 문자열만 단답으로 복원
+    if (typeof ans === 'string') {
+      const s = ans.trim();
+      if (['①', '②', '③', '④', '⑤'].includes(s) || /^[1-5]$/.test(s)) return '';
+      return ans;
+    }
     return '';
   });
   const [choiceLayout, setChoiceLayout] = useState(() => {

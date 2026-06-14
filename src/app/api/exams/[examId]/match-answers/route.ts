@@ -346,7 +346,9 @@ export async function PUT(
         const { normalizeObjectiveAnswer, isValidObjectiveAnswer } = await import('@/lib/validation/objective-answer');
         const trimmedAns = match.newAnswer.trim();
         const wasMultipleChoice = mergedAj.type === 'multiple_choice';
-        const isObviouslyShortAnswer = wasMultipleChoice && trimmedAns !== '' && !isValidObjectiveAnswer(trimmedAns);
+        // ★ "0" 은 단답형 misclassification 이 아니라 객관식 미선택 sentinel → 아래 normalize 가 빈값 처리.
+        //   (제외 안 하면 short_answer 로 flip + "0" 보존 → 빠른답 "0" 박힘)
+        const isObviouslyShortAnswer = wasMultipleChoice && trimmedAns !== '' && trimmedAns !== '0' && !isValidObjectiveAnswer(trimmedAns);
 
         let safeAns: string;
         if (isObviouslyShortAnswer) {
