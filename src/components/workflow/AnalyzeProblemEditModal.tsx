@@ -10,6 +10,7 @@ import {
   X, Save, Loader2, Sigma, Trash2, AlertCircle,
   Bold, Italic, ImageIcon, Table2, List, Minus, Eye, EyeOff, Link2,
   LineChart, Underline as UnderlineIcon, FileText, Type, Upload,
+  ArrowUpToLine, ArrowDownToLine,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
@@ -285,6 +286,23 @@ function EditorPanel({
     }
   };
 
+  // ★ 본문 그림 위치 이동 (사용자 요청) — OCR 이 그림을 엉뚱한 위치에 넣었을 때 버튼으로 맨위/맨아래로.
+  //   그림은 본문 텍스트의 마커(`[도형...]` 또는 `![이미지](...)`) 위치로 자리가 정해짐(splitByFigureMarker).
+  //   마커 문자열만 재배치 → 그림 소스/파이프라인 불변. 첫 마커 기준(보통 문제당 1개).
+  const FIGURE_MARKER_RE = /(!\[[^\]]*\]\([^)]*\)|\[도형(?::[\w-]+)?(?::\d+%?)?\])/;
+  const hasFigureMarker = FIGURE_MARKER_RE.test(value);
+  const moveFigure = (to: 'top' | 'bottom') => {
+    const m = value.match(FIGURE_MARKER_RE);
+    if (!m || m.index == null) return;
+    const marker = m[0];
+    let rest = (value.slice(0, m.index) + value.slice(m.index + marker.length))
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    const next = to === 'top' ? `${marker}\n${rest}` : `${rest}\n${marker}`;
+    onChange(next);
+  };
+
   // 렌더링 모드에서 텍스트(수식 외) 클릭 시 → raw 편집 모드 전환 + 커서 위치 추정
   const handleTextClick = useCallback((e: React.MouseEvent) => {
     // 수식 클릭은 onMathClick에서 처리하므로 여기서는 텍스트만 처리
@@ -332,6 +350,20 @@ function EditorPanel({
           showPreview={editMode === 'rendered'}
           onTogglePreview={() => setEditMode(editMode === 'rendered' ? 'raw' : 'rendered')}
         />
+        {/* ★ 그림 위치 이동 — 본문에 그림 마커가 있을 때만. 맨위/맨아래로 재배치 */}
+        {hasFigureMarker && (
+          <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+            <span className="text-[10px] text-gray-400">그림</span>
+            <button type="button" onClick={() => moveFigure('top')} title="그림을 문제 맨 위로"
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors">
+              <ArrowUpToLine className="h-3 w-3" /> 맨위
+            </button>
+            <button type="button" onClick={() => moveFigure('bottom')} title="그림을 문제 맨 아래로"
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors">
+              <ArrowDownToLine className="h-3 w-3" /> 맨아래
+            </button>
+          </div>
+        )}
       </div>
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {editMode === 'raw' ? (
