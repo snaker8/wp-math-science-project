@@ -16,7 +16,7 @@ import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
-interface IssueBody { studentId?: string; setKey?: string; label?: string; expiresAt?: string | null; }
+interface IssueBody { studentId?: string; setKey?: string; examIds?: string[]; label?: string; expiresAt?: string | null; }
 
 export async function POST(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -36,7 +36,11 @@ export async function POST(request: NextRequest) {
   try { body = (await request.json()) as IssueBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const studentId = body.studentId;
   const setKey = body.setKey;
-  if (!studentId || !setKey) return NextResponse.json({ error: 'studentId, setKey 필수' }, { status: 400 });
+  // ★ 자유 조합 — examIds 배열. set_key 대신(또는 'none::자유 조합' 과 함께) 이 조합으로 합산.
+  const examIds = Array.isArray(body.examIds) ? body.examIds.filter((x) => typeof x === 'string' && x) : [];
+  if (!studentId || (!setKey && examIds.length === 0)) {
+    return NextResponse.json({ error: 'studentId + (setKey 또는 examIds) 필수' }, { status: 400 });
+  }
 
   // 학생 institute 격리 — users 우선, 없으면 roster_students
   let instituteId: string | null = null;
@@ -58,7 +62,8 @@ export async function POST(request: NextRequest) {
   const { error } = await sb.from('parent_share_tokens').insert({
     token,
     student_id: studentId,
-    set_key: setKey,
+    set_key: setKey || (examIds.length > 0 ? 'none::자유 조합' : null),
+    exam_ids: examIds.length > 0 ? examIds.join(',') : null,
     report_kind: 'diagnostic_set',
     label: body.label || null,
     expires_at: body.expiresAt || null,
