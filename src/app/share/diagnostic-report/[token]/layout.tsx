@@ -39,13 +39,18 @@ export async function generateMetadata(
   try {
     const { data: tokenRow } = await supabaseAdmin
       .from('parent_share_tokens')
-      .select('student_id, set_key, report_kind, is_active')
+      .select('student_id, set_key, exam_ids, report_kind, is_active')
       .eq('token', token)
       .maybeSingle();
-    const t = tokenRow as { student_id: string; set_key: string | null; report_kind: string; is_active: boolean } | null;
-    if (!t || !t.is_active || t.report_kind !== 'diagnostic_set' || !t.set_key) return fallback;
+    const t = tokenRow as { student_id: string; set_key: string | null; exam_ids: string | null; report_kind: string; is_active: boolean } | null;
+    // ★ 자유 조합(exam_ids) 토큰도 메타데이터 — examIds 로 계산(set_key 는 합성값).
+    const examIds = t?.exam_ids ? t.exam_ids.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    if (!t || !t.is_active || t.report_kind !== 'diagnostic_set' || (!t.set_key && examIds.length === 0)) return fallback;
 
-    const result = await computeComprehensiveReport(supabaseAdmin, t.student_id, t.set_key);
+    const result = await computeComprehensiveReport(
+      supabaseAdmin, t.student_id, t.set_key || 'none::자유 조합',
+      examIds.length > 0 ? examIds : undefined,
+    );
     if (!result.ok) return fallback;
     const { student, set, overall } = result.payload;
 

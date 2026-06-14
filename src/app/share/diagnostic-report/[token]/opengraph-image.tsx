@@ -33,12 +33,17 @@ async function fetchOgData(token: string): Promise<OgData | null> {
   if (!supabaseAdmin || !token || token.length < 16) return null;
   const { data: tokenRow } = await supabaseAdmin
     .from('parent_share_tokens')
-    .select('student_id, set_key, report_kind, is_active')
+    .select('student_id, set_key, exam_ids, report_kind, is_active')
     .eq('token', token)
     .maybeSingle();
-  const t = tokenRow as { student_id: string; set_key: string | null; report_kind: string; is_active: boolean } | null;
-  if (!t || !t.is_active || t.report_kind !== 'diagnostic_set' || !t.set_key) return null;
-  const result = await computeComprehensiveReport(supabaseAdmin, t.student_id, t.set_key);
+  const t = tokenRow as { student_id: string; set_key: string | null; exam_ids: string | null; report_kind: string; is_active: boolean } | null;
+  // ★ 자유 조합(exam_ids) 토큰도 썸네일 — set_key 합성값('none::자유 조합') 대신 examIds 로 계산.
+  const examIds = t?.exam_ids ? t.exam_ids.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  if (!t || !t.is_active || t.report_kind !== 'diagnostic_set' || (!t.set_key && examIds.length === 0)) return null;
+  const result = await computeComprehensiveReport(
+    supabaseAdmin, t.student_id, t.set_key || 'none::자유 조합',
+    examIds.length > 0 ? examIds : undefined,
+  );
   if (!result.ok) return null;
   const { student, set, overall } = result.payload;
   return {
