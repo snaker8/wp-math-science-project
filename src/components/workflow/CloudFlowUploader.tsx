@@ -188,6 +188,29 @@ export default function CloudFlowUploader({
 
     setJobs((prev) => [tempJob, ...prev]);
 
+    // ★ 한글 .hml — OCR/LibreOffice 없이 직접 파싱 → 클라우드 시험지로 바로 저장.
+    //   (수식이 텍스트로 들어있어 PDF→OCR 의 누락이 없음). 검수·수정은 펼쳐보기에서.
+    if (/\.hml$/i.test(problemFile.name)) {
+      try {
+        setJobs((prev) => prev.map((j) => j.id === tempJob.id
+          ? { ...j, currentStep: '한글(.hml) 파싱·저장 중...', progress: 30 } : j));
+        const fd = new FormData();
+        fd.append('file', problemFile);
+        fd.append('sourceCategory', sourceCategory);
+        const res = await fetch('/api/workflow/import-hml', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        setJobs((prev) => prev.map((j) => j.id === tempJob.id
+          ? { ...j, status: 'COMPLETED', progress: 100, currentStep: `저장 완료 (${data.savedProblems}/${data.totalProblems}문항)` } : j));
+        setPendingFiles({ PROBLEM: null, ANSWER: null, QUICK_ANSWER: null });
+        if (data.examId) router.push(`/dashboard/cloud/${data.examId}`);
+      } catch (e) {
+        setJobs((prev) => prev.map((j) => j.id === tempJob.id
+          ? { ...j, status: 'FAILED', currentStep: `HML 가져오기 실패: ${e instanceof Error ? e.message : String(e)}` } : j));
+      }
+      return;
+    }
+
     try {
       // ★ Vercel Hobby 플랜 4.5MB body 제한 우회:
       // 1) 서명 URL 발급 → 2) Storage 직접 업로드 → 3) 경로만 서버에 전달
@@ -741,7 +764,7 @@ export default function CloudFlowUploader({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.hwp,.hwpx"
+          accept=".pdf,.jpg,.jpeg,.png,.hwp,.hwpx,.hml"
           onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
           className="hidden-input"
         />
