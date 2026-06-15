@@ -71,6 +71,7 @@ const AnswerMatchModal = dynamic(() => import('@/components/exam/AnswerMatchModa
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import type { InterpretedFigure } from '@/types/ocr';
 
 /** 해설에서 [선택지 검증] 섹션 제거 (기존 DB 데이터 호환) */
@@ -3138,6 +3139,7 @@ function DifficultyBadgeLight({ level }: { level: number }) {
 
 export default function CloudExamDetailPage() {
   const router = useRouter();
+  const goBack = useSmartBack('/dashboard/cloud');
   const params = useParams();
   const examId = params.examId as string;
   // ★ 학원명 prefix (2026-05-17)
@@ -3983,7 +3985,7 @@ export default function CloudExamDetailPage() {
           {/* SUBBAR */}
           <div className="ce-subbar">
             <div className="ce-breadcrumb">
-              <button type="button" onClick={() => router.push('/dashboard/cloud')}>
+              <button type="button" onClick={goBack}>
                 <ArrowLeft className="inline h-3 w-3 mr-1" />
                 시험지 목록
               </button>

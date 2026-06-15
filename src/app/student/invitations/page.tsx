@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   ArrowLeft,
   Mail,
@@ -45,6 +45,7 @@ const mockInvitations: Invitation[] = [
 ];
 
 export default function StudentInvitationsPage() {
+  const goBack = useSmartBack('/student');
   const [invitations, setInvitations] = useState<Invitation[]>(mockInvitations);
 
   const pendingCount = invitations.filter((i) => i.status === 'pending').length;
@@ -93,12 +94,13 @@ export default function StudentInvitationsPage() {
       <div className="max-w-3xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link
-            href="/student"
+          <button
+            type="button"
+            onClick={goBack}
             className="p-2 rounded-lg border border-gray-200 text-zinc-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={20} />
-          </Link>
+          </button>
           <div>
             <h1 className="text-2xl font-bold text-zinc-900">초대 목록</h1>
             <p className="text-sm text-zinc-500 mt-1">받은 초대를 확인하고 응답하세요</p>

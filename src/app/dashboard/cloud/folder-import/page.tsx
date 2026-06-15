@@ -21,6 +21,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ArrowLeft, FolderUp, AlertCircle, CheckCircle2, XCircle, Loader2, MapPin, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { extractFolderMeta, toSchoolMetaPayload, type FolderMetaResult } from '@/lib/workflow/folder-meta-extract';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 const SIDO_OPTIONS = [
   '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
@@ -43,6 +44,7 @@ interface FileRow {
 type Step = 'select' | 'preview' | 'progress' | 'report';
 
 export default function FolderImportPage() {
+  const goBack = useSmartBack('/dashboard/cloud');
   const [step, setStep] = useState<Step>('select');
   const [sido, setSido] = useState<string>('부산');
   const [rows, setRows] = useState<FileRow[]>([]);
@@ -213,9 +215,9 @@ export default function FolderImportPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Link href="/dashboard/cloud" className="text-zinc-400 hover:text-white transition">
+          <button type="button" onClick={goBack} className="text-zinc-400 hover:text-white transition">
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </button>
           <h1 className="text-2xl font-bold">학교 기출 단원집 폴더 import</h1>
           <div className="ml-auto text-sm text-zinc-400">
             STEP {step === 'select' ? '1' : step === 'preview' ? '2' : step === 'progress' ? '3' : '4'} / 4

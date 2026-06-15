@@ -35,6 +35,7 @@ import {
 import './report.css';
 import { StudentExamReportDark } from '@/components/exam-report/StudentExamReportDark';
 import { Panel } from '@/components/diagnostics/report-primitives';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 // ============================================================================
 // Types — API 응답 그대로
@@ -597,6 +598,7 @@ export default function StudentReportPage() {
   const examAnalysisHref = track
     ? `/${track}/dashboard/exam-analysis/${examId}`
     : `/dashboard/exam-analysis/${examId}`;
+  const goBack = useSmartBack(examAnalysisHref);
 
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -915,7 +917,7 @@ export default function StudentReportPage() {
         <div className="report-print-pad mx-auto max-w-5xl px-4 sm:px-6 py-6">
           {/* 툴바 (인쇄 시 숨김) */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
-            <button onClick={() => router.push(examAnalysisHref)} className="inline-flex items-center gap-1.5 text-sm text-zinc-300 hover:text-white">
+            <button onClick={goBack} className="inline-flex items-center gap-1.5 text-sm text-zinc-300 hover:text-white">
               <ArrowLeft size={16} /> 시험 분석
             </button>
             <div className="flex flex-wrap items-center gap-2">
@@ -987,7 +989,7 @@ export default function StudentReportPage() {
       <div className="student-report-no-print sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-[210mm] mx-auto px-4 py-3 flex items-center justify-between">
           <button
-            onClick={() => router.push(examAnalysisHref)}
+            onClick={goBack}
             className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-sm font-bold"
           >
             <ArrowLeft size={16} /> 시험 분석으로

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   ArrowLeft,
   BookOpen,
@@ -55,6 +55,7 @@ const mockScores: ScoreEntry[] = [
 export default function StudentClassDetailPage() {
   const params = useParams();
   const classId = params?.id as string;
+  const goBack = useSmartBack('/student/classes');
 
   const [classInfo] = useState(mockClassInfo);
   const [exams] = useState<ExamItem[]>(mockExams);
@@ -95,12 +96,13 @@ export default function StudentClassDetailPage() {
       <div className="max-w-3xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link
-            href="/student/classes"
+          <button
+            type="button"
+            onClick={goBack}
             className="p-2 rounded-lg border border-gray-200 text-zinc-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={20} />
-          </Link>
+          </button>
           <div>
             <h1 className="text-2xl font-bold text-zinc-900">{classInfo.name}</h1>
             <p className="text-sm text-zinc-500 mt-1">반 상세 정보</p>

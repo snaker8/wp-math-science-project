@@ -34,6 +34,7 @@ import {
   formatAvgDifficulty,
   compareToGroup,
 } from '@/lib/utils/difficulty-label';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
 interface SchoolFromHub {
@@ -136,6 +137,7 @@ const EXAM_TYPE_OPTIONS = ['중간', '기말', '모의고사', '수행평가'] a
 
 // ─── 메인 ────────────────────────────────────────────────────────────────
 export default function AggregatePage() {
+  const goBack = useSmartBack('/dashboard/reports');
   const [hubSchools, setHubSchools] = useState<SchoolFromHub[]>([]);
   const [allYears, setAllYears] = useState<number[]>([]);
   const [data, setData] = useState<AggregateResponse | null>(null);
@@ -224,12 +226,13 @@ export default function AggregatePage() {
       <div className="flex-shrink-0 border-b border-zinc-800/50 px-8 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/reports"
+            <button
+              type="button"
+              onClick={goBack}
               className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white"
             >
               <ArrowLeft className="h-4 w-4" />
-            </Link>
+            </button>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
               <BarChart3 className="h-5 w-5 text-cyan-400" />
             </div>

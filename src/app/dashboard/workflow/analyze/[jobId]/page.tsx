@@ -56,6 +56,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { useOrganizationName } from '@/hooks/useUserScope';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 // Desmos 그래프 뷰어 (클라이언트 전용, dynamic import)
 const InlineDesmosGraph = dynamic(
@@ -2970,6 +2971,7 @@ function removeChoicesFromContent(text: string): { content: string; score?: numb
 
 export default function AnalyzeJobPage() {
   const router = useRouter();
+  const goBack = useSmartBack('/dashboard/cloud');
   const params = useParams();
   const searchParams = useSearchParams();
   const jobId = params.jobId as string;
@@ -5159,7 +5161,7 @@ export default function AnalyzeJobPage() {
             type="button"
             className="aze-crumb-back"
             aria-label="뒤로"
-            onClick={() => router.push('/dashboard/cloud')}
+            onClick={goBack}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>

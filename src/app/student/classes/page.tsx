@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Users, Clock, ChevronRight } from 'lucide-react';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 interface ClassItem {
   id: string;
@@ -37,6 +38,7 @@ const mockClasses: ClassItem[] = [
 ];
 
 export default function StudentClassesPage() {
+  const goBack = useSmartBack('/student');
   const [classes] = useState<ClassItem[]>(mockClasses);
 
   return (
@@ -44,12 +46,13 @@ export default function StudentClassesPage() {
       <div className="max-w-3xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link
-            href="/student"
+          <button
+            type="button"
+            onClick={goBack}
             className="p-2 rounded-lg border border-gray-200 text-zinc-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={20} />
-          </Link>
+          </button>
           <div>
             <h1 className="text-2xl font-bold text-zinc-900">내 반 목록</h1>
             <p className="text-sm text-zinc-500 mt-1">등록된 반을 확인하고 관리하세요</p>

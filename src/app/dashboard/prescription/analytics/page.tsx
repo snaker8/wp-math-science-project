@@ -17,7 +17,7 @@ import {
   Brain, TrendingUp, AlertTriangle, ArrowLeft, Loader2, Users, Activity, Target,
   type LucideIcon,
 } from 'lucide-react';
-import Link from 'next/link';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 interface AnalyticsData {
   summary: {
@@ -71,6 +71,7 @@ const ERROR_CAUSE_COLORS: Record<string, string> = {
 };
 
 export default function AnalyticsPage() {
+  const goBack = useSmartBack('/dashboard/prescription');
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,9 +156,9 @@ export default function AnalyticsPage() {
     <div className="min-h-screen bg-zinc-950 text-white p-8 space-y-6 font-sans">
       {/* Header */}
       <div className="flex items-center gap-4 mb-2">
-        <Link href="/dashboard/prescription" className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+        <button type="button" onClick={goBack} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
           <ArrowLeft size={20} />
-        </Link>
+        </button>
         <div>
           <h1 className="text-2xl font-bold">Deep-Dive Analytics</h1>
           <p className="text-gray-500 text-sm">AI 기반 심층 학습 분석 리포트</p>

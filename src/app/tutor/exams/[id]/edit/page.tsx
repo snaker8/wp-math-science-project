@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   ArrowLeft,
   FileText,
@@ -36,6 +36,7 @@ const DIFFICULTY_COLORS: Record<string, { text: string; bg: string }> = {
 
 export default function EditExamPage() {
   const router = useRouter();
+  const goBack = useSmartBack('/tutor/exams');
 
   // Pre-filled mock data
   const [examName, setExamName] = useState('중간고사 모의고사 1회');
@@ -70,12 +71,13 @@ export default function EditExamPage() {
       <div className="max-w-[800px] mx-auto p-8">
         {/* Header */}
         <header className="flex items-center gap-5 mb-8 p-6 bg-zinc-900/40 border border-white/5 rounded-2xl backdrop-blur-xl">
-          <Link
-            href="/tutor/exams"
+          <button
+            type="button"
+            onClick={goBack}
             className="flex items-center justify-center w-[38px] h-[38px] bg-zinc-800/60 border border-white/10 text-zinc-400 rounded-xl hover:bg-zinc-700/80 hover:text-white hover:-translate-x-0.5 transition-all"
           >
             <ArrowLeft size={18} />
-          </Link>
+          </button>
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">시험 수정</h1>
             <p className="text-sm text-zinc-500">시험 정보를 수정하고 문제를 변경하세요</p>

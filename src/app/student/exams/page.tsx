@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   ArrowLeft,
   ClipboardList,
@@ -61,6 +62,7 @@ function fmtDate(iso: string): string {
 }
 
 export default function StudentExamsPage() {
+  const goBack = useSmartBack('/student');
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,12 +123,13 @@ export default function StudentExamsPage() {
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link
-            href="/student"
+          <button
+            type="button"
+            onClick={goBack}
             className="p-2 rounded-lg border border-gray-200 text-zinc-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={20} />
-          </Link>
+          </button>
           <div>
             <h1 className="text-2xl font-bold text-zinc-900">시험·진단 목록</h1>
             <p className="text-sm text-zinc-500 mt-1">나의 진단평가 현황과 결과를 확인하세요</p>

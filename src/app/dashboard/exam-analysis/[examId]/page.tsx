@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useExamProblems, useExamList } from '@/hooks/useExamProblems';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { AIInsightTabs } from './AIInsightTabs';
 import StudentsTab from './StudentsTab';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
@@ -66,6 +67,7 @@ export default function ExamAnalysisPage() {
   const params = useParams();
   const router = useRouter();
   const examId = params?.examId as string;
+  const goBack = useSmartBack(`/dashboard/cloud/${examId}`);
 
   const { exams } = useExamList();
   const { problems, isLoading } = useExamProblems(examId);
@@ -447,7 +449,7 @@ export default function ExamAnalysisPage() {
       {/* ═══════ SUBBAR ═══════ */}
       <div className="ea-subbar">
         <div className="ea-crumbs">
-          <button type="button" onClick={() => router.push(`/dashboard/cloud/${examId}`)}>
+          <button type="button" onClick={goBack}>
             <ArrowLeft className="inline h-3.5 w-3.5" style={{ marginRight: 4 }} />
             시험지 편집
           </button>
