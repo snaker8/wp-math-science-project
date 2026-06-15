@@ -1454,22 +1454,11 @@ export default function CloudPage() {
   const filteredExams = useMemo(() => {
     let result = exams;
     if (searchQuery) {
-      // ★ 검색 시 sub-필터된 전체에서 검색 (북그룹 필터만 무시) + 공백 제거 + 대소문자 무시
+      // ★ 검색은 "현재 선택 폴더(+하위) 범위 안"에서만 (2026-06-12 수정).
+      //   기존엔 북그룹 필터를 무시하고 전체 풀에서 검색 → 3학년 폴더 선택 후 검색해도 2학년까지
+      //   나오던 사고. 전체 검색이 필요하면 좌측에서 '전체 시험지' 선택. (공백 제거·대소문자 무시)
       const q = searchQuery.toLowerCase().replace(/\s+/g, '');
-      const searchSource = subFilteredExams.map((exam, idx) => ({
-        id: exam.id,
-        order: idx + 1,
-        fileName: exam.fileName || exam.title,
-        hasImage: exam.hasImage,
-        problemCount: exam.problemCount,
-        bookGroupId: exam.bookGroupId,
-        createdAt: exam.createdAt,
-        grade: exam.grade,
-        isDiagnostic: exam.isDiagnostic,
-        examType: exam.examType,
-        diagnosticCategory: exam.diagnosticCategory,
-      }));
-      result = searchSource.filter((e) => {
+      result = exams.filter((e) => {
         const name = (e.fileName || '').toLowerCase().replace(/\s+/g, '');
         return name.includes(q);
       });
@@ -1489,7 +1478,7 @@ export default function CloudPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [exams, searchQuery, sortField, sortDir, subFilteredExams]);
+  }, [exams, searchQuery, sortField, sortDir]);
 
   // ★ groupId → 폴더명 맵 (트리 평탄화, 가상노드 제외) — 목록에 소속 폴더 배지 표시용.
   const groupNameById = useMemo(() => {
