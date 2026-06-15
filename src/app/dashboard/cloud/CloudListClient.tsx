@@ -618,6 +618,31 @@ const MoveToGroupModal: React.FC<{
   onMove: (groupId: string | null) => void;
   onClose: () => void;
 }> = ({ groups, currentGroupId, onMove, onClose }) => {
+  // ★ 평면 목록 → 계층(부모-자식) DFS 순서 + depth. 좌측 폴더 트리와 동일한 위계로 보여 이동이 직관적.
+  const ordered = React.useMemo(() => {
+    const byParent = new Map<string | null, DBBookGroup[]>();
+    for (const g of groups) {
+      const p = g.parent_id ?? null;
+      (byParent.get(p) ?? byParent.set(p, []).get(p)!).push(g);
+    }
+    const out: Array<{ g: DBBookGroup; depth: number }> = [];
+    const visited = new Set<string>();
+    const walk = (parent: string | null, depth: number) => {
+      for (const g of byParent.get(parent) ?? []) {
+        if (visited.has(g.id)) continue; // 순환/중복 방어
+        visited.add(g.id);
+        out.push({ g, depth });
+        walk(g.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    // 부모가 목록에 없어 누락된 그룹(고아) → 최상위로 노출
+    for (const g of groups) {
+      if (!visited.has(g.id)) { visited.add(g.id); out.push({ g, depth: 0 }); }
+    }
+    return out;
+  }, [groups]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -652,18 +677,20 @@ const MoveToGroupModal: React.FC<{
             미분류
             {currentGroupId === null && <Check className="h-3 w-3 ml-auto" />}
           </button>
-          {groups.map((g) => (
+          {ordered.map(({ g, depth }) => (
             <button
               key={g.id}
               type="button"
               onClick={() => onMove(g.id)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
+              style={{ paddingLeft: `${12 + depth * 16}px` }}
+              className={`flex w-full items-center gap-2 rounded-lg pr-3 py-2 text-xs transition-colors ${
                 currentGroupId === g.id ? 'bg-cyan-500/10 text-cyan-400' : 'text-content-secondary hover:bg-surface-raised'
               }`}
             >
-              <Folder className="h-3.5 w-3.5" />
-              {g.name}
-              {currentGroupId === g.id && <Check className="h-3 w-3 ml-auto" />}
+              {depth > 0 && <span className="text-content-tertiary/50 select-none">└</span>}
+              <Folder className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">{g.name}</span>
+              {currentGroupId === g.id && <Check className="h-3 w-3 ml-auto flex-shrink-0" />}
             </button>
           ))}
         </div>
