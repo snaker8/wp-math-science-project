@@ -1491,6 +1491,26 @@ export default function CloudPage() {
     return result;
   }, [exams, searchQuery, sortField, sortDir, subFilteredExams]);
 
+  // ★ groupId → 폴더명 맵 (트리 평탄화, 가상노드 제외) — 목록에 소속 폴더 배지 표시용.
+  const groupNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    const walk = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        if (!n.isVirtual) m.set(n.id, n.name);
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(treeNodes);
+    return m;
+  }, [treeNodes]);
+
+  // ★ 현재 목록에 폴더가 2개 이상 섞여 있으면 소속 폴더 배지 노출 (직속 vs 하위 구분).
+  //   단일 폴더(잎)면 모두 직속이라 배지 불필요(노이즈 방지).
+  const showFolderBadge = useMemo(() => {
+    const s = new Set(filteredExams.map((e) => e.bookGroupId ?? 'none'));
+    return s.size > 1;
+  }, [filteredExams]);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -2550,6 +2570,25 @@ export default function CloudPage() {
                                 이미지 포함
                               </span>
                             )}
+                            {/* ★ 소속 폴더 배지 — 폴더 섞인 뷰에서 직속/하위 구분. 선택 폴더 직속이면 강조. */}
+                            {showFolderBadge && renamingExamId !== exam.id && (() => {
+                              const isDirect = (exam.bookGroupId ?? null) === (selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : null);
+                              const folderName = exam.bookGroupId ? (groupNameById.get(exam.bookGroupId) ?? '폴더') : '미분류';
+                              return (
+                                <span
+                                  title={isDirect ? '이 폴더 직속' : `하위 폴더: ${folderName}`}
+                                  className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0 ${
+                                    isDirect
+                                      ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
+                                      : 'border-white/10 bg-surface-raised text-content-tertiary'
+                                  }`}
+                                >
+                                  <Folder className="h-3 w-3" />
+                                  {folderName}
+                                  {isDirect && ' · 직속'}
+                                </span>
+                              );
+                            })()}
                           </div>
                           {/* 출처 카테고리 뱃지 */}
                           <span className="w-28 flex justify-center">
