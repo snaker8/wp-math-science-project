@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Check, RefreshCw, Printer } from 'lucide-react';
-import Link from 'next/link';
 import { MathRenderer } from '@/components/shared/MathRenderer';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 // Mock Problems
 const mockProblems = [
@@ -29,6 +29,7 @@ const mockProblems = [
 ];
 
 export default function ClinicCreationPage() {
+  const goBack = useSmartBack('/dashboard/prescription');
   const [selectedProblems, setSelectedProblems] = useState<number[]>([]);
 
   const toggleProblem = (id: number) => {
@@ -42,9 +43,9 @@ export default function ClinicCreationPage() {
       {/* Header */}
       <header className="flex items-center justify-between mb-8 border-b border-white/10 pb-6">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/prescription" className="p-2 hover:bg-white/10 rounded-full transition-colors">
+          <button type="button" onClick={goBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <ArrowLeft size={24} />
-          </Link>
+          </button>
           <div>
             <h1 className="text-2xl font-bold">오답 클리닉 생성</h1>
             <p className="text-gray-500 text-sm">AI가 분석한 취약점 기반 유사 문제(Twin Problems) 제안</p>

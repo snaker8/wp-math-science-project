@@ -6,8 +6,8 @@
 //   Next.js page 파일은 임의 named export 금지라 컴포넌트를 이 파일로 분리.
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { ArrowLeft, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   createSession, saveSessionItems,
   listMathsecrChildren, listMathsecrSubjects,
@@ -72,6 +72,7 @@ function selectedCode(r: ItemRow): string {
 }
 
 export function ManualGradingEntry() {
+  const goBack = useSmartBack('/dashboard/prescription');
   const [subjects, setSubjects] = useState<MathsecrNode[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
 
@@ -238,12 +239,13 @@ export function ManualGradingEntry() {
       <header className="sticky top-0 z-10 border-b border-white/10 bg-surface-base/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/prescription"
+            <button
+              type="button"
+              onClick={goBack}
               className="p-2 hover:bg-white/10 rounded-lg transition"
             >
               <ArrowLeft size={18} />
-            </Link>
+            </button>
             <div>
               <h1 className="font-bold text-xl">진단 결과 입력</h1>
               <p className="text-xs text-gray-500">수업 직후 시험 결과를 여기 입력합니다</p>

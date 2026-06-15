@@ -27,6 +27,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 interface ExamRow {
@@ -72,6 +73,7 @@ const DIFF_COLOR: Record<string, string> = {
 export default function SchoolReportPage() {
   const params = useParams();
   const router = useRouter();
+  const goBack = useSmartBack('/dashboard/reports');
   const schoolParam = decodeURIComponent((params?.school as string) || '');
 
   const [data, setData] = useState<SchoolDetail | null>(null);
@@ -178,7 +180,7 @@ export default function SchoolReportPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push('/dashboard/reports')}
+              onClick={goBack}
               className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white"
             >
               <ArrowLeft className="h-4 w-4" />

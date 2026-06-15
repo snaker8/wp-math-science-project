@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Loader2, HelpCircle } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 type ErrorCause = '개념' | '유형' | '계산' | '문장제' | '시간';
 
@@ -66,6 +67,7 @@ function extractCorrectAnswer(aj: Record<string, unknown> | null | undefined): s
 export default function StudentSessionResultPage() {
   const params = useParams();
   const router = useRouter();
+  const goBack = useSmartBack('/student/exams');
   const sessionId = (params?.id as string) || '';
 
   const [session, setSession] = useState<SessionData | null>(null);
@@ -142,7 +144,7 @@ export default function StudentSessionResultPage() {
         <div className="flex items-center gap-3 mb-6">
           <button
             type="button"
-            onClick={() => router.push('/student/exams')}
+            onClick={goBack}
             className="p-2 rounded-lg border border-gray-200 text-zinc-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={20} />

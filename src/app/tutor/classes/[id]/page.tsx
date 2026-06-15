@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   ArrowLeft,
   Edit2,
@@ -70,6 +71,7 @@ const gradeLabel = (grade: number | null) => {
 
 export default function ClassDetailPage() {
   const router = useRouter();
+  const goBack = useSmartBack('/tutor/classes');
   const params = useParams<{ id: string }>();
   const classId = params?.id;
 
@@ -163,7 +165,7 @@ export default function ClassDetailPage() {
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
           <button
-            onClick={() => router.push('/tutor/classes')}
+            onClick={goBack}
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800 hover:text-white"
             title="반 목록으로"
           >

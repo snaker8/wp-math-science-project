@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -41,6 +42,7 @@ const DAYS = [
 
 export default function NewClassPage() {
   const router = useRouter();
+  const goBack = useSmartBack('/tutor/classes');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,9 +158,9 @@ export default function NewClassPage() {
     >
       <header className="page-header">
         <div className="header-left">
-          <Link href="/tutor/classes" className="back-btn">
+          <button type="button" onClick={goBack} className="back-btn">
             <ArrowLeft size={18} />
-          </Link>
+          </button>
           <div className="header-title-area">
             <h1>새 반 개설</h1>
             <p>새로운 학습 그룹을 만들고 수업 환경을 설정하세요</p>
