@@ -265,7 +265,9 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
   const flush = () => {
     if (!cur) return;
     const body = cur.lines.join('\n').trim();
-    const { content, choices } = splitChoices(body);
+    const split = splitChoices(body);
+    const content = normalizeBogiBox(split.content);
+    const choices = split.choices;
     if (content || choices.length) {
       // ★ [도형] 마커 순서 = cur.images 순서. 본문 [도형] → stem, 보기 [도형] → 보기 이미지.
       const stemCount = (content.match(/\[도형\]/g) || []).length;
@@ -342,6 +344,22 @@ function buildMathMask(s: string): boolean[] {
 
 const CHOICE_INDEX: Record<string, number> = {};
 CHOICE_MARKS.forEach((m, i) => { CHOICE_INDEX[m] = i; });
+
+/**
+ * 보기 박스 줄 정리 — `<보 기>ㄱ. … ㄴ. …`(공백 없이 붙음)를 헤더·라벨 별도 줄로.
+ *   렌더러(MixedContentRenderer)의 조건박스 파서는 줄 단위라, 라벨이 한 줄에 붙어
+ *   있으면 박스로 안 그려진다(거제여중 #4). 실제 보기 박스(헤더 직후 ㄱ. 라벨)일 때만 적용.
+ */
+function normalizeBogiBox(content: string): string {
+  // 헤더(〈보기〉/<보 기>) 바로 뒤에 ㄱ. 라벨이 오는 진짜 박스만 대상
+  if (!/(?:〈|<)\s*보\s*기\s*(?:〉|>)\s*[ㄱ]\s*[.)]/.test(content)) return content;
+  return content
+    .replace(/((?:〈|<)\s*보\s*기\s*(?:〉|>))\s*(?=[ㄱ]\s*[.)])/g, '\n$1\n')
+    .replace(/([^\n])\s*([ㄴㄷㄹㅁㅂ]\s*[.)])/g, '$1\n$2')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
 
 /** 본문에서 ①~⑤ 보기 분리.
  *   ★ 수식($…$) 내부 마커 제외 + "마지막 증가 런(①②③④⑤)"만 진짜 보기로.
