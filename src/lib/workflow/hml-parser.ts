@@ -329,22 +329,50 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
   return problems;
 }
 
-/** 본문에서 ①~⑤ 보기 분리 */
+/** `$…$` 내부 여부 마스크 (수식 안 ①②(㉠㉡ 라벨)를 보기 마커로 오인하지 않도록) */
+function buildMathMask(s: string): boolean[] {
+  const mask = new Array<boolean>(s.length).fill(false);
+  let inMath = false;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '$') { inMath = !inMath; mask[i] = inMath; }
+    else mask[i] = inMath;
+  }
+  return mask;
+}
+
+const CHOICE_INDEX: Record<string, number> = {};
+CHOICE_MARKS.forEach((m, i) => { CHOICE_INDEX[m] = i; });
+
+/** 본문에서 ①~⑤ 보기 분리.
+ *   ★ 수식($…$) 내부 마커 제외 + "마지막 증가 런(①②③④⑤)"만 진짜 보기로.
+ *     연립방정식 라벨 ①②(㉠㉡) 나 스템 참조 "①을 ②에 대입"이 보기로 잘못 잘리던 사고(거제여중 #3).
+ */
 function splitChoices(body: string): { content: string; choices: string[] } {
-  const firstMark = CHOICE_MARKS.find((m) => body.includes(m));
-  if (!firstMark) return { content: body, choices: [] };
-  const idx = body.indexOf(firstMark);
-  const content = body.slice(0, idx).trim();
-  const rest = body.slice(idx);
-  // ①②③④⑤ 기준 split
+  const mask = buildMathMask(body);
+  const marks: Array<{ idx: number; val: number }> = [];
+  for (let i = 0; i < body.length; i++) {
+    if (!mask[i] && Object.prototype.hasOwnProperty.call(CHOICE_INDEX, body[i])) {
+      marks.push({ idx: i, val: CHOICE_INDEX[body[i]] });
+    }
+  }
+  if (marks.length < 2) return { content: body, choices: [] };
+
+  // 마지막 증가 런의 시작 = 진짜 보기 시작 (앞선 ①② 참조 런은 스템에 귀속)
+  let runStart = 0;
+  for (let k = 1; k < marks.length; k++) {
+    if (marks[k].val <= marks[k - 1].val) runStart = k;
+  }
+  const choiceMarks = marks.slice(runStart);
+  if (choiceMarks.length < 2) return { content: body, choices: [] };
+
+  const content = body.slice(0, choiceMarks[0].idx).trim();
   const choices: string[] = [];
-  const re = /([①②③④⑤⑥⑦⑧⑨⑩])\s*([\s\S]*?)(?=[①②③④⑤⑥⑦⑧⑨⑩]|$)/g;
-  let mm: RegExpExecArray | null;
-  while ((mm = re.exec(rest)) !== null) {
-    const t = (mm[1] + ' ' + mm[2].trim()).trim();
+  for (let k = 0; k < choiceMarks.length; k++) {
+    const start = choiceMarks[k].idx;
+    const end = k + 1 < choiceMarks.length ? choiceMarks[k + 1].idx : body.length;
+    const t = body.slice(start, end).trim();
     if (t) choices.push(t);
   }
-  // 보기가 2개 미만이면 보기 아님 (서답형) → 원문 유지
   if (choices.length < 2) return { content: body, choices: [] };
   return { content, choices };
 }

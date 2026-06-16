@@ -113,6 +113,44 @@ function convertOver(s: string): string {
 }
 
 /**
+ * `cases{ 행1 # 행2 # … }` (연립방정식) → `\begin{cases} 행1 \\ 행2 \end{cases}`.
+ *   ★ 중2 연립방정식 다수. `#`=행 구분. 중첩 브레이스(분수 등) 균형 파싱. 대소문자 무시.
+ *   미변환 시 KaTeX 가 `cases{...}` 를 에러로 띄움(거제여중 #2·#6 실사고).
+ */
+function convertCases(s: string): string {
+  let guard = 0;
+  const re = /(?<![\\A-Za-z])cases\s*\{/i;
+  while (guard++ < 50) {
+    const m = s.match(re);
+    if (!m || m.index == null) break;
+    const braceStart = s.indexOf('{', m.index);
+    const g = grabBraceForward(s, braceStart);
+    let inner: string;
+    let endPos: number;
+    if (g) {
+      inner = g.inner; endPos = g.end;
+    } else {
+      // 닫는 brace 누락(원문 결함) — `#` 가 있으면 cases 확신 → 남은 부분 끝까지 best-effort.
+      const tail = s.slice(braceStart + 1);
+      if (!tail.includes('#')) break;
+      inner = tail.replace(/[}\s]+$/, ''); endPos = s.length;
+    }
+    const rows = inner.split('#').map((r) => r.trim()).filter(Boolean);
+    const body = rows.length ? rows.join(' \\\\ ') : inner.trim();
+    s = s.slice(0, m.index) + `\\begin{cases}${body}\\end{cases}` + s.slice(endPos);
+  }
+  return s;
+}
+
+// 그리스 문자는 대소문자가 다른 명령(\pi vs \Pi) — 정확 매칭 필요. 나머지는 대소문자 무시.
+const GREEK_EXACT = new Set([
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta',
+  'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi',
+  'rho', 'sigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
+  'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Phi', 'Psi', 'Omega',
+]);
+
+/**
  * 한글 수식 SCRIPT → LaTeX (달러 기호 없이 본문만)
  */
 export function hangulEquationToLatex(script: string): string {
@@ -131,21 +169,26 @@ export function hangulEquationToLatex(script: string): string {
     .replace(/>=/g, '\\geq ')
     .replace(/!=/g, '\\neq ');
 
+  // 1.7) 연립방정식 cases → \begin{cases} (over/명령 처리 전에)
+  s = convertCases(s);
+
   // 2) 분수 (over) — 백슬래시 붙이기 전에 처리
   s = convertOver(s);
 
   // 2.5) bar → \overline (선분 표기). KaTeX \bar 는 멀티문자(AB)에 짧은 막대라 선분이 어색.
-  //   \overline 은 양 글자 위 전체 막대 — 선분 AB·평균 x̄ 모두 자연스러움.
-  s = s.replace(/(?<![\\A-Za-z])bar(?![A-Za-z])/g, '\\overline');
+  //   \overline 은 양 글자 위 전체 막대 — 선분 AB·평균 x̄ 모두 자연스러움. (대소문자 무시)
+  s = s.replace(/(?<![\\A-Za-z])bar(?![A-Za-z])/gi, '\\overline');
 
   // 3) 스타일 토큰 제거
   for (const t of DROP_TOKENS) {
     s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${t}\\b`, 'g'), ' ');
   }
 
-  // 4) 명령어 백슬래시 보정 (이미 백슬래시 있거나 단어 일부면 제외)
+  // 4) 명령어 백슬래시 보정. 구조/연산/함수 명령은 대소문자 무시(LEFT/RIGHT/CDOTS 등
+  //   대문자로 내보내는 파일 대응 — 거제여중 중2). 그리스 문자만 정확 매칭(\pi≠\Pi).
   for (const cmd of BACKSLASH_CMDS) {
-    s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${cmd}(?![A-Za-z])`, 'g'), `\\${cmd}`);
+    const flags = GREEK_EXACT.has(cmd) ? 'g' : 'gi';
+    s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${cmd}(?![A-Za-z])`, flags), `\\${cmd}`);
   }
 
   // 5) 공백 정리

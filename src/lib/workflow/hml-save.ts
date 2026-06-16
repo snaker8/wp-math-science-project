@@ -43,6 +43,31 @@ function normalizeChoice(c: string, idx: number): string {
   return `${CIRCLED[idx] || ''} ${stripped}`.trim();
 }
 
+/**
+ * 본문에서 배점 추출 + [N점] 텍스트 제거. (자산화 가드 #2 와 동일 우선순위·정규식)
+ *   우선순위: [총 N점] > 다수 [Ni점] 합산 > 단일 [N점] > null.
+ *   OCR 오타 점/졈/졍 허용. 추출 후 본문 텍스트에서 [총 N점]·[N점] 모두 제거(배지로만 표시).
+ */
+function extractPoints(content: string): { points: number | null; cleaned: string } {
+  const totalRe = /[\[(]\s*총\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]/;
+  const singleRe = /[\[(]\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]/g;
+  let points: number | null = null;
+  const tm = content.match(totalRe);
+  if (tm) {
+    points = parseFloat(tm[1]);
+  } else {
+    const all = [...content.matchAll(singleRe)].map((m) => parseFloat(m[1])).filter((n) => Number.isFinite(n));
+    if (all.length === 1) points = all[0];
+    else if (all.length > 1) points = all.reduce((a, b) => a + b, 0);
+  }
+  const cleaned = content
+    .replace(/[\[(]\s*(?:총\s*)?\d+(?:\.\d+)?\s*[점졈졍]\s*[\])]/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+  return { points, cleaned };
+}
+
 export async function createExamFromHml(
   supabase: SupabaseClient,
   parsed: HmlParseResult,
@@ -64,6 +89,13 @@ export async function createExamFromHml(
     }
   } catch { /* 조회 실패해도 계속 (새로 생성) */ }
 
+  // ── 배점 추출 (문제별) + 총점 ──
+  const pointsData = parsed.problems.map((p) => extractPoints(p.content));
+  const anyPoints = pointsData.some((d) => d.points != null);
+  const totalPoints = anyPoints
+    ? Math.round(pointsData.reduce((s, d) => s + (d.points || 0), 0))
+    : parsed.problems.length * 4; // 배점 없는 파일(해강중 등)은 4점 균등 폴백
+
   // ── exam INSERT ──
   const { data: examRow, error: examErr } = await supabase
     .from('exams')
@@ -74,7 +106,7 @@ export async function createExamFromHml(
       created_by: ctx.createdBy,
       institute_id: ctx.instituteId,
       book_group_id: ctx.bookGroupId ?? null,
-      total_points: parsed.problems.length * 4,
+      total_points: totalPoints,
       time_limit_minutes: 50,
       subject_track: 'math',
     })
@@ -92,6 +124,7 @@ export async function createExamFromHml(
   const warningsByNumber: Record<number, string[]> = {};
   for (let i = 0; i < parsed.problems.length; i++) {
     const p = parsed.problems[i];
+    const { points: problemPoints, cleaned: contentLatex } = pointsData[i]; // 배점 추출·본문 [N점] 제거
     const isObj = p.choices.length > 0;
     const choices = p.choices.map((c, idx) => normalizeChoice(c, idx));
     const safeAns = isObj ? normalizeObjectiveAnswer(p.answer) : (p.answer || '');
@@ -141,11 +174,11 @@ export async function createExamFromHml(
     // ── ★ 검증 루프 (룰베이스, 비용 0) — 의심 문제를 ⚠️ 플래그 → 펼쳐보기에서 검수 ──
     const warnings = verifyHmlProblem({
       number: p.number,
-      content: p.content,
+      content: contentLatex,
       choices,
       answer: safeAns,
       isObjective: isObj,
-      imagesExpected: (p.content.match(/\[도형\]/g) || []).length,
+      imagesExpected: (contentLatex.match(/\[도형\]/g) || []).length,
       imagesSaved: images.length,
       choiceImagesPresent,
     });
@@ -158,7 +191,7 @@ export async function createExamFromHml(
     const { data: probRow, error: probErr } = await supabase
       .from('problems')
       .insert({
-        content_latex: p.content,
+        content_latex: contentLatex,
         solution_latex: '',
         answer_json,
         images,
@@ -181,7 +214,7 @@ export async function createExamFromHml(
       exam_id: examId,
       problem_id: (probRow as { id: string }).id,
       sequence_number: i + 1,
-      points: null,
+      points: problemPoints, // 본문 [N점] 추출값 (없으면 null)
     });
     if (epErr) console.warn(`[createExamFromHml] exam_problems 연결 실패 (${p.number}): ${epErr.message}`);
   }
