@@ -853,6 +853,19 @@ function ProblemCardView({
               원본 있음
             </span>
           )}
+          {/* ★ HML 가져오기 검증 루프 — 룰베이스 자동검증이 의심 잡은 문제. 사유는 툴팁. */}
+          {(() => {
+            const hmlWarnings = (problem.answerJson as { _hmlWarnings?: string[] })?._hmlWarnings;
+            if (!hmlWarnings?.length) return null;
+            return (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 cursor-help"
+                title={`검수 필요:\n· ${hmlWarnings.join('\n· ')}`}
+              >
+                ⚠️ 검수 {hmlWarnings.length}
+              </span>
+            );
+          })()}
           {/* ★ 해설 미완성 배지 — 일괄 해설 생성에서 '미완성만 재처리'로 걸러냄 */}
           {!problem.solution?.trim() && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20"

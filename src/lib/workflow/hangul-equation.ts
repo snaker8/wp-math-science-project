@@ -34,16 +34,81 @@ const BACKSLASH_CMDS = [
 // 스타일 토큰 — LaTeX 에선 불필요하므로 제거
 const DROP_TOKENS = ['rm', 'it', 'bold', 'roman'];
 
-/** `{분자} over {분모}` / `분자 over 분모` → `\frac{..}{..}` */
+/** `{..}` 닫는 위치(end, exclusive)에서 역방향으로 균형 잡힌 여는 `{` 찾기 */
+function grabBraceBackward(s: string, end: number): { start: number; inner: string } | null {
+  let depth = 0;
+  for (let i = end - 1; i >= 0; i--) {
+    if (s[i] === '}') depth++;
+    else if (s[i] === '{') {
+      depth--;
+      if (depth === 0) return { start: i, inner: s.slice(i + 1, end - 1) };
+    }
+  }
+  return null;
+}
+
+/** 여는 `{`(start) 에서 정방향으로 균형 잡힌 닫는 `}` 찾기 */
+function grabBraceForward(s: string, start: number): { end: number; inner: string } | null {
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}') {
+      depth--;
+      if (depth === 0) return { end: i + 1, inner: s.slice(start + 1, i) };
+    }
+  }
+  return null;
+}
+
+/**
+ * `{분자} over {분모}` / `분자 over 분모` → `\dfrac{..}{..}`
+ *   ★ 중첩 브레이스(분자/분모에 `\sqrt{B}`·`x^{2}` 등)도 균형 파싱으로 처리.
+ *     기존 정규식 `\{([^{}]*)\}` 은 중첩을 못 잡아 `\over` 폴백 → 인라인 textstyle(작게) 사고.
+ *   ★ `\dfrac` 사용 — 인라인에서도 분수를 display 크기로(작게 렌더 해소).
+ *   파싱 실패한 `over` 는 그대로 둠 → 이후 BACKSLASH_CMDS 가 `\over` 로 폴백.
+ */
 function convertOver(s: string): string {
-  // {..} over {..}
-  let prev: string;
-  do {
-    prev = s;
-    s = s.replace(/\{([^{}]*)\}\s*over\s*\{([^{}]*)\}/g, '\\frac{$1}{$2}');
-  } while (s !== prev);
-  // 토큰 over 토큰 (브레이스 없는 단순형)
-  s = s.replace(/([A-Za-z0-9.]+)\s*over\s*([A-Za-z0-9.]+)/g, '\\frac{$1}{$2}');
+  let guard = 0;
+  // 단어 경계 over (overline 등 합성어는 \bover\b 가 매칭 안 됨)
+  const overRe = /(?<![\\A-Za-z])over(?![A-Za-z])/;
+  while (guard++ < 200) {
+    const m = s.match(overRe);
+    if (!m || m.index == null) break;
+    const idx = m.index;
+
+    // ── 좌측 피연산자 ──
+    let li = idx - 1;
+    while (li >= 0 && s[li] === ' ') li--;
+    let lStart: number, lInner: string;
+    if (li >= 0 && s[li] === '}') {
+      const g = grabBraceBackward(s, li + 1);
+      if (!g) break;
+      lStart = g.start; lInner = g.inner;
+    } else {
+      let j = li;
+      while (j >= 0 && /[A-Za-z0-9.]/.test(s[j])) j--;
+      lStart = j + 1; lInner = s.slice(lStart, li + 1);
+    }
+
+    // ── 우측 피연산자 ──
+    let ri = idx + 4; // 'over'.length
+    while (ri < s.length && s[ri] === ' ') ri++;
+    let rEnd: number, rInner: string;
+    if (s[ri] === '{') {
+      const g = grabBraceForward(s, ri);
+      if (!g) break;
+      rEnd = g.end; rInner = g.inner;
+    } else {
+      let j = ri;
+      while (j < s.length && /[A-Za-z0-9.]/.test(s[j])) j++;
+      rEnd = j; rInner = s.slice(ri, j);
+    }
+
+    // 양쪽 모두 비면(피연산자 없음) 무한루프 방지 — 폴백에 맡김
+    if (lStart >= idx || rEnd <= idx + 4 || (!lInner.trim() && !rInner.trim())) break;
+
+    s = s.slice(0, lStart) + `\\dfrac{${lInner.trim()}}{${rInner.trim()}}` + s.slice(rEnd);
+  }
   return s;
 }
 
@@ -56,6 +121,15 @@ export function hangulEquationToLatex(script: string): string {
 
   // 1) 백틱(공백/정렬)·물결 → 공백, 정렬용 & 제거
   s = s.replace(/`/g, ' ').replace(/~/g, ' ').replace(/&/g, ' ');
+
+  // 1.5) ASCII 연산자 → LaTeX (한글수식이 ±, ≤ 등을 `+-`, `<=` 리터럴로 내보냄)
+  //   ★ `+-`/`-+` 를 안 바꾸면 KaTeX 가 "+−" 두 글자로 노출(해운대중 #3·#4 실사고).
+  s = s
+    .replace(/\+-/g, '\\pm ')
+    .replace(/-\+/g, '\\mp ')
+    .replace(/<=/g, '\\leq ')
+    .replace(/>=/g, '\\geq ')
+    .replace(/!=/g, '\\neq ');
 
   // 2) 분수 (over) — 백슬래시 붙이기 전에 처리
   s = convertOver(s);

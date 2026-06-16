@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { XMLParser } from 'fast-xml-parser';
+import { inflateRawSync, inflateSync } from 'zlib';
 import { hangulEquationToInlineLatex } from './hangul-equation';
 
 export interface HmlProblem {
@@ -18,7 +19,8 @@ export interface HmlProblem {
   content: string;            // 본문 (텍스트 + $LaTeX$ + [도형] 마커)
   choices: string[];          // ①~⑤ 보기 (없으면 빈 배열 = 서답형)
   answer: string;             // [정답] 마커에서 추출 (①~⑤ 또는 빈 문자열)
-  imagesBase64: string[];     // 이 문제에 등장한 그림 PNG dataURL
+  imagesBase64: string[];     // 본문(stem) 그림 dataURL
+  choiceImagesBase64: (string | null)[]; // 보기별 그림 (그림 객관식). 빈 배열=텍스트 보기
 }
 
 export interface HmlParseResult {
@@ -36,6 +38,16 @@ function tagOf(node: OrderedNode): string {
   return '';
 }
 
+/** 매직바이트로 실제 이미지 MIME 판별 (Format 속성보다 신뢰) */
+function sniffImageMime(buf: Buffer): string {
+  if (buf.length >= 8 && buf.readUInt32BE(0) === 0x89504e47) return 'image/png';
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length >= 2 && buf[0] === 0x42 && buf[1] === 0x4d) return 'image/bmp'; // "BM"
+  if (buf.length >= 6 && buf.toString('ascii', 0, 3) === 'GIF') return 'image/gif';
+  if (buf.length >= 4 && ((buf[0] === 0x49 && buf[1] === 0x49) || (buf[0] === 0x4d && buf[1] === 0x4d))) return 'image/tiff';
+  return ''; // 미지 (WMF/EMF 등 벡터 — 브라우저 렌더 불가)
+}
+
 /** BINDATALIST(헤더) → { binId: dataURL } 맵 */
 function collectBinData(root: OrderedNode[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -45,10 +57,22 @@ function collectBinData(root: OrderedNode[]): Map<string, string> {
       if (tag === 'BINDATA') {
         const attrs = n[':@'] || {};
         const id = attrs['Id'] || attrs['BinData'] || attrs['id'];
-        const fmt = (attrs['Format'] || 'png').toLowerCase();
+        const fmtAttr = (attrs['Format'] || 'png').toLowerCase();
+        // ★ Compress="true" → zlib/raw-deflate 압축 (해강중 #8 BMP 사고). 안 풀면 깨진 이미지.
+        const compressed = String(attrs['Compress'] || '').toLowerCase() === 'true';
         const children = (n[tag] as OrderedNode[]) || [];
         const text = children.map((c) => (c['#text'] as string) || '').join('').trim();
-        if (id && text) map.set(String(id), `data:image/${fmt};base64,${text}`);
+        if (id && text) {
+          let buf = Buffer.from(text, 'base64');
+          if (compressed) {
+            // HWP HML 은 raw-deflate(헤더 없음)가 일반적 — raw 먼저, 안 되면 zlib.
+            try { buf = inflateRawSync(buf); }
+            catch { try { buf = inflateSync(buf); } catch { /* 압축 해제 실패 시 원본 유지 */ } }
+          }
+          // ★ Format 속성이 'png' 여도 실제는 BMP/JPEG 인 경우가 있어 매직바이트 우선.
+          const mime = sniffImageMime(buf) || `image/${fmtAttr}`;
+          map.set(String(id), `data:${mime};base64,${buf.toString('base64')}`);
+        }
       }
       const children = n[tag] as OrderedNode[] | undefined;
       if (Array.isArray(children)) walk(children);
@@ -79,19 +103,39 @@ function extractScript(eqChildren: OrderedNode[]): string {
   return '';
 }
 
-/** 한 문단(P)을 읽기 순서대로 문자열로 — 텍스트 + $수식$ + [도형](이미지 id 수집) */
+/**
+ * 한 문단(P)을 읽기 순서대로 문자열로 — 텍스트 + $수식$ + [도형](이미지 id 수집).
+ *   ★ ENDNOTE/FOOTNOTE(미주/각주)는 본문(stem)이 아니라 별도 answerOut 으로 분리한다.
+ *     수학비서 HML 은 `[정답] {정답}` 을 ENDNOTE 안에 넣어, 재귀하면 정답이 문제 앞에
+ *     인라인으로 박힌다(서답형 #19·#20·#23 사고). 미주를 떼어내면 stem 이 깨끗해지고
+ *     서답형 정답도 answerOut 으로 추출된다.
+ */
 function renderParagraph(
   pChildren: OrderedNode[],
   binData: Map<string, string>,
   imagesOut: string[],
+  answerOut: string[],
 ): string {
   const parts: string[] = [];
+  let clearedAtEndnote = false;
   const rec = (nodes: OrderedNode[]) => {
     for (const n of nodes) {
       const tag = tagOf(n);
       if (!tag) {
         const t = n['#text'] as string | undefined;
         if (t) parts.push(t);
+        continue;
+      }
+      if (tag === 'ENDNOTE' || tag === 'FOOTNOTE') {
+        // ★ 미주/각주 = 정답 채널. stem 에 미포함.
+        const enChildren = (n[tag] as OrderedNode[]) || [];
+        const dropImgs: string[] = [];
+        const dropAns: string[] = [];
+        const aText = renderParagraph(enChildren, binData, dropImgs, dropAns).trim();
+        if (aText) answerOut.push(aText);
+        // ★ HML 구조상 stem 은 미주 뒤에 온다. 미주 앞 텍스트(페이지 머리말·번호 잔재,
+        //   예: 1번 "…제2교시수학영역")는 본문이 아니므로 버린다. 첫 미주에서 1회만.
+        if (!clearedAtEndnote) { parts.length = 0; clearedAtEndnote = true; }
         continue;
       }
       if (tag === 'EQUATION') {
@@ -131,21 +175,25 @@ function findBinRef(node: OrderedNode): string | null {
   return found;
 }
 
-/** 모든 P 문단을 읽기 순서로 수집 */
+interface RawPara { text: string; images: string[]; answer: string }
+
+/** 모든 P 문단을 읽기 순서로 수집 (text=stem, answer=미주[정답], images) */
 function collectParagraphs(
   root: OrderedNode[],
   binData: Map<string, string>,
-): Array<{ text: string; images: string[] }> {
-  const out: Array<{ text: string; images: string[] }> = [];
+): RawPara[] {
+  const out: RawPara[] = [];
   const walk = (nodes: OrderedNode[]) => {
     for (const n of nodes) {
       const tag = tagOf(n);
       if (tag === 'P') {
         const images: string[] = [];
-        const text = renderParagraph((n[tag] as OrderedNode[]) || [], binData, images)
+        const answers: string[] = [];
+        const text = renderParagraph((n[tag] as OrderedNode[]) || [], binData, images, answers)
           .replace(/[ \t]+/g, ' ')
           .trim();
-        if (text || images.length) out.push({ text, images });
+        const answer = answers.join(' ').replace(/[ \t]+/g, ' ').trim();
+        if (text || images.length || answer) out.push({ text, images, answer });
         continue; // P 안의 P 중첩은 드묾 — 상위만
       }
       const children = n[tag] as OrderedNode[] | undefined;
@@ -198,8 +246,18 @@ function extractAnswerAndStem(after: string): { answer: string; stem: string } {
   return { answer: '', stem: s };
 }
 
-/** 문단 배열 → 문제 분리 ([정답] 헤더 기준, 정답 추출) */
-function segmentProblems(paras: Array<{ text: string; images: string[] }>): HmlProblem[] {
+/** 미주 정답 채널에서 정답 추출 ([정답] 뒤). 객관식=①~⑤, 서답형=정답 수식·값 */
+function answerFromChannel(after: string): string {
+  const s = after.trim();
+  const circled = s.match(/^([①②③④⑤⑥⑦⑧⑨⑩])/);
+  return circled ? circled[1] : s;
+}
+
+/** 문단 배열 → 문제 분리.
+ *   신구조: 미주(answer)에 `[정답]` → stem(text)은 깨끗한 본문 (서답형 정답이 앞에 안 박힘).
+ *   구구조 폴백: `[정답]` 이 본문에 인라인 (이전 포맷) — extractAnswerAndStem 로 분리.
+ */
+function segmentProblems(paras: RawPara[]): HmlProblem[] {
   const problems: HmlProblem[] = [];
   let cur: { number: number; answer: string; lines: string[]; images: string[] } | null = null;
   let n = 0;
@@ -209,25 +267,60 @@ function segmentProblems(paras: Array<{ text: string; images: string[] }>): HmlP
     const body = cur.lines.join('\n').trim();
     const { content, choices } = splitChoices(body);
     if (content || choices.length) {
-      problems.push({ number: cur.number, content, choices, answer: cur.answer, imagesBase64: cur.images });
+      // ★ [도형] 마커 순서 = cur.images 순서. 본문 [도형] → stem, 보기 [도형] → 보기 이미지.
+      const stemCount = (content.match(/\[도형\]/g) || []).length;
+      const stemImages = cur.images.slice(0, stemCount);
+      const choiceImagesBase64: (string | null)[] = [];
+      let imgIdx = stemCount;
+      for (const c of choices) {
+        if (/\[도형\]/.test(c)) { choiceImagesBase64.push(cur.images[imgIdx] ?? null); imgIdx++; }
+        else choiceImagesBase64.push(null);
+      }
+      const hasChoiceImg = choiceImagesBase64.some(Boolean);
+      // 그림 객관식: 보기 텍스트에서 [도형] 제거(마커만 남김) → 이미지는 choiceImages 로 렌더.
+      const finalChoices = hasChoiceImg ? choices.map((c) => c.replace(/\[도형\]/g, '').trim()) : choices;
+      problems.push({
+        number: cur.number, content, choices: finalChoices, answer: cur.answer,
+        imagesBase64: stemImages,
+        choiceImagesBase64: hasChoiceImg ? choiceImagesBase64 : [],
+      });
     }
     cur = null;
   };
 
   for (const para of paras) {
-    const text = cleanText(para.text);
-    const hm = text.match(ANSWER_HEADER_RE);
-    if (hm && hm.index != null) {
-      const before = text.slice(0, hm.index).trim();
-      const after = text.slice(hm.index + hm[0].length);
-      // [정답] 앞부분(직전 문제의 꼬리 보기 등)은 직전 문제에 귀속
+    const ansRaw = cleanText(para.answer || '');
+    const stem = cleanText(para.text || '');
+
+    // ★ 빠른정답(정답지) 섹션 시작 → 문제 끝. 이후 표/정답지 전부 버림(마지막 문제에 푸터 유입 차단).
+    if (/빠른\s*정답/.test(stem) || /빠른\s*정답/.test(para.text || '')) { flush(); break; }
+
+    const ansHm = ansRaw.match(ANSWER_HEADER_RE);
+
+    if (ansHm && ansHm.index != null) {
+      // ── 신구조: 미주에 [정답] (본문은 이미 정답 분리됨) ──
+      flush();
+      n += 1;
+      const answer = answerFromChannel(ansRaw.slice(ansHm.index + ansHm[0].length));
+      cur = { number: n, answer, lines: stem ? [stem] : [], images: [...para.images] };
+      continue;
+    }
+
+    const stemHm = stem.match(ANSWER_HEADER_RE);
+    if (stemHm && stemHm.index != null) {
+      // ── 구구조 폴백: [정답] 이 본문 인라인 ──
+      const before = stem.slice(0, stemHm.index).trim();
+      const after = stem.slice(stemHm.index + stemHm[0].length);
       if (cur && before) cur.lines.push(before);
       flush();
       n += 1;
-      const { answer, stem } = extractAnswerAndStem(after);
-      cur = { number: n, answer, lines: stem ? [stem] : [], images: [...para.images] };
-    } else if (cur) {
-      if (text) cur.lines.push(text);
+      const { answer, stem: s2 } = extractAnswerAndStem(after);
+      cur = { number: n, answer, lines: s2 ? [s2] : [], images: [...para.images] };
+      continue;
+    }
+
+    if (cur) {
+      if (stem) cur.lines.push(stem);
       cur.images.push(...para.images);
     }
     // 첫 [정답] 이전(페이지 머리말)은 스킵
@@ -257,7 +350,7 @@ function splitChoices(body: string): { content: string; choices: string[] } {
 }
 
 /** 디버그 — 문단 원시 추출 (검증용) */
-export function __dumpParagraphs(fileBuffer: ArrayBuffer | Buffer): Array<{ text: string; images: string[] }> {
+export function __dumpParagraphs(fileBuffer: ArrayBuffer | Buffer): RawPara[] {
   const xml = Buffer.from(fileBuffer as ArrayBuffer).toString('utf-8').replace(/^﻿/, '');
   const parser = new XMLParser({
     preserveOrder: true, ignoreAttributes: false, attributeNamePrefix: '',

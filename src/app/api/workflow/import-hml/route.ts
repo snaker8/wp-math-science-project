@@ -78,6 +78,9 @@ export async function POST(request: NextRequest) {
     examId: result.examId,
     savedProblems: result.savedProblems,
     totalProblems: parsed.problems.length,
+    // ★ 검증 루프 요약 — 검수가 필요한 문제 수/사유
+    flaggedProblems: result.flaggedProblems ?? 0,
+    warningsByNumber: result.warningsByNumber ?? {},
     alreadyExisted: result.alreadyExisted || false,
   });
 }

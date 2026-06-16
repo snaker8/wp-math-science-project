@@ -200,8 +200,9 @@ export default function CloudFlowUploader({
         const res = await fetch('/api/workflow/import-hml', { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const flaggedNote = data.flaggedProblems > 0 ? ` · ⚠️ 검수 ${data.flaggedProblems}건` : '';
         setJobs((prev) => prev.map((j) => j.id === tempJob.id
-          ? { ...j, status: 'COMPLETED', progress: 100, currentStep: `저장 완료 (${data.savedProblems}/${data.totalProblems}문항)` } : j));
+          ? { ...j, status: 'COMPLETED', progress: 100, currentStep: `저장 완료 (${data.savedProblems}/${data.totalProblems}문항)${flaggedNote}` } : j));
         setPendingFiles({ PROBLEM: null, ANSWER: null, QUICK_ANSWER: null });
         if (data.examId) router.push(`/dashboard/cloud/${data.examId}`);
       } catch (e) {
