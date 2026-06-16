@@ -23,7 +23,7 @@ const BACKSLASH_CMDS = [
   'infty', 'partial', 'nabla', 'angle', 'triangle', 'square',
   'cdots', 'ldots', 'vdots', 'ddots', 'dots',
   'rightarrow', 'leftarrow', 'leftrightarrow', 'Rightarrow', 'Leftarrow', 'to',
-  'overline', 'underline', 'vec', 'hat', 'bar', 'dot', 'tilde',
+  'overline', 'underline', 'vec', 'hat', 'dot', 'tilde', // 'bar' 는 \overline 으로 별도 처리
   // 그리스
   'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta',
   'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi',
@@ -133,6 +133,10 @@ export function hangulEquationToLatex(script: string): string {
 
   // 2) 분수 (over) — 백슬래시 붙이기 전에 처리
   s = convertOver(s);
+
+  // 2.5) bar → \overline (선분 표기). KaTeX \bar 는 멀티문자(AB)에 짧은 막대라 선분이 어색.
+  //   \overline 은 양 글자 위 전체 막대 — 선분 AB·평균 x̄ 모두 자연스러움.
+  s = s.replace(/(?<![\\A-Za-z])bar(?![A-Za-z])/g, '\\overline');
 
   // 3) 스타일 토큰 제거
   for (const t of DROP_TOKENS) {
