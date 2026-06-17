@@ -21,6 +21,7 @@ export interface HmlProblem {
   answer: string;             // [정답] 마커에서 추출 (①~⑤ 또는 빈 문자열)
   imagesBase64: string[];     // 본문(stem) 그림 dataURL
   choiceImagesBase64: (string | null)[]; // 보기별 그림 (그림 객관식). 빈 배열=텍스트 보기
+  choiceHeaders?: string[];   // 표 객관식 컬럼 헤더 (있으면 보기는 | 로 셀 구분)
 }
 
 export interface HmlParseResult {
@@ -266,8 +267,12 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
     if (!cur) return;
     const body = cur.lines.join('\n').trim();
     const split = splitChoices(body);
-    const content = normalizeBogiBox(split.content);
-    const choices = split.choices;
+    let content = normalizeBogiBox(split.content);
+    let choices = split.choices;
+    // ★ 표 객관식 감지 — 헤더행 + 셀들 → choiceHeaders + `|` 셀구분. (감지 안 되면 그대로)
+    let choiceHeaders: string[] | undefined;
+    const tbl = detectTableChoices(content, choices);
+    if (tbl) { content = tbl.content; choices = tbl.choices; choiceHeaders = tbl.choiceHeaders; }
     if (content || choices.length) {
       // ★ [도형] 마커 순서 = cur.images 순서. 본문 [도형] → stem, 보기 [도형] → 보기 이미지.
       const stemCount = (content.match(/\[도형\]/g) || []).length;
@@ -285,6 +290,7 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
         number: cur.number, content, choices: finalChoices, answer: cur.answer,
         imagesBase64: stemImages,
         choiceImagesBase64: hasChoiceImg ? choiceImagesBase64 : [],
+        choiceHeaders,
       });
     }
     cur = null;
@@ -359,6 +365,45 @@ function normalizeBogiBox(content: string): string {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{2,}/g, '\n')
     .trim();
+}
+
+/**
+ * 표 객관식 감지 — content 끝의 "헤더 행"(예: `${A}$사탕${B}$사탕`)과 각 보기가
+ *   순수 `$…$` 셀들로만 구성(예: `①$5.5g$$5g$`)일 때, choiceHeaders + `|` 셀구분으로 변환.
+ *   ★ 안전: 모든 보기가 "사이 텍스트 없는 N개 `$…$`"여야 하고 N≥2 + 헤더행도 N개여야 발동.
+ *     일반 보기(`① $a=1$, $b=2$` 처럼 사이 텍스트)는 안 걸려 오탐 없음.
+ */
+function detectTableChoices(
+  content: string,
+  choices: string[],
+): { content: string; choices: string[]; choiceHeaders: string[] } | null {
+  if (choices.length < 2) return null;
+  const lines = content.split('\n');
+  let hi = -1;
+  for (let i = lines.length - 1; i >= 0; i--) { if (lines[i].trim()) { hi = i; break; } }
+  if (hi < 0) return null;
+  const header = lines[hi].trim();
+  // 헤더 행: 보기마커·물음표 없음 + `$…$`(+라벨) 세그먼트 ≥2
+  if (/[①②③④⑤⑥⑦⑧⑨⑩?]/.test(header)) return null;
+  const headerCells = header.match(/\$[^$]*\$[^$]*/g);
+  if (!headerCells || headerCells.length < 2) return null;
+  const N = headerCells.length;
+
+  const newChoices: string[] = [];
+  for (let i = 0; i < choices.length; i++) {
+    const stripped = choices[i].replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '').trim();
+    // 순수 `$…$` 세그먼트만 (사이 텍스트 없음)
+    if (!/^(?:\$[^$]*\$\s*){2,}$/.test(stripped)) return null;
+    const cells = stripped.match(/\$[^$]*\$/g);
+    if (!cells || cells.length !== N) return null;
+    newChoices.push(`${CHOICE_MARKS[i] || ''} ${cells.map((c) => c.trim()).join(' | ')}`.trim());
+  }
+
+  return {
+    content: lines.slice(0, hi).join('\n').trim(),
+    choices: newChoices,
+    choiceHeaders: headerCells.map((h) => h.trim()),
+  };
 }
 
 /** 본문에서 ①~⑤ 보기 분리.
