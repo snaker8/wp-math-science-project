@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { assertInstituteAccess, applyInstituteFilter } from '@/lib/security/institute-guard';
+import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,10 +34,14 @@ export async function GET(
     .eq('id', examId)
     .maybeSingle();
   if (!exam) return NextResponse.json({ error: '시험지를 찾을 수 없습니다' }, { status: 404 });
-  try {
-    assertInstituteAccess(scope, (exam as { institute_id: string | null }).institute_id);
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const examInstituteId = (exam as { institute_id: string | null }).institute_id;
+  // ★ 공통풀(institute_id=NULL)은 모두 접근 가능 → assert 생략. 특정 institute 만 검증.
+  if (examInstituteId !== null) {
+    try {
+      assertInstituteAccess(scope, examInstituteId);
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const groupId = (exam as { book_group_id: string | null }).book_group_id;
@@ -45,15 +49,17 @@ export async function GET(
     return NextResponse.json({ groupId: null, exams: [], problems: [] });
   }
 
-  // 같은 그룹의 다른 살아있는 시험지 (institute 격리)
-  const sibQ = supabaseAdmin
+  // 같은 그룹의 다른 살아있는 시험지 — 현재 시험지와 같은 격리(공통=NULL 포함)로 필터.
+  //   ★ 그룹 시험지는 대부분 공통풀(NULL)이라, applyInstituteFilter(allowCommonPool 없음)는
+  //     NULL 을 전부 제외해 빈 목록이 되던 버그. 현재 시험지의 institute_id 로 직접 매칭.
+  let sibQ = supabaseAdmin
     .from('exams')
     .select('id, title, created_at')
     .eq('book_group_id', groupId)
     .is('deleted_at', null)
-    .neq('id', examId)
-    .order('created_at', { ascending: false });
-  const { data: sibExams } = await applyInstituteFilter(sibQ, scope);
+    .neq('id', examId);
+  sibQ = examInstituteId === null ? sibQ.is('institute_id', null) : sibQ.eq('institute_id', examInstituteId);
+  const { data: sibExams } = await sibQ.order('created_at', { ascending: false });
   const exams = (sibExams || []) as Array<{ id: string; title: string }>;
   if (exams.length === 0) {
     return NextResponse.json({ groupId, exams: [], problems: [] });
