@@ -818,7 +818,8 @@ const CreateGroupModal: React.FC<{
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               placeholder="예) 2학년 1학기 교과서"
               autoFocus
-              className="w-full rounded-xl border bg-surface-raised/50 px-4 py-3 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500"
+              autoComplete="off"
+              className="w-full rounded-xl border bg-surface-raised px-4 py-3 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500"
             />
           </div>
 
