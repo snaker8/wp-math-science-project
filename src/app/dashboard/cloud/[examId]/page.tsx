@@ -4704,6 +4704,7 @@ export default function CloudExamDetailPage() {
           initialCognitiveDomain={editModalProblem.cognitiveDomain}
           initialTypeCode={editModalProblem.typeCode}
           initialTypeName={editModalProblem.typeName}
+          initialImages={editModalProblem.images}
           cropImageUrl={editModalProblem.images?.find(img => img.type === 'crop')?.url}
           onClose={() => setEditModalProblem(null)}
           onSaved={() => {

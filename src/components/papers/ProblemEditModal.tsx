@@ -36,6 +36,8 @@ interface ProblemEditModalProps {
   initialCognitiveDomain?: string;
   initialTypeCode?: string;
   initialTypeName?: string;
+  /** 본문 도형 이미지 배열 (figure_crop 등) — 모달에서 이미지 추가/저장 */
+  initialImages?: Array<{ url: string; type: string; label?: string }>;
   cropImageUrl?: string;
   onClose: () => void;
   onSaved: () => void;
@@ -191,6 +193,7 @@ function EditorPanel({
   textareaRef,
   onOpenLatex,
   onOpenGraph,
+  onImageButton,
 }: {
   label: string;
   value: string;
@@ -199,6 +202,8 @@ function EditorPanel({
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   onOpenLatex: () => void;
   onOpenGraph: () => void;
+  /** 있으면 이미지 버튼이 이걸 호출(도식 선택창). 없으면 URL prompt 폴백. */
+  onImageButton?: () => void;
 }) {
   const [showPreview, setShowPreview] = useState(false);
 
@@ -248,7 +253,7 @@ function EditorPanel({
           onBold={handleBold}
           onItalic={handleItalic}
           onUnderline={handleUnderline}
-          onInsertImage={handleInsertImage}
+          onInsertImage={onImageButton || handleInsertImage}
           onInsertTable={handleInsertTable}
           onInsertList={handleInsertList}
           onInsertDivider={handleInsertDivider}
@@ -844,6 +849,7 @@ export function ProblemEditModal({
   initialCognitiveDomain,
   initialTypeCode,
   initialTypeName,
+  initialImages,
   cropImageUrl,
   onClose,
   onSaved,
@@ -1066,6 +1072,9 @@ export function ProblemEditModal({
   const [graphTarget, setGraphTarget] = useState<'content' | 'solution'>('content');
   // ★ 고급 분석(채팅형 수정) 모달 — 1차 분석페이지와 동일 기능
   const [showAdvancedModal, setShowAdvancedModal] = useState(false);
+  // ★ 본문 도형 이미지 — 모달에서 추가/저장 (figure_crop). 클라우드 [도형] 렌더와 연동.
+  const [images, setImages] = useState<Array<{ url: string; type: string; label?: string }>>(initialImages || []);
+  const [showContentDiagram, setShowContentDiagram] = useState(false);
   // ★ AI 재분석
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [reanalyzeSuccess, setReanalyzeSuccess] = useState(false);
@@ -1135,14 +1144,14 @@ export function ProblemEditModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showLatexModal || showGraphModal || showAdvancedModal) return;
+        if (showLatexModal || showGraphModal || showAdvancedModal || showContentDiagram) return;
         if (showDeleteConfirm) { setShowDeleteConfirm(false); return; }
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, showLatexModal, showDeleteConfirm, showGraphModal, showAdvancedModal]);
+  }, [onClose, showLatexModal, showDeleteConfirm, showGraphModal, showAdvancedModal, showContentDiagram]);
 
   // 저장
   const handleSave = useCallback(async () => {
@@ -1185,6 +1194,8 @@ export function ProblemEditModal({
         body: JSON.stringify({
           content_latex: content,
           solution_latex: solution,
+          // ★ 본문 도형 이미지 — 모달에서 추가한 figure_crop 포함 저장 (클라우드 [도형] 렌더용)
+          images,
           answer_json: {
             ...initialAnswer,
             correct_answer: finalAnswer,
@@ -1255,7 +1266,7 @@ export function ProblemEditModal({
     }
   // ★ choiceLayout / isMultipleAnswer / choiceImages / choiceHeaders 가 deps 에 빠지면
   //   stale closure 로 변경이 저장 안 되던 회귀. 그림 객관식·표 객관식 추가 시 같은 패턴 발생.
-  }, [problemId, content, solution, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, choiceImages, choiceHeaders, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, correctionReason, onSaved, onClose]);
+  }, [problemId, content, solution, images, initialContent, initialSolution, answerType, correctAnswer, subjectiveAnswer, choices, choiceImages, choiceHeaders, initialAnswer, difficulty, typeCode, cognitiveDomain, choiceLayout, isMultipleAnswer, correctionReason, onSaved, onClose]);
 
   // ★ AI 재분석: 분류 재실행
   const handleReanalyze = useCallback(async () => {
@@ -1406,6 +1417,7 @@ export function ProblemEditModal({
               textareaRef={contentRef}
               onOpenLatex={() => openLatexModal('content')}
               onOpenGraph={() => openGraphModal('content')}
+              onImageButton={() => setShowContentDiagram(true)}
             />
             {/* ★ 렌더 수정 제안 — KaTeX 에러 유발 패턴/학습 규칙 자동 감지 */}
             <RenderRepairPanel
@@ -1526,6 +1538,20 @@ export function ProblemEditModal({
           </div>
         </div>
       </div>
+
+      {/* ★ 본문 도형 이미지 추가 — 도식 선택창(브라우즈/업로드). 선택 시 본문 끝에 [도형] 마커 +
+          images 에 figure_crop 추가 → 저장 시 클라우드 페이지에서 [도형]으로 렌더됨. */}
+      <DiagramBrowserModal
+        isOpen={showContentDiagram}
+        onClose={() => setShowContentDiagram(false)}
+        currentImageUrl={undefined}
+        problemNumber={undefined}
+        onSelect={(imageUrl) => {
+          setContent((prev) => `${prev.trimEnd()}\n[도형]\n`);
+          setImages((prev) => [...prev, { url: imageUrl, type: 'figure_crop', label: '수동 추가 도형' }]);
+          setShowContentDiagram(false);
+        }}
+      />
 
       {/* ★ 고급 분석(채팅형 수정) 모달 — 본문+선택지를 AI 지시로 정제 */}
       {showAdvancedModal && (
