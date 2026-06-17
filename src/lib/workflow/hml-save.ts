@@ -135,6 +135,10 @@ export async function createExamFromHml(
       type: isObj ? 'multiple_choice' : 'short_answer',
       choices,
     };
+    // ★ 표 객관식 — 컬럼 헤더 (있으면 클라우드가 보기를 표로 렌더, | 셀구분)
+    if (p.choiceHeaders && p.choiceHeaders.length > 0) {
+      answer_json.choiceHeaders = p.choiceHeaders;
+    }
 
     // ── 그림 dataURL → Storage 업로드 → public URL. (실패 시 null)
     //   ★ MIME/확장자를 data URL 에서 도출 — BMP/JPEG 를 png 로 박으면 브라우저 렌더 깨짐(해강중 #8).
