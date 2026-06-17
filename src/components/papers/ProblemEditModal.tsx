@@ -4,9 +4,10 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   X, Save, Loader2, Sigma, Trash2, AlertCircle,
   Bold, Italic, ImageIcon, Table2, List, Minus, Eye, EyeOff, Link2,
-  LineChart, Underline as UnderlineIcon, RefreshCw,
+  LineChart, Underline as UnderlineIcon, RefreshCw, Sparkles,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { AdvancedAnalysisModal } from '@/components/workflow/AdvancedAnalysisModal';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
 import RenderRepairPanel from '@/components/papers/RenderRepairPanel';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
@@ -1063,6 +1064,8 @@ export function ProblemEditModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showGraphModal, setShowGraphModal] = useState(false);
   const [graphTarget, setGraphTarget] = useState<'content' | 'solution'>('content');
+  // ★ 고급 분석(채팅형 수정) 모달 — 1차 분석페이지와 동일 기능
+  const [showAdvancedModal, setShowAdvancedModal] = useState(false);
   // ★ AI 재분석
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [reanalyzeSuccess, setReanalyzeSuccess] = useState(false);
@@ -1132,14 +1135,14 @@ export function ProblemEditModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showLatexModal || showGraphModal) return;
+        if (showLatexModal || showGraphModal || showAdvancedModal) return;
         if (showDeleteConfirm) { setShowDeleteConfirm(false); return; }
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, showLatexModal, showDeleteConfirm, showGraphModal]);
+  }, [onClose, showLatexModal, showDeleteConfirm, showGraphModal, showAdvancedModal]);
 
   // 저장
   const handleSave = useCallback(async () => {
@@ -1366,10 +1369,22 @@ export function ProblemEditModal({
               {problemId.slice(0, 20)}...
             </span>
           </div>
-          <button type="button" onClick={onClose}
-            className="p-2 rounded-lg text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* ★ 고급 분석 — 채팅형 AI 수정 (본문+선택지 통합) */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors"
+              title="AI 에게 지시해 본문·선택지를 수정 (채팅형, 여러 번 반복 가능)"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              고급 분석
+            </button>
+            <button type="button" onClick={onClose}
+              className="p-2 rounded-lg text-content-secondary hover:text-content-primary hover:bg-surface-raised transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* 에러 */}
@@ -1511,6 +1526,21 @@ export function ProblemEditModal({
           </div>
         </div>
       </div>
+
+      {/* ★ 고급 분석(채팅형 수정) 모달 — 본문+선택지를 AI 지시로 정제 */}
+      {showAdvancedModal && (
+        <AdvancedAnalysisModal
+          initialContent={content}
+          initialChoices={choices}
+          onApply={(finalContent, finalChoices) => {
+            setContent(finalContent);
+            // choices state 는 ① prefix 없이 보관 (기존 컨벤션) — prefix 제거 후 주입
+            setChoices(finalChoices.map((c) => c.replace(/^[①②③④⑤]\s*/, '').trim()));
+            setShowAdvancedModal(false);
+          }}
+          onCancel={() => setShowAdvancedModal(false)}
+        />
+      )}
 
       {/* LaTeX 수식 입력 모달 */}
       {showLatexModal && (
