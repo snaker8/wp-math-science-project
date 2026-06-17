@@ -179,6 +179,10 @@ export function hangulEquationToLatex(script: string): string {
   //   \overline 은 양 글자 위 전체 막대 — 선분 AB·평균 x̄ 모두 자연스러움. (대소문자 무시)
   s = s.replace(/(?<![\\A-Za-z])bar(?![A-Za-z])/gi, '\\overline');
 
+  // 2.6) box{…} → \boxed{…} (빈칸 채우기 네모칸). 미변환 시 KaTeX 가 "box…" 텍스트로 노출.
+  //   (\boxed 의 box 는 뒤가 "ed{" 라 재매칭 안 됨)
+  s = s.replace(/(?<![\\A-Za-z])box(?=\s*\{)/gi, '\\boxed');
+
   // 3) 스타일 토큰 제거
   for (const t of DROP_TOKENS) {
     s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${t}\\b`, 'g'), ' ');
