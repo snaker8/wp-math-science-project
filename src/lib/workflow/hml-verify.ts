@@ -115,5 +115,12 @@ export function verifyHmlProblem(p: HmlVerifyInput): string[] {
     warnings.push('도형 텍스트 잔재 — 확인');
   }
 
+  // 12) 본문에 표 의심 (연속 $…$ 4개+ = 좌표배치 표가 납작해진 흔적).
+  //   HML 엔 표 구조 정보가 없어 자동복원 불가 → 사람이 캡쳐(이미지)/표삽입으로 보강하라고 안내.
+  //   ($..$ 사이 텍스트 없는 런만 — 일반 수식 나열은 사이에 텍스트가 있어 안 걸림.)
+  if (/(?:\$[^$]*\$\s*){4,}/.test(p.content)) {
+    warnings.push('표 포함 의심 — 수동 확인(캡쳐/표삽입)');
+  }
+
   return warnings;
 }
