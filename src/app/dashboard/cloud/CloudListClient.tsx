@@ -1019,9 +1019,11 @@ export default function CloudPage() {
   const expandedIdsRef = useRef<Set<string>>(new Set(['all']));
 
   // --- DB에서 데이터 가져오기 ---
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      setIsLoading(true);
+      // ★ silent: 폴더/시험지 작업 후 재조회 시 로딩 스켈레톤 없이 화면 유지한 채 갱신
+      //   (전체 새로고침처럼 깜빡이던 문제 해소). 초기 로드·재시도만 스켈레톤 표시.
+      if (!opts?.silent) setIsLoading(true);
       setLoadError(null);
 
       const subjectParam = subject !== '전체' ? `?subject=${encodeURIComponent(subject)}` : '';
@@ -1064,7 +1066,7 @@ export default function CloudPage() {
       console.error('[Cloud] Failed to load data:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
-      setIsLoading(false);
+      if (!opts?.silent) setIsLoading(false);
     }
   }, [subject]);
 
@@ -1171,7 +1173,7 @@ export default function CloudPage() {
       expandedIdsRef.current.add(data.parentId);
     }
     setShowCreateGroup(null);
-    await fetchData();
+    await fetchData({ silent: true });
   }, [fetchData, subject]);
 
   // 그룹 이름 변경 시작
@@ -1210,7 +1212,7 @@ export default function CloudPage() {
     }
 
     setRenamingGroupId(null);
-    await fetchData();
+    await fetchData({ silent: true });
   }, [renamingGroupId, renameValue, fetchData]);
 
   // 그룹 삭제
@@ -1229,7 +1231,7 @@ export default function CloudPage() {
         setSelectedId('all');
         setSelectedName('전체 시험지');
       }
-      await fetchData();
+      await fetchData({ silent: true });
     } catch (err) {
       console.error('[Cloud] Delete group error:', err);
       alert('삭제 중 오류가 발생했습니다.');
@@ -1553,7 +1555,7 @@ export default function CloudPage() {
     }
 
     setRenamingExamId(null);
-    await fetchData();
+    await fetchData({ silent: true });
   }, [renamingExamId, renameExamValue, fetchData]);
 
   // --- 시험지 그룹 이동 ---
@@ -1575,7 +1577,7 @@ export default function CloudPage() {
     }
 
     setMovingExam(null);
-    await fetchData();
+    await fetchData({ silent: true });
   }, [movingExam, fetchData]);
 
   // --- 전체 삭제 (모달 오픈) ---
@@ -1625,12 +1627,12 @@ export default function CloudPage() {
         console.log(`[Cloud] 전체 삭제: ${successCount}/${filteredExams.length}개 완료`);
         if (failCount > 0) {
           setDeleteModalError(`${successCount}개 삭제 완료, ${failCount}개 실패. 서버 로그를 확인하세요.`);
-          await fetchData();
+          await fetchData({ silent: true });
           return;
         }
       }
       setDeleteModal(null);
-      await fetchData();
+      await fetchData({ silent: true });
     } catch (err) {
       console.error('[Cloud] Delete error:', err);
       setDeleteModalError('삭제 중 오류가 발생했습니다. 네트워크를 확인하세요.');
