@@ -5309,7 +5309,11 @@ export default function AnalyzeJobPage() {
             isSaved ? (
               <button
                 type="button"
-                onClick={() => router.push(savedExamId ? `/dashboard/cloud/${savedExamId}` : '/dashboard/cloud')}
+                onClick={() => {
+                  // ★ replace: 자산화 끝난 분석(OCR 1차) 페이지를 history 에서 교체 →
+                  //   클라우드 상세에서 뒤로가기 시 분석 페이지 대신 클라우드 리스트(폴더)로.
+                  router.replace(savedExamId ? `/dashboard/cloud/${savedExamId}` : '/dashboard/cloud');
+                }}
                 className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
                 title={savedExamId ? '방금 자산화한 시험지로 이동' : `${orgName}클라우드 목록으로 이동`}
               >
@@ -5335,7 +5339,10 @@ export default function AnalyzeJobPage() {
 
           <button
             type="button"
-            onClick={() => router.push('/dashboard/cloud')}
+            onClick={() => {
+              // ★ replace: 분석 페이지를 history 에서 빼서 뒤로가기로 되돌아오지 않게.
+              router.replace('/dashboard/cloud');
+            }}
             className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
           >
             닫기

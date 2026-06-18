@@ -49,32 +49,20 @@ import {
 const CloudFlowUploader = dynamic(() => import('@/components/workflow/CloudFlowUploader'), { ssr: false });
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { extractSchoolName } from '@/lib/utils/school-extract';
+// ★ 폴더 트리 순수 로직 — 분리(회귀 테스트 대상). cloud-tree.test.ts 참조.
+import {
+  buildTreeFromDB,
+  collectGroupIds,
+  applyExpandedState,
+  collectDescendantGroupIds,
+  type DBBookGroup,
+  type DBExam,
+  type TreeNode,
+} from './cloud-tree';
 
 // ============================================================================
 // Types
 // ============================================================================
-
-interface DBBookGroup {
-  id: string;
-  name: string;
-  parent_id: string | null;
-  subject: string | null;
-  sort_order: number;
-  institute_id: string | null;
-  created_by: string | null;
-  created_at: string;
-}
-
-interface TreeNode {
-  id: string;
-  name: string;
-  parentId: string | null;
-  subject: string | null;
-  children: TreeNode[];
-  isExpanded: boolean;
-  examCount: number;
-  isVirtual?: boolean; // "전체 시험지", "미분류" 등 가상 노드
-}
 
 interface ExamFile {
   id: string;
@@ -89,26 +77,6 @@ interface ExamFile {
   isDiagnostic?: boolean;
   examType?: string | null;
   diagnosticCategory?: string | null;
-}
-
-interface DBExam {
-  id: string;
-  title: string;
-  fileName: string;
-  status: string;
-  problemCount: number;
-  hasImage: boolean;
-  school: string;
-  year: string;
-  bookGroupId: string | null;
-  subject: string;
-  examType: string;
-  grade: string;
-  createdAt: string;
-  // ★ 출처별 카테고리 분류용 (Phase 1)
-  isDiagnostic?: boolean;
-  diagnosticCategory?: string | null;
-  diagnosticRound?: string | null;  // 'R1', 'R2', ...
 }
 
 // ============================================================================
@@ -161,85 +129,8 @@ function gradeRank(grade?: string): number {
 }
 type SortDir = 'asc' | 'desc';
 
-// ============================================================================
-// Build tree from flat DB groups + exams
-// ============================================================================
-
-function buildTreeFromDB(groups: DBBookGroup[], exams: DBExam[]): TreeNode[] {
-  // 그룹별 시험지 수 계산
-  const examCountMap = new Map<string, number>();
-  let unclassifiedCount = 0;
-
-  for (const exam of exams) {
-    if (exam.bookGroupId) {
-      examCountMap.set(exam.bookGroupId, (examCountMap.get(exam.bookGroupId) || 0) + 1);
-    } else {
-      unclassifiedCount++;
-    }
-  }
-
-  // flat → tree 변환
-  const nodeMap = new Map<string, TreeNode>();
-  for (const g of groups) {
-    nodeMap.set(g.id, {
-      id: g.id,
-      name: g.name,
-      parentId: g.parent_id,
-      subject: g.subject,
-      children: [],
-      isExpanded: false,
-      examCount: examCountMap.get(g.id) || 0,
-    });
-  }
-
-  const roots: TreeNode[] = [];
-  for (const node of nodeMap.values()) {
-    if (node.parentId && nodeMap.has(node.parentId)) {
-      nodeMap.get(node.parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-
-  // 가상 노드: 전체 시험지
-  const allNode: TreeNode = {
-    id: 'all',
-    name: '전체 시험지',
-    parentId: null,
-    subject: null,
-    children: [],
-    isExpanded: true,
-    examCount: exams.length,
-    isVirtual: true,
-  };
-
-  // 가상 노드: 미분류 (book_group_id가 null인 시험지)
-  const unclassifiedNode: TreeNode = {
-    id: 'unclassified',
-    name: '미분류',
-    parentId: null,
-    subject: null,
-    children: [],
-    isExpanded: false,
-    examCount: unclassifiedCount,
-    isVirtual: true,
-  };
-
-  const tree: TreeNode[] = [allNode];
-  if (roots.length > 0) tree.push(...roots);
-  if (unclassifiedCount > 0) tree.push(unclassifiedNode);
-
-  return tree;
-}
-
-// 트리에서 특정 그룹 + 모든 자손 그룹의 ID를 수집
-function collectGroupIds(node: TreeNode): string[] {
-  const ids = [node.id];
-  for (const child of node.children) {
-    ids.push(...collectGroupIds(child));
-  }
-  return ids;
-}
+// 폴더 트리 순수 로직(buildTreeFromDB/collectGroupIds/applyExpandedState/
+// collectDescendantGroupIds)은 ./cloud-tree 로 분리 — 회귀 테스트 대상.
 
 // ============================================================================
 // Sub-Components
@@ -964,7 +855,9 @@ export default function CloudPage() {
   // --- State ---
   // PR-T10 — 트랙별 옵션 첫 항목 (보통 '전체')
   const [subject, setSubject] = useState(trackSubjectOptions[0]);
-  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
+  // ★ 트리는 dbGroups/dbExams 에서 파생(아래 useMemo). 펼침/접힘 토글은 ref 보존 +
+  //   expandVersion bump 로 재계산 트리거 (ref 변경은 useMemo deps 가 감지 못하므로).
+  const [expandVersion, setExpandVersion] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>('all');
   const [selectedName, setSelectedName] = useState<string>('전체 시험지');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1018,6 +911,14 @@ export default function CloudPage() {
   // --- 확장 상태 보존 ---
   const expandedIdsRef = useRef<Set<string>>(new Set(['all']));
 
+  // ★ 트리 파생 — dbGroups/dbExams 변경 시 자동 재계산(낙관적 업데이트가 두 소스만 건드리면
+  //   트리·폴더 카운트·목록이 원자적으로 일관됨). expandVersion 은 토글(ref) 반영용.
+  const treeNodes = useMemo(
+    () => applyExpandedState(buildTreeFromDB(dbGroups, dbExams), expandedIdsRef.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dbGroups, dbExams, expandVersion]
+  );
+
   // --- DB에서 데이터 가져오기 ---
   const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     try {
@@ -1047,21 +948,9 @@ export default function CloudPage() {
       const exams: DBExam[] = examsData.exams || [];
       console.log(`[Cloud] ★ groups: ${groups.length}개, exams: ${exams.length}개`);
 
+      // ★ 트리는 dbGroups/dbExams 에서 파생되므로(useMemo) 여기서 두 소스만 갱신.
       setDbGroups(groups);
       setDbExams(exams);
-
-      // 트리 생성
-      const tree = buildTreeFromDB(groups, exams);
-
-      // 확장 상태 복원
-      const restoreExpanded = (nodes: TreeNode[]): TreeNode[] =>
-        nodes.map((n) => ({
-          ...n,
-          isExpanded: expandedIdsRef.current.has(n.id),
-          children: restoreExpanded(n.children),
-        }));
-
-      setTreeNodes(restoreExpanded(tree));
     } catch (err) {
       console.error('[Cloud] Failed to load data:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load');
@@ -1113,20 +1002,10 @@ export default function CloudPage() {
 
   // --- Tree Toggle ---
   const toggleNode = useCallback((id: string) => {
-    setTreeNodes((prev) => {
-      const toggle = (nodes: TreeNode[]): TreeNode[] =>
-        nodes.map((n) => {
-          if (n.id === id) {
-            const newExpanded = !n.isExpanded;
-            if (newExpanded) expandedIdsRef.current.add(id);
-            else expandedIdsRef.current.delete(id);
-            return { ...n, isExpanded: newExpanded };
-          }
-          if (n.children.length > 0) return { ...n, children: toggle(n.children) };
-          return n;
-        });
-      return toggle(prev);
-    });
+    // 파생 트리: 토글 상태는 ref 에 보존하고 expandVersion bump 로 재계산.
+    if (expandedIdsRef.current.has(id)) expandedIdsRef.current.delete(id);
+    else expandedIdsRef.current.add(id);
+    setExpandVersion((v) => v + 1);
   }, []);
 
   const handleSelect = useCallback((id: string, name: string) => {
@@ -1152,29 +1031,52 @@ export default function CloudPage() {
     setShowCreateGroup({ parentId });
   }, []);
 
-  // 모달에서 저장 시 API 호출
+  // 모달에서 저장 시 API 호출 — ★ 낙관적: temp 폴더 즉시 추가 + 모달 즉시 닫기, 실패 시 롤백.
   const handleCreateGroupSave = useCallback(async (data: { name: string; groupType: string; parentId: string | null }) => {
-    const res = await fetch('/api/book-groups', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: data.name,
-        parentId: data.parentId,
-        groupType: data.groupType,
-        subject: subject !== '전체' ? subject : undefined,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      throw new Error(err.error || err.detail || '그룹 생성에 실패했습니다.');
-    }
-    // 부모 그룹 확장
-    if (data.parentId) {
-      expandedIdsRef.current.add(data.parentId);
-    }
+    const snapshot = dbGroups;
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: DBBookGroup = {
+      id: tempId,
+      name: data.name,
+      parent_id: data.parentId,
+      subject: subject !== '전체' ? subject : null,
+      sort_order: 9999,
+      institute_id: null,
+      created_by: null,
+      created_at: new Date().toISOString(),
+    };
+    // 부모 그룹 확장 → 새 하위 폴더가 바로 보이게
+    if (data.parentId) expandedIdsRef.current.add(data.parentId);
+    setDbGroups((prev) => [...prev, optimistic]);
     setShowCreateGroup(null);
-    await fetchData({ silent: true });
-  }, [fetchData, subject]);
+
+    try {
+      const res = await fetch('/api/book-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          parentId: data.parentId,
+          groupType: data.groupType,
+          subject: subject !== '전체' ? subject : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        setDbGroups(snapshot); // 롤백
+        alert(`그룹 생성 실패: ${err.error || err.detail || '알 수 없는 오류'}`);
+        // 입력값 보존 위해 모달 재오픈
+        setShowCreateGroup({ parentId: data.parentId });
+        return;
+      }
+      await fetchData({ silent: true }); // temp → 실제 노드 교체
+    } catch (err) {
+      console.error('[Cloud] Create group error:', err);
+      setDbGroups(snapshot);
+      alert('그룹 생성 중 오류가 발생했습니다.');
+      setShowCreateGroup({ parentId: data.parentId });
+    }
+  }, [fetchData, subject, dbGroups]);
 
   // 그룹 이름 변경 시작
   const handleStartRenameGroup = useCallback((id: string) => {
@@ -1190,53 +1092,67 @@ export default function CloudPage() {
     setRenameValue(findName(treeNodes));
   }, [treeNodes]);
 
-  // 그룹 이름 변경 확인
+  // 그룹 이름 변경 확인 — ★ 낙관적: 즉시 이름 반영, 실패 시 롤백.
   const handleConfirmRenameGroup = useCallback(async () => {
-    if (!renamingGroupId || !renameValue.trim()) {
+    const id = renamingGroupId;
+    const newName = renameValue.trim();
+    if (!id || !newName) {
       setRenamingGroupId(null);
       return;
     }
+    setRenamingGroupId(null);
+    const snapshot = dbGroups;
+    setDbGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name: newName } : g)));
 
     try {
-      const res = await fetch(`/api/book-groups/${renamingGroupId}`, {
+      const res = await fetch(`/api/book-groups/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: renameValue.trim() }),
+        body: JSON.stringify({ name: newName }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        setDbGroups(snapshot); // 롤백
         alert(`이름 변경 실패: ${err.error || '알 수 없는 오류'}`);
+        return;
       }
+      await fetchData({ silent: true });
     } catch (err) {
       console.error('[Cloud] Rename group error:', err);
+      setDbGroups(snapshot); // 롤백
     }
+  }, [renamingGroupId, renameValue, fetchData, dbGroups]);
 
-    setRenamingGroupId(null);
-    await fetchData({ silent: true });
-  }, [renamingGroupId, renameValue, fetchData]);
-
-  // 그룹 삭제
+  // 그룹 삭제 — ★ 낙관적: 폴더(+하위) 즉시 제거, 실패 시 롤백.
   const handleDeleteGroup = useCallback(async (id: string, name: string) => {
     if (!confirm(`"${name}" 그룹을 삭제하시겠습니까? 하위 그룹도 함께 삭제됩니다.`)) return;
+
+    // 하위 그룹까지 제거 대상 수집 (cloud-tree 의 순수 함수 — 회귀 테스트 대상)
+    const removeIds = collectDescendantGroupIds(dbGroups, id);
+
+    const snapshot = dbGroups;
+    setDbGroups((prev) => prev.filter((g) => !removeIds.has(g.id)));
+    // 선택된 그룹(또는 그 하위)이 삭제된 경우 "전체"로 이동
+    if (selectedId && removeIds.has(selectedId)) {
+      setSelectedId('all');
+      setSelectedName('전체 시험지');
+    }
 
     try {
       const res = await fetch(`/api/book-groups/${id}`, { method: 'DELETE' });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        setDbGroups(snapshot); // 롤백
         alert(`삭제 실패: ${err.error || '알 수 없는 오류'}`);
         return;
-      }
-      // 선택된 그룹이 삭제된 경우 "전체"로 이동
-      if (selectedId === id) {
-        setSelectedId('all');
-        setSelectedName('전체 시험지');
       }
       await fetchData({ silent: true });
     } catch (err) {
       console.error('[Cloud] Delete group error:', err);
+      setDbGroups(snapshot); // 롤백
       alert('삭제 중 오류가 발생했습니다.');
     }
-  }, [selectedId, fetchData]);
+  }, [selectedId, fetchData, dbGroups]);
 
   // --- 선택된 그룹의 시험지 목록 ---
   const findNodeById = useCallback((nodes: TreeNode[], id: string): TreeNode | null => {
@@ -1535,50 +1451,62 @@ export default function CloudPage() {
   }, []);
 
   const handleConfirmRenameExam = useCallback(async () => {
-    if (!renamingExamId || !renameExamValue.trim()) {
+    const id = renamingExamId;
+    const newName = renameExamValue.trim();
+    if (!id || !newName) {
       setRenamingExamId(null);
       return;
     }
+    setRenamingExamId(null);
+    // ★ 낙관적: 목록 표시는 fileName 이므로 title·fileName 둘 다 즉시 반영.
+    const snapshot = dbExams;
+    setDbExams((prev) => prev.map((e) => (e.id === id ? { ...e, title: newName, fileName: newName } : e)));
 
     try {
-      const res = await fetch(`/api/exams/${renamingExamId}`, {
+      const res = await fetch(`/api/exams/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: renameExamValue.trim() }),
+        body: JSON.stringify({ title: newName }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        setDbExams(snapshot); // 롤백
         alert(`이름 변경 실패: ${err.error || '알 수 없는 오류'}`);
+        return;
       }
+      await fetchData({ silent: true });
     } catch (err) {
       console.error('[Cloud] Rename exam error:', err);
+      setDbExams(snapshot); // 롤백
     }
+  }, [renamingExamId, renameExamValue, fetchData, dbExams]);
 
-    setRenamingExamId(null);
-    await fetchData({ silent: true });
-  }, [renamingExamId, renameExamValue, fetchData]);
-
-  // --- 시험지 그룹 이동 ---
+  // --- 시험지 그룹 이동 --- ★ 낙관적: bookGroupId 즉시 반영(출발/도착 폴더 카운트 동시 갱신), 실패 롤백.
   const handleMoveExam = useCallback(async (newGroupId: string | null) => {
     if (!movingExam) return;
+    const id = movingExam.id;
+    setMovingExam(null);
+    const snapshot = dbExams;
+    setDbExams((prev) => prev.map((e) => (e.id === id ? { ...e, bookGroupId: newGroupId } : e)));
 
     try {
-      const res = await fetch(`/api/exams/${movingExam.id}`, {
+      const res = await fetch(`/api/exams/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookGroupId: newGroupId }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        setDbExams(snapshot); // 롤백
         alert(`이동 실패: ${err.error || '알 수 없는 오류'}`);
+        return;
       }
+      await fetchData({ silent: true });
     } catch (err) {
       console.error('[Cloud] Move exam error:', err);
+      setDbExams(snapshot); // 롤백
     }
-
-    setMovingExam(null);
-    await fetchData({ silent: true });
-  }, [movingExam, fetchData]);
+  }, [movingExam, fetchData, dbExams]);
 
   // --- 전체 삭제 (모달 오픈) ---
   const handleDeleteAllVisible = useCallback(() => {
