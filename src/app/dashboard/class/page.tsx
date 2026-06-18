@@ -77,6 +77,7 @@ export default function ClassHubPage() {
   }, [assignments, selStudent]);
 
   const quickLinks = selStudent ? [
+    { href: `/tutor/students/${selStudent}`, icon: UserCog, label: '학생 상세' },
     { href: `/tutor/analytics?studentId=${selStudent}`, icon: BarChart3, label: '학생 성적' },
     { href: '/dashboard/prescription', icon: Stethoscope, label: '학생 진단' },
     { href: `/dashboard/prescription/report?studentId=${selStudent}`, icon: GraduationCap, label: '진단 종합 리포트' },
