@@ -416,7 +416,9 @@ export default function TutorStudentsPage() {
     }
   };
 
-  const classNames = ['전체', ...new Set(students.map((s) => s.className).filter(Boolean))];
+  // ★ 반 없는 학생(className null/빈값 = 미배정)도 모아볼 수 있게 '미배정' 칩 추가.
+  const hasUnassigned = students.some((s) => !s.className);
+  const classNames = ['전체', ...(hasUnassigned ? ['미배정'] : []), ...new Set(students.map((s) => s.className).filter(Boolean))];
   const statuses = ['전체', 'ACCEPTED', 'PENDING'];
 
   const filteredStudents = students.filter((student) => {
@@ -425,7 +427,9 @@ export default function TutorStudentsPage() {
     const matchesSearch =
       (student.name || '').toLowerCase().includes(q) ||
       (student.email || '').toLowerCase().includes(q);
-    const matchesClass = filterClass === '전체' || student.className === filterClass;
+    const matchesClass =
+      filterClass === '전체' ||
+      (filterClass === '미배정' ? !student.className : student.className === filterClass);
     const matchesStatus = filterStatus === '전체' || student.status === filterStatus;
 
     return matchesSearch && matchesClass && matchesStatus;
