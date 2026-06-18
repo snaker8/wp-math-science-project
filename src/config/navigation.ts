@@ -344,7 +344,8 @@ export const topNavGroups: NavGroup[] = [
     icon: FolderOpen,
     children: [
       dashboardNavItems[7], // 과사람클라우드
-      dashboardNavItems[1], // 시험지저장소
+      // ★ 2026-06-18 '시험지저장소' 메뉴 제거 — 초기 스캐폴딩 페이지로 미사용, 클라우드와 중복.
+      //   dashboardNavItems 배열은 인덱스 안정 위해 유지(다른 메뉴가 인덱스 참조). 라우트도 유지.
       dashboardNavItems[6], // 유형/문제관리
       dashboardNavItems[5], // 출판교재유사
     ],
@@ -431,10 +432,11 @@ export const allNavItems: NavItem[] = [
   ...parentNavItems,
 ];
 
-// Header 퀵 액션용 (상위 5개)
+// Header 퀵 액션용
+// ★ 2026-06-18 '시험지저장소'(dashboardNavItems[1]) 제거 — 미사용·클라우드 중복.
 export const quickNavItems: NavItem[] = [
   dashboardNavItems[0], // 대시보드
-  dashboardNavItems[1], // 시험지저장소
+  dashboardNavItems[7], // 과사람클라우드
   dashboardNavItems[2], // 시험지출제
   tutorNavItems[3],     // 채점하기 (/dashboard/grading)
   tutorNavItems[5],     // 학생 진단 (/dashboard/prescription)
