@@ -183,9 +183,9 @@ export function hangulEquationToLatex(script: string): string {
   //   (\boxed 의 box 는 뒤가 "ed{" 라 재매칭 안 됨)
   s = s.replace(/(?<![\\A-Za-z])box(?=\s*\{)/gi, '\\boxed');
 
-  // 3) 스타일 토큰 제거
+  // 3) 스타일 토큰 제거 (대소문자 무시 — 일부 파일이 RM/IT 대문자로 내보냄. 청운고 "RM 2km")
   for (const t of DROP_TOKENS) {
-    s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${t}\\b`, 'g'), ' ');
+    s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${t}\\b`, 'gi'), ' ');
   }
 
   // 4) 명령어 백슬래시 보정. 구조/연산/함수 명령은 대소문자 무시(LEFT/RIGHT/CDOTS 등
@@ -194,6 +194,16 @@ export function hangulEquationToLatex(script: string): string {
     const flags = GREEK_EXACT.has(cmd) ? 'g' : 'gi';
     s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${cmd}(?![A-Za-z])`, flags), `\\${cmd}`);
   }
+
+  // 4.5) \left { / \right } → \left\{ / \right\} (한글 집합기호 중괄호).
+  //   \left 직후의 { 는 그룹이 아니라 구분자 중괄호 → KaTeX 는 \{ 필요. 안 바꾸면
+  //   "\left {a_n \right }" 가 KaTeX parse error (청운고 집합표기 left {a_n right }).
+  s = s.replace(/\\left\s*\{/g, '\\left\\{').replace(/\\right\s*\}/g, '\\right\\}');
+
+  // 4.6) 집합 조건제시법 중간 막대 — \left\{ ... \left| ... → \middle| (그 \left| 는 짝 없는
+  //   구분자라 KaTeX 불균형. \middle 은 \left…\right 안의 중간 구분자용). 절댓값 \left|…\right|
+  //   은 \left\{ 안이 아니므로 보존. \right 를 넘어가지 않게 스코프 제한(다른 집합/괄호 침범 방지).
+  s = s.replace(/\\left\\\{((?:(?!\\right)[\s\S])*?)\\left\|/g, '\\left\\{$1\\middle|');
 
   // 5) 공백 정리
   s = s.replace(/[ \t]{2,}/g, ' ').trim();
