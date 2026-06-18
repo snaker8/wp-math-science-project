@@ -17,6 +17,7 @@ import {
   Wrench,
   Home,
   ChevronRight,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -46,6 +47,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/institutes', label: '학원·센터', icon: Building2, description: '학원/센터 추가·관리' },
       { href: '/admin/users', label: '사용자 배정', icon: UserCog, description: '학원/역할 배정' },
       { href: '/admin/teachers', label: '교직원 권한', icon: Users, description: '강사 권한 세팅' },
+      { href: '/admin/notices', label: '공지 관리', icon: Bell, description: '시스템 공지 작성' },
     ],
   },
   {

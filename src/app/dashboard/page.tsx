@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -26,7 +27,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { heatmapData, classStatus, heatmapConfig } from '@/lib/mock-data';
 import { useDashboardStats, useActivityLogs } from '@/hooks';
 import { motion } from 'framer-motion';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { StudentAnalysisModal } from '@/components/dashboard/StudentAnalysisModal';
 
 // ============================================================================
@@ -140,15 +141,23 @@ function MonthSelector({
 }
 
 // ============================================================================
-// 공지사항 컴포넌트
+// 공지사항 — /api/notices 실데이터 (관리: /admin/notices, super_admin)
 // ============================================================================
 
-const mockNotices = [
-  { id: '1', title: '시스템 업데이트 안내 (v1.2.0)', date: '2026.02.10', urgent: false },
-  { id: '2', title: 'AI 분석 기능 강화 안내', date: '2026.02.08', urgent: true },
-  { id: '3', title: 'pdf(이미지) 파일 업로드 주의사항', date: '2026.02.05', urgent: false },
-  { id: '4', title: '과사람 프로그램 베타 버전 출시', date: '2026.02.01', urgent: false },
-];
+interface Notice {
+  id: string;
+  title: string;
+  body: string | null;
+  is_urgent: boolean;
+  created_at: string;
+}
+
+function formatNoticeDate(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`;
+}
 
 // ============================================================================
 // Main Dashboard
@@ -161,6 +170,26 @@ export default function DashboardPage() {
   // 실데이터 훅 사용
   const { stats, monthlyExams, isLoading: statsLoading } = useDashboardStats();
   const { logs: activityLogs } = useActivityLogs(5);
+
+  // 공지사항 (실데이터)
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [noticesLoading, setNoticesLoading] = useState(true);
+  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/notices', { cache: 'no-store' });
+        const data = await res.json();
+        if (active && res.ok) setNotices(data.notices || []);
+      } catch {
+        /* 무시 — 빈 목록 */
+      } finally {
+        if (active) setNoticesLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   // 월별 결산 상태
   const now = new Date();
@@ -266,34 +295,91 @@ export default function DashboardPage() {
           </div>
         </GlowCard>
 
-        {/* 공지사항 */}
+        {/* 공지사항 — 실데이터(/api/notices) */}
         <GlowCard className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-content-primary flex items-center gap-2">
               <Bell className="w-4 h-4 text-amber-400" />
               공지사항
             </h3>
-            <span className="text-[10px] text-content-tertiary">최근 {mockNotices.length}건</span>
+            {!noticesLoading && notices.length > 0 && (
+              <span className="text-[10px] text-content-tertiary">최근 {notices.length}건</span>
+            )}
           </div>
-          <div className="space-y-0 divide-y divide-white/5">
-            {mockNotices.map((notice) => (
-              <div
-                key={notice.id}
-                className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3 hover:bg-white/[0.02] -mx-2 px-2 rounded cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {notice.urgent && (
-                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      긴급
-                    </span>
-                  )}
-                  <span className="text-sm text-content-secondary truncate">{notice.title}</span>
+          {noticesLoading ? (
+            <div className="space-y-3 animate-pulse">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center justify-between gap-3">
+                  <div className="h-3.5 rounded bg-white/10" style={{ width: `${70 - i * 8}%` }} />
+                  <div className="h-3 w-12 rounded bg-white/10" />
                 </div>
-                <span className="text-[10px] text-content-muted shrink-0">{notice.date}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : notices.length === 0 ? (
+            <div className="py-8 text-center text-xs text-content-tertiary">등록된 공지가 없습니다.</div>
+          ) : (
+            <div className="space-y-0 divide-y divide-white/5">
+              {notices.map((notice) => {
+                const clickable = !!notice.body;
+                return (
+                  <div
+                    key={notice.id}
+                    onClick={() => clickable && setSelectedNotice(notice)}
+                    className={`py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3 -mx-2 px-2 rounded transition-colors ${clickable ? 'hover:bg-white/[0.02] cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {notice.is_urgent && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          긴급
+                        </span>
+                      )}
+                      <span className="text-sm text-content-secondary truncate">{notice.title}</span>
+                    </div>
+                    <span className="text-[10px] text-content-muted shrink-0">{formatNoticeDate(notice.created_at)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </GlowCard>
+
+        {/* 공지 상세 모달 (body 있는 공지 클릭 시) */}
+        {selectedNotice && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setSelectedNotice(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl border border-subtle bg-surface-card shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-subtle px-5 py-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {selectedNotice.is_urgent && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        긴급
+                      </span>
+                    )}
+                    <h3 className="text-base font-bold text-content-primary">{selectedNotice.title}</h3>
+                  </div>
+                  <p className="text-[11px] text-content-tertiary mt-1">{formatNoticeDate(selectedNotice.created_at)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedNotice(null)}
+                  className="text-content-tertiary hover:text-content-primary"
+                  aria-label="닫기"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-5 py-4 text-sm text-content-secondary whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-y-auto">
+                {selectedNotice.body}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. 월별 결산 + AI 포인트 + DB 문제 현황 */}
