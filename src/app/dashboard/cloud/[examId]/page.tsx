@@ -2117,8 +2117,22 @@ function ExamPaperView({
                   gridAutoFlow: 'column',
                   columnGap: `${COLUMN_GAP}px`,
                   alignItems: 'start',
+                  position: 'relative',
                 }}
               >
+                {/* 가운데 세로 구분선 — Grid 는 column-rule 불가 → absolute 세로선.
+                    out-of-flow(width 0)라 측정/분할 기하에 영향 없음. border 라 배경 인쇄 설정과 무관하게 출력됨 */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: '50%',
+                    width: 0,
+                    borderLeft: '1px solid #d4d4d4',
+                  }}
+                />
                 {pageProblems.map((problem) => (
                   <div
                     key={problem.id}
