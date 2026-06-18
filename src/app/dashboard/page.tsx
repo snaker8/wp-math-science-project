@@ -39,12 +39,14 @@ function StatusCard({
   icon: Icon,
   color,
   href,
+  loading,
 }: {
   label: string;
   value: string | number;
   icon: React.ElementType;
   color: string;
   href?: string;
+  loading?: boolean;
 }) {
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
     indigo: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'border-indigo-500/20' },
@@ -60,7 +62,11 @@ function StatusCard({
         <Icon className={`w-5 h-5 ${c.text}`} />
       </div>
       <span className="text-[11px] text-content-tertiary font-medium mb-1">{label}</span>
-      <span className="text-3xl font-bold text-content-primary">{value}</span>
+      {loading ? (
+        <span className="my-1 inline-block h-7 w-14 rounded-md bg-white/10 animate-pulse" aria-label="불러오는 중" />
+      ) : (
+        <span className="text-3xl font-bold text-content-primary">{value}</span>
+      )}
     </>
   );
 
@@ -232,6 +238,7 @@ export default function DashboardPage() {
               icon={Users}
               color="indigo"
               href="/dashboard/settings"
+              loading={statsLoading}
             />
             <StatusCard
               label="발행한 시험지 수"
@@ -239,12 +246,14 @@ export default function DashboardPage() {
               icon={FileText}
               color="rose"
               href="/dashboard/exam-management"
+              loading={statsLoading}
             />
             <StatusCard
               label="등록 학생 수"
               value={stats.totalStudents}
               icon={Users}
               color="amber"
+              loading={statsLoading}
             />
             <StatusCard
               label="TOTAL DB 문제 수"
@@ -252,6 +261,7 @@ export default function DashboardPage() {
               icon={Database}
               color="emerald"
               href="/dashboard/cloud"
+              loading={statsLoading}
             />
           </div>
         </GlowCard>
@@ -390,7 +400,11 @@ export default function DashboardPage() {
               </h4>
               <div className="text-center mb-3">
                 <p className="text-[10px] text-content-tertiary mb-1">총 등록 문제</p>
-                <p className="text-2xl font-bold text-content-primary">{stats.totalProblems}</p>
+                {statsLoading ? (
+                  <span className="mx-auto my-1 inline-block h-6 w-16 rounded-md bg-white/10 animate-pulse" aria-label="불러오는 중" />
+                ) : (
+                  <p className="text-2xl font-bold text-content-primary">{stats.totalProblems}</p>
+                )}
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
                 <span className="text-xs text-content-secondary">이번 주 추가</span>
