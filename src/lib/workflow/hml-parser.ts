@@ -22,6 +22,7 @@ export interface HmlProblem {
   imagesBase64: string[];     // 본문(stem) 그림 dataURL
   choiceImagesBase64: (string | null)[]; // 보기별 그림 (그림 객관식). 빈 배열=텍스트 보기
   choiceHeaders?: string[];   // 표 객관식 컬럼 헤더 (있으면 보기는 | 로 셀 구분)
+  choiceLayout?: number;      // ★ 원본 보기 배치 감지값 (5=가로/3=3열/2=2열/1=세로). 자산화 answer_json 기본값용. undefined=불명.
 }
 
 export interface HmlParseResult {
@@ -286,11 +287,33 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       const hasChoiceImg = choiceImagesBase64.some(Boolean);
       // 그림 객관식: 보기 텍스트에서 [도형] 제거(마커만 남김) → 이미지는 choiceImages 로 렌더.
       const finalChoices = hasChoiceImg ? choices.map((c) => c.replace(/\[도형\]/g, '').trim()) : choices;
+      // ★ 원본 보기 배치 감지 — OCR(cloud-flow)과 동일: body 라인당 보기 마커(①②③④⑤) 수로 열 수 추정.
+      //   가로(한 줄 4~5)=5, 3열=3, 2열=2, 한 줄 1개+긴 보기=세로(1). 표 객관식은 자체 포맷이라 제외.
+      //   자산화 answer_json.choiceLayout 기본값으로 흘러 "원본 배치가 기본세팅". 수동 변경은 그대로 우선.
+      let choiceLayout: number | undefined;
+      if (finalChoices.length > 0 && !choiceHeaders) {
+        const cLines = body.split('\n').filter((l) => /[①②③④⑤]/.test(l));
+        if (cLines.length > 0) {
+          let maxPerLine = 0;
+          for (const l of cLines) {
+            const c = (l.match(/[①②③④⑤]/g) || []).length;
+            if (c > maxPerLine) maxPerLine = c;
+          }
+          if (maxPerLine >= 4) choiceLayout = 5;
+          else if (maxPerLine === 3) choiceLayout = 3;
+          else if (maxPerLine === 2) choiceLayout = 2;
+          else if (maxPerLine === 1) {
+            const avgLen = cLines.reduce((s, l) => s + l.length, 0) / cLines.length;
+            if (avgLen > 25) choiceLayout = 1;
+          }
+        }
+      }
       problems.push({
         number: cur.number, content, choices: finalChoices, answer: cur.answer,
         imagesBase64: stemImages,
         choiceImagesBase64: hasChoiceImg ? choiceImagesBase64 : [],
         choiceHeaders,
+        choiceLayout,
       });
     }
     cur = null;

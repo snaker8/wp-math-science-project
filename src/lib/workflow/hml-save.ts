@@ -139,6 +139,10 @@ export async function createExamFromHml(
     if (p.choiceHeaders && p.choiceHeaders.length > 0) {
       answer_json.choiceHeaders = p.choiceHeaders;
     }
+    // ★ 원본 보기 배치 — 자산화 기본 세팅을 원본과 같게 (OCR 과 동일). 수동 변경은 그대로 우선.
+    if (typeof p.choiceLayout === 'number') {
+      answer_json.choiceLayout = p.choiceLayout;
+    }
 
     // ── 그림 dataURL → Storage 업로드 → public URL. (실패 시 null)
     //   ★ MIME/확장자를 data URL 에서 도출 — BMP/JPEG 를 png 로 박으면 브라우저 렌더 깨짐(해강중 #8).
