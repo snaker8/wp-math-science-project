@@ -2710,17 +2710,47 @@ export default function CloudPage() {
                                   </span>
                                 );
                               })()}
-                              {/* 난이도 분포 바 (하=초록 / 중=앰버 / 상=레드) — 데이터 있을 때만 */}
-                              {exam.difficulty && exam.difficulty.total > 0 && (
-                                <div
-                                  className="mt-0.5 flex h-1.5 overflow-hidden rounded-full bg-surface-raised"
-                                  title={`난이도 — 하 ${exam.difficulty.low} · 중 ${exam.difficulty.mid} · 상 ${exam.difficulty.high}`}
-                                >
-                                  {exam.difficulty.low > 0 && <span style={{ flexGrow: exam.difficulty.low }} className="bg-emerald-500" />}
-                                  {exam.difficulty.mid > 0 && <span style={{ flexGrow: exam.difficulty.mid }} className="bg-amber-500" />}
-                                  {exam.difficulty.high > 0 && <span style={{ flexGrow: exam.difficulty.high }} className="bg-red-500" />}
-                                </div>
-                              )}
+                              {/* ★ 난이도 분포 — 바(하=초록/중=앰버/상=레드) + 호버 시 우리 프리미엄 분포 팝업 */}
+                              {exam.difficulty && exam.difficulty.total > 0 && (() => {
+                                const d = exam.difficulty;
+                                const bands = [
+                                  { label: '하', count: d.low, bar: 'bg-emerald-500', fg: 'text-emerald-400' },
+                                  { label: '중', count: d.mid, bar: 'bg-amber-500', fg: 'text-amber-400' },
+                                  { label: '상', count: d.high, bar: 'bg-red-500', fg: 'text-red-400' },
+                                ];
+                                const max = Math.max(d.low, d.mid, d.high, 1);
+                                const dom = bands.reduce((a, b) => (b.count > a.count ? b : a), bands[0]);
+                                return (
+                                  <div className="group/diff relative mt-0.5">
+                                    <div className="flex h-1.5 cursor-help overflow-hidden rounded-full bg-surface-raised">
+                                      {d.low > 0 && <span style={{ flexGrow: d.low }} className="bg-emerald-500" />}
+                                      {d.mid > 0 && <span style={{ flexGrow: d.mid }} className="bg-amber-500" />}
+                                      {d.high > 0 && <span style={{ flexGrow: d.high }} className="bg-red-500" />}
+                                    </div>
+                                    {/* 호버 팝업 (우리 다크 글라스) */}
+                                    <div className="pointer-events-none invisible absolute left-0 top-full z-30 mt-1.5 w-44 translate-y-1 rounded-xl border border-white/10 bg-surface-card/95 p-3 opacity-0 shadow-2xl backdrop-blur-md transition-all duration-150 group-hover/diff:visible group-hover/diff:translate-y-0 group-hover/diff:opacity-100">
+                                      <div className="mb-2 flex items-center justify-between">
+                                        <span className="text-[11px] font-semibold text-content-primary">난이도 분포</span>
+                                        <span className="text-[10px] text-content-tertiary">{d.total}문항</span>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {bands.map((b) => (
+                                          <div key={b.label} className="flex items-center gap-2">
+                                            <span className={`w-3 text-[10px] font-bold ${b.fg}`}>{b.label}</span>
+                                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-raised">
+                                              <div className={`h-full rounded-full ${b.bar}`} style={{ width: `${(b.count / max) * 100}%` }} />
+                                            </div>
+                                            <span className="w-4 text-right text-[10px] tabular-nums text-content-secondary">{b.count}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="mt-2 border-t border-white/10 pt-1.5 text-[10px] text-content-tertiary">
+                                        중심 난이도 · <span className={`font-semibold ${dom.fg}`}>{dom.label}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                               {/* 푸터: 문항수/작업하기 + 출처 + 액션 */}
                               <div className="mt-auto flex items-center justify-between pt-1.5">
                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
