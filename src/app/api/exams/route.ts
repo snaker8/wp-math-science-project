@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
     // ★ 문제 수를 별도 쿼리로 가져오기 (exam_problems 테이블에서 그룹별 count)
     const examIds = (exams || []).map((e: any) => e.id);
     const problemCountMap = new Map<string, number>();
+    // ★ 난이도 분포 카드 바 — exam 별 문제 id 수집 후 classifications.difficulty 로 집계.
+    const examProblemIds = new Map<string, string[]>();
 
     if (examIds.length > 0) {
       try {
@@ -81,13 +83,16 @@ export async function GET(request: NextRequest) {
         for (;;) {
           const { data: counts, error } = await supabaseAdmin
             .from('exam_problems')
-            .select('exam_id')
+            .select('exam_id, problem_id')
             .in('exam_id', examIds)
             .range(from, from + PAGE - 1);
           if (error) { console.warn('[API/exams] count page error:', error.message); break; }
           if (!counts || counts.length === 0) break;
           for (const row of counts) {
             problemCountMap.set(row.exam_id, (problemCountMap.get(row.exam_id) || 0) + 1);
+            const list = examProblemIds.get(row.exam_id);
+            if (list) list.push(row.problem_id);
+            else examProblemIds.set(row.exam_id, [row.problem_id]);
           }
           if (counts.length < PAGE) break;
           from += PAGE;
@@ -95,6 +100,46 @@ export async function GET(request: NextRequest) {
       } catch {
         // exam_problems 테이블 접근 실패 시 무시 (문제 수 0으로 표시)
         console.warn('[API/exams] exam_problems count 조회 실패');
+      }
+    }
+
+    // ★ 난이도 맵 (problem_id → 1~10). classifications 는 소규모 테이블이라 전체 페이지네이션 적재.
+    //   .in() 에 수천 id 를 넘기면 URL 길이 초과 위험 → 전체 스캔이 더 안전·단순 (memory: select-limit 사고).
+    const difficultyMap = new Map<string, { low: number; mid: number; high: number; total: number }>();
+    if (examIds.length > 0) {
+      try {
+        const diffByProblem = new Map<string, number>();
+        const PAGE = 1000;
+        let from = 0;
+        for (;;) {
+          const { data: rows, error } = await supabaseAdmin
+            .from('classifications')
+            .select('problem_id, difficulty')
+            .range(from, from + PAGE - 1);
+          if (error) { console.warn('[API/exams] difficulty page error:', error.message); break; }
+          if (!rows || rows.length === 0) break;
+          for (const r of rows as Array<{ problem_id: string; difficulty: unknown }>) {
+            const d = parseInt(String(r.difficulty), 10);
+            if (r.problem_id && Number.isFinite(d)) diffByProblem.set(r.problem_id, d);
+          }
+          if (rows.length < PAGE) break;
+          from += PAGE;
+        }
+        // exam 별 분포 집계 (하 1~3 / 중 4~6 / 상 7~10)
+        for (const [examId, pids] of examProblemIds) {
+          let low = 0, mid = 0, high = 0, total = 0;
+          for (const pid of pids) {
+            const d = diffByProblem.get(pid);
+            if (d == null) continue;
+            total++;
+            if (d <= 3) low++;
+            else if (d <= 6) mid++;
+            else high++;
+          }
+          if (total > 0) difficultyMap.set(examId, { low, mid, high, total });
+        }
+      } catch {
+        console.warn('[API/exams] difficulty 집계 실패');
       }
     }
 
@@ -251,6 +296,7 @@ export async function GET(request: NextRequest) {
         fileName: exam.title || fileName,
         status: exam.status,
         problemCount: problemCountMap.get(exam.id) || 0,
+        difficulty: difficultyMap.get(exam.id) || null,
         hasImage,
         school: schoolMatch?.[1] || '',
         year: yearMatch?.[1] || '',

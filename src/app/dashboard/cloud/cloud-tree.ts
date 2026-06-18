@@ -30,6 +30,8 @@ export interface DBExam {
   examType: string;
   grade: string;
   createdAt: string;
+  // ★ 난이도 분포 (카드 바) — 하 1~3 / 중 4~6 / 상 7~10
+  difficulty?: { low: number; mid: number; high: number; total: number } | null;
   // ★ 출처별 카테고리 분류용 (Phase 1)
   isDiagnostic?: boolean;
   diagnosticCategory?: string | null;
