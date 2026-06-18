@@ -1818,11 +1818,43 @@ export default function CloudPage() {
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading State — ★ 레이아웃 모양 스켈레톤(스피너 대체). 진입 시 빈 화면 깜빡임 제거. */}
       {isLoading && (
-        <div className="flex flex-1 items-center justify-center gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
-          <span className="text-sm text-content-secondary">시험지 데이터 로딩 중...</span>
+        <div className="flex flex-1 gap-2 overflow-hidden px-2 pb-2">
+          {/* 좌측 트리 스켈레톤 */}
+          <div
+            className="hidden min-w-0 flex-col rounded-2xl border border-subtle bg-surface-card/60 p-4 sm:flex"
+            style={{ width: `${leftWidth}%` }}
+          >
+            <div className="mb-4 h-9 w-full rounded-lg bg-surface-raised/60 animate-pulse" />
+            {[70, 55, 48, 62, 50, 58, 45].map((w, i) => (
+              <div key={i} className="mb-2.5 flex items-center gap-2" style={{ paddingLeft: i % 3 === 1 ? 16 : 0 }}>
+                <div className="h-4 w-4 flex-shrink-0 rounded bg-surface-raised/60 animate-pulse" />
+                <div className="h-4 rounded bg-surface-raised/60 animate-pulse" style={{ width: `${w}%` }} />
+              </div>
+            ))}
+          </div>
+          {/* 우측 목록 스켈레톤 */}
+          <div className="flex flex-1 flex-col rounded-2xl border border-subtle bg-surface-card/60 pl-0">
+            <div className="flex items-center justify-between border-b border-subtle px-5 py-3.5">
+              <div className="h-6 w-40 rounded bg-surface-raised/60 animate-pulse" />
+              <div className="flex gap-2">
+                <div className="h-8 w-36 rounded-lg bg-surface-raised/60 animate-pulse" />
+                <div className="h-8 w-16 rounded-lg bg-surface-raised/60 animate-pulse" />
+              </div>
+            </div>
+            <div className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-hidden p-4 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex flex-col rounded-xl border border-subtle bg-surface-card/40 p-2">
+                  <div className="h-20 rounded-lg bg-surface-raised/60 animate-pulse" />
+                  <div className="mt-2.5 h-4 w-3/4 rounded bg-surface-raised/60 animate-pulse" />
+                  <div className="mt-1.5 h-3 w-1/2 rounded bg-surface-raised/50 animate-pulse" />
+                  <div className="mt-2.5 h-1.5 w-full rounded-full bg-surface-raised/50 animate-pulse" />
+                  <div className="mt-2.5 h-5 w-2/5 rounded-full bg-surface-raised/50 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
