@@ -15,6 +15,8 @@ import {
   MoreHorizontal,
   Search,
   ListFilter,
+  LayoutGrid,
+  List,
   ArrowUpDown,
   ArrowDownUp,
   Copy,
@@ -73,6 +75,9 @@ interface ExamFile {
   bookGroupId: string | null;
   createdAt?: string;
   grade?: string;
+  subject?: string | null;
+  year?: string;
+  difficulty?: { low: number; mid: number; high: number; total: number } | null;
   // ★ 출처별 카테고리 (Phase 1)
   isDiagnostic?: boolean;
   examType?: string | null;
@@ -864,6 +869,18 @@ export default function CloudPage() {
   const [sortField, setSortField] = useState<SortField>('grade');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  // --- 시험지 목록 뷰 모드 (그리드 카드 / 리스트). localStorage 로 선호 보존 ---
+  //   기본 grid(프리미엄 카드). useEffect 로 마운트 후 복원 → SSR mismatch 회피.
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  useEffect(() => {
+    const v = typeof window !== 'undefined' ? localStorage.getItem('cloud_view_mode') : null;
+    if (v === 'grid' || v === 'list') setViewMode(v);
+  }, []);
+  const changeViewMode = useCallback((m: 'grid' | 'list') => {
+    setViewMode(m);
+    try { localStorage.setItem('cloud_view_mode', m); } catch { /* ignore */ }
+  }, []);
+
   // --- Rename state ---
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -1364,6 +1381,9 @@ export default function CloudPage() {
       bookGroupId: exam.bookGroupId,
       createdAt: exam.createdAt,
       grade: exam.grade,
+      subject: exam.subject,
+      year: exam.year,
+      difficulty: exam.difficulty,
       isDiagnostic: exam.isDiagnostic,
       examType: exam.examType,
       diagnosticCategory: exam.diagnosticCategory,
@@ -2381,6 +2401,29 @@ export default function CloudPage() {
                           className="h-8 w-48 rounded-lg border border-white/10 bg-zinc-900/80 pl-8 pr-3 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                         />
                       </div>
+                      {/* 뷰 토글 (그리드/리스트) */}
+                      <div className="flex items-center rounded-lg border border-white/10 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => changeViewMode('grid')}
+                          className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-cyan-500/15 text-cyan-400' : 'text-content-tertiary hover:bg-surface-raised hover:text-content-primary'}`}
+                          title="카드 보기"
+                          aria-label="카드 보기"
+                          aria-pressed={viewMode === 'grid'}
+                        >
+                          <LayoutGrid className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => changeViewMode('list')}
+                          className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-cyan-500/15 text-cyan-400' : 'text-content-tertiary hover:bg-surface-raised hover:text-content-primary'}`}
+                          title="목록 보기"
+                          aria-label="목록 보기"
+                          aria-pressed={viewMode === 'list'}
+                        >
+                          <List className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                       {/* Sort */}
                       <button
                         type="button"
@@ -2425,8 +2468,17 @@ export default function CloudPage() {
                     </div>
                   </div>
 
-                  {/* Table */}
+                  {/* Table / Grid */}
                   <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700">
+                    {filteredExams.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                        <Search className="h-8 w-8 text-zinc-700" />
+                        <p className="text-sm text-zinc-500">
+                          {searchQuery ? '검색 결과가 없습니다' : '이 그룹에 시험지가 없습니다'}
+                        </p>
+                      </div>
+                    ) : viewMode === 'list' ? (
+                    <>
                     {/* Table Header */}
                     <div className="sticky top-0 z-10 flex items-center border-b border-subtle bg-surface-raised/60 backdrop-blur px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-content-tertiary">
                       <span
@@ -2564,15 +2616,129 @@ export default function CloudPage() {
                           </span>
                         </div>
                       ))}
-                      {filteredExams.length === 0 && (
-                        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                          <Search className="h-8 w-8 text-zinc-700" />
-                          <p className="text-sm text-zinc-500">
-                            {searchQuery ? '검색 결과가 없습니다' : '이 그룹에 시험지가 없습니다'}
-                          </p>
-                        </div>
-                      )}
                     </div>
+                    </>
+                    ) : (
+                      // ======== 그리드 카드 뷰 (프리미엄 다크) ========
+                      <div className="grid grid-cols-2 gap-3 p-4 xl:grid-cols-3">
+                        {filteredExams.map((exam) => (
+                          <div
+                            key={exam.id}
+                            onClick={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                            className="group flex flex-col rounded-xl border border-subtle bg-surface-card transition-colors hover:border-cyan-500/30 hover:bg-surface-raised/30 cursor-pointer"
+                          >
+                            {/* 액자형 썸네일 — 은은한 문서 모티브(실제 미리보기는 후속 단계) */}
+                            <div className="relative m-2 mb-0 flex h-20 items-center justify-center overflow-hidden rounded-lg border border-subtle bg-black/20">
+                              <div className="flex w-14 flex-col gap-1 rounded-sm bg-white/[0.04] p-2">
+                                <div className="h-1 w-3/5 rounded-full bg-white/20"></div>
+                                <div className="h-0.5 w-full rounded-full bg-white/10"></div>
+                                <div className="h-0.5 w-4/5 rounded-full bg-white/10"></div>
+                                <div className="h-0.5 w-11/12 rounded-full bg-white/10"></div>
+                              </div>
+                              <span className="absolute left-2 top-2 inline-flex h-5 min-w-[24px] items-center justify-center rounded-md bg-black/50 px-1.5 text-[10px] font-bold text-content-secondary">
+                                #{exam.order}
+                              </span>
+                              {exam.hasImage && (
+                                <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-400">
+                                  <ImageIcon className="h-3 w-3" />
+                                  이미지
+                                </span>
+                              )}
+                            </div>
+                            {/* 본문 */}
+                            <div className="flex flex-1 flex-col gap-1.5 p-3">
+                              {renamingExamId === exam.id ? (
+                                <input
+                                  type="text"
+                                  value={renameExamValue}
+                                  onChange={(e) => setRenameExamValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleConfirmRenameExam();
+                                    if (e.key === 'Escape') setRenamingExamId(null);
+                                  }}
+                                  onBlur={handleConfirmRenameExam}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                  className="w-full rounded border border-cyan-500/50 bg-surface-raised px-2 py-1 text-[13px] text-content-primary outline-none"
+                                />
+                              ) : (
+                                <span className="truncate text-[13px] font-medium text-content-primary">{exam.fileName}</span>
+                              )}
+                              <span className="truncate text-[11px] text-content-tertiary">
+                                {[exam.grade, exam.subject, exam.year].filter(Boolean).join(' · ') || '—'}
+                              </span>
+                              {showFolderBadge && (() => {
+                                const isDirect = (exam.bookGroupId ?? null) === (selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : null);
+                                const folderName = exam.bookGroupId ? (groupNameById.get(exam.bookGroupId) ?? '폴더') : '미분류';
+                                return (
+                                  <span className={`flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${isDirect ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300' : 'border-white/10 bg-surface-raised text-content-tertiary'}`}>
+                                    <Folder className="h-3 w-3" />
+                                    {folderName}
+                                    {isDirect && ' · 직속'}
+                                  </span>
+                                );
+                              })()}
+                              {/* 난이도 분포 바 (하=초록 / 중=앰버 / 상=레드) — 데이터 있을 때만 */}
+                              {exam.difficulty && exam.difficulty.total > 0 && (
+                                <div
+                                  className="mt-0.5 flex h-1.5 overflow-hidden rounded-full bg-surface-raised"
+                                  title={`난이도 — 하 ${exam.difficulty.low} · 중 ${exam.difficulty.mid} · 상 ${exam.difficulty.high}`}
+                                >
+                                  {exam.difficulty.low > 0 && <span style={{ flexGrow: exam.difficulty.low }} className="bg-emerald-500" />}
+                                  {exam.difficulty.mid > 0 && <span style={{ flexGrow: exam.difficulty.mid }} className="bg-amber-500" />}
+                                  {exam.difficulty.high > 0 && <span style={{ flexGrow: exam.difficulty.high }} className="bg-red-500" />}
+                                </div>
+                              )}
+                              {/* 푸터: 문항수/작업하기 + 출처 + 액션 */}
+                              <div className="mt-auto flex items-center justify-between pt-1.5">
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {exam.problemCount > 0 ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/20 bg-indigo-500/5 px-2 py-0.5 text-[11px] font-medium text-indigo-400">
+                                      <Sparkles className="h-3 w-3" />
+                                      {exam.problemCount}문항
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/cloud/${exam.id}`); }}
+                                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+                                    >
+                                      <Sparkles className="h-3 w-3" />
+                                      작업하기
+                                    </button>
+                                  )}
+                                  <SourceCategoryBadge
+                                    examId={exam.id}
+                                    isDiagnostic={exam.isDiagnostic}
+                                    examType={exam.examType}
+                                    onReclassify={handleReclassify}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteExam(exam.id, exam.fileName); }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 hover:bg-red-900/20 hover:text-red-400 transition-colors"
+                                    title="시험지 삭제"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                  <FileContextMenu
+                                    onRename={() => handleStartRenameExam(exam.id, exam.fileName)}
+                                    onView={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                                    onMove={() => setMovingExam({ id: exam.id, bookGroupId: exam.bookGroupId })}
+                                    onDownload={() => {
+                                      alert('원본 파일 다운로드 기능은 Storage 연동 후 사용 가능합니다.');
+                                    }}
+                                    onDelete={() => handleDeleteExam(exam.id, exam.fileName)}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
