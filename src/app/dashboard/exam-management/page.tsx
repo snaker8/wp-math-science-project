@@ -556,7 +556,7 @@ export default function ExamManagementPage() {
   // DB hooks
   const { exams: dbExams, isLoading: examsLoading, refetch: refetchExams } = useExamList();
   const { problems: dbProblems, examInfo, isLoading: problemsLoading } = useExamProblems(selectedExamId);
-  const { groups: bookGroups } = useBookGroups();
+  const { groups: bookGroups, isLoading: groupsLoading } = useBookGroups();
 
   // DB 문제 → ExamProblem 형식으로 변환
   const problems: ExamProblem[] = useMemo(() => {
@@ -1166,6 +1166,24 @@ export default function ExamManagementPage() {
         </div>
 
         <div className="em-side-body">
+          {/* ★ 로딩 스켈레톤 — 그룹/시험지 로딩 중 빈 화면 대신 (데이터 오면 자동 교체) */}
+          {(examsLoading || groupsLoading) && bookGroups.filter(g => g.id !== 'all').length === 0 && (
+            <div className="animate-pulse" style={{ padding: '4px 4px 0' }} aria-label="불러오는 중">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={`em-sk-${i}`}
+                  style={{
+                    height: i % 3 === 0 ? 30 : 26,
+                    marginBottom: 6,
+                    marginLeft: i % 3 === 0 ? 0 : 14,
+                    borderRadius: 8,
+                    background: 'var(--em-bg-raised)',
+                    opacity: 0.7,
+                  }}
+                />
+              ))}
+            </div>
+          )}
           {bookGroups.filter(g => g.id !== 'all').map((group) => {
             const groupExamsList = examList.filter((e: any) => {
               const gid = e.bookGroupId || e.book_group_id;
