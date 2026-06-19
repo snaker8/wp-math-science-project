@@ -933,6 +933,14 @@ function preprocessMathpixContent(text: string): string {
   // 2-3. 선택지 (1)(2)(3)(4)(5) → ①②③④⑤ 정규화
   result = normalizeChoiceParensForRender(result);
 
+  // 2-4a-0. 두 연립방정식 비교 — 같은 줄 인접 `$cases$ , $cases$` 를 한 디스플레이 블록
+  //   `$$cases \qquad cases$$` 로 병합 → 두 시스템이 나란히(가로). 단일 cases 는 미해당(아래 2-4a
+  //   가 그대로 디스플레이=중앙 처리). "두 연립방정식 A, B 의 해가…"(거제여중 #18) 가 세로로 쌓이던 사고.
+  result = result.replace(
+    /\$([^$\n]*?\\begin\{cases\}[\s\S]*?\\end\{cases\}[^$\n]*?)\$\s*[,，、]?\s*\$([^$\n]*?\\begin\{cases\}[\s\S]*?\\end\{cases\}[^$\n]*?)\$/g,
+    (_m, a, b) => `$$${a}\\qquad ${b}$$`
+  );
+
   // 2-4a. $...\begin{env}...\end{env}...$ (멀티라인 환경 포함 단일$) → $$...$$ (디스플레이로 승격)
   // KaTeX는 $...$에서 멀티라인 환경을 처리 못하고, 디스플레이여야 분수·중괄호가 크게 보임
   // ★ 이전엔 $\begin{cases}...\end{cases}$ (정확히 begin/end만 감싼) 케이스만 매칭 → "f(x) = \begin{cases}..." 같이 앞뒤 텍스트 있으면 누락
