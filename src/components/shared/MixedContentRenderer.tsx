@@ -939,8 +939,12 @@ function preprocessMathpixContent(text: string): string {
   // ★ 버그 수정: lookbehind/lookahead `(?<!\$)` `(?!\$)` 추가. 이미 $$..$$로 감싸진 환경의
   //   안쪽 $..$ (실제론 $$의 두 번째 $와 다음 $$의 첫 $) 까지 매칭해서 $$$..$$$ 로 만들던
   //   버그 (신곡중 13번 array 가 $$$로 깨져 KaTeX 렌더 실패하던 원인).
+  //   ★ 2026-06-20: matrix 계열(matrix/pmatrix/bmatrix/vmatrix) 제외 — 문장 중간 인라인
+  //     열벡터 `$\left(\begin{matrix}1\\1\end{matrix}\right)$` 까지 디스플레이로 승격되어
+  //     "각각 [큰 행렬 가운데 줄바꿈], [큰 행렬]" 처럼 블록으로 빠지던 사고(현대청운고 고급대수 #6).
+  //     행렬은 인라인 유지(문장 흐름 안 가로 배치) — 연립방정식 cases/aligned/array 는 디스플레이 유지.
   result = result.replace(
-    /(?<!\$)\$([^$\n]*?\\begin\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[\s\S]*?\\end\{(?:array|cases|aligned|pmatrix|bmatrix|vmatrix|matrix)\}[^$\n]*?)\$(?!\$)/g,
+    /(?<!\$)\$([^$\n]*?\\begin\{(?:array|cases|aligned)\}[\s\S]*?\\end\{(?:array|cases|aligned)\}[^$\n]*?)\$(?!\$)/g,
     (_m, inner) => `$$${inner}$$`
   );
 
