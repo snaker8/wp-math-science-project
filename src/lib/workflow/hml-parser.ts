@@ -228,6 +228,10 @@ function findTitle(root: OrderedNode[]): string {
 // 문제 구분: 수학비서 HML 은 각 문제를 "[정답] ⊙" 헤더로 시작(정답 인라인 포함)
 const ANSWER_HEADER_RE = /\[\s*정답\s*\]|\[\s*답\s*\]/;
 
+// 묶음문제 지문(공유 발문) — "…다음 물음에 답하시오" 한 문단이 [정답] 없이 오면 직전 문제 본문이
+// 아니라 다음 소문제의 지문이다. (현대청운고 고급대수 #6→#7·#12→#13·#16→#17 묶음)
+const PREAMBLE_RE = /(?:다음|아래)\s*물음에\s*답|물음에\s*답하(?:시오|여라|라)/;
+
 /** 이미지 base64 누출·워터마크 제거 (EQUATION/PICTURE 외 경로로 새는 잔재 정리) */
 function cleanText(s: string): string {
   return s
@@ -263,6 +267,14 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
   const problems: HmlProblem[] = [];
   let cur: { number: number; answer: string; lines: string[]; images: string[] } | null = null;
   let n = 0;
+  // 묶음문제 공유 지문 보류 — 다음 문제 생성 시 본문 앞에 prepend (직전 문제엔 안 붙임).
+  let pending: { text: string; images: string[] } | null = null;
+  const applyPending = (c: { lines: string[]; images: string[] }) => {
+    if (!pending) return;
+    if (pending.text) c.lines.unshift(pending.text);
+    if (pending.images.length) c.images.unshift(...pending.images);
+    pending = null;
+  };
 
   const flush = () => {
     if (!cur) return;
@@ -334,6 +346,7 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       n += 1;
       const answer = answerFromChannel(ansRaw.slice(ansHm.index + ansHm[0].length));
       cur = { number: n, answer, lines: stem ? [stem] : [], images: [...para.images] };
+      applyPending(cur);
       continue;
     }
 
@@ -347,10 +360,28 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       n += 1;
       const { answer, stem: s2 } = extractAnswerAndStem(after);
       cur = { number: n, answer, lines: s2 ? [s2] : [], images: [...para.images] };
+      applyPending(cur);
       continue;
     }
 
     if (cur) {
+      // ★ 묶음 공유 지문 — "…다음 물음에 답하시오"([정답]·보기 없음) 문단을 만나면, 그 문단 + 직전
+      //   문제에 이미 잘못 붙은 setup 줄들까지 함께 떼어 보류 → 다음 소문제 본문 앞에 prepend.
+      //   지문은 여러 문단(설명 + 식 + "…답하시오")이라 마지막 줄만 옮기면 setup 이 앞 문제에 남음.
+      //   setup 경계: 객관식이면 마지막 보기(①~⑤) 줄 다음부터, 서답형이면 첫 줄(본 질문) 다음부터.
+      if (stem && PREAMBLE_RE.test(stem) && !/[①②③④⑤]/.test(stem)) {
+        let boundary = 1;
+        for (let i = cur.lines.length - 1; i >= 0; i--) {
+          if (/[①②③④⑤]/.test(cur.lines[i])) { boundary = i + 1; break; }
+        }
+        const peeled = cur.lines.slice(boundary);
+        cur.lines.length = boundary;
+        const preText = [...peeled, stem].filter(Boolean).join('\n');
+        pending = pending
+          ? { text: `${pending.text}\n${preText}`, images: [...pending.images, ...para.images] }
+          : { text: preText, images: [...para.images] };
+        continue;
+      }
       if (stem) cur.lines.push(stem);
       cur.images.push(...para.images);
     }

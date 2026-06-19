@@ -17,8 +17,9 @@ const BACKSLASH_CMDS = [
   'subset', 'supset', 'subseteq', 'supseteq', 'in', 'notin', 'cup', 'cap',
   // 큰 연산자/극한
   'sum', 'prod', 'int', 'lim', 'inf', 'sup', 'max', 'min',
-  // 함수
+  // 함수·연산자
   'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp',
+  'det', 'dim', 'ker', 'gcd', 'deg', 'arg', // 행렬·대수 연산자 (고급대수)
   // 기호
   'infty', 'partial', 'nabla', 'angle', 'triangle', 'square',
   'cdots', 'ldots', 'vdots', 'ddots', 'dots',
@@ -58,6 +59,55 @@ function grabBraceForward(s: string, start: number): { end: number; inner: strin
     }
   }
   return null;
+}
+
+/** depth-0(중첩 {} 밖)에서만 구분자로 분리. sep='#'(행) 또는 '&'(열, 연속 && 도 1개로). */
+function splitTopLevel(s: string, sep: '#' | '&'): string[] {
+  const out: string[] = [];
+  let depth = 0, last = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { if (depth > 0) depth--; }
+    else if (depth === 0) {
+      if (sep === '#' && ch === '#') { out.push(s.slice(last, i)); last = i + 1; }
+      else if (sep === '&' && ch === '&') {
+        let j = i; while (j < s.length && s[j] === '&') j++; // 연속 & 묶음
+        out.push(s.slice(last, i)); last = j; i = j - 1;
+      }
+    }
+  }
+  out.push(s.slice(last));
+  return out;
+}
+
+// 행렬 열/행 구분 플레이스홀더 — 후속 단계(`&`→공백 등)에 지워지지 않게 보호. 마지막에 복원.
+const MAT_COL = '';
+const MAT_ROW = '';
+
+/**
+ * `pile/rpile/lpile/cpile/matrix{ a && b # c && d }` → `\begin{matrix} a & b \\ c & d \end{matrix}`.
+ *   HWP 행렬: `&&`(또는 `&`)=열 구분, `#`=행 구분. 보통 `\left( … \right)` 안에 옴(괄호는 원문 유지).
+ *   ★ 반드시 `&`→공백 치환·백틱 제거 전에 호출(원본 `&&` 가 살아있어야 열 분리 가능).
+ *   ★ 열/행 구분은 플레이스홀더로 출력 → 셀 내용(cos/theta/over 등)은 이후 단계가 정상 변환,
+ *     열 `&` 는 후속 `&`→공백 치환에 안 지워짐. 중첩 pile 은 guard 루프로 안쪽까지 처리.
+ */
+function convertMatrix(s: string): string {
+  let guard = 0;
+  const re = /(?<![\\A-Za-z])(?:[rlcd]?pile|matrix)\s*\{/i;
+  while (guard++ < 100) {
+    const m = s.match(re);
+    if (!m || m.index == null) break;
+    const braceStart = s.indexOf('{', m.index);
+    const g = grabBraceForward(s, braceStart);
+    if (!g) break; // 닫는 brace 누락(원문 결함) — 무한루프 방지로 중단(해당 pile 은 원문 유지)
+    const rows = splitTopLevel(g.inner, '#').map((r) =>
+      splitTopLevel(r, '&').map((c) => c.trim()).join(MAT_COL)
+    );
+    const body = rows.map((r) => r.trim()).join(MAT_ROW);
+    s = s.slice(0, m.index) + `\\begin{matrix}${body}\\end{matrix}` + s.slice(g.end);
+  }
+  return s;
 }
 
 /**
@@ -157,6 +207,10 @@ export function hangulEquationToLatex(script: string): string {
   if (!script) return '';
   let s = script;
 
+  // 0) 행렬 (rpile/pile/matrix) → \begin{matrix} (★ `&`→공백 치환 전에! 원본 `&&` 열구분 필요)
+  //   열/행 구분은 플레이스홀더(MAT_COL/MAT_ROW)로 보호 → 이후 단계가 안 지움. 끝에서 복원.
+  s = convertMatrix(s);
+
   // 1) 백틱(공백/정렬)·물결 → 공백, 정렬용 & 제거
   s = s.replace(/`/g, ' ').replace(/~/g, ' ').replace(/&/g, ' ');
 
@@ -168,6 +222,15 @@ export function hangulEquationToLatex(script: string): string {
     .replace(/<=/g, '\\leq ')
     .replace(/>=/g, '\\geq ')
     .replace(/!=/g, '\\neq ');
+
+  // 1.6) 화살표 별칭 (HWP: rarrow→→, larrow→←, Rarrow→⇒…). 대소문자로 →/⇒ 구분(대문자=이중선).
+  //   백슬래시 보정(4) 전에 처리 → 이후 \rightarrow 는 재매칭 안 됨.
+  s = s
+    .replace(/(?<![\\A-Za-z])Rarrow(?![A-Za-z])/g, '\\Rightarrow ')
+    .replace(/(?<![\\A-Za-z])Larrow(?![A-Za-z])/g, '\\Leftarrow ')
+    .replace(/(?<![\\A-Za-z])lrarrow(?![A-Za-z])/gi, '\\leftrightarrow ')
+    .replace(/(?<![\\A-Za-z])rarrow(?![A-Za-z])/g, '\\rightarrow ')
+    .replace(/(?<![\\A-Za-z])larrow(?![A-Za-z])/g, '\\leftarrow ');
 
   // 1.7) 연립방정식 cases → \begin{cases} (over/명령 처리 전에)
   s = convertCases(s);
@@ -204,6 +267,9 @@ export function hangulEquationToLatex(script: string): string {
   //   구분자라 KaTeX 불균형. \middle 은 \left…\right 안의 중간 구분자용). 절댓값 \left|…\right|
   //   은 \left\{ 안이 아니므로 보존. \right 를 넘어가지 않게 스코프 제한(다른 집합/괄호 침범 방지).
   s = s.replace(/\\left\\\{((?:(?!\\right)[\s\S])*?)\\left\|/g, '\\left\\{$1\\middle|');
+
+  // 4.7) 행렬 플레이스홀더 복원 (모든 토큰 변환 끝난 뒤 — 열 `&`·행 `\\` 가 위 단계들에 안 지워짐)
+  s = s.split(MAT_COL).join(' & ').split(MAT_ROW).join(' \\\\ ');
 
   // 5) 공백 정리
   s = s.replace(/[ \t]{2,}/g, ' ').trim();
