@@ -197,6 +197,9 @@ export default function CloudFlowUploader({
         const fd = new FormData();
         fd.append('file', problemFile);
         fd.append('sourceCategory', sourceCategory);
+        // ★ 선택한 폴더로 바로 저장 — PDF 업로드와 동일하게 bookGroupId 전달.
+        //   (없으면 import-hml route 가 미분류 저장 → 폴더 선택 후 .hml 올려도 안 들어가던 사고)
+        if (bookGroupId) fd.append('bookGroupId', bookGroupId);
         const res = await fetch('/api/workflow/import-hml', { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
