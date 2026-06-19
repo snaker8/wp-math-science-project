@@ -19,7 +19,7 @@ const BACKSLASH_CMDS = [
   'sum', 'prod', 'int', 'lim', 'inf', 'sup', 'max', 'min',
   // 함수·연산자
   'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp',
-  'det', 'dim', 'ker', 'gcd', 'deg', 'arg', // 행렬·대수 연산자 (고급대수)
+  'det', 'dim', 'ker', 'gcd', // 행렬·대수 연산자 (고급대수). ★ deg/arg 제외 — DEG(도°) 오변환 방지
   // 기호
   'infty', 'partial', 'nabla', 'angle', 'triangle', 'square',
   'cdots', 'ldots', 'vdots', 'ddots', 'dots',
@@ -231,6 +231,13 @@ export function hangulEquationToLatex(script: string): string {
     .replace(/(?<![\\A-Za-z])lrarrow(?![A-Za-z])/gi, '\\leftrightarrow ')
     .replace(/(?<![\\A-Za-z])rarrow(?![A-Za-z])/g, '\\rightarrow ')
     .replace(/(?<![\\A-Za-z])larrow(?![A-Za-z])/g, '\\leftarrow ');
+
+  // 1.6b) HWP 기호 토큰 — DEG=도(°), THEREFORE=∴, BECAUSE=∵. (DEG 는 대문자만 = 도 기호;
+  //   소문자 deg/연산자는 안 건드림. therefore/because 는 해설 본문에 흔해 대소문자 무시.)
+  s = s
+    .replace(/(?<![\\A-Za-z])DEG(?![A-Za-z])/g, '^{\\circ}')
+    .replace(/(?<![\\A-Za-z])therefore(?![A-Za-z])/gi, '\\therefore ')
+    .replace(/(?<![\\A-Za-z])because(?![A-Za-z])/gi, '\\because ');
 
   // 1.7) 연립방정식 cases → \begin{cases} (over/명령 처리 전에)
   s = convertCases(s);
