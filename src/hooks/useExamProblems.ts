@@ -592,49 +592,28 @@ export function useCreateExam() {
     setError(null);
 
     try {
-      const { data: { user } } = await supabaseBrowser.auth.getUser();
-      if (!user) {
-        setError('Not authenticated');
-        return null;
-      }
-
-      // 1. exams 테이블에 INSERT
-      const { data: examData, error: examError } = await supabaseBrowser
-        .from('exams')
-        .insert({
+      // ★ 서버 경유 — supabaseAdmin 으로 institute_id(격리 org=자기 institute) 박고 RLS 우회.
+      //   클라 직접 INSERT 는 institute_id 누락→NULL→exam_problems RLS 거부로 0문항 사고
+      //   (엄궁차수학 김도연 '문제 선택해 시험지 만들기'). /api/exams/generate 수동 모드 재사용.
+      const res = await fetch('/api/exams/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           title: params.title,
-          subject: params.subject || null,
-          grade: params.grade || null,
-          status: 'DRAFT',
-          total_points: params.problemIds.length * 4,
-          created_by: user.id,
-        })
-        .select('id')
-        .single();
+          problemIds: params.problemIds,
+          bookGroupId: params.groupId || null,
+          criteria: { subject: params.subject || '수학' },
+        }),
+      });
 
-      if (examError || !examData) {
-        throw examError || new Error('Failed to create exam');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(d.error || `HTTP ${res.status}`);
       }
 
-      // 2. exam_problems 테이블에 문제 연결 — points는 null로, 사용자가 자동배점/수동
-      const examProblems = params.problemIds.map((problemId, idx) => ({
-        exam_id: examData.id,
-        problem_id: problemId,
-        sequence_number: idx + 1,
-        points: null,
-      }));
-
-      const { error: linkError } = await supabaseBrowser
-        .from('exam_problems')
-        .insert(examProblems);
-
-      if (linkError) {
-        console.error('[CreateExam] Link problems error:', linkError.message);
-        // 시험지는 생성됐으므로 ID는 반환
-      }
-
-      console.log(`[CreateExam] Created exam ${examData.id} with ${params.problemIds.length} problems`);
-      return examData.id;
+      const data = await res.json();
+      console.log(`[CreateExam] Created exam ${data.examId} with ${params.problemIds.length} problems`);
+      return data.examId || null;
 
     } catch (err) {
       console.error('[CreateExam] Error:', err);
