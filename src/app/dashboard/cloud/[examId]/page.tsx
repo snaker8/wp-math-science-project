@@ -1380,7 +1380,9 @@ function ProblemCardView({
               let isInline = false;
               if (savedLayout) {
                 if (savedLayout === 5 && !hasAnyChoiceImage) { isInline = true; }
-                else if (savedLayout === 5 && hasAnyChoiceImage) { gridClass = 'mt-2 grid grid-cols-5 gap-x-3 gap-y-2 pl-4'; }
+                // ★ 그림 보기 + 원본 가로(5) → 5열로 깔면 그래프가 1/5 폭으로 찌그러짐(동해중 #9 회귀).
+                //   인쇄용 ExamProblemRenderer 와 동일하게 2열로(이미지 적당 크기). PR #366 회귀 fix.
+                else if (savedLayout === 5 && hasAnyChoiceImage) { gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-2 pl-4'; }
                 else if (savedLayout === 3) { gridClass = 'mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 pl-4'; }
                 else if (savedLayout === 2) { gridClass = 'mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-4'; }
                 // savedLayout === 1 → 기본 1열
