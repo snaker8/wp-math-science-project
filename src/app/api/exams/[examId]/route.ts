@@ -231,16 +231,30 @@ export async function PATCH(
   // 격리 가드 — exam 의 institute 접근 권한 검증
   const { data: existingExam } = await supabaseAdmin
     .from('exams')
-    .select('institute_id')
+    .select('institute_id, created_by')
     .eq('id', examId)
     .maybeSingle();
   if (!existingExam) {
     return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
   }
-  try {
-    assertInstituteAccess(scope, (existingExam as { institute_id: string | null }).institute_id);
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  {
+    const ex = existingExam as { institute_id: string | null; created_by: string | null };
+    if (ex.institute_id === null) {
+      // ★ 공통풀(공유 라이브러리) 시험지 — 올린(생성) 강사 본인 또는 super_admin 만 수정 허용.
+      //   업로더는 자기가 올린 자료(제목·폴더 등) 관리 가능 + 격리 학원 강사가 공유 시험지를
+      //   임의로 바꾸는 것은 차단. (사용자 정책 2026-06-20: "올리는 강사는 이름 변경 가능")
+      const isOwner = !!ex.created_by && ex.created_by === user.id;
+      if (!scope.isSuperAdmin && !isOwner) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else {
+      // 격리 자료 — institute 접근 권한 검증
+      try {
+        assertInstituteAccess(scope, ex.institute_id);
+      } catch {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
   }
 
   try {
