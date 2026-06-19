@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { title, criteria, problemIds } = body;
+    const { title, criteria, problemIds, bookGroupId } = body;
 
     // ---- Manual mode: problemIds 직접 전달 ----
     if (Array.isArray(problemIds) && problemIds.length > 0) {
@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
           subject: criteria?.subject || '수학',
           total_points: problemIds.length * 4,
           institute_id: insertInstituteId,
+          book_group_id: bookGroupId || null,
           created_by: user.id,
         })
         .select('id')
