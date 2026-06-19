@@ -791,6 +791,34 @@ const CHOSEONG_TO_COMPAT: Record<string, string> = {
   'ᄏ': 'ㅋ', 'ᄐ': 'ㅌ', 'ᄑ': 'ㅍ', 'ᄒ': 'ㅎ',
 };
 
+/**
+ * 집합 조건제시법 막대 — `\left\{ … \left| … \right\}` 의 조건 구분 `\left|` 를 `\middle|` 로.
+ *   `\left|` 는 짝(`\right|`)이 없어 `\left\{…\right\}` 안에서 \left/\right 불균형 → KaTeX 렌더 실패
+ *   (현대청운고 고급대수 #19·#20 빨간 raw). 중첩 `\left(…\right)` 가 사이에 있어도 동작(깊이 추적).
+ *   집합 밖 절댓값 `\left|x\right|` 은 `\left\{` 스코프 밖이라 안 건드림. 깊이 1(집합 직속)만 변환.
+ */
+function convertSetBuilderBar(s: string): string {
+  const OPEN = '\\left\\{';
+  let scanFrom = 0;
+  for (;;) {
+    const start = s.indexOf(OPEN, scanFrom);
+    if (start === -1) break;
+    let depth = 1;
+    let j = start + OPEN.length;
+    while (j < s.length && depth > 0) {
+      if (s.startsWith('\\left|', j)) {
+        if (depth === 1) { s = s.slice(0, j) + '\\middle|' + s.slice(j + 6); j += 8; continue; }
+        depth++; j += 6; continue;
+      }
+      if (s.startsWith('\\left', j)) { depth++; j += 5; continue; }
+      if (s.startsWith('\\right', j)) { depth--; j += 6; continue; }
+      j++;
+    }
+    scanFrom = start + OPEN.length;
+  }
+  return s;
+}
+
 function preprocessMathpixContent(text: string): string {
   // ★ 한글 자모 통일 (Mac/OCR 결합형 ↔ 자판형) — 보기/객관식 ㄱㄴㄷ 라벨이 초성자모
   //   (U+1100~, 결합형)로 들어와 호환자모(U+3131~, 자판형)와 섞여 "왔다갔다"·다르게
@@ -955,6 +983,10 @@ function preprocessMathpixContent(text: string): string {
     /(?<!\$)\$([^$\n]*?\\begin\{(?:array|cases|aligned)\}[\s\S]*?\\end\{(?:array|cases|aligned)\}[^$\n]*?)\$(?!\$)/g,
     (_m, inner) => `$$${inner}$$`
   );
+
+  // 2-4a-1. 집합 조건제시 막대 \left| → \middle| (\left\{…\right\} 안, KaTeX 불균형 해소).
+  //   ★ \left\{…\right. (cases/piecewise) 변환 전에 — 집합은 \right\}(brace) 라 아래 변환과 무관.
+  result = convertSetBuilderBar(result);
 
   // 2-4b. piecewise 함수: \left\{\begin{array}...\end{array}\right. → \begin{cases}...\end{cases}
   // cases 환경은 KaTeX가 자동으로 큰 중괄호를 렌더링
