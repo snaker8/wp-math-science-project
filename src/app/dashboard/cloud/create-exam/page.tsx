@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText,
@@ -46,6 +46,7 @@ export default function CreateExamPage() {
   const [examTitle, setExamTitle] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [bookGroups, setBookGroups] = useState<ExamGroup[]>([]);
+  const [subjectName, setSubjectName] = useState('수학');
 
   // DB에서 book_groups 가져오기
   useEffect(() => {
@@ -59,9 +60,7 @@ export default function CreateExamPage() {
             name: g.name,
           }));
           setBookGroups(groups);
-          if (groups.length > 0 && !selectedGroup) {
-            setSelectedGroup(groups[0].id);
-          }
+          // ★ 첫 폴더 자동선택 안 함 — 기본은 미분류(null). 엉뚱한 폴더로 들어가던 것 방지, 사용자가 직접 선택.
         }
       } catch (err) {
         console.error('[CreateExam] Failed to fetch book groups:', err);
@@ -85,14 +84,12 @@ export default function CreateExamPage() {
           setExamTitle(`${storedTitle} 시험지`);
         }
       }
+      // ★ 원본 시험지 과목 반영 — '수학1' 하드코딩 제거(엉뚱한 폴더 자동분류 방지).
+      const storedSubject = sessionStorage.getItem('sourceExamSubject');
+      if (storedSubject) setSubjectName(storedSubject);
     } catch {
       // ignore parse errors
     }
-  }, []);
-
-  const subjectName = useMemo(() => {
-    // 과목명 추출 (mock)
-    return '수학1';
   }, []);
 
   const handleCreate = async () => {
@@ -106,21 +103,15 @@ export default function CreateExamPage() {
 
     if (examId) {
       setIsCreated(true);
-      // 생성된 시험지 정보를 sessionStorage에 저장 후 이동
-      setTimeout(() => {
-        sessionStorage.setItem(
-          'createdExam',
-          JSON.stringify({
-            id: examId,
-            title: examTitle,
-            groupId: selectedGroup,
-            groupName: bookGroups.find((g) => g.id === selectedGroup)?.name || '',
-            problems,
-            createdAt: new Date().toISOString(),
-          })
-        );
-        router.push('/dashboard/cloud');
-      }, 1500);
+      // ★ 만든 시험지로 바로 이동 — 생성 결과(문제 담김)를 즉시 확인.
+      //   (이전엔 목록(/dashboard/cloud)으로 가서 "안 된 것처럼" 보이고, 엉뚱한 폴더면 못 찾았음)
+      sessionStorage.removeItem('selectedProblems');
+      sessionStorage.removeItem('sourceExamTitle');
+      sessionStorage.removeItem('sourceExamSubject');
+      setTimeout(() => { router.push(`/dashboard/cloud/${examId}`); }, 700);
+    } else {
+      // ★ 실패 시 에러 노출 — 이전엔 조용히 버튼만 리셋돼 "안 됨"으로 보였음.
+      alert(`시험지 생성 실패: ${createError || '잠시 후 다시 시도해주세요.'}`);
     }
   };
 
@@ -231,6 +222,19 @@ export default function CreateExamPage() {
         <div className="w-64 flex-shrink-0 border-r border-zinc-800/50 p-4 overflow-y-auto">
           <h3 className="text-sm font-bold text-zinc-300 mb-3">시험지 그룹 선택</h3>
           <div className="space-y-1">
+            {/* ★ 미분류(폴더 없음) 명시 옵션 — 기본값 */}
+            <button
+              type="button"
+              onClick={() => setSelectedGroup(null)}
+              className={`w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left ${
+                selectedGroup === null
+                  ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                  : 'text-zinc-400 hover:bg-zinc-800 border border-transparent'
+              }`}
+            >
+              <FolderOpen className="h-4 w-4 flex-shrink-0" />
+              미분류
+            </button>
             {bookGroups.map((group) => (
               <button
                 key={group.id}

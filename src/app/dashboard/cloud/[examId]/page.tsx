@@ -3896,8 +3896,11 @@ export default function CloudExamDetailPage() {
     const selected = problems.filter((p) => selectedProblems.has(p.id));
     sessionStorage.setItem('selectedProblems', JSON.stringify(selected));
     sessionStorage.setItem('sourceExamTitle', examTitle);
+    // ★ 원본 시험지 과목 전달 — create-exam 이 '수학1' 하드코딩으로 엉뚱한 폴더 분류되던 것 방지.
+    if (examInfo?.subject) sessionStorage.setItem('sourceExamSubject', examInfo.subject);
+    else sessionStorage.removeItem('sourceExamSubject');
     router.push('/dashboard/cloud/create-exam');
-  }, [problems, selectedProblems, examTitle, router]);
+  }, [problems, selectedProblems, examTitle, examInfo, router]);
 
   // Counts — DifficultyKey 가 1~10 이라 모두 0 으로 초기화
   const difficultyCounts = useMemo(() => {
