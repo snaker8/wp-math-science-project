@@ -198,7 +198,14 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       const hasVerticalBar = colSpec.includes('|');
       const hasHline = /\\hline/i.test(m);
       const hasAlignedInside = /\\begin\{aligned\}/i.test(m);
-      const looksLikeSolutionBox = hasVerticalBar || hasHline || hasAlignedInside;
+      // ★ 다열 데이터 표(테두리 있는 진짜 표, 예: {|l|l|l|l|} + \hline)는 풀이박스가 아님 (화명중 #1
+      //   "글자와 줄만 나옴" 사고: 데이터 표를 풀이박스로 오인해 테두리를 떼어내 격자 없는 표로 렌더됨).
+      //   풀이박스는 보통 단일 컬럼({|l|}). 컬럼 2개 이상이거나 행에 & 가 있으면 데이터 표로 보고
+      //   테두리 유지(parseTabularBlock 이 |·\hline → CSS 격자로 렌더, KaTeX 미사용이라 안전).
+      //   nested \begin{aligned} 풀이는 컬럼수와 무관하게 풀이박스로 유지.
+      const colCount = (colSpec.match(/[clr]/gi) || []).length;
+      const isMultiColumnTable = colCount >= 2 || /&/.test(m);
+      const looksLikeSolutionBox = hasAlignedInside || (!isMultiColumnTable && (hasVerticalBar || hasHline));
 
       // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
       //   \boxed{\text{(가)}} 의 (가) 는 placeholder 라 셀의 보기 라벨과 의미 다름
