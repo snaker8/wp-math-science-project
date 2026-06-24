@@ -45,6 +45,9 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                 .replace(/^\s*\\displaystyle\s*/, '')
                 // ★ KaTeX에서 \square가 기호로 인식 안 되는 문제 → 빈 네모 박스로 변환
                 .replace(/\\square/g, '\\boxed{\\phantom{X}}')
+                // ★ % 는 KaTeX(TeX) 주석 문자 — 수식 안 `$20%$` 가 `%`부터 주석 처리돼 통째로
+                //   사라지던 사고. 이스케이프 안 된 % 를 \% 로(백분율 기호). (2026-06-20 긴급)
+                .replace(/(?<!\\)%/g, '\\%')
                 .trim();
 
             // ★ cases / aligned / array 행간 자동 리사이징 — 완전 비활성화 (2026-05-26 fix 2/2):
@@ -81,6 +84,7 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                         if (m.includes(']')) return ']';
                         return '';
                     })
+                    .replace(/(?<!\\)%/g, '\\%')
                     .replace(/^\s*\\displaystyle\s*/, '').trim();
                 if (!fallback) return '';
                 // ★ fallback 도 동일 — stretchArrays no-op (행 spacing 자동 추가 X, 2026-05-26)
