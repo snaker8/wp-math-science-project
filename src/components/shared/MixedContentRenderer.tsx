@@ -19,7 +19,9 @@ function SolutionBoxRender({ body }: { body: string }) {
         // ★ 분수 크기 정상화 (2026-05-18): displayMode 에서 \frac 가
         //   본문 글자 대비 너무 크게 그려져 박스가 어색해 보임. \tfrac (textstyle)
         //   으로 강제해 본문 글자 비례에 맞춤. \dfrac 사용자는 명시 의도이므로 보존.
-        .replace(/\\frac(?![a-zA-Z])/g, '\\tfrac');
+        .replace(/\\frac(?![a-zA-Z])/g, '\\tfrac')
+        // ★ % 는 TeX 주석 문자 — 수식 안 % 가 뒤를 주석 처리. \% 로 이스케이프. (2026-06-20)
+        .replace(/(?<!\\)%/g, '\\%');
       return katex.renderToString(
         `\\begin{aligned}${cleaned}\\end{aligned}`,
         {

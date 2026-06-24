@@ -63,7 +63,8 @@ function renderMixedContent(raw: string): string {
     const before = s.substring(idx, m.index);
     if (before) parts.push(escapeHtml(before).replace(/\n/g, '<br/>'));
     const isBlock = m[1] !== undefined;
-    const tex = (m[1] ?? m[2] ?? '').trim();
+    // ★ % 는 TeX 주석 문자 — 수식 안 % 가 뒤를 통째로 주석 처리하던 사고. \% 로 이스케이프. (2026-06-20)
+    const tex = (m[1] ?? m[2] ?? '').trim().replace(/(?<!\\)%/g, '\\%');
     try {
       parts.push(
         katex.renderToString(tex, {
