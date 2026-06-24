@@ -138,6 +138,7 @@ export interface LLMAnalysisResult {
   contentMmd?: string;        // Mathpix Markdown 원본 (도형 마커 [도형] 포함)
   choices?: string[];         // 선택지 배열 (수식 포함)
   choiceLayout?: number;      // ★ 원본 보기 배치 감지값 (1=세로/2=2열/3=3열/5=가로). 자산화·수정모달 기본값용.
+  choiceHeaders?: string[];   // ★ 표 객관식 헤더 (보기가 \begin{tabular} 형식일 때 자동 감지). 자산화 answer_json.choiceHeaders 로.
   choiceImages?: (string | null)[]; // 선택지별 이미지 URL (그림 객관식). choices와 인덱스 정렬.
   pageIndex?: number;         // PDF 페이지 인덱스 (0-based)
   bbox?: { x: number; y: number; w: number; h: number }; // 문제 영역 bbox (비율 0~1)
