@@ -3549,6 +3549,10 @@ export default function AnalyzeJobPage() {
           choiceLayout: isEdited
             ? (prevProblem as { choiceLayout?: number }).choiceLayout
             : ((result as { choiceLayout?: number }).choiceLayout ?? result.answer_json?.choiceLayout),
+          // ★ 표 객관식 헤더(보기-표 자동 감지) → 모달·자산화로 전달 (화명중 #5류). choiceLayout 과 동일 경로.
+          choiceHeaders: isEdited
+            ? (prevProblem as { choiceHeaders?: string[] }).choiceHeaders
+            : ((result as { choiceHeaders?: string[] }).choiceHeaders ?? (result.answer_json as { choiceHeaders?: string[] })?.choiceHeaders),
           answer: isEdited ? prevProblem.answer : (result.solution?.finalAnswer || result.answer_json?.correct_answer || ''),
           solution: isEdited ? prevProblem.solution : serverSolution,
           difficulty: isEdited ? (prevProblem.difficulty ?? (result.classification?.difficulty || 3)) : ((result.classification?.difficulty || 3) as 1|2|3|4|5),
