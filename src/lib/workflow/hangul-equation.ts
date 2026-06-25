@@ -245,6 +245,13 @@ export function hangulEquationToLatex(script: string): string {
   // 2) 분수 (over) — 백슬래시 붙이기 전에 처리
   s = convertOver(s);
 
+  // 2.45) rmbar(=rm+bar 붙은 형태) → \overline. bar 정규식은 "앞 글자 없음" 요구라 rmbar 를
+  //   못 잡아 화면에 "rmbar" 글자로 노출되던 사고(전 코퍼스 다수). 선분 인자 있으면 묶어줌.
+  s = s.replace(/(?<![\\A-Za-z])rmbar\s+([A-Za-z][A-Za-z0-9]*)/gi, '\\overline{$1}'); // rmbar PQ → \overline{PQ}
+  s = s.replace(/(?<![\\A-Za-z])rmbar(?![A-Za-z])/gi, '\\overline');                  // 나머지 rmbar{…}
+  // 2.46) prime → ' (도함수·각 표기). HWP 가 ' 를 prime 토큰으로 내보냄. 미변환 시 "prime" 글자 노출.
+  s = s.replace(/(?<![\\A-Za-z])prime(?![A-Za-z])/gi, "'"); // f prime → f '  (KaTeX 가 ' 를 프라임으로 렌더)
+
   // 2.5) bar → \overline (선분 표기). KaTeX \bar 는 멀티문자(AB)에 짧은 막대라 선분이 어색.
   //   \overline 은 양 글자 위 전체 막대 — 선분 AB·평균 x̄ 모두 자연스러움. (대소문자 무시)
   s = s.replace(/(?<![\\A-Za-z])bar(?![A-Za-z])/gi, '\\overline');
