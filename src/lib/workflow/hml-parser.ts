@@ -106,6 +106,63 @@ function extractScript(eqChildren: OrderedNode[]): string {
 }
 
 /**
+ * HWP ML 표(<TABLE><ROW><CELL>) → `\begin{tabular}` 복원.
+ *   ★ 기존엔 표 처리가 없어 셀 <P> 들이 개별로 긁혀 "$x$$1$$3$$c$$7$$y$…" 처럼 구조 없이
+ *     이어붙던 사고(거제여중 #2). 행·열을 보존해 격자 표로 렌더(렌더러 #379 다열표 테두리 유지).
+ *   셀 내용은 renderParagraph 재귀로 텍스트+$수식$ 추출. 빈 셀은 유지(열 정렬).
+ */
+function renderTableToTabular(
+  tableNodes: OrderedNode[],
+  binData: Map<string, string>,
+  imagesOut: string[],
+): string {
+  const rows: string[][] = [];
+  const walkRows = (nodes: OrderedNode[]) => {
+    for (const rn of nodes) {
+      const t = tagOf(rn);
+      if (t === 'ROW') {
+        const cells: string[] = [];
+        for (const cn of (rn['ROW'] as OrderedNode[]) || []) {
+          if (tagOf(cn) === 'CELL') {
+            const txt = renderParagraph((cn['CELL'] as OrderedNode[]) || [], binData, imagesOut, [])
+              .replace(/\s+/g, ' ').trim();
+            cells.push(txt);
+          }
+        }
+        rows.push(cells);
+      } else {
+        const ch = rn[t] as OrderedNode[] | undefined;
+        if (Array.isArray(ch)) walkRows(ch);
+      }
+    }
+  };
+  walkRows(tableNodes);
+  const valid = rows.filter((r) => r.length > 0);
+  if (!valid.length) return '';
+  const colN = Math.max(...valid.map((r) => r.length));
+
+  // ★ "데이터 표"만 격자로 변환. <보기>/<조건> 박스(HWP도 표로 저장)는 ''반환 → 호출부가 기존
+  //   텍스트 처리(normalizeBogiBox/조건박스)로 폴백. 안 그러면 보기/조건 박스가 깨진 표로 렌더됨.
+  //   판정: 2행↑ + 2열↑ + 셀 60%↑ 채워짐 + 박스 헤더(보기/조건/규칙/참고) 없음.
+  const allCells = valid.flat();
+  const filled = allCells.filter((c) => c.trim()).length;
+  const isBoxHeader = /보\s*기|조건|규칙|참고|보기/.test(allCells.join(' '));
+  const dense = allCells.length > 0 && filled / allCells.length >= 0.6;
+  const isDataTable = valid.length >= 2 && colN >= 2 && dense && !isBoxHeader;
+  if (!isDataTable) return '';
+
+  const spec = '|' + 'l|'.repeat(colN);
+  const body = valid
+    .map((r) => {
+      const padded = [...r];
+      while (padded.length < colN) padded.push('');
+      return padded.join(' & ');
+    })
+    .join(' \\\\ \\hline ');
+  return `\n\\begin{tabular}{${spec}}\\hline ${body} \\\\ \\hline\\end{tabular}\n`;
+}
+
+/**
  * 한 문단(P)을 읽기 순서대로 문자열로 — 텍스트 + $수식$ + [도형](이미지 id 수집).
  *   ★ ENDNOTE/FOOTNOTE(미주/각주)는 본문(stem)이 아니라 별도 answerOut 으로 분리한다.
  *     수학비서 HML 은 `[정답] {정답}` 을 ENDNOTE 안에 넣어, 재귀하면 정답이 문제 앞에
@@ -151,6 +208,16 @@ function renderParagraph(
         if (refId && binData.has(refId)) imagesOut.push(binData.get(refId)!);
         parts.push('[도형]');
         continue; // 서브트리 미하강
+      }
+      if (tag === 'TABLE') {
+        // ★ 데이터 표 → \begin{tabular} 복원 (거제여중 #2). 보기/조건 박스는 '' 반환 →
+        //   아래 일반 재귀로 폴백(기존 텍스트 처리 = normalizeBogiBox/조건박스). 회귀 0.
+        const tab = renderTableToTabular((n[tag] as OrderedNode[]) || [], binData, imagesOut);
+        if (tab) { parts.push(tab); continue; }
+        // 박스류 → 셀 내용을 본문으로 펼침(기존 동작)
+        const tblChildren = n[tag] as OrderedNode[] | undefined;
+        if (Array.isArray(tblChildren)) rec(tblChildren);
+        continue;
       }
       // CHAR 등 일반 — 자식 재귀 (텍스트는 #text 로 잡힘)
       const children = n[tag] as OrderedNode[] | undefined;
