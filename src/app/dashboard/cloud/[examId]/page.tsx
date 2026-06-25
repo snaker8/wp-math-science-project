@@ -317,7 +317,6 @@ function FigureMarkerRenderer({
   const splitAtQuestion = (text: string): [string, string, boolean] => {
     let inBlock = false;
     let inInline = false;
-    let firstNewlineIdx = -1;
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
       const next = text[i + 1];
@@ -326,18 +325,16 @@ function FigureMarkerRenderer({
       if (ch === '?' && !inBlock && !inInline) {
         return [text.slice(0, i + 1), text.slice(i + 1), true];
       }
-      if (ch === '\n' && !inBlock && !inInline && firstNewlineIdx === -1) {
-        firstNewlineIdx = i;
-      }
     }
-    // ★ 첫 줄이 질문 지시어(~시오/~라)로 끝날 때만 첫 \n 직전에 배지(서답형 헤더/보기 케이스).
-    //   아니면(cases 먼저·질문이 뒤, 3번류) 폴백 안 함 → 텍스트 끝(질문 뒤)에 배지.
-    //   (ExamProblemRenderer·FigureMarkerRenderer 와 동기화 — 단순 첫-\n 폴백은 3번 배지를 중간으로 보냄)
-    if (firstNewlineIdx > 0) {
-      const before = text.slice(0, firstNewlineIdx).trimEnd();
-      if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
-        return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
-      }
+    // ★ '?' 없을 때 — 본문 어디서든 지시어(~시오/하라/여라/구하라)로 끝나는 문장이 줄끝/텍스트끝인
+    //   첫 위치 뒤에 배지. (ExamProblemRenderer.splitAtFirstQuestionMark 와 동일 — 가드 #4 동기화).
+    //   기존엔 "첫 줄"만 봐서 지문/표 뒤에 질문 오는 서답형(쇼핑몰류: 표\n…구하시오\n(1)…)에서
+    //   배지가 소문제·보기/표 박스 끝에 붙던 사고 해결. "의 해는" 등 비지시어 뒤 오삽입 회귀 없음.
+    const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/;
+    const dm = directiveRe.exec(text);
+    if (dm) {
+      const end = dm.index + dm[0].length;
+      return [text.slice(0, end), text.slice(end), true];
     }
     return [text, '', false];
   };
@@ -1196,7 +1193,6 @@ function ProblemCardView({
                 const splitAtQuestion = (text: string): [string, string, boolean] => {
                   let inBlock = false;
                   let inInline = false;
-                  let firstNewlineIdx = -1;
                   for (let i = 0; i < text.length; i++) {
                     const ch = text[i];
                     const next = text[i + 1];
@@ -1205,18 +1201,14 @@ function ProblemCardView({
                     if (ch === '?' && !inBlock && !inInline) {
                       return [text.slice(0, i + 1), text.slice(i + 1), true];
                     }
-                    if (ch === '\n' && !inBlock && !inInline && firstNewlineIdx === -1) {
-                      firstNewlineIdx = i;
-                    }
                   }
-                  // ★ '?' 없을 때 — 첫 줄이 질문 지시어(~시오/~라)로 끝나는 경우에만 첫 \n 직전에 배지
-                  //   (서답형 헤더 "…하시오.\n5-1.…" 케이스). 아니면(cases 먼저·질문 뒤) 폴백 안 함
-                  //   → 텍스트 끝에 배지. ExamProblemRenderer·ProblemCardView 와 동기화.
-                  if (firstNewlineIdx > 0) {
-                    const before = text.slice(0, firstNewlineIdx).trimEnd();
-                    if (/(시오|하라|여라|하시오|구하라)\s*[.?]?$/.test(before)) {
-                      return [text.slice(0, firstNewlineIdx), text.slice(firstNewlineIdx), true];
-                    }
+                  // ★ '?' 없을 때 — 지시어(~시오/하라/여라/구하라)로 끝나는 문장이 줄끝/텍스트끝인 첫
+                  //   위치 뒤에 배지. (ExamProblemRenderer 와 동일 directiveRe — 가드 #4 동기화). 기존엔
+                  //   "첫 줄"만 봐서 지문/표 뒤 질문 서답형(쇼핑몰류)에서 배지가 소문제·박스 끝에 붙던 사고.
+                  const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/;
+                  const dm = directiveRe.exec(text);
+                  if (dm) {
+                    return [text.slice(0, dm.index + dm[0].length), text.slice(dm.index + dm[0].length), true];
                   }
                   return [text, '', false];
                 };
