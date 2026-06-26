@@ -111,22 +111,46 @@ function extractScript(eqChildren: OrderedNode[]): string {
  *     이어붙던 사고(거제여중 #2). 행·열을 보존해 격자 표로 렌더(렌더러 #379 다열표 테두리 유지).
  *   셀 내용은 renderParagraph 재귀로 텍스트+$수식$ 추출. 빈 셀은 유지(열 정렬).
  */
+/** CELL 내부를 P(문단) 단위 줄 배열로 — base64 누출 줄 제거. 박스 줄 구조 보존용. */
+function renderCellLines(
+  cellNodes: OrderedNode[],
+  binData: Map<string, string>,
+  imagesOut: string[],
+): string[] {
+  const lines: string[] = [];
+  const findP = (nodes: OrderedNode[]) => {
+    for (const x of nodes) {
+      const t = tagOf(x);
+      if (t === 'P') {
+        const txt = renderParagraph((x['P'] as OrderedNode[]) || [], binData, imagesOut, [])
+          .replace(/[ \t]+/g, ' ').trim();
+        // 이미지 데이터(base64 런) 누출 줄 제거 — 수식 렌더 이미지가 P 텍스트로 새는 경우(거제여중 #18)
+        const cleaned = txt.replace(/[A-Za-z0-9+/]{40,}={0,2}/g, '').trim();
+        if (cleaned) lines.push(cleaned);
+      } else {
+        const ch = x[t] as OrderedNode[] | undefined;
+        if (Array.isArray(ch)) findP(ch);
+      }
+    }
+  };
+  findP(cellNodes);
+  return lines;
+}
+
 function renderTableToTabular(
   tableNodes: OrderedNode[],
   binData: Map<string, string>,
   imagesOut: string[],
 ): string {
-  const rows: string[][] = [];
+  const rows: string[][][] = []; // ROW → CELL → 줄[]
   const walkRows = (nodes: OrderedNode[]) => {
     for (const rn of nodes) {
       const t = tagOf(rn);
       if (t === 'ROW') {
-        const cells: string[] = [];
+        const cells: string[][] = [];
         for (const cn of (rn['ROW'] as OrderedNode[]) || []) {
           if (tagOf(cn) === 'CELL') {
-            const txt = renderParagraph((cn['CELL'] as OrderedNode[]) || [], binData, imagesOut, [])
-              .replace(/\s+/g, ' ').trim();
-            cells.push(txt);
+            cells.push(renderCellLines((cn['CELL'] as OrderedNode[]) || [], binData, imagesOut));
           }
         }
         rows.push(cells);
@@ -139,27 +163,42 @@ function renderTableToTabular(
   walkRows(tableNodes);
   const valid = rows.filter((r) => r.length > 0);
   if (!valid.length) return '';
+  const cellText = (lines: string[]) => lines.join(' ').replace(/\s+/g, ' ').trim();
   const colN = Math.max(...valid.map((r) => r.length));
 
   // ★ "데이터 표"만 격자로 변환. <보기>/<조건> 박스(HWP도 표로 저장)는 ''반환 → 호출부가 기존
   //   텍스트 처리(normalizeBogiBox/조건박스)로 폴백. 안 그러면 보기/조건 박스가 깨진 표로 렌더됨.
   //   판정: 2행↑ + 2열↑ + 셀 60%↑ 채워짐 + 박스 헤더(보기/조건/규칙/참고) 없음.
-  const allCells = valid.flat();
+  const allCells = valid.flat().map(cellText);
   const filled = allCells.filter((c) => c.trim()).length;
-  const isBoxHeader = /보\s*기|조건|규칙|참고|보기/.test(allCells.join(' '));
+  const isBoxHeader = /보\s*기|조건|규칙|참고/.test(allCells.join(' '));
   const dense = allCells.length > 0 && filled / allCells.length >= 0.6;
   const isDataTable = valid.length >= 2 && colN >= 2 && dense && !isBoxHeader;
-  if (!isDataTable) return '';
 
-  const spec = '|' + 'l|'.repeat(colN);
-  const body = valid
-    .map((r) => {
-      const padded = [...r];
-      while (padded.length < colN) padded.push('');
-      return padded.join(' & ');
-    })
-    .join(' \\\\ \\hline ');
-  return `\n\\begin{tabular}{${spec}}\\hline ${body} \\\\ \\hline\\end{tabular}\n`;
+  if (isDataTable) {
+    const spec = '|' + 'l|'.repeat(colN);
+    const body = valid
+      .map((r) => {
+        const padded = r.map(cellText);
+        while (padded.length < colN) padded.push('');
+        return padded.join(' & ');
+      })
+      .join(' \\\\ \\hline ');
+    return `\n\\begin{tabular}{${spec}}\\hline ${body} \\\\ \\hline\\end{tabular}\n`;
+  }
+
+  // ★ 정의/요금 박스 — 보기·조건 아님 + 1열인데 셀 내부 줄(P)이 2개 이상이면, 원본처럼 가운데
+  //   테두리 박스(단일 열 tabular)로 복원. 인라인 폴백은 줄바꿈을 뭉개 한 줄로 붕괴시킨다
+  //   (거제여중 #18 버스 요금표 A⇔B/B⇔C/A⇔C 3줄이 한 줄로 붕괴 + 다음 문제로 밀림). 셀 줄 = 각 행.
+  if (!isBoxHeader && colN === 1) {
+    const boxLines = valid.flat().flat().map((s) => s.trim()).filter(Boolean);
+    if (boxLines.length >= 2) {
+      const body = boxLines.join(' \\\\ \\hline ');
+      return `\n\\begin{tabular}{|c|}\\hline ${body} \\\\ \\hline\\end{tabular}\n`;
+    }
+  }
+
+  return ''; // 보기/조건 박스·기타 → 기존 텍스트 폴백
 }
 
 /**
@@ -448,6 +487,15 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
           ? { text: `${pending.text}\n${preText}`, images: [...pending.images, ...para.images] }
           : { text: preText, images: [...para.images] };
         continue;
+      }
+      // ★ 단일 문제 인라인 소문제 보호 — 보류한 지문(preamble) 뒤에 [정답] 없이 본문((1)(2)(3)
+      //   소문제 등)이 현재 문제로 이어지면, 그 지문은 "다음 문제 공유 지문"이 아니라 현재 문제 것이다.
+      //   원위치(peel 경계)로 복원하고 보류 해제 → 표·지문이 다음 문제로 밀려가던 사고 차단.
+      //   진짜 묶음(현대청운고)은 지문 뒤 바로 [정답] 문단이 와 위쪽 ansHm 분기에서 처리되므로 여기 안 옴.
+      if (pending && (stem || para.images.length)) {
+        if (pending.text) cur.lines.push(pending.text);
+        if (pending.images.length) cur.images.push(...pending.images);
+        pending = null;
       }
       if (stem) cur.lines.push(stem);
       cur.images.push(...para.images);
