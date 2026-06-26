@@ -1439,12 +1439,18 @@ function parseMixedContent(text: string): ContentElement[] {
     }
   );
 
-  // 0.5단계: $...$나 $$...$$ 내부에 TABULAR 플레이스홀더가 있으면 분리
+  // 0.5단계: $...$나 $$...$$ 내부에 TABULAR 플레이스홀더가 있으면 분리 (수식이 표를 감싼 경우)
   // 예: "$$k __TABULAR_0__$$" → "$$k$$" + "\n__TABULAR_0__\n"
   // 예: "$k __TABULAR_0__$" → "$k$" + "\n__TABULAR_0__\n"
+  // ★ before/after 는 `[^$]*?` — 다른 $…$ 를 건너뛰지 않게(표 앞뒤 별개 수식을 짝지어 본문 전체를
+  //   한 수식으로 잘못 감싸던 사고). + 여는 delim 앞 $ 개수가 짝수일 때만 분리(=진짜 수식 시작).
+  //   홀수면 그 $ 는 앞 수식의 "닫는" 기호 → 표 앞 ${C}$ 와 표 뒤 $40$ 를 잘못 짝지어 한글·중괄호가
+  //   통째로 깨지던 사고(거제여중 #18 표: { {A}} 중괄호 노출 + 공백 붕괴). $ 패리티로 차단.
   textWithPlaceholders = textWithPlaceholders.replace(
-    /(\$\$|\$)([\s\S]*?)(__TABULAR_\d+__)([\s\S]*?)\1/g,
-    (_match, delim, before, placeholder, after) => {
+    /(\$\$|\$)([^$]*?)(__TABULAR_\d+__)([^$]*?)\1/g,
+    (_match, delim, before, placeholder, after, offset, full) => {
+      const dollarsBefore = (full.slice(0, offset).match(/\$/g) || []).length;
+      if (dollarsBefore % 2 !== 0) return _match; // 여는 $ 가 실제로는 닫는 기호 → 분리 안 함
       let result = '';
       const trimBefore = before.trim();
       if (trimBefore) {
