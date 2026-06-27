@@ -142,10 +142,14 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // ★ $\begin{array}...\end{array}$ 에서 보기형이면 $ 래퍼 제거 (KaTeX가 한글 처리 못함)
   // 1) $$...$$로 감싸진 경우
   // 2) $...$ 로 감싸진 경우
+  // ★ 캡처 전부 `[^$]*?` — 표가 "진짜 수식 안"(내부에 $ 없음, 중첩 불가)일 때만 매칭.
+  //   `[\s\S]*?` 면 다른 $…$ 와 한글을 건너뛰어 본문 중간 standalone 표(셀에 $ 있음) 앞뒤의
+  //   별개 $(${C}$ 닫는 $ 와 $40$ 여는 $)를 짝지어 $ 래퍼를 벗겨 ${A}$ 가 깨지던 사고
+  //   (거제여중 #18: { {A}} 중괄호 노출 + 공백 붕괴). 셀에 $ 있는 데이터 표는 [^$] 에 안 걸려 보존.
   let bodyForTabular = bodyWithoutTrailingChoices;
   // $$...$$
   bodyForTabular = bodyForTabular.replace(
-    /\$\$([\s\S]*?\\begin\{(?:tabular|array)\}[\s\S]*?\\end\{(?:tabular|array)\}[\s\S]*?)\$\$/gi,
+    /\$\$([^$]*?\\begin\{(?:tabular|array)\}[^$]*?\\end\{(?:tabular|array)\}[^$]*?)\$\$/gi,
     (_m, inner) => {
       if (/[가나다라마]/.test(inner) || /\\text/.test(inner)) {
         return inner;
@@ -155,7 +159,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   );
   // $...$  (단일)
   bodyForTabular = bodyForTabular.replace(
-    /\$([\s\S]*?\\begin\{(?:tabular|array)\}[\s\S]*?\\end\{(?:tabular|array)\}[\s\S]*?)\$/gi,
+    /\$([^$]*?\\begin\{(?:tabular|array)\}[^$]*?\\end\{(?:tabular|array)\}[^$]*?)\$/gi,
     (_m, inner) => {
       if (/[가나다라마]/.test(inner) || /\\text/.test(inner)) {
         return inner;
