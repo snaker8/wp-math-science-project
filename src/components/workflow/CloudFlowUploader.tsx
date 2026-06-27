@@ -34,6 +34,7 @@ import {
   type CurriculumVersion,
   type ScienceSubjectMeta,
 } from '@/lib/image-pipeline/types';
+import { CURRICULUM_OPTIONS } from '@/lib/workflow/mathsecr-prompt';
 
 interface CloudFlowUploaderProps {
   instituteId?: string;
@@ -101,6 +102,11 @@ export default function CloudFlowUploader({
   const [schoolChapterInput, setSchoolChapterInput] = useState('');
   const [scienceSubject, setScienceSubject] = useState<ScienceSubjectCode>('IS1');
   const [curriculumVersion, setCurriculumVersion] = useState<CurriculumVersion>('2022');
+  // ★ 자산화 시 학년·학기(특이 진도 대비 복수 선택) → mathsecr 과목코드. 분류가 제목 추론보다 우선 사용.
+  //   비워두면 기존 동작(제목 자동 추론). 수학 업로드에서만 노출.
+  const [curriculumCodes, setCurriculumCodes] = useState<string[]>([]);
+  const toggleCurriculumCode = (code: string) =>
+    setCurriculumCodes((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
 
   // 과학 처리 모드: 'diagrams_only' = 도식 추출만 | 'full' = 문제까지 자산화
   const [scienceMode, setScienceMode] = useState<'diagrams_only' | 'full'>('full');
@@ -200,6 +206,8 @@ export default function CloudFlowUploader({
         // ★ 선택한 폴더로 바로 저장 — PDF 업로드와 동일하게 bookGroupId 전달.
         //   (없으면 import-hml route 가 미분류 저장 → 폴더 선택 후 .hml 올려도 안 들어가던 사고)
         if (bookGroupId) fd.append('bookGroupId', bookGroupId);
+        // ★ 사용자 지정 학년·학기 과목코드 — exam 저장 → 추후 재분류 컨텍스트.
+        if (curriculumCodes.length) fd.append('curriculumCodes', JSON.stringify(curriculumCodes));
         const res = await fetch('/api/workflow/import-hml', { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -317,6 +325,8 @@ export default function CloudFlowUploader({
         // 수학 모드: 기존 OCR/분류 파이프라인
         formData.append('autoClassify', String(autoClassify));
         formData.append('generateSolutions', String(generateSolutions));
+        // ★ 사용자 지정 학년·학기 과목코드 — 분류가 제목 추론 대신 우선 사용 + exam 저장.
+        if (curriculumCodes.length) formData.append('curriculumCodes', JSON.stringify(curriculumCodes));
       }
       if (bookGroupId) {
         formData.append('bookGroupId', bookGroupId);
@@ -615,6 +625,39 @@ export default function CloudFlowUploader({
           );
         })}
       </div>
+
+      {/* ★ 학년·학기 선택 (자산화 분류 컨텍스트) — 수학 업로드에서만. 특이 진도 대비 복수 선택 가능.
+            비워두면 제목 자동 추론(기존 동작). 선택하면 그 학기 범위 안에서만 분류 → 제목 부정확 오분류 차단. */}
+      {subjectArea !== 'science' && (
+        <div className="mt-1 mb-3 px-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mr-1">학년·학기</span>
+            {CURRICULUM_OPTIONS.map((opt) => {
+              const isActive = curriculumCodes.includes(opt.code);
+              return (
+                <button
+                  key={opt.code}
+                  type="button"
+                  onClick={() => toggleCurriculumCode(opt.code)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors border ${
+                    isActive
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
+                      : 'bg-transparent text-zinc-500 border-zinc-700 hover:text-zinc-300 hover:border-zinc-600'
+                  }`}
+                  title={`${opt.label} 범위로 분류`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1">
+            {curriculumCodes.length
+              ? `선택: ${curriculumCodes.map((c) => CURRICULUM_OPTIONS.find((o) => o.code === c)?.label).join(' + ')} — 이 범위 안에서 분류합니다 (특이 진도면 여러 학기 선택).`
+              : '비워두면 제목에서 자동 추론. 특이 진도(여러 학기 섞인 시험지)면 해당 학기를 모두 선택하세요.'}
+          </p>
+        </div>
+      )}
 
       {/* ★ 학교기출 단원집 메타 입력 (2026-05-29) — school 선택 시만 표시.
             수동 자산화 경로(분석 페이지 편집 후 자산화)에서도 학교명/단원이 박히게 함. */}

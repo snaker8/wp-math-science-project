@@ -61,7 +61,7 @@ export async function POST(
     // 1. 시험지 정보 조회
     const { data: exam } = await sb
       .from('exams')
-      .select('id, title, subject, grade')
+      .select('id, title, subject, grade, curriculum_codes')
       .eq('id', examId)
       .single();
 
@@ -75,6 +75,10 @@ export async function POST(
     // 제목에서 감지된 값이 있으면 우선 사용 (DB 값이 '공통수학1' 기본값일 수 있으므로)
     const examSubject = titleSubject || exam.subject || '';
     const examGrade = titleGrade || exam.grade || '';
+    // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 있으면 분류가 제목 추론보다 우선 사용(오분류 차단).
+    const examCurriculumCodes = Array.isArray((exam as { curriculum_codes?: string[] }).curriculum_codes)
+      ? (exam as { curriculum_codes?: string[] }).curriculum_codes
+      : undefined;
 
     console.log(`[auto-fix] exam="${exam.title}" → subject="${examSubject}", grade="${examGrade}"`);
 
@@ -198,6 +202,7 @@ export async function POST(
             content,
             examSubject,
             examGrade,
+            curriculumCodes: examCurriculumCodes,
             logLabel: `auto-fix #${seqNum}`,
           });
           if (!classifyResult) {

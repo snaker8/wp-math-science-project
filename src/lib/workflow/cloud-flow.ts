@@ -1436,7 +1436,8 @@ export async function analyzeProblemWithLLM(
   onProgress?: (progress: number) => void,
   referenceTexts: { answer?: string; quickAnswer?: string } = {},
   subject?: string,
-  gradeHint?: string
+  gradeHint?: string,
+  curriculumCodes?: string[]
 ): Promise<LLMAnalysisResult> {
   if (onProgress) onProgress(55);
 
@@ -1473,6 +1474,7 @@ export async function analyzeProblemWithLLM(
           content: problemText,
           examSubject: subject || '',
           examGrade: gradeHint || '',
+          curriculumCodes,
           logLabel: 'cloud-flow-primary',
         });
         if (claudeResult && claudeResult.typeCode) {
@@ -1517,8 +1519,10 @@ export async function analyzeProblemWithLLM(
     let mathsecrSection = '';
     if (!isScience) {
       try {
-        const { resolveSubjectCode, buildMathsecrPromptSection, buildSubjectOnlyPrompt } = await import('./mathsecr-prompt');
-        const subjectCode = resolveSubjectCode(gradeHint, subject);
+        const { resolveSubjectCode, resolveCurriculumCodes, buildMathsecrPromptSection, buildSubjectOnlyPrompt } = await import('./mathsecr-prompt');
+        // ★ 사용자 지정 학년·학기(curriculumCodes) 우선 — 없으면 제목 추론 폴백.
+        const explicit = resolveCurriculumCodes(curriculumCodes);
+        const subjectCode = explicit.length ? explicit : resolveSubjectCode(gradeHint, subject);
         mathsecrSection = subjectCode
           ? buildMathsecrPromptSection(subjectCode)
           : buildSubjectOnlyPrompt();
@@ -1571,6 +1575,7 @@ export async function analyzeProblemWithLLM(
           content: problemText,
           examSubject: subject || '',
           examGrade: gradeHint || '',
+          curriculumCodes,
           logLabel: 'cloud-flow-1차',
         });
         if (upgrade && upgrade.typeCode) {
@@ -2346,7 +2351,8 @@ export async function processUploadJob(
         },
         { answer: answerText, quickAnswer: quickAnswerText },
         detectedSubject,
-        gradeHint
+        gradeHint,
+        job.curriculumCodes
       );
 
       // 원본 텍스트를 분석 결과에 포함 (DB 저장 시 content_latex로 사용)

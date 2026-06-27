@@ -17,6 +17,8 @@ export interface HmlSaveContext {
   sourceCategory?: 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock';
   title: string;                     // 시험지 제목 (보통 파일명)
   sourceName?: string;               // 원본 파일명
+  /** ★ 자산화 시 사용자가 지정한 학년·학기 mathsecr 과목코드(예: ['05','06']). exams.curriculum_codes 저장 → 추후 재분류 컨텍스트. */
+  curriculumCodes?: string[];
 }
 
 export interface HmlSaveResult {
@@ -109,6 +111,8 @@ export async function createExamFromHml(
       total_points: totalPoints,
       time_limit_minutes: 50,
       subject_track: 'math',
+      // ★ 사용자 지정 학년·학기 과목코드 — 추후 재분류(auto-fix/다시분석) 시 분류 컨텍스트로 사용.
+      curriculum_codes: (ctx.curriculumCodes && ctx.curriculumCodes.length) ? ctx.curriculumCodes : null,
     })
     .select('id')
     .single();

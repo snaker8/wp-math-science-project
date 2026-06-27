@@ -4,7 +4,7 @@
 //   - buildTypeTable / buildL1L2Table: 배열 입력에서 빈 테이블 반환 금지
 // ============================================================================
 import { describe, it, expect } from 'vitest';
-import { resolveSubjectCode, buildTypeTable, buildL1L2Table } from './mathsecr-prompt';
+import { resolveSubjectCode, buildTypeTable, buildL1L2Table, resolveCurriculumCodes, curriculumCodesToLabel, CURRICULUM_OPTIONS } from './mathsecr-prompt';
 
 describe('resolveSubjectCode', () => {
   it('★ 학기 명시 중등도 양 학기 배열 — 제목 학기 불신(제목 2-1+내용 2-2 평행사변형 오분류 fix, 2026-06-12)', () => {
@@ -62,5 +62,57 @@ describe('buildL1L2Table', () => {
     expect(table.length).toBeGreaterThan(0);
     expect(table).toContain('MS03-');
     expect(table).toContain('MS04-');
+  });
+});
+
+describe('resolveCurriculumCodes (자산화 학년·학기 명시 선택)', () => {
+  it('★ 코드 직접 입력 — 그대로 유지(유효성)', () => {
+    expect(resolveCurriculumCodes(['05', '06'])).toEqual(['05', '06']);
+  });
+
+  it('★ 라벨 입력 — 단일 학기 코드로 매핑 (학기 흡수 안 함 — resolveSubjectCode 와 차이)', () => {
+    expect(resolveCurriculumCodes(['중3-1'])).toEqual(['05']);
+    expect(resolveCurriculumCodes(['중3-1', '중3-2'])).toEqual(['05', '06']);
+  });
+
+  it('★ 명시 단일 학기는 단일 코드 — resolveSubjectCode("중3-1")=배열과 달리 사용자 의도 존중', () => {
+    expect(resolveCurriculumCodes(['중3-1'])).toEqual(['05']);
+    // 대비: resolveSubjectCode 는 학기 흡수해 양 학기 반환
+    expect(resolveSubjectCode('중3-1')).toEqual(['05', '06']);
+  });
+
+  it('중복 제거 + 순서 보존', () => {
+    expect(resolveCurriculumCodes(['05', '05', '06'])).toEqual(['05', '06']);
+  });
+
+  it('NFD(맥) 라벨도 매치', () => {
+    expect(resolveCurriculumCodes(['중3-1'.normalize('NFD')])).toEqual(['05']);
+  });
+
+  it('유효하지 않은 값/빈 입력 → []', () => {
+    expect(resolveCurriculumCodes(['99', '영어', ''])).toEqual([]);
+    expect(resolveCurriculumCodes(undefined)).toEqual([]);
+    expect(resolveCurriculumCodes(null)).toEqual([]);
+  });
+
+  it('고등 과목 라벨/코드', () => {
+    expect(resolveCurriculumCodes(['공통수학1'])).toEqual(['07']);
+    expect(resolveCurriculumCodes(['09', '대수'])).toEqual(['09']); // 중복 제거
+  });
+
+  it('모든 CURRICULUM_OPTIONS 코드가 유효(라운드트립)', () => {
+    const codes = CURRICULUM_OPTIONS.map((o) => o.code);
+    expect(resolveCurriculumCodes(codes)).toEqual(codes);
+  });
+});
+
+describe('curriculumCodesToLabel', () => {
+  it('코드 배열 → 라벨 결합', () => {
+    expect(curriculumCodesToLabel(['05', '06'])).toBe('중3-1 + 중3-2');
+    expect(curriculumCodesToLabel(['07'])).toBe('공통수학1');
+  });
+  it('빈 입력 → 빈 문자열', () => {
+    expect(curriculumCodesToLabel([])).toBe('');
+    expect(curriculumCodesToLabel(null)).toBe('');
   });
 });

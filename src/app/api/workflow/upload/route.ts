@@ -264,6 +264,20 @@ export async function POST(request: NextRequest) {
     // ★ 단원집 일련번호 모드 (2026-05-29) — 폴더 import 분할 자산화 시 true.
     //   source_number/source_label 을 시험지 내 누적 순번으로 부여 → 청크 분할에도 1~N 연속.
     const useSequenceNumbering = formData.get('useSequenceNumbering') === 'true';
+    // ★ 자산화 시 사용자가 지정한 학년·학기(특이 진도 대비 복수) mathsecr 과목코드 — JSON 배열.
+    //   분류가 제목 추론 대신 이 값 우선 사용 + exams.curriculum_codes 저장. 비면 기존 동작.
+    let curriculumCodes: string[] | undefined;
+    const curriculumCodesRaw = formData.get('curriculumCodes') as string | null;
+    if (curriculumCodesRaw) {
+      try {
+        const { resolveCurriculumCodes } = await import('@/lib/workflow/mathsecr-prompt');
+        const parsed = JSON.parse(curriculumCodesRaw);
+        const norm = resolveCurriculumCodes(Array.isArray(parsed) ? parsed : []);
+        if (norm.length) curriculumCodes = norm;
+      } catch (e) {
+        console.warn('[Upload] curriculumCodes JSON parse 실패 — 무시:', e);
+      }
+    }
     const scienceSubject = formData.get('scienceSubject') as string | null;
     const curriculumVersion = (formData.get('curriculumVersion') as '2015' | '2022') || '2022';
     const scienceMode = (formData.get('scienceMode') as 'diagrams_only' | 'full') || 'full';
@@ -359,6 +373,7 @@ export async function POST(request: NextRequest) {
       appendToExamId: appendToExamId || undefined, // ★ 기존 시험지에 병합
       subjectArea,
       scienceSubject: scienceSubject || undefined,
+      curriculumCodes,  // ★ 사용자 지정 학년·학기 과목코드 — 분류 컨텍스트 우선 + exam 저장
       curriculumVersion: subjectArea === 'science' ? curriculumVersion : undefined,
       sourceCategory,  // ★ 사용자 명시 출처 카테고리 — PUT 시점에 jobStore 에서 가져와 사용
       schoolMeta,      // ★ 학교 단원집 메타 — PUT 시점에 jobStore 에서 가져와 사용
@@ -1678,6 +1693,8 @@ async function saveEditedProblemsDirect(
         subject: detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
         grade: resolvedSchoolMeta.grade ?? detectGradeFromTitle(fileTitle),
+        // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 재분류 시 분류 컨텍스트로 재사용.
+        curriculum_codes: (job.curriculumCodes && job.curriculumCodes.length) ? job.curriculumCodes : null,
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
         is_diagnostic: sourceOverride.is_diagnostic,
         diagnostic_category: sourceOverride.diagnostic_category,
@@ -2543,6 +2560,8 @@ async function saveProblemsToDB(
         subject: detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
         grade: resolvedSchoolMeta.grade ?? detectGradeFromTitle(fileTitle),
+        // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 재분류 시 분류 컨텍스트로 재사용.
+        curriculum_codes: (job.curriculumCodes && job.curriculumCodes.length) ? job.curriculumCodes : null,
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
         is_diagnostic: sourceOverride.is_diagnostic,
         diagnostic_category: sourceOverride.diagnostic_category,
