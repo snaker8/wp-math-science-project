@@ -148,7 +148,6 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
     /\$\$([\s\S]*?\\begin\{(?:tabular|array)\}[\s\S]*?\\end\{(?:tabular|array)\}[\s\S]*?)\$\$/gi,
     (_m, inner) => {
       if (/[가나다라마]/.test(inner) || /\\text/.test(inner)) {
-        console.log('[$ 래퍼 제거] $$...$$:', inner.substring(0, 100));
         return inner;
       }
       return _m;
@@ -159,7 +158,6 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
     /\$([\s\S]*?\\begin\{(?:tabular|array)\}[\s\S]*?\\end\{(?:tabular|array)\}[\s\S]*?)\$/gi,
     (_m, inner) => {
       if (/[가나다라마]/.test(inner) || /\\text/.test(inner)) {
-        console.log('[$ 래퍼 제거] $...$:', inner.substring(0, 100));
         return inner;
       }
       return _m;
@@ -948,16 +946,6 @@ function preprocessMathpixContent(text: string): string {
   result = result.replace(/\$\s*([ㄱ-ㅎ](?:\s*,\s*[ㄱ-ㅎ])*)\s*\$/g, '$1');
 
   // 2-2. \displaystyle 정리 (MathRenderer가 자동 추가하므로 중복 제거)
-  // ★ 디버그: displaystyle 존재 여부 확인
-  if (result.includes('displaystyle')) {
-    const idx = result.indexOf('displaystyle');
-    const charBefore = idx > 0 ? result.charCodeAt(idx - 1) : -1;
-    console.log('[preprocessMathpix] displaystyle 발견!', {
-      charBeforeCode: charBefore,
-      charBefore: idx > 0 ? result[idx - 1] : 'N/A',
-      context: result.substring(Math.max(0, idx - 10), idx + 20),
-    });
-  }
   // (a) $\displaystyle$ 단독 → 제거 (OCR 아티팩트)
   result = result.replace(/\$\s*\\displaystyle\s*\$/g, '');
   // (b) $\displaystyle ...$ → $...$
@@ -1402,11 +1390,6 @@ function parseMixedContent(text: string): ContentElement[] {
   // ★ 보기> 잔여 텍스트 → 〈보기〉 복원 (OCR에서 <보기> 태그가 깨진 경우)
   text = text.replace(/(?<!〈)보기(?:〉|>)\s*/g, '〈보기〉 ');
 
-  // ★ 디버그: 표 관련 콘텐츠 감지
-  if (text.includes('array') || text.includes('tabular') || text.includes('hline')) {
-    console.log('[MixedContent] ★ 표 입력 감지:', text.substring(0, 500));
-  }
-
   // 0단계: \begin{tabular}...\end{tabular} 및 \begin{array}...\end{array} 블록을 플레이스홀더로 대체
   // 조립제법, 진리표 등 array 환경도 표로 렌더링
   // ★ 단, \left\{ 뒤의 array는 piecewise 수식이므로 KaTeX에서 처리 → 추출 안 함
@@ -1433,7 +1416,6 @@ function parseMixedContent(text: string): ContentElement[] {
       const tableEl = parseTabularBlock(match);
       const idx = tabularBlocks.length;
       tabularBlocks.push(tableEl);
-      console.log(`[MixedContent] 표 추출 #${idx}:`, tableEl.type === 'table' ? { rows: tableEl.rows, vLines: tableEl.verticalLines, hlines: tableEl.hasHlines } : tableEl);
       // ★ 줄바꿈으로 감싸서 wrapBareLatex가 _ 를 첨자로 인식하는 것을 방지
       return `\n__TABULAR_${idx}__\n`;
     }
