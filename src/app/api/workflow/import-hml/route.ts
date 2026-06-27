@@ -42,6 +42,17 @@ export async function POST(request: NextRequest) {
   }
   const bookGroupId = (form.get('bookGroupId') as string) || null;
   const sourceCategory = ((form.get('sourceCategory') as string) || 'auto') as 'auto' | 'school' | 'diagnostic' | 'achievement' | 'textbook' | 'mock';
+  // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — exam 저장(HML 은 import 때 분류 안 함, 추후 재분류 컨텍스트).
+  let curriculumCodes: string[] | undefined;
+  const curriculumCodesRaw = form.get('curriculumCodes') as string | null;
+  if (curriculumCodesRaw) {
+    try {
+      const { resolveCurriculumCodes } = await import('@/lib/workflow/mathsecr-prompt');
+      const parsedCc = JSON.parse(curriculumCodesRaw);
+      const norm = resolveCurriculumCodes(Array.isArray(parsedCc) ? parsedCc : []);
+      if (norm.length) curriculumCodes = norm;
+    } catch { /* 무시 */ }
+  }
 
   // 파싱
   let parsed;
@@ -69,6 +80,7 @@ export async function POST(request: NextRequest) {
     sourceCategory,
     title,
     sourceName: file.name,
+    curriculumCodes,
   });
 
   if (!result.ok) {

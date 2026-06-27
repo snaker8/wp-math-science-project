@@ -21,24 +21,27 @@ function isScienceSubject(subject?: string): boolean {
 /** 문제가 속한 시험지의 과목·학년·제목 조회 (classify.ts에 학년/과목 컨텍스트 전달용) */
 async function getExamMeta(
   problemId: string
-): Promise<{ subject: string | null; grade: string | null; title: string | null }> {
-  if (!supabaseAdmin) return { subject: null, grade: null, title: null };
+): Promise<{ subject: string | null; grade: string | null; title: string | null; curriculumCodes: string[] | null }> {
+  if (!supabaseAdmin) return { subject: null, grade: null, title: null, curriculumCodes: null };
   const { data: ep } = await supabaseAdmin
     .from('exam_problems')
     .select('exam_id')
     .eq('problem_id', problemId)
     .limit(1)
     .single();
-  if (!ep?.exam_id) return { subject: null, grade: null, title: null };
+  if (!ep?.exam_id) return { subject: null, grade: null, title: null, curriculumCodes: null };
   const { data: exam } = await supabaseAdmin
     .from('exams')
-    .select('subject, grade, title')
+    .select('subject, grade, title, curriculum_codes')
     .eq('id', ep.exam_id)
     .single();
   return {
     subject: exam?.subject || null,
     grade: exam?.grade || null,
     title: exam?.title || null,
+    curriculumCodes: Array.isArray((exam as { curriculum_codes?: string[] })?.curriculum_codes)
+      ? (exam as { curriculum_codes?: string[] }).curriculum_codes ?? null
+      : null,
   };
 }
 
@@ -47,6 +50,7 @@ async function getEffectiveExamMeta(problemId: string): Promise<{
   isScience: boolean;
   effectiveSubject: string;
   effectiveGrade: string;
+  curriculumCodes?: string[];
 }> {
   const examMeta = await getExamMeta(problemId);
   const isScience = isScienceSubject(examMeta.subject || '');
@@ -58,7 +62,10 @@ async function getEffectiveExamMeta(problemId: string): Promise<{
     detectSubjectFromTitle(examMeta.title || '') ||
     detectSubjectFromTitle(examMeta.subject || '');
   const effectiveSubject = detectedSubject || examMeta.subject || '';
-  return { isScience, effectiveSubject, effectiveGrade };
+  return {
+    isScience, effectiveSubject, effectiveGrade,
+    curriculumCodes: examMeta.curriculumCodes && examMeta.curriculumCodes.length ? examMeta.curriculumCodes : undefined,
+  };
 }
 
 export async function POST(
@@ -105,7 +112,7 @@ export async function POST(
       .single();
 
     // ★ 시험지 메타 — classify.ts에 학년/과목 컨텍스트 전달용
-    const { isScience, effectiveSubject, effectiveGrade } = await getEffectiveExamMeta(problemId);
+    const { isScience, effectiveSubject, effectiveGrade, curriculumCodes } = await getEffectiveExamMeta(problemId);
     console.log(
       `[Reanalyze] problemId=${problemId}, subject="${effectiveSubject}", grade="${effectiveGrade}", isScience=${isScience}`
     );
@@ -119,7 +126,8 @@ export async function POST(
       isAdvanced,
       isScience,
       effectiveSubject,
-      effectiveGrade
+      effectiveGrade,
+      curriculumCodes
     );
   } catch (error) {
     console.error('[Reanalyze] Error:', error);
@@ -355,7 +363,8 @@ async function reanalyzeClassificationOnly(
   isAdvanced: boolean,
   isScience: boolean = false,
   examSubject: string | null = null,
-  examGrade: string | null = null
+  examGrade: string | null = null,
+  curriculumCodes?: string[]
 ) {
   const contentText = problem.content_latex || '';
 
@@ -369,6 +378,7 @@ async function reanalyzeClassificationOnly(
         content: contentText,
         examSubject: examSubject || '',
         examGrade: examGrade || '',
+        curriculumCodes,
         logLabel: `reanalyze:${problemId.slice(0, 8)}`,
       });
       if (claudeResult && claudeResult.typeCode) {
@@ -499,8 +509,10 @@ async function reanalyzeClassificationOnly(
     : (() => {
       let typeTable = '';
       try {
-        const { resolveSubjectCode, buildTypeTable } = require('@/lib/workflow/mathsecr-prompt');
-        const subjectCode = resolveSubjectCode(examSubject);
+        const { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable } = require('@/lib/workflow/mathsecr-prompt');
+        // ★ 사용자 지정 학년·학기(curriculumCodes) 우선 — 없으면 제목 추론 폴백.
+        const explicit = resolveCurriculumCodes(curriculumCodes);
+        const subjectCode = explicit.length ? explicit : resolveSubjectCode(examSubject);
         if (subjectCode) typeTable = buildTypeTable(subjectCode);
       } catch {}
 

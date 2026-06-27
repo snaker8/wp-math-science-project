@@ -14,7 +14,7 @@
 //   - 에러 로깅 문맥
 // ============================================================================
 
-import { resolveSubjectCode, buildTypeTable, buildL1L2Table, buildL3L4Table } from './mathsecr-prompt';
+import { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable, buildL1L2Table, buildL3L4Table } from './mathsecr-prompt';
 import { cachedSystem } from '@/lib/claude/cache';
 
 // ─── 복합 과목: 이전 교육과정 시험지는 여러 과목 범위가 섞임 ───
@@ -32,6 +32,8 @@ export interface ClassifyInput {
   examSubject: string;
   /** 시험지 학년 힌트 (예: '고2 수학') */
   examGrade: string;
+  /** ★ 자산화 시 사용자가 지정한 mathsecr 과목코드(예: ['05','06']). 있으면 제목 추론(resolveSubjectCode)보다 우선. */
+  curriculumCodes?: string[];
   /** 문제 식별용 (로그용, 실패 시 맥락 확보) */
   logLabel?: string;
 }
@@ -60,7 +62,7 @@ export interface ClassifyResult {
  * 반환값이 null이면 분류 불가 (콘텐츠 없음, 키 없음, 모든 시도 실패).
  */
 export async function classifyProblem(input: ClassifyInput): Promise<ClassifyResult | null> {
-  const { content, examSubject, examGrade, logLabel } = input;
+  const { content, examSubject, examGrade, curriculumCodes, logLabel } = input;
   const label = logLabel || 'classify';
 
   if (!content.trim()) {
@@ -85,8 +87,11 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
   let mathsecrTypeTable = '';
   let resolvedCode: string | string[] = '';
   try {
-    resolvedCode = resolveSubjectCode(examGrade, examSubject) || '';
-    if (resolvedCode) {
+    // ★ 사용자 지정 학년·학기(curriculumCodes)가 있으면 제목 추론보다 우선 — 제목 부정확으로 인한
+    //   오분류(공통수학1/중1-1 등) 차단. 명시 학기를 그대로 존중(resolveSubjectCode 의 학기 흡수 우회).
+    const explicit = resolveCurriculumCodes(curriculumCodes);
+    resolvedCode = explicit.length ? explicit : (resolveSubjectCode(examGrade, examSubject) || '');
+    if (resolvedCode && (Array.isArray(resolvedCode) ? resolvedCode.length : true)) {
       mathsecrTypeTable = buildTypeTable(resolvedCode);
       // ★ resolvedCode 가 배열(학기 불명 — 예 ['03','04'])일 수 있음 — COMBINED 병합은 코드별로.
       //   (배열로 COMBINED_SUBJECTS 인덱싱하면 항상 undefined → 병합 누락. 현재 배열은

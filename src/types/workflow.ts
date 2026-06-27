@@ -35,6 +35,9 @@ export interface UploadJob {
   appendToExamId?: string;       // ★ 기존 시험지에 병합 (문제 추가 기능)
   subjectArea?: 'math' | 'science';  // ★ 과목 영역 (수학/과학)
   scienceSubject?: string;           // ★ 과학 세부 과목 코드 (ScienceSubjectCode)
+  // ★ 자산화 시 사용자가 지정한 학년·학기(특이 진도 대비 복수) mathsecr 과목코드(예: ['05','06']).
+  //   있으면 분류가 제목 추론 대신 이 값 우선 사용 → 제목 부정확 오분류 차단. exams.curriculum_codes 로도 저장.
+  curriculumCodes?: string[];
   curriculumVersion?: '2015' | '2022'; // ★ 교육과정 버전
   // ★ 사용자 명시 출처 카테고리 — 자산화 시 자동 태깅 override (사용자 지시 2026-05-16)
   sourceCategory?: 'auto' | 'school' | 'diagnostic' | 'textbook' | 'mock';

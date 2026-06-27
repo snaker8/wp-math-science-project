@@ -62,6 +62,61 @@ const CODE_TO_NAME: Record<string, string> = {
   '17': '인공지능수학', '18': '수학과제탐구',
 };
 
+/**
+ * 자산화 업로드 UI 에서 학년·학기(특이 진도 대비 복수 선택)를 고르는 옵션 목록.
+ * code 는 mathsecr 과목코드(01~13), label 은 표시명. 선택값은 exams.curriculum_codes 로 저장돼
+ * 분류 컨텍스트에 제목 추론보다 우선 사용된다.
+ */
+export const CURRICULUM_OPTIONS: Array<{ code: string; label: string; group: '중등' | '고등' }> = [
+  { code: '01', label: '중1-1', group: '중등' },
+  { code: '02', label: '중1-2', group: '중등' },
+  { code: '03', label: '중2-1', group: '중등' },
+  { code: '04', label: '중2-2', group: '중등' },
+  { code: '05', label: '중3-1', group: '중등' },
+  { code: '06', label: '중3-2', group: '중등' },
+  { code: '07', label: '공통수학1', group: '고등' },
+  { code: '08', label: '공통수학2', group: '고등' },
+  { code: '09', label: '대수', group: '고등' },
+  { code: '10', label: '미적분1', group: '고등' },
+  { code: '11', label: '확률과 통계', group: '고등' },
+  { code: '12', label: '미적분2', group: '고등' },
+  { code: '13', label: '기하', group: '고등' },
+];
+
+const VALID_CURRICULUM_CODES = new Set(CURRICULUM_OPTIONS.map((o) => o.code));
+
+/**
+ * 사용자가 지정한 학년·학기 입력(코드 '05' 또는 라벨 '중3-1')을 유효한 mathsecr 과목코드 배열로 정규화.
+ * - 2자리 코드면 그대로(유효성 검사), 라벨이면 SUBJECT_CODE_MAP 단일키로 매핑.
+ * - 중복 제거 + 순서 보존. 유효하지 않은 값은 버림. 빈 입력 → [].
+ * ★ resolveSubjectCode 와 달리 학기를 흡수하지 않음 — 사용자가 명시한 학기를 그대로 존중.
+ */
+export function resolveCurriculumCodes(input?: string[] | null): string[] {
+  if (!input || !Array.isArray(input)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (!raw) continue;
+    const v = String(raw).normalize('NFC').trim();
+    let code: string | null = null;
+    if (VALID_CURRICULUM_CODES.has(v)) {
+      code = v;
+    } else {
+      const mapped = SUBJECT_CODE_MAP[v];
+      // 단일 코드 매핑만 채택(배열=학기불명은 명시 선택과 모순이므로 제외)
+      if (typeof mapped === 'string' && VALID_CURRICULUM_CODES.has(mapped)) code = mapped;
+    }
+    if (code && !seen.has(code)) { seen.add(code); out.push(code); }
+  }
+  return out;
+}
+
+/** 과목코드 배열 → 표시 라벨 (예: ['05','06'] → "중3-1 + 중3-2"). 빈 배열 → ''. */
+export function curriculumCodesToLabel(codes?: string[] | null): string {
+  if (!codes || !codes.length) return '';
+  return codes.map((c) => CODE_TO_NAME[c] || c).join(' + ');
+}
+
 function loadTree(): TreeNode[] {
   return mathsecrTree as unknown as TreeNode[];
 }

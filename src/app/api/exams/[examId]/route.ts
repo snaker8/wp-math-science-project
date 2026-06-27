@@ -270,6 +270,18 @@ export async function PATCH(
     if (isDiagnostic !== undefined) updateData.is_diagnostic = isDiagnostic;
     if (grade !== undefined) updateData.grade = grade;
 
+    // ★ 제목 수정 시 과목·학년 자동 재감지 (룰베이스, 비용 0) — subject/grade 를 명시적으로 안 보냈을 때만.
+    //   자산화 때 부정확한 제목으로 박힌 과목/학년이 제목 교정 후에도 옛 값으로 남던 문제 해소.
+    //   감지 결과가 비면 기존 값 보존(덮어쓰기 X).
+    if (title !== undefined && (subject === undefined || grade === undefined)) {
+      try {
+        const { detectSubjectFromTitle, detectGradeFromTitle } = await import('@/lib/workflow/title-detect');
+        const t = title.trim();
+        if (subject === undefined) { const s = detectSubjectFromTitle(t); if (s) updateData.subject = s; }
+        if (grade === undefined) { const g = detectGradeFromTitle(t); if (g) updateData.grade = g; }
+      } catch { /* 감지 실패 시 제목만 갱신 */ }
+    }
+
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: 'No fields to update' },
