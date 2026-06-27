@@ -197,8 +197,6 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       //   + boxed 본문은 placeholder 라 라벨 카운트에서 제거
       const colSpecMatch = m.match(/\\begin\{(?:tabular|array)\}\s*\{([^}]*)\}/);
       const colSpec = colSpecMatch?.[1] || '';
-      const hasVerticalBar = colSpec.includes('|');
-      const hasHline = /\\hline/i.test(m);
       const hasAlignedInside = /\\begin\{aligned\}/i.test(m);
       // ★ 다열 데이터 표(테두리 있는 진짜 표, 예: {|l|l|l|l|} + \hline)는 풀이박스가 아님 (화명중 #1
       //   "글자와 줄만 나옴" 사고: 데이터 표를 풀이박스로 오인해 테두리를 떼어내 격자 없는 표로 렌더됨).
@@ -207,7 +205,17 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       //   nested \begin{aligned} 풀이는 컬럼수와 무관하게 풀이박스로 유지.
       const colCount = (colSpec.match(/[clr]/gi) || []).length;
       const isMultiColumnTable = colCount >= 2 || /&/.test(m);
-      const looksLikeSolutionBox = hasAlignedInside || (!isMultiColumnTable && (hasVerticalBar || hasHline));
+      // ★ 풀이박스 판정 정밀화 — 단일 컬럼이라도 "단순 데이터 박스"(셀이 짧은 $…$/텍스트, 중첩환경 없음)면
+      //   테두리 유지(데이터 표 경로 = parseTabularBlock CSS 격자). 복잡 환경(중첩 aligned/array/cases/
+      //   matrix, \\[Npt] 행간)만 KaTeX 친화 위해 테두리 제거(풀이박스). 거제여중 #18 버스 요금 1열 박스가
+      //   테두리 없이 3줄로만 렌더되던 것 → 테두리 박스로. 셀 본문만 검사(박스 자신의 begin 태그 제외).
+      const innerBody = m
+        .replace(/^\s*\\begin\{(?:tabular|array)\}(?:\s*\{[^}]*\})?/i, '')
+        .replace(/\\end\{(?:tabular|array)\}\s*$/i, '');
+      const hasComplexEnv = hasAlignedInside
+        || /\\begin\{(?:array|cases|matrix|pmatrix|bmatrix|aligned)\}/i.test(innerBody)
+        || /\\\\\s*\[/.test(innerBody);
+      const looksLikeSolutionBox = hasAlignedInside || (!isMultiColumnTable && hasComplexEnv);
 
       // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
       //   \boxed{\text{(가)}} 의 (가) 는 placeholder 라 셀의 보기 라벨과 의미 다름
