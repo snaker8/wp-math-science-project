@@ -814,9 +814,6 @@ function ProblemCardView({
   }, [problem.points]);
   const figureCropImage = problem.images?.find(img => img.type === 'figure_crop');
   const cropImage = figureCropImage || problem.images?.find(img => img.type === 'crop');
-  if (problem.hasFigure) {
-    console.log(`[ProblemCard] #${problem.number} images:`, problem.images?.map(i => `${i.type}:${i.url?.substring(0, 50)}`), 'figureCrop:', !!figureCropImage, 'crop:', !!cropImage);
-  }
   const showOriginal = globalViewMode === 'original' && !!cropImage;
   const hasFigureContent = problem.upscaledCropUrl || problem.figureData || problem.figureSvg || cropImage;
 

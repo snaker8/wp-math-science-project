@@ -373,11 +373,6 @@ function toExamProblemData(
   const upscaledCropUrl = problem.ai_analysis?.upscaledCropUrl || undefined;
   const figureSource = problem.ai_analysis?.figureSource || undefined;
 
-  // DEBUG: figureData 추출 확인
-  if (hasFigure) {
-    const aiKeys = problem.ai_analysis ? Object.keys(problem.ai_analysis) : [];
-    console.log(`[toExamProblemData] #${index + 1} aiKeys=[${aiKeys.join(',')}], hasFigureData=${!!figureData}, hasFigureSvg=${!!figureSvg}${figureData ? `, fdType=${figureData.figureType}, fdHasSvg=${!!figureData.rendering?.svg}` : ''}`);
-  }
 
   return {
     id: problem.id,
