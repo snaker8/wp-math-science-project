@@ -470,6 +470,14 @@ export default function ExamManagementPage() {
   const orgName = useOrganizationName('과사람');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>('all');
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
+  // ★ 좌측 사이드바 검색어 + 폴더 펼침 상태 (펼침을 선택과 분리 — 기존엔 selectedGroupId==='all' 이라 전부 열려있던 버그)
+  const [sideSearch, setSideSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroupExpand = (id: string) => setExpandedGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [activeTab, setActiveTab] = useState<'exam' | 'answer' | 'solution'>('exam');
   const [columns, setColumns] = useState<1 | 2>(2);
   const [gap, setGap] = useState(30);
@@ -1162,7 +1170,12 @@ export default function ExamManagementPage() {
           <input
             type="text"
             placeholder="시험지·유형·날짜 검색"
+            value={sideSearch}
+            onChange={(e) => setSideSearch(e.target.value)}
           />
+          {sideSearch && (
+            <button type="button" className="em-search-clear" onClick={() => setSideSearch('')} aria-label="검색어 지우기">×</button>
+          )}
         </div>
 
         <div className="em-side-body">
@@ -1185,6 +1198,7 @@ export default function ExamManagementPage() {
             </div>
           )}
           {bookGroups.filter(g => g.id !== 'all').map((group) => {
+            const q = sideSearch.trim().toLowerCase();
             const groupExamsList = examList.filter((e: any) => {
               const gid = e.bookGroupId || e.book_group_id;
               if (!gid) return false;
@@ -1193,15 +1207,22 @@ export default function ExamManagementPage() {
                 (node.children || []).forEach(c => ids.push(...collectIds(c)));
                 return ids;
               };
-              return collectIds(group).includes(gid);
+              if (!collectIds(group).includes(gid)) return false;
+              // ★ 검색 필터 — 제목/과목/유형/날짜(연도)로 매칭
+              if (!q) return true;
+              const hay = `${e.title || ''} ${e.subject || ''} ${e.examType || ''} ${e.year || e.created_at || ''}`.toLowerCase();
+              return hay.includes(q);
             });
-            const isOpen = selectedGroupId === group.id || selectedGroupId === 'all';
+            // 검색 중 매칭 0건 폴더는 숨김
+            if (q && groupExamsList.length === 0) return null;
+            // ★ 펼침 = 사용자가 펼친 폴더 OR 검색 중(매칭 자동 펼침). 선택(selectedGroupId)과 분리.
+            const isOpen = expandedGroups.has(group.id) || !!q;
             return (
               <div key={group.id} style={{ marginBottom: 4 }}>
                 <button
                   type="button"
                   className={`em-folder ${isOpen ? 'open' : ''}`}
-                  onClick={() => setSelectedGroupId(selectedGroupId === group.id ? 'all' : group.id)}
+                  onClick={() => { toggleGroupExpand(group.id); setSelectedGroupId(group.id); }}
                 >
                   <ChevronRight className="chevron" />
                   <FolderOpen className="folder-ic" />
