@@ -472,7 +472,11 @@ function FigureMarkerRenderer({
     <div className="inline">
       {contentParts.map((part, i) => {
         if (part.type === 'text') {
-          return renderTextWithBadge(part.text, String(i), 'inline text-sm text-content-secondary leading-relaxed');
+          // ★ 캡션 추출로 비워진 텍스트는 스킵(빈 content → "(문제 내용 없음)" 표시되던 사고).
+          if (!part.text || !part.text.trim()) return null;
+          // ★ 그림 나열(multiFig)에선 텍스트를 block 으로 — inline 이면 그림 뒤 텍스트("(1)" 등)가
+          //   그림 옆으로 흘러 붙음. block 이면 그림 아래 줄로 떨어짐.
+          return renderTextWithBadge(part.text, String(i), `${multiFig ? 'block' : 'inline'} text-sm text-content-secondary leading-relaxed`);
         }
 
         // figure 파트 — figureCounter로 순서 매칭
