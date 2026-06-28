@@ -51,7 +51,7 @@ import {
   CircleDot,
 } from 'lucide-react';
 import './cloud-exam-editor.css';
-import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { MixedContentRenderer, stripOrphanTabular } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { trackBatchSolution } from '@/components/BatchSolutionNotifier';
 import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
@@ -241,6 +241,10 @@ function splitContentByFigureMarker(content: string): Array<{
   floatMode?: 'right' | 'left';
   widthPercent?: number;
 }> {
+  // ★ [도형] 으로 쪼개기 전 전체 content 에 표 마크업 방어망 — 이미지 든 표(matched+[도형])를 인라인.
+  //   쪼갠 뒤엔 \begin{tabular}/\end{tabular} 가 조각마다 흩어져 짝 카운트가 어긋나 방어가 안 되므로,
+  //   반드시 쪼개기 전 전체에 적용(온천중 #21/#22 그림 표 마크업 노출 — 기존 자산화 데이터 정리).
+  content = stripOrphanTabular(content);
   // [도형], [도형:right:40%], [도형:left:35%] 등 모든 형태 매칭
   const markerRegex = /\[도형(?::(\w+[-\w]*))?(?::(\d+)%?)?\]/;
   if (!markerRegex.test(content)) return [{ type: 'text', text: content }];
