@@ -221,7 +221,7 @@ export default function CreateSessionsModal({
                           </div>
                         </div>
                         <a
-                          href={`/api/sessions/${c.session_id}/pdf?variant=teacher`}
+                          href={`/print/session/${c.session_id}?variant=teacher`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
@@ -230,7 +230,7 @@ export default function CreateSessionsModal({
                           <Printer size={12} /> 강사
                         </a>
                         <a
-                          href={`/api/sessions/${c.session_id}/pdf?variant=student`}
+                          href={`/print/session/${c.session_id}?variant=student`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"

@@ -277,7 +277,7 @@ export default function AssignmentsPage() {
                     {a.source === 'qr' ? (
                       <>
                         <a
-                          href={`/api/sessions/${a.id}/pdf?variant=student`}
+                          href={`/print/session/${a.id}?variant=student`}
                           target="_blank" rel="noreferrer"
                           className="text-[11px] px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
                           title="학생용 인쇄"
