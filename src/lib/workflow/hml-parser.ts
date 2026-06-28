@@ -170,6 +170,13 @@ function renderTableToTabular(
   //   텍스트 처리(normalizeBogiBox/조건박스)로 폴백. 안 그러면 보기/조건 박스가 깨진 표로 렌더됨.
   //   판정: 2행↑ + 2열↑ + 셀 60%↑ 채워짐 + 박스 헤더(보기/조건/규칙/참고) 없음.
   const allCells = valid.flat().map(cellText);
+  // ★ 그림 객관식 표 — 셀이 (①②③④⑤ 마커 + [도형]) 구성이면 데이터표 아님. '' 반환 → 인라인 펼침으로
+  //   ①②③④⑤ 가 보기로, [도형] 이 보기 이미지로 추출되게(splitChoices/choiceImagesBase64). 데이터표로
+  //   잘못 변환하면 splitChoices 가 표 중간 ① 에서 본문을 잘라 \begin{tabular} 가 열린 채 본문에 남고
+  //   셀·닫기가 보기로 흩어지는 사고(온천중 #10 그래프 5지선다). 마커 2개↑ + [도형] 2개↑ 일 때만.
+  const markerCells = allCells.filter((c) => /^[①②③④⑤⑥⑦⑧⑨⑩]$/.test(c.trim())).length;
+  const figureCells = allCells.filter((c) => /\[도형\]/.test(c)).length;
+  if (markerCells >= 2 && figureCells >= 2) return '';
   const filled = allCells.filter((c) => c.trim()).length;
   const isBoxHeader = /보\s*기|조건|규칙|참고/.test(allCells.join(' '));
   const dense = allCells.length > 0 && filled / allCells.length >= 0.6;
