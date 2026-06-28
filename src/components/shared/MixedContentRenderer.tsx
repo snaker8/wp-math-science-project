@@ -626,7 +626,7 @@ type ContentElement =
  *   그림 객관식 표가 splitChoices 로 잘려 본문에 \begin{tabular} 가 열린 채 남거나 보기에 \end{tabular}
  *   잔재가 리터럴로 노출되던 기존 자산화 데이터(온천중 #10)를 DB 수정 없이 화면에서 정리.
  */
-function stripOrphanTabular(text: string): string {
+export function stripOrphanTabular(text: string): string {
   if (!text || text.indexOf('\\begin{tabular}') < 0 && text.indexOf('\\end{tabular}') < 0 && text.indexOf('\\hline') < 0) return text;
   // ★ 이미지 든 표(matched)는 격자 렌더 불가 → 표 토큰만 제거하고 [도형]·텍스트는 인라인(per-block 판정).
   //   [도형] 없는 데이터 표(x/y표·요금박스 등)는 그대로 둬서 격자 보존(parseTabularBlock). 기존 자산화
