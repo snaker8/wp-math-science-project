@@ -628,6 +628,16 @@ type ContentElement =
  */
 function stripOrphanTabular(text: string): string {
   if (!text || text.indexOf('\\begin{tabular}') < 0 && text.indexOf('\\end{tabular}') < 0 && text.indexOf('\\hline') < 0) return text;
+  // ★ 이미지 든 표(matched)는 격자 렌더 불가 → 표 토큰만 제거하고 [도형]·텍스트는 인라인(per-block 판정).
+  //   [도형] 없는 데이터 표(x/y표·요금박스 등)는 그대로 둬서 격자 보존(parseTabularBlock). 기존 자산화
+  //   데이터(온천중 #21/#22 그림 나열·그림+설명 표)를 재가져오기 없이 화면에서 정리.
+  if (text.includes('[도형]')) {
+    text = text.replace(/\\begin\{tabular\}\s*\{[^}]*\}([\s\S]*?)\\end\{tabular\}/g, (full, inner: string) =>
+      inner.includes('[도형]')
+        ? inner.replace(/\\hline/g, '').replace(/\s*&\s*/g, ' ').replace(/\\\\(?![A-Za-z])/g, ' ').replace(/[ \t]{2,}/g, ' ').trim()
+        : full // 이미지 없는 데이터 표 → 격자 보존
+    );
+  }
   const begins = (text.match(/\\begin\{tabular\}/g) || []).length;
   const ends = (text.match(/\\end\{tabular\}/g) || []).length;
   if (begins === ends && begins > 0) return text; // 짝 맞는 정상 표 → 손대지 않음

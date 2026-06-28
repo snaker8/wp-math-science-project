@@ -1,0 +1,71 @@
+import { describe, it, expect } from 'vitest';
+
+// stripOrphanTabular 실제 구현 복제(검증용) — .tsx 비export 함수와 동일 로직
+function stripOrphanTabular(text: string): string {
+  if (!text || text.indexOf('\\begin{tabular}') < 0 && text.indexOf('\\end{tabular}') < 0 && text.indexOf('\\hline') < 0) return text;
+  if (text.includes('[도형]')) {
+    text = text.replace(/\\begin\{tabular\}\s*\{[^}]*\}([\s\S]*?)\\end\{tabular\}/g, (full, inner: string) =>
+      inner.includes('[도형]')
+        ? inner.replace(/\\hline/g, '').replace(/\s*&\s*/g, ' ').replace(/\\\\(?![A-Za-z])/g, ' ').replace(/[ \t]{2,}/g, ' ').trim()
+        : full);
+  }
+  const begins = (text.match(/\\begin\{tabular\}/g) || []).length;
+  const ends = (text.match(/\\end\{tabular\}/g) || []).length;
+  if (begins === ends && begins > 0) return text;
+  if (begins === 0 && ends === 0) return text.replace(/\\hline/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+  return text
+    .replace(/\\begin\{tabular\}\s*\{[^}]*\}/g, '')
+    .replace(/\\end\{tabular\}/g, '')
+    .replace(/\\hline/g, '')
+    .replace(/\s*&\s*/g, ' ')
+    .replace(/\\\\(?![A-Za-z])/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+const imgTable = '\\begin{tabular}{|l|l|l|}\\hline [도형] & [도형] & [도형] \\\\ \\hline [1개] & [2개] & [3개] \\\\ \\hline\\end{tabular}';
+const dataTable = '\\begin{tabular}{|l|l|}\\hline $x$ & $1$ \\\\ \\hline\\end{tabular}';
+const feeBox = '\\begin{tabular}{|c|}\\hline $A$원 \\\\ \\hline $B$원 \\\\ \\hline\\end{tabular}';
+const orphanOpen = '적절한 것은?\n\\begin{tabular}{|l|l|l|l|}\\hline';
+
+describe('stripOrphanTabular', () => {
+  it('★ 이미지 표 → 인라인(마크업 제거, 도형·캡션 보존)', () => {
+    const out = stripOrphanTabular(imgTable);
+    expect(out).not.toContain('tabular');
+    expect(out).not.toContain('\\hline');
+    expect(out).toContain('[도형]');
+    expect(out).toContain('1개');
+  });
+  it('★★ 텍스트 데이터 표(도형 없음) → 그대로 보존(격자)', () => {
+    expect(stripOrphanTabular(dataTable)).toBe(dataTable);
+  });
+  it('★★ 요금박스(도형 없음) → 그대로 보존', () => {
+    expect(stripOrphanTabular(feeBox)).toBe(feeBox);
+  });
+  it('★ orphan(짝 안 맞음) → 마크업 제거', () => {
+    const out = stripOrphanTabular(orphanOpen);
+    expect(out).not.toContain('tabular');
+    expect(out).toContain('적절한 것은?');
+  });
+  it('★ 이미지 표 + 데이터 표 혼합 → 이미지만 인라인, 데이터표 보존', () => {
+    const mixed = `${imgTable} 그리고 ${dataTable}`;
+    const out = stripOrphanTabular(mixed);
+    expect(out).toContain(dataTable); // 데이터 표 보존
+    expect(out).toContain('[도형]');
+    expect(out.match(/\\begin\{tabular\}/g)?.length).toBe(1); // 데이터표 1개만 남음
+  });
+});
+
+// 조건박스 보기라벨 오인 회귀(온천중 #5) — 문장 끝 "…것이다." 의 "다." 를 보기 라벨로 보면 안 됨.
+const hasGanaLabels = (s: string) => /(?<![가-힣A-Za-z0-9])[가나다라마]\s*[.)]/.test(s);
+describe('hasGanaLabels (조건박스 vs 진짜 보기)', () => {
+  it('★ 문장 끝 "…이다." "…것이다." 는 보기 라벨 아님', () => {
+    expect(hasGanaLabels('평행이동한 것이다.')).toBe(false);
+    expect(hasGanaLabels('기울기는 $b$이다.')).toBe(false);
+    expect(hasGanaLabels('점을 지난다.')).toBe(false);
+  });
+  it('★ 줄/셀 시작 "가./나./다." 진짜 보기 라벨은 잡음', () => {
+    expect(hasGanaLabels('가. 자연수 $x$')).toBe(true);
+    expect(hasGanaLabels('\\hline 가. $x$ & 나. $y$')).toBe(true);
+  });
+});
