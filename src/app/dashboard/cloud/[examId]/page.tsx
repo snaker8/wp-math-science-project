@@ -441,6 +441,33 @@ function FigureMarkerRenderer({
   //   작게(인라인블록) 가로로 흘러 줄바꿈되게 → 원본 격자에 가깝게. 단일 도형은 기존(큰 중앙).
   const multiFig = allFigureCrops.length >= 2;
 
+  // ★ 각 그림 밑 캡션 짝짓기 — 표가 [그림행][캡션행] 구조라, 연속 그림 런 다음 텍스트의 캡션 수가 런 길이와
+  //   일치(온천중 #21 "[N개]", #22 "①설명"). 런 단위로 그림[k]↔캡션[k] 매칭하고, 캡션은 텍스트에서 제거(중복 방지).
+  const figCaptions: string[] = [];
+  if (multiFig) {
+    let fIdx = 0;
+    for (let pi = 0; pi < contentParts.length; pi++) {
+      if (contentParts[pi].type !== 'figure') continue;
+      let runLen = 0;
+      while (pi + runLen < contentParts.length && contentParts[pi + runLen].type === 'figure') runLen++;
+      const nextPart = contentParts[pi + runLen];
+      const nextText = nextPart && nextPart.type === 'text' ? nextPart.text : '';
+      const brackets = nextText.match(/\[[^\][]+\]/g);
+      const circled = nextText.match(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g);
+      let caps: string[] = [];
+      if (brackets && brackets.length === runLen) {
+        caps = brackets.map((s) => s.trim());
+        nextPart.text = nextText.replace(/\[[^\][]+\]/g, '').trim();
+      } else if (circled && circled.length === runLen) {
+        caps = circled.map((s) => s.trim());
+        nextPart.text = nextText.replace(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g, '').trim();
+      }
+      for (let k = 0; k < runLen; k++) figCaptions[fIdx + k] = caps[k] || '';
+      fIdx += runLen;
+      pi += runLen - 1;
+    }
+  }
+
   return (
     <div className="inline">
       {contentParts.map((part, i) => {
@@ -476,15 +503,18 @@ function FigureMarkerRenderer({
 
         // 2번째 이후 도형 또는 첫 번째에 figureSource 없을 때: figure_crop 이미지 직접 표시
         if (matchedCrop) {
-          // ★ 그림 나열(2개↑) → 작게 인라인블록 가로 흐름(줄바꿈). 단일 → 기존 큰 중앙.
+          // ★ 그림 나열(2개↑) → 작게 가로 흐름(줄바꿈) + 그림 밑 캡션([N개]/①설명).
           return multiFig ? (
-            <span key={i} className="inline-block align-top m-1">
+            <span key={i} className="inline-flex flex-col items-center align-top m-1 max-w-[200px]">
               <img
                 src={proxyUrl(matchedCrop.url)}
                 alt={matchedCrop.label || `도형 ${currentFigureIdx + 1}`}
                 className="rounded-lg border border-zinc-600 bg-white max-h-32 object-contain shadow-sm"
                 loading="lazy"
               />
+              {figCaptions[currentFigureIdx] && (
+                <span className="text-[11px] text-content-secondary mt-1 text-center leading-snug">{figCaptions[currentFigureIdx]}</span>
+              )}
             </span>
           ) : (
             <div key={i} className="my-2 flex justify-center">
