@@ -452,15 +452,20 @@ function FigureMarkerRenderer({
       while (pi + runLen < contentParts.length && contentParts[pi + runLen].type === 'figure') runLen++;
       const nextPart = contentParts[pi + runLen];
       const nextText = nextPart && nextPart.type === 'text' ? nextPart.text : '';
-      const brackets = nextText.match(/\[[^\][]+\]/g);
-      const circled = nextText.match(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g);
+      // ★ 캡션 영역은 다음 소문제 "(1)" 전까지 — 그 뒤의 ①② 는 소문제 본문이라 캡션 아님
+      //   (온천중 #22 ⑤⑥ 뒤에 (1)①② 가 붙어 마커수 불일치로 짝짓기 실패하던 사고). tail 은 텍스트로 보존.
+      const subQ = nextText.search(/(?:^|\n)\s*\(\d+\)/);
+      const capZone = subQ >= 0 ? nextText.slice(0, subQ) : nextText;
+      const tail = subQ >= 0 ? nextText.slice(subQ) : '';
+      const brackets = capZone.match(/\[[^\][]+\]/g);
+      const circled = capZone.match(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g);
       let caps: string[] = [];
       if (brackets && brackets.length === runLen) {
         caps = brackets.map((s) => s.trim());
-        nextPart.text = nextText.replace(/\[[^\][]+\]/g, '').trim();
+        nextPart.text = `${capZone.replace(/\[[^\][]+\]/g, '').trim()} ${tail}`.trim();
       } else if (circled && circled.length === runLen) {
         caps = circled.map((s) => s.trim());
-        nextPart.text = nextText.replace(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g, '').trim();
+        nextPart.text = `${capZone.replace(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g, '').trim()} ${tail}`.trim();
       }
       for (let k = 0; k < runLen; k++) figCaptions[fIdx + k] = caps[k] || '';
       fIdx += runLen;
