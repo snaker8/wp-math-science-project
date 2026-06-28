@@ -136,8 +136,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   const mathSectionIndex = normalized.indexOf('\n\n수식:\n');
   const bodyText = mathSectionIndex >= 0 ? normalized.substring(0, mathSectionIndex) : normalized;
 
-  // ★ content_latex 끝에 포함된 선택지 줄 제거 (choices 배열과 중복 방지)
-  const bodyWithoutTrailingChoices = stripTrailingChoiceLines(bodyText);
+  // ★ 방어망: 짝 안 맞는(orphan) 표 마크업 제거 — 정상(짝 맞는) 표는 안 건드림.
+  //   그림 객관식 표가 잘못 잘려 \begin{tabular} 가 열린 채 본문에 남거나 보기에 \end{tabular}·& 잔재가
+  //   리터럴로 노출되던 사고(온천중 #10) 의 기존 자산화 데이터를 DB 수정 없이 화면에서 정리.
+  const bodyWithoutTrailingChoices = stripTrailingChoiceLines(stripOrphanTabular(bodyText));
 
   // ★ $\begin{array}...\end{array}$ 에서 보기형이면 $ 래퍼 제거 (KaTeX가 한글 처리 못함)
   // 1) $$...$$로 감싸진 경우
@@ -616,6 +618,33 @@ type ContentElement =
   | { type: 'bold'; value: string }
   | { type: 'tag'; value: string }
   | { type: 'table'; rows: string[][]; hasHlines: boolean[]; verticalLines?: number[] };
+
+/**
+ * ★ 방어망 — 짝이 안 맞는(orphan) 표 마크업 제거.
+ *   `\begin{tabular}` 와 `\end{tabular}` 개수가 같으면(=정상 표) 원문 그대로 반환(절대 안 건드림).
+ *   개수가 다르면(잘려서 한쪽만 남은 잔재) 표 토큰(begin/end/hline/셀&·행\\)을 제거 — 어차피 렌더 불가.
+ *   그림 객관식 표가 splitChoices 로 잘려 본문에 \begin{tabular} 가 열린 채 남거나 보기에 \end{tabular}
+ *   잔재가 리터럴로 노출되던 기존 자산화 데이터(온천중 #10)를 DB 수정 없이 화면에서 정리.
+ */
+function stripOrphanTabular(text: string): string {
+  if (!text || text.indexOf('\\begin{tabular}') < 0 && text.indexOf('\\end{tabular}') < 0 && text.indexOf('\\hline') < 0) return text;
+  const begins = (text.match(/\\begin\{tabular\}/g) || []).length;
+  const ends = (text.match(/\\end\{tabular\}/g) || []).length;
+  if (begins === ends && begins > 0) return text; // 짝 맞는 정상 표 → 손대지 않음
+  if (begins === 0 && ends === 0) {
+    // 표는 없는데 \hline 만 떠도는 잔재(보기 조각 등) → \hline 만 제거
+    return text.replace(/\\hline/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+  }
+  // orphan(짝 안 맞음) → 표 마크업 토큰 전부 제거 (잘린 잔재라 렌더 불가)
+  return text
+    .replace(/\\begin\{tabular\}\s*\{[^}]*\}/g, '')
+    .replace(/\\end\{tabular\}/g, '')
+    .replace(/\\hline/g, '')
+    .replace(/\s*&\s*/g, ' ')        // 셀 구분 잔재
+    .replace(/\\\\(?![A-Za-z])/g, ' ') // 행 구분 잔재 (\command 는 보존)
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
 
 /**
  * content_latex 끝에 포함된 선택지 줄 제거
