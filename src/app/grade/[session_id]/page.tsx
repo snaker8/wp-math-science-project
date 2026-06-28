@@ -379,6 +379,35 @@ export default function GradeSessionPage() {
                 <MixedContentRenderer content={item.content} />
               </div>
 
+              {/* ★ 정답 — 채점 기준. answer_json 의 정답/소문제 배점을 표시(이미 받아오는 값). */}
+              {(() => {
+                const aj = (item.answer_json || {}) as Record<string, unknown>;
+                const ans = String((aj.finalAnswer ?? aj.correct_answer ?? '') || '').trim();
+                const subQ = Array.isArray(aj.subQuestions) ? (aj.subQuestions as Array<{ number?: string; points?: number; answer?: string }>) : [];
+                if (!ans && subQ.length === 0) return null;
+                return (
+                  <div className="px-4 pb-2">
+                    <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2">
+                      <div className="text-[11px] font-bold text-emerald-400 mb-1">정답</div>
+                      {ans && (
+                        <div className="text-sm leading-relaxed text-content-secondary">
+                          <MixedContentRenderer content={ans} />
+                        </div>
+                      )}
+                      {subQ.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {subQ.map((s, i) => (
+                            <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                              ({s.number ?? i + 1}) {s.points != null ? `${s.points}점` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* O / X 버튼 */}
               <div className="grid grid-cols-2 gap-2 px-4 pb-3">
                 <button
