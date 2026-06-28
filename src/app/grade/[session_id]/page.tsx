@@ -39,8 +39,13 @@ interface GradeItem {
     error_cause: ErrorCause | null;
     teacher_note: string | null;
     graded_at: string;
+    sub_scores?: SubScore[] | null;
+    awarded_points?: number | null;
+    max_points?: number | null;
   };
 }
+
+interface SubScore { number: string; points: number; awarded: number }
 
 interface LocalMark {
   is_correct: boolean | null;
@@ -49,6 +54,18 @@ interface LocalMark {
   dirty: boolean;           // 서버와 불일치 (저장 필요)
   saving?: boolean;
   savedAt?: string;
+  // ★ 서술형 소문제별 부분점수 (있으면 점수 기반 채점)
+  subScores?: SubScore[];
+  awardedPoints?: number;
+  maxPoints?: number;
+}
+
+/** answer_json 에서 소문제 배점 목록 추출 (서술형 부분점수 채점 대상 판별). */
+function getSubQuestions(aj: Record<string, unknown> | null): Array<{ number: string; points: number }> {
+  const arr = aj && Array.isArray((aj as Record<string, unknown>).subQuestions)
+    ? ((aj as Record<string, unknown>).subQuestions as Array<{ number?: string | number; points?: number }>)
+    : [];
+  return arr.map((s, i) => ({ number: String(s?.number ?? i + 1), points: typeof s?.points === 'number' ? s.points : 0 }));
 }
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
@@ -103,6 +120,9 @@ export default function GradeSessionPage() {
             teacher_note: it.result.teacher_note,
             dirty: false,
             savedAt: it.result.graded_at,
+            subScores: it.result.sub_scores ?? undefined,
+            awardedPoints: it.result.awarded_points ?? undefined,
+            maxPoints: it.result.max_points ?? undefined,
           };
         } else {
           m[it.sequence_number] = {
@@ -129,7 +149,7 @@ export default function GradeSessionPage() {
   // 마킹 변경 — 개별 문항 자동 저장
   // ──────────────────────────────────
   const saveOne = useCallback(
-    async (seq: number, data: { is_correct: boolean; error_cause?: ErrorCause | null; teacher_note?: string | null }) => {
+    async (seq: number, data: { is_correct: boolean; error_cause?: ErrorCause | null; teacher_note?: string | null; sub_scores?: SubScore[] | null; awarded_points?: number | null; max_points?: number | null }) => {
       setMarks(prev => ({ ...prev, [seq]: { ...prev[seq], saving: true } }));
       try {
         const res = await fetch('/api/session-results', {
@@ -142,6 +162,9 @@ export default function GradeSessionPage() {
               is_correct: data.is_correct,
               error_cause: data.error_cause ?? null,
               teacher_note: data.teacher_note ?? null,
+              sub_scores: data.sub_scores ?? null,
+              awarded_points: data.awarded_points ?? null,
+              max_points: data.max_points ?? null,
             }],
           }),
         });
@@ -185,6 +208,25 @@ export default function GradeSessionPage() {
       teacher_note: marks[seq]?.teacher_note ?? null,
     });
   }, [saveOne, marks]);
+
+  // ★ 서술형 소문제 부분점수 — 한 소문제 점수 변경 → 합계·정오 재계산 후 저장.
+  const handleSubScore = useCallback((seq: number, subs: Array<{ number: string; points: number }>, idx: number, awardedRaw: number) => {
+    const cur = marks[seq];
+    const base: SubScore[] = subs.map((s) => {
+      const existing = cur?.subScores?.find(x => x.number === s.number);
+      return { number: s.number, points: s.points, awarded: existing?.awarded ?? 0 };
+    });
+    const clamped = Math.max(0, Math.min(subs[idx].points, Number.isFinite(awardedRaw) ? awardedRaw : 0));
+    base[idx] = { ...base[idx], awarded: clamped };
+    const maxPoints = subs.reduce((a, s) => a + s.points, 0);
+    const awardedPoints = base.reduce((a, s) => a + s.awarded, 0);
+    const isCorrect = maxPoints > 0 && awardedPoints >= maxPoints;
+    setMarks(prev => ({ ...prev, [seq]: { ...prev[seq], is_correct: isCorrect, subScores: base, awardedPoints, maxPoints, dirty: true, saving: false } }));
+    void saveOne(seq, {
+      is_correct: isCorrect, error_cause: cur?.error_cause ?? null, teacher_note: cur?.teacher_note ?? null,
+      sub_scores: base, awarded_points: awardedPoints, max_points: maxPoints,
+    });
+  }, [marks, saveOne]);
 
   const handleErrorCause = useCallback((seq: number, cause: ErrorCause | null) => {
     const current = marks[seq];
@@ -240,13 +282,19 @@ export default function GradeSessionPage() {
   const stats = useMemo(() => {
     const total = items.length;
     let graded = 0;
-    let correct = 0;
+    let fractionSum = 0; // ★ 부분점수 반영 — 서술형은 획득/만점 비율, 그 외는 정오(1/0)
     for (const it of items) {
       const m = marks[it.sequence_number];
-      if (m?.is_correct === true) { graded++; correct++; }
-      else if (m?.is_correct === false) { graded++; }
+      if (!m || m.is_correct === null) continue;
+      graded++;
+      if (m.maxPoints && m.maxPoints > 0) {
+        fractionSum += Math.min(1, (m.awardedPoints ?? 0) / m.maxPoints);
+      } else {
+        fractionSum += m.is_correct ? 1 : 0;
+      }
     }
-    const pct = graded > 0 ? Math.round((correct / graded) * 1000) / 10 : null;
+    const correct = Math.round(fractionSum * 10) / 10;
+    const pct = graded > 0 ? Math.round((fractionSum / graded) * 1000) / 10 : null;
     return { total, graded, correct, pct };
   }, [items, marks]);
 
@@ -333,6 +381,9 @@ export default function GradeSessionPage() {
           };
           const isO = mark.is_correct === true;
           const isX = mark.is_correct === false;
+          // ★ 서술형 + 소문제 배점 있으면 부분점수 채점, 아니면 O/X
+          const subs = getSubQuestions(item.answer_json);
+          const isShortAnswer = ((item.answer_json as Record<string, unknown> | null)?.type === 'short_answer') && subs.length > 0;
           return (
             <div
               key={item.sequence_number}
@@ -408,35 +459,70 @@ export default function GradeSessionPage() {
                 );
               })()}
 
-              {/* O / X 버튼 */}
-              <div className="grid grid-cols-2 gap-2 px-4 pb-3">
-                <button
-                  type="button"
-                  onClick={() => handleMark(item.sequence_number, true)}
-                  className={`flex items-center justify-center gap-1 py-3 rounded-xl font-bold text-lg transition-all ${
-                    isO
-                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                      : 'bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10'
-                  }`}
-                  aria-label="정답"
-                >
-                  <Check size={22} />
-                  <span>O</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMark(item.sequence_number, false)}
-                  className={`flex items-center justify-center gap-1 py-3 rounded-xl font-bold text-lg transition-all ${
-                    isX
-                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-                      : 'bg-white/5 text-red-400 border border-red-500/30 hover:bg-red-500/10'
-                  }`}
-                  aria-label="오답"
-                >
-                  <X size={22} />
-                  <span>X</span>
-                </button>
-              </div>
+              {/* 채점 — 서술형(소문제 배점 있음)은 소문제별 부분점수, 그 외는 O/X */}
+              {isShortAnswer ? (
+                <div className="px-4 pb-3 space-y-2">
+                  {subs.map((s, idx) => {
+                    const awarded = mark.subScores?.find(x => x.number === s.number)?.awarded ?? 0;
+                    return (
+                      <div key={s.number} className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-content-secondary w-10">({s.number})</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {Array.from({ length: s.points + 1 }, (_, p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => handleSubScore(item.sequence_number, subs, idx, p)}
+                              className={`min-w-[34px] px-2 py-1.5 rounded-lg text-sm font-bold border transition-colors ${
+                                awarded === p
+                                  ? 'bg-indigo-500 text-white border-indigo-500'
+                                  : 'bg-white/5 text-content-secondary border-white/10 hover:border-indigo-500/40'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                          <span className="text-xs text-content-tertiary ml-1">/ {s.points}점</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-end gap-1 pt-1 text-sm">
+                    <span className="text-content-tertiary">획득</span>
+                    <span className="font-bold text-indigo-300">{mark.awardedPoints ?? 0}</span>
+                    <span className="text-content-tertiary">/ {mark.maxPoints ?? subs.reduce((a, s) => a + s.points, 0)}점</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 px-4 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => handleMark(item.sequence_number, true)}
+                    className={`flex items-center justify-center gap-1 py-3 rounded-xl font-bold text-lg transition-all ${
+                      isO
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                        : 'bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10'
+                    }`}
+                    aria-label="정답"
+                  >
+                    <Check size={22} />
+                    <span>O</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMark(item.sequence_number, false)}
+                    className={`flex items-center justify-center gap-1 py-3 rounded-xl font-bold text-lg transition-all ${
+                      isX
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                        : 'bg-white/5 text-red-400 border border-red-500/30 hover:bg-red-500/10'
+                    }`}
+                    aria-label="오답"
+                  >
+                    <X size={22} />
+                    <span>X</span>
+                  </button>
+                </div>
+              )}
 
               {/* 오답 원인 — X 일 때만 표시 */}
               {isX && (

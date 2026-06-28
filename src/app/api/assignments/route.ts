@@ -149,12 +149,16 @@ export async function GET(_request: NextRequest) {
   for (const ids of chunk(qrIds, 200)) {
     const [{ data: sp }, { data: sr }] = await Promise.all([
       diag().from('session_problems').select('session_id').in('session_id', ids),
-      diag().from('session_results').select('session_id, is_correct').in('session_id', ids),
+      diag().from('session_results').select('session_id, is_correct, awarded_points, max_points').in('session_id', ids),
     ]);
     for (const r of (sp || []) as Array<{ session_id: string }>) qrTotal.set(r.session_id, (qrTotal.get(r.session_id) || 0) + 1);
-    for (const r of (sr || []) as Array<{ session_id: string; is_correct: boolean }>) {
+    for (const r of (sr || []) as Array<{ session_id: string; is_correct: boolean; awarded_points: number | null; max_points: number | null }>) {
       qrGraded.set(r.session_id, (qrGraded.get(r.session_id) || 0) + 1);
-      if (r.is_correct) qrCorrect.set(r.session_id, (qrCorrect.get(r.session_id) || 0) + 1);
+      // ★ 부분점수 반영 — 서술형(max_points>0)은 획득/만점 비율, 그 외는 정오(1/0).
+      const frac = (r.max_points && r.max_points > 0)
+        ? Math.min(1, (r.awarded_points || 0) / r.max_points)
+        : (r.is_correct ? 1 : 0);
+      qrCorrect.set(r.session_id, (qrCorrect.get(r.session_id) || 0) + frac);
     }
   }
 
@@ -205,7 +209,7 @@ export async function GET(_request: NextRequest) {
       issued_at: r.issued_at,
       completed: !!r.completed_at,
       problems_total: qrTotal.get(r.id) || 0,
-      correct_cnt: correct,
+      correct_cnt: Math.round(correct * 10) / 10,
       score_pct: graded > 0 ? Math.round((correct / graded) * 1000) / 10 : null,
     });
   }

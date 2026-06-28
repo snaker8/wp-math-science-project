@@ -39,6 +39,10 @@ interface ResultEntry {
   is_correct?: boolean;
   error_cause?: string | null;
   teacher_note?: string | null;
+  // ★ 서술형 소문제별 부분점수 (선택). sub_scores=[{number,points,awarded}], awarded/max=합계.
+  sub_scores?: Array<{ number?: string | number; points?: number; awarded?: number }> | null;
+  awarded_points?: number | null;
+  max_points?: number | null;
 }
 
 interface SaveBody {
@@ -126,6 +130,14 @@ export async function POST(request: NextRequest) {
       errorCause = r.error_cause as string;
     }
 
+    // ★ 부분점수(서술형) — 있으면 정규화 저장. 숫자만, 음수·NaN 차단.
+    const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+    const subScores = Array.isArray(r.sub_scores)
+      ? r.sub_scores.map((s) => ({ number: String(s?.number ?? ''), points: num(s?.points) ?? 0, awarded: num(s?.awarded) ?? 0 }))
+      : null;
+    const maxPoints = num(r.max_points) ?? (subScores ? subScores.reduce((a, s) => a + s.points, 0) : null);
+    const awardedPoints = num(r.awarded_points) ?? (subScores ? subScores.reduce((a, s) => a + s.awarded, 0) : null);
+
     rows.push({
       session_id: sessionId,
       problem_id: problemId,
@@ -134,6 +146,9 @@ export async function POST(request: NextRequest) {
       error_cause: errorCause,
       teacher_note: r.teacher_note ?? null,
       graded_at: new Date().toISOString(),
+      sub_scores: subScores,
+      awarded_points: awardedPoints,
+      max_points: maxPoints,
     });
   }
 

@@ -129,6 +129,9 @@ export async function GET(
         error_cause: r.error_cause,
         teacher_note: r.teacher_note,
         graded_at: r.graded_at,
+        sub_scores: r.sub_scores ?? null,
+        awarded_points: r.awarded_points ?? null,
+        max_points: r.max_points ?? null,
       } : null,
     };
   });
