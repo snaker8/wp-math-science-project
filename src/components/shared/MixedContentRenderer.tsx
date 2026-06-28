@@ -224,7 +224,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
       //   ★ boxed 제거된 stripped 에서 검사 — placeholder 오탐 차단
       const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(stripped);
-      const hasGanaLabels = /[가나다라마]\s*[.)]\s*/.test(stripped);
+      // ★ 보기 라벨 "가./나./다."만 — 문장 끝 "…이다." "…것이다."의 "다."를 오인하면 조건박스가
+      //   isChoiceTabular 로 잘못 변환돼 "ㄷ." 라벨 + \hline 노출 사고(온천중 #5). 앞에 한글음절/영문/숫자가
+      //   오면(=문장 중간) 제외 — 진짜 라벨은 줄/셀 시작(공백·\\·& 뒤)이라 통과.
+      const hasGanaLabels = /(?<![가-힣A-Za-z0-9])[가나다라마]\s*[.)]/.test(stripped);
       const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(stripped);
       const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(stripped);
 
