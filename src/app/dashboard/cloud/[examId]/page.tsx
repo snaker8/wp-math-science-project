@@ -437,6 +437,9 @@ function FigureMarkerRenderer({
   // ★ 다중 [도형] 마커 지원: figure_crop 배열에서 순서대로 이미지 매칭
   const allFigureCrops = problem.images?.filter((img: { type: string }) => img.type === 'figure_crop') || [];
   let figureCounter = 0;
+  // ★ 그림 나열(여러 작은 도형) — 각 그림을 전체폭으로 세로 쌓으면 거대해짐(온천중 #21/#22). 2개↑면
+  //   작게(인라인블록) 가로로 흘러 줄바꿈되게 → 원본 격자에 가깝게. 단일 도형은 기존(큰 중앙).
+  const multiFig = allFigureCrops.length >= 2;
 
   return (
     <div className="inline">
@@ -473,7 +476,17 @@ function FigureMarkerRenderer({
 
         // 2번째 이후 도형 또는 첫 번째에 figureSource 없을 때: figure_crop 이미지 직접 표시
         if (matchedCrop) {
-          return (
+          // ★ 그림 나열(2개↑) → 작게 인라인블록 가로 흐름(줄바꿈). 단일 → 기존 큰 중앙.
+          return multiFig ? (
+            <span key={i} className="inline-block align-top m-1">
+              <img
+                src={proxyUrl(matchedCrop.url)}
+                alt={matchedCrop.label || `도형 ${currentFigureIdx + 1}`}
+                className="rounded-lg border border-zinc-600 bg-white max-h-32 object-contain shadow-sm"
+                loading="lazy"
+              />
+            </span>
+          ) : (
             <div key={i} className="my-2 flex justify-center">
               <img
                 src={proxyUrl(matchedCrop.url)}
