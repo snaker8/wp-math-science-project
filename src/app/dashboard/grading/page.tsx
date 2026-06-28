@@ -568,7 +568,7 @@ function SessionCard({
         {/* 액션 버튼들 */}
         <div className="flex items-center gap-1.5">
           <a
-            href={`/api/sessions/${s.id}/pdf?variant=teacher`}
+            href={`/print/session/${s.id}?variant=teacher`}
             target="_blank"
             rel="noreferrer"
             className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
@@ -577,7 +577,7 @@ function SessionCard({
             <Printer size={12} /> 강사
           </a>
           <a
-            href={`/api/sessions/${s.id}/pdf?variant=student`}
+            href={`/print/session/${s.id}?variant=student`}
             target="_blank"
             rel="noreferrer"
             className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
