@@ -56,6 +56,37 @@ describe('stripOrphanTabular', () => {
   });
 });
 
+// 디스플레이 승격 가드(경남고 #5) — $...\begin{array}...\end{array}...$ → $$ 승격하되,
+//   \left( / \left[ / \left| 로 감싼 인라인 행렬·행벡터는 승격 금지(문장 중간 가로 유지).
+//   MixedContentRenderer.tsx 2-4a 단계 로직과 동일.
+function promoteDisplay(result: string): string {
+  return result.replace(
+    /(?<!\$)\$([^$\n]*?\\begin\{(?:array|cases|aligned)\}[\s\S]*?\\end\{(?:array|cases|aligned)\}[^$\n]*?)\$(?!\$)/g,
+    (_m, inner: string) => {
+      if (/\\left\s*[([|]\s*\\begin\{array\}/.test(inner)) return _m;
+      return `$$${inner}$$`;
+    }
+  );
+}
+describe('디스플레이 승격 가드 (인라인 행렬 vs 연립방정식)', () => {
+  it('★ \\left( 로 감싼 행벡터 보기는 인라인 유지($$ 승격 X)', () => {
+    const s = '제 3 행은 $\\left(\\begin{array}{lll}6 & 8 & 0\\end{array}\\right)$이다.';
+    expect(promoteDisplay(s)).toBe(s); // 변화 없음 = 인라인
+  });
+  it('★ \\left[ 로 감싼 행렬도 인라인 유지', () => {
+    const s = '$\\left[\\begin{array}{cc}1 & 2\\\\3 & 4\\end{array}\\right]$';
+    expect(promoteDisplay(s)).toBe(s);
+  });
+  it('★★ 맨몸 array(연립방정식)는 디스플레이로 승격', () => {
+    const s = '$\\begin{array}{l}x+y=1\\\\x-y=3\\end{array}$';
+    expect(promoteDisplay(s)).toContain('$$');
+  });
+  it('★★ cases(연립방정식)는 디스플레이로 승격', () => {
+    const s = '$\\begin{cases}x+y=1\\\\x-y=3\\end{cases}$';
+    expect(promoteDisplay(s)).toContain('$$');
+  });
+});
+
 // 조건박스 보기라벨 오인 회귀(온천중 #5) — 문장 끝 "…것이다." 의 "다." 를 보기 라벨로 보면 안 됨.
 const hasGanaLabels = (s: string) => /(?<![가-힣A-Za-z0-9])[가나다라마]\s*[.)]/.test(s);
 describe('hasGanaLabels (조건박스 vs 진짜 보기)', () => {
