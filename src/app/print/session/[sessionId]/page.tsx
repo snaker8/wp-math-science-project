@@ -193,6 +193,13 @@ function SessionPrintInner() {
     }
   }, [pendingPrint, measured]);
 
+  // ★ 안전 타임아웃 — 측정이 지연/실패해도 인쇄가 영영 막히지 않게 (최대 4s 후 인쇄). hang 차단.
+  useEffect(() => {
+    if (!pendingPrint) return;
+    const t = setTimeout(() => { setPendingPrint(false); window.print(); }, 4000);
+    return () => clearTimeout(t);
+  }, [pendingPrint]);
+
   // 측정폭 — 숨김 측정 패스에서 각 문제를 "컬럼 폭"으로 렌더해 자연 높이를 잰다.
   const measureWidth = columns === 2 ? (CONTENT_W - COLUMN_GAP) / 2 : CONTENT_W;
 
