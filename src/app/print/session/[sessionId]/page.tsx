@@ -120,6 +120,8 @@ function SessionPrintInner() {
   const measureRef = useRef<HTMLDivElement>(null);
   const [problemHeights, setProblemHeights] = useState<number[]>([]);
   const [measured, setMeasured] = useState(false);
+  // ★ 측정 완료 전 인쇄 보류 — 미측정 시 폴백(블라인드 10문제) 분할로 인쇄돼 잘림 차단 (#2 견고화)
+  const [pendingPrint, setPendingPrint] = useState(false);
   const heightCacheRef = useRef<Map<string, number>>(new Map());
 
   const cacheKeyFor = useCallback(
@@ -182,6 +184,14 @@ function SessionPrintInner() {
     measure();
     return () => { cancelled = true; };
   }, [problems, measured, cacheKeyFor]);
+
+  // ★ 보류된 인쇄 재개 — 측정 완료되면 정상 분할로 인쇄 (#2 견고화)
+  useEffect(() => {
+    if (pendingPrint && measured) {
+      setPendingPrint(false);
+      window.print();
+    }
+  }, [pendingPrint, measured]);
 
   // 측정폭 — 숨김 측정 패스에서 각 문제를 "컬럼 폭"으로 렌더해 자연 높이를 잰다.
   const measureWidth = columns === 2 ? (CONTENT_W - COLUMN_GAP) / 2 : CONTENT_W;
@@ -334,7 +344,17 @@ function SessionPrintInner() {
               </button>
             ))}
           </div>
-          <button type="button" className="print-btn" onClick={() => window.print()}>인쇄 / PDF 저장</button>
+          <button
+            type="button"
+            className="print-btn"
+            onClick={() => {
+              // 측정 미완료면 보류(effect가 완료 후 자동 인쇄) — 폴백 분할 인쇄 차단
+              if (problems.length > 0 && !measured) { setPendingPrint(true); }
+              else { window.print(); }
+            }}
+          >
+            {pendingPrint && !measured ? '측정 중… 곧 인쇄' : '인쇄 / PDF 저장'}
+          </button>
         </div>
       </div>
 
