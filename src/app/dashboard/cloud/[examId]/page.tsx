@@ -1563,6 +1563,8 @@ function ExamPaperView({
   const [pagePad, setPagePad] = useState(38);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  // ★ 측정 완료 전 인쇄 요청 보류 — 미측정 시 폴백(블라인드 10문제) 페이지가 인쇄돼 잘림 차단 (#2 견고화)
+  const [pendingPrint, setPendingPrint] = useState(false);
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
   const printMenuRef = useRef<HTMLDivElement>(null);
 
@@ -1788,6 +1790,13 @@ function ExamPaperView({
   const handlePrint = useCallback(() => {
     setShowPrintMenu(false);
 
+    // ★ 측정 미완료 시 인쇄 보류 — 현재 .exam-page 는 폴백(블라인드 10문제) 분할이라 키 큰 문제 잘림.
+    //   측정 끝나면 아래 effect 가 자동으로 인쇄 재개. (페이지 분할 결과 무변경, 인쇄 타이밍만 가드)
+    if (problems.length > 0 && !measured) {
+      setPendingPrint(true);
+      return;
+    }
+
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
 
@@ -1840,7 +1849,15 @@ function ExamPaperView({
     } else {
       runPrint();
     }
-  }, [printSections, examTitle]);
+  }, [printSections, examTitle, measured, problems.length]);
+
+  // ★ 보류된 인쇄 재개 — 측정 완료되면 정상 분할 페이지로 인쇄 (#2 견고화)
+  useEffect(() => {
+    if (pendingPrint && measured) {
+      setPendingPrint(false);
+      handlePrint();
+    }
+  }, [pendingPrint, measured, handlePrint]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
