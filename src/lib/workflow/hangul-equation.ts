@@ -243,6 +243,10 @@ export function hangulEquationToLatex(script: string): string {
   if (!script) return '';
   let s = script;
 
+  // 0z) 잘린 HWP 수식 끝의 `{{:` 아티팩트 제거 — `{x}{{:` 처럼 cases/piecewise 머리만 남고
+  //   본문이 비어 truncated 된 원문결함. 그대로면 KaTeX 불균형 에러. 앞부분({x})은 정상 렌더.
+  s = s.replace(/\{\s*\{\s*:[\s\S]*$/, '').trim();
+
   // 0a) 스타일토큰(it/rm/bold/roman)이 명령에 바로 붙은 경우(itpile·itright·rmsqrt 등) 제거.
   //   DROP_TOKENS 의 (?![A-Za-z]) 가드는 뒤가 글자면 안 잡으므로 명령어 앞일 때 따로 처리.
   //   (bar 는 rmbar 전용 처리(2.45)가 있어 제외)

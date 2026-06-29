@@ -105,4 +105,10 @@ describe('hangulEquationToLatex — n제곱근(root/of) · 글루 스타일토�
     const r = hangulEquationToLatex('a itright }');
     expect(r).not.toContain('itright');
   });
+
+  it('★ 잘린 끝 {{: 아티팩트 제거 — 앞부분만 정상 렌더', () => {
+    expect(hangulEquationToLatex('{x}{{:')).not.toContain('{{:');
+    expect(renders(hangulEquationToLatex('{x}{{:'))).toBe(true);
+    expect(renders(hangulEquationToLatex('{x ^{2} +x-1=0}{{:'))).toBe(true);
+  });
 });
