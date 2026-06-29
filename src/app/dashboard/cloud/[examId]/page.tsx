@@ -444,6 +444,9 @@ function FigureMarkerRenderer({
   // ★ 각 그림 밑 캡션 짝짓기 — 표가 [그림행][캡션행] 구조라, 연속 그림 런 다음 텍스트의 캡션 수가 런 길이와
   //   일치(온천중 #21 "[N개]", #22 "①설명"). 런 단위로 그림[k]↔캡션[k] 매칭하고, 캡션은 텍스트에서 제거(중복 방지).
   const figCaptions: string[] = [];
+  // ★ 그림이 "연속 런(2개↑)"에 속하는지 — 런이면 작게 가로 흐름(나열), 단독(소문제마다 1개)이면 중앙 큰 배치.
+  //   #21/#22 나열은 런, #20 (1)·(2) 그림·#22 (2) 마지막 그림은 단독 → 중앙(온천중 #20).
+  const figIsInRun: boolean[] = [];
   if (multiFig) {
     let fIdx = 0;
     for (let pi = 0; pi < contentParts.length; pi++) {
@@ -467,7 +470,7 @@ function FigureMarkerRenderer({
         caps = circled.map((s) => s.trim());
         nextPart.text = `${capZone.replace(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g, '').trim()} ${tail}`.trim();
       }
-      for (let k = 0; k < runLen; k++) figCaptions[fIdx + k] = caps[k] || '';
+      for (let k = 0; k < runLen; k++) { figCaptions[fIdx + k] = caps[k] || ''; figIsInRun[fIdx + k] = runLen >= 2; }
       fIdx += runLen;
       pi += runLen - 1;
     }
@@ -512,8 +515,8 @@ function FigureMarkerRenderer({
 
         // 2번째 이후 도형 또는 첫 번째에 figureSource 없을 때: figure_crop 이미지 직접 표시
         if (matchedCrop) {
-          // ★ 그림 나열(2개↑) → 작게 가로 흐름(줄바꿈) + 그림 밑 캡션([N개]/①설명).
-          return multiFig ? (
+          // ★ 연속 그림 런(2개↑)만 작게 가로 흐름 + 캡션. 단독 그림(소문제별 1개)은 중앙 큰 배치(온천중 #20).
+          return figIsInRun[currentFigureIdx] ? (
             <span key={i} className="inline-flex flex-col items-center align-top m-1 max-w-[200px]">
               <img
                 src={proxyUrl(matchedCrop.url)}
