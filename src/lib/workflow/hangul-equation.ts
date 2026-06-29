@@ -10,7 +10,7 @@
 // 백슬래시를 붙여야 하는 한글 수식 명령어 (LaTeX 명령과 철자 동일)
 const BACKSLASH_CMDS = [
   // 구분자/구조
-  'left', 'right', 'sqrt', 'frac', 'over', 'root', 'of',
+  'left', 'right', 'sqrt', 'frac', 'over',
   // 연산/관계
   'times', 'div', 'pm', 'mp', 'cdot', 'ast', 'star',
   'leq', 'geq', 'neq', 'ne', 'le', 'ge', 'equiv', 'approx', 'sim', 'propto',
@@ -192,6 +192,42 @@ function convertCases(s: string): string {
   return s;
 }
 
+/**
+ * `root {n} of {x}` → `\sqrt[n]{x}` (n제곱근), `root {x}` (of 없음) → `\sqrt{x}` (제곱근).
+ *   ★ HWP 는 근호를 root/of 로 표기. KaTeX 엔 \root/\of 가 없어 그대로 두면 미정의 명령 에러.
+ *   피연산자는 `{…}`(중첩 균형) 또는 bare 토큰(영숫자/.-) 둘 다 처리. over(분수) 변환 뒤 호출.
+ */
+function convertRoot(s: string): string {
+  let guard = 0;
+  const re = /(?<![\\A-Za-z])root(?![A-Za-z])/;
+  const grab = (str: string, from: number): { end: number; inner: string } => {
+    let i = from;
+    while (i < str.length && str[i] === ' ') i++;
+    if (str[i] === '{') { const g = grabBraceForward(str, i); if (g) return { end: g.end, inner: g.inner }; }
+    let j = i; while (j < str.length && /[A-Za-z0-9.\-]/.test(str[j])) j++;
+    return { end: j, inner: str.slice(i, j) };
+  };
+  while (guard++ < 100) {
+    const m = s.match(re);
+    if (!m || m.index == null) break;
+    const idx = m.index;
+    const a = grab(s, idx + 4); // root 의 지수(또는 제곱근 피연산자)
+    if (a.end <= idx + 4) { // 피연산자 없음 — 무한루프 방지
+      s = s.slice(0, idx) + '\\sqrt' + s.slice(idx + 4);
+      continue;
+    }
+    let oi = a.end; while (oi < s.length && s[oi] === ' ') oi++;
+    const hasOf = /^of(?![A-Za-z])/.test(s.slice(oi));
+    if (hasOf) {
+      const b = grab(s, oi + 2);
+      s = s.slice(0, idx) + `\\sqrt[${a.inner.trim()}]{${b.inner.trim()}}` + s.slice(b.end);
+    } else {
+      s = s.slice(0, idx) + `\\sqrt{${a.inner.trim()}}` + s.slice(a.end);
+    }
+  }
+  return s;
+}
+
 // 그리스 문자는 대소문자가 다른 명령(\pi vs \Pi) — 정확 매칭 필요. 나머지는 대소문자 무시.
 const GREEK_EXACT = new Set([
   'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta',
@@ -206,6 +242,11 @@ const GREEK_EXACT = new Set([
 export function hangulEquationToLatex(script: string): string {
   if (!script) return '';
   let s = script;
+
+  // 0a) 스타일토큰(it/rm/bold/roman)이 명령에 바로 붙은 경우(itpile·itright·rmsqrt 등) 제거.
+  //   DROP_TOKENS 의 (?![A-Za-z]) 가드는 뒤가 글자면 안 잡으므로 명령어 앞일 때 따로 처리.
+  //   (bar 는 rmbar 전용 처리(2.45)가 있어 제외)
+  s = s.replace(/(?<![\\A-Za-z])(?:it|rm|bold|roman)(?=(?:right|left|[rlcd]?pile|matrix|cases|sqrt|root|of|over)(?![A-Za-z]))/gi, ' ');
 
   // 0) 행렬 (rpile/pile/matrix) → \begin{matrix} (★ `&`→공백 치환 전에! 원본 `&&` 열구분 필요)
   //   열/행 구분은 플레이스홀더(MAT_COL/MAT_ROW)로 보호 → 이후 단계가 안 지움. 끝에서 복원.
@@ -244,6 +285,9 @@ export function hangulEquationToLatex(script: string): string {
 
   // 2) 분수 (over) — 백슬래시 붙이기 전에 처리
   s = convertOver(s);
+
+  // 2.1) n제곱근 root/of → \sqrt[n]{x} (BACKSLASH_CMDS 전에! \root/\of 는 KaTeX 미지원)
+  s = convertRoot(s);
 
   // 2.45) rmbar(=rm+bar 붙은 형태) → \overline. bar 정규식은 "앞 글자 없음" 요구라 rmbar 를
   //   못 잡아 화면에 "rmbar" 글자로 노출되던 사고(전 코퍼스 다수). 선분 인자 있으면 묶어줌.
