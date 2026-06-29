@@ -29,6 +29,8 @@ interface EditableExamHeaderProps {
   onExamTitleChange?: (title: string) => void;
   /** 과목 옵션 (과목별 선택) */
   subjectOptions?: string[];
+  /** ★ 헤더 상단 강조색 (우리식 색 테마) — null/undefined면 미표시(기존 동일). 인쇄 반영. */
+  accentColor?: string | null;
 }
 
 function EditableExamHeaderInner({
@@ -40,6 +42,7 @@ function EditableExamHeaderInner({
   onMetaChange,
   onExamTitleChange,
   subjectOptions,
+  accentColor,
 }: EditableExamHeaderProps) {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -52,6 +55,13 @@ function EditableExamHeaderInner({
 
   return (
     <div className="exam-meta-header">
+      {/* ★ 헤더 상단 강조색 띠 (우리식 색 테마) — 선택 시에만. 인쇄 색 반영(WebkitPrintColorAdjust). */}
+      {accentColor && (
+        <div
+          aria-hidden
+          style={{ height: '5px', background: accentColor, WebkitPrintColorAdjust: 'exact' }}
+        />
+      )}
       {/* 편집 모드 토글 바 (편집 가능할 때만 표시, 인쇄 시 숨김) */}
       {editable && (
         <div className="print:hidden flex items-center justify-end gap-1.5 px-2 py-1.5 bg-gray-50 border-b border-gray-200">
