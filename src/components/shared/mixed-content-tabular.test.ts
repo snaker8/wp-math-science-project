@@ -101,33 +101,33 @@ function convertChoiceTabular(m: string): string {
     .replace(/\\quad\s*/g, ' ')
     .trim();
   converted = converted.replace(/\\text\s*\{([^}]*)\}/g, '$1');
-  converted = converted.replace(/(?<![가-힣A-Za-z0-9])가\s*([.)])/g, 'ㄱ$1');
-  converted = converted.replace(/(?<![가-힣A-Za-z0-9])나\s*([.)])/g, 'ㄴ$1');
-  converted = converted.replace(/(?<![가-힣A-Za-z0-9])다\s*([.)])/g, 'ㄷ$1');
+  converted = converted.replace(/(?<![가-힣A-Za-z0-9(（])가\s*([.)])/g, 'ㄱ$1');
+  converted = converted.replace(/(?<![가-힣A-Za-z0-9(（])나\s*([.)])/g, 'ㄴ$1');
+  converted = converted.replace(/(?<![가-힣A-Za-z0-9(（])다\s*([.)])/g, 'ㄷ$1');
   converted = converted.replace(/([ㄱㄴㄷㄹㅁ])\s*([.)])/g, '\n$1$2');
   converted = converted.replace(/(^|\n)[ \t]*[\(（\)）][ \t]*(?=\n|$)/g, '$1');
   converted = converted.replace(/\n{2,}/g, '\n');
   return '\n' + converted.trim() + '\n';
 }
-describe('테두리 조건박스 변환 (예문여고 #16)', () => {
-  // 원본: \hline 옆마다 단독 "(" 가 붙어있는 OCR 잔재 포함
-  const box = '\\begin{array}{|c|}\\hline ( ㄱ. 부등식 $P(x) \\geq -x-4$의 해는 $1 \\leq x \\leq 2$ 이다. \\\\ \\hline ( ㄴ. 방정식 $P(x)=2x-7$은 중근을 가진다. \\\\ \\hline\\end{array}';
+describe('테두리 조건박스 변환 (예문여고 #16/#18 실제 원본=괄호형 (가)(나)(다))', () => {
+  // 실제 parseHml 결과: 라벨은 (가)(나) — ㄱ/ㄴ 아님. \hline 테두리 박스.
+  const box = '\\begin{tabular}{|c|}\\hline (가) 부등식 $P \\left(x \\right) \\geq -x-4$의 해는 $1 \\le x \\le 2$이다. \\\\ \\hline (나) 방정식 $P \\left(x \\right)=2x-7$은 중근을 가진다. \\\\ \\hline\\end{tabular}';
   const out = convertChoiceTabular(box);
   it('★ \\hline 이 raw 로 남지 않음', () => {
     expect(out).not.toContain('hline');
   });
-  it('★ 단독 "(" 잔재 줄이 제거됨', () => {
+  it('★★ 원본 괄호 라벨 (가)(나) 보존 — ㄱ/ㄴ 로 안 바뀜', () => {
+    expect(out).toContain('(가)');
+    expect(out).toContain('(나)');
+    expect(out).not.toContain('ㄱ');
+    expect(out).not.toContain('ㄴ');
+  });
+  it('★ 단독 "(" 잔재 줄 없음 (괄호 보존이라 애초에 안 쪼개짐)', () => {
     expect(out).not.toMatch(/(^|\n)[ \t]*\([ \t]*(\n|$)/);
   });
-  it('★★ 문장 끝 "이다."/"가진다." 가 "ㄷ." 유령 라벨로 안 변함', () => {
+  it('★★ 문장 끝 "이다."/"가진다." 온전', () => {
     expect(out).toContain('이다.');
     expect(out).toContain('가진다.');
-    // ㄷ. 라벨은 없어야(ㄱ/ㄴ 두 개뿐)
-    expect(out).not.toMatch(/\nㄷ\./);
-  });
-  it('★ 진짜 ㄱ./ㄴ. 라벨은 각 줄 시작으로 보존', () => {
-    expect(out).toMatch(/\nㄱ\./);
-    expect(out).toMatch(/\nㄴ\./);
   });
 });
 
