@@ -146,7 +146,7 @@ export function PrescriptionRecommendation({ studentId, weakestUnit }: Props) {
             {weakestUnit.fullPath}
             {weakestUnit.status && (
               <span className="ml-2 inline-block rounded bg-rose-500/25 px-1.5 py-0.5 text-[9px] font-bold text-rose-200">
-                {weakestUnit.status}
+                {({ gamma: 'γ 불안정', beta: 'β 안정', alpha: 'α 마스터', unknown: '미진단' } as Record<string, string>)[weakestUnit.status] || weakestUnit.status}
               </span>
             )}
           </div>

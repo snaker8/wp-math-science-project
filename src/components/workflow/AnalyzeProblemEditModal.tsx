@@ -1634,7 +1634,7 @@ export default function AnalyzeProblemEditModal({
                       type="button"
                       onClick={() => setPickerOpen(true)}
                       className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors"
-                      title="수학비서 분류 트리에서 선택"
+                      title="매쓰싸이 뱅크 분류 트리에서 선택"
                     >
                       유형 검색
                     </button>
