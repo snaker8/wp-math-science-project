@@ -261,9 +261,16 @@ export function hangulEquationToLatex(script: string): string {
   s = s.replace(/(?<![\\A-Za-z])box(?=\s*\{)/gi, '\\boxed');
 
   // 3) 스타일 토큰 제거 (대소문자 무시 — 일부 파일이 RM/IT 대문자로 내보냄. 청운고 "RM 2km")
+  //   ★ 뒤 경계는 (?![A-Za-z]) — `\b` 면 `it_{6}` 처럼 뒤에 `_`(단어문자) 오면 경계 불성립으로
+  //     `it` 이 안 지워져 순열·조합 `it_{n}{ {P}}it_{r}` 가 그대로 노출(동인고 #1). _·{·숫자 뒤도 제거.
   for (const t of DROP_TOKENS) {
-    s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${t}\\b`, 'gi'), ' ');
+    s = s.replace(new RegExp(`(?<![\\\\A-Za-z])${t}(?![A-Za-z])`, 'gi'), ' ');
   }
+
+  // 3.5) 베이스 없는 좌측 첨자 → `{}` 보강. 순열·조합 `_{n} P _{r}`(it 제거 후)·식 시작/연산자 뒤
+  //   `_`/`^` 는 베이스가 없어 KaTeX 가 어색하게(또는 에러로) 렌더. 앞에 `{}` 를 붙여 정상 첨자로.
+  //   진짜 베이스(x_5 의 x) 는 `[([{,+=]`·시작 뒤가 아니므로 안 건드림. (동인고 #1 ₆Pᵣ·ₙCᵣ)
+  s = s.replace(/(^|[([{,+=])\s*([_^])/g, '$1{}$2');
 
   // 4) 명령어 백슬래시 보정. 구조/연산/함수 명령은 대소문자 무시(LEFT/RIGHT/CDOTS 등
   //   대문자로 내보내는 파일 대응 — 거제여중 중2). 그리스 문자만 정확 매칭(\pi≠\Pi).
@@ -281,6 +288,20 @@ export function hangulEquationToLatex(script: string): string {
   //   구분자라 KaTeX 불균형. \middle 은 \left…\right 안의 중간 구분자용). 절댓값 \left|…\right|
   //   은 \left\{ 안이 아니므로 보존. \right 를 넘어가지 않게 스코프 제한(다른 집합/괄호 침범 방지).
   s = s.replace(/\\left\\\{((?:(?!\\right)[\s\S])*?)\\left\|/g, '\\left\\{$1\\middle|');
+
+  // 4.65) 끝의 짝 없는 \right 제거 — 원문 결함으로 \right 가 \left 보다 많을 때(끝에 `\right .` 만
+  //   남는 등). 미제거 시 KaTeX "Expected matching \left" 에러로 수식 통째 빨강(동인고 #15).
+  {
+    let leftN = (s.match(/\\left(?![A-Za-z])/g) || []).length;
+    let rightN = (s.match(/\\right(?![A-Za-z])/g) || []).length;
+    let guard = 0;
+    while (rightN > leftN && guard++ < 10) {
+      const before = s;
+      s = s.replace(/\\right\s*(?:\\?[.)\]}|]|\\rangle|\\rbrace)?\s*$/, '').trimEnd();
+      if (s === before) break; // 끝이 아니면 중단(섣불리 중간 제거 안 함)
+      rightN--;
+    }
+  }
 
   // 4.7) 행렬 플레이스홀더 복원 (모든 토큰 변환 끝난 뒤 — 열 `&`·행 `\\` 가 위 단계들에 안 지워짐)
   s = s.split(MAT_COL).join(' & ').split(MAT_ROW).join(' \\\\ ');

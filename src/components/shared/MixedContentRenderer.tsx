@@ -263,8 +263,16 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       }
 
       if (isChoiceTabular) {
+        // ★ 중첩 수식 환경(matrix/cases/aligned) 보호 — 박스 안 행렬의 & · \ 가 셀구분·줄바꿈 변환에
+        //   파괴되면 행렬이 통째 깨짐(동인고 #16: (가)(나) 조건의 $A\left(\begin{matrix}...\right)$). 끝에 복원.
+        const MTX = String.fromCharCode(1);
+        const nestedEnvs: string[] = [];
+        const mProtected = m.replace(
+          /\\begin\{((?:p|b|v|B|V)?matrix|cases|aligned)\}[\s\S]*?\\end\{\1\}/g,
+          (env) => { nestedEnvs.push(env); return MTX + (nestedEnvs.length - 1) + MTX; }
+        );
         // tabular → 각 보기를 개별 줄로 변환
-        let converted = m
+        let converted = mProtected
           .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '') // 시작 태그 제거
           .replace(/\\end\{(?:tabular|array)\}/, '')                  // 끝 태그 제거
           // ★ 테두리 조건박스({|c|}+\hline)도 isChoiceTabular 로 올 수 있음(#390 이후) — \hline 안 빼면
@@ -302,6 +310,8 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
         //   각 조건 앞·박스 위에 "(" 한 글자로 노출되던 사고(예문여고 #16). 줄 전체가 괄호 1개뿐일 때만.
         converted = converted.replace(/(^|\n)[ \t]*[\(（\)）][ \t]*(?=\n|$)/g, '$1');
         converted = converted.replace(/\n{2,}/g, '\n');
+        // 보호한 중첩 수식 환경 복원(MTX 마커 → 원본 행렬/cases)
+        converted = converted.replace(new RegExp(MTX + '(\d+)' + MTX, 'g'), (_m, ix) => nestedEnvs[Number(ix)] || '');
         return '\n' + converted.trim() + '\n';
       }
       // 일반 tabular: 보호 (조건박스 오인 방지)
