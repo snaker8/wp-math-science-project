@@ -1451,9 +1451,12 @@ function parseMixedContent(text: string): ContentElement[] {
   let textWithPlaceholders = text.replace(
     /\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?[\s\S]*?\\end\{(?:tabular|array)\}/gi,
     (match, offset, fullText) => {
-      // \left\{ 또는 \left\lbrace 뒤에 오는 array는 piecewise 수식 → 추출 안 함
+      // ★ \left( / \left[ / \left{ / \left| / \left\{ 등 \left+구분자 뒤의 array 는 "행렬·piecewise 수식"이라
+      //   블록 표로 추출 금지 → KaTeX 인라인. 데이터 표(조립제법·진리표)는 \left 를 안 써서 영향 없음.
+      //   ($ 패리티 가드가 본문/앞 보기의 $ 누적으로 어긋나 행렬을 블록으로 잘못 빼 줄바꿈되던 사고:
+      //    자산화 객관식 "제 N 행은 (a b c) 이다" 행렬 보기).
       const before = fullText.substring(Math.max(0, offset - 20), offset);
-      if (/\\left\s*[\\{]|\\left\s*\\lbrace/.test(before)) {
+      if (/\\left\s*[([{|\\]/.test(before)) {
         return match; // KaTeX가 처리하도록 그대로 둠
       }
       // $...$나 $$...$$ 내부의 array도 KaTeX가 처리해야 함
