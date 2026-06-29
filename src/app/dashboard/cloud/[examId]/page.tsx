@@ -1565,9 +1565,21 @@ function ExamPaperView({
   // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
   const [zoom, setZoom] = useState(1);
 
+  // ★ 헤더 상단 강조색 (우리식 색 테마) — null=없음(기본). 매쓰홀릭 곡선/특정디자인 카피 X, 깔끔한 색 띠만.
+  const [headerColor, setHeaderColor] = useState<string | null>(null);
+  const HEADER_COLORS: Array<{ c: string | null; label: string }> = [
+    { c: null, label: '없음' },
+    { c: '#4f46e5', label: '인디고' },
+    { c: '#0891b2', label: '시안' },
+    { c: '#059669', label: '에메랄드' },
+    { c: '#e11d48', label: '로즈' },
+    { c: '#d97706', label: '앰버' },
+    { c: '#334155', label: '슬레이트' },
+  ];
+
   // ★ 출력 설정 저장/불러오기 ("내 설정") — 단·간격·여백·배열을 이름 붙여 저장 후 원클릭 적용.
   //   브라우저 localStorage 사용 (서버/스키마 변경 없음). 매쓰홀릭 "저장한 템플릿" 등가.
-  type PrintPreset = { name: string; columns: 1 | 2; gap: number; pagePad: number; perPagePreset: number | null };
+  type PrintPreset = { name: string; columns: 1 | 2; gap: number; pagePad: number; perPagePreset: number | null; headerColor?: string | null };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
     try { const raw = localStorage.getItem('msb_print_presets'); if (raw) setPrintPresets(JSON.parse(raw)); } catch { /* ignore */ }
@@ -1579,12 +1591,13 @@ function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
     if (!p) return;
     setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
+    setHeaderColor(p.headerColor ?? null);
   };
 
   const [showPrintMenu, setShowPrintMenu] = useState(false);
@@ -2020,6 +2033,22 @@ function ExamPaperView({
               title="현재 출력 설정을 이름 붙여 저장"
             >설정 저장</button>
           </div>
+          {/* ★ 헤더 강조색 (우리식 색 테마) */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-content-tertiary">헤더색</span>
+            {HEADER_COLORS.map(({ c, label }) => (
+              <button
+                key={c ?? 'none'}
+                type="button"
+                onClick={() => setHeaderColor(c)}
+                title={label}
+                className={`w-4 h-4 rounded-full border border-zinc-500 flex items-center justify-center ${headerColor === c ? 'ring-2 ring-cyan-400' : ''}`}
+                style={c ? { background: c } : { background: 'transparent' }}
+              >
+                {c === null && <span className="text-[8px] text-content-tertiary leading-none">✕</span>}
+              </button>
+            ))}
+          </div>
           {/* 프리셋 모드에서는 자동 간격 표시 */}
           {perPagePreset && pageAutoGaps && (
             <span className="text-xs text-emerald-400/70">자동 배치</span>
@@ -2236,6 +2265,7 @@ function ExamPaperView({
                   editable={true}
                   onTemplateChange={onTemplateChange}
                   onMetaChange={onMetaChange}
+                  accentColor={headerColor}
                 />
               </div>
             )}
