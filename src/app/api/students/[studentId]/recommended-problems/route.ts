@@ -58,6 +58,8 @@ export async function GET(
 
   const url = new URL(request.url);
   const topN = parseInt(url.searchParams.get('topN') || '10', 10);
+  // ★ 드릴다운에서 특정 약점 소단원/유형을 콕 집어 처방 (없으면 전역 최약점 자동)
+  const focusCode = url.searchParams.get('code');
 
   // 1) 학생 약점 단원 — student_node_status에서 γ status 우선, 없으면 β
   const { data: nodeStatuses } = await sb
@@ -74,8 +76,15 @@ export async function GET(
   }>;
   const gammaNodes = statuses.filter((s) => s.status === 'gamma');
   const betaNodes = statuses.filter((s) => s.status === 'beta');
-  const targetNodes = gammaNodes.length > 0 ? gammaNodes : betaNodes;
-  const weakestNode = targetNodes[0] || null;
+  let weakestNode: { mathsecr_code: string; status: string; last_score: number | null } | null;
+  if (focusCode) {
+    // 지정 코드 우선 — status 있으면 그대로, 없으면 gamma 로 간주해 보강 출제
+    weakestNode = statuses.find((s) => s.mathsecr_code === focusCode)
+      || { mathsecr_code: focusCode, status: 'gamma', last_score: null };
+  } else {
+    const targetNodes = gammaNodes.length > 0 ? gammaNodes : betaNodes;
+    weakestNode = targetNodes[0] || null;
+  }
 
   // 약점 단원 정보 (full_path)
   let weakestUnit: { code: string; fullPath: string; status: string } | null = null;
