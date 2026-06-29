@@ -1562,6 +1562,8 @@ function ExamPaperView({
   //   슬라이더로 20~70px 사이에서 변경 가능. 표·긴 보기가 컬럼 폭을 침범하던 사고 완화.
   const [pagePad, setPagePad] = useState(38);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
+  // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
+  const [zoom, setZoom] = useState(1);
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   // ★ 측정 완료 전 인쇄 요청 보류 — 미측정 시 폴백(블라인드 10문제) 페이지가 인쇄돼 잘림 차단 (#2 견고화)
   const [pendingPrint, setPendingPrint] = useState(false);
@@ -1960,6 +1962,23 @@ function ExamPaperView({
             />
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{pagePad}</span>
           </div>
+          {/* ★ 미리보기 줌 (인쇄물엔 영향 없음 — 미리보기만 확대/축소) */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-content-tertiary">줌</span>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
+              className="px-1.5 py-0.5 rounded border text-xs text-content-tertiary hover:text-content-primary"
+              title="미리보기 축소"
+            >−</button>
+            <span className="text-xs text-content-tertiary w-9 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(1.5, Math.round((z + 0.1) * 10) / 10))}
+              className="px-1.5 py-0.5 rounded border text-xs text-content-tertiary hover:text-content-primary"
+              title="미리보기 확대"
+            >+</button>
+          </div>
           {/* 프리셋 모드에서는 자동 간격 표시 */}
           {perPagePreset && pageAutoGaps && (
             <span className="text-xs text-emerald-400/70">자동 배치</span>
@@ -2146,6 +2165,8 @@ function ExamPaperView({
 
       {/* A4 페이지들 */}
       <div className="exam-page-scroll-bg flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex flex-col items-center py-6 bg-surface-raised/30">
+        {/* ★ 미리보기 줌 래퍼 — .exam-page 의 부모(인쇄 시 클론 제외)라 인쇄물엔 영향 없음 */}
+        <div style={{ zoom }} className="flex flex-col items-center w-full">
         {pages.map((pageProblems, pageIdx) => (
           <div
             key={pageIdx}
@@ -2259,6 +2280,7 @@ function ExamPaperView({
             </div>
           </div>
         ))}
+        </div>
       </div>
 
       {/* 시험지 수식 스타일 + 인쇄 */}
