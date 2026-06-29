@@ -77,3 +77,32 @@ describe('hangulEquationToLatex — 순열·조합 / 짝없는 right (동인고)
     expect(renders(out)).toBe(true);
   });
 });
+
+// n제곱근 root/of, 명령에 붙은 스타일토큰 (전 코퍼스 551→348 감소분, 2026-06-30)
+describe('hangulEquationToLatex — n제곱근(root/of) · 글루 스타일토큰', () => {
+  it('★ root {n} of {x} → \\sqrt[n]{x}', () => {
+    const out = hangulEquationToLatex('root {3} of {8}');
+    expect(out).toContain('\\sqrt[3]{8}');
+    expect(out).not.toMatch(/\\root|\\of(?![A-Za-z])/);
+    expect(renders(out)).toBe(true);
+  });
+  it('★ root {x} (of 없음) → \\sqrt{x}', () => {
+    const out = hangulEquationToLatex('i= root {-1}');
+    expect(out).toContain('\\sqrt{-1}');
+    expect(renders(out)).toBe(true);
+  });
+  it('★ bare root n of x (중괄호 없이도)', () => {
+    const out = hangulEquationToLatex('3 root 3 of 2');
+    expect(out).toContain('\\sqrt[3]{2}');
+    expect(renders(out)).toBe(true);
+  });
+  it('★ \\root/\\of 미정의 명령이 안 남음 (KaTeX 렌더)', () => {
+    expect(renders(hangulEquationToLatex('root5'))).toBe(true);
+    expect(renders(hangulEquationToLatex('2 root 26'))).toBe(true);
+  });
+  it('★ itpile / itright — 명령에 붙은 it 제거', () => {
+    expect(hangulEquationToLatex('left . x itpile { # } right')).not.toContain('itpile');
+    const r = hangulEquationToLatex('a itright }');
+    expect(r).not.toContain('itright');
+  });
+});
