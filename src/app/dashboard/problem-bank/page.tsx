@@ -102,7 +102,7 @@ export default function ProblemBankPage() {
           <Beaker className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-content-primary mb-2">과학 문제은행 준비 중</h2>
           <p className="text-sm text-content-tertiary leading-relaxed">
-            현재 문제은행은 수학비서 분류 트리 기반으로 운영됩니다.
+            현재 문제은행은 매쓰싸이 뱅크 분류 트리 기반으로 운영됩니다.
             <br />
             과학 분류 마스터 데이터 적재 후 정식 분기 예정입니다.
             <br />

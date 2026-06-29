@@ -28,10 +28,12 @@ interface RecommendedProblem {
   reason: string;
 }
 
+// ★ status 는 DB(student_node_status)에 영문 'alpha'/'beta'/'gamma' 로 저장됨.
+//   (이전엔 그리스문자 키 γ/β/α 라 항상 미스매치 → 추천 0개 사고. 2026-06-29 수정.)
 const STATUS_DIFFICULTY_RANGE: Record<string, [number, number]> = {
-  γ: [1, 3], // 불안정 → 기초 보강
-  β: [3, 6], // 중간 → 정공법 응용
-  α: [5, 8], // 안정 → 도전
+  gamma: [1, 3], // 불안정 → 기초 보강
+  beta: [3, 6],  // 중간 → 정공법 응용
+  alpha: [5, 8], // 안정 → 도전
 };
 
 export async function GET(
@@ -70,8 +72,8 @@ export async function GET(
     status: string;
     last_score: number | null;
   }>;
-  const gammaNodes = statuses.filter((s) => s.status === 'γ');
-  const betaNodes = statuses.filter((s) => s.status === 'β');
+  const gammaNodes = statuses.filter((s) => s.status === 'gamma');
+  const betaNodes = statuses.filter((s) => s.status === 'beta');
   const targetNodes = gammaNodes.length > 0 ? gammaNodes : betaNodes;
   const weakestNode = targetNodes[0] || null;
 
@@ -104,7 +106,7 @@ export async function GET(
   );
 
   // 3) 적정 난이도 — status 기반
-  const status = weakestNode?.status || 'β';
+  const status = weakestNode?.status || 'beta';
   const [diffLow, diffHigh] = STATUS_DIFFICULTY_RANGE[status] || [3, 6];
   const difficultyValues = [];
   for (let d = diffLow; d <= diffHigh; d++) difficultyValues.push(String(d));

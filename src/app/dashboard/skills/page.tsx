@@ -885,7 +885,7 @@ export default function SkillsPage() {
               <div className="flex items-center justify-between border-b border-subtle px-3 py-2 flex-shrink-0">
                 {viewMode === 'type' ? (
                   <>
-                    <span className="text-xs font-medium text-content-secondary">수학비서 유형 트리</span>
+                    <span className="text-xs font-medium text-content-secondary">매쓰싸이 뱅크 유형 트리</span>
                     <span className="text-xs text-content-muted">{msTotalTypes}개 유형</span>
                   </>
                 ) : (

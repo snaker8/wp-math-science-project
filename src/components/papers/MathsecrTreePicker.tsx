@@ -131,7 +131,7 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
           <div>
-            <h2 className="text-base font-bold text-white">수학비서 분류 트리</h2>
+            <h2 className="text-base font-bold text-white">매쓰싸이 뱅크 분류 트리</h2>
             <p className="mt-0.5 text-[11px] text-zinc-500">
               과목 선택 후 트리에서 정확한 유형 노드를 골라 보정하세요
             </p>

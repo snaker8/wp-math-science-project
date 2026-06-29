@@ -253,7 +253,7 @@ export default function AnalyticsPage() {
 
           {/* 수학비서 히트맵 + 함정 누적 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card title="수학비서 대단원 히트맵" icon={Brain}>
+            <Card title="매쓰싸이 뱅크 대단원 히트맵" icon={Brain}>
               {data.mathsecrHeatmap.length === 0 ? (
                 <div className="py-8 text-center text-gray-500 text-sm">
                   diagnostics.items 가 누적되면 대단원별 정답률(α·β·γ) 이 표시됩니다.
