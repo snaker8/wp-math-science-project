@@ -1032,7 +1032,14 @@ function preprocessMathpixContent(text: string): string {
   //     행렬은 인라인 유지(문장 흐름 안 가로 배치) — 연립방정식 cases/aligned/array 는 디스플레이 유지.
   result = result.replace(
     /(?<!\$)\$([^$\n]*?\\begin\{(?:array|cases|aligned)\}[\s\S]*?\\end\{(?:array|cases|aligned)\}[^$\n]*?)\$(?!\$)/g,
-    (_m, inner) => `$$${inner}$$`
+    (_m, inner) => {
+      // ★ 2026-06-29: \left( / \left[ / \left| 로 감싼 array = 인라인 행렬·행벡터 → 디스플레이 승격 금지.
+      //   (matrix 계열과 동일 취지 — 문장 중간 가로 유지. "제 N 행은 $\left(\begin{array}{lll}6 & 8 & 0\end{array}\right)$이다"
+      //    가 디스플레이로 승격되어 가운데 정렬·줄바꿈으로 빠지던 사고. 경남고 #5.)
+      //   \left\{ (cases/연립방정식) · 맨몸 array(연립) 는 디스플레이 유지 → 아래 promote.
+      if (/\\left\s*[([|]\s*\\begin\{array\}/.test(inner)) return _m;
+      return `$$${inner}$$`;
+    }
   );
 
   // 2-4a-1. 집합 조건제시 막대 \left| → \middle| (\left\{…\right\} 안, KaTeX 불균형 해소).
