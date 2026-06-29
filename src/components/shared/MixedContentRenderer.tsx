@@ -297,6 +297,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
         converted = converted.replace(/\bc\s*([.)])/g, 'ㄷ$1');
         // 각 보기 라벨 앞에 줄바꿈 → 개별 줄로 분리
         converted = converted.replace(/([ㄱㄴㄷㄹㅁ])\s*([.)])/g, '\n$1$2');
+        // ★ 단독 "(" / ")" 줄 제거 — 테두리 박스의 \hline 옆 OCR 잔재가 단독 괄호로 남아
+        //   각 조건 앞·박스 위에 "(" 한 글자로 노출되던 사고(예문여고 #16). 줄 전체가 괄호 1개뿐일 때만.
+        converted = converted.replace(/(^|\n)[ \t]*[\(（\)）][ \t]*(?=\n|$)/g, '$1');
+        converted = converted.replace(/\n{2,}/g, '\n');
         return '\n' + converted.trim() + '\n';
       }
       // 일반 tabular: 보호 (조건박스 오인 방지)
