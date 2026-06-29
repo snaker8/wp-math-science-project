@@ -105,13 +105,19 @@ function convertChoiceTabular(m: string): string {
   converted = converted.replace(/(?<![가-힣A-Za-z0-9])나\s*([.)])/g, 'ㄴ$1');
   converted = converted.replace(/(?<![가-힣A-Za-z0-9])다\s*([.)])/g, 'ㄷ$1');
   converted = converted.replace(/([ㄱㄴㄷㄹㅁ])\s*([.)])/g, '\n$1$2');
+  converted = converted.replace(/(^|\n)[ \t]*[\(（\)）][ \t]*(?=\n|$)/g, '$1');
+  converted = converted.replace(/\n{2,}/g, '\n');
   return '\n' + converted.trim() + '\n';
 }
 describe('테두리 조건박스 변환 (예문여고 #16)', () => {
-  const box = '\\begin{array}{|c|}\\hline ㄱ. 부등식 $P(x) \\geq -x-4$의 해는 $1 \\leq x \\leq 2$ 이다. \\\\ \\hline ㄴ. 방정식 $P(x)=2x-7$은 중근을 가진다. \\\\ \\hline\\end{array}';
+  // 원본: \hline 옆마다 단독 "(" 가 붙어있는 OCR 잔재 포함
+  const box = '\\begin{array}{|c|}\\hline ( ㄱ. 부등식 $P(x) \\geq -x-4$의 해는 $1 \\leq x \\leq 2$ 이다. \\\\ \\hline ( ㄴ. 방정식 $P(x)=2x-7$은 중근을 가진다. \\\\ \\hline\\end{array}';
   const out = convertChoiceTabular(box);
   it('★ \\hline 이 raw 로 남지 않음', () => {
     expect(out).not.toContain('hline');
+  });
+  it('★ 단독 "(" 잔재 줄이 제거됨', () => {
+    expect(out).not.toMatch(/(^|\n)[ \t]*\([ \t]*(\n|$)/);
   });
   it('★★ 문장 끝 "이다."/"가진다." 가 "ㄷ." 유령 라벨로 안 변함', () => {
     expect(out).toContain('이다.');
