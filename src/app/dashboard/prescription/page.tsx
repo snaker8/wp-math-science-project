@@ -328,6 +328,9 @@ function PrescriptionContent() {
   }, [nodeStatus]);
   const weakestLabel = weakestNode ? (nodeNameMap.get(weakestNode.mathsecr_code) || weakestNode.mathsecr_code) : null;
 
+  // ★ 드릴다운에서 콕 집은 약점 소단원/유형 → 추천 포커스 (null=전역 최약점 자동)
+  const [prescribeFocus, setPrescribeFocus] = useState<string | null>(null);
+
   // 선수 추적 (on-demand)
   const [tracing, setTracing] = useState(false);
   const [traceChain, setTraceChain] = useState<Awaited<ReturnType<typeof traceWeaknessChain>> | null>(null);
@@ -580,8 +583,10 @@ function PrescriptionContent() {
                     </div>
                   </ClinicCard>
 
-                  {/* ★ Phase B: 학생 맞춤 추천 문항 — 약점 + 함정 + 난이도 결합 */}
-                  {student && <RecommendedProblems studentId={student.id} />}
+                  {/* ★ Phase B: 학생 맞춤 추천 문항 — 약점 + 함정 + 난이도 결합 (드릴다운 처방 타겟 연동) */}
+                  <div id="rx-recommend">
+                    {student && <RecommendedProblems studentId={student.id} focusCode={prescribeFocus} />}
+                  </div>
 
                   {/* ★ Phase C: AI 처방 추천 — 약점 체인 + 함정 패턴 결합 */}
                   {student && (
@@ -742,7 +747,15 @@ function PrescriptionContent() {
                   </h3>
                   <div className="text-xs text-content-tertiary">대→중→소단원 펼쳐 유형별 숙달 확인 · γ(약점) 우선</div>
                 </div>
-                <MasteryDrilldown nodeStatus={nodeStatus} />
+                <MasteryDrilldown
+                  nodeStatus={nodeStatus}
+                  onPrescribe={(code) => {
+                    setPrescribeFocus(code);
+                    if (typeof document !== 'undefined') {
+                      document.getElementById('rx-recommend')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                />
               </ClinicCard>
 
               {/* ── 단원별 상태 리스트 + 진단 이력 ── */}

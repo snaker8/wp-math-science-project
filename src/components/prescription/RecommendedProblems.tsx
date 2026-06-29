@@ -40,9 +40,11 @@ interface Response {
 
 interface Props {
   studentId: string;
+  /** 드릴다운에서 콕 집은 약점 소단원/유형 코드 — 있으면 전역 최약점 대신 이 단원으로 추천 */
+  focusCode?: string | null;
 }
 
-export function RecommendedProblems({ studentId }: Props) {
+export function RecommendedProblems({ studentId, focusCode }: Props) {
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -55,7 +57,9 @@ export function RecommendedProblems({ studentId }: Props) {
     let cancelled = false;
     setLoading(true);
     setErr(null);
-    fetch(`/api/students/${encodeURIComponent(studentId)}/recommended-problems?topN=10`, {
+    setGenerated(null); // 단원 바뀌면 이전 생성 결과 초기화
+    const codeParam = focusCode ? `&code=${encodeURIComponent(focusCode)}` : '';
+    fetch(`/api/students/${encodeURIComponent(studentId)}/recommended-problems?topN=10${codeParam}`, {
       cache: 'no-store',
     })
       .then(async (r) => {
@@ -77,7 +81,7 @@ export function RecommendedProblems({ studentId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [studentId]);
+  }, [studentId, focusCode]);
 
   if (loading) {
     return (
