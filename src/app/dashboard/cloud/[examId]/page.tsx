@@ -1564,6 +1564,29 @@ function ExamPaperView({
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
   // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
   const [zoom, setZoom] = useState(1);
+
+  // ★ 출력 설정 저장/불러오기 ("내 설정") — 단·간격·여백·배열을 이름 붙여 저장 후 원클릭 적용.
+  //   브라우저 localStorage 사용 (서버/스키마 변경 없음). 매쓰홀릭 "저장한 템플릿" 등가.
+  type PrintPreset = { name: string; columns: 1 | 2; gap: number; pagePad: number; perPagePreset: number | null };
+  const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
+  useEffect(() => {
+    try { const raw = localStorage.getItem('msb_print_presets'); if (raw) setPrintPresets(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+  const persistPresets = (next: PrintPreset[]) => {
+    setPrintPresets(next);
+    try { localStorage.setItem('msb_print_presets', JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const saveCurrentPreset = () => {
+    const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
+    if (!name) return;
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset }]);
+  };
+  const applyPreset = (name: string) => {
+    const p = printPresets.find((x) => x.name === name);
+    if (!p) return;
+    setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
+  };
+
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   // ★ 측정 완료 전 인쇄 요청 보류 — 미측정 시 폴백(블라인드 10문제) 페이지가 인쇄돼 잘림 차단 (#2 견고화)
   const [pendingPrint, setPendingPrint] = useState(false);
@@ -1978,6 +2001,24 @@ function ExamPaperView({
               className="px-1.5 py-0.5 rounded border text-xs text-content-tertiary hover:text-content-primary"
               title="미리보기 확대"
             >+</button>
+          </div>
+          {/* ★ 출력 설정 저장/불러오기 ("내 설정") */}
+          <div className="flex items-center gap-1">
+            <select
+              value=""
+              onChange={(e) => { if (e.target.value) applyPreset(e.target.value); }}
+              className="rounded border bg-surface-raised text-content-secondary text-xs px-1.5 py-1 cursor-pointer"
+              title="저장한 출력 설정 불러오기"
+            >
+              <option value="">내 설정 불러오기</option>
+              {printPresets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={saveCurrentPreset}
+              className="px-2 py-1 rounded border text-xs text-content-tertiary hover:text-content-primary"
+              title="현재 출력 설정을 이름 붙여 저장"
+            >설정 저장</button>
           </div>
           {/* 프리셋 모드에서는 자동 간격 표시 */}
           {perPagePreset && pageAutoGaps && (
