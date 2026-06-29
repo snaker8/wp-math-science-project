@@ -1787,16 +1787,8 @@ function ExamPaperView({
 
   // 출력 — DOM 복제 방식 (원본 exam-page 노드를 #exam-print-root로 복제)
   // 폰트(KaTeX) 로드 완료 기다린 뒤 print → 수식 누락 방지
-  const handlePrint = useCallback(() => {
-    setShowPrintMenu(false);
-
-    // ★ 측정 미완료 시 인쇄 보류 — 현재 .exam-page 는 폴백(블라인드 10문제) 분할이라 키 큰 문제 잘림.
-    //   측정 끝나면 아래 effect 가 자동으로 인쇄 재개. (페이지 분할 결과 무변경, 인쇄 타이밍만 가드)
-    if (problems.length > 0 && !measured) {
-      setPendingPrint(true);
-      return;
-    }
-
+  // 실제 인쇄 실행 (가드 통과 후) — .exam-page 복제 → window.print. 측정 여부 검사 안 함(가드는 handlePrint/타임아웃에서).
+  const doPrint = useCallback(() => {
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
 
@@ -1849,15 +1841,32 @@ function ExamPaperView({
     } else {
       runPrint();
     }
-  }, [printSections, examTitle, measured, problems.length]);
+  }, [printSections, examTitle]);
+
+  const handlePrint = useCallback(() => {
+    setShowPrintMenu(false);
+    // ★ 측정 미완료 시 인쇄 보류 — 폴백(블라인드 10문제) 분할이라 키 큰 문제 잘림. 측정 완료/타임아웃 시 자동 재개.
+    if (problems.length > 0 && !measured) {
+      setPendingPrint(true);
+      return;
+    }
+    doPrint();
+  }, [measured, problems.length, doPrint]);
 
   // ★ 보류된 인쇄 재개 — 측정 완료되면 정상 분할 페이지로 인쇄 (#2 견고화)
   useEffect(() => {
     if (pendingPrint && measured) {
       setPendingPrint(false);
-      handlePrint();
+      doPrint();
     }
-  }, [pendingPrint, measured, handlePrint]);
+  }, [pendingPrint, measured, doPrint]);
+
+  // ★ 안전 타임아웃 — 측정이 지연/실패해도 인쇄가 영영 막히지 않게 (최대 4s 후 그대로 인쇄). hang 차단.
+  useEffect(() => {
+    if (!pendingPrint) return;
+    const t = setTimeout(() => { setPendingPrint(false); doPrint(); }, 4000);
+    return () => clearTimeout(t);
+  }, [pendingPrint, doPrint]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.

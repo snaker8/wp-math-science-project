@@ -548,13 +548,9 @@ export default function ExamManagementPage() {
   // 출제(배포) 모달
   const [showDeployModal, setShowDeployModal] = useState(false);
 
-  // 출력 실행 — 클라우드 페이지와 완전 동일 방식 (원본 className/style 유지)
-  const executePrint = useCallback(() => {
-    setShowPrintModal(false);
-    // ★ 인쇄(PDF 저장) 파일명 = 시험지명 (전역 'Math×Sci Bank' 방지).
-    //   editExamTitle 은 시험 선택 시 제목으로 동기화됨(빈값이면 유틸이 '시험지' 폴백).
-    executeExamPrint(printSections, editExamTitle);
-  }, [printSections, editExamTitle]);
+  // ★ 측정 완료 전 인쇄 보류 (#2 견고화) — 폴백(블라인드 10문제) 분할 잘림 차단.
+  //   실제 executePrint 는 problems/measured/pages 정의 후(아래)에 선언 — deps TDZ 방지.
+  const [pendingPrint, setPendingPrint] = useState(false);
 
   // PDF 다운로드 (인쇄 다이얼로그 — 동일 방식)
   const handleDownloadPdf = useCallback(() => {
@@ -1064,6 +1060,31 @@ export default function ExamManagementPage() {
   }, [problems, problemHeights, measured, columns, gap, perPagePreset, FIRST_CONTENT_H, CONTENT_H]);
 
   const totalPages = pages.length;
+
+  // 실제 인쇄 (가드 통과 후) — 클라우드와 동일 방식 (.preview-exam-page 복제 → window.print)
+  const doExecutePrint = useCallback(() => {
+    // ★ 인쇄(PDF 저장) 파일명 = 시험지명 (전역 'Math×Sci Bank' 방지).
+    executeExamPrint(printSections, editExamTitle);
+  }, [printSections, editExamTitle]);
+
+  // 출력 실행 — 측정 미완료 시 보류(폴백 분할 잘림 차단), 완료/타임아웃 시 자동 재개 (#2 견고화)
+  const executePrint = useCallback(() => {
+    setShowPrintModal(false);
+    if (problems.length > 0 && !measured) { setPendingPrint(true); return; }
+    doExecutePrint();
+  }, [problems.length, measured, doExecutePrint]);
+
+  // 보류된 인쇄 재개 — 측정 완료 시 정상 분할로 인쇄
+  useEffect(() => {
+    if (pendingPrint && measured) { setPendingPrint(false); doExecutePrint(); }
+  }, [pendingPrint, measured, doExecutePrint]);
+
+  // 안전 타임아웃 — 측정 지연/실패해도 인쇄가 영영 막히지 않게 (최대 4s 후 인쇄). hang 차단.
+  useEffect(() => {
+    if (!pendingPrint) return;
+    const t = setTimeout(() => { setPendingPrint(false); doExecutePrint(); }, 4000);
+    return () => clearTimeout(t);
+  }, [pendingPrint, doExecutePrint]);
 
   // === 프리셋 모드: 페이지별 자동 간격 계산 ===
   const pageAutoGaps = useMemo(() => {
