@@ -12,6 +12,7 @@ import { StudentPitfallSummary } from '@/components/prescription/StudentPitfallS
 import { WeeklyConnections } from '@/components/prescription/WeeklyConnections';
 import { PrescriptionRecommendation } from '@/components/prescription/PrescriptionRecommendation';
 import { RecommendedProblems } from '@/components/prescription/RecommendedProblems';
+import { MasteryDrilldown } from '@/components/prescription/MasteryDrilldown';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip,
 } from 'recharts';
@@ -730,6 +731,18 @@ function PrescriptionContent() {
                     ))}
                   </div>
                 )}
+              </ClinicCard>
+
+              {/* ── 단원별 유형 숙달 드릴다운 (매쓰홀릭 유형분석 등가) ── */}
+              <ClinicCard>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <Sparkles size={18} className="text-emerald-400" />
+                    단원별 유형 숙달
+                  </h3>
+                  <div className="text-xs text-content-tertiary">대→중→소단원 펼쳐 유형별 숙달 확인 · γ(약점) 우선</div>
+                </div>
+                <MasteryDrilldown nodeStatus={nodeStatus} />
               </ClinicCard>
 
               {/* ── 단원별 상태 리스트 + 진단 이력 ── */}

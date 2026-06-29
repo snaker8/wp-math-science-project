@@ -51,6 +51,23 @@ export async function listMathsecrSubjects(): Promise<MathsecrNode[]> {
   return listMathsecrChildren(1, null);
 }
 
+/**
+ * 여러 코드의 mathsecr_types 행 일괄 조회 (단원별 숙달 드릴다운용).
+ * .in() 1000 한도 안전을 위해 800개씩 청크.
+ */
+export async function getMathsecrNodesByCodes(codes: string[]): Promise<MathsecrNode[]> {
+  const unique = Array.from(new Set(codes.filter(Boolean)));
+  if (unique.length === 0) return [];
+  const out: MathsecrNode[] = [];
+  for (let i = 0; i < unique.length; i += 800) {
+    const chunk = unique.slice(i, i + 800);
+    const { data, error } = await pub().from('mathsecr_types').select('*').in('code', chunk);
+    if (error) throw error;
+    out.push(...((data ?? []) as unknown as MathsecrNode[]));
+  }
+  return out;
+}
+
 /** 특정 코드의 mathsecr_types 단일 행 조회 */
 export async function getMathsecrNode(code: string): Promise<MathsecrNode | null> {
   const { data, error } = await pub()
