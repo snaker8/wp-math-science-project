@@ -90,7 +90,13 @@ describe('디스플레이 승격 가드 (인라인 행렬 vs 연립방정식)', 
 // 테두리 조건박스 isChoiceTabular 변환(예문여고 #16) — \hline 제거 + 문장끝 "다." 오인 금지.
 //   MixedContentRenderer.tsx isChoiceTabular 변환부와 동일 로직.
 function convertChoiceTabular(m: string): string {
-  let converted = m
+  const MTX = String.fromCharCode(1);
+  const nestedEnvs: string[] = [];
+  const mProtected = m.replace(
+    /\\begin\{((?:p|b|v|B|V)?matrix|cases|aligned)\}[\s\S]*?\\end\{\1\}/g,
+    (env) => { nestedEnvs.push(env); return MTX + (nestedEnvs.length - 1) + MTX; }
+  );
+  let converted = mProtected
     .replace(/\\begin\{(?:tabular|array)\}(?:\{[^}]*\})?/, '')
     .replace(/\\end\{(?:tabular|array)\}/, '')
     .replace(/\\hline\s*/g, ' ')
@@ -107,6 +113,7 @@ function convertChoiceTabular(m: string): string {
   converted = converted.replace(/([ㄱㄴㄷㄹㅁ])\s*([.)])/g, '\n$1$2');
   converted = converted.replace(/(^|\n)[ \t]*[\(（\)）][ \t]*(?=\n|$)/g, '$1');
   converted = converted.replace(/\n{2,}/g, '\n');
+  converted = converted.replace(new RegExp(MTX + '(\\d+)' + MTX, 'g'), (_m, i) => nestedEnvs[Number(i)] || '');
   return '\n' + converted.trim() + '\n';
 }
 describe('테두리 조건박스 변환 (예문여고 #16/#18 실제 원본=괄호형 (가)(나)(다))', () => {
@@ -142,5 +149,27 @@ describe('hasGanaLabels (조건박스 vs 진짜 보기)', () => {
   it('★ 줄/셀 시작 "가./나./다." 진짜 보기 라벨은 잡음', () => {
     expect(hasGanaLabels('가. 자연수 $x$')).toBe(true);
     expect(hasGanaLabels('\\hline 가. $x$ & 나. $y$')).toBe(true);
+  });
+});
+
+describe('동인고 #16 — (가)(나)(다) 조건박스 안 행렬 보존', () => {
+  // 실제 parseHml 결과 형태
+  const box = '\\begin{tabular}{|c|}\\hline (가) 양수 $k$에 대하여 $A \\left( \\begin{matrix}1 & 2 \\\\ -1 & 1\\end{matrix} \\right)= \\left( \\begin{matrix}0 & k \\\\ 0 & 2k\\end{matrix} \\right)$ \\\\ \\hline (나) $B \\left( \\begin{matrix}1 \\\\ -1\\end{matrix} \\right)= \\left( \\begin{matrix}0 \\\\ 0\\end{matrix} \\right)$이다. \\\\ \\hline (다) $A B =4A$이고, $B A =6B$이다. \\\\ \\hline\\end{tabular}';
+  const out = convertChoiceTabular(box);
+  it('★ 행렬 \\begin{matrix} 가 보존됨', () => {
+    expect(out).toContain('\\begin{matrix}');
+    expect(out).toContain('\\end{matrix}');
+  });
+  it('★★ 행렬 안 열구분 & · 행구분 \\\\ 가 살아있음', () => {
+    expect(out).toContain('1 & 2');     // 열구분 보존
+    expect(out).toContain('1 \\\\ -1'); // 행구분 보존
+  });
+  it('★ (가)(나)(다) 라벨 보존(ㄱ/ㄴ/ㄷ 로 안 바뀜)', () => {
+    expect(out).toContain('(가)');
+    expect(out).toContain('(나)');
+    expect(out).toContain('(다)');
+  });
+  it('★ \\hline raw 노출 없음', () => {
+    expect(out).not.toContain('hline');
   });
 });
