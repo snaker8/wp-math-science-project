@@ -14,7 +14,7 @@ import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
-import { findAutoFolderForSubject, findOrCreateSchoolFolder } from '@/lib/utils/auto-folder';
+import { findAutoFolderForCurriculum, findOrCreateSchoolFolder } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
@@ -1726,18 +1726,17 @@ async function saveEditedProblemsDirect(
           console.warn('[Direct Save] 학교 폴더 배치 실패:', e);
         }
       } else {
-        // ★ 과목 기반 자동 폴더 배치 (fuzzy 매칭 — 폴더 rename에도 견고)
-        const detectedSubject = examInsertData.subject || '';
-        if (detectedSubject) {
-          try {
-            const folder = await findAutoFolderForSubject(supabase, detectedSubject);
-            if (folder) {
-              examInsertData.book_group_id = folder.id;
-              console.log(`[Direct Save] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
-            }
-          } catch (e) {
-            console.warn('[Direct Save] 자동 폴더 매칭 실패:', e);
+        // ★ 과목 기반 자동 폴더 배치 — 업로드 시 선택한 curriculumCodes(공통수학1 등) 우선,
+        //   없으면 분류 감지 과목 폴백 (fuzzy 매칭 — 폴더 rename에도 견고).
+        //   명시 폴더(bookGroupId) 있을 땐 위에서 잡혀 여기 안 옴 → "열어둔 폴더 우선" 정책.
+        try {
+          const folder = await findAutoFolderForCurriculum(supabase, job.curriculumCodes, examInsertData.subject || '');
+          if (folder) {
+            examInsertData.book_group_id = folder.id;
+            console.log(`[Direct Save] 자동 폴더 배치: codes=${JSON.stringify(job.curriculumCodes)} / subject="${examInsertData.subject}" → "${folder.name}" (키워드="${folder.keyword}")`);
           }
+        } catch (e) {
+          console.warn('[Direct Save] 자동 폴더 매칭 실패:', e);
         }
       }
 
@@ -2598,17 +2597,15 @@ async function saveProblemsToDB(
           console.warn('[DB] 학교 폴더 배치 실패:', e);
         }
       } else {
-        const detectedSubject = examInsertData.subject || '';
-        if (detectedSubject) {
-          try {
-            const folder = await findAutoFolderForSubject(supabase, detectedSubject);
-            if (folder) {
-              examInsertData.book_group_id = folder.id;
-              console.log(`[DB] 자동 폴더 배치: "${detectedSubject}" → "${folder.name}" (키워드="${folder.keyword}")`);
-            }
-          } catch (e) {
-            console.warn('[DB] 자동 폴더 매칭 실패:', e);
+        // ★ 과목 기반 자동 폴더 배치 — 선택한 curriculumCodes 우선, 없으면 감지 과목 폴백.
+        try {
+          const folder = await findAutoFolderForCurriculum(supabase, job.curriculumCodes, examInsertData.subject || '');
+          if (folder) {
+            examInsertData.book_group_id = folder.id;
+            console.log(`[DB] 자동 폴더 배치: codes=${JSON.stringify(job.curriculumCodes)} / subject="${examInsertData.subject}" → "${folder.name}" (키워드="${folder.keyword}")`);
           }
+        } catch (e) {
+          console.warn('[DB] 자동 폴더 매칭 실패:', e);
         }
       }
 

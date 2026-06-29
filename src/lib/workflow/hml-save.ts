@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import type { HmlParseResult } from './hml-parser';
 import { verifyHmlProblem } from './hml-verify';
+import { findAutoFolderForCurriculum } from '@/lib/utils/auto-folder';
 
 export interface HmlSaveContext {
   createdBy: string;                 // 필수 (exams.created_by NOT NULL)
@@ -80,11 +81,26 @@ export async function createExamFromHml(
 
   const title = ctx.title.trim();
 
+  // ── 폴더 자동배치 — 명시 폴더(열어둔 폴더) 우선, 없으면 선택한 curriculumCodes(공통수학1 등)로
+  //   폴더 찾기. 폴더는 미리 존재 전제(없으면 미배치, 생성 X). PDF 업로드 경로와 동일 정책.
+  let resolvedBookGroupId: string | null = ctx.bookGroupId ?? null;
+  if (!resolvedBookGroupId && ctx.curriculumCodes && ctx.curriculumCodes.length) {
+    try {
+      const folder = await findAutoFolderForCurriculum(supabase, ctx.curriculumCodes, '');
+      if (folder) {
+        resolvedBookGroupId = folder.id;
+        console.log(`[HML Save] 자동 폴더 배치: codes=${JSON.stringify(ctx.curriculumCodes)} → "${folder.name}" (키워드="${folder.keyword}")`);
+      }
+    } catch (e) {
+      console.warn('[HML Save] 자동 폴더 매칭 실패:', e);
+    }
+  }
+
   // ── 중복 차단 (자산화 가드) — 같은 institute + title (+ book_group) 살아있는 exam 재사용 ──
   try {
     let dup = supabase.from('exams').select('id').eq('title', title).is('deleted_at', null);
     if (ctx.instituteId) dup = dup.eq('institute_id', ctx.instituteId);
-    if (ctx.bookGroupId) dup = dup.eq('book_group_id', ctx.bookGroupId);
+    if (resolvedBookGroupId) dup = dup.eq('book_group_id', resolvedBookGroupId);
     const { data: dupRows } = await dup.order('created_at', { ascending: false }).limit(1);
     if (dupRows && dupRows.length > 0) {
       return { ok: true, examId: (dupRows[0] as { id: string }).id, alreadyExisted: true, savedProblems: 0 };
@@ -107,7 +123,7 @@ export async function createExamFromHml(
       status: 'DRAFT',
       created_by: ctx.createdBy,
       institute_id: ctx.instituteId,
-      book_group_id: ctx.bookGroupId ?? null,
+      book_group_id: resolvedBookGroupId,
       total_points: totalPoints,
       time_limit_minutes: 50,
       subject_track: 'math',

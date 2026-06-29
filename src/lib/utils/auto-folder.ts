@@ -96,6 +96,39 @@ export async function findOrCreateSchoolFolder(
   }
 }
 
+/** 과목코드(01~13) → 폴더 매칭용 라벨. mathsecr-prompt CURRICULUM_OPTIONS 와 동기화 필수. */
+export const CURRICULUM_CODE_LABEL: Record<string, string> = {
+  '01': '중1-1', '02': '중1-2', '03': '중2-1', '04': '중2-2', '05': '중3-1', '06': '중3-2',
+  '07': '공통수학1', '08': '공통수학2', '09': '대수', '10': '미적분1',
+  '11': '확률과 통계', '12': '미적분2', '13': '기하',
+};
+
+/**
+ * 업로드 시 사용자가 선택한 학년·학기 과목코드(curriculumCodes)로 book_groups 폴더 찾기.
+ * - 선택값(예: '07' → 공통수학1) 우선, 없으면 분류 감지 과목(fallbackSubject) 폴백.
+ * - 여러 개면(특이 진도) 순서대로 첫 매칭. 폴더는 미리 만들어져 있다는 전제 — 없으면 미배치(생성 X).
+ * - 명시 폴더(bookGroupId)·학교폴더가 없을 때만 호출하므로 "열어둔 폴더 우선" 정책과 합치.
+ */
+export async function findAutoFolderForCurriculum(
+  supabase: SupabaseClient,
+  curriculumCodes: string[] | null | undefined,
+  fallbackSubject: string,
+): Promise<{ id: string; name: string; keyword: string } | null> {
+  const subjects: string[] = [];
+  if (curriculumCodes?.length) {
+    for (const code of curriculumCodes) {
+      const label = CURRICULUM_CODE_LABEL[code];
+      if (label) subjects.push(label);
+    }
+  }
+  if (fallbackSubject) subjects.push(fallbackSubject);
+  for (const subj of subjects) {
+    const folder = await findAutoFolderForSubject(supabase, subj);
+    if (folder) return folder;
+  }
+  return null;
+}
+
 /**
  * 감지된 과목명에 대해 book_groups에서 가장 적절한 폴더 ID 찾기.
  * 사용자가 폴더 이름을 rename해도 키워드만 포함되면 매칭됨.
