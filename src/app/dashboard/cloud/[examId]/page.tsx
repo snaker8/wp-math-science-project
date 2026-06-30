@@ -2274,33 +2274,33 @@ function ExamPaperView({
                 좌=앞부분(1·2·3), 우=뒤부분(4·5·6) 이면서 같은 줄(1·4, 2·5...)이 같은 높이에 정렬.
                 gridTemplateRows = ceil(n/2) 행. (측정 colFlowTotal 과 동일 짝이라 잘림 없음) */}
             {columns === 2 ? (
-              <div
-                style={{
-                  display: 'grid',
-                  // ★ minmax(0,1fr) — 정확히 반반 고정. '1fr'(=minmax(auto,1fr))은 넓은 내용
-                  //   (18번 cases 등)이 든 칸을 늘려 좌우 폭이 틀어지고 가운데 선이 칸 중앙을 벗어났음.
-                  //   measureWidth=(A4_W-PAGE_PAD*2-COLUMN_GAP)/2 와도 일치 → 측정·분할 정확.
-                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-                  gridTemplateRows: `repeat(${Math.max(1, Math.ceil(pageProblems.length / 2))}, auto)`,
-                  gridAutoFlow: 'column',
-                  columnGap: `${COLUMN_GAP}px`,
-                  alignItems: 'start',
-                }}
-              >
-                {pageProblems.map((problem) => (
-                  <div
-                    key={problem.id}
-                    className="break-inside-avoid"
-                    style={{
-                      marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
-                      breakInside: 'avoid',
-                      pageBreakInside: 'avoid',
-                    }}
-                  >
-                    {renderProblem(problem)}
-                    <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
-                  </div>
-                ))}
+              // ★ 2단 = flex 독립 칼럼 (좌=앞 절반, 우=뒤 절반)으로 각 칸을 빈틈없이 채움. (매쓰홀릭 방식)
+              //   기존 grid 줄맞춤(gridAutoFlow:column + 행정렬)은 한쪽이 길면 반대쪽에 빈칸이 생겨
+              //   "정렬 안 됨"으로 보였음. flex 독립칼럼이면 좌·우가 서로 줄맞춤 안 하고 자연스럽게 채워짐.
+              //   각 칸 폭 = (전체 - COLUMN_GAP)/2 = measureWidth 와 일치 → 측정·분할 기하 그대로(잘림 무증가).
+              //   읽기 순서(열 우선: 좌 위→아래, 우 위→아래)도 동일.
+              <div style={{ display: 'flex', gap: `${COLUMN_GAP}px`, alignItems: 'flex-start' }}>
+                {(() => {
+                  const half = Math.max(1, Math.ceil(pageProblems.length / 2));
+                  return [pageProblems.slice(0, half), pageProblems.slice(half)].map((colProbs, ci) => (
+                    <div key={ci} style={{ flex: 1, minWidth: 0 }}>
+                      {colProbs.map((problem) => (
+                        <div
+                          key={problem.id}
+                          className="break-inside-avoid"
+                          style={{
+                            marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
+                            breakInside: 'avoid',
+                            pageBreakInside: 'avoid',
+                          }}
+                        >
+                          {renderProblem(problem)}
+                          <div style={{ height: `${getAnswerSpace(problem, pageIdx)}px` }} aria-hidden />
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
               </div>
             ) : (
               <div>
