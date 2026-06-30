@@ -201,7 +201,10 @@ function SessionPrintInner() {
   }, [pendingPrint]);
 
   // 측정폭 — 숨김 측정 패스에서 각 문제를 "컬럼 폭"으로 렌더해 자연 높이를 잰다.
-  const measureWidth = columns === 2 ? (CONTENT_W - COLUMN_GAP) / 2 : CONTENT_W;
+  // ★ 실제 더 좁은 col-left 내용폭에 맞춰 보수적으로 잰다 (밑에서 짤림 방지):
+  //   col-left 내용폭 = flex칸((CONTENT_W-COLUMN_GAP)/2) − padding-right(COLUMN_GAP=16) − border(1) = 17px 좁음.
+  //   더 좁은 칸 기준(−17)으로 측정하면 두 칸 모두 "과대측정" → 분할이 절대 과적재 안 함 → 무잘림. (+여유 3px)
+  const measureWidth = columns === 2 ? Math.floor((CONTENT_W - COLUMN_GAP) / 2) - 20 : CONTENT_W;
 
   // 페이지 분할 — ★ "열 우선(세로) 채움": 왼쪽 칸을 위→아래로 꽉 채우고(1,2,3…), 다 차면
   //   오른쪽 칸(다음 번호 계속 아래로) → 한국 시험지 표준 읽기 순서. 각 칸 높이 ≤ maxH (잘림 차단).
