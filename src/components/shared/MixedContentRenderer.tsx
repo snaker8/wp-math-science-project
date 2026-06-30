@@ -470,7 +470,9 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   {headerLabel && (
                     <div className="text-xs font-bold text-gray-700 mb-1.5 -mt-0.5">&lt;{headerLabel}&gt;</div>
                   )}
-                  {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
+                  <FitToWidth>
+                    {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
+                  </FitToWidth>
                 </div>
               );
             }
@@ -492,6 +494,57 @@ export const MixedContentRenderer = memo(MixedContentRendererInner, (prev, next)
     prev.disableConditionBox === next.disableConditionBox
   );
 });
+
+// ★ 조건박스 자동 축소 (2026-07-01, 주례여고 #14 c_n 줄 인쇄 우측 잘림 사고) —
+//   조건박스 내용(예: $$\left\{\begin{array}…$$ 긴 점화식)이 칼럼 폭을 넘으면 KaTeX 가 줄바꿈을
+//   안 해 오른쪽으로 삐져나가고, 인쇄 칼럼 overflow:hidden 이 그걸 잘라냄. 폭이 넘칠 때만
+//   transform: scale 로 축소해 박스 안에 담는다. ★ 안 넘으면 scale=1 → 완전 무변화(회귀 0).
+//   조건박스 한 곳에서만 사용 — 다른 렌더 경로 불변.
+const useIsoLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+function FitToWidth({ children }: { children: React.ReactNode }) {
+  const outerRef = React.useRef<HTMLDivElement>(null);
+  const innerRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = React.useState(1);
+  const [boxH, setBoxH] = React.useState<number | undefined>(undefined);
+
+  useIsoLayoutEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+    const measure = () => {
+      const avail = outer.clientWidth;
+      // transform 은 scrollWidth/Height 에 영향 없음 → 항상 자연 크기로 측정.
+      const w = inner.scrollWidth;
+      const h = inner.scrollHeight;
+      if (!avail || !w) return;
+      const s = w > avail ? Math.max(0.4, avail / w) : 1;
+      setScale(s);
+      setBoxH(s < 1 ? Math.ceil(h * s) : undefined);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(outer);
+    // KaTeX 웹폰트 로딩 후 폭이 바뀌므로 재측정 (인쇄 전 안정화).
+    const fonts = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts;
+    if (fonts?.ready) fonts.ready.then(measure).catch(() => {});
+    return () => ro.disconnect();
+  }, [children]);
+
+  return (
+    <div ref={outerRef} style={{ width: '100%', height: boxH, overflow: scale < 1 ? 'hidden' : undefined }}>
+      <div
+        ref={innerRef}
+        style={{
+          transformOrigin: 'top left',
+          transform: scale < 1 ? `scale(${scale})` : undefined,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /**
  * 텍스트 세그먼트: 줄바꿈 + 마크다운 볼드(**bold**) + 한글 스타일링
