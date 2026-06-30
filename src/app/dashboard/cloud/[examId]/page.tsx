@@ -1810,7 +1810,10 @@ function ExamPaperView({
   // 카드 아래 풀이공간 — 프리셋이면 자동(페이지 채움·잘림방지), 아니면 고정.
   const getAnswerSpace = (problem: ProblemData, pageIdx: number) => {
     if (presetAnswerSpaces && presetAnswerSpaces[pageIdx] !== undefined) {
-      return presetAnswerSpaces[pageIdx];
+      // ★ 프리셋 채움값으로 무작정 늘리지 않고, 문제 유형별 자연 풀이공간을 상한으로.
+      //   → 4문제 등에서 밑 문제 풀이여백이 과하게(322px 등) 벌어지던 것 방지.
+      //   채움값 ≥ 자연값이면 자연값(적당한 여백 + 하단 자연 여유), 빡빡하면 채움값(<자연)으로 축소 → 무잘림.
+      return Math.min(getWritingSpace(problem), presetAnswerSpaces[pageIdx]);
     }
     return getWritingSpace(problem);
   };
