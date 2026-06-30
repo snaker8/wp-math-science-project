@@ -3,7 +3,7 @@
 import React, { memo, useMemo } from 'react';
 import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
-import { convertChoiceTabularBox } from './box-conversion';
+import { convertChoiceTabularBox, extractConditionBoxes } from './box-conversion';
 
 // ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
 //   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
@@ -684,112 +684,7 @@ function stripTrailingChoiceLines(text: string): string {
  * 시험지에서 조건이 사각형 테두리 박스 안에 들어가는 형식을 구현.
  * 헤더 라벨은 원본 그대로 보존(보기/규칙/조건/...) — 렌더 시 동일 라벨 표시.
  */
-const BOX_HEADER_KEYWORDS = ['보기', '규칙', '조건', '참고', '자료', '안내', '주의', '정의', '설명'];
 
-function detectBoxHeaderLabel(trimmed: string): string | null {
-  // 1) `< X >` 또는 `〈 X 〉` 단독 라인 (장식 문자 _, -, ─, —, =, $, \, . 가능)
-  const angleMatch = trimmed.match(
-    /^\s*(?:[$_\\\-─—=.\s]{2,}\s*)?[<〈]\s*([가-힣\s]+?)\s*[>〉]\s*(?:[$_\\\-─—=.\s]{2,})?\s*$/,
-  );
-  if (angleMatch) {
-    const inner = angleMatch[1].replace(/\s+/g, '');
-    if (BOX_HEADER_KEYWORDS.includes(inner)) return inner;
-  }
-  // 2) `| 보 기 |` 형식 (Mathpix가 가로 테두리를 파이프로 출력하는 케이스)
-  const pipeMatch = trimmed.match(/^\s*\|\s*([가-힣\s]+?)\s*\|\s*$/);
-  if (pipeMatch) {
-    const inner = pipeMatch[1].replace(/\s+/g, '');
-    if (BOX_HEADER_KEYWORDS.includes(inner)) return inner;
-  }
-  return null;
-}
-
-function extractConditionBoxes(text: string): { mainContent: string; conditionBoxes: string[]; conditionHeaderLabels: (string | null)[] } {
-  const lines = text.split('\n');
-  const conditionBoxes: string[] = [];
-  const conditionHeaderLabels: (string | null)[] = []; // ★ 박스 헤더 라벨 (보기/규칙/조건/...) — null 이면 헤더 없음
-  const mainLines: string[] = [];
-
-  // (가)/(나)/(다) 또는 <보기>/<규칙>/<조건> 블록 감지
-  let inConditionBlock = false;
-  let conditionLines: string[] = [];
-  let currentHeaderLabel: string | null = null;
-  let boxIndex = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-
-    // 조건 시작: (가), (나), (다), <보기>/<규칙>/<조건>/..., | 보 기 |, ㄱ., ㄴ., ㄷ.
-    // ★ \displaystyle이 앞에 붙어있을 수 있으므로 선택적으로 매칭
-    // ★ 박스 헤더: 단독 줄에 있는 경우만 (문장 중간 <조건>은 무시)
-    // ★ 장식 문자: _, -, ─, —, =, $, \, . (Mathpix가 $\_\_\_\_$ 형식으로 출력)
-    const boxHeaderLabel = detectBoxHeaderLabel(trimmed);
-    const isBoxHeader = boxHeaderLabel !== null;
-    const isConditionStart = /^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(trimmed) ||
-                             isBoxHeader ||
-                             /^\s*(?:\\displaystyle\s*)?[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
-
-    if (isConditionStart && !inConditionBlock) {
-      inConditionBlock = true;
-      currentHeaderLabel = boxHeaderLabel;
-      // ★ 박스 헤더 줄 자체는 제외 (렌더링 시 별도 헤더로 표시)
-      if (isBoxHeader) {
-        conditionLines = [];
-      } else {
-        conditionLines = [lines[i]];
-      }
-      continue;
-    }
-
-    if (inConditionBlock) {
-      // ★ 조건 라벨: (나)(다), ㄴ.ㄷ. → 무조건 조건 계속
-      const isConditionLabel = /^\s*[\(（]\s*[나다라마]\s*[\)）]/.test(trimmed) ||
-                               /^\s*(?:\\displaystyle\s*)?[ㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
-      // ★ 조건 부연설명: (단, ...), 여기서/이때 등
-      const isConditionNote = /^\s*[\(（]\s*단/.test(trimmed) ||
-                              /^\s*여기서|^\s*이때|^\s*단,/.test(trimmed);
-
-      if (isConditionLabel || isConditionNote) {
-        conditionLines.push(lines[i]);
-        continue;
-      }
-
-      // ★ 박스 종료 조건: 선택지, 문제번호, 질문 문장, 빈 줄
-      const isBlockEnd = /^\s*[①②③④⑤]/.test(trimmed) ||
-                         /^\s*\(\s*[1-5]\s*\)/.test(trimmed) ||
-                         /^\s*\d+\s*[.)]\s/.test(trimmed) ||
-                         /것은\s*\?|고르시오|고른\s*것|옳은\s*것|있는\s*대로|만을\s*고|보기.*고른|에서.*옳/.test(trimmed) ||
-                         trimmed === '';
-      if (isBlockEnd) {
-        if (conditionLines.length > 0) {
-          conditionBoxes.push(conditionLines.join('\n'));
-          conditionHeaderLabels.push(currentHeaderLabel);
-          mainLines.push(`__CONDITION_BOX_${boxIndex}__`);
-          boxIndex++;
-        }
-        inConditionBlock = false;
-        conditionLines = [];
-        currentHeaderLabel = null;
-        if (trimmed !== '') mainLines.push(lines[i]);
-        continue;
-      }
-      // ㄱ/ㄴ/ㄷ 내용이 여러 줄이면 계속 수집
-      conditionLines.push(lines[i]);
-      continue;
-    }
-
-    mainLines.push(lines[i]);
-  }
-
-  // 마지막 조건 블록 처리
-  if (inConditionBlock && conditionLines.length > 0) {
-    conditionBoxes.push(conditionLines.join('\n'));
-    conditionHeaderLabels.push(currentHeaderLabel);
-    mainLines.push(`__CONDITION_BOX_${boxIndex}__`);
-  }
-
-  return { mainContent: mainLines.join('\n'), conditionBoxes, conditionHeaderLabels };
-}
 
 /** 조건 블록이 끝나는지 판단 */
 function isEndOfConditionBlock(trimmed: string, lines: string[], currentIdx: number): boolean {
