@@ -3,7 +3,7 @@
 import React, { memo, useMemo } from 'react';
 import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
-import { convertChoiceTabularBox, extractConditionBoxes } from './box-conversion';
+import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock } from './box-conversion';
 
 // ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
 //   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
@@ -198,45 +198,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       //     2) \hline 포함 (가로 구분선 — 풀이 박스 특유 양식)
       //     3) \begin{aligned} 중첩 (식 정리 풀이)
       //   + boxed 본문은 placeholder 라 라벨 카운트에서 제거
-      const colSpecMatch = m.match(/\\begin\{(?:tabular|array)\}\s*\{([^}]*)\}/);
-      const colSpec = colSpecMatch?.[1] || '';
-      const hasAlignedInside = /\\begin\{aligned\}/i.test(m);
-      // ★ 다열 데이터 표(테두리 있는 진짜 표, 예: {|l|l|l|l|} + \hline)는 풀이박스가 아님 (화명중 #1
-      //   "글자와 줄만 나옴" 사고: 데이터 표를 풀이박스로 오인해 테두리를 떼어내 격자 없는 표로 렌더됨).
-      //   풀이박스는 보통 단일 컬럼({|l|}). 컬럼 2개 이상이거나 행에 & 가 있으면 데이터 표로 보고
-      //   테두리 유지(parseTabularBlock 이 |·\hline → CSS 격자로 렌더, KaTeX 미사용이라 안전).
-      //   nested \begin{aligned} 풀이는 컬럼수와 무관하게 풀이박스로 유지.
-      const colCount = (colSpec.match(/[clr]/gi) || []).length;
-      const isMultiColumnTable = colCount >= 2 || /&/.test(m);
-      // ★ 풀이박스 판정 정밀화 — 단일 컬럼이라도 "단순 데이터 박스"(셀이 짧은 $…$/텍스트, 중첩환경 없음)면
-      //   테두리 유지(데이터 표 경로 = parseTabularBlock CSS 격자). 복잡 환경(중첩 aligned/array/cases/
-      //   matrix, \\[Npt] 행간)만 KaTeX 친화 위해 테두리 제거(풀이박스). 거제여중 #18 버스 요금 1열 박스가
-      //   테두리 없이 3줄로만 렌더되던 것 → 테두리 박스로. 셀 본문만 검사(박스 자신의 begin 태그 제외).
-      const innerBody = m
-        .replace(/^\s*\\begin\{(?:tabular|array)\}(?:\s*\{[^}]*\})?/i, '')
-        .replace(/\\end\{(?:tabular|array)\}\s*$/i, '');
-      const hasComplexEnv = hasAlignedInside
-        || /\\begin\{(?:array|cases|matrix|pmatrix|bmatrix|aligned)\}/i.test(innerBody)
-        || /\\\\\s*\[/.test(innerBody);
-      const looksLikeSolutionBox = hasAlignedInside || (!isMultiColumnTable && hasComplexEnv);
-
-      // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
-      //   \boxed{\text{(가)}} 의 (가) 는 placeholder 라 셀의 보기 라벨과 의미 다름
-      const stripped = m.replace(/\\boxed\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
-
-      // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
-      //   ★ boxed 제거된 stripped 에서 검사 — placeholder 오탐 차단
-      const hasJamoLabels = /[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(stripped);
-      // ★ 보기 라벨 "가./나./다."만 — 문장 끝 "…이다." "…것이다."의 "다."를 오인하면 조건박스가
-      //   isChoiceTabular 로 잘못 변환돼 "ㄷ." 라벨 + \hline 노출 사고(온천중 #5). 앞에 한글음절/영문/숫자가
-      //   오면(=문장 중간) 제외 — 진짜 라벨은 줄/셀 시작(공백·\\·& 뒤)이라 통과.
-      const hasGanaLabels = /(?<![가-힣A-Za-z0-9])[가나다라마]\s*[.)]/.test(stripped);
-      const hasTextGanaLabels = /\\text\s*\{\s*[가나다라마]\s*[.)]?\s*\}/.test(stripped);
-      const hasParenLabels = /[\(（]\s*[가나다라마]\s*[\)）]/.test(stripped);
-
-      const isChoiceTabular =
-        !looksLikeSolutionBox &&
-        (hasJamoLabels || hasGanaLabels || hasTextGanaLabels || hasParenLabels);
+      const { looksLikeSolutionBox, isChoiceTabular } = classifyTabularBlock(m);
 
       // ★ 풀이 박스 — KaTeX 비호환 토큰 정규화 (2026-05-18 사고)
       //   PR #188 가드로 array 환경은 보호됐지만 KaTeX 가 다음 토큰 못 풀어
