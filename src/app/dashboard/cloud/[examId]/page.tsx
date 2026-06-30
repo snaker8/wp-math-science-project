@@ -1807,13 +1807,47 @@ function ExamPaperView({
     });
   }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H, getWritingSpace]);
 
+  // ★ 프리셋 풀이공간 — "문제 크기에 따라 적당히 + 칸 꽉 채움" (per-problem, per-column).
+  //   각 칸(flex 독립칼럼)의 실제 내용합 기준 남는 공간을, 문제별 자연 풀이공간(getWritingSpace) 비율로 분배.
+  //   → 큰 문제(서답형)는 큰 칸, 작은 문제(짧은 객관식)는 작은 칸. 칸은 maxH 까지 채움(밑 빈공간 최소).
+  //   안전: Σ분배 ≤ leftover → 칸높이 ≤ maxH → 넘침/잘림 없음. (rowSum 과대계산으로 덜 채워지던 문제 해결)
+  const presetAnswerByProblem = useMemo(() => {
+    if (!perPagePreset || !measured || problemHeights.length === 0) return null;
+    const map = new Map<string, number>();
+    let g = 0;
+    pages.forEach((pageProblems, pageIdx) => {
+      const maxH = pageIdx === 0 ? FIRST_CONTENT_H : CONTENT_H;
+      const half = columns === 2 ? Math.max(1, Math.ceil(pageProblems.length / 2)) : pageProblems.length;
+      const colRanges: Array<[number, number]> = columns === 2
+        ? [[0, half], [half, pageProblems.length]]
+        : [[0, pageProblems.length]];
+      for (const [s, e] of colRanges) {
+        if (e <= s) continue;
+        let contentSum = 0, wSum = 0;
+        const items: Array<{ id: string; w: number }> = [];
+        for (let i = s; i < e; i++) {
+          const p = pageProblems[i];
+          const w = getWritingSpace(p);
+          contentSum += Math.max(0, (problemHeights[g + i] ?? 0) - w);
+          wSum += w;
+          items.push({ id: p.id, w });
+        }
+        const leftover = Math.max(0, maxH - contentSum);
+        for (const it of items) {
+          const share = wSum > 0 ? leftover * (it.w / wSum) : leftover / items.length;
+          map.set(it.id, Math.max(24, Math.floor(share)));
+        }
+      }
+      g += pageProblems.length;
+    });
+    return map;
+  }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H, getWritingSpace]);
+
   // 카드 아래 풀이공간 — 프리셋이면 자동(페이지 채움·잘림방지), 아니면 고정.
   const getAnswerSpace = (problem: ProblemData, pageIdx: number) => {
-    if (presetAnswerSpaces && presetAnswerSpaces[pageIdx] !== undefined) {
-      // ★ 프리셋 채움값으로 무작정 늘리지 않고, 문제 유형별 자연 풀이공간을 상한으로.
-      //   → 4문제 등에서 밑 문제 풀이여백이 과하게(322px 등) 벌어지던 것 방지.
-      //   채움값 ≥ 자연값이면 자연값(적당한 여백 + 하단 자연 여유), 빡빡하면 채움값(<자연)으로 축소 → 무잘림.
-      return Math.min(getWritingSpace(problem), presetAnswerSpaces[pageIdx]);
+    // ★ 프리셋: 문제 크기별 분배값(칸 꽉 채움 + 크기비례). 없으면 자연 풀이공간.
+    if (presetAnswerByProblem) {
+      return presetAnswerByProblem.get(problem.id) ?? getWritingSpace(problem);
     }
     return getWritingSpace(problem);
   };
