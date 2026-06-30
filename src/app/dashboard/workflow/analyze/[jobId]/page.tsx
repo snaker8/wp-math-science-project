@@ -1062,8 +1062,14 @@ function PdfViewerWithBoxes({
         if (pageNumber > pdf.numPages || cancelled) return;
 
         const page = await pdf.getPage(pageNumber);
-        // ★ 회전 적용 — viewport.width/height 가 90/270 시 자동 swap.
-        const viewport = page.getViewport({ scale: 1, rotation });
+        // ★ 회전 적용 — 페이지 자체 /Rotate(회전 메타데이터)를 기준값으로 흡수 후 앱 회전을 더함 (2026-06-30).
+        //   rotation 을 명시하면 PDF.js 가 /Rotate 를 무시 → "회전 저장"한 PDF(/Rotate≠0)가 가로로
+        //   그려지고 Mathpix(세로 OCR)와 좌표계가 어긋나던 사고. total = (/Rotate + 앱회전).
+        //   /Rotate=0 일반 PDF 는 total=rotation 으로 기존과 완전 동일(회귀 0).
+        //   viewport.width/height 가 90/270 시 자동 swap.
+        const baseRotate = (((page.rotate ?? 0) % 360) + 360) % 360;
+        const total = (((baseRotate + rotation) % 360) + 360) % 360;
+        const viewport = page.getViewport({ scale: 1, rotation: total });
 
         const container = containerRef.current;
         if (!container || cancelled) return;
@@ -1092,7 +1098,7 @@ function PdfViewerWithBoxes({
           2.5
         );
 
-        const scaledViewport = page.getViewport({ scale, rotation });
+        const scaledViewport = page.getViewport({ scale, rotation: total });
 
         const canvas = canvasRef.current;
         if (!canvas || cancelled) return;
