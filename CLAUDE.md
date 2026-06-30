@@ -178,8 +178,12 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - **2차 (렌더 안전망)** — `src/hooks/useExamProblems.ts` `stripTrailingInlineChoices`:
   - `hasDbChoices` 일 때, **본문 끝 블록이 `dbChoices` 와 정규화 일치(과반)** 할 때만 제거. 비보기 `①②③`(그림 라벨·서술형 단계)은 절대 안 건드림. 기존 1971건·OCR 엣지 표시 커버.
   - 서답형(`type==='short_answer'`)이면 본문 `①②③` 를 보기로 추출 X (4fb518c — 서답형 단계 보호).
+- **3차 (재OCR "텍스트 다시 읽기")** — `src/lib/ocr/extract-choices-from-ocr.ts` `extractChoicesFromOCR` (2026-06-30 회귀, 장전중 25-3-1 #4):
+  - 원형 `①②③④⑤` 분기(branch 1)는 branch 2·3 `(1)~(5)`/`1)~5)` 의 "5지선다 가드"(318b19f)를 **혼자 못 받아** 무가드로 남아 있었음. `①~⑤에 들어갈 내용` 빈칸채우기 본문의 `\boxed{①}~\boxed{⑤}` placeholder 를 전부 보기로 잡아 본문을 토막낸 garbage choices 저장 → `handleReadText` 가 정상 보기를 덮어씀.
+  - 가드: (1) `\boxed{...}` 안 동그라미 제외, (2) 진짜 보기 = **"마지막 증가 런" 이 ①부터 시작 + 길이 ≥4** 일 때만 인정 (스템참조·`①과 ②`·산발 배제). 확정 못하면 `[]` → 호출측이 기존 보기 보존(손실 0).
+  - 회귀 테스트: `extract-choices-from-ocr.test.ts` (장전중 #4 → [] + 정상 5지선다/스템참조/(5)병합 통과).
 - **가드 원칙**: 오탐(객관식→서술형)은 "본문 제거만 안 함" → **데이터 손실 0** + 렌더넷 커버. 미탐(서술형→객관식)이 본문 삭제 사고이므로 **신호는 넉넉하게 잡아 안전쪽**으로 기운다.
-- `cloud-flow.ts`(보기 판정·content 생성)·`useExamProblems.ts`(추출·strip) 건드릴 때 위 가드 살아있는지 git log 확인 필수.
+- `cloud-flow.ts`(보기 판정·content 생성)·`useExamProblems.ts`(추출·strip)·`extract-choices-from-ocr.ts`(재OCR 보기추출) 건드릴 때 위 가드 살아있는지 git log 확인 필수. **"동그라미가 보기로 잡혀 본문이 보기로 새는" 클래스는 이 3곳 모두에서 재발 이력 있음.**
 
 ### 학습 저장 위치
 - DB: `figure_corrections` (도형 교정 diff), `latex_render_corrections` (LaTeX 수정 diff)
