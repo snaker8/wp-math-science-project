@@ -63,7 +63,14 @@ export async function renderPdfPage(
   }
 
   const page = await pdf.getPage(pageNumber);
-  const viewport = page.getViewport({ scale: 1, rotation });
+  // ★ 페이지 자체 /Rotate(회전 메타데이터)를 기준값으로 흡수 (2026-06-30) — getViewport 에 rotation 을
+  //   "명시"하면 PDF.js 가 페이지의 /Rotate 를 덮어써 무시한다. "회전해서 저장"한 PDF(보통 /Rotate=90
+  //   플래그만 세팅)가 가로(원본)로 그려지고, Mathpix(PDF API)는 /Rotate 반영해 세로로 OCR → 화면·OCR
+  //   좌표계가 어긋나던 사고. total = (/Rotate + 앱회전) 으로 합산. /Rotate=0 일반 PDF 는 total=rotation
+  //   이라 기존 동작과 완전 동일(회귀 0).
+  const baseRotate = (((page.rotate ?? 0) % 360) + 360) % 360;
+  const total = (((baseRotate + rotation) % 360) + 360) % 360;
+  const viewport = page.getViewport({ scale: 1, rotation: total });
 
   // 캔버스에 맞게 스케일 조정
   const scale = Math.min(
@@ -71,7 +78,7 @@ export async function renderPdfPage(
     maxHeight / viewport.height,
     2.5
   );
-  const scaledViewport = page.getViewport({ scale, rotation });
+  const scaledViewport = page.getViewport({ scale, rotation: total });
 
   // 캔버스 크기 설정
   canvas.width = scaledViewport.width;
