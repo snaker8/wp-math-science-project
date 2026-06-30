@@ -31,6 +31,68 @@ interface EditableExamHeaderProps {
   subjectOptions?: string[];
   /** ★ 헤더 상단 강조색 (우리식 색 테마) — null/undefined면 미표시(기존 동일). 인쇄 반영. */
   accentColor?: string | null;
+  /** ★ 헤더 꾸밈 테마 id ('none'|'line'|'double'|'wave'|'corner'|'dots'). accentColor 와 함께 동작. */
+  headerTheme?: string | null;
+}
+
+// ============================================================================
+// ★ 헤더 꾸밈 테마 — 우리 고유 디자인 (매쓰홀릭 "테마" 참고, 카피 X). accentColor 로 색 적용.
+//   모눈/마스코트 없이, 깔끔한 상단 장식 위주. 인쇄 색 반영(print-color-adjust:exact).
+// ============================================================================
+export const HEADER_THEMES: Array<{ id: string; label: string }> = [
+  { id: 'none', label: '없음' },
+  { id: 'line', label: '라인' },
+  { id: 'double', label: '더블' },
+  { id: 'wave', label: '웨이브' },
+  { id: 'corner', label: '코너' },
+  { id: 'dots', label: '도트' },
+];
+
+function ExamHeaderDecoration({ theme, color }: { theme: string; color: string }) {
+  const pca = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties;
+  if (theme === 'line') {
+    return <div aria-hidden style={{ height: 6, background: color, borderRadius: 3, marginBottom: 3, ...pca }} />;
+  }
+  if (theme === 'double') {
+    return (
+      <div aria-hidden style={{ marginBottom: 3, ...pca }}>
+        <div style={{ height: 3, background: color, borderRadius: 2 }} />
+        <div style={{ height: 2, background: color, opacity: 0.45, marginTop: 2, borderRadius: 2 }} />
+      </div>
+    );
+  }
+  if (theme === 'wave') {
+    return (
+      <div aria-hidden style={{ lineHeight: 0, marginBottom: 2, ...pca }}>
+        <svg viewBox="0 0 1200 36" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 16 }}>
+          <path d="M0,22 C200,4 380,4 600,16 C820,28 1000,28 1200,8 L1200,36 L0,36 Z" fill={color} />
+        </svg>
+      </div>
+    );
+  }
+  if (theme === 'corner') {
+    return (
+      <div aria-hidden style={{ position: 'relative', height: 24, marginBottom: 2, ...pca }}>
+        <svg style={{ position: 'absolute', top: 0, left: 0, width: 70, height: 24 }} viewBox="0 0 70 24" fill="none">
+          <path d="M3 22 Q3 3 22 3 L68 3" stroke={color} strokeWidth="4" strokeLinecap="round" />
+        </svg>
+        <svg style={{ position: 'absolute', top: 0, right: 0, width: 70, height: 24 }} viewBox="0 0 70 24" fill="none">
+          <path d="M67 22 Q67 3 48 3 L2 3" stroke={color} strokeWidth="4" strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
+  if (theme === 'dots') {
+    return (
+      <div aria-hidden style={{ display: 'flex', gap: 6, alignItems: 'center', height: 12, marginBottom: 4, ...pca }}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: color, opacity: 1 - i * 0.12, display: 'inline-block' }} />
+        ))}
+        <span style={{ flex: 1, height: 2, background: color, opacity: 0.3, borderRadius: 2 }} />
+      </div>
+    );
+  }
+  return null;
 }
 
 function EditableExamHeaderInner({
@@ -43,6 +105,7 @@ function EditableExamHeaderInner({
   onExamTitleChange,
   subjectOptions,
   accentColor,
+  headerTheme,
 }: EditableExamHeaderProps) {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -55,12 +118,9 @@ function EditableExamHeaderInner({
 
   return (
     <div className="exam-meta-header">
-      {/* ★ 헤더 상단 강조색 띠 (우리식 색 테마) — 선택 시에만. 인쇄 색 반영(WebkitPrintColorAdjust). */}
-      {accentColor && (
-        <div
-          aria-hidden
-          style={{ height: '5px', background: accentColor, WebkitPrintColorAdjust: 'exact' }}
-        />
+      {/* ★ 헤더 꾸밈 테마 (우리 고유 디자인) — accentColor + theme. 선택 시에만. 인쇄 색 반영. */}
+      {accentColor && headerTheme && headerTheme !== 'none' && (
+        <ExamHeaderDecoration theme={headerTheme} color={accentColor} />
       )}
       {/* 편집 모드 토글 바 (편집 가능할 때만 표시, 인쇄 시 숨김) */}
       {editable && (
