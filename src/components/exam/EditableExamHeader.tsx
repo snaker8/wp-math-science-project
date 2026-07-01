@@ -7,9 +7,7 @@
 // ============================================================================
 
 import React, { useState, useCallback, memo } from 'react';
-import { ChevronDown, Edit3, Check, LayoutTemplate, X } from 'lucide-react';
-import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
-import { TemplateSelector } from '@/components/exam/TemplateSelector';
+import { ChevronDown, Edit3, Check, X } from 'lucide-react';
 import { DEFAULT_EXAM_META, type ExamMeta, EXAM_TYPE_OPTIONS } from '@/config/exam-templates';
 
 const GRADE_OPTIONS = ['중1', '중2', '중3', '고1', '고2', '고3'];
@@ -156,7 +154,6 @@ function EditableExamHeaderInner({
   accentColor,
   headerTheme,
 }: EditableExamHeaderProps) {
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const m: ExamMeta = { ...DEFAULT_EXAM_META, ...meta };
   const title = examTitle || '수학 평가';
@@ -174,15 +171,6 @@ function EditableExamHeaderInner({
       {/* 편집 모드 토글 바 (편집 가능할 때만 표시, 인쇄 시 숨김) */}
       {editable && (
         <div className="print:hidden flex items-center justify-end gap-1.5 px-2 py-1.5 bg-gray-50 border-b border-gray-200">
-          <button
-            type="button"
-            onClick={() => setShowTemplateModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-            title="템플릿 변경"
-          >
-            <LayoutTemplate className="h-3.5 w-3.5" />
-            템플릿
-          </button>
           <button
             type="button"
             onClick={() => setEditMode(v => !v)}
@@ -208,24 +196,13 @@ function EditableExamHeaderInner({
           onTitleChange={onExamTitleChange}
           subjectOptions={subjectOptions}
         />
-      ) : templateId === 'simple' || !templateId ? (
-        // 기본 템플릿: 에디토리얼 헤더 (인쇄/표시). 편집은 위 EditableFormView(표 폼)
-        <StaticFormView meta={m} examTitle={title} accent={accentColor} />
       ) : (
-        // 사용자가 지정한 템플릿
-        <ExamPaperHeader templateId={templateId} meta={m} examTitle={title} />
-      )}
-
-      {/* 템플릿 선택 모달 — 열렸을 때만 렌더 (성능) */}
-      {editable && showTemplateModal && (
-        <TemplateSelector
-          isOpen={showTemplateModal}
-          onClose={() => setShowTemplateModal(false)}
-          templateId={templateId}
+        // 헤더 = 에디토리얼 (레이아웃 variant는 templateId로). 표 6종은 디자인 갤러리로 일원화됨.
+        <StaticFormView
           meta={m}
-          onApply={(id, newMeta) => {
-            if (onTemplateChange) onTemplateChange(id, newMeta);
-          }}
+          examTitle={title}
+          accent={accentColor}
+          variant={templateId === 'centered' ? 'centered' : templateId === 'minimal' ? 'minimal' : 'editorial'}
         />
       )}
     </div>
@@ -243,53 +220,71 @@ function StaticFormView({
   meta,
   examTitle,
   accent,
+  variant = 'editorial',
 }: {
   meta: ExamMeta;
   examTitle: string;
   accent?: string | null;
+  variant?: 'editorial' | 'centered' | 'minimal';
 }) {
-  // ★ 에디토리얼 헤더 (2026-07-01) — 색 띠/물결(시중·템플릿 느낌) 대신 "좌표축" 모티프:
-  //   왼쪽 가는 accent 세로 바가 제목군을 앵커. accent 색은 세로바 + eyebrow 과목명에만(절제).
-  //   강한 타이포 위계(eyebrow 넓은자간 → 큰 굵은 제목 → 음영 메타) + 단단한 하단선. 흰 배경 인쇄.
+  // ★ 에디토리얼 헤더 (2026-07-01) — accent는 세로바 + eyebrow 과목명에만(절제). 강한 타이포 위계.
+  //   variant: editorial(좌측 accent바) / centered(중앙정렬+짧은 언더라인) / minimal(제목+이름만).
   const pca = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties;
   const a = accent || '#0f172a';
+  const centered = variant === 'centered';
+  const minimal = variant === 'minimal';
   const metaBits = [
     meta.grade, meta.semester,
     meta.timeLimit ? `${meta.timeLimit}` : '',
     meta.date || '',
   ].filter(Boolean) as string[];
+
+  const eyebrow = !minimal && (meta.subject || meta.examType) ? (
+    <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.13em' }}>
+      {meta.subject ? <span style={{ color: a, ...pca }}>{meta.subject}</span> : null}
+      {meta.subject && meta.examType ? <span style={{ color: '#cbd5e1' }}> &middot; </span> : null}
+      {meta.examType ? <span style={{ color: '#94a3b8' }}>{meta.examType}</span> : null}
+    </span>
+  ) : null;
+
+  const inner = (
+    <div style={{ flex: 1, minWidth: 0, textAlign: centered ? 'center' : 'left' }}>
+      {!minimal && (
+        <div style={{ display: 'flex', justifyContent: centered ? 'center' : 'space-between', alignItems: 'baseline', gap: 12 }}>
+          {eyebrow}
+          {!centered && meta.schoolName ? <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>{meta.schoolName}</span> : null}
+        </div>
+      )}
+      <div style={{ fontSize: centered ? 22 : 21, fontWeight: 800, color: '#0f172a', marginTop: minimal ? 0 : 5, lineHeight: 1.2, letterSpacing: '-0.02em' }}>{examTitle}</div>
+      {centered && meta.schoolName ? <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginTop: 3 }}>{meta.schoolName}</div> : null}
+      {!minimal && metaBits.length > 0 && (
+        <div style={{ fontSize: 11.5, fontWeight: 500, color: '#64748b', marginTop: 5 }}>{metaBits.join(' · ')}</div>
+      )}
+      {centered && <div aria-hidden style={{ width: 46, height: 3, background: a, borderRadius: 2, margin: '9px auto 0', ...pca }} />}
+    </div>
+  );
+
   return (
     <div className="exam-band-header" style={{ marginBottom: 2, ...pca }}>
-      <div style={{ display: 'flex', gap: 13, paddingBottom: 11 }}>
-        {/* accent 세로 바 — 좌표축 모티프, 제목군 앵커 */}
-        <div aria-hidden style={{ width: 3, alignSelf: 'stretch', background: a, borderRadius: 2, flexShrink: 0, ...pca }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* eyebrow(과목/유형) + 학원명 */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.13em' }}>
-              {meta.subject ? <span style={{ color: a, ...pca }}>{meta.subject}</span> : null}
-              {meta.subject && meta.examType ? <span style={{ color: '#cbd5e1' }}> &middot; </span> : null}
-              {meta.examType ? <span style={{ color: '#94a3b8' }}>{meta.examType}</span> : null}
-            </span>
-            {meta.schoolName ? <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>{meta.schoolName}</span> : null}
-          </div>
-          <div style={{ fontSize: 21, fontWeight: 800, color: '#0f172a', marginTop: 5, lineHeight: 1.2, letterSpacing: '-0.02em' }}>{examTitle}</div>
-          {metaBits.length > 0 && (
-            <div style={{ fontSize: 11.5, fontWeight: 500, color: '#64748b', marginTop: 5 }}>{metaBits.join(' · ')}</div>
-          )}
+      {centered ? (
+        <div style={{ paddingBottom: 11 }}>{inner}</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 13, paddingBottom: 11 }}>
+          <div aria-hidden style={{ width: 3, alignSelf: 'stretch', background: a, borderRadius: 2, flexShrink: 0, ...pca }} />
+          {inner}
         </div>
-      </div>
+      )}
       {/* 이름 / 점수 줄 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 8, justifyContent: centered ? 'center' : 'flex-start' }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>이름</span>
-        <span aria-hidden style={{ flex: '0 1 200px', borderBottom: '1px solid #cbd5e1', height: 16 }} />
-        {meta.teacher ? <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>담당 {meta.teacher}</span> : null}
-        <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span aria-hidden style={{ flex: centered ? '0 0 220px' : '0 1 200px', borderBottom: '1px solid #cbd5e1', height: 16 }} />
+        {!centered && meta.teacher ? <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>담당 {meta.teacher}</span> : null}
+        <span style={{ marginLeft: centered ? 0 : 'auto', fontSize: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
           점수 <span aria-hidden style={{ display: 'inline-block', width: 46, borderBottom: '1px solid #cbd5e1', height: 14 }} />
           <span style={{ color: '#94a3b8' }}>/ {meta.totalScore || '100'}</span>
         </span>
       </div>
-      {/* 하단 구분선 — 단단한 한 줄 */}
+      {/* 하단 구분선 */}
       <div aria-hidden style={{ borderBottom: '1.5px solid #0f172a' }} />
     </div>
   );
@@ -537,17 +532,19 @@ export default EditableExamHeader;
 //   각 프리셋 = 장식 테마 + 기본 accent 색. 썸네일 미리보기로 눈으로 고른다.
 //   picking 시 headerTheme + headerColor 를 함께 세팅 → 작은 드롭다운 중복 제거.
 // ============================================================================
-export const HEADER_PRESETS: Array<{ id: string; name: string; theme: string; color: string }> = [
-  { id: 'clean', name: '클린', theme: 'none', color: '#0f172a' },
-  { id: 'wave', name: '웨이브', theme: 'wave', color: '#0891b2' },
-  { id: 'grid', name: '격자', theme: 'grid', color: '#2563eb' },
-  { id: 'ruler', name: '눈금자', theme: 'ruler', color: '#4f46e5' },
-  { id: 'ribbon', name: '리본', theme: 'ribbon', color: '#e11d48' },
-  { id: 'dots', name: '도트', theme: 'dots', color: '#7c3aed' },
-  { id: 'corner', name: '코너', theme: 'corner', color: '#0d9488' },
-  { id: 'mascot', name: '캐릭터', theme: 'mascot', color: '#d97706' },
-  { id: 'line', name: '라인', theme: 'line', color: '#0f172a' },
-  { id: 'double', name: '더블', theme: 'double', color: '#334155' },
+export const HEADER_PRESETS: Array<{ id: string; name: string; theme: string; color: string; layout: string }> = [
+  { id: 'clean', name: '클린', theme: 'none', color: '#0f172a', layout: 'editorial' },
+  { id: 'wave', name: '웨이브', theme: 'wave', color: '#0891b2', layout: 'editorial' },
+  { id: 'grid', name: '격자', theme: 'grid', color: '#2563eb', layout: 'editorial' },
+  { id: 'ruler', name: '눈금자', theme: 'ruler', color: '#4f46e5', layout: 'editorial' },
+  { id: 'ribbon', name: '리본', theme: 'ribbon', color: '#e11d48', layout: 'editorial' },
+  { id: 'dots', name: '도트', theme: 'dots', color: '#7c3aed', layout: 'editorial' },
+  { id: 'corner', name: '코너', theme: 'corner', color: '#0d9488', layout: 'editorial' },
+  { id: 'mascot', name: '캐릭터', theme: 'mascot', color: '#d97706', layout: 'editorial' },
+  { id: 'centered', name: '중앙정렬', theme: 'none', color: '#0f172a', layout: 'centered' },
+  { id: 'minimal', name: '미니멀', theme: 'none', color: '#0f172a', layout: 'minimal' },
+  { id: 'line', name: '라인', theme: 'line', color: '#0f172a', layout: 'editorial' },
+  { id: 'double', name: '더블', theme: 'double', color: '#334155', layout: 'editorial' },
 ];
 
 // 프리셋 썸네일 — 실제 헤더의 축소 목업 (장식 + 좌측 accent 바 + 제목/메타 라인)
@@ -582,7 +579,7 @@ export function HeaderDesignGallery({
   onClose,
 }: {
   activeTheme?: string | null;
-  onSelect: (theme: string, color: string) => void;
+  onSelect: (theme: string, color: string, layout: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -602,7 +599,7 @@ export function HeaderDesignGallery({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => { onSelect(p.theme, p.color); onClose(); }}
+                onClick={() => { onSelect(p.theme, p.color, p.layout); onClose(); }}
                 className={`rounded-xl border p-2.5 text-left transition hover:shadow-md ${active ? 'border-cyan-500 ring-2 ring-cyan-500/30' : 'border-gray-200 hover:border-gray-300'}`}
               >
                 <HeaderPresetThumb theme={p.theme} color={p.color} />

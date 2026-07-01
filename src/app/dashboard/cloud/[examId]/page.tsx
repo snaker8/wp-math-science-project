@@ -2089,7 +2089,11 @@ function ExamPaperView({
           {showDesignGallery && (
             <HeaderDesignGallery
               activeTheme={headerTheme}
-              onSelect={(theme, color) => { setHeaderTheme(theme); setHeaderColor(color); }}
+              onSelect={(theme, color, layout) => {
+                setHeaderTheme(theme);
+                setHeaderColor(color);
+                if (onTemplateChange) onTemplateChange(layout, examMeta);
+              }}
               onClose={() => setShowDesignGallery(false)}
             />
           )}
