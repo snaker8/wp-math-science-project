@@ -66,7 +66,7 @@ const ProblemEditModal = dynamic(() => import('@/components/papers/ProblemEditMo
 const AddProblemsModal = dynamic(() => import('@/components/papers/AddProblemsModal'), { ssr: false });
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
-import { EditableExamHeader, HEADER_THEMES } from '@/components/exam/EditableExamHeader';
+import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 const AnswerMatchModal = dynamic(() => import('@/components/exam/AnswerMatchModal').then(m => m.AnswerMatchModal), { ssr: false });
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
@@ -1568,6 +1568,7 @@ function ExamPaperView({
   // ★ 헤더 상단 강조색 (우리식 색 테마) — null=없음(기본). 매쓰홀릭 곡선/특정디자인 카피 X, 깔끔한 색 띠만.
   const [headerColor, setHeaderColor] = useState<string | null>(null);
   const [headerTheme, setHeaderTheme] = useState<string>('none'); // 헤더 꾸밈 테마 (none/line/double/wave/corner/dots)
+  const [showDesignGallery, setShowDesignGallery] = useState(false); // 헤더 디자인 갤러리 모달
   const HEADER_COLORS: Array<{ c: string | null; label: string }> = [
     { c: null, label: '없음' },
     { c: '#4f46e5', label: '인디고' },
@@ -2072,22 +2073,26 @@ function ExamPaperView({
               title="현재 출력 설정을 이름 붙여 저장"
             >설정 저장</button>
           </div>
-          {/* ★ 헤더 꾸밈 테마 (우리 고유 디자인) — 테마 + 색 */}
+          {/* ★ 헤더 디자인 갤러리 (템플릿+테마 통합) — 썸네일 모달에서 고름 */}
           <div className="flex items-center gap-1">
-            <span className="text-xs text-content-tertiary">테마</span>
-            <select
-              value={headerTheme}
-              onChange={(e) => {
-                const t = e.target.value;
-                setHeaderTheme(t);
-                if (t !== 'none' && !headerColor) setHeaderColor('#0891b2'); // 테마 선택 시 기본색 자동
-              }}
-              className="rounded border bg-surface-raised text-content-secondary text-xs px-1.5 py-1 cursor-pointer"
-              title="헤더 꾸밈 테마"
+            <span className="text-xs text-content-tertiary">디자인</span>
+            <button
+              type="button"
+              onClick={() => setShowDesignGallery(true)}
+              className="flex items-center gap-1 rounded border bg-surface-raised text-content-secondary text-xs px-2 py-1 cursor-pointer hover:text-content-primary transition-colors"
+              title="헤더 디자인 갤러리"
             >
-              {HEADER_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+              {HEADER_THEMES.find((t) => t.id === headerTheme)?.label ?? '없음'}
+              <span className="text-[9px] opacity-70">▾</span>
+            </button>
           </div>
+          {showDesignGallery && (
+            <HeaderDesignGallery
+              activeTheme={headerTheme}
+              onSelect={(theme, color) => { setHeaderTheme(theme); setHeaderColor(color); }}
+              onClose={() => setShowDesignGallery(false)}
+            />
+          )}
           {/* ★ 헤더 강조색 (테마 색) */}
           <div className="flex items-center gap-1">
             <span className="text-xs text-content-tertiary">색</span>
@@ -2274,7 +2279,7 @@ function ExamPaperView({
           top: -99999,
           left: -99999,
           width: `${measureWidth}px`,
-          fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
+          fontFamily: "'Pretendard', 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
           fontSize: '14px',
           lineHeight: '1.5',
         }}
@@ -2306,7 +2311,7 @@ function ExamPaperView({
               position: 'relative',
               boxSizing: 'border-box',
               // ★ 시험지 명조 폰트 — 한국 시험지 표준 양식
-              fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
+              fontFamily: "'Pretendard', 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
             }}
           >
             {/* 헤더 — 첫 페이지만. 가운데 구분선(page-anchored)이 헤더 위로 지나가지 않도록
@@ -3226,7 +3231,7 @@ function SolutionView({
           top: -99999,
           left: -99999,
           width: `${measureWidth}px`,
-          fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
+          fontFamily: "'Pretendard', 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
           fontSize: '13px',
           lineHeight: '1.85',
         }}
@@ -3253,7 +3258,7 @@ function SolutionView({
               borderRadius: '4px',
               position: 'relative',
               boxSizing: 'border-box',
-              fontFamily: "'Nanum Myeongjo', 'Batang', 'Pretendard', 'Noto Sans KR', serif",
+              fontFamily: "'Pretendard', 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
             }}
           >
             {/* 헤더 — 첫 페이지만 */}

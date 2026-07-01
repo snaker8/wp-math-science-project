@@ -7,7 +7,7 @@
 // ============================================================================
 
 import React, { useState, useCallback, memo } from 'react';
-import { ChevronDown, Edit3, Check, LayoutTemplate } from 'lucide-react';
+import { ChevronDown, Edit3, Check, LayoutTemplate, X } from 'lucide-react';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta, EXAM_TYPE_OPTIONS } from '@/config/exam-templates';
@@ -41,15 +41,95 @@ interface EditableExamHeaderProps {
 // ============================================================================
 export const HEADER_THEMES: Array<{ id: string; label: string }> = [
   { id: 'none', label: '없음' },
+  { id: 'wave', label: '웨이브' },
+  { id: 'grid', label: '격자' },
+  { id: 'ruler', label: '눈금자' },
+  { id: 'ribbon', label: '리본' },
+  { id: 'dots', label: '도트' },
+  { id: 'corner', label: '코너' },
+  { id: 'mascot', label: '캐릭터' },
   { id: 'line', label: '라인' },
   { id: 'double', label: '더블' },
-  { id: 'wave', label: '웨이브' },
-  { id: 'corner', label: '코너' },
-  { id: 'dots', label: '도트' },
 ];
 
 function ExamHeaderDecoration({ theme, color }: { theme: string; color: string }) {
   const pca = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties;
+  if (theme === 'wave') {
+    return (
+      <div aria-hidden style={{ position: 'relative', lineHeight: 0, height: 18, marginBottom: 2, ...pca }}>
+        <svg viewBox="0 0 1200 40" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+          <path d="M0,26 C200,6 380,6 600,18 C820,30 1000,30 1200,10 L1200,40 L0,40 Z" fill={color} opacity="0.28" />
+          <path d="M0,30 C220,12 420,12 620,22 C820,32 1010,32 1200,16 L1200,40 L0,40 Z" fill={color} />
+        </svg>
+      </div>
+    );
+  }
+  if (theme === 'grid') {
+    return (
+      <div aria-hidden style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 16, marginBottom: 4, ...pca }}>
+        {Array.from({ length: 14 }).map((_, i) => (
+          <span key={i} style={{ width: 9, height: 9, border: `1.4px solid ${color}`, borderRadius: 1.5, opacity: Math.max(0.12, 1 - i * 0.075), display: 'inline-block' }} />
+        ))}
+        <span style={{ flex: 1, height: 2, background: color, opacity: 0.25, borderRadius: 2, marginLeft: 4 }} />
+      </div>
+    );
+  }
+  if (theme === 'ruler') {
+    return (
+      <div aria-hidden style={{ position: 'relative', height: 15, marginBottom: 4, ...pca }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, background: color, borderRadius: 2 }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'space-between' }}>
+          {Array.from({ length: 25 }).map((_, i) => (
+            <span key={i} style={{ width: 1.4, height: i % 5 === 0 ? 12 : 6, background: color, opacity: i % 5 === 0 ? 0.9 : 0.5, display: 'inline-block' }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (theme === 'ribbon') {
+    return (
+      <div aria-hidden style={{ display: 'flex', alignItems: 'center', height: 16, marginBottom: 4, ...pca }}>
+        <span style={{ display: 'inline-block', width: 42, height: 11, background: color, clipPath: 'polygon(0 0, 100% 0, 86% 50%, 100% 100%, 0 100%)', borderRadius: 1 }} />
+        <span style={{ flex: 1, height: 2, background: color, opacity: 0.35, borderRadius: 2 }} />
+      </div>
+    );
+  }
+  if (theme === 'dots') {
+    return (
+      <div aria-hidden style={{ display: 'flex', gap: 6, alignItems: 'center', height: 12, marginBottom: 4, ...pca }}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: color, opacity: 1 - i * 0.14, display: 'inline-block' }} />
+        ))}
+        <span style={{ flex: 1, height: 2, background: color, opacity: 0.28, borderRadius: 2 }} />
+      </div>
+    );
+  }
+  if (theme === 'corner') {
+    return (
+      <div aria-hidden style={{ position: 'relative', height: 22, marginBottom: 2, ...pca }}>
+        <svg style={{ position: 'absolute', top: 0, left: 0, width: 64, height: 22 }} viewBox="0 0 64 22" fill="none">
+          <path d="M3 20 Q3 3 20 3 L62 3" stroke={color} strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+        <svg style={{ position: 'absolute', top: 0, right: 0, width: 64, height: 22 }} viewBox="0 0 64 22" fill="none">
+          <path d="M61 20 Q61 3 44 3 L2 3" stroke={color} strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
+  if (theme === 'mascot') {
+    return (
+      <div aria-hidden style={{ display: 'flex', alignItems: 'center', gap: 8, height: 22, marginBottom: 3, ...pca }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="2" />
+          <path d="M4 12 A8 8 0 0 1 20 12" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <circle cx="9" cy="10.5" r="1.1" fill={color} />
+          <circle cx="15" cy="10.5" r="1.1" fill={color} />
+          <path d="M9 14.6 Q12 16.6 15 14.6" stroke={color} strokeWidth="1.6" strokeLinecap="round" fill="none" />
+        </svg>
+        <span style={{ flex: 1, height: 2, background: color, opacity: 0.3, borderRadius: 2 }} />
+      </div>
+    );
+  }
   if (theme === 'line') {
     return <div aria-hidden style={{ height: 6, background: color, borderRadius: 3, marginBottom: 3, ...pca }} />;
   }
@@ -58,37 +138,6 @@ function ExamHeaderDecoration({ theme, color }: { theme: string; color: string }
       <div aria-hidden style={{ marginBottom: 3, ...pca }}>
         <div style={{ height: 3, background: color, borderRadius: 2 }} />
         <div style={{ height: 2, background: color, opacity: 0.45, marginTop: 2, borderRadius: 2 }} />
-      </div>
-    );
-  }
-  if (theme === 'wave') {
-    return (
-      <div aria-hidden style={{ lineHeight: 0, marginBottom: 2, ...pca }}>
-        <svg viewBox="0 0 1200 36" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 16 }}>
-          <path d="M0,22 C200,4 380,4 600,16 C820,28 1000,28 1200,8 L1200,36 L0,36 Z" fill={color} />
-        </svg>
-      </div>
-    );
-  }
-  if (theme === 'corner') {
-    return (
-      <div aria-hidden style={{ position: 'relative', height: 24, marginBottom: 2, ...pca }}>
-        <svg style={{ position: 'absolute', top: 0, left: 0, width: 70, height: 24 }} viewBox="0 0 70 24" fill="none">
-          <path d="M3 22 Q3 3 22 3 L68 3" stroke={color} strokeWidth="4" strokeLinecap="round" />
-        </svg>
-        <svg style={{ position: 'absolute', top: 0, right: 0, width: 70, height: 24 }} viewBox="0 0 70 24" fill="none">
-          <path d="M67 22 Q67 3 48 3 L2 3" stroke={color} strokeWidth="4" strokeLinecap="round" />
-        </svg>
-      </div>
-    );
-  }
-  if (theme === 'dots') {
-    return (
-      <div aria-hidden style={{ display: 'flex', gap: 6, alignItems: 'center', height: 12, marginBottom: 4, ...pca }}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: color, opacity: 1 - i * 0.12, display: 'inline-block' }} />
-        ))}
-        <span style={{ flex: 1, height: 2, background: color, opacity: 0.3, borderRadius: 2 }} />
       </div>
     );
   }
@@ -160,8 +209,8 @@ function EditableExamHeaderInner({
           subjectOptions={subjectOptions}
         />
       ) : templateId === 'simple' || !templateId ? (
-        // 기본 템플릿: 편집 모드와 동일 레이아웃 (정적 표시)
-        <StaticFormView meta={m} examTitle={title} />
+        // 기본 템플릿: 에디토리얼 헤더 (인쇄/표시). 편집은 위 EditableFormView(표 폼)
+        <StaticFormView meta={m} examTitle={title} accent={accentColor} />
       ) : (
         // 사용자가 지정한 템플릿
         <ExamPaperHeader templateId={templateId} meta={m} examTitle={title} />
@@ -193,66 +242,55 @@ export const EditableExamHeader = memo(EditableExamHeaderInner);
 function StaticFormView({
   meta,
   examTitle,
+  accent,
 }: {
   meta: ExamMeta;
   examTitle: string;
+  accent?: string | null;
 }) {
-  // ★ 셀 클래스 (라벨/값 공통) — 라벨은 nowrap(1줄 유지), 값은 break-words(자연 줄바꿈)
-  const L = "border border-gray-400 px-1 py-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 text-center whitespace-nowrap";
-  const V = "border border-gray-400 px-2 py-1.5 text-sm font-bold text-gray-900 break-words";
+  // ★ 에디토리얼 헤더 (2026-07-01) — 색 띠/물결(시중·템플릿 느낌) 대신 "좌표축" 모티프:
+  //   왼쪽 가는 accent 세로 바가 제목군을 앵커. accent 색은 세로바 + eyebrow 과목명에만(절제).
+  //   강한 타이포 위계(eyebrow 넓은자간 → 큰 굵은 제목 → 음영 메타) + 단단한 하단선. 흰 배경 인쇄.
+  const pca = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties;
+  const a = accent || '#0f172a';
+  const metaBits = [
+    meta.grade, meta.semester,
+    meta.timeLimit ? `${meta.timeLimit}` : '',
+    meta.date || '',
+  ].filter(Boolean) as string[];
   return (
-    <div className="border-b-2 border-gray-800 p-0 bg-white">
-      {/* ★ table-layout: fixed + colgroup 으로 컬럼 폭 고정 (라벨 10% / 값 15%).
-          기존엔 auto-layout 에서 '유형' 값의 nowrap 이 폭을 독차지 → 과목·시험명 값이
-          0폭으로 짓눌려 글자마다 줄바꿈·헤더 비대(행 77px) 됐음. 8칸 정렬 + 폭 고정으로 해소. */}
-      <table className="w-full border-collapse text-black" style={{ tableLayout: 'fixed' }}>
-        {/* 라벨 8% 고정. 값 칸은 비대칭: 유형(C6)은 값이 길어(진단평가B(...)) 30% 로 넓혀
-            2줄에 담고, 비거나 짧은 학기·일시(C4) 10% / 과목·학년(C2,C8) 14% 로 줄여
-            중간 행(유형 3줄→2줄) 높이를 낮춤. */}
-        <colgroup>
-          <col style={{ width: '8%' }} /><col style={{ width: '14%' }} />
-          <col style={{ width: '8%' }} /><col style={{ width: '10%' }} />
-          <col style={{ width: '8%' }} /><col style={{ width: '30%' }} />
-          <col style={{ width: '8%' }} /><col style={{ width: '14%' }} />
-        </colgroup>
-        <tbody>
-          {/* 1행: 학원/학교 + 시험명(넓게 colSpan3) + 담당 */}
-          <tr>
-            <td className={L}>학원/학교</td>
-            <td className={V}>{meta.schoolName || ''}</td>
-            <td className={L}>시험명</td>
-            <td className={V} colSpan={3}>{examTitle}</td>
-            <td className={L}>담당</td>
-            <td className={V}>{meta.teacher || ''}</td>
-          </tr>
-          {/* 2행: 과목 + 학기 + 유형 + 학년 */}
-          <tr>
-            <td className={L}>과목</td>
-            <td className={V}>{meta.subject || ''}</td>
-            <td className={L}>학기</td>
-            <td className={V}>{meta.semester || ''}</td>
-            <td className={L}>유형</td>
-            <td className={V}>{meta.examType || ''}</td>
-            <td className={L}>학년</td>
-            <td className={V}>{meta.grade || ''}</td>
-          </tr>
-          {/* 3행: 시간 + 일시 + 총점(넓게 colSpan3) — 인쇄 시 항상 표시, 화면에선 값 있을 때만 */}
-          {(() => {
-            const hasAnyValue = Boolean(meta.timeLimit || meta.date || (meta.totalScore && meta.totalScore !== '100'));
-            const trClass = hasAnyValue ? '' : 'hidden print:table-row';
-            return (
-              <tr className={trClass}>
-                <td className={L}>시간</td>
-                <td className={V.replace('font-bold ', '')}>{meta.timeLimit || ''}</td>
-                <td className={L}>일시</td>
-                <td className={V.replace('font-bold ', '')}>{meta.date || ''}</td>
-                <td className={L}>총점</td>
-                <td className={V.replace('font-bold ', '')} colSpan={3}>{meta.totalScore || ''}</td>
-              </tr>
-            );
-          })()}
-        </tbody>
-      </table>
+    <div className="exam-band-header" style={{ marginBottom: 2, ...pca }}>
+      <div style={{ display: 'flex', gap: 13, paddingBottom: 11 }}>
+        {/* accent 세로 바 — 좌표축 모티프, 제목군 앵커 */}
+        <div aria-hidden style={{ width: 3, alignSelf: 'stretch', background: a, borderRadius: 2, flexShrink: 0, ...pca }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* eyebrow(과목/유형) + 학원명 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.13em' }}>
+              {meta.subject ? <span style={{ color: a, ...pca }}>{meta.subject}</span> : null}
+              {meta.subject && meta.examType ? <span style={{ color: '#cbd5e1' }}> &middot; </span> : null}
+              {meta.examType ? <span style={{ color: '#94a3b8' }}>{meta.examType}</span> : null}
+            </span>
+            {meta.schoolName ? <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>{meta.schoolName}</span> : null}
+          </div>
+          <div style={{ fontSize: 21, fontWeight: 800, color: '#0f172a', marginTop: 5, lineHeight: 1.2, letterSpacing: '-0.02em' }}>{examTitle}</div>
+          {metaBits.length > 0 && (
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: '#64748b', marginTop: 5 }}>{metaBits.join(' · ')}</div>
+          )}
+        </div>
+      </div>
+      {/* 이름 / 점수 줄 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 8 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>이름</span>
+        <span aria-hidden style={{ flex: '0 1 200px', borderBottom: '1px solid #cbd5e1', height: 16 }} />
+        {meta.teacher ? <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>담당 {meta.teacher}</span> : null}
+        <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+          점수 <span aria-hidden style={{ display: 'inline-block', width: 46, borderBottom: '1px solid #cbd5e1', height: 14 }} />
+          <span style={{ color: '#94a3b8' }}>/ {meta.totalScore || '100'}</span>
+        </span>
+      </div>
+      {/* 하단 구분선 — 단단한 한 줄 */}
+      <div aria-hidden style={{ borderBottom: '1.5px solid #0f172a' }} />
     </div>
   );
 }
@@ -493,3 +531,90 @@ function DropdownSelect({
 }
 
 export default EditableExamHeader;
+
+// ============================================================================
+// ★ 헤더 디자인 갤러리 (2026-07-01) — 템플릿(레이아웃) + 테마(장식) 통합.
+//   각 프리셋 = 장식 테마 + 기본 accent 색. 썸네일 미리보기로 눈으로 고른다.
+//   picking 시 headerTheme + headerColor 를 함께 세팅 → 작은 드롭다운 중복 제거.
+// ============================================================================
+export const HEADER_PRESETS: Array<{ id: string; name: string; theme: string; color: string }> = [
+  { id: 'clean', name: '클린', theme: 'none', color: '#0f172a' },
+  { id: 'wave', name: '웨이브', theme: 'wave', color: '#0891b2' },
+  { id: 'grid', name: '격자', theme: 'grid', color: '#2563eb' },
+  { id: 'ruler', name: '눈금자', theme: 'ruler', color: '#4f46e5' },
+  { id: 'ribbon', name: '리본', theme: 'ribbon', color: '#e11d48' },
+  { id: 'dots', name: '도트', theme: 'dots', color: '#7c3aed' },
+  { id: 'corner', name: '코너', theme: 'corner', color: '#0d9488' },
+  { id: 'mascot', name: '캐릭터', theme: 'mascot', color: '#d97706' },
+  { id: 'line', name: '라인', theme: 'line', color: '#0f172a' },
+  { id: 'double', name: '더블', theme: 'double', color: '#334155' },
+];
+
+// 프리셋 썸네일 — 실제 헤더의 축소 목업 (장식 + 좌측 accent 바 + 제목/메타 라인)
+function HeaderPresetThumb({ theme, color }: { theme: string; color: string }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #f1f5f9', padding: 8 }}>
+      {theme !== 'none' && <ExamHeaderDecoration theme={theme} color={color} />}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div aria-hidden style={{ width: 3, alignSelf: 'stretch', background: color, borderRadius: 2, flexShrink: 0, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ height: 4, width: '38%', background: color, opacity: 0.65, borderRadius: 2 }} />
+          <div style={{ height: 8, width: '86%', background: '#334155', borderRadius: 2, marginTop: 4 }} />
+          <div style={{ height: 4, width: '52%', background: '#e2e8f0', borderRadius: 2, marginTop: 4 }} />
+        </div>
+      </div>
+      <div aria-hidden style={{ borderBottom: '1.5px solid #0f172a', marginTop: 6 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
+        <div style={{ height: 4, width: 18, background: '#475569', borderRadius: 2 }} />
+        <div style={{ height: 4, flex: 1, background: '#e2e8f0', borderRadius: 2 }} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 헤더 디자인 갤러리 모달 — 프리셋(장식+색)을 썸네일로 골라 적용.
+ *   onSelect(theme, color) 로 headerTheme + headerColor 를 함께 세팅.
+ */
+export function HeaderDesignGallery({
+  activeTheme,
+  onSelect,
+  onClose,
+}: {
+  activeTheme?: string | null;
+  onSelect: (theme: string, color: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[85vh] overflow-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-base font-bold text-gray-900">헤더 디자인</h3>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-gray-500">템플릿·테마를 하나로. 원하는 스타일을 고르세요. 색은 아래 &lsquo;색&rsquo;에서 따로 바꿀 수 있습니다.</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {HEADER_PRESETS.map((p) => {
+            const active = activeTheme === p.theme;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => { onSelect(p.theme, p.color); onClose(); }}
+                className={`rounded-xl border p-2.5 text-left transition hover:shadow-md ${active ? 'border-cyan-500 ring-2 ring-cyan-500/30' : 'border-gray-200 hover:border-gray-300'}`}
+              >
+                <HeaderPresetThumb theme={p.theme} color={p.color} />
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
+                  <span className="text-xs font-semibold text-gray-700">{p.name}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
