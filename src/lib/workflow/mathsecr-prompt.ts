@@ -62,6 +62,35 @@ const CODE_TO_NAME: Record<string, string> = {
   '17': '인공지능수학', '18': '수학과제탐구',
 };
 
+// 과목 코드 → 대표 학년 (2022 개정). 중등 01~06, 고1 07·08, 고2 09~11, 고3 12·13.
+//   14~18(이산수학 등 진로선택)은 학년 고정이 아니라 매핑 제외(폴백).
+const CODE_TO_GRADE: Record<string, string> = {
+  '01': '중1', '02': '중1', '03': '중2', '04': '중2', '05': '중3', '06': '중3',
+  '07': '고1', '08': '고1',
+  '09': '고2', '10': '고2', '11': '고2',
+  '12': '고3', '13': '고3',
+};
+
+/**
+ * 자산화 때 사용자가 직접 고른 curriculum_codes → 대표 과목명·학년.
+ *   ★ 제목/파일명 추론(title-detect)·stale 한 exam.subject/grade 보다 우선하는 "정답" 출처.
+ *     제목에 학년·과목이 안 박힌 시험지(예: "26-2-1-F 주례여고")가 exam.grade 기본값("고1")으로
+ *     총평·썸네일에 "고1 공통수학1" 박히던 사고 차단 — curriculum_codes=["09"]=대수(고2)가 진실.
+ *   복수 선택이면 첫 유효 코드를 대표로. 매핑 불가(14~18 등)면 null → 호출측이 기존 로직 폴백.
+ */
+export function curriculumCodesToSubjectGrade(
+  codes?: string[] | null
+): { subject: string; grade: string } | null {
+  if (!codes || !codes.length) return null;
+  for (const raw of codes) {
+    const c = String(raw ?? '').normalize('NFC').trim();
+    const subject = CODE_TO_NAME[c];
+    const grade = CODE_TO_GRADE[c];
+    if (subject && grade) return { subject, grade };
+  }
+  return null;
+}
+
 /**
  * 자산화 업로드 UI 에서 학년·학기(특이 진도 대비 복수 선택)를 고르는 옵션 목록.
  * code 는 mathsecr 과목코드(01~13), label 은 표시명. 선택값은 exams.curriculum_codes 로 저장돼
