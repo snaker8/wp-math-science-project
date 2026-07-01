@@ -16,7 +16,7 @@ import {
   EXAM_ANALYSIS_SYSTEM_PROMPT,
   buildExamAnalysisUserPrompt,
 } from '@/lib/ai/exam-analysis-prompt';
-import { resolveSubjectCode } from '@/lib/workflow/mathsecr-prompt';
+import { resolveSubjectCode, curriculumCodesToSubjectGrade } from '@/lib/workflow/mathsecr-prompt';
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
 
@@ -91,7 +91,7 @@ export async function POST(
   // 1. 시험지 조회
   const { data: exam, error: examError } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, ai_analysis')
+    .select('id, title, grade, subject, curriculum_codes, ai_analysis')
     .eq('id', examId)
     .single();
 
@@ -177,12 +177,16 @@ export async function POST(
   // ★ exam.grade가 "고1"로 박혔어도 title/subject에 "대수"가 있으면 detectGradeFromTitle이 "고2"로 잡음.
   //   이 effectiveGrade를 Claude 프롬프트에 전달해야 summary 텍스트에 잘못된 학년이 박히지 않음.
   //   사고 이력: 대수(고2) 시험지에 exam.grade="고1"로 저장 → Claude가 "이 시험지는 고1 수학 범위" summary 작성.
+  // ★ curriculum_codes(자산화 때 사용자가 직접 고른 과목, 예 ["09"]=대수) 최우선 — 제목/파일명에
+  //   학년·과목이 안 박힌 시험지("26-2-1-F 주례여고")가 stale 한 exam.grade("고1")·title-detect 폴백으로
+  //   총평에 "고1 공통수학1" 박히던 사고 차단. curriculum_codes 없으면 기존 로직 폴백(회귀 0).
+  const currMeta = curriculumCodesToSubjectGrade(exam.curriculum_codes as string[] | null);
   const detectedGrade =
     detectGradeFromTitle(exam.title || '') || detectGradeFromTitle(exam.subject || '');
-  const effectiveGrade = detectedGrade || exam.grade || null;
+  const effectiveGrade = currMeta?.grade || detectedGrade || exam.grade || null;
   const detectedSubject =
     detectSubjectFromTitle(exam.title || '') || detectSubjectFromTitle(exam.subject || '');
-  const effectiveSubject = detectedSubject || exam.subject || null;
+  const effectiveSubject = currMeta?.subject || detectedSubject || exam.subject || null;
 
   // 5-B. mathsecr_types에서 majorUnit lookup — type_code prefix(MS09-01)로 정확한 대단원명 조회
   // ★ classifications.type_code(MS09=대수)는 정확하지만 problems.ai_analysis.classification.chapter는

@@ -13,6 +13,7 @@ import { processUploadJob, getStatusLabel, convertedPdfStore, isScienceSubject }
 import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
+import { curriculumCodesToSubjectGrade } from '@/lib/workflow/mathsecr-prompt';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForCurriculum, findOrCreateSchoolFolder } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
@@ -1690,9 +1691,11 @@ async function saveEditedProblemsDirect(
         institute_id: instituteId,
         total_points: editedProblems.length * 4,
         time_limit_minutes: 50,
-        subject: detectSubjectFromTitle(fileTitle),
+        // ★ curriculum_codes(사용자가 자산화 때 고른 과목) 우선 — 제목에 학년·과목 없는 시험지
+        //   ("26-2-1-F 주례여고")가 title-detect 폴백으로 grade/subject 오표기되던 사고 차단.
+        subject: curriculumCodesToSubjectGrade(job.curriculumCodes)?.subject ?? detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
-        grade: resolvedSchoolMeta.grade ?? detectGradeFromTitle(fileTitle),
+        grade: resolvedSchoolMeta.grade ?? curriculumCodesToSubjectGrade(job.curriculumCodes)?.grade ?? detectGradeFromTitle(fileTitle),
         // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 재분류 시 분류 컨텍스트로 재사용.
         curriculum_codes: (job.curriculumCodes && job.curriculumCodes.length) ? job.curriculumCodes : null,
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
@@ -2556,9 +2559,10 @@ async function saveProblemsToDB(
         institute_id: instituteId,
         total_points: results.length * 4,
         time_limit_minutes: 50,
-        subject: detectSubjectFromTitle(fileTitle),
+        // ★ curriculum_codes 우선 (saveEditedProblemsDirect 와 동일 가드 — 두 INSERT 동시 패치 필수).
+        subject: curriculumCodesToSubjectGrade(job.curriculumCodes)?.subject ?? detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
-        grade: resolvedSchoolMeta.grade ?? detectGradeFromTitle(fileTitle),
+        grade: resolvedSchoolMeta.grade ?? curriculumCodesToSubjectGrade(job.curriculumCodes)?.grade ?? detectGradeFromTitle(fileTitle),
         // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 재분류 시 분류 컨텍스트로 재사용.
         curriculum_codes: (job.curriculumCodes && job.curriculumCodes.length) ? job.curriculumCodes : null,
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
