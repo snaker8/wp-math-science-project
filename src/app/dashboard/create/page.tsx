@@ -26,7 +26,7 @@ import { useRouter } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import { Beaker } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
-import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
+import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { downloadPDF } from '@/lib/pdf/generator';
@@ -588,6 +588,10 @@ function ExamPreviewPanel({
   isPDFGenerating: boolean;
 }) {
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
+  // ★ 헤더 디자인(테마+색) — cloud/exam-management 와 동일한 디자인 갤러리 연동
+  const [headerColor, setHeaderColor] = useState<string | null>(null);
+  const [headerTheme, setHeaderTheme] = useState<string>('none');
+  const [showDesignGallery, setShowDesignGallery] = useState(false);
 
   const midIdx = Math.ceil(problems.length / 2);
   const leftProblems = problems.slice(0, midIdx);
@@ -655,16 +659,24 @@ function ExamPreviewPanel({
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={onOpenTemplateModal}
-            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-violet-400 hover:bg-violet-500/10 transition-colors"
+            onClick={() => setShowDesignGallery(true)}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+            title="헤더 디자인 갤러리"
           >
             <FileEdit size={12} />
-            템플릿
+            디자인{headerTheme && headerTheme !== 'none' ? ` · ${HEADER_THEMES.find((t) => t.id === headerTheme)?.label ?? ''}` : ''}
           </button>
           <span className="text-xs font-bold text-content-secondary">{totalQuestions}</span>
           <span className="text-[10px] text-content-muted">문항</span>
         </div>
       </div>
+      {showDesignGallery && (
+        <HeaderDesignGallery
+          activeTheme={headerTheme}
+          onSelect={(theme, color) => { setHeaderTheme(theme); setHeaderColor(color); }}
+          onClose={() => setShowDesignGallery(false)}
+        />
+      )}
 
       {/* 미리보기 본문 */}
       <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50 p-4">
@@ -675,10 +687,13 @@ function ExamPreviewPanel({
           </div>
         ) : problems.length > 0 ? (
           <div ref={previewRef} className="mx-auto bg-white rounded shadow-xl" style={{ maxWidth: '720px' }}>
-            <ExamPaperHeader
+            <EditableExamHeader
               templateId={templateId}
               meta={{ ...examMeta, subject: examMeta.subject || categoryLabel || '수학' }}
               examTitle={paperName || '시험지'}
+              editable={false}
+              accentColor={headerColor}
+              headerTheme={headerTheme}
             />
 
             {/* 시험지 탭 */}
