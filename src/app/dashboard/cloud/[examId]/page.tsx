@@ -28,7 +28,6 @@ import {
   Shapes,
   Trash2,
   CheckCheck,
-  FileEdit,
   Move,
   ScanLine,
   Loader2,
@@ -68,7 +67,6 @@ import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 const AnswerMatchModal = dynamic(() => import('@/components/exam/AnswerMatchModal').then(m => m.AnswerMatchModal), { ssr: false });
-import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import { useSmartBack } from '@/lib/navigation/useSmartBack';
@@ -2175,14 +2173,6 @@ function ExamPaperView({
             <Trash2 className="h-4 w-4" />
             배점 초기화
           </button>
-          <button
-            type="button"
-            onClick={onOpenTemplateModal}
-            className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
-          >
-            <FileEdit className="h-4 w-4" />
-            템플릿
-          </button>
           <div className="relative" ref={printMenuRef}>
             <button
               type="button"
@@ -3463,7 +3453,6 @@ export default function CloudExamDetailPage() {
   // 시험지 템플릿
   const [templateId, setTemplateId] = useState('simple');
   const [examMeta, setExamMeta] = useState<ExamMeta>({ ...DEFAULT_EXAM_META });
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // ★ 시험지 로드 시 examMeta 를 DB 값으로 초기화 (subject/grade/examType)
   //   기존엔 빈 DEFAULT_EXAM_META 로 시작해서 사용자 편집 전엔 헤더가 항상 비어있고,
@@ -4767,7 +4756,7 @@ export default function CloudExamDetailPage() {
           examId={examId}
           templateId={templateId}
           examMeta={examMeta}
-          onOpenTemplateModal={() => setShowTemplateModal(true)}
+          onOpenTemplateModal={() => {}}
           onTemplateChange={(id, meta) => { setTemplateId(id); setExamMeta(meta); }}
           onMetaChange={setExamMeta}
           refetchProblems={refetchProblems}
@@ -4790,7 +4779,7 @@ export default function CloudExamDetailPage() {
           examId={examId}
           templateId={templateId}
           examMeta={examMeta}
-          onOpenTemplateModal={() => setShowTemplateModal(true)}
+          onOpenTemplateModal={() => {}}
           refetchProblems={refetchProblems}
         />
       )}
@@ -4970,17 +4959,6 @@ export default function CloudExamDetailPage() {
         problemNumber={diagramBrowserProblem?.number}
       />
 
-      {/* 템플릿 선택 모달 */}
-      <TemplateSelector
-        isOpen={showTemplateModal}
-        onClose={() => setShowTemplateModal(false)}
-        templateId={templateId}
-        meta={examMeta}
-        onApply={(id, meta) => {
-          setTemplateId(id);
-          setExamMeta(meta);
-        }}
-      />
         </main>
 
         {/* RIGHT PANEL 제거됨 — 서브바와 완전 중복 (필터/뷰옵션/내보내기 모두 서브바에 존재) */}
