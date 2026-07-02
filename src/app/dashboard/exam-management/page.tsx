@@ -47,7 +47,7 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
-import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
+import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import DeployExamModal from '@/components/exam/DeployExamModal';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { downloadExamDocx } from '@/lib/export/docx-generator';
@@ -506,6 +506,10 @@ export default function ExamManagementPage() {
   const [examTypeFilter, setExamTypeFilter] = useState('전체');
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printSections, setPrintSections] = useState({ exam: true, answer: true, solution: false });
+  // ★ 헤더 디자인(테마+색) — cloud 와 동일한 디자인 갤러리 연동
+  const [headerColor, setHeaderColor] = useState<string | null>(null);
+  const [headerTheme, setHeaderTheme] = useState<string>('none');
+  const [showDesignGallery, setShowDesignGallery] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   // ★ 시험지 헤더 편집 필드 (레거시 — EditableExamHeader로 대체 예정)
@@ -1431,12 +1435,29 @@ export default function ExamManagementPage() {
                     </span>
                   )}
                 </div>
-                <div className="zoom">
-                  <button><Minus /></button>
-                  <span>100%</span>
-                  <button><Plus /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDesignGallery(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#0891b2', border: '1px solid rgba(8,145,178,0.35)', borderRadius: 8, padding: '4px 10px', background: 'rgba(8,145,178,0.08)', cursor: 'pointer' }}
+                    title="헤더 디자인 갤러리"
+                  >
+                    디자인{headerTheme && headerTheme !== 'none' ? ` · ${HEADER_THEMES.find((t) => t.id === headerTheme)?.label ?? ''}` : ''}
+                  </button>
+                  <div className="zoom">
+                    <button><Minus /></button>
+                    <span>100%</span>
+                    <button><Plus /></button>
+                  </div>
                 </div>
               </div>
+              {showDesignGallery && (
+                <HeaderDesignGallery
+                  activeTheme={headerTheme}
+                  onSelect={(theme, color, layout) => { setHeaderTheme(theme); setHeaderColor(color); handleTemplateChange(layout, unifiedMeta); }}
+                  onClose={() => setShowDesignGallery(false)}
+                />
+              )}
 
               {problemsLoading && (
                 <div className="flex items-center justify-center py-8">
@@ -1457,6 +1478,8 @@ export default function ExamManagementPage() {
                   onMetaChange={handleMetaChange}
                   onExamTitleChange={handleTitleChange}
                   subjectOptions={unifiedSubjectOptions}
+                  accentColor={headerColor}
+                  headerTheme={headerTheme}
                 />
 
                 {activeTab === 'exam' && (
