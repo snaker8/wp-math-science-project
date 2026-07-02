@@ -326,124 +326,91 @@ function EditableFormView({
   const subjects = subjectOptions && subjectOptions.length > 0 ? subjectOptions : ['공통수학1', '공통수학2', '수학(상)', '수학(하)', '미적분', '확률과통계', '기하', '수학I', '수학II', '중1 수학', '중2 수학', '중3 수학'];
 
   return (
-    <div className="border-b-2 border-gray-800 p-0 bg-white">
-      <table className="w-full border-collapse text-black">
-        <tbody>
-          {/* 1행: 학원/학교명 + 시험명 + 담당 */}
-          <tr>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학원/학교</td>
-            <td className="border border-gray-400 px-1 py-1">
-              <input
-                type="text"
-                value={localSchool}
-                onChange={(e) => setLocalSchool(e.target.value)}
-                onBlur={() => { if (localSchool !== meta.schoolName) onMetaChange('schoolName', localSchool); }}
-                placeholder="학원/학교명"
-                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시험명</td>
-            <td className="border border-gray-400 px-1 py-1" colSpan={2}>
-              <input
-                type="text"
-                value={localTitle}
-                onChange={(e) => setLocalTitle(e.target.value)}
-                onBlur={() => { if (onTitleChange && localTitle !== examTitle) onTitleChange(localTitle); }}
-                placeholder="시험지명"
-                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">담당</td>
-            <td className="border border-gray-400 px-1 py-1 w-20">
-              <input
-                type="text"
-                value={localTeacher}
-                onChange={(e) => setLocalTeacher(e.target.value)}
-                onBlur={() => { if (localTeacher !== meta.teacher) onMetaChange('teacher', localTeacher); }}
-                placeholder="선생님"
-                className="w-full px-1.5 py-0.5 text-sm font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-              />
-            </td>
-          </tr>
-          {/* 2행: 과목 + 학기 + 시험유형 + 학년 */}
-          <tr>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">과목</td>
-            <td className="border border-gray-400 px-1 py-1">
-              <DropdownSelect
-                value={meta.subject}
-                onChange={(v) => onMetaChange('subject', v)}
-                options={subjects}
-                placeholder="과목"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학기</td>
-            <td className="border border-gray-400 px-1 py-1">
-              <DropdownSelect
-                value={meta.semester}
-                onChange={(v) => onMetaChange('semester', v)}
-                options={SEMESTER_OPTIONS}
-                placeholder="-"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">유형</td>
-            <td className="border border-gray-400 px-1 py-1 whitespace-nowrap" style={{ minWidth: '120px' }}>
-              <DropdownSelect
-                value={meta.examType}
-                onChange={(v) => onMetaChange('examType', v)}
-                options={EXAM_TYPE_OPTIONS as unknown as string[]}
-                placeholder="시험유형"
-                allowCustom
-                customTrigger="기타"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">학년</td>
-            <td className="border border-gray-400 px-1 py-1 w-20">
-              <DropdownSelect
-                value={meta.grade}
-                onChange={(v) => onMetaChange('grade', v)}
-                options={GRADE_OPTIONS}
-                placeholder="학년"
-              />
-            </td>
-          </tr>
-          {/* 3행: 시험시간 + 일시 + 총점 */}
-          <tr>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">시간</td>
-            <td className="border border-gray-400 px-1 py-1">
-              <input
-                type="text"
-                value={localTime}
-                onChange={(e) => setLocalTime(e.target.value)}
-                onBlur={() => { if (localTime !== meta.timeLimit) onMetaChange('timeLimit', localTime); }}
-                placeholder="50분"
-                className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">일시</td>
-            <td className="border border-gray-400 px-1 py-1">
-              <input
-                type="text"
-                value={localDate}
-                onChange={(e) => setLocalDate(e.target.value)}
-                onBlur={() => { if (localDate !== meta.date) onMetaChange('date', localDate); }}
-                placeholder=""
-                className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-              />
-            </td>
-            <td className="border border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-500 w-14 bg-gray-50 text-center">총점</td>
-            <td className="border border-gray-400 px-1 py-1" colSpan={3}>
-              <input
-                type="text"
-                value={localScore}
-                onChange={(e) => setLocalScore(e.target.value)}
-                onBlur={() => { if (localScore !== meta.totalScore) onMetaChange('totalScore', localScore); }}
-                placeholder="100"
-                className="w-full px-1.5 py-0.5 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-300 focus:bg-yellow-50/50"
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="border-b border-slate-300 bg-white px-1 pb-3 pt-1">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-4">
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">학원/학교</span>
+          <input
+            type="text"
+            value={localSchool}
+            onChange={(e) => setLocalSchool(e.target.value)}
+            onBlur={() => { if (localSchool !== meta.schoolName) onMetaChange('schoolName', localSchool); }}
+            placeholder="학원/학교명"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">시험명</span>
+          <input
+            type="text"
+            value={localTitle}
+            onChange={(e) => setLocalTitle(e.target.value)}
+            onBlur={() => { if (onTitleChange && localTitle !== examTitle) onTitleChange(localTitle); }}
+            placeholder="시험지명"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">담당</span>
+          <input
+            type="text"
+            value={localTeacher}
+            onChange={(e) => setLocalTeacher(e.target.value)}
+            onBlur={() => { if (localTeacher !== meta.teacher) onMetaChange('teacher', localTeacher); }}
+            placeholder="선생님"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-medium text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">과목</span>
+          <DropdownSelect value={meta.subject} onChange={(v) => onMetaChange('subject', v)} options={subjects} placeholder="과목" />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">학기</span>
+          <DropdownSelect value={meta.semester} onChange={(v) => onMetaChange('semester', v)} options={SEMESTER_OPTIONS} placeholder="-" />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">유형</span>
+          <DropdownSelect value={meta.examType} onChange={(v) => onMetaChange('examType', v)} options={EXAM_TYPE_OPTIONS as unknown as string[]} placeholder="시험유형" allowCustom customTrigger="기타" />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">학년</span>
+          <DropdownSelect value={meta.grade} onChange={(v) => onMetaChange('grade', v)} options={GRADE_OPTIONS} placeholder="학년" />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">시간</span>
+          <input
+            type="text"
+            value={localTime}
+            onChange={(e) => setLocalTime(e.target.value)}
+            onBlur={() => { if (localTime !== meta.timeLimit) onMetaChange('timeLimit', localTime); }}
+            placeholder="50분"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">일시</span>
+          <input
+            type="text"
+            value={localDate}
+            onChange={(e) => setLocalDate(e.target.value)}
+            onBlur={() => { if (localDate !== meta.date) onMetaChange('date', localDate); }}
+            placeholder=""
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-0.5 block text-[10px] font-semibold tracking-wide text-slate-400">총점</span>
+          <input
+            type="text"
+            value={localScore}
+            onChange={(e) => setLocalScore(e.target.value)}
+            onBlur={() => { if (localScore !== meta.totalScore) onMetaChange('totalScore', localScore); }}
+            placeholder="100"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+          />
+        </label>
+      </div>
     </div>
   );
 }
