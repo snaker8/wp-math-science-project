@@ -104,6 +104,9 @@ function latexToHWPEquation(latex: string): string {
   //   오인해 삼키면 cases/array 행 분리(\\ split, 아래서 실행)가 통째로 깨진다 (회귀 테스트가 발견).
   eq = eq.replace(/(?<!\\)\\[,;!:]/g, ' ').replace(/(?<!\\)\\ /g, ' ');
 
+  // 이스케이프 리터럴(\% \$ \# \& \_) → 문자 그대로. 미처리 시 한글 수식에 "\%" 노출 (부흥중 "30\%" 실증)
+  eq = eq.replace(/\\([%$#&_])/g, '$1');
+
   // \frac{a}{b} → {a} over {b}  (중첩 대비 반복)
   for (let i = 0; i < 6; i++) {
     eq = eq.replace(
@@ -241,7 +244,7 @@ const TEXT_SYM: Record<string, string> = {
 function cleanTextLatex(s: string): string {
   let t = s;
   t = t.replace(/\\left\s*/g, '').replace(/\\right\s*/g, '');
-  t = t.replace(/\\([{}])/g, '$1');           // \{ → {, \} → }
+  t = t.replace(/\\([{}%$#&_])/g, '$1');      // \{ → {, \% → % 등 이스케이프 리터럴
   t = t.replace(/\\[,;!:]/g, ' ').replace(/\\ /g, ' ');
   for (const [k, v] of Object.entries(TEXT_SYM)) {
     t = t.replace(new RegExp(k.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g'), v);
@@ -339,6 +342,62 @@ function equationRun(script: string): string {
 // 선택지 앞에 이미 붙은 동그라미/번호(①~⑩, (1), 1.) 제거 — 우리가 다시 붙이므로 중복 방지
 function stripChoicePrefix(s: string): string {
   return (s || '').replace(/^\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|\(?\s*\d{1,2}\s*\)|\d{1,2}\s*[.)])\s*/, '').trim();
+}
+
+// ----------------------------------------------------------------------------
+// 내보내기 전 본문 정리 — 실데이터(부흥중 2-1 기말, 2026-07) 실증 결함 3종.
+// 가드 #9 원칙: "확신할 때만 제거"(번호 일치·보기 정규화 과반 일치), 애매하면 보존 → 손실 0.
+// ----------------------------------------------------------------------------
+
+// 본문 끝 인라인 보기(①~⑤) 제거 — useExamProblems.stripTrailingInlineChoices 이식.
+//   content 와 answer_json.choices 양쪽에 보기가 있으면 한글에서 보기가 2번 노출.
+//   끝 블록이 dbChoices 와 정규화 과반(60%) 일치할 때만 제거 (그림 라벨·서술형 단계 ①②③ 보존).
+function stripInlineChoicesForExport(text: string, dbChoices: string[]): string {
+  const n = dbChoices.length;
+  if (n < 2 || n > 5) return text;
+  const markers = ['①', '②', '③', '④', '⑤'];
+  const pos = new Array<number>(n);
+  pos[n - 1] = text.lastIndexOf(markers[n - 1]);
+  if (pos[n - 1] === -1) return text;
+  for (let k = n - 2; k >= 0; k--) {
+    pos[k] = text.lastIndexOf(markers[k], pos[k + 1] - 1);
+    if (pos[k] === -1) return text; // 순서대로 못 찾음 → 끝 보기 런 아님
+  }
+  const start = pos[0];
+  const head = text.slice(0, start).trim();
+  if (head.length < 5) return text; // 질문이 사실상 없음 → 위험, 패스
+
+  const norm = (s: string) =>
+    s
+      .replace(/[①②③④⑤]/g, '')
+      .replace(/\\[a-zA-Z]+/g, '')
+      .replace(/[\s${}().,]/g, '')
+      .toLowerCase();
+
+  let matches = 0;
+  for (let k = 0; k < n; k++) {
+    const segEnd = k + 1 < n ? pos[k + 1] : text.length;
+    const segN = norm(text.slice(pos[k], segEnd));
+    const dbN = norm(dbChoices[k] || '');
+    if (segN && dbN && segN === dbN) matches++;
+  }
+  if (matches >= Math.ceil(n * 0.6)) return head;
+  return text;
+}
+
+// 문제 본문 전처리: ①유형 태그 첫 줄 제거 ②선두 중복 번호 제거 ③끝 인라인 보기 제거.
+function sanitizeProblemContent(content: string, num: number, dbChoices: string[]): string {
+  let s = content || '';
+  // ① 첫 줄 `| 유형명 |` 태그 — 자산화 시 박힌 분류 라벨. 시험지에 노출되면 학생에게 유형 힌트.
+  s = s.replace(/^\s*\|[^|\n]{1,60}\|\s*\n/, '');
+  // ② 선두 중복 번호 — 우리가 "N. " 을 다시 붙이므로. 시퀀스 번호와 일치할 때만(보수적):
+  //    "01 "(zero-pad+공백) / "1."·"1)"(구두점). ★ bare "1 "(비패딩+공백)은 "1 이상의 수" 오삭제 위험 → 보존.
+  const zeroPad = String(num).padStart(2, '0');
+  s = s.replace(new RegExp(`^\\s*(?:${zeroPad}\\s+|${num}\\s*[.)]\\s*)`), '');
+  //    수식 선두 케이스: "$07\\ x=2..." — 번호가 수식 안에 박힘 (부흥중 #7 실증). zero-pad 만.
+  s = s.replace(new RegExp(`^(\\s*\\$)${zeroPad}(?:\\\\)?\\s+`), '$1');
+  // ③ 끝 인라인 보기 — dbChoices 와 과반 일치 시만
+  return stripInlineChoicesForExport(s, dbChoices);
 }
 
 // ----------------------------------------------------------------------------
@@ -746,6 +805,12 @@ export async function generateHWPX(
 ): Promise<Blob | Buffer> {
   _shapeId = 2000000000;
 
+  // 본문 전처리 — 유형태그·중복번호·인라인 보기 중복 제거 (이미지 수집 전에, 원본 불변)
+  problems = problems.map((p) => ({
+    ...p,
+    content: sanitizeProblemContent(p.content, p.number, p.choices || []),
+  }));
+
   // 도형 이미지: content/choices/solution 의 ![](url)·<img> 를 fetch → 임베드
   const imageUrls = collectImageUrls(problems);
   const { info: imageMap, bytes: imageBytes } = imageUrls.length > 0
@@ -805,4 +870,4 @@ export async function downloadHWPX(
 }
 
 // 테스트용 export
-export { latexToHWPEquation, parseContent };
+export { latexToHWPEquation, parseContent, sanitizeProblemContent };
