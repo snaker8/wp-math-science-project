@@ -77,6 +77,7 @@ const PARA = {
   number: 65,   // 문제번호(단독)
   body: 62,     // 본문/선택지
   figure: 36,   // 도형
+  eq: 64,       // 디스플레이 수식 자기단락 (템플릿 실측 CENTER 정렬)
 } as const;
 const STYLE = 0;
 // 2단 NEWSPAPER + 구분선 (매쓰플랫 동일)
@@ -98,8 +99,10 @@ function latexToHWPEquation(latex: string): string {
   eq = eq.replace(/^\$\$?|\$\$?$/g, '');
   eq = eq.trim();
 
-  // LaTeX 공백 명령(\, \; \! \ )은 HWP 수식에선 공백으로
-  eq = eq.replace(/\\[,;!:]/g, ' ').replace(/\\ /g, ' ');
+  // LaTeX 공백 명령(\, \; \! \ )은 HWP 수식에선 공백으로.
+  // ★ (?<!\\) 필수 — `\\ `(행 구분자+공백)의 두 번째 백슬래시를 `\ ` 공백명령으로
+  //   오인해 삼키면 cases/array 행 분리(\\ split, 아래서 실행)가 통째로 깨진다 (회귀 테스트가 발견).
+  eq = eq.replace(/(?<!\\)\\[,;!:]/g, ' ').replace(/(?<!\\)\\ /g, ' ');
 
   // \frac{a}{b} → {a} over {b}  (중첩 대비 반복)
   for (let i = 0; i < 6; i++) {
@@ -179,8 +182,10 @@ function latexToHWPEquation(latex: string): string {
     '\\in': 'in', '\\notin': 'notin', '\\subset': 'subset', '\\supset': 'supset',
     '\\cup': 'cup', '\\cap': 'cap', '\\emptyset': 'emptyset',
     '\\forall': 'forall', '\\exists': 'exists',
-    '\\rightarrow': '->', '\\to': '->', '\\leftarrow': '<-', '\\gets': '<-',
-    '\\Rightarrow': '=>', '\\Leftarrow': '<=', '\\leftrightarrow': '<->',
+    // 화살표는 한글 정식 토큰(rarrow 계열)으로 — 에디터 축약형(->)과 렌더 동일하고,
+    // 가져오기(hangul-equation)가 같은 토큰을 처리해 라운드트립 검증 가능.
+    '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
+    '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
     '\\therefore': 'therefore', '\\because': 'because',
     '\\angle': 'angle', '\\triangle': 'triangle',
     '\\parallel': 'parallel', '\\perp': 'perp', '\\prime': "'",
@@ -213,7 +218,12 @@ function latexToHWPEquation(latex: string): string {
 // 컨텐츠 파싱: HTML/LaTeX → 텍스트 + 수식 세그먼트
 // ============================================================================
 
-interface ContentSegment { type: 'text' | 'equation' | 'image'; value: string; }
+interface ContentSegment {
+  type: 'text' | 'equation' | 'image';
+  value: string;
+  // 디스플레이 수식($$..$$, \[..\]) — 가운데정렬 자기 단락(paraPr 64)으로 분리 렌더.
+  display?: boolean;
+}
 
 const IMG_MD = /!\[[^\]]*\]\(\s*([^)\s]+)[^)]*\)/g;            // ![alt](url)
 const IMG_HTML = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi; // <img src="url">
@@ -249,7 +259,8 @@ function parseTextMath(text: string): ContentSegment[] {
   while ((m = mathPattern.exec(text)) !== null) {
     if (m.index > last) { const t = text.slice(last, m.index); if (t.trim()) segs.push({ type: 'text', value: cleanTextLatex(t) }); }
     const hwpEq = latexToHWPEquation(m[1] || m[2] || m[3] || m[4]);
-    if (hwpEq) segs.push({ type: 'equation', value: hwpEq });
+    // m[1]=\[..\], m[3]=$$..$$ → 디스플레이 수식 (m[2]=\(..\), m[4]=$..$ 는 인라인)
+    if (hwpEq) segs.push({ type: 'equation', value: hwpEq, display: !!(m[1] || m[3]) });
     last = m.index + m[0].length;
   }
   if (last < text.length) { const t = text.slice(last); if (t.trim()) segs.push({ type: 'text', value: cleanTextLatex(t) }); }
@@ -420,8 +431,12 @@ function lineSeg(_paraPrId: number): string {
   return '';
 }
 
-function paragraph(runsXml: string, paraPrId: number = PARA.body): string {
-  return `<hp:p id="${nextId()}" paraPrIDRef="${paraPrId}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0">${runsXml || textRun('', CHAR.body)}${lineSeg(paraPrId)}</hp:p>`;
+function paragraph(
+  runsXml: string,
+  paraPrId: number = PARA.body,
+  breaks?: { page?: boolean; column?: boolean },
+): string {
+  return `<hp:p id="${nextId()}" paraPrIDRef="${paraPrId}" styleIDRef="${STYLE}" pageBreak="${breaks?.page ? 1 : 0}" columnBreak="${breaks?.column ? 1 : 0}" merged="0">${runsXml || textRun('', CHAR.body)}${lineSeg(paraPrId)}</hp:p>`;
 }
 
 function segmentsToRuns(segments: ContentSegment[], charPrId: number, imageMap: ImageMap): string {
@@ -433,6 +448,52 @@ function segmentsToRuns(segments: ContentSegment[], charPrId: number, imageMap: 
     }
     return textRun(seg.value, charPrId);
   }).join('');
+}
+
+// 세그먼트 → 단락 목록. 디스플레이 수식($$..$$/\[..\])은 가운데정렬(paraPr 64) 자기 단락으로 분리.
+//   leadRun(문제번호)은 첫 단락 맨 앞, tailRun(배점)은 마지막 텍스트 단락 끝에 붙는다.
+//   inlineImages=false: 이미지 세그먼트 건너뜀(호출측이 pushFigures 로 자기 단락 처리 — 문제 본문).
+//   inlineImages=true: 텍스트 흐름에 인라인(해설 — 기존 동작 유지).
+//   breaks 는 이 문제의 "첫" 단락에만 적용 (perPage 페이지/단 나누기).
+function bodyParagraphs(
+  segs: ContentSegment[],
+  opts: {
+    imageMap: ImageMap;
+    leadRun?: string;
+    tailRun?: string;
+    firstParaPr?: number;
+    inlineImages?: boolean;
+    breaks?: { page?: boolean; column?: boolean };
+  },
+): string[] {
+  const out: string[] = [];
+  let buf = opts.leadRun || '';
+  let first = true;
+  const flush = () => {
+    if (!buf) return;
+    out.push(paragraph(buf, first ? (opts.firstParaPr ?? PARA.body) : PARA.body, first ? opts.breaks : undefined));
+    first = false;
+    buf = '';
+  };
+  for (const seg of segs) {
+    if (seg.type === 'image') {
+      if (opts.inlineImages) {
+        const info = opts.imageMap.get(seg.value);
+        if (info) buf += picRun(info.id, info.w, info.h);
+      }
+      continue;
+    }
+    if (seg.type === 'equation' && seg.display) {
+      flush();
+      out.push(paragraph(equationRun(seg.value), PARA.eq, first ? opts.breaks : undefined));
+      first = false;
+      continue;
+    }
+    buf += seg.type === 'equation' ? equationRun(seg.value) : textRun(seg.value, CHAR.body);
+  }
+  if (opts.tailRun) buf += opts.tailRun;
+  flush();
+  return out;
 }
 
 const CIRCLE = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
@@ -528,15 +589,28 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     }
   };
 
+  // ★ perPage 배열 — 간격 근사가 아니라 페이지/단 나누기로 '페이지당 N문제'를 확정 보장.
+  //   2단이면 단당 N/2 문제 후 columnBreak, 페이지당 N 문제 후 pageBreak.
+  //   (간격 프리셋 computeGapHwpUnit 은 단 내부 분산용으로 유지.)
+  const perPage = config.perPage && config.perPage > 0 ? config.perPage : 0;
+  const perCol = perPage > 0 && cols === 2 ? Math.ceil(perPage / 2) : 0;
+
   // 문제 (번호 인라인 + 본문, 매쓰플랫 paraPr/charPr)
   problems.forEach((prob, idx) => {
     const segs = parseContent(prob.content);
-    const textSegs = segs.filter((s) => s.type !== 'image');
     const pts = prob.points ? `   [${prob.points}점]` : '';
-    const runs = textRun(`${prob.number}. `, CHAR.number) + segmentsToRuns(textSegs, CHAR.body, imageMap)
-      + (pts ? textRun(pts, CHAR.small) : '');
-    // 첫 문제는 헤더 바로 아래라 위 간격 X. 이후 문제는 PARA_SPACED 로 문제 사이 간격.
-    P.push(paragraph(runs, idx === 0 ? PARA.body : PARA_SPACED));
+    const pos = perPage > 0 ? idx % perPage : -1;
+    const pageBrk = perPage > 0 && idx > 0 && pos === 0;
+    const colBrk = !pageBrk && perCol > 0 && pos === perCol;
+    const brk = pageBrk || colBrk;
+    // 첫 문제·나누기 직후 문제는 단/페이지 맨 위라 위 간격 X. 그 외엔 PARA_SPACED 로 문제 사이 간격.
+    P.push(...bodyParagraphs(segs, {
+      imageMap,
+      leadRun: textRun(`${prob.number}. `, CHAR.number),
+      tailRun: pts ? textRun(pts, CHAR.small) : '',
+      firstParaPr: idx === 0 || brk ? PARA.body : PARA_SPACED,
+      breaks: brk ? { page: pageBrk, column: colBrk } : undefined,
+    }));
     pushFigures(segs);  // 도형은 본문 아래 자기 단락에
 
     if (prob.choices && prob.choices.length > 0) {
@@ -565,7 +639,12 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     for (const prob of problems) {
       if (prob.solution) {
         const ss = parseContent(prob.solution);
-        P.push(paragraph(textRun(`${prob.number}. `, CHAR.number) + segmentsToRuns(ss, CHAR.body, imageMap), PARA.body));
+        // 해설도 디스플레이 수식은 가운데 자기 단락. 이미지는 기존대로 인라인.
+        P.push(...bodyParagraphs(ss, {
+          imageMap,
+          leadRun: textRun(`${prob.number}. `, CHAR.number),
+          inlineImages: true,
+        }));
       }
     }
   }
@@ -649,7 +728,8 @@ function injectSpacingParaPr(header: string, gapHwpUnit: number): string {
 function computeGapHwpUnit(config: HwpxExamConfig): number {
   const gapPx = (config.problemGap && config.problemGap > 0) ? config.problemGap : 30;
   if (config.perPage && config.perPage > 0) {
-    // N문제 배열: 페이지당 문제 수 적을수록 간격 ↑ (대략적 spread — 정밀 페이지채움은 후속)
+    // N문제 배열: '페이지당 N문제'는 buildSection0 의 pageBreak/columnBreak 가 확정 보장.
+    // 여기 간격은 단 내부에서 문제를 벌려주는 분산용 (적을수록 간격 ↑).
     const map: Record<number, number> = { 4: 4200, 6: 3000, 8: 2300 };
     if (map[config.perPage]) return map[config.perPage];
   }
