@@ -15,8 +15,9 @@ const BACKSLASH_CMDS = [
   'times', 'div', 'pm', 'mp', 'cdot', 'ast', 'star',
   'leq', 'geq', 'neq', 'ne', 'le', 'ge', 'equiv', 'approx', 'sim', 'propto',
   'subset', 'supset', 'subseteq', 'supseteq', 'in', 'notin', 'cup', 'cap',
-  // 큰 연산자/극한
-  'sum', 'prod', 'int', 'lim', 'inf', 'sup', 'max', 'min',
+  // 큰 연산자/극한. ★ 'inf' 제외 — 한글수식 inf = ∞ 기호(1.6b 에서 \infty 로).
+  //   \inf(infimum)로 붙이면 화면에 "inf" 글자 노출 (고교 수학에 infimum 없음).
+  'sum', 'prod', 'int', 'lim', 'sup', 'max', 'min',
   // 함수·연산자
   'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp',
   'det', 'dim', 'ker', 'gcd', // 행렬·대수 연산자 (고급대수). ★ deg/arg 제외 — DEG(도°) 오변환 방지
@@ -282,7 +283,10 @@ export function hangulEquationToLatex(script: string): string {
   s = s
     .replace(/(?<![\\A-Za-z])DEG(?![A-Za-z])/g, '^{\\circ}')
     .replace(/(?<![\\A-Za-z])therefore(?![A-Za-z])/gi, '\\therefore ')
-    .replace(/(?<![\\A-Za-z])because(?![A-Za-z])/gi, '\\because ');
+    .replace(/(?<![\\A-Za-z])because(?![A-Za-z])/gi, '\\because ')
+    // 한글수식 inf = 무한대 ∞ (BACKSLASH_CMDS 에 넣으면 \inf=infimum 으로 "inf" 글자 노출.
+    //  hwpx export 라운드트립 테스트가 발견. infty 는 lookbehind 로 재매칭 안 됨.)
+    .replace(/(?<![\\A-Za-z])inf(?![A-Za-z])/gi, '\\infty ');
 
   // 1.7) 연립방정식 cases → \begin{cases} (over/명령 처리 전에)
   s = convertCases(s);
