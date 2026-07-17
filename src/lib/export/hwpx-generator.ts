@@ -65,8 +65,10 @@ export interface HwpxExamConfig {
 // 매쓰플랫 실제 .hwpx 와 동일한 charPr/paraPr ID (header.xml 검증 템플릿 기준)
 const CHAR = {
   body: 0,      // h1000 본문/수식
-  number: 16,   // h1600 Bold 문제번호
-  title: 23,    // h2000 Bold 제목
+  // ★ 번호·제목은 검정 — 클라우드 인쇄 형식 (2026-07-17 사용자: 매쓰플랫 파랑(16=#00ABFF h1600,
+  //   23=#00ABFF h2000) 말고 클라우드처럼). 21=h1200 준검정 볼드, 24=h2000 검정 볼드 (템플릿 네이티브).
+  number: 21,   // h1200 Bold 검정 문제번호 (클라우드 번호 비율 ≈ 본문 1.2배)
+  title: 24,    // h2000 Bold 검정 제목
   chapter: 21,  // h1200 Bold 부제
   meta: 22,     // h1100 메타(이름/날짜)
   small: 3,     // h900 배점 — 본문(h1000)보다 작게 (시중 문제지 스타일. h1100=본문보다 커서 부자연 실증)

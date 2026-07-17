@@ -18,6 +18,7 @@ import {
   Pencil,
   AlertCircle,
   Printer,
+  FileDown,
   Columns2,
   AlignJustify,
   Check,
@@ -1944,6 +1945,39 @@ function ExamPaperView({
     return () => clearTimeout(t);
   }, [pendingPrint, doPrint]);
 
+  // ★ 한글(.hwpx) 다운로드 — 현재 출력 설정(단수·간격·N문제 배열·섹션)을 그대로 전달.
+  //   exam-management handleDownloadHwpx 와 동일 패턴 (서버 export-hwp 가 DB 조회·생성).
+  const [isDownloadingHwpx, setIsDownloadingHwpx] = useState(false);
+  const handleDownloadHwpx = useCallback(async () => {
+    if (!examId || isDownloadingHwpx) return;
+    setIsDownloadingHwpx(true);
+    try {
+      const perPageQ = perPagePreset ? `&perPage=${perPagePreset}` : '';
+      const res = await fetch(
+        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'HWP 생성 실패');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${examTitle || '시험지'}.hwpx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setShowPrintMenu(false);
+    } catch (error) {
+      console.error('HWPX download error:', error);
+      alert(`HWP 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsDownloadingHwpx(false);
+    }
+  }, [examId, isDownloadingHwpx, perPagePreset, printSections.answer, printSections.solution, columns, gap, examTitle]);
+
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
   //   textSize 13.5px: 기본 14px 보다 아주 조금 작게(사용자 요청). 측정·렌더 같은 헬퍼라 분할 일치.
@@ -2204,7 +2238,7 @@ function ExamPaperView({
                     </label>
                   ))}
                 </div>
-                <div className="px-2 pb-2">
+                <div className="px-2 pb-2 space-y-1.5">
                   <button
                     type="button"
                     onClick={handlePrint}
@@ -2213,6 +2247,16 @@ function ExamPaperView({
                   >
                     <Printer className="h-4 w-4" />
                     출력하기
+                  </button>
+                  {/* ★ 한글(.hwpx) 다운로드 — 현재 단수·간격·N문제 배열 설정 그대로 (편집 가능 한글 파일) */}
+                  <button
+                    type="button"
+                    onClick={handleDownloadHwpx}
+                    disabled={isDownloadingHwpx}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 disabled:opacity-50 px-3 py-2 text-sm font-bold text-sky-300 transition-colors"
+                  >
+                    <FileDown className="h-4 w-4" />
+                    {isDownloadingHwpx ? '한글 생성 중…' : '한글(.hwpx) 다운로드'}
                   </button>
                 </div>
 
