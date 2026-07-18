@@ -364,8 +364,9 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     const bx = await xmlOf('boxed');               // 박스형: 우측 회색 정보칸(bf25) + 테두리(bf4)
     expect(bx).toContain('borderFillIDRef="25"');
     expect(bx).toContain('점수 :');
-    const mk = await xmlOf('mock');                // 모의고사형: 1열 표 + 가운데(64) 제목
-    expect(mk).toMatch(/colCnt="1"[\s\S]*?paraPrIDRef="64"[\s\S]*?중간고사/);
+    const mk = await xmlOf('mock');                // 모의고사형: 3열 밴드 + 하단 0.4mm(bf31) + 가운데(64) 제목
+    expect(mk).toContain('borderFillIDRef="31"');
+    expect(mk).toMatch(/paraPrIDRef="64"[\s\S]*?중간고사/);
   });
 
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {

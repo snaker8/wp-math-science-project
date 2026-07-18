@@ -807,45 +807,49 @@ function buildBoxedHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boo
 // ----------------------------------------------------------------------------
 // 모의고사형 헤더 — 수능 스타일: 가운데 정렬 스택 + 상/하 구분선 (수학비서 '모의고사 타입' 대응)
 // ----------------------------------------------------------------------------
-const MOCK_ROWS = { rule: 300, meta: 1900, title: 3400, sub: 1900, name: 2000 } as const;
+// 수학비서 모의고사 타입 실측(현대청운고 .hml 해부): 1행 3열 밴드(좌·우 보조, 가운데 메인),
+//   전 셀 하단 0.4mm 굵은선 = 전체 폭 밑줄. 간결한 밴드가 디자인의 핵심.
+//   + 우리 시험지 필수인 이름·점수는 밴드 아래 보조 줄로.
+const MOCK_ROWS = { band: 4900, sub: 2200 } as const;
 function mockHeaderHeight(): number {
-  return MOCK_ROWS.rule + MOCK_ROWS.meta + MOCK_ROWS.title + MOCK_ROWS.sub + MOCK_ROWS.name + 500;
+  return MOCK_ROWS.band + MOCK_ROWS.sub + 500;
 }
 
 function buildMockHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
-  const meta = [h.examType, h.semester].filter(Boolean).join(' · ');
-  const sub = [h.subject, h.grade].filter(Boolean).join(' · ');
-  const row = (inner: string, r: number, hh: number, bf: number) =>
-    `<hp:tr><hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+  const SIDE_W = 15000;
+  const cell = (inner: string, col: number, r: number, w: number, hh: number, bf: number, span = 1) =>
+    `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
     + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
     + inner
     + `</hp:subList>`
-    + `<hp:cellAddr colAddr="0" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
-    + `<hp:cellSz width="${TABLE_W}" height="${hh}"/>`
-    + `<hp:cellMargin left="0" right="0" top="0" bottom="0"/>`
-    + `</hp:tc></hp:tr>`;
-  let r = 0;
-  const rows = [
-    row(paragraph(textRun('', CHAR.small), PARA.eq), r++, MOCK_ROWS.rule, 10),            // 상단 구분선(아래선)
-    row(paragraph(textRun(meta, CHAR.meta), PARA.eq), r++, MOCK_ROWS.meta, BF_NONE),      // 유형·학기 (가운데)
-    row(paragraph(textRun(h.examTitle || '', CHAR.title), PARA.eq), r++, MOCK_ROWS.title, BF_NONE), // 제목 (가운데)
-    row(paragraph(textRun(sub, CHAR.chapter), PARA.eq), r++, MOCK_ROWS.sub, BF_NONE),     // 과목·학년 (가운데 볼드)
-    row(
+    + `<hp:cellAddr colAddr="${col}" rowAddr="${r}"/><hp:cellSpan colSpan="${span}" rowSpan="1"/>`
+    + `<hp:cellSz width="${w}" height="${hh}"/>`
+    + `<hp:cellMargin left="200" right="200" top="100" bottom="100"/>`
+    + `</hp:tc>`;
+  // 1행: 밴드 — [좌: 학년·학기] [중: 제목 크게] [우: 학교명] + 전 셀 하단 0.4mm (실측 bf10=0.4mm 등가)
+  const left = [h.grade, h.semester].filter(Boolean).join(' · ');
+  const band = '<hp:tr>'
+    + cell(paragraph(textRun(left, CHAR.meta), PARA.body), 0, 0, SIDE_W, MOCK_ROWS.band, BF_RULE_THICK)
+    + cell(paragraph(textRun(h.examTitle || h.subject || '', CHAR.title), PARA.eq), 1, 0, TABLE_W - SIDE_W * 2, MOCK_ROWS.band, BF_RULE_THICK)
+    + cell(paragraph(textRun(h.schoolName || '', CHAR.meta), PARA_RIGHT), 2, 0, SIDE_W, MOCK_ROWS.band, BF_RULE_THICK)
+    + '</hp:tr>';
+  // 2행: 보조 줄 — [좌: 과목·유형] [우: 이름/점수]
+  const sub = [h.subject, h.examType].filter(Boolean).join(' · ');
+  const row2 = '<hp:tr>'
+    + cell(paragraph(textRun(sub, CHAR.meta), PARA.body), 0, 1, Math.floor(TABLE_W / 2), MOCK_ROWS.sub, BF_NONE, 1)
+    + cell(
       paragraph(
-        showNameField
-          ? textRun(`이름 :               점수 :       / ${h.totalScore || '100'}`, CHAR.meta)
-          : textRun('', CHAR.meta),
-        PARA.eq,
+        showNameField ? textRun(`이름 :               점수 :       / ${h.totalScore || '100'}`, CHAR.meta) : textRun('', CHAR.meta),
+        PARA_RIGHT,
       ),
-      r++, MOCK_ROWS.name, 10,                                                            // 하단 구분선
-    ),
-  ].join('');
-  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${r}" colCnt="1" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+      1, 1, TABLE_W - Math.floor(TABLE_W / 2), MOCK_ROWS.sub, BF_NONE, 2)
+    + '</hp:tr>';
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="2" colCnt="3" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
     + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${mockHeaderHeight() - 500}" heightRelTo="ABSOLUTE" protect="0"/>`
     + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
     + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
-    + rows
+    + band + row2
     + `</hp:tbl>`;
 }
 
@@ -1349,6 +1353,22 @@ function injectVbarBorderFill(header: string): string {
 const BF_ACCENT_LINE = 28;
 const BF_ACCENT_BAND = 29;
 const BF_ACCENT_DOUBLE = 30;
+// 하단 0.4mm 검정 굵은선 — 수학비서 모의고사 타입 실측 (bf10 은 0.12mm 라 별도). 항상 주입.
+const BF_RULE_THICK = 31;
+function injectThickRule(header: string): string {
+  const i = header.indexOf('<hh:borderFill id="10"');
+  if (i < 0) return header;
+  const j = header.indexOf('</hh:borderFill>', i);
+  if (j < 0) return header;
+  let clone = header.slice(i, j + '</hh:borderFill>'.length);
+  clone = clone
+    .replace('<hh:borderFill id="10"', `<hh:borderFill id="${BF_RULE_THICK}"`)
+    .replace(/<hh:bottomBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/, '<hh:bottomBorder type="SOLID" width="0.4 mm" color="#000000"/>');
+  const out = header.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+  const k = out.indexOf('</hh:borderFills>');
+  if (k < 0) return header;
+  return out.slice(0, k) + clone + out.slice(k);
+}
 
 function injectAccentFills(header: string, color: string): string {
   let out = header;
@@ -1423,7 +1443,7 @@ export async function generateHWPX(
   zip.file('META-INF/container.xml', CONTAINER_XML);
   zip.file('META-INF/manifest.xml', MANIFEST_XML);
   zip.file('META-INF/container.rdf', CONTAINER_RDF);
-  let headerXml = injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config))));
+  let headerXml = injectThickRule(injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)))));
   // 헤더 강조색 — 유효한 hex 일 때만 주입 (28=하단선, 29=색띠, 30=이중선)
   const accent = config.header?.accentColor;
   if (accent && /^#[0-9a-fA-F]{6}$/.test(accent)) {
