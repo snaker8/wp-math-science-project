@@ -198,6 +198,8 @@ function latexToHWPEquation(latex: string): string {
     '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
     '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
     '\\therefore': 'therefore', '\\because': 'because',
+    // 점열 — 미매핑 시 잔여 명령 정리에서 삭제돼 "y=x-2 ⋯①" 의 ⋯ 소실 (거제여중 3번 실증)
+    '\\cdots': 'cdots', '\\ldots': 'ldots', '\\vdots': 'vdots', '\\ddots': 'ddots', '\\dots': 'ldots',
     '\\angle': 'angle', '\\triangle': 'triangle',
     '\\parallel': 'parallel', '\\perp': 'perp', '\\prime': "'",
   };
