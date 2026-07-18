@@ -507,8 +507,11 @@ export function ExamPaperView({
       const pageCountsQ = !perPagePreset && measured && pages.length > 0
         ? `&pageCounts=${pages.map((pg) => pg.length).join(',')}`
         : '';
+      // 헤더 디자인 갤러리 강조색·테마 → 한글 헤더에도 반영 (네이티브 3종 매핑)
+      const decoQ = (headerColor ? `&headerColor=${encodeURIComponent(headerColor)}` : '')
+        + (headerTheme && headerTheme !== 'none' ? `&headerTheme=${encodeURIComponent(headerTheme)}` : '');
       const res = await fetch(
-        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}`
+        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}${decoQ}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -530,7 +533,7 @@ export function ExamPaperView({
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle]);
+  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle, headerColor, headerTheme]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.

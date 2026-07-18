@@ -45,6 +45,10 @@ export interface HwpxHeaderMeta {
   timeLimit?: string;    // 시간
   date?: string;         // 일시
   totalScore?: string;   // 총점
+  // ★ 헤더 디자인 (2026-07-18) — 웹 디자인 갤러리의 강조색·테마를 한글 네이티브 3종으로 매핑:
+  //   line→하단 accent 선 / double→하단 accent 이중선 / 그 외 그래픽 테마(wave·ribbon 등)→상단 색 띠.
+  accentColor?: string;  // #rrggbb (없으면 기본 검정 에디토리얼)
+  headerTheme?: string;  // 웹 테마 id (none/line/double/wave/...)
 }
 
 export interface HwpxExamConfig {
@@ -646,15 +650,24 @@ const TABLE_W = 52800;                    // 본문 폭(53860)보다 좁게 — 
 const HALF_W = Math.floor(TABLE_W / 2);
 // ★ 행 높이는 "글자 h × 줄간격 160% + 여유" 로 정직하게 — 선언보다 실렌더가 크면(셀 성장)
 //   그리드1 이 첫 페이지 계산에 안 맞아 헤더 단독 페이지 발생 (거제여중 실증, 2026-07-18).
-const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000 } as const;
+const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000, band: 550 } as const;
+
+// 헤더 장식 결정 — 한글 네이티브 3종 (라인/더블/색 띠). 색 없으면 장식 없음(기본 검정).
+function headerDeco(h: HwpxHeaderMeta): { band: boolean; lineBf: number } {
+  if (!h.accentColor) return { band: false, lineBf: 10 }; // 기본: 가는 검정 하단선
+  const t = h.headerTheme || 'line';
+  if (t === 'none' || t === 'line') return { band: false, lineBf: BF_ACCENT_LINE };
+  if (t === 'double') return { band: false, lineBf: BF_ACCENT_DOUBLE };
+  return { band: true, lineBf: BF_ACCENT_LINE }; // 그래픽 테마 → 상단 색 띠 + accent 선
+}
 
 function edCell(
   runsXml: string,
   col: number,
   row: number,
-  opts: { span?: number; w: number; h: number; align?: 'left' | 'right'; line?: boolean },
+  opts: { span?: number; w: number; h: number; align?: 'left' | 'right'; line?: boolean; lineBf?: number; bf?: number },
 ): string {
-  const bf = opts.line ? 10 : BF_NONE; // 10 = bottom SOLID only (템플릿 실측) → 이름줄 아래 구분선
+  const bf = opts.bf ?? (opts.line ? (opts.lineBf ?? 10) : BF_NONE); // 기본 하단선=10, accent 는 28/30
   const para = opts.align === 'right' ? PARA_RIGHT : PARA.body;
   return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
     + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
@@ -670,7 +683,8 @@ function edCell(
 //   반드시 함께 갱신할 것 — 그리드 첫 페이지가 이 값으로 문제 행 높이를 배분하므로,
 //   선언 < 실렌더가 되는 순간 표가 밀려 빈 1페이지가 재발한다 (거제여중 반복 실증).
 function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): number {
-  return ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0)
+  return (headerDeco(h).band ? ED_ROW_H.band : 0)
+    + ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0)
     + (showNameField ? ED_ROW_H.name : 0) + 500; // + outMargin bottom
 }
 
@@ -678,8 +692,14 @@ function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): numbe
 // inline=false(흐름 모드): 2단 colPr 위 전체폭 플로팅 (매쓰플랫 실측, 부흥중 검증).
 function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
   const meta = [h.subject, h.examType].filter(Boolean).join(' · ');
+  const deco = headerDeco(h);
   const rows: string[] = [];
   let r = 0;
+  if (deco.band) {
+    // 상단 색 띠 — 그래픽 테마(wave/ribbon 등) 근사, accent 배경 (한글 네이티브 디자인)
+    rows.push('<hp:tr>' + edCell(textRun('', CHAR.small), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.band, bf: BF_ACCENT_BAND }) + '</hp:tr>');
+    r++;
+  }
   rows.push('<hp:tr>'
     + edCell(textRun(meta, CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.meta })
     + edCell(textRun(h.schoolName || '', CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.meta, align: 'right' })
@@ -693,8 +713,8 @@ function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline:
   }
   if (showNameField) {
     rows.push('<hp:tr>'
-      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.name, line: true })
-      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.name, line: true, align: 'right' })
+      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf })
+      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf, align: 'right' })
       + '</hp:tr>');
     r++;
   }
@@ -1212,6 +1232,45 @@ function injectVbarBorderFill(header: string): string {
   return out.slice(0, k) + clone + out.slice(k);
 }
 
+// ── 헤더 디자인 갤러리(테마·강조색) 한글 반영 (2026-07-18) ─────────────────────
+//   BF_ACCENT_LINE(28) = 하단 accent 실선 0.4mm (line 테마·이름줄)
+//   BF_ACCENT_BAND(29) = 테두리 없이 accent 배경 (색 띠 — wave/ribbon 등 그래픽 테마 근사)
+//   BF_ACCENT_DOUBLE(30) = 하단 accent 이중선 (double 테마)
+//   ※ 그래픽 테마(wave/grid/dots/corner/mascot 등 SVG)는 한글 표현 불가 → 색 띠 근사.
+const BF_ACCENT_LINE = 28;
+const BF_ACCENT_BAND = 29;
+const BF_ACCENT_DOUBLE = 30;
+
+function injectAccentFills(header: string, color: string): string {
+  let out = header;
+  const cloneFrom = (srcId: string, transform: (clone: string) => string): void => {
+    const i = out.indexOf(`<hh:borderFill id="${srcId}"`);
+    if (i < 0) return;
+    const j = out.indexOf('</hh:borderFill>', i);
+    if (j < 0) return;
+    const clone = transform(out.slice(i, j + '</hh:borderFill>'.length));
+    out = out.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+    const k = out.indexOf('</hh:borderFills>');
+    if (k < 0) return;
+    out = out.slice(0, k) + clone + out.slice(k);
+  };
+  // 28: bf10(하단선만) → accent 0.4mm
+  cloneFrom('10', (c) => c
+    .replace('<hh:borderFill id="10"', `<hh:borderFill id="${BF_ACCENT_LINE}"`)
+    .replace(/<hh:bottomBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/, `<hh:bottomBorder type="SOLID" width="0.4 mm" color="${color}"/>`));
+  // 29: bf25(회색 배경) → 테두리 NONE + accent 배경
+  cloneFrom('25', (c) => c
+    .replace('<hh:borderFill id="25"', `<hh:borderFill id="${BF_ACCENT_BAND}"`)
+    .replace(/<hh:(left|right|top|bottom)Border type="[A-Z]+"/g, '<hh:$1Border type="NONE"')
+    .replace(/faceColor="[^"]*"/, `faceColor="${color}"`)
+    .replace(/hatchColor="[^"]*"/, `hatchColor="${color}"`));
+  // 30: bf10 → 하단 accent 이중선
+  cloneFrom('10', (c) => c
+    .replace('<hh:borderFill id="10"', `<hh:borderFill id="${BF_ACCENT_DOUBLE}"`)
+    .replace(/<hh:bottomBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/, `<hh:bottomBorder type="DOUBLE_SLIM" width="0.5 mm" color="${color}"/>`));
+  return out;
+}
+
 // gap(px) + perPage → space-before HWPUNIT (px 96dpi → ×75)
 function computeGapHwpUnit(config: HwpxExamConfig): number {
   // perPage 그리드 모드는 셀이 배치를 담당 → 간격 paraPr 미사용. 흐름 모드 슬라이더 값만.
@@ -1228,6 +1287,11 @@ export async function generateHWPX(
   config: HwpxExamConfig,
 ): Promise<Blob | Buffer> {
   _shapeId = 2000000000;
+
+  // 강조색 정규화 — 유효 hex 아니면 제거 (headerDeco 가 미주입 bf 를 참조하는 사고 방지)
+  if (config.header?.accentColor && !/^#[0-9a-fA-F]{6}$/.test(config.header.accentColor)) {
+    config = { ...config, header: { ...config.header, accentColor: undefined } };
+  }
 
   // 본문 전처리 — 유형태그·중복번호·인라인 보기 중복 제거 (이미지 수집 전에, 원본 불변)
   problems = problems.map((p) => ({
@@ -1250,10 +1314,13 @@ export async function generateHWPX(
   zip.file('META-INF/container.xml', CONTAINER_XML);
   zip.file('META-INF/manifest.xml', MANIFEST_XML);
   zip.file('META-INF/container.rdf', CONTAINER_RDF);
-  zip.file(
-    'Contents/header.xml',
-    injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)))),
-  );
+  let headerXml = injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config))));
+  // 헤더 강조색 — 유효한 hex 일 때만 주입 (28=하단선, 29=색띠, 30=이중선)
+  const accent = config.header?.accentColor;
+  if (accent && /^#[0-9a-fA-F]{6}$/.test(accent)) {
+    headerXml = injectAccentFills(headerXml, accent);
+  }
+  zip.file('Contents/header.xml', headerXml);
 
   // BinData + manifest items
   const imageItems: Array<{ id: string; ext: string; mime: string }> = [];
