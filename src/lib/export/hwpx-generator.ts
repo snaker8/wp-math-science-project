@@ -807,16 +807,15 @@ function buildBoxedHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boo
 // ----------------------------------------------------------------------------
 // 모의고사형 헤더 — 수능 스타일: 가운데 정렬 스택 + 상/하 구분선 (수학비서 '모의고사 타입' 대응)
 // ----------------------------------------------------------------------------
-// 수학비서 모의고사 타입 실측(현대청운고 .hml 해부): 1행 3열 밴드(좌·우 보조, 가운데 메인),
-//   전 셀 하단 0.4mm 굵은선 = 전체 폭 밑줄. 간결한 밴드가 디자인의 핵심.
-//   + 우리 시험지 필수인 이름·점수는 밴드 아래 보조 줄로.
-const MOCK_ROWS = { band: 4900, sub: 2200 } as const;
+// 모의고사형 — 수능지 형식 (사용자 제공 코어블랙 캡처 기준, '제N교시' 타원 제외):
+//   상단 가운데 부제(시험명) → 가운데 초대형 과목명("수학영역" 자리) → 가운데 정보줄
+//   → 전체 폭 0.4mm 굵은선 → 이름·점수 보조 줄.
+const MOCK_ROWS = { sub: 1900, main: 3600, info: 1900, name: 2200 } as const;
 function mockHeaderHeight(): number {
-  return MOCK_ROWS.band + MOCK_ROWS.sub + 500;
+  return MOCK_ROWS.sub + MOCK_ROWS.main + MOCK_ROWS.info + MOCK_ROWS.name + 500;
 }
 
 function buildMockHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
-  const SIDE_W = 15000;
   const cell = (inner: string, col: number, r: number, w: number, hh: number, bf: number, span = 1) =>
     `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
     + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
@@ -824,32 +823,31 @@ function buildMockHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: bool
     + `</hp:subList>`
     + `<hp:cellAddr colAddr="${col}" rowAddr="${r}"/><hp:cellSpan colSpan="${span}" rowSpan="1"/>`
     + `<hp:cellSz width="${w}" height="${hh}"/>`
-    + `<hp:cellMargin left="200" right="200" top="100" bottom="100"/>`
+    + `<hp:cellMargin left="200" right="200" top="80" bottom="80"/>`
     + `</hp:tc>`;
-  // 1행: 밴드 — [좌: 학년·학기] [중: 제목 크게] [우: 학교명] + 전 셀 하단 0.4mm (실측 bf10=0.4mm 등가)
-  const left = [h.grade, h.semester].filter(Boolean).join(' · ');
-  const band = '<hp:tr>'
-    + cell(paragraph(textRun(left, CHAR.meta), PARA.body), 0, 0, SIDE_W, MOCK_ROWS.band, BF_RULE_THICK)
-    + cell(paragraph(textRun(h.examTitle || h.subject || '', CHAR.title), PARA.eq), 1, 0, TABLE_W - SIDE_W * 2, MOCK_ROWS.band, BF_RULE_THICK)
-    + cell(paragraph(textRun(h.schoolName || '', CHAR.meta), PARA_RIGHT), 2, 0, SIDE_W, MOCK_ROWS.band, BF_RULE_THICK)
-    + '</hp:tr>';
-  // 2행: 보조 줄 — [좌: 과목·유형] [우: 이름/점수]
-  const sub = [h.subject, h.examType].filter(Boolean).join(' · ');
-  const row2 = '<hp:tr>'
-    + cell(paragraph(textRun(sub, CHAR.meta), PARA.body), 0, 1, Math.floor(TABLE_W / 2), MOCK_ROWS.sub, BF_NONE, 1)
+  const full = (inner: string, r: number, hh: number, bf: number) => `<hp:tr>${cell(inner, 0, r, TABLE_W, hh, bf, 2)}</hp:tr>`;
+  // 수능지: 부제(시험명 작게) / 과목명 초대형 / 정보줄(학교·학년·학기·유형) / ━0.4mm / 이름·점수
+  const info = [h.schoolName, h.grade, h.semester, h.examType].filter(Boolean).join(' · ');
+  const rows = [
+    full(paragraph(textRun(h.examTitle || '', CHAR.meta), PARA.eq), 0, MOCK_ROWS.sub, BF_NONE),
+    full(paragraph(textRun(h.subject || h.examTitle || '', CHAR.title), PARA.eq), 1, MOCK_ROWS.main, BF_NONE),
+    full(paragraph(textRun(info, CHAR.meta), PARA.eq), 2, MOCK_ROWS.info, BF_RULE_THICK), // 이 행 하단 = 전폭 0.4mm
+    '<hp:tr>'
+    + cell(paragraph(textRun('', CHAR.meta), PARA.body), 0, 3, Math.floor(TABLE_W / 2), MOCK_ROWS.name, BF_NONE)
     + cell(
       paragraph(
         showNameField ? textRun(`이름 :               점수 :       / ${h.totalScore || '100'}`, CHAR.meta) : textRun('', CHAR.meta),
         PARA_RIGHT,
       ),
-      1, 1, TABLE_W - Math.floor(TABLE_W / 2), MOCK_ROWS.sub, BF_NONE, 2)
-    + '</hp:tr>';
-  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="2" colCnt="3" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+      1, 3, TABLE_W - Math.floor(TABLE_W / 2), MOCK_ROWS.name, BF_NONE)
+    + '</hp:tr>',
+  ].join('');
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="4" colCnt="2" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
     + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${mockHeaderHeight() - 500}" heightRelTo="ABSOLUTE" protect="0"/>`
     + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
     + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
-    + band + row2
+    + rows
     + `</hp:tbl>`;
 }
 
