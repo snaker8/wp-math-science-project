@@ -47,6 +47,8 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
+// ★ 2026-07-17 인쇄 통일 — 클라우드 검증 인쇄 엔진 재사용 (측정→분할→렌더→인쇄→한글 내장)
+import { ExamPaperView, QuickAnswerView, SolutionView, type ProblemData } from '@/components/exam-paper/ExamPaperView';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import DeployExamModal from '@/components/exam/DeployExamModal';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
@@ -563,29 +565,35 @@ export default function ExamManagementPage() {
 
   // DB hooks
   const { exams: dbExams, isLoading: examsLoading, refetch: refetchExams } = useExamList();
-  const { problems: dbProblems, examInfo, isLoading: problemsLoading } = useExamProblems(selectedExamId);
+  const { problems: dbProblems, examInfo, isLoading: problemsLoading, refetch: refetchProblems } = useExamProblems(selectedExamId);
   const { groups: bookGroups, isLoading: groupsLoading } = useBookGroups();
 
-  // DB 문제 → ExamProblem 형식으로 변환
-  const problems: ExamProblem[] = useMemo(() => {
+  // DB 문제 → ProblemData 변환 — ★ 클라우드(cloud/[examId])와 동일 매핑 (인쇄 통일, 2026-07-17)
+  const problems: ProblemData[] = useMemo(() => {
     return dbProblems.map((p) => ({
       id: p.id,
       number: p.number,
       points: p.points,  // ★ 배점 — 시험지 출력에 [N점] 배지 표시
+      difficulty: p.difficulty,
+      cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
       content: p.content,
       choices: p.choices,
+      choiceImages: p.choiceImages,
       choiceHeaders: p.choiceHeaders,
       choiceLayout: p.choiceLayout,
-      choiceImages: p.choiceImages,
       answer: p.answer,
+      answerJson: p.answerJson,
       solution: p.solution,
-      difficulty: p.difficulty,
+      year: p.year,
+      typeCode: p.typeCode,
+      typeName: p.typeName,
+      source: p.source,
+      images: p.images,
       hasFigure: p.hasFigure,
       figureSvg: p.figureSvg,
       figureData: p.figureData,
       upscaledCropUrl: p.upscaledCropUrl,
       figureSource: p.figureSource,
-      images: p.images,
     }));
   }, [dbProblems]);
 
@@ -1329,12 +1337,7 @@ export default function ExamManagementPage() {
             </span>
           )}
 
-          <button type="button" className="em-action-btn" title="PDF 다운로드" onClick={handleDownloadPdf}>
-            <Download /><span className="em-action-label">PDF</span>
-          </button>
-          <button type="button" className="em-action-btn" title="한글(.hwpx) 다운로드" onClick={handleDownloadHwpx} disabled={isDownloadingHwpx}>
-            {isDownloadingHwpx ? <Loader2 className="animate-spin" /> : <FileDown />}<span className="em-action-label">한글</span>
-          </button>
+          {/* (PDF·한글 버튼 제거 — 시험지 탭 ExamPaperView 툴바의 출력/한글 다운로드로 통일, 2026-07-17) */}
           <button type="button" className="em-action-btn" title="시험지 수정"
             onClick={() => { if (selectedExamId) router.push(`/dashboard/cloud/${selectedExamId}`); }}>
             <Pencil /><span className="em-action-label">수정</span>
@@ -1356,14 +1359,7 @@ export default function ExamManagementPage() {
             <Trash2 /><span className="em-action-label">삭제</span>
           </button>
 
-          <button
-            type="button"
-            className="em-subbar-print"
-            onClick={() => setShowPrintModal(true)}
-          >
-            <Printer className="h-3.5 w-3.5" />
-            인쇄
-          </button>
+          {/* (인쇄 버튼 제거 — ExamPaperView 툴바 '출력'으로 통일) */}
         </div>
       </div>
 
@@ -1423,42 +1419,6 @@ export default function ExamManagementPage() {
             )}
 
             <div className="em-paper-wrap em-view">
-              <div className="em-paper-bar">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span>A4 · {columns}단 레이아웃</span>
-                  <span>·</span>
-                  <span>{problems.length}문항</span>
-                  {problems.filter(p => !p.solution).length > 0 && (
-                    <span className="em-issue-badge">
-                      <AlertTriangle />
-                      해설 미완성 {problems.filter(p => !p.solution).length}건
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowDesignGallery(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#0891b2', border: '1px solid rgba(8,145,178,0.35)', borderRadius: 8, padding: '4px 10px', background: 'rgba(8,145,178,0.08)', cursor: 'pointer' }}
-                    title="헤더 디자인 갤러리"
-                  >
-                    디자인{headerTheme && headerTheme !== 'none' ? ` · ${HEADER_THEMES.find((t) => t.id === headerTheme)?.label ?? ''}` : ''}
-                  </button>
-                  <div className="zoom">
-                    <button><Minus /></button>
-                    <span>100%</span>
-                    <button><Plus /></button>
-                  </div>
-                </div>
-              </div>
-              {showDesignGallery && (
-                <HeaderDesignGallery
-                  activeTheme={headerTheme}
-                  onSelect={(theme, color, layout) => { setHeaderTheme(theme); setHeaderColor(color); handleTemplateChange(layout, unifiedMeta); }}
-                  onClose={() => setShowDesignGallery(false)}
-                />
-              )}
-
               {problemsLoading && (
                 <div className="flex items-center justify-center py-8">
                   <div className="flex items-center gap-2 text-content-secondary text-sm">
@@ -1468,169 +1428,47 @@ export default function ExamManagementPage() {
                 </div>
               )}
 
-              <div className="w-full bg-white rounded-lg shadow-2xl shadow-black/50">
-                <EditableExamHeader
-                  templateId={templateId}
-                  meta={unifiedMeta}
+              {/* ★ 2026-07-17 인쇄 통일 — 클라우드 검증 엔진(ExamPaperView 계열) 재사용.
+                  측정→분할→렌더→인쇄(출력 메뉴)→한글(.hwpx) 다운로드까지 컴포넌트 내장(툴바 포함).
+                  기존 자체 미리보기·분할·인쇄 모달·우측 레이아웃 옵션은 제거 (반복 이탈 원천 차단). */}
+              {activeTab === 'exam' && selectedExamId && (
+                <ExamPaperView
+                  problems={problems}
                   examTitle={editExamTitle || selectedExam.title}
-                  editable={true}
+                  examId={selectedExamId}
+                  templateId={templateId}
+                  examMeta={unifiedMeta}
+                  onOpenTemplateModal={() => {}}
                   onTemplateChange={handleTemplateChange}
                   onMetaChange={handleMetaChange}
-                  onExamTitleChange={handleTitleChange}
-                  subjectOptions={unifiedSubjectOptions}
-                  accentColor={headerColor}
-                  headerTheme={headerTheme}
                 />
-
-                {activeTab === 'exam' && (
-                  <div ref={measureRef}>
-                    {pages.map((pageProblems, pageIdx) => {
-                      let globalStartIdx = 0;
-                      for (let p = 0; p < pageIdx; p++) globalStartIdx += pages[p].length;
-
-                      const renderProblem = (problem: ExamProblem, idx: number) => (
-                        <div
-                          key={problem.id}
-                          data-problem-idx={idx}
-                          className="break-inside-avoid"
-                          style={{ marginBottom: `${getEffectiveGap(pageIdx)}px` }}
-                        >
-                          <ExamProblemRenderer problem={problem} />
-                        </div>
-                      );
-
-                      const useManualColumns = columns === 2;
-                      const half = Math.ceil(pageProblems.length / 2);
-                      const leftProblems = useManualColumns ? pageProblems.slice(0, half) : pageProblems;
-                      const rightProblems = useManualColumns ? pageProblems.slice(half) : [];
-
-                      return (
-                        <div
-                          key={pageIdx}
-                          className="preview-exam-page exam-page bg-white"
-                          style={{
-                            width: '794px',
-                            minHeight: `${A4_H}px`,
-                            padding: '20mm 15mm', /* 상하 20mm(시중 표준)·좌우 15mm */
-                            marginBottom: pageIdx < pages.length - 1 ? '24px' : 0,
-                            boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
-                            borderRadius: '4px',
-                            position: 'relative',
-                            boxSizing: 'border-box',
-                            fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
-                          }}
-                        >
-                          {pageIdx > 0 && (
-                            <div className="border-t-2 border-dashed border-gray-300 my-2 relative page-divider-ui">
-                              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] text-gray-400 font-medium">
-                                {pageIdx + 1}페이지
-                              </span>
-                            </div>
-                          )}
-                          {useManualColumns ? (
-                            // ★ 외부 padding:15mm(57px)만으로 A4 표준 여백 충분.
-                            //   기존 px-10(40px) 중복 패딩을 제거해 본문 폭을 확보.
-                            <div className="py-2 flex gap-4">
-                              <div className="flex-1 min-w-0 border-r border-gray-200 pr-3">
-                                {leftProblems.map((problem, probIdx) =>
-                                  renderProblem(problem, globalStartIdx + probIdx)
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0 pl-1">
-                                {rightProblems.map((problem, probIdx) =>
-                                  renderProblem(problem, globalStartIdx + half + probIdx)
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="py-2">
-                              {pageProblems.map((problem, probIdx) =>
-                                renderProblem(problem, globalStartIdx + probIdx)
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {activeTab === 'answer' && (
-                  <div className="px-10 py-8">
-                    <div className="text-center mb-5">
-                      <h2 className="text-lg font-bold text-gray-900">{selectedExam.title}</h2>
-                      <p className="text-sm text-gray-500 mt-1">빠른 정답</p>
-                    </div>
-                    <table className="w-full max-w-2xl mx-auto border-collapse border-2 border-gray-800" style={{ tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '42%' }} />
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '42%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">문항</th>
-                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
-                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">문항</th>
-                          <th className="bg-gray-100 border border-gray-400 px-2 py-2.5 text-center text-xs font-bold text-gray-600">정답</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
-                          const leftNum = rowIdx + 1;
-                          const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
-                          const leftP = problems.find((p) => p.number === leftNum);
-                          const rightP = problems.find((p) => p.number === rightNum);
-                          const rowBg = rowIdx % 2 === 1 ? 'bg-blue-50/40' : '';
-                          return (
-                            <tr key={rowIdx} className={rowBg}>
-                              <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-900">{leftNum}</td>
-                              <td className="border border-gray-300 px-2 py-2 text-center text-base font-bold text-blue-600 overflow-hidden">
-                                {leftP ? <AnswerDisplay answer={leftP.answer} className="text-blue-600" compact /> : '-'}
-                              </td>
-                              <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-900">
-                                {rightNum <= problems.length ? rightNum : ''}
-                              </td>
-                              <td className="border border-gray-300 px-2 py-2 text-center text-base font-bold text-blue-600 overflow-hidden">
-                                {rightP ? <AnswerDisplay answer={rightP.answer} className="text-blue-600" compact /> : ''}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {activeTab === 'solution' && (
-                  <div
-                    className={`p-6 ${columns === 2 ? 'columns-2' : ''}`}
-                    style={{ columnGap: columns === 2 ? `${gap}px` : undefined }}
-                  >
-                    {problems.map((problem) => (
-                      <div
-                        key={problem.id}
-                        className="break-inside-avoid"
-                        style={{ marginBottom: `${gap}px` }}
-                      >
-                        <div className="flex items-center gap-2.5 mb-2">
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold flex-shrink-0">
-                            {problem.number}
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-1 text-xs font-bold text-blue-700">
-                            정답 <AnswerDisplay answer={problem.answer} className="text-blue-700" />
-                          </span>
-                        </div>
-                        <div className="ml-3 pl-4 border-l-2 border-blue-200 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                          <MixedContentRenderer content={stripChoiceAnalysis(problem.solution)} className="text-gray-700" />
-                        </div>
-                        <div className="mt-3 border-b border-dashed border-gray-300" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
+              {activeTab === 'answer' && (
+                <QuickAnswerView
+                  problems={problems}
+                  examTitle={editExamTitle || selectedExam.title}
+                  templateId={templateId}
+                  examMeta={unifiedMeta}
+                />
+              )}
+              {activeTab === 'solution' && selectedExamId && (
+                <SolutionView
+                  problems={problems}
+                  examTitle={editExamTitle || selectedExam.title}
+                  examId={selectedExamId}
+                  templateId={templateId}
+                  examMeta={unifiedMeta}
+                  onOpenTemplateModal={() => {}}
+                  refetchProblems={refetchProblems}
+                />
+              )}
+              {/* 시험지 탭 출력 시 빠른정답/해설 DOM 복제 소스 (클라우드 동일 패턴) */}
+              {activeTab === 'exam' && selectedExamId && (
+                <div style={{ position: 'absolute', left: -99999, top: -99999, width: 900 }} aria-hidden>
+                  <QuickAnswerView problems={problems} examTitle={editExamTitle || selectedExam.title} templateId={templateId} examMeta={unifiedMeta} />
+                  <SolutionView problems={problems} examTitle={editExamTitle || selectedExam.title} examId={selectedExamId} templateId={templateId} examMeta={unifiedMeta} onOpenTemplateModal={() => {}} refetchProblems={refetchProblems} />
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1643,127 +1481,12 @@ export default function ExamManagementPage() {
 
       {/* ======== RIGHT OPTIONS PANEL ======== */}
       <aside className="em-options">
-        <div className="em-opts-group">
-          <h4><Columns2 />레이아웃</h4>
-          <div className="em-col-toggle">
-            <button
-              type="button"
-              className={`em-col-btn ${columns === 1 ? 'active' : ''}`}
-              onClick={() => setColumns(1)}
-            >
-              <div className="em-col-vis">
-                <div className="em-col-vis-line" />
-                <div className="em-col-vis-line short" />
-                <div className="em-col-vis-line gap" />
-                <div className="em-col-vis-line" />
-                <div className="em-col-vis-line short" />
-                <div className="em-col-vis-line gap" />
-                <div className="em-col-vis-line" />
-              </div>
-              <span className="em-col-label">1단</span>
-            </button>
-            <button
-              type="button"
-              className={`em-col-btn ${columns === 2 ? 'active' : ''}`}
-              onClick={() => setColumns(2)}
-            >
-              <div className="em-col-vis">
-                <div className="em-col-vis-cols">
-                  <div className="em-col-vis-col">
-                    <div className="em-col-vis-line" />
-                    <div className="em-col-vis-line short" />
-                    <div className="em-col-vis-line" />
-                    <div className="em-col-vis-line short" />
-                  </div>
-                  <div className="em-col-vis-col">
-                    <div className="em-col-vis-line" />
-                    <div className="em-col-vis-line short" />
-                    <div className="em-col-vis-line" />
-                    <div className="em-col-vis-line short" />
-                  </div>
-                </div>
-              </div>
-              <span className="em-col-label">2단</span>
-            </button>
-          </div>
-
-          {/* 페이지당 문제 수 — SUBBAR 에서 이동 (좁은 화면 겹침 완화) */}
-          <div className="em-slider-row" style={{ marginTop: 12 }}>
-            <span>페이지당 문제 수</span>
-          </div>
-          <div className="em-ppp em-ppp-block">
-            {[
-              { value: null, label: '자동' },
-              { value: 4, label: '4' },
-              { value: 6, label: '6' },
-              { value: 8, label: '8' },
-            ].map(({ value, label }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setPerPagePreset(value)}
-                className={perPagePreset === value ? 'active' : ''}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="em-opts-group">
-          <h4><MoveVertical />문제 간격</h4>
-          <div className="em-slider-row">
-            <span>세로 여백</span>
-            <span className="em-slider-val">
-              {perPagePreset ? '자동' : `${gap}px`}
-            </span>
-          </div>
-          <input
-            type="range"
-            className="em-slider"
-            min={8} max={48} step={2}
-            value={gap}
-            onChange={(e) => setGap(Number(e.target.value))}
-            disabled={!!perPagePreset}
-          />
-          <div className="em-slider-ticks">
-            <span>좁게</span>
-            <span>기본</span>
-            <span>넓게</span>
-          </div>
-        </div>
-
+        {/* (레이아웃·페이지당·간격·출력옵션·인쇄CTA 제거 — ExamPaperView 툴바로 통일, 2026-07-17) */}
         <div className="em-opts-group">
           <h4><FileIcon />용지</h4>
           <select className="em-select">
             <option value="A4">A4 (210 × 297mm)</option>
           </select>
-        </div>
-
-        <div className="em-opts-group">
-          <h4><Printer />출력 옵션</h4>
-          {[
-            { id: 'exam' as const, label: '시험지', sub: 'A4 · 본지' },
-            { id: 'answer' as const, label: '빠른정답', sub: 'Answer key' },
-            { id: 'solution' as const, label: '해설지', sub: '상세 풀이' },
-          ].map((item) => {
-            const on = printSections[item.id];
-            return (
-              <div
-                key={item.id}
-                className={`em-check-row ${on ? 'on' : ''}`}
-                onClick={() => togglePrintSection(item.id)}
-              >
-                <div className="em-cbox">
-                  {on && <Check />}
-                </div>
-                <div className="em-check-row-label">
-                  <span className="main">{item.label}</span>
-                  <span className="sub">{item.sub}</span>
-                </div>
-              </div>
-            );
-          })}
         </div>
 
         <div className="em-opts-group">
@@ -1809,219 +1532,11 @@ export default function ExamManagementPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="em-print-cta"
-          onClick={() => setShowPrintModal(true)}
-        >
-          <div className="em-print-cta-head">
-            <Printer />
-            <span>인쇄 준비 완료</span>
-          </div>
-          <div className="em-print-cta-main">
-            <span>지금 인쇄하기</span>
-            <ArrowRight />
-          </div>
-          <div className="em-print-cta-sub">
-            {Object.entries(printSections).filter(([, v]) => v).map(([k], i, arr) => (
-              <React.Fragment key={k}>
-                <span>{k === 'exam' ? '시험지' : k === 'answer' ? '빠른정답' : '해설지'}</span>
-                {i < arr.length - 1 && <span className="dot">·</span>}
-              </React.Fragment>
-            ))}
-            <span className="dot">·</span>
-            <span>A4 {columns}단</span>
-          </div>
-        </button>
       </aside>
 
 
-      {/* ======== 인쇄 전용 영역 (화면에 숨김, handlePrint에서 DOM 복제) ======== */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        #exam-print-root { display: none; }
-        #exam-print-root .katex { font-size: 1.05em !important; }
-        /* ★ display:none → off-screen: CSS columns 레이아웃 계산을 위해 렌더링 유지 */
-        .print-source-sections {
-          position: fixed;
-          left: -9999px;
-          top: 0;
-          width: 794px;
-          z-index: -1;
-          pointer-events: none;
-        }
-        @media print {
-          body > *:not(#exam-print-root) { display: none !important; }
-          #exam-print-root { display: block !important; }
-          html, body {
-            background: white !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            height: auto !important;
-            overflow: visible !important;
-          }
-          #exam-print-root .exam-page {
-            width: 210mm !important;
-            height: 297mm !important;
-            min-height: 297mm !important;
-            max-height: 297mm !important;
-            margin: 0 !important;
-            padding: 20mm 15mm !important; /* 상하 20mm(시중 표준)·좌우 15mm */
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            page-break-after: always;
-            overflow: hidden !important;
-            background: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          #exam-print-root .exam-page:last-child { page-break-after: auto; }
-          #exam-print-root .exam-page.exam-last-page { page-break-after: auto; }
-          /* 개별 문제 단위로 page-break 방지 */
-          #exam-print-root .break-inside-avoid {
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-          /* 해설지: 자연스러운 페이지 흐름 + 상하 여백 확보 */
-          #exam-print-root .exam-page.solution-page {
-            height: auto !important;
-            min-height: auto !important;
-            max-height: none !important;
-            overflow: visible !important;
-            page-break-after: auto;
-            page-break-inside: auto;
-            padding-top: 18mm !important;
-            padding-bottom: 18mm !important;
-          }
-          #exam-print-root .exam-page.solution-page .break-inside-avoid {
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-        }
-        @page { size: A4 portrait; margin: 0; }
-      `}} />
-      {selectedExam && problems.length > 0 && (
-        <div className="print-source-sections">
-          {/* ★ 시험지(exam) 섹션은 executePrint()에서 .preview-exam-page를 직접 복제하므로 off-screen 렌더 제거 (성능 개선) */}
+      {/* (구 인쇄 전용 영역·출력 모달 제거 — ExamPaperView 가 인쇄 CSS·출력 메뉴·DOM 복제 자체 내장) */}
 
-          {/* 빠른정답 섹션 */}
-          <div className="print-section-answer bg-white p-8">
-              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111' }}>{selectedExam.title}</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>빠른 정답</p>
-              </div>
-              <table style={{ width: '100%', maxWidth: '600px', margin: '0 auto', borderCollapse: 'collapse', border: '2px solid #1f2937', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '42%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '42%' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563' }}>문항</th>
-                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563' }}>정답</th>
-                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563' }}>문항</th>
-                    <th style={{ background: '#f3f4f6', border: '1px solid #9ca3af', padding: '8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#4b5563' }}>정답</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
-                    const leftNum = rowIdx + 1;
-                    const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
-                    const leftP = problems.find((p) => p.number === leftNum);
-                    const rightP = problems.find((p) => p.number === rightNum);
-                    return (
-                      <tr key={rowIdx} style={{ background: rowIdx % 2 === 1 ? '#eff6ff80' : 'white' }}>
-                        <td style={{ border: '1px solid #d1d5db', padding: '6px 4px', textAlign: 'center', fontSize: '14px', fontWeight: 700, color: '#111' }}>{leftNum}</td>
-                        <td style={{ border: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center', fontSize: '16px', fontWeight: 700, color: '#2563eb', overflow: 'hidden' }}>
-                          {leftP ? <AnswerDisplay answer={leftP.answer} className="text-blue-600" compact /> : '-'}
-                        </td>
-                        <td style={{ border: '1px solid #d1d5db', padding: '6px 4px', textAlign: 'center', fontSize: '14px', fontWeight: 700, color: '#111' }}>
-                          {rightNum <= problems.length ? rightNum : ''}
-                        </td>
-                        <td style={{ border: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center', fontSize: '16px', fontWeight: 700, color: '#2563eb', overflow: 'hidden' }}>
-                          {rightP ? <AnswerDisplay answer={rightP.answer} className="text-blue-600" compact /> : ''}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-          </div>
-
-          {/* 해설지 섹션 */}
-          <div className="print-section-solution bg-white p-8">
-              <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #1f2937', paddingBottom: '12px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111' }}>{selectedExam.title}</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>해설지</p>
-              </div>
-              <div style={{ columns, columnGap: columns === 2 ? `${gap}px` : undefined }}>
-                {problems.map((problem) => (
-                  <div key={problem.id} style={{ breakInside: 'avoid', marginBottom: `${gap}px` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', background: '#1f2937', color: 'white', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
-                        {problem.number}
-                      </span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '6px', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '4px 8px', fontSize: '12px', fontWeight: 700, color: '#1d4ed8' }}>
-                        정답 <AnswerDisplay answer={problem.answer} className="text-blue-700" />
-                      </span>
-                    </div>
-                    <div style={{ marginLeft: '12px', paddingLeft: '16px', borderLeft: '2px solid #bfdbfe', fontSize: '14px', color: '#374151', lineHeight: 1.6 }} className="whitespace-pre-line">
-                      <MixedContentRenderer content={stripChoiceAnalysis(problem.solution)} className="text-gray-700" />
-                    </div>
-                    <div style={{ marginTop: '12px', borderBottom: '1px dashed #d1d5db' }} />
-                  </div>
-                ))}
-              </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======== 출력 모달 (fixed — overflow-hidden 우회) ======== */}
-      {showPrintModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" onClick={() => setShowPrintModal(false)}>
-          <div className="w-72 rounded-xl border border-zinc-600 bg-zinc-800 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-zinc-700">
-              <span className="text-sm font-bold text-white">출력할 항목 선택</span>
-            </div>
-            <div className="p-3 space-y-1.5">
-              {([
-                { key: 'exam' as const, label: '시험지' },
-                { key: 'answer' as const, label: '빠른정답' },
-                { key: 'solution' as const, label: '해설지' },
-              ]).map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-700 cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={printSections[key]}
-                    onChange={() => togglePrintSection(key)}
-                    className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
-                  />
-                  <span className="text-sm text-white">{label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="px-3 pb-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPrintModal(false)}
-                className="flex-1 rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-700 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={executePrint}
-                disabled={!printSections.exam && !printSections.answer && !printSections.solution}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-500 px-3 py-2 text-sm font-bold text-white transition-colors"
-              >
-                <Printer className="h-4 w-4" />
-                출력하기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 출제(배포) 모달 — 매쓰플랫 미러링: 학년/반 + 학생 트리 → POST /api/sessions(type=EX) */}
       <DeployExamModal
