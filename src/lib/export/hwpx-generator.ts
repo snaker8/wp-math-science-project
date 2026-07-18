@@ -72,6 +72,47 @@ export interface HwpxExamConfig {
   pageCounts?: number[];
   // ★ 시험지 헤더 표 — 있으면 제목/부제/이름란 대신 우리 헤더 표(학원/학교·시험명·과목·유형·학년)를 그린다.
   header?: HwpxHeaderMeta;
+  // 잔재 경고 수신 콜백 (검증 루프) — 미변환 LaTeX 등 발견 시 호출 (파일 생성은 계속)
+  onWarnings?: (warnings: HwpxArtifactWarning[]) => void;
+  // 이미지 fetch 생략 (전수 감사용 — 네트워크 없이 텍스트·수식 변환만 검사)
+  skipImages?: boolean;
+}
+
+// ============================================================================
+// 검증 루프 — 잔재 스캐너 (2026-07-18)
+//   지금까지의 원문 노출 사고(\boxed·\hline·\cdots·\square·\%·화살표·$ 잔재…)는 전부
+//   "한글 텍스트/수식에 LaTeX 잔재가 남는" 한 클래스 → 범용 감지기로 상시 검출.
+//   hml-verify(가져오기 검증 루프)의 내보내기 등가물. 비용 0 (룰베이스).
+// ============================================================================
+export interface HwpxArtifactWarning { kind: string; sample: string; count: number }
+
+export function scanHwpxArtifacts(sectionXml: string): HwpxArtifactWarning[] {
+  const warns: HwpxArtifactWarning[] = [];
+  const texts = [...sectionXml.matchAll(/<hp:t>([^<]*)<\/hp:t>/g)].map((m) => m[1]);
+  const joined = texts.join('\n');
+  const add = (kind: string, re: RegExp) => {
+    const ms = [...joined.matchAll(re)];
+    if (ms.length) warns.push({ kind, sample: ms[0][0].slice(0, 50), count: ms.length });
+  };
+  add('latex-command', /\\[a-zA-Z]{2,}/g);            // \boxed \hline \le 류 미변환 명령
+  add('latex-env', /\\begin\{|\\end\{/g);             // 환경 잔재
+  add('dollar', /\$/g);                               // 수식 경계 $ 잔재
+  add('figure-marker', /\[(?:도형|그림)\]/g);          // 웹 렌더 마커
+  add('tabular-bar', /\\hline|\|\s*c\s*\|/g);         // 표 괘선/스펙 잔재
+  // 수식 스크립트: 백슬래시 잔재·중괄호 불균형 (한글에서 글자 노출/깨짐)
+  const scripts = [...sectionXml.matchAll(/<hp:script>([\s\S]*?)<\/hp:script>/g)].map((m) => m[1]);
+  let bs = 0; let bsSample = '';
+  let brace = 0; let brSample = '';
+  for (const s of scripts) {
+    const d = s.replace(/&[a-z]+;/g, '');
+    if (/\\[a-zA-Z]/.test(d)) { bs++; if (!bsSample) bsSample = d.slice(0, 50); }
+    const o = (s.match(/\{/g) || []).length;
+    const c = (s.match(/\}/g) || []).length;
+    if (o !== c) { brace++; if (!brSample) brSample = s.slice(0, 50); }
+  }
+  if (bs) warns.push({ kind: 'eq-backslash', sample: bsSample, count: bs });
+  if (brace) warns.push({ kind: 'eq-brace-unbalanced', sample: brSample, count: brace });
+  return warns;
 }
 
 // 매쓰플랫 실제 .hwpx 와 동일한 charPr/paraPr ID (header.xml 검증 템플릿 기준)
@@ -164,13 +205,14 @@ function latexToHWPEquation(latex: string): string {
   eq = eq.replace(/\\bar\{([^{}]*)\}/g, 'bar {$1}');
   eq = eq.replace(/\\vec\{([^{}]*)\}/g, 'vec {$1}');
 
-  // 조각함수: \left\{ \begin{array}{..} ... \end{array} \right.  → cases { ... }
-  eq = eq.replace(/\\left\s*\\?\{\s*\\begin\{array\}\{[^}]*\}([\s\S]*?)\\end\{array\}\s*\\right\s*\.?/g, (_, c: string) => {
+  // 조각함수: \left\{ \begin{array|aligned|...} ... \right.  → cases { ... }
+  //   (aligned 미포함 시 "LEFT { aligned ..." 중괄호 불균형 잔재 — hwpx-audit 발견)
+  eq = eq.replace(/\\left\s*\\?\{\s*\\begin\{(?:array|aligned|align\*?|gathered|cases)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:array|aligned|align\*?|gathered|cases)\}\s*\\right\s*\.?/g, (_, c: string) => {
     const rows = c.split('\\\\').map((r) => r.trim()).filter(Boolean); // & 는 HWP 열 구분자라 보존
     return `cases {${rows.join(' # ')}}`;
   });
-  // 행렬 / cases / array
-  eq = eq.replace(/\\begin\{(?:pmatrix|bmatrix|matrix|array)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:pmatrix|bmatrix|matrix|array)\}/g, (_, c: string) => {
+  // 행렬 / cases / array / aligned
+  eq = eq.replace(/\\begin\{(?:pmatrix|bmatrix|matrix|array|aligned|align\*?|gathered)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{(?:pmatrix|bmatrix|matrix|array|aligned|align\*?|gathered)\}/g, (_, c: string) => {
     const rows = c.split('\\\\').map((r) => r.trim()).filter(Boolean); // & 는 HWP 열 구분자라 보존
     return `matrix {${rows.join(' # ')}}`;
   });
@@ -279,6 +321,9 @@ function cleanTextLatex(s: string): string {
   t = t.replace(/\\boxed\{\\text\{([^{}]*)\}\}/g, '[$1]');
   t = t.replace(/\\boxed\{([^{}]*)\}/g, '[$1]');
   t = t.replace(/\\text(?:bf|it|rm)?\{([^{}]*)\}/g, '$1');
+  // 감사(hwpx-audit) 발견 클래스: \mathbf/\underline/\overline 등 스타일 명령 — 내용만
+  t = t.replace(/\\(?:mathbf|mathrm|mathit|underline|overline|emph)\{([^{}]*)\}/g, '$1');
+  t = t.replace(/\\multicolumn\{\d+\}\{[^{}]*\}\{([^{}]*)\}/g, '$1');
   t = t.replace(/\\q?quad(?![a-zA-Z])/g, ' ');
   t = t.replace(/\\([{}%$#&_])/g, '$1');      // \{ → {, \% → % 등 이스케이프 리터럴
   t = t.replace(/\\[,;!:]/g, ' ').replace(/\\ /g, ' ');
@@ -1530,7 +1575,7 @@ export async function generateHWPX(
   }));
 
   // 도형 이미지: content/choices/solution 의 ![](url)·<img> 를 fetch → 임베드
-  const imageUrls = collectImageUrls(problems);
+  const imageUrls = config.skipImages ? [] : collectImageUrls(problems);
   const { info: imageMap, bytes: imageBytes } = imageUrls.length > 0
     ? await fetchImages(imageUrls)
     : { info: new Map() as ImageMap, bytes: new Map<string, Uint8Array>() };
@@ -1575,6 +1620,11 @@ export async function generateHWPX(
     }
   }
   zip.file('Contents/section0.xml', sectionXml);
+  // ★ 검증 루프 — 잔재 스캔 (파일 생성은 계속, 경고만 전달)
+  if (config.onWarnings) {
+    const warns = scanHwpxArtifacts(sectionXml);
+    if (warns.length > 0) config.onWarnings(warns);
+  }
   const prv = problems.map((p) => `${p.number}. ${(p.content || '').replace(/<[^>]*>/g, '').replace(/\\[a-zA-Z]+/g, '').slice(0, 60)}`).join('\r\n');
   zip.file('Preview/PrvText.txt', prv);
 

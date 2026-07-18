@@ -180,6 +180,8 @@ export async function GET(
     headerStyle,
   };
 
+  // ★ 검증 루프 — 잔재 경고 수집 (파일은 생성, 경고는 헤더+서버 로그로)
+  let artifactWarnings: Array<{ kind: string; sample: string; count: number }> = [];
   const buf = (await generateHWPX(hwpProblems, {
     title: examTitle,
     showAnswerSheet: withAnswer,
@@ -189,7 +191,11 @@ export async function GET(
     perPage,
     pageCounts,
     header: headerMeta,
+    onWarnings: (w) => { artifactWarnings = w; },
   })) as Buffer;
+  if (artifactWarnings.length > 0) {
+    console.warn(`[export-hwp] 잔재 경고 (${examTitle}):`, JSON.stringify(artifactWarnings));
+  }
 
   const filename = `${examTitle}.hwpx`;
   return new NextResponse(buf as unknown as BodyInit, {
@@ -199,6 +205,10 @@ export async function GET(
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
       'Content-Length': String(buf.length),
       'Cache-Control': 'no-store',
+      // 검증 루프 — 잔재 경고 요약 (클라이언트가 읽어 표시). ASCII 안전 형태로.
+      ...(artifactWarnings.length > 0
+        ? { 'X-Hwpx-Warnings': encodeURIComponent(artifactWarnings.map((w) => `${w.kind}x${w.count}`).join(',')) }
+        : {}),
     },
   });
 }

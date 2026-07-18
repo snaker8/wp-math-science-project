@@ -664,6 +664,13 @@ export function ExamPaperView({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       setShowPrintMenu(false);
+      // ★ 검증 루프 — 잔재 경고 표시 (파일은 정상 다운로드됨)
+      const warnHeader = res.headers.get('X-Hwpx-Warnings');
+      if (warnHeader) {
+        const summary = decodeURIComponent(warnHeader);
+        console.warn('[한글 다운로드] 변환 경고:', summary);
+        alert(`한글 파일은 다운로드됐지만 일부 변환 경고가 있습니다 (${summary}).\n해당 부분이 한글에서 원문 그대로 보일 수 있어요 — 개발팀 로그에 기록됐습니다.`);
+      }
     } catch (error) {
       console.error('HWPX download error:', error);
       alert(`HWP 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
