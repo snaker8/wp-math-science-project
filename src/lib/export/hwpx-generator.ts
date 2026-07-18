@@ -230,6 +230,8 @@ function latexToHWPEquation(latex: string): string {
 
   // 빈칸 네모(\square) — 시험지 빈칸 채우기 기호. 미매핑 시 "\square" 글자 노출(동래여중 16번 실증)
   eq = eq.replace(/\\square(?![a-zA-Z])/g, '□');
+  // \boxed{..} → 한글 box{..} (네모 상자 — 가져오기 역변환 box→\boxed 과 왕복 짝)
+  eq = eq.replace(/\\boxed(?![a-zA-Z])/g, 'box');
 
   // 남은 LaTeX 명령 정리
   eq = eq.replace(/\\[a-zA-Z]+\{([^{}]*)\}/g, '$1');
@@ -273,6 +275,11 @@ function cleanTextLatex(s: string): string {
   let t = s;
   // (?![a-zA-Z]) 필수 — 없으면 \leftrightarrow 의 "\left" 를 삼켜 "rightarrow" 글자 노출 (요금표 실증)
   t = t.replace(/\\left(?![a-zA-Z])\s*/g, '').replace(/\\right(?![a-zA-Z])\s*/g, '');
+  // \boxed{\text{유제}} 류 라벨 (2026-07-18 실증) — 텍스트 근사 [유제]. \text 는 내용만, \quad 는 공백.
+  t = t.replace(/\\boxed\{\\text\{([^{}]*)\}\}/g, '[$1]');
+  t = t.replace(/\\boxed\{([^{}]*)\}/g, '[$1]');
+  t = t.replace(/\\text(?:bf|it|rm)?\{([^{}]*)\}/g, '$1');
+  t = t.replace(/\\q?quad(?![a-zA-Z])/g, ' ');
   t = t.replace(/\\([{}%$#&_])/g, '$1');      // \{ → {, \% → % 등 이스케이프 리터럴
   t = t.replace(/\\[,;!:]/g, ' ').replace(/\\ /g, ' ');
   for (const [k, v] of Object.entries(TEXT_SYM)) {
@@ -753,6 +760,7 @@ function splitTabularParts(content: string): ContentPart[] {
     if (!m || m.index === undefined) break;
     if (m.index > 0) parts.push({ type: 'text', v: rest.slice(0, m.index) });
     const rows = m[1]
+      .replace(/\\hline/g, '') // 표 괘선 명령 — 미제거 시 셀에 "\hline" 글자 노출 (2026-07-18 실증)
       .split(/\\\\/)
       .map((r) => r.trim())
       .filter(Boolean)

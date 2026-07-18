@@ -130,6 +130,18 @@ describe('sanitizeProblemContent (부흥중 2-1 실데이터 결함 3종)', () =
     expect(txt).not.toContain('\\square');
   });
 
+  it('\\boxed 라벨·\\quad·\\hline 처리 (유제/답 라벨·표 괘선 노출 실증)', () => {
+    // 텍스트 경로: \boxed{\text{유제}} → [유제], \quad → 공백
+    const segs = parseContent('\\boxed{\\text{유제}} 1-7. 경우의 수를 구하시오. \\quad \\boxed{\\text{답}} 540');
+    const txt = segs.filter((s: { type: string }) => s.type === 'text').map((s: { value: string }) => s.value).join('');
+    expect(txt).toContain('[유제]');
+    expect(txt).toContain('[답]');
+    expect(txt).not.toContain('\\boxed');
+    expect(txt).not.toContain('\\quad');
+    // 수식 경로: \boxed → box
+    expect(latexToHWPEquation('\\boxed{x+1}')).toBe('box{x+1}');
+  });
+
   it('[도형]/[그림] 마커 제거 (동래여중 12번 노출)', () => {
     expect(sanitizeProblemContent('그래프가 아래와 같을 때, 넓이는? [도형]', 12, [])).not.toContain('[도형]');
     expect(sanitizeProblemContent('[그림] 참고', 3, [])).not.toContain('[그림]');
