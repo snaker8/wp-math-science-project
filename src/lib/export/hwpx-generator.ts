@@ -642,7 +642,9 @@ function buildHeaderTable(h: HwpxHeaderMeta): string {
 // ----------------------------------------------------------------------------
 const TABLE_W = 52800;                    // 본문 폭(53860)보다 좁게 — 우측 넘침 방지 안전마진
 const HALF_W = Math.floor(TABLE_W / 2);
-const ED_ROW_H = { meta: 1300, title: 2800, grade: 1200, name: 1700 } as const;
+// ★ 행 높이는 "글자 h × 줄간격 160% + 여유" 로 정직하게 — 선언보다 실렌더가 크면(셀 성장)
+//   그리드1 이 첫 페이지 계산에 안 맞아 헤더 단독 페이지 발생 (거제여중 실증, 2026-07-18).
+const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000 } as const;
 
 function edCell(
   runsXml: string,
@@ -737,11 +739,13 @@ function tabularTable(rows: string[][], width: number, cellRender: (cell: string
   const colCnt = Math.max(1, ...rows.map((r) => r.length));
   const cellW = Math.floor(width / colCnt);
   const rowH = 1100; // 최소 — 내용 따라 자동 성장
+  // 1열 나열형(요금표 등) = 세로 막대만({|c|} 스타일, 웹 동일) / 다열 데이터표 = 전체 격자
+  const bf = colCnt === 1 ? BF_VBAR : 4;
   const trs = rows.map((row, r) => {
     const tcs: string[] = [];
     for (let c = 0; c < colCnt; c++) {
       tcs.push(
-        `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="4">`
+        `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
         + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
         + cellRender(row[c] ?? '')
         + `</hp:subList>`
@@ -753,7 +757,7 @@ function tabularTable(rows: string[][], width: number, cellRender: (cell: string
     }
     return `<hp:tr>${tcs.join('')}</hp:tr>`;
   }).join('');
-  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rows.length}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rows.length}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${bf}" noAdjust="0">`
     + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="${rows.length * rowH}" heightRelTo="ABSOLUTE" protect="0"/>`
     + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="250" bottom="250"/>`
@@ -972,9 +976,9 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     const gridBoxW = Math.floor(TABLE_W / gridCols) - 3200;
     chunks.forEach((pageProblems, page) => {
       const rowsPerPage = Math.max(1, Math.ceil(pageProblems.length / gridCols));
-      // 첫 페이지 여유 2400 — 헤더 문단 줄간격/빈 런 오버헤드. 400 이면 그리드1이 다음
-      //   페이지로 밀려 헤더 단독 페이지 발생 (거제여중 실증). 이후 페이지는 400.
-      const gridH = PAGE_USABLE_H - (page === 0 ? headerH + 2400 : 0) - 400;
+      // 첫 페이지 여유 2000 — firstPara 빈 런/문단 간격 오버헤드 (헤더 행높이는 ED_ROW_H 가
+      //   실측 기준이라 별도 성장분 불필요). 이후 페이지는 400.
+      const gridH = PAGE_USABLE_H - (page === 0 ? headerH + 2000 : 0) - 400;
       const rowH = Math.floor(gridH / rowsPerPage);
       const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''));
       // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
@@ -1117,6 +1121,25 @@ function injectDividerBorderFill(header: string): string {
   return out.slice(0, k) + clone + out.slice(k);
 }
 
+// 세로 막대 전용 borderFill(27) — tabular {|c|} 스타일 (좌우 SOLID, 상하 NONE).
+//   1열 나열형 표(요금표 등)는 웹과 동일하게 가로 구분선 없이 세로 막대만 (2026-07-18).
+const BF_VBAR = 27;
+function injectVbarBorderFill(header: string): string {
+  const i = header.indexOf('<hh:borderFill id="4"');
+  if (i < 0) return header;
+  const j = header.indexOf('</hh:borderFill>', i);
+  if (j < 0) return header;
+  let clone = header.slice(i, j + '</hh:borderFill>'.length);
+  clone = clone.replace('<hh:borderFill id="4"', `<hh:borderFill id="${BF_VBAR}"`);
+  clone = clone
+    .replace(/<hh:topBorder type="[A-Z]+"/, '<hh:topBorder type="NONE"')
+    .replace(/<hh:bottomBorder type="[A-Z]+"/, '<hh:bottomBorder type="NONE"');
+  const out = header.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+  const k = out.indexOf('</hh:borderFills>');
+  if (k < 0) return header;
+  return out.slice(0, k) + clone + out.slice(k);
+}
+
 // gap(px) + perPage → space-before HWPUNIT (px 96dpi → ×75)
 function computeGapHwpUnit(config: HwpxExamConfig): number {
   // perPage 그리드 모드는 셀이 배치를 담당 → 간격 paraPr 미사용. 흐름 모드 슬라이더 값만.
@@ -1157,7 +1180,7 @@ export async function generateHWPX(
   zip.file('META-INF/container.rdf', CONTAINER_RDF);
   zip.file(
     'Contents/header.xml',
-    injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config))),
+    injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)))),
   );
 
   // BinData + manifest items

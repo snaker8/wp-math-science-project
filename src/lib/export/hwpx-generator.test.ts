@@ -306,6 +306,7 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xml).not.toContain('tabular');       // 원문 노출 없음
     const tbl = xml.match(/<hp:tbl[^>]*rowCnt="3" colCnt="1"[\s\S]*?<\/hp:tbl>/);
     expect(tbl).toBeTruthy();                    // 3행 1열 표
+    expect(tbl![0]).toContain('borderFillIDRef="27"'); // 1열 = 세로 막대만 ({|c|} 웹 동일)
     expect(tbl![0]).toContain('1200원');
     expect(tbl![0]).toContain('↔');              // \leftrightarrow → ↔
     expect(xml).toContain('[5점]');              // 배점은 표 뒤 텍스트 파트에 유지
