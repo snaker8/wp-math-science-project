@@ -131,13 +131,18 @@ describe('sanitizeProblemContent (부흥중 2-1 실데이터 결함 3종)', () =
   });
 
   it('\\boxed 라벨·\\quad·\\hline 처리 (유제/답 라벨·표 괘선 노출 실증)', () => {
-    // 텍스트 경로: \boxed{\text{유제}} → [유제], \quad → 공백
+    // 텍스트 경로: naked \boxed{\text{유제}} → 한글 수식 상자 box{"유제"} (웹 뱃지 동일 모양)
     const segs = parseContent('\\boxed{\\text{유제}} 1-7. 경우의 수를 구하시오. \\quad \\boxed{\\text{답}} 540');
+    const eqs = segs.filter((s: { type: string }) => s.type === 'equation').map((s: { value: string }) => s.value);
+    expect(eqs).toContain('box{"유제"}');
+    expect(eqs).toContain('box{"답"}');
     const txt = segs.filter((s: { type: string }) => s.type === 'text').map((s: { value: string }) => s.value).join('');
-    expect(txt).toContain('[유제]');
-    expect(txt).toContain('[답]');
     expect(txt).not.toContain('\\boxed');
     expect(txt).not.toContain('\\quad');
+    expect(txt).toContain('경우의 수를 구하시오');
+    // 공백 변형 "\boxed {\text { 유제 }}" 도 동일
+    const segs2 = parseContent('\\boxed {\\text { 유 제 }} 2-1. 다음');
+    expect(segs2.some((s: { type: string; value: string }) => s.type === 'equation' && s.value === 'box{"유 제"}')).toBe(true);
     // 수식 경로: \boxed → box
     expect(latexToHWPEquation('\\boxed{x+1}')).toBe('box{x+1}');
   });
