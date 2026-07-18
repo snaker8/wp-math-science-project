@@ -369,18 +369,29 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(mk).toMatch(/paraPrIDRef="64"[\s\S]*?중간고사/);
   });
 
-  it('정답표의 $..$ 수식은 변환 렌더 (LaTeX 원문 노출 방지 — 동해중 실증)', async () => {
+  it('빠른정답 표 — PDF 형식(문항|정답 4열, 회색 헤더행, 수식 렌더, LaTeX 노출 없음)', async () => {
     const buf = (await generateHWPX(
-      [{ ...prob(1, '풀어라.'), answer: '$\\dfrac{1}{5} \\le a \\le 7$' } as never],
+      [
+        { ...prob(1, '풀어라.'), answer: '$\\dfrac{1}{5} \\le a \\le 7$' } as never,
+        { ...prob(2, '구하라.'), answer: '②' } as never,
+        { ...prob(3, '풀어라.'), answer: '-8' } as never,
+      ],
       { title: 't', showNameField: false, showAnswerSheet: true },
     )) as Buffer;
     const xml = await section0Of(buf);
-    const ansIdx = xml.indexOf('[ 정답 ]');
+    const ansIdx = xml.indexOf('빠 른 정 답');
+    expect(ansIdx).toBeGreaterThan(0);
     const tail = xml.slice(ansIdx);
-    expect(tail).toContain('<hp:equation');            // 수식 객체로
-    expect(tail).toContain('{1} over {5}');            // \dfrac 변환
-    expect(tail).not.toContain('\\dfrac');             // 원문 노출 없음
-    expect(tail).not.toContain('$');
+    // 4열 표 + 회색 헤더행(문항/정답 bf25)
+    expect(tail).toMatch(/<hp:tbl[^>]*colCnt="4"/);
+    expect(tail).toContain('문항');
+    expect(tail).toContain('borderFillIDRef="25"');
+    // 수식 렌더 + 원문 노출 없음
+    expect(tail).toContain('<hp:equation');
+    expect(tail).toContain('{1} over {5}');
+    expect(tail).not.toContain('\\dfrac');
+    // 좌 1..2 / 우 3 배치 (half=2)
+    expect(tail).toContain('②');
   });
 
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {

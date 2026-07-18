@@ -1244,22 +1244,53 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     });
   }
 
-  // 정답표 — ★ 정답 속 $..$ 수식을 변환해 렌더 (생 텍스트로 박으면 "$\dfrac{1}{5} \le a$"
-  //   LaTeX 원문 노출 — 동해중 운영 실증, 2026-07-18)
-  if (config.showAnswerSheet !== false) {
+  // 빠른정답 표 — PDF 인쇄(QuickAnswerView)와 동일 형식 (2026-07-18 사용자 요구):
+  //   "빠 른 정 답" 가운데 제목 + [문항|정답|문항|정답] 4열 표(회색 헤더행, 수식 렌더,
+  //   좌 절반=1..half / 우 절반=half+1..n). 나열형은 LaTeX 노출·가독성 문제.
+  if (config.showAnswerSheet !== false && problems.length > 0) {
     P.push(paragraph(''));
-    P.push(paragraph(textRun('[ 정답 ]', CHAR.number), PARA.body));
-    const withAns = problems.filter((p) => p.answer !== undefined && p.answer !== '');
-    if (withAns.length > 0) {
-      let runs = '';
-      withAns.forEach((p, i) => {
-        runs += textRun(`${p.number}. `, CHAR.body);
-        const segs = parseContent(String(p.answer)).filter((s) => s.type !== 'image');
-        runs += segmentsToRuns(segs, CHAR.body, imageMap);
-        if (i < withAns.length - 1) runs += textRun('     ', CHAR.body);
-      });
-      P.push(paragraph(runs, PARA.body));
+    P.push(paragraph(textRun('빠 른 정 답', CHAR.title), PARA.eq));
+    P.push(paragraph(''));
+    const NUM_W = 6000;
+    const ANS_W = Math.floor(TABLE_W / 2) - NUM_W;
+    const half = Math.ceil(problems.length / 2);
+    const tc = (inner: string, col: number, r: number, w: number, bf: number, center = true) =>
+      `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+      + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+      + paragraph(inner, center ? PARA.eq : PARA.body)
+      + `</hp:subList>`
+      + `<hp:cellAddr colAddr="${col}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+      + `<hp:cellSz width="${w}" height="1700"/>`
+      + `<hp:cellMargin left="200" right="200" top="150" bottom="150"/>`
+      + `</hp:tc>`;
+    const ansRuns = (p?: HwpxProblem) => {
+      if (!p || p.answer === undefined || p.answer === '') return textRun('-', CHAR.body);
+      const segs = parseContent(String(p.answer)).filter((s) => s.type !== 'image');
+      return segmentsToRuns(segs, CHAR.body, imageMap) || textRun('-', CHAR.body);
+    };
+    const trs: string[] = [];
+    trs.push('<hp:tr>'
+      + tc(textRun('문항', CHAR.meta), 0, 0, NUM_W, 25) + tc(textRun('정답', CHAR.meta), 1, 0, ANS_W, 25)
+      + tc(textRun('문항', CHAR.meta), 2, 0, NUM_W, 25) + tc(textRun('정답', CHAR.meta), 3, 0, ANS_W, 25)
+      + '</hp:tr>');
+    for (let r = 0; r < half; r++) {
+      const left = problems[r];
+      const right = problems[r + half];
+      trs.push('<hp:tr>'
+        + tc(textRun(String(left?.number ?? ''), CHAR.number), 0, r + 1, NUM_W, 4)
+        + tc(ansRuns(left), 1, r + 1, ANS_W, 4)
+        + tc(textRun(right ? String(right.number) : '', CHAR.number), 2, r + 1, NUM_W, 4)
+        + tc(right ? ansRuns(right) : textRun('', CHAR.body), 3, r + 1, ANS_W, 4)
+        + '</hp:tr>');
     }
+    const ansTbl = `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="${half + 1}" colCnt="4" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+      + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${(half + 1) * 1700}" heightRelTo="ABSOLUTE" protect="0"/>`
+      + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+      + `<hp:outMargin left="0" right="0" top="200" bottom="200"/>`
+      + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+      + trs.join('')
+      + `</hp:tbl>`;
+    P.push(paragraph(`<hp:run charPrIDRef="0">${ansTbl}</hp:run>`, PARA.body));
   }
 
   // 해설
