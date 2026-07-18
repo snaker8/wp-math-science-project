@@ -666,6 +666,9 @@ function edCell(
     + `</hp:tc>`;
 }
 
+// ★ 가드: 헤더 디자인(행 추가·테마 등)을 바꾸면 이 함수가 "실제 렌더 높이"를 반환하도록
+//   반드시 함께 갱신할 것 — 그리드 첫 페이지가 이 값으로 문제 행 높이를 배분하므로,
+//   선언 < 실렌더가 되는 순간 표가 밀려 빈 1페이지가 재발한다 (거제여중 반복 실증).
 function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): number {
   return ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0)
     + (showNameField ? ED_ROW_H.name : 0) + 500; // + outMargin bottom
@@ -1036,8 +1039,10 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
           h: headerH,
         }
         : undefined;
-      // 여유 2000 = firstPara 빈 런 + 문단 간격 오버헤드. 이후 페이지는 400.
-      const gridH = PAGE_USABLE_H - (page === 0 ? 2000 : 400) - (withHeader ? headerH : 0);
+      // 첫 페이지 여유 4000 — firstPara(secPr 단락) 빈 줄(~1600) + 문단 간격 + 안전 마진.
+      //   2000 이면 헤더 병합 표가 아슬아슬하게 안 들어가 통째로 2페이지로 밀림(빈 1페이지, 실증).
+      //   이후 페이지는 400.
+      const gridH = PAGE_USABLE_H - (page === 0 ? 4000 : 400) - (withHeader ? headerH : 0);
       const rowH = Math.floor(gridH / rowsPerPage);
       const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''), headerRow);
       // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
