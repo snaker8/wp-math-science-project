@@ -49,6 +49,9 @@ export interface HwpxHeaderMeta {
   //   line→하단 accent 선 / double→하단 accent 이중선 / 그 외 그래픽 테마(wave·ribbon 등)→상단 색 띠.
   accentColor?: string;  // #rrggbb (없으면 기본 검정 에디토리얼)
   headerTheme?: string;  // 웹 테마 id (none/line/double/wave/...)
+  // ★ 한글 헤더 구조 (2026-07-18) — editorial(기본)/classic(격자 표형)/boxed(제목+우측 정보칸)
+  //   /mock(모의고사·수능 스타일: 가운데 정렬 + 상하 구분선. 수학비서 '모의고사 타입' 대응)
+  headerStyle?: 'editorial' | 'classic' | 'boxed' | 'mock';
 }
 
 export interface HwpxExamConfig {
@@ -606,7 +609,7 @@ function hdrCell(text: string, col: number, row: number, opts: { span?: number; 
     + `<hp:cellMargin left="510" right="510" top="141" bottom="141"/>`
     + `</hp:tc>`;
 }
-function buildHeaderTable(h: HwpxHeaderMeta): string {
+function buildHeaderTable(h: HwpxHeaderMeta, inline = false): string {
   const rows: string[] = [];
   // 1행: 학원/학교 | 시험명(span3) | 담당
   rows.push('<hp:tr>'
@@ -634,11 +637,16 @@ function buildHeaderTable(h: HwpxHeaderMeta): string {
   const id = nextId();
   return `<hp:tbl id="${id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="8" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
     + `<hp:sz width="53839" widthRelTo="ABSOLUTE" height="${rowCnt * HDR_ROW_H}" heightRelTo="ABSOLUTE" protect="0"/>`
-    + `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="${inline ? 'PARA' : 'COLUMN'}" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
     + `<hp:inMargin left="510" right="510" top="141" bottom="141"/>`
     + rows.join('')
     + `</hp:tbl>`;
+}
+// 클래식 표형 높이 — 라벨 h1100×1.6=1760 < 행 2800 이라 성장 없음 (실측 안전)
+function classicHeaderHeight(h: HwpxHeaderMeta): number {
+  const showRow3 = !!(h.timeLimit || h.date || (h.totalScore && h.totalScore !== '100'));
+  return (showRow3 ? 3 : 2) * HDR_ROW_H + 500;
 }
 
 // ----------------------------------------------------------------------------
@@ -752,6 +760,107 @@ function splitTabularParts(content: string): ContentPart[] {
   }
   if (rest.trim() || parts.length === 0) parts.push({ type: 'text', v: rest });
   return parts;
+}
+
+// ----------------------------------------------------------------------------
+// 박스형 헤더 — 좌: 메타/큰 제목/학년 스택, 우: 회색 정보 칸(학교명·이름·점수).
+//   매쓰플랫 실측 헤더(좌 넓은 제목 + 우 좁은 정보) 구조 기반의 한글 네이티브 디자인.
+// ----------------------------------------------------------------------------
+const BOXED_ROW_H = 7400;
+const BOXED_INFO_W = 16500;
+function boxedHeaderHeight(): number { return BOXED_ROW_H + 500; }
+
+function buildBoxedHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  const meta = [h.subject, h.examType].filter(Boolean).join(' · ');
+  const leftParas = [
+    paragraph(textRun(meta, CHAR.meta), PARA.body),
+    paragraph(textRun(h.examTitle || '', CHAR.title), PARA.body),
+    ...(h.grade ? [paragraph(textRun(h.grade, CHAR.meta), PARA.body)] : []),
+  ].join('');
+  const rightParas = [
+    paragraph(textRun(h.schoolName || '', CHAR.chapter), PARA.eq), // 가운데 볼드
+    ...(showNameField
+      ? [
+        paragraph(textRun('이름 :             ', CHAR.meta), PARA.eq),
+        paragraph(textRun(`점수 :      / ${h.totalScore || '100'}`, CHAR.meta), PARA.eq),
+      ]
+      : []),
+  ].join('');
+  const cell = (inner: string, col: number, w: number, bf: number, pad: number) =>
+    `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + inner
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="0"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+    + `<hp:cellSz width="${w}" height="${BOXED_ROW_H}"/>`
+    + `<hp:cellMargin left="${pad}" right="${pad}" top="200" bottom="200"/>`
+    + `</hp:tc>`;
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="2" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${BOXED_ROW_H}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + `<hp:tr>${cell(leftParas, 0, TABLE_W - BOXED_INFO_W, 4, 600)}${cell(rightParas, 1, BOXED_INFO_W, 25, 300)}</hp:tr>`
+    + `</hp:tbl>`;
+}
+
+// ----------------------------------------------------------------------------
+// 모의고사형 헤더 — 수능 스타일: 가운데 정렬 스택 + 상/하 구분선 (수학비서 '모의고사 타입' 대응)
+// ----------------------------------------------------------------------------
+const MOCK_ROWS = { rule: 300, meta: 1900, title: 3400, sub: 1900, name: 2000 } as const;
+function mockHeaderHeight(): number {
+  return MOCK_ROWS.rule + MOCK_ROWS.meta + MOCK_ROWS.title + MOCK_ROWS.sub + MOCK_ROWS.name + 500;
+}
+
+function buildMockHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  const meta = [h.examType, h.semester].filter(Boolean).join(' · ');
+  const sub = [h.subject, h.grade].filter(Boolean).join(' · ');
+  const row = (inner: string, r: number, hh: number, bf: number) =>
+    `<hp:tr><hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + inner
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="0" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+    + `<hp:cellSz width="${TABLE_W}" height="${hh}"/>`
+    + `<hp:cellMargin left="0" right="0" top="0" bottom="0"/>`
+    + `</hp:tc></hp:tr>`;
+  let r = 0;
+  const rows = [
+    row(paragraph(textRun('', CHAR.small), PARA.eq), r++, MOCK_ROWS.rule, 10),            // 상단 구분선(아래선)
+    row(paragraph(textRun(meta, CHAR.meta), PARA.eq), r++, MOCK_ROWS.meta, BF_NONE),      // 유형·학기 (가운데)
+    row(paragraph(textRun(h.examTitle || '', CHAR.title), PARA.eq), r++, MOCK_ROWS.title, BF_NONE), // 제목 (가운데)
+    row(paragraph(textRun(sub, CHAR.chapter), PARA.eq), r++, MOCK_ROWS.sub, BF_NONE),     // 과목·학년 (가운데 볼드)
+    row(
+      paragraph(
+        showNameField
+          ? textRun(`이름 :               점수 :       / ${h.totalScore || '100'}`, CHAR.meta)
+          : textRun('', CHAR.meta),
+        PARA.eq,
+      ),
+      r++, MOCK_ROWS.name, 10,                                                            // 하단 구분선
+    ),
+  ].join('');
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${r}" colCnt="1" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${mockHeaderHeight() - 500}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + rows
+    + `</hp:tbl>`;
+}
+
+// ── 헤더 구조 디스패처 — 그리드 배분(headerHeightOf)과 렌더(buildHeaderByStyle)는 반드시 짝 ──
+function buildHeaderByStyle(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  if (h.headerStyle === 'classic') return buildHeaderTable(h, inline);
+  if (h.headerStyle === 'boxed') return buildBoxedHeader(h, showNameField, inline);
+  if (h.headerStyle === 'mock') return buildMockHeader(h, showNameField, inline);
+  return buildEditorialHeader(h, showNameField, inline);
+}
+function headerHeightOf(h: HwpxHeaderMeta, showNameField: boolean): number {
+  if (h.headerStyle === 'classic') return classicHeaderHeight(h);
+  if (h.headerStyle === 'boxed') return boxedHeaderHeight();
+  if (h.headerStyle === 'mock') return mockHeaderHeight();
+  return editorialHeaderHeight(h, showNameField);
 }
 
 // <보기>/<조건> 박스 — 테두리 있는 1×1 인라인 표. 라벨 줄이 단독으로 있을 때만 감지
@@ -1029,7 +1138,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     //   + 퍼짐(스프레드) 안 됨. 표 셀은 위치·크기 고정이라 확정 배열.
     const gridCols = cols === 2 ? 2 : 1;
     const headerH = config.header
-      ? editorialHeaderHeight(config.header, config.showNameField !== false)
+      ? headerHeightOf(config.header, config.showNameField !== false)
       : 0;
     // 그리드 모드 헤더는 firstPara(secPr 단락) 안에 인라인으로 — 별도 단락이면 keepWithNext 로
     //   그리드1과 함께 밀려 "빈 1페이지 + 헤더 단독 2페이지"가 생김 (거제여중 실증, 2026-07-18).
@@ -1058,7 +1167,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
       const withHeader = page === 0 && !!config.header;
       const headerRow = withHeader
         ? {
-          xml: `<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${buildEditorialHeader(config.header!, config.showNameField !== false, true)}</hp:run></hp:p>`,
+          xml: `<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${buildHeaderByStyle(config.header!, config.showNameField !== false, true)}</hp:run></hp:p>`,
           h: headerH,
         }
         : undefined;
@@ -1133,7 +1242,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   const headerBody = gridMode && firstGridTbl
     ? `<hp:run charPrIDRef="0">${firstGridTbl}</hp:run>`
     : (config.header
-      ? `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+      ? `<hp:run charPrIDRef="0">${buildHeaderByStyle(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
       : textRun(config.title, CHAR.title) + lineSeg(PARA.title));
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
     + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`

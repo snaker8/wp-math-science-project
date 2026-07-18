@@ -349,6 +349,25 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xmlB).not.toContain('borderFillIDRef="29"');
   });
 
+  it('헤더 구조 4종(editorial/classic/boxed/mock) — 각 구조 시그니처 렌더', async () => {
+    const base = { title: 't', columns: 2 as const, perPage: 4, showAnswerSheet: false };
+    const header = { schoolName: 'A중', examTitle: '중간고사', subject: '수학', examType: '학교기출', grade: '중2', teacher: '김샘' };
+    const xmlOf = async (headerStyle?: 'editorial' | 'classic' | 'boxed' | 'mock') => {
+      const buf = (await generateHWPX([prob(1, '본문')], { ...base, header: { ...header, headerStyle } })) as Buffer;
+      return section0Of(buf);
+    };
+    const ed = await xmlOf();                      // 기본 에디토리얼: 이름줄 하단선(10)
+    expect(ed).toContain('이름 :');
+    const cl = await xmlOf('classic');             // 클래식: 라벨 셀(bf25) + '학원/학교' 라벨
+    expect(cl).toContain('학원/학교');
+    expect(cl).toContain('borderFillIDRef="25"');
+    const bx = await xmlOf('boxed');               // 박스형: 우측 회색 정보칸(bf25) + 테두리(bf4)
+    expect(bx).toContain('borderFillIDRef="25"');
+    expect(bx).toContain('점수 :');
+    const mk = await xmlOf('mock');                // 모의고사형: 1열 표 + 가운데(64) 제목
+    expect(mk).toMatch(/colCnt="1"[\s\S]*?paraPrIDRef="64"[\s\S]*?중간고사/);
+  });
+
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {
