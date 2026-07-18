@@ -997,6 +997,9 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     return out;
   };
 
+  // 그리드1(첫 페이지 표) — firstPara 안에 직접 배치 (아래 grid 분기에서 채움)
+  let firstGridTbl: string | null = null;
+
   if (gridMode) {
     // ★ 그리드 모드 = 페이지당 표 (문제=고정 셀). 두 진입로:
     //   - perPage(4/6/8 프리셋): 페이지당 N문제 균등.
@@ -1039,14 +1042,17 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
           h: headerH,
         }
         : undefined;
-      // 첫 페이지 여유 4000 — firstPara(secPr 단락) 빈 줄(~1600) + 문단 간격 + 안전 마진.
-      //   2000 이면 헤더 병합 표가 아슬아슬하게 안 들어가 통째로 2페이지로 밀림(빈 1페이지, 실증).
-      //   이후 페이지는 400.
-      const gridH = PAGE_USABLE_H - (page === 0 ? 4000 : 400) - (withHeader ? headerH : 0);
+      // ★ 그리드1 은 firstPara(secPr 단락) 안에 직접 들어감 — 앞에 빈 줄이 없어 밀릴 수 없음.
+      //   (별도 단락 + 여유 2000/4000 튜닝은 3회 모두 실패 — 첫 단락 빈 줄과 페이지공유 불가가 원인)
+      const gridH = PAGE_USABLE_H - (page === 0 ? 1200 : 400) - (withHeader ? headerH : 0);
       const rowH = Math.floor(gridH / rowsPerPage);
       const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''), headerRow);
-      // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
-      P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run></hp:p>`);
+      if (page === 0) {
+        firstGridTbl = tbl; // firstPara 조립부에서 사용
+      } else {
+        // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
+        P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run></hp:p>`);
+      }
     });
   } else {
     // 자연 흐름 (2단 NEWSPAPER) — 첫 문제는 헤더 바로 아래라 위 간격 X, 이후 PARA_SPACED 간격.
@@ -1102,13 +1108,13 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   //   흐름 모드 + header: 에디토리얼 헤더를 전체폭 플로팅으로 같은 단락에 (2단 위에 얹힘).
   //   그리드 모드 헤더는 위에서 인라인으로 이미 P 에 추가됨 → 여기선 빈 런만.
   //   header 없으면 기존 제목 텍스트.
-  // 그리드 모드 헤더는 그리드1 첫 행(병합 셀)에 내장 → firstPara 는 빈 런만.
-  //   흐름 모드는 firstPara 플로팅 (colPr 2단 위 전체폭 — 부흥중 검증). 이중 생성 금지.
-  const headerBody = config.header
-    ? (gridMode
-      ? `<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
-      : `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`)
-    : textRun(config.title, CHAR.title) + lineSeg(PARA.title);
+  // 그리드 모드: 그리드1(헤더 행 내장)이 firstPara 의 본문 — 표 앞에 아무 줄도 없어
+  //   페이지 밀림 원천 차단. 흐름 모드: 헤더 플로팅 (colPr 2단 위 전체폭 — 부흥중 검증).
+  const headerBody = gridMode && firstGridTbl
+    ? `<hp:run charPrIDRef="0">${firstGridTbl}</hp:run>`
+    : (config.header
+      ? `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+      : textRun(config.title, CHAR.title) + lineSeg(PARA.title));
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
     + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`
     + headerBody
