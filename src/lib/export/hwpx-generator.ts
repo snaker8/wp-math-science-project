@@ -731,8 +731,8 @@ function splitTabularParts(content: string): ContentPart[] {
 
 // <보기>/<조건> 박스 — 테두리 있는 1×1 인라인 표. 라벨 줄이 단독으로 있을 때만 감지
 //   (본문 속 "다음 〈보기〉 중에서" 언급은 미발동). 전각/반각 괄호 혼용 허용 (동래여중 '<보기＞' 실증).
-//   |보기| 파이프 형식도 허용 (엄궁중 유사1회 실증, 2026-07-18).
-const BOX_LABEL_RE = /^\s*[<〈＜|]\s*(보기|조건)\s*[>〉＞|]\s*$/;
+//   |보기| 파이프 형식·"보 기" 내부 공백도 허용 (엄궁중·거제여중 8번 실증, 2026-07-18).
+const BOX_LABEL_RE = /^\s*[<〈＜|]\s*(보\s*기|조\s*건)\s*[>〉＞|]\s*$/;
 
 // 데이터 표 (tabular) — 전 셀 테두리(bf 4), 셀 내용 가운데 정렬, 내용 따라 행 성장.
 function tabularTable(rows: string[][], width: number, cellRender: (cell: string) => string): string {
@@ -766,6 +766,37 @@ function tabularTable(rows: string[][], width: number, cellRender: (cell: string
     + `</hp:tbl>`;
 }
 
+// 짧은 선택지 3열 배치 — 웹 인쇄(①②③/④⑤ 균등 3열)와 동일 정렬. 테두리 없는 표.
+function choiceGridTable(cellParas: string[], width: number): string {
+  const colCnt = 3;
+  const rowCnt = Math.max(1, Math.ceil(cellParas.length / colCnt));
+  const cellW = Math.floor(width / colCnt);
+  const rowH = 1500; // 최소 — 내용 따라 성장
+  let trs = '';
+  for (let r = 0; r < rowCnt; r++) {
+    let tcs = '';
+    for (let c = 0; c < colCnt; c++) {
+      const inner = cellParas[r * colCnt + c] ?? paragraph('');
+      tcs += `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${BF_NONE}">`
+        + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+        + inner
+        + `</hp:subList>`
+        + `<hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+        + `<hp:cellSz width="${cellW}" height="${rowH}"/>`
+        + `<hp:cellMargin left="150" right="150" top="100" bottom="100"/>`
+        + `</hp:tc>`;
+    }
+    trs += `<hp:tr>${tcs}</hp:tr>`;
+  }
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="${rowCnt * rowH}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="150" bottom="150"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + trs
+    + `</hp:tbl>`;
+}
+
 function boxTable(innerParas: string, width: number): string {
   return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="1" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
     + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="1000" heightRelTo="ABSOLUTE" protect="0"/>`
@@ -792,9 +823,26 @@ function buildProblemGrid(
   rowCnt: number,
   rowH: number,
   renderCell: (p: HwpxProblem) => string,
+  // ★ 첫 페이지 헤더를 그리드의 첫 행(전체 폭 병합 셀)으로 — 별도 단락/표로 두면 한글
+  //   페이지 계산에 따라 헤더 단독 페이지가 반복 발생 (거제여중 3회 실증). 같은 표 안이면
+  //   물리적으로 분리 불가.
+  headerRow?: { xml: string; h: number },
 ): string {
   const cellW = Math.floor(TABLE_W / colCnt);
   const rows: string[] = [];
+  const rowOffset = headerRow ? 1 : 0;
+  if (headerRow) {
+    rows.push(
+      `<hp:tr><hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${BF_NONE}">`
+      + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+      + headerRow.xml
+      + `</hp:subList>`
+      + `<hp:cellAddr colAddr="0" rowAddr="0"/><hp:cellSpan colSpan="${colCnt}" rowSpan="1"/>`
+      + `<hp:cellSz width="${TABLE_W}" height="${headerRow.h}"/>`
+      + `<hp:cellMargin left="0" right="0" top="0" bottom="300"/>`
+      + `</hp:tc></hp:tr>`,
+    );
+  }
   for (let r = 0; r < rowCnt; r++) {
     const tcs: string[] = [];
     for (let c = 0; c < colCnt; c++) {
@@ -809,7 +857,7 @@ function buildProblemGrid(
         + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
         + inner
         + `</hp:subList>`
-        + `<hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+        + `<hp:cellAddr colAddr="${c}" rowAddr="${r + rowOffset}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
         + `<hp:cellSz width="${cellW}" height="${rowH}"/>`
         + `<hp:cellMargin left="${c === 0 ? 0 : 900}" right="${c === 0 ? 900 : 0}" top="141" bottom="141"/>`
         + `</hp:tc>`,
@@ -819,8 +867,8 @@ function buildProblemGrid(
   }
   // ★ treatAsChar=1 (인라인) — 플로팅(treatAsChar=0)은 colPr 없는 섹션에서 한글이 위치를
   //   오른쪽으로 틀어 계산 (동래여중 v1·v2 치우침 실증). 인라인은 텍스트 흐름 = 왼쪽 여백 시작.
-  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
-    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${rowCnt * rowH}" heightRelTo="ABSOLUTE" protect="0"/>`
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt + rowOffset}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${rowCnt * rowH + (headerRow ? headerRow.h : 0)}" heightRelTo="ABSOLUTE" protect="0"/>`
     + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="0" bottom="0"/>`
     + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
@@ -905,10 +953,10 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     if (tailRun && !tailUsed) out.push(paragraph(tailRun, PARA.body)); // 전부 표뿐인 극단 케이스
 
     if (boxIdx >= 0) {
-      const label = (lines[boxIdx].match(BOX_LABEL_RE) || [])[1] || '보기';
+      const label = ((lines[boxIdx].match(BOX_LABEL_RE) || [])[1] || '보기').replace(/\s+/g, '');
       const boxSegs = parseContent(lines.slice(boxIdx + 1).join('\n'));
       const inner = [
-        paragraph(textRun(`< ${label} >`, CHAR.meta), PARA.eq), // 가운데 라벨
+        paragraph(textRun(`<${label}>`, CHAR.number), PARA.body), // 왼쪽 볼드 라벨 (웹 인쇄 동일)
         ...bodyParagraphs(boxSegs, { imageMap, firstParaPr: PARA.body }),
       ].join('');
       out.push(paragraph(`<hp:run charPrIDRef="0">${boxTable(inner, boxW)}</hp:run>`, PARA.body));
@@ -922,14 +970,16 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
         stripChoicePrefix(c).replace(/\\[a-zA-Z]+/g, '').replace(/[${}\s]/g, '').length;
       const allShort = prob.choices.every((c) => visLen(c) <= 6);
       if (allShort) {
-        const runs = prob.choices.map((c, i) => {
+        // 웹 인쇄와 동일한 3열 정렬 (①②③ / ④⑤) — 테두리 없는 표
+        const cells = prob.choices.map((c, i) => {
           const cseg = parseContent(stripChoicePrefix(c));
           const cText = cseg.filter((s) => s.type !== 'image');
-          return textRun(`${CIRCLE[i] || `(${i + 1})`} `, CHAR.body)
-            + segmentsToRuns(cText, CHAR.body, imageMap)
-            + textRun('      ', CHAR.body);
-        }).join('');
-        out.push(paragraph(textRun('   ', CHAR.body) + runs, PARA.body));
+          return paragraph(
+            textRun(`${CIRCLE[i] || `(${i + 1})`} `, CHAR.body) + segmentsToRuns(cText, CHAR.body, imageMap),
+            PARA.body,
+          );
+        });
+        out.push(paragraph(`<hp:run charPrIDRef="0">${choiceGridTable(cells, boxW)}</hp:run>`, PARA.body));
       } else {
         for (let i = 0; i < prob.choices.length; i++) {
           const cseg = parseContent(stripChoicePrefix(prob.choices[i]));
@@ -976,11 +1026,18 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     const gridBoxW = Math.floor(TABLE_W / gridCols) - 3200;
     chunks.forEach((pageProblems, page) => {
       const rowsPerPage = Math.max(1, Math.ceil(pageProblems.length / gridCols));
-      // 첫 페이지 여유 2000 — firstPara 빈 런/문단 간격 오버헤드 (헤더 행높이는 ED_ROW_H 가
-      //   실측 기준이라 별도 성장분 불필요). 이후 페이지는 400.
-      const gridH = PAGE_USABLE_H - (page === 0 ? headerH + 2000 : 0) - 400;
+      // 첫 페이지: 헤더를 그리드 첫 행(병합 셀)으로 — 별도 단락이면 헤더 단독 페이지 반복 (실증 3회).
+      const withHeader = page === 0 && !!config.header;
+      const headerRow = withHeader
+        ? {
+          xml: `<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${buildEditorialHeader(config.header!, config.showNameField !== false, true)}</hp:run></hp:p>`,
+          h: headerH,
+        }
+        : undefined;
+      // 여유 2000 = firstPara 빈 런 + 문단 간격 오버헤드. 이후 페이지는 400.
+      const gridH = PAGE_USABLE_H - (page === 0 ? 2000 : 400) - (withHeader ? headerH : 0);
       const rowH = Math.floor(gridH / rowsPerPage);
-      const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''));
+      const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''), headerRow);
       // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
       P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run></hp:p>`);
     });
@@ -1038,10 +1095,12 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   //   흐름 모드 + header: 에디토리얼 헤더를 전체폭 플로팅으로 같은 단락에 (2단 위에 얹힘).
   //   그리드 모드 헤더는 위에서 인라인으로 이미 P 에 추가됨 → 여기선 빈 런만.
   //   header 없으면 기존 제목 텍스트.
-  // 헤더는 모드 무관 firstPara 안에 (그리드=인라인 / 흐름=플로팅). 별도 단락 금지 — keepWithNext
-  //   로 그리드와 함께 밀려 빈 페이지 생김. 이중 생성 금지 (gridMode 인자만 분기).
+  // 그리드 모드 헤더는 그리드1 첫 행(병합 셀)에 내장 → firstPara 는 빈 런만.
+  //   흐름 모드는 firstPara 플로팅 (colPr 2단 위 전체폭 — 부흥중 검증). 이중 생성 금지.
   const headerBody = config.header
-    ? `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, gridMode)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+    ? (gridMode
+      ? `<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+      : `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`)
     : textRun(config.title, CHAR.title) + lineSeg(PARA.title);
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
     + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`

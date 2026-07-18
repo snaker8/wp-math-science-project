@@ -172,7 +172,7 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xml).toMatch(/<hp:run charPrIDRef="3"><hp:t>\s*\[5점\]<\/hp:t>/);
   });
 
-  it('짧은 선택지는 한 줄 가로 배열, 긴 선택지는 세로 (시중 문제지 배치)', async () => {
+  it('짧은 선택지는 3열 표 배열(웹 인쇄 동일), 긴 선택지는 세로', async () => {
     const shortChoices = ['① ㄱ', '② ㄱ,ㄷ', '③ ㄱ,ㄹ', '④ ㄴ,ㄹ', '⑤ ㄱ,ㄴ,ㄹ'];
     const longChoices = ['① $y=-3x+2$ 그래프', '② $y=-\\frac{2}{3}x+7$ 그래프', '③ 매우 긴 선택지 텍스트입니다', '④ 다른 긴 선택지 후보', '⑤ 마지막 긴 선택지'];
     const buf = (await generateHWPX(
@@ -183,9 +183,11 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
       { title: 't', showNameField: false, showAnswerSheet: false },
     )) as Buffer;
     const xml = await section0Of(buf);
-    // 짧은 세트: ①~⑤ 가 같은 단락 안에
-    const onePara = xml.match(/<hp:p[^>]*>(?:(?!<\/hp:p>)[\s\S])*?①(?:(?!<\/hp:p>)[\s\S])*?⑤(?:(?!<\/hp:p>)[\s\S])*?<\/hp:p>/);
-    expect(onePara).toBeTruthy();
+    // 짧은 세트: 2행 3열 테두리 없는 표 안에 ①~⑤ (①②③ / ④⑤)
+    const grid = xml.match(/<hp:tbl[^>]*rowCnt="2" colCnt="3"[^>]*borderFillIDRef="2"[\s\S]*?<\/hp:tbl>/);
+    expect(grid).toBeTruthy();
+    expect(grid![0]).toContain('①');
+    expect(grid![0]).toContain('⑤');
     // 긴 세트: ① 단락과 ⑤ 단락이 분리 (⑤만 있고 ① 없는 단락 존재)
     const seperate = [...xml.matchAll(/<hp:p[^>]*>((?:(?!<\/hp:p>)[\s\S])*?)<\/hp:p>/g)]
       .filter((m) => m[1].includes('⑤') && !m[1].includes('①'));
@@ -259,7 +261,7 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     const box = xml.match(/<hp:tbl[^>]*rowCnt="1" colCnt="1"[^>]*borderFillIDRef="4"[\s\S]*?<\/hp:tbl>/);
     expect(box).toBeTruthy();
     expect(box![0]).toContain('treatAsChar="1"');
-    expect(box![0]).toContain('&lt; 보기 &gt;');   // 가운데 라벨
+    expect(box![0]).toContain('&lt;보기&gt;');   // 왼쪽 볼드 라벨
     expect(box![0]).toContain('<hp:equation');     // ㄱ/ㄴ 수식이 박스 안에
     // 질문 스템(박스 밖)에는 보기 항목 수식 없음 + 스템의 〈보기〉 언급은 유지
     expect(xml).toContain('다음 〈보기〉 중에서');
@@ -292,7 +294,7 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     const xml = await section0Of(buf);
     const box = xml.match(/<hp:tbl[^>]*rowCnt="1" colCnt="1"[^>]*borderFillIDRef="4"[\s\S]*?<\/hp:tbl>/);
     expect(box).toBeTruthy();
-    expect(box![0]).toContain('&lt; 보기 &gt;');
+    expect(box![0]).toContain('&lt;보기&gt;');
     expect(xml).toContain('|보기|에서 모두'); // 본문 언급은 유지
   });
 
