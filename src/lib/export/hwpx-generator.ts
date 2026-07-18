@@ -340,18 +340,36 @@ function parseTextMath(text: string): ContentSegment[] {
   // ※ "벌거벗은 환경을 $로 감싸기" 시도는 금지 — 이미 $..$ 안에 있는 환경까지 이중 감싸
   //   $ 짝을 대량 파괴 (전수 감사 67→115개 악화 실증, 2026-07-18 롤백). 원본 결함은 경고로만.
   const segs: ContentSegment[] = [];
+  // 텍스트 조각 push — $ 밖이 보장되는 지점. naked \boxed{..} 라벨(유제/답)은 텍스트 근사([유제])
+  // 대신 한글 수식 상자(box{"유제"})로 → 웹의 네모 뱃지와 동일한 모양 (2026-07-18 사용자 요구).
+  const pushText = (t: string) => {
+    const boxedRe = /\\boxed\s*\{\s*(?:\\text\s*\{([^{}]*)\}|([^{}]*))\s*\}/g;
+    let tLast = 0;
+    let bm: RegExpExecArray | null;
+    while ((bm = boxedRe.exec(t)) !== null) {
+      if (bm.index > tLast) {
+        const pre = t.slice(tLast, bm.index);
+        if (pre.trim()) segs.push({ type: 'text', value: cleanTextLatex(pre) });
+      }
+      const label = (bm[1] ?? bm[2] ?? '').trim();
+      if (label) segs.push({ type: 'equation', value: `box{"${label}"}` });
+      tLast = bm.index + bm[0].length;
+    }
+    const rest = t.slice(tLast);
+    if (rest.trim()) segs.push({ type: 'text', value: cleanTextLatex(rest) });
+  };
   // 디스플레이 수식(\[ \], $$ $$)은 여러 줄 가능 → [\s\S]. 인라인($, \()은 줄 안.
   const mathPattern = /\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = mathPattern.exec(text)) !== null) {
-    if (m.index > last) { const t = text.slice(last, m.index); if (t.trim()) segs.push({ type: 'text', value: cleanTextLatex(t) }); }
+    if (m.index > last) { const t = text.slice(last, m.index); if (t.trim()) pushText(t); }
     const hwpEq = latexToHWPEquation(m[1] || m[2] || m[3] || m[4]);
     // m[1]=\[..\], m[3]=$$..$$ → 디스플레이 수식 (m[2]=\(..\), m[4]=$..$ 는 인라인)
     if (hwpEq) segs.push({ type: 'equation', value: hwpEq, display: !!(m[1] || m[3]) });
     last = m.index + m[0].length;
   }
-  if (last < text.length) { const t = text.slice(last); if (t.trim()) segs.push({ type: 'text', value: cleanTextLatex(t) }); }
+  if (last < text.length) { const t = text.slice(last); if (t.trim()) pushText(t); }
   return segs;
 }
 
