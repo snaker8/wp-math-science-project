@@ -114,6 +114,26 @@ describe('sanitizeProblemContent (부흥중 2-1 실데이터 결함 3종)', () =
   it('\\% 이스케이프 → 수식 스크립트에 % 리터럴', () => {
     expect(latexToHWPEquation('30\\%')).toBe('30%');
   });
+
+  it('단일 문자 지수 경계 확정 — (2x-5)^2=a 가 ^{2}=a 로 (동래여중 5번 지수깨짐)', () => {
+    expect(latexToHWPEquation('(2x-5)^2=a')).toBe('(2x-5)^{2}=a');
+    expect(latexToHWPEquation('x^2+y_1')).toBe('x^{2}+y_{1}');
+    // 이미 중괄호면 불변
+    expect(latexToHWPEquation('x^{2}=a')).toBe('x^{2}=a');
+  });
+
+  it('\\square → □ (수식·텍스트 양쪽, 동래여중 16번 노출)', () => {
+    expect(latexToHWPEquation('\\square')).toBe('□');
+    const segs = parseContent('포물선의 \\square(이)라 한다.');
+    const txt = segs.filter((s: { type: string }) => s.type === 'text').map((s: { value: string }) => s.value).join('');
+    expect(txt).toContain('□');
+    expect(txt).not.toContain('\\square');
+  });
+
+  it('[도형]/[그림] 마커 제거 (동래여중 12번 노출)', () => {
+    expect(sanitizeProblemContent('그래프가 아래와 같을 때, 넓이는? [도형]', 12, [])).not.toContain('[도형]');
+    expect(sanitizeProblemContent('[그림] 참고', 3, [])).not.toContain('[그림]');
+  });
 });
 
 // zip 을 되열어 section0.xml 텍스트 추출
@@ -143,6 +163,37 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(center![1]).not.toContain('[5점]');
   });
 
+  it('배점은 본문보다 작은 글자(charPr 3, h900) — 시중 문제지 스타일', async () => {
+    const buf = (await generateHWPX(
+      [{ ...prob(1, '계산하시오.'), points: 5 }],
+      { title: 't', showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    expect(xml).toMatch(/<hp:run charPrIDRef="3"><hp:t>\s*\[5점\]<\/hp:t>/);
+  });
+
+  it('짧은 선택지는 3열 표 배열(웹 인쇄 동일), 긴 선택지는 세로', async () => {
+    const shortChoices = ['① ㄱ', '② ㄱ,ㄷ', '③ ㄱ,ㄹ', '④ ㄴ,ㄹ', '⑤ ㄱ,ㄴ,ㄹ'];
+    const longChoices = ['① $y=-3x+2$ 그래프', '② $y=-\\frac{2}{3}x+7$ 그래프', '③ 매우 긴 선택지 텍스트입니다', '④ 다른 긴 선택지 후보', '⑤ 마지막 긴 선택지'];
+    const buf = (await generateHWPX(
+      [
+        { ...prob(1, '고른 것은?'), choices: shortChoices },
+        { ...prob(2, '옳은 것은?'), choices: longChoices },
+      ],
+      { title: 't', showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    // 짧은 세트: 2행 3열 테두리 없는 표 안에 ①~⑤ (①②③ / ④⑤)
+    const grid = xml.match(/<hp:tbl[^>]*rowCnt="2" colCnt="3"[^>]*borderFillIDRef="2"[\s\S]*?<\/hp:tbl>/);
+    expect(grid).toBeTruthy();
+    expect(grid![0]).toContain('①');
+    expect(grid![0]).toContain('⑤');
+    // 긴 세트: ① 단락과 ⑤ 단락이 분리 (⑤만 있고 ① 없는 단락 존재)
+    const seperate = [...xml.matchAll(/<hp:p[^>]*>((?:(?!<\/hp:p>)[\s\S])*?)<\/hp:p>/g)]
+      .filter((m) => m[1].includes('⑤') && !m[1].includes('①'));
+    expect(seperate.length).toBeGreaterThan(0);
+  });
+
   it('인라인 수식($..$)만 있으면 가운데 단락 없음 (기존 동작 보존)', async () => {
     const buf = (await generateHWPX(
       [prob(1, '함수 $y=2x$ 의 기울기를 구하시오.')],
@@ -153,30 +204,124 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xml).toContain('<hp:equation');
   });
 
-  it('perPage=4·2단: 단당 2문제 후 columnBreak, 4문제 후 pageBreak (8문제)', async () => {
+  it('perPage=4·2단: 페이지당 2×2 그리드 표, 세로 우선 배치 (8문제 → 표 2개)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {
       title: 't', columns: 2, perPage: 4, showNameField: false, showAnswerSheet: false,
     })) as Buffer;
     const xml = await section0Of(buf);
-    // idx4(5번 문제) 에서 pageBreak 1회, idx2(3번)·idx6(7번) 에서 columnBreak 2회
-    expect((xml.match(/pageBreak="1"/g) || []).length).toBe(1);
-    expect((xml.match(/columnBreak="1"/g) || []).length).toBe(2);
-    // 나누기 단락이 해당 문제 번호 run 을 포함하는지 (위치 검증)
-    const pageBrkPara = xml.match(/<hp:p[^>]*pageBreak="1"[^>]*>([\s\S]*?)<\/hp:p>/);
-    expect(pageBrkPara![1]).toContain('5. ');
-    const colBrkParas = [...xml.matchAll(/<hp:p[^>]*columnBreak="1"[^>]*>([\s\S]*?)<\/hp:p>/g)];
-    expect(colBrkParas[0][1]).toContain('3. ');
-    expect(colBrkParas[1][1]).toContain('7. ');
+    // 그리드 표 2개 (헤더 미지정이라 헤더표 없음), 각각 2행×2열
+    const tbls = [...xml.matchAll(/<hp:tbl[^>]*rowCnt="(\d+)" colCnt="(\d+)"[\s\S]*?<\/hp:tbl>/g)];
+    expect(tbls.length).toBe(2);
+    for (const t of tbls) { expect(t[1]).toBe('2'); expect(t[2]).toBe('2'); }
+    // 세로 우선: 표1 = 1·2(왼쪽 열), 3·4(오른쪽 열). 셀(r0,c1) 에 3번.
+    // 번호는 자기 단락 <hp:t>N.</hp:t> (본문은 번호 아래 줄부터 — PDF/시중지 스타일)
+    expect(tbls[0][0]).toContain('<hp:t>1.</hp:t>');
+    expect(tbls[0][0]).toContain('<hp:t>4.</hp:t>');
+    expect(tbls[0][0]).not.toContain('<hp:t>5.</hp:t>');
+    expect(tbls[1][0]).toContain('<hp:t>5.</hp:t>');
+    expect(tbls[1][0]).toContain('<hp:t>8.</hp:t>');
+    // 셀 주소 검증: 3번 문제 셀은 colAddr=1, rowAddr=0
+    const cell3 = tbls[0][0].match(/<hp:tc[^>]*>(?:(?!<\/hp:tc>)[\s\S])*?<hp:t>3\.<\/hp:t>(?:(?!<\/hp:tc>)[\s\S])*?<\/hp:tc>/);
+    expect(cell3![0]).toContain('colAddr="1" rowAddr="0"');
+    // 그리드 모드 = 명시적 1단 colPr (colPr 생략 시 한글이 표를 우측으로 밀어 배치 — 치우침 실증)
+    expect(xml).toContain('colCount="1"');
+    expect(xml).not.toContain('colCount="2"');
+    // 왼쪽 열 = 구분선 borderFill(26), 오른쪽 열 = 테두리 없음(2)
+    expect(tbls[0][0]).toContain('borderFillIDRef="26"');
+    expect(tbls[0][0]).toContain('borderFillIDRef="2"');
   });
 
-  it('perPage 미지정: 나누기 없음 (기존 동작 보존)', async () => {
+  it('그리드 모드: header.xml 구분선 bf(26) 주입 + 표 전부 인라인(treatAsChar=1)', async () => {
+    const buf = (await generateHWPX(
+      [prob(1, '본문')],
+      { title: 't', columns: 2, perPage: 4, showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const zip = await JSZip.loadAsync(buf);
+    const header = await zip.file('Contents/header.xml')!.async('string');
+    expect(header).toContain('<hh:borderFill id="26"');
+    expect(header).toMatch(/<hh:borderFill id="26"[\s\S]*?<hh:rightBorder type="SOLID" width="0\.12 mm" color="#CCCCCC"\/>/);
+    // 그리드 모드는 플로팅 표 금지 — colPr 없는 섹션의 플로팅은 한글이 우측으로 틀어 배치(치우침 실증)
+    const xml = await zip.file('Contents/section0.xml')!.async('string');
+    expect(xml).not.toContain('treatAsChar="0"');
+  });
+
+  it('전각 구두점 선두 번호 "1．다음" 제거 (동래여중 실증)', () => {
+    expect(sanitizeProblemContent('1．다음 〈보기〉 중에서 이차방정식인 것은?', 1, [])).toMatch(/^다음/);
+  });
+
+  it('<보기＞ 라벨 단독 줄 → 테두리 박스 표(bf4)로, 본문 언급 〈보기〉는 미발동', async () => {
+    const content = '다음 〈보기〉 중에서 고른 것은?\n<보기＞\nㄱ． $2x^{2}-x+4=x^{2}+1$\nㄴ． $2x(x-1)=3+2x^{2}$';
+    const buf = (await generateHWPX(
+      [prob(1, content)],
+      { title: 't', columns: 2, showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    // 박스 표 존재 (테두리 bf4, 1×1, 인라인)
+    const box = xml.match(/<hp:tbl[^>]*rowCnt="1" colCnt="1"[^>]*borderFillIDRef="4"[\s\S]*?<\/hp:tbl>/);
+    expect(box).toBeTruthy();
+    expect(box![0]).toContain('treatAsChar="1"');
+    expect(box![0]).toContain('&lt;보기&gt;');   // 왼쪽 볼드 라벨
+    expect(box![0]).toContain('<hp:equation');     // ㄱ/ㄴ 수식이 박스 안에
+    // 질문 스템(박스 밖)에는 보기 항목 수식 없음 + 스템의 〈보기〉 언급은 유지
+    expect(xml).toContain('다음 〈보기〉 중에서');
+  });
+
+  it('pageCounts(자동 배열): 미리보기 페이지 구성 그대로 — [3,2] → 표 2개 (2행/1행)', async () => {
+    const problems = Array.from({ length: 5 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
+    const buf = (await generateHWPX(problems, {
+      title: 't', columns: 2, pageCounts: [3, 2], showNameField: false, showAnswerSheet: false,
+    })) as Buffer;
+    const xml = await section0Of(buf);
+    const tbls = [...xml.matchAll(/<hp:tbl[^>]*rowCnt="(\d+)" colCnt="(\d+)"[\s\S]*?<\/hp:tbl>/g)];
+    expect(tbls.length).toBe(2);
+    expect(tbls[0][1]).toBe('2'); // ceil(3/2)=2행
+    expect(tbls[1][1]).toBe('1'); // ceil(2/2)=1행
+    expect(tbls[0][0]).toContain('<hp:t>3.</hp:t>');
+    expect(tbls[0][0]).not.toContain('<hp:t>4.</hp:t>');
+    expect(tbls[1][0]).toContain('<hp:t>4.</hp:t>');
+    expect(tbls[1][0]).toContain('<hp:t>5.</hp:t>');
+    // 자동 그리드도 1단 colPr
+    expect(xml).toContain('colCount="1"');
+  });
+
+  it('|보기| 파이프 라벨도 박스 감지 (엄궁중 실증)', async () => {
+    const content = '다음 중 일차함수인 것을 |보기|에서 모두 고른 것은?\n|보기|\nㄱ. 한 변의 길이가 $2x$ 인 정사각형의 넓이 $y$';
+    const buf = (await generateHWPX(
+      [prob(1, content)],
+      { title: 't', columns: 2, showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    const box = xml.match(/<hp:tbl[^>]*rowCnt="1" colCnt="1"[^>]*borderFillIDRef="4"[\s\S]*?<\/hp:tbl>/);
+    expect(box).toBeTruthy();
+    expect(box![0]).toContain('&lt;보기&gt;');
+    expect(xml).toContain('|보기|에서 모두'); // 본문 언급은 유지
+  });
+
+  it('\\begin{tabular} 데이터 표 → 테두리 표 (원문 노출 방지, 요금표 실증)', async () => {
+    const content = '구간별 요금은 다음과 같다.\n\\begin{tabular}{|c|}A \\leftrightarrow B: 1200원 \\\\ B \\leftrightarrow C: 1000원 \\\\ A \\leftrightarrow C: 1800원 \\\\ \\end{tabular}\n이 버스에 승객 40명을 태우고 출발한 후. [5점]';
+    const buf = (await generateHWPX(
+      [{ ...prob(1, content), points: 5 }],
+      { title: 't', columns: 2, showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    expect(xml).not.toContain('tabular');       // 원문 노출 없음
+    const tbl = xml.match(/<hp:tbl[^>]*rowCnt="3" colCnt="1"[\s\S]*?<\/hp:tbl>/);
+    expect(tbl).toBeTruthy();                    // 3행 1열 표
+    expect(tbl![0]).toContain('borderFillIDRef="27"'); // 1열 = 세로 막대만 ({|c|} 웹 동일)
+    expect(tbl![0]).toContain('1200원');
+    expect(tbl![0]).toContain('↔');              // \leftrightarrow → ↔
+    expect(xml).toContain('[5점]');              // 배점은 표 뒤 텍스트 파트에 유지
+    expect(xml).toContain('승객 40명');
+  });
+
+  it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {
       title: 't', columns: 2, showNameField: false, showAnswerSheet: false,
     })) as Buffer;
     const xml = await section0Of(buf);
-    expect(xml).not.toContain('pageBreak="1"');
-    expect(xml).not.toContain('columnBreak="1"');
+    expect(xml).not.toContain('<hp:tbl'); // 헤더 미지정 + 흐름 모드 → 표 없음
+    expect(xml).toContain('<hp:colPr');
   });
 });

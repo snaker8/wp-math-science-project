@@ -57,7 +57,10 @@ export interface HwpxExamConfig {
   showSolutions?: boolean;
   columns?: 1 | 2;       // 인쇄 모달 단 수 (기본 2). 1 = 단일칼럼(편집 친화)
   problemGap?: number;   // 인쇄 모달 문제 간격(px, 기본 ~30) → 문제 사이 여백
-  perPage?: number;      // 인쇄 모달 '4문제 배열' 프리셋(4/6/8) → 문제 밀도(간격)
+  perPage?: number;      // 인쇄 모달 '4문제 배열' 프리셋(4/6/8) → 페이지당 고정 그리드
+  // ★ 자동 모드 페이지 구성 (2026-07-18) — 웹 미리보기의 측정 기반 분할 결과(페이지별 문제 수).
+  //   있으면 그리드 모드로 페이지 구성을 그대로 재현 (한글 자체 reflow 에 안 맡김).
+  pageCounts?: number[];
   // ★ 시험지 헤더 표 — 있으면 제목/부제/이름란 대신 우리 헤더 표(학원/학교·시험명·과목·유형·학년)를 그린다.
   header?: HwpxHeaderMeta;
 }
@@ -65,11 +68,13 @@ export interface HwpxExamConfig {
 // 매쓰플랫 실제 .hwpx 와 동일한 charPr/paraPr ID (header.xml 검증 템플릿 기준)
 const CHAR = {
   body: 0,      // h1000 본문/수식
-  number: 16,   // h1600 Bold 문제번호
-  title: 23,    // h2000 Bold 제목
+  // ★ 번호·제목은 검정 — 클라우드 인쇄 형식 (2026-07-17 사용자: 매쓰플랫 파랑(16=#00ABFF h1600,
+  //   23=#00ABFF h2000) 말고 클라우드처럼). 21=h1200 준검정 볼드, 24=h2000 검정 볼드 (템플릿 네이티브).
+  number: 21,   // h1200 Bold 검정 문제번호 (클라우드 번호 비율 ≈ 본문 1.2배)
+  title: 24,    // h2000 Bold 검정 제목
   chapter: 21,  // h1200 Bold 부제
   meta: 22,     // h1100 메타(이름/날짜)
-  small: 22,    // h1100 배점 (charPr 26 은 밑줄 있어서 22 사용)
+  small: 3,     // h900 배점 — 본문(h1000)보다 작게 (시중 문제지 스타일. h1100=본문보다 커서 부자연 실증)
 } as const;
 const PARA = {
   title: 38,    // 제목/부제
@@ -82,6 +87,9 @@ const PARA = {
 const STYLE = 0;
 // 2단 NEWSPAPER + 구분선 (매쓰플랫 동일)
 const COLPR_CTRL = '<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="2" sameSz="1" sameGap="2000"><hp:colLine type="SOLID" width="0.2 mm" color="#CCCCCC"/></hp:colPr></hp:ctrl>';
+// 1단 명시 colPr — ★ colPr 자체가 없으면 한글이 섹션 컬럼 폭 계산을 틀어 표가 우측으로
+//   밀림(동래여중 그리드 v1~v3 치우침 실증 — 플로팅/인라인 무관, colPr 유무가 유일한 차이).
+const COLPR_SINGLE = '<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>';
 
 // ============================================================================
 // LaTeX → HWP 수식 변환 (실측 포맷에 맞춤)
@@ -190,6 +198,8 @@ function latexToHWPEquation(latex: string): string {
     '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
     '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
     '\\therefore': 'therefore', '\\because': 'because',
+    // 점열 — 미매핑 시 잔여 명령 정리에서 삭제돼 "y=x-2 ⋯①" 의 ⋯ 소실 (거제여중 3번 실증)
+    '\\cdots': 'cdots', '\\ldots': 'ldots', '\\vdots': 'vdots', '\\ddots': 'ddots', '\\dots': 'ldots',
     '\\angle': 'angle', '\\triangle': 'triangle',
     '\\parallel': 'parallel', '\\perp': 'perp', '\\prime': "'",
   };
@@ -209,9 +219,17 @@ function latexToHWPEquation(latex: string): string {
   // \mathrm,\text,\textbf → "..."
   eq = eq.replace(/\\(?:mathrm|text|textbf|mathbf|boldsymbol|operatorname)\{([^{}]*)\}/g, '"$1"');
 
+  // 빈칸 네모(\square) — 시험지 빈칸 채우기 기호. 미매핑 시 "\square" 글자 노출(동래여중 16번 실증)
+  eq = eq.replace(/\\square(?![a-zA-Z])/g, '□');
+
   // 남은 LaTeX 명령 정리
   eq = eq.replace(/\\[a-zA-Z]+\{([^{}]*)\}/g, '$1');
   eq = eq.replace(/\\[a-zA-Z]+/g, '');
+
+  // ★ 단일 문자 지수/첨자 중괄호 확정 — `x^2=a` 를 한글이 `^{2=a}` 로 묶어 "2=a 전체가
+  //   지수로 올라가는" 사고 (동래여중 5번 (2x-5)^2=a 실증). `^{2}=a` 로 경계 명시.
+  eq = eq.replace(/([_^])([A-Za-z0-9])(?![\w{])/g, '$1{$2}');
+
   eq = eq.replace(/\s+/g, ' ').trim();
 
   return eq;
@@ -238,12 +256,14 @@ const TEXT_SYM: Record<string, string> = {
   '\\cup': '∪', '\\cap': '∩', '\\in': '∈', '\\notin': '∉', '\\subset': '⊂', '\\supset': '⊃',
   '\\infty': '∞', '\\to': '→', '\\rightarrow': '→', '\\Rightarrow': '⇒', '\\leftarrow': '←',
   '\\cdots': '⋯', '\\ldots': '…', '\\dots': '…', '\\circ': '∘', '\\angle': '∠',
+  '\\square': '□', '\\Box': '□', '\\leftrightarrow': '↔', '\\Leftrightarrow': '⇔',
   '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ', '\\theta': 'θ',
   '\\lambda': 'λ', '\\mu': 'μ', '\\pi': 'π', '\\sigma': 'σ', '\\omega': 'ω',
 };
 function cleanTextLatex(s: string): string {
   let t = s;
-  t = t.replace(/\\left\s*/g, '').replace(/\\right\s*/g, '');
+  // (?![a-zA-Z]) 필수 — 없으면 \leftrightarrow 의 "\left" 를 삼켜 "rightarrow" 글자 노출 (요금표 실증)
+  t = t.replace(/\\left(?![a-zA-Z])\s*/g, '').replace(/\\right(?![a-zA-Z])\s*/g, '');
   t = t.replace(/\\([{}%$#&_])/g, '$1');      // \{ → {, \% → % 등 이스케이프 리터럴
   t = t.replace(/\\[,;!:]/g, ' ').replace(/\\ /g, ' ');
   for (const [k, v] of Object.entries(TEXT_SYM)) {
@@ -390,10 +410,14 @@ function sanitizeProblemContent(content: string, num: number, dbChoices: string[
   let s = content || '';
   // ① 첫 줄 `| 유형명 |` 태그 — 자산화 시 박힌 분류 라벨. 시험지에 노출되면 학생에게 유형 힌트.
   s = s.replace(/^\s*\|[^|\n]{1,60}\|\s*\n/, '');
+  // ①-b 웹 렌더용 도형 위치 마커 — 한글에선 도형이 별도 단락으로 붙으므로 마커 텍스트 제거
+  //    (동래여중 12번 "[도형]" 노출 실증)
+  s = s.replace(/\[(?:도형|그림)\]/g, ' ');
   // ② 선두 중복 번호 — 우리가 "N. " 을 다시 붙이므로. 시퀀스 번호와 일치할 때만(보수적):
-  //    "01 "(zero-pad+공백) / "1."·"1)"(구두점). ★ bare "1 "(비패딩+공백)은 "1 이상의 수" 오삭제 위험 → 보존.
+  //    "01 "(zero-pad+공백) / "1."·"1)"(구두점, 전각 ．） 포함 — 동래여중 "1．다음" 실증).
+  //    ★ bare "1 "(비패딩+공백)은 "1 이상의 수" 오삭제 위험 → 보존.
   const zeroPad = String(num).padStart(2, '0');
-  s = s.replace(new RegExp(`^\\s*(?:${zeroPad}\\s+|${num}\\s*[.)]\\s*)`), '');
+  s = s.replace(new RegExp(`^\\s*(?:${zeroPad}\\s+|${num}\\s*[.)．）]\\s*)`), '');
   //    수식 선두 케이스: "$07\\ x=2..." — 번호가 수식 안에 박힘 (부흥중 #7 실증). zero-pad 만.
   s = s.replace(new RegExp(`^(\\s*\\$)${zeroPad}(?:\\\\)?\\s+`), '$1');
   // ③ 끝 인라인 보기 — dbChoices 와 과반 일치 시만
@@ -490,12 +514,8 @@ function lineSeg(_paraPrId: number): string {
   return '';
 }
 
-function paragraph(
-  runsXml: string,
-  paraPrId: number = PARA.body,
-  breaks?: { page?: boolean; column?: boolean },
-): string {
-  return `<hp:p id="${nextId()}" paraPrIDRef="${paraPrId}" styleIDRef="${STYLE}" pageBreak="${breaks?.page ? 1 : 0}" columnBreak="${breaks?.column ? 1 : 0}" merged="0">${runsXml || textRun('', CHAR.body)}${lineSeg(paraPrId)}</hp:p>`;
+function paragraph(runsXml: string, paraPrId: number = PARA.body): string {
+  return `<hp:p id="${nextId()}" paraPrIDRef="${paraPrId}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0">${runsXml || textRun('', CHAR.body)}${lineSeg(paraPrId)}</hp:p>`;
 }
 
 function segmentsToRuns(segments: ContentSegment[], charPrId: number, imageMap: ImageMap): string {
@@ -511,9 +531,8 @@ function segmentsToRuns(segments: ContentSegment[], charPrId: number, imageMap: 
 
 // 세그먼트 → 단락 목록. 디스플레이 수식($$..$$/\[..\])은 가운데정렬(paraPr 64) 자기 단락으로 분리.
 //   leadRun(문제번호)은 첫 단락 맨 앞, tailRun(배점)은 마지막 텍스트 단락 끝에 붙는다.
-//   inlineImages=false: 이미지 세그먼트 건너뜀(호출측이 pushFigures 로 자기 단락 처리 — 문제 본문).
+//   inlineImages=false: 이미지 세그먼트 건너뜀(호출측이 도형을 자기 단락으로 처리 — 문제 본문).
 //   inlineImages=true: 텍스트 흐름에 인라인(해설 — 기존 동작 유지).
-//   breaks 는 이 문제의 "첫" 단락에만 적용 (perPage 페이지/단 나누기).
 function bodyParagraphs(
   segs: ContentSegment[],
   opts: {
@@ -522,7 +541,6 @@ function bodyParagraphs(
     tailRun?: string;
     firstParaPr?: number;
     inlineImages?: boolean;
-    breaks?: { page?: boolean; column?: boolean };
   },
 ): string[] {
   const out: string[] = [];
@@ -530,7 +548,7 @@ function bodyParagraphs(
   let first = true;
   const flush = () => {
     if (!buf) return;
-    out.push(paragraph(buf, first ? (opts.firstParaPr ?? PARA.body) : PARA.body, first ? opts.breaks : undefined));
+    out.push(paragraph(buf, first ? (opts.firstParaPr ?? PARA.body) : PARA.body));
     first = false;
     buf = '';
   };
@@ -544,7 +562,7 @@ function bodyParagraphs(
     }
     if (seg.type === 'equation' && seg.display) {
       flush();
-      out.push(paragraph(equationRun(seg.value), PARA.eq, first ? opts.breaks : undefined));
+      out.push(paragraph(equationRun(seg.value), PARA.eq));
       first = false;
       continue;
     }
@@ -558,7 +576,10 @@ function bodyParagraphs(
 const CIRCLE = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
 
 // ----------------------------------------------------------------------------
-// 시험지 헤더 표 (EditableExamHeader StaticFormView 와 동일 구조)
+// [구] 시험지 헤더 표 (EditableExamHeader StaticFormView 와 동일 구조)
+//   ★ 2026-07-17 에디토리얼 헤더(buildEditorialHeader)로 대체되어 현재 미사용.
+//   인쇄 헤더가 에디토리얼+디자인 갤러리로 재편(PR #432~438)되어 한글도 동일 디자인 채택.
+//   추후 "디자인 갤러리 → 한글" 확장 시 프리셋 중 하나로 재활용 가능해 보존.
 //   매쓰플랫 실측 구조: 전체폭(53839) 플로팅 표(treatAsChar=0, TOP_AND_BOTTOM)를
 //   secPr+colPr 뒤 첫 단락에 두면 → 표는 전체폭으로 위에 얹히고 문제는 그 아래 2단으로 흐른다.
 //   8열 고정 그리드. 라벨셀=borderFill 25(회색+테두리, CENTER) / 값셀=borderFill 4(흰색+테두리, LEFT Bold).
@@ -616,12 +637,262 @@ function buildHeaderTable(h: HwpxHeaderMeta): string {
     + `</hp:tbl>`;
 }
 
+// ----------------------------------------------------------------------------
+// 에디토리얼 헤더 — PDF 인쇄 헤더(디자인 갤러리 기본형)와 동일 구조 (2026-07-17 사용자 요구):
+//   메타(과목·유형 좌 / 학교명 우) → 큰 제목 → 학년 → 이름·점수 줄(아래 가는 구분선).
+//   테두리 없는 2열 표로 좌/우 배치. 구 테두리 표 헤더(buildHeaderTable)를 대체.
+// ----------------------------------------------------------------------------
+const TABLE_W = 52800;                    // 본문 폭(53860)보다 좁게 — 우측 넘침 방지 안전마진
+const HALF_W = Math.floor(TABLE_W / 2);
+// ★ 행 높이는 "글자 h × 줄간격 160% + 여유" 로 정직하게 — 선언보다 실렌더가 크면(셀 성장)
+//   그리드1 이 첫 페이지 계산에 안 맞아 헤더 단독 페이지 발생 (거제여중 실증, 2026-07-18).
+const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000 } as const;
+
+function edCell(
+  runsXml: string,
+  col: number,
+  row: number,
+  opts: { span?: number; w: number; h: number; align?: 'left' | 'right'; line?: boolean },
+): string {
+  const bf = opts.line ? 10 : BF_NONE; // 10 = bottom SOLID only (템플릿 실측) → 이름줄 아래 구분선
+  const para = opts.align === 'right' ? PARA_RIGHT : PARA.body;
+  return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + `<hp:p id="0" paraPrIDRef="${para}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0">${runsXml}</hp:p>`
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="${row}"/><hp:cellSpan colSpan="${opts.span || 1}" rowSpan="1"/>`
+    + `<hp:cellSz width="${opts.w}" height="${opts.h}"/>`
+    + `<hp:cellMargin left="0" right="0" top="0" bottom="0"/>`
+    + `</hp:tc>`;
+}
+
+// ★ 가드: 헤더 디자인(행 추가·테마 등)을 바꾸면 이 함수가 "실제 렌더 높이"를 반환하도록
+//   반드시 함께 갱신할 것 — 그리드 첫 페이지가 이 값으로 문제 행 높이를 배분하므로,
+//   선언 < 실렌더가 되는 순간 표가 밀려 빈 1페이지가 재발한다 (거제여중 반복 실증).
+function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): number {
+  return ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0)
+    + (showNameField ? ED_ROW_H.name : 0) + 500; // + outMargin bottom
+}
+
+// inline=true(그리드 모드): treatAsChar=1 로 텍스트 흐름에 박음 — 플로팅 위치계산 배제(치우침 원천 차단).
+// inline=false(흐름 모드): 2단 colPr 위 전체폭 플로팅 (매쓰플랫 실측, 부흥중 검증).
+function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  const meta = [h.subject, h.examType].filter(Boolean).join(' · ');
+  const rows: string[] = [];
+  let r = 0;
+  rows.push('<hp:tr>'
+    + edCell(textRun(meta, CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.meta })
+    + edCell(textRun(h.schoolName || '', CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.meta, align: 'right' })
+    + '</hp:tr>');
+  r++;
+  rows.push('<hp:tr>' + edCell(textRun(h.examTitle || '', CHAR.title), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.title }) + '</hp:tr>');
+  r++;
+  if (h.grade) {
+    rows.push('<hp:tr>' + edCell(textRun(h.grade, CHAR.meta), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.grade }) + '</hp:tr>');
+    r++;
+  }
+  if (showNameField) {
+    rows.push('<hp:tr>'
+      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.name, line: true })
+      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.name, line: true, align: 'right' })
+      + '</hp:tr>');
+    r++;
+  }
+  const totalH = editorialHeaderHeight(h, showNameField) - 500;
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${r}" colCnt="2" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${totalH}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + rows.join('')
+    + `</hp:tbl>`;
+}
+
+// \begin{tabular}{..}..\end{tabular} — 데이터 표(요금표 등). 웹은 renderTableToTabular 로
+//   박스 표 렌더하는데 한글 내보내기에 처리 루트가 없어 원문 노출 (엄궁중류 18번 실증, 2026-07-18).
+//   행 = \\ 구분, 열 = & 구분 → 테두리 표로.
+const TABULAR_RE = /\\begin\{tabular\}\{[^}]*\}([\s\S]*?)\\end\{tabular\}/;
+
+type ContentPart = { type: 'text'; v: string } | { type: 'tabular'; rows: string[][] };
+
+function splitTabularParts(content: string): ContentPart[] {
+  const parts: ContentPart[] = [];
+  let rest = content || '';
+  for (let guard = 0; guard < 20; guard++) {
+    const m = rest.match(TABULAR_RE);
+    if (!m || m.index === undefined) break;
+    if (m.index > 0) parts.push({ type: 'text', v: rest.slice(0, m.index) });
+    const rows = m[1]
+      .split(/\\\\/)
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((r) => r.split('&').map((c) => c.trim()));
+    if (rows.length > 0) parts.push({ type: 'tabular', rows });
+    rest = rest.slice(m.index + m[0].length);
+  }
+  if (rest.trim() || parts.length === 0) parts.push({ type: 'text', v: rest });
+  return parts;
+}
+
+// <보기>/<조건> 박스 — 테두리 있는 1×1 인라인 표. 라벨 줄이 단독으로 있을 때만 감지
+//   (본문 속 "다음 〈보기〉 중에서" 언급은 미발동). 전각/반각 괄호 혼용 허용 (동래여중 '<보기＞' 실증).
+//   |보기| 파이프 형식·"보 기" 내부 공백도 허용 (엄궁중·거제여중 8번 실증, 2026-07-18).
+const BOX_LABEL_RE = /^\s*[<〈＜|]\s*(보\s*기|조\s*건)\s*[>〉＞|]\s*$/;
+
+// 데이터 표 (tabular) — 전 셀 테두리(bf 4), 셀 내용 가운데 정렬, 내용 따라 행 성장.
+function tabularTable(rows: string[][], width: number, cellRender: (cell: string) => string): string {
+  const colCnt = Math.max(1, ...rows.map((r) => r.length));
+  const cellW = Math.floor(width / colCnt);
+  const rowH = 1100; // 최소 — 내용 따라 자동 성장
+  // 1열 나열형(요금표 등) = 세로 막대만({|c|} 스타일, 웹 동일) / 다열 데이터표 = 전체 격자
+  const bf = colCnt === 1 ? BF_VBAR : 4;
+  const trs = rows.map((row, r) => {
+    const tcs: string[] = [];
+    for (let c = 0; c < colCnt; c++) {
+      tcs.push(
+        `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+        + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+        + cellRender(row[c] ?? '')
+        + `</hp:subList>`
+        + `<hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+        + `<hp:cellSz width="${cellW}" height="${rowH}"/>`
+        + `<hp:cellMargin left="400" right="400" top="150" bottom="150"/>`
+        + `</hp:tc>`,
+      );
+    }
+    return `<hp:tr>${tcs.join('')}</hp:tr>`;
+  }).join('');
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rows.length}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${bf}" noAdjust="0">`
+    + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="${rows.length * rowH}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="250" bottom="250"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + trs
+    + `</hp:tbl>`;
+}
+
+// 짧은 선택지 3열 배치 — 웹 인쇄(①②③/④⑤ 균등 3열)와 동일 정렬. 테두리 없는 표.
+function choiceGridTable(cellParas: string[], width: number): string {
+  const colCnt = 3;
+  const rowCnt = Math.max(1, Math.ceil(cellParas.length / colCnt));
+  const cellW = Math.floor(width / colCnt);
+  const rowH = 1500; // 최소 — 내용 따라 성장
+  let trs = '';
+  for (let r = 0; r < rowCnt; r++) {
+    let tcs = '';
+    for (let c = 0; c < colCnt; c++) {
+      const inner = cellParas[r * colCnt + c] ?? paragraph('');
+      tcs += `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${BF_NONE}">`
+        + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+        + inner
+        + `</hp:subList>`
+        + `<hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+        + `<hp:cellSz width="${cellW}" height="${rowH}"/>`
+        + `<hp:cellMargin left="150" right="150" top="100" bottom="100"/>`
+        + `</hp:tc>`;
+    }
+    trs += `<hp:tr>${tcs}</hp:tr>`;
+  }
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="${rowCnt * rowH}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="150" bottom="150"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + trs
+    + `</hp:tbl>`;
+}
+
+function boxTable(innerParas: string, width: number): string {
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="1" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+    + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="1000" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="250" bottom="250"/>`
+    + `<hp:inMargin left="400" right="400" top="200" bottom="200"/>`
+    + `<hp:tr><hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="4">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${innerParas}</hp:subList>`
+    + `<hp:cellAddr colAddr="0" rowAddr="0"/><hp:cellSpan colSpan="1" rowSpan="1"/><hp:cellSz width="${width}" height="1000"/><hp:cellMargin left="400" right="400" top="200" bottom="200"/>`
+    + `</hp:tc></hp:tr></hp:tbl>`;
+}
+
+// ----------------------------------------------------------------------------
+// perPage 'N문제 배열' 그리드 — 테두리 없는 고정 셀 표, 문제=셀.
+//   배치는 PDF 4문제 배열과 동일한 세로 우선 (왼쪽 열 위→아래 → 오른쪽 열):
+//   셀(r,c) = 문제 idx c*rowCnt+r. 셀 크기 고정이라 한글 재계산과 무관하게 균등 배열.
+// ----------------------------------------------------------------------------
+const PAGE_USABLE_H = 84186 - 2834 * 2; // pagePr 실측 (A4 세로 84186 - 상하 여백 2834×2)
+const BF_NONE = 2;                      // 4변 모두 NONE 인 borderFill (템플릿 실측)
+
+function buildProblemGrid(
+  pageProblems: HwpxProblem[],
+  colCnt: number,
+  rowCnt: number,
+  rowH: number,
+  renderCell: (p: HwpxProblem) => string,
+  // ★ 첫 페이지 헤더를 그리드의 첫 행(전체 폭 병합 셀)으로 — 별도 단락/표로 두면 한글
+  //   페이지 계산에 따라 헤더 단독 페이지가 반복 발생 (거제여중 3회 실증). 같은 표 안이면
+  //   물리적으로 분리 불가.
+  headerRow?: { xml: string; h: number },
+): string {
+  const cellW = Math.floor(TABLE_W / colCnt);
+  const rows: string[] = [];
+  const rowOffset = headerRow ? 1 : 0;
+  if (headerRow) {
+    rows.push(
+      `<hp:tr><hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${BF_NONE}">`
+      + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+      + headerRow.xml
+      + `</hp:subList>`
+      + `<hp:cellAddr colAddr="0" rowAddr="0"/><hp:cellSpan colSpan="${colCnt}" rowSpan="1"/>`
+      + `<hp:cellSz width="${TABLE_W}" height="${headerRow.h}"/>`
+      + `<hp:cellMargin left="0" right="0" top="0" bottom="300"/>`
+      + `</hp:tc></hp:tr>`,
+    );
+  }
+  for (let r = 0; r < rowCnt; r++) {
+    const tcs: string[] = [];
+    for (let c = 0; c < colCnt; c++) {
+      const prob = pageProblems[c * rowCnt + r];
+      const inner = prob ? renderCell(prob) : paragraph('');
+      // 왼쪽 열 셀은 오른쪽에만 가는 회색 선(BF_DIVIDER) — 2단 colLine 재현
+      const bf = colCnt === 2 && c === 0 ? BF_DIVIDER : BF_NONE;
+      // ★ hasMargin="1" 필수 — 0 이면 cellMargin 이 무시되고 표 inMargin(0)을 상속해
+      //   내용이 가운데 구분선에 딱 붙음 (거제여중 실증, 2026-07-18). 구분선 쪽 여백 900(≈1.25mm).
+      tcs.push(
+        `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+        + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+        + inner
+        + `</hp:subList>`
+        + `<hp:cellAddr colAddr="${c}" rowAddr="${r + rowOffset}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+        + `<hp:cellSz width="${cellW}" height="${rowH}"/>`
+        + `<hp:cellMargin left="${c === 0 ? 0 : 900}" right="${c === 0 ? 900 : 0}" top="141" bottom="141"/>`
+        + `</hp:tc>`,
+      );
+    }
+    rows.push(`<hp:tr>${tcs.join('')}</hp:tr>`);
+  }
+  // ★ treatAsChar=1 (인라인) — 플로팅(treatAsChar=0)은 colPr 없는 섹션에서 한글이 위치를
+  //   오른쪽으로 틀어 계산 (동래여중 v1·v2 치우침 실증). 인라인은 텍스트 흐름 = 왼쪽 여백 시작.
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt + rowOffset}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${rowCnt * rowH + (headerRow ? headerRow.h : 0)}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="0"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + rows.join('')
+    + `</hp:tbl>`;
+}
+
 function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap: ImageMap): string {
   const P: string[] = [];
 
   // 인쇄 모달 설정 반영: 단 수 + 문제 간격
   const cols = config.columns === 1 ? 1 : 2;
-  const colCtrl = cols === 2 ? COLPR_CTRL : '';
+  const perPage = config.perPage && config.perPage > 0 ? config.perPage : 0;
+  const pageCounts = Array.isArray(config.pageCounts) && config.pageCounts.some((n) => n > 0)
+    ? config.pageCounts.filter((n) => n > 0)
+    : null;
+  const gridMode = perPage > 0 || !!pageCounts;
+  // ★ 그리드 모드: 2열 배치는 표가 담당 → 명시적 "1단" colPr (생략 금지 — 위 COLPR_SINGLE 주석).
+  const colCtrl = cols === 2 && !gridMode ? COLPR_CTRL : COLPR_SINGLE;
   // 본문 가로폭(HWPUNIT): A4 59528 - 좌우여백 2834*2 = 53860. 2단이면 (그 폭 - 단간격 2000)/2.
   _colWidth = cols === 2 ? Math.round((53860 - 2000) / 2) : 53860;
   // ★ 문제 간격은 빈 단락이 아니라 '문단 위 간격(space-before)' 으로 — 한글 네이티브 방식.
@@ -639,48 +910,157 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     P.push(paragraph(''));  // 빈 줄
   }
 
-  // 도형(이미지) 세그먼트는 텍스트 흐름에서 떼어 자기 단락으로 (인라인 X — 줄바꿈 방해 방지)
-  const pushFigures = (segs: ContentSegment[]) => {
-    for (const s of segs) {
-      if (s.type !== 'image') continue;
-      const info = imageMap.get(s.value);
-      if (info) P.push(paragraph(picRun(info.id, info.w, info.h), PARA.figure));
-    }
-  };
+  // 문제 1개 → 단락 목록 (번호 단락 + 본문 + 보기박스 + 도형 + 선택지). 흐름/그리드 셀 공용.
+  //   ★ 번호는 자기 단락(PARA.number=65), 본문은 그 아래 줄부터 — PDF·시중 문제지·매쓰플랫 실측 동일
+  //     (2026-07-17 사용자: "문제 숫자 밑에서부터 문제 시작". 번호 인라인은 긴 문제에서 부자연).
+  //   numberParaPr = 번호 단락 paraPr (흐름 모드에선 PARA_SPACED 로 문제 간 간격 담당).
+  //   boxW = <보기>/<조건> 박스 표 폭 (배치 컨텍스트의 가용 폭에 맞춤).
+  const problemBlockParas = (prob: HwpxProblem, numberParaPr: number, boxW: number): string[] => {
+    const out: string[] = [];
+    out.push(paragraph(textRun(`${prob.number}.`, CHAR.number), numberParaPr));
+    // 도형(이미지)은 텍스트 흐름에서 떼어 자기 단락으로 (인라인 X — 줄바꿈 방해 방지)
+    const figures = (ss: ContentSegment[]) => {
+      for (const s of ss) {
+        if (s.type !== 'image') continue;
+        const info = imageMap.get(s.value);
+        if (info) out.push(paragraph(picRun(info.id, info.w, info.h), PARA.figure));
+      }
+    };
+    // <보기>/<조건> 라벨 단독 줄 감지 → 라벨 이후 끝까지를 테두리 박스로
+    const lines = (prob.content || '').split('\n');
+    const boxIdx = lines.findIndex((l) => BOX_LABEL_RE.test(l));
+    const mainContent = boxIdx >= 0 ? lines.slice(0, boxIdx).join('\n') : prob.content;
 
-  // ★ perPage 배열 — 간격 근사가 아니라 페이지/단 나누기로 '페이지당 N문제'를 확정 보장.
-  //   2단이면 단당 N/2 문제 후 columnBreak, 페이지당 N 문제 후 pageBreak.
-  //   (간격 프리셋 computeGapHwpUnit 은 단 내부 분산용으로 유지.)
-  const perPage = config.perPage && config.perPage > 0 ? config.perPage : 0;
-  const perCol = perPage > 0 && cols === 2 ? Math.ceil(perPage / 2) : 0;
-
-  // 문제 (번호 인라인 + 본문, 매쓰플랫 paraPr/charPr)
-  problems.forEach((prob, idx) => {
-    const segs = parseContent(prob.content);
     const pts = prob.points ? `   [${prob.points}점]` : '';
-    const pos = perPage > 0 ? idx % perPage : -1;
-    const pageBrk = perPage > 0 && idx > 0 && pos === 0;
-    const colBrk = !pageBrk && perCol > 0 && pos === perCol;
-    const brk = pageBrk || colBrk;
-    // 첫 문제·나누기 직후 문제는 단/페이지 맨 위라 위 간격 X. 그 외엔 PARA_SPACED 로 문제 사이 간격.
-    P.push(...bodyParagraphs(segs, {
-      imageMap,
-      leadRun: textRun(`${prob.number}. `, CHAR.number),
-      tailRun: pts ? textRun(pts, CHAR.small) : '',
-      firstParaPr: idx === 0 || brk ? PARA.body : PARA_SPACED,
-      breaks: brk ? { page: pageBrk, column: colBrk } : undefined,
-    }));
-    pushFigures(segs);  // 도형은 본문 아래 자기 단락에
+    const tailRun = pts ? textRun(pts, CHAR.small) : '';
+    // \begin{tabular} 데이터 표 분리 — 텍스트/표 파트 순서대로 방출. 배점은 마지막 텍스트 파트 끝에.
+    const parts = splitTabularParts(mainContent);
+    const lastTextIdx = parts.reduce((acc, p, i) => (p.type === 'text' && p.v.trim() ? i : acc), -1);
+    let tailUsed = false;
+    parts.forEach((part, i) => {
+      if (part.type === 'tabular') {
+        const tbl = tabularTable(part.rows, boxW, (cell) =>
+          bodyParagraphs(parseContent(cell), { imageMap, firstParaPr: PARA.eq }).join('') || paragraph('', PARA.eq));
+        out.push(paragraph(`<hp:run charPrIDRef="0">${tbl}</hp:run>`, PARA.body));
+        return;
+      }
+      if (!part.v.trim()) return;
+      const segs2 = parseContent(part.v);
+      const isTail = i === lastTextIdx;
+      if (isTail) tailUsed = true;
+      out.push(...bodyParagraphs(segs2, {
+        imageMap,
+        tailRun: isTail ? tailRun : '',
+        firstParaPr: PARA.body,
+      }));
+      figures(segs2);
+    });
+    if (tailRun && !tailUsed) out.push(paragraph(tailRun, PARA.body)); // 전부 표뿐인 극단 케이스
+
+    if (boxIdx >= 0) {
+      const label = ((lines[boxIdx].match(BOX_LABEL_RE) || [])[1] || '보기').replace(/\s+/g, '');
+      const boxSegs = parseContent(lines.slice(boxIdx + 1).join('\n'));
+      const inner = [
+        paragraph(textRun(`<${label}>`, CHAR.number), PARA.body), // 왼쪽 볼드 라벨 (웹 인쇄 동일)
+        ...bodyParagraphs(boxSegs, { imageMap, firstParaPr: PARA.body }),
+      ].join('');
+      out.push(paragraph(`<hp:run charPrIDRef="0">${boxTable(inner, boxW)}</hp:run>`, PARA.body));
+      figures(boxSegs);
+    }
 
     if (prob.choices && prob.choices.length > 0) {
-      for (let i = 0; i < prob.choices.length; i++) {
-        const cseg = parseContent(stripChoicePrefix(prob.choices[i]));
-        const cText = cseg.filter((s) => s.type !== 'image');
-        P.push(paragraph(textRun(`   ${CIRCLE[i] || `(${i + 1})`} `, CHAR.body) + segmentsToRuns(cText, CHAR.body, imageMap), PARA.body));
-        pushFigures(cseg);  // 선택지 도형(드묾)도 자기 단락
+      // 시중 문제지처럼 짧은 선택지(①ㄱ ②ㄱ,ㄷ / ①121 등)는 한 줄 가로 배열 — 세로 5줄은 공간 낭비·부자연.
+      // 수식·긴 텍스트 선택지는 기존대로 세로 1줄씩.
+      const visLen = (c: string) =>
+        stripChoicePrefix(c).replace(/\\[a-zA-Z]+/g, '').replace(/[${}\s]/g, '').length;
+      const allShort = prob.choices.every((c) => visLen(c) <= 6);
+      if (allShort) {
+        // 웹 인쇄와 동일한 3열 정렬 (①②③ / ④⑤) — 테두리 없는 표
+        const cells = prob.choices.map((c, i) => {
+          const cseg = parseContent(stripChoicePrefix(c));
+          const cText = cseg.filter((s) => s.type !== 'image');
+          return paragraph(
+            textRun(`${CIRCLE[i] || `(${i + 1})`} `, CHAR.body) + segmentsToRuns(cText, CHAR.body, imageMap),
+            PARA.body,
+          );
+        });
+        out.push(paragraph(`<hp:run charPrIDRef="0">${choiceGridTable(cells, boxW)}</hp:run>`, PARA.body));
+      } else {
+        for (let i = 0; i < prob.choices.length; i++) {
+          const cseg = parseContent(stripChoicePrefix(prob.choices[i]));
+          const cText = cseg.filter((s) => s.type !== 'image');
+          out.push(paragraph(textRun(`   ${CIRCLE[i] || `(${i + 1})`} `, CHAR.body) + segmentsToRuns(cText, CHAR.body, imageMap), PARA.body));
+          figures(cseg);
+        }
       }
     }
-  });
+    return out;
+  };
+
+  // 그리드1(첫 페이지 표) — firstPara 안에 직접 배치 (아래 grid 분기에서 채움)
+  let firstGridTbl: string | null = null;
+
+  if (gridMode) {
+    // ★ 그리드 모드 = 페이지당 표 (문제=고정 셀). 두 진입로:
+    //   - perPage(4/6/8 프리셋): 페이지당 N문제 균등.
+    //   - pageCounts(자동 배열): 웹 미리보기의 측정 기반 분할 결과를 그대로 재현 —
+    //     한글 자체 reflow(자연 흐름)에 맡기면 미리보기와 페이지 구성이 달라지는 문제 해결 (2026-07-18).
+    //   v1 은 hp:p pageBreak/columnBreak 속성이었으나 한글이 흐름 재계산에서 무시/유동적
+    //   + 퍼짐(스프레드) 안 됨. 표 셀은 위치·크기 고정이라 확정 배열.
+    const gridCols = cols === 2 ? 2 : 1;
+    const headerH = config.header
+      ? editorialHeaderHeight(config.header, config.showNameField !== false)
+      : 0;
+    // 그리드 모드 헤더는 firstPara(secPr 단락) 안에 인라인으로 — 별도 단락이면 keepWithNext 로
+    //   그리드1과 함께 밀려 "빈 1페이지 + 헤더 단독 2페이지"가 생김 (거제여중 실증, 2026-07-18).
+    // 페이지별 청크 — pageCounts 우선, 없으면 perPage 균등. 남는 문제는 마지막에 perPage 단위로.
+    const chunks: HwpxProblem[][] = [];
+    {
+      let idx = 0;
+      if (pageCounts) {
+        for (const n of pageCounts) {
+          if (idx >= problems.length) break;
+          chunks.push(problems.slice(idx, idx + n));
+          idx += n;
+        }
+      }
+      const per = perPage > 0 ? perPage : (pageCounts ? pageCounts[pageCounts.length - 1] || 4 : 4);
+      while (idx < problems.length) {
+        chunks.push(problems.slice(idx, idx + per));
+        idx += per;
+      }
+    }
+    // 박스 폭 — 매쓰플랫 실측(단 폭 25930 에 박스 22676 ≈ -3200) 비율로 셀 폭에서 차감
+    const gridBoxW = Math.floor(TABLE_W / gridCols) - 3200;
+    chunks.forEach((pageProblems, page) => {
+      const rowsPerPage = Math.max(1, Math.ceil(pageProblems.length / gridCols));
+      // 첫 페이지: 헤더를 그리드 첫 행(병합 셀)으로 — 별도 단락이면 헤더 단독 페이지 반복 (실증 3회).
+      const withHeader = page === 0 && !!config.header;
+      const headerRow = withHeader
+        ? {
+          xml: `<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${buildEditorialHeader(config.header!, config.showNameField !== false, true)}</hp:run></hp:p>`,
+          h: headerH,
+        }
+        : undefined;
+      // ★ 그리드1 은 firstPara(secPr 단락) 안에 직접 들어감 — 앞에 빈 줄이 없어 밀릴 수 없음.
+      //   (별도 단락 + 여유 2000/4000 튜닝은 3회 모두 실패 — 첫 단락 빈 줄과 페이지공유 불가가 원인)
+      const gridH = PAGE_USABLE_H - (page === 0 ? 1200 : 400) - (withHeader ? headerH : 0);
+      const rowH = Math.floor(gridH / rowsPerPage);
+      const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''), headerRow);
+      if (page === 0) {
+        firstGridTbl = tbl; // firstPara 조립부에서 사용
+      } else {
+        // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
+        P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run></hp:p>`);
+      }
+    });
+  } else {
+    // 자연 흐름 (2단 NEWSPAPER) — 첫 문제는 헤더 바로 아래라 위 간격 X, 이후 PARA_SPACED 간격.
+    const flowBoxW = cols === 2 ? 22676 : 50000; // 보기박스 폭 — 매쓰플랫 실측 (2단 22676)
+    problems.forEach((prob, idx) => {
+      P.push(...problemBlockParas(prob, idx === 0 ? PARA.number : PARA_SPACED, flowBoxW));
+    });
+  }
 
   // 정답표
   if (config.showAnswerSheet !== false) {
@@ -725,11 +1105,16 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     + 'xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0"';
 
   // 첫 단락: run0 에 secPr + colPr(2단 NEWSPAPER+구분선) — 매쓰플랫 구조 동일.
-  //   header 있으면 전체폭 헤더 표(플로팅)를 같은 단락에 — 표 위, 문제는 2단으로 아래 흐름.
-  //   없으면 기존 제목 텍스트.
-  const headerBody = config.header
-    ? `<hp:run charPrIDRef="0">${buildHeaderTable(config.header)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
-    : textRun(config.title, CHAR.title) + lineSeg(PARA.title);
+  //   흐름 모드 + header: 에디토리얼 헤더를 전체폭 플로팅으로 같은 단락에 (2단 위에 얹힘).
+  //   그리드 모드 헤더는 위에서 인라인으로 이미 P 에 추가됨 → 여기선 빈 런만.
+  //   header 없으면 기존 제목 텍스트.
+  // 그리드 모드: 그리드1(헤더 행 내장)이 firstPara 의 본문 — 표 앞에 아무 줄도 없어
+  //   페이지 밀림 원천 차단. 흐름 모드: 헤더 플로팅 (colPr 2단 위 전체폭 — 부흥중 검증).
+  const headerBody = gridMode && firstGridTbl
+    ? `<hp:run charPrIDRef="0">${firstGridTbl}</hp:run>`
+    : (config.header
+      ? `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+      : textRun(config.title, CHAR.title) + lineSeg(PARA.title));
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
     + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`
     + headerBody
@@ -764,18 +1149,19 @@ function buildContentHpf(config: HwpxExamConfig, images: Array<{ id: string; ext
 // 문제 간격 — '문단 위 간격(space-before)' paraPr 를 header.xml 에 동적 주입.
 //   빈 단락보다 편집 안정적이고, 2단 컬럼 맨 위에선 한글이 자동 억제(상단 깔끔).
 // ----------------------------------------------------------------------------
-const PARA_SPACED = 90; // 문제 첫 단락용(위 간격). injectSpacingParaPr 가 정의 주입.
+const PARA_SPACED = 90; // 문제 "번호" 단락용(위 간격). injectSpacingParaPr 가 정의 주입.
 
 function injectSpacingParaPr(header: string, gapHwpUnit: number): string {
-  // paraPr 62(body, LEFT) 복제 → id=PARA_SPACED, prev(문단 위 간격)=gapHwpUnit.
-  const i = header.indexOf('<hh:paraPr id="62"');
+  // paraPr 65(문제번호 단독) 복제 → id=PARA_SPACED, prev(문단 위 간격)=gapHwpUnit.
+  //   (2026-07-17: 번호가 자기 단락이 되면서 간격도 번호 단락이 담당 — 62(body) 클론에서 변경)
+  const i = header.indexOf('<hh:paraPr id="65"');
   if (i < 0) return header;
   const j = header.indexOf('</hh:paraPr>', i);
   if (j < 0) return header;
   let clone = header.slice(i, j + '</hh:paraPr>'.length);
-  clone = clone.replace('<hh:paraPr id="62"', `<hh:paraPr id="${PARA_SPACED}"`);
-  // case + default 두 군데의 prev(문단 위 간격) 0 → gapHwpUnit (next/left 등은 그대로)
-  clone = clone.replace(/<hc:prev value="0"/g, `<hc:prev value="${Math.max(0, Math.round(gapHwpUnit))}"`);
+  clone = clone.replace('<hh:paraPr id="65"', `<hh:paraPr id="${PARA_SPACED}"`);
+  // case + default 두 군데의 prev(문단 위 간격) → gapHwpUnit (next/left 등은 그대로)
+  clone = clone.replace(/<hc:prev value="\d+"/g, `<hc:prev value="${Math.max(0, Math.round(gapHwpUnit))}"`);
   // paraProperties itemCnt +1
   const out = header.replace(/(<hh:paraProperties\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
   const k = out.indexOf('</hh:paraProperties>');
@@ -783,15 +1169,53 @@ function injectSpacingParaPr(header: string, gapHwpUnit: number): string {
   return out.slice(0, k) + clone + out.slice(k);
 }
 
+// 우측정렬 paraPr — 템플릿 실측 63 (RIGHT). ★ 복제 주입(91)은 한글이 무시함(실검증, 동래여중 v2)
+//   — 정렬류 paraPr 은 반드시 템플릿 네이티브 id 사용.
+const PARA_RIGHT = 63;
+
+// 세로 구분선 borderFill(26) — 그리드 왼쪽 열 셀의 "오른쪽"에만 얇은 회색 선.
+//   2단 NEWSPAPER 의 colLine(0.2mm #CCCCCC) 을 그리드 모드에서 재현.
+const BF_DIVIDER = 26;
+function injectDividerBorderFill(header: string): string {
+  const i = header.indexOf('<hh:borderFill id="2"');
+  if (i < 0) return header;
+  const j = header.indexOf('</hh:borderFill>', i);
+  if (j < 0) return header;
+  let clone = header.slice(i, j + '</hh:borderFill>'.length);
+  clone = clone.replace('<hh:borderFill id="2"', `<hh:borderFill id="${BF_DIVIDER}"`);
+  clone = clone.replace(
+    /<hh:rightBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/,
+    '<hh:rightBorder type="SOLID" width="0.12 mm" color="#CCCCCC"/>',
+  );
+  const out = header.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+  const k = out.indexOf('</hh:borderFills>');
+  if (k < 0) return header;
+  return out.slice(0, k) + clone + out.slice(k);
+}
+
+// 세로 막대 전용 borderFill(27) — tabular {|c|} 스타일 (좌우 SOLID, 상하 NONE).
+//   1열 나열형 표(요금표 등)는 웹과 동일하게 가로 구분선 없이 세로 막대만 (2026-07-18).
+const BF_VBAR = 27;
+function injectVbarBorderFill(header: string): string {
+  const i = header.indexOf('<hh:borderFill id="4"');
+  if (i < 0) return header;
+  const j = header.indexOf('</hh:borderFill>', i);
+  if (j < 0) return header;
+  let clone = header.slice(i, j + '</hh:borderFill>'.length);
+  clone = clone.replace('<hh:borderFill id="4"', `<hh:borderFill id="${BF_VBAR}"`);
+  clone = clone
+    .replace(/<hh:topBorder type="[A-Z]+"/, '<hh:topBorder type="NONE"')
+    .replace(/<hh:bottomBorder type="[A-Z]+"/, '<hh:bottomBorder type="NONE"');
+  const out = header.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+  const k = out.indexOf('</hh:borderFills>');
+  if (k < 0) return header;
+  return out.slice(0, k) + clone + out.slice(k);
+}
+
 // gap(px) + perPage → space-before HWPUNIT (px 96dpi → ×75)
 function computeGapHwpUnit(config: HwpxExamConfig): number {
+  // perPage 그리드 모드는 셀이 배치를 담당 → 간격 paraPr 미사용. 흐름 모드 슬라이더 값만.
   const gapPx = (config.problemGap && config.problemGap > 0) ? config.problemGap : 30;
-  if (config.perPage && config.perPage > 0) {
-    // N문제 배열: '페이지당 N문제'는 buildSection0 의 pageBreak/columnBreak 가 확정 보장.
-    // 여기 간격은 단 내부에서 문제를 벌려주는 분산용 (적을수록 간격 ↑).
-    const map: Record<number, number> = { 4: 4200, 6: 3000, 8: 2300 };
-    if (map[config.perPage]) return map[config.perPage];
-  }
   return Math.round(gapPx * 75);
 }
 
@@ -826,7 +1250,10 @@ export async function generateHWPX(
   zip.file('META-INF/container.xml', CONTAINER_XML);
   zip.file('META-INF/manifest.xml', MANIFEST_XML);
   zip.file('META-INF/container.rdf', CONTAINER_RDF);
-  zip.file('Contents/header.xml', injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)));
+  zip.file(
+    'Contents/header.xml',
+    injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)))),
+  );
 
   // BinData + manifest items
   const imageItems: Array<{ id: string; ext: string; mime: string }> = [];
