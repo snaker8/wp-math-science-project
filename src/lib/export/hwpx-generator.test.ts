@@ -296,6 +296,22 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xml).toContain('|보기|에서 모두'); // 본문 언급은 유지
   });
 
+  it('\\begin{tabular} 데이터 표 → 테두리 표 (원문 노출 방지, 요금표 실증)', async () => {
+    const content = '구간별 요금은 다음과 같다.\n\\begin{tabular}{|c|}A \\leftrightarrow B: 1200원 \\\\ B \\leftrightarrow C: 1000원 \\\\ A \\leftrightarrow C: 1800원 \\\\ \\end{tabular}\n이 버스에 승객 40명을 태우고 출발한 후. [5점]';
+    const buf = (await generateHWPX(
+      [{ ...prob(1, content), points: 5 }],
+      { title: 't', columns: 2, showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    expect(xml).not.toContain('tabular');       // 원문 노출 없음
+    const tbl = xml.match(/<hp:tbl[^>]*rowCnt="3" colCnt="1"[\s\S]*?<\/hp:tbl>/);
+    expect(tbl).toBeTruthy();                    // 3행 1열 표
+    expect(tbl![0]).toContain('1200원');
+    expect(tbl![0]).toContain('↔');              // \leftrightarrow → ↔
+    expect(xml).toContain('[5점]');              // 배점은 표 뒤 텍스트 파트에 유지
+    expect(xml).toContain('승객 40명');
+  });
+
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {
