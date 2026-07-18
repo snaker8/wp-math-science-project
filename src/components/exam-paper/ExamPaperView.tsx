@@ -80,6 +80,132 @@ export interface ProblemData {
 const PRINT_PAD_Y = 76; // ~20mm
 
 // ============================================================================
+// 한글(.hwpx) 헤더 구조 갤러리 — 미리보기 카드 모달 (수학비서 '기본틀' 선택 대응)
+//   미리보기는 각 구조를 CSS 로 그린 축소판 (실제 한글 렌더 아님 — 구조 감만 전달).
+// ============================================================================
+export const HWPX_HEADER_STYLES: Array<{ id: string; label: string; desc: string }> = [
+  { id: 'editorial', label: '에디토리얼', desc: '메타 → 큰 제목 → 학년 → 이름·점수줄' },
+  { id: 'classic', label: '클래식 표', desc: '학원/학교·시험명·과목… 격자 표' },
+  { id: 'boxed', label: '박스형', desc: '좌 제목 블록 + 우 회색 정보칸' },
+  { id: 'mock', label: '모의고사형', desc: '수능지 — 가운데 과목명 + 굵은 밑줄' },
+  { id: 'band', label: '밴드형', desc: '회색 타이틀 밴드 + 컬러 포인트' },
+];
+
+function HwpxHeaderPreview({ id, accent }: { id: string; accent: string }) {
+  // 공통 축소판 캔버스 (흰 종이 위 회색/검정 블록)
+  const bar = (w: string, h = 5, bg = '#cbd5e1', extra?: React.CSSProperties) => (
+    <div style={{ width: w, height: h, background: bg, borderRadius: 1, ...extra }} />
+  );
+  const wrap = (children: React.ReactNode) => (
+    <div style={{ width: '100%', height: 84, background: '#fff', borderRadius: 4, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5, overflow: 'hidden' }}>
+      {children}
+    </div>
+  );
+  if (id === 'classic') {
+    return wrap(
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, marginTop: 6 }}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} style={{ height: 16, background: i % 2 === 0 ? '#e2e8f0' : '#fff', border: '1px solid #94a3b8' }} />
+        ))}
+      </div>,
+    );
+  }
+  if (id === 'boxed') {
+    return wrap(
+      <div style={{ display: 'flex', gap: 6, marginTop: 4, border: '1px solid #94a3b8', padding: 5, height: 56 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, justifyContent: 'center' }}>
+          {bar('40%', 4)}{bar('80%', 9, '#334155')}{bar('30%', 4)}
+        </div>
+        <div style={{ width: 56, background: '#e2e8f0', border: '1px solid #94a3b8', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center' }}>
+          {bar('70%', 4, '#475569')}{bar('80%', 3)}{bar('80%', 3)}
+        </div>
+      </div>,
+    );
+  }
+  if (id === 'mock') {
+    return wrap(
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, marginTop: 3 }}>
+        {bar('34%', 4)}
+        {bar('56%', 11, '#1e293b')}
+        {bar('44%', 4)}
+        <div style={{ width: '100%', height: 3, background: '#111', marginTop: 3 }} />
+        <div style={{ alignSelf: 'flex-end' }}>{bar('90px', 4)}</div>
+      </div>,
+    );
+  }
+  if (id === 'band') {
+    return wrap(
+      <>
+        <div style={{ display: 'flex', height: 34, marginTop: 4 }}>
+          <div style={{ width: 12, background: accent }} />
+          <div style={{ flex: 1, background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {bar('55%', 9, '#334155')}
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+          {bar('34%', 4)}{bar('26%', 4)}
+        </div>
+      </>,
+    );
+  }
+  // editorial (기본)
+  return wrap(
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>{bar('30%', 4)}{bar('16%', 4)}</div>
+      {bar('62%', 10, '#1e293b')}
+      {bar('14%', 4)}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 2 }}>
+        {bar('30%', 4)}{bar('22%', 4)}
+      </div>
+      <div style={{ width: '100%', height: 2, background: accent }} />
+    </>,
+  );
+}
+
+function HwpxHeaderGalleryModal({
+  active,
+  accentColor,
+  onSelect,
+  onClose,
+}: {
+  active: string;
+  accentColor: string | null;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const accent = accentColor || '#334155';
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div className="w-[680px] max-w-[92vw] rounded-xl border border-zinc-600 bg-zinc-800 shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-sm font-bold text-white">한글(.hwpx) 헤더 구조</div>
+            <div className="text-xs text-zinc-400 mt-0.5">한글 다운로드에 적용됩니다 · 미리보기는 구조 참고용 축소판</div>
+          </div>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white text-sm px-2">✕</button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {HWPX_HEADER_STYLES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onSelect(s.id)}
+              className={`rounded-lg border p-2 text-left transition-colors ${
+                active === s.id ? 'border-sky-400 ring-2 ring-sky-400/40 bg-sky-500/10' : 'border-zinc-600 hover:border-zinc-400 bg-zinc-700/40'
+              }`}
+            >
+              <HwpxHeaderPreview id={s.id} accent={accent} />
+              <div className="mt-2 text-sm font-semibold text-white">{s.label}</div>
+              <div className="text-[11px] text-zinc-400 leading-snug">{s.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // Exam Paper View (시험지)
 // ============================================================================
 
@@ -506,6 +632,7 @@ export function ExamPaperView({
     setHwpxHeaderStyle(v);
     try { localStorage.setItem('msb_hwpx_header_style', v); } catch { /* ignore */ }
   };
+  const [showHwpxHeaderModal, setShowHwpxHeaderModal] = useState(false);
   const handleDownloadHwpx = useCallback(async () => {
     if (!examId || isDownloadingHwpx) return;
     setIsDownloadingHwpx(true);
@@ -673,9 +800,9 @@ export function ExamPaperView({
               title="현재 출력 설정을 이름 붙여 저장"
             >설정 저장</button>
           </div>
-          {/* ★ 헤더 디자인 갤러리 (템플릿+테마 통합) — 썸네일 모달에서 고름 */}
+          {/* ★ PDF(화면 인쇄) 헤더 디자인 갤러리 — 한글 헤더 갤러리와 구분되게 라벨 명시 */}
           <div className="flex items-center gap-1">
-            <span className="text-xs text-content-tertiary">디자인</span>
+            <span className="text-xs text-content-tertiary">PDF 디자인</span>
             <button
               type="button"
               onClick={() => setShowDesignGallery(true)}
@@ -775,19 +902,25 @@ export function ExamPaperView({
             <Trash2 className="h-4 w-4" />
             배점 초기화
           </button>
-          {/* 한글 헤더 구조 선택 — 수학비서 '기본틀' 대응 (한글 다운로드에만 적용) */}
-          <select
-            value={hwpxHeaderStyle}
-            onChange={(e) => pickHwpxHeaderStyle(e.target.value)}
-            title="한글(.hwpx) 헤더 구조"
-            className="rounded-lg border border-sky-500/30 bg-surface-raised text-sky-300 text-sm px-2 py-1.5 cursor-pointer"
+          {/* 한글 헤더 갤러리 — 미리보기 카드 모달 (수학비서 '기본틀' 대응, 한글 다운로드에만 적용) */}
+          <button
+            type="button"
+            onClick={() => setShowHwpxHeaderModal(true)}
+            className="flex items-center gap-1 rounded-lg border border-sky-500/30 bg-surface-raised px-2 py-1.5 text-sm text-sky-300 hover:bg-sky-500/10 transition-colors"
+            title="한글(.hwpx) 헤더 구조 선택 — 미리보기에서 고르기"
           >
-            <option value="editorial">헤더: 에디토리얼</option>
-            <option value="classic">헤더: 클래식 표</option>
-            <option value="boxed">헤더: 박스형</option>
-            <option value="mock">헤더: 모의고사형</option>
-            <option value="band">헤더: 밴드형</option>
-          </select>
+            <span className="text-xs text-content-tertiary">한글 헤더</span>
+            {HWPX_HEADER_STYLES.find((s) => s.id === hwpxHeaderStyle)?.label ?? '에디토리얼'}
+            <span className="text-[9px] opacity-70">▾</span>
+          </button>
+          {showHwpxHeaderModal && (
+            <HwpxHeaderGalleryModal
+              active={hwpxHeaderStyle}
+              accentColor={headerColor}
+              onSelect={(id) => { pickHwpxHeaderStyle(id); setShowHwpxHeaderModal(false); }}
+              onClose={() => setShowHwpxHeaderModal(false)}
+            />
+          )}
           {/* ★ 한글 다운로드 — 드롭다운 속에선 안 보인다는 피드백으로 툴바 독립 버튼으로 승격 (2026-07-18) */}
           <button
             type="button"

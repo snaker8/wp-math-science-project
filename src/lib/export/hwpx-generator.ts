@@ -14,6 +14,7 @@
 // ============================================================================
 
 import JSZip from 'jszip';
+import { XMLValidator } from 'fast-xml-parser';
 import {
   MIMETYPE, VERSION_XML, SETTINGS_XML,
   CONTAINER_XML, MANIFEST_XML, CONTAINER_RDF, HEADER_XML, SECPR_XML,
@@ -979,16 +980,20 @@ function choiceGridTable(cellParas: string[], width: number): string {
     + `</hp:tbl>`;
 }
 
+// ★ 배열 join 조립 (2026-07-18) — 운영 빌드에서 이 함수의 긴 문자열 연결 청크만 오염돼
+//   (보간 이후 정적 구간 소실 → XML 손상 파일) 재작성으로 변환 캐시 무효화 + 형태 회피.
 function boxTable(innerParas: string, width: number): string {
-  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="1" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
-    + `<hp:sz width="${width}" widthRelTo="ABSOLUTE" height="1000" heightRelTo="ABSOLUTE" protect="0"/>`
-    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
-    + `<hp:outMargin left="0" right="0" top="250" bottom="250"/>`
-    + `<hp:inMargin left="400" right="400" top="200" bottom="200"/>`
-    + `<hp:tr><hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="4">`
-    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${innerParas}</hp:subList>`
-    + `<hp:cellAddr colAddr="0" rowAddr="0"/><hp:cellSpan colSpan="1" rowSpan="1"/><hp:cellSz width="${width}" height="1000"/><hp:cellMargin left="400" right="400" top="200" bottom="200"/>`
-    + `</hp:tc></hp:tr></hp:tbl>`;
+  const parts: string[] = [];
+  parts.push('<hp:tbl id="', String(nextId()), '" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="1" cellSpacing="0" borderFillIDRef="4" noAdjust="0">');
+  parts.push('<hp:sz width="', String(width), '" widthRelTo="ABSOLUTE" height="1000" heightRelTo="ABSOLUTE" protect="0"/>');
+  parts.push('<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>');
+  parts.push('<hp:outMargin left="0" right="0" top="250" bottom="250"/>');
+  parts.push('<hp:inMargin left="400" right="400" top="200" bottom="200"/>');
+  parts.push('<hp:tr><hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="4">');
+  parts.push('<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">', innerParas, '</hp:subList>');
+  parts.push('<hp:cellAddr colAddr="0" rowAddr="0"/><hp:cellSpan colSpan="1" rowSpan="1"/><hp:cellSz width="', String(width), '" height="1000"/><hp:cellMargin left="400" right="400" top="200" bottom="200"/>');
+  parts.push('</hp:tc></hp:tr></hp:tbl>');
+  return parts.join('');
 }
 
 // ----------------------------------------------------------------------------
@@ -1510,7 +1515,18 @@ export async function generateHWPX(
   }
 
   zip.file('Contents/content.hpf', buildContentHpf(config, imageItems));
-  zip.file('Contents/section0.xml', buildSection0(problems, config, imageMap));
+  const sectionXml = buildSection0(problems, config, imageMap);
+  // ★ 생성 XML 무결성 가드 (2026-07-18) — 운영에서 빌드 산출물 오염으로 boxTable 템플릿
+  //   일부가 잘려 "파일이 손상되었습니다" 파일이 조용히 배포된 사고(동해중). 손상이면
+  //   파일 배포 대신 명확한 오류로 실패시킨다.
+  for (const [name, xml] of [['header.xml', headerXml], ['section0.xml', sectionXml]] as const) {
+    const v = XMLValidator.validate(xml);
+    if (v !== true) {
+      const err = (v as { err?: { msg?: string; col?: number } }).err;
+      throw new Error(`HWPX 생성 XML 손상 감지 (${name}): ${err?.msg || 'unknown'} @${err?.col ?? '?'}`);
+    }
+  }
+  zip.file('Contents/section0.xml', sectionXml);
   const prv = problems.map((p) => `${p.number}. ${(p.content || '').replace(/<[^>]*>/g, '').replace(/\\[a-zA-Z]+/g, '').slice(0, 60)}`).join('\r\n');
   zip.file('Preview/PrvText.txt', prv);
 
