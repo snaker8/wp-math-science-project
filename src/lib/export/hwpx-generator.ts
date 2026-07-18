@@ -741,14 +741,16 @@ function buildProblemGrid(
       const inner = prob ? renderCell(prob) : paragraph('');
       // 왼쪽 열 셀은 오른쪽에만 가는 회색 선(BF_DIVIDER) — 2단 colLine 재현
       const bf = colCnt === 2 && c === 0 ? BF_DIVIDER : BF_NONE;
+      // ★ hasMargin="1" 필수 — 0 이면 cellMargin 이 무시되고 표 inMargin(0)을 상속해
+      //   내용이 가운데 구분선에 딱 붙음 (거제여중 실증, 2026-07-18). 구분선 쪽 여백 900(≈1.25mm).
       tcs.push(
-        `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+        `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
         + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
         + inner
         + `</hp:subList>`
         + `<hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
         + `<hp:cellSz width="${cellW}" height="${rowH}"/>`
-        + `<hp:cellMargin left="${c === 0 ? 0 : 700}" right="${c === 0 ? 700 : 0}" top="141" bottom="141"/>`
+        + `<hp:cellMargin left="${c === 0 ? 0 : 900}" right="${c === 0 ? 900 : 0}" top="141" bottom="141"/>`
         + `</hp:tc>`,
       );
     }
@@ -960,7 +962,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   //   그리드 모드 헤더는 위에서 인라인으로 이미 P 에 추가됨 → 여기선 빈 런만.
   //   header 없으면 기존 제목 텍스트.
   const headerBody = config.header
-    ? (perPage > 0
+    ? (gridMode // ★ perPage 뿐 아니라 pageCounts(자동 배열)도 그리드 — 이중 헤더(빈 페이지 2장) 사고 수정 (2026-07-18)
       ? `<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
       : `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`)
     : textRun(config.title, CHAR.title) + lineSeg(PARA.title);
