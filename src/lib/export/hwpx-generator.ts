@@ -1244,13 +1244,22 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     });
   }
 
-  // 정답표
+  // 정답표 — ★ 정답 속 $..$ 수식을 변환해 렌더 (생 텍스트로 박으면 "$\dfrac{1}{5} \le a$"
+  //   LaTeX 원문 노출 — 동해중 운영 실증, 2026-07-18)
   if (config.showAnswerSheet !== false) {
     P.push(paragraph(''));
     P.push(paragraph(textRun('[ 정답 ]', CHAR.number), PARA.body));
-    const ans = problems.filter((p) => p.answer !== undefined && p.answer !== '')
-      .map((p) => `${p.number}. ${p.answer}`).join('     ');
-    if (ans) P.push(paragraph(textRun(ans, CHAR.body), PARA.body));
+    const withAns = problems.filter((p) => p.answer !== undefined && p.answer !== '');
+    if (withAns.length > 0) {
+      let runs = '';
+      withAns.forEach((p, i) => {
+        runs += textRun(`${p.number}. `, CHAR.body);
+        const segs = parseContent(String(p.answer)).filter((s) => s.type !== 'image');
+        runs += segmentsToRuns(segs, CHAR.body, imageMap);
+        if (i < withAns.length - 1) runs += textRun('     ', CHAR.body);
+      });
+      P.push(paragraph(runs, PARA.body));
+    }
   }
 
   // 해설

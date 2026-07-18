@@ -369,6 +369,20 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(mk).toMatch(/paraPrIDRef="64"[\s\S]*?중간고사/);
   });
 
+  it('정답표의 $..$ 수식은 변환 렌더 (LaTeX 원문 노출 방지 — 동해중 실증)', async () => {
+    const buf = (await generateHWPX(
+      [{ ...prob(1, '풀어라.'), answer: '$\\dfrac{1}{5} \\le a \\le 7$' } as never],
+      { title: 't', showNameField: false, showAnswerSheet: true },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    const ansIdx = xml.indexOf('[ 정답 ]');
+    const tail = xml.slice(ansIdx);
+    expect(tail).toContain('<hp:equation');            // 수식 객체로
+    expect(tail).toContain('{1} over {5}');            // \dfrac 변환
+    expect(tail).not.toContain('\\dfrac');             // 원문 노출 없음
+    expect(tail).not.toContain('$');
+  });
+
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {
