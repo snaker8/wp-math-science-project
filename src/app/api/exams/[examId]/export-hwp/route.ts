@@ -94,6 +94,12 @@ export async function GET(
   const problemGap = Number.isFinite(gapRaw) && gapRaw > 0 ? gapRaw : undefined;
   const perPageRaw = parseInt(searchParams.get('perPage') || '', 10);
   const perPage = Number.isFinite(perPageRaw) && perPageRaw > 0 ? perPageRaw : undefined;
+  // ★ 자동 배열 — 웹 미리보기의 페이지별 문제 수 (예: "5,4,6"). 그리드로 페이지 구성 재현.
+  const pageCountsRaw = (searchParams.get('pageCounts') || '')
+    .split(',')
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isFinite(n) && n > 0 && n <= 50);
+  const pageCounts = pageCountsRaw.length > 0 && pageCountsRaw.length <= 200 ? pageCountsRaw : undefined;
 
   // 시험지
   const { data: exam, error: examErr } = await sb
@@ -170,6 +176,7 @@ export async function GET(
     columns,
     problemGap,
     perPage,
+    pageCounts,
     header: headerMeta,
   })) as Buffer;
 

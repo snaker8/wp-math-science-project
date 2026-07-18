@@ -57,7 +57,10 @@ export interface HwpxExamConfig {
   showSolutions?: boolean;
   columns?: 1 | 2;       // 인쇄 모달 단 수 (기본 2). 1 = 단일칼럼(편집 친화)
   problemGap?: number;   // 인쇄 모달 문제 간격(px, 기본 ~30) → 문제 사이 여백
-  perPage?: number;      // 인쇄 모달 '4문제 배열' 프리셋(4/6/8) → 문제 밀도(간격)
+  perPage?: number;      // 인쇄 모달 '4문제 배열' 프리셋(4/6/8) → 페이지당 고정 그리드
+  // ★ 자동 모드 페이지 구성 (2026-07-18) — 웹 미리보기의 측정 기반 분할 결과(페이지별 문제 수).
+  //   있으면 그리드 모드로 페이지 구성을 그대로 재현 (한글 자체 reflow 에 안 맡김).
+  pageCounts?: number[];
   // ★ 시험지 헤더 표 — 있으면 제목/부제/이름란 대신 우리 헤더 표(학원/학교·시험명·과목·유형·학년)를 그린다.
   header?: HwpxHeaderMeta;
 }
@@ -699,7 +702,8 @@ function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline:
 
 // <보기>/<조건> 박스 — 테두리 있는 1×1 인라인 표. 라벨 줄이 단독으로 있을 때만 감지
 //   (본문 속 "다음 〈보기〉 중에서" 언급은 미발동). 전각/반각 괄호 혼용 허용 (동래여중 '<보기＞' 실증).
-const BOX_LABEL_RE = /^\s*[<〈＜]\s*(보기|조건)\s*[>〉＞]\s*$/;
+//   |보기| 파이프 형식도 허용 (엄궁중 유사1회 실증, 2026-07-18).
+const BOX_LABEL_RE = /^\s*[<〈＜|]\s*(보기|조건)\s*[>〉＞|]\s*$/;
 
 function boxTable(innerParas: string, width: number): string {
   return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="1" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
@@ -767,8 +771,12 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   // 인쇄 모달 설정 반영: 단 수 + 문제 간격
   const cols = config.columns === 1 ? 1 : 2;
   const perPage = config.perPage && config.perPage > 0 ? config.perPage : 0;
-  // ★ perPage 그리드 모드: 2열 배치는 표가 담당 → 명시적 "1단" colPr (생략 금지 — 위 COLPR_SINGLE 주석).
-  const colCtrl = cols === 2 && perPage === 0 ? COLPR_CTRL : COLPR_SINGLE;
+  const pageCounts = Array.isArray(config.pageCounts) && config.pageCounts.some((n) => n > 0)
+    ? config.pageCounts.filter((n) => n > 0)
+    : null;
+  const gridMode = perPage > 0 || !!pageCounts;
+  // ★ 그리드 모드: 2열 배치는 표가 담당 → 명시적 "1단" colPr (생략 금지 — 위 COLPR_SINGLE 주석).
+  const colCtrl = cols === 2 && !gridMode ? COLPR_CTRL : COLPR_SINGLE;
   // 본문 가로폭(HWPUNIT): A4 59528 - 좌우여백 2834*2 = 53860. 2단이면 (그 폭 - 단간격 2000)/2.
   _colWidth = cols === 2 ? Math.round((53860 - 2000) / 2) : 53860;
   // ★ 문제 간격은 빈 단락이 아니라 '문단 위 간격(space-before)' 으로 — 한글 네이티브 방식.
@@ -854,13 +862,14 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     return out;
   };
 
-  if (perPage > 0) {
-    // ★ perPage 'N문제 배열' = 페이지당 표 그리드 (문제=고정 셀).
+  if (gridMode) {
+    // ★ 그리드 모드 = 페이지당 표 (문제=고정 셀). 두 진입로:
+    //   - perPage(4/6/8 프리셋): 페이지당 N문제 균등.
+    //   - pageCounts(자동 배열): 웹 미리보기의 측정 기반 분할 결과를 그대로 재현 —
+    //     한글 자체 reflow(자연 흐름)에 맡기면 미리보기와 페이지 구성이 달라지는 문제 해결 (2026-07-18).
     //   v1 은 hp:p pageBreak/columnBreak 속성이었으나 한글이 흐름 재계산에서 무시/유동적
-    //   + 퍼짐(스프레드) 안 됨 → PDF 4문제 배열(사분면 균등)과 불일치. 표 셀은 위치·크기
-    //   고정이라 PDF 와 동일 배열 확정 (매쓰플랫도 레이아웃에 표 사용, 헤더표 문법으로 검증됨).
+    //   + 퍼짐(스프레드) 안 됨. 표 셀은 위치·크기 고정이라 확정 배열.
     const gridCols = cols === 2 ? 2 : 1;
-    const rowsPerPage = Math.max(1, Math.ceil(perPage / gridCols));
     const headerH = config.header
       ? editorialHeaderHeight(config.header, config.showNameField !== false)
       : 0;
@@ -869,16 +878,33 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
       const hdr = buildEditorialHeader(config.header, config.showNameField !== false, true);
       P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${hdr}</hp:run></hp:p>`);
     }
+    // 페이지별 청크 — pageCounts 우선, 없으면 perPage 균등. 남는 문제는 마지막에 perPage 단위로.
+    const chunks: HwpxProblem[][] = [];
+    {
+      let idx = 0;
+      if (pageCounts) {
+        for (const n of pageCounts) {
+          if (idx >= problems.length) break;
+          chunks.push(problems.slice(idx, idx + n));
+          idx += n;
+        }
+      }
+      const per = perPage > 0 ? perPage : (pageCounts ? pageCounts[pageCounts.length - 1] || 4 : 4);
+      while (idx < problems.length) {
+        chunks.push(problems.slice(idx, idx + per));
+        idx += per;
+      }
+    }
     // 박스 폭 — 매쓰플랫 실측(단 폭 25930 에 박스 22676 ≈ -3200) 비율로 셀 폭에서 차감
     const gridBoxW = Math.floor(TABLE_W / gridCols) - 3200;
-    for (let start = 0, page = 0; start < problems.length; start += perPage, page++) {
-      const pageProblems = problems.slice(start, start + perPage);
+    chunks.forEach((pageProblems, page) => {
+      const rowsPerPage = Math.max(1, Math.ceil(pageProblems.length / gridCols));
       const gridH = PAGE_USABLE_H - (page === 0 ? headerH : 0) - 400; // 400 = 라운딩 여유
       const rowH = Math.floor(gridH / rowsPerPage);
       const tbl = buildProblemGrid(pageProblems, gridCols, rowsPerPage, rowH, (p) => problemBlockParas(p, PARA.number, gridBoxW).join(''));
-      // 각 그리드는 자기 anchor 단락에 플로팅 (헤더표와 동일 방식) — 표가 페이지를 채워 다음 표는 다음 페이지로
+      // 각 그리드는 자기 anchor 단락에 — 표가 페이지를 채워 다음 표는 다음 페이지로
       P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run></hp:p>`);
-    }
+    });
   } else {
     // 자연 흐름 (2단 NEWSPAPER) — 첫 문제는 헤더 바로 아래라 위 간격 X, 이후 PARA_SPACED 간격.
     const flowBoxW = cols === 2 ? 22676 : 50000; // 보기박스 폭 — 매쓰플랫 실측 (2단 22676)

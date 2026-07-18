@@ -502,8 +502,13 @@ export function ExamPaperView({
     setIsDownloadingHwpx(true);
     try {
       const perPageQ = perPagePreset ? `&perPage=${perPagePreset}` : '';
+      // ★ 자동 배열(프리셋 없음): 미리보기의 측정 기반 페이지 분할 결과를 그대로 전달 —
+      //   한글 자체 reflow 에 맡기면 미리보기와 페이지 구성이 달라짐 (2026-07-18).
+      const pageCountsQ = !perPagePreset && measured && pages.length > 0
+        ? `&pageCounts=${pages.map((pg) => pg.length).join(',')}`
+        : '';
       const res = await fetch(
-        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}`
+        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -525,7 +530,7 @@ export function ExamPaperView({
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [examId, isDownloadingHwpx, perPagePreset, printSections.answer, printSections.solution, columns, gap, examTitle]);
+  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
@@ -542,8 +547,9 @@ export function ExamPaperView({
   return (
     <div className="flex flex-col h-full exam-print-container">
       {/* 컨트롤 바 */}
-      <div className="exam-controls flex items-center justify-between border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
-        <div className="flex items-center gap-3">
+      {/* ★ flex-wrap — 좁은 컨테이너(출제 페이지 등)에서 우측 버튼(출력·한글)이 잘려 안 보이던 문제 (2026-07-18) */}
+      <div className="exam-controls flex flex-wrap items-center justify-between gap-y-2 border-b border-subtle px-5 py-2 flex-shrink-0 bg-surface-raised/50">
+        <div className="flex flex-wrap items-center gap-3 gap-y-2">
           {/* 1단/2단 토글 */}
           <div className="flex items-center gap-1 rounded-lg border overflow-hidden">
             <button
@@ -699,7 +705,7 @@ export function ExamPaperView({
             <span className="text-xs text-emerald-400/70">자동 배치</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 gap-y-2">
           <button
             type="button"
             onClick={async () => {
@@ -756,6 +762,17 @@ export function ExamPaperView({
             <Trash2 className="h-4 w-4" />
             배점 초기화
           </button>
+          {/* ★ 한글 다운로드 — 드롭다운 속에선 안 보인다는 피드백으로 툴바 독립 버튼으로 승격 (2026-07-18) */}
+          <button
+            type="button"
+            onClick={handleDownloadHwpx}
+            disabled={isDownloadingHwpx}
+            className="flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 transition-colors"
+            title="현재 단수·간격·N문제 배열 설정 그대로 편집 가능한 한글 파일 생성"
+          >
+            <FileDown className="h-4 w-4" />
+            {isDownloadingHwpx ? '한글 생성 중…' : '한글'}
+          </button>
           <div className="relative" ref={printMenuRef}>
             <button
               type="button"
@@ -787,7 +804,7 @@ export function ExamPaperView({
                     </label>
                   ))}
                 </div>
-                <div className="px-2 pb-2 space-y-1.5">
+                <div className="px-2 pb-2">
                   <button
                     type="button"
                     onClick={handlePrint}
@@ -796,16 +813,6 @@ export function ExamPaperView({
                   >
                     <Printer className="h-4 w-4" />
                     출력하기
-                  </button>
-                  {/* ★ 한글(.hwpx) 다운로드 — 현재 단수·간격·N문제 배열 설정 그대로 (편집 가능 한글 파일) */}
-                  <button
-                    type="button"
-                    onClick={handleDownloadHwpx}
-                    disabled={isDownloadingHwpx}
-                    className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 disabled:opacity-50 px-3 py-2 text-sm font-bold text-sky-300 transition-colors"
-                  >
-                    <FileDown className="h-4 w-4" />
-                    {isDownloadingHwpx ? '한글 생성 중…' : '한글(.hwpx) 다운로드'}
                   </button>
                 </div>
 

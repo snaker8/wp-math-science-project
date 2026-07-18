@@ -265,6 +265,37 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xml).toContain('다음 〈보기〉 중에서');
   });
 
+  it('pageCounts(자동 배열): 미리보기 페이지 구성 그대로 — [3,2] → 표 2개 (2행/1행)', async () => {
+    const problems = Array.from({ length: 5 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
+    const buf = (await generateHWPX(problems, {
+      title: 't', columns: 2, pageCounts: [3, 2], showNameField: false, showAnswerSheet: false,
+    })) as Buffer;
+    const xml = await section0Of(buf);
+    const tbls = [...xml.matchAll(/<hp:tbl[^>]*rowCnt="(\d+)" colCnt="(\d+)"[\s\S]*?<\/hp:tbl>/g)];
+    expect(tbls.length).toBe(2);
+    expect(tbls[0][1]).toBe('2'); // ceil(3/2)=2행
+    expect(tbls[1][1]).toBe('1'); // ceil(2/2)=1행
+    expect(tbls[0][0]).toContain('<hp:t>3.</hp:t>');
+    expect(tbls[0][0]).not.toContain('<hp:t>4.</hp:t>');
+    expect(tbls[1][0]).toContain('<hp:t>4.</hp:t>');
+    expect(tbls[1][0]).toContain('<hp:t>5.</hp:t>');
+    // 자동 그리드도 1단 colPr
+    expect(xml).toContain('colCount="1"');
+  });
+
+  it('|보기| 파이프 라벨도 박스 감지 (엄궁중 실증)', async () => {
+    const content = '다음 중 일차함수인 것을 |보기|에서 모두 고른 것은?\n|보기|\nㄱ. 한 변의 길이가 $2x$ 인 정사각형의 넓이 $y$';
+    const buf = (await generateHWPX(
+      [prob(1, content)],
+      { title: 't', columns: 2, showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    const box = xml.match(/<hp:tbl[^>]*rowCnt="1" colCnt="1"[^>]*borderFillIDRef="4"[\s\S]*?<\/hp:tbl>/);
+    expect(box).toBeTruthy();
+    expect(box![0]).toContain('&lt; 보기 &gt;');
+    expect(xml).toContain('|보기|에서 모두'); // 본문 언급은 유지
+  });
+
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {
