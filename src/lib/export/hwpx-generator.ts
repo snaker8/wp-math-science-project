@@ -267,8 +267,8 @@ function latexToHWPEquation(latex: string): string {
   // 남은 naked \{ \} (집합 등) → 리터럴 중괄호
   eq = eq.replace(/\\\{/g, ' lbrace ').replace(/\\\}/g, ' rbrace ');
 
-  // \mathrm,\text,\textbf → "..."
-  eq = eq.replace(/\\(?:mathrm|text|textbf|mathbf|boldsymbol|operatorname)\{([^{}]*)\}/g, '"$1"');
+  // \mathrm,\text,\textbf → "..." (\s* — 명령·중괄호 사이 공백 변형 허용)
+  eq = eq.replace(/\\(?:mathrm|text|textbf|mathbf|boldsymbol|operatorname)\s*\{([^{}]*)\}/g, '"$1"');
 
   // 빈칸 네모(\square) — 시험지 빈칸 채우기 기호. 미매핑 시 "\square" 글자 노출(동래여중 16번 실증)
   eq = eq.replace(/\\square(?![a-zA-Z])/g, '□');
@@ -310,6 +310,7 @@ const TEXT_SYM: Record<string, string> = {
   '\\infty': '∞', '\\to': '→', '\\rightarrow': '→', '\\Rightarrow': '⇒', '\\leftarrow': '←',
   '\\cdots': '⋯', '\\ldots': '…', '\\dots': '…', '\\circ': '∘', '\\angle': '∠',
   '\\square': '□', '\\Box': '□', '\\leftrightarrow': '↔', '\\Leftrightarrow': '⇔',
+  '\\therefore': '∴', '\\because': '∵',
   '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ', '\\theta': 'θ',
   '\\lambda': 'λ', '\\mu': 'μ', '\\pi': 'π', '\\sigma': 'σ', '\\omega': 'ω',
 };
@@ -318,9 +319,10 @@ function cleanTextLatex(s: string): string {
   // (?![a-zA-Z]) 필수 — 없으면 \leftrightarrow 의 "\left" 를 삼켜 "rightarrow" 글자 노출 (요금표 실증)
   t = t.replace(/\\left(?![a-zA-Z])\s*/g, '').replace(/\\right(?![a-zA-Z])\s*/g, '');
   // \boxed{\text{유제}} 류 라벨 (2026-07-18 실증) — 텍스트 근사 [유제]. \text 는 내용만, \quad 는 공백.
-  t = t.replace(/\\boxed\{\\text\{([^{}]*)\}\}/g, '[$1]');
-  t = t.replace(/\\boxed\{([^{}]*)\}/g, '[$1]');
-  t = t.replace(/\\text(?:bf|it|rm)?\{([^{}]*)\}/g, '$1');
+  // ★ \s* 필수 — "\text { 개를 }" 처럼 명령·중괄호 사이 공백 변형이 흔함 (유제 라벨 비일관 실증)
+  t = t.replace(/\\boxed\s*\{\s*\\text\s*\{([^{}]*)\}\s*\}/g, (_m, x: string) => `[${x.trim()}]`);
+  t = t.replace(/\\boxed\s*\{([^{}]*)\}/g, (_m, x: string) => `[${x.trim()}]`);
+  t = t.replace(/\\text(?:bf|it|rm)?\s*\{([^{}]*)\}/g, '$1');
   // 감사(hwpx-audit) 발견 클래스: \mathbf/\underline/\overline 등 스타일 명령 — 내용만
   t = t.replace(/\\(?:mathbf|mathrm|mathit|underline|overline|emph)\{([^{}]*)\}/g, '$1');
   t = t.replace(/\\multicolumn\{\d+\}\{[^{}]*\}\{([^{}]*)\}/g, '$1');
@@ -335,6 +337,8 @@ function cleanTextLatex(s: string): string {
 
 // 텍스트(이미지 제외) → text/equation 세그먼트
 function parseTextMath(text: string): ContentSegment[] {
+  // ※ "벌거벗은 환경을 $로 감싸기" 시도는 금지 — 이미 $..$ 안에 있는 환경까지 이중 감싸
+  //   $ 짝을 대량 파괴 (전수 감사 67→115개 악화 실증, 2026-07-18 롤백). 원본 결함은 경고로만.
   const segs: ContentSegment[] = [];
   // 디스플레이 수식(\[ \], $$ $$)은 여러 줄 가능 → [\s\S]. 인라인($, \()은 줄 안.
   const mathPattern = /\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
@@ -358,7 +362,8 @@ function parseContent(content: string): ContentSegment[] {
   let s = content
     .replace(IMG_MD, (_m, url) => { imgs.push(url); return ` IMG${imgs.length - 1} `; })
     .replace(IMG_HTML, (_m, url) => { imgs.push(url); return ` IMG${imgs.length - 1} `; });
-  // 2) 나머지 HTML 정리
+  // 2) 나머지 HTML 정리 + 웹 렌더용 도형 마커 제거 (본문·해설·선택지 공통 진입점 — 감사 발견)
+  s = s.replace(/\[(?:도형|그림)\]/g, ' ');
   s = s.replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(?:p|div|span|strong|em|b|i|u|sup|sub|small|font|a|ul|ol|li|table|thead|tbody|tr|td|th)\b[^>]*>/gi, '')
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -1352,7 +1357,8 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     P.push(paragraph(textRun('[ 해설 ]', CHAR.number), PARA.body));
     for (const prob of problems) {
       if (prob.solution) {
-        const ss = parseContent(prob.solution);
+        // [도형]/[그림] 마커는 해설에도 잔존 (전수 감사 발견 — sanitize 는 본문 전용이었음)
+        const ss = parseContent(prob.solution.replace(/\[(?:도형|그림)\]/g, ' '));
         // 해설도 디스플레이 수식은 가운데 자기 단락. 이미지는 기존대로 인라인.
         P.push(...bodyParagraphs(ss, {
           imageMap,
