@@ -100,6 +100,14 @@ export async function GET(
     .map((s) => parseInt(s, 10))
     .filter((n) => Number.isFinite(n) && n > 0 && n <= 50);
   const pageCounts = pageCountsRaw.length > 0 && pageCountsRaw.length <= 200 ? pageCountsRaw : undefined;
+  // 헤더 디자인 — 갤러리 강조색·테마 (한글 네이티브 3종으로 매핑: line/double/색띠)
+  const headerColorRaw = searchParams.get('headerColor') || '';
+  const accentColor = /^#[0-9a-fA-F]{6}$/.test(headerColorRaw) ? headerColorRaw : undefined;
+  const headerThemeRaw = (searchParams.get('headerTheme') || '').slice(0, 20);
+  const headerTheme = /^[a-z]{1,20}$/.test(headerThemeRaw) ? headerThemeRaw : undefined;
+  // 한글 헤더 구조 선택 (에디토리얼/클래식/박스형/모의고사형/밴드형)
+  const styleRaw = searchParams.get('headerStyle') || '';
+  const headerStyle = (['editorial', 'classic', 'boxed', 'mock', 'band'] as const).find((s) => s === styleRaw);
 
   // 시험지
   const { data: exam, error: examErr } = await sb
@@ -167,6 +175,9 @@ export async function GET(
     semester: '',
     examType: examType || '학교기출',
     grade: examGrade || '고1',
+    accentColor,
+    headerTheme,
+    headerStyle,
   };
 
   const buf = (await generateHWPX(hwpProblems, {

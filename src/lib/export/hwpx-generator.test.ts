@@ -315,6 +315,60 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(xml).toContain('승객 40명');
   });
 
+  it('헤더 강조색·테마: 색띠(bf29)+accent선(bf28) 주입, line 은 선만, 없으면 기본(10)', async () => {
+    const base = { title: 't', columns: 2 as const, perPage: 4, showAnswerSheet: false };
+    const header = { schoolName: 'A중', examTitle: 'T', subject: '수학', examType: '기출', grade: '중2' };
+    // wave(그래픽 테마) → 색 띠 + accent 선
+    const bufWave = (await generateHWPX([prob(1, '본문')], {
+      ...base, header: { ...header, accentColor: '#0891B2', headerTheme: 'wave' },
+    })) as Buffer;
+    const zipW = await JSZip.loadAsync(bufWave);
+    const hW = await zipW.file('Contents/header.xml')!.async('string');
+    expect(hW).toMatch(/<hh:borderFill id="29"[\s\S]*?faceColor="#0891B2"/);
+    expect(hW).toMatch(/<hh:borderFill id="28"[\s\S]*?bottomBorder type="SOLID" width="0\.4 mm" color="#0891B2"/);
+    const xmlW = await zipW.file('Contents/section0.xml')!.async('string');
+    expect(xmlW).toContain('borderFillIDRef="29"'); // 색 띠 행
+    expect(xmlW).toContain('borderFillIDRef="28"'); // 이름줄 accent 선
+    // line 테마 → 색 띠 없음, accent 선만
+    const bufLine = (await generateHWPX([prob(1, '본문')], {
+      ...base, header: { ...header, accentColor: '#E11D48', headerTheme: 'line' },
+    })) as Buffer;
+    const xmlL = await (await JSZip.loadAsync(bufLine)).file('Contents/section0.xml')!.async('string');
+    expect(xmlL).not.toContain('borderFillIDRef="29"');
+    expect(xmlL).toContain('borderFillIDRef="28"');
+    // 색 없음 → 기본 하단선(10), 주입 없음
+    const bufNone = (await generateHWPX([prob(1, '본문')], { ...base, header })) as Buffer;
+    const zipN = await JSZip.loadAsync(bufNone);
+    expect(await zipN.file('Contents/header.xml')!.async('string')).not.toContain('<hh:borderFill id="28"');
+    expect(await zipN.file('Contents/section0.xml')!.async('string')).toContain('borderFillIDRef="10"');
+    // 잘못된 색 → 무시 (미주입 bf 참조 사고 방지)
+    const bufBad = (await generateHWPX([prob(1, '본문')], {
+      ...base, header: { ...header, accentColor: 'red', headerTheme: 'wave' },
+    })) as Buffer;
+    const xmlB = await (await JSZip.loadAsync(bufBad)).file('Contents/section0.xml')!.async('string');
+    expect(xmlB).not.toContain('borderFillIDRef="29"');
+  });
+
+  it('헤더 구조 4종(editorial/classic/boxed/mock) — 각 구조 시그니처 렌더', async () => {
+    const base = { title: 't', columns: 2 as const, perPage: 4, showAnswerSheet: false };
+    const header = { schoolName: 'A중', examTitle: '중간고사', subject: '수학', examType: '학교기출', grade: '중2', teacher: '김샘' };
+    const xmlOf = async (headerStyle?: 'editorial' | 'classic' | 'boxed' | 'mock') => {
+      const buf = (await generateHWPX([prob(1, '본문')], { ...base, header: { ...header, headerStyle } })) as Buffer;
+      return section0Of(buf);
+    };
+    const ed = await xmlOf();                      // 기본 에디토리얼: 이름줄 하단선(10)
+    expect(ed).toContain('이름 :');
+    const cl = await xmlOf('classic');             // 클래식: 라벨 셀(bf25) + '학원/학교' 라벨
+    expect(cl).toContain('학원/학교');
+    expect(cl).toContain('borderFillIDRef="25"');
+    const bx = await xmlOf('boxed');               // 박스형: 우측 회색 정보칸(bf25) + 테두리(bf4)
+    expect(bx).toContain('borderFillIDRef="25"');
+    expect(bx).toContain('점수 :');
+    const mk = await xmlOf('mock');                // 모의고사형: 3열 밴드 + 하단 0.4mm(bf31) + 가운데(64) 제목
+    expect(mk).toContain('borderFillIDRef="31"');
+    expect(mk).toMatch(/paraPrIDRef="64"[\s\S]*?중간고사/);
+  });
+
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {

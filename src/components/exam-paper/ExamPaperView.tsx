@@ -497,6 +497,15 @@ export function ExamPaperView({
   // ★ 한글(.hwpx) 다운로드 — 현재 출력 설정(단수·간격·N문제 배열·섹션)을 그대로 전달.
   //   exam-management handleDownloadHwpx 와 동일 패턴 (서버 export-hwp 가 DB 조회·생성).
   const [isDownloadingHwpx, setIsDownloadingHwpx] = useState(false);
+  // 한글 헤더 구조 선택 (수학비서 기본틀 선택 대응) — localStorage 유지
+  const [hwpxHeaderStyle, setHwpxHeaderStyle] = useState<string>('editorial');
+  useEffect(() => {
+    try { const v = localStorage.getItem('msb_hwpx_header_style'); if (v) setHwpxHeaderStyle(v); } catch { /* ignore */ }
+  }, []);
+  const pickHwpxHeaderStyle = (v: string) => {
+    setHwpxHeaderStyle(v);
+    try { localStorage.setItem('msb_hwpx_header_style', v); } catch { /* ignore */ }
+  };
   const handleDownloadHwpx = useCallback(async () => {
     if (!examId || isDownloadingHwpx) return;
     setIsDownloadingHwpx(true);
@@ -507,8 +516,12 @@ export function ExamPaperView({
       const pageCountsQ = !perPagePreset && measured && pages.length > 0
         ? `&pageCounts=${pages.map((pg) => pg.length).join(',')}`
         : '';
+      // 헤더 디자인 갤러리 강조색·테마 → 한글 헤더에도 반영 (네이티브 3종 매핑)
+      const decoQ = (headerColor ? `&headerColor=${encodeURIComponent(headerColor)}` : '')
+        + (headerTheme && headerTheme !== 'none' ? `&headerTheme=${encodeURIComponent(headerTheme)}` : '')
+        + (hwpxHeaderStyle && hwpxHeaderStyle !== 'editorial' ? `&headerStyle=${encodeURIComponent(hwpxHeaderStyle)}` : '');
       const res = await fetch(
-        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}`
+        `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}${decoQ}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -530,7 +543,7 @@ export function ExamPaperView({
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle]);
+  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle, headerColor, headerTheme, hwpxHeaderStyle]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
@@ -762,6 +775,19 @@ export function ExamPaperView({
             <Trash2 className="h-4 w-4" />
             배점 초기화
           </button>
+          {/* 한글 헤더 구조 선택 — 수학비서 '기본틀' 대응 (한글 다운로드에만 적용) */}
+          <select
+            value={hwpxHeaderStyle}
+            onChange={(e) => pickHwpxHeaderStyle(e.target.value)}
+            title="한글(.hwpx) 헤더 구조"
+            className="rounded-lg border border-sky-500/30 bg-surface-raised text-sky-300 text-sm px-2 py-1.5 cursor-pointer"
+          >
+            <option value="editorial">헤더: 에디토리얼</option>
+            <option value="classic">헤더: 클래식 표</option>
+            <option value="boxed">헤더: 박스형</option>
+            <option value="mock">헤더: 모의고사형</option>
+            <option value="band">헤더: 밴드형</option>
+          </select>
           {/* ★ 한글 다운로드 — 드롭다운 속에선 안 보인다는 피드백으로 툴바 독립 버튼으로 승격 (2026-07-18) */}
           <button
             type="button"

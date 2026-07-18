@@ -45,6 +45,14 @@ export interface HwpxHeaderMeta {
   timeLimit?: string;    // 시간
   date?: string;         // 일시
   totalScore?: string;   // 총점
+  // ★ 헤더 디자인 (2026-07-18) — 웹 디자인 갤러리의 강조색·테마를 한글 네이티브 3종으로 매핑:
+  //   line→하단 accent 선 / double→하단 accent 이중선 / 그 외 그래픽 테마(wave·ribbon 등)→상단 색 띠.
+  accentColor?: string;  // #rrggbb (없으면 기본 검정 에디토리얼)
+  headerTheme?: string;  // 웹 테마 id (none/line/double/wave/...)
+  // ★ 한글 헤더 구조 (2026-07-18) — editorial(기본)/classic(격자 표형)/boxed(제목+우측 정보칸)
+  //   /mock(수능지 형식: 가운데 초대형 과목명 + 전폭 굵은선)
+  //   /band(기출정복풍 "느낌" 구현: 회색 타이틀 밴드 + 좌측 컬러 포인트 블록 — 그대로 카피 X)
+  headerStyle?: 'editorial' | 'classic' | 'boxed' | 'mock' | 'band';
 }
 
 export interface HwpxExamConfig {
@@ -602,7 +610,7 @@ function hdrCell(text: string, col: number, row: number, opts: { span?: number; 
     + `<hp:cellMargin left="510" right="510" top="141" bottom="141"/>`
     + `</hp:tc>`;
 }
-function buildHeaderTable(h: HwpxHeaderMeta): string {
+function buildHeaderTable(h: HwpxHeaderMeta, inline = false): string {
   const rows: string[] = [];
   // 1행: 학원/학교 | 시험명(span3) | 담당
   rows.push('<hp:tr>'
@@ -630,11 +638,16 @@ function buildHeaderTable(h: HwpxHeaderMeta): string {
   const id = nextId();
   return `<hp:tbl id="${id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="8" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
     + `<hp:sz width="53839" widthRelTo="ABSOLUTE" height="${rowCnt * HDR_ROW_H}" heightRelTo="ABSOLUTE" protect="0"/>`
-    + `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="${inline ? 'PARA' : 'COLUMN'}" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
     + `<hp:inMargin left="510" right="510" top="141" bottom="141"/>`
     + rows.join('')
     + `</hp:tbl>`;
+}
+// 클래식 표형 높이 — 라벨 h1100×1.6=1760 < 행 2800 이라 성장 없음 (실측 안전)
+function classicHeaderHeight(h: HwpxHeaderMeta): number {
+  const showRow3 = !!(h.timeLimit || h.date || (h.totalScore && h.totalScore !== '100'));
+  return (showRow3 ? 3 : 2) * HDR_ROW_H + 500;
 }
 
 // ----------------------------------------------------------------------------
@@ -646,15 +659,24 @@ const TABLE_W = 52800;                    // 본문 폭(53860)보다 좁게 — 
 const HALF_W = Math.floor(TABLE_W / 2);
 // ★ 행 높이는 "글자 h × 줄간격 160% + 여유" 로 정직하게 — 선언보다 실렌더가 크면(셀 성장)
 //   그리드1 이 첫 페이지 계산에 안 맞아 헤더 단독 페이지 발생 (거제여중 실증, 2026-07-18).
-const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000 } as const;
+const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000, band: 550 } as const;
+
+// 헤더 장식 결정 — 한글 네이티브 3종 (라인/더블/색 띠). 색 없으면 장식 없음(기본 검정).
+function headerDeco(h: HwpxHeaderMeta): { band: boolean; lineBf: number } {
+  if (!h.accentColor) return { band: false, lineBf: 10 }; // 기본: 가는 검정 하단선
+  const t = h.headerTheme || 'line';
+  if (t === 'none' || t === 'line') return { band: false, lineBf: BF_ACCENT_LINE };
+  if (t === 'double') return { band: false, lineBf: BF_ACCENT_DOUBLE };
+  return { band: true, lineBf: BF_ACCENT_LINE }; // 그래픽 테마 → 상단 색 띠 + accent 선
+}
 
 function edCell(
   runsXml: string,
   col: number,
   row: number,
-  opts: { span?: number; w: number; h: number; align?: 'left' | 'right'; line?: boolean },
+  opts: { span?: number; w: number; h: number; align?: 'left' | 'right'; line?: boolean; lineBf?: number; bf?: number },
 ): string {
-  const bf = opts.line ? 10 : BF_NONE; // 10 = bottom SOLID only (템플릿 실측) → 이름줄 아래 구분선
+  const bf = opts.bf ?? (opts.line ? (opts.lineBf ?? 10) : BF_NONE); // 기본 하단선=10, accent 는 28/30
   const para = opts.align === 'right' ? PARA_RIGHT : PARA.body;
   return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
     + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
@@ -670,7 +692,8 @@ function edCell(
 //   반드시 함께 갱신할 것 — 그리드 첫 페이지가 이 값으로 문제 행 높이를 배분하므로,
 //   선언 < 실렌더가 되는 순간 표가 밀려 빈 1페이지가 재발한다 (거제여중 반복 실증).
 function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): number {
-  return ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0)
+  return (headerDeco(h).band ? ED_ROW_H.band : 0)
+    + ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0)
     + (showNameField ? ED_ROW_H.name : 0) + 500; // + outMargin bottom
 }
 
@@ -678,8 +701,14 @@ function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): numbe
 // inline=false(흐름 모드): 2단 colPr 위 전체폭 플로팅 (매쓰플랫 실측, 부흥중 검증).
 function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
   const meta = [h.subject, h.examType].filter(Boolean).join(' · ');
+  const deco = headerDeco(h);
   const rows: string[] = [];
   let r = 0;
+  if (deco.band) {
+    // 상단 색 띠 — 그래픽 테마(wave/ribbon 등) 근사, accent 배경 (한글 네이티브 디자인)
+    rows.push('<hp:tr>' + edCell(textRun('', CHAR.small), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.band, bf: BF_ACCENT_BAND }) + '</hp:tr>');
+    r++;
+  }
   rows.push('<hp:tr>'
     + edCell(textRun(meta, CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.meta })
     + edCell(textRun(h.schoolName || '', CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.meta, align: 'right' })
@@ -693,8 +722,8 @@ function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline:
   }
   if (showNameField) {
     rows.push('<hp:tr>'
-      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.name, line: true })
-      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.name, line: true, align: 'right' })
+      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf })
+      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf, align: 'right' })
       + '</hp:tr>');
     r++;
   }
@@ -732,6 +761,154 @@ function splitTabularParts(content: string): ContentPart[] {
   }
   if (rest.trim() || parts.length === 0) parts.push({ type: 'text', v: rest });
   return parts;
+}
+
+// ----------------------------------------------------------------------------
+// 박스형 헤더 — 좌: 메타/큰 제목/학년 스택, 우: 회색 정보 칸(학교명·이름·점수).
+//   매쓰플랫 실측 헤더(좌 넓은 제목 + 우 좁은 정보) 구조 기반의 한글 네이티브 디자인.
+// ----------------------------------------------------------------------------
+const BOXED_ROW_H = 7400;
+const BOXED_INFO_W = 16500;
+function boxedHeaderHeight(): number { return BOXED_ROW_H + 500; }
+
+function buildBoxedHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  const meta = [h.subject, h.examType].filter(Boolean).join(' · ');
+  const leftParas = [
+    paragraph(textRun(meta, CHAR.meta), PARA.body),
+    paragraph(textRun(h.examTitle || '', CHAR.title), PARA.body),
+    ...(h.grade ? [paragraph(textRun(h.grade, CHAR.meta), PARA.body)] : []),
+  ].join('');
+  const rightParas = [
+    paragraph(textRun(h.schoolName || '', CHAR.chapter), PARA.eq), // 가운데 볼드
+    ...(showNameField
+      ? [
+        paragraph(textRun('이름 :             ', CHAR.meta), PARA.eq),
+        paragraph(textRun(`점수 :      / ${h.totalScore || '100'}`, CHAR.meta), PARA.eq),
+      ]
+      : []),
+  ].join('');
+  const cell = (inner: string, col: number, w: number, bf: number, pad: number) =>
+    `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + inner
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="0"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
+    + `<hp:cellSz width="${w}" height="${BOXED_ROW_H}"/>`
+    + `<hp:cellMargin left="${pad}" right="${pad}" top="200" bottom="200"/>`
+    + `</hp:tc>`;
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="1" colCnt="2" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${BOXED_ROW_H}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + `<hp:tr>${cell(leftParas, 0, TABLE_W - BOXED_INFO_W, 4, 600)}${cell(rightParas, 1, BOXED_INFO_W, 25, 300)}</hp:tr>`
+    + `</hp:tbl>`;
+}
+
+// ----------------------------------------------------------------------------
+// 모의고사형 헤더 — 수능 스타일: 가운데 정렬 스택 + 상/하 구분선 (수학비서 '모의고사 타입' 대응)
+// ----------------------------------------------------------------------------
+// 모의고사형 — 수능지 형식 (사용자 제공 코어블랙 캡처 기준, '제N교시' 타원 제외):
+//   상단 가운데 부제(시험명) → 가운데 초대형 과목명("수학영역" 자리) → 가운데 정보줄
+//   → 전체 폭 0.4mm 굵은선 → 이름·점수 보조 줄.
+const MOCK_ROWS = { sub: 1900, main: 3600, info: 1900, name: 2200 } as const;
+function mockHeaderHeight(): number {
+  return MOCK_ROWS.sub + MOCK_ROWS.main + MOCK_ROWS.info + MOCK_ROWS.name + 500;
+}
+
+function buildMockHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  const cell = (inner: string, col: number, r: number, w: number, hh: number, bf: number, span = 1) =>
+    `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + inner
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="${r}"/><hp:cellSpan colSpan="${span}" rowSpan="1"/>`
+    + `<hp:cellSz width="${w}" height="${hh}"/>`
+    + `<hp:cellMargin left="200" right="200" top="80" bottom="80"/>`
+    + `</hp:tc>`;
+  const full = (inner: string, r: number, hh: number, bf: number) => `<hp:tr>${cell(inner, 0, r, TABLE_W, hh, bf, 2)}</hp:tr>`;
+  // 수능지: 부제(시험명 작게) / 과목명 초대형 / 정보줄(학교·학년·학기·유형) / ━0.4mm / 이름·점수
+  const info = [h.schoolName, h.grade, h.semester, h.examType].filter(Boolean).join(' · ');
+  const rows = [
+    full(paragraph(textRun(h.examTitle || '', CHAR.meta), PARA.eq), 0, MOCK_ROWS.sub, BF_NONE),
+    full(paragraph(textRun(h.subject || h.examTitle || '', CHAR.title), PARA.eq), 1, MOCK_ROWS.main, BF_NONE),
+    full(paragraph(textRun(info, CHAR.meta), PARA.eq), 2, MOCK_ROWS.info, BF_RULE_THICK), // 이 행 하단 = 전폭 0.4mm
+    '<hp:tr>'
+    + cell(paragraph(textRun('', CHAR.meta), PARA.body), 0, 3, Math.floor(TABLE_W / 2), MOCK_ROWS.name, BF_NONE)
+    + cell(
+      paragraph(
+        showNameField ? textRun(`이름 :               점수 :       / ${h.totalScore || '100'}`, CHAR.meta) : textRun('', CHAR.meta),
+        PARA_RIGHT,
+      ),
+      1, 3, TABLE_W - Math.floor(TABLE_W / 2), MOCK_ROWS.name, BF_NONE)
+    + '</hp:tr>',
+  ].join('');
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="4" colCnt="2" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${mockHeaderHeight() - 500}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + rows
+    + `</hp:tbl>`;
+}
+
+// ----------------------------------------------------------------------------
+// 밴드형 헤더 — 기출정복 캡처의 "느낌" 구현 (동일 카피 아님):
+//   회색 배경 타이틀 밴드(제목 가운데 크게) + 좌측 accent 컬러 포인트 블록 + 아래 정보줄.
+// ----------------------------------------------------------------------------
+const BAND_ROWS = { band: 5200, info: 2000 } as const;
+function bandHeaderHeight(): number { return BAND_ROWS.band + BAND_ROWS.info + 500; }
+
+function buildBandHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  const POINT_W = 2600; // 좌측 컬러 칩 블록
+  const cell = (inner: string, col: number, r: number, w: number, hh: number, bf: number, span = 1) =>
+    `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
+    + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
+    + inner
+    + `</hp:subList>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="${r}"/><hp:cellSpan colSpan="${span}" rowSpan="1"/>`
+    + `<hp:cellSz width="${w}" height="${hh}"/>`
+    + `<hp:cellMargin left="250" right="250" top="100" bottom="100"/>`
+    + `</hp:tc>`;
+  // 1행: [accent 칩][회색 밴드: 제목 가운데][회색 밴드: 학교명 우측]
+  const SCHOOL_W = 12000;
+  const band = '<hp:tr>'
+    + cell(paragraph(textRun('', CHAR.small), PARA.body), 0, 0, POINT_W, BAND_ROWS.band, BF_ACCENT_BAND)
+    + cell(paragraph(textRun(h.examTitle || '', CHAR.title), PARA.eq), 1, 0, TABLE_W - POINT_W - SCHOOL_W, BAND_ROWS.band, 25)
+    + cell(paragraph(textRun(h.schoolName || '', CHAR.meta), PARA_RIGHT), 2, 0, SCHOOL_W, BAND_ROWS.band, 25)
+    + '</hp:tr>';
+  // 2행: [좌: 과목·학년·학기·유형] [우: 일시 또는 이름/점수]
+  const info = [h.subject, h.grade, h.semester, h.examType].filter(Boolean).join(' · ');
+  const right = showNameField
+    ? `이름 :               점수 :       / ${h.totalScore || '100'}`
+    : (h.date || '');
+  const row2 = '<hp:tr>'
+    + cell(paragraph(textRun(info, CHAR.meta), PARA.body), 0, 1, Math.floor(TABLE_W / 2), BAND_ROWS.info, BF_NONE, 2)
+    + cell(paragraph(textRun(right, CHAR.meta), PARA_RIGHT), 2, 1, TABLE_W - Math.floor(TABLE_W / 2), BAND_ROWS.info, BF_NONE)
+    + '</hp:tr>';
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="2" colCnt="3" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+    + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${bandHeaderHeight() - 500}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + band + row2
+    + `</hp:tbl>`;
+}
+
+// ── 헤더 구조 디스패처 — 그리드 배분(headerHeightOf)과 렌더(buildHeaderByStyle)는 반드시 짝 ──
+function buildHeaderByStyle(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
+  if (h.headerStyle === 'classic') return buildHeaderTable(h, inline);
+  if (h.headerStyle === 'boxed') return buildBoxedHeader(h, showNameField, inline);
+  if (h.headerStyle === 'mock') return buildMockHeader(h, showNameField, inline);
+  if (h.headerStyle === 'band') return buildBandHeader(h, showNameField, inline);
+  return buildEditorialHeader(h, showNameField, inline);
+}
+function headerHeightOf(h: HwpxHeaderMeta, showNameField: boolean): number {
+  if (h.headerStyle === 'classic') return classicHeaderHeight(h);
+  if (h.headerStyle === 'boxed') return boxedHeaderHeight();
+  if (h.headerStyle === 'mock') return mockHeaderHeight();
+  if (h.headerStyle === 'band') return bandHeaderHeight();
+  return editorialHeaderHeight(h, showNameField);
 }
 
 // <보기>/<조건> 박스 — 테두리 있는 1×1 인라인 표. 라벨 줄이 단독으로 있을 때만 감지
@@ -1009,7 +1186,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
     //   + 퍼짐(스프레드) 안 됨. 표 셀은 위치·크기 고정이라 확정 배열.
     const gridCols = cols === 2 ? 2 : 1;
     const headerH = config.header
-      ? editorialHeaderHeight(config.header, config.showNameField !== false)
+      ? headerHeightOf(config.header, config.showNameField !== false)
       : 0;
     // 그리드 모드 헤더는 firstPara(secPr 단락) 안에 인라인으로 — 별도 단락이면 keepWithNext 로
     //   그리드1과 함께 밀려 "빈 1페이지 + 헤더 단독 2페이지"가 생김 (거제여중 실증, 2026-07-18).
@@ -1038,7 +1215,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
       const withHeader = page === 0 && !!config.header;
       const headerRow = withHeader
         ? {
-          xml: `<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${buildEditorialHeader(config.header!, config.showNameField !== false, true)}</hp:run></hp:p>`,
+          xml: `<hp:p id="${nextId()}" paraPrIDRef="${PARA.body}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${buildHeaderByStyle(config.header!, config.showNameField !== false, true)}</hp:run></hp:p>`,
           h: headerH,
         }
         : undefined;
@@ -1113,7 +1290,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   const headerBody = gridMode && firstGridTbl
     ? `<hp:run charPrIDRef="0">${firstGridTbl}</hp:run>`
     : (config.header
-      ? `<hp:run charPrIDRef="0">${buildEditorialHeader(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
+      ? `<hp:run charPrIDRef="0">${buildHeaderByStyle(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
       : textRun(config.title, CHAR.title) + lineSeg(PARA.title));
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
     + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`
@@ -1212,6 +1389,61 @@ function injectVbarBorderFill(header: string): string {
   return out.slice(0, k) + clone + out.slice(k);
 }
 
+// ── 헤더 디자인 갤러리(테마·강조색) 한글 반영 (2026-07-18) ─────────────────────
+//   BF_ACCENT_LINE(28) = 하단 accent 실선 0.4mm (line 테마·이름줄)
+//   BF_ACCENT_BAND(29) = 테두리 없이 accent 배경 (색 띠 — wave/ribbon 등 그래픽 테마 근사)
+//   BF_ACCENT_DOUBLE(30) = 하단 accent 이중선 (double 테마)
+//   ※ 그래픽 테마(wave/grid/dots/corner/mascot 등 SVG)는 한글 표현 불가 → 색 띠 근사.
+const BF_ACCENT_LINE = 28;
+const BF_ACCENT_BAND = 29;
+const BF_ACCENT_DOUBLE = 30;
+// 하단 0.4mm 검정 굵은선 — 수학비서 모의고사 타입 실측 (bf10 은 0.12mm 라 별도). 항상 주입.
+const BF_RULE_THICK = 31;
+function injectThickRule(header: string): string {
+  const i = header.indexOf('<hh:borderFill id="10"');
+  if (i < 0) return header;
+  const j = header.indexOf('</hh:borderFill>', i);
+  if (j < 0) return header;
+  let clone = header.slice(i, j + '</hh:borderFill>'.length);
+  clone = clone
+    .replace('<hh:borderFill id="10"', `<hh:borderFill id="${BF_RULE_THICK}"`)
+    .replace(/<hh:bottomBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/, '<hh:bottomBorder type="SOLID" width="0.4 mm" color="#000000"/>');
+  const out = header.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+  const k = out.indexOf('</hh:borderFills>');
+  if (k < 0) return header;
+  return out.slice(0, k) + clone + out.slice(k);
+}
+
+function injectAccentFills(header: string, color: string): string {
+  let out = header;
+  const cloneFrom = (srcId: string, transform: (clone: string) => string): void => {
+    const i = out.indexOf(`<hh:borderFill id="${srcId}"`);
+    if (i < 0) return;
+    const j = out.indexOf('</hh:borderFill>', i);
+    if (j < 0) return;
+    const clone = transform(out.slice(i, j + '</hh:borderFill>'.length));
+    out = out.replace(/(<hh:borderFills\b[^>]*\bitemCnt=")(\d+)(")/, (_m, a, n, b) => a + (parseInt(n, 10) + 1) + b);
+    const k = out.indexOf('</hh:borderFills>');
+    if (k < 0) return;
+    out = out.slice(0, k) + clone + out.slice(k);
+  };
+  // 28: bf10(하단선만) → accent 0.4mm
+  cloneFrom('10', (c) => c
+    .replace('<hh:borderFill id="10"', `<hh:borderFill id="${BF_ACCENT_LINE}"`)
+    .replace(/<hh:bottomBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/, `<hh:bottomBorder type="SOLID" width="0.4 mm" color="${color}"/>`));
+  // 29: bf25(회색 배경) → 테두리 NONE + accent 배경
+  cloneFrom('25', (c) => c
+    .replace('<hh:borderFill id="25"', `<hh:borderFill id="${BF_ACCENT_BAND}"`)
+    .replace(/<hh:(left|right|top|bottom)Border type="[A-Z]+"/g, '<hh:$1Border type="NONE"')
+    .replace(/faceColor="[^"]*"/, `faceColor="${color}"`)
+    .replace(/hatchColor="[^"]*"/, `hatchColor="${color}"`));
+  // 30: bf10 → 하단 accent 이중선
+  cloneFrom('10', (c) => c
+    .replace('<hh:borderFill id="10"', `<hh:borderFill id="${BF_ACCENT_DOUBLE}"`)
+    .replace(/<hh:bottomBorder type="[A-Z]+" width="[^"]*" color="[^"]*"\/>/, `<hh:bottomBorder type="DOUBLE_SLIM" width="0.5 mm" color="${color}"/>`));
+  return out;
+}
+
 // gap(px) + perPage → space-before HWPUNIT (px 96dpi → ×75)
 function computeGapHwpUnit(config: HwpxExamConfig): number {
   // perPage 그리드 모드는 셀이 배치를 담당 → 간격 paraPr 미사용. 흐름 모드 슬라이더 값만.
@@ -1228,6 +1460,15 @@ export async function generateHWPX(
   config: HwpxExamConfig,
 ): Promise<Blob | Buffer> {
   _shapeId = 2000000000;
+
+  // 강조색 정규화 — 유효 hex 아니면 제거 (headerDeco 가 미주입 bf 를 참조하는 사고 방지)
+  if (config.header?.accentColor && !/^#[0-9a-fA-F]{6}$/.test(config.header.accentColor)) {
+    config = { ...config, header: { ...config.header, accentColor: undefined } };
+  }
+  // 밴드형은 좌측 컬러 칩(bf29)이 필수 → 색 미지정 시 기본 남색
+  if (config.header?.headerStyle === 'band' && !config.header.accentColor) {
+    config = { ...config, header: { ...config.header, accentColor: '#1E3A8A' } };
+  }
 
   // 본문 전처리 — 유형태그·중복번호·인라인 보기 중복 제거 (이미지 수집 전에, 원본 불변)
   problems = problems.map((p) => ({
@@ -1250,10 +1491,13 @@ export async function generateHWPX(
   zip.file('META-INF/container.xml', CONTAINER_XML);
   zip.file('META-INF/manifest.xml', MANIFEST_XML);
   zip.file('META-INF/container.rdf', CONTAINER_RDF);
-  zip.file(
-    'Contents/header.xml',
-    injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)))),
-  );
+  let headerXml = injectThickRule(injectVbarBorderFill(injectDividerBorderFill(injectSpacingParaPr(HEADER_XML, computeGapHwpUnit(config)))));
+  // 헤더 강조색 — 유효한 hex 일 때만 주입 (28=하단선, 29=색띠, 30=이중선)
+  const accent = config.header?.accentColor;
+  if (accent && /^#[0-9a-fA-F]{6}$/.test(accent)) {
+    headerXml = injectAccentFills(headerXml, accent);
+  }
+  zip.file('Contents/header.xml', headerXml);
 
   // BinData + manifest items
   const imageItems: Array<{ id: string; ext: string; mime: string }> = [];
