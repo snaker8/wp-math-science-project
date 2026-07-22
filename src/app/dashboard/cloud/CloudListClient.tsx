@@ -111,6 +111,9 @@ const SOURCE_CATEGORIES: Array<{
   { id: 'mock', label: '모의고사', color: 'rose', emoji: '📝' },
 ];
 
+/** 탭 복귀 재조회 최소 간격 — 알트탭마다 전체 재조회가 나가지 않게 */
+const VISIBILITY_REFETCH_MIN_MS = 30_000;
+
 const MOCK_TITLE_PATTERN = /모의고사|평가원|교육청|수능|학평/;
 const MOCK_TYPE_PATTERN = /모의|수능|평가원|학평/;
 // ★ 성취도 평가 패턴 (2026-05-19): 사용자 요청 — 신규 카테고리.
@@ -963,6 +966,9 @@ export default function CloudPage() {
   );
 
   // --- DB에서 데이터 가져오기 ---
+  // 마지막 성공 시각 — 탭 복귀 시 과도한 재조회를 막는 기준
+  const lastFetchAtRef = useRef(0);
+
   const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     try {
       // ★ silent: 폴더/시험지 작업 후 재조회 시 로딩 스켈레톤 없이 화면 유지한 채 갱신
@@ -984,16 +990,13 @@ export default function CloudPage() {
       const groupsData = await groupsRes.json();
       const examsData = await examsRes.json();
 
-      console.log('[Cloud] ★ /api/exams 응답:', JSON.stringify(examsData).substring(0, 500));
-      console.log('[Cloud] ★ /api/book-groups 응답:', JSON.stringify(groupsData).substring(0, 500));
-
       const groups: DBBookGroup[] = groupsData.groups || [];
       const exams: DBExam[] = examsData.exams || [];
-      console.log(`[Cloud] ★ groups: ${groups.length}개, exams: ${exams.length}개`);
 
       // ★ 트리는 dbGroups/dbExams 에서 파생되므로(useMemo) 여기서 두 소스만 갱신.
       setDbGroups(groups);
       setDbExams(exams);
+      lastFetchAtRef.current = Date.now();
     } catch (err) {
       console.error('[Cloud] Failed to load data:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load');
@@ -1008,11 +1011,18 @@ export default function CloudPage() {
   }, [fetchData]);
 
   // 페이지 복귀 시 데이터 재로드
+  //
+  // ★ 두 가지 사고를 같이 막는다 (2026-07-23)
+  //   1) silent 필수 — 없으면 setIsLoading(true) 가 걸려 카드가 스켈레톤으로 교체됐다가
+  //      다시 그려진다. 탭을 오갈 때마다 목록이 사라졌다 나타나던 원인.
+  //      (silent 는 #356 에서 폴더 작업용으로 만들어 뒀는데 여기만 안 쓰고 있었다.)
+  //   2) 최근에 받았으면 건너뛴다 — 알트탭을 자주 하면 매번 전체 재조회가 나가
+  //      요청이 쌓인다. 30초 안에 받은 데이터면 그대로 쓴다.
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        fetchData();
-      }
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastFetchAtRef.current < VISIBILITY_REFETCH_MIN_MS) return;
+      fetchData({ silent: true });
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
