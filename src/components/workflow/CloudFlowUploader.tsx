@@ -34,7 +34,8 @@ import {
   type CurriculumVersion,
   type ScienceSubjectMeta,
 } from '@/lib/image-pipeline/types';
-import { CURRICULUM_OPTIONS } from '@/lib/workflow/mathsecr-prompt';
+// ★ curriculum-options 직접 import 필수 — mathsecr-prompt 는 3.3MB JSON 을 끌고 옴 (클라이언트 번들 금지)
+import { CURRICULUM_OPTIONS } from '@/lib/workflow/curriculum-options';
 
 interface CloudFlowUploaderProps {
   instituteId?: string;

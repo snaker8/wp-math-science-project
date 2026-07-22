@@ -6,6 +6,8 @@
 // ============================================================================
 
 import React, { Suspense, lazy, useMemo, useState, useCallback } from 'react';
+// ★ katex 는 반드시 ESM import — require('katex') 는 CJS 사본(75kB gz)을 통째로 이중 번들함 (2026-07-22 실측)
+import katex from 'katex';
 import { Loader2, Pencil } from 'lucide-react';
 import type {
   InterpretedFigure,
@@ -336,7 +338,7 @@ export function FigureRenderer({
               {/* 수식 목록 */}
               {displayLabels.map((expr, i) => {
                 let html = '';
-                try { html = require('katex').renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
+                try { html = katex.renderToString(expr, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch {}
                 return (
                   <div key={i} className="flex items-center gap-1 group/label">
                     {html ? (
