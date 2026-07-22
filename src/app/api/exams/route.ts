@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
+import { buildPreviewText } from '@/lib/exams/preview-text';
 
 // Next.js 14 Data Cache 비활성화 — supabaseAdmin 내부 fetch가 캐싱되는 문제 방지
 export const dynamic = 'force-dynamic';
@@ -116,6 +117,44 @@ export async function GET(request: NextRequest) {
         }
       } catch {
         console.warn('[API/exams] difficulty 집계 실패');
+      }
+    }
+
+    // ★ 카드 액자 미리보기 — 1번 문제 본문 첫 토막 (2026-07-23).
+    //   목록 카드의 액자가 회색 문서 아이콘(플레이스홀더)이라 가장 눈에 띄는 자리가
+    //   비어 있었다. 운영 195건 전부 sequence_number=1 본문이 있어(실측 100%) 그걸 쓴다.
+    //   ★ sequence_number=1 만 조회하므로 exam 당 1행 — .select() 1000행 한계
+    //     (동백중 problemCount=0 사고, 위 문제수 집계 주석 참조)에 걸리지 않는다.
+    //     이미지가 아니라 텍스트라 전송량·로딩 부담도 없다.
+    const previewMap = new Map<string, string>();
+    if (examIds.length > 0) {
+      try {
+        const { data: firstRows } = await supabaseAdmin
+          .from('exam_problems')
+          .select('exam_id, problem_id')
+          .in('exam_id', examIds)
+          .eq('sequence_number', 1);
+
+        const problemIds = (firstRows || []).map((r) => r.problem_id).filter(Boolean);
+        if (problemIds.length > 0) {
+          const { data: firstProblems } = await supabaseAdmin
+            .from('problems')
+            .select('id, content_latex')
+            .in('id', problemIds)
+            .is('deleted_at', null);
+
+          const textById = new Map<string, string>();
+          for (const p of firstProblems || []) {
+            textById.set(p.id, p.content_latex || '');
+          }
+          for (const r of firstRows || []) {
+            const preview = buildPreviewText(textById.get(r.problem_id));
+            if (preview) previewMap.set(r.exam_id, preview);
+          }
+        }
+      } catch {
+        // 미리보기는 부가 정보 — 실패해도 목록은 그대로 나간다(기존 모티브로 폴백)
+        console.warn('[API/exams] 미리보기 텍스트 조회 실패');
       }
     }
 
@@ -273,6 +312,7 @@ export async function GET(request: NextRequest) {
         status: exam.status,
         problemCount: problemCountMap.get(exam.id) || 0,
         difficulty: difficultyMap.get(exam.id) || null,
+        previewText: previewMap.get(exam.id) || '',
         hasImage,
         school: schoolMatch?.[1] || '',
         year: yearMatch?.[1] || '',

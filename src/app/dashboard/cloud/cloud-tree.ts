@@ -32,6 +32,8 @@ export interface DBExam {
   createdAt: string;
   // ★ 난이도 분포 (카드 바) — 하 1~3 / 중 4~6 / 상 7~10
   difficulty?: { low: number; mid: number; high: number; total: number } | null;
+  /** 카드 액자용 1번 문제 본문 첫 토막 (없으면 문서 모티브로 폴백) */
+  previewText?: string;
   // ★ 출처별 카테고리 분류용 (Phase 1)
   isDiagnostic?: boolean;
   diagnosticCategory?: string | null;
