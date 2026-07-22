@@ -80,7 +80,15 @@ import type { InterpretedFigure } from '@/types/ocr';
 // ============================================================================
 
 // ★ ProblemData·ExamPaperView 계열은 공용 컴포넌트로 이동 (2026-07-17 인쇄 통일) — 로직 무변경 추출.
-import { ExamPaperView, QuickAnswerView, SolutionView, type ProblemData } from '@/components/exam-paper/ExamPaperView';
+// ★ 인쇄 엔진(~2000줄)은 dynamic — 기본 뷰(펼쳐보기)에선 불필요, 시험지/정답/해설 탭 진입 시 로드
+//   (상세 페이지 초기 JS 감량, 전환 체감 2026-07-18)
+import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
+const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.ExamPaperView), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center py-16"><div className="h-5 w-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /></div>,
+});
+const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.QuickAnswerView), { ssr: false });
+const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.SolutionView), { ssr: false });
 
 type DifficultyKey = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 type DomainKey = 'CALCULATION' | 'UNDERSTANDING' | 'INFERENCE' | 'PROBLEM_SOLVING' | 'UNASSIGNED';

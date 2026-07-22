@@ -3,6 +3,8 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
+import { trackHref } from '@/lib/track/href';
+import { DEFAULT_SUBJECT_TRACK } from '@/lib/subject-track';
 import { useOrganizationName } from '@/hooks/useUserScope';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -765,6 +767,16 @@ export default function CloudPage() {
   // PR-T10 — 활성 트랙별 과목 옵션. flag false / Provider 없음 → 둘 다 노출 (기존 동작)
   const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
   const trackKey = trackSplitEnabled ? activeTrack ?? null : null;
+  // ★ 전환 체감 (2026-07-18): 상세 이동은 트랙 prefix 직접 적용(legacy 경로 push 는
+  //   미들웨어 redirect 한 홉 추가) + 카드 hover 시 prefetch 로 클릭 전에 라우트 준비.
+  const examHref = useCallback(
+    (id: string) => trackHref(`/dashboard/cloud/${id}`, activeTrack ?? DEFAULT_SUBJECT_TRACK),
+    [activeTrack],
+  );
+  const goExam = useCallback((id: string) => router.push(examHref(id)), [router, examHref]);
+  const prefetchExam = useCallback((id: string) => {
+    try { router.prefetch(examHref(id)); } catch { /* prefetch 실패는 무시 */ }
+  }, [router, examHref]);
   const trackSubjectOptions = useMemo(() => getSubjectOptions(trackKey), [trackKey]);
   // ★ 학원명 prefix — "{학원명}클라우드" 동적 표시 (2026-05-17)
   const orgName = useOrganizationName('과사람');
@@ -1930,8 +1942,9 @@ export default function CloudPage() {
                         }`}
                         onClick={() => {
                           setShowSourceList(false);
-                          router.push(`/dashboard/cloud/${exam.id}`);
+                          goExam(exam.id);
                         }}
+                        onMouseEnter={() => prefetchExam(exam.id)}
                         title={`${exam.title}\n과목: ${exam.subject || '미지정'}\n유형: ${exam.examType || '미지정'}\n학년: ${exam.grade || '미지정'}\n생성: ${exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('ko-KR') : '?'}`}
                       >
                         <FileText className={`h-3 w-3 flex-shrink-0 ${dupeCount > 1 ? 'text-amber-400' : 'text-content-muted'}`} />
@@ -2006,7 +2019,7 @@ export default function CloudPage() {
                     fetchData();
                     // appendTo가 있으면 기존 시험지로 이동
                     if (appendToExamId) {
-                      router.push(`/dashboard/cloud/${appendToExamId}`);
+                      goExam(appendToExamId);
                     }
                   }}
                 />
@@ -2541,7 +2554,8 @@ export default function CloudPage() {
                         <div
                           key={exam.id}
                           className="group flex items-center px-5 py-3 hover:bg-surface-raised/30 transition-colors cursor-pointer"
-                          onClick={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                          onClick={() => goExam(exam.id)}
+                          onMouseEnter={() => prefetchExam(exam.id)}
                         >
                           <span className="w-14 text-center">
                             <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-surface-raised px-1.5 text-[11px] font-bold text-content-secondary">
@@ -2614,8 +2628,9 @@ export default function CloudPage() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  router.push(`/dashboard/cloud/${exam.id}`);
+                                  goExam(exam.id);
                                 }}
+                                onMouseEnter={() => prefetchExam(exam.id)}
                                 className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
                               >
                                 <Sparkles className="h-3 w-3" />
@@ -2637,7 +2652,7 @@ export default function CloudPage() {
                             </button>
                             <FileContextMenu
                               onRename={() => handleStartRenameExam(exam.id, exam.fileName)}
-                              onView={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                              onView={() => goExam(exam.id)}
                               onMove={() => setMovingExam({ id: exam.id, bookGroupId: exam.bookGroupId })}
                               onDownload={() => {
                                 // TODO: Storage 연동 후 실제 파일 다운로드
@@ -2656,7 +2671,8 @@ export default function CloudPage() {
                         {filteredExams.map((exam) => (
                           <div
                             key={exam.id}
-                            onClick={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                            onClick={() => goExam(exam.id)}
+                            onMouseEnter={() => prefetchExam(exam.id)}
                             className="group flex flex-col rounded-xl border border-subtle bg-surface-card transition-colors hover:border-cyan-500/30 hover:bg-surface-raised/30 cursor-pointer"
                           >
                             {/* 액자형 썸네일 — 은은한 문서 모티브(실제 미리보기는 후속 단계) */}
@@ -2762,7 +2778,7 @@ export default function CloudPage() {
                                   ) : (
                                     <button
                                       type="button"
-                                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/cloud/${exam.id}`); }}
+                                      onClick={(e) => { e.stopPropagation(); goExam(exam.id); }}
                                       className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
                                     >
                                       <Sparkles className="h-3 w-3" />
@@ -2787,7 +2803,7 @@ export default function CloudPage() {
                                   </button>
                                   <FileContextMenu
                                     onRename={() => handleStartRenameExam(exam.id, exam.fileName)}
-                                    onView={() => router.push(`/dashboard/cloud/${exam.id}`)}
+                                    onView={() => goExam(exam.id)}
                                     onMove={() => setMovingExam({ id: exam.id, bookGroupId: exam.bookGroupId })}
                                     onDownload={() => {
                                       alert('원본 파일 다운로드 기능은 Storage 연동 후 사용 가능합니다.');
