@@ -150,7 +150,7 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
           <select
             value={subjectCode}
             onChange={(e) => setSubjectCode(e.target.value)}
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
           >
             <optgroup label="중학교">
               {SUBJECT_OPTIONS.filter((s) => s.level === '중').map((s) => (
@@ -174,7 +174,7 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="단원·유형명 검색 (예: 상용로그, 식 세우기)"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
             />
           </div>
         </div>
@@ -237,7 +237,7 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
               type="button"
               onClick={handleConfirm}
               disabled={!selected}
-              className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-4 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-4 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               선택 적용
             </button>
@@ -271,7 +271,7 @@ function TreeNode({
     <li>
       <div
         className={`group flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors ${
-          isSelected ? 'bg-cyan-500/15 text-cyan-300' : 'text-zinc-300 hover:bg-zinc-900'
+          isSelected ? 'bg-indigo-500/15 text-indigo-300' : 'text-zinc-300 hover:bg-zinc-900'
         }`}
         style={{ paddingLeft: 6 + indent }}
       >

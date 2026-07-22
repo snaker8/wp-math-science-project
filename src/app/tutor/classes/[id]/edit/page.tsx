@@ -159,7 +159,7 @@ export default function EditClassPage() {
         <div className="text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
           <p className="mb-4">{loadError}</p>
-          <Link href="/tutor/classes" className="text-cyan-400 hover:text-cyan-300">
+          <Link href="/tutor/classes" className="text-indigo-400 hover:text-indigo-300">
             ← 반 목록으로
           </Link>
         </div>

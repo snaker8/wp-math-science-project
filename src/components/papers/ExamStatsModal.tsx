@@ -367,7 +367,7 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
                   </div>
                   <div className="w-full h-2 bg-surface-raised rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-cyan-500 transition-all"
+                      className="h-full rounded-full bg-indigo-500 transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -440,7 +440,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             onClick={() => setActiveTab('table')}
             className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
               activeTab === 'table'
-                ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-indigo-500/5'
                 : 'text-content-tertiary hover:text-content-secondary'
             }`}
           >
@@ -451,7 +451,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             onClick={() => setActiveTab('chart')}
             className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
               activeTab === 'chart'
-                ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-indigo-500/5'
                 : 'text-content-tertiary hover:text-content-secondary'
             }`}
           >
@@ -471,7 +471,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
         {/* 하단 안내 */}
         <div className="flex-shrink-0 border-t border-subtle px-5 py-2 text-center">
           <span className="text-[11px] text-content-muted">
-            통계 데이터는 <span className="text-cyan-500">실시간</span>으로 갱신됩니다. 최신 결과가 보이지 않으면 잠시 후 다시 확인하거나 새로고침해주세요.
+            통계 데이터는 <span className="text-indigo-500">실시간</span>으로 갱신됩니다. 최신 결과가 보이지 않으면 잠시 후 다시 확인하거나 새로고침해주세요.
           </span>
         </div>
       </div>

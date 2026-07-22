@@ -103,7 +103,7 @@ type SourceCategory = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock' | 'a
 const SOURCE_CATEGORIES: Array<{
   id: SourceCategory; label: string; color: string; emoji: string;
 }> = [
-  { id: 'all', label: '전체', color: 'cyan', emoji: '📚' },
+  { id: 'all', label: '전체', color: 'indigo', emoji: '📚' },
   { id: 'diagnostic', label: '진단평가', color: 'indigo', emoji: '🩺' },
   { id: 'achievement', label: '성취도 평가', color: 'violet', emoji: '🎓' },
   { id: 'school', label: '학교기출', color: 'emerald', emoji: '🏫' },
@@ -190,7 +190,7 @@ const SubjectDropdown: React.FC<{
               const isSeparator = opt.startsWith('──');
               if (isSeparator) {
                 return (
-                  <div key={opt} className="px-4 py-1.5 text-[11px] font-bold text-content-tertiary border-t border-subtle mt-1 pt-2">
+                  <div key={opt} className="px-4 py-1.5 text-xs font-bold text-content-tertiary border-t border-subtle mt-1 pt-2">
                     {opt.replace(/──\s?/g, '').trim()}
                   </div>
                 );
@@ -200,7 +200,7 @@ const SubjectDropdown: React.FC<{
                   key={opt}
                   type="button"
                   onClick={() => { onChange(opt); setOpen(false); }}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised transition-colors ${value === opt ? 'bg-surface-raised text-cyan-400 font-medium' : 'text-content-secondary'}`}
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised transition-colors ${value === opt ? 'bg-surface-raised text-indigo-400 font-medium' : 'text-content-secondary'}`}
                 >
                   {opt}
                 </button>
@@ -331,7 +331,7 @@ const SourceCategoryBadge: React.FC<{
                 key={opt.id}
                 type="button"
                 onClick={(e) => handleSelect(e, opt.id)}
-                className={`flex w-full items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-surface-raised transition-colors ${
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-surface-raised transition-colors ${
                   opt.id === (isDiagnostic ? 'diagnostic' : examType === '성취도 평가' ? 'achievement' : examType === '모의고사' ? 'mock' : examType === '시중교재' ? 'textbook' : 'school')
                     ? `${opt.colorClass} font-semibold`
                     : 'text-content-secondary'
@@ -439,7 +439,7 @@ const TreeNodeComponent: React.FC<{
       <div
         className={`group flex items-center gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${
           isSelected
-            ? 'bg-cyan-500/10 text-cyan-400'
+            ? 'bg-indigo-500/10 text-indigo-400'
             : 'text-content-secondary hover:bg-surface-raised/50'
         }`}
         style={{ paddingLeft: `${8 + level * 16}px` }}
@@ -458,7 +458,7 @@ const TreeNodeComponent: React.FC<{
           <span className="w-3.5 flex-shrink-0" />
         )}
         {isExpanded || isSelected ? (
-          <FolderOpen className="h-4 w-4 flex-shrink-0 text-cyan-500" />
+          <FolderOpen className="h-4 w-4 flex-shrink-0 text-indigo-500" />
         ) : (
           <Folder className="h-4 w-4 flex-shrink-0 text-content-tertiary" />
         )}
@@ -474,10 +474,10 @@ const TreeNodeComponent: React.FC<{
             onBlur={onRenameConfirm}
             onClick={(e) => e.stopPropagation()}
             autoFocus
-            className="flex-1 bg-surface-raised border border-cyan-500/50 rounded px-1.5 py-0.5 text-[13px] text-content-primary outline-none"
+            className="flex-1 bg-surface-raised border border-indigo-500/50 rounded px-1.5 py-0.5 text-sm text-content-primary outline-none"
           />
         ) : (
-          <span className={`flex-1 truncate text-[13px] ${isSelected ? 'font-semibold' : 'font-medium'}`}>
+          <span className={`flex-1 truncate text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>
             {node.name}
           </span>
         )}
@@ -577,7 +577,7 @@ const MoveToGroupModal: React.FC<{
             type="button"
             onClick={() => onMove(null)}
             className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
-              currentGroupId === null ? 'bg-cyan-500/10 text-cyan-400' : 'text-content-secondary hover:bg-surface-raised'
+              currentGroupId === null ? 'bg-indigo-500/10 text-indigo-400' : 'text-content-secondary hover:bg-surface-raised'
             }`}
           >
             <Folder className="h-3.5 w-3.5" />
@@ -591,7 +591,7 @@ const MoveToGroupModal: React.FC<{
               onClick={() => onMove(g.id)}
               style={{ paddingLeft: `${12 + depth * 16}px` }}
               className={`flex w-full items-center gap-2 rounded-lg pr-3 py-2 text-xs transition-colors ${
-                currentGroupId === g.id ? 'bg-cyan-500/10 text-cyan-400' : 'text-content-secondary hover:bg-surface-raised'
+                currentGroupId === g.id ? 'bg-indigo-500/10 text-indigo-400' : 'text-content-secondary hover:bg-surface-raised'
               }`}
             >
               {depth > 0 && <span className="text-content-tertiary/50 select-none">└</span>}
@@ -665,7 +665,7 @@ const CreateGroupModal: React.FC<{
         className="w-full max-w-lg mx-4 bg-surface-card border rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-600 to-indigo-600 px-6 py-5">
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-600 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
               <FolderPlus className="h-5 w-5 text-white" />
@@ -694,20 +694,20 @@ const CreateGroupModal: React.FC<{
                     onClick={() => setGroupType(type.id)}
                     className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all ${
                       isSelected
-                        ? 'border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30'
+                        ? 'border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500/30'
                         : 'border bg-surface-raised/50 hover:border-content-muted hover:bg-surface-raised'
                     }`}
                   >
                     <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
-                      isSelected ? 'bg-cyan-500/20 text-cyan-400' : 'bg-surface-raised/50 text-content-tertiary'
+                      isSelected ? 'bg-indigo-500/20 text-indigo-400' : 'bg-surface-raised/50 text-content-tertiary'
                     }`}>
                       <Icon className="h-4.5 w-4.5" />
                     </div>
                     <div className="min-w-0">
-                      <div className={`text-sm font-semibold ${isSelected ? 'text-cyan-400' : 'text-content-secondary'}`}>
+                      <div className={`text-sm font-semibold ${isSelected ? 'text-indigo-400' : 'text-content-secondary'}`}>
                         {type.label}
                       </div>
-                      <div className="text-[11px] text-content-tertiary leading-tight mt-0.5">{type.desc}</div>
+                      <div className="text-xs text-content-tertiary leading-tight mt-0.5">{type.desc}</div>
                     </div>
                   </button>
                 );
@@ -726,7 +726,7 @@ const CreateGroupModal: React.FC<{
               placeholder="예) 2학년 1학기 교과서"
               autoFocus
               autoComplete="off"
-              className="w-full rounded-xl border bg-surface-raised px-4 py-3 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500"
+              className="w-full rounded-xl border bg-surface-raised px-4 py-3 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
             />
           </div>
 
@@ -751,7 +751,7 @@ const CreateGroupModal: React.FC<{
               type="button"
               onClick={handleSave}
               disabled={!name.trim() || saving}
-              className="flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-surface-raised disabled:text-content-tertiary px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-cyan-500/20 disabled:shadow-none"
+              className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-surface-raised disabled:text-content-tertiary px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-indigo-500/20 disabled:shadow-none"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {saving ? '저장 중...' : '저장'}
@@ -1748,7 +1748,7 @@ export default function CloudPage() {
             onClick={() => setShowSourceList(!showSourceList)}
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${
               showSourceList
-                ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-400'
+                ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
                 : 'bg-surface-raised/60 text-content-tertiary hover:text-content-primary hover:bg-surface-raised'
             }`}
             title="업로드된 출처 목록"
@@ -1764,7 +1764,7 @@ export default function CloudPage() {
             <Upload className="h-4 w-4" />
             자료 업로드
           </button>
-          <span className="text-[11px] text-content-muted">
+          <span className="text-xs text-content-muted">
             <Database className="inline h-3 w-3 mr-1" />
             DB 시험지 {dbExams.length}건
           </span>
@@ -1776,18 +1776,18 @@ export default function CloudPage() {
         <div className="flex flex-shrink-0 items-center gap-3 px-6 py-2 border-b border-subtle/30 bg-surface-base/60">
           {sourceCategory === 'diagnostic' && (
             <>
-              <span className="text-[11px] text-content-tertiary font-medium">세션</span>
+              <span className="text-xs text-content-tertiary font-medium">세션</span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => { setDiagSession('all'); setDiagRound('all'); }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
                     diagSession === 'all'
                       ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
                       : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
                   }`}
                 >
-                  전체 <span className="text-[9px] opacity-60">{categoryFilteredExams.length}</span>
+                  전체 <span className="text-[10px] opacity-60">{categoryFilteredExams.length}</span>
                 </button>
                 {diagSessionOptions.map((s) => (
                   <button
@@ -1795,7 +1795,7 @@ export default function CloudPage() {
                     type="button"
                     onClick={() => { setDiagSession(s.id as any); setDiagRound('all'); }}
                     disabled={s.count === 0}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                       diagSession === s.id
                         ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
                         : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
@@ -1804,19 +1804,19 @@ export default function CloudPage() {
                   >
                     <span>{s.emoji}</span>
                     <span>{s.label}</span>
-                    <span className="text-[9px] opacity-60">{s.count}</span>
+                    <span className="text-[10px] opacity-60">{s.count}</span>
                   </button>
                 ))}
               </div>
               {diagRoundOptions.length > 0 && (
                 <>
                   <div className="h-4 w-px bg-subtle/50" />
-                  <span className="text-[11px] text-content-tertiary font-medium">회차</span>
+                  <span className="text-xs text-content-tertiary font-medium">회차</span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => setDiagRound('all')}
-                      className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                      className={`px-2 py-1 rounded-md text-xs font-semibold transition-colors ${
                         diagRound === 'all'
                           ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
                           : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
@@ -1829,14 +1829,14 @@ export default function CloudPage() {
                         key={r.id}
                         type="button"
                         onClick={() => setDiagRound(r.id)}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold transition-colors ${
                           diagRound === r.id
                             ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
                             : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
                         }`}
                       >
                         <span>{r.label}</span>
-                        <span className="text-[9px] opacity-60">{r.count}</span>
+                        <span className="text-[10px] opacity-60">{r.count}</span>
                       </button>
                     ))}
                   </div>
@@ -1846,25 +1846,25 @@ export default function CloudPage() {
           )}
           {sourceCategory === 'mock' && (
             <>
-              <span className="text-[11px] text-content-tertiary font-medium">연도</span>
+              <span className="text-xs text-content-tertiary font-medium">연도</span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setMockYear('all')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
                     mockYear === 'all'
                       ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40'
                       : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
                   }`}
                 >
-                  전체 <span className="text-[9px] opacity-60">{categoryFilteredExams.length}</span>
+                  전체 <span className="text-[10px] opacity-60">{categoryFilteredExams.length}</span>
                 </button>
                 {mockYearOptions.map((y) => (
                   <button
                     key={y.id}
                     type="button"
                     onClick={() => setMockYear(y.id)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
                       mockYear === y.id
                         ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40'
                         : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
@@ -1872,7 +1872,7 @@ export default function CloudPage() {
                   >
                     <span>📅</span>
                     <span>{y.label}</span>
-                    <span className="text-[9px] opacity-60">{y.count}</span>
+                    <span className="text-[10px] opacity-60">{y.count}</span>
                   </button>
                 ))}
               </div>
@@ -1928,7 +1928,7 @@ export default function CloudPage() {
             <p className="text-red-400 text-sm mb-2">데이터 로딩 실패: {loadError}</p>
             <button
               onClick={() => fetchData()}
-              className="text-xs text-cyan-400 hover:underline"
+              className="text-xs text-indigo-400 hover:underline"
             >
               새로고침
             </button>
@@ -1949,7 +1949,7 @@ export default function CloudPage() {
             <div className="px-6 py-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-content-primary flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4 text-cyan-400" />
+                  <ClipboardList className="h-4 w-4 text-indigo-400" />
                   업로드된 출처 목록 ({dbExams.length}건)
                 </h3>
                 <div className="flex items-center gap-2">
@@ -1960,13 +1960,13 @@ export default function CloudPage() {
                       <div className="flex gap-1">
                         <button
                           onClick={() => setSourceFilter('')}
-                          className={`px-2 py-0.5 rounded text-[10px] transition-colors ${!sourceFilter ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-surface-raised/60 text-content-muted hover:text-content-primary'}`}
+                          className={`px-2 py-0.5 rounded text-[10px] transition-colors ${!sourceFilter ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-surface-raised/60 text-content-muted hover:text-content-primary'}`}
                         >전체</button>
                         {subjects.map(s => (
                           <button
                             key={s}
                             onClick={() => setSourceFilter(s)}
-                            className={`px-2 py-0.5 rounded text-[10px] transition-colors ${sourceFilter === s ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-surface-raised/60 text-content-muted hover:text-content-primary'}`}
+                            className={`px-2 py-0.5 rounded text-[10px] transition-colors ${sourceFilter === s ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-surface-raised/60 text-content-muted hover:text-content-primary'}`}
                           >{s}</button>
                         ))}
                       </div>
@@ -1986,10 +1986,10 @@ export default function CloudPage() {
                     return (
                       <div
                         key={exam.id}
-                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] group cursor-pointer transition-colors ${
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs group cursor-pointer transition-colors ${
                           dupeCount > 1
                             ? 'bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50'
-                            : 'bg-surface-raised/60 border-subtle/50 hover:border-cyan-500/30'
+                            : 'bg-surface-raised/60 border-subtle/50 hover:border-indigo-500/30'
                         }`}
                         onClick={() => {
                           setShowSourceList(false);
@@ -2000,17 +2000,17 @@ export default function CloudPage() {
                       >
                         <FileText className={`h-3 w-3 flex-shrink-0 ${dupeCount > 1 ? 'text-amber-400' : 'text-content-muted'}`} />
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className={`truncate ${dupeCount > 1 ? 'text-amber-300' : 'text-content-secondary group-hover:text-cyan-400'}`}>
+                          <span className={`truncate ${dupeCount > 1 ? 'text-amber-300' : 'text-content-secondary group-hover:text-indigo-400'}`}>
                             {exam.title || exam.fileName}
                           </span>
-                          <span className="text-[9px] text-content-muted truncate">
+                          <span className="text-[10px] text-content-muted truncate">
                             {exam.subject || ''} {exam.grade || ''} {exam.examType || ''}
                           </span>
                         </div>
                         <div className="flex flex-col items-end flex-shrink-0">
-                          <span className="text-[9px] text-content-muted">{exam.problemCount}문제</span>
+                          <span className="text-[10px] text-content-muted">{exam.problemCount}문제</span>
                           {dupeCount > 1 && (
-                            <span className="text-[8px] text-amber-400 font-bold">중복{dupeCount}</span>
+                            <span className="text-[10px] text-amber-400 font-bold">중복{dupeCount}</span>
                           )}
                         </div>
                       </div>
@@ -2240,7 +2240,7 @@ export default function CloudPage() {
                           className={`w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-surface-raised text-content-primary placeholder-content-muted outline-none transition-colors ${
                             deletePinError
                               ? 'border-red-500 focus:border-red-400'
-                              : 'border focus:border-cyan-500'
+                              : 'border focus:border-indigo-500'
                           }`}
                         />
                       </div>
@@ -2327,8 +2327,8 @@ export default function CloudPage() {
               className="w-full max-w-sm rounded-2xl border bg-surface-card shadow-2xl mx-4"
             >
               <div className="flex items-center gap-3 border-b border-subtle px-6 py-4">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-900/30 border border-cyan-900/50">
-                  <KeyRound className="h-4 w-4 text-cyan-400" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-900/30 border border-indigo-900/50">
+                  <KeyRound className="h-4 w-4 text-indigo-400" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-content-primary">관리자 PIN 변경</h3>
@@ -2351,7 +2351,7 @@ export default function CloudPage() {
                         value={value}
                         onChange={(e) => { setter(e.target.value); setPinChangeError(''); }}
                         placeholder={placeholder}
-                        className="w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-surface-raised text-content-primary placeholder-content-muted outline-none focus:border-cyan-500 transition-colors"
+                        className="w-full rounded-lg border pl-9 pr-4 py-2.5 text-sm bg-surface-raised text-content-primary placeholder-content-muted outline-none focus:border-indigo-500 transition-colors"
                       />
                     </div>
                   </div>
@@ -2376,7 +2376,7 @@ export default function CloudPage() {
                   type="button"
                   onClick={handlePinChange}
                   disabled={!pinOld || !pinNew || !pinConfirm}
-                  className="flex items-center gap-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:bg-surface-raised disabled:text-content-tertiary px-4 py-2 text-sm font-bold text-white transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-indigo-700 hover:bg-indigo-600 disabled:bg-surface-raised disabled:text-content-tertiary px-4 py-2 text-sm font-bold text-white transition-colors"
                 >
                   <Check className="h-4 w-4" />
                   PIN 변경
@@ -2397,7 +2397,7 @@ export default function CloudPage() {
           >
             {/* Top Bar */}
             <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
-              <span className="rounded-full border bg-surface-raised px-3 py-1 text-[11px] font-semibold text-content-secondary">
+              <span className="rounded-full border bg-surface-raised px-3 py-1 text-xs font-semibold text-content-secondary">
                 {sourceCategory === 'all'
                   ? `북그룹 ${totalGroups}개`
                   : `${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.emoji ?? ''} ${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.label ?? ''} · ${subFilteredExams.length}건`}
@@ -2406,7 +2406,7 @@ export default function CloudPage() {
                 <button
                   type="button"
                   onClick={handleAddRootGroup}
-                  className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-400"
+                  className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-400"
                 >
                   <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
                     <Plus className="h-3 w-3" />
@@ -2442,7 +2442,7 @@ export default function CloudPage() {
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <Smile className="h-12 w-12 text-cyan-500/50" />
+                    <Smile className="h-12 w-12 text-indigo-500/50" />
                     <p className="text-sm text-content-tertiary">
                       {sourceCategory === 'all' ? '업로드된 시험지가 없습니다.' : '이 분류에 해당하는 자료가 없습니다.'}
                     </p>
@@ -2475,12 +2475,12 @@ export default function CloudPage() {
                   {/* Content Header */}
                   <div className="flex items-center justify-between border-b border-subtle px-5 py-3.5">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10">
-                        <FileText className="h-4 w-4 text-cyan-400" />
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10">
+                        <FileText className="h-4 w-4 text-indigo-400" />
                       </div>
                       <div className="min-w-0">
                         <h2 className="text-sm font-semibold text-content-primary truncate">{selectedName}</h2>
-                        <p className="text-[11px] text-content-tertiary">
+                        <p className="text-xs text-content-tertiary">
                           총 {exams.length}건 · 표시 {filteredExams.length}건
                         </p>
                       </div>
@@ -2494,7 +2494,7 @@ export default function CloudPage() {
                           placeholder="파일명으로 검색..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="h-8 w-48 rounded-lg border border-white/10 bg-zinc-900/80 pl-8 pr-3 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                          className="h-8 w-48 rounded-lg border border-white/10 bg-zinc-900/80 pl-8 pr-3 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
                       {/* 뷰 토글 (그리드/리스트) */}
@@ -2502,7 +2502,7 @@ export default function CloudPage() {
                         <button
                           type="button"
                           onClick={() => changeViewMode('grid')}
-                          className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-cyan-500/15 text-cyan-400' : 'text-content-tertiary hover:bg-surface-raised hover:text-content-primary'}`}
+                          className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-indigo-500/15 text-indigo-400' : 'text-content-tertiary hover:bg-surface-raised hover:text-content-primary'}`}
                           title="카드 보기"
                           aria-label="카드 보기"
                           aria-pressed={viewMode === 'grid'}
@@ -2512,7 +2512,7 @@ export default function CloudPage() {
                         <button
                           type="button"
                           onClick={() => changeViewMode('list')}
-                          className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-cyan-500/15 text-cyan-400' : 'text-content-tertiary hover:bg-surface-raised hover:text-content-primary'}`}
+                          className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-indigo-500/15 text-indigo-400' : 'text-content-tertiary hover:bg-surface-raised hover:text-content-primary'}`}
                           title="목록 보기"
                           aria-label="목록 보기"
                           aria-pressed={viewMode === 'list'}
@@ -2605,7 +2605,7 @@ export default function CloudPage() {
                     ) : viewMode === 'list' ? (
                     <>
                     {/* Table Header */}
-                    <div className="sticky top-0 z-10 flex items-center border-b border-subtle bg-surface-raised/60 backdrop-blur px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-content-tertiary">
+                    <div className="sticky top-0 z-10 flex items-center border-b border-subtle bg-surface-raised/60 backdrop-blur px-5 py-2 text-xs font-medium uppercase tracking-wide text-content-tertiary">
                       <span
                         className="w-14 text-center cursor-pointer hover:text-content-primary"
                         onClick={() => toggleSort('order')}
@@ -2638,7 +2638,7 @@ export default function CloudPage() {
                           onMouseEnter={() => prefetchExam(exam.id)}
                         >
                           <span className="w-14 text-center">
-                            <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-surface-raised px-1.5 text-[11px] font-bold text-content-secondary">
+                            <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-surface-raised px-1.5 text-xs font-bold text-content-secondary">
                               #{exam.order}
                             </span>
                           </span>
@@ -2655,15 +2655,15 @@ export default function CloudPage() {
                                 onBlur={handleConfirmRenameExam}
                                 onClick={(e) => e.stopPropagation()}
                                 autoFocus
-                                className="flex-1 bg-surface-raised border border-cyan-500/50 rounded px-2 py-1 text-[13px] text-content-primary outline-none"
+                                className="flex-1 bg-surface-raised border border-indigo-500/50 rounded px-2 py-1 text-sm text-content-primary outline-none"
                               />
                             ) : (
-                              <span className="truncate text-[13px] text-content-secondary font-medium">
+                              <span className="truncate text-sm text-content-secondary font-medium">
                                 {exam.fileName}
                               </span>
                             )}
                             {exam.hasImage && renamingExamId !== exam.id && (
-                              <span className="flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-1.5 py-0.5 text-[10px] font-medium text-cyan-400 flex-shrink-0">
+                              <span className="flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/5 px-1.5 py-0.5 text-[10px] font-medium text-indigo-400 flex-shrink-0">
                                 <ImageIcon className="h-3 w-3" />
                                 이미지 포함
                               </span>
@@ -2677,7 +2677,7 @@ export default function CloudPage() {
                                   title={isDirect ? '이 폴더 직속' : `하위 폴더: ${folderName}`}
                                   className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0 ${
                                     isDirect
-                                      ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
+                                      ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300'
                                       : 'border-white/10 bg-surface-raised text-content-tertiary'
                                   }`}
                                 >
@@ -2753,7 +2753,7 @@ export default function CloudPage() {
                             key={exam.id}
                             onClick={() => goExam(exam.id)}
                             onMouseEnter={() => prefetchExam(exam.id)}
-                            className="group flex flex-col rounded-xl border border-subtle bg-surface-card transition-colors hover:border-cyan-500/30 hover:bg-surface-raised/30 cursor-pointer"
+                            className="group flex flex-col rounded-xl border border-subtle bg-surface-card transition-colors hover:border-indigo-500/30 hover:bg-surface-raised/30 cursor-pointer"
                           >
                             {/* 액자형 썸네일 — 은은한 문서 모티브(실제 미리보기는 후속 단계) */}
                             <div className="relative m-2 mb-0 flex h-20 items-center justify-center overflow-hidden rounded-lg border border-subtle bg-black/20">
@@ -2767,7 +2767,7 @@ export default function CloudPage() {
                                 #{exam.order}
                               </span>
                               {exam.hasImage && (
-                                <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-400">
+                                <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium text-indigo-400">
                                   <ImageIcon className="h-3 w-3" />
                                   이미지
                                 </span>
@@ -2787,19 +2787,19 @@ export default function CloudPage() {
                                   onBlur={handleConfirmRenameExam}
                                   onClick={(e) => e.stopPropagation()}
                                   autoFocus
-                                  className="w-full rounded border border-cyan-500/50 bg-surface-raised px-2 py-1 text-[13px] text-content-primary outline-none"
+                                  className="w-full rounded border border-indigo-500/50 bg-surface-raised px-2 py-1 text-sm text-content-primary outline-none"
                                 />
                               ) : (
-                                <span className="truncate text-[13px] font-medium text-content-primary">{exam.fileName}</span>
+                                <span className="truncate text-sm font-medium text-content-primary">{exam.fileName}</span>
                               )}
-                              <span className="truncate text-[11px] text-content-tertiary">
+                              <span className="truncate text-xs text-content-tertiary">
                                 {[exam.grade, exam.subject, exam.year].filter(Boolean).join(' · ') || '—'}
                               </span>
                               {showFolderBadge && (() => {
                                 const isDirect = (exam.bookGroupId ?? null) === (selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : null);
                                 const folderName = exam.bookGroupId ? (groupNameById.get(exam.bookGroupId) ?? '폴더') : '미분류';
                                 return (
-                                  <span className={`flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${isDirect ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300' : 'border-white/10 bg-surface-raised text-content-tertiary'}`}>
+                                  <span className={`flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${isDirect ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300' : 'border-white/10 bg-surface-raised text-content-tertiary'}`}>
                                     <Folder className="h-3 w-3" />
                                     {folderName}
                                     {isDirect && ' · 직속'}
@@ -2826,7 +2826,7 @@ export default function CloudPage() {
                                     {/* 호버 팝업 (우리 다크 글라스) */}
                                     <div className="pointer-events-none invisible absolute left-0 top-full z-30 mt-1.5 w-44 translate-y-1 rounded-xl border border-white/10 bg-surface-card/95 p-3 opacity-0 shadow-2xl backdrop-blur-md transition-all duration-150 group-hover/diff:visible group-hover/diff:translate-y-0 group-hover/diff:opacity-100">
                                       <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-[11px] font-semibold text-content-primary">난이도 분포</span>
+                                        <span className="text-xs font-semibold text-content-primary">난이도 분포</span>
                                         <span className="text-[10px] text-content-tertiary">{d.total}문항</span>
                                       </div>
                                       <div className="space-y-1.5">
@@ -2851,7 +2851,7 @@ export default function CloudPage() {
                               <div className="mt-auto flex items-center justify-between pt-1.5">
                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                   {exam.problemCount > 0 ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/20 bg-indigo-500/5 px-2 py-0.5 text-[11px] font-medium text-indigo-400">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/20 bg-indigo-500/5 px-2 py-0.5 text-xs font-medium text-indigo-400">
                                       <Sparkles className="h-3 w-3" />
                                       {exam.problemCount}문항
                                     </span>
@@ -2859,7 +2859,7 @@ export default function CloudPage() {
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); goExam(exam.id); }}
-                                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+                                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
                                     >
                                       <Sparkles className="h-3 w-3" />
                                       작업하기
@@ -2903,7 +2903,7 @@ export default function CloudPage() {
                 /* Empty State */
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
                   <div className="flex h-20 w-20 items-center justify-center rounded-full bg-zinc-800">
-                    <Smile className="h-10 w-10 text-cyan-500/50" />
+                    <Smile className="h-10 w-10 text-indigo-500/50" />
                   </div>
                   <div className="space-y-1">
                     <p className="text-base font-semibold text-zinc-300">둘러볼 북그룹을 선택해 주세요</p>

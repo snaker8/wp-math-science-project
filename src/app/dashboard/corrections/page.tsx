@@ -103,10 +103,10 @@ export default function CorrectionsDashboardPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-cyan-900/30 via-indigo-900/20 to-zinc-900/30 px-8 py-6">
+      <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/30 via-indigo-900/20 to-zinc-900/30 px-8 py-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
-            <Sparkles className="h-5 w-5 text-cyan-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10">
+            <Sparkles className="h-5 w-5 text-indigo-400" />
           </div>
           <div>
             <h1 className="text-xl font-bold">분류 보정 이력</h1>
@@ -121,7 +121,7 @@ export default function CorrectionsDashboardPage() {
         {/* 통계 4 카드 */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="총 보정 수" value={data.total} unit="건" icon={<History className="h-4 w-4" />} />
-          <StatCard label="최근 30일" value={data.recent30} unit="건" icon={<TrendingUp className="h-4 w-4" />} accent="cyan" />
+          <StatCard label="최근 30일" value={data.recent30} unit="건" icon={<TrendingUp className="h-4 w-4" />} accent="indigo" />
           <StatCard label="최근 7일" value={data.recent7} unit="건" icon={<Sparkles className="h-4 w-4" />} accent="amber" />
           <StatCard
             label="평균 일일"
@@ -143,11 +143,11 @@ export default function CorrectionsDashboardPage() {
                   title={`${d.date} · ${d.count}건`}
                 >
                   <div
-                    className="rounded-t bg-gradient-to-t from-cyan-500/40 to-cyan-500"
+                    className="rounded-t bg-gradient-to-t from-indigo-500/40 to-indigo-500"
                     style={{ height: d.count === 0 ? '2px' : `${Math.max(4, pct)}%` }}
                   />
                   {d.count > 0 && (
-                    <div className="absolute -top-5 left-1/2 hidden -translate-x-1/2 rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] text-cyan-300 group-hover:block">
+                    <div className="absolute -top-5 left-1/2 hidden -translate-x-1/2 rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] text-indigo-300 group-hover:block">
                       {d.count}
                     </div>
                   )}
@@ -200,7 +200,7 @@ export default function CorrectionsDashboardPage() {
                         <div className="text-xs text-zinc-300">{prefixToName(a.prefix)}</div>
                         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-500"
                             style={{ width: `${pct}%` }}
                           />
                         </div>
@@ -246,7 +246,7 @@ export default function CorrectionsDashboardPage() {
                           {(r.beforeCode || '(없음)').slice(0, 20)}
                         </code>
                         <ArrowRight className="mx-1 inline h-3 w-3 text-zinc-600" />
-                        <code className="text-cyan-300">{r.afterCode}</code>
+                        <code className="text-indigo-300">{r.afterCode}</code>
                       </td>
                       <td className="px-3 py-2 text-zinc-300">
                         <span className="line-clamp-1">{r.afterTypeName || '-'}</span>
@@ -278,9 +278,9 @@ function StatCard({
   value: number;
   unit: string;
   icon: React.ReactNode;
-  accent?: 'cyan' | 'amber';
+  accent?: 'indigo' | 'amber';
 }) {
-  const valueColor = accent === 'cyan' ? 'text-cyan-400' : accent === 'amber' ? 'text-amber-400' : 'text-white';
+  const valueColor = accent === 'indigo' ? 'text-indigo-400' : accent === 'amber' ? 'text-amber-400' : 'text-white';
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">

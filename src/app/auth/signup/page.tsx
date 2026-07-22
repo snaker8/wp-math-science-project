@@ -40,7 +40,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     label: '학생',
     description: '문제를 풀고 학습 진도를 관리합니다',
     icon: <GraduationCap size={24} />,
-    color: 'from-blue-500 to-cyan-500',
+    color: 'from-blue-500 to-indigo-500',
   },
   {
     value: 'TEACHER',

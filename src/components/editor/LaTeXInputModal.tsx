@@ -157,7 +157,7 @@ export function LaTeXInputModal({
               type="checkbox"
               checked={displayStyle}
               onChange={(e) => setDisplayStyle(e.target.checked)}
-              className="w-3.5 h-3.5 accent-cyan-500 rounded"
+              className="w-3.5 h-3.5 accent-indigo-500 rounded"
             />
             displaystyle 적용
           </label>
@@ -166,7 +166,7 @@ export function LaTeXInputModal({
               type="checkbox"
               checked={block}
               onChange={(e) => setBlock(e.target.checked)}
-              className="w-3.5 h-3.5 accent-cyan-500 rounded"
+              className="w-3.5 h-3.5 accent-indigo-500 rounded"
             />
             block 적용
           </label>
@@ -194,7 +194,7 @@ export function LaTeXInputModal({
             value={latex}
             onChange={(e) => setLatex(e.target.value)}
             placeholder="LaTeX 수식을 입력하세요 (예: x^2 + y^2 = r^2)"
-            className="w-full h-32 resize-none rounded-xl border border bg-surface-raised px-4 py-3 text-sm text-cyan-200 font-mono leading-relaxed placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+            className="w-full h-32 resize-none rounded-xl border border bg-surface-raised px-4 py-3 text-sm text-indigo-200 font-mono leading-relaxed placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
             spellCheck={false}
           />
         </div>

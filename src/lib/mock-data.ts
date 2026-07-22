@@ -303,7 +303,7 @@ export const mockStaff: StaffMember[] = [
         role: 'Tutor',
         email: 'hwang@gwamath.com',
         phone: '010-5678-9012',
-        avatar: 'bg-cyan-500',
+        avatar: 'bg-indigo-500',
         assignedClasses: ['중2 심화반'],
         status: 'Active',
         lastActive: '5분 전',

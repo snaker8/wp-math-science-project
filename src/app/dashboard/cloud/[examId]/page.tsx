@@ -85,7 +85,7 @@ import type { InterpretedFigure } from '@/types/ocr';
 import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
 const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.ExamPaperView), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center py-16"><div className="h-5 w-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /></div>,
+  loading: () => <div className="flex items-center justify-center py-16"><div className="h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>,
 });
 const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.QuickAnswerView), { ssr: false });
 const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.SolutionView), { ssr: false });
@@ -772,13 +772,13 @@ function SubQuestionTable({
       <div className="divide-y divide-amber-500/10">
         {items.map((it, idx) => (
           <div key={it.number} className="flex items-center gap-2 px-3 py-1.5">
-            <span className="text-[11px] font-bold text-cyan-400 w-10 flex-shrink-0">{it.number}</span>
+            <span className="text-[11px] font-bold text-indigo-400 w-10 flex-shrink-0">{it.number}</span>
             <input
               type="text"
               placeholder="답"
               value={it.answer}
               onChange={(e) => update(idx, { answer: e.target.value })}
-              className="flex-1 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500"
+              className="flex-1 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500"
             />
             <input
               type="number"
@@ -791,7 +791,7 @@ function SubQuestionTable({
                 const v = e.target.value;
                 update(idx, { points: v === '' ? null : Number(v) });
               }}
-              className="w-16 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 text-right"
+              className="w-16 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 text-right"
             />
             <span className="text-[11px] text-zinc-500">점</span>
           </div>
@@ -862,7 +862,7 @@ function ProblemCardView({
     <div
       className={`group rounded-xl border transition-all cursor-pointer ${
         isSelectionMode && isSelected
-          ? 'border-cyan-500 bg-cyan-500/5 ring-1 ring-cyan-500/30'
+          ? 'border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500/30'
           : isEditingPosition
           ? 'border-violet-500 bg-violet-500/5 ring-1 ring-violet-500/20'
           : 'border-subtle bg-surface-card/80 hover:border-accent/30'
@@ -917,7 +917,7 @@ function ProblemCardView({
           <div
             className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all ${
               isSelected
-                ? 'border-cyan-500 bg-cyan-500 text-white'
+                ? 'border-indigo-500 bg-indigo-500 text-white'
                 : 'border-zinc-600 bg-surface-raised text-transparent hover:border-zinc-400'
             }`}
           >
@@ -1097,7 +1097,7 @@ function ProblemCardView({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onTwinGenerate(problem); }}
-              className="p-1 rounded text-content-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+              className="p-1 rounded text-content-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
               title="유사문제 만들기"
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -1372,7 +1372,7 @@ function ProblemCardView({
                       const stripped = choice.replace(/^[①②③④⑤]\s*/, '').replace(/^\(\d+\)\s*/, '').trim();
                       return (
                         <div key={i} className="flex items-start gap-1.5 text-[13px] text-content-secondary">
-                          <span className="flex-shrink-0 text-cyan-500 font-medium">({i + 1})</span>
+                          <span className="flex-shrink-0 text-indigo-500 font-medium">({i + 1})</span>
                           <MixedContentRenderer content={stripped} className="text-content-secondary" />
                         </div>
                       );
@@ -2386,7 +2386,7 @@ export default function CloudExamDetailPage() {
               }}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                 isSelectionMode
-                  ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
                   : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
@@ -2519,7 +2519,7 @@ export default function CloudExamDetailPage() {
               onClick={() => setActiveView('exam')}
               className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 activeView === 'exam'
-                  ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
                   : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
@@ -2531,7 +2531,7 @@ export default function CloudExamDetailPage() {
               onClick={() => setActiveView('answer')}
               className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 activeView === 'answer'
-                  ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
                   : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
@@ -2543,7 +2543,7 @@ export default function CloudExamDetailPage() {
               onClick={() => setActiveView('solution')}
               className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 activeView === 'solution'
-                  ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
                   : 'border bg-surface-card text-content-secondary hover:bg-surface-raised'
               }`}
             >
@@ -2778,7 +2778,7 @@ export default function CloudExamDetailPage() {
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 px-4 py-4">
           {dbLoading ? (
             <div className="flex flex-col items-center justify-center h-64 text-content-tertiary">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-t-cyan-500 mb-3" />
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-t-indigo-500 mb-3" />
               <p className="text-sm">문제 로딩 중...</p>
             </div>
           ) : filteredProblems.length > 0 ? (
@@ -2790,7 +2790,7 @@ export default function CloudExamDetailPage() {
                 </div>
               )}
               {isReordering && (
-                <div className="mb-3 text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-3 py-2">
+                <div className="mb-3 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-3 py-2">
                   순서 변경 중…
                 </div>
               )}
@@ -2830,7 +2830,7 @@ export default function CloudExamDetailPage() {
                         }
                       }}
                       className={`transition-all ${
-                        isDragOver ? 'ring-2 ring-cyan-500 scale-[1.01]' : ''
+                        isDragOver ? 'ring-2 ring-indigo-500 scale-[1.01]' : ''
                       } ${draggedProblemId === problem.id ? 'opacity-40' : ''}`}
                       style={{ cursor: canDrag ? 'grab' : undefined }}
                     >
@@ -2870,7 +2870,7 @@ export default function CloudExamDetailPage() {
               <button
                 type="button"
                 onClick={() => { setActiveDifficulty(null); setActiveDomain(null); }}
-                className="mt-2 text-xs text-cyan-400 hover:text-cyan-300"
+                className="mt-2 text-xs text-indigo-400 hover:text-indigo-300"
               >
                 필터 초기화
               </button>
@@ -2976,7 +2976,7 @@ export default function CloudExamDetailPage() {
               <button
                 type="button"
                 onClick={handleCreateExam}
-                className="flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-sm font-bold text-white transition-all"
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition-all"
               >
                 <ShoppingCart className="h-4 w-4" />
                 <span>시험지 만들기</span>

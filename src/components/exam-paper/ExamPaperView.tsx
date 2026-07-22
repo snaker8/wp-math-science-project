@@ -704,7 +704,7 @@ export function ExamPaperView({
               onClick={() => setColumns(1)}
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 1
-                  ? 'bg-cyan-500/10 text-cyan-400'
+                  ? 'bg-indigo-500/10 text-indigo-400'
                   : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
@@ -716,7 +716,7 @@ export function ExamPaperView({
               onClick={() => setColumns(2)}
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 2
-                  ? 'bg-cyan-500/10 text-cyan-400'
+                  ? 'bg-indigo-500/10 text-indigo-400'
                   : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
@@ -753,7 +753,7 @@ export function ExamPaperView({
                 max={700}
                 value={gap}
                 onChange={(e) => setGap(Number(e.target.value))}
-                className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+                className="w-32 h-1 accent-indigo-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
             </div>
@@ -767,7 +767,7 @@ export function ExamPaperView({
               max={70}
               value={pagePad}
               onChange={(e) => setPagePad(Number(e.target.value))}
-              className="w-24 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-24 h-1 accent-indigo-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
               title="페이지 좌우 여백 (px)"
             />
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{pagePad}</span>
@@ -840,7 +840,7 @@ export function ExamPaperView({
                 type="button"
                 onClick={() => setHeaderColor(c)}
                 title={label}
-                className={`w-4 h-4 rounded-full border border-zinc-500 flex items-center justify-center ${headerColor === c ? 'ring-2 ring-cyan-400' : ''}`}
+                className={`w-4 h-4 rounded-full border border-zinc-500 flex items-center justify-center ${headerColor === c ? 'ring-2 ring-indigo-400' : ''}`}
                 style={c ? { background: c } : { background: 'transparent' }}
               >
                 {c === null && <span className="text-[8px] text-content-tertiary leading-none">✕</span>}
@@ -943,7 +943,7 @@ export function ExamPaperView({
             <button
               type="button"
               onClick={() => setShowPrintMenu(!showPrintMenu)}
-              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-sm font-medium text-indigo-400 hover:bg-indigo-500/20 transition-colors"
             >
               <Printer className="h-4 w-4" />
               출력
@@ -964,7 +964,7 @@ export function ExamPaperView({
                         type="checkbox"
                         checked={printSections[key]}
                         onChange={() => setPrintSections(prev => ({ ...prev, [key]: !prev[key] }))}
-                        className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
+                        className="w-4 h-4 rounded border-zinc-500 text-indigo-500 focus:ring-indigo-500 bg-zinc-700"
                       />
                       <span className="text-sm text-content-secondary">{label}</span>
                     </label>
@@ -975,7 +975,7 @@ export function ExamPaperView({
                     type="button"
                     onClick={handlePrint}
                     disabled={!printSections.exam && !printSections.answer && !printSections.solution}
-                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-400 px-3 py-2 text-sm font-bold text-white transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-600 disabled:text-zinc-400 px-3 py-2 text-sm font-bold text-white transition-colors"
                   >
                     <Printer className="h-4 w-4" />
                     출력하기
@@ -1716,7 +1716,7 @@ export function SolutionView({
               onClick={() => setColumns(1)}
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 1
-                  ? 'bg-cyan-500/10 text-cyan-400'
+                  ? 'bg-indigo-500/10 text-indigo-400'
                   : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
@@ -1728,7 +1728,7 @@ export function SolutionView({
               onClick={() => setColumns(2)}
               className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                 columns === 2
-                  ? 'bg-cyan-500/10 text-cyan-400'
+                  ? 'bg-indigo-500/10 text-indigo-400'
                   : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
@@ -1744,7 +1744,7 @@ export function SolutionView({
               max={700}
               value={gap}
               onChange={(e) => setGap(Number(e.target.value))}
-              className="w-32 h-1 accent-cyan-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+              className="w-32 h-1 accent-indigo-500 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
             />
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{gap}</span>
           </div>
@@ -1821,8 +1821,8 @@ export function SolutionView({
           }}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
             isGeneratingBatch
-              ? 'bg-cyan-500/20 text-cyan-400 animate-pulse'
-              : 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
+              ? 'bg-indigo-500/20 text-indigo-400 animate-pulse'
+              : 'border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
           }`}
         >
           <Wand2 className="h-3.5 w-3.5" />
@@ -1857,7 +1857,7 @@ export function SolutionView({
                     .map(p => p.id);
                   setSelectedForBatch(new Set(unsolvedIds));
                 }}
-                className="px-2.5 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+                className="px-2.5 py-1 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20"
               >
                 미완성만 ({problems.filter(p => !p.solution || p.solution.trim().length < 30).length})
               </button>
@@ -1891,7 +1891,7 @@ export function SolutionView({
                       key={p.id}
                       className={`flex items-center gap-2 px-2 py-1.5 rounded border cursor-pointer text-xs transition-colors ${
                         checked
-                          ? 'bg-cyan-500/10 border-cyan-500/50'
+                          ? 'bg-indigo-500/10 border-indigo-500/50'
                           : 'bg-surface-raised/50 border-subtle hover:bg-surface-raised'
                       }`}
                     >
@@ -1967,7 +1967,7 @@ export function SolutionView({
                     alert(`해설 생성 요청 실패: ${String(err)}`);
                   }
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Wand2 className="h-3.5 w-3.5" />
                 선택한 {selectedForBatch.size}개 해설 생성

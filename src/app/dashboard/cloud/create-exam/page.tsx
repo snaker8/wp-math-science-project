@@ -135,10 +135,10 @@ export default function CreateExamPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* ======== Header (Dark gradient) ======== */}
-      <div className="relative flex-shrink-0 bg-gradient-to-r from-indigo-900/80 via-cyan-900/60 to-zinc-900 px-8 py-6">
+      <div className="relative flex-shrink-0 bg-gradient-to-r from-indigo-900/80 via-indigo-900/60 to-zinc-900 px-8 py-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 border border-white/20">
-            <FileText className="h-5 w-5 text-cyan-400" />
+            <FileText className="h-5 w-5 text-indigo-400" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">선택한 문제로 시험지 만들기</h1>
@@ -160,18 +160,18 @@ export default function CreateExamPage() {
               value={examTitle}
               onChange={(e) => setExamTitle(e.target.value)}
               placeholder="시험지 제목을 입력하세요..."
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/30 transition-colors"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 transition-colors"
             />
           </div>
 
           {/* 선택된 문제 수 */}
           <div className="flex items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900 px-5 py-3">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/10 border border-cyan-500/30">
-              <CheckCircle className="h-4 w-4 text-cyan-400" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/30">
+              <CheckCircle className="h-4 w-4 text-indigo-400" />
             </div>
             <div>
               <div className="text-sm font-bold text-white">
-                선택된 문제 <span className="text-cyan-400">{problems.length}</span> / 50
+                선택된 문제 <span className="text-indigo-400">{problems.length}</span> / 50
               </div>
               <div className="text-xs text-zinc-500">과목: {subjectName}</div>
             </div>
@@ -194,8 +194,8 @@ export default function CreateExamPage() {
                 isCreated
                   ? 'bg-emerald-600 text-white'
                   : isCreating
-                  ? 'bg-cyan-700 text-cyan-200 cursor-wait'
-                  : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-lg shadow-cyan-500/20'
+                  ? 'bg-indigo-700 text-indigo-200 cursor-wait'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
               } disabled:opacity-60`}
             >
               {isCreated ? (
@@ -228,7 +228,7 @@ export default function CreateExamPage() {
               onClick={() => setSelectedGroup(null)}
               className={`w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left ${
                 selectedGroup === null
-                  ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30'
                   : 'text-zinc-400 hover:bg-zinc-800 border border-transparent'
               }`}
             >
@@ -242,7 +242,7 @@ export default function CreateExamPage() {
                 onClick={() => setSelectedGroup(group.id)}
                 className={`w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left ${
                   selectedGroup === group.id
-                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30'
                     : 'text-zinc-400 hover:bg-zinc-800 border border-transparent'
                 }`}
               >

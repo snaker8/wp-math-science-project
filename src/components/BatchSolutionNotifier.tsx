@@ -133,17 +133,17 @@ export function BatchSolutionNotifier() {
             <Link
               key={s.examId}
               href={`/dashboard/cloud/${s.examId}`}
-              className="flex items-center gap-3 rounded-xl border border-cyan-500/40 bg-zinc-900/95 backdrop-blur px-4 py-3 shadow-2xl min-w-[280px] hover:border-cyan-400 transition-colors"
+              className="flex items-center gap-3 rounded-xl border border-indigo-500/40 bg-zinc-900/95 backdrop-blur px-4 py-3 shadow-2xl min-w-[280px] hover:border-indigo-400 transition-colors"
             >
-              <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse flex-shrink-0" />
+              <Sparkles className="h-4 w-4 text-indigo-400 animate-pulse flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-cyan-300 truncate">{s.title}</div>
+                <div className="text-xs font-semibold text-indigo-300 truncate">{s.title}</div>
                 <div className="text-[11px] text-content-tertiary mt-0.5">
                   해설 생성 중 · {s.done}/{s.total}
                 </div>
                 <div className="mt-1 h-1 bg-zinc-800 rounded overflow-hidden">
                   <div
-                    className="h-full bg-cyan-500 transition-all"
+                    className="h-full bg-indigo-500 transition-all"
                     style={{ width: `${s.total > 0 ? (s.done / s.total) * 100 : 0}%` }}
                   />
                 </div>

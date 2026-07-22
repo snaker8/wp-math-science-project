@@ -170,7 +170,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                     //   → Ctrl+P 한 번에 전체 학생지 PDF (학생마다 페이지 나뉨).
                     window.open(`/print/session/${ids[0]}?variant=student&ids=${ids.join(',')}`, '_blank');
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-600/50 text-cyan-300 hover:bg-cyan-600/15 text-xs font-semibold"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-600/50 text-indigo-300 hover:bg-indigo-600/15 text-xs font-semibold"
                   title="출제된 전체 학생지를 한 탭에 묶어서 — Ctrl+P 한 번에 전체 PDF"
                 >
                   <Printer className="h-3.5 w-3.5" /> 전체 학생지 PDF
@@ -186,7 +186,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                     <div className="flex items-center gap-3">
                       <span className="text-zinc-500">{c.problem_count}문항</span>
                       <a href={`/print/session/${c.session_id}?variant=student`} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300">
+                        className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300">
                         <Printer className="h-3.5 w-3.5" />출력
                       </a>
                       <a href={`/grade/${c.session_id}`} target="_blank" rel="noreferrer"
@@ -218,7 +218,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 계속 출제
               </button>
               <button type="button" onClick={onClose}
-                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold">
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">
                 닫기
               </button>
             </div>
@@ -232,7 +232,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 <select
                   value={selectedInstitute}
                   onChange={(e) => { setSelectedInstitute(e.target.value); setSelected(new Set()); setOpenL(new Set()); setOpenR(new Set()); }}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 text-sm text-white border border-zinc-700 outline-none focus:border-cyan-600"
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 text-sm text-white border border-zinc-700 outline-none focus:border-indigo-600"
                 >
                   <option value="">전체 학원</option>
                   {institutes.map((i) => (
@@ -286,7 +286,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                         <span className="ml-1 font-semibold text-white text-sm">{g}</span>
                         <span className="ml-2 text-xs text-zinc-500">{list.length}명</span>
                         <button type="button" onClick={() => addMany(list.map((s) => s.id))}
-                          className="ml-auto p-1 rounded-full bg-cyan-600 hover:bg-cyan-500 text-white" title="전체 추가">
+                          className="ml-auto p-1 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white" title="전체 추가">
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -297,10 +297,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                           {s.className && <span className="ml-2 text-[11px] text-zinc-600">{s.className}</span>}
                           {/* 학원 라벨 — '어디 학생인지' 구분 (전체 보기 시) */}
                           {!selectedInstitute && s.institute && (
-                            <span className="ml-2 text-[10px] font-medium text-cyan-400/80 px-1 py-0.5 rounded bg-cyan-500/10">{s.institute}</span>
+                            <span className="ml-2 text-[10px] font-medium text-indigo-400/80 px-1 py-0.5 rounded bg-indigo-500/10">{s.institute}</span>
                           )}
                           <button type="button" onClick={() => addMany([s.id])}
-                            className="ml-auto p-0.5 rounded-full bg-cyan-600/80 hover:bg-cyan-500 text-white">
+                            className="ml-auto p-0.5 rounded-full bg-indigo-600/80 hover:bg-indigo-500 text-white">
                             <Plus className="h-3 w-3" />
                           </button>
                         </div>
@@ -314,7 +314,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
               <div className="flex flex-col min-h-0 rounded-xl border border-zinc-800 overflow-hidden">
                 <div className="px-3 py-2.5 border-b border-zinc-800 text-sm">
                   <span className="font-semibold text-white">선택된 학생</span>
-                  <span className="ml-2 text-cyan-400 font-bold">{selected.size > 0 ? `${selected.size}명` : '없음'}</span>
+                  <span className="ml-2 text-indigo-400 font-bold">{selected.size > 0 ? `${selected.size}명` : '없음'}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {selected.size === 0 ? (
@@ -340,7 +340,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                           <span className="text-sm text-zinc-300">{s.name}</span>
                           {gradeIntToLabel(s.grade) && <span className="ml-2 text-[11px] font-medium text-zinc-400 px-1 py-0.5 rounded bg-zinc-700/60">{gradeIntToLabel(s.grade)}</span>}
                           {!selectedInstitute && s.institute && (
-                            <span className="ml-2 text-[10px] font-medium text-cyan-400/80 px-1 py-0.5 rounded bg-cyan-500/10">{s.institute}</span>
+                            <span className="ml-2 text-[10px] font-medium text-indigo-400/80 px-1 py-0.5 rounded bg-indigo-500/10">{s.institute}</span>
                           )}
                           <button type="button" onClick={() => removeMany([s.id])}
                             className="ml-auto p-0.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white">
@@ -366,7 +366,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 <QrCode className="h-3.5 w-3.5" /> 출제 후 학생별 QR·출력·채점 가능
               </span>
               <button type="button" onClick={handleDeploy} disabled={selected.size === 0 || submitting || !exam}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-bold transition-colors">
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-bold transition-colors">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {submitting ? '출제 중…' : `${selected.size > 0 ? selected.size + '명에게 ' : ''}출제하기`}
               </button>

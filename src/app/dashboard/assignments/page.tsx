@@ -27,7 +27,7 @@ interface Assignment {
 
 const TAG_COLOR = (tag: string): string => {
   if (tag.startsWith('시험지')) return 'text-rose-400';
-  if (tag.startsWith('학습지')) return 'text-cyan-400';
+  if (tag.startsWith('학습지')) return 'text-indigo-400';
   return 'text-amber-400';
 };
 

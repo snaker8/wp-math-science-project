@@ -505,14 +505,14 @@ function ManualSearchPanel({
                 onClick={() => onToggleSelect(p.id, p)}
                 className={`rounded-lg border p-3 cursor-pointer transition-all ${
                   isSelected
-                    ? 'border-cyan-500 bg-cyan-500/5 ring-1 ring-cyan-500/30'
+                    ? 'border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500/30'
                     : 'border-subtle bg-surface-card/80 hover:border-accent/30'
                 }`}
               >
                 <div className="flex items-start gap-2">
                   {/* Checkbox */}
                   <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                    isSelected ? 'border-cyan-500 bg-cyan-500' : 'border-zinc-600'
+                    isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-zinc-600'
                   }`}>
                     {isSelected && <Check size={10} className="text-white" />}
                   </div>
@@ -660,7 +660,7 @@ function ExamPreviewPanel({
           <button
             type="button"
             onClick={() => setShowDesignGallery(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-indigo-400 hover:bg-indigo-500/10 transition-colors"
             title="헤더 디자인 갤러리"
           >
             <FileEdit size={12} />
@@ -1545,7 +1545,7 @@ export default function PaperCreatePage() {
                   </span>
                 )}
                 {createMode === 'manual' && manualSelected.size > 0 && (
-                  <span className="ml-auto text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">
+                  <span className="ml-auto text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
                     {manualSelected.size}개 선택
                   </span>
                 )}
@@ -1591,7 +1591,7 @@ export default function PaperCreatePage() {
                 <div className="flex items-center gap-2">
                   <StepBadge number={3} active />
                   <span className="text-sm font-semibold text-content-primary">선택된 문제</span>
-                  <span className="text-lg font-bold text-cyan-400">{manualSelected.size}</span>
+                  <span className="text-lg font-bold text-indigo-400">{manualSelected.size}</span>
                   <span className="text-xs text-content-muted">문항</span>
                 </div>
                 <button
