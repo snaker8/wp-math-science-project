@@ -97,12 +97,29 @@ export interface ApplyInstituteFilterOptions {
  *   if (!user) return new Response('unauthorized', { status: 401 });
  *   const scope = await getUserAccessScope(supabaseAdmin!, user.id, user.app_metadata);
  */
+// ★ 스코프 60초 TTL 캐시 (2026-07-18 사용자 승인 — "매쓰플랫급 전환 체감" 레버):
+//   API 호출마다 users(+ORG_ADMIN 은 institutes) 왕복(~100-250ms)이 직렬로 끼던 것 제거.
+//   트레이드오프: 권한(role)·트랙·센터 배정 변경 반영이 최대 60초 지연 (isolate 단위).
+//   세션 검증(로그아웃/만료)은 별도 경로라 영향 없음. 변경 라우트는 bustUserScopeCache 호출.
+const SCOPE_TTL_MS = 60_000;
+const scopeCache = new Map<string, { scope: InstituteAccessScope; t: number }>();
+
+export function bustUserScopeCache(userId?: string): void {
+  if (userId) scopeCache.delete(userId);
+  else scopeCache.clear();
+}
+
 export async function getUserAccessScope(
   adminClient: SupabaseClient,
   userId: string,
   appMetadata?: Record<string, unknown> | null
 ): Promise<InstituteAccessScope> {
   const isSuperAdmin = Boolean(appMetadata?.super_admin === true);
+
+  const cached = scopeCache.get(userId);
+  if (cached && Date.now() - cached.t < SCOPE_TTL_MS) {
+    return cached.scope;
+  }
 
   // 1) users 테이블에서 institute/organization/role + subject_track 조회
   const { data: userRow, error } = await adminClient
@@ -169,7 +186,7 @@ export async function getUserAccessScope(
     accessibleInstituteIds = [];
   }
 
-  return {
+  const scope: InstituteAccessScope = {
     userId,
     instituteId,
     organizationId,
@@ -179,6 +196,12 @@ export async function getUserAccessScope(
     accessibleTracks,
     activeTrack,
   };
+  scopeCache.set(userId, { scope, t: Date.now() });
+  if (scopeCache.size > 500) {
+    const oldest = scopeCache.keys().next().value;
+    if (oldest !== undefined) scopeCache.delete(oldest);
+  }
+  return scope;
 }
 
 // ============================================================================
