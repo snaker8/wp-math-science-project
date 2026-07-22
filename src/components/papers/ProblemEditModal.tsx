@@ -173,7 +173,7 @@ function EditorToolbar({
       </button>
       <div className="w-px h-4 bg-zinc-700 mx-0.5" />
       <button type="button" onClick={onTogglePreview}
-        className={`p-1 rounded transition-colors ${showPreview ? 'text-cyan-400 bg-cyan-500/10' : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'}`}
+        className={`p-1 rounded transition-colors ${showPreview ? 'text-indigo-400 bg-indigo-500/10' : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'}`}
         title={showPreview ? '미리보기 끄기' : '수식 미리보기'}>
         {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
       </button>
@@ -247,7 +247,7 @@ function EditorPanel({
     <div className="flex flex-col flex-1 min-h-0 rounded-xl border border/60 bg-surface-card/80 overflow-hidden">
       {/* 레이블 + 툴바 */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-raised/50 border-b border/50">
-        <span className="text-xs font-bold text-cyan-400 flex-shrink-0">{label}</span>
+        <span className="text-xs font-bold text-indigo-400 flex-shrink-0">{label}</span>
         <EditorToolbar
           onInsertMath={onOpenLatex}
           onBold={handleBold}
@@ -395,11 +395,11 @@ function ChoicesEditor({
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => onAnswerTypeChange('objective')}
             className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              answerType === 'objective' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary hover:text-content-secondary border border-transparent'
+              answerType === 'objective' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' : 'text-content-tertiary hover:text-content-secondary border border-transparent'
             }`}>객관식</button>
           <button type="button" onClick={() => onAnswerTypeChange('subjective')}
             className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              answerType === 'subjective' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary hover:text-content-secondary border border-transparent'
+              answerType === 'subjective' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' : 'text-content-tertiary hover:text-content-secondary border border-transparent'
             }`}>주관식</button>
         </div>
       </div>
@@ -422,7 +422,7 @@ function ChoicesEditor({
                   onClick={() => onChoiceLayoutChange(cols)}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
                     hasHeaders ? 'text-content-tertiary/40 border border-subtle cursor-not-allowed' :
-                    choiceLayout === cols ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary'
+                    choiceLayout === cols ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' : 'text-content-tertiary border border hover:text-content-secondary'
                   }`}
                   title={hasHeaders ? '표 객관식 모드는 1줄 고정' : `${cols}줄 레이아웃`}>{cols}줄</button>
               ))}
@@ -519,7 +519,7 @@ function ChoicesEditor({
                           type="text"
                           value={col}
                           onChange={(e) => handleColChange(ci, e.target.value)}
-                          className="rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
+                          className="rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 min-w-0"
                           placeholder={`컬럼 ${ci + 1}`}
                         />
                       ))}
@@ -542,7 +542,7 @@ function ChoicesEditor({
                     <input type="text"
                       value={choice.replace(/^[①②③④⑤]\s*/, '')}
                       onChange={(e) => handleChoiceChange(i, e.target.value)}
-                      className="flex-1 rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 min-w-0"
+                      className="flex-1 rounded-md border border bg-surface-raised px-2 py-0.5 text-xs text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 min-w-0"
                       placeholder={`선택지 ${i + 1}`} />
                     {/* 마지막 선택지에 삭제 버튼 (2개 이상일 때) */}
                     {i === choices.length - 1 && choices.length > 2 && (
@@ -574,7 +574,7 @@ function ChoicesEditor({
                         <button
                           type="button"
                           onClick={() => onOpenDiagramBrowser(i)}
-                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
+                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-indigo-400 hover:border-indigo-500/50 transition-colors"
                           title="SVG·이미지·도형 DB로 교체"
                         >교체</button>
                       </>
@@ -584,14 +584,14 @@ function ChoicesEditor({
                         <button
                           type="button"
                           onClick={() => onOpenDiagramBrowser(i)}
-                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
+                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-indigo-400 hover:border-indigo-500/50 transition-colors"
                           title="SVG · 이미지 파일 · 도형 DB"
                         >+ 도식 입력</button>
                         {/* 2) 빠른 클립보드/파일 업로드 (paste 가능) */}
                         <label className={`cursor-pointer text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed transition-colors ${
                           isUploading
                             ? 'text-content-tertiary border-zinc-700'
-                            : 'text-content-tertiary border-zinc-700 hover:text-cyan-400 hover:border-cyan-500/50'
+                            : 'text-content-tertiary border-zinc-700 hover:text-indigo-400 hover:border-indigo-500/50'
                         }`}>
                           <input
                             type="file"
@@ -629,13 +629,13 @@ function ChoicesEditor({
             {/* 선택지 추가 — 같은 줄로 통합 */}
             {choices.length < 5 && (
               <button type="button" onClick={() => onChange([...choices, ''])}
-                className="ml-2 px-2 py-0.5 rounded-md border border-dashed border-zinc-600 text-[10px] text-content-tertiary hover:text-cyan-400 hover:border-cyan-500/50 transition-colors">
+                className="ml-2 px-2 py-0.5 rounded-md border border-dashed border-zinc-600 text-[10px] text-content-tertiary hover:text-indigo-400 hover:border-indigo-500/50 transition-colors">
                 + 추가 ({choices.length}/5)
               </button>
             )}
             <label className="flex items-center gap-1 ml-auto text-[11px] text-content-tertiary cursor-pointer">
               <input type="checkbox" checked={isMultipleAnswer} onChange={(e) => onMultipleAnswerChange(e.target.checked)}
-                className="w-3 h-3 accent-cyan-500 rounded" />
+                className="w-3 h-3 accent-indigo-500 rounded" />
               복수정답
             </label>
           </div>
@@ -644,7 +644,7 @@ function ChoicesEditor({
         <div className="px-3 py-2">
           <label className="block text-xs font-medium text-content-secondary mb-1.5">주관식 정답</label>
           <input type="text" value={subjectiveAnswer} onChange={(e) => onSubjectiveAnswerChange(e.target.value)}
-            className="w-full rounded-md border border bg-surface-raised px-2.5 py-1.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full rounded-md border border bg-surface-raised px-2.5 py-1.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
             placeholder="정답을 입력하세요" />
         </div>
       )}
@@ -710,7 +710,7 @@ function TagManagementPanel({
             {domains.map((d) => (
               <button key={d.key} type="button" onClick={() => onCognitiveDomainChange(d.key)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  cognitiveDomain === d.key ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-content-tertiary border border hover:text-content-secondary hover:border-zinc-500'
+                  cognitiveDomain === d.key ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' : 'text-content-tertiary border border hover:text-content-secondary hover:border-zinc-500'
                 }`}>{d.label}</button>
             ))}
           </div>
@@ -735,7 +735,7 @@ function TagManagementPanel({
         <div>
           <label className="block text-[11px] font-medium text-content-tertiary mb-1.5">채점 방법</label>
           <div className="flex gap-1">
-            <button type="button" className="px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">자동 채점</button>
+            <button type="button" className="px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">자동 채점</button>
             <button type="button" className="px-2.5 py-1 rounded-md text-xs font-medium text-content-tertiary border border hover:text-content-secondary">자기 채점</button>
           </div>
         </div>
@@ -755,7 +755,7 @@ function TagManagementPanel({
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
-              className="p-1.5 rounded-lg text-content-tertiary hover:text-cyan-400 hover:bg-surface-raised transition-colors border border"
+              className="p-1.5 rounded-lg text-content-tertiary hover:text-indigo-400 hover:bg-surface-raised transition-colors border border"
               title="매쓰싸이 뱅크 분류 트리에서 선택"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -816,7 +816,7 @@ function TagManagementPanel({
               type="button"
               onClick={onGenerateSolution}
               disabled={isGenerating}
-              className="w-full rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isGenerating ? (
                 <>
@@ -1385,7 +1385,7 @@ export function ProblemEditModal({
             <button
               type="button"
               onClick={() => setShowAdvancedModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 transition-colors"
               title="AI 에게 지시해 본문·선택지를 수정 (채팅형, 여러 번 반복 가능)"
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -1527,7 +1527,7 @@ export function ProblemEditModal({
               {reanalyzeSuccess ? 'AI 분석 완료' : isReanalyzing ? 'AI 분석 중...' : 'AI 재분석'}
             </button>
             <button type="button" onClick={handleSave} disabled={isSaving}
-              className="flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-5 py-2 text-sm font-bold text-content-primary transition-colors disabled:opacity-50 shadow-lg shadow-cyan-500/20">
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-5 py-2 text-sm font-bold text-content-primary transition-colors disabled:opacity-50 shadow-lg shadow-indigo-500/20">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               저장 하기
             </button>

@@ -195,7 +195,7 @@ export default function TestSciencePage() {
               setWholeResult(null);
               setPerResult(null);
             }}
-            className="block w-full text-sm text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-cyan-500 file:text-white hover:file:bg-cyan-600"
+            className="block w-full text-sm text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600"
           />
           {file && (
             <div className="mt-3 text-xs text-zinc-400">
@@ -259,8 +259,8 @@ function WholeResultView({ result, clientMs }: { result: WholeResult; clientMs: 
 
       {/* OpenCV 그림 검출 결과 — 페이지별 그리드 */}
       {result.cvPageFigures && result.cvPageFigures.length > 0 && (
-        <div className="rounded-xl border border-cyan-700 bg-cyan-900/10 p-5 mb-4">
-          <div className="text-[11px] text-cyan-400 mb-3 font-bold">
+        <div className="rounded-xl border border-indigo-700 bg-indigo-900/10 p-5 mb-4">
+          <div className="text-[11px] text-indigo-400 mb-3 font-bold">
             OpenCV 그림 검출 ({totalCvFigures}건) — 픽셀 분석 기반, LLM 환각 없음
           </div>
           {result.cvPageFigures.map((page) => (
@@ -328,7 +328,7 @@ function WholeProblemCard({ problem }: { problem: WholeProblem }) {
         <div className="space-y-1">
           {problem.choices.map((c, i) => (
             <div key={i} className="flex gap-2 items-baseline text-[13px]">
-              <span className="text-cyan-400 font-bold w-6">{['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`}</span>
+              <span className="text-indigo-400 font-bold w-6">{['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`}</span>
               <span className="text-zinc-200 font-mono">{c}</span>
             </div>
           ))}
@@ -440,7 +440,7 @@ function PerProblemCard({ problem }: { problem: PerProblem }) {
               <div className="space-y-1">
                 {problem.choices.map((c, i) => (
                   <div key={i} className="flex gap-2 items-baseline text-[13px]">
-                    <span className="text-cyan-400 font-bold w-6">{['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`}</span>
+                    <span className="text-indigo-400 font-bold w-6">{['①', '②', '③', '④', '⑤'][i] || `(${i + 1})`}</span>
                     <span className="text-zinc-200 font-mono">{c}</span>
                   </div>
                 ))}
@@ -452,8 +452,8 @@ function PerProblemCard({ problem }: { problem: PerProblem }) {
 
       {/* 문제 안 OpenCV figures (lenient — <보기> 같은 텍스트 박스도 포함될 수 있음) */}
       {problem.figures && problem.figures.length > 0 && (
-        <div className="mt-3 rounded border border-cyan-700 bg-cyan-900/10 p-3">
-          <div className="text-[11px] text-cyan-300 mb-2 font-bold">
+        <div className="mt-3 rounded border border-indigo-700 bg-indigo-900/10 p-3">
+          <div className="text-[11px] text-indigo-300 mb-2 font-bold">
             문제 안 OpenCV 검출 ({problem.figures.length}건)
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">

@@ -336,7 +336,7 @@ function EditableFormView({
             onChange={(e) => setLocalSchool(e.target.value)}
             onBlur={() => { if (localSchool !== meta.schoolName) onMetaChange('schoolName', localSchool); }}
             placeholder="학원/학교명"
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-900 outline-none placeholder-slate-300 focus:border-indigo-400"
           />
         </label>
         <label className="block sm:col-span-2">
@@ -347,7 +347,7 @@ function EditableFormView({
             onChange={(e) => setLocalTitle(e.target.value)}
             onBlur={() => { if (onTitleChange && localTitle !== examTitle) onTitleChange(localTitle); }}
             placeholder="시험지명"
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-900 outline-none placeholder-slate-300 focus:border-indigo-400"
           />
         </label>
         <label className="block">
@@ -358,7 +358,7 @@ function EditableFormView({
             onChange={(e) => setLocalTeacher(e.target.value)}
             onBlur={() => { if (localTeacher !== meta.teacher) onMetaChange('teacher', localTeacher); }}
             placeholder="선생님"
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-medium text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm font-medium text-slate-900 outline-none placeholder-slate-300 focus:border-indigo-400"
           />
         </label>
         <label className="block">
@@ -385,7 +385,7 @@ function EditableFormView({
             onChange={(e) => setLocalTime(e.target.value)}
             onBlur={() => { if (localTime !== meta.timeLimit) onMetaChange('timeLimit', localTime); }}
             placeholder="50분"
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-indigo-400"
           />
         </label>
         <label className="block">
@@ -396,7 +396,7 @@ function EditableFormView({
             onChange={(e) => setLocalDate(e.target.value)}
             onBlur={() => { if (localDate !== meta.date) onMetaChange('date', localDate); }}
             placeholder=""
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-indigo-400"
           />
         </label>
         <label className="block sm:col-span-2">
@@ -407,7 +407,7 @@ function EditableFormView({
             onChange={(e) => setLocalScore(e.target.value)}
             onBlur={() => { if (localScore !== meta.totalScore) onMetaChange('totalScore', localScore); }}
             placeholder="100"
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-cyan-400"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none placeholder-slate-300 focus:border-indigo-400"
           />
         </label>
       </div>
@@ -567,7 +567,7 @@ export function HeaderDesignGallery({
                 key={p.id}
                 type="button"
                 onClick={() => { onSelect(p.theme, p.color, p.layout); onClose(); }}
-                className={`rounded-xl border p-2.5 text-left transition hover:shadow-md ${active ? 'border-cyan-500 ring-2 ring-cyan-500/30' : 'border-gray-200 hover:border-gray-300'}`}
+                className={`rounded-xl border p-2.5 text-left transition hover:shadow-md ${active ? 'border-indigo-500 ring-2 ring-indigo-500/30' : 'border-gray-200 hover:border-gray-300'}`}
               >
                 <HeaderPresetThumb theme={p.theme} color={p.color} />
                 <div className="mt-2 flex items-center gap-1.5">

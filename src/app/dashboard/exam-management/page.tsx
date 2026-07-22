@@ -53,7 +53,7 @@ import dynamic from 'next/dynamic';
 import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
 const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.ExamPaperView), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center py-16"><div className="h-5 w-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /></div>,
+  loading: () => <div className="flex items-center justify-center py-16"><div className="h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>,
 });
 const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.QuickAnswerView), { ssr: false });
 const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.SolutionView), { ssr: false });
@@ -180,7 +180,7 @@ function GroupTreeItem({
       <div
         className={`flex items-center gap-1.5 rounded-lg px-2 py-2 cursor-pointer transition-colors ${
           selectedGroupId === group.id
-            ? 'bg-cyan-500/10 text-cyan-400'
+            ? 'bg-indigo-500/10 text-indigo-400'
             : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
         }`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
@@ -252,7 +252,7 @@ function PageMap({
             onClick={() => onPageSelect(i + 1)}
             className={`w-8 h-8 rounded text-xs font-bold border transition-colors ${
               currentPage === i + 1
-                ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
                 : 'border bg-surface-card text-content-tertiary hover:border-zinc-500 hover:text-content-secondary'
             }`}
           >
@@ -450,7 +450,7 @@ function PrintMenu({
               type="checkbox"
               checked={sections[key]}
               onChange={() => onToggle(key)}
-              className="w-4 h-4 rounded border-zinc-500 text-cyan-500 focus:ring-cyan-500 bg-zinc-700"
+              className="w-4 h-4 rounded border-zinc-500 text-indigo-500 focus:ring-indigo-500 bg-zinc-700"
             />
             <span className="text-sm text-content-secondary">{label}</span>
           </label>
@@ -461,7 +461,7 @@ function PrintMenu({
           type="button"
           onClick={onPrint}
           disabled={!anySelected}
-          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-600 disabled:text-zinc-400 px-3 py-2 text-sm font-bold text-white transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-600 disabled:text-zinc-400 px-3 py-2 text-sm font-bold text-white transition-colors"
         >
           <Printer className="h-4 w-4" />
           출력하기
@@ -1430,7 +1430,7 @@ export default function ExamManagementPage() {
               {problemsLoading && (
                 <div className="flex items-center justify-center py-8">
                   <div className="flex items-center gap-2 text-content-secondary text-sm">
-                    <div className="h-4 w-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                     문제를 불러오는 중...
                   </div>
                 </div>

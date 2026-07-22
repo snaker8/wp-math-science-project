@@ -59,7 +59,7 @@ const SOURCE_TABS: Array<{
     label: '전체 문제',
     description: '모든 출처 — 단원·유형 트리에서 직접 선택',
     icon: Layers,
-    color: 'cyan',
+    color: 'indigo',
     available: true,
   },
   {
@@ -623,8 +623,8 @@ export default function ExamCreatePage() {
       <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/30 to-zinc-900/30 px-8 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
-              <BookOpen className="h-5 w-5 text-cyan-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10">
+              <BookOpen className="h-5 w-5 text-indigo-400" />
             </div>
             <div>
               <h1 className="text-xl font-bold">시험지 출제</h1>
@@ -634,7 +634,7 @@ export default function ExamCreatePage() {
             </div>
           </div>
           <div className="text-[11px] text-zinc-400">
-            선택한 문항 <span className="font-bold text-cyan-400">{pickedList.length}</span>개
+            선택한 문항 <span className="font-bold text-indigo-400">{pickedList.length}</span>개
           </div>
         </div>
 
@@ -1603,7 +1603,7 @@ export default function ExamCreatePage() {
                     다음 Phase 에서 활성화됩니다. 현재는 <button
                       type="button"
                       onClick={() => setActiveTab('all')}
-                      className="text-cyan-400 underline hover:text-cyan-300"
+                      className="text-indigo-400 underline hover:text-indigo-300"
                     >전체 문제</button> 탭에서 단원·유형으로 출제 가능.
                   </div>
                 </>
@@ -1692,7 +1692,7 @@ export default function ExamCreatePage() {
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="예: 미생물, 함수"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
               />
             </div>
           </div>
@@ -1702,7 +1702,7 @@ export default function ExamCreatePage() {
             type="button"
             onClick={handleSearch}
             disabled={loading || (!typeCode && !keyword.trim() && selectedDiffs.size === 0)}
-            className="w-full rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2 text-xs font-bold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>
@@ -1766,7 +1766,7 @@ export default function ExamCreatePage() {
                       onClick={() => togglePick(p)}
                       className={`text-left rounded-xl border p-4 transition-all ${
                         isPicked
-                          ? 'border-cyan-500/50 bg-cyan-500/10'
+                          ? 'border-indigo-500/50 bg-indigo-500/10'
                           : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                       }`}
                     >
@@ -1781,7 +1781,7 @@ export default function ExamCreatePage() {
                         </div>
                         <div
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                            isPicked ? 'bg-cyan-500 text-white' : 'border border-zinc-700'
+                            isPicked ? 'bg-indigo-500 text-white' : 'border border-zinc-700'
                           }`}
                         >
                           {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
@@ -1819,15 +1819,15 @@ export default function ExamCreatePage() {
 
       {/* 푸터 — 시험지 편성 버튼 */}
       {pickedList.length > 0 && (
-        <div className="flex-shrink-0 border-t border-cyan-500/30 bg-cyan-500/10 px-8 py-3">
+        <div className="flex-shrink-0 border-t border-indigo-500/30 bg-indigo-500/10 px-8 py-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-cyan-200">
+            <span className="text-xs text-indigo-200">
               <span className="font-bold">{pickedList.length}</span>개 문항 선택됨
             </span>
             <button
               type="button"
               onClick={openCompose}
-              className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30"
+              className="rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-1.5 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30"
             >
               시험지 편성 →
             </button>
@@ -1866,7 +1866,7 @@ export default function ExamCreatePage() {
             </div>
 
             <div className="space-y-3 p-5">
-              <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-300">
+              <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-300">
                 선택 문항 <span className="font-bold">{pickedList.length}</span>개 / 단원: {typeName || '미지정'}
               </div>
 
@@ -1877,7 +1877,7 @@ export default function ExamCreatePage() {
                   value={examTitle}
                   onChange={(e) => setExamTitle(e.target.value)}
                   placeholder="예: 26 신곡중 3-1 중간고사 대비"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
 
@@ -1889,7 +1889,7 @@ export default function ExamCreatePage() {
                     value={examGrade}
                     onChange={(e) => setExamGrade(e.target.value)}
                     placeholder="예: 고2"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -1899,7 +1899,7 @@ export default function ExamCreatePage() {
                     value={examSubject}
                     onChange={(e) => setExamSubject(e.target.value)}
                     placeholder="예: 대수"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1953,7 +1953,7 @@ export default function ExamCreatePage() {
                     setComposing(false);
                   }
                 }}
-                className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-1.5 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {composing ? (
                   <>

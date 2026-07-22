@@ -183,7 +183,7 @@ export function AdvancedAnalysisModal({
                 onClick={() => setModel(m)}
                 className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
                   model === m
-                    ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                    ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
                     : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
                 }`}
                 title={
@@ -221,7 +221,7 @@ export function AdvancedAnalysisModal({
                 {history.map((h, i) => (
                   <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[11px]">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-cyan-400 font-semibold">#{i + 1}</span>
+                      <span className="text-indigo-400 font-semibold">#{i + 1}</span>
                       <span className="text-zinc-500">·</span>
                       <span className="text-zinc-400">{h.model}</span>
                       <span className="text-zinc-500">·</span>
@@ -262,14 +262,14 @@ export function AdvancedAnalysisModal({
               }}
               disabled={isProcessing}
               rows={2}
-              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none disabled:opacity-50"
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none disabled:opacity-50"
               placeholder="예) 분모를 x+1로 바꿔줘 / ㄱ선택지 삭제해줘 / ⌘+Enter 로 전송"
             />
             <button
               type="button"
               onClick={submitInstruction}
               disabled={isProcessing || !draftPrompt.trim()}
-              className="self-stretch px-5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
+              className="self-stretch px-5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
             >
               {isProcessing ? '...' : '분석'}
             </button>

@@ -416,7 +416,7 @@ function PageThumbnailItem({
       style={style}
       className={`w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-all ${
         isActive
-          ? 'bg-cyan-500/10 border-2 border-cyan-500/40'
+          ? 'bg-indigo-500/10 border-2 border-indigo-500/40'
           : 'border-2 border-zinc-800 hover:border-zinc-600'
       } ${isDragging ? 'shadow-xl' : ''}`}
     >
@@ -441,7 +441,7 @@ function PageThumbnailItem({
         {/* 표시 페이지 번호 */}
         <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 ${
           isActive
-            ? 'bg-cyan-500 text-white'
+            ? 'bg-indigo-500 text-white'
             : 'bg-zinc-700 text-zinc-400'
         }`}>
           {entry.displayNumber}
@@ -449,7 +449,7 @@ function PageThumbnailItem({
 
         {/* 썸네일 — 원본 PDF 페이지 번호로 렌더링 (절대 변경 X) */}
         <div className={`relative w-14 h-20 rounded border overflow-hidden flex-shrink-0 bg-white ${
-          isActive ? 'border-cyan-400' : 'border-zinc-600'
+          isActive ? 'border-indigo-400' : 'border-zinc-600'
         }`}>
           <PdfPageCanvas
             pdfUrl={pdfUrl}
@@ -472,7 +472,7 @@ function PageThumbnailItem({
 
         <div className="min-w-0 flex-1">
           <div className={`text-xs font-medium ${
-            isActive ? 'text-cyan-300' : 'text-zinc-400'
+            isActive ? 'text-indigo-300' : 'text-zinc-400'
           }`}>
             페이지 {entry.displayNumber}
             {entry.pdfPageNumber !== entry.displayNumber && (
@@ -569,7 +569,7 @@ function PageThumbnailList({
             onClick={() => setReorderMode((v) => !v)}
             className={`text-[10px] px-1.5 py-0.5 rounded border ${
               reorderMode
-                ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40'
                 : 'text-zinc-400 border-zinc-700 hover:bg-zinc-800'
             }`}
             title="페이지가 잘못 스캔된 순서로 들어왔을 때 드래그로 정정"
@@ -579,7 +579,7 @@ function PageThumbnailList({
         </div>
       </div>
       {reorderMode && (
-        <div className="px-3 py-1.5 bg-cyan-500/5 border-b border-cyan-500/20 text-[10px] text-cyan-300">
+        <div className="px-3 py-1.5 bg-indigo-500/5 border-b border-indigo-500/20 text-[10px] text-indigo-300">
           📌 핸들을 드래그해 페이지 순서를 정정하세요
         </div>
       )}
@@ -737,7 +737,7 @@ function DraggableBbox({
             : isProcessing
             ? 'border-2 border-dashed border-amber-400/60 bg-amber-400/5 animate-pulse cursor-pointer'
             : isPending
-            ? 'border-2 border-dashed border-cyan-400/50 bg-cyan-400/5 cursor-pointer'
+            ? 'border-2 border-dashed border-indigo-400/50 bg-indigo-400/5 cursor-pointer'
             : 'border-2 border-dashed border-blue-300/40 bg-blue-300/5 cursor-pointer'
         }`}
         onMouseDown={(e) => handleMouseDown(e, isSelected ? 'move' : 'move')}
@@ -770,7 +770,7 @@ function DraggableBbox({
           : isProcessing
           ? 'bg-amber-500'
           : isPending
-          ? 'bg-cyan-600'
+          ? 'bg-indigo-600'
           : 'bg-gray-400'
       }`}>
         {isComplete ? (
@@ -1204,7 +1204,7 @@ function PdfViewerWithBoxes({
           title={`페이지 회전 (90° 시계방향). 현재 ${rotation}°`}
         >
           <RotateCw className="h-3 w-3" />
-          회전 {rotation > 0 && <span className="text-cyan-300">{rotation}°</span>}
+          회전 {rotation > 0 && <span className="text-indigo-300">{rotation}°</span>}
         </button>
       )}
       <div
@@ -1261,7 +1261,7 @@ function PdfViewerWithBoxes({
         {/* 수동 드래그 선택 사각형 */}
         {dragRect && dragRect.w > 5 && dragRect.h > 5 && (
           <div
-            className="absolute border-2 border-dashed border-cyan-400 bg-cyan-400/10 pointer-events-none z-30"
+            className="absolute border-2 border-dashed border-indigo-400 bg-indigo-400/10 pointer-events-none z-30"
             style={{
               left: `${dragRect.x}px`,
               top: `${dragRect.y}px`,
@@ -1269,7 +1269,7 @@ function PdfViewerWithBoxes({
               height: `${dragRect.h}px`,
             }}
           >
-            <span className="absolute bottom-1 right-2 text-[10px] text-cyan-300 bg-black/60 px-1.5 py-0.5 rounded">
+            <span className="absolute bottom-1 right-2 text-[10px] text-indigo-300 bg-black/60 px-1.5 py-0.5 rounded">
               영역 선택 중...
             </span>
           </div>
@@ -1567,7 +1567,7 @@ function AdvancedAnalysisModal({
                 onClick={() => setModel(m)}
                 className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
                   model === m
-                    ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                    ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
                     : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
                 }`}
                 title={
@@ -1610,7 +1610,7 @@ function AdvancedAnalysisModal({
                 {history.map((h, i) => (
                   <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[11px]">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-cyan-400 font-semibold">#{i + 1}</span>
+                      <span className="text-indigo-400 font-semibold">#{i + 1}</span>
                       <span className="text-zinc-500">·</span>
                       <span className="text-zinc-400">{h.model}</span>
                       <span className="text-zinc-500">·</span>
@@ -1656,14 +1656,14 @@ function AdvancedAnalysisModal({
               }}
               disabled={isProcessing}
               rows={2}
-              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none disabled:opacity-50"
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none disabled:opacity-50"
               placeholder="예) 분모를 x+1로 바꿔줘 / ㄱ선택지 삭제해줘 / ⌘+Enter 로 전송"
             />
             <button
               type="button"
               onClick={submitInstruction}
               disabled={isProcessing || !draftPrompt.trim()}
-              className="self-stretch px-5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
+              className="self-stretch px-5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
             >
               {isProcessing ? '...' : '분석'}
             </button>
@@ -1991,8 +1991,8 @@ function ProblemDetailPanel({
           {/* ★ 객관식 이미지 수동 크롭 (2026-06-08): 본문처럼 드래그 크롭 → 그 선택지 choiceImages 로.
               본문 경로 불변, 가산만. 4x 업스케일 동일. 객관식(choices) 있는 문제에서만 노출. */}
           {problem.choices && problem.choices.length > 0 && (
-            <div className="flex items-center gap-1 rounded-lg border border-cyan-200 bg-cyan-50/40 px-1.5 py-1">
-              <span className="text-[10px] font-bold text-cyan-600 px-0.5">객관식</span>
+            <div className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/40 px-1.5 py-1">
+              <span className="text-[10px] font-bold text-indigo-600 px-0.5">객관식</span>
               {['①', '②', '③', '④', '⑤'].slice(0, problem.choices.length).map((cn, i) => (
                 <button key={i} type="button"
                   onClick={() => { setCropTarget(i); if (!insertImageMode) onToggleInsertImage?.(); }}
@@ -2000,8 +2000,8 @@ function ProblemDetailPanel({
                   title={`${cn} 선택지에 이미지 크롭 — 드래그로 영역 선택`}
                   className={`w-6 h-6 rounded text-xs font-bold border transition-colors disabled:opacity-40 ${
                     insertImageMode && cropTarget === i
-                      ? 'border-cyan-500 bg-cyan-600 text-white shadow shadow-cyan-500/30'
-                      : 'border-cyan-300 bg-white text-cyan-700 hover:bg-cyan-100'
+                      ? 'border-indigo-500 bg-indigo-600 text-white shadow shadow-indigo-500/30'
+                      : 'border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100'
                   }`}>
                   {cn}
                 </button>
@@ -2347,7 +2347,7 @@ function ProblemDetailPanel({
               {problem.achievementCode && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-gray-500 w-14 flex-shrink-0">성취기준</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
                     {problem.achievementCode}
                   </span>
                 </div>
@@ -5132,7 +5132,7 @@ export default function AnalyzeJobPage() {
     return (
       <div className="flex h-full w-full items-center justify-center bg-black text-white">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
           <p className="text-sm text-zinc-400">분석 데이터를 불러오는 중...</p>
         </div>
       </div>
@@ -5287,7 +5287,7 @@ export default function AnalyzeJobPage() {
           <span className="text-xs text-zinc-400">
             {isAutoCropActive ? (
               <>
-                감지 <span className="text-cyan-400 font-bold">{autoCropAllProblems.length}</span>문항
+                감지 <span className="text-indigo-400 font-bold">{autoCropAllProblems.length}</span>문항
                 {completedCount > 0 && (
                   <span className="text-emerald-400"> · {completedCount}완료</span>
                 )}
@@ -5297,7 +5297,7 @@ export default function AnalyzeJobPage() {
               </>
             ) : (
               <>
-                총 <span className="text-cyan-400 font-bold">{jobData.totalProblems}</span>문항
+                총 <span className="text-indigo-400 font-bold">{jobData.totalProblems}</span>문항
               </>
             )}
           </span>
@@ -5362,7 +5362,7 @@ export default function AnalyzeJobPage() {
 
       {/* 페이지 탭 바 */}
       <div className="flex items-center gap-2 border-b border-zinc-800/50 px-4 py-1.5 flex-shrink-0 bg-zinc-950/50">
-        <span className="text-xs text-cyan-400 font-bold bg-cyan-500/10 border border-cyan-500/30 rounded px-2 py-0.5">
+        <span className="text-xs text-indigo-400 font-bold bg-indigo-500/10 border border-indigo-500/30 rounded px-2 py-0.5">
           페이지 {currentPage} / {totalPdfPages}
         </span>
         <span className="text-[11px] text-zinc-500 truncate">
@@ -5372,7 +5372,7 @@ export default function AnalyzeJobPage() {
           useAutoCropMode
             ? detectionMode === 'ai'
               ? 'text-indigo-400/70 bg-indigo-500/5 border border-indigo-500/20'
-              : 'text-cyan-400/70 bg-cyan-500/5 border border-cyan-500/20'
+              : 'text-indigo-400/70 bg-indigo-500/5 border border-indigo-500/20'
             : 'text-emerald-400/70 bg-emerald-500/5 border border-emerald-500/20'
         }`}>
           {useAutoCropMode

@@ -104,7 +104,7 @@ export const dashboardNavItems: NavItem[] = [
     icon: Cloud,
     label: '클라우드',
     description: '문제·시험지 라이브러리',
-    activeColor: 'bg-cyan-500/10 text-cyan-500',
+    activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
   {
@@ -239,7 +239,7 @@ export const tutorNavItems: NavItem[] = [
     icon: BarChart3,
     label: '학교별 리포트',
     description: '학교별 시험지 누적 분석 + 학부모 공유 관리',
-    activeColor: 'bg-cyan-500/10 text-cyan-400',
+    activeColor: 'bg-indigo-500/10 text-indigo-400',
     group: 'tutor',
   },
   {
@@ -248,7 +248,7 @@ export const tutorNavItems: NavItem[] = [
     icon: Layers,
     label: '진단 종합 리포트',
     description: 'A/B/C 진단 합산 · 시험대비 처방 · 학부모 공유',
-    activeColor: 'bg-cyan-500/10 text-cyan-400',
+    activeColor: 'bg-indigo-500/10 text-indigo-400',
     group: 'tutor',
   },
   {

@@ -34,7 +34,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed right-4 top-1/2 z-40 -translate-y-1/2 flex flex-col items-center gap-1.5 rounded-l-xl border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-3 text-cyan-300 shadow-2xl hover:bg-cyan-500/25"
+          className="fixed right-4 top-1/2 z-40 -translate-y-1/2 flex flex-col items-center gap-1.5 rounded-l-xl border border-indigo-500/40 bg-indigo-500/15 px-2.5 py-3 text-indigo-300 shadow-2xl hover:bg-indigo-500/25"
           title="선택한 문항 보기"
         >
           <ChevronRight className="h-4 w-4 rotate-180" />
@@ -43,11 +43,11 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
       )}
 
       {open && (
-        <div className="fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col border-l border-cyan-500/30 bg-zinc-950/95 shadow-2xl backdrop-blur">
+        <div className="fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col border-l border-indigo-500/30 bg-zinc-950/95 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-cyan-300">선택한 문항</span>
-              <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[11px] font-bold text-cyan-300 tabular-nums">
+              <span className="text-sm font-bold text-indigo-300">선택한 문항</span>
+              <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[11px] font-bold text-indigo-300 tabular-nums">
                 {picked.length}
               </span>
             </div>
@@ -119,7 +119,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
             <button
               type="button"
               onClick={onCompose}
-              className="w-full rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30"
+              className="w-full rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30"
             >
               시험지 편성 →
             </button>

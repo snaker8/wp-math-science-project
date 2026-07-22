@@ -682,7 +682,7 @@ function ChoicesEditor({
                       — 2차(ProblemEditModal) 와 동일하게 선택지마다 이미지 입력 가능. 1차는 problemId
                       없어 base64 보관 → 자산화 시 Storage 일괄 업로드(기존 choiceImages 경로). */}
                   {img ? (
-                    <div className="ml-7 relative inline-block rounded border border-cyan-200 bg-cyan-50/30 p-1 self-start">
+                    <div className="ml-7 relative inline-block rounded border border-indigo-200 bg-indigo-50/30 p-1 self-start">
                       <img src={img} alt={`선택지 ${i + 1} 이미지`} className="max-h-16 max-w-full object-contain rounded" />
                       <button type="button"
                         onClick={() => onClearChoiceImage(i)}
@@ -712,7 +712,7 @@ function ChoicesEditor({
                       }}
                     >
                       <label
-                        className="cursor-pointer text-[11px] font-bold inline-flex items-center gap-1 px-2 py-1 rounded-md border border-cyan-300 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 hover:border-cyan-400 transition-colors"
+                        className="cursor-pointer text-[11px] font-bold inline-flex items-center gap-1 px-2 py-1 rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
                         title="이 선택지에 이미지 넣기 — 파일 선택 또는 여기에 붙여넣기(Ctrl+V)"
                       >
                         <input
@@ -1409,7 +1409,7 @@ export default function AnalyzeProblemEditModal({
                   {problem.cvFigures && problem.cvFigures.length > 0 && (
                     <div>
                       <div className="text-xs font-bold text-gray-500 mb-1.5 flex items-center gap-1.5">
-                        <ImageIcon className="h-3.5 w-3.5 text-cyan-500" />
+                        <ImageIcon className="h-3.5 w-3.5 text-indigo-500" />
                         이미지 후보 ({problem.cvFigures.length})
                         <span className="ml-auto text-[9px] text-gray-400 font-normal">클릭해서 본문/선택지에 삽입</span>
                       </div>
@@ -1432,7 +1432,7 @@ export default function AnalyzeProblemEditModal({
                                   <button key={ci} type="button"
                                     onClick={() => handleInsertFigureToChoice(fig.cropBase64!, ci)}
                                     title={`${cn} 선택지에 삽입`}
-                                    className="w-5 h-5 rounded text-[10px] font-bold bg-gray-50 text-gray-500 border border-gray-200 hover:bg-cyan-50 hover:text-cyan-600 hover:border-cyan-300 transition-colors">
+                                    className="w-5 h-5 rounded text-[10px] font-bold bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
                                     {cn}
                                   </button>
                                 ))}
@@ -1633,7 +1633,7 @@ export default function AnalyzeProblemEditModal({
                     <button
                       type="button"
                       onClick={() => setPickerOpen(true)}
-                      className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors"
+                      className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
                       title="매쓰싸이 뱅크 분류 트리에서 선택"
                     >
                       유형 검색
