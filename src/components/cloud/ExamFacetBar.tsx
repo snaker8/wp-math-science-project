@@ -23,6 +23,7 @@ import {
   type FacetOption,
 } from '@/lib/exams/parse-exam-title';
 import type { ParsedExamTitle } from '@/lib/exams/parse-exam-title';
+import { PANEL_SURFACE, RADIUS } from '@/components/ui/surface';
 
 interface Props {
   /** 현재 폴더 범위의 시험지들을 파싱한 결과 (순서 무관) */
@@ -82,7 +83,8 @@ export function ExamFacetBar({
   if (visibleAxes.length === 0 && !active) return null;
 
   return (
-    <div className="mb-3 rounded-xl border border-white/[.07] bg-white/[.02] px-3.5 py-3">
+    // 표면 규칙은 surface.tsx 한 곳에서 — 여기서 배경·테두리를 직접 정하지 않는다.
+    <div className={`mb-3 ${RADIUS.panel} ${PANEL_SURFACE} px-3.5 py-3`}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         {visibleAxes.map(({ key, label }) => (
           <div key={key} className="flex items-center gap-2">
