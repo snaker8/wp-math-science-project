@@ -53,6 +53,15 @@ import {
 const CloudFlowUploader = dynamic(() => import('@/components/workflow/CloudFlowUploader'), { ssr: false });
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { extractSchoolName } from '@/lib/utils/school-extract';
+import { ExamFacetBar } from '@/components/cloud/ExamFacetBar';
+import {
+  parseExamTitle,
+  matchesFacets,
+  hasAnyFacet,
+  buildFacetOptions,
+  EMPTY_FACET_SELECTION,
+  type ExamFacetSelection,
+} from '@/lib/exams/parse-exam-title';
 // ★ 폴더 트리 순수 로직 — 분리(회귀 테스트 대상). cloud-tree.test.ts 참조.
 import {
   buildTreeFromDB,
@@ -878,6 +887,11 @@ export default function CloudPage() {
   const [selectedId, setSelectedId] = useState<string | null>('all');
   const [selectedName, setSelectedName] = useState<string>('전체 시험지');
   const [searchQuery, setSearchQuery] = useState('');
+  // ★ 조건(패싯) — 제목의 연도·학년·학기·중간기말·학교급으로 좁힌다 (2026-07-23).
+  //   폴더 트리는 계층을 하나만 표현해 같은 학교 자료가 여러 폴더로 흩어진다
+  //   (실측: 47개 학교 중 19개가 2~5개 폴더). 트리는 그대로 두고 좁히기만 여기서.
+  //   비어 있으면 기존 목록과 100% 동일 — 켜기 전엔 아무 동작도 바뀌지 않는다.
+  const [facets, setFacets] = useState<ExamFacetSelection>(EMPTY_FACET_SELECTION);
   const [sortField, setSortField] = useState<SortField>('grade');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -1402,14 +1416,51 @@ export default function CloudPage() {
     }));
   }, [selectedId, subFilteredExams, treeNodes, findNodeById]);
 
+  // ★ 폴더 범위 목록을 제목 파싱 — 조건 칩 후보값은 "지금 이 범위에 실제로 있는 값"만.
+  //   조건 적용 전 목록에서 뽑아야 칩 건수가 고정된다(누를 때마다 후보가 사라지지 않음).
+  const parsedExamTitles = useMemo(
+    () => exams.map((e) => parseExamTitle(e.fileName)),
+    [exams],
+  );
+  const facetOptions = useMemo(() => buildFacetOptions(parsedExamTitles), [parsedExamTitles]);
+
+  // 폴더를 옮기면 새 범위에 없는 조건은 자동으로 떨어뜨린다.
+  // (안 그러면 조건은 켜져 있는데 칩은 사라져 0건 화면에서 빠져나올 수 없다.
+  //  '전체에서 찾기'로 범위를 넓힐 땐 후보가 늘어나므로 아무것도 안 떨어진다.)
+  useEffect(() => {
+    setFacets((prev) => {
+      if (!hasAnyFacet(prev)) return prev;
+      const keep = (axis: keyof ExamFacetSelection) => {
+        const avail = new Set(facetOptions[axis].map((o) => o.value));
+        return prev[axis].filter((v) => avail.has(v));
+      };
+      const next: ExamFacetSelection = {
+        year: keep('year'), grade: keep('grade'), term: keep('term'),
+        kind: keep('kind'), level: keep('level'),
+      };
+      // 값까지 비교 — 길이만 보면 하나 빠지고 하나 들어온 경우를 놓친다.
+      // keep() 은 prev 순서를 보존하므로 위치별 비교가 성립한다.
+      const same = (Object.keys(next) as Array<keyof ExamFacetSelection>).every(
+        (k) => next[k].length === prev[k].length && next[k].every((v, i) => v === prev[k][i]),
+      );
+      return same ? prev : next;
+    });
+  }, [facetOptions]);
+
   const filteredExams = useMemo(() => {
     let result = exams;
+    // 조건 — 검색보다 먼저 적용(둘 다 켜면 교집합). 조건이 없으면 그대로 통과.
+    if (hasAnyFacet(facets)) {
+      result = result.filter((e) => matchesFacets(parseExamTitle(e.fileName), facets));
+    }
     if (searchQuery) {
       // ★ 검색은 "현재 선택 폴더(+하위) 범위 안"에서만 (2026-06-12 수정).
       //   기존엔 북그룹 필터를 무시하고 전체 풀에서 검색 → 3학년 폴더 선택 후 검색해도 2학년까지
       //   나오던 사고. 전체 검색이 필요하면 좌측에서 '전체 시험지' 선택. (공백 제거·대소문자 무시)
       const q = searchQuery.toLowerCase().replace(/\s+/g, '');
-      result = exams.filter((e) => {
+      // ★ exams 가 아니라 result 에서 걸러야 한다 — 조건(패싯)과 교집합이 되도록.
+      //   exams 로 시작하면 검색을 켜는 순간 앞의 조건이 통째로 무시된다.
+      result = result.filter((e) => {
         const name = (e.fileName || '').toLowerCase().replace(/\s+/g, '');
         return name.includes(q);
       });
@@ -1429,7 +1480,7 @@ export default function CloudPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [exams, searchQuery, sortField, sortDir]);
+  }, [exams, searchQuery, sortField, sortDir, facets]);
 
   // ★ groupId → 폴더명 맵 (트리 평탄화, 가상노드 제외) — 목록에 소속 폴더 배지 표시용.
   const groupNameById = useMemo(() => {
@@ -2515,12 +2566,41 @@ export default function CloudPage() {
 
                   {/* Table / Grid */}
                   <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700">
+                    {/* ★ 조건 바 — 폴더 범위 안에서 연도·학년·학기·구분으로 좁힌다.
+                        조건을 걸 축이 없으면(교재 폴더 등) 스스로 숨는다. */}
+                    <div className="px-5 pt-3">
+                      <ExamFacetBar
+                        parsedList={parsedExamTitles}
+                        value={facets}
+                        onChange={setFacets}
+                        resultCount={filteredExams.length}
+                        isAllScope={selectedId === 'all'}
+                        onExpandScope={() => {
+                          // selectedName 은 별도 상태 — 같이 안 바꾸면 헤더가 옛 폴더명으로 남는다.
+                          setSelectedId('all');
+                          setSelectedName('전체 시험지');
+                        }}
+                      />
+                    </div>
                     {filteredExams.length === 0 ? (
                       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                         <Search className="h-8 w-8 text-zinc-700" />
                         <p className="text-sm text-zinc-500">
-                          {searchQuery ? '검색 결과가 없습니다' : '이 그룹에 시험지가 없습니다'}
+                          {hasAnyFacet(facets)
+                            ? '조건에 맞는 시험지가 없습니다'
+                            : searchQuery
+                              ? '검색 결과가 없습니다'
+                              : '이 그룹에 시험지가 없습니다'}
                         </p>
+                        {hasAnyFacet(facets) && (
+                          <button
+                            type="button"
+                            onClick={() => setFacets(EMPTY_FACET_SELECTION)}
+                            className="rounded-full border border-white/10 px-3 py-1 text-xs text-content-tertiary hover:border-indigo-500/40 hover:text-indigo-200 transition-colors"
+                          >
+                            조건 초기화
+                          </button>
+                        )}
                       </div>
                     ) : viewMode === 'list' ? (
                     <>
