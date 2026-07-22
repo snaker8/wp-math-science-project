@@ -416,7 +416,8 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       //   자산화 answer_json.choiceLayout 기본값으로 흘러 "원본 배치가 기본세팅". 수동 변경은 그대로 우선.
       let choiceLayout: number | undefined;
       if (finalChoices.length > 0 && !choiceHeaders) {
-        const cLines = body.split('\n').filter((l) => /[①②③④⑤]/.test(l));
+        // 표 안 placeholder 동그라미가 열 수 추정을 왜곡하지 않도록 표 블록 제거 후 스캔
+        const cLines = stripTabularBlocks(body).split('\n').filter((l) => /[①②③④⑤]/.test(l));
         if (cLines.length > 0) {
           let maxPerLine = 0;
           for (const l of cLines) {
@@ -481,7 +482,7 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       //   문제에 이미 잘못 붙은 setup 줄들까지 함께 떼어 보류 → 다음 소문제 본문 앞에 prepend.
       //   지문은 여러 문단(설명 + 식 + "…답하시오")이라 마지막 줄만 옮기면 setup 이 앞 문제에 남음.
       //   setup 경계: 객관식이면 마지막 보기(①~⑤) 줄 다음부터, 서답형이면 첫 줄(본 질문) 다음부터.
-      if (stem && PREAMBLE_RE.test(stem) && !/[①②③④⑤]/.test(stem)) {
+      if (stem && PREAMBLE_RE.test(stem) && !hasChoiceMarkOutsideMathTable(stem)) {
         let boundary = 1;
         for (let i = cur.lines.length - 1; i >= 0; i--) {
           if (/[①②③④⑤]/.test(cur.lines[i])) { boundary = i + 1; break; }
@@ -492,6 +493,15 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
         pending = pending
           ? { text: `${pending.text}\n${preText}`, images: [...pending.images, ...para.images] }
           : { text: preText, images: [...para.images] };
+        continue;
+      }
+      // ★ 공유 지문(pending) 활성 중 "표만 있는 문단"은 앞 문제로 되돌리지 말고 지문에 이어붙인다.
+      //   근의공식 유도 표 등 표 지문이 preamble 과 다음 문제 [정답] 마커 문단 사이에 낄 때,
+      //   표 안 ①②③ placeholder 때문에 아래 복원 분기로 새 문제 표가 앞 문제에 흡수되던 사고 차단
+      //   (이사벨중 23-3-1 #8/#9). 다음에 [정답] 오면 applyPending 으로 새 문제에, 아니면
+      //   복원 분기에서 현재 문제로 — 어느 쪽이든 표는 지문과 함께 움직인다.
+      if (pending && stem && isTableOnlyParagraph(stem)) {
+        pending = { text: `${pending.text}\n${stem}`, images: [...pending.images, ...para.images] };
         continue;
       }
       // ★ 단일 문제 인라인 소문제 보호 — 보류한 지문(preamble) 뒤에 [정답] 없이 본문((1)(2)(3)
@@ -521,6 +531,56 @@ function buildMathMask(s: string): boolean[] {
     else mask[i] = inMath;
   }
   return mask;
+}
+
+/**
+ * 보기 마커 판정용 마스크 — `$…$`(수식) + `\begin{tabular}…\end{tabular}`(표) 내부를 모두 true.
+ * ★ 표 안의 ①②③ 은 빈칸채우기·근의공식 유도 등 placeholder 이지 객관식 보기가 아니다.
+ *   (CLAUDE.md 가드 #9: "동그라미가 있다고 다 객관식이 아니다" — 표/박스 안 동그라미는 본문.)
+ *   이 마스크로 splitChoices·preamble 게이트가 표 안 동그라미를 보기로 오인하지 않게 한다.
+ *   실증: 이사벨중 23-3-1 #8/#9(근의공식 표)·#17(연속 짝수 빈칸 표) — 표 placeholder 가
+ *   보기로 잡혀 본문 토막 + garbage 보기 저장되던 사고.
+ */
+const TABULAR_OPEN = '\\begin{tabular}';
+const TABULAR_CLOSE = '\\end{tabular}';
+function buildChoiceMask(s: string): boolean[] {
+  const mask = buildMathMask(s);
+  let from = 0;
+  for (;;) {
+    const open = s.indexOf(TABULAR_OPEN, from);
+    if (open < 0) break;
+    const closeAt = s.indexOf(TABULAR_CLOSE, open);
+    const end = closeAt < 0 ? s.length : closeAt + TABULAR_CLOSE.length; // 닫힘 없으면 끝까지
+    for (let i = open; i < end; i++) mask[i] = true;
+    from = end;
+  }
+  return mask;
+}
+
+/** 수식·표 밖에 진짜 보기 마커(①②③④⑤)가 있는지 — 표 안 placeholder 는 무시 */
+function hasChoiceMarkOutsideMathTable(s: string): boolean {
+  const mask = buildChoiceMask(s);
+  for (let i = 0; i < s.length; i++) {
+    if (!mask[i] && /[①②③④⑤]/.test(s[i])) return true;
+  }
+  return false;
+}
+
+/** `\begin{tabular}…\end{tabular}` 블록을 제거한 나머지 텍스트 (표만 있는 문단 판정용) */
+function stripTabularBlocks(s: string): string {
+  return s.replace(/\\begin\{tabular\}[\s\S]*?(?:\\end\{tabular\}|$)/g, ' ');
+}
+
+/**
+ * "표만 있는 문단" — 표 블록을 걷어내면 유의미한 텍스트가 남지 않는 문단.
+ * pending(공유 지문) 활성 중 이런 문단은 앞 문제로 되돌리지 말고 지문에 이어붙인다
+ * (표 지문이 다음 문제의 [정답] 마커 문단 앞에 오는 경우 = 이사벨중 #9 근의공식 표).
+ */
+function isTableOnlyParagraph(s: string): boolean {
+  if (!s.includes(TABULAR_OPEN)) return false;
+  const rest = stripTabularBlocks(s).replace(/[\s ]+/g, ' ').trim();
+  // 표를 걷어낸 나머지가 비었거나 극히 짧은 꼬리(문장부호·번호 조각)면 표 지문으로 본다.
+  return rest.length <= 2;
 }
 
 const CHOICE_INDEX: Record<string, number> = {};
@@ -586,7 +646,7 @@ function detectTableChoices(
  *     연립방정식 라벨 ①②(㉠㉡) 나 스템 참조 "①을 ②에 대입"이 보기로 잘못 잘리던 사고(거제여중 #3).
  */
 function splitChoices(body: string): { content: string; choices: string[] } {
-  const mask = buildMathMask(body);
+  const mask = buildChoiceMask(body); // 수식+표 내부 동그라미 제외
   const marks: Array<{ idx: number; val: number }> = [];
   for (let i = 0; i < body.length; i++) {
     if (!mask[i] && Object.prototype.hasOwnProperty.call(CHOICE_INDEX, body[i])) {

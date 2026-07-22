@@ -13,8 +13,13 @@ const DIR = 'C:/Users/임세현/OneDrive/Documents/수학자료모음/학교내�
 const GJ = `${DIR}/내신 2023년 부산 연제구 거제여중 중2공통 1학기기말 중등수학2상.hml`;
 const OC = `${DIR}/내신 2023년 부산 동래구 온천중 중2공통 1학기기말 중등수학2상.hml`;
 
+// 표 안 ①②③ placeholder(빈칸/유도 과정)가 보기로 오인되던 사고 — 이사벨중 23-3-1 기말
+const DIR31 = 'C:/Users/임세현/OneDrive/Documents/수학자료모음/학교내신기출문제/3-1 기말고사/[동래] 중등 3-1 기말';
+const IS = `${DIR31}/내신 2023년 부산 연제구 이사벨중 중3공통 1학기기말 중등수학3상.hml`;
+
 const haveFiles = existsSync(GJ) && existsSync(OC);
 const d = haveFiles ? describe : describe.skip;
+const dIS = existsSync(IS) ? describe : describe.skip;
 
 d('HML 파서 회귀 (실제 .hml)', () => {
   const gj = haveFiles ? parseHml(readFileSync(GJ)) : { problems: [] as any[] };
@@ -53,5 +58,36 @@ d('HML 파서 회귀 (실제 .hml)', () => {
     expect(p).toBeTruthy();
     expect(/begin\{tabular\}/.test(p!.content)).toBe(false);
     expect(p!.content).toContain('[도형]');
+  });
+});
+
+dIS('HML 파서 회귀 — 표 안 동그라미 placeholder (이사벨중 23-3-1)', () => {
+  const is = parseHml(readFileSync(IS));
+  const find = (n: number) => is.problems.find((p) => p.number === n);
+
+  it('#8 — 근의공식 표(#9)가 흡수되지 않고 진짜 보기 ①~⑤ 5개', () => {
+    const p = find(8);
+    expect(p).toBeTruthy();
+    expect(p!.content).toContain('$x^{2}-4x+k=0$');          // #8 본문
+    expect(p!.content).not.toContain('근의 공식');            // #9 지문 안 섞임
+    expect(p!.choices.length).toBe(5);
+    expect(p!.choices.every((c) => !/hline|tabular/.test(c))).toBe(true); // garbage 0
+  });
+
+  it('#9 — 근의공식 유도 표가 본문에 온전히 + 진짜 보기 ①~⑤(①$4a$…)', () => {
+    const p = find(9);
+    expect(p).toBeTruthy();
+    expect(p!.content).toContain('근의 공식');
+    expect(/begin\{tabular\}/.test(p!.content)).toBe(true);  // 유도 표는 본문에
+    expect(p!.choices.length).toBe(5);
+    expect(p!.choices[0]).toContain('4a');                   // 표 placeholder 아닌 진짜 보기
+    expect(p!.choices.every((c) => !/hline|tabular/.test(c))).toBe(true);
+  });
+
+  it('#17 — 빈칸(①②) 표는 서답형: 보기로 추출 안 함', () => {
+    const p = find(17);
+    expect(p).toBeTruthy();
+    expect(p!.choices.length).toBe(0);                        // 표 안 ( ① )( ② )는 보기 아님
+    expect(/begin\{tabular\}/.test(p!.content)).toBe(true);   // 빈칸 표는 본문 유지
   });
 });
