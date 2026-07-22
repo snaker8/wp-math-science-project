@@ -349,10 +349,9 @@ export default function SignUpPage() {
   const selectedRoleOption = ROLE_OPTIONS.find((r) => r.value === selectedRole);
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.15),transparent_50%)]" />
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-violet-600/10 rounded-full blur-[128px] translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+    // ★ 로그인 화면과 동일 규칙 (2026-07-22): 100dvh · zinc-950 바탕 · 글로우 제거.
+    //   두 화면은 나란히 오가므로 한쪽만 고치면 오히려 어긋나 보인다.
+    <div className="min-h-[100dvh] bg-zinc-950 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
       {/* Logo */}
       <motion.div
@@ -375,7 +374,7 @@ export default function SignUpPage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, x: -50 }}
             transition={{ duration: 0.3 }}
-            className="w-full max-w-md bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-xl"
+            className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
           >
             <div className="text-center mb-8">
               <h2 className="text-xl font-bold text-white mb-2">회원가입</h2>
@@ -396,9 +395,9 @@ export default function SignUpPage() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => handleRoleSelect(option.value)}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-black/30 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group text-left"
+                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-white/10 bg-zinc-950/40 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-colors group text-left"
                 >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${option.color} flex items-center justify-center text-white shadow-lg`}>
+                  <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${option.color} flex items-center justify-center text-white shadow-lg`}>
                     {option.icon}
                   </div>
                   <div className="flex-1">
@@ -431,7 +430,7 @@ export default function SignUpPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
             transition={{ duration: 0.3 }}
-            className="w-full max-w-md bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-xl"
+            className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
           >
             <div className="text-center mb-6">
               <h2 className="text-xl font-bold text-white mb-2">정보 입력</h2>
@@ -446,7 +445,7 @@ export default function SignUpPage() {
 
             {/* 선택된 역할 뱃지 */}
             {selectedRoleOption && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-6">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 mb-6">
                 <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${selectedRoleOption.color} flex items-center justify-center text-white text-sm`}>
                   {selectedRoleOption.icon}
                 </div>
@@ -486,7 +485,7 @@ export default function SignUpPage() {
                     onChange={handleInputChange}
                     placeholder="홍길동"
                     required
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
                   />
                 </div>
               </div>
@@ -503,7 +502,7 @@ export default function SignUpPage() {
                     onChange={handleInputChange}
                     placeholder="example@email.com"
                     required
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
                   />
                 </div>
               </div>
@@ -521,7 +520,7 @@ export default function SignUpPage() {
                     placeholder="8자 이상 입력"
                     minLength={8}
                     required
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
                   />
                 </div>
               </div>
@@ -539,7 +538,7 @@ export default function SignUpPage() {
                     placeholder="비밀번호를 다시 입력"
                     minLength={8}
                     required
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
                   />
                 </div>
               </div>
@@ -555,7 +554,7 @@ export default function SignUpPage() {
                     value={formData.phone}
                     onChange={handleInputChange}
                     placeholder="010-1234-5678"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
                   />
                 </div>
               </div>
@@ -573,7 +572,7 @@ export default function SignUpPage() {
                     onChange={(e) => handleOrgInputChange(e.target.value)}
                     onFocus={() => setOrgDropdownOpen(true)}
                     placeholder="학원명 입력"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
                   />
                   {orgSearching && (
                     <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 animate-spin" size={16} />
@@ -584,7 +583,7 @@ export default function SignUpPage() {
 
                   {/* 매칭 후보 드롭다운 */}
                   {orgDropdownOpen && !selectedOrg && !applyMode && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl max-h-64 overflow-y-auto z-20">
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl max-h-64 overflow-y-auto z-20">
                       {orgCandidates.length > 0 ? (
                         <>
                           {orgCandidates.map((org) => (
@@ -634,7 +633,7 @@ export default function SignUpPage() {
                       value={formData.instituteId}
                       onChange={handleInputChange}
                       required
-                      className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                      className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors appearance-none"
                     >
                       <option value="" className="bg-zinc-900">
                         {institutesLoading ? '로딩 중…' : (institutes.length === 0 ? '등록된 센터 없음' : '센터를 선택하세요')}
@@ -655,7 +654,7 @@ export default function SignUpPage() {
 
                 {/* 가맹 신청 모드 — 학원·센터 자유 입력 */}
                 {applyMode && (
-                  <div className="mt-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                  <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-2">
                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
                       <AlertCircle size={12} /> 신규 학원 가맹 신청
                     </div>
@@ -668,7 +667,7 @@ export default function SignUpPage() {
                       value={applyInstituteName}
                       onChange={(e) => setApplyInstituteName(e.target.value)}
                       placeholder="센터 이름 (선택)"
-                      className="w-full bg-black/50 border border-amber-500/30 rounded-lg py-2 px-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-zinc-950/60 border border-amber-500/30 rounded-lg py-2 px-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
                     />
                     <button
                       type="button"
@@ -690,7 +689,7 @@ export default function SignUpPage() {
                     value={formData.grade}
                     onChange={handleInputChange}
                     required
-                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors appearance-none"
                   >
                     <option value="" className="bg-zinc-900">학년을 선택하세요</option>
                     <option value="7" className="bg-zinc-900">중1</option>
@@ -707,7 +706,7 @@ export default function SignUpPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 group mt-2"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group mt-2"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={20} />
@@ -806,7 +805,7 @@ export default function SignUpPage() {
               {!applicationSubmitted && (
                 <button
                   onClick={navigateByRole}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 group"
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group"
                 >
                   <span>시작하기</span>
                   <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />

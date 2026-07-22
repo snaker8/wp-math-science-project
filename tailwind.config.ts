@@ -110,8 +110,10 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ["var(--font-pretendard)", "Inter", "sans-serif"],
-        mono: ["var(--font-inter)", "monospace"],
+        sans: ["var(--font-pretendard)", "sans-serif"],
+        // ★ 진짜 등폭 — 예전엔 var(--font-inter)(=Inter, 가변폭)라 font-mono 를 건
+        //   숫자 열이 안 맞았다. 등폭은 그 자체로 tabular 라 사용처 74곳은 그대로 둔다.
+        mono: ["var(--font-mono)", "monospace"],
       },
       borderColor: {
         DEFAULT: 'var(--border-default)',
