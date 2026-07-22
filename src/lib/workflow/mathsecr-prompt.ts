@@ -91,26 +91,11 @@ export function curriculumCodesToSubjectGrade(
   return null;
 }
 
-/**
- * 자산화 업로드 UI 에서 학년·학기(특이 진도 대비 복수 선택)를 고르는 옵션 목록.
- * code 는 mathsecr 과목코드(01~13), label 은 표시명. 선택값은 exams.curriculum_codes 로 저장돼
- * 분류 컨텍스트에 제목 추론보다 우선 사용된다.
- */
-export const CURRICULUM_OPTIONS: Array<{ code: string; label: string; group: '중등' | '고등' }> = [
-  { code: '01', label: '중1-1', group: '중등' },
-  { code: '02', label: '중1-2', group: '중등' },
-  { code: '03', label: '중2-1', group: '중등' },
-  { code: '04', label: '중2-2', group: '중등' },
-  { code: '05', label: '중3-1', group: '중등' },
-  { code: '06', label: '중3-2', group: '중등' },
-  { code: '07', label: '공통수학1', group: '고등' },
-  { code: '08', label: '공통수학2', group: '고등' },
-  { code: '09', label: '대수', group: '고등' },
-  { code: '10', label: '미적분1', group: '고등' },
-  { code: '11', label: '확률과 통계', group: '고등' },
-  { code: '12', label: '미적분2', group: '고등' },
-  { code: '13', label: '기하', group: '고등' },
-];
+// ★ CURRICULUM_OPTIONS 본체는 curriculum-options.ts 로 이동 (2026-07-22) —
+//   클라이언트가 이 파일을 import 하면 mathsecr_complete.json 3.3MB 가 번들에 딸려옴.
+//   서버 호환용 re-export. 클라이언트 컴포넌트는 '@/lib/workflow/curriculum-options' 직접 import.
+import { CURRICULUM_OPTIONS } from './curriculum-options';
+export { CURRICULUM_OPTIONS };
 
 const VALID_CURRICULUM_CODES = new Set(CURRICULUM_OPTIONS.map((o) => o.code));
 
