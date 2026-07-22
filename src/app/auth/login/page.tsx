@@ -150,9 +150,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent_50%)]" />
+    // ★ min-h-[100dvh] — min-h-screen 은 iOS 사파리 주소창 때문에 첫 화면이 튄다.
+    // ★ 배경은 zinc-950. 순수 검정(#000)이면 카드와 배경의 깊이 차가 사라진다.
+    //   인디고 방사형 글로우는 제거 — 브랜드 색은 버튼에서만 쓴다.
+    <div className="min-h-[100dvh] bg-zinc-950 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
       {/* Logo */}
       <div
@@ -162,7 +163,7 @@ export default function LoginPage() {
 
         {/* 학원 표시 — URL ?org=<id> 로 진입 시 */}
         {orgInfo && (
-          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500/10 to-violet-500/10 border border-indigo-500/30">
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
             <Building2 size={14} className="text-indigo-400" />
             <span className="text-[11px] uppercase tracking-wider text-zinc-500">학원</span>
             <span className="text-sm font-bold text-indigo-300">{orgInfo.name}</span>
@@ -172,10 +173,10 @@ export default function LoginPage() {
 
       {/* Login Card */}
       <div
-        className="w-full max-w-md bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-xl"
+        className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
       >
-        {/* Type Switcher */}
-        <div className="flex bg-black/50 p-1 rounded-xl mb-8 border border-white/5">
+        {/* Type Switcher — 반경 규칙: 카드 2xl(16px) / 그 안의 조작요소 전부 lg(8px) */}
+        <div className="flex bg-zinc-950/60 p-1 rounded-lg mb-8 border border-white/5">
           {[
             { id: 'student', label: '학생' },
             { id: 'parent', label: '학부모' },
@@ -185,9 +186,9 @@ export default function LoginPage() {
               key={type.id}
               type="button"
               onClick={() => setLoginType(type.id as 'student' | 'teacher' | 'parent')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${loginType === type.id
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
-                : 'text-zinc-500 hover:text-zinc-300'
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${loginType === type.id
+                ? 'bg-indigo-600 text-white'
+                : 'text-zinc-400 hover:text-zinc-200'
                 }`}
             >
               {type.label}
@@ -207,8 +208,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
-              {loginType === 'student' ? '전화번호' : 'Email'}
+            {/* ★ 학생 탭은 실제로 전화번호를 받는데 라벨이 'Email' 이라 어긋났었다 */}
+            <label className="text-xs font-bold text-zinc-400 ml-1">
+              {loginType === 'student' ? '전화번호' : '이메일'}
             </label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
@@ -218,7 +220,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={loginType === 'student' ? '010-1234-5678 또는 01012345678' : '이메일을 입력하세요'}
                 required
-                className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               />
             </div>
             {loginType === 'student' && (
@@ -229,7 +231,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Password</label>
+            <label className="text-xs font-bold text-zinc-400 ml-1">비밀번호</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
               <input
@@ -238,7 +240,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="비밀번호를 입력하세요"
                 required
-                className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               />
             </div>
           </div>
@@ -246,7 +248,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 group"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group"
           >
             {isLoading ? (
               <Loader2 className="animate-spin" size={20} />
@@ -260,9 +262,12 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center space-y-3">
-          <a href="#" className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors block">
-            계정을 잊으셨나요?
-          </a>
+          {/* ★ 예전엔 href="#" 죽은 링크였다 — 눌러도 아무 일이 없어 사용자가 헤맴.
+              비밀번호 재설정은 학원이 처리하는 구조(학생 초기 비번 발급)라, 링크 대신
+              실제 해결 경로를 안내한다. 셀프 재설정 페이지가 생기면 그때 링크로 되돌린다. */}
+          <p className="text-xs text-zinc-500">
+            비밀번호를 잊으셨다면 학원으로 문의해 주세요.
+          </p>
           <div className="pt-4 border-t border-white/10">
             <p className="text-sm text-zinc-500">
               아직 계정이 없으신가요?{' '}

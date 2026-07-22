@@ -4,8 +4,17 @@
 
 @layer base {
   :root {
-    /* ── 폰트 ── */
-    --font-pretendard: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+    /* ── 폰트 ──
+       ★ Pretendard 는 layout.tsx 에서 self-host 로 실제 로딩한다 (2026-07-22).
+         예전엔 이 목록에 이름만 있고 폰트 파일을 가져오는 코드가 없어, Pretendard 가
+         설치된 PC 에서만 Pretendard 로 보이고 나머지는 OS 기본 글꼴(맑은 고딕 /
+         Apple SD Gothic Neo / Noto Sans KR)로 갈라졌다. 원장·강사·학부모가 서로 다른
+         글꼴로 같은 성적표를 보던 상태. 이름 순서는 Variable → static → 시스템 폴백.
+       ★ --font-mono 는 반드시 진짜 등폭 스택. 예전엔 Inter(가변폭)를 가리켜
+         font-mono 를 건 점수·정답률 숫자의 자릿수가 안 맞았다 (38개 파일 74곳). */
+    --font-pretendard: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;
+    /* @deprecated — 예전 이름. font-mono 가 이걸 가리켜 생긴 버그 때문에 유지만 함. */
     --font-inter: "Inter", sans-serif;
 
     /* ── 세련된 다크 팔레트 (Chrome 디자인 시스템과 통일) ── */

@@ -1,4 +1,10 @@
 import type { Metadata } from 'next';
+// ★ Pretendard self-host (2026-07-22) — 이름만 선언돼 있고 실제 로딩이 없어서
+//   보는 기기마다 다른 글꼴로 표시되던 것을 고정. variable + dynamic-subset 이라
+//   92개 유니코드 구간 중 그 페이지에 필요한 구간만 내려받는다(수십 KB).
+//   ⚠ 인쇄·PDF 도 이 글꼴을 쓰므로, 글꼴이 바뀌면 줄바꿈 위치가 한 번 달라진다.
+//     대신 그 뒤로는 모든 기기에서 동일 — 기존엔 기기마다 제각각이었다. SIL OFL.
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 import './globals.css';
 import 'katex/dist/katex.min.css';
 import { RootProviders } from '@/components/providers/RootProviders';
