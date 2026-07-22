@@ -292,6 +292,25 @@ function NavTab({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const prefetchedRef = useRef(false);
+
+  // ★ 2026-07-02 전환 속도감: 드롭다운 자식 링크는 {open && ...} 로 열렸을 때만
+  //   DOM 에 생겨 <Link> 자동 prefetch 가 사실상 안 됨(열고 바로 클릭 → 리드타임 0).
+  //   prod 대시보드는 전부 Dynamic 라우트라 미리 안 당기면 클릭 시점에 서버 왕복 전부를 침.
+  //   → 트리거 hover/focus 시 자식 href 를 미리 prefetch(라우트당 1회). loading.tsx 경계
+  //     덕에 동적 라우트도 이 prefetch 가 의미 있음.
+  const prefetchChildren = () => {
+    if (prefetchedRef.current || !group.children) return;
+    prefetchedRef.current = true;
+    for (const item of group.children) {
+      try {
+        router.prefetch(item.href);
+      } catch {
+        /* prefetch 실패는 무시 — UX 보조일 뿐 */
+      }
+    }
+  };
 
   // 바깥 클릭 시 닫기
   useEffect(() => {
@@ -344,6 +363,8 @@ function NavTab({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
+        onMouseEnter={prefetchChildren}
+        onFocus={prefetchChildren}
         className={`
           flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
           ${isActive
