@@ -24,6 +24,24 @@ export const RADIUS = {
 } as const;
 
 /**
+ * 패널 표면 — 배경·테두리만. 레이아웃(flex·높이·overflow)은 쓰는 쪽이 정한다.
+ *
+ * ★ 앱과 리포트가 정반대였다 (실측 2026-07-23)
+ *     앱   : bg-surface-card/90 (거의 불투명) + border-subtle(흰 6%, 거의 안 보임)
+ *            → 판은 꽉 찼는데 경계가 흐려 뭉개져 보인다
+ *     리포트: bg-zinc-900/40 (많이 비침)      + border-zinc-800(또렷)
+ *            → 판은 비치는데 경계가 분명해 "층"으로 읽힌다
+ *   후자가 고급스럽게 읽힌 이유. 채움은 낮추고 경계는 올린다.
+ *
+ * 구조를 가진 컨테이너(사이드바·목록판 등)는 SurfacePanel 로 감싸면 여백이 끼어
+ * 레이아웃이 깨지므로, 그런 곳엔 이 클래스만 얹는다.
+ */
+export const PANEL_SURFACE = 'border border-white/[.08] bg-surface-card/40';
+
+/** 패널 안에 한 겹 더 들어가는 표면 (행 hover·내부 카드 등) */
+export const PANEL_INSET = 'border border-white/[.06] bg-white/[.03]';
+
+/**
  * 패널 — 카드·박스·목록 컨테이너의 기본 단위.
  * 반투명 표면 + 조용한 테두리. 배경 위에 "얹힌 판"이 아니라 "층"으로 보이게 한다.
  */
@@ -41,9 +59,7 @@ export function SurfacePanel({
 }) {
   const pad = padding === 'tight' ? 'p-4' : 'p-5';
   return (
-    <div
-      className={`${RADIUS.panel} border border-white/[.07] bg-white/[.02] ${pad} ${className}`}
-    >
+    <div className={`${RADIUS.panel} ${PANEL_SURFACE} ${pad} ${className}`}>
       {(title || right) && (
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-2 min-w-0">
@@ -84,7 +100,7 @@ export function StatTile({
   }[tone];
 
   return (
-    <div className={`${RADIUS.panel} border border-white/[.07] bg-white/[.02] p-4 ${className}`}>
+    <div className={`${RADIUS.panel} ${PANEL_SURFACE} p-4 ${className}`}>
       <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[.11em] text-content-muted">
         {icon}
         <span className="truncate">{label}</span>

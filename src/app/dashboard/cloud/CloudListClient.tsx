@@ -1886,7 +1886,7 @@ export default function CloudPage() {
         <div className="flex flex-1 gap-2 overflow-hidden px-2 pb-2">
           {/* 좌측 트리 스켈레톤 */}
           <div
-            className="hidden min-w-0 flex-col rounded-2xl border border-subtle bg-surface-card/60 p-4 sm:flex"
+            className="hidden min-w-0 flex-col rounded-2xl border border-white/[.08] bg-surface-card/40 p-4 sm:flex"
             style={{ width: `${leftWidth}%` }}
           >
             <div className="mb-4 h-9 w-full rounded-lg bg-surface-raised/60 animate-pulse" />
@@ -1898,7 +1898,7 @@ export default function CloudPage() {
             ))}
           </div>
           {/* 우측 목록 스켈레톤 */}
-          <div className="flex flex-1 flex-col rounded-2xl border border-subtle bg-surface-card/60 pl-0">
+          <div className="flex flex-1 flex-col rounded-2xl border border-white/[.08] bg-surface-card/40 pl-0">
             <div className="flex items-center justify-between border-b border-subtle px-5 py-3.5">
               <div className="h-6 w-40 rounded bg-surface-raised/60 animate-pulse" />
               <div className="flex gap-2">
@@ -1908,7 +1908,7 @@ export default function CloudPage() {
             </div>
             <div className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-hidden p-4 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex flex-col rounded-xl border border-subtle bg-surface-card/40 p-2">
+                <div key={i} className="flex flex-col rounded-xl border border-white/[.08] bg-surface-card/40 p-2">
                   <div className="h-20 rounded-lg bg-surface-raised/60 animate-pulse" />
                   <div className="mt-2.5 h-4 w-3/4 rounded bg-surface-raised/60 animate-pulse" />
                   <div className="mt-1.5 h-3 w-1/2 rounded bg-surface-raised/50 animate-pulse" />
@@ -2396,7 +2396,7 @@ export default function CloudPage() {
             style={{ width: `${leftWidth}%`, flexShrink: 0 }}
           >
             {/* Top Bar */}
-            <div className="flex items-center justify-between rounded-2xl border border-subtle bg-surface-card/90 px-4 py-2.5 flex-shrink-0">
+            <div className="flex items-center justify-between rounded-2xl border border-white/[.08] bg-surface-card/40 px-4 py-2.5 flex-shrink-0">
               <span className="rounded-full border bg-surface-raised px-3 py-1 text-xs font-semibold text-content-secondary">
                 {sourceCategory === 'all'
                   ? `북그룹 ${totalGroups}개`
@@ -2417,7 +2417,7 @@ export default function CloudPage() {
             </div>
 
             {/* Tree Panel — sub-필터·카테고리 적용된 examCount 기준 빈 폴더 자동 숨김 */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface-card/90">
+            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[.08] bg-surface-card/40">
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 p-2">
                 {displayedTreeNodes.length > 0 ? (
                   <div className="space-y-0.5">
@@ -2469,7 +2469,7 @@ export default function CloudPage() {
 
           {/* ======== Right Panel: File List ======== */}
           <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-2">
-            <div className="flex h-full flex-col rounded-2xl border border-subtle bg-surface-card/90">
+            <div className="flex h-full flex-col rounded-2xl border border-white/[.08] bg-surface-card/40">
               {selectedId ? (
                 <>
                   {/* Content Header */}
