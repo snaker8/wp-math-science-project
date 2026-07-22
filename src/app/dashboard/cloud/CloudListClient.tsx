@@ -89,6 +89,8 @@ interface ExamFile {
   subject?: string | null;
   year?: string;
   difficulty?: { low: number; mid: number; high: number; total: number } | null;
+  /** 카드 액자에 그릴 1번 문제 본문 첫 토막. 없으면 문서 모티브로 폴백 */
+  previewText?: string;
   // ★ 출처별 카테고리 (Phase 1)
   isDiagnostic?: boolean;
   examType?: string | null;
@@ -1420,6 +1422,7 @@ export default function CloudPage() {
       subject: exam.subject,
       year: exam.year,
       difficulty: exam.difficulty,
+      previewText: exam.previewText,
       isDiagnostic: exam.isDiagnostic,
       examType: exam.examType,
       diagnosticCategory: exam.diagnosticCategory,
@@ -2765,14 +2768,24 @@ export default function CloudPage() {
                             onMouseEnter={() => prefetchExam(exam.id)}
                             className="group flex flex-col rounded-xl border border-subtle bg-surface-card transition-colors hover:border-indigo-500/30 hover:bg-surface-raised/30 cursor-pointer"
                           >
-                            {/* 액자형 썸네일 — 은은한 문서 모티브(실제 미리보기는 후속 단계) */}
-                            <div className="relative m-2 mb-0 flex h-20 items-center justify-center overflow-hidden rounded-lg border border-subtle bg-black/20">
-                              <div className="flex w-14 flex-col gap-1 rounded-sm bg-white/[0.04] p-2">
-                                <div className="h-1 w-3/5 rounded-full bg-white/20"></div>
-                                <div className="h-0.5 w-full rounded-full bg-white/10"></div>
-                                <div className="h-0.5 w-4/5 rounded-full bg-white/10"></div>
-                                <div className="h-0.5 w-11/12 rounded-full bg-white/10"></div>
-                              </div>
+                            {/* ★ 액자형 썸네일 — 1번 문제 본문을 실제로 작게 그린다 (2026-07-23).
+                                예전엔 회색 문서 모티브 플레이스홀더였다. 카드 높이의 40%,
+                                가장 눈이 먼저 가는 자리인데 아무 정보가 없어 화면이 허전하면서
+                                복잡해 보였다. 이제 무슨 시험지인지 내용으로 구분된다.
+                                previewText 가 없으면(구 데이터·조회 실패) 기존 모티브로 폴백. */}
+                            <div className="relative m-2 mb-0 flex h-20 overflow-hidden rounded-lg border border-subtle bg-black/20">
+                              {exam.previewText ? (
+                                <p className="w-full px-2.5 pb-2 pt-6 text-[9px] leading-[1.5] text-content-tertiary/90 line-clamp-4 break-words">
+                                  {exam.previewText}
+                                </p>
+                              ) : (
+                                <div className="m-auto flex w-14 flex-col gap-1 rounded-sm bg-white/[0.04] p-2">
+                                  <div className="h-1 w-3/5 rounded-full bg-white/20"></div>
+                                  <div className="h-0.5 w-full rounded-full bg-white/10"></div>
+                                  <div className="h-0.5 w-4/5 rounded-full bg-white/10"></div>
+                                  <div className="h-0.5 w-11/12 rounded-full bg-white/10"></div>
+                                </div>
+                              )}
                               <span className="absolute left-2 top-2 inline-flex h-5 min-w-[24px] items-center justify-center rounded-md bg-black/50 px-1.5 text-[10px] font-bold text-content-secondary">
                                 #{exam.order}
                               </span>
