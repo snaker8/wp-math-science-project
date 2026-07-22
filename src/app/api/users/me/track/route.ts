@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import { isSubjectTrack, type SubjectTrack } from '@/types/track';
+import { bustUserScopeCache } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,6 +116,9 @@ export async function PATCH(request: Request) {
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
+
+  // ★ 스코프 캐시 무효화 (60초 TTL, 2026-07-18) — 트랙 변경 즉시 반영
+  bustUserScopeCache(auth.userId);
 
   // ★ track-chosen 쿠키 set — middleware redirect 가드 통과용.
   //   다음 /dashboard 진입 시 middleware 가 이 쿠키 읽고 redirect 안 함.

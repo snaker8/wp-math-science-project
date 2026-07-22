@@ -70,6 +70,17 @@ export function createSupabaseMiddlewareClient(request: NextRequest) {
   return { supabase, response };
 }
 
+// ★ users 행 60초 TTL 캐시 (2026-07-18 사용자 승인 — 전환 체감 레버):
+//   페이지 이동마다 미들웨어가 users 를 왕복(실측 p50 242ms)하던 것 제거.
+//   트레이드오프: role·트랙·센터 배정 변경 반영 최대 60초 지연 (isolate 단위).
+//   세션 자체(JWT 쿠키 검증·만료·로그아웃)는 캐시하지 않음 — 보안 경계 불변.
+const USER_ROW_TTL_MS = 60_000;
+type CachedUserRow = {
+  role: string; institute_id: string | null; full_name: string;
+  preferences: unknown; subject_tracks: unknown; active_subject_track: unknown;
+};
+const userRowCache = new Map<string, { row: CachedUserRow; t: number }>();
+
 /**
  * 현재 인증된 사용자 정보 조회 (역할 포함)
  */
@@ -115,15 +126,27 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
       user = authUser;
     }
 
-    // users 테이블에서 역할 + 트랙 정보 조회
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('role, institute_id, full_name, preferences, subject_tracks, active_subject_track')
-      .eq('id', user.id)
-      .single();
+    // users 테이블에서 역할 + 트랙 정보 조회 — 60초 TTL 캐시 (매 네비 왕복 제거)
+    let userData: CachedUserRow;
+    const cachedRow = userRowCache.get(user.id);
+    if (cachedRow && Date.now() - cachedRow.t < USER_ROW_TTL_MS) {
+      userData = cachedRow.row;
+    } else {
+      const { data: fresh, error: userError } = await supabase
+        .from('users')
+        .select('role, institute_id, full_name, preferences, subject_tracks, active_subject_track')
+        .eq('id', user.id)
+        .single();
 
-    if (userError || !userData) {
-      return null;
+      if (userError || !fresh) {
+        return null;
+      }
+      userData = fresh as CachedUserRow;
+      userRowCache.set(user.id, { row: userData, t: Date.now() });
+      if (userRowCache.size > 500) {
+        const oldest = userRowCache.keys().next().value;
+        if (oldest !== undefined) userRowCache.delete(oldest);
+      }
     }
 
     // preferences에서 isAcademyAdmin 플래그 확인
