@@ -48,7 +48,15 @@ import { MathRenderer } from '@/components/shared/MathRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 // ★ 2026-07-17 인쇄 통일 — 클라우드 검증 인쇄 엔진 재사용 (측정→분할→렌더→인쇄→한글 내장)
-import { ExamPaperView, QuickAnswerView, SolutionView, type ProblemData } from '@/components/exam-paper/ExamPaperView';
+// ★ 인쇄 엔진(~2000줄)은 dynamic — 시험지 선택 전 목록 화면에선 불필요 (초기 JS 감량, 2026-07-18)
+import dynamic from 'next/dynamic';
+import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
+const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.ExamPaperView), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center py-16"><div className="h-5 w-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /></div>,
+});
+const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.QuickAnswerView), { ssr: false });
+const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then(m => m.SolutionView), { ssr: false });
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import DeployExamModal from '@/components/exam/DeployExamModal';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
