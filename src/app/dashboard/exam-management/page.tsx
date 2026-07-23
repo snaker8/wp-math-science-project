@@ -376,8 +376,8 @@ function AnswerDisplay({ answer, className = '', compact = false }: { answer: nu
     const wrapped = converted.includes('$') ? converted : `$${converted}$`;
     // compact: 길이별 폰트 축소
     const fontSize = compact
-      ? (wrapped.length > 100 ? 'text-[8px]' : wrapped.length > 60 ? 'text-[9px]' : wrapped.length > 40 ? 'text-[10px]' : 'text-[12px]')
-      : (wrapped.length > 30 ? 'text-[11px]' : '');
+      ? (wrapped.length > 100 ? 'text-[10px]' : wrapped.length > 60 ? 'text-[10px]' : wrapped.length > 40 ? 'text-[10px]' : 'text-xs')
+      : (wrapped.length > 30 ? 'text-xs' : '');
     return (
       <div
         className={`inline-block ${fontSize} leading-tight`}
@@ -389,8 +389,8 @@ function AnswerDisplay({ answer, className = '', compact = false }: { answer: nu
   }
   // 5) 수식 없는 일반 텍스트
   const fontSize = compact
-    ? (str.length > 60 ? 'text-[9px]' : str.length > 30 ? 'text-[10px]' : '')
-    : (str.length > 20 ? 'text-[11px]' : '');
+    ? (str.length > 60 ? 'text-[10px]' : str.length > 30 ? 'text-[10px]' : '')
+    : (str.length > 20 ? 'text-xs' : '');
   return (
     <span
       className={`${className} ${fontSize} ${str.length > 20 ? 'leading-tight' : ''}`}
@@ -1171,7 +1171,7 @@ export default function ExamManagementPage() {
                   setSubjectCategory(cat);
                   setSubjectFilter(SUBJECT_CATEGORIES[cat][0]);
                 }}
-                className="flex-1 px-2 py-1 text-[11px] font-medium rounded-md transition-colors"
+                className="flex-1 px-2 py-1 text-xs font-medium rounded-md transition-colors"
                 style={{
                   background: subjectCategory === cat ? 'var(--em-bg-chrome)' : 'transparent',
                   color: subjectCategory === cat ? 'var(--em-fg-1)' : 'var(--em-fg-3)',
@@ -1186,7 +1186,7 @@ export default function ExamManagementPage() {
             <select
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
-              className="em-select text-[11px]"
+              className="em-select text-xs"
               style={{ padding: '4px 18px 4px 6px' }}
             >
               {SUBJECT_CATEGORIES[subjectCategory].map((subj) => (
@@ -1196,7 +1196,7 @@ export default function ExamManagementPage() {
             <select
               value={examTypeFilter}
               onChange={(e) => setExamTypeFilter(e.target.value)}
-              className="em-select text-[11px]"
+              className="em-select text-xs"
               style={{ padding: '4px 18px 4px 6px' }}
             >
               {EXAM_TYPES.map((t) => (
