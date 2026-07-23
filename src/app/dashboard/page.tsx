@@ -62,9 +62,9 @@ function StatusCard({
       <div className={`p-2 ${c.bg} rounded-lg mb-3`}>
         <Icon className={`w-5 h-5 ${c.text}`} />
       </div>
-      <span className="text-[11px] text-content-tertiary font-medium mb-1">{label}</span>
+      <span className="text-xs text-content-tertiary font-medium mb-1">{label}</span>
       {loading ? (
-        <span className="my-1 inline-block h-7 w-14 rounded-md bg-white/10 animate-pulse" aria-label="불러오는 중" />
+        <span className="my-1 inline-block h-7 w-14 rounded-lg bg-white/10 animate-pulse" aria-label="불러오는 중" />
       ) : (
         <span className="text-3xl font-bold text-content-primary">{value}</span>
       )}
@@ -73,15 +73,15 @@ function StatusCard({
 
   if (href) {
     return (
-      <Link href={href} className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/50 border border-subtle hover:border-white/10 hover:bg-surface-raised/50 transition-all cursor-pointer group">
+      <Link href={href} className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/40 border border-white/[.08] hover:border-white/10 hover:bg-surface-raised/50 transition-all cursor-pointer group">
         {content}
-        <span className="text-[9px] text-content-muted group-hover:text-content-secondary mt-2 transition-colors">클릭하여 이동 →</span>
+        <span className="text-[10px] text-content-muted group-hover:text-content-secondary mt-2 transition-colors">클릭하여 이동 →</span>
       </Link>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/50 border border-subtle hover:border-white/10 transition-all">
+    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/40 border border-white/[.08] hover:border-white/10 transition-all">
       {content}
     </div>
   );
@@ -329,7 +329,7 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {notice.is_urgent && (
-                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                           긴급
                         </span>
                       )}
@@ -357,13 +357,13 @@ export default function DashboardPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     {selectedNotice.is_urgent && (
-                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                         긴급
                       </span>
                     )}
                     <h3 className="text-base font-bold text-content-primary">{selectedNotice.title}</h3>
                   </div>
-                  <p className="text-[11px] text-content-tertiary mt-1">{formatNoticeDate(selectedNotice.created_at)}</p>
+                  <p className="text-xs text-content-tertiary mt-1">{formatNoticeDate(selectedNotice.created_at)}</p>
                 </div>
                 <button
                   type="button"
@@ -390,7 +390,7 @@ export default function DashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
                 <h3 className="text-sm font-bold text-content-primary mb-0.5">월별 결산</h3>
-                <p className="text-[11px] text-content-tertiary">선택한 연·월 기준으로 지표가 반영됩니다.</p>
+                <p className="text-xs text-content-tertiary">선택한 연·월 기준으로 지표가 반영됩니다.</p>
               </div>
               <MonthSelector
                 selectedMonth={selectedMonth}
@@ -462,16 +462,16 @@ export default function DashboardPage() {
                 <p className="text-3xl font-bold text-rose-400">{aiPoints.monthUsage} P</p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/40 border border-white/[.08]">
                   <span className="text-xs text-content-secondary">현재 잔액</span>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-content-primary">{aiPoints.balance} P</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
                       정상
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/40 border border-white/[.08]">
                   <span className="text-xs text-content-secondary">경고 임계치</span>
                   <span className="text-sm font-bold text-content-tertiary">{aiPoints.warningThreshold} P</span>
                 </div>
@@ -487,12 +487,12 @@ export default function DashboardPage() {
               <div className="text-center mb-3">
                 <p className="text-[10px] text-content-tertiary mb-1">총 등록 문제</p>
                 {statsLoading ? (
-                  <span className="mx-auto my-1 inline-block h-6 w-16 rounded-md bg-white/10 animate-pulse" aria-label="불러오는 중" />
+                  <span className="mx-auto my-1 inline-block h-6 w-16 rounded-lg bg-white/10 animate-pulse" aria-label="불러오는 중" />
                 ) : (
                   <p className="text-2xl font-bold text-content-primary">{stats.totalProblems}</p>
                 )}
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/80 border border-subtle">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/40 border border-white/[.08]">
                 <span className="text-xs text-content-secondary">이번 주 추가</span>
                 <span className="text-sm font-bold text-indigo-400">+{stats.problemsThisWeek}</span>
               </div>
@@ -578,7 +578,7 @@ export default function DashboardPage() {
                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-surface-base/80 backdrop-blur-md border border-white/10 shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 min-w-[120px]">
                                 <div className="text-[10px] text-content-tertiary tracking-wide mb-1 font-medium">{student}</div>
                                 <div className="text-content-primary text-xs font-semibold mb-1.5">{unit}</div>
-                                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/10">
+                                <div className="flex items-center justify-between text-xs pt-1 border-t border-white/10">
                                   <span className="text-content-secondary">Proficiency</span>
                                   <span className="text-indigo-400 font-bold font-mono">{score}%</span>
                                 </div>
@@ -596,7 +596,7 @@ export default function DashboardPage() {
 
               {/* Legend */}
               <div className="flex items-center justify-end gap-3 mt-5 pt-3 border-t border-subtle">
-                <span className="text-[9px] uppercase tracking-wider text-content-muted font-medium">Proficiency Index</span>
+                <span className="text-[10px] uppercase tracking-wider text-content-muted font-medium">Proficiency Index</span>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-content-tertiary font-medium">Low</span>
                   <div className="flex gap-[1px] h-2">
@@ -639,7 +639,7 @@ export default function DashboardPage() {
                   <button
                     key={i}
                     onClick={() => router.push(action.href)}
-                    className={`flex flex-col items-center justify-center gap-2 p-4 bg-surface-card/50 border border-subtle rounded-xl transition-all hover:bg-surface-raised ${action.color} group`}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 bg-surface-card/40 border border-white/[.08] rounded-xl transition-all hover:bg-surface-raised ${action.color} group`}
                   >
                     <Icon size={20} className="text-content-tertiary group-hover:text-content-primary transition-colors" />
                     <span className="text-sm text-content-secondary group-hover:text-content-primary font-medium transition-colors">
@@ -651,7 +651,7 @@ export default function DashboardPage() {
             </div>
           </GlowCard>
 
-          <div className="p-4 rounded-xl bg-surface-card/30 border border-subtle">
+          <div className="p-4 rounded-xl bg-surface-card/40 border border-white/[.08]">
             <div className="flex justify-between items-center mb-2">
               <span className="text-xs text-content-tertiary">수식 렌더링 미리보기</span>
             </div>
@@ -707,7 +707,7 @@ export default function DashboardPage() {
             {classStatus.map((cls) => (
               <div
                 key={cls.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-surface-card/50 border border-subtle hover:border-white/10 transition-colors"
+                className="flex items-center justify-between p-3 rounded-lg bg-surface-card/40 border border-white/[.08] hover:border-white/10 transition-colors"
               >
                 <div>
                   <h4 className="text-sm font-medium text-content-primary mb-0.5">{cls.name}</h4>
@@ -718,7 +718,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <span
-                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  className={`px-2 py-1 rounded-lg text-xs font-medium ${
                     cls.status === 'active'
                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       : cls.status === 'scheduled'

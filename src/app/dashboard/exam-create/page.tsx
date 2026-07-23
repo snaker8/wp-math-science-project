@@ -633,7 +633,7 @@ export default function ExamCreatePage() {
               </p>
             </div>
           </div>
-          <div className="text-[11px] text-zinc-400">
+          <div className="text-xs text-zinc-400">
             선택한 문항 <span className="font-bold text-indigo-400">{pickedList.length}</span>개
           </div>
         </div>
@@ -661,7 +661,7 @@ export default function ExamCreatePage() {
                 <Icon size={15} className={isActive ? `text-${tab.color}-400` : ''} />
                 {tab.label}
                 {!tab.available && (
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500 font-normal">
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500 font-normal">
                     곧 출시
                   </span>
                 )}
@@ -712,15 +712,15 @@ export default function ExamCreatePage() {
                       >
                         <div className="flex items-center gap-2 mb-0.5">
                           {ex.diagnostic_category && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">
                               {ex.diagnostic_category}
                             </span>
                           )}
                           {ex.diagnostic_round != null && (
-                            <span className="text-[9px] text-zinc-500">R{ex.diagnostic_round}</span>
+                            <span className="text-[10px] text-zinc-500">R{ex.diagnostic_round}</span>
                           )}
                           {ex.grade && (
-                            <span className="text-[9px] text-zinc-500">· {ex.grade}</span>
+                            <span className="text-[10px] text-zinc-500">· {ex.grade}</span>
                           )}
                         </div>
                         <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
@@ -760,7 +760,7 @@ export default function ExamCreatePage() {
                     onClick={() => {
                       toggleAll(diagProblems);
                     }}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 underline"
                   >
                     전체 선택/해제
                   </button>
@@ -976,7 +976,7 @@ export default function ExamCreatePage() {
                     value={schoolQuery}
                     onChange={(e) => setSchoolQuery(e.target.value)}
                     placeholder="학교명·시험지 검색"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-[11px] text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
                 {schoolLoading ? (
@@ -1011,7 +1011,7 @@ export default function ExamCreatePage() {
                           >
                             <span className="flex items-center gap-1.5 truncate">
                               {level !== '미분류' && (
-                                <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 font-bold">
+                                <span className="text-[10px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 font-bold">
                                   {level}
                                 </span>
                               )}
@@ -1049,15 +1049,15 @@ export default function ExamCreatePage() {
                             >
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 {ex.grade && (
-                                  <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
                                     {ex.grade}
                                   </span>
                                 )}
                                 {ex.exam_type && (
-                                  <span className="text-[9px] text-zinc-500">{ex.exam_type}</span>
+                                  <span className="text-[10px] text-zinc-500">{ex.exam_type}</span>
                                 )}
                               </div>
-                              <div className="text-[11px] font-semibold text-white truncate">{ex.title}</div>
+                              <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
                             </button>
                           </li>
                         );
@@ -1099,7 +1099,7 @@ export default function ExamCreatePage() {
                         onClick={() => {
                           toggleAll(schoolProblems);
                         }}
-                        className="text-[11px] text-emerald-400 hover:text-emerald-300 underline"
+                        className="text-xs text-emerald-400 hover:text-emerald-300 underline"
                       >
                         전체 선택/해제
                       </button>
@@ -1186,7 +1186,7 @@ export default function ExamCreatePage() {
                     value={textbookQuery}
                     onChange={(e) => setTextbookQuery(e.target.value)}
                     placeholder="교재·출판사 검색"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-[11px] text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
                   />
                 </div>
                 {textbookLoading ? (
@@ -1228,7 +1228,7 @@ export default function ExamCreatePage() {
                             <span className="flex flex-col min-w-0">
                               <span className="truncate font-semibold">{bg.name}</span>
                               {bg.publisher && (
-                                <span className="text-[9px] text-zinc-500 truncate">{bg.publisher}</span>
+                                <span className="text-[10px] text-zinc-500 truncate">{bg.publisher}</span>
                               )}
                             </span>
                             <span className="text-[10px] text-zinc-500 flex-shrink-0">{count}</span>
@@ -1267,15 +1267,15 @@ export default function ExamCreatePage() {
                             >
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 {ex.grade && (
-                                  <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-300">
                                     {ex.grade}
                                   </span>
                                 )}
                                 {ex.subject && (
-                                  <span className="text-[9px] text-zinc-500">{ex.subject}</span>
+                                  <span className="text-[10px] text-zinc-500">{ex.subject}</span>
                                 )}
                               </div>
-                              <div className="text-[11px] font-semibold text-white truncate">{ex.title}</div>
+                              <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
                             </button>
                           </li>
                         );
@@ -1317,7 +1317,7 @@ export default function ExamCreatePage() {
                         onClick={() => {
                           toggleAll(textbookProblems);
                         }}
-                        className="text-[11px] text-amber-400 hover:text-amber-300 underline"
+                        className="text-xs text-amber-400 hover:text-amber-300 underline"
                       >
                         전체 선택/해제
                       </button>
@@ -1408,7 +1408,7 @@ export default function ExamCreatePage() {
                     value={mockQuery}
                     onChange={(e) => setMockQuery(e.target.value)}
                     placeholder="제목 검색"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-[11px] text-white placeholder-zinc-500 focus:border-rose-500 focus:outline-none"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-rose-500 focus:outline-none"
                   />
                 </div>
                 {mockLoading ? (
@@ -1482,15 +1482,15 @@ export default function ExamCreatePage() {
                             >
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 {ex.exam_type && (
-                                  <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/15 text-rose-300">
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-rose-500/15 text-rose-300">
                                     {ex.exam_type}
                                   </span>
                                 )}
                                 {ex.grade && (
-                                  <span className="text-[9px] text-zinc-500">{ex.grade}</span>
+                                  <span className="text-[10px] text-zinc-500">{ex.grade}</span>
                                 )}
                               </div>
-                              <div className="text-[11px] font-semibold text-white truncate">{ex.title}</div>
+                              <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
                             </button>
                           </li>
                         );
@@ -1532,7 +1532,7 @@ export default function ExamCreatePage() {
                         onClick={() => {
                           toggleAll(mockProblems);
                         }}
-                        className="text-[11px] text-rose-400 hover:text-rose-300 underline"
+                        className="text-xs text-rose-400 hover:text-rose-300 underline"
                       >
                         전체 선택/해제
                       </button>
@@ -1617,7 +1617,7 @@ export default function ExamCreatePage() {
         <aside className="w-[320px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-5 space-y-4">
           {/* 단원 picker */}
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-400">
               단원 / 유형
             </label>
             <button
@@ -1651,7 +1651,7 @@ export default function ExamCreatePage() {
 
           {/* 난이도 multi-select */}
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-400">
               난이도 (1~10, 다중 선택)
             </label>
             <div className="grid grid-cols-5 gap-1">
@@ -1681,7 +1681,7 @@ export default function ExamCreatePage() {
 
           {/* 키워드 */}
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-400">
               본문 키워드
             </label>
             <div className="relative">
@@ -1871,7 +1871,7 @@ export default function ExamCreatePage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-zinc-400">제목 *</label>
+                <label className="mb-1 block text-xs font-semibold text-zinc-400">제목 *</label>
                 <input
                   type="text"
                   value={examTitle}
@@ -1883,7 +1883,7 @@ export default function ExamCreatePage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-1 block text-[11px] font-semibold text-zinc-400">학년 (선택)</label>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-400">학년 (선택)</label>
                   <input
                     type="text"
                     value={examGrade}
@@ -1893,7 +1893,7 @@ export default function ExamCreatePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] font-semibold text-zinc-400">과목 (선택)</label>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-400">과목 (선택)</label>
                   <input
                     type="text"
                     value={examSubject}
@@ -2106,7 +2106,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
                 }`}
               >
                 {node.sigungu}
-                <span className="ml-1 text-[9px] text-zinc-500">({node.schools.length})</span>
+                <span className="ml-1 text-[10px] text-zinc-500">({node.schools.length})</span>
               </button>
             ))}
           </div>

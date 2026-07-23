@@ -2775,7 +2775,18 @@ export default function CloudPage() {
                                 previewText 가 없으면(구 데이터·조회 실패) 기존 모티브로 폴백. */}
                             <div className="relative m-2 mb-0 flex h-20 overflow-hidden rounded-lg border border-subtle bg-black/20">
                               {exam.previewText ? (
-                                <p className="w-full px-2.5 pb-2 pt-6 text-[9px] leading-[1.5] text-content-tertiary/90 line-clamp-4 break-words">
+                                // ★ 미리보기는 "읽는 글"이 아니라 "무늬"다 (2026-07-23 사용자 피드백).
+                                //   처음엔 본문색으로 그렸더니 아래 제목·학교와 시선을 다퉈
+                                //   정작 중요한 정보의 가독성이 떨어졌다. 대비를 낮추고 아래쪽을
+                                //   페이드시켜 종이가 이어지는 느낌으로 뒤에 물린다.
+                                <p
+                                  className="w-full px-2.5 pb-2 pt-6 text-[9px] leading-[1.5] text-content-muted/60 line-clamp-4 break-words select-none"
+                                  style={{
+                                    maskImage: 'linear-gradient(to bottom, #000 62%, transparent)',
+                                    WebkitMaskImage: 'linear-gradient(to bottom, #000 62%, transparent)',
+                                  }}
+                                  aria-hidden
+                                >
                                   {exam.previewText}
                                 </p>
                               ) : (
@@ -2813,9 +2824,11 @@ export default function CloudPage() {
                                   className="w-full rounded border border-indigo-500/50 bg-surface-raised px-2 py-1 text-sm text-content-primary outline-none"
                                 />
                               ) : (
-                                <span className="truncate text-sm font-medium text-content-primary">{exam.fileName}</span>
+                                // ★ 카드에서 가장 중요한 정보 = "어느 시험지인가". 미리보기를 뒤로
+                                //   물린 만큼 제목·학교는 앞으로 끌어올린다(semibold + 넉넉한 줄간격).
+                                <span className="truncate text-sm font-semibold leading-snug text-content-primary">{exam.fileName}</span>
                               )}
-                              <span className="truncate text-xs text-content-tertiary">
+                              <span className="truncate text-xs font-medium text-content-secondary">
                                 {[exam.grade, exam.subject, exam.year].filter(Boolean).join(' · ') || '—'}
                               </span>
                               {showFolderBadge && (() => {
