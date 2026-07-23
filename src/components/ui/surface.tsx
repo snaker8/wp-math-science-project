@@ -101,7 +101,11 @@ export function StatTile({
 
   return (
     <div className={`${RADIUS.panel} ${PANEL_SURFACE} p-4 ${className}`}>
-      <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[.11em] text-content-muted">
+      {/* ★ 라벨은 한글 기준으로 (2026-07-23 사용자 피드백 "가독성").
+          영문 라벨 관용구(10px + uppercase + 넓은 자간 + 등폭)를 한글에 쓰면 안 된다:
+          uppercase 는 한글에 무의미하고, 자간 확대는 영문과 반대로 가독성을 떨어뜨리며,
+          등폭 한글은 자형이 뭉개진다. 등폭은 숫자에만. */}
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-content-tertiary">
         {icon}
         <span className="truncate">{label}</span>
       </div>
