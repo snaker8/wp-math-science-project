@@ -10,6 +10,25 @@
 export const MIDDLE_SCHOOL_PATTERN = /[가-힣]{1,6}중(?:학교)?(?!\d)(?!간|심|요)/;
 
 /**
+ * 중학교 "신호" — 학교명이 아닌 곳에서 중등 여부를 판단할 때 쓴다.
+ *
+ * ★ 맨 '중' 한 글자로 판단하면 안 된다 (2026-07-23 사고).
+ *   `[23년][1-1][중간][해운대고][수학상]` 은 해운대고 수학(상), 즉 고1 시험지인데
+ *   **"중간"(중간고사)의 '중'** 이 중학교 신호로 잡혀 `[1-1]` 을 중1-1 로 해석 →
+ *   subject='중1-1 수학', grade='중1' 로 박히고, 그 값이 분류 프롬프트로 흘러
+ *   집합·역함수·합성함수 문제가 전부 중1-1 유형으로 분류됐다.
+ *   같은 학교 `[기말]` 시험지는 '중' 이 없어 정상이었던 것이 결정적 단서.
+ */
+const MIDDLE_MARKER = /중\s*[1-3]|중등|중학|중\]/;
+
+/**
+ * 고등학교 이름 패턴 — "해운대고", "부산고", "OO고등학교".
+ * ★ "중간고사" 의 '고' 를 학교로 오인하지 않도록 뒤가 한글이면 제외한다.
+ *   (학교명은 보통 대괄호·공백·문자열 끝이 뒤따른다)
+ */
+export const HIGH_SCHOOL_PATTERN = /[가-힣]{2,6}고(?:등학교)?(?=[\]\[\s)(·,]|$)/;
+
+/**
  * 제목에서 수학 과목 감지
  * 반환값 예: '공통수학1', '수학II', '중3-1 수학', '중등 수학', ''
  */
@@ -20,8 +39,8 @@ export function detectSubjectFromTitle(title: string): string {
   title = title.normalize('NFC');
 
   // ★ 중학교 이름 감지: "사직중", "여명중", "OO중학교" 등
-  // "고등학교"가 명시되어 있으면 중학교 아님
-  const hasHighSchool = /고등학교|고등/.test(title);
+  // "고등학교"·고교명("해운대고")이 있으면 중학교 아님
+  const hasHighSchool = /고등학교|고등/.test(title) || HIGH_SCHOOL_PATTERN.test(title);
   const isMiddleSchool = !hasHighSchool && MIDDLE_SCHOOL_PATTERN.test(title);
 
   // ★ 중등 — [2026][2-1-M] 패턴 (각각 별개 괄호)
@@ -37,14 +56,15 @@ export function detectSubjectFromTitle(title: string): string {
   //   기존 (\d)-(\d) 는 "26-3-1" 같은 문자열에서 "6-3" 을 먼저 잡는 버그
   //   → 학년은 [1-3], 학기는 [12] 로 제한 + 좌우 비-숫자 경계로 격리
   const midMatch = title.match(/(?<!\d)([1-3])-([12])(?:-?[ME])?(?!\d)/);
-  if (midMatch && (isMiddleSchool || /중/.test(title))) {
+  // ★ 맨 '중' 이 아니라 MIDDLE_MARKER — "중간"(중간고사)을 중학교로 읽던 사고 차단
+  if (midMatch && !hasHighSchool && (isMiddleSchool || MIDDLE_MARKER.test(title))) {
     const grade = midMatch[1];
     const semester = midMatch[2];
     return `중${grade}-${semester} 수학`;
   }
 
-  // 중등 — "중2-1", "중3", "중학" 등 직접 패턴
-  if (/중[23]?-?[12]/.test(title) || /중학/.test(title) || /중\]/.test(title)) {
+  // 중등 — "중2-1", "중3", "중학" 등 직접 패턴 (고교명이 있으면 건너뜀)
+  if (!hasHighSchool && (/중[23]?-?[12]/.test(title) || /중학/.test(title) || /중\]/.test(title))) {
     const match = title.match(/(?<!\d)([1-3])-([12])(?!\d)/);
     if (match) return `중${match[1]}-${match[2]} 수학`;
     return '중등 수학';
@@ -61,8 +81,10 @@ export function detectSubjectFromTitle(title: string): string {
   }
 
   // 고등 — 수학(상/하) 먼저 체크 (2015 교육과정)
-  if (/수학\s*\(상\)/.test(title)) return '공통수학1'; // 수학(상) = 공통수학1+2 범위 → 07로 매핑, 08도 COMBINED로 포함
-  if (/수학\s*\(하\)/.test(title)) return '공통수학2'; // 수학(하) = 공통수학2 범위 → 08로 매핑
+  // ★ 괄호 없는 "수학상"·"수학 상" 도 인정 — 운영 제목 `[수학상]` 이 괄호 없이 쓰인다.
+  //   뒤에 한글이 오면 제외("수학상수" 같은 단어 오인 방지).
+  if (/수학\s*\(\s*상\s*\)|수학\s*상(?![가-힣])/.test(title)) return '공통수학1'; // 수학(상) = 공통수학1+2 범위 → 07로 매핑, 08도 COMBINED로 포함
+  if (/수학\s*\(\s*하\s*\)|수학\s*하(?![가-힣])/.test(title)) return '공통수학2'; // 수학(하) = 공통수학2 범위 → 08로 매핑
   if (/공통수학[12]/.test(title)) return title.match(/공통수학[12]/)?.[0] || '공통수학1';
   if (/공통수학/.test(title)) return '공통수학1';
   if (/대수/.test(title)) return '대수';
@@ -96,8 +118,8 @@ export function detectGradeFromTitle(title: string): string {
   if (!title) return '';
   title = title.normalize('NFC'); // ★ Mac(NFD) 정규화 — 윈도우(NFC)는 무변화(멱등)
 
-  // ★ 중학교 이름 감지 ("고등학교" 있으면 제외)
-  const hasHighSchool = /고등학교|고등/.test(title);
+  // ★ 중학교 이름 감지 ("고등학교"·고교명 있으면 제외)
+  const hasHighSchool = /고등학교|고등/.test(title) || HIGH_SCHOOL_PATTERN.test(title);
   const isMiddleSchool = !hasHighSchool && MIDDLE_SCHOOL_PATTERN.test(title);
 
   // ★ [2026][2-1-M] 패턴 (학년 1~3, 학기 1~2 제한)
@@ -109,13 +131,16 @@ export function detectGradeFromTitle(title: string): string {
   // ★ [2-1-M], "26-3-1-M" 등 — "26"의 6-3 매치 버그 차단
   //   학년 [1-3] · 학기 [12] · 좌우 비-숫자 경계
   const midMatch = title.match(/(?<!\d)([1-3])-([12])(?:-?[ME])?(?!\d)/);
-  if (midMatch && (isMiddleSchool || /중/.test(title))) {
+  // ★ 맨 '중' 이 아니라 MIDDLE_MARKER — "중간"(중간고사) 오인 차단 (detectSubjectFromTitle 과 동일)
+  if (midMatch && !hasHighSchool && (isMiddleSchool || MIDDLE_MARKER.test(title))) {
     return `중${midMatch[1]}`;
   }
 
-  if (/중1/.test(title)) return '중1';
-  if (/중2/.test(title)) return '중2';
-  if (/중3/.test(title)) return '중3';
+  if (!hasHighSchool) {
+    if (/중1/.test(title)) return '중1';
+    if (/중2/.test(title)) return '중2';
+    if (/중3/.test(title)) return '중3';
+  }
 
   // ★ 학교명에 "중"이 있으면 중학교 → 학년 추출 시도
   if (isMiddleSchool) {
@@ -129,14 +154,17 @@ export function detectGradeFromTitle(title: string): string {
   if (/고2(?:\s|$|학년)/.test(title)) return '고2';
   if (/고3(?:\s|$|학년)/.test(title)) return '고3';
 
-  // "고등학교"가 제목에 있으면 학년 추출
-  if (/고등학교|고등/.test(title)) {
+  // 고교명·"고등학교"가 제목에 있으면 학년 추출
+  if (hasHighSchool) {
     const gradeMatch = title.match(/(\d)\s*학년/);
     if (gradeMatch) return `고${gradeMatch[1]}`;
+    // ★ `[23년][1-1][중간][해운대고]` 처럼 고교명 + 학년-학기 표기 → 고1
+    const gs = title.match(/(?<!\d)([1-3])-([12])(?:-?[ME])?(?!\d)/);
+    if (gs) return `고${gs[1]}`;
   }
 
-  // 과목명으로 학년 추론 (명시적 학년 없을 때)
-  if (/공통수학|수학\s*\(상\)|수학\s*\(하\)/.test(title)) return '고1';
+  // 과목명으로 학년 추론 (명시적 학년 없을 때) — 괄호 없는 "수학상" 포함
+  if (/공통수학|수학\s*\(?\s*[상하]\s*\)?(?![가-힣])/.test(title)) return '고1';
 
   // ★ 고2: 수학I, 수학II, 대수, 확률과통계 — 모두 고2 소속 (축약형 "수1"/"수2" 포함)
   //   "수2" 단독 표기가 "수학[2IⅡ]" 정규식에 안 잡혀 exam.grade 기본값이 쓰이던 버그 수정.
