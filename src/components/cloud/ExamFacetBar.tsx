@@ -62,7 +62,7 @@ function Chip({
     >
       {option.label}
       <span
-        className={`font-mono text-[10px] tabular-nums ${active ? 'text-indigo-300/80' : 'text-content-muted'}`}
+        className={`font-mono text-[10px] tabular-nums ${active ? 'text-indigo-200' : 'text-content-tertiary'}`}
       >
         {option.count}
       </span>
@@ -88,7 +88,7 @@ export function ExamFacetBar({
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         {visibleAxes.map(({ key, label }) => (
           <div key={key} className="flex items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-[.11em] text-content-muted">
+            <span className="shrink-0 text-xs font-semibold text-content-tertiary">
               {label}
             </span>
             <div className="flex flex-wrap gap-1.5">
@@ -106,7 +106,7 @@ export function ExamFacetBar({
 
         <div className="ml-auto flex items-center gap-2.5">
           {active && (
-            <span className="font-mono text-[11px] tabular-nums text-content-tertiary">
+            <span className="font-mono text-xs tabular-nums text-content-secondary">
               <span className="font-bold text-indigo-300">{resultCount}</span>건
             </span>
           )}
@@ -116,7 +116,7 @@ export function ExamFacetBar({
             <button
               type="button"
               onClick={onExpandScope}
-              className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium
+              className="rounded-full border border-white/10 px-2.5 py-1 text-xs font-medium
                 text-content-tertiary transition-colors hover:border-indigo-500/40 hover:text-indigo-200
                 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
@@ -127,8 +127,8 @@ export function ExamFacetBar({
             <button
               type="button"
               onClick={() => onChange({ year: [], grade: [], term: [], kind: [], level: [] })}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]
-                text-content-muted transition-colors hover:bg-white/[.06] hover:text-content-secondary
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs
+                text-content-tertiary transition-colors hover:bg-white/[.06] hover:text-content-secondary
                 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <X className="h-3 w-3" /> 초기화
@@ -140,7 +140,7 @@ export function ExamFacetBar({
       {active && options.unparsed > 0 && (
         // 조건을 켜면 제목 형식이 아닌 자료(교재류)는 빠지므로, 조용히 사라진 게
         // 아니라는 것을 알린다.
-        <p className="mt-2 border-t border-white/[.05] pt-2 font-mono text-[10.5px] text-content-muted">
+        <p className="mt-2 border-t border-white/[.05] pt-2 text-xs text-content-tertiary">
           제목에 학년·학기 표기가 없는 {options.unparsed}건은 조건 적용 시 제외됩니다
         </p>
       )}

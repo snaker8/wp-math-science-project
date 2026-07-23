@@ -2618,7 +2618,7 @@ export default function CloudPage() {
                     ) : viewMode === 'list' ? (
                     <>
                     {/* Table Header */}
-                    <div className="sticky top-0 z-10 flex items-center border-b border-subtle bg-surface-raised/60 backdrop-blur px-5 py-2 text-xs font-medium uppercase tracking-wide text-content-tertiary">
+                    <div className="sticky top-0 z-10 flex items-center border-b border-subtle bg-surface-raised/60 backdrop-blur px-5 py-2 text-xs font-semibold text-content-secondary">
                       <span
                         className="w-14 text-center cursor-pointer hover:text-content-primary"
                         onClick={() => toggleSort('order')}
