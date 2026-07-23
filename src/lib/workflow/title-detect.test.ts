@@ -11,19 +11,20 @@ describe('중간고사의 "중" 을 중학교로 오인하지 않는다 (실사�
   const 사고제목 = '[23년][1-1][중간][해운대고][수학상]';
   const 정상제목 = '[22년][1-1][기말][해운대고][수학상]';
 
-  it('★ 고교 중간고사 — 중1-1 이 아니라 공통수학1/고1', () => {
-    expect(detectSubjectFromTitle(사고제목)).toBe('공통수학1');
+  it('★ 고교 중간고사 — 중1-1 이 아니라 고1 수학(상)', () => {
+    expect(detectSubjectFromTitle(사고제목)).toBe('수학(상)');
+    expect(detectSubjectFromTitle(사고제목)).not.toMatch(/^중/);
     expect(detectGradeFromTitle(사고제목)).toBe('고1');
   });
 
   it('같은 학교 기말도 동일하게 (중간/기말이 결과를 바꾸면 안 된다)', () => {
-    expect(detectSubjectFromTitle(정상제목)).toBe('공통수학1');
+    expect(detectSubjectFromTitle(정상제목)).toBe(detectSubjectFromTitle(사고제목));
     expect(detectGradeFromTitle(정상제목)).toBe('고1');
   });
 
   it('괄호 없는 "수학상"·"수학하" 도 인정 (운영 제목이 괄호를 안 쓴다)', () => {
-    expect(detectSubjectFromTitle('[24년][1-1][중간][부산고][수학하]')).toBe('공통수학2');
-    expect(detectSubjectFromTitle('[24년][1-1][기말][부산고][수학(상)]')).toBe('공통수학1');
+    expect(detectSubjectFromTitle('[24년][1-1][중간][부산고][수학하]')).toBe('수학(하)');
+    expect(detectSubjectFromTitle('[24년][1-1][기말][부산고][수학(상)]')).toBe('수학(상)');
   });
 
   it('"수학상수" 같은 단어는 과목으로 오인하지 않는다', () => {
@@ -64,5 +65,20 @@ describe('고등 과목 감지 (회귀 방지)', () => {
   ])('%s → %s / %s', (title, subject, grade) => {
     expect(detectSubjectFromTitle(title)).toBe(subject);
     expect(detectGradeFromTitle(title)).toBe(grade);
+  });
+});
+
+describe('2015 수학(상)/(하) — 단일 과목으로 접지 않는다', () => {
+  it('수학(상)/수학상 → 라벨 보존 (공통수학1 로 접으면 도형의방정식·집합 유형표를 못 본다)', () => {
+    expect(detectSubjectFromTitle('[23년][1-1][중간][해운대고][수학상]')).toBe('수학(상)');
+    expect(detectSubjectFromTitle('[24년][1-1][기말][부산고][수학(상)]')).toBe('수학(상)');
+  });
+
+  it('수학(하)/수학하 → 라벨 보존', () => {
+    expect(detectSubjectFromTitle('[24년][1-2][중간][경남고][수학하]')).toBe('수학(하)');
+  });
+
+  it('학년은 여전히 고1', () => {
+    expect(detectGradeFromTitle('[23년][1-1][중간][해운대고][수학상]')).toBe('고1');
   });
 });

@@ -116,3 +116,26 @@ describe('curriculumCodesToLabel', () => {
     expect(curriculumCodesToLabel(null)).toBe('');
   });
 });
+
+describe('2015 수학(상)/(하) → 공통수학1·2 두 과목 표 제공', () => {
+  it('★ 어느 쪽도 단일 과목에 안 들어간다 — 수학(상)은 도형의방정식(공수2), 수학(하)는 경우의수(공수1) 포함', () => {
+    expect(resolveSubjectCode(undefined, '수학(상)')).toEqual(['07', '08']);
+    expect(resolveSubjectCode(undefined, '수학(하)')).toEqual(['07', '08']);
+  });
+
+  it('괄호 없는 표기도 동일', () => {
+    expect(resolveSubjectCode(undefined, '수학상')).toEqual(['07', '08']);
+    expect(resolveSubjectCode(undefined, '수학하')).toEqual(['07', '08']);
+  });
+
+  it('2022 개정 공통수학1/2 는 단일 코드 유지 (회귀 방지)', () => {
+    expect(resolveSubjectCode(undefined, '공통수학1')).toBe('07');
+    expect(resolveSubjectCode(undefined, '공통수학2')).toBe('08');
+  });
+
+  it('두 과목 표가 실제로 합쳐져 나온다', () => {
+    const table = buildTypeTable(['07', '08']);
+    expect(table).toContain('MS07-');
+    expect(table).toContain('MS08-');
+  });
+});
