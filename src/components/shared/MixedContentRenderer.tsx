@@ -3,7 +3,7 @@
 import React, { memo, useMemo } from 'react';
 import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
-import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock } from './box-conversion';
+import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel } from './box-conversion';
 
 // ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
 //   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
@@ -407,6 +407,18 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
               ))}
             </tbody>
           </table>
+        </span>
+      );
+    }
+    // ★ \boxed{ ㉠ } 빈칸 라벨 박스 — KaTeX 폭 문제로 HTML 박스로 렌더 (위 matchBoxedLabel 주석)
+    const boxed = el.type === 'inline-math' ? matchBoxedLabel(el.value) : null;
+    if (boxed) {
+      return (
+        <span
+          key={i}
+          className="inline-flex items-center justify-center align-middle mx-0.5 px-1.5 py-0.5 min-w-[1.5em] min-h-[1.4em] rounded-[3px] border border-current leading-none"
+        >
+          {boxed.label}
         </span>
       );
     }
