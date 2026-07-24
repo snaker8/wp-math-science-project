@@ -255,7 +255,9 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // 수식 클릭 가능 스타일
   const mathClickStyle = onMathClick ? 'cursor-pointer hover:bg-blue-100/20 rounded px-0.5 transition-colors' : '';
 
-  const renderElement = (el: ContentElement, i: number) => {
+  // compactInlineMath: 조건/보기 박스 안에서 인라인 cases 등을 textstyle 로(=\displaystyle 생략)
+  //   렌더해 항목 세로 간격을 좁힌다. 박스 밖(본문)은 false → 기존 동작 유지.
+  const renderElement = (el: ContentElement, i: number, compactInlineMath = false) => {
     if (el.type === 'text') {
       return <TextSegment key={i} text={el.value} />;
     }
@@ -431,7 +433,13 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
         onClick={onMathClick ? (e) => { e.stopPropagation(); onMathClick(el.value, false); } : undefined}
         title={onMathClick ? '클릭하여 수식 편집' : undefined}
       >
-        <MathRenderer content={el.value} className="mx-0.5" />
+        <MathRenderer
+          content={el.value}
+          className="mx-0.5"
+          // ★ 박스 안이라도 compact 는 cases(중괄호 연립)에만 — 분수 등 다른 인라인 수식은
+          //   기존대로 \displaystyle 유지(축소되면 안 됨). 사용자가 지목한 "중괄호 연립" 한정.
+          compact={compactInlineMath && /\\begin\{cases\}/.test(el.value)}
+        />
       </span>
     );
   };
@@ -478,14 +486,25 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
             const headerLabel = conditionHeaderLabels[boxIdx];
             if (boxContent) {
               return (
-                <div key={`cbox-${boxIdx}`} className="my-3 px-4 py-3 rounded-md border border-gray-500 leading-relaxed max-w-full">
+                // ★ cases(연립방정식)가 여러 개 든 보기 박스만 줄간격을 좁힌다(leading-snug).
+                //   텍스트 조건 박스((가)(나) 문장)는 relaxed 그대로 — 가독성 보존.
+                (() => {
+                  const hasCases = /\\begin\{cases\}/.test(boxContent);
+                  return (
+                <div key={`cbox-${boxIdx}`} className={`my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full ${hasCases ? 'leading-snug' : 'leading-relaxed'}`}>
                   {headerLabel && (
                     <div className="text-xs font-bold text-gray-700 mb-1.5 -mt-0.5">&lt;{headerLabel}&gt;</div>
                   )}
                   <FitToWidth>
-                    {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei))}
+                    {/* ★ compact=true — 박스 안 인라인 cases(연립방정식)를 textstyle 로 렌더해
+                        항목(ㄱ~ㅁ) 세로 간격을 원본처럼 좁힌다. cases 아닌 인라인 수식(분수 등)은
+                        위 renderElement 에서 compact 제외. 본문 흐름의 단독 cases 는 $$ 로
+                        디스플레이 승격되는 별도 경로라 무영향(여명중 23년 보기 박스). */}
+                    {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei, true))}
                   </FitToWidth>
                 </div>
+                  );
+                })()
               );
             }
           }
