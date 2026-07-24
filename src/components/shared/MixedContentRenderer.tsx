@@ -262,6 +262,23 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
       return <TextSegment key={i} text={el.value} />;
     }
     if (el.type === 'display-math') {
+      // ★ 조건/보기 박스 안 연립방정식(cases) — 디스플레이 블록(가운데 정렬 + my-2 + 자기 줄)이라
+      //   ㄱ~ㅁ 항목 사이가 과하게 벌어진다(여명중 23년). 박스(compactInlineMath) 안 cases 는
+      //   라벨(ㄱ.) 옆에 붙는 compact 인라인으로 렌더 → 원본처럼 촘촘·좌측정렬. 박스 밖 본문의
+      //   단독 cases 는 compactInlineMath=false 라 기존 디스플레이 블록 그대로(무영향).
+      if (compactInlineMath && /\\begin\{cases\}/.test(el.value)) {
+        return (
+          <span
+            key={i}
+            className={`inline ${mathClickStyle}`}
+            data-math-click="true"
+            onClick={onMathClick ? (e) => { e.stopPropagation(); onMathClick(el.value, false); } : undefined}
+            title={onMathClick ? '클릭하여 수식 편집' : undefined}
+          >
+            <MathRenderer content={el.value} className="mx-0.5" compact />
+          </span>
+        );
+      }
       return (
         <span
           key={i}
