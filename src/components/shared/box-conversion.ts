@@ -1,6 +1,24 @@
 // 테두리/조건 박스(isChoiceTabular)를 각 조건 줄로 변환하는 순수 함수.
 // MixedContentRenderer(.tsx)에서 분리 — vitest 가 직접 import 해 실제 코드를 테스트(복제 drift 방지).
 
+// ★ \boxed{ ㉠ } 처럼 "원문자(㉠㉡)·원숫자(①②)·한글"만 든 빈칸 라벨 박스는 KaTeX 로 그리면
+//   안 된다 (2026-07-23 사고). KaTeX 에 이 글자들의 폭 정보(character metrics)가 없어
+//   박스가 0폭으로 계산돼 라벨을 감싸지 못한다("박스가 동그라미 기호를 안 감쌈"). 실측 확인.
+//   → 이런 경우만 렌더러가 HTML 테두리 박스로 그린다. 진짜 수식 박스(\boxed{x+1})는 KaTeX 유지.
+const BOXED_LABEL_RE = /^\\(?:boxed|fbox)\s*\{\s*([\s\S]*?)\s*\}$/;
+// KaTeX metrics 없는 글자군: 원문자 한글(㉠~), 괄호한글(㈀~), 원숫자(①~), 괄호숫자(⑴~),
+//   원영문(ⓐ~/Ⓐ~), 자모(ㄱ~ㅎ), 한글 음절(가~힣), 공백.
+const NO_METRICS_LABEL_RE = /^[\s㉠-㉿㈀-㈜①-⑳⑴-⒇ⓐ-ⓩⒶ-Ⓩㄱ-ㅎ가-힣]*$/;
+
+/** 전체가 \boxed{빈칸 라벨} 이면 라벨 반환, 아니면 null(→ KaTeX 로 렌더). */
+export function matchBoxedLabel(mathValue: string): { label: string } | null {
+  const m = mathValue.trim().match(BOXED_LABEL_RE);
+  if (!m) return null;
+  const inner = m[1].trim();
+  if (inner === '' || NO_METRICS_LABEL_RE.test(inner)) return { label: inner };
+  return null;
+}
+
 // ★ 테두리/조건 박스(isChoiceTabular) → 각 조건 줄로 변환. 실제 렌더 경로 = 이 함수(테스트도 이걸 직접 호출).
 //   중첩 행렬/cases 는 MTX 마커로 보호 후 복원(동인고 #16). 복원 정규식은 [0-9]+ — '\\d' 이스케이프 함정 회피.
 export function convertChoiceTabularBox(m: string): string {
