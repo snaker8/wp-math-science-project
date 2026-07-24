@@ -3,7 +3,7 @@
 import React, { memo, useMemo } from 'react';
 import katex from 'katex';
 import { MathRenderer } from './MathRenderer';
-import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel } from './box-conversion';
+import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
 
 // ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
 //   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
@@ -507,18 +507,33 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                 //   텍스트 조건 박스((가)(나) 문장)는 relaxed 그대로 — 가독성 보존.
                 (() => {
                   const hasCases = /\\begin\{cases\}/.test(boxContent);
+                  // ★ cases 여러 개 든 보기 박스 → 라벨(ㄱ~ㅁ) 단위로 쪼개 가로 2열 그리드로 배치
+                  //   (2026-07-24 사용자 요청: "너무 붙어 있으니 가로 2개 정도로 자연스럽게").
+                  //   원본 시험지처럼 촘촘하면서도 세로로 안 길어진다. cases 박스에만 적용 —
+                  //   텍스트 조건 박스((가)(나) 문장)는 gridItems=null 로 폴백(회귀 0).
+                  const gridItems = hasCases ? splitLabeledBoxItems(boxContent) : null;
+                  const base = 1000 + boxIdx * 100;
                   return (
                 <div key={`cbox-${boxIdx}`} className={`my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full ${hasCases ? 'leading-snug' : 'leading-relaxed'}`}>
                   {headerLabel && (
                     <div className="text-xs font-bold text-gray-700 mb-1.5 -mt-0.5">&lt;{headerLabel}&gt;</div>
                   )}
+                  {gridItems ? (
+                    // 가로 2열 — 좁은 화면(모바일 카드)에선 1열로 접힘. 각 셀 = 라벨 + compact 인라인 cases.
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
+                      {gridItems.map((item, k) => (
+                        <div key={k} className="min-w-0">
+                          {parseMixedContent(item).map((bel, bei) => renderElement(bel, base + k * 20 + bei, true))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <FitToWidth>
-                    {/* ★ compact=true — 박스 안 인라인 cases(연립방정식)를 textstyle 로 렌더해
-                        항목(ㄱ~ㅁ) 세로 간격을 원본처럼 좁힌다. cases 아닌 인라인 수식(분수 등)은
-                        위 renderElement 에서 compact 제외. 본문 흐름의 단독 cases 는 $$ 로
-                        디스플레이 승격되는 별도 경로라 무영향(여명중 23년 보기 박스). */}
-                    {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, 1000 + boxIdx * 100 + bei, true))}
+                    {/* ★ compact=true — 박스 안 인라인/디스플레이 cases 를 라벨 옆 compact 인라인으로.
+                        cases 아닌 수식(분수 등)은 renderElement 에서 compact 제외. 본문 단독 cases 무영향. */}
+                    {parseMixedContent(boxContent).map((bel, bei) => renderElement(bel, base + bei, true))}
                   </FitToWidth>
+                  )}
                 </div>
                   );
                 })()

@@ -19,6 +19,28 @@ export function matchBoxedLabel(mathValue: string): { label: string } | null {
   return null;
 }
 
+// ★ 보기 박스 라벨 항목 분리 (2026-07-24) — "ㄱ. …", "①. …", "(가) …" 처럼 라벨로 시작하는
+//   항목들을 각각 떼어낸다. cases(연립방정식) 여러 개가 세로로 촘촘히 쌓이면 답답해서
+//   원본 시험지처럼 가로 2열 그리드로 배치하기 위함(사용자 요청). 라벨 없는 줄은 직전 항목에 이어붙임.
+//   라벨: 자모(ㄱ-ㅎ) / 원숫자(①-⑳) / 원문자한글(㉠-㉿) / (가)~(하). 뒤에 . 또는 ) .
+//   원숫자(①)·원문자한글(㉠)·(가)는 그 자체가 라벨(뒤 구두점 불필요), 자모(ㄱ)는 뒤에 .·) 필요.
+const ITEM_LABEL_RE = /^(?:[①-⑳]|[㉠-㉿]|\([가-힣]\)|[ㄱ-ㅎ]\s*[.)])/;
+
+/**
+ * 라벨로 시작하는 항목 리스트면 항목별 문자열 배열 반환, 아니면 null.
+ * null 이면 호출측은 기존(세로 흐름) 렌더로 폴백 — 회귀 0.
+ */
+export function splitLabeledBoxItems(content: string): string[] | null {
+  const lines = content.split('\n').map((l) => l.trim()).filter(Boolean);
+  const items: string[] = [];
+  for (const line of lines) {
+    if (ITEM_LABEL_RE.test(line)) items.push(line);
+    else if (items.length) items[items.length - 1] += '\n' + line; // 이어지는 줄
+    else return null; // 첫 줄부터 라벨이 아님 → 라벨 리스트 아님(텍스트 조건 박스 등)
+  }
+  return items.length >= 2 ? items : null;
+}
+
 // ★ 테두리/조건 박스(isChoiceTabular) → 각 조건 줄로 변환. 실제 렌더 경로 = 이 함수(테스트도 이걸 직접 호출).
 //   중첩 행렬/cases 는 MTX 마커로 보호 후 복원(동인고 #16). 복원 정규식은 [0-9]+ — '\\d' 이스케이프 함정 회피.
 export function convertChoiceTabularBox(m: string): string {
