@@ -13,6 +13,13 @@ interface MathRendererProps {
     content: string;
     block?: boolean;
     className?: string;
+    /**
+     * ★ compact (2026-07-23) — 인라인 수식에 붙이는 \displaystyle 을 생략(textstyle 로 렌더).
+     *   기본 false(=기존 동작 유지). 조건/보기 박스처럼 인라인 cases 가 여러 개 세로로 쌓이는
+     *   곳에서만 true — \displaystyle cases 가 키가 커 항목 사이 간격이 과하게 벌어지던 문제
+     *   (여명중 23년 보기 박스). 선형식뿐이라 크기만 줄고 모양은 동일. block 렌더엔 무영향.
+     */
+    compact?: boolean;
 }
 
 // ★ cases/array 안 행에서 분수·거듭제곱근 등 키 큰 수식 감지용 (모듈 스코프)
@@ -52,7 +59,7 @@ function balanceBraces(s: string): string {
   return out + '}'.repeat(Math.max(0, depth));
 }
 
-export function MathRenderer({ content, block = false, className }: MathRendererProps) {
+export function MathRenderer({ content, block = false, className, compact = false }: MathRendererProps) {
     const html = useMemo(() => {
         try {
             // 인라인 수식에서 분수(\frac), 합(\sum) 등이 축소되지 않도록
@@ -77,7 +84,8 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
             // ★ 중괄호 균형 복구 — KaTeX 는 throwOnError:false 라 짝 안 맞는 } 를 빨간 raw 로 렌더(폴백 안 탐).
             //   메인에서 미리 균형(정상 콘텐츠엔 no-op) → 원본 오타(해운대고 #9 z_{1}}) 도 렌더됨.
             const widened = dfracInCases(stretchArrays(balanceBraces(stripped)));
-            const processedContent = block ? widened : `\\displaystyle ${widened}`;
+            // compact: 인라인이라도 \displaystyle 생략 (박스 안 cases 세로 간격 축소용)
+            const processedContent = (block || compact) ? widened : `\\displaystyle ${widened}`;
 
             return katex.renderToString(processedContent, {
                 throwOnError: false,
@@ -110,7 +118,7 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                 // ★ fallback 도 동일 — stretchArrays no-op (행 spacing 자동 추가 X, 2026-05-26)
                 //   #23: cases 안 \frac→\dfrac (행 겹침 해결) — 메인 경로와 동일. 행렬 불변.
                 const fallbackWidened = dfracInCases(fallback);
-                const fallbackContent = block ? fallbackWidened : `\\displaystyle ${fallbackWidened}`;
+                const fallbackContent = (block || compact) ? fallbackWidened : `\\displaystyle ${fallbackWidened}`;
                 return katex.renderToString(fallbackContent, {
                     throwOnError: false,
                     displayMode: block,
@@ -131,7 +139,7 @@ export function MathRenderer({ content, block = false, className }: MathRenderer
                 return content;
             }
         }
-    }, [content, block]);
+    }, [content, block, compact]);
 
     return (
         <span
