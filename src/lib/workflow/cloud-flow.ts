@@ -18,6 +18,7 @@ import {
   processHWPWithPython,
   type HWPParseResult,
 } from './hwp-processor';
+import { detectTabularChoices } from '@/lib/workflow/tabular-choices';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { parseQuestions, getQuestionParser } from '@/lib/ocr/question-parser';
 import type { MathpixResponse, ParsedQuestion, MathpixLine, MathpixPageLines } from '@/types/ocr';
@@ -449,51 +450,8 @@ export async function runOcrBboxDetection(
 /**
  * 문제 그룹에서 bbox와 콘텐츠 생성
  */
-/**
- * OCR 표 객관식 자동 감지 — content 안의 \begin{tabular}/\begin{array} 블록이
- *   "헤더행 + (1)~(5)/①~⑤ 라벨 행" 인 보기 표면 choiceHeaders + choices 로 변환.
- *   (예: 화명중 #5 — `& A사탕 & B사탕 \\ $(1)$ & 5.5g & 5g \\ …`)
- *   ★ 라벨이 보기마커((1)~(5)/①~⑤)인 행이 3~5개일 때만 발동 → 데이터 표(#1, x/y 행)는 미발동(오탐 0).
- *   ★ 헤더 셀 수 == 보기 셀 수일 때만(보수적). 반환: {content(표 제거), choices(① a | b), choiceHeaders} | null.
- */
-function detectTabularChoices(content: string):
-  { content: string; choices: string[]; choiceHeaders: string[] } | null {
-  const MARKS = ['①', '②', '③', '④', '⑤'];
-  const blockRe = /\\begin\{(?:tabular|array)\}(?:\s*\{[^}]*\})?([\s\S]*?)\\end\{(?:tabular|array)\}/;
-  const m = content.match(blockRe);
-  if (!m || m.index == null) return null;
-  const rawRows = m[1].split(/\\\\|\n/).map((r) => r.replace(/\\hline/g, '').trim()).filter(Boolean);
-  if (rawRows.length < 4) return null; // 헤더 + 최소 3보기
-  const rows = rawRows.map((r) => r.split('&').map((c) => c.trim()));
-  const labelRe = /^\$?\s*[(（]?\s*([1-5])\s*[)）]?\s*\$?$/;
-  const circRe = /^\$?\s*([①②③④⑤])\s*\$?$/;
-
-  const labeled: { idx: number; cells: string[] }[] = [];
-  let header: string[] | null = null;
-  for (const cells of rows) {
-    const first = cells[0] || '';
-    const lm = first.match(labelRe);
-    const cm = first.match(circRe);
-    if (lm) labeled.push({ idx: parseInt(lm[1], 10), cells: cells.slice(1) });
-    else if (cm) labeled.push({ idx: MARKS.indexOf(cm[1]) + 1, cells: cells.slice(1) });
-    else if (header === null && cells.some((c) => c)) header = cells;
-  }
-  if (labeled.length < 3 || labeled.length > 5) return null;
-  labeled.sort((a, b) => a.idx - b.idx);
-  for (let i = 0; i < labeled.length; i++) if (labeled[i].idx !== i + 1) return null; // 1..N 연속
-  const colN = labeled[0].cells.length;
-  if (colN < 1 || !labeled.every((l) => l.cells.length === colN)) return null;
-  // 헤더: 라벨열(첫 빈칸) 제거 후 셀 수가 보기 셀 수와 일치해야 표 객관식
-  const headerCells = header
-    ? (header[0] === '' ? header.slice(1) : header).map((c) => c.trim()).filter(Boolean)
-    : [];
-  if (headerCells.length !== colN) return null;
-
-  const choices = labeled.map((l) => `${MARKS[l.idx - 1] || ''} ${l.cells.join(' | ')}`.trim());
-  const newContent = (content.slice(0, m.index) + content.slice(m.index + m[0].length))
-    .replace(/\n{2,}/g, '\n').trim();
-  return { content: newContent, choices, choiceHeaders: headerCells };
-}
+// ★ detectTabularChoices 는 src/lib/workflow/tabular-choices.ts 로 추출 (2026-07-24) —
+//   HML 자산화 경로(hml-parser)도 같은 로직을 쓰도록 공용화. 동작 불변.
 
 function buildQuestionResult(
   group: { number: number; lines: MathpixLine[]; choiceTexts: string[] },

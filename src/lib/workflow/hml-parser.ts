@@ -13,6 +13,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { inflateRawSync, inflateSync } from 'zlib';
 import { hangulEquationToInlineLatex } from './hangul-equation';
+import { detectTabularChoices } from './tabular-choices';
 
 export interface HmlProblem {
   number: number;
@@ -398,6 +399,14 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
     let choiceHeaders: string[] | undefined;
     const tbl = detectTableChoices(content, choices);
     if (tbl) { content = tbl.content; choices = tbl.choices; choiceHeaders = tbl.choiceHeaders; }
+    // ★ 보기가 안 잡혔는데(choices 비었음) 본문 전체가 표 객관식 블록(\begin{tabular} 헤더행 +
+    //   ①~⑤ 라벨행)이면 choiceHeaders+choices 로 변환 (2026-07-24, 사직중 #13류).
+    //   기존엔 PDF/OCR(cloud-flow)만 이 감지를 해서 HML 자산화 표 객관식이 서답형(표가 본문에
+    //   박힌 채)으로 남았다. 두 경로 같은 공용 함수(tabular-choices)로 통일.
+    if (choices.length === 0) {
+      const blockTbl = detectTabularChoices(content);
+      if (blockTbl) { content = blockTbl.content; choices = blockTbl.choices; choiceHeaders = blockTbl.choiceHeaders; }
+    }
     if (content || choices.length) {
       // ★ [도형] 마커 순서 = cur.images 순서. 본문 [도형] → stem, 보기 [도형] → 보기 이미지.
       const stemCount = (content.match(/\[도형\]/g) || []).length;
