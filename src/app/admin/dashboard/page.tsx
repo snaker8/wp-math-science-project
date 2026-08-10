@@ -7,7 +7,6 @@ import {
   BookOpen,
   ClipboardList,
   TrendingUp,
-  TrendingDown,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -131,10 +130,12 @@ export default function AdminDashboardPage() {
             <span className="stat-value">{stats.totalUsers}</span>
             <span className="stat-label">전체 사용자</span>
           </div>
-          <div className={`stat-trend ${stats.recentUsers > 0 ? 'up' : ''}`}>
-            {stats.recentUsers > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            <span>+{stats.recentUsers} 이번 주</span>
-          </div>
+          {stats.recentUsers > 0 && (
+            <div className="stat-trend up">
+              <TrendingUp size={14} />
+              <span>+{stats.recentUsers} 이번 주</span>
+            </div>
+          )}
         </div>
 
         <div className="stat-card">
@@ -145,10 +146,12 @@ export default function AdminDashboardPage() {
             <span className="stat-value">{stats.totalProblems}</span>
             <span className="stat-label">등록된 문제</span>
           </div>
-          <div className={`stat-trend ${stats.recentProblems > 0 ? 'up' : ''}`}>
-            {stats.recentProblems > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            <span>+{stats.recentProblems} 이번 주</span>
-          </div>
+          {stats.recentProblems > 0 && (
+            <div className="stat-trend up">
+              <TrendingUp size={14} />
+              <span>+{stats.recentProblems} 이번 주</span>
+            </div>
+          )}
         </div>
 
         <div className="stat-card">
@@ -179,14 +182,14 @@ export default function AdminDashboardPage() {
           justify-content: center;
           height: 60vh;
           gap: 16px;
-          color: #6b7280;
+          color: #71717a; /* zinc-500 */
         }
 
         .spinner {
           width: 40px;
           height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #4f46e5;
+          border: 3px solid #3f3f46; /* zinc-700 */
+          border-top-color: #6366f1; /* indigo-500 */
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -204,12 +207,12 @@ export default function AdminDashboardPage() {
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #f4f4f5; /* zinc-100 */
           margin-bottom: 4px;
         }
 
         .page-header p {
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
           font-size: 14px;
         }
 
@@ -222,13 +225,13 @@ export default function AdminDashboardPage() {
 
         .stat-card {
           position: relative;
-          background: white;
+          background: #09090b; /* zinc-950 */
           border-radius: 12px;
           padding: 20px;
           display: flex;
           align-items: center;
           gap: 16px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #27272a; /* zinc-800 */
         }
 
         .stat-icon {
@@ -241,23 +244,23 @@ export default function AdminDashboardPage() {
         }
 
         .stat-icon.red {
-          background: #fef2f2;
-          color: #dc2626;
+          background: rgba(244, 63, 94, 0.1); /* rose-500/10 */
+          color: #fb7185; /* rose-400 */
         }
 
         .stat-icon.blue {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(99, 102, 241, 0.1); /* indigo-500/10 */
+          color: #818cf8; /* indigo-400 */
         }
 
         .stat-icon.purple {
-          background: #f5f3ff;
-          color: #7c3aed;
+          background: rgba(168, 85, 247, 0.1); /* purple-500/10 */
+          color: #c084fc; /* purple-400 */
         }
 
         .stat-icon.orange {
-          background: #fff7ed;
-          color: #ea580c;
+          background: rgba(249, 115, 22, 0.1); /* orange-500/10 */
+          color: #fb923c; /* orange-400 */
         }
 
         .stat-info {
@@ -268,12 +271,12 @@ export default function AdminDashboardPage() {
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #f4f4f5; /* zinc-100 */
         }
 
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
         }
 
         .stat-trend {
@@ -284,27 +287,27 @@ export default function AdminDashboardPage() {
           align-items: center;
           gap: 4px;
           padding: 4px 8px;
-          background: #f3f4f6;
+          background: #27272a; /* zinc-800 */
           border-radius: 9999px;
           font-size: 11px;
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
         }
 
         .stat-trend.up {
-          background: #ecfdf5;
-          color: #059669;
+          background: rgba(16, 185, 129, 0.1); /* emerald-500/10 */
+          color: #34d399; /* emerald-400 */
         }
 
         .info-banner {
-          background: #f8fafc;
-          border: 1px solid #e5e7eb;
+          background: #09090b; /* zinc-950 */
+          border: 1px solid #27272a; /* zinc-800 */
           border-radius: 12px;
           padding: 24px;
           text-align: center;
         }
 
         .info-banner p {
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
           font-size: 14px;
         }
 

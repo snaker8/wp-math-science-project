@@ -19,6 +19,8 @@ import {
   Eye,
   Edit,
   BarChart3,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -26,26 +28,27 @@ interface Exam {
   id: string;
   title: string;
   description: string | null;
-  problemCount: number;
+  problemCount: number | null; // null = 집계 미구현 (거짓 0 대신 '—' 표시)
   duration: number; // minutes
-  status: 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'COMPLETED';
-  scheduledAt: string | null;
+  // 실제 DB CHECK 제약: DRAFT | COMPLETED | PUBLISHED (SCHEDULED/ACTIVE 는 존재하지 않던 상상 스키마)
+  status: 'DRAFT' | 'COMPLETED' | 'PUBLISHED';
+  publishedAt: string | null;
   createdAt: string;
   className: string | null;
-  studentCount: number;
-  submissionCount: number;
+  studentCount: number | null; // null = 집계 미구현
+  submissionCount: number | null; // null = 집계 미구현
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  DRAFT: { label: '임시저장', color: '#6b7280', bg: '#f3f4f6', icon: FileText },
-  SCHEDULED: { label: '예약됨', color: '#3b82f6', bg: '#dbeafe', icon: Clock },
-  ACTIVE: { label: '진행중', color: '#22c55e', bg: '#dcfce7', icon: Play },
-  COMPLETED: { label: '종료', color: '#6b7280', bg: '#f3f4f6', icon: CheckCircle },
+  DRAFT: { label: '임시저장', color: '#6b7280', bg: '#f3f4f6', icon: Clock },
+  COMPLETED: { label: '완성', color: '#3b82f6', bg: '#dbeafe', icon: CheckCircle },
+  PUBLISHED: { label: '출제됨', color: '#22c55e', bg: '#dcfce7', icon: Play },
 };
 
 export default function TutorExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('전체');
 
@@ -54,6 +57,8 @@ export default function TutorExamsPage() {
   }, []);
 
   const loadExams = async () => {
+    setLoading(true);
+    setError(null);
     if (!supabaseBrowser) {
       // Mock data
       setExams([
@@ -64,7 +69,7 @@ export default function TutorExamsPage() {
           problemCount: 25,
           duration: 60,
           status: 'COMPLETED',
-          scheduledAt: null,
+          publishedAt: null,
           createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
           className: 'A반',
           studentCount: 15,
@@ -76,8 +81,8 @@ export default function TutorExamsPage() {
           description: '이차방정식 심화',
           problemCount: 10,
           duration: 30,
-          status: 'ACTIVE',
-          scheduledAt: null,
+          status: 'PUBLISHED',
+          publishedAt: new Date().toISOString(),
           createdAt: new Date().toISOString(),
           className: 'A반',
           studentCount: 15,
@@ -89,8 +94,8 @@ export default function TutorExamsPage() {
           description: '전 범위 종합',
           problemCount: 30,
           duration: 90,
-          status: 'SCHEDULED',
-          scheduledAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'COMPLETED',
+          publishedAt: null,
           createdAt: new Date().toISOString(),
           className: 'B반',
           studentCount: 12,
@@ -103,7 +108,7 @@ export default function TutorExamsPage() {
           problemCount: 5,
           duration: 15,
           status: 'DRAFT',
-          scheduledAt: null,
+          publishedAt: null,
           createdAt: new Date().toISOString(),
           className: null,
           studentCount: 0,
@@ -118,15 +123,16 @@ export default function TutorExamsPage() {
       const { data: { user } } = await supabaseBrowser.auth.getUser();
       if (!user) return;
 
+      // 실DB(클라우드) 실존 컬럼만 select — duration_minutes/scheduled_at/problem_count 는
+      // 존재하지 않는 컬럼이라 42703 으로 이 화면이 한 번도 뜬 적이 없었음 (빈 상태로 위장돼 있었음)
       const { data, error } = await supabaseBrowser
         .from('exams')
         .select(`
           id,
           title,
           description,
-          duration_minutes,
+          time_limit_minutes,
           status,
-          scheduled_at,
           created_at
         `)
         .eq('created_by', user.id)
@@ -135,23 +141,43 @@ export default function TutorExamsPage() {
 
       if (error) throw error;
 
+      // 문제 수는 exam_problems 에서 실집계 — 실패하면 null(— 표시)로 폴백
+      const examIds = (data || []).map((e: any) => e.id);
+      const countByExam = new Map<string, number>();
+      if (examIds.length > 0) {
+        const { data: epRows, error: epError } = await supabaseBrowser
+          .from('exam_problems')
+          .select('exam_id')
+          .in('exam_id', examIds);
+        if (!epError && epRows) {
+          for (const row of epRows as { exam_id: string }[]) {
+            countByExam.set(row.exam_id, (countByExam.get(row.exam_id) ?? 0) + 1);
+          }
+        }
+      }
+
       const examList: Exam[] = (data || []).map((e: any) => ({
         id: e.id,
         title: e.title,
         description: e.description,
-        problemCount: 0,
-        duration: e.duration_minutes || 60,
+        problemCount: countByExam.has(e.id) ? countByExam.get(e.id)! : null,
+        duration: e.time_limit_minutes || 60,
         status: e.status,
-        scheduledAt: e.scheduled_at,
+        publishedAt: null, // 실DB 에 출제 시각 컬럼 없음
         createdAt: e.created_at,
         className: null,
-        studentCount: 0,
-        submissionCount: 0,
+        // 반/응시 집계 쿼리 미구현 — 거짓 0 대신 null 로 두고 UI 에서 렌더 생략
+        studentCount: null,
+        submissionCount: null,
       }));
 
       setExams(examList);
     } catch (error) {
-      console.error('Failed to load exams:', error);
+      console.error('Failed to load exams:', JSON.stringify(error));
+      // 실제 원인(권한/컬럼 등)을 숨기지 않고 표시
+      const detail =
+        (error as { message?: string })?.message || '네트워크 상태를 확인한 뒤 다시 시도해주세요.';
+      setError(detail);
     } finally {
       setLoading(false);
     }
@@ -170,10 +196,17 @@ export default function TutorExamsPage() {
     if (!confirm('이 시험을 삭제하시겠습니까?')) return;
 
     if (supabaseBrowser) {
-      await supabaseBrowser
+      // 삭제 실패를 성공처럼 위장하지 않기 — error 확인 후에만 목록에서 제거
+      const { error: deleteError } = await supabaseBrowser
         .from('exams')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
+
+      if (deleteError) {
+        console.error('Failed to delete exam:', deleteError);
+        alert('삭제에 실패했습니다. 다시 시도해주세요.');
+        return;
+      }
     }
 
     setExams((prev) => prev.filter((e) => e.id !== id));
@@ -211,16 +244,16 @@ export default function TutorExamsPage() {
         <div className="stat-item active">
           <Play size={20} />
           <span className="stat-value">
-            {exams.filter((e) => e.status === 'ACTIVE').length}
+            {exams.filter((e) => e.status === 'PUBLISHED').length}
           </span>
-          <span className="stat-label">진행중</span>
+          <span className="stat-label">출제됨</span>
         </div>
         <div className="stat-item scheduled">
           <Calendar size={20} />
           <span className="stat-value">
-            {exams.filter((e) => e.status === 'SCHEDULED').length}
+            {exams.filter((e) => e.status === 'DRAFT').length}
           </span>
-          <span className="stat-label">예약됨</span>
+          <span className="stat-label">임시저장</span>
         </div>
       </div>
 
@@ -241,15 +274,24 @@ export default function TutorExamsPage() {
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="전체">전체 상태</option>
             <option value="DRAFT">임시저장</option>
-            <option value="SCHEDULED">예약됨</option>
-            <option value="ACTIVE">진행중</option>
-            <option value="COMPLETED">종료</option>
+            <option value="COMPLETED">완성</option>
+            <option value="PUBLISHED">출제됨</option>
           </select>
         </div>
       </div>
 
       {/* Exam List */}
-      {filteredExams.length === 0 ? (
+      {error ? (
+        <div className="error-state">
+          <AlertTriangle size={40} />
+          <h3>시험 목록을 불러오지 못했습니다</h3>
+          <p>{error}</p>
+          <button className="retry-btn" onClick={loadExams}>
+            <RefreshCw size={16} />
+            다시 시도
+          </button>
+        </div>
+      ) : filteredExams.length === 0 ? (
         <div className="empty-state">
           <FileText size={48} />
           <h3>생성된 시험이 없습니다</h3>
@@ -262,7 +304,7 @@ export default function TutorExamsPage() {
       ) : (
         <div className="exam-list">
           {filteredExams.map((exam) => {
-            const statusConfig = STATUS_CONFIG[exam.status];
+            const statusConfig = STATUS_CONFIG[exam.status] ?? STATUS_CONFIG.DRAFT;
             const StatusIcon = statusConfig.icon;
 
             return (
@@ -284,7 +326,8 @@ export default function TutorExamsPage() {
                 <div className="exam-meta">
                   <div className="meta-item">
                     <FileText size={16} />
-                    <span>{exam.problemCount}문제</span>
+                    {/* 집계 미구현(null) 이면 거짓 0 대신 '—' */}
+                    <span>{exam.problemCount != null ? `${exam.problemCount}문제` : '문제 수 —'}</span>
                   </div>
                   <div className="meta-item">
                     <Clock size={16} />
@@ -296,22 +339,22 @@ export default function TutorExamsPage() {
                       <span>{exam.className}</span>
                     </div>
                   )}
-                  {exam.scheduledAt && (
+                  {exam.publishedAt && (
                     <div className="meta-item">
                       <Calendar size={16} />
                       <span>
-                        {new Date(exam.scheduledAt).toLocaleDateString('ko-KR', {
+                        {new Date(exam.publishedAt).toLocaleDateString('ko-KR', {
                           month: 'long',
                           day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        })}{' '}
+                        출제
                       </span>
                     </div>
                   )}
                 </div>
 
-                {exam.status !== 'DRAFT' && (
+                {/* 응시 현황 — 집계 미구현(null) 이면 가짜 0%/0명 진행률 바를 렌더하지 않음 */}
+                {exam.status !== 'DRAFT' && exam.studentCount != null && exam.submissionCount != null && (
                   <div className="exam-progress">
                     <div className="progress-info">
                       <span>응시 현황</span>
@@ -552,6 +595,50 @@ export default function TutorExamsPage() {
         .empty-state p {
           margin-bottom: 24px;
           font-size: 14px;
+        }
+
+        .error-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 48px 24px;
+          background: rgba(127, 29, 29, 0.12);
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 16px;
+          color: #fca5a5;
+        }
+
+        .error-state h3 {
+          margin: 12px 0 4px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #ffffff;
+        }
+
+        .error-state p {
+          margin-bottom: 20px;
+          font-size: 14px;
+          color: #a1a1aa;
+        }
+
+        .retry-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 18px;
+          background: rgba(239, 68, 68, 0.15);
+          color: #fca5a5;
+          font-size: 14px;
+          font-weight: 500;
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .retry-btn:hover {
+          background: rgba(239, 68, 68, 0.25);
         }
 
         .btn-secondary {

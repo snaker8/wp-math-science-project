@@ -134,7 +134,8 @@ export default function LoginPage() {
     let path = '/dashboard';
     switch (role) {
       case 'student':
-        path = '/student';
+        // /student 목업 랜딩 대신 실데이터 대시보드로 직행 (P0)
+        path = '/student/dashboard';
         break;
       case 'parent':
         path = '/parent';

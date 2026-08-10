@@ -19,9 +19,8 @@ import {
   BarChart3,
   Settings,
   Home,
-  Bot,
   User,
-  CreditCard,
+  ClipboardList,
   Sparkles,
   ListChecks,
   HelpCircle,
@@ -295,19 +294,16 @@ export const supportNavItems: NavItem[] = [
   },
 ];
 
-// 학생용 메뉴
+// 학생용 메뉴 — 실제 동작하는 기능만 노출 (목업 라우트 제거, P0)
 export const studentNavItems: NavItem[] = [
-  { href: '/student', icon: Home, label: '홈', group: 'student' },
-  { href: '/student/study', icon: BookOpen, label: '학습', group: 'student' },
-  { href: '/student/ai-tutor', icon: Bot, label: 'AI 튜터', group: 'student' },
+  { href: '/student/dashboard', icon: Home, label: '홈', group: 'student' },
+  { href: '/student/exams', icon: ClipboardList, label: '시험', group: 'student' },
   { href: '/student/profile', icon: User, label: '내 정보', group: 'student' },
 ];
 
-// 학부모용 메뉴
+// 학부모용 메뉴 — 리포트는 /parent/[token] 전용 링크로 제공 (목업 라우트 제거, P0)
 export const parentNavItems: NavItem[] = [
   { href: '/parent', icon: Home, label: '홈', group: 'parent' },
-  { href: '/parent/report', icon: BarChart3, label: '리포트', group: 'parent' },
-  { href: '/parent/payment', icon: CreditCard, label: '결제 관리', group: 'parent' },
 ];
 
 // ============================================================================

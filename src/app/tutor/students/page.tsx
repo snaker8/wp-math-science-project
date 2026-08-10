@@ -22,6 +22,8 @@ import {
   KeyRound,
   Trash2,
   ClipboardList,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { gradeIntToLabel } from '@/lib/students/grade-label';
@@ -40,8 +42,8 @@ interface Student {
   status: 'ACCEPTED' | 'PENDING' | 'REJECTED';
   enrolledAt: string;
   lastActivity: string | null;
-  totalProblems: number;
-  correctRate: number;
+  totalProblems: number | null; // null = 집계 미구현 (거짓 0 대신 '—' 표시)
+  correctRate: number | null; // null = 집계 미구현
 }
 
 // 모의고사 점수 입력 폼 (4종 × 점수/날짜/메모) — 자사관 플래너 연동
@@ -66,6 +68,7 @@ const examInputStyle: CSSProperties = {
 export default function TutorStudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClass, setFilterClass] = useState('전체');
   const [filterStatus, setFilterStatus] = useState('전체');
@@ -283,6 +286,7 @@ export default function TutorStudentsPage() {
   }, []);
 
   const loadStudents = async () => {
+    setError(null);
     if (!supabaseBrowser) {
       // Mock data
       setStudents([
@@ -348,8 +352,8 @@ export default function TutorStudentsPage() {
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         console.error('[students] API error:', errBody.error || res.statusText);
-        setStudents([]);
-        setLoading(false);
+        // 빈 상태("등록된 학생이 없습니다")로 위장하지 않고 에러 배너 + 재시도 노출
+        setError(errBody.error || '서버 오류가 발생했습니다. 다시 시도해주세요.');
         return;
       }
       const { students: apiStudents = [] } = await res.json();
@@ -402,15 +406,17 @@ export default function TutorStudentsPage() {
           source: s.source || 'user',
           status: (enrollment?.status as 'ACCEPTED' | 'PENDING' | 'REJECTED') || 'ACCEPTED',
           enrolledAt: enrollment?.enrolledAt || '',
+          // 학습 지표 집계 미구현 — 거짓 0 대신 null 로 두고 UI 에서 '—' 표시
           lastActivity: null,
-          totalProblems: 0,
-          correctRate: 0,
+          totalProblems: null,
+          correctRate: null,
         };
       });
 
       setStudents(studentList);
     } catch (error) {
       console.error('Failed to load students:', error);
+      setError('네트워크 상태를 확인한 뒤 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }
@@ -516,14 +522,30 @@ export default function TutorStudentsPage() {
       </div>
 
       {/* Student List */}
-      {filteredStudents.length === 0 ? (
+      {error ? (
+        <div className="error-state">
+          <AlertTriangle size={40} />
+          <h3>학생 목록을 불러오지 못했습니다</h3>
+          <p>{error}</p>
+          <button
+            className="retry-btn"
+            onClick={() => {
+              setLoading(true);
+              loadStudents();
+            }}
+          >
+            <RefreshCw size={16} />
+            다시 시도
+          </button>
+        </div>
+      ) : filteredStudents.length === 0 ? (
         <div className="empty-state">
           <GraduationCap size={48} />
           <h3>등록된 학생이 없습니다</h3>
-          <p>학생을 초대하여 반에 등록하세요</p>
-          <button className="btn-secondary" onClick={() => setShowInviteModal(true)}>
+          <p>학생을 직접 등록하여 시작하세요</p>
+          <button className="btn-secondary" onClick={() => { setShowDirectAdd(true); setCredentials(null); }}>
             <UserPlus size={18} />
-            첫 학생 초대
+            첫 학생 등록
           </button>
         </div>
       ) : (
@@ -581,12 +603,13 @@ export default function TutorStudentsPage() {
               </div>
 
               <div className="student-stats">
+                {/* 집계 미구현(null) 이면 거짓 0/0% 대신 '—' */}
                 <div className="stat">
-                  <span className="value">{student.totalProblems}</span>
+                  <span className="value">{student.totalProblems ?? '—'}</span>
                   <span className="label">풀이 문제</span>
                 </div>
                 <div className="stat">
-                  <span className="value">{student.correctRate}%</span>
+                  <span className="value">{student.correctRate != null ? `${student.correctRate}%` : '—'}</span>
                   <span className="label">정답률</span>
                 </div>
               </div>
@@ -904,26 +927,22 @@ export default function TutorStudentsPage() {
         </div>
       )}
 
-      {/* Invite Modal */}
+      {/* Invite Modal — 이메일 발송 백엔드 미구현. 전송되는 것처럼 속이지 않고 '준비 중' 으로 정직하게 표시 */}
       {showInviteModal && (
         <div className="modal-overlay" onClick={() => setShowInviteModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>학생 초대</h2>
             <p>학생의 이메일 주소를 입력하여 반에 초대하세요</p>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.target as HTMLFormElement;
-              const email = (form.elements.namedItem('inviteEmail') as HTMLInputElement)?.value;
-              const className = (form.elements.namedItem('inviteClass') as HTMLSelectElement)?.value;
-              if (email && className) {
-                alert(`${email}으로 '${className}' 반 초대가 전송되었습니다. (데모)`);
-              }
-              setShowInviteModal(false);
-            }}>
+            <div style={{ background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#fbbf24', lineHeight: 1.5 }}>
+              이메일 초대는 <strong>준비 중인 기능입니다.</strong> 아직 초대 메일이 발송되지 않습니다.
+              지금은 <strong>학생 직접 등록</strong>을 이용해주세요.
+            </div>
+
+            <form onSubmit={(e) => e.preventDefault()}>
               <div className="form-group">
                 <label>이메일 주소</label>
-                <input name="inviteEmail" type="email" placeholder="student@example.com" required />
+                <input name="inviteEmail" type="email" placeholder="student@example.com" />
               </div>
 
               <div className="form-group">
@@ -940,8 +959,8 @@ export default function TutorStudentsPage() {
                 <button type="button" className="btn-cancel" onClick={() => setShowInviteModal(false)}>
                   취소
                 </button>
-                <button type="submit" className="btn-submit">
-                  초대 보내기
+                <button type="submit" className="btn-submit" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="준비 중인 기능입니다">
+                  준비 중
                 </button>
               </div>
             </form>
@@ -1330,6 +1349,50 @@ export default function TutorStudentsPage() {
         .empty-state p {
           margin-bottom: 24px;
           font-size: 14px;
+        }
+
+        .error-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 48px 24px;
+          background: rgba(127, 29, 29, 0.12);
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 16px;
+          color: #fca5a5;
+        }
+
+        .error-state h3 {
+          margin: 12px 0 4px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #ffffff;
+        }
+
+        .error-state p {
+          margin-bottom: 20px;
+          font-size: 14px;
+          color: #a1a1aa;
+        }
+
+        .retry-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 18px;
+          background: rgba(239, 68, 68, 0.15);
+          color: #fca5a5;
+          font-size: 14px;
+          font-weight: 500;
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .retry-btn:hover {
+          background: rgba(239, 68, 68, 0.25);
         }
 
         .btn-secondary {

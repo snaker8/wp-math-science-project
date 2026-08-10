@@ -193,14 +193,14 @@ export default function TeachersManagementPage() {
             justify-content: center;
             height: 60vh;
             gap: 16px;
-            color: #6b7280;
+            color: #71717a; /* zinc-500 */
           }
 
           .spinner {
             width: 40px;
             height: 40px;
-            border: 3px solid #e5e7eb;
-            border-top-color: #4f46e5;
+            border: 3px solid #3f3f46; /* zinc-700 */
+            border-top-color: #6366f1; /* indigo-500 */
             border-radius: 50%;
             animation: spin 1s linear infinite;
           }
@@ -356,12 +356,12 @@ export default function TeachersManagementPage() {
         .page-header h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #1f2937;
+          color: #f4f4f5; /* zinc-100 */
           margin-bottom: 4px;
         }
 
         .page-header p {
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
           font-size: 14px;
         }
 
@@ -377,9 +377,9 @@ export default function TeachersManagementPage() {
           align-items: center;
           gap: 16px;
           padding: 20px;
-          background: white;
+          background: #09090b; /* zinc-950 */
           border-radius: 12px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #27272a; /* zinc-800 */
         }
 
         .stat-icon {
@@ -392,13 +392,13 @@ export default function TeachersManagementPage() {
         }
 
         .stat-icon.blue {
-          background: #eef2ff;
-          color: #4f46e5;
+          background: rgba(99, 102, 241, 0.1); /* indigo-500/10 */
+          color: #818cf8; /* indigo-400 */
         }
 
         .stat-icon.green {
-          background: #ecfdf5;
-          color: #059669;
+          background: rgba(16, 185, 129, 0.1); /* emerald-500/10 */
+          color: #34d399; /* emerald-400 */
         }
 
         .stat-info {
@@ -409,12 +409,12 @@ export default function TeachersManagementPage() {
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #f4f4f5; /* zinc-100 */
         }
 
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
         }
 
         .message {
@@ -428,36 +428,37 @@ export default function TeachersManagementPage() {
         }
 
         .message.success {
-          background: #ecfdf5;
-          color: #059669;
-          border: 1px solid #a7f3d0;
+          background: rgba(16, 185, 129, 0.05); /* emerald-500/5 */
+          color: #6ee7b7; /* emerald-300 */
+          border: 1px solid rgba(16, 185, 129, 0.2); /* emerald-500/20 */
         }
 
         .message.error {
-          background: #fef2f2;
-          color: #dc2626;
-          border: 1px solid #fecaca;
+          background: rgba(244, 63, 94, 0.05); /* rose-500/5 */
+          color: #fda4af; /* rose-300 */
+          border: 1px solid rgba(244, 63, 94, 0.2); /* rose-500/20 */
         }
 
         .info-banner {
           display: flex;
           gap: 16px;
           padding: 20px;
-          background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+          background: rgba(99, 102, 241, 0.08); /* indigo-500/8 */
+          border: 1px solid rgba(99, 102, 241, 0.2); /* indigo-500/20 */
           border-radius: 12px;
           margin-bottom: 24px;
-          color: #4f46e5;
+          color: #818cf8; /* indigo-400 */
         }
 
         .info-banner strong {
           display: block;
           margin-bottom: 4px;
-          color: #1e1b4b;
+          color: #c7d2fe; /* indigo-200 */
         }
 
         .info-banner p {
           font-size: 14px;
-          color: #4b5563;
+          color: #a1a1aa; /* zinc-400 */
           margin: 0;
         }
 
@@ -466,21 +467,27 @@ export default function TeachersManagementPage() {
           align-items: center;
           gap: 12px;
           padding: 12px 16px;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: #18181b; /* zinc-900 */
+          border: 1px solid #27272a; /* zinc-800 */
           border-radius: 10px;
           margin-bottom: 20px;
         }
 
         .search-bar :global(svg) {
-          color: #9ca3af;
+          color: #52525b; /* zinc-600 */
         }
 
         .search-bar input {
           flex: 1;
           border: none;
+          background: transparent;
+          color: #f4f4f5; /* zinc-100 */
           font-size: 14px;
           outline: none;
+        }
+
+        .search-bar input::placeholder {
+          color: #52525b; /* zinc-600 */
         }
 
         .teachers-list {
@@ -495,16 +502,16 @@ export default function TeachersManagementPage() {
           align-items: center;
           justify-content: center;
           padding: 60px 20px;
-          background: white;
+          background: #09090b; /* zinc-950 */
           border-radius: 12px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #27272a; /* zinc-800 */
           text-align: center;
-          color: #9ca3af;
+          color: #71717a; /* zinc-500 */
         }
 
         .empty-state h3 {
           margin: 16px 0 8px;
-          color: #374151;
+          color: #d4d4d8; /* zinc-300 */
           font-size: 16px;
         }
 
@@ -517,19 +524,19 @@ export default function TeachersManagementPage() {
           align-items: center;
           justify-content: space-between;
           padding: 16px 20px;
-          background: white;
+          background: #09090b; /* zinc-950 */
           border-radius: 12px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #27272a; /* zinc-800 */
           transition: all 0.2s;
         }
 
         .teacher-card:hover {
-          border-color: #c7d2fe;
+          border-color: rgba(99, 102, 241, 0.4); /* indigo-500/40 */
         }
 
         .teacher-card.admin {
-          border-color: #a7f3d0;
-          background: linear-gradient(135deg, white 0%, #ecfdf5 100%);
+          border-color: rgba(16, 185, 129, 0.3); /* emerald-500/30 */
+          background: linear-gradient(135deg, #09090b 0%, rgba(16, 185, 129, 0.08) 100%);
         }
 
         .teacher-info {
@@ -563,7 +570,7 @@ export default function TeachersManagementPage() {
           gap: 8px;
           font-size: 16px;
           font-weight: 600;
-          color: #1f2937;
+          color: #f4f4f5; /* zinc-100 */
         }
 
         .admin-badge {
@@ -571,8 +578,9 @@ export default function TeachersManagementPage() {
           align-items: center;
           gap: 4px;
           padding: 2px 8px;
-          background: #059669;
-          color: white;
+          background: rgba(16, 185, 129, 0.15); /* emerald-500/15 */
+          color: #34d399; /* emerald-400 */
+          border: 1px solid rgba(16, 185, 129, 0.3); /* emerald-500/30 */
           font-size: 11px;
           font-weight: 500;
           border-radius: 9999px;
@@ -582,7 +590,7 @@ export default function TeachersManagementPage() {
           display: flex;
           gap: 16px;
           font-size: 13px;
-          color: #6b7280;
+          color: #a1a1aa; /* zinc-400 */
         }
 
         .teacher-meta span {
@@ -605,21 +613,21 @@ export default function TeachersManagementPage() {
         }
 
         .toggle-btn.grant {
-          background: #4f46e5;
+          background: #6366f1; /* indigo-500 */
           color: white;
         }
 
         .toggle-btn.grant:hover {
-          background: #4338ca;
+          background: #4f46e5; /* indigo-600 */
         }
 
         .toggle-btn.revoke {
-          background: #fee2e2;
-          color: #dc2626;
+          background: rgba(244, 63, 94, 0.1); /* rose-500/10 */
+          color: #fb7185; /* rose-400 */
         }
 
         .toggle-btn.revoke:hover {
-          background: #fecaca;
+          background: rgba(244, 63, 94, 0.2); /* rose-500/20 */
         }
 
         .toggle-btn:disabled {

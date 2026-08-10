@@ -17,6 +17,8 @@ import {
   BarChart3,
   Upload,
   ArrowLeft,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -59,6 +61,7 @@ export default function TutorProblemsPage() {
   const router = useRouter();
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSubject, setFilterSubject] = useState('전체');
   const [filterDifficulty, setFilterDifficulty] = useState('전체');
@@ -73,6 +76,8 @@ export default function TutorProblemsPage() {
   }, []);
 
   const loadProblems = async () => {
+    setLoading(true);
+    setError(null);
     if (!supabaseBrowser) {
       // Mock data when Supabase is not configured
       setProblems([
@@ -174,10 +179,15 @@ export default function TutorProblemsPage() {
       setProblems(mapped);
     } catch (error) {
       console.error('Failed to load problems:', error);
+      // 빈 상태("등록된 문제가 없습니다")로 위장하지 않고 에러 배너 + 재시도 노출
+      setError('네트워크 상태를 확인한 뒤 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }
   };
+
+  // .limit(100) 쿼리 — 정확히 100건이면 절단됐을 가능성이 높음 (사용자에게 고지)
+  const isTruncated = problems.length === 100;
 
   const filteredProblems = problems.filter((problem) => {
     const matchesSearch =
@@ -203,6 +213,10 @@ export default function TutorProblemsPage() {
 
       if (!error) {
         setProblems((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        // 삭제 실패를 조용히 삼키지 않기
+        console.error('Failed to delete problem:', error);
+        alert('삭제에 실패했습니다. 다시 시도해주세요.');
       }
     } else {
       setProblems((prev) => prev.filter((p) => p.id !== id));
@@ -240,8 +254,9 @@ export default function TutorProblemsPage() {
       <div className="stats-row">
         <div className="stat-item">
           <BookOpen size={20} />
-          <span className="stat-value">{problems.length}</span>
-          <span className="stat-label">전체 문제</span>
+          {/* limit(100) 절단 시 "전체 100" 으로 오인하지 않게 100+ 표기 */}
+          <span className="stat-value">{isTruncated ? '100+' : problems.length}</span>
+          <span className="stat-label">{isTruncated ? '문제 (최근 100개만 표시)' : '전체 문제'}</span>
         </div>
         <div className="stat-item">
           <Tag size={20} />
@@ -303,7 +318,17 @@ export default function TutorProblemsPage() {
       </div>
 
       {/* Problem List */}
-      {filteredProblems.length === 0 ? (
+      {error ? (
+        <div className="error-state">
+          <AlertTriangle size={40} />
+          <h3>문제 목록을 불러오지 못했습니다</h3>
+          <p>{error}</p>
+          <button className="retry-btn" onClick={loadProblems}>
+            <RefreshCw size={16} />
+            다시 시도
+          </button>
+        </div>
+      ) : filteredProblems.length === 0 ? (
         <div className="empty-state">
           <BookOpen size={48} />
           <h3>등록된 문제가 없습니다</h3>
@@ -336,10 +361,11 @@ export default function TutorProblemsPage() {
                   </span>
                 </div>
                 <div className="problem-actions">
-                  <button className="action-btn" title="미리보기" onClick={() => alert(`문제 미리보기:\n\n${problem.content}\n\n${problem.content_latex ? `LaTeX: ${problem.content_latex}` : ''}`)}>
+                  {/* 미리보기·수정은 미구현 — 동작하는 척(alert 데모) 하지 않고 비활성 + 준비 중 표시 */}
+                  <button className="action-btn" title="미리보기 (준비 중인 기능입니다)" disabled>
                     <Eye size={16} />
                   </button>
-                  <button className="action-btn" title="수정" onClick={() => alert(`문제 수정 화면으로 이동합니다. (데모)\n문제 ID: ${problem.id}`)}>
+                  <button className="action-btn" title="수정 (준비 중인 기능입니다)" disabled>
                     <Edit size={16} />
                   </button>
                   <button
@@ -375,6 +401,13 @@ export default function TutorProblemsPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* limit(100) 절단 안내 — 검색/필터도 이 100개 안에서만 동작함을 고지 */}
+      {!error && isTruncated && (
+        <p className="truncate-notice">
+          최근 100개만 표시됩니다. 이전에 업로드한 문제는 이 목록과 검색에 나타나지 않습니다.
+        </p>
       )}
 
       <style jsx>{`
@@ -593,6 +626,57 @@ export default function TutorProblemsPage() {
           font-size: 14px;
         }
 
+        .error-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 48px 24px;
+          background: rgba(127, 29, 29, 0.12);
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 16px;
+          color: #fca5a5;
+        }
+
+        .error-state h3 {
+          margin: 12px 0 4px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #ffffff;
+        }
+
+        .error-state p {
+          margin-bottom: 20px;
+          font-size: 14px;
+          color: #a1a1aa;
+        }
+
+        .retry-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 18px;
+          background: rgba(239, 68, 68, 0.15);
+          color: #fca5a5;
+          font-size: 14px;
+          font-weight: 500;
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .retry-btn:hover {
+          background: rgba(239, 68, 68, 0.25);
+        }
+
+        .truncate-notice {
+          margin-top: 12px;
+          text-align: center;
+          font-size: 13px;
+          color: #a1a1aa;
+        }
+
         .btn-secondary {
           display: inline-flex;
           align-items: center;
@@ -681,6 +765,16 @@ export default function TutorProblemsPage() {
         .action-btn:hover {
           background: rgba(63, 63, 70, 0.5);
           color: #a1a1aa;
+        }
+
+        .action-btn:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+        }
+
+        .action-btn:disabled:hover {
+          background: none;
+          color: #71717a;
         }
 
         .action-btn.delete:hover {

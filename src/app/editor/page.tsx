@@ -95,6 +95,14 @@ export default function EditorPage() {
         </div>
       </header>
 
+      {/* 데모 안내 — 저장이 DB에 반영되지 않음을 명시 (P0) */}
+      <div className="max-w-[1200px] mx-auto px-4 md:px-8 pt-4">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <span className="font-semibold shrink-0">데모 페이지</span>
+          <span>이 에디터의 저장은 화면 미리보기용이며 데이터베이스에 저장되지 않습니다.</span>
+        </div>
+      </div>
+
       {/* 메인 */}
       <main className="max-w-[1200px] mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 md:gap-8">
         <div className="flex flex-col gap-5">
@@ -124,7 +132,7 @@ export default function EditorPage() {
                   active:translate-y-0
                 "
               >
-                저장 (Ctrl+S)
+                미리보기 저장 (Ctrl+S)
               </button>
             </div>
           </div>

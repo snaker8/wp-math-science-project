@@ -6,8 +6,6 @@ import {
   BookOpen,
   ClipboardList,
   Bell,
-  BarChart3,
-  ArrowRight,
   Clock,
   CheckCircle2,
 } from 'lucide-react';
@@ -139,7 +137,8 @@ export default function StudentDashboardPage() {
     if (!supabaseBrowser) return;
 
     try {
-      await supabaseBrowser
+      // supabase-js는 실패해도 throw하지 않음 — error를 직접 확인해야 무음 실패를 막는다
+      const { error } = await supabaseBrowser
         .from('class_enrollments')
         .update({
           status: 'ACCEPTED',
@@ -147,6 +146,12 @@ export default function StudentDashboardPage() {
           responded_at: new Date().toISOString(),
         })
         .eq('id', enrollmentId);
+
+      if (error) {
+        console.error('Accept invitation error:', error);
+        alert('초대 수락에 실패했습니다. 다시 시도해주세요.');
+        return;
+      }
 
       // 새로고침
       loadDashboardData();
@@ -162,13 +167,19 @@ export default function StudentDashboardPage() {
     if (!supabaseBrowser) return;
 
     try {
-      await supabaseBrowser
+      const { error } = await supabaseBrowser
         .from('class_enrollments')
         .update({
           status: 'REJECTED',
           responded_at: new Date().toISOString(),
         })
         .eq('id', enrollmentId);
+
+      if (error) {
+        console.error('Reject invitation error:', error);
+        alert('초대 거절에 실패했습니다. 다시 시도해주세요.');
+        return;
+      }
 
       // 새로고침
       loadDashboardData();
@@ -279,9 +290,6 @@ export default function StudentDashboardPage() {
         <section className="card">
           <div className="card-header">
             <h2>내 반</h2>
-            <Link href="/student/classes" className="view-all">
-              전체보기 <ArrowRight size={16} />
-            </Link>
           </div>
 
           {classes.length === 0 ? (
@@ -292,20 +300,16 @@ export default function StudentDashboardPage() {
             </div>
           ) : (
             <div className="class-list">
+              {/* 반 상세 페이지는 준비 중이라 링크 없이 표시 (P0) */}
               {classes.slice(0, 5).map((cls) => (
-                <Link
-                  key={cls.id}
-                  href={`/student/classes/${cls.id}`}
-                  className="class-item"
-                >
+                <div key={cls.id} className="class-item">
                   <div className="class-info">
                     <span className="class-name">{cls.name}</span>
                     <span className="class-meta">
                       {cls.subject && `${cls.subject} · `}{cls.tutorName} 강사
                     </span>
                   </div>
-                  <ArrowRight size={18} className="arrow" />
-                </Link>
+                </div>
               ))}
             </div>
           )}
@@ -318,25 +322,12 @@ export default function StudentDashboardPage() {
           </div>
 
           <div className="quick-actions">
+            {/* 학습 분석·초대 목록은 준비 중/대시보드 내장이라 링크 제거 (P0) */}
             <Link href="/student/exams" className="action-item">
               <div className="action-icon blue">
                 <ClipboardList size={20} />
               </div>
               <span>시험 보기</span>
-            </Link>
-
-            <Link href="/student/analytics" className="action-item">
-              <div className="action-icon purple">
-                <BarChart3 size={20} />
-              </div>
-              <span>학습 분석 보기</span>
-            </Link>
-
-            <Link href="/student/invitations" className="action-item">
-              <div className="action-icon orange">
-                <Bell size={20} />
-              </div>
-              <span>초대 확인하기</span>
             </Link>
           </div>
         </section>
