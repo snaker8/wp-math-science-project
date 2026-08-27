@@ -282,11 +282,13 @@ const RECLASSIFY_OPTIONS: Array<{
   id: ReclassifyCategory; label: string; emoji: string;
   colorClass: string; bgClass: string; borderClass: string;
 }> = [
-  { id: 'diagnostic',  label: '진단평가',    emoji: '🩺', colorClass: 'text-indigo-400',  bgClass: 'bg-indigo-500/5',  borderClass: 'border-indigo-500/30' },
-  { id: 'achievement', label: '성취도 평가', emoji: '🎓', colorClass: 'text-violet-400',  bgClass: 'bg-violet-500/5',  borderClass: 'border-violet-500/30' },
-  { id: 'school',      label: '학교기출',    emoji: '🏫', colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/5', borderClass: 'border-emerald-500/30' },
-  { id: 'textbook',    label: '시중교재',    emoji: '📖', colorClass: 'text-amber-400',   bgClass: 'bg-amber-500/5',   borderClass: 'border-amber-500/30' },
-  { id: 'mock',        label: '모의고사',    emoji: '📝', colorClass: 'text-rose-400',    bgClass: 'bg-rose-500/5',    borderClass: 'border-rose-500/30' },
+  // ★ 뱃지 색 = 무채 통일 (2026-08-27 디자인 시스템). 카테고리 구분은 이모지+텍스트가 담당 —
+  //   5색 채도 뱃지가 목록 전체를 시끄럽게 만들던 것 제거 (크롬 채도색 금지 규칙).
+  { id: 'diagnostic',  label: '진단평가',    emoji: '🩺', colorClass: 'text-content-secondary', bgClass: 'bg-white/[.04]', borderClass: 'border-white/[.08]' },
+  { id: 'achievement', label: '성취도 평가', emoji: '🎓', colorClass: 'text-content-secondary', bgClass: 'bg-white/[.04]', borderClass: 'border-white/[.08]' },
+  { id: 'school',      label: '학교기출',    emoji: '🏫', colorClass: 'text-content-secondary', bgClass: 'bg-white/[.04]', borderClass: 'border-white/[.08]' },
+  { id: 'textbook',    label: '시중교재',    emoji: '📖', colorClass: 'text-content-secondary', bgClass: 'bg-white/[.04]', borderClass: 'border-white/[.08]' },
+  { id: 'mock',        label: '모의고사',    emoji: '📝', colorClass: 'text-content-secondary', bgClass: 'bg-white/[.04]', borderClass: 'border-white/[.08]' },
 ];
 
 function examCategoryInfo(isDiagnostic?: boolean, examType?: string | null) {
@@ -670,7 +672,7 @@ const CreateGroupModal: React.FC<{
         className="w-full max-w-lg mx-4 bg-surface-card border rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-600 px-6 py-5">
+        <div className="border-b border-white/[.08] bg-white/[.03] px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
               <FolderPlus className="h-5 w-5 text-white" />
@@ -1690,7 +1692,7 @@ export default function CloudPage() {
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-3 border-b border-subtle/50">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-content-primary">{orgName}클라우드 관리</h1>
+          <h1 className="whitespace-nowrap text-lg font-semibold tracking-tight text-content-primary">{orgName}클라우드 관리</h1>
           <div className="flex items-center gap-2">
             <span className="text-xs text-content-tertiary">과목</span>
             <SubjectDropdown value={subject} options={trackSubjectOptions} onChange={setSubject} />
@@ -1731,16 +1733,15 @@ export default function CloudPage() {
                   key={cat.id}
                   type="button"
                   onClick={() => setSourceCategory(cat.id)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  className={`flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
                     isActive
-                      ? `bg-${cat.color}-500/15 text-${cat.color}-300 border border-${cat.color}-500/40`
+                      ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                       : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'
                   }`}
                   title={`${cat.label} (${count}건)`}
                 >
-                  <span>{cat.emoji}</span>
                   <span>{cat.label}</span>
-                  <span className="text-[10px] opacity-70">{count}</span>
+                  <span className="text-[10px] tabular-nums opacity-70">{count}</span>
                 </button>
               );
             })}
@@ -1750,7 +1751,7 @@ export default function CloudPage() {
           <button
             type="button"
             onClick={() => { setPinOld(''); setPinNew(''); setPinConfirm(''); setPinChangeError(''); setShowPinModal(true); }}
-            className="flex items-center gap-1.5 rounded-lg border bg-surface-raised/60 px-3 py-2 text-xs text-content-tertiary hover:text-content-primary hover:bg-surface-raised transition-colors"
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border bg-surface-raised/60 px-3 py-2 text-xs text-content-tertiary hover:text-content-primary hover:bg-surface-raised transition-colors"
             title="관리자 PIN 변경"
           >
             <KeyRound className="h-3.5 w-3.5" />
@@ -1772,7 +1773,7 @@ export default function CloudPage() {
           <button
             type="button"
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition-colors shadow-lg shadow-indigo-500/20"
+            className="flex items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
           >
             <Upload className="h-4 w-4" />
             자료 업로드
@@ -2835,7 +2836,7 @@ export default function CloudPage() {
                                 const isDirect = (exam.bookGroupId ?? null) === (selectedId !== 'all' && selectedId !== 'unclassified' ? selectedId : null);
                                 const folderName = exam.bookGroupId ? (groupNameById.get(exam.bookGroupId) ?? '폴더') : '미분류';
                                 return (
-                                  <span className={`flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${isDirect ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300' : 'border-white/10 bg-surface-raised text-content-tertiary'}`}>
+                                  <span className={`flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${isDirect ? 'border-white/[.14] bg-white/[.06] text-content-primary' : 'border-white/10 bg-surface-raised text-content-tertiary'}`}>
                                     <Folder className="h-3 w-3" />
                                     {folderName}
                                     {isDirect && ' · 직속'}
@@ -2887,7 +2888,7 @@ export default function CloudPage() {
                               <div className="mt-auto flex items-center justify-between pt-1.5">
                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                   {exam.problemCount > 0 ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/20 bg-indigo-500/5 px-2 py-0.5 text-xs font-medium text-indigo-400">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-xs font-medium tabular-nums text-content-secondary">
                                       <Sparkles className="h-3 w-3" />
                                       {exam.problemCount}문항
                                     </span>

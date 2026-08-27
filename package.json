@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:generate": "supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/database.ts",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "design:guard": "node scripts/check-design-tokens.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
