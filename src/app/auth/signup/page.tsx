@@ -30,6 +30,8 @@ interface RoleOption {
   value: UserRole;
   label: string;
   description: string;
+  /** 한글 모노그램 — 아이콘 라이브러리 대신 타이포로 정체성 */
+  monogram: string;
   icon: React.ReactNode;
   color: string;
 }
@@ -39,6 +41,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     value: 'STUDENT',
     label: '학생',
     description: '문제를 풀고 학습 진도를 관리합니다',
+    monogram: '학',
     icon: <GraduationCap size={24} />,
     color: 'from-blue-500 to-indigo-500',
   },
@@ -46,6 +49,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     value: 'TEACHER',
     label: '강사',
     description: '반을 만들고 학생들을 관리합니다',
+    monogram: '강',
     icon: <School size={24} />,
     color: 'from-indigo-500 to-purple-500',
   },
@@ -397,8 +401,9 @@ export default function SignUpPage() {
                   onClick={() => handleRoleSelect(option.value)}
                   className="w-full flex items-center gap-4 p-4 rounded-lg border border-white/10 bg-zinc-950/40 hover:border-white/[.18] hover:bg-white/[.04] transition-colors group text-left"
                 >
-                  <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${option.color} flex items-center justify-center text-white shadow-lg`}>
-                    {option.icon}
+                  {/* 한글 모노그램 — 아이콘 라이브러리 대신 타이포로 정체성 */}
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-white/[.10] bg-white/[.05] text-lg font-bold text-content-primary">
+                    {option.monogram}
                   </div>
                   <div className="flex-1">
                     <div className="font-semibold text-white group-hover:text-content-primary transition-colors">
@@ -446,8 +451,8 @@ export default function SignUpPage() {
             {/* 선택된 역할 뱃지 */}
             {selectedRoleOption && (
               <div className="flex items-center gap-3 p-3 rounded-lg border border-white/[.10] bg-white/[.04] mb-6">
-                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${selectedRoleOption.color} flex items-center justify-center text-white text-sm`}>
-                  {selectedRoleOption.icon}
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[.10] bg-white/[.05] text-sm font-bold text-content-primary">
+                  {selectedRoleOption.monogram}
                 </div>
                 <span className="text-sm font-medium text-content-primary">{selectedRoleOption.label}로 가입</span>
                 <button
