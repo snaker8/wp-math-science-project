@@ -55,9 +55,9 @@ export function BrandLogo({
     // 압축 마크 — "M×S" + 미니 박스 (모바일·좁은 공간용)
     return (
       <span className={`inline-flex items-center gap-1.5 font-black tracking-tighter ${sizeCls} ${className}`}>
-        <span className="bg-gradient-to-br from-indigo-400 to-indigo-600 bg-clip-text text-transparent">M</span>
-        <span className="text-violet-500">×</span>
-        <span className="bg-gradient-to-br from-violet-400 to-pink-500 bg-clip-text text-transparent">S</span>
+        <span className={bankColor}>M</span>
+        <span className="text-zinc-500">×</span>
+        <span className={bankColor}>S</span>
         <span className={`${bankColor} ml-0.5`}>B</span>
       </span>
     );
@@ -66,14 +66,10 @@ export function BrandLogo({
   return (
     <div className={className}>
       <span className={`inline-flex items-baseline font-black tracking-tight ${sizeCls} leading-none`}>
-        <span className="bg-gradient-to-br from-indigo-400 to-indigo-600 bg-clip-text text-transparent">
-          Math
-        </span>
-        <span className="text-violet-500 mx-0.5 font-extralight">×</span>
-        <span className="bg-gradient-to-br from-violet-400 to-pink-500 bg-clip-text text-transparent">
-          Sci
-        </span>
-        <span className={`ml-2 ${bankColor}`}>Bank</span>
+        <span className={bankColor}>Math</span>
+        <span className="mx-0.5 font-extralight text-zinc-500">×</span>
+        <span className={bankColor}>Sci</span>
+        <span className={`ml-2 font-semibold ${variant === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>Bank</span>
       </span>
       {showTagline && (
         <p className={`${taglineSize} ${taglineColor} mt-2 tracking-wide`}>
@@ -98,20 +94,13 @@ export function BrandMark({ size = 28, className = '' }: { size?: number; classN
       className={className}
       aria-label="Math×Sci Bank"
     >
-      <defs>
-        <linearGradient id="mxsbg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#6366f1" />
-          <stop offset="55%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#ec4899" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#mxsbg)" />
+      <rect x="2" y="2" width="60" height="60" rx="14" fill="#FFFFFF" />
       <text
         x="50%"
         y="56%"
         textAnchor="middle"
         dominantBaseline="middle"
-        fill="white"
+        fill="#08090A"
         fontFamily="Inter, system-ui, sans-serif"
         fontWeight="900"
         fontSize="26"
