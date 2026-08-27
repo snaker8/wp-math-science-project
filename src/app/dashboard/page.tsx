@@ -1,6 +1,6 @@
 'use client';
 
-import { SurfacePanel, RADIUS, PANEL_SURFACE, PANEL_INSET } from '@/components/ui/surface';
+import { SurfacePanel, RADIUS, PANEL_SURFACE, PANEL_INSET, PANEL_LIFT } from '@/components/ui/surface';
 import {
   ArrowRight,
   Upload,
@@ -56,7 +56,7 @@ function StatusCard({
     return (
       <Link
         href={href}
-        className={`block ${RADIUS.panel} ${PANEL_INSET} p-4 transition-colors hover:border-white/[.14] hover:bg-white/[.05]`}
+        className={`block ${RADIUS.panel} ${PANEL_INSET} ${PANEL_LIFT} p-4`}
       >
         {content}
       </Link>
@@ -594,7 +594,7 @@ export default function DashboardPage() {
                 <button
                   key={i}
                   onClick={() => router.push(action.href)}
-                  className={`flex flex-col items-center justify-center gap-2 p-4 ${RADIUS.panel} ${PANEL_INSET} transition-colors hover:border-white/[.14] hover:bg-white/[.05] group`}
+                  className={`flex flex-col items-center justify-center gap-2 p-4 ${RADIUS.panel} ${PANEL_INSET} ${PANEL_LIFT} group`}
                 >
                   <Icon size={20} className="text-content-tertiary group-hover:text-content-primary transition-colors" />
                   <span className="text-sm text-content-secondary group-hover:text-content-primary font-medium transition-colors">
