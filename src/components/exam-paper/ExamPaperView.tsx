@@ -34,6 +34,7 @@ import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
+import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 /** 해설에서 [선택지 검증] 섹션 제거 (기존 DB 데이터 호환) — 페이지에서 함께 이동 */
 function stripChoiceAnalysis(s: string): string {
@@ -1945,11 +1946,13 @@ export function SolutionView({
                       try { await Notification.requestPermission(); } catch { /* 거부도 OK */ }
                     }
 
+                    // ★ 해설 생성 게이트 — 관리자 외 관리자 PIN 필요 (2026-08-28)
+                    if (!(await ensureSolutionPin())) return;
                     setIsGeneratingBatch(true);
                     setBatchProgress({ current: 0, total: targetIds.length });
                     const res = await fetch(`/api/exams/${examId}/batch-solutions`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: { 'Content-Type': 'application/json', ...solutionPinHeader() },
                       body: JSON.stringify({ problemIds: targetIds }),
                     });
                     if (res.ok) {

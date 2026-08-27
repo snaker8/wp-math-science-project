@@ -13,6 +13,7 @@ import RenderRepairPanel from '@/components/papers/RenderRepairPanel';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import dynamic from 'next/dynamic';
+import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 // GraphModal은 Desmos API 사용하므로 dynamic import
 const GraphModal = dynamic(
@@ -1084,12 +1085,14 @@ export function ProblemEditModal({
 
   // AI 해설 자동 생성 + 교차 검증
   const handleGenerateSolution = useCallback(async () => {
+    // ★ 해설 생성 게이트 — 관리자 외 관리자 PIN 필요 (2026-08-28)
+    if (!(await ensureSolutionPin())) return;
     setIsGeneratingSolution(true);
     setError(null);
     try {
       const res = await fetch(`/api/problems/${problemId}/generate-solution`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...solutionPinHeader() },
         body: JSON.stringify({ content, choices: choices.filter(c => c.trim()) }),
       });
       const data = await res.json();

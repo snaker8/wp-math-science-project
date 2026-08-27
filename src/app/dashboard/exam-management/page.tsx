@@ -70,6 +70,7 @@ import type { InterpretedFigure } from '@/types/ocr';
 // ★ shadcn/ui components (Phase 2 점진 도입)
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 // ============================================================================
 // Types
@@ -906,6 +907,9 @@ export default function ExamManagementPage() {
       return;
     }
 
+    // ★ 해설 생성 게이트 — 관리자 외 관리자 PIN 필요 (2026-08-28)
+    if (!(await ensureSolutionPin())) return;
+
     setIsGeneratingBatch(true);
     setBatchProgress({ current: 0, total: unsolved.length, failed: 0 });
 
@@ -914,7 +918,7 @@ export default function ExamManagementPage() {
       try {
         const res = await fetch(`/api/problems/${unsolved[i].id}/generate-solution`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...solutionPinHeader() },
           body: JSON.stringify({ choices: unsolved[i].choices || [] }),
         });
         if (!res.ok) failed++;
