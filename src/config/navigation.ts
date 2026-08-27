@@ -47,7 +47,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: LayoutDashboard,
     label: '대시보드',
     description: '전체 현황 요약',
-    activeColor: 'bg-primary-500/10 text-primary-500',
     group: 'main',
   },
   {
@@ -55,7 +54,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: FolderOpen,
     label: '시험지저장소',
     description: '업로드된 시험지 관리',
-    activeColor: 'bg-purple-500/10 text-purple-500',
     group: 'main',
   },
   {
@@ -63,7 +61,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: SquarePen,
     label: '유형별 출제',
     description: '단원·유형·난이도로 문제를 골라 새 시험지 제작',
-    activeColor: 'bg-pink-500/10 text-pink-500',
     group: 'main',
   },
   {
@@ -71,7 +68,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: BookOpen,
     label: '학원자료',
     description: '학원 교재 및 자료',
-    activeColor: 'bg-emerald-500/10 text-emerald-500',
     group: 'main',
   },
   {
@@ -79,7 +75,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: ImageIcon,
     label: '도식 갤러리',
     description: '추출된 과학/수학 도식 이미지',
-    activeColor: 'bg-teal-500/10 text-teal-500',
     group: 'main',
   },
   {
@@ -87,7 +82,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: Layers,
     label: '출판교재유사',
     description: '교재별 유사문제',
-    activeColor: 'bg-blue-500/10 text-blue-500',
     group: 'main',
   },
   {
@@ -95,7 +89,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: Puzzle,
     label: '유형/문제관리',
     description: '단원·유형 분류 체계',
-    activeColor: 'bg-violet-500/10 text-violet-500',
     group: 'main',
   },
   {
@@ -103,7 +96,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: Cloud,
     label: '클라우드',
     description: '문제·시험지 라이브러리',
-    activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
   {
@@ -111,7 +103,6 @@ export const dashboardNavItems: NavItem[] = [
     icon: ClipboardCheck,
     label: '자산 시험지 출제',
     description: '자산화된 시험지 그대로 인쇄·배포·출제',
-    activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'main',
   },
 ];
@@ -123,7 +114,6 @@ export const adminNavItems: NavItem[] = [
     icon: Users,
     label: '교직원 관리',
     description: '강사/직원 권한 관리',
-    activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
   {
@@ -131,7 +121,6 @@ export const adminNavItems: NavItem[] = [
     icon: Building2,
     label: '학원·센터 관리',
     description: '학원/센터 추가 (슈퍼관리자만)',
-    activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
   {
@@ -139,7 +128,6 @@ export const adminNavItems: NavItem[] = [
     icon: UserCog,
     label: '사용자 배정',
     description: '학원/센터/역할 배정 (슈퍼관리자만)',
-    activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'main',
   },
   {
@@ -147,7 +135,6 @@ export const adminNavItems: NavItem[] = [
     icon: Building2,
     label: '가맹 학원 신청',
     description: '신규 학원 가맹 신청 승인/거부 (슈퍼관리자만)',
-    activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'main',
   },
 ];
@@ -164,7 +151,6 @@ export const tutorNavItems: NavItem[] = [
     icon: Upload,
     label: 'DB 자산화',
     description: 'PDF → OCR → 학원 클라우드 저장',
-    activeColor: 'bg-sky-500/10 text-sky-500',
     group: 'tutor',
   },
   {
@@ -172,7 +158,6 @@ export const tutorNavItems: NavItem[] = [
     icon: Users,
     label: '반 관리',
     description: '반 편성·관리',
-    activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'tutor',
   },
   {
@@ -180,7 +165,6 @@ export const tutorNavItems: NavItem[] = [
     icon: User,
     label: '학생 관리',
     description: '학생 등록·관리 (반 없이도 가능)',
-    activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'tutor',
   },
   {
@@ -189,7 +173,6 @@ export const tutorNavItems: NavItem[] = [
     icon: ClipboardCheck,
     label: '채점하기',
     description: 'QR 채점 세션 관리 · 학생 답 자동채점',
-    activeColor: 'bg-green-500/10 text-green-500',
     group: 'tutor',
   },
   {
@@ -198,7 +181,6 @@ export const tutorNavItems: NavItem[] = [
     icon: ClipboardCheck,
     label: '수동 채점 입력',
     description: '시험·진단지 채점 결과 수동 입력',
-    activeColor: 'bg-amber-500/10 text-amber-500',
     group: 'tutor',
   },
   {
@@ -206,7 +188,6 @@ export const tutorNavItems: NavItem[] = [
     icon: Stethoscope,
     label: '학생 진단',
     description: '학생별 단원 히트맵·취약점·약점 추적',
-    activeColor: 'bg-orange-500/10 text-orange-500',
     group: 'tutor',
   },
   {
@@ -214,7 +195,6 @@ export const tutorNavItems: NavItem[] = [
     icon: FileText,
     label: '클리닉시험지',
     description: '오답 클리닉 PDF',
-    activeColor: 'bg-rose-500/10 text-rose-500',
     group: 'tutor',
   },
   {
@@ -222,7 +202,6 @@ export const tutorNavItems: NavItem[] = [
     icon: Sparkles,
     label: 'AI 자동 출제',
     description: '자동 맞춤 문제 선정',
-    activeColor: 'bg-purple-500/10 text-purple-500',
     group: 'tutor',
   },
   {
@@ -230,7 +209,6 @@ export const tutorNavItems: NavItem[] = [
     icon: BarChart3,
     label: '학생 성적',
     description: '히트맵 및 통계',
-    activeColor: 'bg-indigo-500/10 text-indigo-500',
     group: 'tutor',
   },
   {
@@ -238,7 +216,6 @@ export const tutorNavItems: NavItem[] = [
     icon: BarChart3,
     label: '학교별 리포트',
     description: '학교별 시험지 누적 분석 + 학부모 공유 관리',
-    activeColor: 'bg-indigo-500/10 text-indigo-400',
     group: 'tutor',
   },
   {
@@ -247,7 +224,6 @@ export const tutorNavItems: NavItem[] = [
     icon: Layers,
     label: '진단 종합 리포트',
     description: 'A/B/C 진단 합산 · 시험대비 처방 · 학부모 공유',
-    activeColor: 'bg-indigo-500/10 text-indigo-400',
     group: 'tutor',
   },
   {
@@ -256,7 +232,6 @@ export const tutorNavItems: NavItem[] = [
     icon: ListChecks,
     label: '출제 관리',
     description: '학년·학생별 출제 현황 · 점수 (QR+수동 합산)',
-    activeColor: 'bg-sky-500/10 text-sky-400',
     group: 'tutor',
   },
   {
@@ -265,7 +240,6 @@ export const tutorNavItems: NavItem[] = [
     icon: Users,
     label: '수업 홈',
     description: '학생별 종합 — 학습 보고서·진단 리포트·공유링크 한 곳',
-    activeColor: 'bg-sky-500/10 text-sky-400',
     group: 'tutor',
   },
 ];
@@ -277,7 +251,6 @@ export const systemNavItems: NavItem[] = [
     icon: Settings,
     label: '설정',
     description: '계정 및 환경 설정',
-    activeColor: 'bg-gray-500/10 text-gray-500',
     group: 'system',
   },
 ];
@@ -289,7 +262,6 @@ export const supportNavItems: NavItem[] = [
     icon: HelpCircle,
     label: '고객센터',
     description: '이용 가이드 및 문의',
-    activeColor: 'bg-zinc-500/10 text-zinc-500',
     group: 'system',
   },
 ];

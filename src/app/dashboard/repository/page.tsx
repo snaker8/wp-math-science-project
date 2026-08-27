@@ -148,8 +148,8 @@ function CopyExamModal({ exam, onClose, onCopy }: CopyExamModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/10">
-              <Copy className="w-5 h-5 text-indigo-400" />
+            <div className="p-2 rounded-lg bg-white/[.06]">
+              <Copy className="w-5 h-5 text-content-secondary" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-content-primary">유사시험지 만들기</h2>
@@ -173,7 +173,7 @@ function CopyExamModal({ exam, onClose, onCopy }: CopyExamModalProps) {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-surface-raised border border text-content-primary text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              className="w-full px-4 py-2.5 rounded-lg bg-surface-raised border border text-content-primary text-sm focus:outline-none focus:border-white/25 transition-colors"
             />
             <p className="text-xs text-content-muted mt-1.5">
               복사된 시험지의 제목으로 사용됩니다. 필요하다면 원본과 구분될 수 있도록 수정해 주세요.
@@ -193,16 +193,16 @@ function CopyExamModal({ exam, onClose, onCopy }: CopyExamModalProps) {
                 onClick={() => setMode('simple')}
                 className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                   mode === 'simple'
-                    ? 'border-indigo-500 bg-indigo-500/5'
+                    ? 'border-white/[.30] bg-white/[.06]'
                     : 'border bg-surface-raised/50 hover:border-accent/30'
                 }`}
               >
                 {mode === 'simple' && (
-                  <span className="absolute top-3 right-3 text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                  <span className="absolute top-3 right-3 text-[10px] font-bold text-content-primary bg-white/[.08] px-1.5 py-0.5 rounded">
                     SELECTED
                   </span>
                 )}
-                <Copy className={`w-5 h-5 mb-2 ${mode === 'simple' ? 'text-indigo-400' : 'text-content-tertiary'}`} />
+                <Copy className={`w-5 h-5 mb-2 ${mode === 'simple' ? 'text-content-primary' : 'text-content-tertiary'}`} />
                 <h4 className={`text-sm font-bold mb-2 ${mode === 'simple' ? 'text-content-primary' : 'text-content-secondary'}`}>
                   시험지 단순 복사
                 </h4>
@@ -219,16 +219,16 @@ function CopyExamModal({ exam, onClose, onCopy }: CopyExamModalProps) {
                 onClick={() => setMode('similar')}
                 className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                   mode === 'similar'
-                    ? 'border-indigo-500 bg-indigo-500/5'
+                    ? 'border-white/[.30] bg-white/[.06]'
                     : 'border bg-surface-raised/50 hover:border-accent/30'
                 }`}
               >
                 {mode === 'similar' && (
-                  <span className="absolute top-3 right-3 text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                  <span className="absolute top-3 right-3 text-[10px] font-bold text-content-primary bg-white/[.08] px-1.5 py-0.5 rounded">
                     SELECTED
                   </span>
                 )}
-                <Sparkles className={`w-5 h-5 mb-2 ${mode === 'similar' ? 'text-indigo-400' : 'text-content-tertiary'}`} />
+                <Sparkles className={`w-5 h-5 mb-2 ${mode === 'similar' ? 'text-content-primary' : 'text-content-tertiary'}`} />
                 <h4 className={`text-sm font-bold mb-2 ${mode === 'similar' ? 'text-content-primary' : 'text-content-secondary'}`}>
                   유사문제로 복사하기
                 </h4>
@@ -244,7 +244,7 @@ function CopyExamModal({ exam, onClose, onCopy }: CopyExamModalProps) {
 
           {/* 안내 */}
           <div className="flex items-start gap-2 p-3 rounded-lg bg-surface-raised/50 border border/50">
-            <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
+            <div className="w-1 h-1 rounded-full bg-white/40 mt-1.5 shrink-0" />
             <p className="text-xs text-content-tertiary">
               {mode === 'simple'
                 ? '단순 복사는 기존 문제 구성을 유지합니다. 다른 문제로 구성하려면 유사문제로 복사를 선택하세요.'
@@ -264,7 +264,7 @@ function CopyExamModal({ exam, onClose, onCopy }: CopyExamModalProps) {
           <button
             onClick={handleCopy}
             disabled={isCopying || !title.trim()}
-            className="px-5 py-2.5 text-sm font-bold text-content-primary bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-5 py-2.5 text-sm font-bold text-black bg-white hover:bg-zinc-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isCopying ? (
               <>
@@ -425,7 +425,7 @@ export default function RepositoryPage() {
       <div className="flex items-end justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <div className="p-1 px-2 rounded bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-400 tracking-tighter uppercase">
+            <div className="p-1 px-2 rounded bg-white/[.04] border border-white/[.08] text-[10px] font-bold text-content-secondary tracking-tighter uppercase">
               Digital Asset
             </div>
             <span className="text-content-tertiary text-xs font-medium uppercase tracking-widest">Library</span>
@@ -522,7 +522,7 @@ export default function RepositoryPage() {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); }}
-                      className="p-2 rounded-full bg-indigo-600 text-content-primary hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/30"
+                      className="p-2 rounded-full bg-white/[.12] text-content-primary hover:bg-white/[.2] transition-colors"
                       title="AI 분석"
                     >
                       <Zap size={18} />
@@ -572,10 +572,10 @@ export default function RepositoryPage() {
                     <div className={`
                       flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border
                       ${paper.status === 'published'
-                        ? 'text-indigo-400 border-indigo-500/20 bg-indigo-500/5'
+                        ? 'text-content-primary border-white/[.14] bg-white/[.06]'
                         : 'text-content-tertiary border-subtle bg-surface-card'}
                     `}>
-                      <div className={`w-1 h-1 rounded-full ${paper.status === 'published' ? 'bg-indigo-400' : 'bg-zinc-600'}`} />
+                      <div className={`w-1 h-1 rounded-full ${paper.status === 'published' ? 'bg-white/70' : 'bg-zinc-600'}`} />
                       {paper.status === 'completed' ? '완료' : paper.status === 'draft' ? '임시' : paper.status.toUpperCase()}
                     </div>
                   </div>

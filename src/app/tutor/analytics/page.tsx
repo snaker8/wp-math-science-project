@@ -238,7 +238,7 @@ export default function TutorAnalyticsPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BarChart3 size={26} className="text-indigo-400" />
+            <BarChart3 size={26} className="text-content-tertiary" />
             학생 성적
           </h1>
           <p className="text-sm text-content-tertiary mt-1">
@@ -275,7 +275,7 @@ export default function TutorAnalyticsPage() {
             <button
               type="button"
               onClick={() => setDropdownOpen((v) => !v)}
-              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-white/10 bg-surface-card hover:border-indigo-400 text-sm"
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg border border-white/10 bg-surface-card hover:border-white/[.2] text-sm"
             >
               {selectedInfo ? (
                 <span className="flex items-center gap-2">
@@ -319,8 +319,8 @@ export default function TutorAnalyticsPage() {
                             setSearchQuery('');
                             setModalStudentId(s.id);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-500/10 flex items-center justify-between gap-2 ${
-                            selectedStudent === s.id ? 'bg-indigo-500/15 text-indigo-300' : ''
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-white/[.06] flex items-center justify-between gap-2 ${
+                            selectedStudent === s.id ? 'bg-white/[.08] text-content-primary' : ''
                           }`}
                         >
                           <span className="truncate flex items-center gap-1.5">
@@ -539,7 +539,7 @@ export default function TutorAnalyticsPage() {
                         </td>
                         <td className="py-2 pr-3 text-content-tertiary">{fmtDate(s.issued_at)}</td>
                         <td className="py-2 pr-3 text-right text-content-secondary">
-                          {s.pct != null ? <span className="font-bold text-indigo-400">{s.pct}%</span> : '-'}
+                          {s.pct != null ? <span className="font-bold text-content-primary tabular-nums">{s.pct}%</span> : '-'}
                           <span className="text-content-tertiary ml-1">({s.correct}/{s.total})</span>
                         </td>
                         <td className="py-2 text-center">
@@ -547,7 +547,7 @@ export default function TutorAnalyticsPage() {
                             <Link
                               href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                              className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary"
                             >
                               <ExternalLink size={12} /> 리포트
                             </Link>
@@ -555,7 +555,7 @@ export default function TutorAnalyticsPage() {
                             <Link
                               href={`/grade/${s.id}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                              className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content-primary"
                             >
                               <ExternalLink size={12} /> 채점
                             </Link>
@@ -570,19 +570,19 @@ export default function TutorAnalyticsPage() {
           </Card>
 
           {/* AI 인사이트 */}
-          <Card title="AI 진단 인사이트" icon={Brain} className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-indigo-500/30">
+          <Card title="AI 진단 인사이트" icon={Brain}>
             <div className="space-y-3">
               {insights.map((it, i) => (
                 <div key={i} className="flex gap-3">
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      it.kind === 'good' ? 'bg-indigo-500/15 text-indigo-300' : 'bg-rose-500/15 text-rose-300'
+                      it.kind === 'good' ? 'bg-white/[.08] text-content-primary' : 'bg-rose-500/15 text-rose-300'
                     }`}
                   >
                     {it.kind === 'good' ? <TrendingUp size={20} /> : <AlertTriangle size={20} />}
                   </div>
                   <div>
-                    <h4 className={`font-semibold text-sm ${it.kind === 'good' ? 'text-indigo-200' : 'text-rose-200'}`}>
+                    <h4 className={`font-semibold text-sm ${it.kind === 'good' ? 'text-content-primary' : 'text-rose-200'}`}>
                       {it.title}
                     </h4>
                     <p className="text-content-tertiary text-xs leading-relaxed mt-1">{it.body}</p>

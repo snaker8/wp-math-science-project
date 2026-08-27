@@ -24,12 +24,12 @@ interface Institute { id: string; name: string; organization_id: string }
 const ROLES = ['ADMIN', 'TEACHER', 'TUTOR', 'STUDENT', 'PARENT', 'ORG_ADMIN'] as const;
 
 const ROLE_BADGE: Record<string, string> = {
-  ADMIN: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  TEACHER: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  TUTOR: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  STUDENT: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  PARENT: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  ORG_ADMIN: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+  ADMIN: 'bg-white/[.04] text-content-secondary border-white/[.08]',
+  TEACHER: 'bg-white/[.04] text-content-secondary border-white/[.08]',
+  TUTOR: 'bg-white/[.04] text-content-secondary border-white/[.08]',
+  STUDENT: 'bg-white/[.04] text-content-secondary border-white/[.08]',
+  PARENT: 'bg-white/[.04] text-content-secondary border-white/[.08]',
+  ORG_ADMIN: 'bg-white/[.04] text-content-secondary border-white/[.08]',
 };
 
 export default function UsersAdminPage() {
@@ -142,8 +142,8 @@ export default function UsersAdminPage() {
       {/* 헤더 */}
       <div className="flex items-end justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-            <Users className="text-indigo-400" size={20} />
+          <div className="w-10 h-10 rounded-xl bg-white/[.06] border border-white/[.14] flex items-center justify-center">
+            <Users className="text-content-secondary" size={20} />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">사용자 배정</h1>
@@ -161,7 +161,7 @@ export default function UsersAdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="이메일 또는 이름 검색…"
-            className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none"
+            className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-white placeholder:text-zinc-600 focus:border-white/25 focus:outline-none"
           />
         </div>
       </div>
@@ -199,7 +199,7 @@ export default function UsersAdminPage() {
                     || institutes.find((i) => i.id === u.instituteId)?.organization_id
                     || null;
                   return (
-                    <tr key={u.id} className={isEditing ? 'bg-indigo-500/5' : 'hover:bg-zinc-900/40 transition-colors'}>
+                    <tr key={u.id} className={isEditing ? 'bg-white/[.04]' : 'hover:bg-zinc-900/40 transition-colors'}>
                       <td className="px-4 py-3 text-zinc-200">{u.email}</td>
                       <td className="px-4 py-3 text-zinc-300">{u.fullName || '—'}</td>
                       <td className="px-4 py-3">
@@ -207,7 +207,7 @@ export default function UsersAdminPage() {
                           <select
                             value={editRole}
                             onChange={(e) => setEditRole(e.target.value)}
-                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-white/25 focus:outline-none"
                           >
                             <option value="">선택…</option>
                             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -223,7 +223,7 @@ export default function UsersAdminPage() {
                             )}
                             {u.isSuperAdmin && (
                               <span
-                                className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-amber-500/15 text-amber-400 border-amber-500/30 inline-flex items-center gap-0.5"
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-white/[.08] text-content-primary border-white/[.14] inline-flex items-center gap-0.5"
                                 title="본부 운영자 — auth.users.app_metadata.super_admin"
                               >
                                 <Shield size={9} /> SUPER
@@ -237,7 +237,7 @@ export default function UsersAdminPage() {
                           <select
                             value={editOrg || ''}
                             onChange={(e) => { setEditOrg(e.target.value || null); setEditInst(null); }}
-                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-white/25 focus:outline-none"
                           >
                             <option value="">없음</option>
                             {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -251,7 +251,7 @@ export default function UsersAdminPage() {
                           <select
                             value={editInst || ''}
                             onChange={(e) => setEditInst(e.target.value || null)}
-                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-white/25 focus:outline-none disabled:opacity-50"
                             disabled={!editOrg}
                           >
                             <option value="">없음</option>
@@ -267,7 +267,7 @@ export default function UsersAdminPage() {
                             <button
                               onClick={saveEdit}
                               disabled={busy}
-                              className="inline-flex items-center gap-1 rounded bg-indigo-500 hover:bg-indigo-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50 transition-colors"
+                              className="inline-flex items-center gap-1 rounded bg-white hover:bg-zinc-200 px-2 py-1 text-xs font-semibold text-black disabled:opacity-50 transition-colors"
                             >
                               {busy ? <Loader2 className="animate-spin" size={11} /> : <Save size={11} />} 저장
                             </button>
@@ -281,7 +281,7 @@ export default function UsersAdminPage() {
                         ) : (
                           <button
                             onClick={() => startEdit(u)}
-                            className="inline-flex items-center gap-1 rounded border border-zinc-700 hover:border-indigo-500/40 hover:bg-indigo-500/5 px-2 py-1 text-xs font-medium text-zinc-300 hover:text-indigo-400 transition-colors"
+                            className="inline-flex items-center gap-1 rounded border border-zinc-700 hover:border-white/20 hover:bg-white/[.04] px-2 py-1 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
                           >
                             <Pencil size={11} /> 편집
                           </button>

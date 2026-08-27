@@ -54,10 +54,10 @@ const SESSION_TYPE_LABEL: Record<string, string> = {
   SC: '스팟 체크',
 };
 const SESSION_TYPE_COLOR: Record<string, string> = {
-  BS: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  DD: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  PT: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  SC: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  BS: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  DD: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  PT: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  SC: 'border-white/[.08] bg-white/[.04] text-content-secondary',
 };
 
 // ============================================================================
@@ -87,7 +87,7 @@ function ActionButton({
       disabled={disabled}
       className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all disabled:opacity-40 ${
         primary
-          ? 'bg-indigo-600 text-content-primary hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
+          ? 'border border-white/[.14] bg-white/[.08] text-content-primary hover:bg-white/[.12]'
           : 'bg-white/5 text-content-primary border border-white/10 hover:bg-white/10'
       }`}
     >
@@ -366,7 +366,7 @@ function PrescriptionContent() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="이름/학년 검색..."
-              className="w-full bg-surface-card border border-white/10 rounded-lg py-2 pl-10 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-full bg-surface-card border border-white/10 rounded-lg py-2 pl-10 text-sm focus:border-white/25 focus:outline-none"
             />
           </div>
         </div>
@@ -392,7 +392,7 @@ function PrescriptionContent() {
                 onClick={() => handleSelectStudent(s.id)}
                 className={`w-full text-left block p-3 rounded-xl transition-colors ${
                   s.id === student?.id
-                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+                    ? 'bg-white/[.08] text-content-primary border border-white/[.14]'
                     : 'hover:bg-white/5 text-gray-400 border border-transparent'
                 }`}
               >
@@ -422,7 +422,7 @@ function PrescriptionContent() {
             <div>
               <h1 className="font-bold text-xl flex items-center gap-2">
                 AI Clinic
-                <span className="bg-indigo-900/50 text-indigo-400 text-xs px-2 py-0.5 rounded border border-indigo-500/30">Beta</span>
+                <span className="bg-white/[.04] text-content-secondary text-xs px-2 py-0.5 rounded border border-white/[.08]">Beta</span>
               </h1>
               <p className="text-xs text-gray-500">정밀 진단 및 맞춤형 처방</p>
             </div>
@@ -435,7 +435,7 @@ function PrescriptionContent() {
                   {gradeIntToLabel(student.grade, '-')} {student.className ? `| ${student.className}` : ''}
                 </div>
               </div>
-              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-lg font-bold">
+              <div className="w-10 h-10 rounded-full bg-white/[.08] border border-white/[.14] flex items-center justify-center text-lg font-bold">
                 {student.name[0]}
               </div>
             </div>
@@ -464,7 +464,7 @@ function PrescriptionContent() {
                 <ClinicCard className="col-span-1 lg:col-span-2">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-bold text-lg flex items-center gap-2">
-                      <Sparkles size={18} className="text-indigo-400" />
+                      <Sparkles size={18} className="text-content-tertiary" />
                       오답 원인 분포 (5요인)
                     </h3>
                     <div className="text-xs text-content-tertiary">
@@ -479,7 +479,7 @@ function PrescriptionContent() {
                   {/* 미분류 안내 — QR 채점 시 강사가 X 누르고 원인 칩 안 골랐을 때 */}
                   {wrongStats.uncategorizedWrong > 0 && (
                     <div className="mb-3 text-[11px] text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
-                      ⚠ 오답 {wrongStats.uncategorizedWrong}건이 원인 분류 안 됨 —
+                      오답 {wrongStats.uncategorizedWrong}건이 원인 분류 안 됨 —
                       <Link href="/dashboard/grading" className="ml-1 underline hover:text-amber-200">
                         강사 채점 페이지
                       </Link>{' '}에서 X 옆 원인 칩(개념·유형·계산·문장제·시간)을 선택해주세요.
@@ -522,14 +522,14 @@ function PrescriptionContent() {
                       <button
                         type="button"
                         onClick={() => setShowCreateSessions(true)}
-                        className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-indigo-600 text-content-primary hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all"
+                        className="w-full flex items-center gap-2 px-4 py-3 rounded-full font-semibold bg-white text-black hover:bg-zinc-200 transition-all"
                       >
                         <QrCode size={18} />
                         <span>QR 채점 세션 생성</span>
                       </button>
                       <Link
                         href="/dashboard/prescription/report"
-                        className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium bg-cyan-600/90 text-content-primary hover:bg-cyan-500 shadow-lg shadow-cyan-500/20 transition-all"
+                        className="w-full flex items-center gap-2 px-4 py-3 rounded-xl font-medium border border-white/[.14] bg-white/[.08] text-content-primary hover:bg-white/[.12] transition-all"
                       >
                         <Activity size={18} />
                         <span>진단 종합 리포트 (A·B·C)</span>
@@ -608,7 +608,7 @@ function PrescriptionContent() {
 
                   {/* Warning / Prescription Card */}
                   {weakestNode ? (
-                    <ClinicCard className="bg-gradient-to-br from-red-900/20 to-amber-900/20 border-red-500/20">
+                    <ClinicCard className="bg-red-900/15 border-red-500/20">
                       <div className="flex items-start gap-3">
                         <div className="bg-red-500/20 p-2 rounded-lg text-red-400 flex-shrink-0">
                           <AlertCircle size={24} />
@@ -654,7 +654,7 @@ function PrescriptionContent() {
                       </div>
                     </ClinicCard>
                   ) : (
-                    <ClinicCard className="bg-gradient-to-br from-emerald-900/20 to-indigo-900/20 border-emerald-500/20">
+                    <ClinicCard className="bg-emerald-900/15 border-emerald-500/20">
                       <div className="flex items-start gap-3">
                         <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400 flex-shrink-0">
                           <Sparkles size={24} />
@@ -675,7 +675,7 @@ function PrescriptionContent() {
               <ClinicCard>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-lg flex items-center gap-2">
-                    <Activity size={18} className="text-indigo-400" />
+                    <Activity size={18} className="text-content-tertiary" />
                     과목 × 대단원 히트맵
                   </h3>
                   <div className="text-xs text-content-tertiary flex items-center gap-2">
@@ -742,7 +742,7 @@ function PrescriptionContent() {
               <ClinicCard>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-lg flex items-center gap-2">
-                    <Sparkles size={18} className="text-emerald-400" />
+                    <Sparkles size={18} className="text-content-tertiary" />
                     단원별 유형 숙달
                   </h3>
                   <div className="text-xs text-content-tertiary">대→중→소단원 펼쳐 유형별 숙달 확인 · γ(약점) 우선</div>
@@ -802,7 +802,7 @@ function PrescriptionContent() {
                 <ClinicCard>
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-lg flex items-center gap-2">
-                      <Calendar size={18} className="text-indigo-400" />
+                      <Calendar size={18} className="text-content-tertiary" />
                       진단 이력
                     </h3>
                     <div className="text-xs text-content-tertiary">{sessions.length}건 · 클릭 → 리포트</div>

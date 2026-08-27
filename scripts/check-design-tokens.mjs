@@ -22,6 +22,8 @@ const ALLOW = [
   /components[\\/]exam-report[\\/]/,
   /exam-paper/,                        // 인쇄물 (라이트 종이)
   /print/i,
+  /app[\\/]share[\\/]/,                // 외부 공유 문서 — 리포트 언어 유지
+  /app[\\/]parent[\\/]/,               // 학부모 공유 리포트 — 리포트 언어 유지
 ];
 
 const files = [];

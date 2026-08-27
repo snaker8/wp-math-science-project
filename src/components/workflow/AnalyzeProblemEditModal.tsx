@@ -189,7 +189,7 @@ function EditorToolbar({
   return (
     <div className="flex items-center gap-0.5">
       <button type="button" onClick={onInsertMath}
-        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-amber-600 hover:bg-amber-50 transition-colors" title="수식 삽입 (Σ)">
+        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors" title="수식 삽입 (Σ)">
         <Sigma className="h-3.5 w-3.5" />
       </button>
       <div className="w-px h-4 bg-gray-200 mx-0.5" />
@@ -611,7 +611,7 @@ function ChoicesEditor({
           <div className="flex items-center gap-2">
             <button type="button" onClick={hasHeaders ? handleDisableTableMode : handleEnableTableMode}
               className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                hasHeaders ? 'bg-amber-50 text-amber-700 border border-amber-300' : 'text-gray-400 border border-gray-200 hover:text-gray-700'
+                hasHeaders ? 'bg-gray-100 text-gray-700 border border-gray-300' : 'text-gray-400 border border-gray-200 hover:text-gray-700'
               }`}
               title={hasHeaders ? '표 객관식 해제 (헤더 제거, 각 보기는 첫 칸 값만 남김)' : '표 객관식 활성화 (A/B 헤더 추가)'}>
               표 객관식
@@ -632,9 +632,9 @@ function ChoicesEditor({
 
           {/* ★ 헤더 입력 영역 — 표 객관식일 때만 표시. 자동 인식 채워주거나 수동 기입. */}
           {hasHeaders && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-2 space-y-1.5">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-amber-700 flex-shrink-0">컬럼 헤더</span>
+                <span className="text-[10px] font-bold text-gray-600 flex-shrink-0">컬럼 헤더</span>
                 <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `2rem repeat(${columnCount}, 1fr) auto` }}>
                   <span /> {/* ① 번호 자리 비움 */}
                   {choiceHeaders.map((h, ci) => (
@@ -643,23 +643,23 @@ function ChoicesEditor({
                       type="text"
                       value={h}
                       onChange={(e) => handleHeaderChange(ci, e.target.value)}
-                      className="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-800 font-bold text-center focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 font-bold text-center focus:outline-none focus:ring-1 focus:ring-emerald-400"
                       placeholder={String.fromCharCode(65 + ci)}
                     />
                   ))}
                   <div className="flex items-center gap-0.5 flex-shrink-0">
                     <button type="button" onClick={handleRemoveColumn}
                       disabled={choiceHeaders.length <= 1}
-                      className="w-5 h-5 rounded text-[10px] font-bold text-amber-600 border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="w-5 h-5 rounded text-[10px] font-bold text-gray-600 border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       title="컬럼 제거">−</button>
                     <button type="button" onClick={handleAddColumn}
                       disabled={choiceHeaders.length >= 4}
-                      className="w-5 h-5 rounded text-[10px] font-bold text-amber-600 border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="w-5 h-5 rounded text-[10px] font-bold text-gray-600 border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       title="컬럼 추가 (최대 4)">+</button>
                   </div>
                 </div>
               </div>
-              <p className="text-[9px] text-amber-600 pl-[3.5rem]">자동 인식되면 자동 채움. 빈 칸은 직접 입력하세요.</p>
+              <p className="text-[9px] text-gray-500 pl-[3.5rem]">자동 인식되면 자동 채움. 빈 칸은 직접 입력하세요.</p>
             </div>
           )}
 
@@ -682,7 +682,7 @@ function ChoicesEditor({
                       — 2차(ProblemEditModal) 와 동일하게 선택지마다 이미지 입력 가능. 1차는 problemId
                       없어 base64 보관 → 자산화 시 Storage 일괄 업로드(기존 choiceImages 경로). */}
                   {img ? (
-                    <div className="ml-7 relative inline-block rounded border border-indigo-200 bg-indigo-50/30 p-1 self-start">
+                    <div className="ml-7 relative inline-block rounded border border-gray-200 bg-gray-50 p-1 self-start">
                       <img src={img} alt={`선택지 ${i + 1} 이미지`} className="max-h-16 max-w-full object-contain rounded" />
                       <button type="button"
                         onClick={() => onClearChoiceImage(i)}
@@ -712,7 +712,7 @@ function ChoicesEditor({
                       }}
                     >
                       <label
-                        className="cursor-pointer text-[11px] font-bold inline-flex items-center gap-1 px-2 py-1 rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
+                        className="cursor-pointer text-[11px] font-bold inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors"
                         title="이 선택지에 이미지 넣기 — 파일 선택 또는 여기에 붙여넣기(Ctrl+V)"
                       >
                         <input
@@ -1363,7 +1363,7 @@ export default function AnalyzeProblemEditModal({
                       setContent((prev: string) => prev.replace(/\(([1-5])\)/g, (m: string, n: string) => map[n] || m));
                       setChoices((prev: string[]) => prev.map((c: string) => c.replace(/\(([1-5])\)/g, (m: string, n: string) => map[n] || m)));
                     }}
-                      className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-100 transition-colors shadow-sm">
+                      className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
                       ①②③ 변환
                     </button>
                   </div>
@@ -1409,7 +1409,7 @@ export default function AnalyzeProblemEditModal({
                   {problem.cvFigures && problem.cvFigures.length > 0 && (
                     <div>
                       <div className="text-xs font-bold text-gray-500 mb-1.5 flex items-center gap-1.5">
-                        <ImageIcon className="h-3.5 w-3.5 text-indigo-500" />
+                        <ImageIcon className="h-3.5 w-3.5 text-gray-400" />
                         이미지 후보 ({problem.cvFigures.length})
                         <span className="ml-auto text-[9px] text-gray-400 font-normal">클릭해서 본문/선택지에 삽입</span>
                       </div>
@@ -1432,7 +1432,7 @@ export default function AnalyzeProblemEditModal({
                                   <button key={ci} type="button"
                                     onClick={() => handleInsertFigureToChoice(fig.cropBase64!, ci)}
                                     title={`${cn} 선택지에 삽입`}
-                                    className="w-5 h-5 rounded text-[10px] font-bold bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
+                                    className="w-5 h-5 rounded text-[10px] font-bold bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100 hover:text-gray-700 hover:border-gray-400 transition-colors">
                                     {cn}
                                   </button>
                                 ))}
@@ -1518,7 +1518,7 @@ export default function AnalyzeProblemEditModal({
                       value={problemScore}
                       onChange={(e) => setProblemScore(e.target.value)}
                       placeholder="미입력"
-                      className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 text-center font-bold focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder:text-gray-300 placeholder:font-normal placeholder:text-xs"
+                      className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 text-center font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400 placeholder:text-gray-300 placeholder:font-normal placeholder:text-xs"
                     />
                     <span className="text-xs text-gray-400">점</span>
                   </div>
@@ -1544,7 +1544,7 @@ export default function AnalyzeProblemEditModal({
                   <span className="block text-[11px] font-medium text-gray-500 mb-1.5">유형 분류</span>
                   <div className="flex flex-wrap gap-1.5">
                     {problem.typeCode && (
-                      <span className="text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">
+                      <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200">
                         {problem.typeCode}
                       </span>
                     )}
@@ -1627,13 +1627,13 @@ export default function AnalyzeProblemEditModal({
                         setTypeCode(parts[0] || '');
                         setTypeName(parts.slice(1).join('. ') || '');
                       }}
-                      className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-400"
                       placeholder="유형코드. 유형명 — 트리에서 선택 권장"
                     />
                     <button
                       type="button"
                       onClick={() => setPickerOpen(true)}
-                      className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
                       title="매쓰싸이 뱅크 분류 트리에서 선택"
                     >
                       유형 검색
