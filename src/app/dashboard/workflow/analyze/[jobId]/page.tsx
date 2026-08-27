@@ -416,7 +416,7 @@ function PageThumbnailItem({
       style={style}
       className={`w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-all ${
         isActive
-          ? 'bg-indigo-500/10 border-2 border-indigo-500/40'
+          ? 'bg-white/[.08] border-2 border-white/[.14]'
           : 'border-2 border-zinc-800 hover:border-zinc-600'
       } ${isDragging ? 'shadow-xl' : ''}`}
     >
@@ -441,7 +441,7 @@ function PageThumbnailItem({
         {/* 표시 페이지 번호 */}
         <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 ${
           isActive
-            ? 'bg-indigo-500 text-white'
+            ? 'bg-white text-black'
             : 'bg-zinc-700 text-zinc-400'
         }`}>
           {entry.displayNumber}
@@ -449,7 +449,7 @@ function PageThumbnailItem({
 
         {/* 썸네일 — 원본 PDF 페이지 번호로 렌더링 (절대 변경 X) */}
         <div className={`relative w-14 h-20 rounded border overflow-hidden flex-shrink-0 bg-white ${
-          isActive ? 'border-indigo-400' : 'border-zinc-600'
+          isActive ? 'border-white/[.45]' : 'border-zinc-600'
         }`}>
           <PdfPageCanvas
             pdfUrl={pdfUrl}
@@ -460,7 +460,7 @@ function PageThumbnailItem({
           />
           {entry.aiStatus === 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-              <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-content-secondary" />
             </div>
           )}
           {entry.aiStatus === 'error' && (
@@ -472,7 +472,7 @@ function PageThumbnailItem({
 
         <div className="min-w-0 flex-1">
           <div className={`text-xs font-medium ${
-            isActive ? 'text-indigo-300' : 'text-zinc-400'
+            isActive ? 'text-content-primary' : 'text-zinc-400'
           }`}>
             페이지 {entry.displayNumber}
             {entry.pdfPageNumber !== entry.displayNumber && (
@@ -569,7 +569,7 @@ function PageThumbnailList({
             onClick={() => setReorderMode((v) => !v)}
             className={`text-[10px] px-1.5 py-0.5 rounded border ${
               reorderMode
-                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40'
+                ? 'border-white/[.14] bg-white/[.08] text-content-primary'
                 : 'text-zinc-400 border-zinc-700 hover:bg-zinc-800'
             }`}
             title="페이지가 잘못 스캔된 순서로 들어왔을 때 드래그로 정정"
@@ -579,7 +579,7 @@ function PageThumbnailList({
         </div>
       </div>
       {reorderMode && (
-        <div className="px-3 py-1.5 bg-indigo-500/5 border-b border-indigo-500/20 text-[10px] text-indigo-300">
+        <div className="px-3 py-1.5 bg-white/[.03] border-b border-white/[.08] text-[10px] text-content-secondary">
           📌 핸들을 드래그해 페이지 순서를 정정하세요
         </div>
       )}
@@ -1204,7 +1204,7 @@ function PdfViewerWithBoxes({
           title={`페이지 회전 (90° 시계방향). 현재 ${rotation}°`}
         >
           <RotateCw className="h-3 w-3" />
-          회전 {rotation > 0 && <span className="text-indigo-300">{rotation}°</span>}
+          회전 {rotation > 0 && <span className="text-content-primary">{rotation}°</span>}
         </button>
       )}
       <div
@@ -1234,7 +1234,7 @@ function PdfViewerWithBoxes({
                 <div className="h-28 bg-gray-100 rounded animate-pulse" />
               </div>
             </div>
-            <Loader2 className="h-6 w-6 animate-spin text-rose-400 mb-3" />
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400 mb-3" />
             <p className="text-sm text-gray-500 font-medium">페이지를 분석하고 있습니다.</p>
             <p className="text-xs text-gray-400 mt-1">분석이 끝나면 바로 페이지가 열리고</p>
             <p className="text-xs text-gray-400">문제 변환이 시작됩니다.</p>
@@ -1567,7 +1567,7 @@ function AdvancedAnalysisModal({
                 onClick={() => setModel(m)}
                 className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
                   model === m
-                    ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                    ? 'bg-white/[.08] border-white/[.14] text-content-primary'
                     : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
                 }`}
                 title={
@@ -1610,7 +1610,7 @@ function AdvancedAnalysisModal({
                 {history.map((h, i) => (
                   <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[11px]">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-indigo-400 font-semibold">#{i + 1}</span>
+                      <span className="text-content-tertiary font-semibold">#{i + 1}</span>
                       <span className="text-zinc-500">·</span>
                       <span className="text-zinc-400">{h.model}</span>
                       <span className="text-zinc-500">·</span>
@@ -1656,14 +1656,14 @@ function AdvancedAnalysisModal({
               }}
               disabled={isProcessing}
               rows={2}
-              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none disabled:opacity-50"
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-white/25 resize-none disabled:opacity-50"
               placeholder="예) 분모를 x+1로 바꿔줘 / ㄱ선택지 삭제해줘 / ⌘+Enter 로 전송"
             />
             <button
               type="button"
               onClick={submitInstruction}
               disabled={isProcessing || !draftPrompt.trim()}
-              className="self-stretch px-5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
+              className="self-stretch px-5 rounded-lg border border-white/[.14] bg-white/[.08] hover:bg-white/[.12] text-xs font-bold text-content-primary transition-colors disabled:opacity-40"
             >
               {isProcessing ? '...' : '분석'}
             </button>
@@ -1705,7 +1705,7 @@ function AdvancedAnalysisModal({
               type="button"
               onClick={handleApply}
               disabled={isProcessing || !isModified}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
+              className="px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-xs font-semibold text-black transition-colors disabled:opacity-40"
             >
               최종 적용
             </button>
@@ -1814,8 +1814,8 @@ function ProblemDetailPanel({
 
       {/* ===== 합치기 모드 배너 ===== */}
       {mergeMode && (
-        <div className="px-5 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
-          <span className="text-sm font-medium text-purple-700">
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">
             {mergeTargetId
               ? `문제 ${allProblems?.find(p => p.id === mergeTargetId)?.number}번과 합치시겠습니까?`
               : '합칠 문제를 클릭하세요'}
@@ -1823,7 +1823,7 @@ function ProblemDetailPanel({
           <div className="flex gap-2">
             {mergeTargetId && (
               <button type="button" onClick={onMergeProblems}
-                className="px-3 py-1 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors">
+                className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors">
                 합치기 실행
               </button>
             )}
@@ -1955,7 +1955,7 @@ function ProblemDetailPanel({
         <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
           <button type="button" onClick={() => { if (isEditing) { onSave({ content: editContent }); setIsEditing(false); } else { onSave({}); } }}
             disabled={isSaving}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50">
             {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             저장
           </button>
@@ -1970,7 +1970,7 @@ function ProblemDetailPanel({
             다시 분석
           </button>
           <button type="button" onClick={() => setShowAdvancedModal(true)} disabled={isReanalyzing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50">
             <Sparkles className="h-3.5 w-3.5" />
             고급 분석
           </button>
@@ -1982,17 +1982,17 @@ function ProblemDetailPanel({
             disabled={!problem.bbox && !problem.cropImageBase64}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               insertImageMode && cropTarget === 'body'
-                ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
+                : 'border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100'
             }`}>
-            <ImagePlus className={`h-3.5 w-3.5 ${insertImageMode && cropTarget === 'body' ? 'text-white' : 'text-blue-600'}`} />
+            <ImagePlus className={`h-3.5 w-3.5 ${insertImageMode && cropTarget === 'body' ? 'text-white' : 'text-gray-500'}`} />
             📷 {insertImageMode && cropTarget === 'body' ? '삽입 취소' : '본문 이미지'}
           </button>
           {/* ★ 객관식 이미지 수동 크롭 (2026-06-08): 본문처럼 드래그 크롭 → 그 선택지 choiceImages 로.
               본문 경로 불변, 가산만. 4x 업스케일 동일. 객관식(choices) 있는 문제에서만 노출. */}
           {problem.choices && problem.choices.length > 0 && (
-            <div className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/40 px-1.5 py-1">
-              <span className="text-[10px] font-bold text-indigo-600 px-0.5">객관식</span>
+            <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1">
+              <span className="text-[10px] font-bold text-gray-600 px-0.5">객관식</span>
               {['①', '②', '③', '④', '⑤'].slice(0, problem.choices.length).map((cn, i) => (
                 <button key={i} type="button"
                   onClick={() => { setCropTarget(i); if (!insertImageMode) onToggleInsertImage?.(); }}
@@ -2000,8 +2000,8 @@ function ProblemDetailPanel({
                   title={`${cn} 선택지에 이미지 크롭 — 드래그로 영역 선택`}
                   className={`w-6 h-6 rounded text-xs font-bold border transition-colors disabled:opacity-40 ${
                     insertImageMode && cropTarget === i
-                      ? 'border-indigo-500 bg-indigo-600 text-white shadow shadow-indigo-500/30'
-                      : 'border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100'
+                      ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
                   }`}>
                   {cn}
                 </button>
@@ -2018,7 +2018,7 @@ function ProblemDetailPanel({
           {onStartMerge && (
             <button type="button" onClick={onStartMerge}
               disabled={mergeMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50">
               <Merge className="h-3.5 w-3.5" />
               합치기
             </button>
@@ -2048,7 +2048,7 @@ function ProblemDetailPanel({
                     setIsEditingNumber(false);
                   }
                 }}
-                className="w-10 h-8 rounded-full bg-emerald-500 text-white font-bold text-sm text-center flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                className="w-10 h-8 rounded-full bg-gray-900 text-white font-bold text-sm text-center flex-shrink-0 focus:outline-none focus:ring-1 focus:ring-gray-400"
                 min={1}
                 autoFocus
               />
@@ -2060,14 +2060,14 @@ function ProblemDetailPanel({
                   setIsEditingNumber(true);
                   setTimeout(() => numberInputRef.current?.select(), 50);
                 }}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:bg-emerald-600 transition-colors"
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-900 text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:bg-gray-800 transition-colors"
               >
                 {problem.number || '?'}
               </button>
             )}
             <div className="flex-1">
               <div className="flex items-center gap-1">
-                <Pencil className="h-3 w-3 text-emerald-500" />
+                <Pencil className="h-3 w-3 text-gray-500" />
                 <span className="text-xs font-medium text-gray-700">문제 번호</span>
                 {/* 배점 인라인 수정 */}
                 {isEditingScore ? (
@@ -2101,10 +2101,10 @@ function ProblemDetailPanel({
                           setIsEditingScore(false);
                         }
                       }}
-                      className="w-14 h-5 rounded border border-blue-300 bg-white px-1.5 text-xs text-blue-700 text-center font-medium focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      className="w-14 h-5 rounded border border-gray-300 bg-white px-1.5 text-xs text-gray-800 text-center font-medium focus:outline-none focus:ring-1 focus:ring-gray-400"
                       autoFocus
                     />
-                    <span className="text-xs text-blue-500">점</span>
+                    <span className="text-xs text-gray-500">점</span>
                   </div>
                 ) : problem.score != null ? (
                   <button
@@ -2114,7 +2114,7 @@ function ProblemDetailPanel({
                       setIsEditingScore(true);
                       setTimeout(() => scoreInputRef.current?.select(), 50);
                     }}
-                    className="ml-2 text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded hover:bg-blue-100 transition-colors cursor-pointer"
+                    className="ml-2 text-xs font-medium text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded hover:bg-gray-200 transition-colors cursor-pointer tabular-nums"
                     title="클릭해서 배점 수정"
                   >
                     {problem.score}점
@@ -2127,7 +2127,7 @@ function ProblemDetailPanel({
                       setIsEditingScore(true);
                       setTimeout(() => scoreInputRef.current?.focus(), 50);
                     }}
-                    className="ml-2 text-[10px] text-gray-400 border border-dashed border-gray-300 px-1.5 py-0.5 rounded hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer"
+                    className="ml-2 text-[10px] text-gray-400 border border-dashed border-gray-300 px-1.5 py-0.5 rounded hover:border-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
                     title="배점 입력"
                   >
                     + 배점
@@ -2145,11 +2145,11 @@ function ProblemDetailPanel({
 
         {/* ===== 분석 상태 배너 ===== */}
         {problem.status === 'pending' && !isReanalyzing && (
-          <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5">
-            <Eye className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5">
+            <Eye className="h-4 w-4 text-gray-500 flex-shrink-0" />
             <div>
-              <span className="text-xs text-blue-700 font-bold">문제 영역 감지됨</span>
-              <p className="text-[10px] text-blue-500 mt-0.5">&quot;분석 시작&quot; 버튼을 눌러 OCR + AI 분석을 실행하세요</p>
+              <span className="text-xs text-gray-700 font-bold">문제 영역 감지됨</span>
+              <p className="text-[10px] text-gray-500 mt-0.5">&quot;분석 시작&quot; 버튼을 눌러 OCR + AI 분석을 실행하세요</p>
             </div>
           </div>
         )}
@@ -2347,14 +2347,14 @@ function ProblemDetailPanel({
               {problem.achievementCode && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-gray-500 w-14 flex-shrink-0">성취기준</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 font-mono">
                     {problem.achievementCode}
                   </span>
                 </div>
               )}
               <div className="flex flex-wrap gap-1.5">
                 {problem.typeCode && (
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
                     {problem.typeCode}
                   </span>
                 )}
@@ -2363,14 +2363,14 @@ function ProblemDetailPanel({
                     {problem.typeName}
                   </span>
                 )}
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
                   난이도: {diffCfg.label}
                 </span>
               </div>
               {(problem.subject || problem.chapter) && (
                 <div className="flex flex-wrap gap-1.5">
                   {problem.subject && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
                       {problem.subject}
                     </span>
                   )}
@@ -2389,7 +2389,7 @@ function ProblemDetailPanel({
               {problem.cognitiveDomain && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-gray-500 w-14 flex-shrink-0">인지영역</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
                     {{ CALCULATION: '계산', UNDERSTANDING: '이해', INFERENCE: '추론', PROBLEM_SOLVING: '문제해결' }[problem.cognitiveDomain] || problem.cognitiveDomain}
                   </span>
                 </div>
@@ -5132,7 +5132,7 @@ export default function AnalyzeJobPage() {
     return (
       <div className="flex h-full w-full items-center justify-center bg-black text-white">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-content-secondary" />
           <p className="text-sm text-zinc-400">분석 데이터를 불러오는 중...</p>
         </div>
       </div>
@@ -5253,7 +5253,7 @@ export default function AnalyzeJobPage() {
                   setDetectionMode('ai');
                   setUseAutoCropMode(true);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary transition-colors"
                 title="AI(YOLO)가 모든 페이지의 문제·도형을 자동 감지합니다"
               >
                 <Sparkles className="h-3 w-3" />
@@ -5287,7 +5287,7 @@ export default function AnalyzeJobPage() {
           <span className="text-xs text-zinc-400">
             {isAutoCropActive ? (
               <>
-                감지 <span className="text-indigo-400 font-bold">{autoCropAllProblems.length}</span>문항
+                감지 <span className="text-content-primary font-bold tabular-nums">{autoCropAllProblems.length}</span>문항
                 {completedCount > 0 && (
                   <span className="text-emerald-400"> · {completedCount}완료</span>
                 )}
@@ -5297,7 +5297,7 @@ export default function AnalyzeJobPage() {
               </>
             ) : (
               <>
-                총 <span className="text-indigo-400 font-bold">{jobData.totalProblems}</span>문항
+                총 <span className="text-content-primary font-bold tabular-nums">{jobData.totalProblems}</span>문항
               </>
             )}
           </span>
@@ -5335,7 +5335,7 @@ export default function AnalyzeJobPage() {
                 type="button"
                 onClick={handleSaveAll}
                 disabled={isSavingAll}
-                className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 disabled:opacity-60"
+                className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-all bg-white hover:bg-zinc-200 text-black disabled:opacity-60"
               >
                 {isSavingAll ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -5362,7 +5362,7 @@ export default function AnalyzeJobPage() {
 
       {/* 페이지 탭 바 */}
       <div className="flex items-center gap-2 border-b border-zinc-800/50 px-4 py-1.5 flex-shrink-0 bg-zinc-950/50">
-        <span className="text-xs text-indigo-400 font-bold bg-indigo-500/10 border border-indigo-500/30 rounded px-2 py-0.5">
+        <span className="text-xs text-content-secondary font-bold bg-white/[.04] border border-white/[.08] rounded px-2 py-0.5 tabular-nums">
           페이지 {currentPage} / {totalPdfPages}
         </span>
         <span className="text-[11px] text-zinc-500 truncate">
@@ -5371,9 +5371,9 @@ export default function AnalyzeJobPage() {
         <span className={`text-[10px] rounded px-1.5 py-0.5 ${
           useAutoCropMode
             ? detectionMode === 'ai'
-              ? 'text-indigo-400/70 bg-indigo-500/5 border border-indigo-500/20'
-              : 'text-indigo-400/70 bg-indigo-500/5 border border-indigo-500/20'
-            : 'text-emerald-400/70 bg-emerald-500/5 border border-emerald-500/20'
+              ? 'text-content-tertiary bg-white/[.03] border border-white/[.08]'
+              : 'text-content-tertiary bg-white/[.03] border border-white/[.08]'
+            : 'text-content-tertiary bg-white/[.03] border border-white/[.08]'
         }`}>
           {useAutoCropMode
             ? detectionMode === 'ai' ? 'AI 감지 모드' : 'AutoCrop 모드'
@@ -5404,7 +5404,7 @@ export default function AnalyzeJobPage() {
 
         {/* --- 중앙: PDF 이미지 + 바운딩 박스 --- */}
         {jobData.fileName?.match(/\.hwpx?$/i) && !jobData.pdfUrl && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-blue-500/20 border border-blue-500/40 rounded-lg text-blue-300 text-xs text-center max-w-md animate-pulse">
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-white/[.06] border border-white/[.14] rounded-lg text-content-secondary text-xs text-center max-w-md animate-pulse">
             <Loader2 className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5 animate-spin" />
             HWP → PDF 변환 중... 완료되면 미리보기가 표시됩니다.
           </div>

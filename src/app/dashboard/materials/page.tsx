@@ -267,8 +267,8 @@ function SubjectBadge({ subject, detail }: { subject: string; detail: string }) 
     <div className="flex flex-col items-center gap-0.5 shrink-0 w-16">
       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
         isHigh
-          ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
-          : 'bg-violet-500/15 text-violet-400 border border-violet-500/20'
+          ? 'border border-white/[.08] bg-white/[.04] text-content-secondary'
+          : 'border border-white/[.08] bg-white/[.04] text-content-secondary'
       }`}>
         {subject}
       </span>
@@ -338,7 +338,7 @@ function BreakdownPanel({
   return (
     <div className="px-4 py-3 space-y-2">
       {/* 헤더: 자료명 + 전체 출제 */}
-      <div className="flex items-center justify-between rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 mb-3">
+      <div className="flex items-center justify-between rounded-lg bg-white/[.04] border border-white/[.08] px-3 py-2 mb-3">
         <div className="min-w-0">
           <div className="text-sm font-bold text-content-primary truncate">{material.name}</div>
           <div className="text-[11px] text-content-tertiary">
@@ -349,7 +349,7 @@ function BreakdownPanel({
         </div>
         <button
           onClick={() => onPublish(null)}
-          className="shrink-0 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:-translate-y-[1px] transition-all shadow shadow-indigo-500/20"
+          className="shrink-0 whitespace-nowrap rounded-full border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary transition-all"
         >
           + 전체 출제
         </button>
@@ -419,12 +419,12 @@ function BreakdownNodeRow({
         <span
           className={`shrink-0 inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold border ${
             node.level === 1
-              ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/20'
+              ? 'bg-white/[.08] text-content-primary border-white/[.14]'
               : node.level === 2
-              ? 'bg-violet-500/15 text-violet-400 border-violet-500/20'
+              ? 'bg-white/[.06] text-content-secondary border-white/[.10]'
               : node.level === 3
-              ? 'bg-pink-500/15 text-pink-400 border-pink-500/20'
-              : 'bg-amber-500/15 text-amber-400 border-amber-500/20'
+              ? 'bg-white/[.04] text-content-secondary border-white/[.08]'
+              : 'bg-white/[.04] text-content-tertiary border-white/[.08]'
           }`}
         >
           {node.level === 1 ? '대' : node.level === 2 ? '중' : node.level === 3 ? '소' : '유형'}
@@ -452,7 +452,7 @@ function BreakdownNodeRow({
         {/* 출제 버튼 */}
         <button
           onClick={() => onPublish(node)}
-          className="shrink-0 rounded-md bg-indigo-600 hover:bg-indigo-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm shadow-indigo-500/20"
+          className="shrink-0 whitespace-nowrap rounded-md border border-white/[.08] bg-white/[.04] px-2.5 py-1 text-[10px] font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
         >
           + 출제
         </button>
@@ -720,16 +720,16 @@ export default function MaterialsPage() {
             disabled={!hasExams}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
               hasExams
-                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-content-primary shadow-lg shadow-indigo-500/20 hover:-translate-y-[1px]'
+                ? 'bg-white text-black hover:bg-zinc-200'
                 : 'bg-surface-raised text-content-tertiary opacity-50 cursor-not-allowed'
             }`}
           >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${hasExams ? 'bg-black/10' : 'bg-white/10'}`}>
               <Plus className="h-3.5 w-3.5" />
             </span>
             <span>강좌에 추가</span>
           </button>
-          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border bg-surface-raised/80 text-content-secondary hover:bg-zinc-700 transition-colors">
+          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary transition-colors">
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
@@ -755,7 +755,7 @@ export default function MaterialsPage() {
                     <select
                       value={grade}
                       onChange={(e) => handleGradeChange(e.target.value)}
-                      className="h-9 appearance-none rounded-full border border bg-surface-card pl-3 pr-8 text-xs font-medium text-content-primary focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="h-9 appearance-none rounded-full border border bg-surface-card pl-3 pr-8 text-xs font-medium text-content-primary focus:outline-none focus:ring-1 focus:ring-white/30"
                       style={{ width: '120px' }}
                     >
                       {gradeOptions.map((opt) => (
@@ -772,7 +772,7 @@ export default function MaterialsPage() {
                 {selectedFolder && (
                   <button
                     onClick={handleGoBack}
-                    className="flex items-center gap-1.5 mb-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                    className="flex items-center gap-1.5 mb-2 text-xs font-medium text-content-secondary hover:text-content-primary transition-colors"
                   >
                     <ArrowLeft size={12} />
                     <span>그룹으로 돌아가기</span>
@@ -792,7 +792,7 @@ export default function MaterialsPage() {
                           key={group.id}
                           type="button"
                           onClick={() => handleSelectGroup(group)}
-                          className="w-full text-left rounded-lg border border-subtle bg-surface-card/50 px-3 py-2.5 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all"
+                          className="w-full text-left rounded-lg border border-subtle bg-surface-card/50 px-3 py-2.5 hover:border-white/[.14] hover:bg-white/[.06] transition-all"
                         >
                           <span className="text-sm font-medium text-content-primary">{group.name}</span>
                           <span className="text-[10px] text-content-muted ml-2">{group.folders.length}개 폴더</span>
@@ -810,7 +810,7 @@ export default function MaterialsPage() {
                         key={folder.id}
                         type="button"
                         onClick={() => handleSelectFolder(folder)}
-                        className="flex items-center gap-2 rounded-lg border border-subtle bg-surface-card/50 px-3 py-2 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all text-left"
+                        className="flex items-center gap-2 rounded-lg border border-subtle bg-surface-card/50 px-3 py-2 hover:border-white/[.14] hover:bg-white/[.06] transition-all text-left"
                       >
                         <Folder size={14} className="text-content-tertiary shrink-0" />
                         <div className="min-w-0">
@@ -835,12 +835,12 @@ export default function MaterialsPage() {
                         onClick={() => handleSelectSubFolder(sub)}
                         className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all text-left ${
                           selectedSubFolder?.id === sub.id
-                            ? 'border-indigo-500/50 bg-indigo-500/10'
-                            : 'border-subtle bg-surface-card/50 hover:border-indigo-500/30 hover:bg-indigo-500/5'
+                            ? 'border-white/[.14] bg-white/[.08]'
+                            : 'border-subtle bg-surface-card/50 hover:border-white/[.14] hover:bg-white/[.06]'
                         }`}
                       >
-                        <Folder size={13} className={selectedSubFolder?.id === sub.id ? 'text-indigo-400' : 'text-content-tertiary'} />
-                        <span className={`text-xs font-medium ${selectedSubFolder?.id === sub.id ? 'text-indigo-300' : 'text-content-secondary'}`}>
+                        <Folder size={13} className={selectedSubFolder?.id === sub.id ? 'text-content-primary' : 'text-content-tertiary'} />
+                        <span className={`text-xs font-medium ${selectedSubFolder?.id === sub.id ? 'text-content-primary' : 'text-content-secondary'}`}>
                           {sub.name}
                         </span>
                       </button>
@@ -864,7 +864,7 @@ export default function MaterialsPage() {
                       placeholder="학원자료 검색"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-8 w-full rounded-md border border bg-surface-card px-3 pr-8 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="h-8 w-full rounded-md border border bg-surface-card px-3 pr-8 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-white/30"
                     />
                     <Search className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-tertiary" />
                   </div>
@@ -890,7 +890,7 @@ export default function MaterialsPage() {
                         onClick={() => handleSelectMaterial(material)}
                         className={`cursor-pointer border-b border-subtle px-4 py-2.5 transition-colors ${
                           selectedMaterial?.id === material.id
-                            ? 'bg-indigo-500/10 border-l-2 border-l-indigo-500'
+                            ? 'bg-white/[.08] border-l-2 border-l-white/40'
                             : 'hover:bg-surface-card'
                         }`}
                       >
@@ -899,12 +899,12 @@ export default function MaterialsPage() {
                             <FileText size={13} className="text-content-muted shrink-0" />
                             <span className="text-xs font-medium text-content-primary truncate">{material.name}</span>
                             {material.diagnosticCategory && (
-                              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400 shrink-0">
+                              <span className="rounded-full border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[9px] font-bold text-content-secondary shrink-0">
                                 {material.diagnosticCategory}
                               </span>
                             )}
                             {material.type === 'provider' && (
-                              <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400 shrink-0">
+                              <span className="rounded-full border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[9px] font-bold text-content-secondary shrink-0">
                                 과사람
                               </span>
                             )}
@@ -965,7 +965,7 @@ export default function MaterialsPage() {
                     onClick={() => setActiveTab('provider')}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                       activeTab === 'provider'
-                        ? 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30'
+                        ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                         : 'bg-surface-raised text-content-tertiary hover:text-content-secondary'
                     }`}
                   >
@@ -975,7 +975,7 @@ export default function MaterialsPage() {
                     onClick={() => setActiveTab('academy')}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                       activeTab === 'academy'
-                        ? 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30'
+                        ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                         : 'bg-surface-raised text-content-tertiary hover:text-content-secondary'
                     }`}
                   >
@@ -1035,7 +1035,7 @@ export default function MaterialsPage() {
 
                         {/* 출제 button */}
                         <div className="w-16 flex justify-center">
-                          <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-content-primary transition-all hover:bg-indigo-500 active:scale-95 shadow-sm shadow-indigo-500/20">
+                          <button className="whitespace-nowrap rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-[11px] font-bold text-content-secondary transition-all hover:bg-white/[.06] hover:text-content-primary active:scale-95">
                             출제
                           </button>
                         </div>

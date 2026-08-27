@@ -108,7 +108,7 @@ function StepBadge({ number, active }: { number: number; active?: boolean }) {
   return (
     <span className={`
       flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-colors
-      ${active ? 'bg-indigo-500 text-white' : 'bg-zinc-700 text-content-secondary'}
+      ${active ? 'bg-white text-black' : 'bg-zinc-700 text-content-secondary'}
     `}>
       {number}
     </span>
@@ -178,7 +178,7 @@ function MathsecrTreePanel({
             {/* L1: 대단원 */}
             <div className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-all ${
               isL1Selected
-                ? 'bg-indigo-500/10 text-indigo-300'
+                ? 'bg-white/[.08] text-content-primary'
                 : 'text-content-secondary hover:bg-surface-raised/50 hover:text-content-primary'
             }`}>
               <button type="button" onClick={(e) => toggleExpandL1(e, l1Key)} className="p-0.5 shrink-0">
@@ -186,11 +186,11 @@ function MathsecrTreePanel({
               </button>
               <button type="button" onClick={() => onToggleL1(l1)} className="flex items-center gap-2 flex-1 text-left">
                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                  isL1Selected ? 'border-indigo-500 bg-indigo-500'
-                  : isL1Partial ? 'border-indigo-400 bg-indigo-500/40'
+                  isL1Selected ? 'border-white bg-white'
+                  : isL1Partial ? 'border-white/60 bg-white/40'
                   : 'border-zinc-600'
                 }`}>
-                  {(isL1Selected || isL1Partial) && <Check size={9} className="text-white" />}
+                  {(isL1Selected || isL1Partial) && <Check size={9} className="text-black" />}
                 </div>
                 <span className="font-medium">{l1Idx + 1}. {l1.t}</span>
               </button>
@@ -219,7 +219,7 @@ function MathsecrTreePanel({
                         <div key={l2Key}>
                           <div className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-all ${
                             isL2Selected
-                              ? 'bg-blue-500/10 text-blue-300'
+                              ? 'bg-white/[.08] text-content-primary'
                               : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
                           }`}>
                             {l3Children.length > 0 && (
@@ -230,13 +230,13 @@ function MathsecrTreePanel({
                             {l3Children.length === 0 && <span className="w-5" />}
                             <button type="button" onClick={() => onToggleL2(l1, l2)} className="flex items-center gap-2 flex-1 text-left">
                               <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                                isL2Selected ? 'border-blue-500 bg-blue-500'
-                                : isL2Partial ? 'border-blue-400 bg-blue-500/40'
+                                isL2Selected ? 'border-white bg-white'
+                                : isL2Partial ? 'border-white/60 bg-white/40'
                                 : 'border-zinc-600'
                               }`}>
-                                {(isL2Selected || isL2Partial) && <Check size={9} className="text-white" />}
+                                {(isL2Selected || isL2Partial) && <Check size={9} className="text-black" />}
                               </div>
-                              <span className={`text-[10px] font-bold shrink-0 ${isL2Selected ? 'text-blue-400' : 'text-content-muted'}`}>
+                              <span className={`text-[10px] font-bold shrink-0 ${isL2Selected ? 'text-content-primary' : 'text-content-muted'}`}>
                                 {l1Idx + 1}.{l2Idx + 1}
                               </span>
                               <span className="flex-1 text-left truncate">{l2.t}</span>
@@ -265,16 +265,16 @@ function MathsecrTreePanel({
                                         onClick={() => onToggleL3(l3Key)}
                                         className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-[11px] transition-all ${
                                           isL3Selected
-                                            ? 'bg-emerald-500/10 text-emerald-300'
+                                            ? 'bg-white/[.08] text-content-primary'
                                             : 'text-content-tertiary hover:bg-surface-raised/20 hover:text-content-secondary'
                                         }`}
                                       >
                                         <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                                          isL3Selected ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-600'
+                                          isL3Selected ? 'border-white bg-white' : 'border-zinc-600'
                                         }`}>
-                                          {isL3Selected && <Check size={8} className="text-white" />}
+                                          {isL3Selected && <Check size={8} className="text-black" />}
                                         </div>
-                                        <span className={`text-[9px] font-bold shrink-0 ${isL3Selected ? 'text-emerald-400' : 'text-content-muted'}`}>
+                                        <span className={`text-[9px] font-bold shrink-0 ${isL3Selected ? 'text-content-primary' : 'text-content-muted'}`}>
                                           {l3Idx + 1}
                                         </span>
                                         <span className="flex-1 text-left truncate">{l3.t}</span>
@@ -338,7 +338,7 @@ function TypeDetailPanel({
             <button
               type="button"
               onClick={() => onSelectAllGroup(group.key, group.items)}
-              className="text-[10px] text-blue-400 hover:text-blue-300 font-medium shrink-0 ml-2"
+              className="text-[10px] text-content-secondary hover:text-content-primary font-medium shrink-0 ml-2"
             >
               전체 선택
             </button>
@@ -354,7 +354,7 @@ function TypeDetailPanel({
                   key={item.typeCode}
                   className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-blue-500/10 text-blue-300 ring-1 ring-blue-500/20'
+                      ? 'bg-white/[.08] text-content-primary ring-1 ring-white/[.14]'
                       : 'text-content-tertiary hover:bg-surface-raised/30 hover:text-content-secondary'
                   }`}
                   onClick={() => onToggleType(item.typeCode)}
@@ -364,12 +364,12 @@ function TypeDetailPanel({
 
                   {isSelected && (
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                      <Check size={10} className="text-blue-400" />
-                      <button onClick={() => onChangeTypeCount(item.typeCode, Math.max(1, count - 1))} className="p-0.5 text-blue-400 hover:text-blue-300">
+                      <Check size={10} className="text-content-secondary" />
+                      <button onClick={() => onChangeTypeCount(item.typeCode, Math.max(1, count - 1))} className="p-0.5 text-content-secondary hover:text-content-primary">
                         <Minus size={10} />
                       </button>
-                      <span className="text-blue-400 font-bold w-4 text-center">{count}</span>
-                      <button onClick={() => onChangeTypeCount(item.typeCode, count + 1)} className="p-0.5 text-blue-400 hover:text-blue-300">
+                      <span className="text-content-primary font-bold w-4 text-center tabular-nums">{count}</span>
+                      <button onClick={() => onChangeTypeCount(item.typeCode, count + 1)} className="p-0.5 text-content-secondary hover:text-content-primary">
                         <Plus size={10} />
                       </button>
                     </div>
@@ -449,13 +449,13 @@ function ManualSearchPanel({
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="키워드 검색..."
-              className="w-full rounded-md border border-subtle bg-surface-raised pl-8 pr-3 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-subtle bg-surface-raised pl-8 pr-3 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/25"
             />
           </div>
           <select
             value={difficulty}
             onChange={e => setDifficulty(e.target.value)}
-            className="rounded-md border border-subtle bg-surface-raised px-2 py-1.5 text-xs text-content-primary focus:border-indigo-500 focus:outline-none"
+            className="rounded-md border border-subtle bg-surface-raised px-2 py-1.5 text-xs text-content-primary focus:border-white/25 focus:outline-none"
           >
             <option value="">난이도</option>
             <option value="1">최하</option>
@@ -468,13 +468,13 @@ function ManualSearchPanel({
             type="button"
             onClick={handleSearch}
             disabled={isLoading}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 transition-colors shrink-0"
+            className="px-3 py-1.5 text-xs font-semibold text-content-secondary border border-white/[.08] bg-white/[.04] rounded-md hover:bg-white/[.06] hover:text-content-primary disabled:opacity-50 transition-colors shrink-0"
           >
             {isLoading ? <Loader2 size={12} className="animate-spin" /> : '검색'}
           </button>
         </div>
         {manualSelected.size > 0 && (
-          <div className="text-[10px] text-blue-400 font-medium">
+          <div className="text-[10px] text-content-secondary font-medium">
             {manualSelected.size}개 문제 선택됨
           </div>
         )}
@@ -505,16 +505,16 @@ function ManualSearchPanel({
                 onClick={() => onToggleSelect(p.id, p)}
                 className={`rounded-lg border p-3 cursor-pointer transition-all ${
                   isSelected
-                    ? 'border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500/30'
+                    ? 'border-white/[.14] bg-white/[.08]'
                     : 'border-subtle bg-surface-card/80 hover:border-accent/30'
                 }`}
               >
                 <div className="flex items-start gap-2">
                   {/* Checkbox */}
                   <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                    isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-zinc-600'
+                    isSelected ? 'border-white bg-white' : 'border-zinc-600'
                   }`}>
-                    {isSelected && <Check size={10} className="text-white" />}
+                    {isSelected && <Check size={10} className="text-black" />}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -649,7 +649,7 @@ function ExamPreviewPanel({
             onClick={() => onTabChange(tab)}
             className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${
               previewTab === tab
-                ? 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/20'
+                ? 'bg-white/[.08] text-content-primary ring-1 ring-white/[.14]'
                 : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
             }`}
           >
@@ -660,7 +660,7 @@ function ExamPreviewPanel({
           <button
             type="button"
             onClick={() => setShowDesignGallery(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-content-secondary hover:bg-white/[.06] hover:text-content-primary transition-colors"
             title="헤더 디자인 갤러리"
           >
             <FileEdit size={12} />
@@ -682,7 +682,7 @@ function ExamPreviewPanel({
       <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50 p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-full gap-2">
-            <Loader2 size={16} className="animate-spin text-indigo-400" />
+            <Loader2 size={16} className="animate-spin text-content-tertiary" />
             <span className="text-xs text-content-muted">시험지 생성 중...</span>
           </div>
         ) : problems.length > 0 ? (
@@ -778,7 +778,7 @@ function ExamPreviewPanel({
             onClick={() => onLayoutChange('single')}
             className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
               layout === 'single'
-                ? 'bg-indigo-500/20 text-indigo-300'
+                ? 'bg-white/[.08] text-content-primary'
                 : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
             }`}
           >
@@ -789,7 +789,7 @@ function ExamPreviewPanel({
             onClick={() => onLayoutChange('two-column')}
             className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-subtle ${
               layout === 'two-column'
-                ? 'bg-indigo-500/20 text-indigo-300'
+                ? 'bg-white/[.08] text-content-primary'
                 : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
             }`}
           >
@@ -816,7 +816,7 @@ function ExamPreviewPanel({
         {/* PDF 저장 */}
         <button
           type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded transition-colors shrink-0 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-content-secondary border border-white/[.08] bg-white/[.04] hover:bg-white/[.06] hover:text-content-primary rounded transition-colors shrink-0 disabled:opacity-50"
           onClick={onDownloadPDF}
           disabled={problems.length === 0 || isPDFGenerating}
         >
@@ -865,7 +865,7 @@ function DifficultyDistributionBar({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-content-secondary">전체 문항</span>
-          <span className="text-lg font-bold text-indigo-400">{totalQuestions}</span>
+          <span className="text-lg font-bold text-content-primary tabular-nums">{totalQuestions}</span>
         </div>
       </div>
 
@@ -888,7 +888,7 @@ function DifficultyDistributionBar({
                   onChange({ ...difficulties, [level]: v });
                 }}
                 className="h-8 w-12 rounded border border-subtle bg-surface-raised text-center text-sm font-bold text-content-primary
-                  focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500
+                  focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/25
                   [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <span className="text-[9px] text-content-muted">{available}</span>
@@ -1393,7 +1393,7 @@ export default function PaperCreatePage() {
               disabled={generatedExamId ? false : (
                 createMode === 'manual' ? manualSelected.size === 0 : totalQuestions === 0
               ) || !paperName.trim() || isGenerating}
-              className="flex items-center gap-1.5 rounded-lg border border-indigo-500/50 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
             >
               {isGenerating ? (
                 <><Loader2 size={14} className="animate-spin" /><span>생성 중...</span></>
@@ -1422,7 +1422,7 @@ export default function PaperCreatePage() {
                   type="text"
                   value={paperName}
                   onChange={(e) => setPaperName(e.target.value)}
-                  className="block w-52 rounded-md border border-subtle bg-surface-raised px-2 py-1 text-xs text-content-primary mt-0.5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="block w-52 rounded-md border border-subtle bg-surface-raised px-2 py-1 text-xs text-content-primary mt-0.5 focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/25"
                 />
               </div>
             </div>
@@ -1431,7 +1431,7 @@ export default function PaperCreatePage() {
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-center px-3">
               <span className="text-[10px] font-bold uppercase tracking-widest text-content-tertiary">총 문항수</span>
-              <div className="text-xl font-bold text-indigo-400 mt-0.5">{totalQuestions}</div>
+              <div className="text-xl font-bold text-content-primary tabular-nums mt-0.5">{totalQuestions}</div>
             </div>
 
             <div className="flex gap-1">
@@ -1443,9 +1443,9 @@ export default function PaperCreatePage() {
                   key={mode}
                   type="button"
                   onClick={() => setCreateMode(mode)}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-all ${
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
                     createMode === mode
-                      ? mode === 'auto' ? 'bg-indigo-600 ring-2 ring-indigo-400/50' : 'bg-zinc-600 ring-2 ring-zinc-400/50'
+                      ? 'bg-white/[.08] text-content-primary ring-1 ring-white/[.14]'
                       : 'bg-zinc-700/50 text-content-secondary hover:bg-zinc-700'
                   }`}
                 >
@@ -1473,12 +1473,12 @@ export default function PaperCreatePage() {
               {/* Subject selector */}
               <div className="flex-shrink-0 px-3 py-2 border-b border-subtle">
                 {selectedSubjectCode ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2">
-                    <span className="text-xs font-medium text-indigo-300 flex-1 truncate">{categoryLabel}</span>
+                  <div className="flex items-center gap-2 rounded-lg border border-white/[.14] bg-white/[.08] px-3 py-2">
+                    <span className="text-xs font-medium text-content-primary flex-1 truncate">{categoryLabel}</span>
                     <button
                       type="button"
                       onClick={() => handleSubjectChange('')}
-                      className="p-0.5 text-indigo-400 hover:text-indigo-300 transition-colors"
+                      className="p-0.5 text-content-secondary hover:text-content-primary transition-colors"
                     >
                       <X size={14} />
                     </button>
@@ -1487,7 +1487,7 @@ export default function PaperCreatePage() {
                   <select
                     value={selectedSubjectCode}
                     onChange={e => handleSubjectChange(e.target.value)}
-                    className="w-full rounded-lg border border-subtle bg-surface-raised px-3 py-2 text-sm text-content-primary focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-subtle bg-surface-raised px-3 py-2 text-sm text-content-primary focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/25"
                   >
                     <option value="">과목을 선택해 주세요</option>
                     <optgroup label="중학교">
@@ -1540,12 +1540,12 @@ export default function PaperCreatePage() {
                   {createMode === 'manual' ? '문제 검색' : '세부유형 선택'}
                 </span>
                 {createMode === 'auto' && selectedTypeItems.size > 0 && (
-                  <span className="ml-auto text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                  <span className="ml-auto text-[10px] font-bold text-content-secondary border border-white/[.08] bg-white/[.04] px-2 py-0.5 rounded-full tabular-nums">
                     {selectedTypeItems.size}개 선택
                   </span>
                 )}
                 {createMode === 'manual' && manualSelected.size > 0 && (
-                  <span className="ml-auto text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                  <span className="ml-auto text-[10px] font-bold text-content-secondary border border-white/[.08] bg-white/[.04] px-2 py-0.5 rounded-full tabular-nums">
                     {manualSelected.size}개 선택
                   </span>
                 )}
@@ -1591,7 +1591,7 @@ export default function PaperCreatePage() {
                 <div className="flex items-center gap-2">
                   <StepBadge number={3} active />
                   <span className="text-sm font-semibold text-content-primary">선택된 문제</span>
-                  <span className="text-lg font-bold text-indigo-400">{manualSelected.size}</span>
+                  <span className="text-lg font-bold text-content-primary tabular-nums">{manualSelected.size}</span>
                   <span className="text-xs text-content-muted">문항</span>
                 </div>
                 <button
