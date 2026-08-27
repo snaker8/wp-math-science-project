@@ -53,7 +53,7 @@ export default function ReportPage() {
             {/* 1. Header Section */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 print:hidden">
                 <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-indigo-400">
+                    <div className="flex items-center gap-2 text-content-tertiary">
                         <TrendingUp size={20} />
                         <span className="text-sm font-medium tracking-wider uppercase">Student Analysis Report</span>
                     </div>
@@ -62,7 +62,7 @@ export default function ReportPage() {
                 </div>
                 <button
                     onClick={handlePrint}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-content-primary px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20 group"
+                    className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-black transition-all hover:bg-zinc-200 group"
                 >
                     <Printer size={20} className="group-hover:scale-110 transition-transform" />
                     상담용 PDF 출력
@@ -82,15 +82,15 @@ export default function ReportPage() {
                     variants={itemVariants}
                     className="col-span-12 md:col-span-4 bg-surface-card/50 border border-subtle rounded-3xl p-8 space-y-6 relative overflow-hidden group print:border-none print:shadow-none print:bg-white print:p-0"
                 >
-                    <div className="absolute top-0 right-0 p-12 -mt-10 -mr-10 bg-indigo-500/10 blur-[100px] rounded-full group-hover:bg-indigo-500/20 transition-all duration-700" />
+                    <div className="absolute top-0 right-0 p-12 -mt-10 -mr-10 bg-white/[.04] blur-[100px] rounded-full group-hover:bg-white/[.06] transition-all duration-700" />
 
                     <div className="flex items-center gap-6">
-                        <div className="w-24 h-24 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
-                            <User size={48} className="text-indigo-400" />
+                        <div className="w-24 h-24 rounded-2xl bg-white/[.06] flex items-center justify-center border border-white/[.08]">
+                            <User size={48} className="text-content-tertiary" />
                         </div>
                         <div>
                             <h2 className="text-3xl font-bold">김민수</h2>
-                            <p className="text-indigo-400 font-medium">고등부 심화반 (A1)</p>
+                            <p className="text-content-secondary font-medium">고등부 심화반 (A1)</p>
                         </div>
                     </div>
 
@@ -101,7 +101,7 @@ export default function ReportPage() {
                         </div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-subtle print:border-zinc-200">
                             <p className="text-xs text-content-tertiary uppercase font-bold tracking-tighter">종합 등급</p>
-                            <p className="font-semibold mt-1 text-indigo-400">Superior (A+)</p>
+                            <p className="font-semibold mt-1 text-content-primary">Superior (A+)</p>
                         </div>
                     </div>
 
@@ -125,11 +125,11 @@ export default function ReportPage() {
                 {/* AI Insights (6 columns) */}
                 <motion.div
                     variants={itemVariants}
-                    className="col-span-12 md:col-span-8 bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-8 backdrop-blur-xl relative overflow-hidden flex flex-col justify-center print:bg-white print:border-zinc-100 print:mt-12"
+                    className="col-span-12 md:col-span-8 bg-surface-card/50 border border-subtle rounded-3xl p-8 backdrop-blur-xl relative overflow-hidden flex flex-col justify-center print:bg-white print:border-zinc-100 print:mt-12"
                 >
                     <div className="flex items-center gap-3 mb-6">
-                        <BrainCircuit size={28} className="text-indigo-400" />
-                        <h3 className="text-xl font-bold text-indigo-100 print:text-black">AI 맞춤 분석 인사이트</h3>
+                        <BrainCircuit size={28} className="text-content-tertiary" />
+                        <h3 className="text-xl font-bold text-content-primary print:text-black">AI 맞춤 분석 인사이트</h3>
                     </div>
 
                     <div className="space-y-4">
@@ -139,13 +139,13 @@ export default function ReportPage() {
                         <ul className="space-y-3">
                             {aiInsights.details.map((detail, idx) => (
                                 <li key={idx} className="flex gap-3 text-content-secondary print:text-content-muted leading-relaxed">
-                                    <span className="text-indigo-500/50 mt-1">•</span>
+                                    <span className="text-content-muted mt-1">•</span>
                                     <span>{detail}</span>
                                 </li>
                             ))}
                         </ul>
-                        <div className="mt-6 p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 print:bg-zinc-50 print:border-zinc-200">
-                            <p className="text-sm text-indigo-300 print:text-indigo-600 font-bold mb-1 italic">Future Strategy:</p>
+                        <div className="mt-6 p-4 bg-white/[.04] rounded-2xl border border-white/[.08] print:bg-zinc-50 print:border-zinc-200">
+                            <p className="text-sm text-content-secondary print:text-zinc-700 font-bold mb-1 italic">Future Strategy:</p>
                             <p className="text-sm text-content-secondary print:text-zinc-700">{aiInsights.recommendation}</p>
                         </div>
                     </div>
@@ -158,7 +158,7 @@ export default function ReportPage() {
                 >
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-xl font-bold">수학 역량 DNA</h3>
-                        <span className="text-xs bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-full font-bold">5-CORE METRICS</span>
+                        <span className="text-xs border border-white/[.08] bg-white/[.04] text-content-secondary px-3 py-1 rounded-full font-bold">5-CORE METRICS</span>
                     </div>
 
                     <div className="flex-1 min-h-[400px]">
@@ -257,7 +257,7 @@ export default function ReportPage() {
 
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                         {topicMasteryData.map((topic, i) => (
-                            <div key={i} className="bg-white/5 border border-subtle rounded-2xl p-4 flex flex-col justify-between h-32 group hover:border-indigo-500/30 transition-all print:border-zinc-200">
+                            <div key={i} className="bg-white/5 border border-subtle rounded-2xl p-4 flex flex-col justify-between h-32 group hover:border-white/[.14] transition-all print:border-zinc-200">
                                 <p className="text-sm font-semibold text-content-secondary print:text-zinc-700">{topic.topic}</p>
                                 <div>
                                     <div className="flex justify-between items-end mb-2">
@@ -294,7 +294,7 @@ export default function ReportPage() {
                     {/* Gauge Chart Section */}
                     <div className="w-full md:w-1/3 flex flex-col items-center justify-center border-r border-subtle pr-8 print:border-zinc-200">
                         <div className="flex items-center gap-2 mb-4 self-start">
-                            <Zap size={24} className="text-amber-400" />
+                            <Zap size={24} className="text-content-tertiary" />
                             <h3 className="text-xl font-bold">월간 학습 태도</h3>
                         </div>
                         <div className="relative w-[300px] h-[160px] flex justify-center overflow-hidden">
@@ -337,11 +337,7 @@ export default function ReportPage() {
                             {attitudeData.metrics.map((metric, idx) => (
                                 <div key={idx} className="bg-white/5 rounded-2xl p-4 flex items-center justify-between print:bg-zinc-50 print:border print:border-zinc-200">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg ${metric.category === '출결 점수' ? 'bg-indigo-500/20 text-indigo-400' :
-                                                metric.category === '과제 이행률' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                    metric.category === '수업 집중도' ? 'bg-rose-500/20 text-rose-400' :
-                                                        'bg-amber-500/20 text-amber-400'
-                                            }`}>
+                                        <div className="p-2 rounded-lg bg-white/[.06] text-content-secondary">
                                             {metric.category === '출결 점수' && <Clock size={16} />}
                                             {metric.category === '과제 이행률' && <Target size={16} />}
                                             {metric.category === '수업 집중도' && <Zap size={16} />}

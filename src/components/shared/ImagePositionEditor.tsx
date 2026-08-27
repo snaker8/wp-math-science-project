@@ -277,13 +277,13 @@ export function ImagePositionEditor({
   return (
     <div className="flex flex-col gap-2">
       {/* 헤더: 모드 선택 + 크기 조절 + 저장/취소 */}
-      <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 flex-wrap gap-1.5">
+      <div className="flex items-center justify-between px-2 py-1.5 rounded-lg border border-white/[.08] bg-white/[.04] flex-wrap gap-1.5">
         <div className="flex items-center gap-1">
           {/* 레이아웃 모드 버튼 */}
           <button
             type="button"
             onClick={() => setLayoutMode('line')}
-            className={`p-1 rounded transition-colors ${layoutMode === 'line' ? 'bg-violet-500/30 text-violet-300' : 'text-zinc-500 hover:text-violet-400'}`}
+            className={`p-1 rounded transition-colors ${layoutMode === 'line' ? 'border border-white/[.14] bg-white/[.08] text-content-primary' : 'text-zinc-500 hover:text-content-primary'}`}
             title="라인 모드 (블록 사이)"
           >
             <AlignCenter className="h-3.5 w-3.5" />
@@ -291,7 +291,7 @@ export function ImagePositionEditor({
           <button
             type="button"
             onClick={() => setLayoutMode('float-right')}
-            className={`p-1 rounded transition-colors ${layoutMode === 'float-right' ? 'bg-violet-500/30 text-violet-300' : 'text-zinc-500 hover:text-violet-400'}`}
+            className={`p-1 rounded transition-colors ${layoutMode === 'float-right' ? 'border border-white/[.14] bg-white/[.08] text-content-primary' : 'text-zinc-500 hover:text-content-primary'}`}
             title="우측 플로트 (텍스트 감싸기)"
           >
             <AlignRight className="h-3.5 w-3.5" />
@@ -299,7 +299,7 @@ export function ImagePositionEditor({
           <button
             type="button"
             onClick={() => setLayoutMode('float-left')}
-            className={`p-1 rounded transition-colors ${layoutMode === 'float-left' ? 'bg-violet-500/30 text-violet-300' : 'text-zinc-500 hover:text-violet-400'}`}
+            className={`p-1 rounded transition-colors ${layoutMode === 'float-left' ? 'border border-white/[.14] bg-white/[.08] text-content-primary' : 'text-zinc-500 hover:text-content-primary'}`}
             title="좌측 플로트"
           >
             <AlignLeft className="h-3.5 w-3.5" />
@@ -307,19 +307,19 @@ export function ImagePositionEditor({
 
           {/* 크기 조절 (플로트 모드) */}
           {isFloatMode && (
-            <div className="flex items-center gap-1 ml-2 border-l border-violet-500/30 pl-2">
+            <div className="flex items-center gap-1 ml-2 border-l border-white/[.08] pl-2">
               <button
                 type="button"
                 onClick={() => setWidthPercent(prev => Math.max(20, prev - 5))}
-                className="p-0.5 rounded text-violet-400 hover:bg-violet-500/20"
+                className="p-0.5 rounded text-content-secondary hover:bg-white/[.06]"
               >
                 <Minus className="h-3 w-3" />
               </button>
-              <span className="text-[10px] text-violet-300 min-w-[28px] text-center">{widthPercent}%</span>
+              <span className="text-[10px] text-content-secondary tabular-nums min-w-[28px] text-center">{widthPercent}%</span>
               <button
                 type="button"
                 onClick={() => setWidthPercent(prev => Math.min(60, prev + 5))}
-                className="p-0.5 rounded text-violet-400 hover:bg-violet-500/20"
+                className="p-0.5 rounded text-content-secondary hover:bg-white/[.06]"
               >
                 <Plus className="h-3 w-3" />
               </button>
@@ -328,7 +328,7 @@ export function ImagePositionEditor({
         </div>
 
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-violet-400 mr-1">
+          <span className="text-[10px] text-content-tertiary mr-1">
             {layoutMode === 'line' ? '라인' : layoutMode === 'float-right' ? '우측' : '좌측'}
           </span>
           <button
@@ -443,16 +443,16 @@ export function ImagePositionEditor({
               type="button"
               onClick={moveUp}
               disabled={figurePosition <= 0}
-              className="p-0.5 rounded text-violet-400 hover:bg-violet-500/20 disabled:text-zinc-600"
+              className="p-0.5 rounded text-content-secondary hover:bg-white/[.06] disabled:text-zinc-600"
             >
               <ChevronUp className="h-3 w-3" />
             </button>
-            <span className="text-[10px] text-violet-400">이미지 시작 위치</span>
+            <span className="text-[10px] text-content-tertiary">이미지 시작 위치</span>
             <button
               type="button"
               onClick={moveDown}
               disabled={figurePosition >= blocks.length}
-              className="p-0.5 rounded text-violet-400 hover:bg-violet-500/20 disabled:text-zinc-600"
+              className="p-0.5 rounded text-content-secondary hover:bg-white/[.06] disabled:text-zinc-600"
             >
               <ChevronDown className="h-3 w-3" />
             </button>

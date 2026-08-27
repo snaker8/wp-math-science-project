@@ -178,7 +178,7 @@ const FilterDropdown: React.FC<{
                   type="button"
                   onClick={() => { onChange(option); setIsOpen(false); }}
                   className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-raised ${
-                    value === option ? 'bg-surface-raised font-medium text-indigo-400' : 'text-content-secondary'
+                    value === option ? 'bg-surface-raised font-medium text-content-primary' : 'text-content-secondary'
                   }`}
                 >
                   {option}
@@ -193,7 +193,7 @@ const FilterDropdown: React.FC<{
 };
 
 const StepBadge: React.FC<{ number: number }> = ({ number }) => (
-  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-400">
+  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/[.14] bg-white/[.08] text-xs font-semibold text-content-primary">
     {number}
   </span>
 );
@@ -353,11 +353,11 @@ export default function SimilarPage() {
               disabled={!canCreateSimilar}
               className={`flex h-9 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-all ${
                 canCreateSimilar
-                  ? 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-blue-500 text-content-primary shadow-lg shadow-indigo-500/20 hover:-translate-y-[1px] active:translate-y-0'
+                  ? 'bg-white text-black hover:bg-zinc-200'
                   : 'cursor-not-allowed bg-surface-raised text-content-tertiary opacity-50 pointer-events-none'
               }`}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/10">
                 <FileText className="h-3.5 w-3.5" />
               </span>
               <span className="whitespace-nowrap">유사 시험지 출제</span>
@@ -387,10 +387,10 @@ export default function SimilarPage() {
                         placeholder="교재명 검색"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-8 w-40 rounded-md border border bg-surface-raised/50 pl-8 pr-3 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="h-8 w-40 rounded-md border border bg-surface-raised/50 pl-8 pr-3 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-white/[.2]"
                       />
                     </div>
-                    <span className="text-xs font-bold text-indigo-400">{filteredTextbooks.length}권</span>
+                    <span className="text-xs font-bold text-content-secondary tabular-nums">{filteredTextbooks.length}권</span>
                   </div>
                 </div>
 
@@ -412,12 +412,12 @@ export default function SimilarPage() {
                           onClick={() => handleSelectTextbook(book)}
                           className={`flex w-full items-center justify-between px-5 py-3 text-left transition-colors ${
                             isActive
-                              ? 'bg-indigo-500/10 text-indigo-300 font-semibold'
+                              ? 'bg-white/[.08] text-content-primary font-semibold'
                               : 'hover:bg-surface-raised/50 text-content-secondary'
                           }`}
                         >
                           <span className="flex-1 truncate text-[13px]">{book.name}</span>
-                          <span className={`w-14 text-right text-xs ${isActive ? 'text-indigo-400' : 'text-content-tertiary'}`}>
+                          <span className={`w-14 text-right text-xs ${isActive ? 'text-content-primary' : 'text-content-tertiary'}`}>
                             {book.unitCount}
                           </span>
                         </button>
@@ -447,7 +447,7 @@ export default function SimilarPage() {
                       <span className="text-[11px] text-content-tertiary">단원 선택 후 페이지를 선택하세요.</span>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-indigo-400">
+                  <span className="text-xs font-bold text-content-secondary tabular-nums">
                     {selectedTextbook ? units.length : 0}개
                   </span>
                 </div>
@@ -474,7 +474,7 @@ export default function SimilarPage() {
                               onClick={() => handleSelectUnit(unit)}
                               className={`flex w-full items-center px-5 py-3 text-left transition-colors ${
                                 isActive
-                                  ? 'bg-indigo-500/10 text-indigo-300 font-semibold'
+                                  ? 'bg-white/[.08] text-content-primary font-semibold'
                                   : 'hover:bg-surface-raised/50 text-content-secondary'
                               }`}
                             >
@@ -482,12 +482,12 @@ export default function SimilarPage() {
                               <span className="flex-1 flex items-center gap-2 pl-3 truncate text-[13px]">
                                 <span className="font-semibold">{unit.name}</span>
                                 {unit.badge && (
-                                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-400">
+                                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/[.14] bg-white/[.08] text-[10px] font-bold text-content-secondary tabular-nums">
                                     {unit.badge}
                                   </span>
                                 )}
                               </span>
-                              <span className={`w-14 text-center text-xs ${isActive ? 'text-indigo-400 font-bold' : 'text-content-tertiary'}`}>
+                              <span className={`w-14 text-center text-xs ${isActive ? 'text-content-primary font-bold' : 'text-content-tertiary'}`}>
                                 {unit.problemCount}
                               </span>
                             </button>
@@ -520,7 +520,7 @@ export default function SimilarPage() {
                                       onClick={() => handleTogglePage(page.pageNum)}
                                       className={`relative flex h-8 min-w-[40px] items-center justify-center rounded-lg px-2 text-xs font-medium transition-all ${
                                         isSelected
-                                          ? 'bg-indigo-500 text-content-primary shadow-md shadow-indigo-500/30'
+                                          ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                                           : 'bg-surface-raised text-content-secondary hover:bg-zinc-700 hover:text-content-primary'
                                       }`}
                                     >
@@ -559,7 +559,7 @@ export default function SimilarPage() {
                           <span className="text-sm font-semibold text-content-primary">문항 선택</span>
                         </div>
                         <span className="text-xs text-content-secondary">
-                          선택된 문제 <span className="font-bold text-indigo-400">{selectedProblemIds.size}</span>
+                          선택된 문제 <span className="font-bold text-content-primary tabular-nums">{selectedProblemIds.size}</span>
                           <span className="text-content-muted"> / {filteredProblems.length}</span>
                         </span>
                       </div>
@@ -583,7 +583,7 @@ export default function SimilarPage() {
                               onClick={() => setDifficultyFilter(d)}
                               className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
                                 difficultyFilter === d
-                                  ? 'bg-indigo-500 text-content-primary'
+                                  ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                                   : 'bg-surface-raised text-content-tertiary hover:bg-zinc-700 hover:text-content-secondary'
                               }`}
                             >
@@ -612,13 +612,13 @@ export default function SimilarPage() {
                               return (
                                 <span
                                   key={pageNum}
-                                  className="inline-flex items-center gap-1 rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-[11px] font-medium text-indigo-400 ring-1 ring-indigo-500/30"
+                                  className="inline-flex items-center gap-1 rounded-full bg-white/[.04] px-2.5 py-0.5 text-[11px] font-medium text-content-secondary ring-1 ring-white/[.14]"
                                 >
                                   {typeSummary ? `${typeSummary}: ` : ''}{pageNum}p
                                   <button
                                     type="button"
                                     onClick={() => handleRemovePageTag(pageNum)}
-                                    className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-500/30 transition-colors"
+                                    className="ml-0.5 rounded-full p-0.5 hover:bg-white/[.1] transition-colors"
                                   >
                                     <X className="h-2.5 w-2.5" />
                                   </button>
@@ -639,7 +639,7 @@ export default function SimilarPage() {
                             type="checkbox"
                             checked={selectedProblemIds.size === filteredProblems.length && filteredProblems.length > 0}
                             onChange={handleToggleAllProblems}
-                            className="h-3.5 w-3.5 accent-indigo-500 rounded cursor-pointer"
+                            className="h-3.5 w-3.5 accent-zinc-300 rounded cursor-pointer"
                           />
                         </span>
                         <span className="w-12 text-center">순번</span>
@@ -661,7 +661,7 @@ export default function SimilarPage() {
                               onClick={() => handleToggleProblem(problem.id)}
                               className={`flex w-full items-center px-5 py-2.5 text-left transition-colors ${
                                 isChecked
-                                  ? 'bg-indigo-500/5'
+                                  ? 'bg-white/[.04]'
                                   : 'hover:bg-surface-raised/30'
                               }`}
                             >
@@ -670,7 +670,7 @@ export default function SimilarPage() {
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={() => {}}
-                                  className="h-3.5 w-3.5 accent-indigo-500 rounded pointer-events-none"
+                                  className="h-3.5 w-3.5 accent-zinc-300 rounded pointer-events-none"
                                 />
                               </span>
                               <span className="w-12 text-center text-xs text-content-secondary">{problem.sequence}</span>

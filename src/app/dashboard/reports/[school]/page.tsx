@@ -185,8 +185,8 @@ export default function SchoolReportPage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
-              <School className="h-5 w-5 text-cyan-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[.08] bg-white/[.04]">
+              <School className="h-5 w-5 text-content-tertiary" />
             </div>
             <div>
               <h1 className="text-xl font-bold">{data.school}</h1>
@@ -318,7 +318,7 @@ export default function SchoolReportPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="시험지 / 단원 / 출제경향 검색..."
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-white/[.25] focus:outline-none"
               />
             </div>
             {data.availableYears.length > 0 && (
@@ -327,7 +327,7 @@ export default function SchoolReportPage() {
                 onChange={(e) =>
                   setYearFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))
                 }
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-white/[.25] focus:outline-none"
               >
                 <option value="all">전체 년도</option>
                 {data.availableYears.map((y) => (
@@ -404,7 +404,7 @@ export default function SchoolReportPage() {
                         <td className="px-3 py-2 text-center text-zinc-300">{e.problemCount}</td>
                         <td className="px-3 py-2 text-center">
                           {e.hasAnalysis ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-0.5 text-cyan-300">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-content-secondary">
                               <Sparkles className="h-3 w-3" />
                               완료
                             </span>
@@ -440,7 +440,7 @@ export default function SchoolReportPage() {
                           <div className="flex items-center justify-end gap-1">
                             <Link
                               href={`/dashboard/exam-analysis/${e.id}`}
-                              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-cyan-400"
+                              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
                               title="분석 페이지"
                             >
                               <ChevronRight className="h-3.5 w-3.5" />
@@ -450,7 +450,7 @@ export default function SchoolReportPage() {
                                 href={`/share/exam/${e.shareToken}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
+                                className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
                                 title="학부모 페이지"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
@@ -496,7 +496,7 @@ function StatCard({
   accent?: 'cyan' | 'emerald';
 }) {
   const accentColor =
-    accent === 'cyan' ? 'text-cyan-400' : accent === 'emerald' ? 'text-emerald-400' : 'text-white';
+    accent === 'cyan' ? 'text-content-primary' : accent === 'emerald' ? 'text-emerald-400' : 'text-white';
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
@@ -572,7 +572,7 @@ function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
                 className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3"
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <div className="font-bold text-cyan-300">{u.majorUnit}</div>
+                  <div className="font-bold text-zinc-100">{u.majorUnit}</div>
                   <div className="flex flex-wrap gap-1">
                     {u.questionNumbers.map((n) => (
                       <span

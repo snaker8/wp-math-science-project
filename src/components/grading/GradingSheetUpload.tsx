@@ -166,7 +166,7 @@ export default function GradingSheetUpload({
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
           <div>
-            <h2 className="text-base font-bold text-white">📷 채점표 이미지 자동 채점</h2>
+            <h2 className="text-base font-bold text-content-primary">채점표 이미지 자동 채점</h2>
             <p className="text-xs text-zinc-500 mt-0.5">{studentName} · {examTitle}</p>
           </div>
           <button type="button" onClick={() => !busy && onClose()} className="text-zinc-500 hover:text-white">
@@ -182,7 +182,7 @@ export default function GradingSheetUpload({
                 학생이 작성한 답안표 사진(또는 PDF)을 업로드하면 AI 가 번호별 답을 인식해 자동 채점합니다.
               </div>
 
-              <label className="block border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/5 transition-colors">
+              <label className="block border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center cursor-pointer hover:border-white/[.3] hover:bg-white/[.04] transition-colors">
                 <Upload size={28} className="text-zinc-500 mx-auto mb-2" />
                 <p className="text-sm text-zinc-300">파일 선택</p>
                 <p className="text-[11px] text-zinc-500 mt-1">JPG / PNG / WebP / PDF</p>
@@ -213,7 +213,7 @@ export default function GradingSheetUpload({
                 type="button"
                 onClick={handleUpload}
                 disabled={!file || busy}
-                className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+                className="w-full rounded-full bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold py-3 flex items-center justify-center gap-2"
               >
                 {busy ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
                 AI 채점 시작
@@ -317,8 +317,8 @@ export default function GradingSheetUpload({
                               onClick={() => setCause(m.seq, o.error_cause === c ? null : c)}
                               className={`px-2 py-0.5 rounded text-[11px] border transition-colors ${
                                 o.error_cause === c
-                                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                                  : 'bg-white/5 text-zinc-400 border-zinc-700 hover:border-indigo-500/30'
+                                  ? 'border-white/[.14] bg-white/[.08] text-content-primary'
+                                  : 'bg-white/5 text-zinc-400 border-zinc-700 hover:border-white/[.2] hover:text-content-primary'
                               }`}
                             >
                               {c}
@@ -355,7 +355,7 @@ export default function GradingSheetUpload({
               type="button"
               onClick={handleSave}
               disabled={busy}
-              className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2"
+              className="rounded-full bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold px-4 py-2 flex items-center gap-2"
             >
               {busy ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
               채점 결과 저장

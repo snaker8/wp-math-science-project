@@ -1,24 +1,14 @@
 'use client';
 
-import { GlowCard } from '@/components/shared/GlowCard';
-import { MathRenderer } from '@/components/shared/MathRenderer';
+import { SurfacePanel, RADIUS, PANEL_SURFACE, PANEL_INSET, PANEL_LIFT } from '@/components/ui/surface';
 import {
-  Users,
-  BrainCircuit,
-  TrendingUp,
-  Activity,
-  Calendar,
   ArrowRight,
   Upload,
   Wand2,
   MessageCircle,
   BookX,
-  FileText,
-  Database,
-  Zap,
   ChevronLeft,
   ChevronRight,
-  Bell,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -37,54 +27,43 @@ import { StudentAnalysisModal } from '@/components/dashboard/StudentAnalysisModa
 function StatusCard({
   label,
   value,
-  icon: Icon,
-  color,
+  sub,
   href,
   loading,
 }: {
   label: string;
   value: string | number;
-  icon: React.ElementType;
-  color: string;
+  /** 보조 한 줄 — 값만으로 판단이 안 될 때 채운다 */
+  sub?: string;
   href?: string;
   loading?: boolean;
 }) {
-  const colorMap: Record<string, { bg: string; text: string; border: string }> = {
-    indigo: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'border-indigo-500/20' },
-    rose: { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20' },
-    amber: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
-    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
-  };
-  const c = colorMap[color] || colorMap.indigo;
-
   const content = (
     <>
-      <div className={`p-2 ${c.bg} rounded-lg mb-3`}>
-        <Icon className={`w-5 h-5 ${c.text}`} />
-      </div>
-      <span className="text-xs text-content-tertiary font-medium mb-1">{label}</span>
+      <div className="text-xs font-semibold text-content-tertiary truncate">{label}</div>
       {loading ? (
-        <span className="my-1 inline-block h-7 w-14 rounded-lg bg-white/10 animate-pulse" aria-label="불러오는 중" />
+        <span className="mt-2 inline-block h-8 w-16 rounded-lg bg-white/10 animate-pulse" aria-label="불러오는 중" />
       ) : (
-        <span className="text-3xl font-bold text-content-primary">{value}</span>
+        <div className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-content-primary">
+          {value}
+        </div>
       )}
+      {sub && <div className="mt-0.5 text-[11px] text-content-muted">{sub}</div>}
     </>
   );
 
   if (href) {
     return (
-      <Link href={href} className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/40 border border-white/[.08] hover:border-white/10 hover:bg-surface-raised/50 transition-all cursor-pointer group">
+      <Link
+        href={href}
+        className={`block ${RADIUS.panel} ${PANEL_INSET} ${PANEL_LIFT} p-4`}
+      >
         {content}
-        <span className="text-[10px] text-content-muted group-hover:text-content-secondary mt-2 transition-colors">클릭하여 이동 →</span>
       </Link>
     );
   }
 
-  return (
-    <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-surface-card/40 border border-white/[.08] hover:border-white/10 transition-all">
-      {content}
-    </div>
-  );
+  return <div className={`${RADIUS.panel} ${PANEL_INSET} p-4`}>{content}</div>;
 }
 
 // ============================================================================
@@ -231,10 +210,8 @@ export default function DashboardPage() {
       {/* Header Section */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-content-secondary font-medium mb-1">{currentDate}</h2>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
-            대시보드
-          </h1>
+          <h2 className="mb-1 text-xs font-medium text-content-tertiary">{currentDate}</h2>
+          <h1 className="text-2xl font-bold tracking-tight text-content-primary">대시보드</h1>
         </div>
         <div className="flex gap-3">
           <button
@@ -243,9 +220,10 @@ export default function DashboardPage() {
           >
             설정
           </button>
+          {/* ★ 주 CTA = 흰 필 — 페이지의 유일한 명도 반전 요소 (Linear white-cta-inversion) */}
           <button
             onClick={() => router.push('/dashboard/create')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-content-primary text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
           >
             + 시험지 제작
           </button>
@@ -255,57 +233,48 @@ export default function DashboardPage() {
       {/* 1. 현재 등록 현황판 + 공지사항 (참조사이트 레이아웃) */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* 현재 등록 현황판 */}
-        <GlowCard className="lg:col-span-3">
-          <h3 className="text-sm font-bold text-content-primary mb-4 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-indigo-400" />
-            현재 등록 현황판
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <SurfacePanel title="등록 현황" className="lg:col-span-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatusCard
-              label="등록 강사 수"
+              label="등록 강사"
               value={stats.totalTeachers}
-              icon={Users}
-              color="indigo"
+              sub="명"
               href="/dashboard/settings"
               loading={statsLoading}
             />
             <StatusCard
-              label="발행한 시험지 수"
+              label="발행 시험지"
               value={stats.totalExams}
-              icon={FileText}
-              color="rose"
+              sub="장"
               href="/dashboard/exam-management"
               loading={statsLoading}
             />
             <StatusCard
-              label="등록 학생 수"
+              label="등록 학생"
               value={stats.totalStudents}
-              icon={Users}
-              color="amber"
+              sub="명"
               loading={statsLoading}
             />
             <StatusCard
-              label="TOTAL DB 문제 수"
+              label="DB 문제"
               value={stats.totalProblems}
-              icon={Database}
-              color="emerald"
+              sub={`이번 주 +${stats.problemsThisWeek}`}
               href="/dashboard/cloud"
               loading={statsLoading}
             />
           </div>
-        </GlowCard>
+        </SurfacePanel>
 
         {/* 공지사항 — 실데이터(/api/notices) */}
-        <GlowCard className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-content-primary flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-400" />
-              공지사항
-            </h3>
-            {!noticesLoading && notices.length > 0 && (
+        <SurfacePanel
+          title="공지사항"
+          right={
+            !noticesLoading && notices.length > 0 ? (
               <span className="text-[10px] text-content-tertiary">최근 {notices.length}건</span>
-            )}
-          </div>
+            ) : undefined
+          }
+          className="lg:col-span-2"
+        >
           {noticesLoading ? (
             <div className="space-y-3 animate-pulse">
               {[0, 1, 2].map((i) => (
@@ -341,7 +310,7 @@ export default function DashboardPage() {
               })}
             </div>
           )}
-        </GlowCard>
+        </SurfacePanel>
 
         {/* 공지 상세 모달 (body 있는 공지 클릭 시) */}
         {selectedNotice && (
@@ -383,7 +352,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 2. 월별 결산 + AI 포인트 + DB 문제 현황 */}
-      <GlowCard>
+      <SurfacePanel>
         <div className="flex flex-col lg:flex-row gap-6">
           {/* 월별 결산 차트 (좌측 큰 영역) */}
           <div className="flex-1 min-w-0">
@@ -429,18 +398,19 @@ export default function DashboardPage() {
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#1a1d28',
-                        border: '1px solid rgba(148,163,184,0.12)',
+                        backgroundColor: 'var(--bg-surface)',
+                        border: '1px solid rgba(255,255,255,0.09)',
                         borderRadius: '8px',
                         fontSize: '11px',
-                        color: '#fff',
+                        color: 'var(--text-primary)',
                       }}
                       formatter={(value: any) => [`${value}개`, '출제 수']}
                       labelFormatter={(label: any) => `${selectedYear}.${label}`}
                     />
+                    {/* 데이터 그래픽은 채도 허용 — Linear graphic accent (periwinkle) */}
                     <Bar
                       dataKey="count"
-                      fill="#818cf8"
+                      fill="#8FA4FF"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
@@ -453,64 +423,54 @@ export default function DashboardPage() {
           <div className="w-full lg:w-64 shrink-0 space-y-5 lg:border-l lg:border-subtle lg:pl-6">
             {/* AI 포인트 */}
             <div>
-              <h4 className="text-xs font-semibold text-content-secondary mb-3 flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                AI 포인트
-              </h4>
-              <div className="text-center mb-3">
-                <p className="text-[10px] text-content-tertiary mb-1">{selectedMonth}월 사용량</p>
-                <p className="text-3xl font-bold text-rose-400">{aiPoints.monthUsage} P</p>
+              <h4 className="text-xs font-semibold text-content-tertiary mb-3">AI 포인트</h4>
+              <div className="mb-3">
+                <p className="text-[10px] text-content-muted mb-1">{selectedMonth}월 사용량</p>
+                <p className="text-2xl font-bold tabular-nums tracking-tight text-content-primary">
+                  {aiPoints.monthUsage} P
+                </p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/40 border border-white/[.08]">
+                <div className={`flex items-center justify-between p-2.5 ${RADIUS.control} ${PANEL_INSET}`}>
                   <span className="text-xs text-content-secondary">현재 잔액</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-content-primary">{aiPoints.balance} P</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                    <span className="text-sm font-bold tabular-nums text-content-primary">{aiPoints.balance} P</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">
                       정상
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/40 border border-white/[.08]">
+                <div className={`flex items-center justify-between p-2.5 ${RADIUS.control} ${PANEL_INSET}`}>
                   <span className="text-xs text-content-secondary">경고 임계치</span>
-                  <span className="text-sm font-bold text-content-tertiary">{aiPoints.warningThreshold} P</span>
+                  <span className="text-sm font-bold tabular-nums text-content-tertiary">{aiPoints.warningThreshold} P</span>
                 </div>
               </div>
             </div>
 
             {/* DB 문제 현황 */}
             <div>
-              <h4 className="text-xs font-semibold text-content-secondary mb-3 flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5 text-indigo-400" />
-                DB 문제 현황
-              </h4>
-              <div className="text-center mb-3">
-                <p className="text-[10px] text-content-tertiary mb-1">총 등록 문제</p>
+              <h4 className="text-xs font-semibold text-content-tertiary mb-3">DB 문제 현황</h4>
+              <div className="mb-3">
+                <p className="text-[10px] text-content-muted mb-1">총 등록 문제</p>
                 {statsLoading ? (
-                  <span className="mx-auto my-1 inline-block h-6 w-16 rounded-lg bg-white/10 animate-pulse" aria-label="불러오는 중" />
+                  <span className="my-1 inline-block h-6 w-16 rounded-lg bg-white/10 animate-pulse" aria-label="불러오는 중" />
                 ) : (
-                  <p className="text-2xl font-bold text-content-primary">{stats.totalProblems}</p>
+                  <p className="text-2xl font-bold tabular-nums tracking-tight text-content-primary">{stats.totalProblems}</p>
                 )}
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-card/40 border border-white/[.08]">
+              <div className={`flex items-center justify-between p-2.5 ${RADIUS.control} ${PANEL_INSET}`}>
                 <span className="text-xs text-content-secondary">이번 주 추가</span>
-                <span className="text-sm font-bold text-indigo-400">+{stats.problemsThisWeek}</span>
+                <span className="text-sm font-bold tabular-nums text-accent">+{stats.problemsThisWeek}</span>
               </div>
             </div>
           </div>
         </div>
-      </GlowCard>
+      </SurfacePanel>
 
       {/* 3. AI 취약 단원 히트맵 + 빠른 작업 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Heatmap (2 cols) */}
-        <GlowCard className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <BrainCircuit className="w-5 h-5 text-indigo-400" />
-              <h3 className="text-sm font-semibold text-content-primary">AI 취약 단원 분석</h3>
-            </div>
-          </div>
+        <SurfacePanel title="AI 취약 단원 분석" className="lg:col-span-2">
 
           <div className="overflow-x-auto pb-4">
             <div className="min-w-[550px]">
@@ -618,65 +578,43 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        </GlowCard>
+        </SurfacePanel>
 
-        {/* 빠른 작업 + 수식 미리보기 */}
-        <div className="space-y-6">
-          <GlowCard>
-            <h3 className="text-sm font-semibold text-content-primary mb-4 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-indigo-400" />
-              빠른 작업
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: '시험지 자산화', color: 'hover:border-indigo-500/50', icon: Upload, href: '/dashboard/cloud' },
-                { label: '시험지 마법사', color: 'hover:border-rose-500/50', icon: Wand2, href: '/dashboard/create' },
-                { label: '학생 상담', color: 'hover:border-amber-500/50', icon: MessageCircle, href: '/tutor/classes' },
-                { label: '오답 노트', color: 'hover:border-emerald-500/50', icon: BookX, href: '/dashboard/prescription' },
-              ].map((action, i) => {
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => router.push(action.href)}
-                    className={`flex flex-col items-center justify-center gap-2 p-4 bg-surface-card/40 border border-white/[.08] rounded-xl transition-all hover:bg-surface-raised ${action.color} group`}
-                  >
-                    <Icon size={20} className="text-content-tertiary group-hover:text-content-primary transition-colors" />
-                    <span className="text-sm text-content-secondary group-hover:text-content-primary font-medium transition-colors">
-                      {action.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </GlowCard>
-
-          <div className="p-4 rounded-xl bg-surface-card/40 border border-white/[.08]">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs text-content-tertiary">수식 렌더링 미리보기</span>
-            </div>
-            <MathRenderer content="\int_{a}^{b} x^2 dx = [\frac{1}{3}x^3]_a^b" className="text-content-secondary text-sm" />
+        {/* 빠른 작업 */}
+        <SurfacePanel title="빠른 작업" className="self-start">
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: '시험지 자산화', icon: Upload, href: '/dashboard/cloud' },
+              { label: '시험지 마법사', icon: Wand2, href: '/dashboard/create' },
+              { label: '학생 상담', icon: MessageCircle, href: '/tutor/classes' },
+              { label: '오답 노트', icon: BookX, href: '/dashboard/prescription' },
+            ].map((action, i) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={i}
+                  onClick={() => router.push(action.href)}
+                  className={`flex flex-col items-center justify-center gap-2 p-4 ${RADIUS.panel} ${PANEL_INSET} ${PANEL_LIFT} group`}
+                >
+                  <Icon size={20} className="text-content-tertiary group-hover:text-content-primary transition-colors" />
+                  <span className="text-sm text-content-secondary group-hover:text-content-primary font-medium transition-colors">
+                    {action.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </SurfacePanel>
       </div>
 
       {/* 4. 활동 로그 + 수업 현황 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 최근 활동 로그 */}
-        <GlowCard>
-          <h3 className="text-sm font-semibold text-content-primary mb-4">최근 활동 로그</h3>
+        <SurfacePanel title="최근 활동 로그">
           <div className="space-y-0 divide-y divide-white/5">
             {activityLogs.map((log) => (
               <div key={log.id} className="py-4 first:pt-0 last:pb-0 flex items-start gap-3">
-                <div
-                  className={`mt-1 w-2 h-2 rounded-full ${
-                    log.type === 'grading'
-                      ? 'bg-indigo-500'
-                      : log.type === 'clinic'
-                      ? 'bg-rose-500'
-                      : 'bg-emerald-500'
-                  }`}
-                />
+                <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-accent/70" />
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
                     <h4 className="text-sm font-medium text-content-primary">{log.title}</h4>
@@ -687,27 +625,25 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </GlowCard>
+        </SurfacePanel>
 
         {/* 오늘의 수업 현황 */}
-        <GlowCard>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-content-primary flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-indigo-400" />
-              오늘의 수업 현황
-            </h3>
+        <SurfacePanel
+          title="오늘의 수업 현황"
+          right={
             <Link
               href="/dashboard/classes"
               className="text-xs text-content-tertiary hover:text-content-primary flex items-center gap-1 transition-colors"
             >
               전체 일정 <ArrowRight className="w-3 h-3" />
             </Link>
-          </div>
-          <div className="space-y-3">
+          }
+        >
+          <div className="space-y-2">
             {classStatus.map((cls) => (
               <div
                 key={cls.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-surface-card/40 border border-white/[.08] hover:border-white/10 transition-colors"
+                className={`flex items-center justify-between p-3 ${RADIUS.control} ${PANEL_INSET} transition-colors hover:border-white/[.12]`}
               >
                 <div>
                   <h4 className="text-sm font-medium text-content-primary mb-0.5">{cls.name}</h4>
@@ -731,7 +667,7 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </GlowCard>
+        </SurfacePanel>
       </div>
 
       <StudentAnalysisModal

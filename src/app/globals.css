@@ -17,42 +17,46 @@
     /* @deprecated — 예전 이름. font-mono 가 이걸 가리켜 생긴 버그 때문에 유지만 함. */
     --font-inter: "Inter", sans-serif;
 
-    /* ── 세련된 다크 팔레트 (Chrome 디자인 시스템과 통일) ── */
-    --bg-base: #0b0d12;      /* ← 더 깊은 베이스 (chrome-bg와 동일) */
-    --bg-surface: #1a1d28;
-    --bg-raised: #232736;
-    --bg-overlay: #2a2e3d;
+    /* ── 다크 팔레트 — Linear(linear.app) 실측 기반 중성 회색 (2026-08-27, insane-design/linear)
+       ★ 이전 팔레트는 slate 계열(파란기 회색: #1a1d28, rgba(148,163,184,…))이었다.
+         Linear 의 "밤의 콘솔" 인상은 색 기운이 0인 중성 회색 + 밝기 반 스텝 층에서 온다.
+         근거 실측: bg #08090A(69회) · 층 #191D20→#2E2E32→#3E3E44 · 텍스트 #E2E4E7/#9C9DA1/#62666D.
+       ★ 규칙: 크롬(네비·카드·보더)에 채도색 금지. 층은 그림자 아닌 밝기 반 스텝. */
+    --bg-base: #08090A;
+    --bg-surface: #191D20;
+    --bg-raised: #2E2E32;
+    --bg-overlay: #3E3E44;
     /* 사이드바/서브바용 중간 shade (chrome-surface) */
-    --bg-chrome: #0f1117;
+    --bg-chrome: #0E1012;
 
-    --border-default: rgba(148, 163, 184, 0.12);
-    --border-subtle: rgba(148, 163, 184, 0.06);
+    --border-default: rgba(255, 255, 255, 0.09);
+    --border-subtle: rgba(255, 255, 255, 0.05);
 
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-tertiary: #64748b;
-    --text-muted: #475569;
+    --text-primary: #E2E4E7;   /* 순백 아님 — "종이 흰색" (Linear --token-text 실측) */
+    --text-secondary: #B4B8BE;
+    --text-tertiary: #9C9DA1;
+    --text-muted: #62666D;
 
     --accent: oklch(0.97 0 0);
-    --accent-hover: #6366f1;
-    --accent-muted: rgba(129, 140, 248, 0.08);
+    --accent-hover: #ffffff;
+    --accent-muted: rgba(255, 255, 255, 0.07);
 
-    /* ── Chrome 디자인 시스템 (Claude Design 리디자인 → 전역화) ── */
+    /* ── Chrome 디자인 시스템 (동일 팔레트 미러) ── */
     /* 다크 크롬 배경 */
-    --chrome-bg: #0b0d12;
-    --chrome-surface: #0f1117;
-    --chrome-card: #1a1d28;
-    --chrome-raised: #232736;
-    --chrome-input: #161923;
-    /* 크롬 보더 */
-    --chrome-border: rgba(148, 163, 184, 0.12);
-    --chrome-border-sub: rgba(148, 163, 184, 0.06);
-    --chrome-border-str: rgba(148, 163, 184, 0.2);
+    --chrome-bg: #08090A;
+    --chrome-surface: #0E1012;
+    --chrome-card: #191D20;
+    --chrome-raised: #2E2E32;
+    --chrome-input: #141619;
+    /* 크롬 보더 — 중성 백색 알파 (slate 기운 제거) */
+    --chrome-border: rgba(255, 255, 255, 0.09);
+    --chrome-border-sub: rgba(255, 255, 255, 0.05);
+    --chrome-border-str: rgba(255, 255, 255, 0.16);
     /* 크롬 포그라운드 (f1 → fg, 숫자 작을수록 밝음) */
-    --chrome-fg-1: #f1f5f9;
-    --chrome-fg-2: #cbd5e1;
-    --chrome-fg-3: #94a3b8;
-    --chrome-fg-4: #64748b;
+    --chrome-fg-1: #E2E4E7;
+    --chrome-fg-2: #B4B8BE;
+    --chrome-fg-3: #9C9DA1;
+    --chrome-fg-4: #62666D;
     /* Indigo 액센트 스케일 */
     --brand-indigo-300: #a5b4fc;
     --brand-indigo-400: #818cf8;

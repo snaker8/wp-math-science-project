@@ -42,11 +42,11 @@ const LEVEL_LABEL: Record<string, string> = {
 };
 
 const LEVEL_COLOR: Record<string, string> = {
-  초: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  중: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
-  고: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30',
-  대: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
-  미분류: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30',
+  초: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  중: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  고: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  대: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  미분류: 'border-white/[.08] bg-white/[.04] text-content-tertiary',
 };
 
 export default function ReportsHubPage() {
@@ -115,17 +115,17 @@ export default function ReportsHubPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* Header — 두 진입점(학교별 / 집계) 균형 배치 */}
-      <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/40 via-cyan-900/30 to-zinc-900/30 px-8 py-6">
+      <div className="flex-shrink-0 border-b border-white/[.08] bg-white/[.03] px-8 py-6">
         <div className="flex items-stretch gap-6">
           {/* LEFT: 페이지 타이틀 + 통계 */}
           <div className="flex flex-1 items-center gap-3">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10">
-              <School className="h-6 w-6 text-cyan-400" />
+              <School className="h-6 w-6 text-content-tertiary" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold">학교별 분석 리포트</h1>
-                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">
+                <span className="rounded-md border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold text-content-secondary">
                   학교별
                 </span>
               </div>
@@ -142,13 +142,13 @@ export default function ReportsHubPage() {
                 </span>
                 <span className="text-zinc-700">·</span>
                 <span className="flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-cyan-400" />
-                  분석 <span className="font-semibold text-cyan-300">{totals.analyzed}</span>
+                  <Sparkles className="h-3 w-3 text-content-tertiary" />
+                  분석 <span className="font-semibold text-content-primary tabular-nums">{totals.analyzed}</span>
                 </span>
                 <span className="text-zinc-700">·</span>
                 <span className="flex items-center gap-1">
-                  <Share2 className="h-3 w-3 text-emerald-400" />
-                  공유 <span className="font-semibold text-emerald-300">{totals.shared}</span>
+                  <Share2 className="h-3 w-3 text-content-tertiary" />
+                  공유 <span className="font-semibold text-content-primary tabular-nums">{totals.shared}</span>
                 </span>
               </div>
             </div>
@@ -157,23 +157,23 @@ export default function ReportsHubPage() {
           {/* RIGHT: 집계 분석 — 동등한 무게의 진입점 */}
           <Link
             href="/dashboard/reports/aggregate"
-            className="group relative flex w-80 flex-shrink-0 items-center gap-3 overflow-hidden rounded-xl border border-violet-500/40 bg-gradient-to-br from-violet-600/25 via-violet-500/15 to-fuchsia-500/10 px-4 py-3 transition-all hover:border-violet-400/70 hover:from-violet-600/35 hover:to-fuchsia-500/20"
+            className="group relative flex w-80 flex-shrink-0 items-center gap-3 overflow-hidden rounded-xl border border-white/[.08] bg-white/[.04] px-4 py-3 transition-all hover:border-white/[.14] hover:bg-white/[.06]"
           >
-            <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-violet-500/20 blur-2xl transition-opacity group-hover:opacity-80" />
-            <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-violet-400/40 bg-violet-500/30">
-              <BarChart3 className="h-6 w-6 text-violet-100" />
+            <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/[.04] blur-2xl transition-opacity group-hover:opacity-80" />
+            <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-white/[.08] bg-white/[.06]">
+              <BarChart3 className="h-6 w-6 text-content-secondary" />
             </div>
             <div className="relative min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h2 className="text-sm font-bold text-white">다학교 집계 분석</h2>
-                <span className="rounded-md border border-violet-400/40 bg-violet-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100">
+                <h2 className="text-sm font-bold text-content-primary">다학교 집계 분석</h2>
+                <span className="rounded-md border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold text-content-secondary">
                   집계
                 </span>
               </div>
-              <p className="mt-0.5 text-[11px] leading-tight text-violet-200/80">
+              <p className="mt-0.5 text-[11px] leading-tight text-content-tertiary">
                 학년·학기·구분 매칭 → 단원·난이도·함정 패턴 한눈에 비교
               </p>
-              <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-100">
+              <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-content-secondary">
                 <Layers className="h-3 w-3" />
                 집계 분석 시작
                 <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
@@ -193,7 +193,7 @@ export default function ReportsHubPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="학교명 검색..."
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-white placeholder-zinc-500 focus:border-cyan-500 focus:outline-none"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-white placeholder-zinc-500 focus:border-white/[.25] focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 p-1">
@@ -205,7 +205,7 @@ export default function ReportsHubPage() {
                 onClick={() => setLevelFilter(lv)}
                 className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                   levelFilter === lv
-                    ? 'bg-cyan-500/20 text-cyan-400'
+                    ? 'bg-white/[.08] text-content-primary'
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
@@ -219,7 +219,7 @@ export default function ReportsHubPage() {
               onChange={(e) =>
                 setYearFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))
               }
-              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none"
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-white focus:border-white/[.25] focus:outline-none"
             >
               <option value="all">전체 년도</option>
               {allYears.map((y) => (
@@ -255,7 +255,7 @@ export default function ReportsHubPage() {
               <Link
                 key={s.school}
                 href={`/dashboard/reports/${encodeURIComponent(s.school)}`}
-                className="group relative flex flex-col rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 transition-all hover:border-cyan-500/40 hover:bg-zinc-900/60"
+                className="group relative flex flex-col rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 transition-all hover:border-white/[.14] hover:bg-zinc-900/60"
               >
                 {/* Top: 학교명 + level 배지 */}
                 <div className="mb-4 flex items-start justify-between">
@@ -267,7 +267,7 @@ export default function ReportsHubPage() {
                       {LEVEL_LABEL[s.level]}
                     </span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-600 transition-colors group-hover:text-cyan-400" />
+                  <ChevronRight className="h-4 w-4 text-zinc-600 transition-colors group-hover:text-content-primary" />
                 </div>
 
                 {/* Mid: 통계 */}
@@ -285,7 +285,7 @@ export default function ReportsHubPage() {
                       <Sparkles className="h-3 w-3" />
                       분석
                     </div>
-                    <div className="mt-0.5 text-sm font-bold text-cyan-400">
+                    <div className="mt-0.5 text-sm font-bold text-content-primary tabular-nums">
                       {s.analyzedCount}
                       <span className="ml-1 text-[10px] text-zinc-500">/ {s.examCount}</span>
                     </div>
@@ -295,7 +295,7 @@ export default function ReportsHubPage() {
                       <Share2 className="h-3 w-3" />
                       공유
                     </div>
-                    <div className="mt-0.5 text-sm font-bold text-emerald-400">
+                    <div className="mt-0.5 text-sm font-bold text-content-primary tabular-nums">
                       {s.sharedCount}
                       <span className="ml-1 text-[10px] text-zinc-500">/ {s.examCount}</span>
                     </div>

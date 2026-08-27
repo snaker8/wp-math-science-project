@@ -25,9 +25,18 @@ export default function TrackDashboardLayout({
 
   return (
     <SubjectTrackProvider initialActiveTrack={initialTrack}>
-      <div className="min-h-screen bg-surface-base text-content-primary selection:bg-accent/30">
+      <div className="relative min-h-screen bg-surface-base text-content-primary selection:bg-accent/30">
+        {/* 배경 깊이 — 상단 중앙 옅은 액센트 광원 (dashboard/layout.tsx 와 동일) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
+          style={{
+            background:
+              'radial-gradient(60% 100% at 50% 0%, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.015) 45%, transparent 100%)',
+          }}
+        />
         <TopNav />
-        <main className="min-h-[calc(100vh-3.5rem)] px-6 lg:px-8 py-6">
+        <main className="relative min-h-[calc(100vh-3.5rem)] px-6 lg:px-8 py-6">
           <div className="mx-auto max-w-screen-2xl">{children}</div>
         </main>
         <BatchSolutionNotifier />

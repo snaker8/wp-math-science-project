@@ -48,12 +48,12 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 const ROLE_COLOR: Record<Role, string> = {
-  ADMIN: 'bg-purple-500/20 text-purple-300',
-  TEACHER: 'bg-indigo-500/20 text-indigo-300',
-  TUTOR: 'bg-sky-500/20 text-sky-300',
-  STUDENT: 'bg-emerald-500/20 text-emerald-300',
-  PARENT: 'bg-amber-500/20 text-amber-300',
-  ORG_ADMIN: 'bg-fuchsia-500/20 text-fuchsia-300',
+  ADMIN: 'border border-white/[.14] bg-white/[.08] text-content-primary',
+  TEACHER: 'border border-white/[.08] bg-white/[.04] text-content-secondary',
+  TUTOR: 'border border-white/[.08] bg-white/[.04] text-content-secondary',
+  STUDENT: 'border border-white/[.08] bg-white/[.04] text-content-secondary',
+  PARENT: 'border border-white/[.08] bg-white/[.04] text-content-secondary',
+  ORG_ADMIN: 'border border-white/[.14] bg-white/[.08] text-content-primary',
 };
 
 function formatRelative(iso: string | null): string {
@@ -156,12 +156,12 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-surface-base text-content-primary p-6 md:p-10 pb-24 relative overflow-hidden font-sans">
       <div className="fixed inset-0 pointer-events-none opacity-[0.03]"
-        style={{ backgroundImage: 'linear-gradient(#6366f1 1px, transparent 1px), linear-gradient(90deg, #6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }}
+        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '40px 40px' }}
       />
 
       <header className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
         <div>
-          <div className="flex items-center gap-2 text-indigo-400 mb-1">
+          <div className="flex items-center gap-2 text-content-tertiary mb-1">
             <Settings size={18} />
             <span className="text-xs font-bold tracking-widest uppercase">System Control</span>
           </div>
@@ -173,11 +173,11 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-content-primary px-6 py-3 rounded-full shadow-2xl shadow-indigo-500/30 flex items-center gap-4 z-50 cursor-pointer hover:bg-indigo-500 transition-colors"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-3 rounded-full flex items-center gap-4 z-50 cursor-pointer hover:bg-zinc-200 transition-colors"
             onClick={handleSave}
           >
             <span className="font-semibold text-sm">변경 사항이 있습니다</span>
-            <div className="h-4 w-[1px] bg-white/30" />
+            <div className="h-4 w-[1px] bg-black/20" />
             <div className="flex items-center gap-2">
               {isSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
               <span className="text-sm font-bold uppercase">{isSaving ? '저장 중...' : '저장하기'}</span>
@@ -203,7 +203,7 @@ export default function SettingsPage() {
             {activeTab === tab.id && (
               <motion.div
                 layoutId="activeTab"
-                className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                className="absolute bottom-0 left-0 right-0 h-[2px] bg-white"
               />
             )}
           </button>
@@ -232,7 +232,7 @@ export default function SettingsPage() {
               <div className="lg:col-span-4 space-y-8">
                 <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
                   <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                    <Cpu size={20} className="text-indigo-400" />
+                    <Cpu size={20} className="text-content-tertiary" />
                     알고리즘 정밀 튜닝
                   </h3>
 
@@ -240,13 +240,13 @@ export default function SettingsPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-medium text-content-secondary">유사 문제 변형 강도</label>
-                        <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">{variationStrength}%</span>
+                        <span className="text-xs font-mono tabular-nums text-content-secondary bg-white/[.06] px-2 py-1 rounded">{variationStrength}%</span>
                       </div>
                       <input
                         type="range" min="0" max="100"
                         value={variationStrength}
                         onChange={(e) => handleSettingChange(setVariationStrength, Number(e.target.value))}
-                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white"
                       />
                       <p className="text-xs text-content-tertiary leading-relaxed">값이 높을수록 원본 문제의 구조를 더 과감하게 변형합니다. (30~60% 권장)</p>
                     </div>
@@ -254,13 +254,13 @@ export default function SettingsPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-medium text-content-secondary">난이도 자동 조절 민감도</label>
-                        <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">{difficultySensitivity}%</span>
+                        <span className="text-xs font-mono tabular-nums text-content-secondary bg-white/[.06] px-2 py-1 rounded">{difficultySensitivity}%</span>
                       </div>
                       <input
                         type="range" min="0" max="100"
                         value={difficultySensitivity}
                         onChange={(e) => handleSettingChange(setDifficultySensitivity, Number(e.target.value))}
-                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white"
                       />
                       <p className="text-xs text-content-tertiary leading-relaxed">학생의 오답률에 따라 난이도를 얼마나 빠르게 조정할지 결정합니다.</p>
                     </div>
@@ -268,13 +268,13 @@ export default function SettingsPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-medium text-content-secondary">OCR 인식 정밀도 (Latency Trade-off)</label>
-                        <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">{ocrPrecision}%</span>
+                        <span className="text-xs font-mono tabular-nums text-content-secondary bg-white/[.06] px-2 py-1 rounded">{ocrPrecision}%</span>
                       </div>
                       <input
                         type="range" min="50" max="100"
                         value={ocrPrecision}
                         onChange={(e) => handleSettingChange(setOcrPrecision, Number(e.target.value))}
-                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white"
                       />
                       <p className="text-xs text-content-tertiary leading-relaxed">정밀도를 높이면 처리 속도가 늦어질 수 있습니다. (서술형 문제 권장: 90%+)</p>
                     </div>
@@ -283,11 +283,11 @@ export default function SettingsPage() {
               </div>
 
               <div className="lg:col-span-8">
-                <div className="bg-surface-card border border-indigo-500/20 rounded-2xl p-1 relative overflow-hidden h-full min-h-[400px]">
-                  <div className="absolute inset-0 bg-[linear-gradient(rgba(99,102,241,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.03)_1px,transparent_1px)] bg-[size:20px_20px]" />
+                <div className="bg-surface-card border border-white/[.08] rounded-2xl p-1 relative overflow-hidden h-full min-h-[400px]">
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px]" />
                   <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-xs font-bold text-indigo-300 uppercase">Preview (Mock)</span>
+                    <span className="text-xs font-bold text-content-secondary uppercase">Preview (Mock)</span>
                   </div>
                   <div className="h-full flex items-center justify-center p-8 relative z-10">
                     <div className="grid grid-cols-2 gap-8 w-full max-w-2xl">
@@ -297,15 +297,15 @@ export default function SettingsPage() {
                         <div className="mt-4 text-sm text-content-tertiary">Find the derivative f&apos;(x).</div>
                       </div>
                       <motion.div
-                        className="bg-indigo-950/20 border border-indigo-500/30 p-6 rounded-xl backdrop-blur-md relative"
+                        className="bg-white/[.04] border border-white/[.10] p-6 rounded-xl backdrop-blur-md relative"
                         animate={{
                           borderColor: variationStrength > 70 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(99, 102, 241, 0.3)',
                           scale: [1, 1.02, 1],
                         }}
                         transition={{ duration: 0.5 }}
                       >
-                        <div className="absolute -top-3 -right-3 bg-indigo-600 text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">VARIATION: {variationStrength}%</div>
-                        <p className="text-xs text-indigo-400 mb-4 font-mono">OUTPUT_TARGET</p>
+                        <div className="absolute -top-3 -right-3 border border-white/[.14] bg-surface-raised text-content-primary text-[10px] font-bold px-2 py-1 rounded-full">VARIATION: {variationStrength}%</div>
+                        <p className="text-xs text-content-tertiary mb-4 font-mono">OUTPUT_TARGET</p>
                         <motion.div
                           key={variationStrength}
                           initial={{ opacity: 0.5, filter: 'blur(2px)' }}
@@ -316,14 +316,14 @@ export default function SettingsPage() {
                             variationStrength < 70 ? "h(x) = 3x² + 6x + 5" :
                               "k(z) = ln(z² + 2z + 1)"}
                         </motion.div>
-                        <div className="mt-4 text-sm text-indigo-200/70">
+                        <div className="mt-4 text-sm text-content-tertiary">
                           {variationStrength < 50 ? "Find the derivative." : "Calculate the critical points."}
                         </div>
                       </motion.div>
                     </div>
                   </div>
-                  <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-                  <div className="absolute top-0 right-10 w-[1px] h-full bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  <div className="absolute top-0 right-10 w-[1px] h-full bg-gradient-to-b from-transparent via-white/10 to-transparent" />
                 </div>
               </div>
             </motion.div>
@@ -348,7 +348,7 @@ export default function SettingsPage() {
                       onClick={() => setRoleFilter(r)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
                         roleFilter === r
-                          ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-200'
+                          ? 'bg-white/[.08] border-white/[.14] text-content-primary'
                           : 'bg-white/5 border-white/10 text-content-tertiary hover:text-content-secondary'
                       }`}
                     >
@@ -378,7 +378,7 @@ export default function SettingsPage() {
               <div className="bg-surface-card/50 border border-white/10 rounded-2xl overflow-hidden">
                 <div className="p-6 border-b border-white/10 flex justify-between items-center">
                   <h3 className="text-lg font-bold flex items-center gap-2">
-                    <Shield size={20} className="text-emerald-400" />
+                    <Shield size={20} className="text-content-tertiary" />
                     가입자 목록
                     <span className="text-sm font-normal text-content-tertiary">({userTotal}명)</span>
                   </h3>
@@ -412,7 +412,7 @@ export default function SettingsPage() {
                               <div className="font-medium text-content-primary flex items-center gap-2">
                                 {u.fullName}
                                 {u.isAcademyAdmin && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">학원관리자</span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary">학원관리자</span>
                                 )}
                               </div>
                               <div className="text-xs text-content-tertiary">{u.email}</div>
@@ -458,7 +458,7 @@ export default function SettingsPage() {
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Activity size={20} className="text-emerald-400" />
+                  <Activity size={20} className="text-content-tertiary" />
                   플랫폼 현황
                   {stats && (
                     <span className="text-xs font-normal text-content-tertiary">
@@ -482,14 +482,14 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { icon: Users, label: '전체 사용자', value: stats?.users.total, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-                  { icon: UserCheck, label: '강사', value: stats?.users.teachers, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-                  { icon: Users, label: '학생', value: stats?.users.students, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { icon: Users, label: '학부모', value: stats?.users.parents, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-                  { icon: UserPlus, label: '신규 가입 (7일)', value: stats?.users.newThisWeek, color: 'text-pink-400', bg: 'bg-pink-500/10' },
-                  { icon: Activity, label: '활성 (24시간)', value: stats?.users.activeLast24h, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { icon: BookOpen, label: '문제 (문제은행)', value: stats?.content.problems, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-                  { icon: FileText, label: '시험지', value: stats?.content.exams, color: 'text-sky-400', bg: 'bg-sky-500/10' },
+                  { icon: Users, label: '전체 사용자', value: stats?.users.total, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: UserCheck, label: '강사', value: stats?.users.teachers, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: Users, label: '학생', value: stats?.users.students, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: Users, label: '학부모', value: stats?.users.parents, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: UserPlus, label: '신규 가입 (7일)', value: stats?.users.newThisWeek, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: Activity, label: '활성 (24시간)', value: stats?.users.activeLast24h, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: BookOpen, label: '문제 (문제은행)', value: stats?.content.problems, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
+                  { icon: FileText, label: '시험지', value: stats?.content.exams, color: 'text-content-secondary', bg: 'bg-white/[.06]' },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-surface-card/50 border border-white/10 rounded-2xl p-5">
                     <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center mb-3`}>
@@ -506,7 +506,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <Server size={18} className="text-blue-400" />
+                    <Server size={18} className="text-content-tertiary" />
                     <h4 className="font-bold text-sm">API Server</h4>
                     <span className="text-emerald-400 text-xs font-bold ml-auto">● Operational</span>
                   </div>
@@ -516,7 +516,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <Database size={18} className="text-purple-400" />
+                    <Database size={18} className="text-content-tertiary" />
                     <h4 className="font-bold text-sm">Database</h4>
                     <span className="text-emerald-400 text-xs font-bold ml-auto">● Supabase</span>
                   </div>

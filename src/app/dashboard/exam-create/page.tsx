@@ -618,13 +618,13 @@ export default function ExamCreatePage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/30 to-zinc-900/30 px-8 py-6">
+      <div className="flex-shrink-0 border-b border-white/[.08] bg-white/[.03] px-8 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10">
-              <BookOpen className="h-5 w-5 text-indigo-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[.08] bg-white/[.04]">
+              <BookOpen className="h-5 w-5 text-content-tertiary" />
             </div>
             <div>
               <h1 className="text-xl font-bold">시험지 출제</h1>
@@ -634,7 +634,7 @@ export default function ExamCreatePage() {
             </div>
           </div>
           <div className="text-xs text-zinc-400">
-            선택한 문항 <span className="font-bold text-indigo-400">{pickedList.length}</span>개
+            선택한 문항 <span className="font-bold text-content-primary tabular-nums">{pickedList.length}</span>개
           </div>
         </div>
 
@@ -651,14 +651,14 @@ export default function ExamCreatePage() {
                 disabled={!tab.available}
                 className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-all ${
                   isActive
-                    ? `text-${tab.color}-300`
+                    ? 'text-content-primary'
                     : tab.available
                       ? 'text-zinc-400 hover:text-zinc-200'
                       : 'text-zinc-600 cursor-not-allowed'
                 }`}
                 title={tab.available ? tab.description : `${tab.description} (곧 출시)`}
               >
-                <Icon size={15} className={isActive ? `text-${tab.color}-400` : ''} />
+                <Icon size={15} className={isActive ? 'text-content-primary' : ''} />
                 {tab.label}
                 {!tab.available && (
                   <span className="text-[10px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500 font-normal">
@@ -666,7 +666,7 @@ export default function ExamCreatePage() {
                   </span>
                 )}
                 {isActive && (
-                  <span className={`absolute bottom-0 left-0 right-0 h-0.5 bg-${tab.color}-400`} />
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
                 )}
               </button>
             );
@@ -680,7 +680,7 @@ export default function ExamCreatePage() {
           {/* 좌측: 진단평가 시험지 목록 */}
           <aside className="w-[320px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
             <div className="mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">진단평가 시험지</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-content-tertiary">진단평가 시험지</h3>
               <p className="mt-1 text-[10px] text-zinc-500">BS · DD · PT · SC 회차별</p>
             </div>
             {diagLoading ? (
@@ -706,13 +706,13 @@ export default function ExamCreatePage() {
                         onClick={() => setSelectedDiagExamId(ex.id)}
                         className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
                           isSelected
-                            ? 'border-indigo-500/50 bg-indigo-500/10'
+                            ? 'border-white/[.14] bg-white/[.08]'
                             : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-0.5">
                           {ex.diagnostic_category && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary font-bold">
                               {ex.diagnostic_category}
                             </span>
                           )}
@@ -723,7 +723,7 @@ export default function ExamCreatePage() {
                             <span className="text-[10px] text-zinc-500">· {ex.grade}</span>
                           )}
                         </div>
-                        <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
+                        <div className="text-xs font-semibold text-content-primary truncate">{ex.title}</div>
                       </button>
                     </li>
                   );
@@ -752,7 +752,7 @@ export default function ExamCreatePage() {
               <>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="text-xs text-zinc-400">
-                    문제 <span className="font-bold text-white">{diagProblems.length}</span>건
+                    문제 <span className="font-bold text-content-primary tabular-nums">{diagProblems.length}</span>건
                     <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
                   </div>
                   <button
@@ -760,7 +760,7 @@ export default function ExamCreatePage() {
                     onClick={() => {
                       toggleAll(diagProblems);
                     }}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+                    className="text-xs text-content-secondary hover:text-content-primary underline"
                   >
                     전체 선택/해제
                   </button>
@@ -778,7 +778,7 @@ export default function ExamCreatePage() {
                         onClick={() => togglePick(p)}
                         className={`text-left rounded-xl border p-4 transition-all ${
                           isPicked
-                            ? 'border-indigo-500/50 bg-indigo-500/10'
+                            ? 'border-white/[.14] bg-white/[.08]'
                             : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                         }`}
                       >
@@ -793,7 +793,7 @@ export default function ExamCreatePage() {
                           </div>
                           <div
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                              isPicked ? 'bg-indigo-500 text-white' : 'border border-zinc-700'
+                              isPicked ? 'bg-white text-black' : 'border border-zinc-700'
                             }`}
                           >
                             {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
@@ -880,11 +880,11 @@ export default function ExamCreatePage() {
             <div className="flex flex-1 flex-col overflow-hidden">
               {/* ★ 상단: 매쓰플랫식 4-필터 바 */}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/50 bg-zinc-950/60 px-4 py-2.5 text-xs">
-                <span className="font-semibold text-emerald-300">학교별 기출 필터</span>
+                <span className="font-semibold text-content-tertiary">학교별 기출 필터</span>
                 <select
                   value={filterSchoolLevel}
                   onChange={(e) => setFilterSchoolLevel(e.target.value as '전체' | '초' | '중' | '고')}
-                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-content-primary focus:border-white/25 focus:outline-none"
                 >
                   <option value="전체">학교급 전체</option>
                   <option value="중">중학교</option>
@@ -894,7 +894,7 @@ export default function ExamCreatePage() {
                 <select
                   value={filterGradeSemester}
                   onChange={(e) => setFilterGradeSemester(e.target.value)}
-                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-content-primary focus:border-white/25 focus:outline-none"
                 >
                   {GRADE_SEM_OPTIONS.map((g) => (
                     <option key={g || 'all'} value={g}>{g || '학년·학기 전체'}</option>
@@ -903,7 +903,7 @@ export default function ExamCreatePage() {
                 <button
                   type="button"
                   onClick={() => setRegionPickerOpen(true)}
-                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white hover:border-emerald-500 transition flex items-center gap-1.5"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-content-primary hover:border-white/25 transition flex items-center gap-1.5"
                 >
                   <School className="h-3 w-3" />
                   {selectedSchoolNames.size > 0
@@ -913,7 +913,7 @@ export default function ExamCreatePage() {
                 <select
                   value={filterExamRound}
                   onChange={(e) => setFilterExamRound(e.target.value)}
-                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-content-primary focus:border-white/25 focus:outline-none"
                 >
                   {EXAM_ROUND_OPTIONS.map((r) => (
                     <option key={r || 'all'} value={r}>{r || '회차 전체'}</option>
@@ -923,7 +923,7 @@ export default function ExamCreatePage() {
                   <select
                     value={filterChapter}
                     onChange={(e) => setFilterChapter(e.target.value)}
-                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-white focus:border-emerald-500 focus:outline-none"
+                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-content-primary focus:border-white/25 focus:outline-none"
                   >
                     <option value="">단원 전체</option>
                     {chapterOptions.map((c) => (
@@ -947,7 +947,7 @@ export default function ExamCreatePage() {
                   </button>
                 )}
                 <div className="ml-auto text-[10px] text-zinc-500">
-                  매칭 시험지 <span className="text-emerald-300 font-bold">{filteredExams.length}</span>건
+                  매칭 시험지 <span className="text-content-primary font-bold tabular-nums">{filteredExams.length}</span>건
                 </div>
               </div>
 
@@ -966,7 +966,7 @@ export default function ExamCreatePage() {
               {/* 좌측: 학교 list + 검색 */}
               <aside className="w-[260px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
                 <div className="mb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-300">학교</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-content-tertiary">학교</h3>
                   <p className="mt-1 text-[10px] text-zinc-500">자산화 대부분이 학교기출</p>
                 </div>
                 <div className="relative mb-3">
@@ -976,7 +976,7 @@ export default function ExamCreatePage() {
                     value={schoolQuery}
                     onChange={(e) => setSchoolQuery(e.target.value)}
                     placeholder="학교명·시험지 검색"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                   />
                 </div>
                 {schoolLoading ? (
@@ -1005,7 +1005,7 @@ export default function ExamCreatePage() {
                             }}
                             className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                               isSelected
-                                ? 'bg-emerald-500/15 text-emerald-200'
+                                ? 'bg-white/[.08] text-content-primary'
                                 : 'text-zinc-300 hover:bg-white/5'
                             }`}
                           >
@@ -1032,7 +1032,7 @@ export default function ExamCreatePage() {
                   <div className="text-xs text-zinc-500 py-4 text-center">학교를 선택하세요</div>
                 ) : (
                   <>
-                    <h4 className="mb-2 text-xs font-bold text-emerald-200">{selectedSchool} 시험지</h4>
+                    <h4 className="mb-2 text-xs font-bold text-content-secondary">{selectedSchool} 시험지</h4>
                     <ul className="space-y-1.5">
                       {examsForSelected.map((ex) => {
                         const isSelected = selectedSchoolExamId === ex.id;
@@ -1043,13 +1043,13 @@ export default function ExamCreatePage() {
                               onClick={() => setSelectedSchoolExamId(ex.id)}
                               className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
                                 isSelected
-                                  ? 'border-emerald-500/50 bg-emerald-500/10'
+                                  ? 'border-white/[.14] bg-white/[.08]'
                                   : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                               }`}
                             >
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 {ex.grade && (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                                  <span className="text-[10px] px-1 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary">
                                     {ex.grade}
                                   </span>
                                 )}
@@ -1057,7 +1057,7 @@ export default function ExamCreatePage() {
                                   <span className="text-[10px] text-zinc-500">{ex.exam_type}</span>
                                 )}
                               </div>
-                              <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
+                              <div className="text-xs font-semibold text-content-primary truncate">{ex.title}</div>
                             </button>
                           </li>
                         );
@@ -1091,7 +1091,7 @@ export default function ExamCreatePage() {
                   <>
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-xs text-zinc-400">
-                        문제 <span className="font-bold text-white">{schoolProblems.length}</span>건
+                        문제 <span className="font-bold text-content-primary tabular-nums">{schoolProblems.length}</span>건
                         <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
                       </div>
                       <button
@@ -1099,7 +1099,7 @@ export default function ExamCreatePage() {
                         onClick={() => {
                           toggleAll(schoolProblems);
                         }}
-                        className="text-xs text-emerald-400 hover:text-emerald-300 underline"
+                        className="text-xs text-content-secondary hover:text-content-primary underline"
                       >
                         전체 선택/해제
                       </button>
@@ -1117,7 +1117,7 @@ export default function ExamCreatePage() {
                             onClick={() => togglePick(p)}
                             className={`text-left rounded-xl border p-4 transition-all ${
                               isPicked
-                                ? 'border-emerald-500/50 bg-emerald-500/10'
+                                ? 'border-white/[.14] bg-white/[.08]'
                                 : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                             }`}
                           >
@@ -1132,7 +1132,7 @@ export default function ExamCreatePage() {
                               </div>
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                                  isPicked ? 'bg-emerald-500 text-white' : 'border border-zinc-700'
+                                  isPicked ? 'bg-white text-black' : 'border border-zinc-700'
                                 }`}
                               >
                                 {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
@@ -1176,7 +1176,7 @@ export default function ExamCreatePage() {
               {/* 좌측: 교재 list + 검색 */}
               <aside className="w-[260px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
                 <div className="mb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">교재</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-content-tertiary">교재</h3>
                   <p className="mt-1 text-[10px] text-zinc-500">출판사·교재명별 자료</p>
                 </div>
                 <div className="relative mb-3">
@@ -1186,7 +1186,7 @@ export default function ExamCreatePage() {
                     value={textbookQuery}
                     onChange={(e) => setTextbookQuery(e.target.value)}
                     placeholder="교재·출판사 검색"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                   />
                 </div>
                 {textbookLoading ? (
@@ -1219,7 +1219,7 @@ export default function ExamCreatePage() {
                             disabled={count === 0}
                             className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                               isSelected
-                                ? 'bg-amber-500/15 text-amber-200'
+                                ? 'bg-white/[.08] text-content-primary'
                                 : count > 0
                                   ? 'text-zinc-300 hover:bg-white/5'
                                   : 'text-zinc-600 cursor-not-allowed'
@@ -1248,7 +1248,7 @@ export default function ExamCreatePage() {
                   <div className="text-xs text-zinc-500 py-4 text-center">이 교재에 시험지가 없습니다.</div>
                 ) : (
                   <>
-                    <h4 className="mb-2 text-xs font-bold text-amber-200">
+                    <h4 className="mb-2 text-xs font-bold text-content-secondary">
                       {bookGroups.find((g) => g.id === selectedBookGroupId)?.name} 시험지
                     </h4>
                     <ul className="space-y-1.5">
@@ -1261,13 +1261,13 @@ export default function ExamCreatePage() {
                               onClick={() => setSelectedTextbookExamId(ex.id)}
                               className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
                                 isSelected
-                                  ? 'border-amber-500/50 bg-amber-500/10'
+                                  ? 'border-white/[.14] bg-white/[.08]'
                                   : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                               }`}
                             >
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 {ex.grade && (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                                  <span className="text-[10px] px-1 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary">
                                     {ex.grade}
                                   </span>
                                 )}
@@ -1275,7 +1275,7 @@ export default function ExamCreatePage() {
                                   <span className="text-[10px] text-zinc-500">{ex.subject}</span>
                                 )}
                               </div>
-                              <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
+                              <div className="text-xs font-semibold text-content-primary truncate">{ex.title}</div>
                             </button>
                           </li>
                         );
@@ -1309,7 +1309,7 @@ export default function ExamCreatePage() {
                   <>
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-xs text-zinc-400">
-                        문제 <span className="font-bold text-white">{textbookProblems.length}</span>건
+                        문제 <span className="font-bold text-content-primary tabular-nums">{textbookProblems.length}</span>건
                         <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
                       </div>
                       <button
@@ -1317,7 +1317,7 @@ export default function ExamCreatePage() {
                         onClick={() => {
                           toggleAll(textbookProblems);
                         }}
-                        className="text-xs text-amber-400 hover:text-amber-300 underline"
+                        className="text-xs text-content-secondary hover:text-content-primary underline"
                       >
                         전체 선택/해제
                       </button>
@@ -1335,7 +1335,7 @@ export default function ExamCreatePage() {
                             onClick={() => togglePick(p)}
                             className={`text-left rounded-xl border p-4 transition-all ${
                               isPicked
-                                ? 'border-amber-500/50 bg-amber-500/10'
+                                ? 'border-white/[.14] bg-white/[.08]'
                                 : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                             }`}
                           >
@@ -1350,7 +1350,7 @@ export default function ExamCreatePage() {
                               </div>
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                                  isPicked ? 'bg-amber-500 text-white' : 'border border-zinc-700'
+                                  isPicked ? 'bg-white text-black' : 'border border-zinc-700'
                                 }`}
                               >
                                 {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
@@ -1398,7 +1398,7 @@ export default function ExamCreatePage() {
               {/* 좌측: 연도 list + 검색 */}
               <aside className="w-[220px] flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950/40 p-4">
                 <div className="mb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-rose-300">연도</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-content-tertiary">연도</h3>
                   <p className="mt-1 text-[10px] text-zinc-500">모의·수능·평가원·학평</p>
                 </div>
                 <div className="relative mb-3">
@@ -1408,7 +1408,7 @@ export default function ExamCreatePage() {
                     value={mockQuery}
                     onChange={(e) => setMockQuery(e.target.value)}
                     placeholder="제목 검색"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-rose-500 focus:outline-none"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1 pl-7 pr-2 text-xs text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                   />
                 </div>
                 {mockLoading ? (
@@ -1439,7 +1439,7 @@ export default function ExamCreatePage() {
                             }}
                             className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                               isSelected
-                                ? 'bg-rose-500/15 text-rose-200'
+                                ? 'bg-white/[.08] text-content-primary'
                                 : 'text-zinc-300 hover:bg-white/5'
                             }`}
                           >
@@ -1463,7 +1463,7 @@ export default function ExamCreatePage() {
                   <div className="text-xs text-zinc-500 py-4 text-center">시험지가 없습니다.</div>
                 ) : (
                   <>
-                    <h4 className="mb-2 text-xs font-bold text-rose-200">
+                    <h4 className="mb-2 text-xs font-bold text-content-secondary">
                       {selectedMockYear === -1 ? '(연도 미상)' : `${selectedMockYear}년`} 시험지
                     </h4>
                     <ul className="space-y-1.5">
@@ -1476,13 +1476,13 @@ export default function ExamCreatePage() {
                               onClick={() => setSelectedMockExamId(ex.id)}
                               className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
                                 isSelected
-                                  ? 'border-rose-500/50 bg-rose-500/10'
+                                  ? 'border-white/[.14] bg-white/[.08]'
                                   : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                               }`}
                             >
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 {ex.exam_type && (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-rose-500/15 text-rose-300">
+                                  <span className="text-[10px] px-1 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary">
                                     {ex.exam_type}
                                   </span>
                                 )}
@@ -1490,7 +1490,7 @@ export default function ExamCreatePage() {
                                   <span className="text-[10px] text-zinc-500">{ex.grade}</span>
                                 )}
                               </div>
-                              <div className="text-xs font-semibold text-white truncate">{ex.title}</div>
+                              <div className="text-xs font-semibold text-content-primary truncate">{ex.title}</div>
                             </button>
                           </li>
                         );
@@ -1524,7 +1524,7 @@ export default function ExamCreatePage() {
                   <>
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-xs text-zinc-400">
-                        문제 <span className="font-bold text-white">{mockProblems.length}</span>건
+                        문제 <span className="font-bold text-content-primary tabular-nums">{mockProblems.length}</span>건
                         <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
                       </div>
                       <button
@@ -1532,7 +1532,7 @@ export default function ExamCreatePage() {
                         onClick={() => {
                           toggleAll(mockProblems);
                         }}
-                        className="text-xs text-rose-400 hover:text-rose-300 underline"
+                        className="text-xs text-content-secondary hover:text-content-primary underline"
                       >
                         전체 선택/해제
                       </button>
@@ -1550,7 +1550,7 @@ export default function ExamCreatePage() {
                             onClick={() => togglePick(p)}
                             className={`text-left rounded-xl border p-4 transition-all ${
                               isPicked
-                                ? 'border-rose-500/50 bg-rose-500/10'
+                                ? 'border-white/[.14] bg-white/[.08]'
                                 : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                             }`}
                           >
@@ -1565,7 +1565,7 @@ export default function ExamCreatePage() {
                               </div>
                               <div
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                                  isPicked ? 'bg-rose-500 text-white' : 'border border-zinc-700'
+                                  isPicked ? 'bg-white text-black' : 'border border-zinc-700'
                                 }`}
                               >
                                 {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
@@ -1593,17 +1593,17 @@ export default function ExamCreatePage() {
               const Icon = tab.icon;
               return (
                 <>
-                  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-${tab.color}-500/30 bg-${tab.color}-500/10`}>
-                    <Icon size={28} className={`text-${tab.color}-400`} />
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[.08] bg-white/[.04]">
+                    <Icon size={28} className="text-content-tertiary" />
                   </div>
-                  <h2 className="text-xl font-bold text-white mb-2">{tab.label}</h2>
+                  <h2 className="text-xl font-bold text-content-primary mb-2">{tab.label}</h2>
                   <p className="text-sm text-zinc-400 mb-4">{tab.description}</p>
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-500">
-                    <Sparkles size={14} className="inline mr-1 text-amber-400" />
+                    <Sparkles size={14} className="inline mr-1 text-content-tertiary" />
                     다음 Phase 에서 활성화됩니다. 현재는 <button
                       type="button"
                       onClick={() => setActiveTab('all')}
-                      className="text-indigo-400 underline hover:text-indigo-300"
+                      className="text-content-secondary underline hover:text-content-primary"
                     >전체 문제</button> 탭에서 단원·유형으로 출제 가능.
                   </div>
                 </>
@@ -1623,7 +1623,7 @@ export default function ExamCreatePage() {
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
-              className="w-full rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-left text-sm text-amber-300 hover:bg-amber-500/10"
+              className="w-full rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 text-left text-sm text-content-secondary hover:bg-white/[.06]"
             >
               {typeCode ? (
                 <>
@@ -1669,8 +1669,8 @@ export default function ExamCreatePage() {
                   }}
                   className={`rounded-md px-2 py-1.5 text-xs font-bold transition-colors ${
                     selectedDiffs.has(d)
-                      ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50'
-                      : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:text-white'
+                      ? 'bg-white/[.08] text-content-primary border border-white/[.14]'
+                      : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:text-content-primary'
                   }`}
                 >
                   {d}
@@ -1692,7 +1692,7 @@ export default function ExamCreatePage() {
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="예: 미생물, 함수"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-1.5 pl-9 pr-3 text-xs text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
               />
             </div>
           </div>
@@ -1702,7 +1702,7 @@ export default function ExamCreatePage() {
             type="button"
             onClick={handleSearch}
             disabled={loading || (!typeCode && !keyword.trim() && selectedDiffs.size === 0)}
-            className="w-full rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 text-xs font-semibold text-content-secondary hover:bg-white/[.06] hover:text-content-primary disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>
@@ -1750,7 +1750,7 @@ export default function ExamCreatePage() {
             <>
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-xs text-zinc-400">
-                  검색 결과 <span className="font-bold text-white">{problems.length}</span>건
+                  검색 결과 <span className="font-bold text-content-primary tabular-nums">{problems.length}</span>건
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -1766,7 +1766,7 @@ export default function ExamCreatePage() {
                       onClick={() => togglePick(p)}
                       className={`text-left rounded-xl border p-4 transition-all ${
                         isPicked
-                          ? 'border-indigo-500/50 bg-indigo-500/10'
+                          ? 'border-white/[.14] bg-white/[.08]'
                           : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
                       }`}
                     >
@@ -1781,7 +1781,7 @@ export default function ExamCreatePage() {
                         </div>
                         <div
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                            isPicked ? 'bg-indigo-500 text-white' : 'border border-zinc-700'
+                            isPicked ? 'bg-white text-black' : 'border border-zinc-700'
                           }`}
                         >
                           {isPicked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-zinc-500" />}
@@ -1819,15 +1819,15 @@ export default function ExamCreatePage() {
 
       {/* 푸터 — 시험지 편성 버튼 */}
       {pickedList.length > 0 && (
-        <div className="flex-shrink-0 border-t border-indigo-500/30 bg-indigo-500/10 px-8 py-3">
+        <div className="flex-shrink-0 border-t border-white/[.08] bg-white/[.03] px-8 py-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-indigo-200">
+            <span className="text-xs text-content-secondary">
               <span className="font-bold">{pickedList.length}</span>개 문항 선택됨
             </span>
             <button
               type="button"
               onClick={openCompose}
-              className="rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-1.5 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30"
+              className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black hover:bg-zinc-200 whitespace-nowrap"
             >
               시험지 편성 →
             </button>
@@ -1854,19 +1854,19 @@ export default function ExamCreatePage() {
         >
           <div className="w-[480px] max-w-[95vw] rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-              <h2 className="text-base font-bold text-white">시험지 편성</h2>
+              <h2 className="text-base font-bold text-content-primary">시험지 편성</h2>
               <button
                 type="button"
                 onClick={() => !composing && setComposeOpen(false)}
                 disabled={composing}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-900 hover:text-white disabled:opacity-50"
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-900 hover:text-content-primary disabled:opacity-50"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-3 p-5">
-              <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-300">
+              <div className="rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 text-xs text-content-secondary">
                 선택 문항 <span className="font-bold">{pickedList.length}</span>개 / 단원: {typeName || '미지정'}
               </div>
 
@@ -1877,7 +1877,7 @@ export default function ExamCreatePage() {
                   value={examTitle}
                   onChange={(e) => setExamTitle(e.target.value)}
                   placeholder="예: 26 신곡중 3-1 중간고사 대비"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                 />
               </div>
 
@@ -1889,7 +1889,7 @@ export default function ExamCreatePage() {
                     value={examGrade}
                     onChange={(e) => setExamGrade(e.target.value)}
                     placeholder="예: 고2"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -1899,7 +1899,7 @@ export default function ExamCreatePage() {
                     value={examSubject}
                     onChange={(e) => setExamSubject(e.target.value)}
                     placeholder="예: 대수"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1916,7 +1916,7 @@ export default function ExamCreatePage() {
                 type="button"
                 onClick={() => !composing && setComposeOpen(false)}
                 disabled={composing}
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:text-white disabled:opacity-50"
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:text-content-primary disabled:opacity-50"
               >
                 취소
               </button>
@@ -1953,7 +1953,7 @@ export default function ExamCreatePage() {
                     setComposing(false);
                   }
                 }}
-                className="rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-1.5 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {composing ? (
                   <>
@@ -2025,7 +2025,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
       >
         <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
           <div>
-            <h3 className="text-sm font-bold text-emerald-300">지역·학교 선택</h3>
+            <h3 className="text-sm font-bold text-content-primary">지역·학교 선택</h3>
             <p className="mt-0.5 text-[10px] text-zinc-500">
               자산화된 학교 중에서만 선택 가능. 폴더 import 후 데이터가 점점 추가됨.
             </p>
@@ -2033,7 +2033,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-content-primary"
           >
             <X className="h-4 w-4" />
           </button>
@@ -2047,7 +2047,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="학교명으로 검색"
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1.5 pl-7 pr-2 text-xs text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1.5 pl-7 pr-2 text-xs text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
             />
           </div>
         </div>
@@ -2066,7 +2066,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
                 }}
                 className={`w-full rounded px-2 py-1 text-left text-xs transition ${
                   activeSido === node.sido
-                    ? 'bg-emerald-500/20 text-emerald-200'
+                    ? 'bg-white/[.08] text-content-primary'
                     : 'text-zinc-300 hover:bg-zinc-900'
                 }`}
               >
@@ -2082,7 +2082,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
                 }}
                 className={`w-full rounded px-2 py-1 text-left text-xs transition ${
                   activeSido === null
-                    ? 'bg-emerald-500/20 text-emerald-200'
+                    ? 'bg-white/[.08] text-content-primary'
                     : 'text-zinc-500 hover:bg-zinc-900'
                 }`}
               >
@@ -2101,7 +2101,7 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
                 onClick={() => setActiveSigungu(node.sigungu)}
                 className={`w-full rounded px-2 py-1 text-left text-xs transition ${
                   activeSigungu === node.sigungu
-                    ? 'bg-emerald-500/20 text-emerald-200'
+                    ? 'bg-white/[.08] text-content-primary'
                     : 'text-zinc-300 hover:bg-zinc-900'
                 }`}
               >
@@ -2146,12 +2146,12 @@ function RegionPicker({ regionTree, otherSchools, selected, onChange, onClose }:
           </button>
           <div className="flex items-center gap-3 text-xs">
             <span className="text-zinc-400">
-              선택한 학교 수 <span className="font-bold text-emerald-300">{draft.size}</span>개
+              선택한 학교 수 <span className="font-bold text-content-primary tabular-nums">{draft.size}</span>개
             </span>
             <button
               type="button"
               onClick={apply}
-              className="rounded-lg bg-emerald-500 px-4 py-1.5 font-semibold text-zinc-950 hover:bg-emerald-400 transition"
+              className="rounded-full bg-white px-4 py-1.5 font-semibold text-black hover:bg-zinc-200 transition"
             >
               적용하기
             </button>

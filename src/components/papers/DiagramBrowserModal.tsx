@@ -310,7 +310,7 @@ export function DiagramBrowserModal({
         <div className="px-6 py-4 border-b border-subtle">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <ImageIcon className="h-5 w-5 text-teal-400" />
+              <ImageIcon className="h-5 w-5 text-content-tertiary" />
               <h2 className="text-lg font-bold text-content-primary">
                 도식 이미지 교체 {problemNumber ? `— ${problemNumber}번 문제` : ''}
               </h2>
@@ -323,7 +323,7 @@ export function DiagramBrowserModal({
             <button
               onClick={() => setActiveTab('browse')}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'browse' ? 'bg-teal-500/15 text-teal-400' : 'text-content-muted hover:text-content-secondary'
+                activeTab === 'browse' ? 'bg-white/[.08] text-content-primary' : 'text-content-muted hover:text-content-secondary'
               }`}
             >
               DB 검색
@@ -331,7 +331,7 @@ export function DiagramBrowserModal({
             <button
               onClick={() => setActiveTab('upload')}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'upload' ? 'bg-teal-500/15 text-teal-400' : 'text-content-muted hover:text-content-secondary'
+                activeTab === 'upload' ? 'bg-white/[.08] text-content-primary' : 'text-content-muted hover:text-content-secondary'
               }`}
             >
               직접 업로드
@@ -339,7 +339,7 @@ export function DiagramBrowserModal({
             <button
               onClick={() => setActiveTab('svg-paste')}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                activeTab === 'svg-paste' ? 'bg-violet-500/15 text-violet-400' : 'text-content-muted hover:text-content-secondary'
+                activeTab === 'svg-paste' ? 'bg-white/[.08] text-content-primary' : 'text-content-muted hover:text-content-secondary'
               }`}
             >
               <Code2 size={13} />
@@ -355,7 +355,7 @@ export function DiagramBrowserModal({
               onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f); }}
               onDragOver={(e) => e.preventDefault()}
               onClick={() => document.getElementById('diagram-upload-input')?.click()}
-              className="border-2 border-dashed border-subtle rounded-xl p-12 text-center hover:border-teal-500/50 transition-colors cursor-pointer"
+              className="border-2 border-dashed border-subtle rounded-xl p-12 text-center hover:border-white/[.2] transition-colors cursor-pointer"
             >
               <input
                 id="diagram-upload-input"
@@ -369,8 +369,8 @@ export function DiagramBrowserModal({
                   {/* SVG 파일인 경우 배지 표시 */}
                   {isSvgFile && (
                     <div className="flex items-center justify-center gap-1.5">
-                      <Code2 size={14} className="text-violet-400" />
-                      <span className="text-xs font-medium text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full">
+                      <Code2 size={14} className="text-content-tertiary" />
+                      <span className="text-xs font-medium text-content-secondary bg-white/[.04] px-2 py-0.5 rounded-full">
                         SVG 코드 → PNG 변환 후 저장됩니다
                       </span>
                     </div>
@@ -383,7 +383,7 @@ export function DiagramBrowserModal({
                 <div>
                   <Upload size={40} className="mx-auto text-content-muted mb-3" />
                   <p className="text-sm text-content-secondary">이미지 또는 SVG 파일을 드래그하거나 클릭하여 선택</p>
-                  <p className="text-xs text-content-muted mt-1">PNG, JPG, <span className="text-violet-400 font-medium">SVG</span> 지원 — SVG는 PNG로 렌더링 후 저장됩니다</p>
+                  <p className="text-xs text-content-muted mt-1">PNG, JPG, <span className="text-content-secondary font-medium">SVG</span> 지원 — SVG는 PNG로 렌더링 후 저장됩니다</p>
                 </div>
               )}
             </div>
@@ -397,7 +397,7 @@ export function DiagramBrowserModal({
             {isSvgFile && svgCode && (
               <details className="mt-3 border border-subtle rounded-lg overflow-hidden">
                 <summary className="px-3 py-2 text-xs text-content-muted cursor-pointer hover:bg-surface-raised flex items-center gap-1.5">
-                  <Code2 size={12} className="text-violet-400" />
+                  <Code2 size={12} className="text-content-tertiary" />
                   SVG 소스 코드 ({(svgCode.length / 1024).toFixed(1)} KB)
                 </summary>
                 <pre className="px-3 py-2 text-[10px] text-content-tertiary bg-surface-raised max-h-32 overflow-auto font-mono whitespace-pre-wrap break-all">
@@ -411,7 +411,7 @@ export function DiagramBrowserModal({
                 <button
                   onClick={handleUploadAndReplace}
                   disabled={isUploading}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white font-medium text-sm hover:bg-teal-500 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[.14] bg-white/[.08] text-content-primary font-medium text-sm hover:bg-white/[.12] disabled:opacity-50 transition-colors"
                 >
                   {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                   {isUploading ? (isSvgFile ? 'SVG → PNG 변환 중...' : '업로드 중...') : '이미지 교체'}
@@ -428,7 +428,7 @@ export function DiagramBrowserModal({
               {/* 좌: 코드 입력 */}
               <div className="flex-1 flex flex-col min-w-0">
                 <label className="text-xs text-content-muted mb-1.5 flex items-center gap-1.5">
-                  <Code2 size={12} className="text-violet-400" />
+                  <Code2 size={12} className="text-content-tertiary" />
                   SVG 코드 붙여넣기
                 </label>
                 <textarea
@@ -436,7 +436,7 @@ export function DiagramBrowserModal({
                   onChange={(e) => handleSvgPasteChange(e.target.value)}
                   placeholder={'<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">\n  <circle cx="100" cy="100" r="80" fill="none" stroke="black" />\n</svg>'}
                   spellCheck={false}
-                  className="flex-1 min-h-[220px] p-3 rounded-lg bg-surface-raised border border-subtle text-xs font-mono text-content-primary placeholder:text-content-muted/40 resize-none outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30 leading-relaxed"
+                  className="flex-1 min-h-[220px] p-3 rounded-lg bg-surface-raised border border-subtle text-xs font-mono text-content-primary placeholder:text-content-muted/40 resize-none outline-none focus:border-white/[.2] focus:ring-1 focus:ring-white/[.1] leading-relaxed"
                 />
                 <p className="text-[10px] text-content-muted mt-1">
                   {svgPasteCode.trim().length > 0
@@ -476,7 +476,7 @@ export function DiagramBrowserModal({
                 <button
                   onClick={handleSvgPasteUpload}
                   disabled={isUploading}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white font-medium text-sm hover:bg-violet-500 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[.14] bg-white/[.08] text-content-primary font-medium text-sm hover:bg-white/[.12] disabled:opacity-50 transition-colors"
                 >
                   {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                   {isUploading ? 'SVG → PNG 변환 중...' : 'SVG 이미지 교체'}
@@ -498,7 +498,7 @@ export function DiagramBrowserModal({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="파일명, 출처, 유형으로 검색..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg bg-surface-raised border border-subtle text-sm text-content-primary placeholder:text-content-muted focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 outline-none"
+              className="w-full pl-10 pr-4 py-2 rounded-lg bg-surface-raised border border-subtle text-sm text-content-primary placeholder:text-content-muted focus:border-white/[.2] focus:ring-1 focus:ring-white/[.1] outline-none"
             />
           </div>
           <select
@@ -538,7 +538,7 @@ export function DiagramBrowserModal({
                   <img
                     src={getImageUrl(diagrams.find(d => d.id === selectedId)!)}
                     alt="교체할 도식"
-                    className="h-20 rounded border-2 border-teal-500 object-contain bg-white"
+                    className="h-20 rounded border-2 border-white/[.4] object-contain bg-white"
                   />
                 </>
               )}
@@ -550,7 +550,7 @@ export function DiagramBrowserModal({
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-teal-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-content-muted" />
               <span className="ml-3 text-content-muted">도식 이미지 로딩 중...</span>
             </div>
           ) : filteredDiagrams.length === 0 ? (
@@ -574,14 +574,14 @@ export function DiagramBrowserModal({
                       onClick={() => setSelectedId(isSelected ? null : d.id)}
                       className={`relative group rounded-xl border-2 overflow-hidden transition-all ${
                         isSelected
-                          ? 'border-teal-500 ring-2 ring-teal-500/30 bg-teal-500/5'
-                          : 'border-subtle hover:border-teal-500/50 bg-surface-raised'
+                          ? 'border-white/[.4] ring-2 ring-white/[.15] bg-white/[.06]'
+                          : 'border-subtle hover:border-white/[.25] bg-surface-raised'
                       }`}
                     >
                       {/* 선택 체크 */}
                       {isSelected && (
-                        <div className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center">
-                          <Check className="h-4 w-4 text-white" />
+                        <div className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-white flex items-center justify-center">
+                          <Check className="h-4 w-4 text-black" />
                         </div>
                       )}
                       {/* 이미지 */}
@@ -603,12 +603,12 @@ export function DiagramBrowserModal({
                         </p>
                         <div className="flex items-center gap-1 mt-0.5">
                           {d.diagram_type && (
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-teal-500/10 text-teal-400">
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-white/[.06] text-content-secondary">
                               {d.diagram_type}
                             </span>
                           )}
                           {d.unit_name && (
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 truncate max-w-[100px]">
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-white/[.06] text-content-tertiary truncate max-w-[100px]">
                               {d.unit_name}
                             </span>
                           )}
@@ -675,7 +675,7 @@ export function DiagramBrowserModal({
             <button
               onClick={handleConfirm}
               disabled={!selectedId}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 rounded-full text-sm font-semibold bg-white text-black hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               교체
             </button>

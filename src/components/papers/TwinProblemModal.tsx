@@ -202,10 +202,10 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
         {/* 좌측: 제목 + 태그 */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4.5 w-4.5 text-indigo-400" />
+            <Sparkles className="h-4.5 w-4.5 text-content-tertiary" />
             <h2 className="text-sm font-bold text-content-primary">유사문제 작업</h2>
           </div>
-          <div className="h-4 w-px bg-zinc-700" />
+          <div className="h-4 w-px bg-white/[.08]" />
           <span className="text-[11px] text-content-tertiary">
             {problem.number}번 · {problem.typeName}
           </span>
@@ -230,7 +230,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
             type="button"
             onClick={handleGenerate}
             disabled={generating}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/[.04] text-content-secondary border border-white/[.08] hover:bg-white/[.06] hover:text-content-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {generating ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -254,17 +254,17 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
             type="button"
             onClick={handleSave}
             disabled={!currentTwin || isSaved}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
               isSaved
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                : 'bg-indigo-500 text-black hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed'
+                : 'bg-white text-black hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed'
             }`}
           >
             {isSaved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
             {isSaved ? '저장됨' : `저장${savedTwins.length > 0 ? `(${savedTwins.length})` : ''}`}
           </button>
 
-          <div className="h-4 w-px bg-zinc-700 mx-1" />
+          <div className="h-4 w-px bg-white/[.08] mx-1" />
 
           <button
             type="button"
@@ -289,7 +289,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
             {/* 원본 문제 */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded">
+                <span className="text-xs font-bold text-content-secondary bg-white/[.04] border border-white/[.08] px-2 py-0.5 rounded">
                   문제
                 </span>
                 <span className="text-[10px] text-content-tertiary">
@@ -348,7 +348,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
 
             {/* 유형 태그 */}
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[.04] text-content-secondary border border-white/[.08]">
                 {problem.typeCode}
               </span>
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-surface-raised text-content-tertiary border border-subtle">
@@ -363,8 +363,8 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                 onClick={() => setShowOriginalSolution(!showOriginalSolution)}
                 className="flex items-center gap-2 text-[13px] font-bold text-content-secondary hover:text-content-primary transition-colors mb-3 w-full"
               >
-                <FileText className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                <FileText className="h-3.5 w-3.5 text-content-tertiary" />
+                <span className="text-xs font-bold text-content-secondary bg-white/[.04] border border-white/[.08] px-2 py-0.5 rounded">
                   해설
                 </span>
                 <span className="flex-1" />
@@ -401,7 +401,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                 onClick={() => setActiveTab(key)}
                 className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                   activeTab === key
-                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                    ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                     : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised border border-transparent'
                 }`}
               >
@@ -422,7 +422,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                 {/* 문제 컬럼 */}
                 <div className="flex-1 flex flex-col border-r border-subtle/40 min-w-0">
                   <div className="flex items-center justify-between px-5 py-2.5 border-b border-subtle/40 flex-shrink-0">
-                    <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded">
+                    <span className="text-xs font-bold text-content-secondary bg-white/[.04] border border-white/[.08] px-2 py-0.5 rounded">
                       문제
                     </span>
                     <button
@@ -484,7 +484,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                 {/* 해설 컬럼 */}
                 <div className="flex-1 flex flex-col min-w-0">
                   <div className="flex items-center justify-between px-5 py-2.5 border-b border-subtle/40 flex-shrink-0">
-                    <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                    <span className="text-xs font-bold text-content-secondary bg-white/[.04] border border-white/[.08] px-2 py-0.5 rounded">
                       해설
                     </span>
                     <button
@@ -511,7 +511,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
               /* 빈 상태 */
               <div className="flex flex-1 flex-col items-center justify-center h-full gap-5 text-center py-20">
                 <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-surface-raised/80 border border-subtle">
-                  <Sparkles className="h-10 w-10 text-indigo-500/30" />
+                  <Sparkles className="h-10 w-10 text-content-muted" />
                 </div>
                 <div className="space-y-1.5">
                   <p className="text-sm font-bold text-content-secondary">
@@ -526,7 +526,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                   type="button"
                   onClick={handleGenerate}
                   disabled={generating}
-                  className="flex items-center gap-2 rounded-xl bg-indigo-500 px-6 py-2.5 text-sm font-bold text-black hover:bg-indigo-400 disabled:opacity-50 transition-colors mt-2"
+                  className="flex items-center gap-2 rounded-full border border-white/[.14] bg-white/[.08] px-6 py-2.5 text-sm font-semibold text-content-primary hover:bg-white/[.12] disabled:opacity-50 transition-colors mt-2"
                 >
                   {generating ? (
                     <>
@@ -553,7 +553,7 @@ export function TwinProblemModal({ problem, onClose }: TwinProblemModalProps) {
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="코멘트를 입력하세요... (학생에게 전달할 메모, 변형 지시사항 등)"
                 rows={2}
-                className="flex-1 resize-none rounded-lg border border-subtle bg-surface-raised px-3 py-2 text-xs text-content-primary placeholder:text-content-tertiary focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-colors"
+                className="flex-1 resize-none rounded-lg border border-subtle bg-surface-raised px-3 py-2 text-xs text-content-primary placeholder:text-content-tertiary focus:outline-none focus:border-white/[.2] focus:ring-1 focus:ring-white/[.1] transition-colors"
               />
             </div>
 

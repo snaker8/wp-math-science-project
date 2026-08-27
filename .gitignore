@@ -64,3 +64,7 @@ image-pipeline/*.log
 
 # 진단 시스템 웹챗 원본 (참조용, 커밋 X)
 개별맞춤학생프로젝트/
+insane-design/*/css/
+insane-design/*/index.html
+insane-design/*/screenshots/
+insane-design/*/phase1/

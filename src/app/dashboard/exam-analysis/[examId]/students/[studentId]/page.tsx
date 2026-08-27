@@ -869,7 +869,7 @@ export default function StudentReportPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-content-tertiary" />
       </div>
     );
   }
@@ -878,7 +878,7 @@ export default function StudentReportPage() {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4 p-8">
         <AlertCircle className="w-10 h-10 text-rose-400" />
-        <p className="text-white font-bold">리포트를 불러오지 못했습니다</p>
+        <p className="text-content-primary font-bold">리포트를 불러오지 못했습니다</p>
         <p className="text-zinc-400 text-sm">{error || '데이터 없음'}</p>
         <button
           onClick={() => router.back()}
@@ -894,7 +894,7 @@ export default function StudentReportPage() {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4 p-8">
         <AlertCircle className="w-10 h-10 text-amber-400" />
-        <p className="text-white font-bold">채점 기록이 없습니다</p>
+        <p className="text-content-primary font-bold">채점 기록이 없습니다</p>
         <p className="text-zinc-400 text-sm">{data.message}</p>
         <button
           onClick={() => router.back()}
@@ -922,16 +922,16 @@ export default function StudentReportPage() {
             </button>
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => handleGenerateAi(true)} disabled={aiBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary disabled:opacity-50">
                 <Sparkles size={14} /> {aiBusy ? '생성 중…' : 'AI 코멘트 생성'}
               </button>
               <button onClick={handleShareParent} disabled={shareBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-black hover:bg-zinc-200 disabled:opacity-50">
                 {shareBusy ? <Loader2 size={14} className="animate-spin" /> : shareCopied ? <Check size={14} /> : <Share2 size={14} />}
                 {shareBusy ? '발급 중…' : shareCopied ? '복사됨!' : '학부모 링크 복사'}
               </button>
               <button onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800">
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary">
                 <Printer size={14} /> 인쇄
               </button>
             </div>
@@ -956,7 +956,7 @@ export default function StudentReportPage() {
                     <div className="space-y-3 text-sm leading-relaxed">
                       <div><span className="text-emerald-300 font-bold">강점 </span><span className="text-zinc-200">{ai.strong}</span></div>
                       <div><span className="text-rose-300 font-bold">보완 </span><span className="text-zinc-200">{ai.weak}</span></div>
-                      <div><span className="text-indigo-300 font-bold">학습법 </span><span className="text-zinc-200">{ai.method}</span></div>
+                      <div><span className="text-zinc-300 font-bold">학습법 </span><span className="text-zinc-200">{ai.method}</span></div>
                     </div>
                   ) : (
                     <p className="text-sm text-zinc-500">아직 생성된 AI 코멘트가 없습니다.</p>
@@ -965,10 +965,10 @@ export default function StudentReportPage() {
                 <Panel title="강사 한마디" hint={teacherSaved ?? ''}>
                   <textarea value={teacherText} onChange={(e) => setTeacherText(e.target.value)} rows={3}
                     placeholder="학생/학부모에게 전할 한마디를 입력하세요."
-                    className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 print:border-transparent print:bg-transparent" />
+                    className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-white/[.25] print:border-transparent print:bg-transparent" />
                   <div className="mt-2 flex justify-end print:hidden">
                     <button onClick={handleSaveTeacherComment} disabled={teacherSaving}
-                      className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50">
+                      className="rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary disabled:opacity-50">
                       {teacherSaving ? '저장 중…' : '저장'}
                     </button>
                   </div>
@@ -999,7 +999,7 @@ export default function StudentReportPage() {
               onClick={toggleDeepAnalysis}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors border ${
                 showDeepAnalysis
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  ? 'bg-slate-100 border-slate-400 text-slate-800'
                   : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'
               }`}
               title="세부유형·인지영역 심화 분석 페이지 포함 여부 (데이터가 적으면 부정확할 수 있어 기본 꺼짐)"
@@ -1015,7 +1015,7 @@ export default function StudentReportPage() {
             <button
               onClick={handleShareParent}
               disabled={shareBusy}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors disabled:opacity-50"
               title="학부모용 공유 링크 발급/조회"
             >
               {shareBusy ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
@@ -1026,24 +1026,24 @@ export default function StudentReportPage() {
 
         {shareUrl && (
           <div className="max-w-[210mm] mx-auto px-4 pb-3 -mt-1">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
-              <span className="shrink-0 text-[12px] font-bold text-emerald-700">공유 URL:</span>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
+              <span className="shrink-0 text-[12px] font-bold text-slate-600">공유 URL:</span>
               <input
                 type="text"
                 readOnly
                 value={shareUrl}
                 onClick={(e) => (e.target as HTMLInputElement).select()}
-                className="flex-1 min-w-0 bg-white border border-emerald-200 rounded-md px-2 py-1 text-[12px] text-slate-800 font-medium focus:outline-none"
+                className="flex-1 min-w-0 bg-white border border-slate-200 rounded-md px-2 py-1 text-[12px] text-slate-800 font-medium focus:outline-none"
               />
               <button
                 onClick={handleCopyShareUrl}
-                className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-md"
+                className="shrink-0 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-[11px] font-bold px-2.5 py-1.5 rounded-md"
               >
                 {shareCopied ? '복사됨' : '복사'}
               </button>
               <button
                 onClick={() => window.open(shareUrl, '_blank', 'noopener')}
-                className="shrink-0 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-100 text-[11px] font-bold px-2.5 py-1.5 rounded-md"
+                className="shrink-0 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold px-2.5 py-1.5 rounded-md"
               >
                 미리보기
               </button>
@@ -1150,7 +1150,7 @@ export default function StudentReportPage() {
                 <div className="student-report-no-print relative">
                   <button
                     type="button"
-                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-white border border-indigo-200 hover:border-indigo-400 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+                    className="text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 hover:border-slate-400 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
                     onClick={() => setAiPanelOpen((v) => !v)}
                     disabled={aiBusy}
                     title="AI 맞춤 코멘트 생성 — 길이·어조·강조 설정"
@@ -1183,8 +1183,8 @@ export default function StudentReportPage() {
                                 onClick={() => setAiLength(v)}
                                 className={`flex-1 text-[11px] font-bold py-1 rounded-md border ${
                                   aiLength === v
-                                    ? 'bg-indigo-600 text-white border-indigo-600'
-                                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                                    ? 'bg-slate-800 text-white border-slate-800'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                 }`}
                               >
                                 {label}
@@ -1206,8 +1206,8 @@ export default function StudentReportPage() {
                                 onClick={() => setAiTone(v)}
                                 className={`flex-1 text-[11px] font-bold py-1 rounded-md border ${
                                   aiTone === v
-                                    ? 'bg-indigo-600 text-white border-indigo-600'
-                                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                                    ? 'bg-slate-800 text-white border-slate-800'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                 }`}
                               >
                                 {label}
@@ -1229,8 +1229,8 @@ export default function StudentReportPage() {
                                 onClick={() => toggleAiFocus(v)}
                                 className={`text-[11px] font-bold py-1 rounded-md border ${
                                   aiFocus.includes(v)
-                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                    : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300'
+                                    ? 'bg-slate-200 text-slate-800 border-slate-400'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                 }`}
                               >
                                 {label}
@@ -1243,7 +1243,7 @@ export default function StudentReportPage() {
                       <button
                         type="button"
                         onClick={() => handleGenerateAi(true)}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-bold py-1.5 rounded-md flex items-center justify-center gap-1"
+                        className="w-full bg-slate-800 hover:bg-slate-900 text-white text-[12px] font-bold py-1.5 rounded-md flex items-center justify-center gap-1"
                       >
                         <Sparkles size={13} />{' '}
                         {data.aiComment ? '이 설정으로 재생성' : '이 설정으로 생성'}

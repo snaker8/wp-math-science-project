@@ -36,10 +36,25 @@ export const RADIUS = {
  * 구조를 가진 컨테이너(사이드바·목록판 등)는 SurfacePanel 로 감싸면 여백이 끼어
  * 레이아웃이 깨지므로, 그런 곳엔 이 클래스만 얹는다.
  */
-export const PANEL_SURFACE = 'border border-white/[.08] bg-surface-card/40';
+export const PANEL_SURFACE =
+  'border border-white/[.08] bg-surface-card/40 ' +
+  // ★ "빛 받은 유리판" 깊이 (2026-08-27, Linear edge-highlight 공법):
+  //   ① inset 1px 상단 하이라이트 — 위에서 빛이 떨어진 듯한 모서리
+  //   ② 표면 세로 그라데이션 — 위가 반 스텝 밝음 (광원 방향 일치)
+  //   ③ 색 없는 앰비언트 그림자 — 판이 바닥에서 살짝 떠 보임
+  //   문자 그대로의 3D(베벨·엠보스)는 금지 — 깊이는 빛으로만 표현한다.
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_40px_-20px_rgba(0,0,0,0.55)] ' +
+  '[background-image:linear-gradient(180deg,rgba(255,255,255,0.03),transparent_140px)]';
 
 /** 패널 안에 한 겹 더 들어가는 표면 (행 hover·내부 카드 등) */
-export const PANEL_INSET = 'border border-white/[.06] bg-white/[.03]';
+export const PANEL_INSET =
+  'border border-white/[.06] bg-white/[.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
+
+/** 클릭 가능한 카드에 얹는 부양 인터랙션 — hover 시 1px 떠오름 + 그림자 깊어짐 */
+export const PANEL_LIFT =
+  'transition-[transform,box-shadow,border-color,background-color] duration-150 ' +
+  'hover:-translate-y-px hover:border-white/[.14] hover:bg-white/[.05] ' +
+  'hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_44px_-20px_rgba(0,0,0,0.65)]';
 
 /**
  * 패널 — 카드·박스·목록 컨테이너의 기본 단위.

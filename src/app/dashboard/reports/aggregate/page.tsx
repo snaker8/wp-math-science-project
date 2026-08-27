@@ -233,8 +233,8 @@ export default function AggregatePage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
-              <BarChart3 className="h-5 w-5 text-cyan-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[.08] bg-white/[.04]">
+              <BarChart3 className="h-5 w-5 text-content-tertiary" />
             </div>
             <div>
               <h1 className="text-xl font-bold">학교별 집계 분석</h1>
@@ -254,7 +254,7 @@ export default function AggregatePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleShareClick}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
                 title="새 탭에서 학부모 공유 페이지를 엽니다 (링크도 자동 복사)"
               >
                 {shareCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
@@ -270,7 +270,7 @@ export default function AggregatePage() {
         {/* 필터 */}
         <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
-            <Filter className="h-4 w-4 text-cyan-400" />
+            <Filter className="h-4 w-4 text-content-tertiary" />
             필터
             {hasActiveFilter && (
               <button
@@ -348,7 +348,7 @@ export default function AggregatePage() {
                     onClick={() => toggleSchool(s.school)}
                     className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                       active
-                        ? 'border-cyan-500 bg-cyan-500/20 text-cyan-200'
+                        ? 'border-white/[.14] bg-white/[.08] text-content-primary'
                         : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-600'
                     }`}
                   >
@@ -368,7 +368,7 @@ export default function AggregatePage() {
               type="button"
               onClick={fetchAggregate}
               disabled={loading}
-              className="rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-2 text-sm font-bold text-white hover:from-cyan-400 hover:to-indigo-400 disabled:opacity-50"
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
             >
               {loading ? '집계 중...' : '집계 분석 실행'}
             </button>
@@ -389,7 +389,7 @@ export default function AggregatePage() {
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 p-8 text-center text-zinc-500">
-            필터를 선택하고 <span className="text-cyan-400">집계 분석 실행</span> 을 누르세요.
+            필터를 선택하고 <span className="text-content-primary">집계 분석 실행</span> 을 누르세요.
           </div>
         )}
       </div>
@@ -442,11 +442,11 @@ function StatCard({
 }) {
   const accentColor =
     accent === 'cyan'
-      ? 'text-cyan-400'
+      ? 'text-content-primary'
       : accent === 'emerald'
         ? 'text-emerald-400'
         : accent === 'amber'
-          ? 'text-amber-400'
+          ? 'text-content-primary'
           : 'text-white';
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -529,13 +529,13 @@ function ResultsView({ data }: { data: AggregateResponse }) {
       {data.narrative.length > 0 && (
         <Panel
           title="강사 인사이트"
-          icon={<Lightbulb className="h-4 w-4 text-amber-400" />}
+          icon={<Lightbulb className="h-4 w-4 text-content-tertiary" />}
           hint="모든 수치는 DB 분류·난이도에서 직접 도출 (할루시네이션 0)"
         >
           <div className="space-y-4 text-sm leading-relaxed text-zinc-200">
             {data.narrative.map((sec, i) => (
               <div key={i}>
-                <h4 className="mb-1 text-[13px] font-bold text-amber-300">{sec.heading}</h4>
+                <h4 className="mb-1 text-[13px] font-bold text-zinc-100">{sec.heading}</h4>
                 {sec.paragraphs.map((p, j) => (
                   <p key={j} className="text-zinc-300">{p}</p>
                 ))}
@@ -558,14 +558,14 @@ function ResultsView({ data }: { data: AggregateResponse }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <UnitSegmentPanel
           title="공통 출제 단원 (≥80% 학교)"
-          icon={<Users className="h-4 w-4 text-cyan-400" />}
+          icon={<Users className="h-4 w-4 text-content-tertiary" />}
           units={data.unitSegmentation.common}
           totalSchools={data.matched.schoolCount}
           accent="cyan"
         />
         <UnitSegmentPanel
           title="학교 차별 단원 (≤30% 학교)"
-          icon={<TrendingUp className="h-4 w-4 text-amber-400" />}
+          icon={<TrendingUp className="h-4 w-4 text-content-tertiary" />}
           units={data.unitSegmentation.unique}
           totalSchools={data.matched.schoolCount}
           accent="amber"
@@ -599,7 +599,7 @@ function DifficultyPanel({ data }: { data: AggregateResponse }) {
   return (
     <Panel
       title={`시험지 전체 난이도 (${totalExams}건)`}
-      icon={<BarChart3 className="h-4 w-4 text-cyan-400" />}
+      icon={<BarChart3 className="h-4 w-4 text-content-tertiary" />}
       hint="시험지마다 problem 평균(1~10) → 5밴드 라벨"
     >
       <div className="mb-4 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
@@ -656,7 +656,7 @@ function DifficultyPanel({ data }: { data: AggregateResponse }) {
         })}
       </div>
       <div className="mt-2 text-[10px] text-zinc-500">
-        💡 학부모 가이드 — 1~2 평이 / 3~4 보통 / 5~6 난이도 있음 (내신 평균) / 7~8 매우 난이도 있음 (상위권 변별) / 9~10 최고난도
+        학부모 가이드 — 1~2 평이 / 3~4 보통 / 5~6 난이도 있음 (내신 평균) / 7~8 매우 난이도 있음 (상위권 변별) / 9~10 최고난도
       </div>
     </Panel>
   );
@@ -666,7 +666,7 @@ function UnitFrequencyPanel({ data }: { data: AggregateResponse }) {
   const top = data.unitFrequency.slice(0, 15);
   const max = Math.max(1, ...top.map((u) => u.problemCount));
   return (
-    <Panel title="단원 출제 빈도 (TOP 15)" icon={<BarChart3 className="h-4 w-4 text-cyan-400" />}>
+    <Panel title="단원 출제 빈도 (TOP 15)" icon={<BarChart3 className="h-4 w-4 text-content-tertiary" />}>
       <div className="space-y-1.5">
         {top.map((u) => {
           const pct = (u.problemCount / max) * 100;
@@ -698,7 +698,7 @@ function UnitTrendsPanel({ data }: { data: AggregateResponse }) {
   const years = data.availableYears;
   if (years.length < 2) {
     return (
-      <Panel title="단원 시계열 추세" icon={<TrendingUp className="h-4 w-4 text-cyan-400" />}>
+      <Panel title="단원 시계열 추세" icon={<TrendingUp className="h-4 w-4 text-content-tertiary" />}>
         <Empty>비교할 년도 데이터가 1개 이하 — 추세 미생성</Empty>
       </Panel>
     );
@@ -706,7 +706,7 @@ function UnitTrendsPanel({ data }: { data: AggregateResponse }) {
   return (
     <Panel
       title={`단원 시계열 추세 (${years[0]}~${years[years.length - 1]})`}
-      icon={<TrendingUp className="h-4 w-4 text-cyan-400" />}
+      icon={<TrendingUp className="h-4 w-4 text-content-tertiary" />}
       hint="TOP 5 단원 · 년도별 문항수"
     >
       <div className="space-y-2">
@@ -803,7 +803,7 @@ function UnitSegmentPanel({
 function SchoolBreakdownPanel({ data }: { data: AggregateResponse }) {
   const groupAvg = data.difficultyDist.overallAvg;
   return (
-    <Panel title="학교별 비교" icon={<School className="h-4 w-4 text-cyan-400" />}>
+    <Panel title="학교별 비교" icon={<School className="h-4 w-4 text-content-tertiary" />}>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -873,7 +873,7 @@ function SchoolBreakdownPanel({ data }: { data: AggregateResponse }) {
 function PitfallPanel({ data }: { data: AggregateResponse }) {
   const top = data.pitfalls.slice(0, 8);
   return (
-    <Panel title="함정 패턴" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}>
+    <Panel title="함정 패턴" icon={<AlertTriangle className="h-4 w-4 text-content-tertiary" />}>
       {top.length > 0 ? (
         <div className="space-y-1.5">
           {top.map((p) => (
@@ -905,7 +905,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
   return (
     <Panel
       title={`시험지별 분석 인용 (${data.aiNarratives.length}건)`}
-      icon={<Sparkles className="h-4 w-4 text-violet-400" />}
+      icon={<Sparkles className="h-4 w-4 text-content-tertiary" />}
       hint="출처 시험지 ID 명시"
     >
       {data.aiNarratives.length === 0 ? (
@@ -917,7 +917,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
               <summary className="cursor-pointer text-zinc-200">
                 <span className="font-semibold">{n.school}</span>
                 <span className="ml-1.5 text-zinc-500">{n.year} · {n.examTitle.slice(0, 30)}</span>
-                <span className="ml-1.5 text-[10px] text-violet-400">✻ 시험지 분석</span>
+                <span className="ml-1.5 text-[10px] text-content-tertiary">시험지 분석</span>
               </summary>
               {n.summary && (
                 <div className="mt-2 text-zinc-300">
@@ -930,8 +930,8 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
                   <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">고난도 문항</div>
                   <ul className="space-y-1.5">
                     {n.hardQuestions.map((h) => (
-                      <li key={h.problemId} className="border-l-2 border-violet-500/40 pl-2 text-zinc-300">
-                        <span className="font-semibold text-violet-300">#{h.number}</span>
+                      <li key={h.problemId} className="border-l-2 border-white/[.14] pl-2 text-zinc-300">
+                        <span className="font-semibold text-zinc-100">#{h.number}</span>
                         <span className="ml-1.5 text-zinc-200">{h.subTitle}</span>
                         <div className="mt-0.5 text-[11px] text-zinc-400">{h.intent}</div>
                       </li>
@@ -949,7 +949,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
 
 function ExamListPanel({ data }: { data: AggregateResponse }) {
   return (
-    <Panel title={`매칭 시험지 (${data.exams.length}건)`} icon={<Layers className="h-4 w-4 text-cyan-400" />}>
+    <Panel title={`매칭 시험지 (${data.exams.length}건)`} icon={<Layers className="h-4 w-4 text-content-tertiary" />}>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -971,7 +971,7 @@ function ExamListPanel({ data }: { data: AggregateResponse }) {
                   <td className="max-w-md truncate py-2 pr-2">
                     <Link
                       href={`/dashboard/cloud/${e.id}`}
-                      className="text-zinc-200 hover:text-cyan-300"
+                      className="text-zinc-200 hover:text-white"
                       title={e.title}
                     >
                       {e.title}
@@ -1003,7 +1003,7 @@ function ExamListPanel({ data }: { data: AggregateResponse }) {
                   </td>
                   <td className="py-2 pl-2 text-center">
                     {e.hasAnalysis ? (
-                      <Sparkles className="inline h-3.5 w-3.5 text-violet-400" />
+                      <Sparkles className="inline h-3.5 w-3.5 text-content-secondary" />
                     ) : (
                       <span className="text-zinc-700">-</span>
                     )}

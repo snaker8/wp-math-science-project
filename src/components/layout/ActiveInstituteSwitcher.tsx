@@ -68,13 +68,13 @@ export default function ActiveInstituteSwitcher() {
     new Set(institutes.map((i) => i.organizationName ?? '')).size > 1;
 
   return (
-    <div className="hidden md:flex items-center gap-1.5 mr-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
-      <Building2 className="h-3 w-3 text-amber-400 shrink-0" />
+    <div className="hidden md:flex items-center gap-1.5 mr-1 px-2 py-1 rounded-lg border border-white/[.08] bg-white/[.03]">
+      <Building2 className="h-3 w-3 text-content-tertiary shrink-0" />
       <select
         value={activeId}
         onChange={onChange}
         disabled={busy}
-        className="bg-transparent text-[12px] font-bold text-amber-200 focus:outline-none cursor-pointer pr-1 max-w-[160px] truncate disabled:opacity-60"
+        className="bg-transparent text-[12px] font-semibold text-content-secondary focus:outline-none cursor-pointer pr-1 max-w-[160px] truncate disabled:opacity-60"
         title="활성 센터 — 학생 채점, 자산화 등 모든 작업이 이 센터 기준"
       >
         {institutes.map((i) => (

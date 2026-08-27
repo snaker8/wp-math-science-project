@@ -47,7 +47,7 @@ const mockStudents: StudentRealtime[] = [
 
 const StatusBadge = ({ status }: { status: StudentRealtime['status'] }) => {
     const configs = {
-        solving: { color: 'text-indigo-400', bg: 'bg-indigo-500/10', label: '풀이 중', icon: Activity },
+        solving: { color: 'text-content-secondary', bg: 'bg-white/[.04]', label: '풀이 중', icon: Activity },
         completed: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: '완료', icon: CheckCircle2 },
         blocked: { color: 'text-rose-400', bg: 'bg-rose-500/10', label: '도움 필요', icon: AlertCircle },
         idle: { color: 'text-content-tertiary', bg: 'bg-surface-raised', label: '대기', icon: Clock },
@@ -89,7 +89,7 @@ export default function MonitorPage() {
                             <div className="text-sm font-bold text-content-primary">12 / 15</div>
                         </div>
                     </div>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-content-primary text-xs font-bold rounded-xl shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-content-primary text-xs font-bold rounded-xl transition-all">
                         <Zap size={14} /> 세션 종료
                     </button>
                 </div>
@@ -97,9 +97,9 @@ export default function MonitorPage() {
 
             {/* 2. Top Stats Bento */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <GlowCard className="bg-indigo-500/5 border-indigo-500/10">
+                <GlowCard className="bg-white/[.03] border-white/[.08]">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
+                        <div className="p-2 rounded-lg bg-white/[.06] text-content-secondary">
                             <Activity size={18} />
                         </div>
                         <span className="text-[10px] text-content-tertiary font-bold uppercase transition-colors">Avg. Pace</span>
@@ -134,15 +134,15 @@ export default function MonitorPage() {
                     <div className="text-[10px] text-rose-400 font-bold">Action Required immediately</div>
                 </GlowCard>
 
-                <GlowCard className="bg-amber-500/5 border-amber-500/10">
+                <GlowCard className="bg-white/[.03] border-white/[.08]">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+                        <div className="p-2 rounded-lg bg-white/[.06] text-content-secondary">
                             <Trophy size={18} />
                         </div>
                         <span className="text-[10px] text-content-tertiary font-bold uppercase">Class Score</span>
                     </div>
                     <div className="text-2xl font-bold text-content-primary mb-1">842 <span className="text-xs font-normal text-content-tertiary">Pts</span></div>
-                    <div className="text-[10px] text-amber-400 font-bold">New High Score Potential</div>
+                    <div className="text-[10px] text-content-secondary font-bold">New High Score Potential</div>
                 </GlowCard>
             </div>
 
@@ -150,7 +150,7 @@ export default function MonitorPage() {
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
-                        <Users size={16} className="text-indigo-400" />
+                        <Users size={16} className="text-content-tertiary" />
                         학생별 실시간 현황
                     </h3>
                     <div className="flex items-center gap-4">
@@ -208,7 +208,7 @@ export default function MonitorPage() {
                                             <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${student.progress}%` }}
-                                                className={`h-full rounded-full ${student.status === 'blocked' ? 'bg-rose-500 shadow-[0_0_10px_rgba(225,29,72,0.5)]' : 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]'
+                                                className={`h-full rounded-full ${student.status === 'blocked' ? 'bg-rose-500' : 'bg-white/40'
                                                     }`}
                                             />
                                         </div>
@@ -242,7 +242,7 @@ export default function MonitorPage() {
                                         <button className="flex items-center gap-1.5 text-[10px] font-bold text-content-tertiary hover:text-content-primary transition-colors">
                                             <MessageCircle size={12} /> 상담 메시지
                                         </button>
-                                        <button className="flex items-center gap-1 text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+                                        <button className="flex items-center gap-1 text-[10px] font-bold text-content-secondary hover:text-content-primary transition-colors">
                                             학습 상세 <ArrowUpRight size={12} />
                                         </button>
                                     </div>

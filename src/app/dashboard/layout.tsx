@@ -12,9 +12,18 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-surface-base text-content-primary selection:bg-accent/30">
+    <div className="relative min-h-screen bg-surface-base text-content-primary selection:bg-accent/30">
+      {/* 배경 깊이 — 상단 중앙에서 퍼지는 아주 옅은 액센트 광원. 표면이 "층"으로 읽히게 하는 바탕광 */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
+        style={{
+          background:
+            'radial-gradient(60% 100% at 50% 0%, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.015) 45%, transparent 100%)',
+        }}
+      />
       <TopNav />
-      <main className="min-h-[calc(100vh-3.5rem)] px-6 lg:px-8 py-6">
+      <main className="relative min-h-[calc(100vh-3.5rem)] px-6 lg:px-8 py-6">
         <div className="mx-auto max-w-screen-2xl">{children}</div>
       </main>
       <BatchSolutionNotifier />

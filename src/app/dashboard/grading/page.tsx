@@ -59,12 +59,12 @@ const SESSION_TYPE_LABEL: Record<string, string> = {
 };
 
 const SESSION_TYPE_COLOR: Record<string, string> = {
-  BS: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  DD: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  PT: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  SC: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  WS: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-  EX: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+  BS: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  DD: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  PT: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  SC: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  WS: 'border-white/[.08] bg-white/[.04] text-content-secondary',
+  EX: 'border-white/[.08] bg-white/[.04] text-content-secondary',
 };
 
 type StatusFilter = 'all' | 'pending' | 'done';
@@ -254,7 +254,7 @@ export default function GradingPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ClipboardCheck size={26} className="text-emerald-400" />
+              <ClipboardCheck size={26} className="text-content-tertiary" />
               채점하기
             </h1>
             <p className="text-sm text-content-tertiary mt-1">
@@ -276,7 +276,7 @@ export default function GradingPage() {
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 flex items-center gap-2 whitespace-nowrap"
               >
                 <Plus size={16} /> QR 채점 세션 생성
               </button>
@@ -293,7 +293,7 @@ export default function GradingPage() {
               onClick={() => setActiveTab(t)}
               className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
                 activeTab === t
-                  ? 'border-emerald-400 text-content-primary'
+                  ? 'border-white text-content-primary'
                   : 'border-transparent text-content-tertiary hover:text-content-secondary'
               }`}
             >
@@ -319,7 +319,7 @@ export default function GradingPage() {
               placeholder="학생명 / 시험지 검색"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none"
             />
           </div>
 
@@ -329,7 +329,7 @@ export default function GradingPage() {
           <select
             value={studentFilter}
             onChange={(e) => setStudentFilter(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+            className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none"
           >
             <option value="">전체</option>
             {students.map(s => (
@@ -343,7 +343,7 @@ export default function GradingPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+            className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none"
           >
             <option value="all">전체</option>
             <option value="pending">미채점</option>
@@ -399,19 +399,19 @@ export default function GradingPage() {
                   placeholder="시험지명 검색"
                   value={excelSearch}
                   onChange={(e) => setExcelSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none"
                 />
               </div>
               <select value={excelSubject} onChange={(e) => setExcelSubject(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none">
+                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none">
                 {excelSubjects.map((s) => <option key={s} value={s}>{s === '전체' ? '과목 전체' : s}</option>)}
               </select>
               <select value={excelType} onChange={(e) => setExcelType(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none">
+                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none">
                 {excelTypes.map((s) => <option key={s} value={s}>{s === '전체' ? '유형 전체' : s}</option>)}
               </select>
               <select value={excelGrade} onChange={(e) => setExcelGrade(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-indigo-400 focus:outline-none">
+                className="px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-sm focus:border-white/25 focus:outline-none">
                 {excelGrades.map((s) => <option key={s} value={s}>{s === '전체' ? '학년 전체' : s}</option>)}
               </select>
             </div>
@@ -426,7 +426,7 @@ export default function GradingPage() {
                   type="button"
                   onClick={() => setExcelExamId(ex.id)}
                   className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition ${
-                    excelExamId === ex.id ? 'bg-indigo-500/15' : ''
+                    excelExamId === ex.id ? 'bg-white/[.08]' : ''
                   }`}
                 >
                   <span className="text-sm text-content-primary truncate">{ex.title}</span>
@@ -559,7 +559,7 @@ function SessionCard({
           </div>
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div
-              className={`h-full transition-all ${isDone ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+              className={`h-full transition-all ${isDone ? 'bg-emerald-500' : 'bg-white/40'}`}
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -596,7 +596,7 @@ function SessionCard({
           <button
             type="button"
             onClick={onSheetUpload}
-            className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 flex items-center gap-1"
+            className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
             title="채점표 이미지 업로드 → AI 자동 채점"
           >
             <Camera size={12} /> 이미지 채점
@@ -604,7 +604,7 @@ function SessionCard({
           <Link
             href={`/grade/${s.id}`}
             target="_blank"
-            className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 flex items-center gap-1"
+            className="text-xs px-2 py-1 rounded border border-white/[.14] bg-white/[.08] text-content-primary hover:bg-white/[.12] flex items-center gap-1"
             title="강사 채점 페이지"
           >
             <ExternalLink size={12} /> 채점

@@ -154,8 +154,8 @@ export default function InstitutesAdminPage() {
       <div className="flex items-end justify-between">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-              <Building2 className="text-indigo-400" size={20} />
+            <div className="w-10 h-10 rounded-xl bg-white/[.04] border border-white/[.08] flex items-center justify-center">
+              <Building2 className="text-content-secondary" size={20} />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">학원·센터 관리</h1>
@@ -165,7 +165,7 @@ export default function InstitutesAdminPage() {
         </div>
         <button
           onClick={() => setShowOrgForm((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors"
+          className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-white hover:bg-zinc-200 px-4 py-2 text-sm font-semibold text-black transition-colors"
         >
           <Plus size={16} /> 학원 추가
         </button>
@@ -180,9 +180,9 @@ export default function InstitutesAdminPage() {
 
       {/* 학원 추가 폼 */}
       {showOrgForm && (
-        <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-5">
+        <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-5">
           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-            <Plus size={14} className="text-indigo-400" /> 새 학원 추가
+            <Plus size={14} className="text-content-tertiary" /> 새 학원 추가
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
@@ -192,7 +192,7 @@ export default function InstitutesAdminPage() {
                 value={newOrgName}
                 onChange={(e) => setNewOrgName(e.target.value)}
                 placeholder="예: 외부학원 A"
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
               />
             </div>
             <div>
@@ -202,7 +202,7 @@ export default function InstitutesAdminPage() {
                 value={newOrgSlug}
                 onChange={(e) => setNewOrgSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
                 placeholder="external-a (영소문자/숫자/하이픈)"
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none font-mono"
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none font-mono"
               />
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function InstitutesAdminPage() {
             <button
               onClick={createOrg}
               disabled={orgBusy || !newOrgName.trim() || !newOrgSlug.trim()}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-white/[.14] bg-white/[.08] px-4 py-2 text-sm font-semibold text-content-primary hover:bg-white/[.12] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {orgBusy ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />} 추가
             </button>
@@ -253,8 +253,8 @@ export default function InstitutesAdminPage() {
                 {/* 학원 헤더 */}
                 <div className="flex items-center justify-between p-5 border-b border-zinc-800">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                      <Building2 className="text-indigo-400" size={18} />
+                    <div className="w-10 h-10 rounded-lg bg-white/[.04] border border-white/[.08] flex items-center justify-center">
+                      <Building2 className="text-content-secondary" size={18} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 mb-0.5">
@@ -262,7 +262,7 @@ export default function InstitutesAdminPage() {
                         <span className="text-[10px] font-mono text-zinc-500 px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
                           {org.slug}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-content-secondary bg-white/[.04] border border-white/[.08] px-2 py-0.5 rounded">
                           {org.subscription_tier}
                         </span>
                       </div>
@@ -274,7 +274,7 @@ export default function InstitutesAdminPage() {
                   </div>
                   <button
                     onClick={() => setAddInstFor(isAdding ? null : org.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 hover:border-indigo-500/40 hover:bg-indigo-500/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-indigo-400 transition-colors"
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-800 hover:border-white/[.14] hover:bg-white/[.06] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-content-primary transition-colors"
                   >
                     <Plus size={12} /> 센터 추가
                   </button>
@@ -282,19 +282,19 @@ export default function InstitutesAdminPage() {
 
                 {/* 센터 추가 폼 */}
                 {isAdding && (
-                  <div className="px-5 py-3 bg-indigo-500/5 border-b border-indigo-500/20 flex gap-2">
+                  <div className="px-5 py-3 bg-white/[.03] border-b border-white/[.08] flex gap-2">
                     <input
                       type="text"
                       value={newInstName}
                       onChange={(e) => setNewInstName(e.target.value)}
                       placeholder="센터명 (예: 자사관, 고등관, 초등관)"
-                      className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500 focus:outline-none"
+                      className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                       autoFocus
                     />
                     <button
                       onClick={() => createInstitute(org.id)}
                       disabled={instBusy || !newInstName.trim()}
-                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 hover:bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-white/[.14] bg-white/[.08] px-4 py-2 text-sm font-semibold text-content-primary hover:bg-white/[.12] disabled:opacity-50 transition-colors"
                     >
                       {instBusy ? <Loader2 className="animate-spin" size={14} /> : '추가'}
                     </button>
@@ -315,8 +315,8 @@ export default function InstitutesAdminPage() {
                   {orgInsts.map((inst) => (
                     <div key={inst.id} className="px-5 py-3 flex items-center justify-between hover:bg-zinc-900/50 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                          <Layers size={14} className="text-emerald-400" />
+                        <div className="w-8 h-8 rounded-lg bg-white/[.04] border border-white/[.08] flex items-center justify-center">
+                          <Layers size={14} className="text-content-secondary" />
                         </div>
                         <div className="text-sm font-medium text-zinc-100">{inst.name}</div>
                       </div>
@@ -329,9 +329,7 @@ export default function InstitutesAdminPage() {
                               onClick={() => updateReportStyle(inst.id, st)}
                               className={`text-[10px] font-bold px-2 py-1 rounded-md transition-colors ${
                                 (inst.report_style ?? 'legacy') === st
-                                  ? st === 'unified'
-                                    ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
-                                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                  ? 'bg-white/[.08] text-content-primary border border-white/[.14]'
                                   : 'text-zinc-500 hover:text-zinc-300'
                               }`}
                               title={
@@ -366,9 +364,9 @@ function StatCard({ icon, label, value, accent }: {
   accent: 'indigo' | 'emerald' | 'amber';
 }) {
   const map = {
-    indigo: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',
-    emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
-    amber: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+    indigo: 'bg-white/[.04] border-white/[.08] text-content-secondary',
+    emerald: 'bg-white/[.04] border-white/[.08] text-content-secondary',
+    amber: 'bg-white/[.04] border-white/[.08] text-content-secondary',
   };
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">

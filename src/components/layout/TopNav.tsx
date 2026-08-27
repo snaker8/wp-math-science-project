@@ -109,7 +109,7 @@ export function TopNav() {
   const trackedGroups = withTrackGroups(visibleGroups, track);
 
   return (
-    <nav className="sticky top-0 z-50 h-14 border-b bg-surface-card/95 backdrop-blur-md">
+    <nav className="sticky top-0 z-50 h-14 border-b border-white/[.06] bg-surface-base/75 backdrop-blur-xl">
       <div className="flex h-full items-center justify-between px-6 max-w-screen-2xl mx-auto">
         {/* ── Left: 로고 + 탭 ── */}
         <div className="flex items-center gap-1">
@@ -121,24 +121,21 @@ export function TopNav() {
           </Link>
           {userScope?.organizationName && (
             <div className="hidden md:flex items-center mr-6 pl-4 border-l border-zinc-700/40 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <Building2 className="h-3 w-3 text-indigo-400/70 shrink-0" />
-                <div className="flex flex-col leading-tight">
-                  <span className="text-[11px] font-bold text-zinc-200 tracking-tight">
-                    {userScope.organizationName}
+              <div className="flex flex-col leading-tight">
+                <span className="text-[11px] font-bold text-zinc-200 tracking-tight whitespace-nowrap">
+                  {userScope.organizationName}
+                </span>
+                {userScope.instituteName && userScope.instituteName !== userScope.organizationName && (
+                  <span className="text-[9px] text-zinc-500 mt-px whitespace-nowrap">
+                    {userScope.instituteName}
                   </span>
-                  {userScope.instituteName && userScope.instituteName !== userScope.organizationName && (
-                    <span className="text-[9px] text-zinc-500 mt-px">
-                      {userScope.instituteName}
-                    </span>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           )}
 
           {/* 메뉴 탭 — 이미 trackHref 적용된 그룹 사용 */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex h-14 items-center gap-1">
             {trackedGroups.map((group) => (
               <NavTab
                 key={group.id}
@@ -339,21 +336,21 @@ function NavTab({
     return <DbAssetizeTab group={group} isActive={!!isActive} pathname={pathname} track={track} />;
   }
 
-  // 직접 링크
+  // 직접 링크 — 텍스트 탭 + 하단 액센트 라인 (아이콘은 드롭다운 안에서만)
   if (group.href && !group.children) {
     return (
       <Link
         href={group.href}
         className={`
-          flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+          relative flex h-14 items-center whitespace-nowrap px-3 text-sm font-medium transition-colors
           ${isActive
-            ? 'text-accent bg-accent-muted'
-            : 'text-content-secondary hover:text-content-primary hover:bg-surface-raised'
+            ? 'text-content-primary'
+            : 'text-content-tertiary hover:text-content-primary'
           }
         `}
       >
-        <group.icon size={16} />
         <span>{group.label}</span>
+        {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
       </Link>
     );
   }
@@ -366,19 +363,19 @@ function NavTab({
         onMouseEnter={prefetchChildren}
         onFocus={prefetchChildren}
         className={`
-          flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+          relative flex h-14 items-center gap-1 whitespace-nowrap px-3 text-sm font-medium transition-colors
           ${isActive
-            ? 'text-accent bg-accent-muted'
-            : 'text-content-secondary hover:text-content-primary hover:bg-surface-raised'
+            ? 'text-content-primary'
+            : 'text-content-tertiary hover:text-content-primary'
           }
         `}
       >
-        <group.icon size={16} />
         <span>{group.label}</span>
         <ChevronDown
-          size={14}
-          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+          size={12}
+          className={`text-content-muted transition-transform ${open ? 'rotate-180' : ''}`}
         />
+        {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
       </button>
 
       <AnimatePresence>
@@ -468,15 +465,15 @@ function DbAssetizeTab({
         }
       }}
       className={`
-        flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+        relative flex h-14 items-center whitespace-nowrap px-3 text-sm font-medium transition-colors
         ${isActive
-          ? 'text-accent bg-accent-muted'
-          : 'text-content-secondary hover:text-content-primary hover:bg-surface-raised'
+          ? 'text-content-primary'
+          : 'text-content-tertiary hover:text-content-primary'
         }
       `}
     >
-      <group.icon size={16} />
       <span>{group.label}</span>
+      {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
     </button>
   );
 }
