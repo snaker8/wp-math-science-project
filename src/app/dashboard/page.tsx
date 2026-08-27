@@ -220,9 +220,10 @@ export default function DashboardPage() {
           >
             설정
           </button>
+          {/* ★ 주 CTA = 흰 필 — 페이지의 유일한 명도 반전 요소 (Linear white-cta-inversion) */}
           <button
             onClick={() => router.push('/dashboard/create')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-content-primary text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
           >
             + 시험지 제작
           </button>
@@ -397,18 +398,19 @@ export default function DashboardPage() {
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#1a1d28',
-                        border: '1px solid rgba(148,163,184,0.12)',
+                        backgroundColor: 'var(--bg-surface)',
+                        border: '1px solid rgba(255,255,255,0.09)',
                         borderRadius: '8px',
                         fontSize: '11px',
-                        color: '#fff',
+                        color: 'var(--text-primary)',
                       }}
                       formatter={(value: any) => [`${value}개`, '출제 수']}
                       labelFormatter={(label: any) => `${selectedYear}.${label}`}
                     />
+                    {/* 데이터 그래픽은 채도 허용 — Linear graphic accent (periwinkle) */}
                     <Bar
                       dataKey="count"
-                      fill="#818cf8"
+                      fill="#8FA4FF"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>

@@ -32,7 +32,7 @@ export default function TrackDashboardLayout({
           className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
           style={{
             background:
-              'radial-gradient(60% 100% at 50% 0%, rgba(99,102,241,0.07) 0%, rgba(99,102,241,0.02) 45%, transparent 100%)',
+              'radial-gradient(60% 100% at 50% 0%, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.015) 45%, transparent 100%)',
           }}
         />
         <TopNav />
