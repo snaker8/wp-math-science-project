@@ -325,7 +325,6 @@ const SourceCategoryBadge: React.FC<{
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
         className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-all hover:opacity-80 ${info.bgClass} ${info.borderClass} ${info.colorClass} ${saving ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
       >
-        <span>{info.emoji}</span>
         <span>{info.label}</span>
         {!saving && <ChevronDown className="h-2.5 w-2.5 opacity-50" />}
       </button>
@@ -344,7 +343,6 @@ const SourceCategoryBadge: React.FC<{
                     : 'text-content-secondary'
                 }`}
               >
-                <span>{opt.emoji}</span>
                 <span>{opt.label}</span>
               </button>
             ))}
@@ -443,13 +441,15 @@ const TreeNodeComponent: React.FC<{
 
   return (
     <div>
+      {/* ★ Linear 사이드바 문법 (2026-08-28): 폴더 아이콘 제거 — 계층은 셰브런+들여쓰기 가이드가,
+          선택은 색이 아니라 밝기가 말한다. 숫자는 우측 정렬 등폭. */}
       <div
-        className={`group flex items-center gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${
+        className={`group flex items-center gap-1.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${
           isSelected
-            ? 'bg-indigo-500/10 text-indigo-400'
-            : 'text-content-secondary hover:bg-surface-raised/50'
+            ? 'bg-white/[.07] text-content-primary'
+            : 'text-content-tertiary hover:bg-white/[.04] hover:text-content-secondary'
         }`}
-        style={{ paddingLeft: `${8 + level * 16}px` }}
+        style={{ paddingLeft: '8px' }} /* 계층 들여쓰기는 자식 컨테이너(ml+border-l)가 담당 */
         onClick={() => {
           if (hasChildren) onToggle(node.id);
           onSelect(node.id, node.name);
@@ -457,17 +457,12 @@ const TreeNodeComponent: React.FC<{
       >
         {hasChildren ? (
           isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-content-tertiary" />
+            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-content-muted" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-content-tertiary" />
+            <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-content-muted" />
           )
         ) : (
           <span className="w-3.5 flex-shrink-0" />
-        )}
-        {isExpanded || isSelected ? (
-          <FolderOpen className="h-4 w-4 flex-shrink-0 text-indigo-500" />
-        ) : (
-          <Folder className="h-4 w-4 flex-shrink-0 text-content-tertiary" />
         )}
         {isRenaming ? (
           <input
@@ -484,12 +479,12 @@ const TreeNodeComponent: React.FC<{
             className="flex-1 bg-surface-raised border border-indigo-500/50 rounded px-1.5 py-0.5 text-sm text-content-primary outline-none"
           />
         ) : (
-          <span className={`flex-1 truncate text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>
+          <span className={`flex-1 truncate text-[13px] ${isSelected ? 'font-semibold' : 'font-medium'}`}>
             {node.name}
           </span>
         )}
         {node.examCount > 0 && !isRenaming && (
-          <span className="text-[10px] text-content-muted mr-1">{node.examCount}</span>
+          <span className="mr-1 text-[11px] tabular-nums text-content-muted">{node.examCount}</span>
         )}
         {!node.isVirtual && !isRenaming && (
           <GroupContextMenu
@@ -500,7 +495,8 @@ const TreeNodeComponent: React.FC<{
         )}
       </div>
       {hasChildren && isExpanded && (
-        <div>
+        // 들여쓰기 가이드 — 계층을 선 하나로 읽게 한다
+        <div className="ml-[15px] border-l border-white/[.06]">
           {node.children.map((child) => (
             <TreeNodeComponent
               key={child.id}
@@ -1811,12 +1807,11 @@ export default function CloudPage() {
                     disabled={s.count === 0}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                       diagSession === s.id
-                        ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'
+                        ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                         : 'text-content-tertiary hover:bg-surface-raised hover:text-content-secondary border border-transparent'
                     }`}
                     title={`${s.label} (${s.count}건)`}
                   >
-                    <span>{s.emoji}</span>
                     <span>{s.label}</span>
                     <span className="text-[10px] opacity-60">{s.count}</span>
                   </button>
@@ -2414,13 +2409,13 @@ export default function CloudPage() {
               <span className="rounded-full border bg-surface-raised px-3 py-1 text-xs font-semibold text-content-secondary">
                 {sourceCategory === 'all'
                   ? `북그룹 ${totalGroups}개`
-                  : `${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.emoji ?? ''} ${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.label ?? ''} · ${subFilteredExams.length}건`}
+                  : `${SOURCE_CATEGORIES.find((c) => c.id === sourceCategory)?.label ?? ''} · ${subFilteredExams.length}건`}
               </span>
               {sourceCategory === 'all' && (
                 <button
                   type="button"
                   onClick={handleAddRootGroup}
-                  className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-400"
+                  className="flex items-center gap-2 rounded-full border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-content-secondary transition-all hover:border-white/[.16] hover:bg-white/[.06] hover:text-content-primary"
                 >
                   <span className="flex h-5 w-5 items-center justify-center rounded-full border border-content-muted bg-surface-card text-content-secondary">
                     <Plus className="h-3 w-3" />
@@ -2456,7 +2451,7 @@ export default function CloudPage() {
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <Smile className="h-12 w-12 text-indigo-500/50" />
+                    <Smile className="h-12 w-12 text-content-muted" />
                     <p className="text-sm text-content-tertiary">
                       {sourceCategory === 'all' ? '업로드된 시험지가 없습니다.' : '이 분류에 해당하는 자료가 없습니다.'}
                     </p>

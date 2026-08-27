@@ -1,5 +1,5 @@
 {
-  "total": 3147,
+  "total": 3137,
   "counts": {
     "src/app/admin/AdminLayoutClient.tsx": 11,
     "src/app/admin/answer-fix/page.tsx": 8,
@@ -14,7 +14,7 @@
     "src/app/dashboard/account/page.tsx": 7,
     "src/app/dashboard/assignments/page.tsx": 26,
     "src/app/dashboard/class/page.tsx": 3,
-    "src/app/dashboard/cloud/CloudListClient.tsx": 107,
+    "src/app/dashboard/cloud/CloudListClient.tsx": 97,
     "src/app/dashboard/cloud/create-exam/page.tsx": 20,
     "src/app/dashboard/cloud/folder-import/page.tsx": 17,
     "src/app/dashboard/cloud/[examId]/page.tsx": 168,
