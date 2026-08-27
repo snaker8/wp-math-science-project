@@ -1,248 +1,149 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { motion, useScroll, useTransform, useInView } from 'framer-motion';
-import { ChevronRight, Zap, Target, BarChart3, ArrowUpRight } from 'lucide-react';
+import { ChevronRight, ScanText, ClipboardCheck, LineChart, FolderOpen } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/Logo';
 
-// --- Components ---
+// ============================================================================
+// 랜딩 — Linear 문법 (2026-08-28 재작성)
+// ★ 이전 버전의 거짓 요소 제거: "v2.0 Public Beta" 가짜 배지, "99.8% Accuracy"
+//   "+24%" 등 지어낸 수치, 가짜 대시보드 목업. 카피는 실제 하는 일만 말한다.
+// ★ 크롬 무채색 — 액센트는 흰 필 CTA 하나. (insane-design/linear/design.md §18)
+// ============================================================================
 
-function Hero() {
-  const { scrollY } = useScroll();
-  const y1 = useTransform(scrollY, [0, 500], [0, 200]);
-  const y2 = useTransform(scrollY, [0, 500], [0, -150]);
-  const rotateX = useTransform(scrollY, [0, 800], [0, 25]);
-  const opacity = useTransform(scrollY, [0, 600], [1, 0.5]);
-
-  return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-black pt-32 pb-20">
-      {/* Background Gradients */}
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-600/30 rounded-full blur-[128px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-violet-600/20 rounded-full blur-[128px] translate-x-1/3 translate-y-1/3 pointer-events-none" />
-      <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.05] pointer-events-none" />
-
-      {/* Content */}
-      <div className="z-10 text-center px-6 max-w-5xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-        >
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-indigo-300 backdrop-blur-md mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-            </span>
-            v2.0 Public Beta is Live
-          </span>
-
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-[1.1]">
-            <span className="bg-gradient-to-br from-indigo-400 to-indigo-600 bg-clip-text text-transparent">Math</span>
-            <span className="text-violet-500 mx-2 font-extralight">×</span>
-            <span className="bg-gradient-to-br from-violet-400 to-pink-500 bg-clip-text text-transparent">Sci</span>
-            <span className="ml-3 text-white">Bank</span>
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50">
-              for the Future
-            </span>
-          </h1>
-
-          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Math×Sci Bank 는 단순한 문제은행이 아닙니다. <br className="hidden md:block" />
-            함께 만드는 자산, AI 정밀 채점과 완전무결한 오답 관리 루프로 수학·과학 교육의 본질을 혁신합니다.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/auth/signup" className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-full bg-indigo-600 px-8 font-medium text-white transition-all duration-300 hover:bg-indigo-500 hover:scale-105 active:scale-95">
-              <div className="absolute inset-0 flex items-center justify-center [transform:skew(-12deg)_translateX(-100%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(100%)]">
-                <div className="relative h-full w-8 bg-white/20" />
-              </div>
-              <span>무료로 시작하기</span>
-              <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-            <Link href="/auth/login" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
-              이미 계정이 있으신가요?
-            </Link>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* 3D Dashboard Visual */}
-      <motion.div
-        style={{ y: y1, rotateX, opacity }}
-        className="relative mt-20 w-full max-w-6xl mx-auto px-4 perspective-1000"
-      >
-        <div className="relative rounded-2xl border border-white/10 bg-gray-900/50 backdrop-blur-xl shadow-2xl shadow-indigo-500/10 overflow-hidden aspect-[16/10] group">
-          {/* Dashboard Header Mock */}
-          <div className="h-10 border-b border-white/10 flex items-center px-4 gap-2 bg-white/5">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
-              <div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50" />
-            </div>
-            <div className="flex-1 text-center text-[10px] text-gray-500 font-mono">dashboard.preview.tsx</div>
-          </div>
-          {/* Simple Mock Content */}
-          <div className="p-8 grid grid-cols-3 gap-6 h-full">
-            <div className="col-span-2 space-y-6">
-              <div className="h-40 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10 animate-pulse relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12 translate-x-[-100%] animate-shimmer" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="h-24 rounded-xl bg-white/5 border border-white/5" />
-                <div className="h-24 rounded-xl bg-white/5 border border-white/5" />
-              </div>
-            </div>
-            <div className="col-span-1 h-full rounded-xl bg-white/5 border border-white/5 flex flex-col p-4 gap-3">
-              <div className="h-8 w-1/2 bg-white/10 rounded" />
-              <div className="h-4 w-full bg-white/5 rounded" />
-              <div className="h-4 w-3/4 bg-white/5 rounded" />
-              <div className="mt-auto h-32 rounded bg-indigo-500/10 border border-indigo-500/20" />
-            </div>
-          </div>
-
-          {/* Floating UI Elements */}
-          <motion.div
-            style={{ y: y2 }}
-            className="absolute -right-10 top-20 bg-black/80 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-2xl z-20 w-64"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white">
-                <Zap size={20} fill="currentColor" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-400">AI Analysis</div>
-                <div className="text-sm font-bold text-white">Optimization +24%</div>
-              </div>
-            </div>
-            <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 w-[74%]" />
-            </div>
-          </motion.div>
-        </div>
-      </motion.div>
-    </section>
-  );
-}
-
-function BentoItem({ title, description, icon: Icon, value, label, colSpan = 1 }: any) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true });
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={isInView ? { opacity: 1, scale: 1 } : {}}
-      transition={{ duration: 0.5, delay: 0.1 }}
-      className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-8 hover:bg-white/[0.04] transition-colors ${colSpan === 2 ? 'md:col-span-2' : ''}`}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-      <div className="relative z-10 flex flex-col h-full justify-between">
-        <div className="mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-indigo-400 mb-6 group-hover:scale-110 transition-transform duration-300">
-            <Icon size={24} />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
-          <p className="text-gray-400 text-sm leading-relaxed">{description}</p>
-        </div>
-
-        {value && (
-          <div className="pt-6 border-t border-white/5">
-            <div className="text-3xl font-bold text-white mb-1 flex items-baseline gap-1">
-              {value}
-              <span className="text-sm text-gray-500 font-normal">{label}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-function BentoGrid() {
-  return (
-    <section className="bg-black py-32 px-6 relative">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-20">
-          <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-            Redefining <span className="text-indigo-500">Precision</span>
-          </h2>
-          <p className="text-gray-400 max-w-xl text-lg">
-            데이터에 기반한 의사결정과 AI의 속도가 만나
-            가장 완벽한 수학 교육 경험을 제공합니다.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <BentoItem
-            title="AI Precision Grading"
-            description="단순 채점을 넘어 풀이 과정의 논리적 오류까지 찾아내는 딥러닝 기반 정밀 채점 시스템입니다."
-            icon={Target}
-            value="99.8%"
-            label="Accuracy"
-            colSpan={2}
-          />
-          <BentoItem
-            title="Zero-Wrong Loop"
-            description="틀린 문제는 3배수 유사 변형 문제로 자동 출제되어, 완벽히 이해할 때까지 반복됩니다."
-            icon={Zap}
-            value="3.5x"
-            label="Speed"
-          />
-          <BentoItem
-            title="Real-time Insights"
-            description="학생의 학습 상태를 실시간으로 분석하여, 선생님과 학부모에게 즉각적인 피드백을 제공합니다."
-            icon={BarChart3}
-          />
-          <BentoItem
-            title="Seamless Cloud"
-            description="어디서든 이어지는 끊김 없는 학습 경험. 태블릿, PC, 모바일 완벽 동기화."
-            icon={ArrowUpRight}
-            colSpan={2}
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="bg-black border-t border-white/10 py-12 px-6">
-      <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-        <div className="text-center md:text-left">
-          <BrandLogo size="md" />
-          <p className="text-xs text-gray-500 mt-2">© 2026 Math×Sci Bank. All rights reserved.</p>
-        </div>
-        <div className="flex gap-6 text-sm text-gray-400">
-          <Link href="#" className="hover:text-white transition-colors">Privacy</Link>
-          <Link href="#" className="hover:text-white transition-colors">Terms</Link>
-          <Link href="#" className="hover:text-white transition-colors">Contact</Link>
-        </div>
-      </div>
-    </footer>
-  );
-}
+const FEATURES = [
+  {
+    icon: ScanText,
+    title: '시험지 자산화',
+    description:
+      'HWP·PDF 시험지를 올리면 수식까지 인식해 문제 단위로 분해하고, 단원·유형·난이도를 분류해 문제은행에 쌓습니다.',
+  },
+  {
+    icon: FolderOpen,
+    title: '유형별 출제',
+    description:
+      '학교기출·교재·진단평가로 쌓인 문제를 단원과 유형으로 골라 몇 분 만에 시험지로 편성하고 인쇄합니다.',
+  },
+  {
+    icon: ClipboardCheck,
+    title: 'QR 채점과 오답 관리',
+    description:
+      'QR 답안지로 채점하면 결과가 학생별 유형 숙달로 쌓이고, 약점 유형은 유사 문제로 다시 출제됩니다.',
+  },
+  {
+    icon: LineChart,
+    title: '학생·학교 리포트',
+    description:
+      '내신·진단·모의고사 결과를 학생 단위로 모아 강사와 학부모가 같은 그림을 봅니다.',
+  },
+];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
-      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b border-white/5 bg-black/50 h-16 flex items-center px-6">
-        <div className="max-w-6xl w-full mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-surface-base text-content-primary selection:bg-white/20">
+      {/* 배경 깊이 — 상단 중앙 옅은 광원 (앱과 동일 문법) */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[480px]"
+        style={{
+          background:
+            'radial-gradient(60% 100% at 50% 0%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 45%, transparent 100%)',
+        }}
+      />
+
+      <nav className="fixed inset-x-0 top-0 z-50 h-16 border-b border-white/[.06] bg-surface-base/75 backdrop-blur-xl">
+        <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between px-6">
           <BrandLogo size="md" />
-          <div className="flex gap-6 text-sm font-medium text-gray-300">
-            <Link href="/auth/login" className="hover:text-white transition-colors">로그인</Link>
-            <Link href="/auth/signup" className="px-4 py-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 transition-colors">회원가입</Link>
+          <div className="flex items-center gap-5 text-sm font-medium">
+            <Link href="/auth/login" className="text-content-tertiary transition-colors hover:text-content-primary">
+              로그인
+            </Link>
+            <Link
+              href="/auth/signup"
+              className="rounded-full bg-white px-4 py-1.5 font-semibold text-black transition-colors hover:bg-zinc-200"
+            >
+              회원가입
+            </Link>
           </div>
         </div>
       </nav>
 
-      <Hero />
-      <BentoGrid />
-      <Footer />
+      {/* Hero */}
+      <section className="relative flex min-h-[88vh] flex-col justify-center px-6 pt-24">
+        <div className="mx-auto w-full max-w-4xl">
+          <div>
+            <h1 className="mb-8 text-4xl font-bold leading-[1.15] tracking-tight text-content-primary md:text-6xl">
+              학원의 시험지가
+              <br />
+              자산이 되는 문제은행
+            </h1>
+            <p className="mb-10 max-w-2xl text-base leading-relaxed text-content-tertiary md:text-lg">
+              시험지를 올리면 문제 단위로 분해되어 쌓이고, 골라서 출제하고, QR로 채점하고,
+              <br className="hidden md:block" />
+              결과는 학생별 약점 관리로 이어집니다. 수학·과학 학원을 위한 운영 루프입니다.
+            </p>
+            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+              <Link
+                href="/auth/signup"
+                className="group inline-flex h-12 items-center justify-center rounded-full bg-white px-7 font-semibold text-black transition-colors hover:bg-zinc-200"
+              >
+                무료로 시작하기
+                <ChevronRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                href="/auth/login"
+                className="text-sm font-medium text-content-tertiary transition-colors hover:text-content-primary"
+              >
+                이미 계정이 있으신가요?
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="relative px-6 py-28">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-16 max-w-2xl">
+            <h2 className="mb-4 text-2xl font-bold tracking-tight text-content-primary md:text-4xl">
+              업로드에서 리포트까지, 한 흐름
+            </h2>
+            <p className="text-content-tertiary">
+              흩어진 자료 정리부터 채점 후 처방까지 — 학원 수업의 하루가 한 시스템 안에서 돕니다.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="rounded-xl border border-white/[.08] bg-surface-card/40 p-7
+                  shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_40px_-20px_rgba(0,0,0,0.55)]
+                  [background-image:linear-gradient(180deg,rgba(255,255,255,0.03),transparent_140px)]"
+              >
+                <f.icon size={22} className="mb-5 text-content-tertiary" />
+                <h3 className="mb-2 text-lg font-bold text-content-primary">{f.title}</h3>
+                <p className="text-sm leading-relaxed text-content-tertiary">{f.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/[.06] px-6 py-12">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 md:flex-row">
+          <div className="text-center md:text-left">
+            <BrandLogo size="md" />
+            <p className="mt-2 text-xs text-content-muted">© 2026 Math×Sci Bank. All rights reserved.</p>
+          </div>
+          <div className="flex gap-6 text-sm text-content-tertiary">
+            <Link href="/support" className="transition-colors hover:text-content-primary">
+              고객센터
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
