@@ -164,10 +164,10 @@ export default function LoginPage() {
 
         {/* 학원 표시 — URL ?org=<id> 로 진입 시 */}
         {orgInfo && (
-          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
-            <Building2 size={14} className="text-indigo-400" />
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[.10] bg-white/[.04]">
+            <Building2 size={14} className="text-content-tertiary" />
             <span className="text-[11px] uppercase tracking-wider text-zinc-500">학원</span>
-            <span className="text-sm font-bold text-indigo-300">{orgInfo.name}</span>
+            <span className="text-sm font-bold text-content-primary">{orgInfo.name}</span>
           </div>
         )}
       </div>
@@ -188,7 +188,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => setLoginType(type.id as 'student' | 'teacher' | 'parent')}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${loginType === type.id
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-white text-black'
                 : 'text-zinc-400 hover:text-zinc-200'
                 }`}
             >
@@ -221,12 +221,12 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={loginType === 'student' ? '010-1234-5678 또는 01012345678' : '이메일을 입력하세요'}
                 required
-                className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
               />
             </div>
             {loginType === 'student' && (
               <p className="text-[11px] text-zinc-500 ml-1">
-                하이픈 입력해도 OK. 초기 비밀번호 <strong className="text-indigo-400">123456</strong> → 로그인 후 변경 권장.
+                하이픈 입력해도 OK. 초기 비밀번호 <strong className="text-content-primary">123456</strong> → 로그인 후 변경 권장.
               </p>
             )}
           </div>
@@ -241,7 +241,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="비밀번호를 입력하세요"
                 required
-                className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors"
+                className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
               />
             </div>
           </div>
@@ -249,7 +249,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group"
+            className="w-full rounded-full bg-white py-3.5 font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group"
           >
             {isLoading ? (
               <Loader2 className="animate-spin" size={20} />
@@ -272,7 +272,7 @@ export default function LoginPage() {
           <div className="pt-4 border-t border-white/10">
             <p className="text-sm text-zinc-500">
               아직 계정이 없으신가요?{' '}
-              <Link href="/auth/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+              <Link href="/auth/signup" className="font-medium text-content-primary underline underline-offset-4 decoration-white/30 hover:decoration-white transition-colors">
                 회원가입
               </Link>
             </p>
