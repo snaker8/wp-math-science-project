@@ -219,7 +219,6 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    // ★ 인덱스 [10] — 배열 끝에 append 필수 (topNavGroups 가 인덱스 참조).
     href: '/dashboard/prescription/report',
     icon: Layers,
     label: '진단 종합 리포트',
@@ -227,7 +226,7 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    // ★ 인덱스 [11] — 출제 관리 (매쓰플랫 수업>학습지 미러, 2026-06-11)
+    // 출제 관리 (매쓰플랫 수업>학습지 미러, 2026-06-11)
     href: '/dashboard/assignments',
     icon: ListChecks,
     label: '출제 관리',
@@ -235,7 +234,7 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    // ★ 인덱스 [12] — 수업 허브 (IA Phase 2, 2026-06-12). 배열 끝 append 필수.
+    // 수업 허브 (IA Phase 2, 2026-06-12)
     href: '/dashboard/class',
     icon: Users,
     label: '수업 홈',
@@ -304,46 +303,58 @@ export interface NavGroup {
 //   - 순서: 문제은행 → 수업 → 출제 → 채점 → 분석 → 학원자료 → DB 자산화.
 //   - [출제 관리]를 수업 → 출제 그룹으로 이동 (출제 현황·점수는 출제 흐름의 끝).
 //   - 출제 그룹 라벨 명확화: 유형별 출제(문제 골라 제작) vs 자산 시험지 출제(자산화 시험지 그대로).
+// ★ 인덱스 참조는 배열 순서가 바뀌면 조용히 다른 메뉴를 가리킨다 (실제로 "배열 끝 append 필수"
+//   주석이 여러 개 붙어 있었다). href 로 찾는 헬퍼로 교체 — 순서 바뀌어도 안전하고, 없는 항목은
+//   빌드가 아니라 런타임에 조용히 사라지지 않게 예외로 드러난다.
+function navItem(items: NavItem[], href: string): NavItem {
+  const found = items.find((i) => i.href === href);
+  if (!found) throw new Error(`[navigation] 메뉴 항목 없음: ${href}`);
+  return found;
+}
+const dash = (href: string) => navItem(dashboardNavItems, href);
+const tutor = (href: string) => navItem(tutorNavItems, href);
+
 export const topNavGroups: NavGroup[] = [
-  // ── 1) 재료: 문제은행 ──
+  // ── 1) 자료 — "무엇으로 출제할 것인가". 예전엔 문제은행·학원자료·DB자산화 3탭으로
+  //   흩어져 있어 자료를 찾을 때 어디를 눌러야 할지 매번 헷갈렸다 (2026-08-28 통합).
   {
-    id: 'repository',
-    label: '문제은행',
+    id: 'library',
+    label: '자료',
     icon: FolderOpen,
     children: [
-      dashboardNavItems[7], // 과사람클라우드
-      // ★ 2026-06-18 '시험지저장소' 메뉴 제거 — 초기 스캐폴딩 페이지로 미사용, 클라우드와 중복.
-      //   dashboardNavItems 배열은 인덱스 안정 위해 유지(다른 메뉴가 인덱스 참조). 라우트도 유지.
-      dashboardNavItems[6], // 유형/문제관리
-      dashboardNavItems[5], // 출판교재유사
+      dash('/dashboard/cloud'),              // 과사람클라우드 (시험지·문제 라이브러리)
+      dash('/dashboard/skills'),             // 유형/문제관리
+      dash('/dashboard/similar'),            // 출판교재유사
+      dash('/dashboard/materials'),          // 학원자료
+      dash('/dashboard/materials/diagrams'), // 도식 갤러리
     ],
   },
-  // ── 2) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러).
-  //   수업 홈(/dashboard/class) = Phase 2 허브 — 학생 선택 시 보고서·진단·공유 한 화면. ──
-  {
-    id: 'class',
-    label: '수업',
-    icon: Users,
-    children: [
-      tutorNavItems[12], // ★ 수업 홈 (허브)
-      tutorNavItems[8],  // 학생 성적
-      tutorNavItems[5],  // 학생 진단
-      tutorNavItems[10], // 진단 종합 리포트
-      tutorNavItems[6],  // 클리닉시험지
-      tutorNavItems[1],  // 반 관리
-      tutorNavItems[2],  // 학생 관리
-    ],
-  },
-  // ── 3) 제작 + 배포 + 현황: 출제 ──
+  // ── 2) 제작 + 배포 + 현황: 출제 ──
   {
     id: 'exams',
     label: '출제',
     icon: SquarePen,
     children: [
-      dashboardNavItems[2], // 유형별 출제 (문제 골라 새 시험지 제작)
-      tutorNavItems[7],     // AI 자동 출제
-      dashboardNavItems[8], // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
-      tutorNavItems[11],    // 출제 관리 (학생별 출제 현황·점수) — 수업에서 이동
+      dash('/dashboard/create'),           // 유형별 출제 (문제 골라 새 시험지 제작)
+      tutor('/dashboard/curation'),        // AI 자동 출제
+      dash('/dashboard/exam-management'),  // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
+      tutor('/dashboard/assignments'),     // 출제 관리 (학생별 출제 현황·점수)
+    ],
+  },
+  // ── 3) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러).
+  //   수업 홈(/dashboard/class) = 허브 — 학생 선택 시 보고서·진단·공유 한 화면. ──
+  {
+    id: 'class',
+    label: '수업',
+    icon: Users,
+    children: [
+      tutor('/dashboard/class'),               // 수업 홈 (허브)
+      tutor('/tutor/analytics'),               // 학생 성적
+      tutor('/dashboard/prescription'),        // 학생 진단
+      tutor('/dashboard/prescription/report'), // 진단 종합 리포트
+      tutor('/tutor/clinic'),                  // 클리닉시험지
+      tutor('/tutor/classes'),                 // 반 관리
+      tutor('/tutor/students'),                // 학생 관리
     ],
   },
   // ── 4) 채점 — 단일 페이지(QR/수동/엑셀 탭 내장). 직접 링크. ──
@@ -360,23 +371,8 @@ export const topNavGroups: NavGroup[] = [
     icon: BarChart3,
     href: '/dashboard/reports',
   },
-  // ── 6) 학원자료 — DB 자산화 바로 앞 (자료 → 자산화 흐름) ──
-  {
-    id: 'materials',
-    label: '학원자료',
-    icon: BookOpen,
-    children: [
-      dashboardNavItems[3], // 학원자료
-      dashboardNavItems[4], // 도식 갤러리
-    ],
-  },
-  // ── 7) DB 자산화 — 단독 탭(빠른 진입). 클라우드 + 업로드 모달 자동 오픈. ──
-  {
-    id: 'db-assetize',
-    label: 'DB 자산화',
-    icon: Upload,
-    href: '/dashboard/cloud?upload=1',
-  },
+  // ★ DB 자산화는 탭이 아니라 '행동' — TopNav 우측에 버튼으로 분리 (2026-08-28).
+  //   topNavGroups 에는 남기지 않는다. TopNav 가 DB_ASSETIZE_ACTION 을 직접 렌더.
   // ★ 운영 관리 — multi-tenancy. 학원·센터·사용자/교직원 관리.
   //   페이지는 super_admin 가드로 막혀있지만 *메뉴 자체* 가 강사·학생에게도 보이면
   //   "관리자로 로그인된 것처럼" 보이는 사고. roles 필터로 노출 자체 차단.
@@ -388,6 +384,18 @@ export const topNavGroups: NavGroup[] = [
     roles: ['super_admin', 'ADMIN', 'ORG_ADMIN'],
   },
 ];
+
+/**
+ * DB 자산화 — 네비 탭이 아니라 우측 상단 액션 버튼.
+ * "업로드"는 이동(navigation)이 아니라 행동(action)이라 탭 문법이 안 맞았다.
+ * TopNav 가 이 정의로 흰 필 버튼을 렌더한다. (동작: 클라우드 + 업로드 모달 자동 오픈)
+ */
+export const DB_ASSETIZE_ACTION = {
+  id: 'db-assetize',
+  label: 'DB 자산화',
+  icon: Upload,
+  href: '/dashboard/cloud?upload=1',
+} as const;
 
 // 전체 네비게이션 (Sidebar용 — 레거시)
 export const allNavItems: NavItem[] = [

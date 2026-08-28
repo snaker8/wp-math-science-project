@@ -13,7 +13,7 @@ const ActiveInstituteSwitcher = dynamic(
   { ssr: false }
 );
 import { BrandLogo } from '@/components/brand/Logo';
-import { topNavGroups, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
+import { topNavGroups, DB_ASSETIZE_ACTION, type NavGroup, type NavItem, findActiveNavItem } from '@/config/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { TrackToggle } from '@/components/layout/TrackToggle';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
@@ -148,8 +148,10 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* ── Right: 센터 선택 + 트랙 토글 + 설정 + 사용자 ── */}
+        {/* ── Right: 자산화 액션 + 센터 선택 + 트랙 토글 + 설정 + 사용자 ── */}
         <div className="flex items-center gap-2">
+          {/* ★ DB 자산화 — 탭이 아니라 행동. 화면 유일 흰 필 (2026-08-28 IA 재편) */}
+          <DbAssetizeButton pathname={pathname} track={track} />
           <ActiveInstituteSwitcher />
           {/* 트랙 토글 — flag true + 다중 트랙일 때만 노출, 그 외엔 null */}
           <TrackToggle />
@@ -330,12 +332,6 @@ function NavTab({
         (child) => pathname === child.href || pathname.startsWith(child.href + '/')
       );
 
-  // ★ DB 자산화 — 특수 처리: 클라우드 페이지면 글로벌 이벤트, 다른 페이지면 router.push.
-  //   Next.js Link 가 같은 URL 로는 navigation 안 일으키는 회귀 차단 (PR #47/#49 사고).
-  if (group.id === 'db-assetize') {
-    return <DbAssetizeTab group={group} isActive={!!isActive} pathname={pathname} track={track} />;
-  }
-
   // 직접 링크 — 텍스트 탭 + 하단 액센트 라인 (아이콘은 드롭다운 안에서만)
   if (group.href && !group.children) {
     return (
@@ -434,14 +430,10 @@ function NavTab({
 //                     가 즉시 모달 오픈
 //   - 다른 페이지: router.push('/dashboard/cloud?upload=1') → 마운트 시 모달
 // ============================================================================
-function DbAssetizeTab({
-  group,
-  isActive,
+function DbAssetizeButton({
   pathname,
   track,
 }: {
-  group: NavGroup;
-  isActive: boolean;
   pathname: string;
   track: 'math' | 'science';
 }) {
@@ -454,26 +446,17 @@ function DbAssetizeTab({
         const stripped = stripTrackPrefix(pathname);
         // ★ 클라우드 리스트 페이지(정확히 /dashboard/cloud)에서만 이벤트 dispatch.
         //   디테일 페이지(/dashboard/cloud/[examId])는 리스너가 없어서 클릭이 무반응이 됨 (2026-05-19 사고).
-        //   디테일 페이지면 리스트로 navigate + ?upload=1.
         const isCloudList = stripped === '/dashboard/cloud' || stripped === '/dashboard/cloud/';
         if (isCloudList) {
-          // 같은 페이지 — 즉시 모달
           window.dispatchEvent(new CustomEvent('cloud:open-upload'));
         } else {
-          // 다른 페이지 (디테일 포함) — 리스트로 이동 (?upload=1 으로 mount 시 자동 오픈), 트랙 prefix 적용
           router.push(trackHref('/dashboard/cloud?upload=1', track));
         }
       }}
-      className={`
-        relative flex h-14 items-center whitespace-nowrap px-3 text-sm font-medium transition-colors
-        ${isActive
-          ? 'text-content-primary'
-          : 'text-content-tertiary hover:text-content-primary'
-        }
-      `}
+      className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
     >
-      <span>{group.label}</span>
-      {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
+      <DB_ASSETIZE_ACTION.icon size={15} />
+      <span>{DB_ASSETIZE_ACTION.label}</span>
     </button>
   );
 }
