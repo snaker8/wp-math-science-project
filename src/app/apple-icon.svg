@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <rect width="180" height="180" fill="#FFFFFF"/>
+  <text x="90" y="98" text-anchor="middle" fill="#08090A"
+    font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="62" letter-spacing="-3">M×S</text>
+  <text x="90" y="128" text-anchor="middle" fill="#62666D"
+    font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="22">Bank</text>
+</svg>
