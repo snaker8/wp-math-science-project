@@ -26,9 +26,9 @@ interface Assignment {
 }
 
 const TAG_COLOR = (tag: string): string => {
-  if (tag.startsWith('시험지')) return 'text-rose-400';
-  if (tag.startsWith('학습지')) return 'text-indigo-400';
-  return 'text-amber-400';
+  if (tag.startsWith('시험지')) return 'text-content-primary';
+  if (tag.startsWith('학습지')) return 'text-content-secondary';
+  return 'text-content-tertiary';
 };
 
 function fmtDate(iso?: string | null) {
@@ -144,7 +144,7 @@ export default function AssignmentsPage() {
     <div className="flex h-[calc(100vh-7rem)] rounded-2xl border border-white/10 overflow-hidden bg-surface-card text-content-primary">
       {/* ===== 좌측: 학년/반 트리 (공용 컴포넌트 — 수업 허브와 공유) ===== */}
       <StudentTreePanel
-        header={<><ListChecks size={18} className="text-sky-400" /> 출제 관리</>}
+        header={<><ListChecks size={18} className="text-content-tertiary" /> 출제 관리</>}
         students={students}
         counts={countByStudent}
         selected={selStudent}
@@ -156,16 +156,16 @@ export default function AssignmentsPage() {
         {/* 헤더 */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <ListChecks size={20} className="text-sky-400" />
+            <ListChecks size={20} className="text-content-tertiary" />
             <h1 className="text-lg font-bold">
               {selStudentName ? `${selStudentName} 학생 출제 내역` : '전체 출제 내역'}
             </h1>
           </div>
           <div className="flex items-center gap-2 text-xs ml-2">
-            <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10">출제 {summary.total}</span>
-            <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">완료 {summary.done}</span>
+            <span className="px-2 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary tabular-nums whitespace-nowrap">출제 {summary.total}</span>
+            <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 tabular-nums whitespace-nowrap">완료 {summary.done}</span>
             {summary.avg != null && (
-              <span className="px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300">평균 {summary.avg}%</span>
+              <span className="px-2 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary tabular-nums whitespace-nowrap">평균 {summary.avg}%</span>
             )}
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -175,7 +175,7 @@ export default function AssignmentsPage() {
                 value={titleSearch}
                 onChange={(e) => setTitleSearch(e.target.value)}
                 placeholder="학습지명 검색"
-                className="pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm w-48 focus:border-sky-500 focus:outline-none"
+                className="pl-8 pr-3 py-1.5 rounded-lg bg-white/[.04] border border-white/[.08] text-sm w-48 focus:border-white/25 focus:outline-none"
               />
             </div>
             <button
@@ -194,7 +194,7 @@ export default function AssignmentsPage() {
             type="button"
             onClick={() => setTab('history')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'history' ? 'text-sky-300 border-sky-400' : 'text-content-tertiary border-transparent hover:text-content-primary'
+              tab === 'history' ? 'text-content-primary border-white/50' : 'text-content-tertiary border-transparent hover:text-content-primary'
             }`}
           >
             <History size={14} /> 학습내역
@@ -203,7 +203,7 @@ export default function AssignmentsPage() {
             type="button"
             onClick={() => setTab('worksheet')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'worksheet' ? 'text-sky-300 border-sky-400' : 'text-content-tertiary border-transparent hover:text-content-primary'
+              tab === 'worksheet' ? 'text-content-primary border-white/50' : 'text-content-tertiary border-transparent hover:text-content-primary'
             }`}
           >
             <ListChecks size={14} /> 학습지
@@ -213,7 +213,7 @@ export default function AssignmentsPage() {
             type="button"
             onClick={() => setTab('report')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'report' ? 'text-sky-300 border-sky-400' : 'text-content-tertiary border-transparent hover:text-content-primary'
+              tab === 'report' ? 'text-content-primary border-white/50' : 'text-content-tertiary border-transparent hover:text-content-primary'
             }`}
           >
             <FileBarChart size={14} /> 보고서
@@ -257,7 +257,7 @@ export default function AssignmentsPage() {
                     <div className="text-sm truncate" title={a.title}>{a.title}</div>
                     <div className="text-[11px] text-content-tertiary">
                       {a.problems_total > 0 ? `${a.problems_total}문제` : '문항 정보 없음'}
-                      {a.source === 'manual' && <span className="ml-1.5 text-amber-400/70">· 수동</span>}
+                      {a.source === 'manual' && <span className="ml-1.5 text-content-tertiary">· 수동</span>}
                     </div>
                   </div>
                   <span className="text-xs text-content-tertiary text-center tabular-nums">{fmtDate(a.issued_at)}</span>
@@ -279,7 +279,7 @@ export default function AssignmentsPage() {
                         <a
                           href={`/print/session/${a.id}?variant=student`}
                           target="_blank" rel="noreferrer"
-                          className="text-[11px] px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1"
+                          className="text-[11px] px-2 py-1 rounded border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary flex items-center gap-1"
                           title="학생용 인쇄"
                         >
                           <Printer size={11} />
@@ -287,7 +287,7 @@ export default function AssignmentsPage() {
                         <Link
                           href={`/grade/${a.id}`}
                           target="_blank"
-                          className="text-[11px] px-2 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-500 flex items-center gap-1"
+                          className="text-[11px] px-2 py-1 rounded border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary flex items-center gap-1 whitespace-nowrap"
                           title="채점"
                         >
                           <ExternalLink size={11} /> 채점
@@ -314,7 +314,7 @@ export default function AssignmentsPage() {
               studentTimeline.length > 0 ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm text-content-tertiary mb-3">
-                    <TrendingUp size={15} className="text-sky-400" />
+                    <TrendingUp size={15} className="text-content-tertiary" />
                     <span>{selStudentName} 학생 — 출제 {studentTimeline.length}건 · 시간순</span>
                   </div>
                   {studentTimeline.map((a, i) => (

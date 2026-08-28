@@ -230,7 +230,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold truncate">{studentName}</h1>
               {gradeLabel && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary whitespace-nowrap">
                   {gradeLabel}
                 </span>
               )}
@@ -256,7 +256,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                   active
-                    ? 'border-indigo-500 text-indigo-400'
+                    ? 'border-white/60 text-content-primary'
                     : 'border-transparent text-content-tertiary hover:text-content-secondary'
                 }`}
               >
@@ -285,10 +285,10 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 <StatCell label="채점 문항" value={data.summary.totalGraded} icon={FileText} />
                 <StatCell label="최근 활동" value={fmtDate(data.summary.lastActiveAt)} icon={Calendar} />
                 <div className="col-span-2 md:col-span-4 mt-2 flex flex-wrap gap-2">
-                  <button onClick={() => setTab('reports')} className="text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-                    개별 리포트 보기 ({reportSessions.length})
+                  <button onClick={() => setTab('reports')} className="text-sm font-semibold px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 whitespace-nowrap">
+                    개별 리포트 보기 (<span className="tabular-nums">{reportSessions.length}</span>)
                   </button>
-                  <button onClick={() => setTab('diagnostics')} className="text-sm font-semibold px-4 py-2 rounded-lg border border-white/10 bg-surface-card text-content-secondary hover:bg-white/10">
+                  <button onClick={() => setTab('diagnostics')} className="text-sm font-semibold px-4 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary whitespace-nowrap">
                     진단 보기
                   </button>
                 </div>
@@ -301,7 +301,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 {/* 세트 리포트 (진단평가 종합) */}
                 <div>
                   <h3 className="text-sm font-bold text-content-secondary mb-2.5 flex items-center gap-1.5">
-                    <FileText size={15} className="text-violet-500" /> 세트 리포트 <span className="text-xs font-normal text-content-tertiary">진단평가 종합</span>
+                    <FileText size={15} className="text-content-tertiary" /> 세트 리포트 <span className="text-xs font-normal text-content-tertiary">진단평가 종합</span>
                   </h3>
                   {diagSetsLoading ? (
                     <div className="py-4 text-content-tertiary text-sm"><Loader2 className="animate-spin inline mr-2" size={14} />불러오는 중…</div>
@@ -312,7 +312,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                   ) : (
                     <div className="grid gap-2">
                       {diagSets.map((sr) => (
-                        <div key={sr.setKey} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-violet-500/30 bg-violet-500/10 hover:border-violet-500/50 hover:shadow-sm transition-all">
+                        <div key={sr.setKey} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-white/[.09] bg-white/[.04] hover:border-white/[.14] transition-colors">
                           <div className="min-w-0">
                             <div className="font-bold text-content-secondary truncate">{sr.setTitle}</div>
                             <div className="text-xs text-content-tertiary mt-0.5">{sr.bookGroupName || ''}{sr.bookGroupName ? ' · ' : ''}응시 {sr.variants}회</div>
@@ -320,7 +320,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                           <Link
                             href={`/dashboard/prescription/report?setKey=${encodeURIComponent(sr.setKey)}&studentId=${encodeURIComponent(sr.studentIdInSet)}`}
                             target="_blank"
-                            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700"
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary text-sm font-semibold hover:bg-white/[.06] hover:text-content-primary whitespace-nowrap"
                           >
                             <FileText size={14} /> 세트 리포트 보기
                           </Link>
@@ -333,14 +333,14 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                 {/* 개별 리포트 (시험지별) */}
                 <div className="border-t border-white/10 pt-5">
                   <h3 className="text-sm font-bold text-content-secondary mb-2.5 flex items-center gap-1.5">
-                    <FileText size={15} className="text-indigo-500" /> 개별 리포트 <span className="text-xs font-normal text-content-tertiary">시험지별</span>
+                    <FileText size={15} className="text-content-tertiary" /> 개별 리포트 <span className="text-xs font-normal text-content-tertiary">시험지별</span>
                   </h3>
                   {reportSessions.length === 0 ? (
                     <div className="py-8 text-center text-content-tertiary text-sm">채점된 시험지가 없습니다.</div>
                   ) : (
                     <div className="grid gap-3">
                       {reportSessions.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-white/10 bg-surface-card hover:border-indigo-500/40 hover:shadow-sm transition-all">
+                        <div key={s.id} className="flex items-center justify-between gap-3 p-4 rounded-xl border border-white/10 bg-surface-card hover:border-white/[.14] transition-colors">
                           <div className="min-w-0">
                             <div className="font-bold text-content-secondary truncate">{s.exam_title || '(제목 없음)'}</div>
                             <div className="text-xs text-content-tertiary mt-0.5 flex flex-wrap items-center gap-x-2">
@@ -348,7 +348,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                               <span>· {fmtDate(s.issued_at)}</span>
                               <span>·{' '}
                                 {s.pct != null ? (
-                                  <span className="font-bold text-indigo-400">{s.pct}%</span>
+                                  <span className="font-bold text-content-primary tabular-nums">{s.pct}%</span>
                                 ) : '-'}
                                 <span className="text-content-tertiary"> ({s.correct}/{s.total})</span>
                               </span>
@@ -357,7 +357,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                           <Link
                             href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`}
                             target="_blank"
-                            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary text-sm font-semibold hover:bg-white/[.06] hover:text-content-primary whitespace-nowrap"
                           >
                             <FileText size={14} /> 리포트 보기
                           </Link>
@@ -421,12 +421,12 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                               <td className="py-2 pr-3 text-content-tertiary">{SESSION_TYPE_LABEL[s.session_type] || s.session_type} · R{s.round_number}</td>
                               <td className="py-2 pr-3 text-content-tertiary">{fmtDate(s.issued_at)}</td>
                               <td className="py-2 pr-3 text-right text-content-secondary">
-                                {s.pct != null ? <span className="font-bold text-indigo-400">{s.pct}%</span> : '-'}
+                                {s.pct != null ? <span className="font-bold text-content-primary tabular-nums">{s.pct}%</span> : '-'}
                                 <span className="text-content-tertiary ml-1">({s.correct}/{s.total})</span>
                               </td>
                               <td className="py-2 text-center">
                                 {s.exam_id ? (
-                                  <Link href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`} target="_blank" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300">
+                                  <Link href={`/dashboard/exam-analysis/${s.exam_id}/students/${s.report_student_id || studentId}`} target="_blank" className="inline-flex items-center gap-1 text-xs font-semibold text-content-secondary hover:text-content-primary">
                                     <ExternalLink size={12} /> 리포트
                                   </Link>
                                 ) : (
@@ -552,7 +552,7 @@ export default function StudentDetailContent({ studentId, onClose }: { studentId
                         : (manageStudent?.status === 'ACCEPTED' ? '활성' : manageStudent?.status === 'PENDING' ? '대기중' : '-')}
                     />
                     <div className="pt-4">
-                      <Link href="/tutor/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-400 hover:text-indigo-300">
+                      <Link href="/tutor/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-content-secondary hover:text-content-primary">
                         <Settings size={14} /> 학생 관리에서 정보 수정
                       </Link>
                     </div>

@@ -46,11 +46,8 @@ const TOKEN_KIND_LABEL: Record<ShareTokenItem['kind'], string> = {
   diagnostic_set: '세트 리포트', pitfall: '함정 리포트', exam: '시험 리포트',
 };
 
-const TAG_COLOR = (tag: string): string => {
-  if (tag.startsWith('시험지')) return 'text-rose-400';
-  if (tag.startsWith('학습지')) return 'text-cyan-400';
-  return 'text-amber-400';
-};
+// 태그(시험지/학습지/기타)는 카테고리 라벨 — 구분은 텍스트가 담당(무채)
+const TAG_COLOR = (_tag: string): string => 'text-content-secondary';
 
 function fmtDate(iso?: string | null) {
   if (!iso) return '-';
@@ -174,7 +171,7 @@ export function StudentLearningReport({
       {studentSets.length > 0 && (
         <div className="rounded-2xl border border-white/10 p-5">
           <div className="flex items-center gap-2 text-sm font-bold mb-3">
-            <Layers size={15} className="text-violet-400" /> 진단 세트 리포트
+            <Layers size={15} className="text-content-tertiary" /> 진단 세트 리포트
           </div>
           <div className="space-y-1.5">
             {studentSets.map(({ set, me }) => (
@@ -188,7 +185,7 @@ export function StudentLearningReport({
                 </span>
                 <Link
                   href={`/dashboard/prescription/report?setKey=${encodeURIComponent(set.setKey)}&studentId=${encodeURIComponent(studentId)}`}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300 hover:bg-violet-500/20 flex items-center gap-1 flex-shrink-0"
+                  className="text-xs px-2.5 py-1 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary flex items-center gap-1 flex-shrink-0 whitespace-nowrap"
                 >
                   세트 리포트 보기 <ExternalLink size={10} className="opacity-60" />
                 </Link>
@@ -200,7 +197,7 @@ export function StudentLearningReport({
 
       {/* 점수 추이 */}
       <div className="rounded-2xl border border-white/10 p-5">
-        <div className="flex items-center gap-2 text-sm font-bold mb-4"><TrendingUp size={15} className="text-sky-400" /> 점수 추이</div>
+        <div className="flex items-center gap-2 text-sm font-bold mb-4"><TrendingUp size={15} className="text-content-tertiary" /> 점수 추이</div>
         {scored.length === 0 ? (
           <div className="text-xs text-content-tertiary">채점된 출제가 없습니다.</div>
         ) : (
@@ -219,7 +216,7 @@ export function StudentLearningReport({
       {/* 약점 (점수 낮은 출제) */}
       {weak.length > 0 && (
         <div className="rounded-2xl border border-white/10 p-5">
-          <div className="flex items-center gap-2 text-sm font-bold mb-3"><History size={15} className="text-rose-400" /> 보완 필요 — 점수 낮은 출제</div>
+          <div className="flex items-center gap-2 text-sm font-bold mb-3"><History size={15} className="text-content-tertiary" /> 보완 필요 — 점수 낮은 출제</div>
           <div className="space-y-1.5">
             {weak.map((r) => (
               <div key={`w-${r.source}-${r.id}`} className="flex items-center gap-3 text-sm">
@@ -252,7 +249,7 @@ export function StudentLearningReport({
                 {r.exam_id && r.score_pct != null ? (
                   <Link
                     href={`/dashboard/exam-analysis/${r.exam_id}/students/${r.student_id}`}
-                    className="text-[11px] px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20"
+                    className="text-[11px] px-2 py-0.5 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary whitespace-nowrap"
                   >
                     리포트
                   </Link>
@@ -266,7 +263,7 @@ export function StudentLearningReport({
       {/* 학부모 공유링크 발급 내역 */}
       <div className="rounded-2xl border border-white/10 p-5">
         <div className="flex items-center gap-2 text-sm font-bold mb-3">
-          <Share2 size={15} className="text-emerald-400" /> 학부모 공유링크 내역
+          <Share2 size={15} className="text-content-tertiary" /> 학부모 공유링크 내역
           {shareTokens && <span className="text-xs font-normal text-content-tertiary">({shareTokens.length})</span>}
         </div>
         {tokensLoading ? (
@@ -281,9 +278,7 @@ export function StudentLearningReport({
           <div className="space-y-1.5">
             {shareTokens.map((t) => (
               <div key={`${t.revokeKind}-${t.revokeRef}`} className={`flex items-center gap-3 text-sm ${t.isActive ? '' : 'opacity-50'}`}>
-                <span className={`text-[11px] font-medium w-16 flex-shrink-0 ${
-                  t.kind === 'diagnostic_set' ? 'text-violet-300' : t.kind === 'exam' ? 'text-sky-300' : 'text-amber-300'
-                }`}>{TOKEN_KIND_LABEL[t.kind]}</span>
+                <span className="text-[11px] font-medium w-16 flex-shrink-0 text-content-secondary">{TOKEN_KIND_LABEL[t.kind]}</span>
                 <span className="flex-1 truncate" title={t.title}>
                   {t.title}
                   {t.label && <span className="text-content-tertiary text-xs ml-1.5">{t.label}</span>}

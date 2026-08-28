@@ -315,19 +315,19 @@ export default function AnalyticsPage() {
           </div>
 
           {/* AI Insights */}
-          <Card title="AI 진단 인사이트" icon={Brain} className="bg-gradient-to-r from-indigo-950/30 to-purple-950/30 border-indigo-500/20">
+          <Card title="AI 진단 인사이트" icon={Brain} className="bg-white/[.03] border-white/[.08]">
             <div className="space-y-4">
               {insights.map((it, i) => (
                 <div key={i} className="flex gap-4">
                   <div
                     className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      it.kind === 'good' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-rose-500/20 text-rose-400'
+                      it.kind === 'good' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
                     }`}
                   >
                     {it.kind === 'good' ? <TrendingUp size={24} /> : <AlertTriangle size={24} />}
                   </div>
                   <div>
-                    <h4 className={`font-bold text-lg ${it.kind === 'good' ? 'text-indigo-200' : 'text-rose-200'}`}>
+                    <h4 className={`font-bold text-lg ${it.kind === 'good' ? 'text-emerald-200' : 'text-rose-200'}`}>
                       {it.title}
                     </h4>
                     <p className="text-gray-400 text-sm leading-relaxed mt-1">{it.body}</p>

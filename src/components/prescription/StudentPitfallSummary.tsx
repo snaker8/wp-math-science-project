@@ -41,13 +41,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   time: '시간',
 };
 
-const CATEGORY_COLOR: Record<string, string> = {
-  computation: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  concept: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
-  logic: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-  wording: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-  time: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30',
-};
+const CATEGORY_CHIP = 'border-white/[.08] bg-white/[.04] text-content-secondary';
 
 interface Props {
   studentId: string;
@@ -89,7 +83,7 @@ export function StudentPitfallSummary({ studentId }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-xs text-zinc-500">
+      <div className="flex items-center justify-center rounded-xl border border-white/[.08] bg-surface-card px-4 py-6 text-xs text-content-tertiary">
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
         함정 누적 로딩 중...
       </div>
@@ -106,10 +100,10 @@ export function StudentPitfallSummary({ studentId }: Props) {
 
   if (!data || data.distinctPitfalls === 0) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-center text-xs text-zinc-500">
-        <Sparkles className="mx-auto mb-2 h-4 w-4 text-zinc-700" />
+      <div className="rounded-xl border border-white/[.08] bg-surface-card px-4 py-6 text-center text-xs text-content-tertiary">
+        <Sparkles className="mx-auto mb-2 h-4 w-4 text-content-muted" />
         아직 누적된 함정 데이터가 없습니다.
-        <div className="mt-1 text-[10px] text-zinc-600">
+        <div className="mt-1 text-[10px] text-content-muted">
           학생이 채점에서 오답 낼 때마다 자동으로 누적됩니다.
         </div>
       </div>
@@ -119,15 +113,15 @@ export function StudentPitfallSummary({ studentId }: Props) {
   const top = data.summary.slice(0, 8);
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+    <div className="rounded-xl border border-white/[.08] bg-surface-card p-4">
       {/* 헤더 — 요약 통계 */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-bold text-white">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
+        <div className="flex items-center gap-2 text-sm font-bold text-content-primary">
+          <AlertTriangle className="h-4 w-4 text-content-tertiary" />
           학생 함정 누적
         </div>
         {data.recentWeekTotal > 0 && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-[10px] font-semibold text-content-secondary">
             <TrendingUp className="h-3 w-3" />
             이번 주 +{data.recentWeekTotal}
           </span>
@@ -146,11 +140,9 @@ export function StudentPitfallSummary({ studentId }: Props) {
           {data.byCategory.map((c) => (
             <span
               key={c.category}
-              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium ${
-                CATEGORY_COLOR[c.category] || 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30'
-              }`}
+              className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-[10px] font-medium ${CATEGORY_CHIP}`}
             >
-              {CATEGORY_LABEL[c.category] || c.category} {c.count}
+              {CATEGORY_LABEL[c.category] || c.category} <span className="tabular-nums">{c.count}</span>
             </span>
           ))}
         </div>
@@ -158,7 +150,7 @@ export function StudentPitfallSummary({ studentId }: Props) {
 
       {/* TOP 함정 리스트 */}
       <div className="space-y-1.5">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">
           TOP {top.length} 자주 빠지는 함정
         </div>
         {top.map((p) => {
@@ -168,9 +160,9 @@ export function StudentPitfallSummary({ studentId }: Props) {
             <div key={p.pitfallCode} className="grid grid-cols-[1fr_60px] items-center gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <div className="truncate text-xs text-zinc-200">{p.label}</div>
+                  <div className="truncate text-xs text-content-secondary">{p.label}</div>
                   {p.recentWeekCount > 0 && (
-                    <span className="shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] text-amber-300">
+                    <span className="shrink-0 whitespace-nowrap rounded border border-white/[.08] bg-white/[.04] px-1 py-0.5 text-[9px] text-content-secondary">
                       +{p.recentWeekCount} 이번 주
                     </span>
                   )}
@@ -182,9 +174,9 @@ export function StudentPitfallSummary({ studentId }: Props) {
                   />
                 </div>
               </div>
-              <div className="text-right text-[10px] text-zinc-400">
+              <div className="text-right text-[10px] tabular-nums text-content-secondary">
                 {p.occurrenceCount}회
-                <span className="ml-1 text-zinc-600">/{p.distinctProblemCount}문항</span>
+                <span className="ml-1 text-content-muted">/{p.distinctProblemCount}문항</span>
               </div>
             </div>
           );
@@ -205,14 +197,14 @@ function Stat({
   unit: string;
   accent?: 'cyan' | 'amber';
 }) {
-  const valueColor =
-    accent === 'cyan' ? 'text-cyan-400' : accent === 'amber' ? 'text-amber-400' : 'text-white';
+  // 수치 색은 크롬 — 무채 (accent 는 강조 단계만 남김)
+  const valueColor = accent ? 'text-content-secondary' : 'text-content-primary';
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-2">
-      <div className="text-[9px] uppercase tracking-wider text-zinc-500">{label}</div>
+    <div className="rounded-lg border border-white/[.08] bg-white/[.03] p-2">
+      <div className="text-[9px] uppercase tracking-wider text-content-tertiary">{label}</div>
       <div className={`mt-0.5 text-base font-bold ${valueColor}`}>
         {value}
-        <span className="ml-0.5 text-[9px] font-medium text-zinc-500">{unit}</span>
+        <span className="ml-0.5 text-[9px] font-medium text-content-tertiary">{unit}</span>
       </div>
     </div>
   );

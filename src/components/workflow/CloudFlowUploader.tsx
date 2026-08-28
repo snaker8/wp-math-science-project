@@ -600,27 +600,26 @@ export default function CloudFlowUploader({
       <div className="flex flex-wrap items-center gap-2 mt-2 mb-3 px-1">
         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mr-1">출처</span>
         {([
-          { id: 'auto',        label: '자동 감지',    emoji: '✨', color: 'zinc' },
-          { id: 'school',      label: '학교기출',    emoji: '🏫', color: 'emerald' },
-          { id: 'diagnostic',  label: '진단평가',    emoji: '🩺', color: 'indigo' },
-          { id: 'achievement', label: '성취도 평가', emoji: '🎓', color: 'violet' },
-          { id: 'textbook',    label: '시중교재',    emoji: '📖', color: 'amber' },
-          { id: 'mock',        label: '모의고사',    emoji: '📝', color: 'rose' },
-        ] as Array<{ id: UploadSourceCategory; label: string; emoji: string; color: string }>).map((c) => {
+          { id: 'auto',        label: '자동 감지' },
+          { id: 'school',      label: '학교기출' },
+          { id: 'diagnostic',  label: '진단평가' },
+          { id: 'achievement', label: '성취도 평가' },
+          { id: 'textbook',    label: '시중교재' },
+          { id: 'mock',        label: '모의고사' },
+        ] as Array<{ id: UploadSourceCategory; label: string }>).map((c) => {
           const isActive = sourceCategory === c.id;
           return (
             <button
               key={c.id}
               type="button"
               onClick={() => setSourceCategory(c.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors border ${
+              className={`flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-md text-xs font-semibold transition-colors border ${
                 isActive
-                  ? `bg-${c.color}-500/20 text-${c.color}-300 border-${c.color}-500/50`
-                  : 'bg-transparent text-zinc-400 border-zinc-700 hover:text-zinc-200 hover:border-zinc-600'
+                  ? 'border-white/[.14] bg-white/[.08] text-content-primary'
+                  : 'border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary'
               }`}
               title={c.id === 'auto' ? '제목 패턴으로 자동 분류' : `${c.label} 으로 강제 박힘`}
             >
-              <span>{c.emoji}</span>
               <span>{c.label}</span>
             </button>
           );
@@ -632,7 +631,7 @@ export default function CloudFlowUploader({
       {subjectArea !== 'science' && (
         <div className="mt-1 mb-3 px-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mr-1">학년·학기</span>
+            <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mr-1">학년·학기</span>
             {CURRICULUM_OPTIONS.map((opt) => {
               const isActive = curriculumCodes.includes(opt.code);
               return (
@@ -640,10 +639,10 @@ export default function CloudFlowUploader({
                   key={opt.code}
                   type="button"
                   onClick={() => toggleCurriculumCode(opt.code)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors border ${
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap transition-colors border ${
                     isActive
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
-                      : 'bg-transparent text-zinc-500 border-zinc-700 hover:text-zinc-300 hover:border-zinc-600'
+                      ? 'border-white/[.14] bg-white/[.08] text-content-primary'
+                      : 'border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary'
                   }`}
                   title={`${opt.label} 범위로 분류`}
                 >
@@ -664,25 +663,25 @@ export default function CloudFlowUploader({
             수동 자산화 경로(분석 페이지 편집 후 자산화)에서도 학교명/단원이 박히게 함. */}
       {sourceCategory === 'school' && (
         <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
-          <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider mr-1">학교 정보</span>
+          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mr-1">학교 정보</span>
           <input
             type="text"
             value={schoolNameInput}
             onChange={(e) => setSchoolNameInput(e.target.value)}
             placeholder="학교명 (예: 동래중)"
-            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none w-32"
+            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-zinc-500 focus:outline-none w-32"
           />
           <input
             type="text"
             value={schoolGradeInput}
             onChange={(e) => setSchoolGradeInput(e.target.value)}
             placeholder="학년 (예: 중2)"
-            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none w-24"
+            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-zinc-500 focus:outline-none w-24"
           />
           <select
             value={schoolSemesterInput}
             onChange={(e) => setSchoolSemesterInput(e.target.value as '' | '1' | '2')}
-            className="px-2 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none"
+            className="px-2 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-zinc-500 focus:outline-none"
           >
             <option value="">학기</option>
             <option value="1">1학기</option>
@@ -693,7 +692,7 @@ export default function CloudFlowUploader({
             value={schoolChapterInput}
             onChange={(e) => setSchoolChapterInput(e.target.value)}
             placeholder="단원 (예: 수와 식)"
-            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-emerald-500 focus:outline-none w-32"
+            className="px-2.5 py-1 rounded-md text-xs bg-zinc-800 text-white border border-zinc-700 focus:border-zinc-500 focus:outline-none w-32"
           />
           <span className="text-[10px] text-zinc-500">입력하면 클라우드에서 학교별 폴더로 정리됩니다</span>
         </div>
@@ -761,7 +760,7 @@ export default function CloudFlowUploader({
           >
             <FileText size={16} />
             문제지
-            {pendingFiles.PROBLEM && <span className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full"></span>}
+            {pendingFiles.PROBLEM && <span className="absolute top-0 right-0 w-2 h-2 bg-white rounded-full"></span>}
           </button>
           <button
             className={`type-btn ${activeTab === 'ANSWER' ? 'active' : ''}`}
@@ -769,7 +768,7 @@ export default function CloudFlowUploader({
           >
             <CheckCircle size={16} />
             해설지
-            {pendingFiles.ANSWER && <span className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full"></span>}
+            {pendingFiles.ANSWER && <span className="absolute top-0 right-0 w-2 h-2 bg-white rounded-full"></span>}
           </button>
           <button
             className={`type-btn ${activeTab === 'QUICK_ANSWER' ? 'active' : ''}`}
@@ -777,7 +776,7 @@ export default function CloudFlowUploader({
           >
             <Sparkles size={16} />
             빠른 답지
-            {pendingFiles.QUICK_ANSWER && <span className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full"></span>}
+            {pendingFiles.QUICK_ANSWER && <span className="absolute top-0 right-0 w-2 h-2 bg-white rounded-full"></span>}
           </button>
         </div>
 
@@ -828,9 +827,9 @@ export default function CloudFlowUploader({
 
         {pendingFiles[activeTab] ? (
           <div className="mt-4 space-y-2">
-            <div className="p-3 bg-zinc-800 rounded-lg flex items-center gap-3 border border-indigo-500/30">
-              <CheckCircle className="text-indigo-400" size={20} />
-              <span className="text-indigo-100 font-medium">{pendingFiles[activeTab]?.name}</span>
+            <div className="p-3 bg-white/[.04] rounded-lg flex items-center gap-3 border border-white/[.14]">
+              <CheckCircle className="text-content-tertiary" size={20} />
+              <span className="text-content-primary font-medium">{pendingFiles[activeTab]?.name}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); clearPendingFile(activeTab); setDuplicateWarning(null); }}
                 className="ml-auto text-zinc-500 hover:text-red-400"
@@ -864,22 +863,22 @@ export default function CloudFlowUploader({
           </h4>
           <div className="space-y-2 mb-4">
             {pendingFiles.PROBLEM && (
-              <div className="flex items-center justify-between text-sm p-2 bg-zinc-800 rounded border border-indigo-500/20">
-                <span className="flex items-center gap-2 text-indigo-300">
+              <div className="flex items-center justify-between text-sm p-2 bg-white/[.04] rounded border border-white/[.08]">
+                <span className="flex items-center gap-2 text-content-secondary">
                   <FileText size={14} /> 문제지: {pendingFiles.PROBLEM.name}
                 </span>
               </div>
             )}
             {pendingFiles.ANSWER && (
-              <div className="flex items-center justify-between text-sm p-2 bg-zinc-800 rounded border border-emerald-500/20">
-                <span className="flex items-center gap-2 text-emerald-300">
+              <div className="flex items-center justify-between text-sm p-2 bg-white/[.04] rounded border border-white/[.08]">
+                <span className="flex items-center gap-2 text-content-secondary">
                   <CheckCircle size={14} /> 해설지: {pendingFiles.ANSWER.name}
                 </span>
               </div>
             )}
             {pendingFiles.QUICK_ANSWER && (
-              <div className="flex items-center justify-between text-sm p-2 bg-zinc-800 rounded border border-amber-500/20">
-                <span className="flex items-center gap-2 text-amber-300">
+              <div className="flex items-center justify-between text-sm p-2 bg-white/[.04] rounded border border-white/[.08]">
+                <span className="flex items-center gap-2 text-content-secondary">
                   <Sparkles size={14} /> 빠른 답지: {pendingFiles.QUICK_ANSWER.name}
                 </span>
               </div>
@@ -895,10 +894,10 @@ export default function CloudFlowUploader({
             onClick={startProcessing}
             disabled={!pendingFiles.PROBLEM}
             className={`
-                      w-full py-3 rounded-lg font-bold text-white transition-all
+                      w-full py-3 rounded-full text-sm font-semibold transition-colors
                       ${pendingFiles.PROBLEM
-                ? 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
-                : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'}
+                ? 'bg-white text-black hover:bg-zinc-200'
+                : 'bg-white/[.04] text-zinc-500 cursor-not-allowed'}
                   `}
           >
             분석 시작하기

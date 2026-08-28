@@ -104,7 +104,7 @@ export default function ClassesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-surface-base text-content-primary">
       <div className="mx-auto max-w-6xl px-6 py-6">
         {/* Header */}
         <div className="mb-5 flex items-center gap-3">
@@ -121,7 +121,7 @@ export default function ClassesPage() {
           </div>
           <Link
             href="/tutor/classes/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-bold text-black hover:bg-zinc-100"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
           >
             <Plus size={16} />
             <span>새 반 만들기</span>
@@ -137,7 +137,7 @@ export default function ClassesPage() {
               placeholder="반 이름 또는 과목 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-zinc-900/60 py-2 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600 focus:border-indigo-500/40 focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-zinc-900/60 py-2 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
             />
           </div>
           {classes.length > 0 && (
@@ -167,7 +167,7 @@ export default function ClassesPage() {
             {!searchQuery && (
               <Link
                 href="/tutor/classes/new"
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-bold text-black hover:bg-zinc-100"
+                className="mt-4 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
               >
                 <Plus size={16} />첫 번째 반 만들기
               </Link>
@@ -180,7 +180,7 @@ export default function ClassesPage() {
                 key={cls.id}
                 className={`group relative flex flex-col rounded-xl border bg-zinc-900/60 p-4 transition-colors ${
                   cls.isActive
-                    ? 'border-white/10 hover:border-indigo-500/40'
+                    ? 'border-white/10 hover:border-white/[.14]'
                     : 'border-white/5 opacity-60'
                 }`}
               >
@@ -188,7 +188,7 @@ export default function ClassesPage() {
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div className="flex flex-wrap gap-1.5">
                     {cls.subject && (
-                      <span className="rounded-md bg-indigo-500/15 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-indigo-300">
+                      <span className="rounded-md border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-zinc-300 whitespace-nowrap">
                         {cls.subject}
                       </span>
                     )}
@@ -277,7 +277,7 @@ export default function ClassesPage() {
                   </Link>
                   <Link
                     href={`/tutor/classes/${cls.id}`}
-                    className="flex h-7 w-9 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25"
+                    className="flex h-7 w-9 items-center justify-center rounded-md border border-white/[.08] bg-white/[.04] text-zinc-300 hover:bg-white/[.06] hover:text-white"
                     title="학생 추가"
                   >
                     <UserPlus size={13} />

@@ -310,8 +310,8 @@ export default function DiagramGalleryPage() {
               <ArrowLeft className="h-4 w-4" />
             </button>
             <div>
-              <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                <ImageIcon className="h-5 w-5 text-emerald-400" />
+              <h1 className="text-lg font-bold text-content-primary flex items-center gap-2">
+                <ImageIcon className="h-5 w-5 text-content-tertiary" />
                 도식 이미지 갤러리
               </h1>
               <p className="text-xs text-zinc-500 mt-0.5">
@@ -327,14 +327,10 @@ export default function DiagramGalleryPage() {
                 <button
                   key={val}
                   onClick={() => setSubjectFilter(val)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition ${
                     subjectFilter === val
-                      ? val === 'science'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        : val === 'math'
-                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                          : 'bg-zinc-700 text-white'
-                      : 'text-zinc-500 hover:text-zinc-300'
+                      ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
+                      : 'border border-transparent text-content-tertiary hover:text-content-primary'
                   }`}
                 >
                   {val === 'all' ? '전체' : val === 'math' ? '수학' : '과학'}
@@ -349,10 +345,10 @@ export default function DiagramGalleryPage() {
             <div className="relative group/tag">
               <button
                 disabled={tagging}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                   tagging
-                    ? 'bg-violet-500/20 text-violet-300 cursor-wait'
-                    : 'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 hover:text-violet-300 border border-violet-500/20'
+                    ? 'bg-white/[.08] text-content-secondary cursor-wait'
+                    : 'bg-white text-black hover:bg-zinc-200'
                 }`}
               >
                 {tagging ? (
@@ -399,8 +395,8 @@ export default function DiagramGalleryPage() {
               onClick={() => setScienceSubjectFilter('all')}
               className={`px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition ${
                 scienceSubjectFilter === 'all'
-                  ? 'bg-zinc-700 text-white'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
+                  : 'border border-transparent text-content-tertiary hover:text-content-primary'
               }`}
             >
               전체
@@ -411,8 +407,8 @@ export default function DiagramGalleryPage() {
                 onClick={() => setScienceSubjectFilter(code)}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition ${
                   scienceSubjectFilter === code
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                    ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
+                    : 'border border-transparent text-content-tertiary hover:text-content-primary'
                 }`}
               >
                 {scienceSubjectNames[code] || code}
@@ -464,17 +460,17 @@ export default function DiagramGalleryPage() {
       {(tagging || tagResult) && (
         <div className="max-w-7xl mx-auto px-6 pt-4">
           {tagging && taggingProgress?.active ? (
-            <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 flex items-center gap-4">
-              <Loader2 className="h-4 w-4 animate-spin text-violet-400 flex-shrink-0" />
+            <div className="bg-white/[.04] border border-white/[.08] rounded-xl px-4 py-3 flex items-center gap-4">
+              <Loader2 className="h-4 w-4 animate-spin text-content-tertiary flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-violet-300 font-medium">
+                  <p className="text-xs text-content-secondary font-medium">
                     AI 태깅 중... ({taggingProgress.current}/{taggingProgress.total})
                     {taggingProgress.tagged > 0 && ` — ${taggingProgress.tagged}개 성공`}
                     {taggingProgress.errors > 0 && `, ${taggingProgress.errors}개 오류`}
                   </p>
                   {taggingProgress.total > 0 && (
-                    <span className="text-[10px] text-violet-400/70 ml-2">
+                    <span className="text-[10px] text-content-tertiary ml-2 tabular-nums">
                       {Math.round((taggingProgress.current / taggingProgress.total) * 100)}%
                     </span>
                   )}
@@ -482,7 +478,7 @@ export default function DiagramGalleryPage() {
                 {taggingProgress.total > 0 && (
                   <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
                     <div
-                      className="bg-violet-500 h-full rounded-full transition-all duration-500"
+                      className="bg-white/70 h-full rounded-full transition-all duration-500"
                       style={{ width: `${Math.round((taggingProgress.current / taggingProgress.total) * 100)}%` }}
                     />
                   </div>
@@ -490,9 +486,9 @@ export default function DiagramGalleryPage() {
               </div>
             </div>
           ) : tagging ? (
-            <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
-              <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-              <p className="text-xs text-violet-300 font-medium">AI 태깅 시작 중...</p>
+            <div className="bg-white/[.04] border border-white/[.08] rounded-xl px-4 py-3 flex items-center gap-3">
+              <Loader2 className="h-4 w-4 animate-spin text-content-tertiary" />
+              <p className="text-xs text-content-secondary font-medium">AI 태깅 시작 중...</p>
             </div>
           ) : tagResult ? (
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -606,18 +602,8 @@ export default function DiagramGalleryPage() {
                       onClick={() => toggleSubject(sciSubj)}
                       className="w-full flex items-center gap-3 mb-4 group/subj"
                     >
-                      <div className={`w-1 h-6 rounded-full ${
-                        sciSubj.startsWith('IS') || sciSubj === 'science'
-                          ? 'bg-emerald-500'
-                          : sciSubj === 'math'
-                            ? 'bg-indigo-500'
-                            : sciSubj.startsWith('PHY') ? 'bg-blue-500'
-                            : sciSubj.startsWith('CHM') ? 'bg-orange-500'
-                            : sciSubj.startsWith('BIO') ? 'bg-green-500'
-                            : sciSubj.startsWith('EAR') ? 'bg-amber-500'
-                            : 'bg-zinc-500'
-                      }`} />
-                      <h2 className="text-base font-bold text-white">{subjectName}</h2>
+                      <div className="w-1 h-6 rounded-full bg-white/20" />
+                      <h2 className="text-base font-bold text-content-primary">{subjectName}</h2>
                       <span className="text-xs text-zinc-500">{subjectImgs.length}개</span>
                       <span className="text-xs text-zinc-600">({sourceGroups.size}개 출처)</span>
                       <svg
@@ -704,7 +690,7 @@ export default function DiagramGalleryPage() {
                                           {/* AI 태그 정보 */}
                                           {img.tags && typeof img.tags === 'object' && (img.tags as any).diagram_type && (img.tags as any).diagram_type !== '미분류' && (
                                             <div className="mt-1 space-y-0.5">
-                                              <p className="text-[9px] text-violet-400 font-medium truncate">
+                                              <p className="text-[9px] text-content-secondary font-medium truncate">
                                                 {(img.tags as any).diagram_type}
                                               </p>
                                               {(img.unit_code || (img.tags as any).unit_code) && (
@@ -787,7 +773,7 @@ export default function DiagramGalleryPage() {
                   {(previewImage as any).tags && typeof (previewImage as any).tags === 'object' && (previewImage as any).tags.diagram_type && (previewImage as any).tags.diagram_type !== '미분류' && (
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded text-[10px] font-medium">
+                        <span className="px-2 py-0.5 border border-white/[.08] bg-white/[.04] text-content-secondary rounded text-[10px] font-medium">
                           {(previewImage as any).tags.diagram_type}
                         </span>
                         {(previewImage as any).tags.subject && (

@@ -192,8 +192,8 @@ export default function StudentsTab({ examId }: { examId: string }) {
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Upload size={18} className="text-indigo-400" />
+            <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
+              <Upload size={18} className="text-content-tertiary" />
               학생 답안 엑셀 업로드
             </h3>
             <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
@@ -206,7 +206,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
           <button
             onClick={fetchStudents}
             disabled={loading}
-            className="shrink-0 text-zinc-400 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-50"
+            className="shrink-0 text-zinc-400 hover:text-content-primary p-1.5 rounded-lg hover:bg-white/[.06] transition-colors disabled:opacity-50"
             title="새로고침"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -217,7 +217,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
         {canSwitch && activeInstituteName && (
           <div className="mb-4 flex items-center gap-2 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
             <span className="text-[12px] font-black text-amber-300 shrink-0">
-              ⚠ 등록 센터
+              등록 센터
             </span>
             <span className="text-[13px] font-bold text-amber-200">
               {activeInstituteName}
@@ -274,8 +274,8 @@ export default function StudentsTab({ examId }: { examId: string }) {
             uploadBusy
               ? 'border-zinc-700 bg-zinc-800/40 cursor-not-allowed'
               : isDragOver
-                ? 'border-indigo-400 bg-indigo-500/10 scale-[1.01]'
-                : 'border-zinc-700 hover:border-indigo-500 hover:bg-indigo-500/5'
+                ? 'border-white/30 bg-white/[.06] scale-[1.01]'
+                : 'border-zinc-700 hover:border-white/25 hover:bg-white/[.04]'
           }`}
         >
           <input
@@ -288,17 +288,17 @@ export default function StudentsTab({ examId }: { examId: string }) {
             onChange={(e) => handleFiles(e.target.files)}
           />
           {uploadBusy ? (
-            <div className="flex items-center justify-center gap-2 text-indigo-400">
+            <div className="flex items-center justify-center gap-2 text-content-secondary">
               <Loader2 size={18} className="animate-spin" />
               <span className="font-bold">업로드 및 채점 중...</span>
             </div>
           ) : isDragOver ? (
             <div className="flex flex-col items-center gap-2 pointer-events-none">
-              <FileSpreadsheet size={28} className="text-indigo-400" />
-              <p className="text-sm font-black text-indigo-300">
+              <FileSpreadsheet size={28} className="text-content-secondary" />
+              <p className="text-sm font-semibold text-content-primary">
                 여기에 놓으면 채점됩니다
               </p>
-              <p className="text-xs text-indigo-400/80">
+              <p className="text-xs text-content-tertiary">
                 .xlsx / .xls / .csv / .tsv
               </p>
             </div>
@@ -344,7 +344,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
                     )}
                     <span className="font-bold text-zinc-200">{r.studentName}</span>
                     {r.isNewRoster && (
-                      <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] border border-white/[.08] bg-white/[.04] text-content-secondary px-1.5 py-0.5 rounded">
                         신규
                       </span>
                     )}
@@ -391,8 +391,8 @@ export default function StudentsTab({ examId }: { examId: string }) {
       {/* ───── 학생 리스트 ───── */}
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <Users size={18} className="text-indigo-400" />
+          <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
+            <Users size={18} className="text-content-tertiary" />
             채점된 학생
             <span className="text-xs font-normal text-zinc-400">
               ({students.length}명)
@@ -430,7 +430,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
                   <tr key={s.sessionId} className="hover:bg-zinc-800/40">
                     <td className="px-4 py-2.5 text-zinc-300">{s.grade ?? '-'}</td>
                     <td className="px-4 py-2.5 text-zinc-300">{s.classLabel ?? '-'}</td>
-                    <td className="px-4 py-2.5 font-bold text-white flex items-center gap-2">
+                    <td className="px-4 py-2.5 font-semibold text-content-primary flex items-center gap-2">
                       {s.fullName}
                       {s.isPromoted && (
                         <span
@@ -469,7 +469,7 @@ export default function StudentsTab({ examId }: { examId: string }) {
                     <td className="px-4 py-2.5 text-center">
                       <Link
                         href={`${baseHref}/${s.rosterId}`}
-                        className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-bold text-xs"
+                        className="inline-flex items-center gap-1 text-content-secondary hover:text-content-primary font-semibold text-xs whitespace-nowrap"
                       >
                         <ExternalLink size={12} /> 리포트
                       </Link>

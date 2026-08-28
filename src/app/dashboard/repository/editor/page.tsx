@@ -60,7 +60,7 @@ export default function ProblemEditorPage() {
                                     : 'hover:bg-white/50 border border-transparent'
                                 }`}
                         >
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
                                 <FileText size={16} />
                             </div>
                             <div className="min-w-0 flex-1">
@@ -83,11 +83,11 @@ export default function ProblemEditorPage() {
             <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-warm-border-soft bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b border-warm-border-soft px-6 py-3 bg-white/80 backdrop-blur">
                     <div className="flex items-center gap-2">
-                        <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">EDITING</span>
+                        <span className="rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">EDITING</span>
                         <h1 className="text-sm font-semibold text-warm-text-primary">문제 편집</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100 transition-colors">
+                        <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap">
                             <Sparkles size={14} />
                             <span>AI 다듬기</span>
                         </button>
@@ -113,7 +113,7 @@ export default function ProblemEditorPage() {
                         <button className="px-4 py-2 text-sm font-medium text-warm-text-secondary hover:text-warm-text-primary transition-colors">
                             미리보기
                         </button>
-                        <button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-transform hover:-translate-y-0.5">
+                        <button className="flex items-center gap-2 rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 whitespace-nowrap">
                             <Save size={16} />
                             <span>저장하기</span>
                         </button>
@@ -149,37 +149,37 @@ export default function ProblemEditorPage() {
 
                         <div>
                             <label className="mb-1.5 block text-xs font-medium text-warm-text-secondary">단원 분류</label>
-                            <select className="w-full rounded-lg border border-warm-border-soft bg-warm-surface px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                            <select className="w-full rounded-lg border border-warm-border-soft bg-warm-surface px-3 py-2 text-sm focus:border-gray-400 focus:outline-none">
                                 <option>수학(상) {'>'} 다항식</option>
                                 <option>수학(하) {'>'} 집합</option>
                             </select>
                         </div>
 
                         <div className="flex gap-2">
-                            <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10">추론형</span>
-                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">4점 문항</span>
+                            <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-900/10">추론형</span>
+                            <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-900/10">4점 문항</span>
                         </div>
                     </div>
                 </div>
 
                 {/* AI Twin Generator */}
-                <div className="flex-1 rounded-2xl border border-warm-border-soft bg-gradient-to-br from-indigo-50 to-white p-4">
+                <div className="flex-1 rounded-2xl border border-warm-border-soft bg-white p-4">
                     <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-indigo-900">AI 쌍둥이 문제</h3>
-                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600">NEW</span>
+                        <h3 className="text-sm font-semibold text-warm-text-primary">AI 쌍둥이 문제</h3>
+                        <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">NEW</span>
                     </div>
 
                     <div className="flex h-full flex-col justify-center text-center">
                         <div className="mb-3 flex justify-center">
-                            <div className="rounded-full bg-indigo-100 p-3">
-                                <Sparkles className="h-6 w-6 text-indigo-600" />
+                            <div className="rounded-full bg-gray-100 p-3">
+                                <Sparkles className="h-6 w-6 text-gray-500" />
                             </div>
                         </div>
-                        <p className="text-sm font-medium text-indigo-900">유사 문제 생성</p>
-                        <p className="mt-1 text-xs text-indigo-600/70">
+                        <p className="text-sm font-medium text-warm-text-primary">유사 문제 생성</p>
+                        <p className="mt-1 text-xs text-gray-500">
                             현재 문제와 유사한 유형의 문제를<br />AI가 자동으로 생성합니다.
                         </p>
-                        <button className="mt-4 w-full rounded-xl bg-white border border-indigo-200 py-2.5 text-sm font-semibold text-indigo-600 shadow-sm transition-colors hover:bg-indigo-50">
+                        <button className="mt-4 w-full rounded-full bg-white border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 whitespace-nowrap">
                             3문항 생성하기
                         </button>
                     </div>
