@@ -102,9 +102,9 @@ function TrackButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+      className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
         active
-          ? 'bg-accent/20 text-accent'
+          ? 'bg-white text-black'
           : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'
       }`}
     >

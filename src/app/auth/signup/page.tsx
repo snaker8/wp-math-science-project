@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
   ArrowLeft,
@@ -358,26 +357,20 @@ export default function SignUpPage() {
     <div className="min-h-[100dvh] bg-zinc-950 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
       {/* Logo */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
         className="mb-10 text-center"
       >
         <Link href="/" className="inline-block">
           <BrandLogo size="xl" showTagline />
         </Link>
-      </motion.div>
+      </div>
 
       {/* Main Card */}
-      <AnimatePresence mode="wait">
+      <>
         {/* Step 1: 역할 선택 */}
         {step === 1 && (
-          <motion.div
+          <div
             key="step1"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
             className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
           >
             <div className="text-center mb-8">
@@ -393,11 +386,9 @@ export default function SignUpPage() {
 
             <div className="space-y-3">
               {ROLE_OPTIONS.map((option) => (
-                <motion.button
+                <button
                   key={option.value}
                   type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => handleRoleSelect(option.value)}
                   className="w-full flex items-center gap-4 p-4 rounded-lg border border-white/10 bg-zinc-950/40 hover:border-white/[.18] hover:bg-white/[.04] transition-colors group text-left"
                 >
@@ -412,7 +403,7 @@ export default function SignUpPage() {
                     <div className="text-xs text-zinc-500 mt-0.5">{option.description}</div>
                   </div>
                   <ArrowRight size={18} className="text-zinc-600 group-hover:text-content-primary group-hover:translate-x-1 transition-all" />
-                </motion.button>
+                </button>
               ))}
             </div>
 
@@ -424,17 +415,13 @@ export default function SignUpPage() {
                 </Link>
               </p>
             </div>
-          </motion.div>
+          </div>
         )}
 
         {/* Step 2: 정보 입력 */}
         {step === 2 && selectedRole && (
-          <motion.div
+          <div
             key="step2"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
             className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
           >
             <div className="text-center mb-6">
@@ -467,14 +454,12 @@ export default function SignUpPage() {
 
             {/* Error */}
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
+              <div
                 className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm"
               >
                 <AlertCircle size={16} />
                 <span>{error}</span>
-              </motion.div>
+              </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -748,22 +733,16 @@ export default function SignUpPage() {
                 ⚠️ Demo 모드 - Supabase 미연결
               </p>
             )}
-          </motion.div>
+          </div>
         )}
 
         {/* Step 3: 가입 완료 */}
         {step === 3 && (
-          <motion.div
+          <div
             key="step3"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, type: 'spring' }}
             className="w-full max-w-md bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-xl text-center"
           >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            <div
               className={`w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center ${
                 applicationSubmitted
                   ? 'bg-amber-500/20 border border-amber-500/30'
@@ -775,7 +754,7 @@ export default function SignUpPage() {
               ) : (
                 <CheckCircle2 size={40} className="text-green-400" />
               )}
-            </motion.div>
+            </div>
 
             {applicationSubmitted ? (
               <>
@@ -823,9 +802,9 @@ export default function SignUpPage() {
                 {applicationSubmitted ? '닫고 로그인 페이지로' : '로그인 페이지로 이동'}
               </Link>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
 
       <footer className="absolute bottom-6 text-center">
         <p className="text-[10px] text-zinc-700">© 2026 Math×Sci Bank. All rights reserved.</p>
