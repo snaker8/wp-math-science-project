@@ -43,7 +43,7 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
       <div className="relative rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/50 group">
         {/* Background Grid (Digital Overlay) */}
         <div className="absolute inset-0 opacity-[0.1]"
-          style={{ backgroundImage: 'linear-gradient(rgba(129, 140, 248, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(129, 140, 248, 0.2) 1px, transparent 1px)', backgroundSize: '40px 40px' }}
+          style={{ backgroundImage: 'linear-gradient(rgba(255,255,255, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255, 0.2) 1px, transparent 1px)', backgroundSize: '40px 40px' }}
         />
 
         {/* Mock Handwriting Image Placeholder */}
@@ -59,14 +59,14 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
 
         {/* 1. Scanning Line Animation */}
         <motion.div
-          className="absolute left-0 right-0 h-1 bg-indigo-500 shadow-[0_0_20px_rgba(99,102,241,1)] z-20"
+          className="absolute left-0 right-0 h-1 bg-white/70 shadow-[0_0_20px_rgba(255,255,255,0.45)] z-20"
           animate={{ top: ['0%', '100%', '0%'] }}
           transition={{ duration: 4, ease: "linear", repeat: Infinity }}
         />
 
         {/* Scanning Gradient Trail */}
         <motion.div
-          className="absolute left-0 right-0 h-24 bg-gradient-to-b from-indigo-500/0 via-indigo-500/10 to-indigo-500/0 z-10"
+          className="absolute left-0 right-0 h-24 bg-gradient-to-b from-white/0 via-white/10 to-white/0 z-10"
           animate={{ top: ['-5%', '95%', '-5%'] }}
           transition={{ duration: 4, ease: "linear", repeat: Infinity }}
         />
@@ -79,7 +79,7 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{
                 opacity: [0, 1, 1, 0],
-                borderColor: ['rgba(99,102,241,0)', 'rgba(99,102,241,0.8)', 'rgba(99,102,241,0.8)', 'rgba(99,102,241,0)']
+                borderColor: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.8)', 'rgba(255,255,255,0.8)', 'rgba(255,255,255,0)']
               }}
               transition={{
                 duration: 2,
@@ -87,7 +87,7 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
                 repeatDelay: 1 + i,
                 times: [0, 0.1, 0.8, 1]
               }}
-              className="absolute border border-indigo-500/50 rounded bg-indigo-500/5 z-10 box-content"
+              className="absolute border border-white/20 rounded bg-white/[.04] z-10 box-content"
               style={{
                 top: `${20 + i * 20}%`,
                 left: `${10 + i * 15}%`,
@@ -95,7 +95,7 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
                 height: '40px'
               }}
             >
-              <div className="absolute -top-3 -right-1 text-[8px] text-indigo-400 font-mono bg-zinc-900 border border-indigo-500/30 px-1 rounded">
+              <div className="absolute -top-3 -right-1 text-[8px] text-content-tertiary font-mono bg-zinc-900 border border-white/[.14] px-1 rounded">
                 CONF: {(0.9 + i * 0.02).toFixed(2)}
               </div>
             </motion.div>
@@ -104,9 +104,9 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
 
         {/* Status Indicators */}
         <div className="absolute bottom-4 left-4 flex items-center gap-3 z-30">
-          <div className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-indigo-500/30 flex items-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-            <span className="text-xs text-indigo-200 font-mono">SCANNING...</span>
+          <div className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/[.14] flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 text-content-tertiary animate-spin" />
+            <span className="text-xs text-content-secondary font-mono">SCANNING...</span>
           </div>
           <div className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-2">
             <Binary className="w-3.5 h-3.5 text-zinc-400" />
@@ -118,8 +118,8 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
       {/* RIGHT: Digital Transformation (KaTeX Morphing) */}
       <div className="flex flex-col h-full">
         <div className="mb-6 pb-4 border-b border-white/5">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />
+          <h2 className="text-xl font-semibold text-content-primary flex items-center gap-2">
+            <Zap className="w-5 h-5 text-content-tertiary" />
             Digital Analysis
           </h2>
           <p className="text-zinc-500 text-sm mt-1">AI가 필기를 인식하여 논리 구조를 분석합니다.</p>
@@ -133,7 +133,7 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
               <div key={check.id} className={`
                       flex items-center gap-2 p-3 rounded-lg border text-xs font-medium transition-colors
                       ${check.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : check.status === 'processing' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+                  : check.status === 'processing' ? 'border-white/[.14] bg-white/[.08] text-content-primary'
                     : 'bg-zinc-900 border-white/5 text-zinc-600'}
                   `}>
                 {check.status === 'completed' ? <CheckCircle2 className="w-3.5 h-3.5" />
@@ -167,14 +167,14 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
 
                 {/* Timeline Dot */}
                 <div className={`absolute -left-[29px] top-3 w-2.5 h-2.5 rounded-full border-2 bg-zinc-950 transition-colors duration-500
-                          ${formula.stage === 'error' ? 'border-rose-500' : 'border-indigo-500'}
+                          ${formula.stage === 'error' ? 'border-rose-500' : 'border-white/30'}
                       `} />
 
                 <div className={`
                           p-4 rounded-xl border transition-all duration-300
                           ${formula.stage === 'error'
                     ? 'bg-rose-950/20 border-rose-500/30 hover:bg-rose-500/10'
-                    : 'bg-zinc-900 border-white/5 hover:border-indigo-500/30'}
+                    : 'bg-zinc-900 border-white/5 hover:border-white/20'}
                       `}>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
@@ -186,7 +186,7 @@ export function DeepGradingPanel({ checks = [], answers, examTitle, onGrade, onC
                   </div>
 
                   {/* KaTeX Renderer with Glow */}
-                  <div className={`text-base font-medium ${formula.stage === 'error' ? 'text-rose-300' : 'text-indigo-300 drop-shadow-[0_0_8px_rgba(99,102,241,0.15)]'}`}>
+                  <div className={`text-base font-medium ${formula.stage === 'error' ? 'text-rose-300' : 'text-content-primary drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]'}`}>
                     <MathRenderer content={formula.parsed} />
                   </div>
                 </div>

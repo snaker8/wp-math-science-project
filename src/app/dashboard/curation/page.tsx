@@ -27,9 +27,9 @@ import { GlowCard } from '@/components/shared/GlowCard';
 // ============================================================================
 
 const groupStats = [
-    { id: 1, name: '심화 (Advanced)', count: 12, status: 'active', color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-    { id: 2, name: '보충 (Supplementary)', count: 28, status: 'active', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { id: 3, name: '재시험 (Retake)', count: 5, status: 'pending', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+    { id: 1, name: '심화 (Advanced)', count: 12, status: 'active', color: 'text-content-secondary', bg: 'bg-white/[.04]' },
+    { id: 2, name: '보충 (Supplementary)', count: 28, status: 'active', color: 'text-content-secondary', bg: 'bg-white/[.04]' },
+    { id: 3, name: '재시험 (Retake)', count: 5, status: 'pending', color: 'text-content-secondary', bg: 'bg-white/[.04]' },
 ];
 
 const curatedSets = [
@@ -69,9 +69,9 @@ function StatusToggle({ label, active, onToggle }: { label: string; active: bool
             <span className="text-content-tertiary text-xs font-medium uppercase tracking-wider">{label}</span>
             <button
                 onClick={onToggle}
-                className={`w-9 h-5 rounded-full p-1 transition-colors duration-300 ${active ? 'bg-indigo-600' : 'bg-surface-raised'}`}
+                className={`w-9 h-5 rounded-full p-1 transition-colors duration-300 border ${active ? 'bg-white border-white' : 'bg-surface-raised border-white/[.08]'}`}
             >
-                <div className={`w-3 h-3 rounded-full bg-white transition-transform duration-300 ${active ? 'translate-x-4' : 'translate-x-0'}`} />
+                <div className={`w-3 h-3 rounded-full transition-transform duration-300 ${active ? 'bg-black translate-x-4' : 'bg-white/50 translate-x-0'}`} />
             </button>
         </div>
     );
@@ -96,12 +96,12 @@ export default function CurationPage() {
             <div className="flex items-end justify-between">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <div className="p-1 px-2 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-400 tracking-tighter uppercase">
+                        <div className="p-1 px-2 rounded border border-white/[.08] bg-white/[.04] text-[10px] font-bold text-content-secondary tracking-tighter uppercase">
                             AI Automation
                         </div>
                         <span className="text-content-tertiary text-xs font-medium uppercase tracking-widest">v2.0 Beta</span>
                     </div>
-                    <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+                    <h1 className="text-4xl font-semibold tracking-tight text-content-primary">
                         AI 자동큐레이션
                     </h1>
                 </div>
@@ -116,10 +116,10 @@ export default function CurationPage() {
             </div>
 
             {/* 2. Hero Action: Run Now */}
-            <GlowCard className="bg-gradient-to-br from-indigo-500/10 via-black to-black border-indigo-500/20 py-12">
+            <GlowCard className="border-white/[.08] bg-white/[.03] py-12">
                 <div className="flex flex-col items-center justify-center text-center space-y-6">
                     <div className="relative">
-                        <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full" />
+                        <div className="absolute inset-0 bg-white/10 blur-3xl rounded-full" />
                         <motion.button
                             onClick={handleRunNow}
                             whileHover={{ scale: 1.05 }}
@@ -146,7 +146,7 @@ export default function CurationPage() {
                         </motion.button>
                     </div>
                     <p className="text-content-secondary text-sm max-w-md">
-                        현재 학습 데이터를 실시간으로 분석하여 <span className="text-indigo-400">심화, 보충, 재시험</span> 그룹별
+                        현재 학습 데이터를 실시간으로 분석하여 <span className="text-content-primary">심화, 보충, 재시험</span> 그룹별
                         최적화된 문항 세트를 자동으로 구성합니다.
                     </p>
                 </div>
@@ -159,7 +159,7 @@ export default function CurationPage() {
                 <GlowCard>
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-sm font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
-                            <Users size={16} className="text-indigo-400" />
+                            <Users size={16} className="text-content-tertiary" />
                             스마트 그룹화
                         </h3>
                         <ArrowUpRight size={14} className="text-content-muted" />
@@ -183,7 +183,7 @@ export default function CurationPage() {
                 <GlowCard className="md:col-span-2">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-sm font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
-                            <TrendingUp size={16} className="text-rose-400" />
+                            <TrendingUp size={16} className="text-content-tertiary" />
                             성취도 향상 예측
                         </h3>
                         <div className="flex items-center gap-4">
@@ -218,7 +218,7 @@ export default function CurationPage() {
                 <GlowCard>
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-sm font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
-                            <Database size={16} className="text-emerald-400" />
+                            <Database size={16} className="text-content-tertiary" />
                             엔진 설정
                         </h3>
                     </div>
@@ -234,7 +234,7 @@ export default function CurationPage() {
                 <GlowCard className="md:col-span-2">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-sm font-bold text-content-secondary uppercase tracking-widest flex items-center gap-2">
-                            <Layers size={16} className="text-amber-400" />
+                            <Layers size={16} className="text-content-tertiary" />
                             주간 추천 문제지
                         </h3>
                         <button className="text-[10px] text-content-tertiary hover:text-content-primary font-bold transition-colors">
@@ -243,9 +243,9 @@ export default function CurationPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {curatedSets.map(set => (
-                            <div key={set.id} className="relative group bg-surface-card/30 border border-subtle rounded-2xl p-4 hover:border-indigo-500/40 transition-all cursor-pointer overflow-hidden">
-                                <div className="absolute top-0 right-0 p-3 bg-indigo-500/5 rounded-bl-2xl opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <ArrowUpRight size={14} className="text-indigo-400" />
+                            <div key={set.id} className="relative group bg-surface-card/30 border border-subtle rounded-2xl p-4 hover:border-white/[.14] transition-all cursor-pointer overflow-hidden">
+                                <div className="absolute top-0 right-0 p-3 bg-white/[.06] rounded-bl-2xl opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ArrowUpRight size={14} className="text-content-secondary" />
                                 </div>
                                 <div className="flex items-center gap-2 mb-3">
                                     <span className="text-[10px] font-bold text-content-tertiary px-2 py-0.5 rounded-full bg-surface-raised border border-subtle">
@@ -264,7 +264,7 @@ export default function CurationPage() {
                                         <div className={`w-1 h-1 rounded-full ${set.status === 'ready' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
                                         {set.status.toUpperCase()}
                                     </div>
-                                    <button className="flex items-center gap-1 text-[10px] font-bold text-content-primary bg-indigo-600/80 hover:bg-indigo-600 px-3 py-1.5 rounded-lg transition-all">
+                                    <button className="flex items-center gap-1 whitespace-nowrap text-[10px] font-bold rounded-full border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-content-secondary transition-colors hover:bg-white/[.06] hover:text-content-primary">
                                         검토 및 발행 <ChevronRight size={12} />
                                     </button>
                                 </div>

@@ -178,9 +178,9 @@ export default function StudentSessionResultPage() {
             <p className="text-[10px] text-rose-600 uppercase tracking-wider">오답</p>
             <p className="text-lg font-bold text-rose-700">{stats.wrong}</p>
           </div>
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-center">
-            <p className="text-[10px] text-indigo-600 uppercase tracking-wider">정답률</p>
-            <p className="text-lg font-bold text-indigo-700">
+          <div className="rounded-xl border border-zinc-300 bg-zinc-100 p-3 text-center">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-wider">정답률</p>
+            <p className="text-lg font-bold text-zinc-900 tabular-nums">
               {stats.pct != null ? `${stats.pct}%` : '-'}
             </p>
           </div>
@@ -194,7 +194,7 @@ export default function StudentSessionResultPage() {
               {Object.entries(stats.wrongCauses).map(([cause, n]) => (
                 <span
                   key={cause}
-                  className="px-2.5 py-1 rounded-full text-xs bg-indigo-50 text-indigo-700 border border-indigo-200"
+                  className="px-2.5 py-1 rounded-full text-xs bg-zinc-50 text-zinc-700 border border-zinc-200 tabular-nums"
                 >
                   {cause} · {n}건
                 </span>
@@ -241,7 +241,7 @@ export default function StudentSessionResultPage() {
                     </span>
                   )}
                   {it.result?.error_cause && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-50 text-zinc-700 border border-zinc-200">
                       {it.result.error_cause}
                     </span>
                   )}

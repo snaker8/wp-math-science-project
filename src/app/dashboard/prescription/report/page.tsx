@@ -119,16 +119,16 @@ function ReportContent() {
   }, [router, setKey]);
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans">
-      <header className="border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/40 via-cyan-900/30 to-zinc-900/30 px-4 sm:px-6 py-5">
+    <div className="min-h-screen bg-surface-base text-content-primary font-sans">
+      <header className="border-b border-white/[.08] bg-white/[.03] px-4 sm:px-6 py-5">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/15 bg-white/10">
-            <BarChart3 className="h-6 w-6 text-cyan-300" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/[.08] bg-white/[.04]">
+            <BarChart3 className="h-6 w-6 text-zinc-400" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold">진단평가 종합 리포트</h1>
-              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">시험대비 처방</span>
+              <span className="rounded-md border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold text-zinc-300 whitespace-nowrap">시험대비 처방</span>
             </div>
             <p className="mt-0.5 text-xs text-zinc-400">A·B·C 진단 결과를 합산해 약점 단원과 시험 대비 방향을 분석합니다</p>
           </div>
@@ -143,7 +143,7 @@ function ReportContent() {
             {([['set', '진단평가 세트'], ['free', '자유 조합']] as const).map(([t, label]) => (
               <button key={t} type="button" onClick={() => setSelTab(t)}
                 className={`px-3 py-1.5 text-sm font-semibold border-b-2 -mb-px transition ${
-                  selTab === t ? 'border-cyan-400 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  selTab === t ? 'border-white/60 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
                 }`}>
                 {label}
               </button>
@@ -159,7 +159,7 @@ function ReportContent() {
                 <div className="text-rose-400 text-xs bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{setsError}</div>
               ) : (
                 <select value={setKey ?? ''} onChange={(e) => handleSelectSet(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none">
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none">
                   <option value="" disabled>세트 선택…</option>
                   {sets.map((s) => (
                     <option key={s.setKey} value={s.setKey}>
@@ -172,7 +172,7 @@ function ReportContent() {
             <div>
               <label className="text-[10px] uppercase tracking-wider text-zinc-500 flex items-center gap-1.5 mb-2"><Users className="h-3.5 w-3.5" /> 학생</label>
               <select value={studentId ?? ''} onChange={(e) => handleSelectStudent(e.target.value)} disabled={!selectedSet}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none disabled:opacity-40">
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none disabled:opacity-40">
                 <option value="" disabled>{selectedSet ? '학생 선택…' : '세트 먼저 선택'}</option>
                 {(selectedSet?.students ?? []).map((stu) => (
                   <option key={stu.id} value={stu.id}>
@@ -188,7 +188,7 @@ function ReportContent() {
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-zinc-500 flex items-center gap-1.5 mb-2"><Users className="h-3.5 w-3.5" /> 학생</label>
                 <select value={freeStudentId} onChange={(e) => setFreeStudentId(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none">
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none">
                   <option value="">학생 선택…</option>
                   {freeStudents.map((s) => <option key={s.id} value={s.id}>{s.name}{gradeIntToLabel(s.grade) ? ` (${gradeIntToLabel(s.grade)})` : ''}</option>)}
                 </select>
@@ -198,21 +198,21 @@ function ReportContent() {
                 <div className="relative mb-2">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
                   <input value={examSearch} onChange={(e) => setExamSearch(e.target.value)} placeholder="시험지명 검색"
-                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-white focus:border-cyan-500 focus:outline-none" />
+                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-white focus:border-white/30 focus:outline-none" />
                 </div>
                 <div className="max-h-52 overflow-y-auto rounded-lg border border-zinc-800 divide-y divide-zinc-800/60">
                   {freeFilteredExams.length === 0 ? (
                     <div className="text-center text-zinc-600 text-xs py-6">시험지가 없습니다.</div>
                   ) : freeFilteredExams.map((ex) => (
                     <label key={ex.id} className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5 cursor-pointer">
-                      <input type="checkbox" checked={freeExamIds.has(ex.id)} onChange={() => toggleFreeExam(ex.id)} className="accent-cyan-500" />
+                      <input type="checkbox" checked={freeExamIds.has(ex.id)} onChange={() => toggleFreeExam(ex.id)} className="accent-white" />
                       <span className="truncate">{ex.title}</span>
                     </label>
                   ))}
                 </div>
               </div>
               <button type="button" onClick={generateFreeReport} disabled={!freeStudentId || freeExamIds.size === 0}
-                className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-700 disabled:text-zinc-500 px-4 py-2 text-sm font-bold text-white">
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 disabled:bg-white/[.06] disabled:text-zinc-500">
                 <Wand2 className="h-4 w-4" /> 리포트 생성 ({freeExamIds.size}개 선택)
               </button>
             </div>
@@ -273,15 +273,15 @@ function ParentLinkBar({ studentId, setKey, examIds }: { studentId: string; setK
   }, [studentId, setKey, examIds]);
 
   return (
-    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-2 text-sm text-emerald-200">
-        <Share2 className="h-4 w-4 text-emerald-400" />
+    <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm text-zinc-200">
+        <Share2 className="h-4 w-4 text-zinc-400" />
         <span className="font-semibold">학부모 공유 링크</span>
-        <span className="text-[11px] text-emerald-300/70">로그인 없이 이 리포트를 볼 수 있는 링크를 발급합니다</span>
+        <span className="text-[11px] text-zinc-500">로그인 없이 이 리포트를 볼 수 있는 링크를 발급합니다</span>
       </div>
       <div className="flex items-center gap-2">
         <button type="button" onClick={issueAndCopy} disabled={issuing}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/[.06] hover:text-white disabled:opacity-50">
           {issuing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : copied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
           {issuing ? '발급 중…' : copied ? '복사됨!' : '학부모 링크 복사'}
         </button>
@@ -300,7 +300,7 @@ function ParentLinkBar({ studentId, setKey, examIds }: { studentId: string; setK
 export default function Page() {
   return (
     <Suspense fallback={
-      <div className="flex h-screen items-center justify-center bg-black text-white">
+      <div className="flex h-screen items-center justify-center bg-surface-base text-content-primary">
         <Loader2 className="animate-spin mr-2" size={18} /> 리포트 로딩…
       </div>
     }>

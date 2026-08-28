@@ -61,25 +61,25 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-                            className="bg-surface-raised border border-indigo-500/30 rounded-2xl shadow-2xl w-full max-w-4xl pointer-events-auto overflow-hidden flex flex-col max-h-[90vh]"
+                            className="bg-surface-raised border border-white/[.09] rounded-2xl shadow-2xl w-full max-w-4xl pointer-events-auto overflow-hidden flex flex-col max-h-[90vh]"
                         >
                             {/* Header */}
                             <div className="flex items-center justify-between p-6 border-b border-subtle bg-surface-card/50">
                                 <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-                                        <span className="text-lg font-bold text-indigo-400">{data.student[0]}</span>
+                                    <div className="h-12 w-12 rounded-full bg-white/[.06] flex items-center justify-center border border-white/[.08]">
+                                        <span className="text-lg font-bold text-content-primary">{data.student[0]}</span>
                                     </div>
                                     <div>
                                         <h2 className="text-xl font-bold text-content-primary flex items-center gap-2">
                                             {data.student}
-                                            <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-400 font-medium animate-pulse">
+                                            <span className="px-2 py-0.5 rounded-full bg-white/[.04] border border-white/[.08] text-[10px] text-content-secondary font-medium whitespace-nowrap">
                                                 AI 정밀 진단 중
                                             </span>
                                         </h2>
                                         <div className="flex items-center gap-2 text-sm text-content-secondary mt-1">
                                             <span>{data.unit}</span>
                                             <span className="w-1 h-1 rounded-full bg-zinc-700" />
-                                            <span className="text-indigo-400 font-semibold">숙련도 {data.score}%</span>
+                                            <span className="text-content-primary font-semibold tabular-nums">숙련도 {data.score}%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -98,7 +98,7 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                                 <div className="md:col-span-1 bg-surface-card/40 border border-subtle rounded-xl p-4 flex flex-col justify-between">
                                     <div>
                                         <h3 className="text-sm font-semibold text-content-secondary mb-4 flex items-center gap-2">
-                                            <Target className="w-4 h-4 text-emerald-400" />
+                                            <Target className="w-4 h-4 text-content-tertiary" />
                                             5대 수학 역량 분석
                                         </h3>
                                         <div className="h-[250px] w-full -ml-4">
@@ -121,8 +121,8 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                                             </ResponsiveContainer>
                                         </div>
                                     </div>
-                                    <div className="mt-4 p-3 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
-                                        <p className="text-xs text-indigo-300 leading-relaxed text-center">
+                                    <div className="mt-4 p-3 bg-white/[.03] rounded-lg border border-white/[.08]">
+                                        <p className="text-xs text-content-secondary leading-relaxed text-center">
                                             &quot;평균 대비 <strong>이해력</strong>이 우수하나, <br /><strong>응용력</strong> 보완이 필요합니다.&quot;
                                         </p>
                                     </div>
@@ -133,7 +133,7 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                                     {/* Weakness Analysis */}
                                     <div className="bg-surface-card/40 border border-subtle rounded-xl p-5">
                                         <h3 className="text-sm font-semibold text-content-secondary mb-3 flex items-center gap-2">
-                                            <BrainCircuit className="w-4 h-4 text-rose-400" />
+                                            <BrainCircuit className="w-4 h-4 text-content-tertiary" />
                                             AI 취약 포인트 진단
                                         </h3>
                                         <div className="space-y-3">
@@ -155,19 +155,19 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                                     {/* Learning Trajectory */}
                                     <div className="bg-surface-card/40 border border-subtle rounded-xl p-5">
                                         <h3 className="text-sm font-semibold text-content-secondary mb-3 flex items-center gap-2">
-                                            <TrendingUp className="w-4 h-4 text-blue-400" />
+                                            <TrendingUp className="w-4 h-4 text-content-tertiary" />
                                             학습 제안
                                         </h3>
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div className="p-3 bg-surface-card rounded-lg border border-subtle hover:border-indigo-500/30 transition-colors cursor-pointer group">
-                                                <div className="text-xs text-content-tertiary mb-1 group-hover:text-indigo-400 transition-colors">추천 문제집</div>
+                                            <div className="p-3 bg-surface-card rounded-lg border border-subtle hover:border-white/[.14] transition-colors cursor-pointer group">
+                                                <div className="text-xs text-content-tertiary mb-1 group-hover:text-content-secondary transition-colors">추천 문제집</div>
                                                 <div className="text-sm text-content-primary font-medium flex items-center gap-2">
                                                     <Files className="w-3.5 h-3.5" />
                                                     개념원리 RPM 심화
                                                 </div>
                                             </div>
-                                            <div className="p-3 bg-surface-card rounded-lg border border-subtle hover:border-emerald-500/30 transition-colors cursor-pointer group">
-                                                <div className="text-xs text-content-tertiary mb-1 group-hover:text-emerald-400 transition-colors">클리닉 테마</div>
+                                            <div className="p-3 bg-surface-card rounded-lg border border-subtle hover:border-white/[.14] transition-colors cursor-pointer group">
+                                                <div className="text-xs text-content-tertiary mb-1 group-hover:text-content-secondary transition-colors">클리닉 테마</div>
                                                 <div className="text-sm text-content-primary font-medium flex items-center gap-2">
                                                     <Lightbulb className="w-3.5 h-3.5" />
                                                     로그함수 그래프 개형
@@ -184,11 +184,11 @@ export function StudentAnalysisModal({ isOpen, onClose, data }: StudentAnalysisM
                                     데이터 업데이트: 2024.03.14 14:00 (실시간)
                                 </span>
                                 <div className="flex gap-3">
-                                    <button className="flex items-center gap-2 px-4 py-2 bg-surface-raised hover:bg-zinc-700 text-content-secondary rounded-lg text-sm font-medium transition-colors border border-subtle">
+                                    <button className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary text-sm font-medium transition-colors whitespace-nowrap">
                                         <Printer className="w-4 h-4" />
                                         상세 리포트 출력
                                     </button>
-                                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-content-primary rounded-lg text-sm font-medium transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40">
+                                    <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-sm font-semibold transition-colors whitespace-nowrap">
                                         <UserCheck className="w-4 h-4" />
                                         클리닉 배정하기
                                     </button>

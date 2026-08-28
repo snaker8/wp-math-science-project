@@ -251,7 +251,7 @@ export default function CreateSessionsModal({
                           href={`/grade/${c.session_id}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 flex items-center gap-1"
+                          className="text-xs px-2 py-1 rounded border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary flex items-center gap-1 whitespace-nowrap"
                           title="모바일 채점 페이지"
                         >
                           <ExternalLink size={12} /> 채점
@@ -292,7 +292,7 @@ export default function CreateSessionsModal({
                     value={examSearch}
                     onChange={(e) => setExamSearch(e.target.value)}
                     placeholder="시험지 제목·과목·학년 검색"
-                    className="w-full pl-9 pr-3 py-2 bg-surface-card border border-white/10 rounded-lg text-sm focus:border-indigo-500 outline-none"
+                    className="w-full pl-9 pr-3 py-2 bg-surface-card border border-white/10 rounded-lg text-sm focus:border-white/30 outline-none"
                   />
                 </div>
                 <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-surface-card divide-y divide-white/5">
@@ -311,7 +311,7 @@ export default function CreateSessionsModal({
                         type="button"
                         onClick={() => setSelectedExamId(e.id)}
                         className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                          selectedExamId === e.id ? 'bg-indigo-600/20 text-indigo-400' : 'hover:bg-white/5'
+                          selectedExamId === e.id ? 'bg-white/[.08] text-content-primary' : 'text-content-secondary hover:bg-white/[.04]'
                         }`}
                       >
                         <div className="font-semibold truncate">{e.title}</div>
@@ -334,7 +334,7 @@ export default function CreateSessionsModal({
                   <button
                     type="button"
                     onClick={handleSelectAllStudents}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300"
+                    className="text-[11px] text-content-secondary hover:text-content-primary whitespace-nowrap"
                   >
                     {selectedStudents.size === students.length ? '전체 해제' : '전체 선택'}
                   </button>
@@ -354,8 +354,8 @@ export default function CreateSessionsModal({
                           onClick={() => toggleStudent(s.id)}
                           className={`text-left px-2 py-1.5 rounded text-xs transition-colors ${
                             checked
-                              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40'
-                              : 'hover:bg-white/5 border border-transparent'
+                              ? 'bg-white/[.08] text-content-primary border border-white/[.14]'
+                              : 'text-content-secondary hover:bg-white/[.04] border border-transparent'
                           }`}
                         >
                           <div className="font-semibold truncate">{s.name}</div>
@@ -381,8 +381,8 @@ export default function CreateSessionsModal({
                         onClick={() => setRoundNumber(n)}
                         className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition-colors ${
                           roundNumber === n
-                            ? 'bg-indigo-600 text-white border-indigo-500'
-                            : 'border-white/10 hover:bg-white/5'
+                            ? 'bg-white/[.08] text-content-primary border-white/[.14]'
+                            : 'border-white/10 text-content-secondary hover:bg-white/[.04]'
                         }`}
                       >
                         R{n}
@@ -401,8 +401,8 @@ export default function CreateSessionsModal({
                         onClick={() => setSessionType(t.key)}
                         className={`px-2 py-1.5 rounded-lg border text-xs text-left transition-colors ${
                           sessionType === t.key
-                            ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40'
-                            : 'border-white/10 hover:bg-white/5'
+                            ? 'bg-white/[.08] text-content-primary border-white/[.14]'
+                            : 'border-white/10 text-content-secondary hover:bg-white/[.04]'
                         }`}
                       >
                         <div className="font-semibold">{t.label}</div>
@@ -421,7 +421,7 @@ export default function CreateSessionsModal({
                   onChange={(e) => setTeacherNote(e.target.value)}
                   rows={2}
                   placeholder="예: 중간고사 대비 BS 1회차"
-                  className="w-full px-3 py-2 bg-surface-card border border-white/10 rounded-lg text-sm focus:border-indigo-500 outline-none resize-none"
+                  className="w-full px-3 py-2 bg-surface-card border border-white/10 rounded-lg text-sm focus:border-white/30 outline-none resize-none"
                 />
               </div>
 
@@ -442,7 +442,7 @@ export default function CreateSessionsModal({
                 type="button"
                 onClick={handleClose}
                 disabled={submitting}
-                className="px-4 py-2 rounded-lg text-sm text-content-secondary hover:bg-white/5 disabled:opacity-50"
+                className="px-4 py-2 rounded-full text-sm text-content-secondary hover:bg-white/[.06] hover:text-content-primary disabled:opacity-50 whitespace-nowrap"
               >
                 취소
               </button>
@@ -450,7 +450,7 @@ export default function CreateSessionsModal({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="px-5 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-5 py-2 rounded-full text-sm font-semibold bg-white text-black hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
               >
                 {submitting && <Loader2 className="animate-spin" size={14} />}
                 {submitting ? '생성 중…' : `${selectedStudents.size}개 세션 생성`}
@@ -460,7 +460,7 @@ export default function CreateSessionsModal({
             <button
               type="button"
               onClick={handleClose}
-              className="px-5 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500"
+              className="px-5 py-2 rounded-full text-sm font-semibold bg-white text-black hover:bg-zinc-200 whitespace-nowrap"
             >
               완료
             </button>

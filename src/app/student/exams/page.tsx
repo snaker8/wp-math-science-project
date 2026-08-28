@@ -103,7 +103,7 @@ export default function StudentExamsPage() {
         );
       case '진행중':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-900/[0.05] text-zinc-700 border border-zinc-300">
             <PlayCircle size={12} />
             진행중
           </span>
@@ -160,8 +160,8 @@ export default function StudentExamsPage() {
                   <p className="text-xs text-zinc-500">미응시</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-                <PlayCircle size={20} className="text-blue-500" />
+              <div className="flex items-center gap-3 p-4 bg-zinc-50 border border-zinc-200 rounded-xl">
+                <PlayCircle size={20} className="text-zinc-500" />
                 <div>
                   <p className="text-lg font-bold text-zinc-900">{counts.progress}</p>
                   <p className="text-xs text-zinc-500">진행중</p>
@@ -210,7 +210,7 @@ export default function StudentExamsPage() {
                         <td className="px-5 py-4 text-center">{getStatusBadge(status)}</td>
                         <td className="px-5 py-4 text-center">
                           {s.score_pct != null ? (
-                            <span className="text-sm font-semibold text-indigo-600">
+                            <span className="text-sm font-semibold text-zinc-900 tabular-nums">
                               {s.score_pct}% ({s.correct_cnt}/{s.problems_graded})
                             </span>
                           ) : (
@@ -221,7 +221,7 @@ export default function StudentExamsPage() {
                           {status === '미응시' && (
                             <Link
                               href={`/answer/${s.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                              className="inline-flex items-center gap-1 whitespace-nowrap px-3 py-1.5 bg-zinc-900 text-white text-xs font-semibold rounded-full hover:bg-zinc-800 transition-colors"
                             >
                               응시하기
                             </Link>
@@ -229,7 +229,7 @@ export default function StudentExamsPage() {
                           {status === '진행중' && (
                             <Link
                               href={`/answer/${s.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                              className="inline-flex items-center gap-1 whitespace-nowrap px-3 py-1.5 bg-zinc-900 text-white text-xs font-semibold rounded-full hover:bg-zinc-800 transition-colors"
                             >
                               이어서
                             </Link>
@@ -237,7 +237,7 @@ export default function StudentExamsPage() {
                           {status === '완료' && (
                             <Link
                               href={`/student/sessions/${s.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-white text-indigo-600 text-xs font-medium rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                              className="inline-flex items-center gap-1 whitespace-nowrap px-3 py-1.5 bg-white text-zinc-700 text-xs font-semibold rounded-full border border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 transition-colors"
                             >
                               <Eye size={12} />
                               결과보기
@@ -269,7 +269,7 @@ export default function StudentExamsPage() {
                     <div className="flex items-center gap-4 text-xs text-zinc-500 mb-3">
                       <span>{fmtDate(s.issued_at)}</span>
                       {s.score_pct != null && (
-                        <span className="font-semibold text-indigo-600">
+                        <span className="font-semibold text-zinc-900 tabular-nums">
                           {s.score_pct}% ({s.correct_cnt}/{s.problems_graded})
                         </span>
                       )}
@@ -278,7 +278,7 @@ export default function StudentExamsPage() {
                       {status === '미응시' && (
                         <Link
                           href={`/answer/${s.id}`}
-                          className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-full hover:bg-zinc-800 transition-colors"
                         >
                           응시하기
                         </Link>
@@ -286,7 +286,7 @@ export default function StudentExamsPage() {
                       {status === '진행중' && (
                         <Link
                           href={`/answer/${s.id}`}
-                          className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-full hover:bg-zinc-800 transition-colors"
                         >
                           이어서
                         </Link>
@@ -294,7 +294,7 @@ export default function StudentExamsPage() {
                       {status === '완료' && (
                         <Link
                           href={`/student/sessions/${s.id}`}
-                          className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-white text-indigo-600 text-sm font-medium rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                          className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-white text-zinc-700 text-sm font-semibold rounded-full border border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 transition-colors"
                         >
                           <Eye size={14} />
                           결과보기

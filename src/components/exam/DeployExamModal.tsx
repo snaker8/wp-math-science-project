@@ -141,10 +141,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <div className="flex items-baseline gap-2 min-w-0">
-            <h2 className="text-lg font-bold text-white">시험지 출제하기</h2>
+            <h2 className="text-lg font-semibold text-content-primary">시험지 출제하기</h2>
             <span className="text-sm text-zinc-400 truncate">{exam?.title || ''}</span>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
+          <button type="button" onClick={onClose} className="p-1 rounded-md text-zinc-400 hover:text-content-primary hover:bg-white/[.06]">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -170,7 +170,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                     //   → Ctrl+P 한 번에 전체 학생지 PDF (학생마다 페이지 나뉨).
                     window.open(`/print/session/${ids[0]}?variant=student&ids=${ids.join(',')}`, '_blank');
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-600/50 text-indigo-300 hover:bg-indigo-600/15 text-xs font-semibold"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary text-xs font-semibold whitespace-nowrap"
                   title="출제된 전체 학생지를 한 탭에 묶어서 — Ctrl+P 한 번에 전체 PDF"
                 >
                   <Printer className="h-3.5 w-3.5" /> 전체 학생지 PDF
@@ -182,15 +182,15 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 const s = studentById.get(c.student_id);
                 return (
                   <div key={c.session_id} className="flex items-center justify-between rounded-lg bg-zinc-800/60 px-3 py-2 text-sm">
-                    <span className="text-white font-medium">{s?.name || c.student_id.slice(0, 8)}</span>
+                    <span className="text-content-primary font-medium">{s?.name || c.student_id.slice(0, 8)}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-zinc-500">{c.problem_count}문항</span>
                       <a href={`/print/session/${c.session_id}?variant=student`} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300">
+                        className="inline-flex items-center gap-1 text-content-secondary hover:text-content-primary">
                         <Printer className="h-3.5 w-3.5" />출력
                       </a>
                       <a href={`/grade/${c.session_id}`} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-zinc-300 hover:text-white">
+                        className="inline-flex items-center gap-1 text-content-secondary hover:text-content-primary">
                         <ExternalLink className="h-3.5 w-3.5" />채점
                       </a>
                     </div>
@@ -214,11 +214,11 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
             )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => { setResult(null); setSelected(new Set()); }}
-                className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 text-sm font-medium">
+                className="px-4 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary text-sm font-medium whitespace-nowrap">
                 계속 출제
               </button>
               <button type="button" onClick={onClose}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">
+                className="px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-black text-sm font-semibold whitespace-nowrap">
                 닫기
               </button>
             </div>
@@ -232,7 +232,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 <select
                   value={selectedInstitute}
                   onChange={(e) => { setSelectedInstitute(e.target.value); setSelected(new Set()); setOpenL(new Set()); setOpenR(new Set()); }}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 text-sm text-white border border-zinc-700 outline-none focus:border-indigo-600"
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 text-sm text-content-primary border border-zinc-700 outline-none focus:border-white/25"
                 >
                   <option value="">전체 학원</option>
                   {institutes.map((i) => (
@@ -248,7 +248,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 {(['grade', 'class'] as const).map((g) => (
                   <button key={g} type="button" onClick={() => { setGroupBy(g); setOpenL(new Set()); setOpenR(new Set()); }}
                     className={`flex-1 py-1.5 rounded-md text-sm font-semibold transition-colors ${
-                      groupBy === g ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                      groupBy === g ? 'border border-white/[.14] bg-white/[.08] text-content-primary' : 'text-zinc-400 hover:text-zinc-200'
                     }`}>
                     {g === 'grade' ? '학년' : '반'}
                   </button>
@@ -264,9 +264,9 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
                     <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="학생 이름 검색"
-                      className="w-full pl-8 pr-7 py-1.5 rounded-md bg-zinc-800 text-sm text-white placeholder-zinc-500 outline-none border border-transparent focus:border-zinc-600" />
+                      className="w-full pl-8 pr-7 py-1.5 rounded-md bg-zinc-800 text-sm text-content-primary placeholder-zinc-500 outline-none border border-transparent focus:border-zinc-600" />
                     {search && (
-                      <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
+                      <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-content-primary">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
@@ -283,10 +283,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                         <button type="button" onClick={() => toggle(setOpenL, g)} className="text-zinc-500 hover:text-zinc-300">
                           {openL.has(g) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
-                        <span className="ml-1 font-semibold text-white text-sm">{g}</span>
+                        <span className="ml-1 font-semibold text-content-primary text-sm">{g}</span>
                         <span className="ml-2 text-xs text-zinc-500">{list.length}명</span>
                         <button type="button" onClick={() => addMany(list.map((s) => s.id))}
-                          className="ml-auto p-1 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white" title="전체 추가">
+                          className="ml-auto p-1 rounded-full border border-white/[.08] bg-white/[.08] hover:bg-white/[.14] text-content-primary" title="전체 추가">
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -297,10 +297,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                           {s.className && <span className="ml-2 text-[11px] text-zinc-600">{s.className}</span>}
                           {/* 학원 라벨 — '어디 학생인지' 구분 (전체 보기 시) */}
                           {!selectedInstitute && s.institute && (
-                            <span className="ml-2 text-[10px] font-medium text-indigo-400/80 px-1 py-0.5 rounded bg-indigo-500/10">{s.institute}</span>
+                            <span className="ml-2 text-[10px] font-medium text-content-secondary px-1 py-0.5 rounded border border-white/[.08] bg-white/[.04]">{s.institute}</span>
                           )}
                           <button type="button" onClick={() => addMany([s.id])}
-                            className="ml-auto p-0.5 rounded-full bg-indigo-600/80 hover:bg-indigo-500 text-white">
+                            className="ml-auto p-0.5 rounded-full border border-white/[.08] bg-white/[.08] hover:bg-white/[.14] text-content-primary">
                             <Plus className="h-3 w-3" />
                           </button>
                         </div>
@@ -313,8 +313,8 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
               {/* 우: 선택됨 */}
               <div className="flex flex-col min-h-0 rounded-xl border border-zinc-800 overflow-hidden">
                 <div className="px-3 py-2.5 border-b border-zinc-800 text-sm">
-                  <span className="font-semibold text-white">선택된 학생</span>
-                  <span className="ml-2 text-indigo-400 font-bold">{selected.size > 0 ? `${selected.size}명` : '없음'}</span>
+                  <span className="font-semibold text-content-primary">선택된 학생</span>
+                  <span className="ml-2 text-content-primary font-bold tabular-nums">{selected.size > 0 ? `${selected.size}명` : '없음'}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {selected.size === 0 ? (
@@ -328,10 +328,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                         <button type="button" onClick={() => toggle(setOpenR, g)} className="text-zinc-500 hover:text-zinc-300">
                           {openR.has(g) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
-                        <span className="ml-1 font-semibold text-white text-sm">{g}</span>
+                        <span className="ml-1 font-semibold text-content-primary text-sm">{g}</span>
                         <span className="ml-2 text-xs text-zinc-500">{list.length}명</span>
                         <button type="button" onClick={() => removeMany(list.map((s) => s.id))}
-                          className="ml-auto p-1 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white" title="전체 제거">
+                          className="ml-auto p-1 rounded-full border border-white/[.08] bg-white/[.08] hover:bg-white/[.14] text-content-primary" title="전체 제거">
                           <Minus className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -340,10 +340,10 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                           <span className="text-sm text-zinc-300">{s.name}</span>
                           {gradeIntToLabel(s.grade) && <span className="ml-2 text-[11px] font-medium text-zinc-400 px-1 py-0.5 rounded bg-zinc-700/60">{gradeIntToLabel(s.grade)}</span>}
                           {!selectedInstitute && s.institute && (
-                            <span className="ml-2 text-[10px] font-medium text-indigo-400/80 px-1 py-0.5 rounded bg-indigo-500/10">{s.institute}</span>
+                            <span className="ml-2 text-[10px] font-medium text-content-secondary px-1 py-0.5 rounded border border-white/[.08] bg-white/[.04]">{s.institute}</span>
                           )}
                           <button type="button" onClick={() => removeMany([s.id])}
-                            className="ml-auto p-0.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white">
+                            className="ml-auto p-0.5 rounded-full border border-white/[.08] bg-white/[.08] hover:bg-white/[.14] text-content-primary">
                             <Minus className="h-3 w-3" />
                           </button>
                         </div>
@@ -366,7 +366,7 @@ export default function DeployExamModal({ isOpen, onClose, exam, onDeployed }: P
                 <QrCode className="h-3.5 w-3.5" /> 출제 후 학생별 QR·출력·채점 가능
               </span>
               <button type="button" onClick={handleDeploy} disabled={selected.size === 0 || submitting || !exam}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-bold transition-colors">
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-white hover:bg-zinc-200 disabled:bg-white/[.06] disabled:text-content-tertiary text-black text-sm font-semibold whitespace-nowrap transition-colors">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {submitting ? '출제 중…' : `${selected.size > 0 ? selected.size + '명에게 ' : ''}출제하기`}
               </button>
