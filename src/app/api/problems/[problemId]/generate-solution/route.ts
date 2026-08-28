@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
+import { requireSolutionPin } from '@/lib/security/solution-pin';
 import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -51,6 +52,9 @@ export async function POST(
 ) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
+  // ★ 해설 생성 게이트 — 관리자 외에는 관리자 PIN(x-solution-pin) 필요 (2026-08-28)
+  const pinDenied = await requireSolutionPin(request, authed.data.scope);
+  if (pinDenied) return pinDenied;
   const { problemId } = await params;
 
   try {

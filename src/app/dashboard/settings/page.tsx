@@ -69,6 +69,34 @@ function formatRelative(iso: string | null): string {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('permissions');
+  // ★ 해설 생성 PIN (2026-08-28) — 강사의 AI 해설 생성을 승인하는 관리자 PIN
+  const [solutionPin, setSolutionPin] = useState('');
+  const [solutionPinSaving, setSolutionPinSaving] = useState(false);
+  const [solutionPinMsg, setSolutionPinMsg] = useState('');
+
+  const saveSolutionPin = useCallback(async () => {
+    if (!/^\d{4,8}$/.test(solutionPin.trim())) {
+      setSolutionPinMsg('PIN은 숫자 4~8자리입니다.');
+      return;
+    }
+    setSolutionPinSaving(true);
+    setSolutionPinMsg('');
+    try {
+      const res = await fetch('/api/admin/solution-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: solutionPin.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '저장 실패');
+      setSolutionPinMsg('저장됐습니다. 강사는 이 PIN 입력 후 해설 생성이 가능합니다.');
+      setSolutionPin('');
+    } catch (e) {
+      setSolutionPinMsg(e instanceof Error ? e.message : '저장 실패');
+    } finally {
+      setSolutionPinSaving(false);
+    }
+  }, [solutionPin]);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -371,6 +399,37 @@ export default function SettingsPage() {
                   >
                     <RefreshCw size={14} className={usersLoading ? 'animate-spin' : ''} />
                   </button>
+                </div>
+              </div>
+
+              {/* 해설 생성 PIN — 강사의 AI 해설 생성 승인용 (관리자 전용 설정) */}
+              <div className="bg-surface-card/50 border border-white/10 rounded-2xl p-6">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  해설 생성 PIN
+                </h3>
+                <p className="mt-1 mb-4 text-xs text-content-tertiary">
+                  AI 해설 생성(비용 발생)은 관리자 승인 하에 실행됩니다. 관리자는 PIN 없이 생성할 수 있고,
+                  강사는 이 PIN을 입력해야 생성할 수 있습니다.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={solutionPin}
+                    onChange={(e) => setSolutionPin(e.target.value)}
+                    placeholder="숫자 4~8자리"
+                    className="w-44 rounded-lg border border-white/10 bg-zinc-950/60 px-3 py-2 text-sm text-content-primary placeholder-zinc-600 focus:border-white/[.25] focus:outline-none focus:ring-1 focus:ring-white/[.15]"
+                  />
+                  <button
+                    onClick={saveSolutionPin}
+                    disabled={solutionPinSaving}
+                    className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-50"
+                  >
+                    {solutionPinSaving ? '저장 중…' : 'PIN 저장'}
+                  </button>
+                  {solutionPinMsg && (
+                    <span className="text-xs text-content-tertiary">{solutionPinMsg}</span>
+                  )}
                 </div>
               </div>
 
