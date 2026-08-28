@@ -11,12 +11,14 @@
 //   - feature flag false → /dashboard 로 즉시 redirect (의미 없는 페이지)
 //   - 단일 트랙만 가진 사용자 → /dashboard 로 즉시 redirect
 //   - 두 트랙 사용자 → 카드 표시, 클릭 시 setActiveTrack + /dashboard 이동
+//
+// ★ 2026-08-28 디자인 시스템 통일: 인디고/에메랄드 2색 카드 → 무채 표면 +
+//   한글 모노그램(수/과). 선택·hover 는 밝기만. framer 입장 애니 제거(정적).
 // ============================================================================
 
 import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Sigma, FlaskConical, ArrowRight, type LucideIcon } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import { trackHref } from '@/lib/track/href';
 import type { SubjectTrack } from '@/types/track';
@@ -74,133 +76,94 @@ export default function SelectTrackPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-surface-base p-4 overflow-hidden">
-      {/* 배경 ambient 글로우 */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full bg-indigo-500/5 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-[28rem] h-[28rem] rounded-full bg-emerald-500/5 blur-3xl" />
-      </div>
+      {/* 배경 깊이 — 앱과 동일한 상단 중앙 무채 광원 */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
+        style={{
+          background:
+            'radial-gradient(60% 100% at 50% 0%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 45%, transparent 100%)',
+        }}
+      />
 
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
-        className="relative max-w-xl w-full"
-      >
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-br from-white to-zinc-400 bg-clip-text text-transparent mb-3">
-            과목 선택
-          </h1>
-          <p className="text-sm text-content-tertiary leading-relaxed">
+      <div className="relative w-full max-w-xl">
+        <div className="mb-10 text-center">
+          <h1 className="mb-3 text-2xl font-bold tracking-tight text-content-primary">과목 선택</h1>
+          <p className="text-sm leading-relaxed text-content-tertiary">
             진행할 트랙을 선택하세요. 언제든 상단 토글로 다시 변경할 수 있습니다.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {accessibleTracks.includes('math') && (
             <TrackCard
-              track="math"
               label="수학"
+              monogram="수"
               description="문제은행 · 시험지 · 진단"
-              Icon={Sigma}
               isActive={activeTrack === 'math'}
               onClick={() => handleSelect('math')}
             />
           )}
           {accessibleTracks.includes('science') && (
             <TrackCard
-              track="science"
               label="과학"
+              monogram="과"
               description="통합과학 · 물리 · 화학 · 생명 · 지구"
-              Icon={FlaskConical}
               isActive={activeTrack === 'science'}
               onClick={() => handleSelect('science')}
             />
           )}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
 
-const TRACK_PALETTE = {
-  math: {
-    iconBg: 'bg-indigo-500/10',
-    iconColor: 'text-indigo-300',
-    border: 'border-indigo-500/20',
-    borderHover: 'hover:border-indigo-500/50',
-    activeBorder: 'border-indigo-500/60',
-    activeRing: 'ring-2 ring-indigo-500/30',
-    glow: 'before:bg-indigo-500/5',
-  },
-  science: {
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-300',
-    border: 'border-emerald-500/20',
-    borderHover: 'hover:border-emerald-500/50',
-    activeBorder: 'border-emerald-500/60',
-    activeRing: 'ring-2 ring-emerald-500/30',
-    glow: 'before:bg-emerald-500/5',
-  },
-} as const;
-
 function TrackCard({
-  track,
   label,
+  monogram,
   description,
-  Icon,
   isActive,
   onClick,
 }: {
-  track: SubjectTrack;
   label: string;
+  /** 한글 모노그램 — 아이콘 라이브러리 대신 타이포 정체성 */
+  monogram: string;
   description: string;
-  Icon: LucideIcon;
   isActive: boolean;
   onClick: () => void;
 }) {
-  const c = TRACK_PALETTE[track];
-
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
       className={`
-        group relative overflow-hidden text-left
-        p-6 rounded-2xl border bg-surface-raised/40 backdrop-blur-sm
-        transition-colors
-        before:absolute before:inset-0 before:opacity-0 before:transition-opacity
-        hover:before:opacity-100 ${c.glow}
-        ${isActive ? `${c.activeBorder} ${c.activeRing}` : `${c.border} ${c.borderHover}`}
+        group relative rounded-xl border p-6 text-left transition-[transform,box-shadow,border-color,background-color] duration-150
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_40px_-20px_rgba(0,0,0,0.55)]
+        [background-image:linear-gradient(180deg,rgba(255,255,255,0.03),transparent_120px)]
+        hover:-translate-y-px
+        ${isActive
+          ? 'border-white/[.18] bg-white/[.07]'
+          : 'border-white/[.08] bg-surface-card/40 hover:border-white/[.14] hover:bg-white/[.04]'}
       `}
     >
-      <div className="relative">
-        {/* 아이콘 */}
-        <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${c.iconBg} mb-5`}>
-          <Icon className={`w-6 h-6 ${c.iconColor}`} strokeWidth={1.75} />
-        </div>
+      {/* 한글 모노그램 */}
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-white/[.10] bg-white/[.05] text-lg font-bold text-content-primary">
+        {monogram}
+      </div>
 
-        {/* 라벨 + 설명 */}
-        <div className="flex items-end justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-base font-semibold text-content-primary mb-1">
-              {label}
-            </div>
-            <div className="text-xs text-content-tertiary leading-relaxed">
-              {description}
-            </div>
-          </div>
-          {/* hover 시 화살표 — 진입 의미 시각화 */}
-          <div
-            className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${c.iconColor}`}
-            aria-hidden
-          >
-            <ArrowRight className="w-4 h-4" />
-          </div>
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <div className="mb-1 text-base font-semibold text-content-primary">{label}</div>
+          <div className="text-xs leading-relaxed text-content-tertiary">{description}</div>
+        </div>
+        <div
+          className="shrink-0 text-content-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden
+        >
+          <ArrowRight className="h-4 w-4" />
         </div>
       </div>
-    </motion.button>
+    </button>
   );
 }
