@@ -28,6 +28,44 @@ export function isSolutionApprover(scope: InstituteAccessScope): boolean {
 }
 
 /**
+ * 유효 PIN 해시 조회 — 센터 값이 있으면 센터, 없으면 학원(organization) 기본값.
+ * (2026-08-29: 센터마다 설정하는 운영 부담 제거. 학원에 하나 걸면 산하 전 센터 적용.)
+ */
+export async function resolveSolutionPinHash(
+  instituteId: string | null,
+  organizationId?: string | null,
+): Promise<{ hash: string | null; scopeLabel: 'institute' | 'organization' | null; error?: string }> {
+  if (!supabaseAdmin) return { hash: null, scopeLabel: null, error: 'Database not configured' };
+
+  let orgId = organizationId ?? null;
+
+  if (instituteId) {
+    const { data, error } = await supabaseAdmin
+      .from('institutes')
+      .select('solution_pin_hash, organization_id')
+      .eq('id', instituteId)
+      .maybeSingle();
+    if (error) return { hash: null, scopeLabel: null, error: error.message };
+    const row = data as { solution_pin_hash: string | null; organization_id: string | null } | null;
+    if (row?.solution_pin_hash) return { hash: row.solution_pin_hash, scopeLabel: 'institute' };
+    orgId = orgId ?? row?.organization_id ?? null;
+  }
+
+  if (orgId) {
+    const { data, error } = await supabaseAdmin
+      .from('organizations')
+      .select('solution_pin_hash')
+      .eq('id', orgId)
+      .maybeSingle();
+    if (error) return { hash: null, scopeLabel: null, error: error.message };
+    const hash = (data as { solution_pin_hash: string | null } | null)?.solution_pin_hash ?? null;
+    if (hash) return { hash, scopeLabel: 'organization' };
+  }
+
+  return { hash: null, scopeLabel: null };
+}
+
+/**
  * 해설 생성 요청 게이트. 통과하면 null, 차단이면 NextResponse(403) 반환.
  * 사용: `const denied = await requireSolutionPin(request, scope); if (denied) return denied;`
  */
@@ -47,20 +85,15 @@ export async function requireSolutionPin(
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('institutes')
-    .select('solution_pin_hash')
-    .eq('id', scope.instituteId)
-    .single();
-
-  if (error) {
+  const resolved = await resolveSolutionPinHash(scope.instituteId, scope.organizationId);
+  if (resolved.error) {
     return NextResponse.json(
       { error: '해설 생성 권한 확인에 실패했습니다.', code: 'PIN_LOOKUP_FAILED' },
       { status: 500 },
     );
   }
 
-  const storedHash = (data as { solution_pin_hash: string | null } | null)?.solution_pin_hash ?? null;
+  const storedHash = resolved.hash;
   if (!storedHash) {
     return NextResponse.json(
       {

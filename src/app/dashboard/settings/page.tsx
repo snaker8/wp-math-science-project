@@ -73,6 +73,14 @@ export default function SettingsPage() {
   const [solutionPin, setSolutionPin] = useState('');
   const [solutionPinSaving, setSolutionPinSaving] = useState(false);
   const [solutionPinMsg, setSolutionPinMsg] = useState('');
+  const [solutionPinInfo, setSolutionPinInfo] = useState<{ isSet: boolean; scopeLabel: string | null } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/solution-pin', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setSolutionPinInfo({ isSet: !!d.isSet, scopeLabel: d.scopeLabel ?? null }))
+      .catch(() => { /* 표시용 — 실패해도 저장은 가능 */ });
+  }, [solutionPinMsg]);
 
   const saveSolutionPin = useCallback(async () => {
     if (!/^\d{4,8}$/.test(solutionPin.trim())) {
@@ -407,9 +415,20 @@ export default function SettingsPage() {
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   해설 생성 PIN
                 </h3>
-                <p className="mt-1 mb-4 text-xs text-content-tertiary">
+                <p className="mt-1 mb-1 text-xs text-content-tertiary">
                   AI 해설 생성(비용 발생)은 관리자 승인 하에 실행됩니다. 관리자는 PIN 없이 생성할 수 있고,
-                  강사는 이 PIN을 입력해야 생성할 수 있습니다.
+                  강사는 이 PIN을 입력해야 생성할 수 있습니다. 학원 관리자가 저장하면 <b>산하 모든 센터</b>에 적용됩니다.
+                </p>
+                <p className="mb-4 text-xs">
+                  {solutionPinInfo === null ? (
+                    <span className="text-content-muted">현재 설정 확인 중…</span>
+                  ) : solutionPinInfo.isSet ? (
+                    <span className="text-emerald-400">
+                      설정됨 · {solutionPinInfo.scopeLabel === 'organization' ? '학원 전체 공용' : '이 센터 전용'}
+                    </span>
+                  ) : (
+                    <span className="text-amber-400">미설정 — 강사의 해설 생성이 차단된 상태입니다.</span>
+                  )}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                   <input
