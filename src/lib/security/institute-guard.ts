@@ -124,12 +124,18 @@ export async function getUserAccessScope(
   // 1) users 테이블에서 institute/organization/role + subject_track 조회
   const { data: userRow, error } = await adminClient
     .from('users')
-    .select('institute_id, organization_id, role, subject_tracks, active_subject_track')
+    .select('institute_id, organization_id, role, subject_tracks, active_subject_track, deleted_at')
     .eq('id', userId)
     .maybeSingle();
 
   if (error) {
     throw new Error(`getUserAccessScope: users 조회 실패 — ${error.message}`);
+  }
+
+  // ★ 퇴원·퇴사 보관 계정은 API 접근 차단 (2026-08-29). 미들웨어 차단만으로는
+  //   API 직접 호출(토큰 보유)이 막히지 않아 서버 가드에도 건다.
+  if ((userRow as { deleted_at?: string | null } | null)?.deleted_at) {
+    throw new Error('ACCOUNT_ARCHIVED');
   }
 
   const instituteId = (userRow?.institute_id as string | null) ?? null;

@@ -6,7 +6,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Loader2, AlertTriangle, Save, Pencil, X, Search, Shield } from 'lucide-react';
+import { Users, Loader2, AlertTriangle, Save, Pencil, X, Search, Shield, Archive, RotateCcw } from 'lucide-react';
 
 interface UserRow {
   id: string;
@@ -16,6 +16,8 @@ interface UserRow {
   instituteId: string | null;
   organizationId?: string | null;
   isSuperAdmin?: boolean;
+  /** 보관(퇴원·퇴사) 처리 시각. 값이 있으면 로그인·API 차단 상태 */
+  archivedAt?: string | null;
 }
 
 interface Organization { id: string; name: string }
@@ -40,6 +42,8 @@ export default function UsersAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [permError, setPermError] = useState(false);
   const [search, setSearch] = useState('');
+  // ★ 보관(퇴원·퇴사) 계정 보기 (2026-08-29)
+  const [showArchived, setShowArchived] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState('');
@@ -52,7 +56,7 @@ export default function UsersAdminPage() {
     setError(null);
     try {
       const [uRes, oRes, iRes] = await Promise.all([
-        fetch('/api/admin/users?limit=500'),
+        fetch(`/api/admin/users?limit=500${showArchived ? '&archived=1' : ''}`),
         fetch('/api/admin/tenancy/organizations'),
         fetch('/api/admin/tenancy/institutes'),
       ]);
@@ -72,7 +76,26 @@ export default function UsersAdminPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { reload(); }, [showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 보관(퇴원·퇴사) 처리 / 복구 — 계정은 지우지 않고 deleted_at 만 채운다.
+  const toggleArchive = async (u: UserRow) => {
+    const archiving = !u.archivedAt;
+    const name = u.fullName || u.email;
+    if (archiving && !confirm(`${name} 계정을 보관 처리할까요?
+
+· 로그인과 앱 사용이 차단됩니다
+· 성적·채점 이력은 그대로 보존됩니다
+· 필요하면 [보관 계정] 목록에서 되돌릴 수 있습니다`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/archive`, { method: archiving ? 'POST' : 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '처리 실패');
+      await reload();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
 
   const startEdit = (u: UserRow) => {
     setEditingId(u.id);
@@ -163,6 +186,26 @@ export default function UsersAdminPage() {
             placeholder="이메일 또는 이름 검색…"
             className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-white placeholder:text-zinc-600 focus:border-white/25 focus:outline-none"
           />
+        </div>
+        {/* 활성 ↔ 보관(퇴원·퇴사) 전환 */}
+        <div className="inline-flex items-center rounded-lg border border-white/[.08] bg-white/[.03] p-0.5">
+          {[
+            { on: false, label: '활성 계정' },
+            { on: true, label: '보관 계정' },
+          ].map((tab) => (
+            <button
+              key={tab.label}
+              type="button"
+              onClick={() => setShowArchived(tab.on)}
+              className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+                showArchived === tab.on
+                  ? 'bg-white text-black'
+                  : 'text-content-tertiary hover:text-content-secondary'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -279,12 +322,26 @@ export default function UsersAdminPage() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => startEdit(u)}
-                            className="inline-flex items-center gap-1 rounded border border-zinc-700 hover:border-white/20 hover:bg-white/[.04] px-2 py-1 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
-                          >
-                            <Pencil size={11} /> 편집
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => startEdit(u)}
+                              className="inline-flex items-center gap-1 rounded border border-zinc-700 hover:border-white/20 hover:bg-white/[.04] px-2 py-1 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+                            >
+                              <Pencil size={11} /> 편집
+                            </button>
+                            <button
+                              onClick={() => toggleArchive(u)}
+                              disabled={busy}
+                              title={u.archivedAt ? '보관 해제 — 다시 로그인 가능' : '보관 처리 — 로그인 차단, 이력은 보존'}
+                              className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 ${
+                                u.archivedAt
+                                  ? 'border-zinc-700 text-zinc-300 hover:border-white/20 hover:bg-white/[.04] hover:text-white'
+                                  : 'border-zinc-700 text-zinc-400 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300'
+                              }`}
+                            >
+                              {u.archivedAt ? <><RotateCcw size={11} /> 복구</> : <><Archive size={11} /> 보관</>}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

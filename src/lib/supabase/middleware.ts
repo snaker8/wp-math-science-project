@@ -78,6 +78,8 @@ const USER_ROW_TTL_MS = 60_000;
 type CachedUserRow = {
   role: string; institute_id: string | null; full_name: string;
   preferences: unknown; subject_tracks: unknown; active_subject_track: unknown;
+  /** 퇴원·퇴사 보관 처리 시각. NOT NULL 이면 로그인 차단 (2026-08-29) */
+  deleted_at: string | null;
 };
 const userRowCache = new Map<string, { row: CachedUserRow; t: number }>();
 
@@ -134,7 +136,7 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
     } else {
       const { data: fresh, error: userError } = await supabase
         .from('users')
-        .select('role, institute_id, full_name, preferences, subject_tracks, active_subject_track')
+        .select('role, institute_id, full_name, preferences, subject_tracks, active_subject_track, deleted_at')
         .eq('id', user.id)
         .single();
 
@@ -147,6 +149,15 @@ export async function getAuthUser(supabase: ReturnType<typeof createServerClient
         const oldest = userRowCache.keys().next().value;
         if (oldest !== undefined) userRowCache.delete(oldest);
       }
+    }
+
+    // ★ 퇴원·퇴사 보관 계정 차단 (2026-08-29)
+    //   학생 관리 UI 가 "삭제 시 로그인이 차단됩니다" 라고 안내해 왔지만 실제 차단 코드가
+    //   없어 보관된 계정도 그대로 로그인됐다. 여기서 null 을 반환하면 미들웨어가
+    //   비인증으로 처리해 로그인 화면으로 보낸다.
+    //   ※ 캐시 TTL(60초) 때문에 이미 세션이 열린 사용자는 최대 60초 뒤 차단된다.
+    if (userData.deleted_at) {
+      return null;
     }
 
     // preferences에서 isAcademyAdmin 플래그 확인

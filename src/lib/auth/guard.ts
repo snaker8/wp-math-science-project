@@ -166,7 +166,23 @@ export async function requireAuthScope(): Promise<
     };
   }
 
-  const scope = await getUserAccessScope(supabaseAdmin, rawUser.id, rawUser.app_metadata);
+  // ★ 보관(퇴원·퇴사) 계정이면 getUserAccessScope 가 ACCOUNT_ARCHIVED 를 던진다 →
+  //   500 이 아니라 403 으로 정확히 알린다 (2026-08-29).
+  let scope: InstituteAccessScope;
+  try {
+    scope = await getUserAccessScope(supabaseAdmin, rawUser.id, rawUser.app_metadata);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'ACCOUNT_ARCHIVED') {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: '보관 처리된 계정입니다. 관리자에게 문의하세요.', code: 'ACCOUNT_ARCHIVED' },
+          { status: 403 },
+        ),
+      };
+    }
+    throw e;
+  }
   const guardUser: GuardUser = {
     id: rawUser.id,
     email: rawUser.email ?? null,
