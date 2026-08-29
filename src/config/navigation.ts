@@ -28,6 +28,7 @@ import {
   Building2,
   UserCog,
   Shield,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -103,6 +104,15 @@ export const dashboardNavItems: NavItem[] = [
     icon: ClipboardCheck,
     label: '자산 시험지 출제',
     description: '자산화된 시험지 그대로 인쇄·배포·출제',
+    group: 'main',
+  },
+  {
+    // ★ 2026-08-29 되살림 — 페이지·API 는 살아 있는데 메뉴 연결이 없어 URL 직접 입력으로만
+    //   들어가지던 화면. AI 분류를 사람이 고친 이력(자동 학습 회로 C-2)을 보는 곳.
+    href: '/dashboard/corrections',
+    icon: History,
+    label: '분류 보정 이력',
+    description: 'AI 분류를 사람이 고친 기록 — 학습 회로 확인',
     group: 'main',
   },
 ];
@@ -327,6 +337,7 @@ export const topNavGroups: NavGroup[] = [
       dash('/dashboard/similar'),            // 출판교재유사
       dash('/dashboard/materials'),          // 학원자료
       dash('/dashboard/materials/diagrams'), // 도식 갤러리
+      dash('/dashboard/corrections'),        // 분류 보정 이력 (자동 학습 회로)
     ],
   },
   // ── 2) 제작 + 배포 + 현황: 출제 ──
