@@ -22,16 +22,19 @@ export async function GET(req: NextRequest) {
   const role = searchParams.get('role') as Role | null;
   const search = searchParams.get('q')?.trim() ?? '';
   const limit = Math.min(Number(searchParams.get('limit') ?? 200), 500);
+  // ★ 보관(퇴원·퇴사) 계정 보기 — 기본은 활성만. archived=1 이면 보관된 것만 (2026-08-29)
+  const archived = searchParams.get('archived') === '1';
 
   let query = supabaseAdmin
     .from('users')
     .select(
-      'id, email, full_name, phone, role, institute_id, preferences, last_login_at, created_at',
+      'id, email, full_name, phone, role, institute_id, preferences, last_login_at, created_at, deleted_at',
       { count: 'exact' }
     )
-    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  query = archived ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null);
 
   // super_admin only — 전체 사용자 조회 (scope 제한 없음)
 
@@ -76,6 +79,7 @@ export async function GET(req: NextRequest) {
       true,
     lastLoginAt: u.last_login_at,
     createdAt: u.created_at,
+    archivedAt: u.deleted_at,
   }));
 
   return NextResponse.json({ users, total: count ?? users.length });

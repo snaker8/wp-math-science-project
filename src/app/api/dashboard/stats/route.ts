@@ -44,19 +44,22 @@ export async function GET() {
     let studentsBase = supabaseAdmin
       .from('users')
       .select('*', { count: 'exact', head: true })
-      .eq('role', 'STUDENT');
+      .eq('role', 'STUDENT')
+      .is('deleted_at', null); // ★ 보관(퇴원) 계정 제외 (2026-08-29)
     const studentsQ = applyInstituteFilter(studentsBase, scope);
 
     let teachersBase = supabaseAdmin
       .from('users')
       .select('*', { count: 'exact', head: true })
-      .in('role', ['TEACHER', 'ADMIN']);
+      .in('role', ['TEACHER', 'ADMIN'])
+      .is('deleted_at', null); // ★ 보관(퇴사) 계정 제외
     const teachersQ = applyInstituteFilter(teachersBase, scope);
 
     let newStudentsBase = supabaseAdmin
       .from('users')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'STUDENT')
+      .is('deleted_at', null)
       .gte('created_at', weekAgo.toISOString());
     const newStudentsQ = applyInstituteFilter(newStudentsBase, scope);
 
