@@ -886,7 +886,7 @@ function PitfallPanel({ data }: { data: AggregateResponse }) {
                 {p.category && <div className="text-[10px] text-zinc-500">{p.category}</div>}
               </div>
               <div className="text-right">
-                <div className="font-bold text-amber-400">{p.problemCount}문항</div>
+                <div className="font-bold tabular-nums text-zinc-200">{p.problemCount}문항</div>
                 <div className="text-[10px] text-zinc-500">
                   {p.examCount}/{data.matched.examCount}건
                 </div>

@@ -53,7 +53,7 @@ export default function ClinicCreationPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-400">선택된 문제: <strong className="text-indigo-400">{selectedProblems.length}</strong>개</span>
+          <span className="text-sm text-content-secondary">선택된 문제: <strong className="text-content-primary tabular-nums">{selectedProblems.length}</strong>개</span>
           <button
             onClick={() => {
               if (selectedProblems.length === 0) {
@@ -62,7 +62,7 @@ export default function ClinicCreationPage() {
                 alert(`${selectedProblems.length}개의 문제로 클리닉 시험지가 생성되었습니다. (데모)`);
               }
             }}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all"
+            className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black hover:bg-zinc-200 flex items-center gap-2 whitespace-nowrap transition-colors"
           >
             <Printer size={18} />
             클리닉 시험지 생성
@@ -73,11 +73,10 @@ export default function ClinicCreationPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Original Problem (Source of Error) */}
         <div className="space-y-4">
-          <h3 className="text-indigo-400 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-            <div className="w-2 h-2 bg-indigo-500 rounded-full" />
+          <h3 className="text-content-tertiary font-semibold uppercase tracking-wider text-sm">
             Original Error Problem
           </h3>
-          <div className="bg-zinc-900 border border-indigo-500/30 rounded-2xl p-6 relative overflow-hidden">
+          <div className="bg-zinc-900 border border-white/[.08] rounded-2xl p-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 bg-red-500/20 text-red-300 text-xs font-bold px-3 py-1 rounded-br-xl border-r border-b border-red-500/30">
               WRONG
             </div>
@@ -98,8 +97,7 @@ export default function ClinicCreationPage() {
 
         {/* Twin Problems (Suggestions) */}
         <div className="space-y-4">
-          <h3 className="text-emerald-400 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+          <h3 className="text-content-tertiary font-semibold uppercase tracking-wider text-sm">
             AI Recommended Twin Problems
           </h3>
 
@@ -110,7 +108,7 @@ export default function ClinicCreationPage() {
                 layout
                 onClick={() => toggleProblem(prob.id)}
                 className={`group relative border rounded-2xl p-6 cursor-pointer transition-all ${selectedProblems.includes(prob.id)
-                    ? 'bg-indigo-900/10 border-indigo-500 ring-1 ring-indigo-500'
+                    ? 'bg-white/[.08] border-white/[.24] ring-1 ring-white/20'
                     : 'bg-zinc-900 border-white/10 hover:border-white/30'
                   }`}
               >
@@ -120,8 +118,8 @@ export default function ClinicCreationPage() {
                     {prob.difficulty}
                   </span>
                   <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors ${selectedProblems.includes(prob.id)
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'border-gray-600 text-transparent group-hover:border-white'
+                      ? 'bg-white border-white text-black'
+                      : 'border-white/25 text-transparent group-hover:border-white'
                     }`}>
                     <Check size={14} />
                   </div>

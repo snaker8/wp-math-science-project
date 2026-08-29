@@ -41,13 +41,13 @@ const FAQItem = ({ question, answer }: { question: string, answer: string }) => 
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full flex items-center justify-between py-5 text-left group"
             >
-                <span className={`text-base font-medium transition-colors ${isOpen ? 'text-indigo-600' : 'text-zinc-800 group-hover:text-indigo-600'}`}>
+                <span className={`text-base font-medium transition-colors ${isOpen ? 'text-zinc-900' : 'text-zinc-800 group-hover:text-zinc-900'}`}>
                     {question}
                 </span>
                 <motion.span
                     animate={{ rotate: isOpen ? 180 : 0 }}
                     transition={{ duration: 0.2 }}
-                    className="text-zinc-400 group-hover:text-indigo-500"
+                    className="text-zinc-400 group-hover:text-zinc-600"
                 >
                     <ChevronDown size={20} />
                 </motion.span>
@@ -73,7 +73,7 @@ const FAQItem = ({ question, answer }: { question: string, answer: string }) => 
 
 export default function SupportPage() {
     return (
-        <div className="min-h-screen bg-white text-zinc-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+        <div className="min-h-screen bg-white text-zinc-900 font-sans selection:bg-zinc-200 selection:text-zinc-900">
             {/* 1. Hero Section */}
             <section className="relative pt-32 pb-20 px-6 flex flex-col items-center justify-center text-center bg-gradient-to-b from-zinc-50/50 to-white">
                 <motion.div
@@ -86,12 +86,12 @@ export default function SupportPage() {
                     </h1>
                     <div className="relative group">
                         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                            <Search className="h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
+                            <Search className="h-5 w-5 text-zinc-400 group-focus-within:text-zinc-600 transition-colors" />
                         </div>
                         <input
                             type="text"
                             placeholder="질문 키워드를 입력해보세요 (예: 리포트, 결제)"
-                            className="w-full py-4 pl-12 pr-4 rounded-2xl bg-white border border-zinc-200 shadow-sm text-base placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all hover:shadow-md"
+                            className="w-full py-4 pl-12 pr-4 rounded-2xl bg-white border border-zinc-200 shadow-sm text-base placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-900/15 focus:border-zinc-400 transition-all hover:shadow-md"
                         />
                     </div>
                 </motion.div>
@@ -107,12 +107,12 @@ export default function SupportPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: idx * 0.1 }}
                             whileHover={{ y: -5 }}
-                            className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] hover:border-indigo-100 transition-all cursor-pointer group"
+                            className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] hover:border-zinc-300 transition-all cursor-pointer group"
                         >
-                            <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                            <div className="w-12 h-12 rounded-xl bg-zinc-100 text-zinc-900 flex items-center justify-center mb-4 group-hover:bg-zinc-900 group-hover:text-white transition-colors">
                                 <cat.icon size={24} />
                             </div>
-                            <h3 className="text-lg font-bold text-zinc-900 mb-1 group-hover:text-indigo-600 transition-colors">{cat.title}</h3>
+                            <h3 className="text-lg font-bold text-zinc-900 mb-1 transition-colors">{cat.title}</h3>
                             <p className="text-sm text-zinc-500">{cat.desc}</p>
                         </motion.div>
                     ))}
@@ -131,7 +131,7 @@ export default function SupportPage() {
                     ))}
                 </div>
                 <div className="mt-8 text-center">
-                    <button className="text-indigo-600 font-bold hover:underline flex items-center justify-center gap-1 mx-auto">
+                    <button className="text-zinc-900 font-bold hover:underline flex items-center justify-center gap-1 mx-auto">
                         모든 질문 보기 <ArrowRight size={16} />
                     </button>
                 </div>
@@ -157,9 +157,9 @@ export default function SupportPage() {
             <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-[0_4px_20px_rgba(79,70,229,0.4)] flex items-center justify-center hover:bg-indigo-700 transition-colors z-50 group"
+                className="fixed bottom-8 right-8 w-16 h-16 bg-zinc-900 text-white rounded-full shadow-[0_4px_20px_rgba(24,24,27,0.3)] flex items-center justify-center hover:bg-zinc-800 transition-colors z-50 group"
             >
-                <div className="absolute inset-0 rounded-full bg-indigo-400 animate-ping opacity-20" />
+                <div className="absolute inset-0 rounded-full bg-zinc-400 animate-ping opacity-20" />
                 <MessageCircle size={28} />
                 <span className="absolute right-full mr-4 bg-zinc-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0 pointer-events-none">
                     1:1 문의하기

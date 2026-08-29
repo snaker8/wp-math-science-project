@@ -558,7 +558,7 @@ function PageThumbnailList({
             <button
               type="button"
               onClick={() => onReorder(Array.from({ length: totalPdfPages }, (_, i) => i + 1))}
-              className="text-[10px] text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 hover:bg-amber-500/10"
+              className="text-[10px] text-content-secondary hover:text-content-primary px-1.5 py-0.5 rounded border border-white/[.08] hover:bg-white/[.06]"
               title="원본 PDF 순서로 복원"
             >
               초기화
@@ -1177,7 +1177,7 @@ function PdfViewerWithBoxes({
         <div className="text-center">
           {isAnalyzing ? (
             <>
-              <Loader2 className="h-10 w-10 animate-spin text-amber-400 mx-auto mb-4" />
+              <Loader2 className="h-10 w-10 animate-spin text-content-secondary mx-auto mb-4" />
               <p className="text-sm text-zinc-300 font-medium">페이지를 분석하고 있습니다.</p>
               <p className="text-xs text-zinc-500 mt-1">분석이 끝나면 바로 페이지가 열리고</p>
               <p className="text-xs text-zinc-500">문제 변환이 시작됩니다.</p>
@@ -1841,7 +1841,7 @@ function ProblemDetailPanel({
           <div
             className={`relative rounded-lg border bg-white overflow-hidden shadow-sm select-none ${
               insertImageMode
-                ? 'border-blue-400 ring-2 ring-blue-300/50'
+                ? 'border-gray-500 ring-1 ring-gray-400/60'
                 : 'border-gray-200'
             }`}
             style={insertImageMode ? { cursor: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'%3E%3Cline x1=\'16\' y1=\'0\' x2=\'16\' y2=\'32\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Cline x1=\'0\' y1=\'16\' x2=\'32\' y2=\'16\' stroke=\'%23e11d48\' stroke-width=\'2\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'3\' fill=\'%23e11d48\'/%3E%3C/svg%3E") 16 16, crosshair' } : undefined}
@@ -2154,9 +2154,9 @@ function ProblemDetailPanel({
           </div>
         )}
         {(problem.status === 'analyzing' || isReanalyzing) && (
-          <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
-            <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-            <span className="text-xs text-amber-700 font-bold">분석 중...</span>
+          <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5">
+            <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+            <span className="text-xs text-gray-700 font-bold">분석 중...</span>
           </div>
         )}
         {problem.status === 'error' && (
@@ -2190,7 +2190,7 @@ function ProblemDetailPanel({
                 type="button"
                 onClick={onReanalyze}
                 disabled={isReanalyzing}
-                className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-shrink-0 inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isReanalyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                 재OCR
@@ -5213,13 +5213,13 @@ export default function AnalyzeJobPage() {
           {/* 배치 분석 진행률 */}
           {isBatchAnalyzing && (
             <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
-              <span className="text-xs text-amber-300 font-bold">
+              <Loader2 className="h-4 w-4 animate-spin text-content-secondary" />
+              <span className="text-xs text-content-secondary font-bold tabular-nums">
                 분석 중... {batchProgress.current}/{batchProgress.total}
               </span>
               <div className="w-28 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  className="h-full bg-white/70 rounded-full transition-all duration-500"
                   style={{ width: `${batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0}%` }}
                 />
               </div>
@@ -5229,15 +5229,15 @@ export default function AnalyzeJobPage() {
           {/* 서버 분석 진행률 (레거시 모드) */}
           {!isAutoCropActive && isProcessing && (
             <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-content-secondary" />
               <div className="flex flex-col items-end">
-                <span className="text-xs text-amber-300 font-bold">
+                <span className="text-xs text-content-secondary font-bold tabular-nums">
                   {jobData.currentStep || '분석 중...'} {jobData.progress}%
                 </span>
               </div>
               <div className="w-28 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  className="h-full bg-white/70 rounded-full transition-all duration-500"
                   style={{ width: `${jobData.progress}%` }}
                 />
               </div>
@@ -5307,7 +5307,7 @@ export default function AnalyzeJobPage() {
             <button
               type="button"
               onClick={handleBatchAnalyze}
-              className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold transition-all bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20 animate-pulse"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold transition-colors border border-white/[.14] bg-white/[.08] text-content-primary hover:bg-white/[.12]"
             >
               <Play className="h-3.5 w-3.5" />
               분석 시작 ({pendingCount}문항)

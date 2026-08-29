@@ -169,7 +169,7 @@ export default function GradingSheetUpload({
             <h2 className="text-base font-bold text-content-primary">채점표 이미지 자동 채점</h2>
             <p className="text-xs text-zinc-500 mt-0.5">{studentName} · {examTitle}</p>
           </div>
-          <button type="button" onClick={() => !busy && onClose()} className="text-zinc-500 hover:text-white">
+          <button type="button" onClick={() => !busy && onClose()} className="text-zinc-500 hover:text-content-primary">
             <X size={20} />
           </button>
         </div>
@@ -225,7 +225,7 @@ export default function GradingSheetUpload({
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="rounded-lg bg-zinc-900 border border-zinc-800 p-2.5">
                   <div className="text-[10px] text-zinc-500 uppercase">전체</div>
-                  <div className="text-xl font-bold text-white">{preview.summary.total}</div>
+                  <div className="text-xl font-bold text-content-primary">{preview.summary.total}</div>
                 </div>
                 <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5">
                   <div className="text-[10px] text-emerald-500 uppercase">정답</div>
@@ -261,10 +261,10 @@ export default function GradingSheetUpload({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="font-bold text-lg text-white w-8 text-center">{m.seq}</span>
+                        <span className="font-bold text-lg text-content-primary w-8 text-center">{m.seq}</span>
                         <div className="flex-1 min-w-0">
                           <div className="text-[11px] text-zinc-500 uppercase tracking-wider">학생답</div>
-                          <div className="text-sm text-white font-medium truncate">
+                          <div className="text-sm text-content-primary font-medium truncate">
                             {m.student_answer || <span className="text-zinc-600">—</span>}
                           </div>
                         </div>
@@ -281,7 +281,7 @@ export default function GradingSheetUpload({
                               onClick={() => toggleCorrect(m.seq, true)}
                               className={`px-3 py-1.5 rounded-lg font-bold text-sm transition-all ${
                                 isO
-                                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                  ? 'bg-emerald-500 text-white'
                                   : 'bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10'
                               }`}
                             >
@@ -292,7 +292,7 @@ export default function GradingSheetUpload({
                               onClick={() => toggleCorrect(m.seq, false)}
                               className={`px-3 py-1.5 rounded-lg font-bold text-sm transition-all ${
                                 isX
-                                  ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
+                                  ? 'bg-rose-500 text-white'
                                   : 'bg-white/5 text-rose-400 border border-rose-500/30 hover:bg-rose-500/10'
                               }`}
                             >

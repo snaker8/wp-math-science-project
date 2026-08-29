@@ -785,7 +785,7 @@ export default function ExamCreatePage() {
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             {diff > 0 && (
-                              <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                              <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
                                 난이도 {diff}
                               </span>
                             )}
@@ -1124,7 +1124,7 @@ export default function ExamCreatePage() {
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 {diff > 0 && (
-                                  <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                  <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
                                     난이도 {diff}
                                   </span>
                                 )}
@@ -1342,7 +1342,7 @@ export default function ExamCreatePage() {
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 {diff > 0 && (
-                                  <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                  <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
                                     난이도 {diff}
                                   </span>
                                 )}
@@ -1557,7 +1557,7 @@ export default function ExamCreatePage() {
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 {diff > 0 && (
-                                  <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                  <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
                                     난이도 {diff}
                                   </span>
                                 )}
@@ -1773,7 +1773,7 @@ export default function ExamCreatePage() {
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           {diff > 0 && (
-                            <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                            <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
                               난이도 {diff}
                             </span>
                           )}

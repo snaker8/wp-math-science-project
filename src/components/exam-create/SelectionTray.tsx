@@ -34,7 +34,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed right-4 top-1/2 z-40 -translate-y-1/2 flex flex-col items-center gap-1.5 rounded-l-xl border border-indigo-500/40 bg-indigo-500/15 px-2.5 py-3 text-indigo-300 shadow-2xl hover:bg-indigo-500/25"
+          className="fixed right-4 top-1/2 z-40 -translate-y-1/2 flex flex-col items-center gap-1.5 rounded-l-xl border border-white/[.14] bg-white/[.08] px-2.5 py-3 text-content-primary backdrop-blur hover:bg-white/[.12]"
           title="선택한 문항 보기"
         >
           <ChevronRight className="h-4 w-4 rotate-180" />
@@ -43,11 +43,11 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
       )}
 
       {open && (
-        <div className="fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col border-l border-indigo-500/30 bg-zinc-950/95 shadow-2xl backdrop-blur">
+        <div className="fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col border-l border-white/[.09] bg-zinc-950/95 backdrop-blur">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-indigo-300">선택한 문항</span>
-              <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[11px] font-bold text-indigo-300 tabular-nums">
+              <span className="text-sm font-semibold text-content-primary">선택한 문항</span>
+              <span className="rounded-full border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-[11px] font-semibold text-content-secondary tabular-nums">
                 {picked.length}
               </span>
             </div>
@@ -72,7 +72,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
                   key={p.id}
                   value={p}
                   className="group rounded-lg border border-zinc-800 bg-zinc-900/60 p-2.5 hover:border-zinc-700"
-                  whileDrag={{ scale: 1.02, borderColor: 'rgb(34 211 238 / 0.6)' }}
+                  whileDrag={{ scale: 1.02, borderColor: 'rgb(255 255 255 / 0.28)' }}
                 >
                   <div className="flex items-start gap-2">
                     <GripVertical className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 cursor-grab text-zinc-600 group-hover:text-zinc-400 active:cursor-grabbing" />
@@ -83,7 +83,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
                             {idx + 1}
                           </span>
                           {p.difficulty > 0 && (
-                            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 font-bold text-amber-300">
+                            <span className="rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 font-semibold text-content-secondary tabular-nums">
                               난이도 {p.difficulty}
                             </span>
                           )}
@@ -119,7 +119,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
             <button
               type="button"
               onClick={onCompose}
-              className="w-full rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30"
+              className="w-full whitespace-nowrap rounded-lg border border-white/[.08] bg-white/[.04] px-4 py-2 text-xs font-semibold text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
             >
               시험지 편성 →
             </button>

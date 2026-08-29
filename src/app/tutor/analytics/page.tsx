@@ -327,7 +327,7 @@ export default function TutorAnalyticsPage() {
                             {name}
                             {s.source === 'roster' && (
                               <span
-                                className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-300 flex-shrink-0"
+                                className="text-[10px] font-semibold px-1 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary flex-shrink-0"
                                 title="엑셀 일괄 채점으로 자동등록된 학생 (auth 미연동)"
                               >
                                 명단

@@ -93,7 +93,7 @@ export default function GradeRosterTable({
     <div className="bg-surface-card border border-white/10 rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between gap-3 p-4 border-b border-white/5">
         <div className="flex items-center gap-2">
-          <ListChecks size={18} className="text-indigo-400" />
+          <ListChecks size={18} className="text-content-tertiary" />
           <h2 className="font-bold text-content-primary">학생 성적 일람표</h2>
           <span className="text-xs text-content-tertiary">학년별 · 최근 점수</span>
         </div>
@@ -134,9 +134,9 @@ export default function GradeRosterTable({
             <tbody>
               {groups.map(([gradeLabel, list]) => (
                 <React.Fragment key={gradeLabel}>
-                  <tr className="bg-indigo-500/10">
-                    <td colSpan={6} className="py-1.5 px-4 text-xs font-bold text-indigo-300">
-                      {gradeLabel} <span className="text-indigo-400 font-normal">({list.length}명)</span>
+                  <tr className="bg-white/[.06]">
+                    <td colSpan={6} className="py-1.5 px-4 text-xs font-bold text-content-primary">
+                      {gradeLabel} <span className="text-content-tertiary font-normal tabular-nums">({list.length}명)</span>
                     </td>
                   </tr>
                   {list.map((r) => {
@@ -149,7 +149,7 @@ export default function GradeRosterTable({
                       <tr
                         key={r.id}
                         onClick={() => onSelectStudent(r.id)}
-                        className={`border-t border-white/5 cursor-pointer hover:bg-indigo-500/10 ${selected ? 'bg-indigo-500/15' : ''}`}
+                        className={`border-t border-white/5 cursor-pointer hover:bg-white/[.04] ${selected ? 'bg-white/[.08]' : ''}`}
                       >
                         <td className="py-2.5 px-4 font-semibold text-content-primary">{r.name}</td>
                         <td className="py-2.5 px-3 text-right"><ScoreCell value={r.school?.score ?? null} sub={schoolSub} /></td>

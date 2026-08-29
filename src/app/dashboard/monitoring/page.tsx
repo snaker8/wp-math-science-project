@@ -68,7 +68,7 @@ const StudentMonitorCard: React.FC<StudentMonitorCardProps> = ({ student }) => {
             )}
 
             <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${student.status === 'solving' ? 'bg-indigo-100 text-indigo-600' : 'bg-white text-gray-600 shadow-sm'
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${student.status === 'solving' ? 'bg-zinc-100 text-zinc-700' : 'bg-white text-gray-600 shadow-sm'
                     }`}>
                     {student.avatar}
                 </div>
@@ -140,10 +140,10 @@ export default function MonitoringPage() {
 
                 <div className="flex items-center gap-3">
                     <button className="flex items-center gap-1.5 rounded-xl bg-warm-surface-strong px-4 py-2 text-sm font-semibold text-warm-text-primary transition-colors hover:bg-warm-border-soft">
-                        <Zap size={16} className="text-amber-500" />
+                        <Zap size={16} className="text-zinc-500" />
                         <span>전체 힌트 전송</span>
                     </button>
-                    <button className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-content-primary shadow-md shadow-indigo-200 transition-colors hover:bg-indigo-700">
+                    <button className="flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800">
                         <span>수업 종료</span>
                     </button>
                 </div>
@@ -174,7 +174,7 @@ export default function MonitoringPage() {
                             <div className="rounded-xl border border-warm-border-soft bg-warm-surface p-4">
                                 <div className="flex justify-between text-xs mb-2">
                                     <span className="text-warm-text-secondary">학급 평균 정답률</span>
-                                    <span className="font-bold text-indigo-600">72%</span>
+                                    <span className="font-bold tabular-nums text-zinc-900">72%</span>
                                 </div>
                                 {/* Dummy Line Chart Visualization */}
                                 <div className="flex items-end gap-1 h-16 w-full px-1">
@@ -204,9 +204,9 @@ export default function MonitoringPage() {
                         </div>
                     </div>
 
-                    <div className="mt-auto rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 p-5 text-content-primary shadow-lg">
+                    <div className="mt-auto rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-white">
                         <h3 className="font-bold">AI 수업 조교</h3>
-                        <p className="mt-2 text-xs text-indigo-100 opacity-90">
+                        <p className="mt-2 text-xs text-zinc-400">
                             &quot;현재 7번 문항에서 5명의 학생이 정체 중입니다. <br />
                             관련 개념 힌트를 전송할까요?&quot;
                         </p>
