@@ -132,8 +132,8 @@ export default function NoticesAdminPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-              <Bell className="h-5 w-5 text-amber-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[.08] bg-white/[.04]">
+              <Bell className="h-5 w-5 text-content-tertiary" />
             </div>
             <div>
               <h1 className="text-lg font-bold">공지 관리</h1>
@@ -143,7 +143,7 @@ export default function NoticesAdminPage() {
           <button
             type="button"
             onClick={openCreate}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-medium transition-colors"
+            className="flex items-center gap-1.5 rounded-full bg-white hover:bg-zinc-200 px-4 py-2 text-sm font-semibold text-black whitespace-nowrap transition-colors"
           >
             <Plus className="h-4 w-4" /> 새 공지
           </button>
@@ -169,14 +169,14 @@ export default function NoticesAdminPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="제목 (필수)"
-              className="mb-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="mb-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-white/25"
             />
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="상세 내용 (선택 — 입력 시 대시보드에서 클릭하면 모달로 표시)"
               rows={4}
-              className="mb-3 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="mb-3 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-white/25"
             />
             <div className="flex items-center gap-4 mb-3 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -194,7 +194,7 @@ export default function NoticesAdminPage() {
                 type="button"
                 onClick={save}
                 disabled={!title.trim() || saving}
-                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 px-4 py-2 text-sm font-medium"
+                className="flex items-center gap-1.5 rounded-lg border border-white/[.14] bg-white/[.08] text-content-primary hover:bg-white/[.12] disabled:opacity-50 px-4 py-2 text-sm font-medium"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />} 저장
               </button>

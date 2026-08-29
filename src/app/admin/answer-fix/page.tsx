@@ -155,7 +155,7 @@ export default function AnswerFixPage() {
               type="button"
               onClick={handleBulkApplySuggested}
               disabled={bulkApplying}
-              className="ml-auto px-3 py-1.5 rounded-md bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="ml-auto px-3 py-1.5 rounded-full bg-gray-900 text-white text-xs font-bold hover:bg-gray-700 whitespace-nowrap transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {bulkApplying ? (
                 <>
@@ -211,7 +211,7 @@ export default function AnswerFixPage() {
                         href={`/dashboard/cloud/${it.examId}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center gap-0.5"
+                        className="ml-1 text-gray-500 hover:text-gray-900 inline-flex items-center gap-0.5"
                       >
                         <ExternalLink className="h-3 w-3" />
                         <span>시험지</span>
@@ -250,12 +250,12 @@ export default function AnswerFixPage() {
 
                 {/* 추천 답 표시 */}
                 {it.suggestedAnswer && !isDone && !isSkipped && (
-                  <div className="mb-2 text-xs text-blue-600">
-                    💡 해설에서 추출된 추천 답: <strong className="text-base">{it.suggestedAnswer}</strong>
+                  <div className="mb-2 text-xs text-gray-700">
+                    해설에서 추출된 추천 답: <strong className="text-base">{it.suggestedAnswer}</strong>
                   </div>
                 )}
                 {!it.hasSolution && !isDone && !isSkipped && (
-                  <div className="mb-2 text-xs text-gray-400">⚠️ 해설 없음 — 추천 답 자동 추출 불가</div>
+                  <div className="mb-2 text-xs text-gray-400">해설 없음 — 추천 답 자동 추출 불가</div>
                 )}
 
                 {/* 액션 */}
@@ -278,7 +278,7 @@ export default function AnswerFixPage() {
                             onClick={() => handleFix(it.problemId, c)}
                             className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-bold transition-all ${
                               isSuggested
-                                ? 'bg-blue-500 text-white ring-2 ring-blue-300 hover:bg-blue-600'
+                                ? 'bg-white text-gray-900 border-2 border-gray-900 hover:bg-gray-100'
                                 : 'bg-gray-50 text-gray-700 border border-gray-300 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50'
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
                             title={isSuggested ? '추천 답' : `${c} 으로 저장`}

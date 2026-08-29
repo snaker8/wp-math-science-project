@@ -84,7 +84,7 @@ export function PrescriptionRecommendation({ studentId, weakestUnit }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-xs text-zinc-500">
+      <div className="flex items-center justify-center rounded-xl border border-white/[.08] bg-white/[.03] px-4 py-6 text-xs text-content-tertiary">
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
         처방 추천 분석 중...
       </div>
@@ -97,12 +97,12 @@ export function PrescriptionRecommendation({ studentId, weakestUnit }: Props) {
       return null; // 약점 단원 + 함정 둘 다 없으면 카드 자체 숨김
     }
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
-          <Lightbulb className="h-4 w-4 text-amber-400" />
+      <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-content-primary">
+          <Lightbulb className="h-4 w-4 text-content-tertiary" />
           AI 처방 추천
         </div>
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-content-secondary">
           학생의 채점 데이터가 더 누적되면 단원 + 함정 결합 추천이 활성화됩니다.
         </div>
         {weakestUnit && (
@@ -124,13 +124,13 @@ export function PrescriptionRecommendation({ studentId, weakestUnit }: Props) {
     .slice(0, 2);
 
   return (
-    <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-900/20 via-zinc-900/40 to-zinc-900/40 p-4">
+    <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4">
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-bold text-white">
-          <Lightbulb className="h-4 w-4 text-amber-400" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
+          <Lightbulb className="h-4 w-4 text-content-tertiary" />
           AI 처방 추천
         </div>
-        <span className="text-[10px] text-zinc-500">
+        <span className="whitespace-nowrap text-[10px] text-content-tertiary">
           약점 체인 + 함정 패턴 결합
         </span>
       </div>
@@ -183,7 +183,7 @@ export function PrescriptionRecommendation({ studentId, weakestUnit }: Props) {
                   </div>
                   <ArrowRight className="h-3.5 w-3.5 shrink-0 text-amber-400/70" />
                 </div>
-                <div className="mt-1.5 text-[10px] text-zinc-300">
+                <div className="mt-1.5 text-[10px] text-content-secondary">
                   → 추천: <span className="font-semibold text-emerald-300">{action}</span>
                 </div>
               </li>

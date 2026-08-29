@@ -459,13 +459,13 @@ export function ImagePositionEditor({
           </div>
 
           {/* 플로트 영역: 이미지 + 텍스트 감싸기 */}
-          <div className="px-2 py-1 rounded border border-violet-500/20 bg-violet-500/5">
+          <div className="px-2 py-1 rounded border border-white/[.08] bg-white/[.04]">
             <div
               className={`mb-2 ${layoutMode === 'float-right' ? 'float-right ml-3' : 'float-left mr-3'}`}
               style={{ width: `${widthPercent}%`, maxWidth: '200px' }}
             >
               {hasMainFigure && (
-                <div className="border-2 border-violet-500/40 rounded-lg p-1 bg-white">
+                <div className="border-2 border-white/[.14] rounded-lg p-1 bg-white">
                   <FigureRenderer
                     figureData={figureData}
                     figureSvg={figureSvg}
@@ -518,8 +518,8 @@ function DropZone({
     <div
       className={`transition-all cursor-pointer flex items-center justify-center ${
         isDragOver
-          ? 'h-10 border-2 border-dashed border-violet-400 bg-violet-500/15 rounded-lg mx-2 my-1.5'
-          : 'h-5 hover:h-8 border-2 border-dashed border-violet-500/40 hover:border-violet-500/70 bg-violet-500/[0.04] hover:bg-violet-500/15 rounded mx-2 my-1'
+          ? 'h-10 border-2 border-dashed border-white/40 bg-white/[.10] rounded-lg mx-2 my-1.5'
+          : 'h-5 hover:h-8 border-2 border-dashed border-white/[.14] hover:border-white/30 bg-white/[0.03] hover:bg-white/[.08] rounded mx-2 my-1'
       }`}
       onDragOver={(e) => onDragOver(e, idx)}
       onDragLeave={onDragLeave}
@@ -528,9 +528,9 @@ function DropZone({
       title="여기에 도형 배치 (드래그 또는 클릭)"
     >
       {isDragOver ? (
-        <span className="text-[11px] text-violet-300 font-medium">여기에 놓기</span>
+        <span className="text-[11px] text-content-primary font-medium">여기에 놓기</span>
       ) : (
-        <span className="text-[10px] text-violet-400/70">⋮ 드래그하거나 클릭</span>
+        <span className="text-[10px] text-content-tertiary">⋮ 드래그하거나 클릭</span>
       )}
     </div>
   );
@@ -573,13 +573,13 @@ const DraggableFigure = React.forwardRef<
       onClick={() => onSelect?.()}
       className={`group/figure flex items-start gap-1.5 mx-2 my-1 p-2 rounded-lg border-2 cursor-grab active:cursor-grabbing transition-all ${
         isSelected
-          ? 'border-violet-500/60 bg-violet-500/10'
-          : 'border-violet-500/20 bg-violet-500/[0.03] hover:border-violet-500/40'
+          ? 'border-white/30 bg-white/[.08]'
+          : 'border-white/[.08] bg-white/[0.03] hover:border-white/[.14]'
       }`}
     >
       <div className="flex flex-col items-center gap-0.5 pt-1">
         {showIdxBadge && (
-          <span className="text-[9px] font-bold text-violet-400 bg-violet-500/15 px-1 py-0.5 rounded leading-none mb-0.5">
+          <span className="text-[9px] font-bold text-content-secondary bg-white/[.08] px-1 py-0.5 rounded leading-none mb-0.5 tabular-nums">
             {(figureIdx ?? 0) + 1}/{totalFigures}
           </span>
         )}
@@ -587,16 +587,16 @@ const DraggableFigure = React.forwardRef<
           type="button"
           onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
           disabled={!canMoveUp}
-          className="p-0.5 rounded hover:bg-violet-500/20 text-violet-400 disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors"
+          className="p-0.5 rounded hover:bg-white/[.08] text-content-secondary disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronUp className="h-3 w-3" />
         </button>
-        <GripVertical className="h-4 w-4 text-violet-400/60" />
+        <GripVertical className="h-4 w-4 text-content-tertiary" />
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
           disabled={!canMoveDown}
-          className="p-0.5 rounded hover:bg-violet-500/20 text-violet-400 disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors"
+          className="p-0.5 rounded hover:bg-white/[.08] text-content-secondary disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronDown className="h-3 w-3" />
         </button>

@@ -79,7 +79,7 @@ export function StudentTreePanel({
             type="button"
             onClick={() => setLeftTab(v)}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              leftTab === v ? 'text-sky-300 border-b-2 border-sky-400' : 'text-content-tertiary hover:text-content-primary'
+              leftTab === v ? 'text-content-primary border-b-2 border-white/40' : 'text-content-tertiary hover:text-content-primary'
             }`}
           >
             {label}
@@ -94,7 +94,7 @@ export function StudentTreePanel({
             value={studentSearch}
             onChange={(e) => setStudentSearch(e.target.value)}
             placeholder="학생 이름 검색"
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm focus:border-sky-500 focus:outline-none"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm focus:border-white/25 focus:outline-none"
           />
         </div>
       </div>
@@ -104,7 +104,7 @@ export function StudentTreePanel({
           type="button"
           onClick={() => onSelect(null)}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold mb-1 ${
-            selected === null ? 'bg-sky-500/15 text-sky-300' : 'hover:bg-white/5 text-content-secondary'
+            selected === null ? 'bg-white/[.08] text-content-primary' : 'hover:bg-white/5 text-content-secondary'
           }`}
         >
           <span className="flex items-center gap-1.5"><Users size={14} /> 전체</span>
@@ -136,7 +136,7 @@ export function StudentTreePanel({
                         type="button"
                         onClick={() => onSelect(s.id)}
                         className={`w-full flex items-center justify-between pl-3 pr-2 py-1.5 text-sm rounded-r-lg ${
-                          selected === s.id ? 'bg-sky-500/15 text-sky-300 font-medium' : 'hover:bg-white/5 text-content-secondary'
+                          selected === s.id ? 'bg-white/[.08] text-content-primary font-medium' : 'hover:bg-white/5 text-content-secondary'
                         }`}
                       >
                         <span className="truncate">{s.name}</span>

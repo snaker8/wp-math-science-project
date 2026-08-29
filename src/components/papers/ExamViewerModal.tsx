@@ -150,7 +150,7 @@ export function ExamViewerModal({ examId, examTitle, onClose }: ExamViewerModalP
                   onClick={() => setShowAnalytics(!showAnalytics)}
                   className={`p-2 rounded-lg transition-colors ${
                     showAnalytics
-                      ? 'bg-indigo-100 text-indigo-600'
+                      ? 'bg-gray-900 text-white'
                       : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
                   title="분석 사이드바"

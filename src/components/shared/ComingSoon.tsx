@@ -23,7 +23,7 @@ export default function ComingSoon({
 }: ComingSoonProps) {
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-6 py-16">
-      <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mb-5">
+      <div className="w-14 h-14 rounded-2xl bg-gray-100 text-gray-500 flex items-center justify-center mb-5">
         <Construction size={28} />
       </div>
       <h1 className="text-lg font-bold text-gray-900 mb-2">{title}</h1>
@@ -31,7 +31,7 @@ export default function ComingSoon({
       {backHref && (
         <Link
           href={backHref}
-          className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+          className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 hover:text-gray-600"
         >
           <ArrowLeft size={16} />
           {backLabel}
