@@ -245,7 +245,7 @@ export default function SchoolReportPage() {
                       <div className="text-xs text-zinc-300">{g.grade}</div>
                       <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500"
+                          className="h-full rounded-full bg-white/40"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -271,7 +271,7 @@ export default function SchoolReportPage() {
                         <div className="text-xs text-zinc-300">{u.unit}</div>
                         <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-800">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-amber-500 to-rose-500"
+                            className="h-full rounded-full bg-white/40"
                             style={{ width: `${pct}%` }}
                           />
                         </div>
@@ -586,7 +586,7 @@ function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
                 </div>
                 {u.keyPoints && (
                   <div className="mt-2">
-                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-amber-300">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">
                       <Target className="h-3 w-3" />
                       출제경향
                     </div>
@@ -597,7 +597,7 @@ function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
                 )}
                 {u.strategy && (
                   <div className="mt-2">
-                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-300">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">
                       <Lightbulb className="h-3 w-3" />
                       대비전략
                     </div>
@@ -637,7 +637,7 @@ function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
                 </div>
                 {h.intent && (
                   <div className="mt-2">
-                    <div className="mb-1 text-[10px] font-semibold text-amber-300">출제 의도</div>
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">출제 의도</div>
                     <div className="text-zinc-300 leading-relaxed">
                       <MixedContentRenderer content={h.intent} />
                     </div>
@@ -645,7 +645,7 @@ function ExamAnalysisInline({ analysis }: { analysis: ExamAIAnalysis }) {
                 )}
                 {h.strategy && (
                   <div className="mt-2">
-                    <div className="mb-1 text-[10px] font-semibold text-emerald-300">공략</div>
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">공략</div>
                     <div className="text-zinc-300 leading-relaxed">
                       <MixedContentRenderer content={h.strategy} />
                     </div>

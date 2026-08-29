@@ -251,7 +251,7 @@ export default function ReportPage() {
                     className="col-span-12 bg-surface-card/50 border border-subtle rounded-3xl p-8 print:bg-white print:mt-12 print:border-zinc-200"
                 >
                     <div className="flex items-center gap-2 mb-8">
-                        <BookOpen size={24} className="text-indigo-400" />
+                        <BookOpen size={24} className="text-content-tertiary" />
                         <h3 className="text-xl font-bold">단원별 주제 숙련도</h3>
                     </div>
 

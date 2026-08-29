@@ -76,13 +76,13 @@ export function TemplateSelector({
                     onClick={() => setSelectedId(t.id)}
                     className={`relative text-left px-3 py-2.5 rounded-lg border transition-all ${
                       selectedId === t.id
-                        ? 'border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500/30'
+                        ? 'border-white/[.14] bg-white/[.08] ring-1 ring-white/[.10]'
                         : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600'
                     }`}
                   >
                     {selectedId === t.id && (
                       <div className="absolute top-1.5 right-1.5">
-                        <Check size={14} className="text-indigo-400" />
+                        <Check size={14} className="text-content-primary" />
                       </div>
                     )}
                     <div className="text-sm font-medium text-white">{t.name}</div>
@@ -180,7 +180,7 @@ export function TemplateSelector({
           </button>
           <button
             onClick={handleApply}
-            className="px-5 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+            className="px-5 py-2 text-sm font-semibold bg-white hover:bg-zinc-200 text-black rounded-full transition-colors"
           >
             적용
           </button>
@@ -213,7 +213,7 @@ function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+        className="w-full px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/20"
       />
     </div>
   );
@@ -261,7 +261,7 @@ function SelectField({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder="직접 입력"
-            className="flex-1 px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+            className="flex-1 px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/20"
             autoFocus
           />
           <button
@@ -277,7 +277,7 @@ function SelectField({
         <select
           value={value}
           onChange={(e) => handleSelect(e.target.value)}
-          className="w-full px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+          className="w-full px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/20"
         >
           <option value="">{placeholder || '선택'}</option>
           {options.map((opt) => (

@@ -42,7 +42,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     description: '문제를 풀고 학습 진도를 관리합니다',
     monogram: '학',
     icon: <GraduationCap size={24} />,
-    color: 'from-blue-500 to-indigo-500',
+    color: 'from-white/[.10] to-white/[.04]',
   },
   {
     value: 'TEACHER',
@@ -50,7 +50,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     description: '반을 만들고 학생들을 관리합니다',
     monogram: '강',
     icon: <School size={24} />,
-    color: 'from-indigo-500 to-purple-500',
+    color: 'from-white/[.10] to-white/[.04]',
   },
 ];
 
@@ -354,7 +354,7 @@ export default function SignUpPage() {
   return (
     // ★ 로그인 화면과 동일 규칙 (2026-07-22): 100dvh · zinc-950 바탕 · 글로우 제거.
     //   두 화면은 나란히 오가므로 한쪽만 고치면 오히려 어긋나 보인다.
-    <div className="min-h-[100dvh] bg-zinc-950 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-zinc-950 text-content-primary flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
       {/* Logo */}
       <div
@@ -374,7 +374,7 @@ export default function SignUpPage() {
             className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
           >
             <div className="text-center mb-8">
-              <h2 className="text-xl font-bold text-white mb-2">회원가입</h2>
+              <h2 className="text-xl font-bold text-content-primary mb-2">회원가입</h2>
               <p className="text-zinc-500 text-sm">어떤 역할로 가입하시겠어요?</p>
             </div>
 
@@ -397,7 +397,7 @@ export default function SignUpPage() {
                     {option.monogram}
                   </div>
                   <div className="flex-1">
-                    <div className="font-semibold text-white group-hover:text-content-primary transition-colors">
+                    <div className="font-semibold text-content-primary transition-colors">
                       {option.label}
                     </div>
                     <div className="text-xs text-zinc-500 mt-0.5">{option.description}</div>
@@ -425,7 +425,7 @@ export default function SignUpPage() {
             className="w-full max-w-md bg-zinc-900/60 border border-white/10 rounded-2xl p-8"
           >
             <div className="text-center mb-6">
-              <h2 className="text-xl font-bold text-white mb-2">정보 입력</h2>
+              <h2 className="text-xl font-bold text-content-primary mb-2">정보 입력</h2>
               <p className="text-zinc-500 text-sm">아래 정보를 입력해주세요</p>
             </div>
 
@@ -475,7 +475,7 @@ export default function SignUpPage() {
                     onChange={handleInputChange}
                     placeholder="홍길동"
                     required
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-content-primary placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
                   />
                 </div>
               </div>
@@ -492,7 +492,7 @@ export default function SignUpPage() {
                     onChange={handleInputChange}
                     placeholder="example@email.com"
                     required
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-content-primary placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
                   />
                 </div>
               </div>
@@ -510,7 +510,7 @@ export default function SignUpPage() {
                     placeholder="8자 이상 입력"
                     minLength={8}
                     required
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-content-primary placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
                   />
                 </div>
               </div>
@@ -528,7 +528,7 @@ export default function SignUpPage() {
                     placeholder="비밀번호를 다시 입력"
                     minLength={8}
                     required
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-content-primary placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
                   />
                 </div>
               </div>
@@ -544,7 +544,7 @@ export default function SignUpPage() {
                     value={formData.phone}
                     onChange={handleInputChange}
                     placeholder="010-1234-5678"
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-content-primary placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
                   />
                 </div>
               </div>
@@ -562,7 +562,7 @@ export default function SignUpPage() {
                     onChange={(e) => handleOrgInputChange(e.target.value)}
                     onFocus={() => setOrgDropdownOpen(true)}
                     placeholder="학원명 입력"
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-content-primary placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
                   />
                   {orgSearching && (
                     <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 animate-spin" size={16} />
@@ -581,7 +581,7 @@ export default function SignUpPage() {
                               key={org.id}
                               type="button"
                               onClick={() => pickOrg(org)}
-                              className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/[.06] transition-colors flex items-center gap-2"
+                              className="w-full text-left px-4 py-2.5 text-sm text-content-primary hover:bg-white/[.06] transition-colors flex items-center gap-2"
                             >
                               <Building2 size={14} className="text-zinc-500 flex-shrink-0" />
                               <span>{org.name}</span>
@@ -623,7 +623,7 @@ export default function SignUpPage() {
                       value={formData.instituteId}
                       onChange={handleInputChange}
                       required
-                      className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors appearance-none"
+                      className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 px-4 text-content-primary focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors appearance-none"
                     >
                       <option value="" className="bg-zinc-900">
                         {institutesLoading ? '로딩 중…' : (institutes.length === 0 ? '등록된 센터 없음' : '센터를 선택하세요')}
@@ -657,7 +657,7 @@ export default function SignUpPage() {
                       value={applyInstituteName}
                       onChange={(e) => setApplyInstituteName(e.target.value)}
                       placeholder="센터 이름 (선택)"
-                      className="w-full bg-zinc-950/60 border border-amber-500/30 rounded-lg py-2 px-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-zinc-950/60 border border-amber-500/30 rounded-lg py-2 px-3 text-sm text-content-primary placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
                     />
                     <button
                       type="button"
@@ -679,7 +679,7 @@ export default function SignUpPage() {
                     value={formData.grade}
                     onChange={handleInputChange}
                     required
-                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors appearance-none"
+                    className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 px-4 text-content-primary focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors appearance-none"
                   >
                     <option value="" className="bg-zinc-900">학년을 선택하세요</option>
                     <option value="7" className="bg-zinc-900">중1</option>
@@ -730,7 +730,7 @@ export default function SignUpPage() {
 
             {!isSupabaseConfigured && (
               <p className="mt-3 text-center text-xs text-amber-500/70">
-                ⚠️ Demo 모드 - Supabase 미연결
+                Demo 모드 - Supabase 미연결
               </p>
             )}
           </div>
@@ -758,7 +758,7 @@ export default function SignUpPage() {
 
             {applicationSubmitted ? (
               <>
-                <h2 className="text-2xl font-bold text-white mb-3">신청 완료 — 승인 대기</h2>
+                <h2 className="text-2xl font-bold text-content-primary mb-3">신청 완료 — 승인 대기</h2>
                 <p className="text-zinc-400 text-sm mb-2">
                   <span className="text-content-primary font-semibold">{formData.fullName}</span>님,
                   가입 신청을 접수했습니다.
@@ -773,7 +773,7 @@ export default function SignUpPage() {
               </>
             ) : (
               <>
-                <h2 className="text-2xl font-bold text-white mb-3">가입 완료!</h2>
+                <h2 className="text-2xl font-bold text-content-primary mb-3">가입 완료!</h2>
                 <p className="text-zinc-400 text-sm mb-2">
                   환영합니다! <span className="text-content-primary font-semibold">{formData.fullName}</span>님
                 </p>
@@ -789,7 +789,7 @@ export default function SignUpPage() {
               {!applicationSubmitted && (
                 <button
                   onClick={navigateByRole}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group"
+                  className="w-full rounded-full bg-white py-3.5 font-semibold text-black transition-colors hover:bg-zinc-200 focus:outline-none focus:ring-1 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-zinc-900 flex items-center justify-center gap-2 group"
                 >
                   <span>시작하기</span>
                   <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />

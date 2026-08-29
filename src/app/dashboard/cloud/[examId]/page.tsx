@@ -469,8 +469,8 @@ function FigureMarkerRenderer({
           return showFigureCompare && cropImage ? (
             <div key={i} className="my-2 grid grid-cols-2 gap-3">
               <div className="flex flex-col items-center">
-                <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
-                <img src={proxyUrl(cropImage.url)} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
+                <span className="text-[10px] text-content-secondary font-semibold mb-1">원본</span>
+                <img src={proxyUrl(cropImage.url)} alt="원본 도형" className="rounded border border-white/[.14] max-h-48 object-contain" loading="lazy" />
               </div>
               <div className="flex flex-col items-center">
                 <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
@@ -888,7 +888,7 @@ function ProblemCardView({
                 className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 cursor-help"
                 title={`검수 필요:\n· ${hmlWarnings.join('\n· ')}`}
               >
-                ⚠️ 검수 {hmlWarnings.length}
+                검수 {hmlWarnings.length}
               </span>
             );
           })()}
@@ -1295,8 +1295,8 @@ function ProblemCardView({
                     showFigureCompare && cropImage ? (
                       <div className="mt-2 grid grid-cols-2 gap-3">
                         <div className="flex flex-col items-center">
-                          <span className="text-[10px] text-blue-400 font-semibold mb-1">원본</span>
-                          <img src={getProxiedImageUrl(cropImage.url)} alt="원본 도형" className="rounded border border-blue-500/30 max-h-48 object-contain" loading="lazy" />
+                          <span className="text-[10px] text-content-secondary font-semibold mb-1">원본</span>
+                          <img src={getProxiedImageUrl(cropImage.url)} alt="원본 도형" className="rounded border border-white/[.14] max-h-48 object-contain" loading="lazy" />
                         </div>
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] text-emerald-400 font-semibold mb-1">AI 생성</span>
@@ -2600,7 +2600,7 @@ export default function CloudExamDetailPage() {
                 issue.type === 'empty' ? 'border-red-500/30 bg-red-500/10 text-red-400' :
                 issue.type === 'unclassified' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' :
                 issue.type === 'choice_misdetect' ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400' :
-                'border-violet-500/30 bg-violet-500/10 text-violet-400'
+                'border-white/[.08] bg-white/[.04] text-content-secondary'
               }`}>
                 #{issue.problemNum} {issue.message}
               </span>

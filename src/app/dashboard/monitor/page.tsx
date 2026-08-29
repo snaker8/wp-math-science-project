@@ -68,12 +68,12 @@ export default function MonitorPage() {
             <div className="flex items-end justify-between">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <div className="p-1 px-2 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-bold text-rose-400 tracking-tighter uppercase">
+                        <div className="p-1 px-2 rounded border border-white/[.08] bg-white/[.04] text-[10px] font-semibold text-content-secondary tracking-tighter uppercase">
                             Live Session
                         </div>
                         <span className="text-content-tertiary text-xs font-medium uppercase tracking-widest">Real-time Class Monitor</span>
                     </div>
-                    <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+                    <h1 className="text-4xl font-semibold tracking-tight text-content-primary">
                         실시간 클래스 모니터
                     </h1>
                 </div>
@@ -89,7 +89,7 @@ export default function MonitorPage() {
                             <div className="text-sm font-bold text-content-primary">12 / 15</div>
                         </div>
                     </div>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-content-primary text-xs font-bold rounded-xl transition-all">
+                    <button className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/[.08] bg-white/[.04] px-4 py-2 text-xs font-semibold text-rose-300 hover:bg-white/[.06] transition-colors">
                         <Zap size={14} /> 세션 종료
                     </button>
                 </div>

@@ -176,7 +176,7 @@ function MathsecrTreeView({
           onClick={() => isLeaf ? onSelectType(node.code) : toggle(node.code)}
           className={`w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
             isSelected
-              ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+              ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
               : 'hover:bg-surface-raised text-content-secondary'
           }`}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
@@ -188,7 +188,7 @@ function MathsecrTreeView({
           )}
           <span className="flex-1 truncate">{node.name}</span>
           {hasProblems && (
-            <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{node.problemCount}</span>
+            <span className="text-[10px] font-medium tabular-nums text-content-secondary border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 rounded">{node.problemCount}</span>
           )}
         </button>
         {isExpanded && node.children.length > 0 && (
@@ -239,7 +239,7 @@ function TypeTreeView({
               className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold text-content-primary hover:bg-surface-raised/80"
             >
               {isLevelOpen
-                ? <ChevronDown className="h-4 w-4 text-violet-400 flex-shrink-0" />
+                ? <ChevronDown className="h-4 w-4 text-content-tertiary flex-shrink-0" />
                 : <ChevronRight className="h-4 w-4 text-content-tertiary flex-shrink-0" />}
               <span>{level.label}</span>
               <span className="ml-auto rounded-full bg-surface-raised px-2 py-0.5 text-[10px] text-content-tertiary">
@@ -261,7 +261,7 @@ function TypeTreeView({
                     {isDomOpen
                       ? <ChevronDown className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />
                       : <ChevronRight className="h-3.5 w-3.5 text-content-tertiary flex-shrink-0" />}
-                    <span className="text-violet-400/80 text-xs mr-0.5">{romanNumeral(di + 1)}.</span>
+                    <span className="text-content-tertiary text-xs mr-0.5">{romanNumeral(di + 1)}.</span>
                     <span>{domain.label}</span>
                     <span className="ml-auto text-[10px] text-content-muted">{domain.typeCount}</span>
                   </button>
@@ -283,7 +283,7 @@ function TypeTreeView({
                           }}
                           className={`flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs hover:bg-surface-raised/50 ${
                             !hasTypes && std.types.length === 1 && selectedTypeCode === std.types[0].typeCode
-                              ? 'bg-violet-900/30 text-violet-300'
+                              ? 'bg-white/[.08] text-content-primary'
                               : 'text-content-secondary'
                           }`}
                           style={{ paddingLeft: '40px' }}
@@ -313,7 +313,7 @@ function TypeTreeView({
                                 onClick={() => onSelectType(t.typeCode)}
                                 className={`flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-xs transition-colors ${
                                   selectedTypeCode === t.typeCode
-                                    ? 'bg-violet-900/30 text-violet-300 font-medium'
+                                    ? 'bg-white/[.08] text-content-primary font-medium'
                                     : 'text-content-tertiary hover:bg-surface-raised/50 hover:text-content-secondary'
                                 }`}
                                 style={{ paddingLeft: '56px' }}
@@ -787,7 +787,7 @@ export default function SkillsPage() {
         {/* Header */}
         <header className="flex w-full flex-shrink-0 items-center justify-between gap-x-4 pb-1">
           <div className="flex items-center gap-3 flex-shrink-0">
-            <Puzzle className="h-5 w-5 text-violet-400" />
+            <Puzzle className="h-5 w-5 text-content-tertiary" />
             <h1 className="text-lg font-semibold text-content-primary">유형/문제 관리</h1>
             <div className="ml-2 flex items-center gap-2">
               <span className="text-xs text-content-tertiary">과목</span>
@@ -808,7 +808,7 @@ export default function SkillsPage() {
                   placeholder="유형 검색..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="h-9 w-64 rounded-lg border border bg-surface-card pl-9 pr-3 text-sm text-content-primary placeholder:text-content-tertiary focus:border-violet-500 focus:outline-none"
+                  className="h-9 w-64 rounded-lg border border bg-surface-card pl-9 pr-3 text-sm text-content-primary placeholder:text-content-tertiary focus:border-white/20 focus:outline-none"
                 />
               </div>
             )}
@@ -843,7 +843,7 @@ export default function SkillsPage() {
                   onClick={() => handleSchoolFilterChange(tab.key)}
                   className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                     schoolFilter === tab.key
-                      ? 'bg-violet-600 text-content-primary'
+                      ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                       : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
                   }`}
                 >
@@ -859,7 +859,7 @@ export default function SkillsPage() {
                 onClick={() => handleViewModeChange('type')}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                   viewMode === 'type'
-                    ? 'bg-violet-700/60 text-violet-200 border border-violet-700/50'
+                    ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                     : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
                 }`}
               >
@@ -871,7 +871,7 @@ export default function SkillsPage() {
                 onClick={() => handleViewModeChange('curriculum')}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                   viewMode === 'curriculum'
-                    ? 'bg-emerald-800/60 text-emerald-200 border border-emerald-700/50'
+                    ? 'border border-white/[.14] bg-white/[.08] text-content-primary'
                     : 'text-content-secondary hover:bg-surface-raised hover:text-content-primary'
                 }`}
               >
@@ -962,9 +962,7 @@ export default function SkillsPage() {
             <div className="flex-shrink-0 rounded-xl border border-subtle bg-surface-card/50">
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-surface-raised shadow-sm ${
-                    viewMode === 'curriculum' ? 'text-emerald-400' : 'text-violet-400'
-                  }`}>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[.08] bg-surface-raised text-content-tertiary">
                     {viewMode === 'curriculum' ? <BookOpen className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
                   </div>
                   <div className="flex flex-col">
@@ -1078,7 +1076,7 @@ export default function SkillsPage() {
                             return (
                               <div
                                 key={String(item.id)}
-                                className="flex items-start gap-3 rounded-xl border border-subtle bg-surface-card p-4 hover:border-violet-500/30 transition-colors"
+                                className="flex items-start gap-3 rounded-xl border border-subtle bg-surface-card p-4 hover:border-white/[.14] transition-colors"
                               >
                                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-raised text-sm font-semibold text-content-secondary">
                                   {i + 1}

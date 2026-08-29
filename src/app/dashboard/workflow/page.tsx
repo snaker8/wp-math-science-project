@@ -101,13 +101,13 @@ export default function WorkflowPage() {
                                 <div className={`
                   flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all duration-300
                   ${isActive
-                                        ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                                        ? 'bg-white/[.08] border-white/[.14] text-content-primary'
                                         : isCompleted
                                             ? 'bg-surface-card border text-content-tertiary'
                                             : 'bg-surface-card/50 border-subtle text-content-muted'
                                     }
                 `}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-indigo-400 animate-pulse' : isCompleted ? 'bg-emerald-500' : 'bg-zinc-700'}`} />
+                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white animate-pulse' : isCompleted ? 'bg-emerald-500' : 'bg-zinc-700'}`} />
                                     <span className="uppercase tracking-wide">
                                         {step === 'upload' ? 'Cloud Flow' : step === 'grading' ? 'Deep Grading' : 'Zero-Wrong Loop'}
                                     </span>
@@ -234,7 +234,7 @@ export default function WorkflowPage() {
 
                                     {/* Bottom Action */}
                                     <div className="mt-2 flex justify-end">
-                                        <button className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-content-primary rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:scale-105 transition-all">
+                                        <button className="flex items-center gap-2 whitespace-nowrap rounded-full bg-white px-6 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors">
                                             <Send className="w-4 h-4" />
                                             학생에게 클리닉 전송
                                         </button>

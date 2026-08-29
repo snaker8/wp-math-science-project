@@ -160,13 +160,13 @@ export default function ClassDetailPage() {
   const pending = enrollments.filter((e) => e.status === 'PENDING');
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-content-primary">
       <div className="mx-auto max-w-6xl px-6 py-8">
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
           <button
             onClick={goBack}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800 hover:text-content-primary"
             title="반 목록으로"
           >
             <ArrowLeft size={18} />
@@ -196,7 +196,7 @@ export default function ClassDetailPage() {
           </div>
           <Link
             href={`/tutor/classes/${classId}/edit`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-content-primary"
           >
             <Edit2 size={14} />
             반 수정
@@ -266,7 +266,7 @@ export default function ClassDetailPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="truncate text-base font-bold text-white">{s.full_name}</h3>
+                        <h3 className="truncate text-base font-bold text-content-primary">{s.full_name}</h3>
                         {e.status === 'PENDING' && (
                           <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                             대기
@@ -431,8 +431,8 @@ function AddExistingStudentModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">학생 추가</h2>
-          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+          <h2 className="text-lg font-bold text-content-primary">학생 추가</h2>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-content-primary">
             <X size={18} />
           </button>
         </div>
@@ -446,7 +446,7 @@ function AddExistingStudentModal({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="학생 이름 검색"
           autoFocus
-          className="mb-3 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+          className="mb-3 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/5 bg-black/20">
@@ -607,7 +607,7 @@ function AddStudentModal({
                 <Check size={20} />
               </div>
               <div className="flex-1">
-                <h2 className="text-lg font-bold text-white">{studentName} 학생 등록 완료</h2>
+                <h2 className="text-lg font-bold text-content-primary">{studentName} 학생 등록 완료</h2>
                 <p className="mt-0.5 text-xs text-zinc-400">
                   아래 로그인 정보를 학생에게 전달하세요
                 </p>
@@ -620,10 +620,10 @@ function AddStudentModal({
                   이메일 (로그인 ID){credentials.emailGenerated && <span className="ml-1 text-content-tertiary">자동 생성</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 truncate font-mono text-[13px] text-white">{credentials.email}</div>
+                  <div className="flex-1 truncate font-mono text-[13px] text-content-primary">{credentials.email}</div>
                   <button
                     onClick={() => copyToClipboard(credentials.email, 'email')}
-                    className="flex-shrink-0 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                    className="flex-shrink-0 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-content-primary"
                   >
                     {copied === 'email' ? <Check size={14} /> : <Copy size={14} />}
                   </button>
@@ -634,10 +634,10 @@ function AddStudentModal({
                   비밀번호{credentials.passwordGenerated && <span className="ml-1 text-content-tertiary">자동 생성</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 truncate font-mono text-[13px] text-white">{credentials.password}</div>
+                  <div className="flex-1 truncate font-mono text-[13px] text-content-primary">{credentials.password}</div>
                   <button
                     onClick={() => copyToClipboard(credentials.password, 'password')}
-                    className="flex-shrink-0 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                    className="flex-shrink-0 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-content-primary"
                   >
                     {copied === 'password' ? <Check size={14} /> : <Copy size={14} />}
                   </button>
@@ -652,12 +652,12 @@ function AddStudentModal({
                 }
                 className="w-full whitespace-nowrap rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 text-sm font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
               >
-                {copied === 'all' ? '✓ 모두 복사됨' : '둘 다 복사 (카톡 전달용)'}
+                {copied === 'all' ? '모두 복사됨' : '둘 다 복사 (카톡 전달용)'}
               </button>
             </div>
 
             <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-[11.5px] text-amber-200">
-              ⚠ 비밀번호는 이 화면을 닫으면 다시 볼 수 없습니다. 학생에게 전달 후 닫아주세요.
+              비밀번호는 이 화면을 닫으면 다시 볼 수 없습니다. 학생에게 전달 후 닫아주세요.
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -673,10 +673,10 @@ function AddStudentModal({
           // ─── 입력 폼 ───
           <>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">학생 직접 등록</h2>
+              <h2 className="text-lg font-bold text-content-primary">학생 직접 등록</h2>
               <button
                 onClick={onClose}
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-content-primary"
               >
                 <X size={18} />
               </button>
@@ -694,7 +694,7 @@ function AddStudentModal({
                   placeholder="홍길동"
                   autoFocus
                   required
-                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                 />
               </Field>
               <div className="grid grid-cols-2 gap-2">
@@ -704,7 +704,7 @@ function AddStudentModal({
                     value={grade}
                     onChange={(e) => setGrade(e.target.value)}
                     placeholder="중3"
-                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                   />
                 </Field>
                 <Field label="연락처">
@@ -713,7 +713,7 @@ function AddStudentModal({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="010-0000-0000"
-                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                   />
                 </Field>
               </div>
@@ -723,7 +723,7 @@ function AddStudentModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="student@example.com"
-                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                 />
               </Field>
               <Field label="비밀번호 (선택)" hint="비워두면 자동 생성, 등록 후 학생에게 전달">
@@ -732,7 +732,7 @@ function AddStudentModal({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="자동 생성됨"
-                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                 />
               </Field>
               <Field label="메모 (선택)">
@@ -741,7 +741,7 @@ function AddStudentModal({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="예: 자모 김OO, 4월 등록"
-                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-content-primary placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
                 />
               </Field>
 

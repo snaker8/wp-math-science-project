@@ -103,10 +103,10 @@ export default function CorrectionsDashboardPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-zinc-800/50 bg-gradient-to-r from-indigo-900/30 via-indigo-900/20 to-zinc-900/30 px-8 py-6">
+      <div className="flex-shrink-0 border-b border-white/[.08] bg-white/[.03] px-8 py-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10">
-            <Sparkles className="h-5 w-5 text-indigo-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[.08] bg-white/[.04]">
+            <Sparkles className="h-5 w-5 text-content-tertiary" />
           </div>
           <div>
             <h1 className="text-xl font-bold">분류 보정 이력</h1>
@@ -147,7 +147,7 @@ export default function CorrectionsDashboardPage() {
                     style={{ height: d.count === 0 ? '2px' : `${Math.max(4, pct)}%` }}
                   />
                   {d.count > 0 && (
-                    <div className="absolute -top-5 left-1/2 hidden -translate-x-1/2 rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] text-indigo-300 group-hover:block">
+                    <div className="absolute -top-5 left-1/2 hidden -translate-x-1/2 rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] tabular-nums text-zinc-200 group-hover:block">
                       {d.count}
                     </div>
                   )}
@@ -171,8 +171,8 @@ export default function CorrectionsDashboardPage() {
                 {data.topTransitions.map((t, i) => (
                   <li key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-2">
                     <div className="flex items-center justify-between gap-2 text-[11px]">
-                      <code className="truncate text-amber-300">{t.transition}</code>
-                      <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-300">
+                      <code className="truncate text-zinc-300">{t.transition}</code>
+                      <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 tabular-nums text-zinc-300">
                         {t.count}회
                       </span>
                     </div>
@@ -242,11 +242,11 @@ export default function CorrectionsDashboardPage() {
                         })}
                       </td>
                       <td className="px-3 py-2">
-                        <code className="text-amber-300">
+                        <code className="text-zinc-500">
                           {(r.beforeCode || '(없음)').slice(0, 20)}
                         </code>
                         <ArrowRight className="mx-1 inline h-3 w-3 text-zinc-600" />
-                        <code className="text-indigo-300">{r.afterCode}</code>
+                        <code className="text-zinc-200">{r.afterCode}</code>
                       </td>
                       <td className="px-3 py-2 text-zinc-300">
                         <span className="line-clamp-1">{r.afterTypeName || '-'}</span>
@@ -280,7 +280,8 @@ function StatCard({
   icon: React.ReactNode;
   accent?: 'indigo' | 'amber';
 }) {
-  const valueColor = accent === 'indigo' ? 'text-indigo-400' : accent === 'amber' ? 'text-amber-400' : 'text-white';
+  // 크롬 통계값은 무채 — 강조는 크기·굵기가 담당 (accent 는 호출부 호환용으로 유지)
+  const valueColor = accent ? 'text-white' : 'text-white';
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500">

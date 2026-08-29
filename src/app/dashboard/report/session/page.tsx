@@ -51,10 +51,10 @@ export default function SessionReportPage() {
                     <ChevronLeft size={16} /> 대시보드로 돌아가기
                 </button>
                 <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition-all flex items-center gap-2">
+                    <button className="px-4 py-2 border border-white/[.08] bg-white/[.04] hover:bg-white/[.06] rounded-full text-xs font-semibold text-content-secondary hover:text-content-primary transition-colors flex items-center gap-2 whitespace-nowrap">
                         <Share2 size={14} /> 공유하기
                     </button>
-                    <button onClick={() => window.print()} className="px-6 py-2 bg-white text-black rounded-xl text-xs font-bold hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all flex items-center gap-2">
+                    <button onClick={() => window.print()} className="px-5 py-2 bg-white text-black rounded-full text-xs font-semibold hover:bg-zinc-200 transition-colors flex items-center gap-2 whitespace-nowrap">
                         <Printer size={14} /> PDF 리포트 출력
                     </button>
                 </div>
@@ -65,7 +65,7 @@ export default function SessionReportPage() {
 
                 {/* A. Report Title & Meta */}
                 <div className="text-center space-y-4">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-400 tracking-tighter uppercase">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[.08] bg-white/[.04] text-[10px] font-semibold text-content-secondary tracking-tighter uppercase">
                         Final Session Analysis Report
                     </div>
                     <h1 className="text-5xl font-black tracking-tight">2026 1학기 중간고사 대비 모의고사 A</h1>
@@ -80,7 +80,7 @@ export default function SessionReportPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <GlowCard className="text-center py-10 border-white/5">
                         <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-2">평균 성취도</div>
-                        <div className="text-4xl font-black text-indigo-400 mb-1">82.4%</div>
+                        <div className="text-4xl font-semibold tracking-tight text-content-primary tabular-nums mb-1">82.4%</div>
                         <div className="text-[10px] text-emerald-400 font-bold flex items-center justify-center gap-1">
                             <TrendingUp size={10} /> 지난 세션 대비 +4.2%
                         </div>
@@ -103,7 +103,7 @@ export default function SessionReportPage() {
                     {/* 1. Skill Analysis (Radar) */}
                     <GlowCard className="border-white/5">
                         <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-                            <Zap size={16} className="text-amber-400" /> 세션 종합 역량 분석
+                            <Zap size={16} className="text-content-tertiary" /> 세션 종합 역량 분석
                         </h3>
                         <div className="h-[300px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
@@ -132,7 +132,7 @@ export default function SessionReportPage() {
                     {/* 2. Grade Distribution (Pie) */}
                     <GlowCard className="border-white/5">
                         <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-                            <PieChartIcon size={16} className="text-indigo-400" /> 성취도 분포 현황
+                            <PieChartIcon size={16} className="text-content-tertiary" /> 성취도 분포 현황
                         </h3>
                         <div className="h-[300px] w-full flex items-center justify-center">
                             <ResponsiveContainer width="100%" height="100%">
@@ -165,26 +165,26 @@ export default function SessionReportPage() {
                 </div>
 
                 {/* D. AI Insights Panel */}
-                <GlowCard className="bg-gradient-to-br from-indigo-500/10 via-black to-black border-indigo-500/20 p-10">
+                <GlowCard className="bg-white/[.03] border-white/[.08] p-10">
                     <div className="flex flex-col md:flex-row gap-8 items-start">
-                        <div className="flex-shrink-0 p-4 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/20">
+                        <div className="flex-shrink-0 p-4 rounded-2xl bg-white/[.06] text-content-secondary border border-white/[.08]">
                             <Award size={32} />
                         </div>
                         <div className="space-y-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <h3 className="text-xl font-semibold text-content-primary flex items-center gap-2">
                                 AI 학습 처방 가이드
-                                <span className="text-xs font-bold text-indigo-400 px-2 py-0.5 rounded bg-indigo-500/10">PREMIUM</span>
+                                <span className="text-xs font-semibold text-content-secondary px-2 py-0.5 rounded border border-white/[.08] bg-white/[.04]">PREMIUM</span>
                             </h3>
                             <p className="text-zinc-400 text-sm leading-relaxed max-w-2xl">
                                 이번 세션에서는 **&apos;추론력&apos;** 파트의 정답률이 도드라지게 높았으나, **&apos;계산력&apos;** 부분에서 실수가 다수 발견되었습니다.
-                                다음 세션 전까지 <span className="text-indigo-400">계산 연습 30제</span>를 과제로 할당하고, 상위 10% 학생들에게는
-                                <span className="text-amber-400">C-Level 고난도 기하</span> 문항을 추천합니다.
+                                다음 세션 전까지 <span className="text-content-primary font-medium">계산 연습 30제</span>를 과제로 할당하고, 상위 10% 학생들에게는
+                                <span className="text-content-primary font-medium">C-Level 고난도 기하</span> 문항을 추천합니다.
                             </p>
                             <div className="flex gap-4 pt-4">
-                                <button className="flex items-center gap-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 rounded-xl transition-all">
+                                <button className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold text-content-secondary hover:text-content-primary border border-white/[.08] bg-white/[.04] hover:bg-white/[.06] px-5 py-2.5 rounded-full transition-colors">
                                     추천 과제 할당 <ArrowRight size={14} />
                                 </button>
-                                <button className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 border border-white/5 px-5 py-2.5 rounded-xl transition-all">
+                                <button className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold text-content-secondary hover:text-content-primary border border-white/[.08] bg-white/[.04] hover:bg-white/[.06] px-5 py-2.5 rounded-full transition-colors">
                                     오답 노트 생성
                                 </button>
                             </div>

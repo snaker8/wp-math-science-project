@@ -234,7 +234,7 @@ export default function FolderImportPage() {
             <select
               value={sido}
               onChange={(e) => setSido(e.target.value)}
-              className="bg-zinc-800 text-white rounded-lg px-4 py-2 mb-6 border border-zinc-700 focus:border-blue-500 outline-none"
+              className="bg-zinc-800 text-white rounded-lg px-4 py-2 mb-6 border border-zinc-700 focus:border-white/20 outline-none"
             >
               {SIDO_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -257,7 +257,7 @@ export default function FolderImportPage() {
                   className="hidden"
                   onChange={(e) => onFolderSelected(e.target.files)}
                 />
-                <span className="bg-blue-600 hover:bg-blue-500 transition px-6 py-3 rounded-lg font-medium cursor-pointer inline-flex items-center gap-2">
+                <span className="whitespace-nowrap rounded-full bg-white px-6 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors cursor-pointer inline-flex items-center gap-2">
                   <FolderUp className="w-4 h-4" />
                   폴더 선택
                 </span>
@@ -288,7 +288,7 @@ export default function FolderImportPage() {
                     type="checkbox"
                     checked={overwriteDuplicates}
                     onChange={(e) => setOverwriteDuplicates(e.target.checked)}
-                    className="accent-blue-500"
+                    className="accent-white"
                   />
                   중복도 다시 자산화
                 </label>
@@ -366,7 +366,7 @@ export default function FolderImportPage() {
                       <td className="px-3 py-2 text-zinc-400 text-xs">{r.meta.district || '미감지'}</td>
                       <td className="px-3 py-2">
                         <span className={`text-xs px-2 py-0.5 rounded ${
-                          r.meta.documentType === 'PROBLEM' ? 'bg-blue-900/40 text-blue-300' :
+                          r.meta.documentType === 'PROBLEM' ? 'border border-white/[.08] bg-white/[.04] text-content-secondary' :
                           r.meta.documentType === 'ANSWER' ? 'bg-zinc-700 text-zinc-300' :
                           'bg-zinc-700 text-zinc-300'
                         }`}>
@@ -402,7 +402,7 @@ export default function FolderImportPage() {
               <button
                 onClick={startImport}
                 disabled={rows.length === 0}
-                className="ml-auto px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg font-medium transition flex items-center gap-2"
+                className="ml-auto whitespace-nowrap rounded-full bg-white px-6 py-2 text-sm font-semibold text-black hover:bg-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
                 자산화 시작 ({rows.filter((r) => r.status !== 'duplicate' || overwriteDuplicates).filter((r) => r.meta.documentType === 'PROBLEM').length} 건)
@@ -443,7 +443,7 @@ export default function FolderImportPage() {
             <div className="mt-6">
               <Link
                 href="/dashboard/cloud"
-                className="inline-block px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition"
+                className="inline-block whitespace-nowrap rounded-full bg-white px-6 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
               >
                 클라우드로 이동
               </Link>
@@ -486,7 +486,7 @@ function ProgressTable({ rows }: { rows: FileRow[] }) {
               <td className="px-3 py-2">
                 {r.status === 'pending' && <span className="text-zinc-500">대기</span>}
                 {r.status === 'in_progress' && (
-                  <span className="text-blue-400 flex items-center gap-1">
+                  <span className="text-content-secondary flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" /> 자산화 중
                   </span>
                 )}
@@ -509,7 +509,7 @@ function ProgressTable({ rows }: { rows: FileRow[] }) {
               </td>
               <td className="px-3 py-2 text-xs">
                 {r.examId && (
-                  <Link href={`/dashboard/cloud/${r.examId}`} className="text-blue-400 hover:underline">
+                  <Link href={`/dashboard/cloud/${r.examId}`} className="text-content-primary hover:underline">
                     시험지 보기
                   </Link>
                 )}

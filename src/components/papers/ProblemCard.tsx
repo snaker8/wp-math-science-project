@@ -102,7 +102,7 @@ export function ProblemCard({ index, problem, points }: ProblemCardProps) {
         </span>
 
         {typeCode && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
             {typeCode}
           </span>
         )}

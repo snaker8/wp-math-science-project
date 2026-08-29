@@ -71,7 +71,7 @@ export default function ChatPage() {
                 <div className="p-6 border-b border-[#D2D2D7]/30">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-xl font-bold tracking-tight">상담 대화</h2>
-                        <button className="p-2 rounded-xl bg-[#F5F5F7] text-zinc-500 hover:text-indigo-600 transition-colors">
+                        <button className="p-2 rounded-xl bg-[#F5F5F7] text-zinc-500 hover:text-zinc-900 transition-colors">
                             <MessageSquare size={18} />
                         </button>
                     </div>
@@ -80,13 +80,13 @@ export default function ChatPage() {
                         <input
                             type="text"
                             placeholder="이름 또는 내용 검색"
-                            className="w-full bg-[#F5F5F7] border-none rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full bg-[#F5F5F7] border-none rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-zinc-900/15"
                         />
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className={`p-4 flex items-center gap-3 cursor-pointer transition-colors ${i === 1 ? 'bg-indigo-50 border-r-4 border-indigo-500' : 'hover:bg-[#F5F5F7]'}`}>
+                        <div key={i} className={`p-4 flex items-center gap-3 cursor-pointer transition-colors ${i === 1 ? 'bg-zinc-100 border-r-4 border-zinc-900' : 'hover:bg-[#F5F5F7]'}`}>
                             <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400">
                                 <User size={20} />
                             </div>
@@ -110,7 +110,7 @@ export default function ChatPage() {
                         <button className="md:hidden p-2 rounded-full hover:bg-[#F5F5F7]">
                             <ChevronLeft size={20} />
                         </button>
-                        <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm">
+                        <div className="w-9 h-9 rounded-full bg-zinc-900 flex items-center justify-center text-white font-bold text-sm">
                             김
                         </div>
                         <div>
@@ -140,7 +140,7 @@ export default function ChatPage() {
                                     <div className={`
                                         rounded-2xl px-4 py-2.5 text-[13px] font-medium leading-relaxed shadow-sm
                                         ${msg.sender === 'tutor'
-                                            ? 'bg-indigo-600 text-white rounded-tr-none'
+                                            ? 'bg-zinc-900 text-white rounded-tr-none'
                                             : 'bg-white text-[#1D1D1F] rounded-tl-none border border-[#D2D2D7]/20'}
                                     `}>
                                         {msg.isMath ? (
@@ -154,7 +154,7 @@ export default function ChatPage() {
                                     <div className="flex items-center gap-1.5 px-1">
                                         <span className="text-[9px] text-zinc-400 font-bold uppercase">{msg.timestamp}</span>
                                         {msg.sender === 'tutor' && (
-                                            <CheckCheck size={12} className={msg.status === 'read' ? 'text-indigo-500' : 'text-zinc-300'} />
+                                            <CheckCheck size={12} className={msg.status === 'read' ? 'text-zinc-600' : 'text-zinc-300'} />
                                         )}
                                     </div>
                                 </div>
@@ -167,14 +167,14 @@ export default function ChatPage() {
                 <footer className="p-6 bg-white/80 backdrop-blur-xl border-t border-[#D2D2D7]/30 space-y-4">
                     {/* AI Suggestions */}
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                        <div className="flex-shrink-0 p-1.5 rounded-lg bg-indigo-50 text-indigo-500 border border-indigo-100">
+                        <div className="flex-shrink-0 p-1.5 rounded-lg bg-zinc-100 text-zinc-600 border border-zinc-200">
                             <Zap size={14} fill="currentColor" />
                         </div>
                         {aiSuggestions.map((s, idx) => (
                             <button
                                 key={idx}
                                 onClick={() => setInputValue(s)}
-                                className="flex-shrink-0 px-3 py-1.5 bg-white border border-[#D2D2D7]/40 rounded-full text-[11px] font-bold text-zinc-500 hover:border-indigo-500 hover:text-indigo-600 transition-all whitespace-nowrap"
+                                className="flex-shrink-0 px-3 py-1.5 bg-white border border-[#D2D2D7]/40 rounded-full text-[11px] font-bold text-zinc-500 hover:border-zinc-400 hover:text-zinc-900 transition-all whitespace-nowrap"
                             >
                                 {s}
                             </button>
@@ -183,10 +183,10 @@ export default function ChatPage() {
 
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1">
-                            <button className="p-2 text-zinc-400 hover:text-indigo-500 transition-colors">
+                            <button className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors">
                                 <ImageIcon size={20} />
                             </button>
-                            <button className="p-2 text-zinc-400 hover:text-indigo-500 transition-colors">
+                            <button className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors">
                                 <Paperclip size={20} />
                             </button>
                         </div>
@@ -197,9 +197,9 @@ export default function ChatPage() {
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                                 placeholder="메시지를 입력하세요 (수식은 KaTeX 문법 사용)..."
-                                className="w-full bg-[#F5F5F7] border-none rounded-2xl py-3 px-4 text-sm focus:ring-2 focus:ring-indigo-500/20 placeholder:text-zinc-400"
+                                className="w-full bg-[#F5F5F7] border-none rounded-2xl py-3 px-4 text-sm focus:ring-1 focus:ring-zinc-900/15 placeholder:text-zinc-400"
                             />
-                            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-indigo-500 transition-colors">
+                            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-900 transition-colors">
                                 <Smile size={20} />
                             </button>
                         </div>
@@ -207,8 +207,8 @@ export default function ChatPage() {
                             onClick={handleSend}
                             disabled={!inputValue.trim()}
                             className={`
-                                p-3 rounded-2xl shadow-lg transition-all
-                                ${inputValue.trim() ? 'bg-indigo-600 text-white shadow-indigo-500/30' : 'bg-zinc-100 text-zinc-400 shadow-none'}
+                                p-3 rounded-2xl transition-all
+                                ${inputValue.trim() ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-400'}
                             `}
                         >
                             <Send size={20} fill={inputValue.trim() ? 'currentColor' : 'none'} />

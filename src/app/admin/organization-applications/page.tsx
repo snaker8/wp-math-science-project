@@ -194,12 +194,12 @@ export default function OrganizationApplicationsPage() {
 
   if (permError) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-black text-content-primary flex items-center justify-center p-6">
         <div className="max-w-md text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 mb-4">
             <AlertTriangle className="text-rose-400" size={28} />
           </div>
-          <h1 className="text-xl font-bold text-white mb-2">접근 권한 없음</h1>
+          <h1 className="text-xl font-bold text-content-primary mb-2">접근 권한 없음</h1>
           <p className="text-sm text-zinc-400">시스템 슈퍼관리자(super_admin)만 사용 가능합니다.</p>
         </div>
       </div>
@@ -207,7 +207,7 @@ export default function OrganizationApplicationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 space-y-6">
+    <div className="min-h-screen bg-black text-content-primary p-6 space-y-6">
       {/* 헤더 */}
       <div>
         <div className="flex items-center gap-2 mb-2">
@@ -215,7 +215,7 @@ export default function OrganizationApplicationsPage() {
             <Building2 className="text-content-secondary" size={20} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">가맹 학원 신청 관리</h1>
+            <h1 className="text-2xl font-bold text-content-primary">가맹 학원 신청 관리</h1>
             <p className="text-xs text-zinc-500 mt-0.5">새 학원 가맹 신청을 검토하고 승인/거부합니다 · 슈퍼관리자 전용</p>
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function OrganizationApplicationsPage() {
             onClick={() => setStatusFilter(s)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               statusFilter === s
-                ? 'bg-white/[.1] text-white'
+                ? 'bg-white/[.1] text-content-primary'
                 : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
@@ -276,7 +276,7 @@ export default function OrganizationApplicationsPage() {
                         </span>
                         <span className="text-[11px] text-zinc-500">{fmtDate(app.created_at)}</span>
                       </div>
-                      <div className="font-bold text-lg text-white">
+                      <div className="font-bold text-lg text-content-primary">
                         {app.proposed_organization_name}
                       </div>
                       {app.proposed_institute_name && (
@@ -342,11 +342,11 @@ export default function OrganizationApplicationsPage() {
       {approving && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" onClick={() => !busy && setApproving(null)}>
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-white mb-4">🏫 가맹 학원 승인</h2>
+            <h2 className="text-lg font-bold text-content-primary mb-4">가맹 학원 승인</h2>
 
             <div className="text-xs text-zinc-400 mb-4 bg-zinc-900/50 rounded-lg p-3">
-              신청자: <span className="text-white">{approving.applicant_full_name || approving.applicant_email}</span><br />
-              신청 학원: <span className="text-white font-bold">{approving.proposed_organization_name}</span>
+              신청자: <span className="text-content-primary">{approving.applicant_full_name || approving.applicant_email}</span><br />
+              신청 학원: <span className="text-content-primary font-bold">{approving.proposed_organization_name}</span>
             </div>
 
             {/* 모드 선택 */}
@@ -354,14 +354,14 @@ export default function OrganizationApplicationsPage() {
               <button
                 type="button"
                 onClick={() => setApproveMode('new')}
-                className={`flex-1 px-3 py-2 rounded text-xs font-semibold ${approveMode === 'new' ? 'bg-white/[.1] text-white' : 'text-zinc-500'}`}
+                className={`flex-1 px-3 py-2 rounded text-xs font-semibold ${approveMode === 'new' ? 'bg-white/[.1] text-content-primary' : 'text-zinc-500'}`}
               >
                 신규 학원 생성
               </button>
               <button
                 type="button"
                 onClick={() => setApproveMode('existing')}
-                className={`flex-1 px-3 py-2 rounded text-xs font-semibold ${approveMode === 'existing' ? 'bg-white/[.1] text-white' : 'text-zinc-500'}`}
+                className={`flex-1 px-3 py-2 rounded text-xs font-semibold ${approveMode === 'existing' ? 'bg-white/[.1] text-content-primary' : 'text-zinc-500'}`}
               >
                 기존 학원에 배정
               </button>
@@ -375,7 +375,7 @@ export default function OrganizationApplicationsPage() {
                     type="text"
                     value={newOrgName}
                     onChange={(e) => setNewOrgName(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-white focus:border-white/25 focus:outline-none"
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-content-primary focus:border-white/25 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -385,7 +385,7 @@ export default function OrganizationApplicationsPage() {
                     value={newInstituteName}
                     onChange={(e) => setNewInstituteName(e.target.value)}
                     placeholder="예: 본원, 동래본원, 동부산센터"
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-white focus:border-white/25 focus:outline-none"
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-content-primary focus:border-white/25 focus:outline-none"
                   />
                 </div>
               </div>
@@ -396,7 +396,7 @@ export default function OrganizationApplicationsPage() {
                   <select
                     value={existingOrgId}
                     onChange={(e) => setExistingOrgId(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-white focus:border-white/25 focus:outline-none"
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-content-primary focus:border-white/25 focus:outline-none"
                   >
                     <option value="">선택하세요</option>
                     {organizations.map((o) => (
@@ -411,7 +411,7 @@ export default function OrganizationApplicationsPage() {
                     value={newInstituteName}
                     onChange={(e) => setNewInstituteName(e.target.value)}
                     placeholder="신청자가 배정될 센터 (없으면 기본 '본원')"
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-white focus:border-white/25 focus:outline-none"
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-content-primary focus:border-white/25 focus:outline-none"
                   />
                 </div>
               </div>
@@ -424,7 +424,7 @@ export default function OrganizationApplicationsPage() {
                 onChange={(e) => setDecisionNote(e.target.value)}
                 placeholder="결정 사유·메모"
                 rows={2}
-                className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-white focus:border-white/25 focus:outline-none resize-none"
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-content-primary focus:border-white/25 focus:outline-none resize-none"
               />
             </div>
 
@@ -433,7 +433,7 @@ export default function OrganizationApplicationsPage() {
                 type="button"
                 onClick={() => setApproving(null)}
                 disabled={busy}
-                className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-400 text-sm"
+                className="px-4 py-2 rounded-lg border border-white/[.08] bg-white/[.04] text-sm text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
               >
                 취소
               </button>
@@ -455,7 +455,7 @@ export default function OrganizationApplicationsPage() {
       {rejecting && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" onClick={() => !busy && setRejecting(null)}>
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-white mb-3">가맹 신청 거부</h2>
+            <h2 className="text-lg font-bold text-content-primary mb-3">가맹 신청 거부</h2>
             <p className="text-xs text-zinc-400 mb-4">
               신청자에게 거부 사유를 메모로 남길 수 있습니다 (옵션). 신청자 계정은 institute 미배정 상태로 유지됩니다.
             </p>
@@ -464,14 +464,14 @@ export default function OrganizationApplicationsPage() {
               onChange={(e) => setRejectNote(e.target.value)}
               placeholder="거부 사유 (옵션)"
               rows={3}
-              className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-white focus:border-white/25 focus:outline-none resize-none"
+              className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-content-primary focus:border-white/25 focus:outline-none resize-none"
             />
             <div className="flex justify-end gap-2 mt-4">
               <button
                 type="button"
                 onClick={() => setRejecting(null)}
                 disabled={busy}
-                className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-400 text-sm"
+                className="px-4 py-2 rounded-lg border border-white/[.08] bg-white/[.04] text-sm text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
               >
                 취소
               </button>
