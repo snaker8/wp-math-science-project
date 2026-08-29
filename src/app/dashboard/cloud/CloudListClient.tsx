@@ -48,6 +48,7 @@ import {
   ChevronLeft,
   AlertTriangle,
   KeyRound,
+  FolderTree,
 } from 'lucide-react';
 // ★ 업로드 모달 안에서만 쓰는 무거운 업로더 — dynamic import (열 때만 로드)
 const CloudFlowUploader = dynamic(() => import('@/components/workflow/CloudFlowUploader'), { ssr: false });
@@ -951,6 +952,22 @@ export default function CloudPage() {
 
   // Resizable panels
   const [leftWidth, setLeftWidth] = useState(28);
+  // ★ 2026-08-29 탐색 역전: 폴더 트리는 '보관함' 보조로 내리고 기본 접힘.
+  //   조건(패싯) 바가 주 탐색이다. 트리는 필요할 때만 펼친다 — 선택은 기억한다.
+  const [treeOpen, setTreeOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('gsaram_cloud_tree_open');
+      if (saved !== null) setTreeOpen(saved === '1');
+    } catch { /* 프라이빗 모드 등 — 기본값 유지 */ }
+  }, []);
+  const toggleTree = useCallback(() => {
+    setTreeOpen((v) => {
+      const next = !v;
+      try { localStorage.setItem('gsaram_cloud_tree_open', next ? '1' : '0'); } catch { /* 무시 */ }
+      return next;
+    });
+  }, []);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -2395,10 +2412,48 @@ export default function CloudPage() {
         )}
       </AnimatePresence>
 
+      {/* ★ 주 탐색 = 조건(패싯) 바 (2026-08-29 탐색 역전).
+          예전엔 폴더 트리가 화면 28% 를 상시 점유하고, 조건 바는 목록 안쪽에 묻혀 있었다.
+          같은 자료를 폴더와 상단 카테고리가 두 번 보여주는 이중 탐색이라 매번 "어디를 눌러야
+          하지"가 됐다. 조건을 위로 올리고 폴더는 [보관함] 토글로 내린다. */}
+      {!isLoading && !loadError && (
+        <div className="flex items-start gap-2 px-4 pt-3">
+          <button
+            type="button"
+            onClick={toggleTree}
+            aria-pressed={treeOpen}
+            title="폴더 보관함 열기/닫기"
+            className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors ${
+              treeOpen
+                ? 'border-white/[.14] bg-white/[.08] text-content-primary'
+                : 'border-white/[.08] bg-white/[.03] text-content-tertiary hover:text-content-secondary'
+            }`}
+          >
+            <FolderTree className="h-3.5 w-3.5" />
+            보관함
+          </button>
+          <div className="min-w-0 flex-1">
+            <ExamFacetBar
+              parsedList={parsedExamTitles}
+              value={facets}
+              onChange={setFacets}
+              resultCount={filteredExams.length}
+              isAllScope={selectedId === 'all'}
+              onExpandScope={() => {
+                // selectedName 은 별도 상태 — 같이 안 바꾸면 헤더가 옛 폴더명으로 남는다.
+                setSelectedId('all');
+                setSelectedName('전체 시험지');
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Main Split Panel */}
       {!isLoading && !loadError && (
         <div ref={containerRef} className="flex flex-1 min-h-0 px-4 py-3 gap-0">
-          {/* ======== Left Panel: Tree (모든 카테고리에서 북그룹 폴더 트리 공통) ======== */}
+          {/* ======== Left Panel: 보관함(폴더 트리) — 기본 접힘, 보조 탐색 ======== */}
+          {treeOpen && (
           <div
             className="flex flex-col gap-3 overflow-hidden pr-2"
             style={{ width: `${leftWidth}%`, flexShrink: 0 }}
@@ -2464,8 +2519,10 @@ export default function CloudPage() {
               </div>
             </div>
           </div>
+          )}
 
-          {/* ======== Resize Handle ======== */}
+          {/* ======== Resize Handle — 보관함 열렸을 때만 ======== */}
+          {treeOpen && (
           <div
             className="flex w-3 flex-shrink-0 cursor-col-resize items-center justify-center"
             onMouseDown={handleMouseDown}
@@ -2474,6 +2531,7 @@ export default function CloudPage() {
               <GripVertical className="h-3 w-3 text-content-tertiary" />
             </div>
           </div>
+          )}
 
           {/* ======== Right Panel: File List ======== */}
           <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-2">
@@ -2574,22 +2632,6 @@ export default function CloudPage() {
 
                   {/* Table / Grid */}
                   <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700">
-                    {/* ★ 조건 바 — 폴더 범위 안에서 연도·학년·학기·구분으로 좁힌다.
-                        조건을 걸 축이 없으면(교재 폴더 등) 스스로 숨는다. */}
-                    <div className="px-5 pt-3">
-                      <ExamFacetBar
-                        parsedList={parsedExamTitles}
-                        value={facets}
-                        onChange={setFacets}
-                        resultCount={filteredExams.length}
-                        isAllScope={selectedId === 'all'}
-                        onExpandScope={() => {
-                          // selectedName 은 별도 상태 — 같이 안 바꾸면 헤더가 옛 폴더명으로 남는다.
-                          setSelectedId('all');
-                          setSelectedName('전체 시험지');
-                        }}
-                      />
-                    </div>
                     {filteredExams.length === 0 ? (
                       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                         <Search className="h-8 w-8 text-zinc-700" />
