@@ -65,7 +65,7 @@ export default function AssignClassModal({ isOpen, onClose, paperTitle }: Assign
                     <div className="p-6 border-b border-subtle flex items-center justify-between bg-surface-card/50">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <Zap size={14} className="text-indigo-400" />
+                                <Zap size={14} className="text-content-tertiary" />
                                 <span className="text-[10px] font-bold text-content-tertiary uppercase tracking-widest">Assign Asset</span>
                             </div>
                             <h2 className="text-xl font-bold text-content-primary">학급 배정 및 배포</h2>
@@ -78,12 +78,12 @@ export default function AssignClassModal({ isOpen, onClose, paperTitle }: Assign
                     {/* Body */}
                     <div className="p-6 space-y-8">
                         {/* Paper Info */}
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-                            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/[.04] border border-white/[.08]">
+                            <div className="w-12 h-12 rounded-xl bg-white/[.06] flex items-center justify-center text-content-secondary">
                                 <FileText size={24} />
                             </div>
                             <div>
-                                <div className="text-[10px] font-bold text-indigo-400/60 uppercase tracking-tighter">Selected Paper</div>
+                                <div className="text-[10px] font-bold text-content-tertiary uppercase tracking-tighter">Selected Paper</div>
                                 <div className="text-sm font-bold text-content-primary uppercase">{paperTitle}</div>
                             </div>
                         </div>
@@ -138,7 +138,7 @@ export default function AssignClassModal({ isOpen, onClose, paperTitle }: Assign
                                         <span className="text-xs text-content-secondary">즉시 배포</span>
                                         <button
                                             onClick={() => setIsScheduling(!isScheduling)}
-                                            className={`w-9 h-5 rounded-full p-1 transition-colors ${!isScheduling ? 'bg-indigo-600' : 'bg-surface-raised'}`}
+                                            className={`w-9 h-5 rounded-full p-1 transition-colors ${!isScheduling ? 'bg-white/[.35]' : 'bg-surface-raised'}`}
                                         >
                                             <div className={`w-3 h-3 rounded-full bg-white transition-transform ${!isScheduling ? 'translate-x-4' : 'translate-x-0'}`} />
                                         </button>
@@ -157,7 +157,7 @@ export default function AssignClassModal({ isOpen, onClose, paperTitle }: Assign
                                 <div className="bg-surface-card/50 rounded-2xl border border-subtle p-4 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs text-content-secondary">학생 푸시 알림</span>
-                                        <button className="w-9 h-5 bg-indigo-600 rounded-full p-1">
+                                        <button className="w-9 h-5 bg-white/[.35] rounded-full p-1">
                                             <div className="w-3 h-3 translate-x-4 rounded-full bg-white" />
                                         </button>
                                     </div>
@@ -178,16 +178,16 @@ export default function AssignClassModal({ isOpen, onClose, paperTitle }: Assign
                             <Lock size={12} /> Secure Distribution
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={onClose} className="px-6 py-2.5 rounded-xl bg-surface-raised hover:bg-zinc-700 text-xs font-bold text-content-primary transition-all">
+                            <button onClick={onClose} className="whitespace-nowrap px-6 py-2.5 rounded-full border border-white/[.08] bg-white/[.04] text-xs font-semibold text-content-secondary hover:bg-white/[.06] hover:text-content-primary transition-colors">
                                 취소
                             </button>
                             <button
                                 disabled={selectedClasses.length === 0}
                                 className={`
-                                    px-8 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2
+                                    px-8 py-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2
                                     ${selectedClasses.length > 0
-                                        ? 'bg-white text-black hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]'
-                                        : 'bg-surface-raised text-content-tertiary cursor-not-allowed'}
+                                        ? 'bg-white text-black hover:bg-zinc-200'
+                                        : 'bg-white/[.06] text-content-tertiary cursor-not-allowed'}
                                 `}
                             >
                                 <Globe size={14} /> 배포 실행

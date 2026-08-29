@@ -360,7 +360,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
       <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-subtle bg-surface-card shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-subtle">
-          <h2 className="text-sm font-bold text-content-primary">빠른답 / 해설</h2>
+          <h2 className="text-sm font-semibold text-content-primary">빠른답 / 해설</h2>
           <button onClick={onClose} className="p-1 text-content-muted hover:text-content-secondary">
             <X size={18} />
           </button>
@@ -373,7 +373,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               onClick={() => { setMode('text'); setError(null); }}
               className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
                 mode === 'text'
-                  ? 'text-emerald-400 border-b-2 border-emerald-500 bg-emerald-500/5'
+                  ? 'text-content-primary border-b-2 border-white/70 bg-white/[.04]'
                   : 'text-content-muted hover:text-content-secondary'
               }`}
             >
@@ -384,7 +384,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               onClick={() => { setMode('quick'); setError(null); }}
               className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
                 mode === 'quick'
-                  ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5'
+                  ? 'text-content-primary border-b-2 border-white/70 bg-white/[.04]'
                   : 'text-content-muted hover:text-content-secondary'
               }`}
             >
@@ -395,7 +395,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               onClick={() => { setMode('solution'); setError(null); }}
               className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
                 mode === 'solution'
-                  ? 'text-amber-400 border-b-2 border-amber-500 bg-amber-500/5'
+                  ? 'text-content-primary border-b-2 border-white/70 bg-white/[.04]'
                   : 'text-content-muted hover:text-content-secondary'
               }`}
             >
@@ -417,24 +417,24 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                   <span className="text-[10px] text-content-muted">shortAnswer/narrative 또는 1. 3 형식</span>
                 </div>
                 {/* ★ 개별 번호 등록 안내 (2026-05-18) — 누락분 재등록·일부 번호만 등록 가능 */}
-                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px] leading-relaxed text-content-secondary">
-                  💡 <b>번호 명시하면 해당 번호만 등록</b> — 누락된 일부만 재등록할 때 사용.
+                <div className="rounded-md border border-white/[.08] bg-white/[.04] px-3 py-2 text-[11px] leading-relaxed text-content-secondary">
+                  <b>번호 명시하면 해당 번호만 등록</b> — 누락된 일부만 재등록할 때 사용.
                   <br />
-                  예: <code className="text-emerald-400">30. ③</code> 만 붙여넣으면 <b>30번만</b> 등록됩니다.
+                  예: <code className="text-content-primary">30. ③</code> 만 붙여넣으면 <b>30번만</b> 등록됩니다.
                   번호 없이 답만 나열하면 1번부터 순서대로 매칭.
                 </div>
                 <textarea
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
                   placeholder={`# 개별 번호만 등록 (번호 prefix 사용):\n30. ③\n32. 7\n\n# 또는 전체 일괄 등록 (번호 prefix 통일 or 생략):\n1. 3\n2. 2\n3. 4\n\n# 답 추출기 형식:\nshortAnswer\\t3\nnarrative\\tπ/3`}
-                  className="w-full h-48 rounded-lg border border-subtle bg-surface-raised px-3 py-2.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                  className="w-full h-48 rounded-lg border border-subtle bg-surface-raised px-3 py-2.5 text-sm text-content-primary font-mono focus:outline-none focus:ring-1 focus:ring-white/25 focus:border-white/25 resize-none"
                   autoFocus
                 />
               </div>
               <button
                 onClick={handleTextParse}
                 disabled={!pasteText.trim()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary font-medium text-sm whitespace-nowrap transition-colors disabled:opacity-50"
               >
                 <Check size={16} /> 파싱 + 미리보기
               </button>
@@ -447,9 +447,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
               <div
                 onDrop={handleDrop}
                 onDragOver={e => e.preventDefault()}
-                className={`border-2 border-dashed border-subtle rounded-xl p-6 text-center transition-colors cursor-pointer ${
-                  mode === 'solution' ? 'hover:border-amber-500/50' : 'hover:border-indigo-500/50'
-                }`}
+                className="border-2 border-dashed border-subtle rounded-xl p-6 text-center transition-colors cursor-pointer hover:border-white/25"
                 onClick={() => document.getElementById('answer-file-input')?.click()}
               >
                 <input
@@ -471,7 +469,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                 <div className="space-y-1.5 max-h-52 overflow-auto rounded-lg border border-subtle bg-surface-raised/50 p-2">
                   {files.map((f, idx) => (
                     <div key={`${f.name}-${idx}`} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-raised">
-                      <FileText size={14} className={`shrink-0 ${mode === 'solution' ? 'text-amber-400' : 'text-indigo-400'}`} />
+                      <FileText size={14} className="shrink-0 text-content-tertiary" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-content-primary truncate">{f.name}</p>
                         <p className="text-[10px] text-content-muted">{(f.size / 1024).toFixed(0)} KB</p>
@@ -492,11 +490,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                 <button
                   onClick={handleUpload}
                   disabled={isUploading}
-                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-white font-medium text-sm transition-colors disabled:opacity-50 ${
-                    mode === 'solution'
-                      ? 'bg-amber-600 hover:bg-amber-500'
-                      : 'bg-indigo-600 hover:bg-indigo-500'
-                  }`}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary font-medium text-sm whitespace-nowrap transition-colors disabled:opacity-50"
                 >
                   {isUploading ? (
                     <><Loader2 size={16} className="animate-spin" /> {mode === 'solution' ? 'OCR + 해설 파싱' : 'OCR + 매칭 분석'} 중 ({files.length}장)...</>
@@ -521,16 +515,16 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
             <>
               {/* 요약 */}
               <div className="flex items-center gap-4 text-xs">
-                <span className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 font-medium">
+                <span className="px-2 py-1 rounded border border-white/[.08] bg-white/[.04] text-content-secondary font-medium">
                   {matchResult.detectedType === 'text_paste' ? '텍스트 입력' :
                    matchResult.detectedType === 'quick_answer' ? '빠른답' :
                    matchResult.detectedType === 'solution' ? '해설' :
                    matchResult.detectedType === 'mixed' ? '빠른답+해설' : '미확인'}
                 </span>
-                <span className="text-content-muted">
+                <span className="text-content-muted tabular-nums">
                   답 {matchResult.parsedAnswers}개 · 변경 {matchResult.changedCount}개
                 </span>
-                <button onClick={toggleAll} className="ml-auto text-blue-400 hover:text-blue-300 font-medium">
+                <button onClick={toggleAll} className="ml-auto text-content-secondary hover:text-content-primary font-medium whitespace-nowrap">
                   {selectedMatches.size > 0 ? '전체 해제' : '전체 선택'}
                 </button>
               </div>
@@ -559,22 +553,22 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                               onClick={() => toggleMatch(m.problemNumber)}
                               className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
                                 selectedMatches.has(m.problemNumber)
-                                  ? 'border-emerald-500 bg-emerald-500'
-                                  : 'border-zinc-600'
+                                  ? 'border-white bg-white'
+                                  : 'border-white/[.20] hover:border-white/[.40]'
                               }`}
                             >
-                              {selectedMatches.has(m.problemNumber) && <Check size={10} className="text-white" />}
+                              {selectedMatches.has(m.problemNumber) && <Check size={10} className="text-black" />}
                             </button>
                           )}
                         </td>
-                        <td className="px-3 py-2 font-bold text-content-secondary">{m.problemNumber}</td>
+                        <td className="px-3 py-2 font-semibold text-content-secondary tabular-nums">{m.problemNumber}</td>
                         <td className="px-3 py-2 text-content-muted">{m.currentAnswer || '-'}</td>
                         <td className={`px-3 py-2 font-medium ${m.newAnswer && m.newAnswer !== m.currentAnswer ? 'text-emerald-400' : 'text-content-muted'}`}>
                           {m.newAnswer || '-'}
                         </td>
                         <td className="px-3 py-2">
                           {m.newSolution ? (
-                            <span className="text-blue-400">있음</span>
+                            <span className="text-content-secondary">있음</span>
                           ) : (
                             <span className="text-content-muted">-</span>
                           )}
@@ -596,7 +590,7 @@ export function AnswerMatchModal({ isOpen, examId, problems, onClose, onApplied 
                 <button
                   onClick={handleApply}
                   disabled={isApplying || selectedMatches.size === 0}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-black font-semibold text-sm whitespace-nowrap transition-colors disabled:opacity-40"
                 >
                   {isApplying ? (
                     <><Loader2 size={14} className="animate-spin" /> 적용 중...</>

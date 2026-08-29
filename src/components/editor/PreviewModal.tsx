@@ -86,17 +86,17 @@ export function PreviewModal({ isOpen, onClose, content }: PreviewModalProps) {
             >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6 px-4">
-                    <div className="flex items-center gap-4 bg-zinc-900/50 p-1.5 rounded-xl border border-white/10 backdrop-blur-md">
+                    <div className="flex items-center gap-1 bg-white/[.03] p-1.5 rounded-xl border border-white/[.08] backdrop-blur-md">
                         <button
                             onClick={() => setMode('A4')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'A4' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${mode === 'A4' ? 'border border-white/[.14] bg-white/[.08] text-content-primary' : 'border border-transparent text-content-tertiary hover:text-content-primary hover:bg-white/[.05]'}`}
                         >
                             <Printer className="w-4 h-4" />
                             A4 Paper
                         </button>
                         <button
                             onClick={() => setMode('TABLET')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'TABLET' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${mode === 'TABLET' ? 'border border-white/[.14] bg-white/[.08] text-content-primary' : 'border border-transparent text-content-tertiary hover:text-content-primary hover:bg-white/[.05]'}`}
                         >
                             <Smartphone className="w-4 h-4" />
                             Student App
@@ -107,15 +107,15 @@ export function PreviewModal({ isOpen, onClose, content }: PreviewModalProps) {
                         <button
                             onClick={handleDownloadPDF}
                             disabled={isGenerating}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-[0_0_15px_rgba(99,102,241,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-indigo-400/20"
+                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-black text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             {isGenerating ? 'Generating...' : 'Download PDF'}
                         </button>
-                        <div className="w-[1px] h-6 bg-white/10 mx-1" />
+                        <div className="w-[1px] h-6 bg-white/[.08] mx-1" />
                         <button
                             onClick={onClose}
-                            className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors border border-white/5"
+                            className="w-10 h-10 rounded-full flex items-center justify-center border border-white/[.08] bg-white/[.04] text-content-tertiary hover:bg-white/[.06] hover:text-content-primary transition-colors"
                         >
                             <X className="w-5 h-5" />
                         </button>

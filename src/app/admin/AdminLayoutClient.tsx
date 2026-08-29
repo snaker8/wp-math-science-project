@@ -108,8 +108,8 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
         {/* Header / Logo */}
         <div className="h-14 px-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
           <Link href="/admin/dashboard" className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center group-hover:border-indigo-500/60 transition-colors">
-              <LayoutDashboard size={14} className="text-indigo-400" />
+            <div className="w-7 h-7 rounded-lg bg-white/[.06] border border-white/[.14] flex items-center justify-center group-hover:border-white/25 transition-colors">
+              <LayoutDashboard size={14} className="text-content-secondary" />
             </div>
             <div>
               <div className="text-sm font-bold tracking-tight">관리자 콘솔</div>
@@ -143,17 +143,17 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
                       className={`
                         group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all
                         ${isActive
-                          ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30'
+                          ? 'bg-white/[.08] text-content-primary border border-white/[.14]'
                           : 'text-zinc-400 hover:bg-zinc-900 hover:text-white border border-transparent'
                         }
                       `}
                     >
                       <Icon
                         size={16}
-                        className={isActive ? 'text-indigo-400' : 'text-zinc-600 group-hover:text-zinc-300'}
+                        className={isActive ? 'text-content-primary' : 'text-zinc-600 group-hover:text-zinc-300'}
                       />
                       <span className="flex-1 font-medium">{item.label}</span>
-                      {isActive && <ChevronRight size={12} className="text-indigo-400" />}
+                      {isActive && <ChevronRight size={12} className="text-content-tertiary" />}
                     </Link>
                   );
                 })}

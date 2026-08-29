@@ -64,10 +64,10 @@ function ProblemRow({ p, isSelected, isExpanded, onToggle, onExpand }: {
     <div
       className={`rounded-lg border transition-colors ${
         p.alreadyInExam
-          ? 'border-zinc-700 bg-zinc-800/50 opacity-50'
+          ? 'border-white/[.06] bg-white/[.02] opacity-50'
           : isSelected
-          ? 'border-blue-500 bg-blue-500/10'
-          : 'border-zinc-700 bg-zinc-800 hover:border-zinc-500'
+          ? 'border-white/[.14] bg-white/[.08]'
+          : 'border-white/[.08] bg-white/[.04] hover:border-white/[.14]'
       }`}
     >
       <div className="flex items-start gap-2 p-3">
@@ -76,30 +76,32 @@ function ProblemRow({ p, isSelected, isExpanded, onToggle, onExpand }: {
           disabled={p.alreadyInExam}
           className={`mt-0.5 w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center ${
             p.alreadyInExam
-              ? 'border-zinc-600 bg-zinc-700'
+              ? 'border-white/[.10] bg-white/[.08]'
               : isSelected
-              ? 'border-blue-500 bg-blue-500'
-              : 'border-zinc-500 hover:border-blue-400'
+              ? 'border-white bg-white'
+              : 'border-white/[.20] hover:border-white/[.40]'
           }`}
         >
-          {(isSelected || p.alreadyInExam) && <Check className="w-3 h-3 text-white" />}
+          {(isSelected || p.alreadyInExam) && (
+            <Check className={`w-3 h-3 ${isSelected && !p.alreadyInExam ? 'text-black' : 'text-content-secondary'}`} />
+          )}
         </button>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <DiffBadge d={p.difficulty} />
             {p.typeName && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-600 text-zinc-300">{p.typeName}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/[.08] bg-white/[.04] text-content-secondary">{p.typeName}</span>
             )}
-            {p.source && <span className="text-[10px] text-zinc-500">{p.source}</span>}
-            {p.alreadyInExam && <span className="text-[10px] text-yellow-500">이미 추가됨</span>}
+            {p.source && <span className="text-[10px] text-content-tertiary">{p.source}</span>}
+            {p.alreadyInExam && <span className="text-[10px] text-amber-400/90">이미 추가됨</span>}
           </div>
-          <div className={`text-sm text-zinc-200 ${isExpanded ? '' : 'line-clamp-2'}`}>
+          <div className={`text-sm text-content-secondary ${isExpanded ? '' : 'line-clamp-2'}`}>
             <MixedContentRenderer content={p.content} />
           </div>
         </div>
 
-        <button onClick={onExpand} className="text-zinc-500 hover:text-zinc-300">
+        <button onClick={onExpand} className="text-content-tertiary hover:text-content-primary">
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
       </div>
@@ -164,15 +166,15 @@ function GroupTab({ examId, selectedIds, onToggle, onAdded, onClose }: {
   }, [examId, onAdded, onClose]);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full text-zinc-500"><Loader2 className="w-5 h-5 animate-spin mr-2" />불러오는 중...</div>;
+    return <div className="flex items-center justify-center h-full text-content-tertiary"><Loader2 className="w-5 h-5 animate-spin mr-2" />불러오는 중...</div>;
   }
 
   if (!groupId) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-        <Layers className="w-10 h-10 text-zinc-600 mb-3" />
-        <p className="text-zinc-300 font-medium mb-1">이 시험지는 폴더(그룹)에 속해있지 않습니다</p>
-        <p className="text-zinc-500 text-sm">그룹으로 이동하면 같은 그룹의 시험지·문제를 합칠 수 있습니다. 위의 "문제은행 전체" 탭을 이용하세요.</p>
+        <Layers className="w-10 h-10 text-content-tertiary mb-3" />
+        <p className="text-content-primary font-medium mb-1">이 시험지는 폴더(그룹)에 속해있지 않습니다</p>
+        <p className="text-content-tertiary text-sm">그룹으로 이동하면 같은 그룹의 시험지·문제를 합칠 수 있습니다. 위의 "문제은행 전체" 탭을 이용하세요.</p>
       </div>
     );
   }
@@ -181,23 +183,23 @@ function GroupTab({ examId, selectedIds, onToggle, onAdded, onClose }: {
     <div className="flex flex-col h-full overflow-y-auto p-3 gap-4">
       {/* 그룹 내 시험지 */}
       <div>
-        <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-content-tertiary uppercase tracking-wider">
           <FileStack className="w-3.5 h-3.5" /> 그룹 내 시험지 ({exams.length}) — 통째로 합치기
         </div>
         {exams.length === 0 ? (
-          <div className="text-sm text-zinc-500 px-1">같은 그룹에 다른 시험지가 없습니다.</div>
+          <div className="text-sm text-content-tertiary px-1">같은 그룹에 다른 시험지가 없습니다.</div>
         ) : (
           <div className="space-y-1.5">
             {exams.map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2">
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2">
                 <div className="min-w-0">
-                  <div className="text-sm text-zinc-200 truncate">{e.title}</div>
-                  <div className="text-[11px] text-zinc-500">{e.problemCount}문항</div>
+                  <div className="text-sm text-content-primary truncate">{e.title}</div>
+                  <div className="text-[11px] text-content-tertiary tabular-nums">{e.problemCount}문항</div>
                 </div>
                 <button
                   onClick={() => addWholeExam(e)}
                   disabled={addingExamId === e.id || e.problemCount === 0}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary text-xs font-medium whitespace-nowrap disabled:opacity-40"
                 >
                   {addingExamId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                   통째로 추가
@@ -210,11 +212,11 @@ function GroupTab({ examId, selectedIds, onToggle, onAdded, onClose }: {
 
       {/* 그룹 내 문제 */}
       <div>
-        <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-content-tertiary uppercase tracking-wider">
           <BookOpen className="w-3.5 h-3.5" /> 그룹 내 문제 ({problems.length}) — 개별 선택
         </div>
         {problems.length === 0 ? (
-          <div className="text-sm text-zinc-500 px-1">그룹 내 문제가 없습니다.</div>
+          <div className="text-sm text-content-tertiary px-1">그룹 내 문제가 없습니다.</div>
         ) : (
           <div className="space-y-1">
             {problems.map((p) => (
@@ -271,22 +273,22 @@ function BankTab({ examId, selectedIds, onToggle }: {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex gap-2 p-3 border-b border-zinc-700">
+      <div className="flex gap-2 p-3 border-b border-white/[.08]">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-tertiary" />
           <input
             type="text"
             placeholder="키워드로 검색..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && doSearch()}
-            className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            className="w-full pl-9 pr-3 py-2 bg-white/[.04] border border-white/[.08] rounded-lg text-sm text-content-primary placeholder-content-tertiary focus:outline-none focus:border-white/25"
           />
         </div>
         <select
           value={difficulty}
           onChange={(e) => setDifficulty(e.target.value)}
-          className="bg-zinc-800 border border-zinc-600 rounded-lg text-sm text-white px-2"
+          className="bg-white/[.04] border border-white/[.08] rounded-lg text-sm text-content-primary px-2 outline-none focus:border-white/25"
         >
           <option value="">전체 난이도</option>
           <option value="1">매우쉬움</option>
@@ -298,7 +300,7 @@ function BankTab({ examId, selectedIds, onToggle }: {
         <button
           onClick={doSearch}
           disabled={isSearching}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white flex items-center gap-1"
+          className="px-4 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary text-sm font-medium whitespace-nowrap flex items-center gap-1"
         >
           {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           검색
@@ -307,7 +309,7 @@ function BankTab({ examId, selectedIds, onToggle }: {
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {results.length === 0 && !isSearching && (
-          <div className="text-center text-zinc-500 py-8">검색 결과가 없습니다</div>
+          <div className="text-center text-content-tertiary py-8">검색 결과가 없습니다</div>
         )}
         {results.map((p) => (
           <ProblemRow
@@ -332,15 +334,15 @@ function UploadTab({ examId, onClose }: { examId: string; onClose: () => void })
   return (
     <div className="flex flex-col items-center justify-center h-full p-6">
       <div className="w-full max-w-md text-center">
-        <Upload className="w-12 h-12 text-zinc-400 mx-auto mb-4" />
-        <p className="text-zinc-200 text-lg font-medium mb-2">파일 업로드로 문제 추가</p>
-        <p className="text-zinc-400 text-sm mb-6">
+        <Upload className="w-12 h-12 text-content-tertiary mx-auto mb-4" />
+        <p className="text-content-primary text-lg font-medium mb-2">파일 업로드로 문제 추가</p>
+        <p className="text-content-secondary text-sm mb-6">
           기존 업로드 워크플로우에서 OCR 방식을 선택하고<br />
           처리된 문제가 이 시험지에 자동으로 추가됩니다.
         </p>
         <button
           onClick={() => { onClose(); window.location.href = `/dashboard/cloud?appendTo=${examId}`; }}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-white/[.08] bg-white/[.04] text-content-secondary hover:bg-white/[.06] hover:text-content-primary font-medium whitespace-nowrap transition-colors"
         >
           <Upload className="w-5 h-5" />
           업로드 페이지로 이동
@@ -397,35 +399,35 @@ export default function AddProblemsModal({ examId, onClose, onAdded }: AddProble
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-[700px] h-[600px] flex flex-col shadow-2xl">
+      <div className="bg-zinc-900 border border-white/[.09] rounded-2xl w-[700px] h-[600px] flex flex-col shadow-2xl">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-700">
-          <h2 className="text-lg font-bold text-white">문제 추가</h2>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/[.08]">
+          <h2 className="text-lg font-semibold text-content-primary">문제 추가</h2>
           <div className="flex items-center gap-2">
             {tab !== 'upload' && selectedIds.size > 0 && (
               <button
                 onClick={handleAddSelected}
                 disabled={isAdding}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white hover:bg-zinc-200 text-sm font-semibold text-black whitespace-nowrap disabled:opacity-40"
               >
                 {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {selectedIds.size}개 추가
               </button>
             )}
-            <button onClick={onClose} className="p-1.5 hover:bg-zinc-700 rounded-lg">
-              <X className="w-5 h-5 text-zinc-400" />
+            <button onClick={onClose} className="p-1.5 rounded-md text-content-tertiary hover:text-content-primary hover:bg-white/[.06]">
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* 탭 */}
-        <div className="flex border-b border-zinc-700">
+        <div className="flex border-b border-white/[.08]">
           {tabs.map(({ key, label, Icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
-                tab === key ? 'text-blue-400 border-b-2 border-blue-400' : 'text-zinc-400 hover:text-zinc-200'
+                tab === key ? 'text-content-primary border-b-2 border-white/70' : 'text-content-tertiary hover:text-content-primary'
               }`}
             >
               <Icon className="w-4 h-4" />

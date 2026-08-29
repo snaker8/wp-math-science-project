@@ -120,7 +120,7 @@ function UnitTypeTable({ problems }: { problems: Problem[] }) {
 
   return (
     <div className="space-y-1">
-      <h3 className="text-sm font-bold text-content-primary mb-3">단원 및 유형별 문항 수</h3>
+      <h3 className="text-sm font-semibold text-content-primary mb-3">단원 및 유형별 문항 수</h3>
 
       {/* 테이블 헤더 */}
       <div className="grid grid-cols-[1fr_80px_60px_60px_60px_60px_60px] gap-0 rounded-t-lg bg-surface-raised px-3 py-2 text-[11px] font-semibold text-content-secondary">
@@ -134,7 +134,7 @@ function UnitTypeTable({ problems }: { problems: Problem[] }) {
       </div>
 
       {/* 테이블 바디 */}
-      <div className="divide-y divide-zinc-800/50 rounded-b-lg border border-subtle overflow-hidden">
+      <div className="divide-y divide-white/[.06] rounded-b-lg border border-subtle overflow-hidden">
         {rows.map((row) => (
           <React.Fragment key={row.section}>
             <div
@@ -149,11 +149,11 @@ function UnitTypeTable({ problems }: { problems: Problem[] }) {
                 />
                 <span className="text-xs font-medium text-content-secondary">{row.section}</span>
               </div>
-              <span className="text-center text-sm font-bold text-content-primary">{row.total}</span>
+              <span className="text-center text-sm font-semibold text-content-primary tabular-nums">{row.total}</span>
               {[1, 2, 3, 4, 5].map((d) => (
                 <span
                   key={d}
-                  className={`text-center text-sm ${
+                  className={`text-center text-sm tabular-nums ${
                     row.byDifficulty[d] > 0 ? 'font-semibold text-content-secondary' : 'text-content-muted'
                   }`}
                 >
@@ -264,7 +264,7 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
       <div className="grid grid-cols-2 gap-4">
         {/* 난이도별 분포 - 바 차트 */}
         <div className="rounded-xl border border-subtle bg-surface-card/50 p-4">
-          <h4 className="text-sm font-bold text-content-primary mb-4">난이도별 분포</h4>
+          <h4 className="text-sm font-semibold text-content-primary mb-4">난이도별 분포</h4>
           <div className="flex items-end gap-3 h-40 px-2">
             {[1, 2, 3, 4, 5].map((d) => {
               const count = difficultyDist[d];
@@ -292,14 +292,14 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
             </div>
           </div>
           <div className="flex items-center justify-center gap-2 mt-3">
-            <span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" />
+            <span className="inline-block w-3 h-3 rounded-sm bg-white/25" />
             <span className="text-[10px] text-content-tertiary">문항 수</span>
           </div>
         </div>
 
         {/* 출제 형태(L-Type) 분포 - 파이 차트 */}
         <div className="rounded-xl border border-subtle bg-surface-card/50 p-4">
-          <h4 className="text-sm font-bold text-content-primary mb-4">출제 형태(L-Type) 분포</h4>
+          <h4 className="text-sm font-semibold text-content-primary mb-4">출제 형태(L-Type) 분포</h4>
           <div className="flex items-center justify-center">
             <div className="relative">
               <svg width="180" height="180" viewBox="0 0 200 200">
@@ -353,7 +353,7 @@ function StatsChartView({ problems }: { problems: Problem[] }) {
 
       {/* 하단: 단원별 문항 수 분포 */}
       <div className="rounded-xl border border-subtle bg-surface-card/50 p-4">
-        <h4 className="text-sm font-bold text-content-primary mb-3">단원별 문항 수 분포</h4>
+        <h4 className="text-sm font-semibold text-content-primary mb-3">단원별 문항 수 분포</h4>
         <div className="space-y-2">
           {Object.entries(chapterDist)
             .sort(([, a], [, b]) => b - a)
@@ -404,21 +404,21 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-surface-base/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 flex flex-col w-[90vw] max-w-4xl h-[80vh] rounded-2xl border border bg-surface-card shadow-2xl overflow-hidden">
+      <div className="relative z-10 flex flex-col w-[90vw] max-w-4xl h-[80vh] rounded-2xl border border-white/[.09] bg-surface-card shadow-2xl overflow-hidden">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle flex-shrink-0">
           <div>
-            <h2 className="text-base font-bold text-content-primary">문제 유형 분석</h2>
+            <h2 className="text-base font-semibold text-content-primary">문제 유형 분석</h2>
             <p className="text-xs text-content-tertiary mt-0.5">{examTitle}</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-content-secondary">
-              총 <span className="font-bold text-content-primary">{problems.length}문항</span>
+            <span className="text-sm text-content-secondary tabular-nums whitespace-nowrap">
+              총 <span className="font-semibold text-content-primary">{problems.length}문항</span>
               {' '}(객관식 {objectiveCount} / 주관식 {subjectiveCount})
             </span>
             <button
               type="button"
-              className="flex items-center gap-1.5 rounded-lg border border bg-surface-raised px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-zinc-700 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-white/[.06] hover:text-content-primary whitespace-nowrap transition-colors"
             >
               <Printer className="h-3.5 w-3.5" />
               프린트
@@ -426,7 +426,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border bg-surface-raised px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-zinc-700 transition-colors"
+              className="rounded-full border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-white/[.06] hover:text-content-primary whitespace-nowrap transition-colors"
             >
               닫기
             </button>
@@ -440,7 +440,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             onClick={() => setActiveTab('table')}
             className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
               activeTab === 'table'
-                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-indigo-500/5'
+                ? 'text-content-primary border-b-2 border-white/70 bg-white/[.04]'
                 : 'text-content-tertiary hover:text-content-secondary'
             }`}
           >
@@ -451,7 +451,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
             onClick={() => setActiveTab('chart')}
             className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
               activeTab === 'chart'
-                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-indigo-500/5'
+                ? 'text-content-primary border-b-2 border-white/70 bg-white/[.04]'
                 : 'text-content-tertiary hover:text-content-secondary'
             }`}
           >
@@ -471,7 +471,7 @@ export function ExamStatsModal({ examTitle, problems, onClose }: ExamStatsModalP
         {/* 하단 안내 */}
         <div className="flex-shrink-0 border-t border-subtle px-5 py-2 text-center">
           <span className="text-[11px] text-content-muted">
-            통계 데이터는 <span className="text-indigo-500">실시간</span>으로 갱신됩니다. 최신 결과가 보이지 않으면 잠시 후 다시 확인하거나 새로고침해주세요.
+            통계 데이터는 <span className="text-content-secondary">실시간</span>으로 갱신됩니다. 최신 결과가 보이지 않으면 잠시 후 다시 확인하거나 새로고침해주세요.
           </span>
         </div>
       </div>

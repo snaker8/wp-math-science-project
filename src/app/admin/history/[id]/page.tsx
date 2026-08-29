@@ -45,22 +45,22 @@ const TimelineEvent = ({ event, index }: { event: HistoryEvent; index: number })
             className="pl-8 relative border-l border-white/10 pb-8 last:pb-0 group"
         >
             {/* Timeline Node */}
-            <div className={`absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full border border-black transition-all duration-300 ${event.badge === 'Mastered' ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' :
-                    event.badge === 'Passing' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' :
-                        'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]'
+            <div className={`absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full border border-black transition-all duration-300 ${event.badge === 'Mastered' ? 'bg-white' :
+                    event.badge === 'Passing' ? 'bg-emerald-500' :
+                        'bg-rose-500'
                 }`} />
 
             {/* Event Card */}
             <motion.div
                 layout
                 onClick={() => setIsExpanded(!isExpanded)}
-                className={`cursor-pointer rounded-2xl border ${isExpanded ? 'bg-zinc-900/80 border-indigo-500/30' : 'bg-zinc-900/30 border-white/5 hover:border-white/10'} overflow-hidden transition-colors`}
+                className={`cursor-pointer rounded-2xl border ${isExpanded ? 'bg-zinc-900/80 border-white/[.14]' : 'bg-zinc-900/30 border-white/5 hover:border-white/10'} overflow-hidden transition-colors`}
             >
                 <div className="p-4 flex items-start justify-between">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{event.date}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${event.badge === 'Mastered' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${event.badge === 'Mastered' ? 'bg-white/[.08] text-content-primary border-white/[.14]' :
                                     event.badge === 'Passing' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                         'bg-rose-500/10 text-rose-400 border-rose-500/20'
                                 }`}>
@@ -100,9 +100,9 @@ const TimelineEvent = ({ event, index }: { event: HistoryEvent; index: number })
                                 )}
                                 <div>
                                     <div className="text-[10px] text-zinc-500 font-bold uppercase mb-2 flex items-center gap-2">
-                                        <BrainCircuit size={12} className="text-indigo-400" /> AI Analysis
+                                        <BrainCircuit size={12} className="text-content-tertiary" /> AI Analysis
                                     </div>
-                                    <p className="text-xs text-zinc-300 leading-relaxed bg-indigo-500/5 p-3 rounded-lg border border-indigo-500/10">
+                                    <p className="text-xs text-zinc-300 leading-relaxed bg-white/[.04] p-3 rounded-lg border border-white/[.08]">
                                         {event.aiComment}
                                     </p>
                                 </div>
@@ -122,7 +122,7 @@ export default function StudentHistoryPage({ params }: { params: { id: string } 
             <div className="flex items-end justify-between">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <div className="p-1 px-2 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-400 tracking-tighter uppercase">
+                        <div className="p-1 px-2 rounded bg-white/[.04] border border-white/[.08] text-[10px] font-bold text-content-secondary tracking-tighter uppercase">
                             Admin Console
                         </div>
                         <span className="text-zinc-500 text-xs font-medium uppercase tracking-widest">Student Management</span>
@@ -136,7 +136,7 @@ export default function StudentHistoryPage({ params }: { params: { id: string } 
             {/* Profile Summary */}
             <GlowCard className="bg-zinc-900/30 border-white/5 p-0 overflow-hidden">
                 <div className="p-6 flex items-center gap-8">
-                    <div className={`w-20 h-20 rounded-2xl ${mockStudentProfile.avatar} flex items-center justify-center text-3xl font-bold shadow-2xl shadow-indigo-500/20`}>
+                    <div className={`w-20 h-20 rounded-2xl ${mockStudentProfile.avatar} flex items-center justify-center text-3xl font-bold`}>
                         {mockStudentProfile.name[0]}
                     </div>
                     <div className="flex-1 grid grid-cols-3 gap-8">
@@ -156,7 +156,7 @@ export default function StudentHistoryPage({ params }: { params: { id: string } 
                             <div className="text-[10px] text-zinc-500 font-bold uppercase mb-1 flex items-center gap-2">
                                 <Clock size={12} /> Total Learning Time
                             </div>
-                            <div className="text-2xl font-bold text-indigo-400">{mockStudentProfile.totalLearningTime}</div>
+                            <div className="text-2xl font-bold text-content-primary tabular-nums">{mockStudentProfile.totalLearningTime}</div>
                         </div>
                     </div>
                 </div>
@@ -167,11 +167,11 @@ export default function StudentHistoryPage({ params }: { params: { id: string } 
                 <div className="col-span-12 lg:col-span-8 space-y-8">
                     {/* Achievement Trend */}
                     <div className="p-6 rounded-3xl bg-zinc-900/30 border border-white/5 backdrop-blur-sm relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                        <div className="absolute inset-0 bg-white/[.02] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                         <div className="flex items-center justify-between mb-8 relative z-10">
                             <div>
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                    <TrendingUp size={18} className="text-indigo-400" /> Achievement Trend
+                                    <TrendingUp size={18} className="text-content-tertiary" /> Achievement Trend
                                 </h3>
                                 <p className="text-xs text-zinc-500 mt-1">Monthly performance analysis over the last 6 months</p>
                             </div>

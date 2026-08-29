@@ -157,7 +157,7 @@ export function LaTeXInputModal({
               type="checkbox"
               checked={displayStyle}
               onChange={(e) => setDisplayStyle(e.target.checked)}
-              className="w-3.5 h-3.5 accent-indigo-500 rounded"
+              className="w-3.5 h-3.5 accent-zinc-300 rounded"
             />
             displaystyle 적용
           </label>
@@ -166,7 +166,7 @@ export function LaTeXInputModal({
               type="checkbox"
               checked={block}
               onChange={(e) => setBlock(e.target.checked)}
-              className="w-3.5 h-3.5 accent-indigo-500 rounded"
+              className="w-3.5 h-3.5 accent-zinc-300 rounded"
             />
             block 적용
           </label>
@@ -194,7 +194,7 @@ export function LaTeXInputModal({
             value={latex}
             onChange={(e) => setLatex(e.target.value)}
             placeholder="LaTeX 수식을 입력하세요 (예: x^2 + y^2 = r^2)"
-            className="w-full h-32 resize-none rounded-xl border border bg-surface-raised px-4 py-3 text-sm text-indigo-200 font-mono leading-relaxed placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full h-32 resize-none rounded-xl border border bg-surface-raised px-4 py-3 text-sm text-content-primary font-mono leading-relaxed placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20"
             spellCheck={false}
           />
         </div>
@@ -221,7 +221,7 @@ export function LaTeXInputModal({
             type="button"
             onClick={handleInsert}
             disabled={!latex.trim()}
-            className="rounded-lg bg-amber-600 hover:bg-amber-500 px-5 py-2 text-sm font-bold text-content-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-full bg-white hover:bg-zinc-200 px-5 py-2 text-sm font-semibold text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             입력
           </button>

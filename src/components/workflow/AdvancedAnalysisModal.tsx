@@ -165,26 +165,26 @@ export function AdvancedAnalysisModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-3xl h-[88vh] rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl overflow-hidden flex flex-col">
+      <div className="w-full max-w-3xl h-[88vh] rounded-2xl bg-zinc-900 border border-white/[.09] shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-3 border-b border-white/[.08] flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 className="text-sm font-bold text-white">고급 분석 — 채팅형 수정</h3>
-            <p className="text-[11px] text-zinc-500 mt-0.5">
+            <h3 className="text-sm font-semibold text-content-primary">고급 분석 — 채팅형 수정</h3>
+            <p className="text-[11px] text-content-tertiary mt-0.5">
               현재 내용을 보면서 지시하면 즉시 반영됩니다. 여러 번 반복 가능.
             </p>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-zinc-500 mr-1">모델:</span>
+            <span className="text-[10px] text-content-tertiary mr-1">모델:</span>
             {(['gpt-4o', 'claude-sonnet', 'claude-opus'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setModel(m)}
-                className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
+                className={`px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap transition-colors border ${
                   model === m
-                    ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
-                    : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                    ? 'bg-white/[.08] border-white/25 text-content-primary'
+                    : 'border-white/[.08] bg-white/[.04] text-content-tertiary hover:text-content-primary hover:bg-white/[.06]'
                 }`}
                 title={
                   m === 'gpt-4o' ? '빠름 · 저렴'
@@ -202,11 +202,11 @@ export function AdvancedAnalysisModal({
         <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">현재 내용</span>
+              <span className="text-[11px] font-semibold text-content-tertiary uppercase tracking-wider">현재 내용</span>
               {isModified && <span className="text-[10px] text-amber-400 font-semibold">● 수정됨</span>}
             </div>
-            <div className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 max-h-64 overflow-y-auto">
-              <pre className="whitespace-pre-wrap break-words text-xs text-zinc-200 font-mono leading-relaxed">
+            <div className="rounded-lg border border-white/[.08] bg-white/[.02] px-3 py-2 max-h-64 overflow-y-auto">
+              <pre className="whitespace-pre-wrap break-words text-xs text-content-secondary font-mono leading-relaxed">
                 {currentText || '(비어있음)'}
               </pre>
             </div>
@@ -214,20 +214,20 @@ export function AdvancedAnalysisModal({
 
           {history.length > 0 && (
             <div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+              <div className="text-[11px] font-semibold text-content-tertiary uppercase tracking-wider mb-1.5">
                 수정 이력 ({history.length})
               </div>
               <div className="space-y-1.5">
                 {history.map((h, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[11px]">
+                  <div key={i} className="rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 text-[11px]">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-indigo-400 font-semibold">#{i + 1}</span>
-                      <span className="text-zinc-500">·</span>
-                      <span className="text-zinc-400">{h.model}</span>
-                      <span className="text-zinc-500">·</span>
-                      <span className="text-zinc-500">{(h.durationMs / 1000).toFixed(1)}s</span>
+                      <span className="text-content-tertiary font-semibold tabular-nums">#{i + 1}</span>
+                      <span className="text-content-muted">·</span>
+                      <span className="text-content-tertiary">{h.model}</span>
+                      <span className="text-content-muted">·</span>
+                      <span className="text-content-tertiary tabular-nums">{(h.durationMs / 1000).toFixed(1)}s</span>
                     </div>
-                    <div className="text-zinc-300 break-words">{h.prompt}</div>
+                    <div className="text-content-secondary break-words">{h.prompt}</div>
                   </div>
                 ))}
               </div>
@@ -240,14 +240,14 @@ export function AdvancedAnalysisModal({
         </div>
 
         {/* 프리셋 + 입력 */}
-        <div className="border-t border-zinc-800 p-4 space-y-2 flex-shrink-0">
+        <div className="border-t border-white/[.08] p-4 space-y-2 flex-shrink-0">
           <div className="flex flex-wrap gap-1.5">
             {presets.map((preset, i) => (
               <button
                 key={i}
                 type="button"
                 onClick={() => setDraftPrompt((prev) => (prev ? `${prev}\n${preset}` : preset))}
-                className="text-[10px] rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 text-zinc-400 transition-colors"
+                className="text-[10px] rounded-full border border-white/[.08] bg-white/[.04] hover:bg-white/[.06] px-2.5 py-1 text-content-secondary hover:text-content-primary whitespace-nowrap transition-colors"
               >
                 + {preset.slice(0, 22)}{preset.length > 22 ? '…' : ''}
               </button>
@@ -262,14 +262,14 @@ export function AdvancedAnalysisModal({
               }}
               disabled={isProcessing}
               rows={2}
-              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none disabled:opacity-50"
+              className="flex-1 rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-1 focus:ring-white/25 resize-none disabled:opacity-50"
               placeholder="예) 분모를 x+1로 바꿔줘 / ㄱ선택지 삭제해줘 / ⌘+Enter 로 전송"
             />
             <button
               type="button"
               onClick={submitInstruction}
               disabled={isProcessing || !draftPrompt.trim()}
-              className="self-stretch px-5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors disabled:opacity-40"
+              className="self-stretch px-5 rounded-lg border border-white/[.14] bg-white/[.08] hover:bg-white/[.12] text-xs font-semibold text-content-primary whitespace-nowrap transition-colors disabled:opacity-40"
             >
               {isProcessing ? '...' : '분석'}
             </button>
@@ -277,16 +277,16 @@ export function AdvancedAnalysisModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between items-center gap-2 px-5 py-3 border-t border-zinc-800 flex-shrink-0">
+        <div className="flex justify-between items-center gap-2 px-5 py-3 border-t border-white/[.08] flex-shrink-0">
           <div className="flex gap-2">
             {history.length > 0 && (
               <>
                 <button type="button" onClick={handleUndo}
-                  className="px-3 py-1.5 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800">
+                  className="px-3 py-1.5 rounded-full border border-white/[.08] bg-white/[.04] text-xs text-content-secondary hover:text-content-primary hover:bg-white/[.06] whitespace-nowrap transition-colors">
                   ↶ 한 단계 되돌리기
                 </button>
                 <button type="button" onClick={handleRevert}
-                  className="px-3 py-1.5 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800">
+                  className="px-3 py-1.5 rounded-full border border-white/[.08] bg-white/[.04] text-xs text-content-secondary hover:text-content-primary hover:bg-white/[.06] whitespace-nowrap transition-colors">
                   원본으로
                 </button>
               </>
@@ -294,11 +294,11 @@ export function AdvancedAnalysisModal({
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={onCancel} disabled={isProcessing}
-              className="px-4 py-2 rounded-lg border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
+              className="px-4 py-2 rounded-full border border-white/[.08] bg-white/[.04] text-xs text-content-secondary hover:text-content-primary hover:bg-white/[.06] whitespace-nowrap transition-colors disabled:opacity-50">
               닫기
             </button>
             <button type="button" onClick={handleApply} disabled={isProcessing || !isModified}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors disabled:opacity-40">
+              className="px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-xs font-semibold text-black whitespace-nowrap transition-colors disabled:opacity-40">
               최종 적용
             </button>
           </div>

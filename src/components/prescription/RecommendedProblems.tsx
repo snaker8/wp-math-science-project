@@ -85,7 +85,7 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-xs text-zinc-500">
+      <div className="flex items-center justify-center rounded-xl border border-white/[.08] bg-white/[.03] px-4 py-6 text-xs text-content-tertiary">
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
         추천 문항 분석 중...
       </div>
@@ -105,12 +105,12 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
   // 데이터 부족 케이스
   if (data.problems.length === 0) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
-          <BookOpen className="h-4 w-4 text-emerald-400" />
+      <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-content-primary">
+          <BookOpen className="h-4 w-4 text-content-tertiary" />
           맞춤 추천 문항
         </div>
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-content-secondary">
           {data.message || '학생 데이터가 더 누적되면 추천이 활성화됩니다.'}
         </div>
       </div>
@@ -118,13 +118,13 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-900/20 via-zinc-900/40 to-zinc-900/40 p-4">
+    <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4">
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-bold text-white">
-          <BookOpen className="h-4 w-4 text-emerald-400" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
+          <BookOpen className="h-4 w-4 text-content-tertiary" />
           맞춤 추천 문항
         </div>
-        <span className="text-[10px] text-zinc-500">
+        <span className="text-[10px] tabular-nums text-content-tertiary">
           후보 {data.candidateCount || 0} / 추천 {data.problems.length}
         </span>
       </div>
@@ -156,12 +156,12 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
             </div>
           </div>
         )}
-        <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-2.5 py-1.5">
-          <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-cyan-300">
+        <div className="rounded-lg border border-white/[.08] bg-white/[.04] px-2.5 py-1.5">
+          <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-content-tertiary">
             <Sparkles className="h-3 w-3" />
             적정 난이도
           </div>
-          <div className="mt-0.5 text-cyan-100">
+          <div className="mt-0.5 tabular-nums text-content-primary">
             {data.difficultyRange[0]} ~ {data.difficultyRange[1]} 단계
           </div>
         </div>
@@ -172,13 +172,13 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
         {data.problems.map((p, i) => (
           <div
             key={p.problemId}
-            className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+            className="rounded-lg border border-white/[.06] bg-white/[.02] px-3 py-2"
           >
             <div className="flex items-center gap-2">
-              <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+              <span className="shrink-0 rounded-full border border-white/[.08] bg-white/[.06] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
                 #{i + 1}
               </span>
-              <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
+              <span className="shrink-0 rounded border border-white/[.08] bg-white/[.04] px-1.5 py-0.5 text-[10px] tabular-nums text-content-secondary">
                 난이도 {p.difficulty}
               </span>
               {p.matchedPitfalls.length > 0 && (
@@ -186,23 +186,23 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
                   함정 {p.matchedPitfalls.length}
                 </span>
               )}
-              <span className="ml-auto truncate text-[10px] text-zinc-500">
+              <span className="ml-auto truncate text-[10px] text-content-tertiary">
                 {p.typeName}
               </span>
             </div>
-            <div className="mt-1 line-clamp-2 text-[11px] text-zinc-300">
+            <div className="mt-1 line-clamp-2 text-[11px] text-content-secondary">
               {p.contentPreview || '(본문 없음)'}
             </div>
-            <div className="mt-1 text-[10px] text-emerald-300/80">→ {p.reason}</div>
+            <div className="mt-1 text-[10px] text-content-tertiary">→ {p.reason}</div>
           </div>
         ))}
       </div>
 
       {/* 학습지 자동 생성 — 추천 문항을 즉시 sessions로 발급 */}
       {generated ? (
-        <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs">
+        <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
           <div className="font-semibold text-emerald-200">
-            ✓ 학습지 생성 완료 — 문항 {generated.problemCount}개
+            학습지 생성 완료 — 문항 {generated.problemCount}개
           </div>
           <a
             href={generated.sessionUrl}
@@ -243,7 +243,7 @@ export function RecommendedProblems({ studentId, focusCode }: Props) {
               setGenerating(false);
             }
           }}
-          className="mt-3 w-full rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="mt-3 w-full whitespace-nowrap rounded-full bg-white px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {generating ? (
             <>

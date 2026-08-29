@@ -77,7 +77,7 @@ export function WeeklyConnections({ studentId }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-xs text-zinc-500">
+      <div className="flex items-center justify-center rounded-xl border border-white/[.08] bg-white/[.03] px-4 py-6 text-xs text-content-tertiary">
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
         이번 주 활동 로딩 중...
       </div>
@@ -94,10 +94,10 @@ export function WeeklyConnections({ studentId }: Props) {
 
   if (!data || data.recentWeekTotal === 0) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-gradient-to-br from-emerald-900/20 to-zinc-900/40 px-4 py-6 text-center">
-        <Sparkles className="mx-auto mb-2 h-5 w-5 text-emerald-400" />
-        <div className="text-xs font-semibold text-emerald-300">이번 주 새 연결 없음</div>
-        <div className="mt-1 text-[10px] text-zinc-500">
+      <div className="rounded-xl border border-white/[.08] bg-white/[.03] px-4 py-6 text-center">
+        <Sparkles className="mx-auto mb-2 h-5 w-5 text-content-tertiary" />
+        <div className="text-xs font-semibold text-content-primary">이번 주 새 연결 없음</div>
+        <div className="mt-1 text-[10px] text-content-tertiary">
           학생이 채점에서 오답 낼 때 자동 추적됩니다.
         </div>
       </div>
@@ -108,14 +108,14 @@ export function WeeklyConnections({ studentId }: Props) {
   const intCount = data.intensifying.length;
 
   return (
-    <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-indigo-900/30 via-cyan-900/20 to-zinc-900/40 p-4">
+    <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4">
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-bold text-white">
-          <Zap className="h-4 w-4 text-cyan-400" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-content-primary">
+          <Zap className="h-4 w-4 text-content-tertiary" />
           이번 주 새 연결
         </div>
-        <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
+        <span className="whitespace-nowrap rounded-full border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-content-secondary">
           총 {data.recentWeekTotal}건
         </span>
       </div>
@@ -123,7 +123,7 @@ export function WeeklyConnections({ studentId }: Props) {
       {/* New Connections — 첫 발생 */}
       {newCount > 0 ? (
         <div className="mb-3">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">
             <Sparkles className="h-3 w-3" />
             신규 연결 {newCount}건 — 이번 주 첫 발견
           </div>
@@ -131,15 +131,15 @@ export function WeeklyConnections({ studentId }: Props) {
             {data.newConnections.slice(0, 5).map((p) => (
               <li
                 key={p.pitfallCode}
-                className="flex items-center justify-between rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5"
+                className="flex items-center justify-between rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-xs font-medium text-cyan-200">{p.label}</div>
-                  <div className="mt-0.5 text-[10px] text-cyan-400/70">
+                  <div className="truncate text-xs font-medium text-content-primary">{p.label}</div>
+                  <div className="mt-0.5 text-[10px] text-content-tertiary">
                     {CATEGORY_LABEL[p.category] || p.category} · {p.distinctProblemCount}문항에서
                   </div>
                 </div>
-                <span className="shrink-0 rounded bg-cyan-500/25 px-2 py-0.5 text-[11px] font-bold text-cyan-200">
+                <span className="shrink-0 rounded border border-white/[.08] bg-white/[.06] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-content-secondary">
                   +{p.recentWeekCount}
                 </span>
               </li>
