@@ -1,4 +1,8 @@
-# 배포 가이드 (Vercel + Railway)
+# 배포 가이드 (Vercel + Railway + Hugging Face Spaces)
+
+> ⚠️ **두 파이썬 서비스는 서로 다른 곳에 있다.** 헷갈리면 며칠이 날아간다(실제로 그랬다).
+> - `image-pipeline` → **Railway**
+> - `yolo-server` → **Hugging Face Spaces** (2026-04-29 이전, 커밋 `90f2690`)
 
 ## 아키텍처
 
@@ -11,12 +15,14 @@
              │                    │
              ▼                    ▼
 ┌─────────────────────┐  ┌──────────────────────────┐
-│  Railway             │  │  Railway                 │
+│  Railway             │  │  Hugging Face Spaces ★   │
 │  image-pipeline      │  │  yolo-server             │
-│  (FastAPI :8200)     │  │  (FastAPI :8100)         │
+│  (FastAPI :8200)     │  │  (FastAPI :8100, docker) │
 │  - PDF OCR           │  │  - YOLO 문제 영역 감지   │
 │  - 도식 추출/매칭    │  │  - 폴백: GPT-4o Vision   │
 │  - index.json (6MB)  │  │  - best.pt (13MB)        │
+│                      │  │  snaker1107-gwasaram-yolo│
+│                      │  │      .hf.space           │
 └──────────┬───────────┘  └──────────────────────────┘
            │
            ▼
@@ -43,9 +49,9 @@ python bulk_upload_to_supabase.py --resume
 SELECT subject, COUNT(*) FROM diagram_images GROUP BY subject;
 ```
 
-## 2단계: Railway 배포
+## 2단계: 파이썬 서비스 배포 (image-pipeline=Railway / yolo-server=Hugging Face)
 
-### 2-1. CLI 설치 & 로그인
+### 2-1. Railway CLI 설치 & 로그인 (image-pipeline 전용)
 ```bash
 npm i -g @railway/cli
 railway login
@@ -64,20 +70,53 @@ railway domain            # 퍼블릭 URL 발급
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
 
-### 2-3. yolo-server 서비스
+### 2-3. yolo-server — ⚠️ Railway 아님. **Hugging Face Spaces** 다
+
+> 🔴 **이 문서를 보고 Railway 로 갔다가 며칠을 날린 적이 있다.**
+> yolo-server 는 **2026-04-29 에 Hugging Face Spaces 로 옮겼는데**(커밋 `90f2690`)
+> 이 문서가 4개월간 옛 내용(Railway)으로 남아 있었다. Railway 에 아무리 배포해도
+> 운영은 꿈쩍도 안 한다 — 운영이 보는 주소는 아래 HF 주소다.
+
+**운영 주소 (2026-08-30 실측 확인)**
+```
+https://snaker1107-gwasaram-yolo.hf.space
+```
 ```bash
-cd ../yolo-server
-railway init              # 별도 프로젝트 "과사람-yolo"
-railway up
-railway domain            # 퍼블릭 URL 발급
+curl https://snaker1107-gwasaram-yolo.hf.space/health
+# {"status":"ok","model_loaded":true,"model_path":"/app/models/best.pt",
+#  "class_names":{"0":"problem","1":"graph","2":"table"}}
 ```
 
-**환경변수** — YOLO 서버는 외부 API 호출 없음, env 필요 없음
+**단일 진실 공급원은 Vercel 환경변수 `YOLO_SERVER_URL` 이다.**
+코드는 이 값만 본다(`src/app/api/workflow/detect-problems-yolo/route.ts`,
+`src/app/api/cron/yolo-warm/route.ts`). **작업 전에 반드시 먼저 확인할 것:**
+```bash
+vercel env ls | grep YOLO_SERVER_URL
+```
+
+**배포 방법** — HF Space 저장소에 push 하면 Docker 빌드가 자동으로 돈다.
+`yolo-server/README.md` 상단 frontmatter(`sdk: docker`, `app_port: 8100`)가 HF Spaces 설정이다.
+```bash
+cd yolo-server
+# HF Space 원격이 등록돼 있어야 한다 (없으면):
+#   git remote add space https://huggingface.co/spaces/snaker1107/gwasaram-yolo
+git add models/best.pt server.py Dockerfile README.md
+git commit -m "update model"
+git push space main        # → HF 에서 Docker 빌드 자동 시작
+```
+
+**모델 교체(재학습 후)** — `yolo-server/models/best.pt` 를 새 가중치로 바꿔 push 하면 된다.
+클래스 순서는 `server.py` 의 `CLASS_NAMES {0:problem, 1:graph, 2:table}` 와 **반드시 일치**해야 한다.
+
+**sleep 주의** — HF Spaces 무료 티어는 유휴 시 잠든다. 6시간마다 핑하는 크론이 있다
+(`src/app/api/cron/yolo-warm/route.ts`, 커밋 `afe5af1`). 첫 호출이 느리면 깨어나는 중이다.
+
+**환경변수** — YOLO 서버 자체는 외부 API 호출이 없어 env 불필요.
 
 ### 2-4. 헬스 체크
 ```bash
-curl https://<image-pipeline-url>/health
-curl https://<yolo-url>/health
+curl https://<image-pipeline-url>/health          # Railway
+curl https://snaker1107-gwasaram-yolo.hf.space/health   # Hugging Face Spaces
 ```
 
 ## 3단계: Vercel 배포
