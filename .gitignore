@@ -24,6 +24,13 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+# ★ 2026-08-30: 사본·백업이 무방비였다. `.env.local.sydney-backup`(서울 이전 전 시드니 키
+#   전량: SUPABASE_SERVICE_ROLE_KEY·ANTHROPIC·OPENAI·MATHPIX 등)이 위 규칙에 안 걸려
+#   `git add .` 한 번이면 커밋될 상태로 방치돼 있었다. 접미사가 뭐든 막는다.
+#   (`.env.example` 은 이 패턴에 안 걸리므로 계속 추적된다.)
+.env.local.*
+.env.*.backup
+.env.*.bak
 
 # IDE
 .vscode/
