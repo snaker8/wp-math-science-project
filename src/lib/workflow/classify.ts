@@ -1,11 +1,20 @@
 // ============================================================================
-// 문제 분류 공용 모듈 — Gemini Flash + GPT-4o 폴백
+// 문제 분류 공용 모듈 — Claude Sonnet 전면 + Gemini/GPT 폴백
+//
+// ★ 2026-08-30 주석 정정: 예전엔 Gemini 1차였으나 지금은 Claude 가 전면이다.
+//   옛 주석("Gemini Flash + GPT-4o 폴백")을 보고 "GPT-4o 가 분류를 한다" 고 오해하기 쉽다.
+//   실제 호출 순서는 아래와 같다 (CLASSIFY_PROVIDER 로 1차 공급자 변경 가능):
+//     1차 (전면): Claude Sonnet 4.6  — 한국어 분류 정확도가 가장 높음
+//        ↓ 실패·빈 응답
+//     2차 (폴백): Gemini 2.5 Flash   — preview 모델은 429 잦아 stable 사용
+//        ↓ 빈 응답
+//     3차 (폴백): GPT-4o / GPT-4.1-mini
+//   ★ 모델 상수를 문자열 grep 으로만 세면 폴백 자리를 전면으로 오독한다. 분기를 따라갈 것.
 //
 // auto-fix 의 검증된 분류 로직을 단일 함수로 추출:
 //   - 수학비서 typeTable 주입 + COMBINED_SUBJECTS 병합
-//   - Gemini 3 Flash 1차 호출 (rate-limit backoff)
-//   - Gemini 빈 응답 시 GPT-4o 폴백
-//   - Gemini 키 없을 때 GPT-4.1-mini 폴백
+//   - 1차 호출 (rate-limit backoff)
+//   - 빈 응답 시 다음 공급자로 폴백
 //   - JSON 파싱 (부분 추출 포함)
 //
 // 호출자 책임:

@@ -11,6 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { extractChoicesFromOCR } from '@/lib/ocr/extract-choices-from-ocr';
+import { withSamplingParams } from '@/lib/claude/model-params';
 
 // 그래프 분석 결과 타입
 export interface GraphData {
@@ -1071,13 +1072,19 @@ ${customPrompt}
       'x-api-key': ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
+    // ★ 2026-08-30: Opus 4.7 부터 temperature 가 제거돼 그대로 보내면 400 이었다.
+    //   이 경로는 throw 라 사용자에게 "Claude API error: 400" 으로 노출됐다.
+    //   모델별 허용 여부는 model-params.ts 한 곳에서 판단한다.
+    body: JSON.stringify(withSamplingParams(
+      {
+        model,
+        max_tokens: 3000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      },
       model,
-      max_tokens: 3000,
-      temperature: 0.2,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    }),
+      { temperature: 0.2 },
+    )),
   });
 
   if (!response.ok) {

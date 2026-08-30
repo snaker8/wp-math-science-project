@@ -21,7 +21,15 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 // ★ Anthropic 공식 alias 사용 (Sonnet 4.6부터 date suffix 없는 alias 유효)
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 // ★ 어려운 문제 / Sonnet 검산 불일치 시 fallback 모델
-const ANTHROPIC_OPUS_MODEL = process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1';
+//   2026-08-30: claude-opus-4-1 은 2026-08-05 은퇴 → API 404. 실측 확인:
+//     GET /v1/models/claude-opus-4-1 → 404 / claude-opus-4-7 → 200
+//   폴백 실패는 Sonnet 결과를 그대로 두고 warn 만 남기는 구조라 화면엔 증상이 없었다.
+//   즉 은퇴일 이후 "어려운 문제·검산 불일치" 건의 Opus 보정이 조용히 전부 무효였다.
+//   ★ 모델을 올릴 때는 요금·파라미터를 같이 본다. Opus 4.7 부터 temperature/top_p/top_k 와
+//     thinking budget_tokens 가 제거돼 그대로 보내면 400 이다 (아래 호출부 참고).
+//     4-7 을 고른 이유: 4-1 과 같은 요금대이고, thinking 을 생략하면 기존처럼 비활성이라
+//     현재 비용 프로파일이 그대로 유지된다. (Opus 5 는 thinking 이 기본 on 이라 비용이 변한다.)
+const ANTHROPIC_OPUS_MODEL = process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-7';
 // Sonnet thinking 최대 대기 시간(ms). 이 이상 걸리면 Opus로 넘어감
 const SONNET_TIMEOUT_MS = Number(process.env.SONNET_TIMEOUT_MS || 90_000);
 // 난이도가 이 이상이면 처음부터 Opus 사용 (수학비서 기준 1~10 중 10 = 사실상 비활성)
@@ -938,18 +946,20 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
         //   Opus 기본 성능만으로도 Sonnet + thinking 수준 이상 기대 가능
         //   비용: thinking 켤 때 ~$0.80/호출 → 끄면 ~$0.15/호출, 속도 1~3분 → 10~30초
         //   되돌리려면 OPUS_USE_THINKING=1 env 설정
+        //   ★ 2026-08-30: Opus 4.7 부터 temperature/top_p/top_k 는 제거됐다 — 보내면 400.
+        //     (기존 temperature 0.3 / thinking 시 1 을 그대로 두면 폴백이 통째로 실패한다.)
+        //     thinking 도 budget_tokens 방식이 제거됐고 adaptive 로 대체됐다.
+        //     thinking 을 생략하면 4.7 은 비활성 → 기존 "thinking 끈다" 의도가 그대로 유지된다.
         const opusUseThinking = process.env.OPUS_USE_THINKING === '1';
         const opusBody: Record<string, unknown> = {
           model: ANTHROPIC_OPUS_MODEL,
           max_tokens: 4000,
           system: cachedSystem(systemPrompt),
           messages: [{ role: 'user', content: userContent }],
-          temperature: 0.3,
         };
         if (opusUseThinking) {
           opusBody.max_tokens = 16000;
-          opusBody.thinking = { type: 'enabled', budget_tokens: 8000 };
-          opusBody.temperature = 1;
+          opusBody.thinking = { type: 'adaptive' };
         }
         const opusRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
