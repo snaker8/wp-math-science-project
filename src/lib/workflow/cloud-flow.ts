@@ -849,30 +849,6 @@ function validateChoices(choices: string[]): string[] {
   return validated.slice(0, 5);
 }
 
-function createMockPDFResult(jobId: string): OCRResult {
-  return {
-    jobId,
-    pages: [
-      {
-        pageNumber: 1,
-        text: '[PDF 추출] 다음 이차방정식의 두 근을 구하시오.\n$x^2 - 7x + 12 = 0$',
-        mathExpressions: [
-          {
-            latex: 'x^2 - 7x + 12 = 0',
-            boundingBox: { x: 50, y: 100, width: 250, height: 40 },
-            confidence: 0.93,
-          },
-        ],
-        images: [],
-        confidence: 0.91,
-      },
-    ],
-    rawText: '다음 이차방정식의 두 근을 구하시오. x² - 7x + 12 = 0',
-    confidence: 0.91,
-    processedAt: new Date().toISOString(),
-  };
-}
-
 /**
  * 이미지 파일 처리 (OCR)
  */
@@ -929,30 +905,6 @@ async function processImageDocument(
     }
     throw error;
   }
-}
-
-function createMockImageResult(jobId: string): OCRResult {
-  return {
-    jobId,
-    pages: [
-      {
-        pageNumber: 1,
-        text: '[이미지 OCR] 다음 극한값을 구하시오.\n$\\lim_{x \\to 0} \\frac{\\sin x}{x}$',
-        mathExpressions: [
-          {
-            latex: '\\lim_{x \\to 0} \\frac{\\sin x}{x}',
-            boundingBox: { x: 80, y: 150, width: 200, height: 60 },
-            confidence: 0.88,
-          },
-        ],
-        images: [],
-        confidence: 0.86,
-      },
-    ],
-    rawText: '다음 극한값을 구하시오. lim(x→0) sin(x)/x',
-    confidence: 0.86,
-    processedAt: new Date().toISOString(),
-  };
 }
 
 // ============================================================================
@@ -1847,56 +1799,6 @@ function normalizeAnswer(ans: string): string {
     .trim();
 }
 
-function getMockLLMResponse(): string {
-  return JSON.stringify({
-    classification: {
-      typeCode: 'MA-HS1-ALG-02-015',
-      typeName: '이차방정식의 풀이 - 인수분해',
-      subject: '수학I',
-      chapter: '방정식과 부등식',
-      section: '이차방정식',
-      difficulty: 2,
-      cognitiveDomain: 'CALCULATION',
-      confidence: 0.95,
-      prerequisites: ['MA-HS1-ALG-01-003', 'MA-HS1-ALG-01-008'],
-    },
-    solution: {
-      approach: '좌변을 인수분해하여 근을 구한다.',
-      steps: [
-        {
-          stepNumber: 1,
-          description: '이차방정식의 좌변을 인수분해한다.',
-          latex: 'x^2 - 5x + 6 = (x-2)(x-3) = 0',
-          explanation: '두 수의 합이 -5이고 곱이 6인 수는 -2와 -3이다.',
-        },
-        {
-          stepNumber: 2,
-          description: '각 인수가 0이 되는 x의 값을 구한다.',
-          latex: 'x - 2 = 0 \\quad \\text{또는} \\quad x - 3 = 0',
-          explanation: '영인수의 법칙을 적용한다.',
-        },
-        {
-          stepNumber: 3,
-          description: '해를 구한다.',
-          latex: 'x = 2 \\quad \\text{또는} \\quad x = 3',
-          explanation: '이차방정식의 두 근은 2와 3이다.',
-        },
-      ],
-      finalAnswer: 'x = 2 또는 x = 3',
-      alternativeMethods: ['근의 공식 이용'],
-      commonMistakes: [
-        '인수분해 부호 실수',
-        '두 근 중 하나만 답으로 제출',
-      ],
-    },
-    metadata: {
-      estimatedTimeMinutes: 3,
-      keywordsTags: ['이차방정식', '인수분해', '근의 공식'],
-      similarTypes: ['MA-HS1-ALG-02-016', 'MA-HS1-ALG-02-017'],
-    },
-  });
-}
-
 /**
  * GPT 응답의 JSON 문자열에서 잘못된 이스케이프 시퀀스를 정리
  * LaTeX 수식에 \sin, \frac 등이 포함되면 JSON 파서가 \s, \f 를 제어 문자로 해석하여 실패함
@@ -2513,11 +2415,6 @@ ${isObjective ? `5. finalAnswer에 정답 번호(④ 또는 4 등) 반드시 포
 // ============================================================================
 // Utility Functions
 // ============================================================================
-
-function simulateProcessing(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export function getStatusLabel(status: ProcessingStatus): string {
   const labels: Record<ProcessingStatus, string> = {
     PENDING: '대기 중',
