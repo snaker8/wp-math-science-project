@@ -38,9 +38,24 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const OUT_DIR = path.resolve('yolo-dataset');
 const VAL_RATIO = 0.2;
 const STORAGE_BUCKET = 'source-files';
-const CLASS_NAMES = ['problem']; // 단일 클래스. 추후 multi-class 확장 시 여기 추가.
+
+// ★ 클래스 id 는 yolo-server/server.py 의 CLASS_NAMES 와 **반드시 같은 순서**여야 한다.
+//   서버는 {0:"problem", 1:"graph", 2:"table"} 로 고정 해석하므로, 여기 순서가 어긋나면
+//   학습된 모델이 도형을 문제로 보고하는 식으로 조용히 뒤바뀐다.
+//   table 은 아직 학습 데이터가 0건이지만, 자리를 비워두어야 나중에 추가될 때 id 가 밀리지 않는다.
+const CLASS_NAMES = ['problem', 'graph', 'table'];
+
+// ★ 어떤 출처의 annotation 을 학습에 쓸지.
+//   MANUAL   = 자산화 시 사용자가 검수한 좌표 (1차 학습에 쓰인 것)
+//   BACKFILL = 2026-08-30 크롭 이미지에서 역산해 복구한 좌표
+//              (4/26~8/29 유실분. 도형(graph) 클래스는 전량 여기에서 나온다)
+//   사용법: npx tsx scripts/export-yolo-dataset.ts --source=all|MANUAL|BACKFILL
+//   기본값 all — 1차 재현이나 백필 효과 비교가 필요하면 명시적으로 좁힌다.
+const SOURCE_ARG = (process.argv.find(a => a.startsWith('--source=')) || '').split('=')[1] || 'all';
+const SOURCES = SOURCE_ARG.toLowerCase() === 'all' ? null : SOURCE_ARG.split(',').map(s => s.trim());
 
 interface AnnotationRow {
+  detection_source?: string | null;
   page_image_path: string;
   page_width: number;
   page_height: number;
@@ -83,11 +98,13 @@ async function fetchAllAnnotations(): Promise<AnnotationRow[]> {
   let from = 0;
   const PAGE = 1000;
   for (;;) {
-    const { data, error } = await supabase
+    let q = supabase
       .from('detection_annotations')
-      .select('page_image_path, page_width, page_height, bbox_x, bbox_y, bbox_w, bbox_h, class_label')
-      .eq('detection_source', 'MANUAL')
-      .range(from, from + PAGE - 1);
+      .select('page_image_path, page_width, page_height, bbox_x, bbox_y, bbox_w, bbox_h, class_label, detection_source');
+    // ★ 예전엔 .eq('detection_source','MANUAL') 로 고정돼 있었다. 그 탓에 2026-08-30 백필분
+    //   (문제 3,503 + 도형 657)이 학습에서 통째로 빠질 뻔했다. 이제 --source 로 고른다.
+    if (SOURCES) q = q.in('detection_source', SOURCES);
+    const { data, error } = await q.range(from, from + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
     all.push(...(data as AnnotationRow[]));
@@ -101,8 +118,23 @@ async function fetchAllAnnotations(): Promise<AnnotationRow[]> {
   console.log('📦 YOLO dataset export 시작\n');
 
   // 1) annotation 전체 가져오기
+  console.log(`  출처 필터: ${SOURCES ? SOURCES.join(', ') : 'all (MANUAL + BACKFILL)'}`);
   const rows = await fetchAllAnnotations();
   console.log(`✓ annotation: ${rows.length} 건`);
+
+  // 클래스·출처 분포를 먼저 보여준다 — 학습 전에 "도형이 실제로 들어갔는지" 눈으로 확인.
+  const dist: Record<string, number> = {};
+  const srcDist: Record<string, number> = {};
+  for (const r of rows) {
+    dist[r.class_label] = (dist[r.class_label] || 0) + 1;
+    srcDist[r.detection_source || '(없음)'] = (srcDist[r.detection_source || '(없음)'] || 0) + 1;
+  }
+  console.log('  클래스 분포:', Object.entries(dist).map(([k, v]) => `${k} ${v}`).join(' / '));
+  console.log('  출처 분포  :', Object.entries(srcDist).map(([k, v]) => `${k} ${v}`).join(' / '));
+  const unknown = Object.keys(dist).filter(k => !CLASS_NAMES.includes(k));
+  if (unknown.length) {
+    console.warn(`  ⚠ CLASS_NAMES 에 없는 라벨 — 학습에서 제외됨: ${unknown.join(', ')}`);
+  }
 
   // 2) page_image_path 기준 그룹핑
   const pageMap = new Map<string, AnnotationRow[]>();
@@ -138,7 +170,8 @@ async function fetchAllAnnotations(): Promise<AnnotationRow[]> {
   ensureDir(path.join(OUT_DIR, 'labels', 'val'));
 
   // 5) 각 페이지: 이미지 다운로드 + 라벨 파일 생성
-  let imgOk = 0, imgFail = 0, bboxTotal = 0;
+  let imgOk = 0, imgFail = 0, bboxTotal = 0, skippedUnknown = 0;
+  const bboxByClass: Record<string, number> = {};
   let idx = 0;
   for (const pagePath of pages) {
     idx++;
@@ -160,7 +193,7 @@ async function fetchAllAnnotations(): Promise<AnnotationRow[]> {
     const lines: string[] = [];
     for (const a of annots) {
       const classIdx = CLASS_NAMES.indexOf(a.class_label);
-      if (classIdx < 0) continue; // 알 수 없는 라벨 skip
+      if (classIdx < 0) { skippedUnknown++; continue; } // 알 수 없는 라벨 — 조용히 버리지 않고 센다
       // 우리 bbox: 좌상단(x,y) + w/h, 모두 0~1 정규화 (sample 확인)
       // YOLO: 중심(cx,cy) + w/h
       const cx = a.bbox_x + a.bbox_w / 2;
@@ -169,6 +202,7 @@ async function fetchAllAnnotations(): Promise<AnnotationRow[]> {
       const safe = (v: number) => Math.max(0, Math.min(1, v));
       lines.push(`${classIdx} ${safe(cx).toFixed(6)} ${safe(cy).toFixed(6)} ${safe(a.bbox_w).toFixed(6)} ${safe(a.bbox_h).toFixed(6)}`);
       bboxTotal++;
+      bboxByClass[a.class_label] = (bboxByClass[a.class_label] || 0) + 1;
     }
     fs.writeFileSync(labelDest, lines.join('\n') + (lines.length ? '\n' : ''), 'utf-8');
     console.log(`OK (${lines.length} bbox)`);
@@ -190,8 +224,12 @@ async function fetchAllAnnotations(): Promise<AnnotationRow[]> {
 
   console.log('\n📊 결과:');
   console.log(`  - 이미지: ${imgOk} 다운로드 / ${imgFail} 실패`);
-  console.log(`  - bbox  : ${bboxTotal} 건`);
+  console.log(`  - bbox  : ${bboxTotal} 건 (${Object.entries(bboxByClass).map(([k, v]) => `${k} ${v}`).join(' / ') || '없음'})`);
+  if (skippedUnknown) console.log(`  - 제외  : ${skippedUnknown} 건 (CLASS_NAMES 에 없는 라벨)`);
   console.log(`  - 출력  : ${OUT_DIR}`);
+  if (!bboxByClass['graph']) {
+    console.warn('  ⚠ 도형(graph) bbox 가 0건이다 — --source 로 BACKFILL 을 빼지 않았는지 확인할 것.');
+  }
   console.log('\n✅ 다음 단계 (Colab/로컬 GPU):');
   console.log('  pip install ultralytics');
   console.log(`  yolo train data=${OUT_DIR.replace(/\\/g, '/')}/data.yaml model=yolov8n.pt epochs=80 imgsz=1024 batch=8`);
