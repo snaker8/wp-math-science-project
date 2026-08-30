@@ -11,6 +11,21 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 //   1: graph          — 그래프/좌표평면/함수 그림
 //   2: table          — 표/도표
 //   3: science_problem — 과학 문제 영역 (길고 가변, 별도 클래스로 분리하여 학습)
+/** detection_annotations 중 export 가 실제로 쓰는 필드 */
+interface AnnotationRow {
+  page_image_path: string;
+  class_label: string;
+  bbox_x: number;
+  bbox_y: number;
+  bbox_w: number;
+  bbox_h: number;
+  detection_source?: string | null;
+  page_number?: number | null;
+  /** 0 또는 null 일 수 있다 — 학습에는 안 쓰이고 매니페스트 참고용 */
+  page_width?: number | null;
+  page_height?: number | null;
+}
+
 const CLASS_MAP: Record<string, number> = {
   problem: 0,
   graph: 1,
@@ -28,26 +43,38 @@ export async function GET(request: NextRequest) {
   const classFilter = searchParams.get('class') || null; // problem, graph, table
 
   try {
-    // detection_annotations 조회
-    let query = supabaseAdmin
-      .from('detection_annotations')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    // ★ 2026-08-30: PostgREST 는 한 요청당 1,000행에서 자른다. `.limit(5000)` 을 줘도
+    //   1,000행만 온다(실측). 학습 데이터가 694건이던 시절엔 안 걸렸다가, 4,854건이 되면서
+    //   조용히 80% 가 사라지는 상태가 됐다. 게다가 정렬이 created_at DESC 라 잘려나가는 쪽이
+    //   **가장 오래된 = 사람이 직접 검수한 MANUAL 좌표** 였다.
+    //   → range() 페이지네이션으로 전량을 가져온다. limit 은 상한으로만 쓴다.
+    //   같은 클래스의 사고 이력: `.in()` + 1000행 잘림 (동백중 problemCount=0).
+    const PAGE = 1000;
+    const annotations: AnnotationRow[] = [];
+    for (let from = 0; from < limit; from += PAGE) {
+      let query = supabaseAdmin
+        .from('detection_annotations')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, Math.min(from + PAGE, limit) - 1);
 
-    if (classFilter && CLASS_MAP[classFilter] !== undefined) {
-      query = query.eq('class_label', classFilter);
+      if (classFilter && CLASS_MAP[classFilter] !== undefined) {
+        query = query.eq('class_label', classFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('[YOLO Export] Query error:', error.message);
+        return NextResponse.json(
+          { error: 'Failed to fetch annotations', detail: error.message },
+          { status: 500 }
+        );
+      }
+      if (!data || data.length === 0) break;
+      annotations.push(...(data as AnnotationRow[]));
+      if (data.length < PAGE) break;
     }
-
-    const { data: annotations, error } = await query;
-
-    if (error) {
-      console.error('[YOLO Export] Query error:', error.message);
-      return NextResponse.json(
-        { error: 'Failed to fetch annotations', detail: error.message },
-        { status: 500 }
-      );
-    }
+    console.log(`[YOLO Export] annotation ${annotations.length}건 조회 (상한 ${limit})`);
 
     if (!annotations || annotations.length === 0) {
       return NextResponse.json({
