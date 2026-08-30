@@ -22,6 +22,7 @@ import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
 import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
 import { verifyAndRepairWithVision, persistVisionDiffsForLearning, applyVisionDiffs } from '@/lib/ocr/vision-verifier';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
+import { saveDetectionAnnotations, type AnnotationDbClient } from '@/lib/workflow/detection-annotations';
 import { extractSchoolName } from '@/lib/utils/school-extract';
 import { normalizeSchoolName, formatSourceLabel } from '@/lib/utils/school-normalize';
 
@@ -2185,55 +2186,26 @@ async function saveEditedProblemsDirect(
           console.warn(`[Direct Save] 문제 ${edited.number} annotation: pageImagePathMap miss (size=${pageImagePathMap.size}, pageNum=${pageNum}) → 결정적 경로 폴백`);
           pageImgInfo = { path: `page-images/${jobId}/page-${pageNum}.jpg`, width: 0, height: 0 };
         }
-        if (pageImgInfo) {
-          try {
-            // ★ 기존 레코드 삭제 후 insert (중복 방지)
-            await supabase.from('detection_annotations').delete().eq('problem_id', problem.id);
-            // problem 클래스 (사용자 검수된 좌표)
-            const annotationsToInsert: Array<Record<string, unknown>> = [{
-              problem_id: problem.id,
-              exam_id: examId,
-              job_id: jobId,
-              page_number: pageNum,
-              page_image_path: pageImgInfo.path,
-              page_width: pageImgInfo.width,
-              page_height: pageImgInfo.height,
-              bbox_x: edited.bbox.x,
-              bbox_y: edited.bbox.y,
-              bbox_w: edited.bbox.w,
-              bbox_h: edited.bbox.h,
-              class_label: 'problem',
-              problem_number: edited.number,
-              detection_source: 'MANUAL',
-            }];
-            // ★ graph 클래스 학습 데이터 — figureBboxes 좌표 (problem 크롭 0~1) → 페이지 좌표 변환
-            if (edited.figureBboxes && edited.figureBboxes.length > 0) {
-              for (const fig of edited.figureBboxes) {
-                if (fig.w <= 0 || fig.h <= 0) continue;
-                annotationsToInsert.push({
-                  problem_id: problem.id,
-                  exam_id: examId,
-                  job_id: jobId,
-                  page_number: pageNum,
-                  page_image_path: pageImgInfo.path,
-                  page_width: pageImgInfo.width,
-                  page_height: pageImgInfo.height,
-                  // ★ 좌표 변환: problem.bbox + fig * problem.bbox.size = 페이지 0~1 좌표
-                  bbox_x: edited.bbox.x + fig.x * edited.bbox.w,
-                  bbox_y: edited.bbox.y + fig.y * edited.bbox.h,
-                  bbox_w: fig.w * edited.bbox.w,
-                  bbox_h: fig.h * edited.bbox.h,
-                  class_label: 'graph',
-                  problem_number: edited.number,
-                  detection_source: 'MANUAL',
-                });
-              }
-            }
-            await supabase.from('detection_annotations').insert(annotationsToInsert);
-          } catch (annErr) {
-            console.warn(`[Direct Save] 문제 ${edited.number}번 어노테이션 저장 실패:`, annErr);
-          }
-        }
+        // ★ 2026-08-30: problem/graph 분리 INSERT + 무효 좌표 배제 + .error 로깅.
+        //   사고 이력과 가드 3종은 detection-annotations.ts 헤더 참고.
+        //   ★ problem 행과 graph 행을 한 배열로 합치지 말 것 — 도형 하나가 문제까지 죽인다.
+        await saveDetectionAnnotations(
+          supabase as unknown as AnnotationDbClient,
+          {
+            problemId: problem.id,
+            examId,
+            jobId,
+            pageNumber: pageNum,
+            pageImagePath: pageImgInfo.path,
+            pageWidth: pageImgInfo.width,
+            pageHeight: pageImgInfo.height,
+            problemBbox: edited.bbox,
+            figureBboxes: edited.figureBboxes,
+            problemNumber: edited.number,
+            detectionSource: 'MANUAL',
+          },
+          `[Direct Save] 문제 ${edited.number}번`,
+        );
       } else if (problem) {
         console.warn(`[Direct Save] 문제 ${edited.number} annotation 스킵: bbox 무효 (bbox=${JSON.stringify(edited.bbox)})`);
       }
@@ -2960,30 +2932,25 @@ async function saveProblemsToDB(
             console.warn(`[DB] 문제 ${problemNum} annotation: pageImagePathMap miss (size=${pageImagePathMap.size}, pageNum=${pageNum}) → 결정적 경로 폴백`);
             pageImgInfo = { path: `page-images/${jobId}/page-${pageNum}.jpg`, width: 0, height: 0 };
           }
-          if (pageImgInfo) {
-            try {
-              // ★ 기존 레코드 삭제 후 insert (중복 방지)
-              await supabase.from('detection_annotations').delete().eq('problem_id', problem.id);
-              await supabase.from('detection_annotations').insert({
-                problem_id: problem.id,
-                exam_id: examId,
-                job_id: jobId,
-                page_number: pageNum,
-                page_image_path: pageImgInfo.path,
-                page_width: pageImgInfo.width,
-                page_height: pageImgInfo.height,
-                bbox_x: bbox.x,
-                bbox_y: bbox.y,
-                bbox_w: bbox.w,
-                bbox_h: bbox.h,
-                class_label: 'problem',
-                problem_number: problemNum,
-                detection_source: editedBbox ? 'MANUAL' : 'MATHPIX',
-              });
-            } catch (annErr) {
-              console.warn(`[DB] 문제 ${problemNum}번 어노테이션 저장 실패:`, annErr);
-            }
-          }
+          // ★ 2026-08-30: saveEditedProblemsDirect 와 동일 헬퍼 사용 (두 경로 동시 패치).
+          //   무효 좌표 배제 + .error 로깅. 이 경로는 problem 라벨만 저장한다(기존 동작 유지).
+          await saveDetectionAnnotations(
+            supabase as unknown as AnnotationDbClient,
+            {
+              problemId: problem.id,
+              examId,
+              jobId,
+              pageNumber: pageNum,
+              pageImagePath: pageImgInfo.path,
+              pageWidth: pageImgInfo.width,
+              pageHeight: pageImgInfo.height,
+              problemBbox: bbox,
+              figureBboxes: null,
+              problemNumber: problemNum,
+              detectionSource: editedBbox ? 'MANUAL' : 'MATHPIX',
+            },
+            `[DB] 문제 ${problemNum}번`,
+          );
         }
       }
     } catch (err) {
