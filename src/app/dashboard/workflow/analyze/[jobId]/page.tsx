@@ -102,6 +102,8 @@ interface AnalyzedProblem {
   typeName: string;
   confidence: number;
   status: 'pending' | 'analyzing' | 'completed' | 'error' | 'edited';
+  /** ★ 사용자가 문제 번호를 직접 고쳤는가. true 면 자산화 시 순번으로 덮어쓰지 않는다. */
+  numberEdited?: boolean;
   pageIndex: number;
   // 바운딩 박스 (비율 기반, 0~1)
   bbox?: { x: number; y: number; w: number; h: number };
@@ -2036,13 +2038,14 @@ function ProblemDetailPanel({
                 onChange={(e) => setEditNumberValue(e.target.value)}
                 onBlur={() => {
                   const num = parseInt(editNumberValue, 10);
-                  if (!isNaN(num) && num > 0) onSave({ number: num });
+                  // ★ numberEdited 를 같이 보낸다 — 이게 없으면 자산화가 순번으로 덮어쓴다.
+                  if (!isNaN(num) && num > 0) onSave({ number: num, numberEdited: true });
                   setIsEditingNumber(false);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const num = parseInt(editNumberValue, 10);
-                    if (!isNaN(num) && num > 0) onSave({ number: num });
+                    if (!isNaN(num) && num > 0) onSave({ number: num, numberEdited: true });
                     setIsEditingNumber(false);
                   } else if (e.key === 'Escape') {
                     setIsEditingNumber(false);
@@ -3873,7 +3876,14 @@ export default function AnalyzeJobPage() {
               h: img.cropRelativeRect.h,
             }));
             editedProblems.push({
-              number: globalProblemNumber, // ★ 전역 순번 사용 (p.number는 페이지별로 리셋되어 크롭 파일 충돌)
+              // ★ 2026-08-31 사고 수정 — "클릭해서 번호를 수정하세요" 가 실제로는 안 먹었다.
+              //   화면 편집은 상태에 잘 저장됐지만 여기서 순번(globalProblemNumber)으로
+              //   무조건 덮어써 사용자의 수정이 통째로 버려지고 있었다.
+              //   순번을 쓰던 이유는 "검출된 p.number 가 페이지마다 1 부터 다시 시작해
+              //   크롭 파일명이 충돌"하기 때문 — 그 목적은 아래 크롭 경로가 이미
+              //   globalProblemNumber 를 쓰므로 그대로 지켜진다(파일명 충돌 없음).
+              //   → 사용자가 직접 고친 경우에만 그 번호를 존중한다.
+              number: p.numberEdited && p.number > 0 ? p.number : globalProblemNumber,
               // ★ 사용자가 1차 OCR 화면에서 직접 수정한 문제 표시 (2026-05-30).
               //   서버 자산화 시 verifyAndRepairWithVision(이미지 기준 재교정)이 사용자 수정을 덮어쓰는
               //   회귀 방지 — isEdited=true 면 비전 재교정 스킵 (수정본 신뢰). saveEditedProblemsDirect·
