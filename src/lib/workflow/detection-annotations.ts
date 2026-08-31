@@ -19,12 +19,20 @@
 //     - problem + graph 정상 2행 → INSERT 성공
 //     - graph 행 하나만 bbox_w 무효 → PG 23502, 배치 전체 실패 (problem 행 동반 사망)
 //
-//   [미확정] 최초 트리거는 특정하지 못했다. 일자별 실측상 4/20 경부터 이미 간헐 실패였고
-//   (4/22~25 시험지 8개 자산화에 annotation 0), 4/26 을 마지막으로 영구 0 이 됐다.
-//   4/29 YOLO 엔드포인트 전환(f7ad223)·4/30 graph 배열 INSERT 도입(e030838)은 영구 0
-//   구간 안에 있으나 영구 0 의 시작이 그보다 앞서므로, 단일 커밋을 원인으로 지목할
-//   근거가 없다. 클라이언트 상태에 좌우되는 부분이라 정적 분석의 한계다.
-//   → 아래 가드 (3) 의 오류 로깅이 다음 자산화에서 진짜 원인을 드러낸다.
+//   [원인 확정 2026-08-31] 운영 실측으로 진짜 트리거를 잡았다.
+//     Postgres 로그: `ERROR 22P02: invalid input syntax for type integer: "1630.5"`
+//     PostgREST 는 이걸 400 으로 돌려주고, DELETE(204) 만 성공한 채 INSERT 는 전부 실패했다.
+//
+//     page_width / page_height 는 integer 컬럼인데, 클라이언트가 PDF.js viewport 에서
+//     구한 페이지 크기를 **소수**(예: 1630.5) 로 보낸다. 정수 컬럼에 소수 문자열이 들어가
+//     행 하나도 못 들어갔다. bbox 는 real 이라 멀쩡했고, 오직 페이지 크기 두 개가 원인이다.
+//
+//     이래서 증상이 "page-images 는 계속 쌓이는데 annotation 만 0" 이었다. 좌표·이미지·
+//     자산화는 전부 정상이고 마지막 INSERT 만 죽었으니 화면에는 아무 표시가 안 났다.
+//     4/20 경 간헐 → 4/26 이후 영구 0 도 페이지 렌더 배율이 바뀌며 폭이 소수로 굳은 것과 맞는다.
+//
+//   ★ 그래서 아래 가드 (4) 가 있다. 정수 컬럼에는 반드시 정수를 넣는다.
+//     이 변환을 지우면 같은 사고가 그대로 재발한다.
 //
 // ★ 가드 — 아래 3개는 같이 살아있어야 한다. 하나라도 빠지면 같은 사고가 재발한다.
 //   (1) 유한수 검증: 무효 bbox 는 행을 만들기 전에 배제한다. NaN·Infinity·undefined 모두.
@@ -32,6 +40,9 @@
 //       무슨 값이 들어와도 problem 행을 죽일 수 없다. ★ 절대 한 배열로 합치지 말 것.
 //   (3) 오류 로깅: 모든 INSERT 의 `.error` 를 확인해 console.error 로 남긴다.
 //       조용한 실패를 다시 만들지 않는다.
+//   (4) 정수 컬럼 정규화: page_number·page_width·page_height 는 integer 컬럼이다.
+//       소수가 들어오면 PG 22P02 로 INSERT 전체가 죽는다(위 사고의 확정 원인).
+//       ★ Math.round 를 지우지 말 것. 학습용 페이지 크기는 1px 반올림 오차가 무의미하다.
 //
 //   자산화(exam/problems 저장) 자체에는 영향을 주지 않는다 — 학습 데이터는 부가 산출물이라
 //   여기서 무엇이 실패해도 예외를 던지지 않고 로그만 남긴다.
@@ -109,6 +120,17 @@ export function isFiniteBbox(bbox: unknown): bbox is AnnotationBbox {
  * 도형 좌표는 problem 크롭 기준(0~1)이므로 페이지 기준(0~1)으로 변환한다:
  *   pageX = problem.x + fig.x * problem.w
  */
+/**
+ * integer 컬럼에 넣을 값으로 정규화한다.
+ *
+ * ★ 소수(1630.5)를 그대로 보내면 PG 22P02 로 INSERT 가 통째로 실패한다 — 4개월 유실의
+ *   확정 원인. 비유한수(NaN·undefined)는 0 으로 떨어뜨린다. page_width/height 는
+ *   nullable 이고 학습 시 bbox(0~1 정규화)만 쓰므로 0 이어도 데이터 가치는 그대로다.
+ */
+function toIntOrZero(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : 0;
+}
+
 export function buildAnnotationRows(input: BuildAnnotationRowsInput): BuildAnnotationRowsResult {
   const skipped: string[] = [];
 
@@ -125,10 +147,11 @@ export function buildAnnotationRows(input: BuildAnnotationRowsInput): BuildAnnot
     problem_id: input.problemId,
     exam_id: input.examId,
     job_id: input.jobId,
-    page_number: input.pageNumber,
+    // ★ integer 컬럼 3종 — 반드시 정수로. 가드 (4) 참고.
+    page_number: toIntOrZero(input.pageNumber),
     page_image_path: input.pageImagePath,
-    page_width: input.pageWidth,
-    page_height: input.pageHeight,
+    page_width: toIntOrZero(input.pageWidth),
+    page_height: toIntOrZero(input.pageHeight),
     problem_number: input.problemNumber,
     detection_source: input.detectionSource,
   };
