@@ -4401,7 +4401,9 @@ export default function AnalyzeJobPage() {
           ...page,
           problems: page.problems.map(p =>
             p.id === problemId
-              ? { ...p, bbox: newBbox }
+              // ★ 캐시된 크롭을 같이 버린다 — AutoCrop 핸들러와 같은 이유(위 주석 참고).
+              //   한쪽만 고치면 모드에 따라 증상이 갈려 진단이 어려워진다. 두 곳 동시 패치.
+              ? { ...p, bbox: newBbox, cropImageBase64: undefined }
               : p
           ),
         })),
@@ -5094,7 +5096,12 @@ export default function AnalyzeJobPage() {
         const idx = problems.findIndex(p => p.id === problemId);
         if (idx >= 0) {
           const updated = [...problems];
-          updated[idx] = { ...updated[idx], bbox: newBbox };
+          // ★ 2026-08-31 사고 수정 — 박스를 키워도 저장되는 이미지가 안 바뀌던 문제.
+          //   자산화는 `p.cropImageBase64` 가 있으면 그걸 그대로 올리고, 없을 때만
+          //   현재 bbox 로 크롭을 새로 만든다. 그런데 여기서 캐시를 안 지워서
+          //   "좌표는 새 값, 이미지는 옛 값" 이 저장됐다.
+          //   → 사용자가 박스를 고치면 캐시를 버려 자산화 때 새 좌표로 다시 자르게 한다.
+          updated[idx] = { ...updated[idx], bbox: newBbox, cropImageBase64: undefined };
           next.set(pageIdx, updated);
           break;
         }
