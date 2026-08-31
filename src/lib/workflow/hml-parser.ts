@@ -376,6 +376,28 @@ function answerFromChannel(after: string): string {
  *   신구조: 미주(answer)에 `[정답]` → stem(text)은 깨끗한 본문 (서답형 정답이 앞에 안 박힘).
  *   구구조 폴백: `[정답]` 이 본문에 인라인 (이전 포맷) — extractAnswerAndStem 로 분리.
  */
+/**
+ * 수학비서가 문항 끝에 붙이는 **출처·난이도 각주 표**를 걷어낸다.
+ *
+ * 원본 형태 (표 한 칸에 출처, 다음 칸에 난이도):
+ *   \begin{tabular}{|l|l|}\hline [출처] & 내신 2025년 … 2 [3.40점] \\ \hline & ∙∘∘∘쉬움2 \\ \hline\end{tabular}
+ *
+ * ★ 이 표는 문제 내용이 아니라 출처 표기다. 남겨두면 보기 ⑤ 뒤에 표가 통째로 붙어
+ *   시험지·문제은행·인쇄에 그대로 노출된다 (2026-09-01 반여고 실사고: 본문 3·보기 18 오염).
+ * ★ `[출처]` 가 들어 있는 tabular 만 지운다. 조건 박스·데이터 표·그림 표는 건드리지 않는다
+ *   — 표 처리는 회귀가 잦은 자리라 판정을 좁게 잡는다.
+ */
+export function stripSourceFootnote(text: string): string {
+  if (!text || !text.includes('[출처]')) return text;
+  return text
+    .replace(/\\begin\{tabular\}(?:\{[^}]*\})?[\s\S]*?\\end\{tabular\}/g, (block) =>
+      block.includes('[출처]') ? '' : block,
+    )
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function segmentProblems(paras: RawPara[]): HmlProblem[] {
   const problems: HmlProblem[] = [];
   let cur: { number: number; answer: string; lines: string[]; images: string[] } | null = null;
@@ -443,7 +465,14 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
         }
       }
       problems.push({
-        number: cur.number, content, choices: finalChoices, answer: cur.answer,
+        number: cur.number,
+        // ★ 수학비서 출처·난이도 각주 표 제거 (2026-09-01, 반여고 실사고).
+        //   본문 3문항·보기 18문항이 오염됐다. 보기 ⑤ 뒤에 표가 통째로 붙어
+        //   `⑤ $17$ \begin{tabular}…[출처] 내신 2025년 …[3.40점]…∙∘∘∘쉬움2…\end{tabular}`
+        //   같은 값이 저장됐다. 시험지에도 문제은행에도 그대로 노출된다.
+        content: stripSourceFootnote(content),
+        choices: finalChoices.map(stripSourceFootnote),
+        answer: cur.answer,
         imagesBase64: stemImages,
         choiceImagesBase64: hasChoiceImg ? choiceImagesBase64 : [],
         choiceHeaders,
