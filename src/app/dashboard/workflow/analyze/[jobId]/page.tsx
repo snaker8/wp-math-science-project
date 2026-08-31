@@ -2678,6 +2678,21 @@ async function detectFiguresFromProblemCropAfterAnalysis(
   problem: AnalyzedProblem,
   pageNum: number
 ): Promise<InsertedImage[]> {
+  // ★ 2026-08-31 중복 삽입 사고 — 도형이 한 문제에 두 번 들어갔다.
+  //   도형을 넣는 경로가 둘이다:
+  //     (1) 페이지 검출 직후  autoCropFiguresForProblems   — 전체 페이지 문맥, 경계가 정밀
+  //     (2) 분석 후          이 함수                      — 문제 크롭만 보고 다시 검출
+  //   1차 YOLO 는 도형 클래스를 못 잡아 (1) 이 항상 비어 있었고, 그래서 (2) 가 유일한 경로였다.
+  //   2차 모델(2026-08-31)부터 (1) 이 도형을 잡기 시작하면서 같은 도형이 두 번 들어갔다.
+  //   (1) 의 크롭이 더 정확하므로 그쪽을 남기고 여기서는 건너뛴다.
+  //   ※ (1) 이 아무것도 못 넣었을 때는 여기가 그대로 동작한다(GPT 폴백 포함) — 기능 손실 없음.
+  const alreadyAuto = (problem.insertedImages || []).filter((im) => im.id?.startsWith('auto-fig-'));
+  if (alreadyAuto.length > 0) {
+    console.log(
+      `[FigureAfterAnalyze] 문제 ${problem.number}: 페이지 단계에서 이미 ${alreadyAuto.length}개 삽입됨 — 중복 방지로 건너뜀`
+    );
+    return [];
+  }
   try {
     const res = await fetch('/api/workflow/detect-problems-yolo', {
       method: 'POST',
@@ -2761,6 +2776,30 @@ async function detectFiguresFromProblemCropAfterAnalysis(
     console.warn(`[FigureAfterAnalyze] 문제 ${problem.number} 실패:`, err);
     return [];
   }
+}
+
+
+/**
+ * ★ 도형 병합 — 이미 있는 것과 크게 겹치는 항목은 버린다 (중복 삽입 2차 방어).
+ *   좌표는 problem 크롭 기준 0~1. 겹침이 작은 쪽 면적의 60% 를 넘으면 같은 도형으로 본다.
+ */
+function mergeFiguresDedup(existing: InsertedImage[], incoming: InsertedImage[]): InsertedImage[] {
+  const out = [...existing];
+  for (const cand of incoming) {
+    const c = cand.cropRelativeRect;
+    const dup = out.some((e) => {
+      const r = e.cropRelativeRect;
+      if (!r || !c) return false;
+      const ix = Math.max(0, Math.min(r.x + r.w, c.x + c.w) - Math.max(r.x, c.x));
+      const iy = Math.max(0, Math.min(r.y + r.h, c.y + c.h) - Math.max(r.y, c.y));
+      const inter = ix * iy;
+      const small = Math.min(r.w * r.h, c.w * c.h);
+      return small > 0 && inter / small > 0.6;
+    });
+    if (!dup) out.push(cand);
+    else console.log('[FigureMerge] 겹치는 도형 발견 — 중복으로 버림');
+  }
+  return out;
 }
 
 // ★ 재분석 후 새 OCR 텍스트에 기존 삽입 이미지를 다시 적용
@@ -4745,7 +4784,7 @@ export default function AnalyzeJobPage() {
               const extracted = extractProblemContent(rawContent, classification?.classification?.typeName);
               // ★ 기존 삽입 이미지 + 분석 후 YOLO 가 잡은 figure 합치기
               const existingImages = pageProbs[idx].insertedImages || [];
-              const allImages = [...existingImages, ...yoloFigures];
+              const allImages = mergeFiguresDedup(existingImages, yoloFigures);
               const finalContent = reapplyInsertedImages(extracted.content, allImages);
 
               const cls = classification?.classification;
@@ -4890,7 +4929,7 @@ export default function AnalyzeJobPage() {
             const extracted = extractProblemContent(rawContent, classification?.classification?.typeName);
             // ★ 기존 삽입 이미지 + 분석 후 YOLO 가 잡은 figure 합치기
             const existingImages = pageProbs[idx].insertedImages || [];
-            const allImages = [...existingImages, ...yoloFigures];
+            const allImages = mergeFiguresDedup(existingImages, yoloFigures);
             const finalContent = reapplyInsertedImages(extracted.content, allImages);
 
             pageProbs[idx] = {
