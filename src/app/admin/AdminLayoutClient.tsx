@@ -8,9 +8,6 @@ import {
   Building2,
   Users,
   UserCog,
-  BookOpen,
-  BarChart3,
-  Settings,
   LogOut,
   Menu,
   X,
@@ -54,14 +51,17 @@ const NAV_GROUPS: NavGroup[] = [
     label: '도구',
     items: [
       { href: '/admin/answer-fix', label: '객관식 정답 회복', icon: Wrench },
-      { href: '/admin/problems', label: '문제 관리', icon: BookOpen },
-      { href: '/admin/analytics', label: '통계', icon: BarChart3 },
+      // ★ 2026-08-31 제거: /admin/problems · /admin/analytics · /admin/settings 는
+      //   페이지가 없는데 메뉴만 있어서 누르면 404 였다(사용자 신고).
+      //   메뉴에서 빼는 것이 "눌러도 아무 일 없는 것"보다 정직하다.
+      //   ※ 되살릴 때는 반드시 src/app/admin/<이름>/page.tsx 를 먼저 만들고 링크를 추가할 것.
+      //     유사 기능은 사용자 화면에 있다 — 문제은행 /dashboard/repository,
+      //     통계 /tutor/analytics, 설정 /dashboard/settings (다만 이들은 관리자용이 아님).
     ],
   },
   {
     label: '시스템',
     items: [
-      { href: '/admin/settings', label: '설정', icon: Settings },
       { href: '/dashboard', label: '메인으로', icon: Home },
     ],
   },
