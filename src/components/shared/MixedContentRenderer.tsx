@@ -2,6 +2,7 @@
 
 import React, { memo, useMemo } from 'react';
 import katex from 'katex';
+import { stripDollarsInsideMathEnv } from './math-env-dollar';
 import { MathRenderer } from './MathRenderer';
 import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
 
@@ -904,7 +905,12 @@ function preprocessMathpixContent(text: string): string {
         const sdCount = (before.replace(/\$\$/g, '').match(/\$/g) || []).length;
         if (sdCount % 2 === 1) return match; // $ 안 → 그대로
         if (envName === 'array' && /&/.test(match)) return match;
-        return `$$${match}$$`;
+        // ★ 2026-08-31 사고 — 수식 환경 **안쪽**에 $ 가 섞여 들어오는 경우.
+        //   Mathpix 가 연립방정식의 두 줄 중 한 줄만 $ 로 감싸 내보내는 일이 있다:
+        //   이걸 그대로 $$ 로 감싸면 수식 모드 안에 $ 가 남아 KaTeX 가 통째로 실패하고,
+        //   화면에는 cases 원문이 날것(LaTeX 문자열)으로 노출된다 — 서여고 미적분1 실측.
+        //   수식 환경 안에서 $ 는 어떤 경우에도 유효한 문법이 아니므로 전부 걷어낸다.
+        return `$$${stripDollarsInsideMathEnv(match)}$$`;
       }
     );
   }
