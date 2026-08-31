@@ -1067,16 +1067,14 @@ export default function CloudFlowUploader({
           background: rgba(255, 255, 255, 0.05);
         }
 
-        .subject-area-btn.active.math {
-          background: rgba(99, 102, 241, 0.15);
-          border-color: rgba(99, 102, 241, 0.5);
-          color: #a5b4fc;
-        }
-
+        /* ★ 선택 상태는 무채색으로 통일 (insane-design/linear §18 — 크롬에 채도색 금지).
+           수학=보라·과학=초록으로 갈라 두면 트랙을 옮길 때 화면 톤이 통째로 바뀐다.
+           어느 과목인지는 버튼의 글자가 이미 말해 준다. */
+        .subject-area-btn.active.math,
         .subject-area-btn.active.science {
-          background: rgba(16, 185, 129, 0.15);
-          border-color: rgba(16, 185, 129, 0.5);
-          color: #6ee7b7;
+          background: rgba(255, 255, 255, 0.10);
+          border-color: rgba(255, 255, 255, 0.22);
+          color: #ffffff;
         }
 
         .science-subject-picker {
@@ -1197,7 +1195,7 @@ export default function CloudFlowUploader({
         }
 
         .upload-zone {
-          border: 2px dashed rgba(99, 102, 241, 0.3);
+          border: 2px dashed rgba(255, 255, 255, 0.14);
           border-radius: 16px;
           padding: 40px 24px;
           text-align: center;
@@ -1208,8 +1206,8 @@ export default function CloudFlowUploader({
 
         .upload-zone:hover,
         .upload-zone.dragging {
-          border-color: rgba(99, 102, 241, 0.6);
-          background: rgba(79, 70, 229, 0.1);
+          border-color: rgba(255, 255, 255, 0.30);
+          background: rgba(255, 255, 255, 0.04);
         }
 
         .hidden-input {
@@ -1220,7 +1218,8 @@ export default function CloudFlowUploader({
           width: 64px;
           height: 64px;
           margin: 0 auto 16px;
-          background: linear-gradient(135deg, #4f46e5, #7c3aed);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 16px;
           display: flex;
           align-items: center;
@@ -1252,7 +1251,7 @@ export default function CloudFlowUploader({
           align-items: center;
           gap: 6px;
           font-size: 12px;
-          color: #a5b4fc;
+          color: #a1a1aa;
         }
 
         .upload-options {
@@ -1274,7 +1273,7 @@ export default function CloudFlowUploader({
         .option input {
           width: 16px;
           height: 16px;
-          accent-color: #6366f1;
+          accent-color: #ffffff;
         }
 
         .job-list {
@@ -1337,8 +1336,8 @@ export default function CloudFlowUploader({
         }
 
         .expand-button:hover {
-          background: rgba(99, 102, 241, 0.1);
-          color: #a5b4fc;
+          background: rgba(255, 255, 255, 0.06);
+          color: #ffffff;
         }
 
         .remove-button:hover {
@@ -1433,8 +1432,8 @@ export default function CloudFlowUploader({
         .type-code {
           font-size: 11px;
           font-weight: 600;
-          color: #a5b4fc;
-          background: rgba(99, 102, 241, 0.15);
+          color: #d4d4d8;
+          background: rgba(255, 255, 255, 0.08);
           padding: 2px 8px;
           border-radius: 4px;
         }
@@ -1544,7 +1543,7 @@ export default function CloudFlowUploader({
 
         .type-btn.active svg {
           opacity: 1;
-          color: #818cf8;
+          color: #ffffff;
         }
 
         .options {
