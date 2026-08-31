@@ -3822,7 +3822,30 @@ export default function AnalyzeJobPage() {
       const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }>; choiceImages?: Array<string | null>; choiceHeaders?: string[]; choiceLayout?: number; isEdited?: boolean }> = [];
       const pagesWithProblems = new Set<number>(); // YOLO 학습용 페이지 이미지 수집
       let globalProblemNumber = 0; // ★ 전역 순번 (페이지별 리셋 방지)
-      for (const [pageIdx, pageProbs] of autoCropProblems.entries()) {
+      // ★ 2026-08-31 사고 수정 — 페이지 순서를 바꿔도 번호가 옛 순서로 매겨졌다.
+      //   autoCropProblems 는 Map 이라 entries() 가 **삽입 순서**를 준다. 검출 루프는
+      //   pageOrder 순서로 돌지만, 검출이 끝난 뒤에 사용자가 썸네일을 드래그해 순서를
+      //   고치면 Map 순서는 그대로다. 화면은 새 순서로 보이는데 자산화는 옛 순서로
+      //   번호를 매겨, 11번 문제가 2번으로 저장되는 사고가 났다.
+      //   → 화면에 보이는 순서(pageOrder)를 그대로 따른다. pageOrder 에 없는 페이지는
+      //     뒤에 붙여 누락을 만들지 않는다.
+      const orderedPageIdxs: number[] = (() => {
+        const keys = Array.from(autoCropProblems.keys());
+        if (!pageOrder.length) return keys;
+        const seen = new Set<number>();
+        const ordered: number[] = [];
+        for (const pdfPageNum of pageOrder) {
+          const idx = pdfPageNum - 1; // pageOrder 는 1-based PDF page number
+          if (autoCropProblems.has(idx) && !seen.has(idx)) {
+            ordered.push(idx);
+            seen.add(idx);
+          }
+        }
+        for (const k of keys) if (!seen.has(k)) ordered.push(k); // 순서 정보 밖의 페이지 보존
+        return ordered;
+      })();
+      for (const pageIdx of orderedPageIdxs) {
+        const pageProbs = autoCropProblems.get(pageIdx) || [];
         for (const p of pageProbs) {
           if (p.status === 'edited' || p.status === 'completed') {
             globalProblemNumber++;
