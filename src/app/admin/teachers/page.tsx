@@ -154,7 +154,11 @@ export default function TeachersManagementPage() {
       if (!res.ok) throw new Error(data.message || data.detail || '보관에 실패했습니다.');
       setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
       setArchiveTarget(null);
-      setMessage({ type: 'success', text: `${teacher.full_name} 계정을 보관했습니다. 로그인이 차단됩니다.` });
+      setMessage({
+        type: 'success',
+        text: `${teacher.full_name} 계정을 보관했습니다. 로그인이 차단되며`
+          + `${data.adminRevoked ? ' 관리자 권한도 해제됐습니다.' : ' 반·시험지·문제는 그대로 남습니다.'}`,
+      });
       setTimeout(() => setMessage(null), 5000);
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : '보관에 실패했습니다.' });
@@ -412,7 +416,11 @@ export default function TeachersManagementPage() {
             </div>
 
             <p className="dialog-desc">
-              로그인이 차단됩니다. <strong>반·시험지·문제는 지워지지 않고 그대로 남습니다.</strong>
+              로그인이 차단됩니다.
+              {archiveTarget.teacher.isAcademyAdmin && (
+                <> <strong>관리자 권한도 함께 해제됩니다.</strong></>
+              )}{' '}
+              <strong>반·시험지·문제는 지워지지 않고 그대로 남습니다.</strong>
             </p>
 
             <div className="impact">

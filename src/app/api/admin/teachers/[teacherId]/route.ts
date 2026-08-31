@@ -41,7 +41,7 @@ async function loadDeletableTarget(teacherId: string, actorId: string) {
 
   const { data: target, error } = await supabaseAdmin
     .from('users')
-    .select('id, email, full_name, role, institute_id, deleted_at')
+    .select('id, email, full_name, role, institute_id, deleted_at, preferences')
     .eq('id', teacherId)
     .maybeSingle();
 
@@ -94,7 +94,13 @@ export async function GET(_req: NextRequest, { params }: { params: { teacherId: 
   if (error) return error;
 
   return NextResponse.json({
-    teacher: { id: target!.id, name: target!.full_name, email: target!.email, archived: !!target!.deleted_at },
+    teacher: {
+      id: target!.id,
+      name: target!.full_name,
+      email: target!.email,
+      archived: !!target!.deleted_at,
+      isAcademyAdmin: ((target!.preferences as Record<string, unknown>) ?? {}).isAcademyAdmin === true,
+    },
     impact: await loadImpact(params.teacherId),
   });
 }
@@ -112,9 +118,24 @@ export async function DELETE(_req: NextRequest, { params }: { params: { teacherI
   }
 
   const impact = await loadImpact(params.teacherId);
+
+  // ★ 퇴사 처리는 "로그인 차단" 만으로 끝나지 않는다. 관리자 권한도 같이 걷는다.
+  //   안 걷으면 (1) 보관 상태에서도 권한 보유자로 남고 (2) 나중에 복구했을 때
+  //   퇴사 전 권한을 그대로 되찾는다. 둘 다 사고다.
+  const { data: current } = await supabaseAdmin
+    .from('users')
+    .select('preferences')
+    .eq('id', params.teacherId)
+    .maybeSingle();
+  const prefs = ((current?.preferences as Record<string, unknown>) ?? {});
+  const hadAdmin = prefs.isAcademyAdmin === true;
+
   const { error: updErr } = await supabaseAdmin
     .from('users')
-    .update({ deleted_at: new Date().toISOString() })
+    .update({
+      deleted_at: new Date().toISOString(),
+      preferences: { ...prefs, isAcademyAdmin: false },
+    })
     .eq('id', params.teacherId);
 
   if (updErr) {
@@ -125,17 +146,23 @@ export async function DELETE(_req: NextRequest, { params }: { params: { teacherI
   // 권한 캐시(60초 TTL)를 즉시 비워 다음 요청부터 차단되게 한다.
   bustUserScopeCache(params.teacherId);
   console.log(
-    `[admin/teachers] 보관 ${target!.email} (반 ${impact.classes} · 시험지 ${impact.exams} · 문제 ${impact.problems}) by ${authed.data.user.id}`
+    `[admin/teachers] 보관 ${target!.email} (반 ${impact.classes} · 시험지 ${impact.exams} · 문제 ${impact.problems}` +
+    `${hadAdmin ? ' · 관리자 권한 해제' : ''}) by ${authed.data.user.id}`
   );
 
   return NextResponse.json({
     ok: true,
     teacher: { id: target!.id, name: target!.full_name, email: target!.email },
     impact,
+    adminRevoked: hadAdmin,
   });
 }
 
-/** POST — 복구. 보관을 되돌린다. */
+/**
+ * POST — 복구. 보관을 되돌린다.
+ * ★ 관리자 권한은 되살리지 않는다 — 보관 시 해제된 상태 그대로 돌아온다.
+ *   재입사자에게 예전 권한이 자동으로 붙으면 안 된다. 필요하면 화면에서 다시 부여한다.
+ */
 export async function POST(_req: NextRequest, { params }: { params: { teacherId: string } }) {
   const authed = await requireSuperAdmin();
   if (!authed.ok) return authed.response;
