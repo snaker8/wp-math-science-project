@@ -3487,6 +3487,9 @@ export default function AnalyzeJobPage() {
 
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  // ★ 임시저장이 용량 한도로 꺼졌는가 (2026-08-31). 조용히 실패하면 새로고침 때 편집분이
+  //   통째로 날아가므로 화면에 반드시 드러낸다.
+  const [draftBlocked, setDraftBlocked] = useState(false);
   const prevResultCountRef = useRef(0);
 
   // ★ 자동 임시저장 (localStorage) — 분석/편집 데이터 손실 방지
@@ -3525,24 +3528,61 @@ export default function AnalyzeJobPage() {
     if (!draftKey || !draftLoadedRef.current) return;
     if (autoCropProblems.size === 0) return;
     const timer = setTimeout(() => {
-      try {
-        // base64 제거하여 size 절감 (텍스트·메타만 유지)
-        const stripped = Array.from(autoCropProblems.entries()).map(([page, problems]) => [
+      // ★ 2026-08-31 수정 — 임시저장이 매번 QuotaExceeded 로 죽고 있었다.
+      //   기존에는 cropImageBase64 와 insertedImages.base64 만 비웠는데, 그 뒤 추가된
+      //   choiceImages(그림 객관식)·cvFigures.cropBase64(도형 후보)·graphData.svg 가
+      //   전부 base64/대용량이라 localStorage 5MB 한도를 그냥 넘겼다.
+      //   실패가 console.warn 뿐이라 사용자는 임시저장이 꺼진 줄 모른 채 작업했다.
+      //   → (1) 무거운 필드를 모두 덜어내고 (2) 그래도 넘치면 핵심만 남긴 축소본으로
+      //     한 번 더 시도하고 (3) 그것도 실패하면 화면에 알린다.
+      const isHeavyImage = (v: string | null | undefined) => !!v && v.startsWith('data:');
+
+      // 1차 — 큰 데이터만 덜어낸 판본 (복원 시 화면이 거의 그대로 돌아온다)
+      const slim = Array.from(autoCropProblems.entries()).map(([page, problems]) => [
+        page,
+        problems.map(p => ({
+          ...p,
+          cropImageBase64: undefined,
+          // 그림 객관식: base64 는 버리고 Storage URL 은 남긴다
+          choiceImages: p.choiceImages?.map(img => (isHeavyImage(img) ? null : img)),
+          // 도형 후보: 좌표만 남기고 썸네일 base64 는 버린다
+          cvFigures: p.cvFigures?.map(({ x, y, w, h }) => ({ x, y, w, h })),
+          graphData: p.graphData ? { ...p.graphData, svg: undefined } : undefined,
+          insertedImages: (p.insertedImages || []).map(img => ({
+            ...img,
+            base64: '', // 비움 (복원 시 사용자 재삽입 필요)
+          })),
+        })),
+      ]) as Array<[number, AnalyzedProblem[]]>;
+
+      // 2차 — 그래도 넘칠 때. 사람이 다시 만들기 어려운 것만 남긴다.
+      //   (좌표·번호·정답·배점·분류는 손으로 복원하기 가장 비싸다)
+      const minimal = () =>
+        Array.from(autoCropProblems.entries()).map(([page, problems]) => [
           page,
           problems.map(p => ({
-            ...p,
-            cropImageBase64: undefined, // 큰 데이터 제거
-            insertedImages: (p.insertedImages || []).map(img => ({
-              ...img,
-              base64: '', // 비움 (복원 시 사용자 재삽입 필요)
-            })),
+            id: p.id, number: p.number, numberEdited: p.numberEdited,
+            content: p.content, choices: p.choices, answer: p.answer,
+            score: p.score, difficulty: p.difficulty,
+            typeCode: p.typeCode, typeName: p.typeName,
+            status: p.status, pageIndex: p.pageIndex, bbox: p.bbox,
+            confidence: p.confidence, solution: '',
           })),
         ]) as Array<[number, AnalyzedProblem[]]>;
-        localStorage.setItem(draftKey, JSON.stringify(stripped));
-      } catch (e) {
-        // QuotaExceeded 등 — 조용히 실패 (분석 흐름 영향 X)
-        console.warn('[Draft] 저장 실패:', e instanceof Error ? e.message : e);
+
+      for (const [label, build] of [['일반', () => slim], ['축소', minimal]] as const) {
+        try {
+          localStorage.setItem(draftKey, JSON.stringify(build()));
+          if (label === '축소') console.warn('[Draft] 용량 초과 → 축소본으로 저장 (해설·이미지 제외)');
+          setDraftBlocked(false);
+          return;
+        } catch (e) {
+          console.warn(`[Draft] ${label} 저장 실패:`, e instanceof Error ? e.message : e);
+        }
       }
+      // 둘 다 실패 — 조용히 넘기지 않는다. 새로고침하면 편집분이 날아간다.
+      setDraftBlocked(true);
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
     }, 2000);
     return () => clearTimeout(timer);
   }, [autoCropProblems, draftKey]);
@@ -5387,6 +5427,17 @@ export default function AnalyzeJobPage() {
           )}
 
           {/* 자산화 버튼 / 클라우드 이동 버튼 */}
+          {/* ★ 임시저장이 꺼졌으면 반드시 보이게 한다. 조용한 실패가 제일 위험하다. */}
+          {draftBlocked && !isSaved && (
+            <span
+              className="flex items-center gap-1.5 rounded-full border border-white/25 bg-white/[.10] px-3 py-1.5 text-[11px] font-semibold text-white"
+              title="문항·이미지가 많아 브라우저 임시저장 한도를 넘었습니다. 새로고침하거나 페이지를 벗어나면 편집 내용이 사라집니다. 자산화를 먼저 끝내세요."
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              임시저장 꺼짐 · 새로고침 주의
+            </span>
+          )}
+
           {((!isProcessing && jobData.totalProblems > 0) || (isAutoCropActive && completedCount > 0)) && (
             isSaved ? (
               <button
