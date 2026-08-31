@@ -50,6 +50,25 @@ const SPLIT_PIECEWISE_BARE =
 // ─────────────────────────────────────────────────────────────
 const EMPTY_MATH_BLOCK = /(?<!\$)\$([ \t]+|\\displaystyle[ \t]*|[ \t]*\\displaystyle[ \t]*)\$(?!\$)/g;
 
+// ─────────────────────────────────────────────────────────────
+// Rule D: `\left {` / `\right }` — 중괄호 이스케이프 누락
+//   LaTeX 에서 `\left` 뒤 구분자는 `\{` 여야 한다. `{` 는 그룹 시작이라
+//   KaTeX 가 "Expected '}', got '\right'" 로 죽고 수식 블록 전체를 포기한다.
+//   HWP→LaTeX 변환에서 역슬래시가 빠져 생긴다.
+//   ★ 치환이 항상 안전하다 — 정상 LaTeX 에 `\left {` 가 의미 있게 등장할 일이 없다.
+// ─────────────────────────────────────────────────────────────
+const LEFT_BRACE_UNESCAPED = /\\left(\s*)\{/g;
+const RIGHT_BRACE_UNESCAPED = /\\right(\s*)\}/g;
+
+// ─────────────────────────────────────────────────────────────
+// Rule E: 한글 수식 `cases{ 행1 # 행2 }` 가 변환되지 않고 남은 경우
+//   HWP 수식에서 `#` 는 행 구분자다. 변환기(hangul-equation.ts)가 처리하지만
+//   그 이전에 적재된 데이터에는 원문이 그대로 남아 KaTeX 가 `#` 에서 죽는다.
+//   ★ 보수적: `#` 가 실제로 있고 중첩 중괄호가 없을 때만 변환한다.
+//     `#` 없는 `cases{...}` 는 손대지 않는다 — 잘못 건드리면 본문이 손상된다.
+// ─────────────────────────────────────────────────────────────
+const HWP_CASES = /(?<![\\A-Za-z])cases\s*\{([^{}]*#[^{}]*)\}/g;
+
 function containsBareArray(middle: string): boolean {
   return /\\begin\{(?:array|cases|aligned|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|equation)\}/.test(middle);
 }
@@ -122,6 +141,30 @@ export function repairLatexRender(input: string): LatexRepairResult {
     const before = fixed;
     fixed = fixed.replace(EMPTY_MATH_BLOCK, '');
     if (fixed !== before) changes.push('빈 수식 블록 제거');
+  }
+
+  // ─── Rule D: `\left {` → `\left\{` ───
+  {
+    LEFT_BRACE_UNESCAPED.lastIndex = 0;
+    RIGHT_BRACE_UNESCAPED.lastIndex = 0;
+    const before = fixed;
+    fixed = fixed
+      .replace(LEFT_BRACE_UNESCAPED, '\\left\\{')
+      .replace(RIGHT_BRACE_UNESCAPED, '\\right\\}');
+    if (fixed !== before) changes.push('\\left { 중괄호 이스케이프 복원');
+  }
+
+  // ─── Rule E: 한글 `cases{A#B}` → `\begin{cases}` ───
+  {
+    HWP_CASES.lastIndex = 0;
+    const before = fixed;
+    fixed = fixed.replace(HWP_CASES, (whole: string, inner: string) => {
+      const rows = inner.split('#').map((r) => r.trim()).filter(Boolean);
+      // 행이 하나뿐이면 연립방정식이 아니다 → 원문 유지 (오발동 방지)
+      if (rows.length < 2) return whole;
+      return `\\begin{cases}${rows.join(' \\\\ ')}\\end{cases}`;
+    });
+    if (fixed !== before) changes.push('한글 cases{A#B} → \\begin{cases}');
   }
 
   return { fixed, changes };
