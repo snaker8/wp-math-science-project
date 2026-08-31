@@ -200,7 +200,7 @@ export default function TeachersManagementPage() {
             width: 40px;
             height: 40px;
             border: 3px solid #3f3f46; /* zinc-700 */
-            border-top-color: #6366f1; /* indigo-500 */
+            border-top-color: rgba(255, 255, 255, 0.55);
             border-radius: 50%;
             animation: spin 1s linear infinite;
           }
@@ -392,8 +392,8 @@ export default function TeachersManagementPage() {
         }
 
         .stat-icon.blue {
-          background: rgba(99, 102, 241, 0.1); /* indigo-500/10 */
-          color: #818cf8; /* indigo-400 */
+          background: rgba(255, 255, 255, 0.07);
+          color: #ffffff;
         }
 
         .stat-icon.green {
@@ -443,17 +443,17 @@ export default function TeachersManagementPage() {
           display: flex;
           gap: 16px;
           padding: 20px;
-          background: rgba(99, 102, 241, 0.08); /* indigo-500/8 */
-          border: 1px solid rgba(99, 102, 241, 0.2); /* indigo-500/20 */
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 12px;
           margin-bottom: 24px;
-          color: #818cf8; /* indigo-400 */
+          color: #ffffff;
         }
 
         .info-banner strong {
           display: block;
           margin-bottom: 4px;
-          color: #c7d2fe; /* indigo-200 */
+          color: #d4d4d8;
         }
 
         .info-banner p {
@@ -531,7 +531,7 @@ export default function TeachersManagementPage() {
         }
 
         .teacher-card:hover {
-          border-color: rgba(99, 102, 241, 0.4); /* indigo-500/40 */
+          border-color: rgba(255, 255, 255, 0.24);
         }
 
         .teacher-card.admin {
@@ -551,7 +551,8 @@ export default function TeachersManagementPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           color: white;
           font-size: 18px;
           font-weight: 600;
@@ -613,12 +614,14 @@ export default function TeachersManagementPage() {
         }
 
         .toggle-btn.grant {
-          background: #6366f1; /* indigo-500 */
+          background: #ffffff;
+          color: #09090b;
           color: white;
         }
 
         .toggle-btn.grant:hover {
-          background: #4f46e5; /* indigo-600 */
+          background: #e4e4e7;
+          color: #09090b;
         }
 
         .toggle-btn.revoke {
