@@ -105,8 +105,15 @@ export async function GET(_req: NextRequest, { params }: { params: { teacherId: 
   });
 }
 
-/** DELETE — 보관(소프트 삭제). 반·시험지·문제는 남는다. */
-export async function DELETE(_req: NextRequest, { params }: { params: { teacherId: string } }) {
+/**
+ * DELETE — 보관(소프트 삭제). 반·시험지·문제는 남는다.
+ *
+ * body(선택): { reassignTo?: string }
+ *   담당 반을 다른 강사에게 넘긴다. 퇴사자가 담당으로 남아 있으면 반 목록·수업 배정이
+ *   실제 운영과 어긋나므로, 보관과 같은 요청에서 한 번에 처리한다.
+ *   생략하면 반은 그대로 퇴사자에게 남는다(자료 보존 우선 — 임의로 떼지 않는다).
+ */
+export async function DELETE(req: NextRequest, { params }: { params: { teacherId: string } }) {
   const authed = await requireSuperAdmin();
   if (!authed.ok) return authed.response;
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -117,7 +124,49 @@ export async function DELETE(_req: NextRequest, { params }: { params: { teacherI
     return NextResponse.json({ ok: true, alreadyArchived: true, teacher: { id: target!.id } });
   }
 
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const reassignTo = typeof body.reassignTo === 'string' && body.reassignTo ? body.reassignTo : null;
+
   const impact = await loadImpact(params.teacherId);
+
+  // ★ 담당 반 이관 — 보관보다 **먼저** 한다.
+  //   순서를 뒤집으면 이관이 실패했을 때 "로그인은 막혔는데 반은 퇴사자 소유" 인
+  //   어중간한 상태로 남는다. 이관이 실패하면 보관 자체를 중단하는 편이 낫다.
+  let reassignedClasses = 0;
+  if (reassignTo) {
+    if (reassignTo === params.teacherId) {
+      return NextResponse.json(
+        { error: 'InvalidTarget', message: '같은 강사에게는 이관할 수 없습니다.' },
+        { status: 400 }
+      );
+    }
+    // 인수자는 살아있는 강사여야 한다 (보관된 계정·학생에게 넘기면 안 됨).
+    const { data: successor } = await supabaseAdmin
+      .from('users')
+      .select('id, full_name, role, deleted_at')
+      .eq('id', reassignTo)
+      .maybeSingle();
+    if (!successor || successor.deleted_at || !['TEACHER', 'ORG_ADMIN'].includes(successor.role ?? '')) {
+      return NextResponse.json(
+        { error: 'InvalidSuccessor', message: '이관 받을 강사를 찾을 수 없습니다(보관된 계정은 불가).' },
+        { status: 400 }
+      );
+    }
+
+    const { error: reErr, count } = await supabaseAdmin
+      .from('classes')
+      .update({ tutor_id: reassignTo }, { count: 'exact' })
+      .eq('tutor_id', params.teacherId);
+    if (reErr) {
+      console.error('[admin/teachers] 반 이관 실패 — 보관 중단:', reErr.message, reErr.details);
+      return NextResponse.json(
+        { error: 'ReassignFailed', message: `담당 반 이관에 실패해 보관을 중단했습니다: ${reErr.message}` },
+        { status: 500 }
+      );
+    }
+    reassignedClasses = count ?? 0;
+    console.log(`[admin/teachers] 반 ${reassignedClasses}개 이관 ${target!.email} → ${successor.full_name}`);
+  }
 
   // ★ 퇴사 처리는 "로그인 차단" 만으로 끝나지 않는다. 관리자 권한도 같이 걷는다.
   //   안 걷으면 (1) 보관 상태에서도 권한 보유자로 남고 (2) 나중에 복구했을 때
@@ -147,7 +196,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { teacherI
   bustUserScopeCache(params.teacherId);
   console.log(
     `[admin/teachers] 보관 ${target!.email} (반 ${impact.classes} · 시험지 ${impact.exams} · 문제 ${impact.problems}` +
-    `${hadAdmin ? ' · 관리자 권한 해제' : ''}) by ${authed.data.user.id}`
+    `${hadAdmin ? ' · 관리자 권한 해제' : ''}` +
+    `${reassignedClasses ? ` · 반 ${reassignedClasses}개 이관` : ''}) by ${authed.data.user.id}`
   );
 
   return NextResponse.json({
@@ -155,6 +205,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { teacherI
     teacher: { id: target!.id, name: target!.full_name, email: target!.email },
     impact,
     adminRevoked: hadAdmin,
+    reassignedClasses,
   });
 }
 

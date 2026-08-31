@@ -40,6 +40,8 @@ export default function TeachersManagementPage() {
     { teacher: Teacher; impact: { classes: number; exams: number; problems: number } | null } | null
   >(null);
   const [archiving, setArchiving] = useState(false);
+  // ★ 담당 반 인수자 — 빈 문자열이면 "이관하지 않음"(반은 퇴사자에게 그대로 남음).
+  const [reassignTo, setReassignTo] = useState('');
 
   useEffect(() => {
     loadTeachers();
@@ -125,6 +127,7 @@ export default function TeachersManagementPage() {
 
   /** 확인창 열기 — 서버에서 영향 범위(반·시험지·문제 수)를 먼저 받아온다. */
   const openArchiveDialog = async (teacher: Teacher) => {
+    setReassignTo('');
     setArchiveTarget({ teacher, impact: null });
     try {
       const res = await fetch(`/api/admin/teachers/${teacher.id}`);
@@ -149,15 +152,20 @@ export default function TeachersManagementPage() {
     const { teacher } = archiveTarget;
     setArchiving(true);
     try {
-      const res = await fetch(`/api/admin/teachers/${teacher.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/teachers/${teacher.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reassignTo ? { reassignTo } : {}),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.detail || '보관에 실패했습니다.');
       setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
       setArchiveTarget(null);
       setMessage({
         type: 'success',
-        text: `${teacher.full_name} 계정을 보관했습니다. 로그인이 차단되며`
-          + `${data.adminRevoked ? ' 관리자 권한도 해제됐습니다.' : ' 반·시험지·문제는 그대로 남습니다.'}`,
+        text: `${teacher.full_name} 계정을 보관했습니다.`
+          + `${data.adminRevoked ? ' 관리자 권한 해제.' : ''}`
+          + `${data.reassignedClasses ? ` 담당 반 ${data.reassignedClasses}개 이관 완료.` : ''}`,
       });
       setTimeout(() => setMessage(null), 5000);
     } catch (e) {
@@ -435,6 +443,31 @@ export default function TeachersManagementPage() {
                 </>
               )}
             </div>
+
+            {/* ★ 담당 반이 있으면 후임을 고르게 한다. 안 고르면 반은 퇴사자에게 그대로 남는다. */}
+            {archiveTarget.impact !== null && archiveTarget.impact.classes > 0 && (
+              <div className="handover">
+                <label className="handover-label">담당 반 {archiveTarget.impact.classes}개를 넘길 강사</label>
+                <select
+                  className="handover-select"
+                  value={reassignTo}
+                  onChange={(e) => setReassignTo(e.target.value)}
+                  disabled={archiving}
+                >
+                  <option value="">이관하지 않음 (퇴사자 담당으로 유지)</option>
+                  {teachers
+                    .filter((t) => t.id !== archiveTarget.teacher.id)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>{t.full_name} ({t.email})</option>
+                    ))}
+                </select>
+                {!reassignTo && (
+                  <p className="handover-warn">
+                    이관하지 않으면 반 목록에 퇴사자가 담당으로 계속 표시됩니다.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="dialog-actions">
               <button className="dialog-cancel" onClick={() => setArchiveTarget(null)} disabled={archiving}>
@@ -863,6 +896,33 @@ export default function TeachersManagementPage() {
           font-size: 11px;
           color: #71717a;
         }
+        .handover { margin-bottom: 16px; }
+        .handover-label {
+          display: block;
+          font-size: 12px;
+          font-weight: 600;
+          color: #d4d4d8;
+          margin-bottom: 6px;
+        }
+        .handover-select {
+          width: 100%;
+          padding: 9px 11px;
+          border-radius: 8px;
+          background: #09090b;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: #e4e4e7;
+          font-size: 13px;
+        }
+        .handover-select:focus {
+          outline: none;
+          border-color: rgba(255, 255, 255, 0.28);
+        }
+        .handover-warn {
+          margin: 6px 0 0;
+          font-size: 11px;
+          color: #a1a1aa;
+        }
+
         .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
         .dialog-cancel, .dialog-confirm {
           padding: 9px 16px;
