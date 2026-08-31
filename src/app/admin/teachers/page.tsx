@@ -12,6 +12,7 @@ import {
   Phone,
   Building2,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -34,6 +35,11 @@ export default function TeachersManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // ★ 보관(소프트 삭제) 확인창 — 영향 범위를 먼저 보여주고 나서 진행한다.
+  const [archiveTarget, setArchiveTarget] = useState<
+    { teacher: Teacher; impact: { classes: number; exams: number; problems: number } | null } | null
+  >(null);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     loadTeachers();
@@ -114,6 +120,51 @@ export default function TeachersManagementPage() {
       setMessage({ type: 'error', text: '강사 목록을 불러오는 중 오류가 발생했습니다.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** 확인창 열기 — 서버에서 영향 범위(반·시험지·문제 수)를 먼저 받아온다. */
+  const openArchiveDialog = async (teacher: Teacher) => {
+    setArchiveTarget({ teacher, impact: null });
+    try {
+      const res = await fetch(`/api/admin/teachers/${teacher.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setArchiveTarget({ teacher, impact: data.impact });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setArchiveTarget(null);
+        setMessage({ type: 'error', text: err.message || '확인에 실패했습니다.' });
+        setTimeout(() => setMessage(null), 4000);
+      }
+    } catch {
+      // 영향 범위를 못 받아도 진행은 가능하게 둔다 (숫자만 '-' 로 표시)
+      setArchiveTarget({ teacher, impact: { classes: -1, exams: -1, problems: -1 } });
+    }
+  };
+
+  /** 실제 보관 — users.deleted_at 을 채운다. 반·시험지·문제는 그대로 남는다. */
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    const { teacher } = archiveTarget;
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/admin/teachers/${teacher.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.detail || '보관에 실패했습니다.');
+      setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
+      setArchiveTarget(null);
+      setMessage({
+        type: 'success',
+        text: `${teacher.full_name} 계정을 보관했습니다. 로그인이 차단되며`
+          + `${data.adminRevoked ? ' 관리자 권한도 해제됐습니다.' : ' 반·시험지·문제는 그대로 남습니다.'}`,
+      });
+      setTimeout(() => setMessage(null), 5000);
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : '보관에 실패했습니다.' });
+      setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -337,11 +388,65 @@ export default function TeachersManagementPage() {
                     </>
                   )}
                 </button>
+                {/* ★ 실제 동작은 '보관'(소프트 삭제)이다 — 반·시험지·문제는 남고 로그인만 막힌다.
+                    하드 삭제는 classes.tutor_id CASCADE 때문에 그 강사의 반이 통째로 사라진다. */}
+                <button
+                  className="archive-btn"
+                  onClick={() => openArchiveDialog(teacher)}
+                  disabled={updating === teacher.id}
+                  title="계정 보관 (로그인 차단, 되돌릴 수 있음)"
+                >
+                  <Trash2 size={16} />
+                  삭제
+                </button>
               </div>
             </div>
           ))
         )}
       </div>
+
+
+      {/* ★ 보관 확인창 — 무엇이 남고 무엇이 막히는지 명시한다. 되돌릴 수 있다는 것도. */}
+      {archiveTarget && (
+        <div className="dialog-backdrop" onClick={() => !archiving && setArchiveTarget(null)}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-title">
+              <AlertCircle size={18} />
+              {archiveTarget.teacher.full_name} 계정을 보관할까요?
+            </div>
+
+            <p className="dialog-desc">
+              로그인이 차단됩니다.
+              {archiveTarget.teacher.isAcademyAdmin && (
+                <> <strong>관리자 권한도 함께 해제됩니다.</strong></>
+              )}{' '}
+              <strong>반·시험지·문제는 지워지지 않고 그대로 남습니다.</strong>
+            </p>
+
+            <div className="impact">
+              {archiveTarget.impact === null ? (
+                <span className="impact-loading">영향 범위 확인 중...</span>
+              ) : (
+                <>
+                  <div className="impact-row"><span>담당 반</span><b>{archiveTarget.impact.classes < 0 ? '-' : `${archiveTarget.impact.classes}개`}</b></div>
+                  <div className="impact-row"><span>만든 시험지</span><b>{archiveTarget.impact.exams < 0 ? '-' : `${archiveTarget.impact.exams}개`}</b></div>
+                  <div className="impact-row"><span>만든 문제</span><b>{archiveTarget.impact.problems < 0 ? '-' : `${archiveTarget.impact.problems}개`}</b></div>
+                  <div className="impact-note">위 자료는 보관 후에도 유지됩니다.</div>
+                </>
+              )}
+            </div>
+
+            <div className="dialog-actions">
+              <button className="dialog-cancel" onClick={() => setArchiveTarget(null)} disabled={archiving}>
+                취소
+              </button>
+              <button className="dialog-confirm" onClick={confirmArchive} disabled={archiving}>
+                {archiving ? '보관 중...' : '보관하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .page {
@@ -678,6 +783,109 @@ export default function TeachersManagementPage() {
             gap: 4px;
           }
         }
+
+        .archive-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          background: transparent;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: #a1a1aa;
+          transition: all 0.15s;
+        }
+        .archive-btn:hover:not(:disabled) {
+          border-color: rgba(248, 113, 113, 0.45);
+          color: #f87171;
+          background: rgba(248, 113, 113, 0.08);
+        }
+        .archive-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .dialog-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 60;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+        .dialog {
+          width: 100%;
+          max-width: 420px;
+          background: #18181b;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 16px;
+          padding: 22px;
+        }
+        .dialog-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 16px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 10px;
+        }
+        .dialog-desc {
+          font-size: 13px;
+          line-height: 1.6;
+          color: #a1a1aa;
+          margin: 0 0 14px;
+        }
+        .dialog-desc strong { color: #e4e4e7; font-weight: 600; }
+        .impact {
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 10px;
+          padding: 12px 14px;
+          margin-bottom: 18px;
+        }
+        .impact-loading { font-size: 12px; color: #71717a; }
+        .impact-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 13px;
+          color: #a1a1aa;
+          padding: 3px 0;
+        }
+        .impact-row b { color: #ffffff; font-weight: 600; }
+        .impact-note {
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          font-size: 11px;
+          color: #71717a;
+        }
+        .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        .dialog-cancel, .dialog-confirm {
+          padding: 9px 16px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .dialog-cancel {
+          background: transparent;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: #a1a1aa;
+        }
+        .dialog-cancel:hover:not(:disabled) { color: #ffffff; border-color: rgba(255, 255, 255, 0.24); }
+        .dialog-confirm {
+          background: #ffffff;
+          border: 1px solid #ffffff;
+          color: #09090b;
+        }
+        .dialog-confirm:hover:not(:disabled) { background: #e4e4e7; }
+        .dialog-cancel:disabled, .dialog-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
       `}</style>
     </div>
   );
