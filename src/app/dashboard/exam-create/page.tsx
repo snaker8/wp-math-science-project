@@ -111,8 +111,47 @@ interface ProblemRow {
     | Array<{ type_code: string; difficulty: string }>;
 }
 
+/**
+ * `/api/problems/search` 의 실제 응답 형태.
+ *
+ * ★ 이 화면이 쓰는 ProblemRow 와 **필드 이름이 다르다** (2026-09-01 실측):
+ *     API   content / source / year / typeCode / difficulty   (평탄한 구조)
+ *     화면  content_latex / source_name / source_year / classifications[]
+ *   그대로 넣으면 전부 빈값이 되어 결과 카드가 전부 "(문제 내용 없음)" 으로 뜬다.
+ *   실제로 그 상태로 방치돼 있었고, 그래서 이 화면이 메뉴에서 빠져 있었다.
+ *   ★ API 는 /dashboard/create 등 다른 화면도 쓰므로 건드리지 않는다. 여기서 맞춘다.
+ */
+interface SearchApiRow {
+  id: string;
+  content: string;
+  source: string;
+  year: number | string;
+  typeCode: string;
+  typeName: string;
+  difficulty: number;
+  cognitiveDomain: string;
+  alreadyInExam?: boolean;
+  images?: unknown[];
+}
+
 interface SearchResponse {
-  problems: ProblemRow[];
+  problems: SearchApiRow[];
+}
+
+/** 검색 API 응답 → 이 화면의 ProblemRow */
+function adaptSearchRow(r: SearchApiRow): ProblemRow {
+  return {
+    id: String(r.id || ''),
+    content_latex: String(r.content || ''),
+    source_name: r.source ? String(r.source) : null,
+    source_year: r.year ? Number(r.year) || null : null,
+    classifications: [
+      {
+        type_code: String(r.typeCode || ''),
+        difficulty: String(r.difficulty ?? ''),
+      },
+    ],
+  };
 }
 
 const DIFFICULTIES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -552,8 +591,9 @@ export default function ExamCreatePage() {
         throw new Error(d.error || `HTTP ${res.status}`);
       }
       const data = (await res.json()) as SearchResponse;
-      // 다난이도 필터는 클라이언트에서
-      let filtered = data.problems || [];
+      // ★ API 응답 필드명이 이 화면의 ProblemRow 와 다르다 — 반드시 변환해서 넣는다.
+      //   (변환을 빼면 결과 카드가 전부 "(문제 내용 없음)" 이 된다)
+      let filtered = (data.problems || []).map(adaptSearchRow);
       if (selectedDiffs.size > 1) {
         filtered = filtered.filter((p) => {
           const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
