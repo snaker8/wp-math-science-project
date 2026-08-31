@@ -46,6 +46,65 @@ describe('isFiniteBbox', () => {
   });
 });
 
+// ============================================================================
+// 회귀 테스트 — 2026-08-31 원인 확정: 정수 컬럼에 소수가 들어가 INSERT 전멸
+//
+// 운영 Postgres 로그 실측:
+//   ERROR 22P02: invalid input syntax for type integer: "1630.5"
+// page_width/page_height 는 integer 인데 클라이언트가 PDF.js viewport 크기를 소수로
+// 보냈다. PostgREST 가 400 을 돌려주며 annotation 이 한 건도 안 들어갔다.
+// (DELETE 는 204 로 성공해서 "기존 행만 지우고 새로 안 넣는" 상태였다.)
+// ============================================================================
+describe('정수 컬럼 정규화 (22P02 재발 차단)', () => {
+  it('소수 페이지 크기를 반올림한다 — 실제 사고값 1630.5', () => {
+    const { problemRow } = buildAnnotationRows({
+      ...baseInput,
+      pageWidth: 1630.5,
+      pageHeight: 2308.25,
+    });
+    expect(problemRow!.page_width).toBe(1631);
+    expect(problemRow!.page_height).toBe(2308);
+    expect(Number.isInteger(problemRow!.page_width)).toBe(true);
+    expect(Number.isInteger(problemRow!.page_height)).toBe(true);
+  });
+
+  it('도형 행도 같은 정수 값을 쓴다', () => {
+    const { figureRows } = buildAnnotationRows({
+      ...baseInput,
+      pageWidth: 1630.5,
+      pageHeight: 2308.25,
+      figureBboxes: [{ x: 0.1, y: 0.1, w: 0.5, h: 0.5 }],
+    });
+    expect(figureRows).toHaveLength(1);
+    expect(Number.isInteger(figureRows[0].page_width)).toBe(true);
+    expect(Number.isInteger(figureRows[0].page_height)).toBe(true);
+  });
+
+  it('페이지 번호도 정수로 만든다', () => {
+    const { problemRow } = buildAnnotationRows({ ...baseInput, pageNumber: 2.0000001 });
+    expect(problemRow!.page_number).toBe(2);
+  });
+
+  it.each([
+    ['NaN', NaN],
+    ['Infinity', Infinity],
+    ['undefined', undefined as unknown as number],
+  ])('비유한 페이지 크기는 0 으로 떨어뜨린다 (행은 살린다) — %s', (_label, bad) => {
+    const { problemRow } = buildAnnotationRows({ ...baseInput, pageWidth: bad });
+    expect(problemRow).not.toBeNull();
+    expect(problemRow!.page_width).toBe(0);
+  });
+
+  it('bbox 는 real 컬럼이라 소수를 그대로 보존한다', () => {
+    const { problemRow } = buildAnnotationRows({
+      ...baseInput,
+      problemBbox: { x: 0.1234, y: 0.2345, w: 0.5678, h: 0.4321 },
+    });
+    expect(problemRow!.bbox_x).toBeCloseTo(0.1234);
+    expect(problemRow!.bbox_w).toBeCloseTo(0.5678);
+  });
+});
+
 describe('buildAnnotationRows', () => {
   it('문제 행을 만든다', () => {
     const { problemRow, figureRows, skipped } = buildAnnotationRows(baseInput);
