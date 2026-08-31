@@ -683,7 +683,13 @@ function detectTableChoices(
  *   ★ 수식($…$) 내부 마커 제외 + "마지막 증가 런(①②③④⑤)"만 진짜 보기로.
  *     연립방정식 라벨 ①②(㉠㉡) 나 스템 참조 "①을 ②에 대입"이 보기로 잘못 잘리던 사고(거제여중 #3).
  */
-function splitChoices(body: string): { content: string; choices: string[] } {
+/**
+ * 본문에서 보기(①~⑤)를 분리한다.
+ * ★ export 이유 — 순수 문자열 로직이라 단위 테스트로 직접 잠근다.
+ *   기존 파서 회귀 테스트는 실제 .hml 파일에 의존해 파일이 없으면 통째로 skip 된다.
+ *   보기 분리는 채점에 직결되므로 파일 유무와 무관하게 항상 검증되어야 한다.
+ */
+export function splitChoices(body: string): { content: string; choices: string[] } {
   const mask = buildChoiceMask(body); // 수식+표 내부 동그라미 제외
   const marks: Array<{ idx: number; val: number }> = [];
   for (let i = 0; i < body.length; i++) {
@@ -698,6 +704,30 @@ function splitChoices(body: string): { content: string; choices: string[] } {
   for (let k = 1; k < marks.length; k++) {
     if (marks[k].val <= marks[k - 1].val) runStart = k;
   }
+
+  // ★ 원본 오타 내성 (2026-09-01, 반여고 확률과통계 #3 실측)
+  //   수학비서 원본에 보기 번호가 잘못 찍힌 파일이 드물게 있다:
+  //     ① 3/16  ② 1/4  ③ 5/16
+  //     ③ 3/8   ⑤ 7/16          ← ④ 가 ③ 으로 오타
+  //   마커가 1,2,3,3,5 라 "증가가 끊긴 곳"을 새 보기 시작으로 보고 뒤 2개만 잡았다.
+  //   원본 오타 하나에 멀쩡한 보기 3개가 버려지고, 정답 ⑤ 는 보기 범위 밖이 되어
+  //   채점이 불가능해진다. 원본은 우리가 못 고치므로 파서가 견뎌야 한다.
+  //
+  //   → **①로 시작하고 4~6개인 꼬리 구간**이 있으면 그쪽을 우선한다. 5지선다(때로 4지)의
+  //     실제 모양이다. 스템의 `①과 ②` 같은 참조 런은 길이가 2~3이라 여기 안 걸린다.
+  //     오타가 2개 이상이면 포기하고 기존 판정을 쓴다 (억지로 맞추지 않는다).
+  //   ★ CHOICE_INDEX 는 0-based (① = 0). 1 과 비교하면 ② 부터 잡혀 ① 이 본문에 남는다.
+  if (marks.length - runStart < 4) {
+    for (let k = 0; k <= marks.length - 4; k++) {
+      if (marks[k].val !== CHOICE_INDEX['①']) continue;
+      const tail = marks.slice(k);
+      if (tail.length < 4 || tail.length > 6) continue;
+      let violations = 0;
+      for (let j = 1; j < tail.length; j++) if (tail[j].val <= tail[j - 1].val) violations++;
+      if (violations <= 1) { runStart = k; break; }
+    }
+  }
+
   const choiceMarks = marks.slice(runStart);
   if (choiceMarks.length < 2) return { content: body, choices: [] };
 
@@ -706,7 +736,12 @@ function splitChoices(body: string): { content: string; choices: string[] } {
   for (let k = 0; k < choiceMarks.length; k++) {
     const start = choiceMarks[k].idx;
     const end = k + 1 < choiceMarks.length ? choiceMarks[k + 1].idx : body.length;
-    const t = body.slice(start, end).trim();
+    // ★ 마지막 보기 뒤에 붙는 배점 표기 제거 (`⑤ $7/16$\n[3.20점]`).
+    //   HML 은 배점을 별도 문단으로 두는데, 마지막 보기부터 문단 끝까지를 잘라내므로
+    //   그대로 두면 보기 텍스트에 `[3.20점]` 이 섞인다 (반여고 실측).
+    const t = body.slice(start, end)
+      .replace(/\s*[\[(]\s*(?:총\s*)?\d+(?:\.\d+)?\s*[점졈졍]\s*[\])]\s*$/g, '')
+      .trim();
     if (t) choices.push(t);
   }
   if (choices.length < 2) return { content: body, choices: [] };
