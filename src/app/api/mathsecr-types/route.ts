@@ -54,12 +54,16 @@ export async function GET(request: NextRequest) {
     // RPC가 없으면 직접 쿼리 (fallback) — 같은 1000행 사고 회피 위해 페이지네이션
     let problemCounts: Record<string, number> = {};
     if (countsErr || !counts) {
+      // ★ 2026-09-01 — 삭제된 문제까지 세어 트리 개수가 실제 검색 결과보다 많았다.
+      //   classifications 는 문제를 소프트 삭제해도 남으므로, problems 를 조인해
+      //   살아있는 것만 센다. (problems!inner + deleted_at is null)
       const clsAll: Array<{ type_code: string }> = [];
       for (let from = 0; ; from += PAGE) {
         const { data: page } = await supabaseAdmin
           .from('classifications')
-          .select('type_code')
+          .select('type_code, problems!inner(deleted_at)')
           .like('type_code', subject ? `MS${subject}%` : 'MS%')
+          .is('problems.deleted_at', null)
           .range(from, from + PAGE - 1);
         if (!page || page.length === 0) break;
         clsAll.push(...(page as Array<{ type_code: string }>));
