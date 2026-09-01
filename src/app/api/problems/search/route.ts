@@ -144,6 +144,30 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // ★ 출처 표기 — 시험지 제목 우선 (2026-09-01)
+    //   문제는 자기 source_name(업로드한 원본 파일명)을 갖고 있는데, 화면이 그걸 그대로
+    //   보여줘서 대표가 정한 규칙(`25-1-1-M 사직고`)이 아니라
+    //   `[2021년_기출]_사직고등학교_(부산_동래구)_1학년_1학기_중간_수학.pdf` 로 떴다.
+    //   한글이 깨진 파일명(`2025______2__1_1_____.pdf`)도 그대로 노출됐다.
+    //   → 시험지에 붙어 있으면 시험지 제목을, 없으면 파일명을 쓴다.
+    //   ★ 부수 효과가 유용하다 — 파일명으로 뜨는 것 = 자산화가 안 끝난 자료. 화면에서 바로 구분된다.
+    const examTitleByProblem = new Map<string, string>();
+    {
+      const ids = (problems || []).map((p: { id: string }) => p.id);
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data: links } = await supabaseAdmin
+          .from('exam_problems')
+          .select('problem_id, exams!inner(title, deleted_at)')
+          .in('problem_id', ids.slice(i, i + 200))
+          .is('exams.deleted_at', null);
+        for (const l of (links || []) as unknown as Array<{ problem_id: string; exams: { title: string } }>) {
+          if (l.exams?.title && !examTitleByProblem.has(l.problem_id)) {
+            examTitleByProblem.set(l.problem_id, l.exams.title);
+          }
+        }
+      }
+    }
+
     // 7. 응답 매핑
     const mapped = (problems || []).map((p: any) => {
       const cls = p.classifications?.[0] || {};
@@ -151,7 +175,7 @@ export async function GET(request: NextRequest) {
         id: p.id,
         content: p.content_latex || '',
         answer: p.answer_json,
-        source: p.source_name || '',
+        source: examTitleByProblem.get(p.id) || p.source_name || '',
         year: p.source_year || '',
         typeCode: cls.type_code || '',
         typeName: typeNameMap.get(cls.expanded_type_code || '') || cls.type_code || '',
