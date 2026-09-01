@@ -63,9 +63,17 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
     setLoading(true);
     setSelected(null);
     setSearch('');
+
+    // ★ 2026-09-01 사고 — 과목을 빠르게 바꾸면 **늦게 도착한 옛 응답이 새 응답을 덮어썼다.**
+    //   드롭다운은 "공통수학1" 인데 트리는 "공통수학2" 가 뜬 채로 굳는다(실측).
+    //   그 상태로 [전체 적용] 을 누르면 화면에 보이던 단원과 다른 과목이 필터로 걸린다.
+    //   → 응답이 돌아왔을 때 아직 그 과목이 유효한지 확인하고, 아니면 버린다.
+    let cancelled = false;
+
     fetch(`/api/mathsecr-types?subject=${subjectCode}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
+        if (cancelled) return;   // 이미 다른 과목으로 넘어갔다 — 이 응답은 버린다
         setTree(d.tree || []);
         // 초기 — 1단계(대단원)만 expand
         const initialExpand = new Set<string>();
@@ -74,8 +82,14 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
         });
         setExpanded(initialExpand);
       })
-      .catch((e) => console.error('[MathsecrTreePicker] fetch error:', e))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!cancelled) console.error('[MathsecrTreePicker] fetch error:', e);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
   }, [open, subjectCode]);
 
   // 검색 필터 (full_path 또는 name substring)
