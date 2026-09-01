@@ -60,7 +60,9 @@ const LIMIT = Number(ARG('limit') || 0);
 export interface SchoolExam {
   kind: 'school';
   year: number; school: string; grade: number; semester: number;
-  period: '중간' | '기말'; subject: string; similar: boolean;
+  period: '중간' | '기말'; subject: string;
+  /** '' | '유사' | '유사1' | '유사2' — 유사문항은 원본과 다른 문제라 번호까지 보존한다 */
+  similar: string;
 }
 export interface MadeSheet { kind: 'made'; name: string }
 export type Classified = SchoolExam | MadeSheet;
@@ -100,7 +102,10 @@ function stripDbSuffix(s: string): string {
 
 export function classify(fileName: string): Classified {
   const n = stripDbSuffix(fileName.replace(/\.hml$/i, '').trim());
-  const similar = /유사/.test(n);
+  // ★ 유사문항은 원본과 **다른 문제**다. `유사1`·`유사2` 는 서로도 다르다.
+  //   번호까지 보존해야 제목이 겹치지 않는다 (2026-09-02 사고 — 403개가 사라질 뻔했다).
+  const similarMatch = n.match(/유사\s*(\d+)?/);
+  const similar = similarMatch ? (similarMatch[1] ? `유사${similarMatch[1]}` : '유사') : '';
 
   const a = n.match(P_A);
   if (a) {
@@ -157,7 +162,7 @@ export function buildTitle(c: Classified): string {
   const yy = String(c.year).slice(2);
   const p = c.period === '중간' ? 'M' : 'F';
   const sub = c.subject ? ` ${c.subject}` : '';
-  return `${yy}-${c.grade}-${c.semester}-${p} ${c.school}${sub}${c.similar ? ' (유사)' : ''}`;
+  return `${yy}-${c.grade}-${c.semester}-${p} ${c.school}${sub}${c.similar ? ` (${c.similar})` : ''}`;
 }
 
 /** 장식 문자·미러 접두 폴더를 걷어낸 G드라이브 폴더 경로 */
@@ -290,20 +295,18 @@ async function main() {
     //   같은 파일이 폴더 두 곳에 있는데, 두 번째를 검사할 때 첫 번째 INSERT 가
     //   아직 조회에 안 잡혀 DB 검사만으로는 못 막았다.
     //   → 이 실행에서 이미 처리한 키를 메모리에 기억해 같은 실행 안의 중복도 막는다.
-    const dupKey = cls.kind === 'school'
-      ? `${title.split(' ')[0]} ${cls.school}`
-      : title;
+    //   ★ 2026-09-02 두 번째 사고 — 키에 유사 여부가 빠져 **유사문항이 원본과 같은 키**가 됐다.
+    //     `[2023기출][1-2-F][중앙여고]` / `…[유사1]` / `…[유사2]` 는 **서로 다른 문제**인데
+    //     하나만 남고 나머지가 버려졌다(전체 403개 파일이 사라질 뻔했다).
+    //     제목에는 ` (유사)` 가 붙는데 키에는 안 들어가 생긴 불일치다.
+    //   ★ 그래서 키를 **제목 전체**로 잡는다. 제목이 곧 식별자다.
+    //     (과목명 유무 차이는 이제 없다 — 파일명 파서가 과목을 일관되게 뽑는다)
+    const dupKey = title;
     if (seenKeys.has(dupKey)) { skipped++; continue; }
 
-    if (cls.kind === 'school') {
-      const { data } = await sb.from('exams').select('id,title')
-        .like('title', `${dupKey}%`).is('deleted_at', null).limit(1);
-      if (data?.length) { seenKeys.add(dupKey); skipped++; continue; }
-    } else {
-      const { data } = await sb.from('exams').select('id')
-        .eq('title', title).is('deleted_at', null).limit(1);
-      if (data?.length) { seenKeys.add(dupKey); skipped++; continue; }
-    }
+    const { data: dup } = await sb.from('exams').select('id')
+      .eq('title', title).is('deleted_at', null).limit(1);
+    if (dup?.length) { seenKeys.add(dupKey); skipped++; continue; }
     seenKeys.add(dupKey);
 
     let parsed;
