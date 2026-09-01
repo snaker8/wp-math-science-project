@@ -1,5 +1,5 @@
 /**
- * 수학비서 학교 기출 HML → 클라우드 일괄 적재
+ * 수학비서 HML → 클라우드 일괄 적재
  * ============================================================================
  *
  * ★ 기본은 드라이런이다. 실제로 쓰려면 `--commit` 을 명시해야 한다.
@@ -7,133 +7,192 @@
  *
  * ★ 앱과 **같은 함수**(createExamFromHml)를 쓴다. 별도 적재 경로를 만들지 않는다.
  *   /api/workflow/import-hml 라우트가 부르는 바로 그 함수라, 화면에서 한 장씩
- *   올린 것과 데이터 모양이 100% 같다. (검증 루프·경고 집계도 그대로 동작)
+ *   올린 것과 데이터 모양이 100% 같다 (검증 루프·검수 경고 포함).
  *
- * 대상: 학교 기출만 (`내신 YYYY년 …`). 수업·과제 자료 제외 — 대표 지시(2026-08-31).
- * 소속: 공통풀(institute_id = NULL) — 학교 기출은 특정 학원 자산이 아니다.
- * 폴더: 학교기출 / {학교} / {과목}  (없으면 만든다)
- * 제목: {YY}-{학년}-{학기}-{M|F} {학교} {과목}   예) 25-1-2-F 동인고 공통수학2
+ * ── 대상 ────────────────────────────────────────────────────────────────
+ * 수학비서 자료는 **전부 기출 기반**이다 (대표 확인, 2026-09-01). 파일명이
+ * 무엇이든 안에 든 문제는 학교 기출이므로 전량이 대상이다.
+ * 다만 **파일의 성격**은 둘로 갈리고, 그에 따라 제목·폴더만 달라진다:
  *
- * 중복 차단 2단:
- *   1) source_name (원본 파일명) — 같은 파일 재실행 시 건너뜀
- *   2) 제목 + book_group — 파일명이 달라도 같은 시험지면 건너뜀
- *   ★ 수학비서ID 접두어는 113건이 비어 있어 단독 키로 못 쓴다(드라이런 실측).
+ *   [학교 기출 원본]  한 학교 한 시험 → 제목 규칙 적용, 학교별 폴더
+ *     A `…_내신 2025년 부산 해운대구 반여고 고1공통 1학기기말 공통수학1`
+ *     B `…_2024년 경일고 1학년 1학기 중간고사`
+ *     C `…_[2023기출][1-2-F][혜광고]`
+ *
+ *   [편집 문제지]    여러 학교 기출을 조합한 수업·과제용 → G드라이브 폴더 그대로
+ *     예) `…_[전사고][대수][14.등차수열의합][과제]`
+ *   ★ 학교가 하나가 아니므로 학교별 폴더에 못 넣는다. 대표가 쓰던 분류를 유지한다.
+ *
+ * 어느 쪽이든 **문제는 똑같이 문제은행에 쌓인다.** 폴더는 "시험지 원본을 어디서
+ * 다시 꺼내 보는가"의 문제일 뿐이다.
+ *
+ * ── 중복 차단 ───────────────────────────────────────────────────────────
+ * 학교 기출: 접두 키(`25-1-1-F 반여고`). 제목 전체 비교는 과목명 유무 때문에
+ *   같은 시험지를 못 걸러 두 벌이 생긴 사고가 있었다 (2026-09-01 반여고).
+ * 편집 문제지: 제목 + 폴더 조합.
+ *
+ * ── 품질 게이트 ─────────────────────────────────────────────────────────
+ * 원본(수학비서 파일) 자체가 불완전한 경우가 드물게 있다 — 보기가 2~3개뿐인 문항 등.
+ * 우리가 고칠 수 없으므로 **버리지 않고 넣되 리포트에 남긴다.** 조용히 넣는 게 제일 나쁘다.
  *
  * 실행:
- *   npx tsx scripts/import-mathsecr.ts                    드라이런(전체)
- *   npx tsx scripts/import-mathsecr.ts --school=반여고      한 학교만
+ *   npx tsx scripts/import-mathsecr.ts                     드라이런(전체)
+ *   npx tsx scripts/import-mathsecr.ts --kind=school        학교 기출만
+ *   npx tsx scripts/import-mathsecr.ts --folder=동래자사관    특정 폴더만
  *   npx tsx scripts/import-mathsecr.ts --school=반여고 --commit
  */
 import fs from 'fs';
 import path from 'path';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { parseHml } from '@/lib/workflow/hml-parser';
+import { parseHml, type HmlProblem } from '@/lib/workflow/hml-parser';
 import { createExamFromHml } from '@/lib/workflow/hml-save';
 
-// ── 설정 ─────────────────────────────────────────────────────────────────
 const ROOT = process.env.MATHSECR_ROOT || 'G:/내 드라이브/수학 자료';
 const CREATED_BY = process.env.IMPORT_USER_ID || 'a629ecb4-965a-43eb-b42e-c0e17c8ff5b9'; // snaker@hanmail.net
-const ROOT_FOLDER = '학교기출';
 const COMMIT = process.argv.includes('--commit');
-const ONLY_SCHOOL = process.argv.find((a) => a.startsWith('--school='))?.split('=')[1];
-const LIMIT = Number(process.argv.find((a) => a.startsWith('--limit='))?.split('=')[1] || 0);
+const ARG = (k: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split('=')[1];
+const ONLY_SCHOOL = ARG('school');
+const ONLY_FOLDER = ARG('folder');
+const ONLY_KIND = ARG('kind') as 'school' | 'made' | undefined;
+const LIMIT = Number(ARG('limit') || 0);
 
-// ── 파일명 파싱 ───────────────────────────────────────────────────────────
-export interface ExamMeta {
-  msId: string; year: number; region: string; district: string;
-  school: string; grade: string; track: string;
-  semester: number; period: '중간' | '기말'; subject: string;
+// ── 분류 ─────────────────────────────────────────────────────────────────
+export interface SchoolExam {
+  kind: 'school';
+  year: number; school: string; grade: number; semester: number;
+  period: '중간' | '기말'; subject: string; similar: boolean;
+}
+export interface MadeSheet { kind: 'made'; name: string }
+export type Classified = SchoolExam | MadeSheet;
+
+const P_A = /^(?:\d+_)?내신\s*(\d{4})\s*년\s+(.+?)\s+(중|고)(\d)(\S*)\s+(\d)\s*학기\s*(중간|기말)\s*(.*)$/;
+const P_B = /^(?:\d+_)?(\d{4})년\s+(\S+?)\s+(\d)학년\s+(\d)학기\s*(중간|기말)고사\s*(.*)$/;
+const P_C = /^(?:\d+_)?\[(\d{4})기출\]\[(\d)-(\d)-([MF])\]\[([^\]]+)\]\s*(.*)$/;
+
+/** 2022 개정 여부로 고1 과목명을 가른다. 2024년 이후 입학생이 공통수학1·2. */
+function hs1Subject(year: number, semester: number): string {
+  if (year >= 2024) return semester === 2 ? '공통수학2' : '공통수학1';
+  return semester === 2 ? '수학(하)' : '수학(상)';
 }
 
-/**
- * 파일명 → 메타. 규격 밖이면 null (건너뛴다 — 억지로 넣지 않는다).
- * 실측상 네 갈래 변형이 있어 모두 선택항목으로 푼다:
- *   ID 접두어 없음 / 구·군 없음(특목고) / "1학기 중간" 공백 / 과목명 없음
- */
-export function parseExamFileName(fileName: string): ExamMeta | null {
-  const name = fileName.replace(/\.hml$/i, '');
-  const m = name.match(
-    /^(?:(\d+)_)?내신\s*(\d{4})\s*년\s+(.+?)\s+(중\d|고\d)(\S*)\s+(\d)\s*학기\s*(중간|기말)\s*(.*)$/,
-  );
-  if (!m) return null;
-  const loc = m[3].trim().split(/\s+/);
-  return {
-    msId: m[1] || '',
-    year: Number(m[2]),
-    region: loc.length >= 2 ? loc[0] : '',
-    district: loc.length >= 3 ? loc.slice(1, -1).join(' ') : '',
-    school: loc[loc.length - 1],
-    grade: m[4],
-    track: m[5] || '',
-    semester: Number(m[6]),
-    period: m[7] as '중간' | '기말',
-    subject: m[8].trim(),
-  };
-}
+export function classify(fileName: string): Classified {
+  const n = fileName.replace(/\.hml$/i, '').trim();
+  const similar = /유사/.test(n);
 
-/**
- * 제목 — 운영 DB 실측 형식.  `25-1-2-F 동인고 공통수학2` = 2025년 고1 2학기 기말
- * ★ 학년이 먼저, 학기가 나중. 뒤집으면 1-1 인 표본에서는 안 드러난다.
- */
-export function buildExamTitle(m: ExamMeta): string {
-  const yy = String(m.year).slice(2);
-  const grade = m.grade.replace(/[^0-9]/g, '');
-  const p = m.period === '중간' ? 'M' : 'F';
-  return `${yy}-${grade}-${m.semester}-${p} ${m.school}${m.subject ? ` ${m.subject}` : ''}`;
-}
-
-/**
- * 학년·학기 → mathsecr 과목코드. 파일명에 학년·학기가 다 있으므로 정확히 특정된다.
- * (resolveCurriculumCodes 는 과목명만 보므로 `중등수학2상`·`수학상` 을 못 잡는다)
- */
-export function resolveCodes(m: ExamMeta): string[] {
-  const 중 = m.grade.match(/^중(\d)$/);
-  if (중) {
-    const table: Record<string, string[]> = { '1': ['01', '02'], '2': ['03', '04'], '3': ['05', '06'] };
-    const pair = table[중[1]];
-    return pair ? [pair[m.semester === 2 ? 1 : 0]] : [];
+  const a = n.match(P_A);
+  if (a) {
+    const loc = a[2].trim().split(/\s+/);
+    return {
+      kind: 'school', year: Number(a[1]), school: loc[loc.length - 1],
+      grade: Number(a[4]), semester: Number(a[6]),
+      period: a[7] as '중간' | '기말', subject: a[8].trim(), similar,
+    };
   }
-  const s = m.subject.replace(/\s/g, '');
+  const b = n.match(P_B);
+  if (b) {
+    const year = Number(b[1]); const grade = Number(b[3]); const semester = Number(b[4]);
+    return {
+      kind: 'school', year, school: b[2], grade, semester,
+      period: b[5] as '중간' | '기말',
+      subject: grade === 1 ? hs1Subject(year, semester) : '', similar,
+    };
+  }
+  const c = n.match(P_C);
+  if (c) {
+    const year = Number(c[1]); const grade = Number(c[2]); const semester = Number(c[3]);
+    return {
+      kind: 'school', year, school: c[5], grade, semester,
+      period: c[4] === 'M' ? '중간' : '기말',
+      subject: grade === 1 ? hs1Subject(year, semester) : '', similar,
+    };
+  }
+  return { kind: 'made', name: n.replace(/^\d+_/, '').trim() || n };
+}
+
+/** 제목 — 운영 실측 형식. `25-1-2-F 동인고 공통수학2` = 2025년 고1 2학기 기말 */
+export function buildTitle(c: Classified): string {
+  if (c.kind === 'made') return c.name;
+  const yy = String(c.year).slice(2);
+  const p = c.period === '중간' ? 'M' : 'F';
+  const sub = c.subject ? ` ${c.subject}` : '';
+  return `${yy}-${c.grade}-${c.semester}-${p} ${c.school}${sub}${c.similar ? ' (유사)' : ''}`;
+}
+
+/** 장식 문자·미러 접두 폴더를 걷어낸 G드라이브 폴더 경로 */
+function mirrorFolders(file: string): string[] {
+  const rel = path.relative(ROOT, path.dirname(file));
+  return rel.split(path.sep)
+    .map((s) => s.replace(/^[★◐△■♣＃＆#&\s]+/, '').trim())
+    .filter((s) => s && !/미러$/.test(s))
+    .slice(0, 3);
+}
+
+export function targetFolders(c: Classified, file: string): string[] {
+  if (c.kind === 'school') {
+    return [c.similar ? '학교기출유사' : '학교기출', c.school, c.subject || '기타'];
+  }
+  const f = mirrorFolders(file);
+  return f.length ? f : ['수학비서 자료'];
+}
+
+/** 학년·학기 → mathsecr 과목코드. 파일명에 둘 다 있으므로 정확히 특정된다. */
+export function resolveCodes(c: Classified, file: string): string[] {
+  if (c.kind !== 'school') return [];
+  if (/중\d/.test(file) || (c.grade <= 3 && /중등/.test(c.subject))) {
+    const table: Record<number, string[]> = { 1: ['01', '02'], 2: ['03', '04'], 3: ['05', '06'] };
+    const pair = table[c.grade];
+    if (pair && /중등|중\d/.test(c.subject + file)) return [pair[c.semester === 2 ? 1 : 0]];
+  }
+  const s = c.subject.replace(/\s/g, '');
   const direct: Record<string, string> = {
-    '공통수학1': '07', '공수1': '07', '공통수학2': '08', '공수2': '08',
-    '대수': '09', '수학1': '09', '수1': '09',
-    '수학2': '10', '수2': '10', '미적분1': '10',
-    '확률과통계': '11', '확통': '11', '미적분': '12', '미적분2': '12', '기하': '13',
+    '공통수학1': '07', '공통수학2': '08', '수학(상)': '07', '수학(하)': '08',
+    '대수': '09', '수학1': '09', '수1': '09', '수학2': '10', '수2': '10', '미적분1': '10',
+    '확률과통계': '11', '확통': '11', '미적분': '12', '기하': '13',
   };
-  if (direct[s]) return [direct[s]];
-  // 수학(상)/(하) 는 학기로 가른다 — 고1 과정
-  if (/^수학[(（]?[상하]/.test(s) || m.grade === '고1') return [m.semester === 2 ? '08' : '07'];
-  return [];
+  return direct[s] ? [direct[s]] : [];
+}
+
+// ── 품질 게이트 ───────────────────────────────────────────────────────────
+export interface Defect { number: number; reason: string }
+
+/**
+ * 문항 품질 점검. 원본이 불완전한 경우를 **버리지 않고 드러낸다.**
+ * (수학비서 파일 자체가 드물게 불완전하다 — 대표 확인, 실측 3,762 객관식 중 2건)
+ */
+export function inspect(problems: HmlProblem[]): Defect[] {
+  const out: Defect[] = [];
+  for (const p of problems) {
+    if (!p.content.trim()) { out.push({ number: p.number, reason: '본문 없음' }); continue; }
+    const marks = (p.content.match(/[①②③④⑤]/g) || []).length;
+    if (p.choices.length > 0 && p.choices.length < 5) {
+      out.push({ number: p.number, reason: `보기 ${p.choices.length}개${marks ? ' (본문에 마커 잔류 — 쪼개짐 의심)' : ' (원본 결손 의심)'}` });
+    }
+    const idx = '①②③④⑤'.indexOf(p.answer);
+    if (p.choices.length > 0 && idx >= 0 && idx >= p.choices.length) {
+      out.push({ number: p.number, reason: `정답 ${p.answer} 인데 보기 ${p.choices.length}개 — 채점 불가` });
+    }
+  }
+  return out;
 }
 
 // ── 폴더 ─────────────────────────────────────────────────────────────────
 const folderCache = new Map<string, string>();
-
-/** `학교기출 / {학교} / {과목}` 경로를 보장하고 말단 폴더 id 를 돌려준다. */
 async function ensureFolder(sb: SupabaseClient, segments: string[]): Promise<string | null> {
   let parentId: string | null = null;
   for (let i = 0; i < segments.length; i++) {
     const key = segments.slice(0, i + 1).join('/');
-    const cached = folderCache.get(key);
-    if (cached) { parentId = cached; continue; }
-
-    const q = sb.from('book_groups').select('id').eq('name', segments[i]).is('deleted_at', null)
-      .is('institute_id', null);
-    const { data: found } = parentId ? await q.eq('parent_id', parentId) : await q.is('parent_id', null);
-
-    if (found && found.length) {
-      parentId = found[0].id as string;
-      folderCache.set(key, parentId);
-      continue;
-    }
-    if (!COMMIT) { folderCache.set(key, `(신규:${key})`); parentId = `(신규:${key})`; continue; }
-
-    const { data: created, error } = await sb.from('book_groups')
+    const hit = folderCache.get(key);
+    if (hit) { parentId = hit; continue; }
+    const base = sb.from('book_groups').select('id').eq('name', segments[i])
+      .is('deleted_at', null).is('institute_id', null);
+    const { data: found } = parentId ? await base.eq('parent_id', parentId) : await base.is('parent_id', null);
+    if (found?.length) { parentId = found[0].id as string; folderCache.set(key, parentId); continue; }
+    if (!COMMIT) { parentId = `(신규)${key}`; folderCache.set(key, parentId); continue; }
+    const { data: made, error } = await sb.from('book_groups')
       .insert({ name: segments[i], parent_id: parentId, institute_id: null, created_by: CREATED_BY })
       .select('id').single();
-    if (error || !created) { console.error(`  폴더 생성 실패 "${key}": ${error?.message}`); return null; }
-    parentId = created.id as string;
-    folderCache.set(key, parentId);
+    if (error || !made) { console.error(`  폴더 생성 실패 "${key}": ${error?.message}`); return null; }
+    parentId = made.id as string; folderCache.set(key, parentId);
   }
   return parentId;
 }
@@ -159,68 +218,77 @@ async function main() {
   ) as Record<string, string>;
   const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-  const all = walk(ROOT).filter((f) => /내신\s*\d{4}\s*년/.test(path.basename(f)));
-  let items = all.map((f) => ({ file: f, meta: parseExamFileName(path.basename(f)) }))
-    .filter((x): x is { file: string; meta: ExamMeta } => !!x.meta);
-  if (ONLY_SCHOOL) items = items.filter((x) => x.meta.school === ONLY_SCHOOL);
+  let items = walk(ROOT).map((file) => ({ file, cls: classify(path.basename(file)) }));
+  if (ONLY_KIND) items = items.filter((x) => x.cls.kind === ONLY_KIND);
+  if (ONLY_SCHOOL) items = items.filter((x) => x.cls.kind === 'school' && x.cls.school === ONLY_SCHOOL);
+  if (ONLY_FOLDER) items = items.filter((x) => x.file.includes(ONLY_FOLDER));
   if (LIMIT) items = items.slice(0, LIMIT);
 
-  console.log(`${COMMIT ? '★ 실제 적재' : '드라이런 (쓰지 않음)'}`);
-  console.log(`대상 ${items.length}건${ONLY_SCHOOL ? ` — ${ONLY_SCHOOL}` : ''}\n`);
+  console.log(COMMIT ? '★ 실제 적재' : '드라이런 (쓰지 않음)');
+  console.log(`대상 ${items.length}건  (학교기출 ${items.filter((x) => x.cls.kind === 'school').length} / 편집본 ${items.filter((x) => x.cls.kind === 'made').length})\n`);
 
-  let done = 0, skipped = 0, failed = 0, problemsTotal = 0;
-  for (const { file, meta } of items) {
-    const title = buildExamTitle(meta);
-    const sourceName = path.basename(file);
+  let done = 0, skipped = 0, failed = 0, problems = 0, defectExams = 0, defectCount = 0;
+  const report: string[] = [];
 
-    // ── 중복 차단 ────────────────────────────────────────────────────────
-    // ★ 제목 비교만으로는 못 잡는다 (2026-09-01 반여고 실사고).
-    //   예전에는 과목명 없이 `25-1-1-F 반여고` 로 넣었고, 지금은 고등을 구분하려
-    //   `25-1-1-F 반여고 공통수학1` 로 넣는다. 같은 시험지인데 제목이 달라
-    //   중복 차단을 그대로 통과해 두 벌이 생겼다.
-    //   → **접두 키**(연도-학년-학기-시기 + 학교)로 본다. 과목 유무와 무관하게 걸린다.
-    const prefixKey = `${title.split(' ')[0]} ${meta.school}`;   // 예: "25-1-1-F 반여고"
-    const { data: dup } = await sb.from('exams').select('id, title')
-      .like('title', `${prefixKey}%`).is('deleted_at', null).limit(1);
-    if (dup?.length) {
-      console.log(`  건너뜀(중복)     ${title}   ← 기존 "${dup[0].title}"`);
-      skipped++; continue;
+  for (const { file, cls } of items) {
+    const title = buildTitle(cls);
+    const folders = targetFolders(cls, file);
+
+    // 중복 차단
+    if (cls.kind === 'school') {
+      const prefix = title.split(' ')[0] + ' ' + cls.school;
+      const { data } = await sb.from('exams').select('id,title')
+        .like('title', `${prefix}%`).is('deleted_at', null).limit(1);
+      if (data?.length) { skipped++; continue; }
+    } else {
+      const { data } = await sb.from('exams').select('id')
+        .eq('title', title).is('deleted_at', null).limit(1);
+      if (data?.length) { skipped++; continue; }
     }
 
     let parsed;
     try { parsed = parseHml(fs.readFileSync(file)); }
-    catch (e) { console.error(`  파싱실패        ${title} — ${e instanceof Error ? e.message : e}`); failed++; continue; }
-    if (!parsed.problems.length) { console.log(`  건너뜀(0문항)    ${title}`); skipped++; continue; }
+    catch (e) { failed++; report.push(`파싱실패  ${title} — ${e instanceof Error ? e.message : e}`); continue; }
+    if (!parsed.problems.length) { skipped++; continue; }
 
-    const folderPath = [ROOT_FOLDER, meta.school, meta.subject || '기타'];
-    const bookGroupId = await ensureFolder(sb, folderPath);
-
-    if (!COMMIT) {
-      console.log(`  [dry] ${title.padEnd(30)} ${String(parsed.problems.length).padStart(3)}문항  ${folderPath.join('/')}`);
-      problemsTotal += parsed.problems.length; done++;
-      continue;
+    const defects = inspect(parsed.problems);
+    if (defects.length) {
+      defectExams++; defectCount += defects.length;
+      report.push(`검수필요  ${title}\n${defects.map((d) => `            #${d.number} ${d.reason}`).join('\n')}`);
     }
 
+    if (!COMMIT) {
+      console.log(`  [dry] ${title.slice(0, 44).padEnd(46)} ${String(parsed.problems.length).padStart(3)}문항  ${folders.join('/')}${defects.length ? `  ⚠${defects.length}` : ''}`);
+      problems += parsed.problems.length; done++; continue;
+    }
+
+    const bookGroupId = await ensureFolder(sb, folders);
     const res = await createExamFromHml(sb, parsed, {
       createdBy: CREATED_BY,
-      instituteId: null,                    // 공통풀
-      bookGroupId: bookGroupId?.startsWith('(신규') ? null : bookGroupId,
-      sourceCategory: 'school',
+      instituteId: null,                                   // 공통풀
+      bookGroupId: bookGroupId?.startsWith('(신규)') ? null : bookGroupId,
+      sourceCategory: cls.kind === 'school' ? 'school' : 'auto',
       title,
-      sourceName,
-      curriculumCodes: resolveCodes(meta),
+      sourceName: path.basename(file),
+      curriculumCodes: resolveCodes(cls, file),
     });
-    if (!res.ok) { console.error(`  적재실패        ${title} — ${res.error}`); failed++; continue; }
-    problemsTotal += res.savedProblems ?? 0;
-    done++;
-    console.log(`  적재  ${title.padEnd(30)} ${String(res.savedProblems).padStart(3)}문항  검수 ${res.flaggedProblems ?? 0}`);
+    if (!res.ok) { failed++; report.push(`적재실패  ${title} — ${res.error}`); continue; }
+    problems += res.savedProblems ?? 0; done++;
+    if (done % 25 === 0) console.log(`  … ${done}건 적재 (${problems.toLocaleString()}문항)`);
   }
 
   console.log(`\n── 결과 ──`);
-  console.log(`  처리   ${done}`);
-  console.log(`  건너뜀 ${skipped}`);
-  console.log(`  실패   ${failed}`);
-  console.log(`  문항   ${problemsTotal.toLocaleString()}`);
+  console.log(`  처리       ${done}`);
+  console.log(`  건너뜀     ${skipped}   (중복·0문항)`);
+  console.log(`  실패       ${failed}`);
+  console.log(`  문항       ${problems.toLocaleString()}`);
+  console.log(`  검수 필요   시험지 ${defectExams} / 문항 ${defectCount}`);
+
+  if (report.length) {
+    const out = path.join('scripts', `import-report-${COMMIT ? 'commit' : 'dry'}.txt`);
+    fs.writeFileSync(out, report.join('\n'), 'utf-8');
+    console.log(`\n  상세 리포트 → ${out}`);
+  }
   if (!COMMIT) console.log(`\n실제로 넣으려면 --commit 을 붙이세요.`);
 }
 

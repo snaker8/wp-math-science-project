@@ -1,5 +1,5 @@
 {
-  "total": 884,
+  "total": 880,
   "counts": {
     "src/app/admin/AdminLayoutClient.tsx": 2,
     "src/app/admin/history/[id]/page.tsx": 11,
@@ -78,7 +78,7 @@
     "src/components/papers/AddProblemsModal.tsx": 4,
     "src/components/papers/ExamAnalyticsSidebar.tsx": 7,
     "src/components/papers/ExamStatsModal.tsx": 8,
-    "src/components/papers/MathsecrTreePicker.tsx": 9,
+    "src/components/papers/MathsecrTreePicker.tsx": 5,
     "src/components/papers/ProblemCard.tsx": 12,
     "src/components/papers/ProblemEditModal.tsx": 12,
     "src/components/papers/RenderRepairPanel.tsx": 1,

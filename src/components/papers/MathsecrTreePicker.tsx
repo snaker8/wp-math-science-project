@@ -113,11 +113,26 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
 
   if (!open) return null;
 
+  /**
+   * 선택 적용.
+   *
+   * ★ 2026-09-01 사고 — 과목만 고르면 아무 일도 안 일어났다.
+   *   사용자가 "고1 공통수학1" 을 골랐는데 검색 결과에 중3(신도중) 문제가 섞여 나왔다.
+   *   원인: 트리에서 **세부 노드까지** 골라야만 onSelect 가 불렸고, 과목만 바꾸고 닫으면
+   *   유형 코드가 빈 채로 남아 검색이 유형 필터 없이 전 과목을 훑었다.
+   *
+   *   검색 API 는 접두 매칭(`type_code like MS07%`)이라 **과목 코드만으로도 정확히 걸러진다.**
+   *   → 세부 노드를 안 골라도 과목 단위로 적용되게 한다. 넓게 보고 싶을 때 방법이 생긴다.
+   *   (세부 노드를 고르면 종전대로 그 코드가 우선한다 — 기존 동작 불변)
+   */
   const handleConfirm = () => {
     if (selected) {
       onSelect(selected.code, selected.fullPath);
-      onClose();
+    } else {
+      const subj = SUBJECT_OPTIONS.find((s) => s.code === subjectCode);
+      onSelect(`MS${subjectCode}`, subj?.name || `MS${subjectCode}`);
     }
+    onClose();
   };
 
   return (
@@ -233,13 +248,17 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
             >
               취소
             </button>
+            {/* ★ disabled 를 없앴다 — 세부 노드를 안 골라도 과목 단위로 적용된다.
+                무엇이 적용될지 라벨에 그대로 보여준다 (과목 전체인지, 고른 유형인지). */}
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={!selected}
-              className="rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-4 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black hover:bg-zinc-200"
+              title={selected ? selected.fullPath : '세부 유형을 고르지 않으면 과목 전체가 적용됩니다'}
             >
-              선택 적용
+              {selected
+                ? '선택 적용'
+                : `${SUBJECT_OPTIONS.find((s) => s.code === subjectCode)?.name || '과목'} 전체 적용`}
             </button>
           </div>
         </div>
