@@ -83,8 +83,23 @@ function hs1Subject(year: number, semester: number): string {
   return semester === 2 ? '수학(하)' : '수학(상)';
 }
 
+/**
+ * 수학비서 내려받기 접미사 `__db-234951` 제거.
+ *
+ * ★ 2026-09-02 사고 — 제목이 `18-1-1-F 중동고 수학상__db-234951` 로 저장됐다(381건).
+ *   D 규격만 고쳤다가 **A 규격에서 또 나왔다** — A 는 과목을 줄 끝까지 잡으므로
+ *   `수학2__db-234928` 이 통째로 과목명이 된다.
+ *   → 규격별로 막지 말고 **파일명 단계에서 한 번에** 걷어낸다. 새 규격이 생겨도 안전하다.
+ *   수학비서ID 는 제목에 넣지 않는다(중복 차단은 제목 접두 키로 한다).
+ */
+function stripDbSuffix(s: string): string {
+  // `__db-234951` · `__duplicate-of-db-559920` 등 `__` 로 시작하는 내려받기 꼬리표를 모두 제거.
+  // (규격을 좁게 잡았다가 `__duplicate-of-db-` 를 놓친 이력이 있다 — 넓게 잡는다)
+  return s.replace(/__[a-z][a-z0-9-]*\d.*$/i, '').trim();
+}
+
 export function classify(fileName: string): Classified {
-  const n = fileName.replace(/\.hml$/i, '').trim();
+  const n = stripDbSuffix(fileName.replace(/\.hml$/i, '').trim());
   const similar = /유사/.test(n);
 
   const a = n.match(P_A);
@@ -119,10 +134,15 @@ export function classify(fileName: string): Classified {
     const year = 2000 + Number(d[1]);
     const grade = Number(d[2]);
     const semester = Number(d[3]);
-    // 과목 칸이 비었거나 없으면 학년·학기로 보완 (고1 만 안전하게 특정된다)
-    const rawSubject = (d[6] || '').replace(/\s+/g, '');
+    // ★ 2026-09-02 사고 — 과목 칸에 `__db-234951` 접미사가 딸려 들어가
+    //   제목이 `18-1-1-F 중동고 수학상__db-234951` 로 저장됐다(381건).
+    //   수학비서ID 는 중복 차단 키로만 쓰고 제목에는 절대 넣지 않는다.
+    const rawSubject = (d[6] || '')
+      .replace(/__db-\d+.*$/, '')   // 접미 ID 제거
+      .replace(/\s+/g, '')
+      .trim();
     return {
-      kind: 'school', year, school: d[5], grade, semester,
+      kind: 'school', year, school: d[5].replace(/__db-\d+.*$/, '').trim(), grade, semester,
       period: d[4] as '중간' | '기말',
       subject: rawSubject || (grade === 1 ? hs1Subject(year, semester) : ''),
       similar,
@@ -257,23 +277,34 @@ async function main() {
   console.log(`대상 ${items.length}건  (학교기출 ${items.filter((x) => x.cls.kind === 'school').length} / 편집본 ${items.filter((x) => x.cls.kind === 'made').length})\n`);
 
   let done = 0, skipped = 0, failed = 0, problems = 0, defectExams = 0, defectCount = 0;
+  /** 이 실행에서 이미 처리한 중복 키 — 같은 실행 안의 중복을 막는다 (DB 조회만으론 못 막음) */
+  const seenKeys = new Set<string>();
   const report: string[] = [];
 
   for (const { file, cls } of items) {
     const title = buildTitle(cls);
     const folders = targetFolders(cls, file);
 
-    // 중복 차단
+    // ── 중복 차단 ────────────────────────────────────────────────────────
+    // ★ 2026-09-02 사고 — 같은 시험지가 **같은 초에 두 번** 들어갔다(129건).
+    //   같은 파일이 폴더 두 곳에 있는데, 두 번째를 검사할 때 첫 번째 INSERT 가
+    //   아직 조회에 안 잡혀 DB 검사만으로는 못 막았다.
+    //   → 이 실행에서 이미 처리한 키를 메모리에 기억해 같은 실행 안의 중복도 막는다.
+    const dupKey = cls.kind === 'school'
+      ? `${title.split(' ')[0]} ${cls.school}`
+      : title;
+    if (seenKeys.has(dupKey)) { skipped++; continue; }
+
     if (cls.kind === 'school') {
-      const prefix = title.split(' ')[0] + ' ' + cls.school;
       const { data } = await sb.from('exams').select('id,title')
-        .like('title', `${prefix}%`).is('deleted_at', null).limit(1);
-      if (data?.length) { skipped++; continue; }
+        .like('title', `${dupKey}%`).is('deleted_at', null).limit(1);
+      if (data?.length) { seenKeys.add(dupKey); skipped++; continue; }
     } else {
       const { data } = await sb.from('exams').select('id')
         .eq('title', title).is('deleted_at', null).limit(1);
-      if (data?.length) { skipped++; continue; }
+      if (data?.length) { seenKeys.add(dupKey); skipped++; continue; }
     }
+    seenKeys.add(dupKey);
 
     let parsed;
     try { parsed = parseHml(fs.readFileSync(file)); }
