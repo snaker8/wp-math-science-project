@@ -32,9 +32,12 @@ export async function GET(request: NextRequest) {
     let matchedProblemIds: string[] | null = null;
 
     if (typeCodes.length > 0 || difficulty) {
+      // ★ classifications 는 문제를 소프트 삭제해도 남는다 — 여기서 안 거르면
+      //   삭제된 문제가 후보 id 목록에 섞여 limit 을 잡아먹는다(2단계에서 걸러도 낭비).
       let classQuery = supabaseAdmin
         .from('classifications')
-        .select('problem_id, type_code, difficulty, cognitive_domain');
+        .select('problem_id, type_code, difficulty, cognitive_domain, problems!inner(deleted_at)')
+        .is('problems.deleted_at', null);
 
       // typeCode 필터: OR LIKE 패턴
       if (typeCodes.length > 0) {
@@ -69,6 +72,12 @@ export async function GET(request: NextRequest) {
         id, content_latex, answer_json, source_name, source_year, images, created_at, institute_id,
         classifications!inner(type_code, expanded_type_code, difficulty, cognitive_domain)
       `)
+      // ★ 2026-09-01 사고 — 삭제한 문제가 출제 검색에 계속 나왔다.
+      //   문제를 지웠는데 화면은 그대로라 "여전히 그런데" 라는 신고로 돌아왔고,
+      //   그 상태로 담으면 **삭제한 문제가 시험지에 다시 들어간다.**
+      //   available-counts 는 이 필터가 있어 트리 개수와 검색 결과도 서로 안 맞았다.
+      //   ★ problems 를 조회하는 모든 경로는 반드시 deleted_at 을 걸러야 한다.
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit);
 
