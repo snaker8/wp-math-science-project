@@ -75,3 +75,7 @@ insane-design/*/css/
 insane-design/*/index.html
 insane-design/*/screenshots/
 insane-design/*/phase1/
+
+# 일괄 적재 드라이런 리포트 (실행 시 생성 — 커밋 대상 아님)
+scripts/import-report-*.txt
+scripts/_tmp-*
