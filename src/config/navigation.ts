@@ -58,9 +58,22 @@ export const dashboardNavItems: NavItem[] = [
     group: 'main',
   },
   {
+    // ★ 2026-09-01 메뉴 노출 — 그전까지 코드는 배포돼 있었으나 메뉴에 없어
+    //   주소를 직접 쳐야만 들어갈 수 있었다(사용자: "내가 보는 화면에는 안 보이는데").
+    //   출처 탭(진단·학교기출·시중교재·모의고사) + 단원 트리 + 난이도 필터 +
+    //   선택 트레이(실시간 난이도 분포) + 시험지 편성까지 한 화면에서 흐른다.
+    //   ★ 아래 '유형별 출제'(/dashboard/create)는 **그대로 남긴다** — 기존 흐름을
+    //     쓰시던 분이 있으므로 뺏지 않는다. 새 화면이 자리 잡은 뒤 정리한다.
+    href: '/dashboard/exam-create',
+    icon: SquarePen,
+    label: '시험지 출제',
+    description: '출처·단원·난이도로 문제를 골라 담고 난이도 분포를 보며 편성',
+    group: 'main',
+  },
+  {
     href: '/dashboard/create',
     icon: SquarePen,
-    label: '유형별 출제',
+    label: '유형별 출제 (기존)',
     description: '단원·유형·난이도로 문제를 골라 새 시험지 제작',
     group: 'main',
   },
