@@ -53,6 +53,23 @@ describe('stripSourceFootnote', () => {
     expect(out).not.toContain('[출처]');
   });
 
+  // ── 평문 한 줄 형태 (2026-09-02, 포철고 실측) ──
+  //   표가 아니라 그냥 줄로 들어오는 경우. (1) 표 제거만으로는 못 잡아 본문 끝에 남았다.
+  it('평문 [출처] 줄을 지운다 — 표가 아닌 형태', () => {
+    const src = '$f(2)$의 값은?\n[출처] [23년][1-1][중간][포철고][수학 상] 23';
+    expect(stripSourceFootnote(src)).toBe('$f(2)$의 값은?');
+  });
+
+  it('평문 [출처] 줄이 여러 개여도 모두 지운다', () => {
+    const src = '문제 본문\n[출처] A\n[출처] B';
+    expect(stripSourceFootnote(src)).toBe('문제 본문');
+  });
+
+  it('본문 중간에 나온 [출처] 는 건드리지 않는다 — 줄 시작만 지운다', () => {
+    const src = '다음 자료의 [출처] 를 밝히시오.';
+    expect(stripSourceFootnote(src)).toBe(src);
+  });
+
   it('[출처] 가 없으면 문자열을 그대로 돌려준다 (동일성 보장)', () => {
     const plain = '평범한 문제 본문 $a+b$';
     expect(stripSourceFootnote(plain)).toBe(plain);

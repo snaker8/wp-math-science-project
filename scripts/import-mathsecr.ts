@@ -68,6 +68,14 @@ export type Classified = SchoolExam | MadeSheet;
 const P_A = /^(?:\d+_)?내신\s*(\d{4})\s*년\s+(.+?)\s+(중|고)(\d)(\S*)\s+(\d)\s*학기\s*(중간|기말)\s*(.*)$/;
 const P_B = /^(?:\d+_)?(\d{4})년\s+(\S+?)\s+(\d)학년\s+(\d)학기\s*(중간|기말)고사\s*(.*)$/;
 const P_C = /^(?:\d+_)?\[(\d{4})기출\]\[(\d)-(\d)-([MF])\]\[([^\]]+)\]\s*(.*)$/;
+/**
+ * D 규격 — 2026-09-01 대량 유입분(786개).
+ *   `[24년][1-1][중간][학산여고][수학상]__db-165266`
+ *    ↑연도  ↑학년-학기 ↑시기   ↑학교     ↑과목      ↑수학비서ID
+ *   변형: 과목 칸이 없는 것(`[22년][2-1][기말][지산고]`), `수학 상` 처럼 공백 있는 것,
+ *         접두 ID(`1610056_`)와 접미 ID(`__db-…`) 둘 다 나타남.
+ */
+const P_D = /^(?:\d+_)?\[(\d{2})년\]\[(\d)-(\d)\]\[(중간|기말)\]\[([^\]]+)\](?:\[([^\]]*)\])?(?:__db-(\d+))?/;
 
 /** 2022 개정 여부로 고1 과목명을 가른다. 2024년 이후 입학생이 공통수학1·2. */
 function hs1Subject(year: number, semester: number): string {
@@ -104,6 +112,20 @@ export function classify(fileName: string): Classified {
       kind: 'school', year, school: c[5], grade, semester,
       period: c[4] === 'M' ? '중간' : '기말',
       subject: grade === 1 ? hs1Subject(year, semester) : '', similar,
+    };
+  }
+  const d = n.match(P_D);
+  if (d) {
+    const year = 2000 + Number(d[1]);
+    const grade = Number(d[2]);
+    const semester = Number(d[3]);
+    // 과목 칸이 비었거나 없으면 학년·학기로 보완 (고1 만 안전하게 특정된다)
+    const rawSubject = (d[6] || '').replace(/\s+/g, '');
+    return {
+      kind: 'school', year, school: d[5], grade, semester,
+      period: d[4] as '중간' | '기말',
+      subject: rawSubject || (grade === 1 ? hs1Subject(year, semester) : ''),
+      similar,
     };
   }
   return { kind: 'made', name: n.replace(/^\d+_/, '').trim() || n };
@@ -145,9 +167,16 @@ export function resolveCodes(c: Classified, file: string): string[] {
   }
   const s = c.subject.replace(/\s/g, '');
   const direct: Record<string, string> = {
-    '공통수학1': '07', '공통수학2': '08', '수학(상)': '07', '수학(하)': '08',
-    '대수': '09', '수학1': '09', '수1': '09', '수학2': '10', '수2': '10', '미적분1': '10',
-    '확률과통계': '11', '확통': '11', '미적분': '12', '기하': '13',
+    // 2022 개정
+    '공통수학1': '07', '공수1': '07', '공통수학2': '08', '공수2': '08',
+    '대수': '09', '미적분1': '10', '확률과통계': '11', '확통': '11', '기하': '13',
+    // 2015 개정 (D 규격에 많다 — 수학상/수학하/수학1/수학2)
+    '수학상': '07', '수학(상)': '07', '수학하': '08', '수학(하)': '08',
+    '수학1': '09', '수1': '09', '수학I': '09',
+    '수학2': '10', '수2': '10', '수학II': '10',
+    '미적분': '12', '미적분2': '12',
+    // 심화·기타 — 대수 계열로 본다 (트리에 별도 과목이 없다)
+    '고급대수': '09',
   };
   return direct[s] ? [direct[s]] : [];
 }
@@ -292,4 +321,11 @@ async function main() {
   if (!COMMIT) console.log(`\n실제로 넣으려면 --commit 을 붙이세요.`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// ★ 직접 실행할 때만 돈다.
+//   이 파일은 classify()/buildTitle() 같은 순수 함수를 다른 스크립트가 import 해서 쓴다.
+//   가드가 없으면 **import 하는 순간 적재 전체가 실행된다** (2026-09-02 실측 — 검증
+//   스크립트가 멈춘 것처럼 보였는데 실제로는 1,576건 드라이런이 돌고 있었다).
+const isDirectRun = process.argv[1]?.replace(/\\/g, '/').endsWith('import-mathsecr.ts');
+if (isDirectRun) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

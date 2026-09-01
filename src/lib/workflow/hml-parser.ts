@@ -390,9 +390,16 @@ function answerFromChannel(after: string): string {
 export function stripSourceFootnote(text: string): string {
   if (!text || !text.includes('[출처]')) return text;
   return text
+    // (1) 표 형태 — `\begin{tabular}…[출처]…\end{tabular}`
     .replace(/\\begin\{tabular\}(?:\{[^}]*\})?[\s\S]*?\\end\{tabular\}/g, (block) =>
       block.includes('[출처]') ? '' : block,
     )
+    // (2) ★ 평문 한 줄 형태 (2026-09-02, 포철고 실측) — 표가 아니라 그냥 줄로 들어온다:
+    //     `[출처] [23년][1-1][중간][포철고][수학 상] 23`
+    //     `[출처] 내신 2025년 부산 해운대구 반여고 … 2 [3.40점]`
+    //   (1) 만으로는 못 잡아 본문 끝에 그대로 남았다. 줄 단위로 지운다.
+    //   ★ `[출처]` 로 **시작하는 줄**만 지운다 — 본문 중간에 우연히 들어간 경우는 건드리지 않는다.
+    .replace(/^[ \t]*\[출처\][^\n]*$/gm, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
