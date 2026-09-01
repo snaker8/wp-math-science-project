@@ -359,7 +359,10 @@ export const topNavGroups: NavGroup[] = [
     label: '출제',
     icon: SquarePen,
     children: [
-      dash('/dashboard/create'),           // 유형별 출제 (문제 골라 새 시험지 제작)
+      // ★ 상단 메뉴는 이 목록으로 구성된다 — NAV_ITEMS 에 항목만 추가하면 화면에 안 뜬다.
+      //   (2026-09-01: 항목만 넣고 여기 연결을 빠뜨려 "메뉴에 안 보인다" 재발)
+      dash('/dashboard/exam-create'),      // 시험지 출제 (출처·단원·난이도 + 난이도 분포)
+      dash('/dashboard/create'),           // 유형별 출제 (기존)
       tutor('/dashboard/curation'),        // AI 자동 출제
       dash('/dashboard/exam-management'),  // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
       tutor('/dashboard/assignments'),     // 출제 관리 (학생별 출제 현황·점수)
