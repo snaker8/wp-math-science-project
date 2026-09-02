@@ -18,6 +18,10 @@ export interface ExamTitleMeta {
   grade: string | null;
   semester: number;
   examRound: '중간' | '기말';
+  /** 4자리 연도. 제목의 2자리를 2000년대로 편다 (`25` → 2025). */
+  examYear: number;
+  /** 학년 숫자만 (1~3). 학교급이 안 붙은 순수 학년 — 중복 판정에 쓴다. */
+  gradeNum: number;
 }
 
 /**
@@ -28,15 +32,17 @@ export interface ExamTitleMeta {
  *   (B) `[22년][1-1][기말][해운대고][수학상]`
  */
 export function parseExamTitleMeta(title: string): ExamTitleMeta | null {
-  let gradeNum: number, semester: number, roundCode: string, schoolName: string;
+  let gradeNum: number, semester: number, roundCode: string, schoolName: string, yy: number;
 
-  const a = title.match(/^\d{2}-(\d)-(\d)-([MF])[\s-]+([^\s-]+)/);
-  const b = title.match(/^\[\d{2}년\]\[(\d)-(\d)\]\[(중간|기말)\]\[([^\]]+)\]/);
+  const a = title.match(/^(\d{2})-(\d)-(\d)-([MF])[\s-]+([^\s-]+)/);
+  const b = title.match(/^\[(\d{2})년\]\[(\d)-(\d)\]\[(중간|기말)\]\[([^\]]+)\]/);
 
   if (a) {
-    [gradeNum, semester, roundCode, schoolName] = [Number(a[1]), Number(a[2]), a[3], a[4]];
+    [yy, gradeNum, semester, roundCode, schoolName] =
+      [Number(a[1]), Number(a[2]), Number(a[3]), a[4], a[5]];
   } else if (b) {
-    [gradeNum, semester, roundCode, schoolName] = [Number(b[1]), Number(b[2]), b[3], b[4]];
+    [yy, gradeNum, semester, roundCode, schoolName] =
+      [Number(b[1]), Number(b[2]), Number(b[3]), b[4], b[5]];
   } else {
     return null;
   }
@@ -55,5 +61,5 @@ export function parseExamTitleMeta(title: string): ExamTitleMeta | null {
   if (/중(학교)?$/.test(schoolName)) grade = `중${gradeNum}`;
   else if (/고(등학교)?$/.test(schoolName)) grade = `고${gradeNum}`;
 
-  return { schoolName, grade, semester, examRound };
+  return { schoolName, grade, semester, examRound, examYear: 2000 + yy, gradeNum };
 }

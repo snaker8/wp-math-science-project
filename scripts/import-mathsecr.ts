@@ -351,6 +351,13 @@ async function main() {
       curriculumCodes: resolveCodes(cls, file),
     });
     if (!res.ok) { failed++; report.push(`적재실패  ${title} — ${res.error}`); continue; }
+    // ★ 제목이 달라도 같은 시험이면 createExamFromHml 이 건너뛴다(exam-duplicate-guard).
+    //   그걸 "적재됨"으로 세면 리포트가 거짓말이 된다 — 건너뜀으로 잡고 이유를 남긴다.
+    if (res.alreadyExisted) {
+      skipped++;
+      report.push(`중복건너뜀 ${title} — 이미 있음: "${res.duplicateOf?.title ?? '(제목 동일)'}"`);
+      continue;
+    }
     problems += res.savedProblems ?? 0; done++;
     if (done % 25 === 0) console.log(`  … ${done}건 적재 (${problems.toLocaleString()}문항)`);
   }

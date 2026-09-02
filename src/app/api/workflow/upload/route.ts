@@ -136,6 +136,7 @@ function applySourceCategoryOverride(
 }
 import { isSharedLibraryMode } from '@/lib/security/institute-guard';
 import type { SubjectTrack } from '@/types/track';
+import { findDuplicateExams } from '@/lib/workflow/exam-duplicate-guard';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -1676,6 +1677,27 @@ async function saveEditedProblemsDirect(
     }
   }
 
+  // ★ 중복 차단 2 — 제목이 달라도 같은 시험이면 막는다 (2026-09-02)
+  //   학교·연도·학년·학기·중간기말 일치. 제목 표기만 달라도(교과서명 유무) 잡는다.
+  if (!examId) {
+    try {
+      const dups = await findDuplicateExams(supabase, fileTitle, instituteId);
+      if (dups.length > 0) {
+        const keep = dups[0];
+        console.log(`[Direct Save] 같은 시험 발견 → 재사용 (${keep.id}) — "${keep.title}"`);
+        autoSavedExams.set(jobId, keep.id);
+        return NextResponse.json({
+          success: true,
+          message: `같은 시험지가 이미 있습니다: "${keep.title}" (${keep.problemCount}문항). 중복 자산화를 차단했습니다.`,
+          examId: keep.id,
+          alreadySaved: true,
+        });
+      }
+    } catch (e) {
+      console.warn('[Direct Save] 같은-시험 중복 조회 실패 (계속 진행):', e);
+    }
+  }
+
   // ★ append 모드 (examId 이미 set 됨) 면 새 exam INSERT 스킵
   // ★ 학교 단원집 메타 산출 — 두 함수 공통 패턴. school 모드 외에도 명시값 들어오면 박음.
   const resolvedSchoolMeta = fillSchoolMetaFromTitle(schoolMeta || {}, fileTitle);
@@ -2514,6 +2536,21 @@ async function saveProblemsToDB(
         }
       } catch (e) {
         console.warn('[DB] 중복 차단 조회 실패 (계속 진행):', e);
+      }
+    }
+
+    // ★ 중복 차단 2 — 제목이 달라도 같은 시험이면 막는다 (2026-09-02)
+    if (!examId) {
+      try {
+        const dups = await findDuplicateExams(supabase, fileTitle, instituteId);
+        if (dups.length > 0) {
+          const keep = dups[0];
+          console.log(`[DB] 같은 시험 발견 → 재사용 (${keep.id}) — "${keep.title}"`);
+          autoSavedExams.set(jobId, keep.id);
+          return;
+        }
+      } catch (e) {
+        console.warn('[DB] 같은-시험 중복 조회 실패 (계속 진행):', e);
       }
     }
 

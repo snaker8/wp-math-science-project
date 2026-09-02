@@ -11,6 +11,7 @@ import type { HmlParseResult } from './hml-parser';
 import { verifyHmlProblem } from './hml-verify';
 import { findAutoFolderForCurriculum } from '@/lib/utils/auto-folder';
 import { parseExamTitleMeta } from './exam-title-meta';
+import { findDuplicateExams, describeIdentity, examIdentityFromTitle } from './exam-duplicate-guard';
 
 export interface HmlSaveContext {
   createdBy: string;                 // 필수 (exams.created_by NOT NULL)
@@ -32,6 +33,8 @@ export interface HmlSaveResult {
   /** 문제 번호 → 검수 사유 (요약 응답용) */
   warningsByNumber?: Record<number, string[]>;
   alreadyExisted?: boolean;
+  /** 제목은 다르지만 같은 시험이라 건너뛴 경우 — 어떤 시험지와 겹쳤는지 */
+  duplicateOf?: { id: string; title: string; problemCount: number };
   error?: string;
 }
 
@@ -108,6 +111,22 @@ export async function createExamFromHml(
     }
   } catch { /* 조회 실패해도 계속 (새로 생성) */ }
 
+  // ── 중복 차단 2 — 제목이 달라도 **같은 시험**이면 막는다 (2026-09-02) ──
+  //   학교·연도·학년·학기·중간기말이 같으면 같은 시험지다.
+  //   위 제목 가드는 `여명중 수학` vs `여명중 중등수학2상` 을 둘로 봐서 그대로 통과시켰다.
+  try {
+    const dups = await findDuplicateExams(supabase, title, ctx.instituteId);
+    if (dups.length > 0) {
+      const keep = dups[0];
+      console.warn(
+        `[HML Save] 중복 건너뜀 — ${describeIdentity(examIdentityFromTitle(title)!)} 은(는) 이미 있음: ` +
+        `"${keep.title}" (${keep.problemCount}문항, ${keep.createdAt ?? '?'})`
+      );
+      return { ok: true, examId: keep.id, alreadyExisted: true, savedProblems: 0,
+               duplicateOf: { id: keep.id, title: keep.title, problemCount: keep.problemCount } };
+    }
+  } catch { /* 조회 실패는 통과 (가드가 적재를 막지 않는다) */ }
+
   // ── 배점 추출 (문제별) + 총점 ──
   const pointsData = parsed.problems.map((p) => extractPoints(p.content));
   const anyPoints = pointsData.some((d) => d.points != null);
@@ -129,6 +148,7 @@ export async function createExamFromHml(
             school_name: meta.schoolName,
             semester: meta.semester,
             exam_round: meta.examRound,
+            exam_year: meta.examYear,
             ...(meta.grade ? { grade: meta.grade } : {}),
           }
         : {}),
