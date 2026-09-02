@@ -317,7 +317,8 @@ export default function ExamCreatePage() {
     setSchoolError(null);
     (async () => {
       try {
-        const res = await fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' });
+        // ★ limit 명시 — 기본 200 이면 최신 200건만 와서 학교가 63개만 뜬다 (2026-09-02 사고).
+        const res = await fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         const rows = ((data.exams || []) as SchoolExam[]).map((ex) => ({
@@ -406,7 +407,7 @@ export default function ExamCreatePage() {
       try {
         const [bgRes, exRes] = await Promise.all([
           fetch('/api/book-groups', { cache: 'no-store' }),
-          fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' }),
+          fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' }),
         ]);
         const bgData = await bgRes.json().catch(() => ({}));
         if (!bgRes.ok) throw new Error(bgData.error || `book-groups HTTP ${bgRes.status}`);
@@ -437,7 +438,7 @@ export default function ExamCreatePage() {
     setMockError(null);
     (async () => {
       try {
-        const res = await fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' });
+        const res = await fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         // 모의고사 후보 필터 — exam_type 또는 title 패턴 매칭

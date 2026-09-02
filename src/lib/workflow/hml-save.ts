@@ -10,6 +10,7 @@ import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import type { HmlParseResult } from './hml-parser';
 import { verifyHmlProblem } from './hml-verify';
 import { findAutoFolderForCurriculum } from '@/lib/utils/auto-folder';
+import { parseExamTitleMeta } from './exam-title-meta';
 
 export interface HmlSaveContext {
   createdBy: string;                 // 필수 (exams.created_by NOT NULL)
@@ -114,11 +115,23 @@ export async function createExamFromHml(
     ? Math.round(pointsData.reduce((s, d) => s + (d.points || 0), 0))
     : parsed.problems.length * 4; // 배점 없는 파일(해강중 등)은 4점 균등 폴백
 
+  // ── 학교 메타 — 제목에서 파생 (출제 화면 학교기출 탭이 이 컬럼들로 좁힌다) ──
+  //    학교기출 형식이 아니면 null 이 나오고, 그때는 컬럼을 건드리지 않는다.
+  const meta = parseExamTitleMeta(title);
+
   // ── exam INSERT ──
   const { data: examRow, error: examErr } = await supabase
     .from('exams')
     .insert({
       title,
+      ...(meta
+        ? {
+            school_name: meta.schoolName,
+            semester: meta.semester,
+            exam_round: meta.examRound,
+            ...(meta.grade ? { grade: meta.grade } : {}),
+          }
+        : {}),
       description: `HML 가져오기: ${ctx.sourceName || title} (${parsed.problems.length}문항)`,
       status: 'DRAFT',
       created_by: ctx.createdBy,

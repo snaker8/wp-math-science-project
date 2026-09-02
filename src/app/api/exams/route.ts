@@ -33,13 +33,21 @@ export async function GET(request: NextRequest) {
     // ★ 과목 필터 — CloudListClient 에서 과목 전환 시 서버 단 필터 (전체 재로드 후 클라 필터 회피).
     //   book_groups 와 동일한 패턴: .eq('subject', value). '전체' 등 빈값이면 무필터.
     const subjectParam = searchParams.get('subject');
+    // ★ 목록 상한 — 기본 200 (여러 화면이 공유하는 목록이라 기본값은 그대로 둔다).
+    //   학교기출 탭처럼 전량이 필요한 화면만 명시적으로 넓힌다.
+    //   사고 (2026-09-02): 기출 1,741건을 적재했는데 학교기출 탭이 최신 200건만 받아
+    //   학교가 63개만 떴다. 백필로 컬럼을 채운 뒤에도 숫자가 안 늘어 원인을 여기서 찾았다.
+    const limitParam = Number(searchParams.get('limit'));
+    const listLimit = Number.isFinite(limitParam) && limitParam > 0
+      ? Math.min(limitParam, 5000)
+      : 200;
 
     // ★ 시험지 목록 조회 (institute-guard 격리). super_admin 은 전체, ORG_ADMIN 은 산하, 일반 user 는 자기 institute.
     let examsBaseQuery = supabaseAdmin
       .from('exams')
       .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade, is_diagnostic, diagnostic_category, diagnostic_round, diagnostic_difficulty, school_name, district, semester, exam_year, exam_round, chapter')
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(listLimit);
 
     if (isDiagnosticParam === 'true' || isDiagnosticParam === '1') {
       examsBaseQuery = examsBaseQuery.eq('is_diagnostic', true);
