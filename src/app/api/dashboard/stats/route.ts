@@ -64,17 +64,18 @@ export async function GET() {
     const newStudentsQ = applyInstituteFilter(newStudentsBase, scope);
 
     // ── exams (institute + track 필터) ──
-    let examsBase = supabaseAdmin.from('exams').select('*', { count: 'exact', head: true });
+    let examsBase = supabaseAdmin.from('exams').select('*', { count: 'exact', head: true }).is('deleted_at', null);
     const examsQ = applyTrackFilter(applyInstituteFilter(examsBase, scope), scope);
 
     let monthExamsBase = supabaseAdmin
       .from('exams')
       .select('*', { count: 'exact', head: true })
+      .is('deleted_at', null)
       .gte('created_at', monthStart.toISOString());
     const monthExamsQ = applyTrackFilter(applyInstituteFilter(monthExamsBase, scope), scope);
 
     // ── problems (institute + track 필터, 공통 풀 NULL 포함) ──
-    let problemsBase = supabaseAdmin.from('problems').select('*', { count: 'exact', head: true });
+    let problemsBase = supabaseAdmin.from('problems').select('*', { count: 'exact', head: true }).is('deleted_at', null);
     const problemsQ = applyTrackFilter(
       applyInstituteFilter(problemsBase, scope, { allowCommonPool: true }),
       scope
@@ -83,6 +84,7 @@ export async function GET() {
     let newProblemsBase = supabaseAdmin
       .from('problems')
       .select('*', { count: 'exact', head: true })
+      .is('deleted_at', null)
       .gte('created_at', weekAgo.toISOString());
     const newProblemsQ = applyTrackFilter(
       applyInstituteFilter(newProblemsBase, scope, { allowCommonPool: true }),
@@ -112,6 +114,7 @@ export async function GET() {
     let monthlyBase = supabaseAdmin
       .from('exams')
       .select('created_at')
+      .is('deleted_at', null)
       .gte('created_at', monthStart.toISOString())
       .order('created_at', { ascending: true });
     const monthlyQ = applyTrackFilter(applyInstituteFilter(monthlyBase, scope), scope);
