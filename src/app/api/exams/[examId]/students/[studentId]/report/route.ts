@@ -17,6 +17,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { findGradingSession } from '@/lib/diagnostics/find-session';
 
 export const runtime = 'nodejs';
 
@@ -131,25 +132,24 @@ export async function GET(
     }
   }
 
-  // 3. 세션 조회 (가장 최근 EX 세션)
-  const { data: sessions } = await supabaseAdmin
-    .schema('diagnostics')
-    .from('sessions')
-    .select('id, conducted_at, ai_comment_json, teacher_comment_json')
-    .eq('exam_id', examId)
-    .eq('student_id', studentId)
-    .eq('session_type', 'EX')
-    .order('conducted_at', { ascending: false })
-    .limit(1);
-
-  const session = sessions?.[0] as
-    | {
-        id: string;
-        conducted_at: string | null;
-        ai_comment_json: Record<string, unknown> | null;
-        teacher_comment_json: Record<string, unknown> | null;
+  // 3. 세션 조회 — B라인 + 신원 병합 (2026-09-02)
+  //   옛 코드는 A(sessions)를 session_type='EX' 로만 봐서, QR 로만 채점한 학생은
+  //   **AI·교사 코멘트가 통째로 비어** 나왔다. 승격 학생도 못 찾았다.
+  //   같은 조회가 ai-comment·share 에도 복사돼 제각각 틀려 있어 헬퍼로 모았다.
+  const foundSession = await findGradingSession(supabaseAdmin, examId, studentId);
+  const session: {
+    id: string;
+    conducted_at: string | null;
+    ai_comment_json: Record<string, unknown> | null;
+    teacher_comment_json: Record<string, unknown> | null;
+  } | undefined = foundSession
+    ? {
+        id: foundSession.id,
+        conducted_at: foundSession.completedAt,
+        ai_comment_json: foundSession.aiComment as Record<string, unknown> | null,
+        teacher_comment_json: foundSession.teacherComment as Record<string, unknown> | null,
       }
-    | undefined;
+    : undefined;
   // ★ 채점 라인 2개: EX 세션(items) + QR/수동 채점(session_results). 세트 리포트(compute-report 4b)와
   //   동일하게 둘 다 읽는다. EX 세션이 없어도 session_results 가 있으면 리포트를 만든다
   //   → "채점 기록 없음" 판정은 itemBySeq 를 채운 뒤(아래)로 미룬다.
@@ -318,21 +318,11 @@ export async function GET(
     { isCorrect: boolean; note: string | null }
   >();
 
-  // 라인 A — EX 세션 items (seq = qNum)
-  if (session) {
-    const { data: items } = await supabaseAdmin
-      .schema('diagnostics')
-      .from('items')
-      .select('seq, mathsecr_code, is_correct, note')
-      .eq('session_id', session.id);
-    for (const it of items ?? []) {
-      const tt = it as { seq: number; is_correct: boolean; note: string | null };
-      itemBySeq.set(tt.seq, { isCorrect: tt.is_correct, note: tt.note });
-    }
-  }
+  // ★ 2026-09-02: 라인 A(items) 읽기 제거. A 는 이미 B 로 이관돼 있어 B 하나면 전부 나온다.
+  //   둘 다 읽으면 같은 문항을 두 번 세게 된다 (compute-report 에서 실제로 그 사고가 났다).
 
-  // 라인 B — QR/인쇄 수동 채점 (print_sessions + session_results).
-  //   EX items 에 없는 문항만 채움(중복 방지). sequence_number → qNum 매핑. 자동채점 보류 문항 제외.
+  // 채점 결과 — print_sessions + session_results.
+  //   sequence_number → qNum 매핑. 자동채점 보류 문항 제외.
   {
     const { data: psRows } = await supabaseAdmin
       .schema('diagnostics')
@@ -511,31 +501,44 @@ export async function GET(
   let classAvg: number | null = null;
 
   {
+    // ★ 2026-09-02 B라인으로. 옛 코드는 A(sessions)를 `session_type='EX'` 로만 봐서
+    //   QR 로 채점한 반은 **비교 대상이 0~1명** → 백분위·석차·반평균이 통째로 null 이었다.
+    //   session_type 을 못박지 않는다 — 같은 시험지를 친 학생이면 종류와 무관하게 비교 대상.
     const { data: peerSessions } = await supabaseAdmin
       .schema('diagnostics')
-      .from('sessions')
+      .from('print_sessions')
       .select('id, student_id')
-      .eq('exam_id', examId)
-      .eq('session_type', 'EX');
+      .eq('exam_id', examId);
 
     const peerSessionIds = (peerSessions ?? []).map((s) => s.id as string);
     classSize = peerSessionIds.length;
 
     if (classSize >= 2) {
-      const { data: peerItems } = await supabaseAdmin
-        .schema('diagnostics')
-        .from('items')
-        .select('session_id, is_correct')
-        .in('session_id', peerSessionIds);
+      // ★ 행 수가 1,000 에서 잘린다 — 반 30명 × 25문항이면 750 이라 안 걸리지만,
+      //   진단평가처럼 인원이 많으면 뒤쪽 학생 점수가 0 이 되어 석차가 틀어진다.
+      //   (같은 사고를 grades/roster 에서 실제로 겪었다)
+      const peerItems: Array<{ session_id: string; is_correct: boolean; teacher_note: string | null }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data } = await supabaseAdmin
+          .schema('diagnostics')
+          .from('session_results')
+          .select('session_id, is_correct, teacher_note')
+          .in('session_id', peerSessionIds)
+          .order('id')
+          .range(from, from + 999);
+        const rows = (data ?? []) as typeof peerItems;
+        peerItems.push(...rows);
+        if (rows.length < 1000) break;
+      }
 
       // session_id → score percentage (correct/total)
       const peerScore = new Map<string, { correct: number; total: number }>();
-      for (const it of peerItems ?? []) {
-        const tt = it as { session_id: string; is_correct: boolean };
-        const a = peerScore.get(tt.session_id) ?? { correct: 0, total: 0 };
+      for (const it of peerItems) {
+        if ((it.teacher_note ?? '').includes('자동채점 보류')) continue;  // 보류 제외
+        const a = peerScore.get(it.session_id) ?? { correct: 0, total: 0 };
         a.total += 1;
-        if (tt.is_correct) a.correct += 1;
-        peerScore.set(tt.session_id, a);
+        if (it.is_correct) a.correct += 1;
+        peerScore.set(it.session_id, a);
       }
 
       const scores: { sessionId: string; pct: number }[] = [];
@@ -582,20 +585,23 @@ export async function GET(
 
   let unitTrend: UnitTrend = null;
   {
-    // 같은 학생의 다른 EX 세션 (가장 최근 1개). 현재 EX 세션이 있으면 그것만 제외.
+    // ★ 2026-09-02 B라인으로. 옛 코드는 A(sessions)+session_type='EX' 만 봐서
+    //   QR 채점 학생은 이전 시험이 아예 안 잡혀 「단원 추이」가 늘 비어 있었다.
+    //   신원 병합(identityIds)도 빠져 있어 승격 학생은 옛 명단 id 기록을 놓쳤다.
     let otherSessionsQ = supabaseAdmin
       .schema('diagnostics')
-      .from('sessions')
-      .select('id, exam_id, conducted_at')
-      .eq('student_id', studentId)
-      .eq('session_type', 'EX');
+      .from('print_sessions')
+      .select('id, exam_id, completed_at')
+      .in('student_id', Array.from(identityIds))
+      .neq('exam_id', examId)
+      .not('completed_at', 'is', null);
     if (session) otherSessionsQ = otherSessionsQ.neq('id', session.id);
     const { data: otherSessions } = await otherSessionsQ
-      .order('conducted_at', { ascending: false })
+      .order('completed_at', { ascending: false })
       .limit(1);
 
     const prevSess = (otherSessions ?? [])[0] as
-      | { id: string; exam_id: string; conducted_at: string | null }
+      | { id: string; exam_id: string; completed_at: string | null }
       | undefined;
 
     if (prevSess) {
@@ -606,11 +612,11 @@ export async function GET(
         .eq('id', prevSess.exam_id)
         .maybeSingle();
 
-      // 이전 세션 items + 그 typeCode들의 level1_name lookup
+      // 이전 세션 채점 결과 + 그 typeCode들의 level1_name lookup
       const { data: prevItems } = await supabaseAdmin
         .schema('diagnostics')
-        .from('items')
-        .select('mathsecr_code, is_correct')
+        .from('session_results')
+        .select('mathsecr_code, is_correct, teacher_note')
         .eq('session_id', prevSess.id);
 
       const prevTypeCodes = new Set<string>();
@@ -634,7 +640,8 @@ export async function GET(
       // 이전 세션 단원별 집계 (level1_name)
       const prevUnitMap = new Map<string, { correct: number; total: number }>();
       for (const it of prevItems ?? []) {
-        const tt = it as { mathsecr_code: string; is_correct: boolean };
+        const tt = it as { mathsecr_code: string; is_correct: boolean; teacher_note: string | null };
+        if ((tt.teacher_note ?? '').includes('자동채점 보류')) continue;
         const unit = prevTypeCodeToUnit.get(tt.mathsecr_code) ?? '미분류';
         const a = prevUnitMap.get(unit) ?? { correct: 0, total: 0 };
         a.total += 1;
@@ -680,7 +687,7 @@ export async function GET(
           prevExamId: prevSess.exam_id,
           prevExamTitle:
             (prevExam as { title: string } | null)?.title ?? '이전 시험',
-          prevConductedAt: prevSess.conducted_at,
+          prevConductedAt: prevSess.completed_at,
           units: trendRows,
         };
       }

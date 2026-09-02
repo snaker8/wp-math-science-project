@@ -151,12 +151,24 @@ export function classify(fileName: string): Classified {
   return { kind: 'made', name: n.replace(/^\d+_/, '').trim() || n };
 }
 
+/**
+ * 제목 뒤 과목 표기 정리.
+ *   고등은 같은 학년·학기에도 과목이 갈린다(공통수학1 / 대수 / 미적분Ⅰ …) → 그대로 둔다.
+ *   중등 교과서명(`중등수학2상`)은 앞의 `25-2-1-F` 가 이미 학년·학기를 말하고 있어
+ *   중복이다. 학교 이름에 '중'도 들어간다 → 그냥 `수학`. (2026-09-02 대표 지적)
+ */
+export function normalizeSubjectLabel(subject: string): string {
+  if (/^중등수학\s*\d\s*[상하]$/.test(subject)) return '수학';
+  return subject;
+}
+
 /** 제목 — 운영 실측 형식. `25-1-2-F 동인고 공통수학2` = 2025년 고1 2학기 기말 */
 export function buildTitle(c: Classified): string {
   if (c.kind === 'made') return c.name;
   const yy = String(c.year).slice(2);
   const p = c.period === '중간' ? 'M' : 'F';
-  const sub = c.subject ? ` ${c.subject}` : '';
+  const subjectLabel = normalizeSubjectLabel(c.subject);
+  const sub = subjectLabel ? ` ${subjectLabel}` : '';
   return `${yy}-${c.grade}-${c.semester}-${p} ${c.school}${sub}${c.similar ? ' (유사)' : ''}`;
 }
 
@@ -186,19 +198,25 @@ export function resolveCodes(c: Classified, file: string): string[] {
     if (pair && /중등|중\d/.test(c.subject + file)) return [pair[c.semester === 2 ? 1 : 0]];
   }
   const s = c.subject.replace(/\s/g, '');
-  const direct: Record<string, string> = {
+  const direct: Record<string, string | string[]> = {
     // 2022 개정
     '공통수학1': '07', '공수1': '07', '공통수학2': '08', '공수2': '08',
     '대수': '09', '미적분1': '10', '확률과통계': '11', '확통': '11', '기하': '13',
     // 2015 개정 (D 규격에 많다 — 수학상/수학하/수학1/수학2)
-    '수학상': '07', '수학(상)': '07', '수학하': '08', '수학(하)': '08',
+    // ★ 수학(상)/(하)는 2022 공통수학1·2 양쪽으로 단원이 재배치됐다.
+    //   출처명으로 한 과목을 확정하지 않고 두 후보를 모두 저장해 문제 본문으로 최종 분류한다.
+    //   최종 MS07 문제는 공통수학1 유형 검색에, MS08 문제는 공통수학2 유형 검색에 노출된다.
+    '수학상': ['07', '08'], '수학(상)': ['07', '08'],
+    '수학하': ['07', '08'], '수학(하)': ['07', '08'],
     '수학1': '09', '수1': '09', '수학I': '09',
     '수학2': '10', '수2': '10', '수학II': '10',
     '미적분': '12', '미적분2': '12',
     // 심화·기타 — 대수 계열로 본다 (트리에 별도 과목이 없다)
     '고급대수': '09',
   };
-  return direct[s] ? [direct[s]] : [];
+  const resolved = direct[s];
+  if (!resolved) return [];
+  return Array.isArray(resolved) ? resolved : [resolved];
 }
 
 // ── 품질 게이트 ───────────────────────────────────────────────────────────

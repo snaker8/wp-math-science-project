@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import katex from 'katex';
+import { balanceBraces, balanceLeftRight } from './latex-balance';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -42,22 +43,6 @@ function dfracInCases(s: string): string {
         `\\begin{cases}${inner.replace(/\\frac(?![a-zA-Z])/g, '\\dfrac')}\\end{cases}`);
 }
 
-/**
- * 중괄호 균형 복구 — 짝 안 맞는 `}`(짝 없는 닫기) 제거 + 안 닫힌 `{` 만큼 `}` 추가.
- *   ★ 원본 수식 오타(예: `z_{1}}` 닫기 1개 더, 해운대고 #9)로 KaTeX 가 통째로 실패→빨간 raw 되던 것 구제.
- *   `\{`·`\}`(구분자 이스케이프)는 그룹이 아니므로 카운트 제외. 렌더 실패 시 폴백에서만 호출(정상 콘텐츠 무영향).
- */
-function balanceBraces(s: string): string {
-  let depth = 0, out = '';
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    const esc = i > 0 && s[i - 1] === '\\';
-    if (ch === '{' && !esc) { depth++; out += ch; }
-    else if (ch === '}' && !esc) { if (depth > 0) { depth--; out += ch; } /* 짝 없는 } 는 버림 */ }
-    else out += ch;
-  }
-  return out + '}'.repeat(Math.max(0, depth));
-}
 
 export function MathRenderer({ content, block = false, className, compact = false }: MathRendererProps) {
     const html = useMemo(() => {
@@ -83,7 +68,9 @@ export function MathRenderer({ content, block = false, className, compact = fals
             // ★ #23: cases 안 \frac→\dfrac (행 겹침 해결, 위 dfracInCases 주석 참고). 행렬 불변.
             // ★ 중괄호 균형 복구 — KaTeX 는 throwOnError:false 라 짝 안 맞는 } 를 빨간 raw 로 렌더(폴백 안 탐).
             //   메인에서 미리 균형(정상 콘텐츠엔 no-op) → 원본 오타(해운대고 #9 z_{1}}) 도 렌더됨.
-            const widened = dfracInCases(stretchArrays(balanceBraces(stripped)));
+            // ★ left, right 짝도 같이 - 짝 없는 left 하나로 본문 전체가 빨간 raw 가
+            //   되던 사고(연립방정식 2벌 나란히, 2026-09-02). 짝 맞으면 no-op.
+            const widened = dfracInCases(stretchArrays(balanceLeftRight(balanceBraces(stripped))));
             // compact: 인라인이라도 \displaystyle 생략 (박스 안 cases 세로 간격 축소용)
             const processedContent = (block || compact) ? widened : `\\displaystyle ${widened}`;
 
