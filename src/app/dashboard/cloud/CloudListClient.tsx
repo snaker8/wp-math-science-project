@@ -994,11 +994,16 @@ export default function CloudPage() {
       setLoadError(null);
 
       const subjectParam = subject !== '전체' ? `?subject=${encodeURIComponent(subject)}` : '';
+      // ★ /api/exams 는 기본 200건에서 잘린다. 이 화면은 **전체 목록**이라 잘리면
+      //   폴더 트리·카운트·검색이 전부 어긋난다 (실사고: 1,741건인데 화면엔 200건).
+      const examsParam = subjectParam
+        ? `${subjectParam}&limit=5000`
+        : '?limit=5000';
 
       // 북그룹 + 시험지 병렬 fetch (no-store: 삭제 후 최신 데이터 보장)
       const [groupsRes, examsRes] = await Promise.all([
         fetch(`/api/book-groups${subjectParam}`, { cache: 'no-store' }),
-        fetch(`/api/exams${subjectParam}`, { cache: 'no-store' }),
+        fetch(`/api/exams${examsParam}`, { cache: 'no-store' }),
       ]);
 
       if (!groupsRes.ok) throw new Error(`BookGroups HTTP ${groupsRes.status}`);
