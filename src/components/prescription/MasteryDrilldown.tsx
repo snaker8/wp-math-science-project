@@ -9,7 +9,9 @@
 // ============================================================================
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Target, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, Target, Sparkles, FilePlus2 } from 'lucide-react';
+import { useTrackHref } from '@/lib/track/hooks';
 import { getMathsecrNodesByCodes } from '@/app/dashboard/prescription/lib/queries';
 import { STATUS_COLOR, STATUS_LABEL } from '@/app/dashboard/prescription/lib/types';
 import type { StudentNodeStatus, NodeStatus, MathsecrNode } from '@/app/dashboard/prescription/lib/types';
@@ -36,6 +38,26 @@ interface BigUnit { key: string; name: string; agg: Agg; mids: MidUnit[]; }
 interface SubjectGroup { key: string; name: string; agg: Agg; bigs: BigUnit[]; }
 
 const RANK: Record<NodeStatus, number> = { gamma: 0, beta: 1, alpha: 2, unknown: 3 };
+
+/**
+ * 출제로 넘길 코드 — 소단원까지만 남긴다.
+ * `MS07-04-02-06-03`(세부유형) → `MS07-04-02-06`(소단원)
+ *
+ * 세부유형 하나로 좁히면 문제은행에 그 유형이 1~2개뿐인 경우가 많아 연습지가 안 나온다
+ * (실측: 오답 유형 166가지 중 36가지는 그 문제 하나뿐). 소단원까지 넓혀야 후보가 생긴다.
+ * 검색 API 가 `type_code like '<코드>%'` 로 받으므로 접두어만 주면 하위가 전부 잡힌다.
+ */
+function toSubunitCode(code: string): string {
+  const seg = code.split('-');
+  return seg.length >= 5 ? seg.slice(0, -1).join('-') : code;
+}
+
+/** 약한 유형일수록 쉬운 난이도부터 — γ는 하~중, β는 중 */
+function diffRangeFor(status: NodeStatus): string {
+  if (status === 'gamma') return '1,2,3,4';
+  if (status === 'beta') return '3,4,5,6';
+  return '';
+}
 
 function MasteryBar({ agg }: { agg: Agg }) {
   const segs: Array<[NodeStatus, number]> = [
@@ -69,6 +91,7 @@ export function MasteryDrilldown({
   nodeStatus: StudentNodeStatus[];
   onPrescribe?: (code: string, name: string) => void;
 }) {
+  const href = useTrackHref();   // 트랙 prefix (/math/…) 유지 — 안 쓰면 not-found
   const [nodes, setNodes] = useState<Map<string, MathsecrNode>>(new Map());
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -189,15 +212,34 @@ export function MasteryDrilldown({
                           <div className="flex items-center gap-2 px-1 py-1">
                             <span className="text-[11px] font-medium text-content-secondary">{sub.name}</span>
                             <CountChips agg={sub.agg} />
-                            {sub.agg.gamma > 0 && onPrescribe && (
-                              <button
-                                type="button"
-                                onClick={() => { const weak = sub.types.find((t) => t.status === 'gamma') || sub.types[0]; onPrescribe(weak.code, sub.name); }}
-                                className="ml-auto inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-300 hover:bg-rose-500/25"
-                              >
-                                <Target size={9} /> 처방
-                              </button>
-                            )}
+                            {sub.agg.gamma > 0 && (() => {
+                              const weak = sub.types.find((t) => t.status === 'gamma') || sub.types[0];
+                              if (!weak) return null;
+                              const qs = new URLSearchParams({ typeCode: toSubunitCode(weak.code), typeName: sub.name });
+                              const diffs = diffRangeFor(weak.status);
+                              if (diffs) qs.set('diff', diffs);
+                              return (
+                                <span className="ml-auto flex items-center gap-1">
+                                  {onPrescribe && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onPrescribe(weak.code, sub.name)}
+                                      className="inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-300 hover:bg-rose-500/25"
+                                    >
+                                      <Target size={9} /> 처방
+                                    </button>
+                                  )}
+                                  {/* ★ 약점 → 출제 인계. 이 링크가 없으면 약점을 찾아도 시험지로 못 넘어간다. */}
+                                  <Link
+                                    href={href(`/dashboard/exam-create?${qs.toString()}`)}
+                                    title={`${sub.name} 문제로 시험지 만들기`}
+                                    className="inline-flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-bold text-content-secondary hover:bg-white/20"
+                                  >
+                                    <FilePlus2 size={9} /> 출제
+                                  </Link>
+                                </span>
+                              );
+                            })()}
                           </div>
                           {/* 유형 리프 */}
                           <div className="flex flex-wrap gap-1 pb-1.5">

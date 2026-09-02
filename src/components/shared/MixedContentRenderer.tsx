@@ -3,6 +3,8 @@
 import React, { memo, useMemo } from 'react';
 import katex from 'katex';
 import { stripDollarsInsideMathEnv } from './math-env-dollar';
+import { wrapBareLatex } from './wrap-bare-latex';
+import { stripDollarBeforeEnv, stripDollarAfterEnv } from './env-dollar-cleanup';
 import { MathRenderer } from './MathRenderer';
 import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
 
@@ -874,12 +876,10 @@ function preprocessMathpixContent(text: string): string {
   // 1-2. \[...\] → $$...$$
   result = result.replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`);
 
-  // 1-3. 고립된 $ + \begin 정리 — $$도 처리
-  // ★ cases 환경은 $/$$ 안에서 KaTeX가 직접 렌더링하므로 제외
-  result = result.replace(/\$\$\\begin\{(?!cases)/g, '\\begin{');  // $$ 먼저
-  result = result.replace(/\$\\begin\{(?!cases)/g, '\\begin{');    // $ 다음
-  result = result.replace(/\\end\{(?!cases)([^}]+)\}\s*\$\$/g, '\\end{$1}');  // $$ 먼저
-  result = result.replace(/\\end\{(?!cases)([^}]+)\}\s*\$/g, '\\end{$1}');    // $ 다음
+  // 1-3. 고립된 $ + \begin/\end 정리 — env-dollar-cleanup.ts 로 분리(회귀 테스트 대상).
+  //   ★ 닫는 쪽은 같은 줄 공백만 본다. `\s*` 면 다음 줄을 여는 `$` 까지 지운다(사대부고 #17).
+  result = stripDollarBeforeEnv(result);
+  result = stripDollarAfterEnv(result);
 
   // 1-3b. ★ \displaystyle \begin{cases} $ ... \end{cases} 패턴 정리
   // Mathpix가 \displaystyle + $ 를 섞어서 출력하는 경우
@@ -1068,266 +1068,9 @@ function preprocessMathpixContent(text: string): string {
   return result;
 }
 
-/**
- * bare LaTeX 명령어(\frac, \sqrt 등)가 $...$로 감싸져 있지 않으면 자동으로 감싸기
- * 예: "곱은 \frac{105}{4}이다" → "곱은 $\frac{105}{4}$이다"
- *
- * 전략: 텍스트를 문자 단위로 스캔하여 \ 로 시작하는 LaTeX 명령어를 찾고,
- * 중괄호/첨자/수식 기호를 포함한 전체 수식 범위를 파악하여 $...$로 감싼다.
- */
-function wrapBareLatex(text: string): string {
-  // 이미 $...$로 감싸진 부분은 보존하면서, bare LaTeX만 처리
-  const parts: string[] = [];
-  const mathRegex = /\$\$[\s\S]+?\$\$|\$[^$\n]+\$/g;
-  let lastIdx = 0;
-  let m: RegExpExecArray | null;
-
-  while ((m = mathRegex.exec(text)) !== null) {
-    if (m.index > lastIdx) {
-      parts.push(wrapBareLatexInSegment(text.substring(lastIdx, m.index)));
-    }
-    parts.push(m[0]);
-    lastIdx = m.index + m[0].length;
-  }
-  if (lastIdx < text.length) {
-    parts.push(wrapBareLatexInSegment(text.substring(lastIdx)));
-  }
-
-  return parts.join('');
-}
-
-/** LaTeX 명령어 목록 — \command 형태 인식용 */
-const LATEX_COMMANDS = new Set([
-  // 분수/루트
-  'frac', 'dfrac', 'tfrac', 'sqrt', 'root',
-  // 적분/합/극한
-  'sum', 'int', 'iint', 'iiint', 'oint', 'lim', 'prod', 'coprod',
-  // 삼각함수/로그
-  'log', 'ln', 'sin', 'cos', 'tan', 'sec', 'csc', 'cot',
-  'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh',
-  // 그리스 문자
-  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon',
-  'zeta', 'eta', 'theta', 'vartheta', 'iota', 'kappa',
-  'lambda', 'mu', 'nu', 'xi', 'pi', 'varpi',
-  'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon',
-  'phi', 'varphi', 'chi', 'psi', 'omega',
-  'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi',
-  'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega',
-  // 기호
-  'infty', 'cdot', 'cdots', 'ldots', 'ddots', 'vdots',
-  'times', 'div', 'pm', 'mp', 'ast', 'star', 'circ', 'bullet',
-  'leq', 'geq', 'neq', 'approx', 'equiv', 'sim', 'simeq', 'cong',
-  'propto', 'perp', 'parallel', 'angle',
-  'subset', 'supset', 'subseteq', 'supseteq', 'cup', 'cap',
-  'in', 'notin', 'ni', 'forall', 'exists', 'nexists',
-  'nabla', 'partial', 'prime',
-  'rightarrow', 'leftarrow', 'Rightarrow', 'Leftarrow',
-  'leftrightarrow', 'Leftrightarrow', 'uparrow', 'downarrow',
-  'to', 'gets', 'mapsto', 'implies', 'iff',
-  // 괄호/구분자
-  'left', 'right', 'big', 'Big', 'bigg', 'Bigg',
-  'langle', 'rangle', 'lfloor', 'rfloor', 'lceil', 'rceil',
-  'lvert', 'rvert', 'lVert', 'rVert',
-  // 장식
-  'overline', 'underline', 'hat', 'vec', 'bar', 'dot', 'ddot', 'tilde',
-  'widehat', 'widetilde', 'overbrace', 'underbrace',
-  'overrightarrow', 'overleftarrow',
-  // 글꼴/스타일
-  'mathrm', 'mathbf', 'mathit', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak',
-  'boldsymbol', 'text', 'textbf', 'textit', 'textrm',
-  'displaystyle', 'textstyle', 'scriptstyle',
-  // 박스/공간
-  'boxed', 'phantom', 'hspace', 'vspace', 'quad', 'qquad',
-  'not', 'neg', 'cancel', 'bcancel', 'xcancel',
-  // 기타
-  'stackrel', 'overset', 'underset', 'choose', 'binom',
-]);
-
-/**
- * 텍스트 세그먼트(수식 밖)에서 bare LaTeX를 찾아 $...$로 감싼다.
- * 문자 단위 스캐닝으로 중괄호 depth를 추적하여 정확한 범위를 잡는다.
- */
-function wrapBareLatexInSegment(segment: string): string {
-  const result: string[] = [];
-  let i = 0;
-  const len = segment.length;
-
-  while (i < len) {
-    // \ 로 시작하는 LaTeX 명령어 감지
-    if (segment[i] === '\\') {
-      // 명령어 이름 추출
-      let cmdEnd = i + 1;
-      while (cmdEnd < len && /[a-zA-Z]/.test(segment[cmdEnd])) cmdEnd++;
-      const cmd = segment.substring(i + 1, cmdEnd);
-
-      if (cmd && LATEX_COMMANDS.has(cmd)) {
-        // LaTeX 수식 범위를 확장하여 전체 수식을 캡처
-        const mathStart = i;
-        let pos = cmdEnd;
-        pos = expandMathExpression(segment, pos);
-        const mathExpr = segment.substring(mathStart, pos);
-        if (mathExpr.length > 2) {
-          result.push('$', mathExpr, '$');
-        } else {
-          result.push(mathExpr);
-        }
-        i = pos;
-        continue;
-      }
-    }
-
-    // 일반 문자 — 수식 기호 패턴 감지 (예: x^2, a_n, 2^{10})
-    // 영문자/숫자 뒤에 ^나 _가 오면 수식으로 처리
-    if (i < len - 1 && /[a-zA-Z0-9)]/.test(segment[i]) && (segment[i + 1] === '^' || segment[i + 1] === '_')) {
-      const mathStart = i;
-      let pos = i + 1;
-      pos = expandMathExpression(segment, pos);
-      // 앞의 문자까지 포함
-      const mathExpr = segment.substring(mathStart, pos);
-      if (mathExpr.length > 1) {
-        result.push('$', mathExpr, '$');
-        i = pos;
-        continue;
-      }
-    }
-
-    result.push(segment[i]);
-    i++;
-  }
-
-  // 연속된 $...$를 합치기: $A$$B$ → $A B$ (연속 수식 병합)
-  let joined = result.join('');
-  joined = joined.replace(/\$\$(?!\$)/g, (match, offset) => {
-    // $$ 가 display-math가 아닌지 확인 (연속된 inline-math 종료+시작)
-    // 앞뒤 문맥을 봐서 display math가 아닌 경우 공백으로 병합
-    const before = joined[offset - 1];
-    const after = joined[offset + 2];
-    if (before && before !== '\n' && after && after !== '\n') {
-      return ' ';
-    }
-    return match;
-  });
-
-  return joined;
-}
-
-/**
- * 주어진 위치에서 수식 표현식을 확장한다.
- * 중괄호, 첨자(^, _), 후속 LaTeX 명령어, 수식 기호를 포함하여 최대 범위를 반환.
- */
-function expandMathExpression(text: string, pos: number): number {
-  const len = text.length;
-
-  while (pos < len) {
-    const ch = text[pos];
-
-    // 중괄호 블록 {…}
-    if (ch === '{') {
-      pos = skipBraces(text, pos);
-      continue;
-    }
-
-    // 첨자 ^ 또는 _
-    if (ch === '^' || ch === '_') {
-      pos++;
-      if (pos < len) {
-        if (text[pos] === '{') {
-          pos = skipBraces(text, pos);
-        } else if (text[pos] === '\\') {
-          // \command 뒤의 첨자
-          let cmdEnd = pos + 1;
-          while (cmdEnd < len && /[a-zA-Z]/.test(text[cmdEnd])) cmdEnd++;
-          pos = cmdEnd;
-          pos = expandMathExpression(text, pos);
-        } else {
-          // 단일 문자 (예: ^2, _n)
-          pos++;
-        }
-      }
-      continue;
-    }
-
-    // 후속 LaTeX 명령어 (\left, \right, \frac 등)
-    if (ch === '\\') {
-      let cmdEnd = pos + 1;
-      while (cmdEnd < len && /[a-zA-Z]/.test(text[cmdEnd])) cmdEnd++;
-      const cmd = text.substring(pos + 1, cmdEnd);
-      if (cmd && LATEX_COMMANDS.has(cmd)) {
-        pos = cmdEnd;
-        pos = expandMathExpression(text, pos);
-        continue;
-      }
-      // 특수 이스케이프: \, \; \! \> \: 등 spacing
-      if (cmdEnd === pos + 1 && pos + 1 < len) {
-        const nextCh = text[pos + 1];
-        if (',;!>:| '.includes(nextCh) || nextCh === '(' || nextCh === ')' || nextCh === '[' || nextCh === ']') {
-          pos = pos + 2;
-          continue;
-        }
-      }
-      break;
-    }
-
-    // 수식 연결 문자: +, -, =, <, >, (, ), 쉼표, 공백 등은 수식 내부에서 계속
-    if ('+-=<>(),.|!:;'.includes(ch)) {
-      pos++;
-      continue;
-    }
-
-    // 공백 후 수식이 계속되는지 확인
-    if (ch === ' ') {
-      let lookahead = pos + 1;
-      while (lookahead < len && text[lookahead] === ' ') lookahead++;
-      if (lookahead < len) {
-        const nextCh = text[lookahead];
-        // 수식이 이어지는 경우: \command, {, ^, _, 숫자, 수식기호
-        if (nextCh === '\\' || nextCh === '{' || nextCh === '^' || nextCh === '_' ||
-            /[0-9a-zA-Z+\-=<>(]/.test(nextCh)) {
-          // 공백 뒤에 LaTeX 명령어가 있으면 계속
-          if (nextCh === '\\') {
-            let nc = lookahead + 1;
-            while (nc < len && /[a-zA-Z]/.test(text[nc])) nc++;
-            const nextCmd = text.substring(lookahead + 1, nc);
-            if (nextCmd && LATEX_COMMANDS.has(nextCmd)) {
-              pos = lookahead;
-              continue;
-            }
-          }
-          // 공백 뒤 수식 기호가 아니라 한글이면 중단
-          if (/[가-힣]/.test(text[lookahead])) break;
-          // 수식 내 공백 허용
-          pos = lookahead;
-          continue;
-        }
-      }
-      break;
-    }
-
-    // 숫자, 영문자 — 수식 내 변수/상수
-    if (/[0-9a-zA-Z]/.test(ch)) {
-      pos++;
-      continue;
-    }
-
-    // 그 외 (한글 등) — 수식 종료
-    break;
-  }
-
-  return pos;
-}
-
-/** 중괄호 블록을 건너뛴다. {…{…}…} 중첩 지원 */
-function skipBraces(text: string, pos: number): number {
-  if (text[pos] !== '{') return pos;
-  let depth = 1;
-  pos++;
-  while (pos < text.length && depth > 0) {
-    if (text[pos] === '{') depth++;
-    else if (text[pos] === '}') depth--;
-    pos++;
-  }
-  return pos;
-}
+// bare LaTeX 감싸기는 wrap-bare-latex.ts 로 분리 (2026-09-02).
+//   vitest 가 .tsx 를 import 못 해 테스트가 구현을 복제하던 문제 때문 — 그 사이
+//   실제 코드의 결함(구분자 누락)이 테스트를 통과한 채 운영까지 갔다.
 
 /**
  * \begin{tabular}...\end{tabular} 또는 \begin{array}...\end{array} 블록을 파싱하여 table element로 변환

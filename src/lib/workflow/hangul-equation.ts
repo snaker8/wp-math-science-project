@@ -15,6 +15,11 @@ const BACKSLASH_CMDS = [
   'times', 'div', 'pm', 'mp', 'cdot', 'ast', 'star',
   'leq', 'geq', 'neq', 'ne', 'le', 'ge', 'equiv', 'approx', 'sim', 'propto',
   'subset', 'supset', 'subseteq', 'supseteq', 'in', 'notin', 'cup', 'cap',
+  // 집합·합성 (2026-09-02 추가 — 사대부고 실사고). 미변환 시 화면에 글자로 샌다:
+  //   EMPTYSET → "EMPTY SET" · CIRC → "f CIRC f". 실측 emptyset 321건·circ 679건.
+  //   ★ 뒤 경계 (?![A-Za-z]) 라 circle/emptysets 같은 낱말은 안 건드린다.
+  //   ★ bigcirc(○)는 circ(∘)보다 먼저 와야 한다 — BACKSLASH_CMDS 는 순서대로 돌기 때문.
+  'bigcirc', 'emptyset', 'circ',
   // 큰 연산자/극한. ★ 'inf' 제외 — 한글수식 inf = ∞ 기호(1.6b 에서 \infty 로).
   //   \inf(infimum)로 붙이면 화면에 "inf" 글자 노출 (고교 수학에 infimum 없음).
   'sum', 'prod', 'int', 'lim', 'sup', 'max', 'min',
@@ -287,6 +292,41 @@ export function hangulEquationToLatex(script: string): string {
     // 한글수식 inf = 무한대 ∞ (BACKSLASH_CMDS 에 넣으면 \inf=infimum 으로 "inf" 글자 노출.
     //  hwpx export 라운드트립 테스트가 발견. infty 는 lookbehind 로 재매칭 안 됨.)
     .replace(/(?<![\\A-Za-z])inf(?![A-Za-z])/gi, '\\infty ');
+
+  // 1.6c) HWP 전용 집합 기호 + ASCII 화살표 (2026-09-02, 사대부고 실사고)
+  //   한글 수식은 ∩·∪ 를 SMALLINTER/SMALLUNION 으로 내보낸다. LaTeX 에 없는 이름이라
+  //   BACKSLASH_CMDS 로는 못 잡고, 그대로 두면 "A SMALLINTER B" 가 글자로 렌더된다.
+  //   (실측 499건. `SMALLDIFFERENCE`(차집합)도 같은 계열.)
+  //   ★ NSUBSET / notSUBSET = ⊄ ("부분집합이 아니다"). SUBSET(⊂) 과 뜻이 반대라
+  //     먼저 처리한다. 뒤에 대문자 집합명이 붙어 오는 형태도 같이 받는다(`A NSUBSETX`).
+  s = s.replace(/(?<![\\A-Za-z])(?:n|not)SUBSET(?=[^A-Za-z]|[A-Z](?![A-Za-z]))/gi, '\\not\\subset ');
+
+  //   ★ 피연산자가 공백 없이 붙어 오는 형태가 흔하다:
+  //     `A SMALLINTERC`(집합) · `X SUBSETA` · `Q SMALLUNIONS` · `f CIRCf`(함수, 소문자).
+  //     "뒤에 글자가 붙으면 낱말" 규칙만 두면 이게 전부 안 잡힌다(실측 66+19건 잔존).
+  //     **한 글자 + 낱말 경계** 일 때만 피연산자로 보고 떼어낸다 —
+  //     이래야 CIRCLE(=CIRC+LE, 두 글자)은 안 건드린다. 토큰은 대문자 전용(/i 아님).
+  //     ★ BIGCIRC(○)는 합성 ∘ 가 아니다 — 앞 글자 G 때문에 lookbehind 가 막아준다.
+  s = s.replace(
+    /(?<![\\A-Za-z])(SMALLINTER|SMALLUNION|SMALLDIFFERENCE|EMPTYSET|CIRC|SUBSET|SUPSET|NOTIN)([A-Za-z])(?![A-Za-z])/g,
+    (_m, cmd: string, operand: string) => {
+      const map: Record<string, string> = {
+        SMALLINTER: '\\cap', SMALLUNION: '\\cup', SMALLDIFFERENCE: '\\setminus',
+        EMPTYSET: '\\emptyset', CIRC: '\\circ',
+        SUBSET: '\\subset', SUPSET: '\\supset', NOTIN: '\\notin',
+      };
+      return `${map[cmd]} ${operand}`;
+    },
+  );
+
+  s = s
+    .replace(/(?<![\\A-Za-z])smallinter(?![A-Za-z])/gi, '\\cap ')
+    .replace(/(?<![\\A-Za-z])smallunion(?![A-Za-z])/gi, '\\cup ')
+    .replace(/(?<![\\A-Za-z])smalldifference(?![A-Za-z])/gi, '\\setminus ')
+    // 함수 정의역 표기 `f : X -> X`. 순서 주의 — `<->` 를 `->` 보다 먼저 본다.
+    .replace(/<->/g, '\\leftrightarrow ')
+    .replace(/->/g, '\\to ')
+    .replace(/(?<![<-])<-(?!>)/g, '\\leftarrow ');
 
   // 1.7) 연립방정식 cases → \begin{cases} (over/명령 처리 전에)
   s = convertCases(s);

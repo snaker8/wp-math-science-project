@@ -317,7 +317,8 @@ export default function ExamCreatePage() {
     setSchoolError(null);
     (async () => {
       try {
-        const res = await fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' });
+        // ★ limit 명시 — 기본 200 이면 최신 200건만 와서 학교가 63개만 뜬다 (2026-09-02 사고).
+        const res = await fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         const rows = ((data.exams || []) as SchoolExam[]).map((ex) => ({
@@ -406,7 +407,7 @@ export default function ExamCreatePage() {
       try {
         const [bgRes, exRes] = await Promise.all([
           fetch('/api/book-groups', { cache: 'no-store' }),
-          fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' }),
+          fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' }),
         ]);
         const bgData = await bgRes.json().catch(() => ({}));
         if (!bgRes.ok) throw new Error(bgData.error || `book-groups HTTP ${bgRes.status}`);
@@ -437,7 +438,7 @@ export default function ExamCreatePage() {
     setMockError(null);
     (async () => {
       try {
-        const res = await fetch('/api/exams?is_diagnostic=false', { cache: 'no-store' });
+        const res = await fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         // 모의고사 후보 필터 — exam_type 또는 title 패턴 매칭
@@ -615,6 +616,25 @@ export default function ExamCreatePage() {
     if (typeCode) handleSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeCode]);
+
+  // ★ 약점 → 출제 인계 — 처방 화면에서 넘어온 유형을 그대로 받아 바로 검색한다.
+  //   `?typeCode=MS07-04-02&typeName=…&diff=3,4,5`
+  //   typeCode 가 세팅되면 위 effect 가 검색을 돌리므로 여기선 값만 심는다.
+  //   ★ useSearchParams 를 안 쓴다 — Next 14 에서 Suspense 경계가 없으면 빌드가 CSR 로 떨어진다.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get('typeCode');
+    if (!code) return;
+    setTypeName(q.get('typeName') || code);
+    const diffs = (q.get('diff') || '')
+      .split(',')
+      .map((d) => parseInt(d, 10))
+      .filter((d) => Number.isFinite(d) && d >= 1 && d <= 10);
+    if (diffs.length) setSelectedDiffs(new Set(diffs));
+    setTypeCode(code);   // 맨 마지막 — 이게 검색 트리거다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toPickedProblem = (p: ProblemRow): PickedProblem => {
     const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;

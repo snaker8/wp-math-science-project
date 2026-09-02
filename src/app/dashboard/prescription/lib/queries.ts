@@ -83,11 +83,47 @@ export async function getMathsecrNode(code: string): Promise<MathsecrNode | null
 // 진단 세션 · 문항 조회 (diagnostics 스키마)
 // ───────────────────────────────────────────────────────────────
 
+// ───────────────────────────────────────────────────────────────
+// ★ 신원 병합 — 한 학생이 id 두 개를 갖는다
+// ───────────────────────────────────────────────────────────────
+//
+// 진단·채점 데이터의 student_id 는 `users.id` 일 수도, `roster_students.id` 일 수도 있다.
+// 명단(roster)으로 등록해 채점한 뒤 정식 학생으로 승격하면 두 id 가 생기고,
+// **데이터는 옛 roster id 에 남는다.**
+//
+// 사고 (2026-09-02): 처방 화면이 승격된 user id 로만 조회해서, 실제로 106건이 있는
+// 학생인데 "데이터가 아직 없습니다" 로 보였다. 전체 63명·3,950건이 안 보이고 있었다.
+// 진단을 아무리 해도 약점 화면이 비어 있던 원인.
+//
+// 서버 라우트(api/students/[studentId]/analytics)는 이미 같은 병합을 한다 —
+// 이 화면만 빠져 있었다. 정책을 맞춘다.
+
+/** studentId 와 같은 사람을 가리키는 모든 id (자기 자신 + 연결된 roster + 승격된 user). */
+async function resolveStudentIds(studentId: string): Promise<string[]> {
+  const ids = new Set<string>([studentId]);
+  // (1) 이 user 로 승격된 roster 들 — 데이터가 여기 남아 있다
+  const { data: rosters } = await pub()
+    .from('roster_students')
+    .select('id')
+    .eq('promoted_user_id', studentId);
+  for (const r of (rosters ?? []) as Array<{ id: string }>) ids.add(r.id);
+  // (2) 반대로 studentId 자체가 roster id 인 경우 → 승격된 user id 도 포함
+  const { data: self } = await pub()
+    .from('roster_students')
+    .select('promoted_user_id')
+    .eq('id', studentId)
+    .maybeSingle();
+  const promoted = (self as { promoted_user_id: string | null } | null)?.promoted_user_id;
+  if (promoted) ids.add(promoted);
+  return Array.from(ids);
+}
+
 export async function getStudentSessions(studentId: string): Promise<DiagnosisSession[]> {
+  const ids = await resolveStudentIds(studentId);   // ★ 신원 병합
   const { data, error } = await diag()
     .from('sessions')
     .select('*')
-    .eq('student_id', studentId)
+    .in('student_id', ids)
     .order('conducted_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as unknown as DiagnosisSession[];
@@ -99,10 +135,11 @@ export async function getStudentSessions(studentId: string): Promise<DiagnosisSe
  * (시험지 제목은 public.exams 에서 일괄 매핑 → mathflat_sheet_name 자리에 노출)
  */
 export async function getStudentPrintSessions(studentId: string): Promise<DiagnosisSession[]> {
+  const ids = await resolveStudentIds(studentId);   // ★ 신원 병합
   const { data, error } = await diag()
     .from('print_sessions')
     .select('id, exam_id, session_type, round_number, issued_at, completed_at, duration_minutes')
-    .eq('student_id', studentId)
+    .in('student_id', ids)
     .order('issued_at', { ascending: false });
   if (error) throw error;
   const rows = (data ?? []) as Array<{
@@ -133,19 +170,29 @@ export async function getStudentPrintSessions(studentId: string): Promise<Diagno
 }
 
 export async function getStudentNodeStatus(studentId: string): Promise<StudentNodeStatus[]> {
+  const ids = await resolveStudentIds(studentId);   // ★ 신원 병합 — 위 주석 참고
   const { data, error } = await diag()
     .from('student_node_status')
     .select('*')
-    .eq('student_id', studentId);
+    .in('student_id', ids);
   if (error) throw error;
-  return (data ?? []) as unknown as StudentNodeStatus[];
+  const rows = (data ?? []) as unknown as StudentNodeStatus[];
+  if (ids.length === 1) return rows;
+  // ★ 두 id 에 같은 유형이 있으면 숙달 막대가 두 번 세어진다 → 최근 것만 남긴다.
+  const latest = new Map<string, StudentNodeStatus>();
+  for (const r of rows) {
+    const prev = latest.get(r.mathsecr_code);
+    if (!prev || (r.updated_at ?? '') > (prev.updated_at ?? '')) latest.set(r.mathsecr_code, r);
+  }
+  return Array.from(latest.values());
 }
 
 export async function getStudentHeatmap(studentId: string): Promise<MathsecrHeatmapRow[]> {
+  const ids = await resolveStudentIds(studentId);   // ★ 신원 병합
   const { data, error } = await diag()
     .from('v_student_mathsecr_heatmap')
     .select('*')
-    .eq('student_id', studentId)
+    .in('student_id', ids)
     .order('subject_code')
     .order('level1_code');
   if (error) throw error;
@@ -167,10 +214,11 @@ export async function getStudentErrorProfile(studentId: string): Promise<Array<{
   cnt: number;
   pct: number;
 }>> {
+  const ids = await resolveStudentIds(studentId);   // ★ 신원 병합
   const { data, error } = await diag()
     .from('v_student_error_profile')
     .select('*')
-    .eq('student_id', studentId);
+    .in('student_id', ids);
   if (error) throw error;
   return (data ?? []) as unknown as Array<{ error_cause: ErrorCause; cnt: number; pct: number }>;
 }

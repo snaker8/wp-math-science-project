@@ -79,3 +79,6 @@ insane-design/*/phase1/
 # 일괄 적재 드라이런 리포트 (실행 시 생성 — 커밋 대상 아님)
 scripts/import-report-*.txt
 scripts/_tmp-*
+
+# 일괄 교정 스크립트가 뜨는 원본 백업 — 문제 본문이 들어 있고 크다. 복구용 로컬 파일.
+scripts/.backup-*.json
