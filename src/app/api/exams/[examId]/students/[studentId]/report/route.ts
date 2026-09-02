@@ -337,17 +337,25 @@ export async function GET(
       const { data: srRows } = await supabaseAdmin
         .schema('diagnostics')
         .from('session_results')
-        .select('sequence_number, is_correct, teacher_note')
+        .select('sequence_number, is_correct, teacher_note, awarded_points, max_points')
         .eq('session_id', ps.id);
       for (const sr of (srRows ?? []) as Array<{
         sequence_number: number;
         is_correct: boolean;
         teacher_note: string | null;
+        awarded_points: number | null;
+        max_points: number | null;
       }>) {
         if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue;
         const qn = qNumBySeqNum.get(sr.sequence_number);
         if (qn == null || itemBySeq.has(qn)) continue;
-        itemBySeq.set(qn, { isCorrect: sr.is_correct, note: null });
+        // ★ 부분점수 — 아래 채점 계산이 옛 `partial:획득/만점` 형식을 읽는다.
+        //   B 는 숫자 컬럼이라 같은 형식으로 만들어 넘긴다. (2026-09-02 이관)
+        const note =
+          sr.awarded_points != null && sr.max_points != null && sr.max_points > 0
+            ? `partial:${sr.awarded_points}/${sr.max_points}`
+            : null;
+        itemBySeq.set(qn, { isCorrect: sr.is_correct, note });
       }
     }
   }

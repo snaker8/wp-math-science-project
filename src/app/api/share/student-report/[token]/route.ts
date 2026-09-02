@@ -12,6 +12,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { findGradingSession } from '@/lib/diagnostics/find-session';
 
 export const runtime = 'nodejs';
 
@@ -44,32 +45,25 @@ export async function GET(
     return NextResponse.json({ error: 'Supabase admin 미설정' }, { status: 500 });
   }
 
-  type SessionRow = {
-    id: string;
-    exam_id: string;
-    student_id: string;
-    conducted_at: string | null;
-    ai_comment_json: Record<string, unknown> | null;
-    teacher_comment_json: Record<string, unknown> | null;
-  };
 
   // ── 토큰 해석 — 라인 A: sessions.share_token (레거시) ──
+  //   ★ 여기서 A 를 보는 건 **이미 학부모에게 나간 옛 링크(12건)를 살리기 위해서**다.
+  //     이 조회로는 exam_id·student_id 만 가져오고, 리포트 내용은 전부 B 에서 읽는다.
+  //     (A 의 채점 기록은 B 로 옮겨졌다 — A 를 또 읽으면 옛 값이 새 값을 덮는다)
+  //   session_type 을 못박지 않는다 — 토큰이 EX 가 아닌 세션에 붙어 있어도 링크는 살아야 한다.
   const { data: sessions } = await supabaseAdmin
     .schema('diagnostics')
     .from('sessions')
-    .select(
-      'id, exam_id, student_id, conducted_at, ai_comment_json, teacher_comment_json'
-    )
+    .select('id, exam_id, student_id')
     .eq('share_token', token)
-    .eq('session_type', 'EX')
     .limit(1);
 
-  let session = sessions?.[0] as SessionRow | undefined;
-  let examId = session?.exam_id ?? null;
-  let baseStudentId = session?.student_id ?? null;
+  const legacy = sessions?.[0] as { id: string; exam_id: string; student_id: string } | undefined;
+  let examId = legacy?.exam_id ?? null;
+  let baseStudentId = legacy?.student_id ?? null;
 
   // ── 라인 B: parent_share_tokens(report_kind='exam') ──
-  if (!session) {
+  if (!legacy) {
     const { data: pstRows } = await supabaseAdmin
       .from('parent_share_tokens')
       .select('student_id, exam_id, is_active, expires_at')
@@ -93,33 +87,13 @@ export async function GET(
     );
   }
 
-  // 신원 병합 (user↔roster) — report/route.ts 와 동일 규칙
-  const identityIds = new Set<string>([baseStudentId]);
-  {
-    const { data: rosterSelf } = await supabaseAdmin
-      .from('roster_students').select('promoted_user_id').eq('id', baseStudentId).maybeSingle();
-    const pu = (rosterSelf as { promoted_user_id: string | null } | null)?.promoted_user_id;
-    if (pu) identityIds.add(pu);
-    const { data: rostersForUser } = await supabaseAdmin
-      .from('roster_students').select('id').eq('promoted_user_id', baseStudentId);
-    for (const r of (rostersForUser ?? []) as Array<{ id: string }>) identityIds.add(r.id);
-  }
+  // ★ 신원 병합(user↔roster)은 findGradingSession 안에서 한다.
+  //   여기서 또 하면 같은 규칙이 두 군데로 갈라진다.
 
-  // 라인 B 토큰으로 들어온 경우에도 EX 세션이 있으면 items·AI 코멘트에 활용
-  if (!session) {
-    const { data: exSessions } = await supabaseAdmin
-      .schema('diagnostics')
-      .from('sessions')
-      .select(
-        'id, exam_id, student_id, conducted_at, ai_comment_json, teacher_comment_json'
-      )
-      .eq('exam_id', examId)
-      .in('student_id', Array.from(identityIds))
-      .eq('session_type', 'EX')
-      .order('conducted_at', { ascending: false })
-      .limit(1);
-    session = exSessions?.[0] as SessionRow | undefined;
-  }
+  // ── 채점 세션 — B라인 단일 (2026-09-02)
+  //   옛 코드는 A(sessions) + session_type='EX' 로 찾아서, QR 로만 채점한 학생은
+  //   **AI·교사 코멘트가 통째로 비어** 나갔다. 학부모가 보는 화면이라 티가 크다.
+  const graded = await findGradingSession(supabaseAdmin, examId, baseStudentId);
 
   // 시험 정보
   const { data: exam } = await supabaseAdmin
@@ -289,46 +263,37 @@ export async function GET(
     { isCorrect: boolean; note: string | null }
   >();
 
-  // 라인 A — EX 세션 items (seq = qNum)
-  if (session) {
-    const { data: items } = await supabaseAdmin
-      .schema('diagnostics')
-      .from('items')
-      .select('seq, mathsecr_code, is_correct, note')
-      .eq('session_id', session.id);
-    for (const it of items ?? []) {
-      const tt = it as { seq: number; is_correct: boolean; note: string | null };
-      itemBySeq.set(tt.seq, { isCorrect: tt.is_correct, note: tt.note });
-    }
-  }
-
-  // 라인 B — QR/인쇄 수동 채점 (print_sessions + session_results).
-  //   EX items 에 없는 문항만 채움(중복 방지). sequence_number → qNum 매핑. 자동채점 보류 제외.
+  // ★ 2026-09-02 — A(items) 읽기를 없앴다.
+  //   A 의 채점 기록은 마이그레이션으로 B(session_results)에 **이미 들어 있다.**
+  //   둘 다 읽으면 옛 A 값이 새 B 값을 덮는다(먼저 넣은 쪽이 이김).
+  //   실제로 compute-report 에서 양쪽을 더해 문항 수가 2배로 나온 사고가 있었다.
   {
-    const { data: psRows } = await supabaseAdmin
-      .schema('diagnostics')
-      .from('print_sessions')
-      .select('id, completed_at')
-      .eq('exam_id', examId)
-      .in('student_id', Array.from(identityIds))
-      .order('completed_at', { ascending: false, nullsFirst: false })
-      .limit(1);
-    const ps = (psRows ?? [])[0] as { id: string } | undefined;
+    const ps = graded ? { id: graded.id } : undefined;
     if (ps) {
       const { data: srRows } = await supabaseAdmin
         .schema('diagnostics')
         .from('session_results')
-        .select('sequence_number, is_correct, teacher_note')
+        .select('sequence_number, is_correct, teacher_note, awarded_points, max_points')
         .eq('session_id', ps.id);
       for (const sr of (srRows ?? []) as Array<{
         sequence_number: number;
         is_correct: boolean;
         teacher_note: string | null;
+        awarded_points: number | null;
+        max_points: number | null;
       }>) {
         if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue;
         const qn = qNumBySeqNum.get(sr.sequence_number);
         if (qn == null || itemBySeq.has(qn)) continue;
-        itemBySeq.set(qn, { isCorrect: sr.is_correct, note: null });
+        // ★ 부분점수 — 옛 A라인은 `partial:획득/만점` 을 note 에 넣어 뒀고, 아래 채점 계산이
+        //   그 형식을 읽는다. B 는 숫자 컬럼(awarded/max)이라 같은 형식으로 만들어 넘긴다.
+        //   (마이그레이션 때 부분점수가 안 넘어와 258문항이 만점/0점으로 뭉개져 있던 걸
+        //    2026-09-02 에 A 원본에서 채웠다.)
+        const note =
+          sr.awarded_points != null && sr.max_points != null && sr.max_points > 0
+            ? `partial:${sr.awarded_points}/${sr.max_points}`
+            : null;
+        itemBySeq.set(qn, { isCorrect: sr.is_correct, note });
       }
     }
   }
@@ -497,8 +462,8 @@ export async function GET(
     cognitiveDomainStats,
     reportStyle,
     // 학부모용은 반 백분위·시계열 추이 제외 (학원 데이터 보호)
-    aiComment: session?.ai_comment_json ?? null,
-    teacherComment: session?.teacher_comment_json ?? null,
+    aiComment: (graded?.aiComment as Record<string, unknown> | null) ?? null,
+    teacherComment: (graded?.teacherComment as Record<string, unknown> | null) ?? null,
   });
 
   // suppress unused
