@@ -617,6 +617,25 @@ export default function ExamCreatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeCode]);
 
+  // ★ 약점 → 출제 인계 — 처방 화면에서 넘어온 유형을 그대로 받아 바로 검색한다.
+  //   `?typeCode=MS07-04-02&typeName=…&diff=3,4,5`
+  //   typeCode 가 세팅되면 위 effect 가 검색을 돌리므로 여기선 값만 심는다.
+  //   ★ useSearchParams 를 안 쓴다 — Next 14 에서 Suspense 경계가 없으면 빌드가 CSR 로 떨어진다.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get('typeCode');
+    if (!code) return;
+    setTypeName(q.get('typeName') || code);
+    const diffs = (q.get('diff') || '')
+      .split(',')
+      .map((d) => parseInt(d, 10))
+      .filter((d) => Number.isFinite(d) && d >= 1 && d <= 10);
+    if (diffs.length) setSelectedDiffs(new Set(diffs));
+    setTypeCode(code);   // 맨 마지막 — 이게 검색 트리거다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toPickedProblem = (p: ProblemRow): PickedProblem => {
     const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
     const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;

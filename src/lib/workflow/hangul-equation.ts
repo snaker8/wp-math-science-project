@@ -15,6 +15,10 @@ const BACKSLASH_CMDS = [
   'times', 'div', 'pm', 'mp', 'cdot', 'ast', 'star',
   'leq', 'geq', 'neq', 'ne', 'le', 'ge', 'equiv', 'approx', 'sim', 'propto',
   'subset', 'supset', 'subseteq', 'supseteq', 'in', 'notin', 'cup', 'cap',
+  // 집합·합성 (2026-09-02 추가 — 사대부고 실사고). 미변환 시 화면에 글자로 샌다:
+  //   EMPTYSET → "EMPTY SET" · CIRC → "f CIRC f". 실측 emptyset 321건·circ 679건.
+  //   ★ 뒤 경계 (?![A-Za-z]) 라 circle/emptysets 같은 낱말은 안 건드린다.
+  'emptyset', 'circ',
   // 큰 연산자/극한. ★ 'inf' 제외 — 한글수식 inf = ∞ 기호(1.6b 에서 \infty 로).
   //   \inf(infimum)로 붙이면 화면에 "inf" 글자 노출 (고교 수학에 infimum 없음).
   'sum', 'prod', 'int', 'lim', 'sup', 'max', 'min',
@@ -287,6 +291,19 @@ export function hangulEquationToLatex(script: string): string {
     // 한글수식 inf = 무한대 ∞ (BACKSLASH_CMDS 에 넣으면 \inf=infimum 으로 "inf" 글자 노출.
     //  hwpx export 라운드트립 테스트가 발견. infty 는 lookbehind 로 재매칭 안 됨.)
     .replace(/(?<![\\A-Za-z])inf(?![A-Za-z])/gi, '\\infty ');
+
+  // 1.6c) HWP 전용 집합 기호 + ASCII 화살표 (2026-09-02, 사대부고 실사고)
+  //   한글 수식은 ∩·∪ 를 SMALLINTER/SMALLUNION 으로 내보낸다. LaTeX 에 없는 이름이라
+  //   BACKSLASH_CMDS 로는 못 잡고, 그대로 두면 "A SMALLINTER B" 가 글자로 렌더된다.
+  //   (실측 499건. `SMALLDIFFERENCE`(차집합)도 같은 계열.)
+  s = s
+    .replace(/(?<![\\A-Za-z])smallinter(?![A-Za-z])/gi, '\\cap ')
+    .replace(/(?<![\\A-Za-z])smallunion(?![A-Za-z])/gi, '\\cup ')
+    .replace(/(?<![\\A-Za-z])smalldifference(?![A-Za-z])/gi, '\\setminus ')
+    // 함수 정의역 표기 `f : X -> X`. 순서 주의 — `<->` 를 `->` 보다 먼저 본다.
+    .replace(/<->/g, '\\leftrightarrow ')
+    .replace(/->/g, '\\to ')
+    .replace(/(?<![<-])<-(?!>)/g, '\\leftarrow ');
 
   // 1.7) 연립방정식 cases → \begin{cases} (over/명령 처리 전에)
   s = convertCases(s);

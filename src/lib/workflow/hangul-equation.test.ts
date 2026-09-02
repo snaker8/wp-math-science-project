@@ -112,3 +112,64 @@ describe('hangulEquationToLatex — n제곱근(root/of) · 글루 스타일토�
     expect(renders(hangulEquationToLatex('{x ^{2} +x-1=0}{{:'))).toBe(true);
   });
 });
+
+// ============================================================================
+// 회귀 — 2026-09-02 사대부고(23-1-2-M 수학하) 실사고
+//
+// 한글 수식의 집합·합성 기호가 변환표에 없어 **글자 그대로 화면에 샜다.**
+//   EMPTYSET     → "EMPTY SET"        (실측 321건)
+//   SMALLINTER   → "A SMALLINTER B"   (실측 499건)
+//   CIRC         → "f CIRC f"         (실측 679건)
+//   f : X -> X   → "X - > X"
+//
+// ★ 이 계열은 한 번 새면 자산화된 전 코퍼스에 그대로 박힌다 — 낱말 오탐도 같이 고정한다.
+// ============================================================================
+describe('hangulEquationToLatex — 집합·합성 기호 (사대부고)', () => {
+  it('EMPTYSET → \\emptyset', () => {
+    const out = hangulEquationToLatex('EMPTYSET SUBSET S');
+    expect(out).toContain('\\emptyset');
+    expect(out).not.toMatch(/(?<!\\)emptyset/i);   // 백슬래시 없는 맨 토큰이 남으면 화면에 글자로 샌다
+    expect(renders(out)).toBe(true);
+  });
+
+  it('SMALLINTER / SMALLUNION → \\cap / \\cup', () => {
+    const out = hangulEquationToLatex('A ^{C} SMALLINTER B SMALLUNION C');
+    expect(out).toContain('\\cap');
+    expect(out).toContain('\\cup');
+    expect(out).not.toMatch(/SMALL(INTER|UNION)/i);
+    expect(renders(out)).toBe(true);
+  });
+
+  it('CIRC → \\circ (합성함수)', () => {
+    const out = hangulEquationToLatex('left ( f CIRC g CIRC f right ) left ( 3 right )');
+    expect(out).toContain('\\circ');
+    expect(out).not.toMatch(/(?<!\\)CIRC/i);
+    expect(renders(out)).toBe(true);
+  });
+
+  it('-> → \\to (함수 정의역 표기)', () => {
+    const out = hangulEquationToLatex('f : X -> X');
+    expect(out).toContain('\\to');
+    expect(out).not.toContain('->');
+    expect(renders(out)).toBe(true);
+  });
+
+  it('<-> 는 \\leftrightarrow — -> 보다 먼저 잡힌다', () => {
+    const out = hangulEquationToLatex('A <-> B');
+    expect(out).toContain('\\leftrightarrow');
+    expect(out).not.toContain('\\to ');
+  });
+
+  // ★ 오탐 방지 — 낱말 속 철자는 건드리지 않는다
+  it('circle / emptysets 같은 낱말은 안 건드린다', () => {
+    expect(hangulEquationToLatex('circle')).not.toContain('\\circ');
+    expect(hangulEquationToLatex('emptysets')).not.toContain('\\emptyset');
+  });
+
+  it('이미 백슬래시가 붙은 것을 두 번 바꾸지 않는다', () => {
+    expect(hangulEquationToLatex('\\circ')).toBe('\\circ');
+    const deg = hangulEquationToLatex('30 DEG');
+    expect(deg).toContain('^{\\circ}');
+    expect(deg).not.toContain('\\\\circ');
+  });
+});
