@@ -60,6 +60,67 @@ describe('수식 라운드트립 (내보내기 → 가져오기 역변환, 구�
   }
 });
 
+// ============================================================================
+// 중첩 중괄호 (2026-09-02 회귀) — "명령이 통째로 사라지던" 클래스
+// ----------------------------------------------------------------------------
+// 인자를 정규식 `[^{}]*(?:\{[^{}]*\}[^{}]*)*` 로 잡으면 중첩 1단까지만 센다.
+// 2단 이상이면 매칭이 실패하고, 남은 명령을 "잔여 LaTeX 정리"가 지워버려
+// 근호·분수·윗줄이 **조용히 없어진 채** 시험지가 인쇄됐다.
+// 실측(운영 시험지 200개, 수정 전→후): \sqrt 1,237→0 · \overline 419→1 · \dfrac 90→0 ·
+// \lim 74→0 · \ln 11→0 · \int 5→0 · \vec 3→0 (eq-dropped-command 총 1,850→12).
+// ============================================================================
+describe('중첩 중괄호 — 명령이 지워지지 않는다', () => {
+  const cases: [string, string][] = [
+    // 2단 중첩 — 바깥 \sqrt 이 통째로 사라지던 대표 입력
+    ['\\sqrt{\\dfrac{1}{\\sqrt{2}}}', 'sqrt {{1} over {sqrt {2}}}'],
+    ['\\sqrt{x^{2}+\\dfrac{1}{y^{2}}}', 'sqrt {x^{2}+{1} over {y^{2}}}'],
+    // 3단 중첩 — 같은 명령이 자기 인자 안에 반복
+    ['\\sqrt{\\sqrt{\\sqrt{2}}}', 'sqrt {sqrt {sqrt {2}}}'],
+    // 분수 안 분수
+    ['\\frac{\\frac{a}{b}}{\\frac{c}{d}}', '{{a} over {b}} over {{c} over {d}}'],
+    ['\\dfrac{1}{\\dfrac{1}{x}+\\dfrac{1}{y}}', '{1} over {{1} over {x}+{1} over {y}}'],
+    ['\\dfrac{\\sqrt{2}}{\\sqrt{3}}', '{sqrt {2}} over {sqrt {3}}'],
+    // n제곱근 + 중첩 인자
+    ['\\sqrt[3]{\\dfrac{1}{8}}', 'root 3 of {{1} over {8}}'],
+    // 악센트 중첩 (윗줄이 한 겹 사라지던 것)
+    ['\\overline{\\overline{AB}}', 'overline {overline {AB}}'],
+    ['\\overline{\\dfrac{1}{2}}', 'overline {{1} over {2}}'],
+    ['\\vec{\\dfrac{a}{b}}', 'vec {{a} over {b}}'],
+    // 인자 안 중첩이 있는 binom (구조가 깨지던 것)
+    ['\\binom{\\frac{n}{2}}{r}', '( matrix {{n} over {2} # r} )'],
+    // 중괄호 없는 근호 — 잔여 정리에 \sqrt 이 지워지던 것
+    ['\\sqrt2', 'sqrt {2}'],
+    ['\\sqrt x', 'sqrt {x}'],
+    // 큰 연산자: `\lim_` 은 `_` 가 word char 라 `\b` 가 안 걸려 명령이 지워졌다 (실측 74건)
+    ['\\lim_{n \\to \\infty} a_{n}', 'lim from {n -> inf} a_{n}'],
+    ['\\sum_{k=1}^{\\frac{n}{2}} k', 'sum from {k=1} to {{n} over {2}} k'],
+    ['\\int_{0}^{\\frac{1}{2}} x dx', 'int from {0} to {{1} over {2}} x dx'],
+    // 함수 이름 뒤에 숫자가 붙는 경우 (`\b` 가 안 걸려 지워지던 것)
+    ['\\ln2', 'ln2'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+    });
+  }
+
+  it('중첩이 깊어도 명령이 소실되지 않는다 (백슬래시 잔재·소실 동시 검사)', () => {
+    const deep = '\\sqrt{\\dfrac{\\sqrt{a+\\dfrac{1}{b}}}{\\overline{\\mathrm{CD}}}}';
+    const out = latexToHWPEquation(deep);
+    expect(out).not.toMatch(/\\/);            // 미변환 백슬래시 잔재 없음
+    expect((out.match(/sqrt/g) || []).length).toBe(2);
+    expect((out.match(/over(?!line)/g) || []).length).toBe(2);
+    expect(out).toContain('overline');
+    // 중괄호 균형 (한글에서 수식이 깨지는 클래스)
+    expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+  });
+
+  it('닫는 중괄호가 없는 원문은 지우지 않고 남긴다 (손실 0 원칙)', () => {
+    // 인자를 못 채우면 치환하지 않는다 — 잘못 잘라내는 것보다 잔재로 남겨 경고받는 게 안전.
+    expect(latexToHWPEquation('\\frac{1}')).toContain('1');
+  });
+});
+
 describe('parseContent 디스플레이 수식 분리', () => {
   it('$$..$$ 는 display=true', () => {
     const segs = parseContent('다음을 계산하시오. $$\\frac{1}{2}+\\frac{1}{3}$$ 답을 쓰시오.');

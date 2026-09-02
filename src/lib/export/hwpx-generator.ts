@@ -217,7 +217,9 @@ export const HWP_EQ_VOCAB = new Set<string>([
 
 // 변환 중 "그냥 지워진" LaTeX 명령 기록 (안전망). generateHWPX 가 시작 시 비우고 끝에 읽는다.
 const _droppedCommands = new Map<string, number>();
-function __droppedCommandsEntries(): Array<[string, number]> { return [..._droppedCommands.entries()]; }
+// ★ export — 경고 sample 은 상위 5개만 담아서 감사에 쓰면 과소 집계된다. 전수 감사가
+//   "무엇이 몇 건 지워졌나"를 정확히 세려면 원본 맵이 필요하다 (generateHWPX 가 호출 시작 시 clear).
+export function __droppedCommandsEntries(): Array<[string, number]> { return [..._droppedCommands.entries()]; }
 // 구조·서식 명령이라 지워지는 게 정상인 것들 — 경고에서 뺀다.
 const DROP_OK = new Set([
   'left', 'right', 'middle', 'displaystyle', 'textstyle', 'scriptstyle', 'limits', 'nolimits',
@@ -297,6 +299,118 @@ export const HWP_SYMBOL_MAP: Record<string, string> = {
   '\\min': 'min', '\\max': 'max', '\\deg': 'deg', '\\bmod': 'mod', '\\mod': 'mod',
 };
 
+// ============================================================================
+// 중괄호 균형 파서 (2026-09-02) — "인자를 정규식으로 잡던" 자리를 전부 대체
+// ----------------------------------------------------------------------------
+// ★ 무엇이 잘못됐나: 인자 패턴 `[^{}]*(?:\{[^{}]*\}[^{}]*)*` 는 **중첩 1단까지만** 센다.
+//   2단 이상(`\sqrt{\dfrac{1}{\sqrt{2}}}`)이면 매칭이 통째로 실패하고, 실패해서 남은
+//   `\sqrt` 는 아래 "남은 LaTeX 명령 정리"가 **지운다** → 근호가 조용히 사라진다.
+//   `\sqrt{\dfrac{1}{\sqrt{2}}}` → `{{1} over {sqrt {2}}}` (바깥 근호 소실).
+//   실측(운영 시험지 200개 .hwpx 생성, 수정 전 → 후):
+//     \sqrt 1,237→0 · \overline 419→1 · \dfrac 90→0 · \lim 74→0 · \ln 11→0 · \int 5→0 · \vec 3→0
+//     (eq-dropped-command 경고 1,850 → 12. 남은 12 는 전부 평문TeX `\over` 11 + 1 — 아래 주석 참고)
+// ★ 왜 균형 파서인가: 중첩 괄호는 정규(regular) 언어가 아니라 정규식으로 셀 수 없다.
+//   깊이를 세며 훑는 수밖에 없다. 같은 문제를 이미 균형 파싱으로 푼 선례:
+//   `src/lib/workflow/hangul-equation.ts` grabBraceForward/convertOver (가져오기 방향).
+// ============================================================================
+
+/** 여는 `{`(start) 에서 정방향으로 균형 잡힌 닫는 `}` 찾기. start 가 `{` 가 아니면 null. */
+function grabBraceForward(s: string, start: number): { end: number; inner: string } | null {
+  if (s[start] !== '{') return null;
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}') { depth--; if (depth === 0) return { end: i + 1, inner: s.slice(start + 1, i) }; }
+  }
+  return null; // 닫는 중괄호 누락(원문 결함) — 원문 유지 (지우지 않는다)
+}
+
+/**
+ * `\cmd{..}{..}` 계열을 **중괄호 균형 파싱**으로 치환.
+ *   - `cmdPattern`: 명령 이름 부분 정규식 (예: `'sqrt'`, `'(?:d|t)?frac'`, `'vec|overrightarrow'`)
+ *   - `argc`: 중괄호 인자 개수. 인자를 못 채우면 **치환하지 않고 원문을 남긴다**
+ *     (지우는 것보다 남기는 게 항상 안전 — 남으면 잔재 스캐너가 경고로 잡는다).
+ *   - `optional`: `\sqrt[3]{x}` 같은 `[..]` 선택 인자 허용.
+ * 치환할 때마다 처음부터 다시 훑는다 → `\sqrt{\sqrt{\sqrt{2}}}` 처럼 **같은 명령이 자기
+ * 인자 안에 또 있는** 경우도 전부 처리된다 (한 번 훑기는 바깥만 바꾸고 안쪽을 놓친다).
+ */
+function replaceBalanced(
+  src: string,
+  cmdPattern: string,
+  argc: number,
+  render: (args: string[], opt: string | null) => string,
+  optional = false,
+): string {
+  const re = new RegExp(`\\\\(?:${cmdPattern})(?![A-Za-z])`, 'g');
+  let s = src;
+  for (let guard = 0; guard < 400; guard++) {
+    re.lastIndex = 0;
+    let hit = false;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) !== null) {
+      let cur = m.index + m[0].length;
+      let opt: string | null = null;
+      if (optional) {
+        let k = cur;
+        while (s[k] === ' ') k++;
+        if (s[k] === '[') {
+          const close = s.indexOf(']', k);
+          if (close > k) { opt = s.slice(k + 1, close); cur = close + 1; }
+        }
+      }
+      const args: string[] = [];
+      for (let a = 0; a < argc; a++) {
+        // ★ 인자 **앞** 공백만 흡수한다. 마지막 인자 **뒤** 공백까지 먹으면
+        //   `\overline{OP} \perp` 가 `overline {OP}bot` 으로 붙어버려 한글이 모르는
+        //   낱말이 된다 (회귀 테스트가 잡음 — 토큰 엉겨붙기는 기존 사고 클래스).
+        let k = cur;
+        while (s[k] === ' ') k++;          // `\overline {AB}` — 명령·중괄호 사이 공백 변형 허용
+        const g = grabBraceForward(s, k);
+        if (!g) break;
+        args.push(g.inner); cur = g.end;
+      }
+      if (args.length < argc) continue;    // 인자 없음/불완전 → 원문 유지, 다음 후보로
+      s = s.slice(0, m.index) + render(args, opt) + s.slice(cur);
+      hit = true;
+      break;                                // 치환 결과 안의 중첩까지 다시 훑는다
+    }
+    if (!hit) break;
+  }
+  return s;
+}
+
+/**
+ * 큰 연산자 `\sum_{..}^{..}` / `\lim_{..}` / `\int_{..}^{..}` → `sum from {..} to {..}`.
+ * ★ 첨자 인자도 균형 파싱 — `\sum_{k=1}^{\frac{n}{2}}` 처럼 첨자에 분수가 들어가면
+ *   기존 `\^\{([^{}]*)\}` 가 실패해 `\sum` 이 통째로 지워졌다 (\lim 74건 실측).
+ * ★ 경계는 `\b` 가 아니라 `(?![A-Za-z])` — `\lim_` 은 `_` 가 word char 라 `\b` 가 **안 걸린다**.
+ *   이게 \lim 삭제의 직접 원인이었다.
+ */
+function replaceBigOp(src: string, cmdPattern: string, hwp: string): string {
+  const re = new RegExp(`\\\\(?:${cmdPattern})(?![A-Za-z])`, 'g');
+  let s = src;
+  for (let guard = 0; guard < 400; guard++) {
+    re.lastIndex = 0;
+    const m = re.exec(s);
+    if (!m) break;
+    let i = m.index + m[0].length;
+    const grabScript = (mark: '_' | '^'): string | null => {
+      if (s[i] !== mark) return null;
+      const g = grabBraceForward(s, i + 1);
+      if (g) { i = g.end; return g.inner; }
+      if (/[A-Za-z0-9]/.test(s[i + 1] || '')) { i += 2; return s[i - 1]; } // \sum_n 처럼 홑글자
+      return null;                                                         // 그 외는 원문 유지
+    };
+    const sub = grabScript('_');
+    const sup = grabScript('^');
+    let out = hwp;
+    if (sub !== null) out += ` from {${sub}}`;
+    if (sup !== null) out += ` to {${sup}}`;
+    s = s.slice(0, m.index) + out + s.slice(i);
+  }
+  return s;
+}
+
 function latexToHWPEquation(latex: string): string {
   let eq = latex.trim();
 
@@ -314,48 +428,45 @@ function latexToHWPEquation(latex: string): string {
   // 이스케이프 리터럴(\% \$ \# \& \_) → 문자 그대로. 미처리 시 한글 수식에 "\%" 노출 (부흥중 "30\%" 실증)
   eq = eq.replace(/\\([%$#&_])/g, '$1');
 
-  // \frac{a}{b} → {a} over {b}  (중첩 대비 반복)
-  for (let i = 0; i < 6; i++) {
-    eq = eq.replace(
-      /\\(?:d|t)?frac\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g,
-      '{$1} over {$2}'
-    );
-  }
+  // \frac{a}{b} → {a} over {b}  (중첩 무제한 — 균형 파싱)
+  eq = replaceBalanced(eq, '(?:d|t)?frac', 2, ([a, b]) => `{${a}} over {${b}}`);
 
   // \sqrt[n]{x} → root n of {x} / \sqrt{x} → sqrt {x}
-  eq = eq.replace(/\\sqrt\[(\d+)\]\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, 'root $1 of {$2}');
-  eq = eq.replace(/\\sqrt\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, 'sqrt {$1}');
-  eq = eq.replace(/\\sqrt\s*(\d)/g, 'sqrt {$1}');
+  eq = replaceBalanced(eq, 'sqrt', 1, ([x], opt) => (opt !== null ? `root ${opt} of {${x}}` : `sqrt {${x}}`), true);
+  // 중괄호 없는 \sqrt2 · \sqrt x — 미처리 시 아래 잔여 정리가 \sqrt 를 지워 근호가 사라진다.
+  eq = eq.replace(/\\sqrt(?![A-Za-z])\s*([A-Za-z0-9])/g, 'sqrt {$1}');
 
   // \log_{b} → log_{b} (공백 없음, 실측 일치)
   // ★ \log 다음이 '_'(word char)라 \b 가 안 걸림 → '_' 먼저 직접 치환
   eq = eq.replace(/\\log_(\w)(?![\w{])/g, 'log_{$1}'); // \log_a → log_{a}
   eq = eq.replace(/\\log_/g, 'log_');                  // \log_{...} → log_{...}
   eq = eq.replace(/\\log/g, 'log');                    // 남은 \log → log
-  eq = eq.replace(/\\ln\b/g, 'ln');
+  // ★ `\b` 대신 `(?![A-Za-z])` — `\ln2` 처럼 뒤에 숫자가 붙으면 `\b` 가 안 걸려 명령이
+  //   통째로 지워졌다 (\ln 11건 실측). 함수 이름 뒤 경계는 "알파벳이 아니면" 이 맞다.
+  eq = eq.replace(/\\ln(?![A-Za-z])/g, 'ln');
 
   // 삼각함수
   for (const fn of ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan']) {
-    eq = eq.replace(new RegExp(`\\\\${fn}\\b`, 'g'), fn);
+    eq = eq.replace(new RegExp(`\\\\${fn}(?![A-Za-z])`, 'g'), fn);
   }
 
   // \lim / \sum / \prod / \int  (from..to)
+  //   ★ `\lim_{x \to 0}` 는 한글 관례대로 화살표 형태를 유지 (아래 일반 규칙보다 먼저).
   eq = eq.replace(/\\lim_\{([^{}]*?)\\to\s*([^{}]*?)\}/g, 'lim from {$1 -> $2}');
-  eq = eq.replace(/\\lim\b/g, 'lim');
-  eq = eq.replace(/\\sum_\{([^{}]*)\}\^\{([^{}]*)\}/g, 'sum from {$1} to {$2}');
-  eq = eq.replace(/\\sum\b/g, 'sum');
-  eq = eq.replace(/\\prod_\{([^{}]*)\}\^\{([^{}]*)\}/g, 'prod from {$1} to {$2}');
-  eq = eq.replace(/\\prod\b/g, 'prod');
-  eq = eq.replace(/\\int_\{([^{}]*)\}\^\{([^{}]*)\}/g, 'int from {$1} to {$2}');
-  eq = eq.replace(/\\int\b/g, 'int');
+  //   나머지는 균형 파싱 — 첨자에 분수·근호가 들어가도 명령이 살아남는다.
+  eq = replaceBigOp(eq, 'lim', 'lim');
+  eq = replaceBigOp(eq, 'sum', 'sum');
+  eq = replaceBigOp(eq, 'prod', 'prod');
+  eq = replaceBigOp(eq, 'int', 'int');
 
   // overline / bar / vec
-  // ★ 인자에 중첩 중괄호 1단 허용 (\sqrt·\frac 과 같은 패턴). `[^{}]*` 만 쓰면
-  //   실데이터에서 압도적으로 흔한 `\overline{\mathrm{AB}}` 를 못 잡아 **윗줄이 조용히
-  //   사라졌다** (검증 샘플 24문제에서 overline 17건·overrightarrow 11건 소실 실측).
-  const ARG1 = '\\{([^{}]*(?:\\{[^{}]*\\}[^{}]*)*)\\}';
+  // ★ 인자를 못 잡으면 **윗줄이 조용히 사라진다** — 실데이터에 압도적으로 흔한
+  //   `\overline{\mathrm{AB}}` 를 놓쳤던 사고(검증 샘플 24문제에서 overline 17건·
+  //   overrightarrow 11건 소실)로 한 번 넓혔고(중첩 1단 허용 정규식), 그것도 부족해
+  //   2026-09-02 균형 파싱으로 교체했다 — `\overline{\overline{AB}}`·`\vec{\dfrac{a}{b}}`
+  //   같은 2단 중첩에서 여전히 매칭이 실패해 악센트가 지워지고 있었다 (운영 200개 419건 실측).
   const accent = (cmds: string, hwp: string) => {
-    eq = eq.replace(new RegExp(`\\\\(?:${cmds})\\s*${ARG1}`, 'g'), `${hwp} {$1}`);
+    eq = replaceBalanced(eq, cmds, 1, ([x]) => `${hwp} {${x}}`);
   };
   accent('overline', 'overline');
   accent('bar', 'bar');
@@ -367,9 +478,9 @@ function latexToHWPEquation(latex: string): string {
   accent('dot', 'dot');
   accent('tilde', 'tilde');
   // \binom{n}{r} — 미매핑 시 `n{r}` 로 깨졌다(16건). 괄호 안 2행 쌓기가 원래 모양.
-  eq = eq.replace(/\\binom\{([^{}]*)\}\{([^{}]*)\}/g, '( matrix {$1 # $2} )');
+  eq = replaceBalanced(eq, 'binom', 2, ([n, r]) => `( matrix {${n} # ${r}} )`);
   // \pmod{n} → (mod n) — 미매핑 시 "mod" 가 사라져 `a equiv b n` 이 됐다(44건).
-  eq = eq.replace(/\\pmod\s*\{([^{}]*)\}/g, '(mod $1)');
+  eq = replaceBalanced(eq, 'pmod', 1, ([n]) => `(mod ${n})`);
 
   // 조각함수: \left\{ \begin{array|aligned|...} ... \right.  → cases { ... }
   //   (aligned 미포함 시 "LEFT { aligned ..." 중괄호 불균형 잔재 — hwpx-audit 발견)
@@ -437,6 +548,10 @@ function latexToHWPEquation(latex: string): string {
   // ★ 여기서 지워지는 명령은 **기호가 통째로 사라진다** — 조용해서 제일 위험하다.
   //   실제로 \circ(1,755건)가 지워져 `90^{\circ}` 가 `90^{}` 로, 도(°)가 없어져 있었다.
   //   지운 명령을 기록해 generateHWPX 가 eq-dropped-command 경고로 올린다.
+  // ★ 남아 있는 삭제 (2026-09-02 실측, 운영 200개 중 11건): 평문TeX 중위 표기 `a \over b`.
+  //   `\over` 는 인자가 앞뒤로 갈린 중위 연산자라 `\cmd{..}` 파서로는 못 잡는다 → 지금은
+  //   지워져 **분수가 통째로 사라진다**. 고치려면 hangul-equation.ts convertOver 처럼
+  //   좌우 균형 역/정방향 grab 이 필요. 별건이라 미착수 (보고만).
   eq = eq.replace(/\\([a-zA-Z]+)\{([^{}]*)\}/g, (_m, cmd: string, inner: string) => {
     _droppedCommands.set(cmd, (_droppedCommands.get(cmd) || 0) + 1);
     return inner;
