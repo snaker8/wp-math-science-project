@@ -275,7 +275,7 @@ export default function ClassHubPage() {
           )}
 
           {tab === 'assignments' && !error && classId && (
-            <AssignmentsTab classId={classId} />
+            <AssignmentsTab classId={classId} studentIds={students.map((s) => s.id)} />
           )}
 
           {tab !== 'students' && tab !== 'assignments' && !error && (

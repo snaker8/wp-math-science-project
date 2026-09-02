@@ -12,8 +12,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Plus, Loader2, ChevronDown, ChevronRight, Trash2, Search, X, ExternalLink,
+  Plus, Sparkles, RotateCcw, Loader2, ChevronDown, ChevronRight, Trash2, Search, X, ExternalLink,
 } from 'lucide-react';
+import { GenerateAssignmentModal, type GenKind } from './GenerateAssignmentModal';
 
 export interface AssignmentStudent {
   id: string;
@@ -58,12 +59,13 @@ function overdue(a: Assignment): boolean {
   return !!a.dueAt && new Date(a.dueAt).getTime() < Date.now() && a.submitted < a.total - a.excused;
 }
 
-export function AssignmentsTab({ classId }: { classId: string }) {
+export function AssignmentsTab({ classId, studentIds }: { classId: string; studentIds: string[] }) {
   const [rows, setRows] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [gen, setGen] = useState<GenKind | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,13 +101,33 @@ export function AssignmentsTab({ classId }: { classId: string }) {
         <p className="text-sm text-content-tertiary">
           {loading ? ' ' : rows.length === 0 ? '아직 낸 과제가 없습니다.' : `과제 ${rows.length}개`}
         </p>
-        <button
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          과제 내기
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 취약·오답은 **채점 기록에서 문제까지 뽑아** 바로 과제가 된다.
+              먼저 시험지를 만들고 나중에 지정하는 흐름은 이 둘엔 어색하다. */}
+          <button
+            onClick={() => setGen('weak')}
+            disabled={studentIds.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-40"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            취약 과제
+          </button>
+          <button
+            onClick={() => setGen('wrong')}
+            disabled={studentIds.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-40"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            오답 과제
+          </button>
+          <button
+            onClick={() => setCreating(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            과제 내기
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -217,6 +239,16 @@ export function AssignmentsTab({ classId }: { classId: string }) {
             );
           })}
         </div>
+      )}
+
+      {gen && (
+        <GenerateAssignmentModal
+          classId={classId}
+          studentIds={studentIds}
+          kind={gen}
+          onClose={() => setGen(null)}
+          onDone={() => { setGen(null); void load(); }}
+        />
       )}
 
       {creating && (
