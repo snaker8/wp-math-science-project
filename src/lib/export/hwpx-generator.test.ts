@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { generateHWPX, latexToHWPEquation, parseContent, sanitizeProblemContent } from './hwpx-generator';
+import { generateHWPX, latexToHWPEquation, parseContent, sanitizeProblemContent, scanHwpxArtifacts, HWP_EQ_VOCAB, HWP_SYMBOL_MAP } from './hwpx-generator';
 import { hangulEquationToLatex } from '../workflow/hangul-equation';
 
 describe('latexToHWPEquation 골든 (실측 기대값)', () => {
@@ -419,5 +419,66 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     const xml = await section0Of(buf);
     expect(xml).not.toContain('<hp:tbl'); // 헤더 미지정 + 흐름 모드 → 표 없음
     expect(xml).toContain('<hp:colPr');
+  });
+});
+
+// ============================================================================
+// 미지 토큰 회귀 (2026-09-02, 고1 도형 12번 실사고)
+//   증상: 화면 "l ∥ m, l ⊥ n" 이 한글 파일에서 "l ∥ m, lperpn" 으로 나왔다.
+//   원인: \perp 를 `perp` 로 매핑했는데 한글 수식 어휘엔 그런 낱말이 없다.
+//         한글은 모르는 낱말을 오류 없이 **그대로 글자로 찍는다** → 조용히 학생에게 나감.
+//   근거: 한글이 스스로 내보낸 수식이 운영 problems 본문에 26건 남아 있다 —
+//         `${\overline{ OP }} BOT {\overline{ OQ }}$` (직각삼각형 POQ). `PERP` 는 0건.
+// ============================================================================
+describe('한글 수식 미지 토큰 (글자로 새는 클래스)', () => {
+  const cases: [string, string][] = [
+    ['l \\perp m', 'l bot m'],                       // ★ 사고 당사자
+    ['l \\parallel m', 'l parallel m'],              // 정상이던 것 — 회귀 감시
+    ['\\overline{OP} \\perp \\overline{OQ}', 'overline {OP} bot overline {OQ}'],
+    ['A \\cap B', 'A smallinter B'],                 // cap/cup 도 한글 어휘가 아니다
+    ['A \\cup B', 'A smallunion B'],
+    // \circ — 미매핑이라 통째로 지워져 도(°)가 사라졌다 (운영 1,755건)
+    ['90^{\\circ}', '90^{circ}'],
+    ['(f \\circ g)(x)', '(f circ g)(x)'],
+    // 아래는 전부 "조용히 삭제" 였던 것들
+    ['\\{ x \\mid x > 0 \\}', 'lbrace x | x > 0 rbrace'],
+    ['\\gcd(a,b)', 'gcd(a,b)'],
+    ['\\det A', 'det A'],
+    ['\\overrightarrow{AB}', 'vec {AB}'],
+    ['a \\equiv b \\pmod{n}', 'a equiv b (mod n)'],
+    ['\\varnothing', 'emptyset'],
+    ['\\not\\subset', 'nsubset'],                    // \not 삭제로 뜻이 뒤집히던 것
+    // 토큰이 엉겨 붙으면 그것도 한글이 모르는 낱말이 된다 (검증 샘플 실측 2건)
+    ['x \\cdots\\cdots y', 'x cdots cdots y'],
+    ['\\overline{\\mathrm{AB}} \\perp \\overline{\\mathrm{CD}}', 'overline {"AB"} bot overline {"CD"}'],
+    ['\\lvert x \\rvert', '| x |'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+      expect(latexToHWPEquation(latex)).not.toMatch(/perp/);
+    });
+  }
+
+  it('변환표 값은 전부 한글 어휘 토큰이거나 알파벳 없는 리터럴이어야 한다 (재발 차단)', () => {
+    const bad: string[] = [];
+    for (const [tex, hwp] of Object.entries(HWP_SYMBOL_MAP)) {
+      for (const w of hwp.match(/[A-Za-z]{2,}/g) || []) {
+        if (!HWP_EQ_VOCAB.has(w)) bad.push(`${tex} → ${hwp} (미지: ${w})`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('scanHwpxArtifacts 가 미지 토큰을 잡는다 (안전망)', () => {
+    const w = scanHwpxArtifacts('<hp:script>l perp m</hp:script>')
+      .find((x) => x.kind === 'eq-unknown-token');
+    expect(w).toBeTruthy();
+    expect(w!.sample).toContain('perp');
+    // 정상 토큰·따옴표 안 원문(\text)은 안 잡는다
+    expect(scanHwpxArtifacts('<hp:script>l bot m</hp:script>')
+      .find((x) => x.kind === 'eq-unknown-token')).toBeUndefined();
+    expect(scanHwpxArtifacts('<hp:script>"직선이다" bot</hp:script>')
+      .find((x) => x.kind === 'eq-unknown-token')).toBeUndefined();
   });
 });

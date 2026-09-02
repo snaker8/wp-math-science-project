@@ -112,6 +112,27 @@ export function scanHwpxArtifacts(sectionXml: string): HwpxArtifactWarning[] {
   }
   if (bs) warns.push({ kind: 'eq-backslash', sample: bsSample, count: bs });
   if (brace) warns.push({ kind: 'eq-brace-unbalanced', sample: brSample, count: brace });
+
+  // ★ 미지 토큰 (2026-09-02 추가) — "한글이 모르는 낱말이 조용히 글자로 찍히는" 클래스.
+  //   `\perp → perp` 오매핑이 백슬래시도 안 남기고 통과해 시험지에 "lperpn" 으로 나갔다.
+  //   eq-backslash 는 백슬래시가 남은 것만 잡아서 이걸 못 봤다.
+  //   판정: 수식 스크립트에서 따옴표("...", \text 원문) 밖의 **소문자 3글자 이상 낱말**이
+  //   어휘(HWP_EQ_VOCAB)에 없으면 미지 토큰. 변수는 보통 1~2글자라 안 걸린다.
+  const unknown = new Map<string, number>();
+  for (const s of scripts) {
+    const plain = s
+      .replace(/&[a-z]+;/g, ' ')
+      .replace(/"[^"]*"/g, ' ');       // \text/\mathrm 로 들어간 한글·영문 원문은 검사 제외
+    for (const m of plain.matchAll(/(?<![A-Za-z])[a-z]{3,}(?![A-Za-z])/g)) {
+      if (!HWP_EQ_VOCAB.has(m[0])) unknown.set(m[0], (unknown.get(m[0]) || 0) + 1);
+    }
+  }
+  if (unknown.size > 0) {
+    const total = [...unknown.values()].reduce((a, b) => a + b, 0);
+    const top = [...unknown.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([w, n]) => `${w}x${n}`).join(',');
+    warns.push({ kind: 'eq-unknown-token', sample: top.slice(0, 50), count: total });
+  }
   return warns;
 }
 
@@ -147,6 +168,134 @@ const COLPR_SINGLE = '<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" co
 //   - \left\{ → LEFT {  /  \right\} → RIGHT }   (제거하지 않음 — 실측은 보존)
 //   - \log_{a} → log_{a}  (공백 없음)
 // ============================================================================
+
+// ============================================================================
+// 한글 수식이 아는 낱말(토큰) 어휘 — 안전망의 기준표
+// ----------------------------------------------------------------------------
+// ★ 왜 필요한가: 한글 수식은 모르는 낱말을 만나면 **오류를 내지 않고 그냥 글자로 찍는다.**
+//   그래서 `\perp → perp` 같은 오매핑이 조용히 통과해 시험지에 "lperpn" 으로 나갔다
+//   (고1 도형 12번, 2026-09-02 대표 보고). 컴파일러도 테스트도 못 잡던 구멍이다.
+// ★ 근거: (1) 한글이 스스로 내보낸 수식이 운영 problems 본문에 남아 있는 실측 토큰
+//   (BOT 26 · SMALLINTER 314 · CIRC 269 · EMPTYSET 147 · RARROW 74 · DIVIDE 23 …),
+//   (2) 가져오기 변환표 hangul-equation.ts BACKSLASH_CMDS (같은 어휘의 반대 방향).
+// ★ 여기 없는 낱말이 수식 스크립트에 나타나면 scanHwpxArtifacts 가 eq-unknown-token 으로
+//   경고한다. 변수(x, AB 같은 대문자 점 이름)는 소문자 3글자 미만이라 안 걸린다.
+export const HWP_EQ_VOCAB = new Set<string>([
+  // 구조
+  'over', 'atop', 'sqrt', 'root', 'of', 'cases', 'matrix', 'pile', 'from', 'to', 'box',
+  'LEFT', 'RIGHT', 'left', 'right', 'lbrace', 'rbrace', 'mid',
+  // 악센트
+  'overline', 'underline', 'bar', 'vec', 'hat', 'dot', 'ddot', 'tilde', 'acute', 'grave', 'check',
+  // 큰 연산자·함수
+  'sum', 'prod', 'int', 'oint', 'lim', 'liminf', 'limsup', 'sup', 'inf', 'max', 'min',
+  'log', 'ln', 'exp', 'det', 'dim', 'ker', 'gcd', 'lcm', 'mod', 'deg', 'arg',
+  'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'sinh', 'cosh', 'tanh',
+  'arcsin', 'arccos', 'arctan',
+  // 연산자
+  'times', 'div', 'divide', 'cdot', 'ast', 'star', 'bullet', 'circ', 'bigcirc',
+  'oplus', 'ominus', 'otimes', 'odot', 'plusminus', 'minusplus',
+  // 관계
+  'approx', 'equiv', 'sim', 'simeq', 'cong', 'propto', 'parallel', 'bot',
+  'll', 'gg', 'prec', 'succ',
+  // 집합·논리
+  'in', 'owns', 'notin', 'subset', 'supset', 'nsubset', 'subseteq', 'supseteq',
+  'smallinter', 'smallunion', 'smalldifference', 'inter', 'union', 'emptyset',
+  'forall', 'exists', 'neg', 'wedge', 'vee', 'setminus',
+  // 기호
+  'partial', 'nabla', 'angle', 'triangle', 'therefore', 'because', 'prime',
+  'cdots', 'ldots', 'vdots', 'ddots', 'dots', 'aleph', 'hbar', 'imath', 'jmath',
+  // 화살표
+  'rarrow', 'larrow', 'lrarrow', 'Rarrow', 'Larrow', 'Lrarrow',
+  'uparrow', 'downarrow', 'updownarrow', 'nearrow', 'nwarrow', 'searrow', 'swarrow',
+  // 그리스 (소문자 토큰만 — 대문자 GAMMA 류는 검사 대상이 아님)
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta',
+  'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi',
+  'rho', 'sigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
+  // 서식
+  'rm', 'it', 'bold', 'roman', 'italic',
+]);
+
+// 변환 중 "그냥 지워진" LaTeX 명령 기록 (안전망). generateHWPX 가 시작 시 비우고 끝에 읽는다.
+const _droppedCommands = new Map<string, number>();
+function __droppedCommandsEntries(): Array<[string, number]> { return [..._droppedCommands.entries()]; }
+// 구조·서식 명령이라 지워지는 게 정상인 것들 — 경고에서 뺀다.
+const DROP_OK = new Set([
+  'left', 'right', 'middle', 'displaystyle', 'textstyle', 'scriptstyle', 'limits', 'nolimits',
+  'quad', 'qquad', 'hspace', 'vspace', 'phantom', 'vphantom', 'hphantom', 'rule', 'strut',
+  'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'large', 'Large', 'small', 'tiny',
+  'hline', 'cline', 'multicolumn', 'multirow', 'begin', 'end', 'label', 'nonumber',
+  'mathrm', 'mathbf', 'mathit', 'mathbb', 'mathcal', 'mathsf', 'mathbin', 'mathop', 'mathrel',
+  'text', 'textbf', 'textit', 'boldsymbol', 'operatorname', 'emph',
+  'caption', 'captionsetup', 'includegraphics', 'textwidth', 'section', 'footnotetext',
+]);
+
+const HWP_GREEK_MAP: Record<string, string> = {
+  '\\alpha': 'alpha', '\\beta': 'beta', '\\gamma': 'gamma', '\\delta': 'delta',
+  '\\epsilon': 'epsilon', '\\varepsilon': 'epsilon', '\\theta': 'theta',
+  '\\lambda': 'lambda', '\\mu': 'mu', '\\nu': 'nu', '\\xi': 'xi',
+  '\\pi': 'pi', '\\rho': 'rho', '\\sigma': 'sigma', '\\tau': 'tau',
+  '\\phi': 'phi', '\\varphi': 'phi', '\\chi': 'chi', '\\psi': 'psi', '\\omega': 'omega',
+  '\\Gamma': 'GAMMA', '\\Delta': 'DELTA', '\\Theta': 'THETA', '\\Lambda': 'LAMBDA',
+  '\\Sigma': 'SIGMA', '\\Pi': 'PI', '\\Phi': 'PHI', '\\Psi': 'PSI', '\\Omega': 'OMEGA',
+};
+
+// ============================================================================
+// LaTeX → 한글 수식 기호 변환표 (모듈 상수 — 회귀 테스트가 값을 어휘와 대조한다)
+//   ★ 값은 반드시 (a) HWP_EQ_VOCAB 에 있는 한글 수식 토큰 이거나
+//     (b) 알파벳이 안 섞인 리터럴(유니코드 기호·연산자) 이어야 한다.
+//   한글이 모르는 낱말을 넣으면 수식 안에 **글자 그대로** 박혀 학생에게 나간다
+//   (perp → "lperpn" 실사고). 새 항목 추가 시 hwpx-generator.test.ts 가 막는다.
+// ============================================================================
+export const HWP_SYMBOL_MAP: Record<string, string> = {
+  '\\times': 'times', '\\div': 'div', '\\pm': '+-', '\\mp': '-+', '\\cdot': 'cdot',
+  '\\leq': '<=', '\\le': '<=', '\\geq': '>=', '\\ge': '>=',
+  '\\neq': '!=', '\\ne': '!=', '\\approx': 'approx', '\\equiv': 'equiv',
+  '\\sim': 'sim', '\\infty': 'inf',
+  '\\in': 'in', '\\notin': 'notin', '\\subset': 'subset', '\\supset': 'supset',
+  '\\cup': 'smallunion', '\\cap': 'smallinter', '\\emptyset': 'emptyset',
+  '\\forall': 'forall', '\\exists': 'exists',
+  // 화살표는 한글 정식 토큰(rarrow 계열)으로 — 에디터 축약형(->)과 렌더 동일하고,
+  // 가져오기(hangul-equation)가 같은 토큰을 처리해 라운드트립 검증 가능.
+  '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
+  '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
+  '\\therefore': 'therefore', '\\because': 'because',
+  // 점열 — 미매핑 시 잔여 명령 정리에서 삭제돼 "y=x-2 ⋯①" 의 ⋯ 소실 (거제여중 3번 실증)
+  '\\cdots': 'cdots', '\\ldots': 'ldots', '\\vdots': 'vdots', '\\ddots': 'ddots', '\\dots': 'ldots',
+  '\\angle': 'angle', '\\triangle': 'triangle',
+  // ★ 수직 ⊥ 은 한글 어휘로 `bot` 이다. `perp` 는 한글이 모르는 낱말 → 수식 안에 글자
+  //   그대로 박혀 "l perp m" 이 `lperpn` 으로 나온다 (고1 도형 12번 실사고, 2026-09-02).
+  //   근거: 한글이 스스로 내보낸 수식이 운영 DB 에 26건 남아 있다 —
+  //   `${\overline{ OP }} BOT {\overline{ OQ }}$` (직각삼각형 POQ). `PERP` 는 0건.
+  '\\parallel': 'parallel', '\\perp': 'bot', '\\prime': "'",
+  // ★ 합집합·교집합도 같은 함정 — 한글 어휘는 smallunion/smallinter 다 (∪/∩ 이항 연산자).
+  //   운영 DB 실측: SMALLINTER 314건 · SMALLUNION 다수 (한글 자체 출력). CAP/CUP 은 0건.
+  //   union/inter 는 큰 연산자(⋃/⋂)라 이항 자리에 쓰면 크기가 어긋난다.
+  '\\setminus': 'smalldifference',
+  // ★ \circ 미매핑 — 잔여 명령 정리에 삭제돼 `90^{\circ}` 가 `90^{}` 로, 도(°)가 통째로
+  //   사라졌다. 운영 본문 1,755건. 한글 어휘 CIRC 실측 269건.
+  '\\circ': 'circ', '\\bigcirc': 'bigcirc',
+  // 아래는 전부 "미매핑 → 조용히 삭제" 였던 것들 (실측 건수는 운영 problems 본문 기준).
+  //   삭제보다 나쁠 수 없으므로 안전하게 채운다.
+  // 세로줄 — 조건제시법 {x | x>0}·절댓값. 미매핑 시 줄이 통째로 사라져 뜻이 깨졌다.
+  '\\mid': '|', '\\vert': '|', '\\lvert': '|', '\\rvert': '|',
+  '\\Vert': 'parallel', '\\lVert': 'parallel', '\\rVert': 'parallel',
+  '\\varnothing': 'emptyset',                      // (15건)
+  '\\ast': 'ast', '\\star': 'star', '\\bullet': 'bullet',
+  '\\partial': 'partial', '\\nabla': 'nabla', '\\propto': 'propto',
+  '\\subseteq': 'subseteq', '\\supseteq': 'supseteq',
+  '\\uparrow': 'uparrow', '\\downarrow': 'downarrow',
+  '\\longrightarrow': 'rarrow', '\\Leftrightarrow': '⇔',
+  '\\lfloor': '⌊', '\\rfloor': '⌋', '\\lceil': '⌈', '\\rceil': '⌉',
+  '\\langle': '〈', '\\rangle': '〉',
+  '\\wedge': '∧', '\\vee': '∨', '\\neg': '¬',
+  '\\oplus': '⊕', '\\ominus': '⊖', '\\otimes': '⊗',
+  '\\frown': '⌢', '\\checkmark': '✓', '\\urcorner': '⌝',
+  '\\geqslant': '>=', '\\leqslant': '<=', '\\nleq': '≰', '\\backsim': '∼',
+  // 함수·연산자 이름 — 백슬래시만 떼면 된다 (한글도 같은 철자를 안다).
+  //   미매핑 시 `\gcd(a,b)` 가 `(a,b)` 로, `\det A` 가 `A` 로 나왔다.
+  '\\gcd': 'gcd', '\\det': 'det', '\\dim': 'dim', '\\ker': 'ker',
+  '\\min': 'min', '\\max': 'max', '\\deg': 'deg', '\\bmod': 'mod', '\\mod': 'mod',
+};
 
 function latexToHWPEquation(latex: string): string {
   let eq = latex.trim();
@@ -201,9 +350,26 @@ function latexToHWPEquation(latex: string): string {
   eq = eq.replace(/\\int\b/g, 'int');
 
   // overline / bar / vec
-  eq = eq.replace(/\\overline\{([^{}]*)\}/g, 'overline {$1}');
-  eq = eq.replace(/\\bar\{([^{}]*)\}/g, 'bar {$1}');
-  eq = eq.replace(/\\vec\{([^{}]*)\}/g, 'vec {$1}');
+  // ★ 인자에 중첩 중괄호 1단 허용 (\sqrt·\frac 과 같은 패턴). `[^{}]*` 만 쓰면
+  //   실데이터에서 압도적으로 흔한 `\overline{\mathrm{AB}}` 를 못 잡아 **윗줄이 조용히
+  //   사라졌다** (검증 샘플 24문제에서 overline 17건·overrightarrow 11건 소실 실측).
+  const ARG1 = '\\{([^{}]*(?:\\{[^{}]*\\}[^{}]*)*)\\}';
+  const accent = (cmds: string, hwp: string) => {
+    eq = eq.replace(new RegExp(`\\\\(?:${cmds})\\s*${ARG1}`, 'g'), `${hwp} {$1}`);
+  };
+  accent('overline', 'overline');
+  accent('bar', 'bar');
+  // ★ \overrightarrow 는 미매핑이라 잔여 명령 정리에서 화살표만 사라지고 `AB` 만 남았다
+  //   (운영 62건) — 벡터 표기가 통째로 소실. vec 은 한글이 아는 토큰이라 안전.
+  accent('vec|overrightarrow', 'vec');
+  // \hat / \dot / \tilde — 미매핑 시 악센트만 조용히 소실
+  accent('hat', 'hat');
+  accent('dot', 'dot');
+  accent('tilde', 'tilde');
+  // \binom{n}{r} — 미매핑 시 `n{r}` 로 깨졌다(16건). 괄호 안 2행 쌓기가 원래 모양.
+  eq = eq.replace(/\\binom\{([^{}]*)\}\{([^{}]*)\}/g, '( matrix {$1 # $2} )');
+  // \pmod{n} → (mod n) — 미매핑 시 "mod" 가 사라져 `a equiv b n` 이 됐다(44건).
+  eq = eq.replace(/\\pmod\s*\{([^{}]*)\}/g, '(mod $1)');
 
   // 조각함수: \left\{ \begin{array|aligned|...} ... \right.  → cases { ... }
   //   (aligned 미포함 시 "LEFT { aligned ..." 중괄호 불균형 잔재 — hwpx-audit 발견)
@@ -221,42 +387,34 @@ function latexToHWPEquation(latex: string): string {
     return `cases {${rows.join(' # ')}}`;
   });
 
-  // 그리스 문자
-  const greekMap: Record<string, string> = {
-    '\\alpha': 'alpha', '\\beta': 'beta', '\\gamma': 'gamma', '\\delta': 'delta',
-    '\\epsilon': 'epsilon', '\\varepsilon': 'epsilon', '\\theta': 'theta',
-    '\\lambda': 'lambda', '\\mu': 'mu', '\\nu': 'nu', '\\xi': 'xi',
-    '\\pi': 'pi', '\\rho': 'rho', '\\sigma': 'sigma', '\\tau': 'tau',
-    '\\phi': 'phi', '\\varphi': 'phi', '\\chi': 'chi', '\\psi': 'psi', '\\omega': 'omega',
-    '\\Gamma': 'GAMMA', '\\Delta': 'DELTA', '\\Theta': 'THETA', '\\Lambda': 'LAMBDA',
-    '\\Sigma': 'SIGMA', '\\Pi': 'PI', '\\Phi': 'PHI', '\\Psi': 'PSI', '\\Omega': 'OMEGA',
+  // 명령 → 한글 토큰 치환 공통부.
+  // ★ 낱말 토큰이 이웃 글자와 **붙지 않게** 한다 — `\cdots\cdots` 가 `cdotscdots` 로 엉겨
+  //   붙으면 한글이 모르는 낱말이 되어 글자 그대로 찍힌다 (검증 샘플 실측 2건).
+  //   붙을 때만 공백을 넣는다 — `x^\circ` 의 `^` 처럼 이웃이 글자가 아니면 그대로 둬야
+  //   지수 묶음(`^{circ}`)이 유지된다.
+  const applyMap = (map: Record<string, string>) => {
+    for (const [tex, hwp] of Object.entries(map)) {
+      const re = new RegExp(tex.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g');
+      eq = eq.replace(re, (_m, offset: number, whole: string) => {
+        const before = whole[offset - 1] || '';
+        const after = whole[offset + _m.length] || '';
+        const lead = /^[A-Za-z]/.test(hwp) && /[A-Za-z0-9]/.test(before) ? ' ' : '';
+        const tail = /[A-Za-z]$/.test(hwp) && /[A-Za-z0-9]/.test(after) ? ' ' : '';
+        return lead + hwp + tail;
+      });
+    }
   };
-  for (const [tex, hwp] of Object.entries(greekMap)) {
-    eq = eq.replace(new RegExp(tex.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g'), hwp);
-  }
 
-  // 수학 기호 ( \le → <= 등, 실측 일치)
-  const symbolMap: Record<string, string> = {
-    '\\times': 'times', '\\div': 'div', '\\pm': '+-', '\\mp': '-+', '\\cdot': 'cdot',
-    '\\leq': '<=', '\\le': '<=', '\\geq': '>=', '\\ge': '>=',
-    '\\neq': '!=', '\\ne': '!=', '\\approx': 'approx', '\\equiv': 'equiv',
-    '\\sim': 'sim', '\\infty': 'inf',
-    '\\in': 'in', '\\notin': 'notin', '\\subset': 'subset', '\\supset': 'supset',
-    '\\cup': 'cup', '\\cap': 'cap', '\\emptyset': 'emptyset',
-    '\\forall': 'forall', '\\exists': 'exists',
-    // 화살표는 한글 정식 토큰(rarrow 계열)으로 — 에디터 축약형(->)과 렌더 동일하고,
-    // 가져오기(hangul-equation)가 같은 토큰을 처리해 라운드트립 검증 가능.
-    '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
-    '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
-    '\\therefore': 'therefore', '\\because': 'because',
-    // 점열 — 미매핑 시 잔여 명령 정리에서 삭제돼 "y=x-2 ⋯①" 의 ⋯ 소실 (거제여중 3번 실증)
-    '\\cdots': 'cdots', '\\ldots': 'ldots', '\\vdots': 'vdots', '\\ddots': 'ddots', '\\dots': 'ldots',
-    '\\angle': 'angle', '\\triangle': 'triangle',
-    '\\parallel': 'parallel', '\\perp': 'perp', '\\prime': "'",
-  };
-  for (const [tex, hwp] of Object.entries(symbolMap)) {
-    eq = eq.replace(new RegExp(tex.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g'), hwp);
-  }
+  // 그리스 문자
+  applyMap(HWP_GREEK_MAP);
+
+  // ★ \not\subset(⊄)·\not\in(∉) — \not 이 미매핑이라 조용히 삭제돼 ⊂/∈ 로 **뜻이 뒤집혔다**(9건).
+  eq = eq.replace(/\\not\s*\\subset(?![a-zA-Z])/g, 'nsubset');
+  eq = eq.replace(/\\not\s*\\in(?![a-zA-Z])/g, 'notin');
+  eq = eq.replace(/\\not\s*=/g, '!=');
+
+  // 수학 기호 ( \le → <= 등, 실측 일치) — 표는 모듈 상수 HWP_SYMBOL_MAP
+  applyMap(HWP_SYMBOL_MAP);
 
   // 구분자: \left\{ \right\} 만 LEFT { RIGHT }(가변 중괄호, 실측에서 렌더됨).
   //   괄호·대괄호·바(( [ |)는 HWP 에서 LEFT ( 가 글자로 깨짐 → \left/\right 만 제거하고 리터럴 구분자 유지.
@@ -276,8 +434,17 @@ function latexToHWPEquation(latex: string): string {
   eq = eq.replace(/\\boxed(?![a-zA-Z])/g, 'box');
 
   // 남은 LaTeX 명령 정리
-  eq = eq.replace(/\\[a-zA-Z]+\{([^{}]*)\}/g, '$1');
-  eq = eq.replace(/\\[a-zA-Z]+/g, '');
+  // ★ 여기서 지워지는 명령은 **기호가 통째로 사라진다** — 조용해서 제일 위험하다.
+  //   실제로 \circ(1,755건)가 지워져 `90^{\circ}` 가 `90^{}` 로, 도(°)가 없어져 있었다.
+  //   지운 명령을 기록해 generateHWPX 가 eq-dropped-command 경고로 올린다.
+  eq = eq.replace(/\\([a-zA-Z]+)\{([^{}]*)\}/g, (_m, cmd: string, inner: string) => {
+    _droppedCommands.set(cmd, (_droppedCommands.get(cmd) || 0) + 1);
+    return inner;
+  });
+  eq = eq.replace(/\\([a-zA-Z]+)/g, (_m, cmd: string) => {
+    _droppedCommands.set(cmd, (_droppedCommands.get(cmd) || 0) + 1);
+    return '';
+  });
 
   // ★ 단일 문자 지수/첨자 중괄호 확정 — `x^2=a` 를 한글이 `^{2=a}` 로 묶어 "2=a 전체가
   //   지수로 올라가는" 사고 (동래여중 5번 (2x-5)^2=a 실증). `^{2}=a` 로 경계 명시.
@@ -1582,6 +1749,7 @@ export async function generateHWPX(
   config: HwpxExamConfig,
 ): Promise<Blob | Buffer> {
   _shapeId = 2000000000;
+  _droppedCommands.clear();
 
   // 강조색 정규화 — 유효 hex 아니면 제거 (headerDeco 가 미주입 bf 를 참조하는 사고 방지)
   if (config.header?.accentColor && !/^#[0-9a-fA-F]{6}$/.test(config.header.accentColor)) {
@@ -1647,6 +1815,13 @@ export async function generateHWPX(
   // ★ 검증 루프 — 잔재 스캔 (파일 생성은 계속, 경고만 전달)
   if (config.onWarnings) {
     const warns = scanHwpxArtifacts(sectionXml);
+    // ★ 수식 변환 중 조용히 지워진 LaTeX 명령 (기호 소실) — 구조·서식 명령은 제외.
+    const dropped = [...__droppedCommandsEntries()].filter(([c]) => !DROP_OK.has(c));
+    if (dropped.length > 0) {
+      const total = dropped.reduce((a, [, n]) => a + n, 0);
+      const top = dropped.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c, n]) => `\\${c}x${n}`).join(',');
+      warns.push({ kind: 'eq-dropped-command', sample: top.slice(0, 50), count: total });
+    }
     if (warns.length > 0) config.onWarnings(warns);
   }
   const prv = problems.map((p) => `${p.number}. ${(p.content || '').replace(/<[^>]*>/g, '').replace(/\\[a-zA-Z]+/g, '').slice(0, 60)}`).join('\r\n');
