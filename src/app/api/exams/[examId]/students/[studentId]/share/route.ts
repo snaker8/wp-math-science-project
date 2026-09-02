@@ -188,6 +188,7 @@ export async function DELETE(
   // 라인 A 토큰 회수
   const sess = await loadSession(examId, identityIds);
   if (sess?.share_token) {
+    const revoked = sess.share_token;
     const { error } = await supabaseAdmin
       .schema('diagnostics')
       .from('sessions')
@@ -196,6 +197,12 @@ export async function DELETE(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    // ★ 마이그레이션이 같은 토큰을 print_sessions 에도 복사해 뒀다 — 같이 지운다.
+    await supabaseAdmin
+      .schema('diagnostics')
+      .from('print_sessions')
+      .update({ share_token: null })
+      .eq('share_token', revoked);
   }
 
   // 라인 B 토큰 회수 (있으면 — 멱등)

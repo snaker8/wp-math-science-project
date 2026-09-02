@@ -192,14 +192,21 @@ export async function DELETE(request: NextRequest) {
   } else {
     const { data: row } = await sb
       .schema('diagnostics' as never)
-      .from('sessions').select('id, student_id').eq('id', ref).maybeSingle();
+      .from('sessions').select('id, student_id, share_token').eq('id', ref).maybeSingle();
     if (!row) return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
     const cluster = await resolveStudentCluster(sb, scope, (row as { student_id: string }).student_id);
     if ('error' in cluster) return cluster.error;
+    const oldToken = (row as { share_token?: string | null }).share_token ?? null;
     const { error } = await sb
       .schema('diagnostics' as never)
       .from('sessions').update({ share_token: null }).eq('id', ref);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // ★ 마이그레이션이 같은 토큰을 print_sessions 에도 복사해 뒀다(실측 11건).
+    //   A 만 지우면 복사본이 남는다 — 지금은 아무도 안 읽지만, 남겨두면 언젠가 살아난다.
+    if (oldToken) {
+      await sb.schema('diagnostics' as never)
+        .from('print_sessions').update({ share_token: null }).eq('share_token', oldToken);
+    }
   }
   return NextResponse.json({ ok: true });
 }
