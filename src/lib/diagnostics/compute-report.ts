@@ -132,39 +132,11 @@ export async function computeComprehensiveReport(
     seqMetaByExam.set(examId, seqMap);
   }
 
-  // ── 4) 학생 세션 + items ──
-  const { data: sessRows } = await sb
-    .schema('diagnostics' as never)
-    .from('sessions')
-    .select('id, exam_id, student_id, conducted_at')
-    .in('student_id', identityIds)
-    .in('exam_id', variantExamIds);
-  const sessions = (sessRows ?? []) as Array<{ id: string; exam_id: string; student_id: string; conducted_at: string | null }>;
-
-  const sessionByVariantExam = new Map<string, { id: string; conducted_at: string | null }>();
-  for (const s of sessions) {
-    const prev = sessionByVariantExam.get(s.exam_id);
-    if (!prev || (s.conducted_at ?? '') > (prev.conducted_at ?? '')) {
-      sessionByVariantExam.set(s.exam_id, { id: s.id, conducted_at: s.conducted_at });
-    }
-  }
-
-  const usedSessionIds = Array.from(sessionByVariantExam.values()).map((v) => v.id);
-  const itemsBySession = new Map<string, Array<{ seq: number; is_correct: boolean; mathsecr_code: string | null }>>();
-  if (usedSessionIds.length > 0) {
-    const { data: itemRows } = await sb
-      .schema('diagnostics' as never)
-      .from('items')
-      .select('session_id, seq, is_correct, mathsecr_code')
-      .in('session_id', usedSessionIds);
-    for (const it of (itemRows ?? []) as Array<{ session_id: string; seq: number; is_correct: boolean; mathsecr_code: string | null }>) {
-      const arr = itemsBySession.get(it.session_id) ?? [];
-      arr.push({ seq: it.seq, is_correct: it.is_correct, mathsecr_code: it.mathsecr_code });
-      itemsBySession.set(it.session_id, arr);
-    }
-  }
-
-  // ── 4b) QR/인쇄 채점(print_sessions + session_results) 합산 ──
+  // ── 4) 채점 결과 (B라인 단일) ──
+  //   ★ 2026-09-02: 예전엔 A(sessions+items)와 B 를 **그냥 이어붙였다**(`[...diagItems, ...qrItems]`).
+  //     A 를 B 로 이관한 뒤로는 같은 문항이 두 번 세어져 **학부모가 보는 종합 리포트의
+  //     총 문항수가 2배**가 됐다. A 는 이미 B 안에 있으므로 B 하나만 읽는다.
+  //   (원본 A 테이블은 그대로 남아 있다 — 읽지 않을 뿐)
   //   print_sessions.student_id = users.id(uuid). identityIds 로 매칭(roster id 는 매칭 안 됨).
   //   단원코드는 session_problems.type_code_snapshot(=MS 코드). 보류 문항 제외(히트맵과 동일).
   const qrItemsByExam = new Map<string, Array<{ seq: number; is_correct: boolean; mathsecr_code: string | null }>>();
@@ -189,7 +161,10 @@ export async function computeComprehensiveReport(
     if (psIds.length > 0) {
       const [{ data: srRows }, { data: spRows }] = await Promise.all([
         sb.schema('diagnostics' as never).from('session_results')
-          .select('session_id, sequence_number, is_correct, teacher_note').in('session_id', psIds),
+          // ★ mathsecr_code 를 같이 읽는다. 이관된 옛 채점분(A→B)은 session_problems 가 없어
+          //   type_code_snapshot 이 전부 비어 있다 — 그것만 보면 단원별 집계가 통째로 빈다.
+          //   (실측: 이관 2,721문항 중 type_code_snapshot 0건 / mathsecr_code 2,721건)
+          .select('session_id, sequence_number, is_correct, teacher_note, mathsecr_code').in('session_id', psIds),
         sb.schema('diagnostics' as never).from('session_problems')
           .select('session_id, sequence_number, type_code_snapshot').in('session_id', psIds),
       ]);
@@ -197,11 +172,12 @@ export async function computeComprehensiveReport(
       for (const sp of (spRows ?? []) as Array<{ session_id: string; sequence_number: number; type_code_snapshot: string | null }>) {
         codeBySessionSeq.set(`${sp.session_id}:${sp.sequence_number}`, sp.type_code_snapshot ?? null);
       }
-      for (const sr of (srRows ?? []) as Array<{ session_id: string; sequence_number: number; is_correct: boolean; teacher_note: string | null }>) {
+      for (const sr of (srRows ?? []) as Array<{ session_id: string; sequence_number: number; is_correct: boolean; teacher_note: string | null; mathsecr_code: string | null }>) {
         if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외
         const examId = examBySession.get(sr.session_id);
         if (!examId) continue;
-        const code = codeBySessionSeq.get(`${sr.session_id}:${sr.sequence_number}`) ?? null;
+        // 채점 당시 유형코드 우선 → 없으면 출제 시점 스냅샷
+        const code = sr.mathsecr_code ?? codeBySessionSeq.get(`${sr.session_id}:${sr.sequence_number}`) ?? null;
         const arr = qrItemsByExam.get(examId) ?? [];
         arr.push({ seq: sr.sequence_number, is_correct: sr.is_correct, mathsecr_code: code });
         qrItemsByExam.set(examId, arr);
@@ -219,12 +195,8 @@ export async function computeComprehensiveReport(
   let overallCorrect = 0;
 
   for (const e of variantExams) {
-    const sess = sessionByVariantExam.get(e.id);
     const variant = examIdToVariant.get(e.id) ?? null;
-    // 진단/엑셀(items) + QR(session_results) 합산
-    const diagItems = sess ? (itemsBySession.get(sess.id) ?? []) : [];
-    const qrItems = qrItemsByExam.get(e.id) ?? [];
-    const items = [...diagItems, ...qrItems];
+    const items = qrItemsByExam.get(e.id) ?? [];
     if (items.length === 0) {
       variantResults.push({ variant, examId: e.id, title: e.title, graded: false, total: 0, correct: 0, pct: null, items: [], byUnit: [] });
       continue;

@@ -301,6 +301,25 @@ export function hangulEquationToLatex(script: string): string {
   //     먼저 처리한다. 뒤에 대문자 집합명이 붙어 오는 형태도 같이 받는다(`A NSUBSETX`).
   s = s.replace(/(?<![\\A-Za-z])(?:n|not)SUBSET(?=[^A-Za-z]|[A-Z](?![A-Za-z]))/gi, '\\not\\subset ');
 
+  //   ★ 한글이 스스로 내보내는 대문자 토큰들 (2026-09-02 전수 조사).
+  //     한글 어휘와 LaTeX 이름이 달라 그대로 두면 글자로 샌다.
+  //     ★★ 대문자 전용(/i 아님). 소문자까지 잡으면 본문 단어를 망가뜨린다.
+  s = s
+    .replace(/(?<![\\A-Za-z])BOT(?![A-Za-z])/g, '\\perp ')          // ⊥ (한글은 perp 가 아니라 BOT)
+    .replace(/(?<![\\A-Za-z])DIVIDE(?![A-Za-z])/g, '\\div ')        // ÷
+    .replace(/(?<![\\A-Za-z])CENTIGRADE(?![A-Za-z])/g, '^{\\circ}\\mathrm{C}')  // ℃
+    .replace(/(?<![\\A-Za-z])RARROW(?![A-Za-z])/g, '\\rightarrow ')  // →
+    .replace(/(?<![\\A-Za-z])LARROW(?![A-Za-z])/g, '\\leftarrow ')
+    .replace(/(?<![\\A-Za-z])LRARROW(?![A-Za-z])/g, '\\leftrightarrow ')
+    // Δ — 증분(`x+ DELTA x`)과 사용자정의 연산자 양쪽에 쓰인다. 한글 뜻 그대로 대문자 델타.
+    .replace(/(?<![\\A-Za-z])DELTA(?![A-Za-z])/g, '\\Delta ')
+    // `rm ABC` (로만체 지정)가 붙어 RMABC 로 나온다. 스타일이라 글자만 남기면 된다.
+    //   `삼각형 $O RMA B$` → `삼각형 $OAB$` · `$RMABC$` → `$ABC$`
+    //   ★ 한 글자만 잡으면 `RMABC` 가 그대로 남는다 → 대문자 연속 전체를 받는다.
+    //     `\mathrm{` 은 앞 글자(h) 때문에 lookbehind 가 막아준다.
+    .replace(/(?<![\\A-Za-z])RM([A-Z]+)(?![a-z])/g, '$1')
+    .replace(/(?<![\\A-Za-z])rm([A-Z]+)(?![a-z])/g, '$1');
+
   //   ★ 피연산자가 공백 없이 붙어 오는 형태가 흔하다:
   //     `A SMALLINTERC`(집합) · `X SUBSETA` · `Q SMALLUNIONS` · `f CIRCf`(함수, 소문자).
   //     "뒤에 글자가 붙으면 낱말" 규칙만 두면 이게 전부 안 잡힌다(실측 66+19건 잔존).

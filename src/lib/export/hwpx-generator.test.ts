@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { generateHWPX, latexToHWPEquation, parseContent, sanitizeProblemContent } from './hwpx-generator';
+import { generateHWPX, latexToHWPEquation, parseContent, sanitizeProblemContent, scanHwpxArtifacts, HWP_EQ_VOCAB, HWP_SYMBOL_MAP } from './hwpx-generator';
 import { hangulEquationToLatex } from '../workflow/hangul-equation';
 
 describe('latexToHWPEquation 골든 (실측 기대값)', () => {
@@ -58,6 +58,167 @@ describe('수식 라운드트립 (내보내기 → 가져오기 역변환, 구�
       expect(back).not.toMatch(/(?<!\\)\b(?:over|of|rpile|lpile|cpile)\b/);
     });
   }
+});
+
+// ============================================================================
+// 중첩 중괄호 (2026-09-02 회귀) — "명령이 통째로 사라지던" 클래스
+// ----------------------------------------------------------------------------
+// 인자를 정규식 `[^{}]*(?:\{[^{}]*\}[^{}]*)*` 로 잡으면 중첩 1단까지만 센다.
+// 2단 이상이면 매칭이 실패하고, 남은 명령을 "잔여 LaTeX 정리"가 지워버려
+// 근호·분수·윗줄이 **조용히 없어진 채** 시험지가 인쇄됐다.
+// 실측(운영 시험지 200개, 수정 전→후): \sqrt 1,237→0 · \overline 419→1 · \dfrac 90→0 ·
+// \lim 74→0 · \ln 11→0 · \int 5→0 · \vec 3→0 (eq-dropped-command 총 1,850→12).
+// ============================================================================
+describe('중첩 중괄호 — 명령이 지워지지 않는다', () => {
+  const cases: [string, string][] = [
+    // 2단 중첩 — 바깥 \sqrt 이 통째로 사라지던 대표 입력
+    ['\\sqrt{\\dfrac{1}{\\sqrt{2}}}', 'sqrt {{1} over {sqrt {2}}}'],
+    ['\\sqrt{x^{2}+\\dfrac{1}{y^{2}}}', 'sqrt {x^{2}+{1} over {y^{2}}}'],
+    // 3단 중첩 — 같은 명령이 자기 인자 안에 반복
+    ['\\sqrt{\\sqrt{\\sqrt{2}}}', 'sqrt {sqrt {sqrt {2}}}'],
+    // 분수 안 분수
+    ['\\frac{\\frac{a}{b}}{\\frac{c}{d}}', '{{a} over {b}} over {{c} over {d}}'],
+    ['\\dfrac{1}{\\dfrac{1}{x}+\\dfrac{1}{y}}', '{1} over {{1} over {x}+{1} over {y}}'],
+    ['\\dfrac{\\sqrt{2}}{\\sqrt{3}}', '{sqrt {2}} over {sqrt {3}}'],
+    // n제곱근 + 중첩 인자
+    ['\\sqrt[3]{\\dfrac{1}{8}}', 'root 3 of {{1} over {8}}'],
+    // 악센트 중첩 (윗줄이 한 겹 사라지던 것)
+    ['\\overline{\\overline{AB}}', 'overline {overline {AB}}'],
+    ['\\overline{\\dfrac{1}{2}}', 'overline {{1} over {2}}'],
+    ['\\vec{\\dfrac{a}{b}}', 'vec {{a} over {b}}'],
+    // 인자 안 중첩이 있는 binom (구조가 깨지던 것)
+    ['\\binom{\\frac{n}{2}}{r}', '( matrix {{n} over {2} # r} )'],
+    // 중괄호 없는 근호 — 잔여 정리에 \sqrt 이 지워지던 것
+    ['\\sqrt2', 'sqrt {2}'],
+    ['\\sqrt x', 'sqrt {x}'],
+    // 큰 연산자: `\lim_` 은 `_` 가 word char 라 `\b` 가 안 걸려 명령이 지워졌다 (실측 74건)
+    ['\\lim_{n \\to \\infty} a_{n}', 'lim from {n -> inf} a_{n}'],
+    ['\\sum_{k=1}^{\\frac{n}{2}} k', 'sum from {k=1} to {{n} over {2}} k'],
+    ['\\int_{0}^{\\frac{1}{2}} x dx', 'int from {0} to {{1} over {2}} x dx'],
+    // 함수 이름 뒤에 숫자가 붙는 경우 (`\b` 가 안 걸려 지워지던 것)
+    ['\\ln2', 'ln2'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+    });
+  }
+
+  it('중첩이 깊어도 명령이 소실되지 않는다 (백슬래시 잔재·소실 동시 검사)', () => {
+    const deep = '\\sqrt{\\dfrac{\\sqrt{a+\\dfrac{1}{b}}}{\\overline{\\mathrm{CD}}}}';
+    const out = latexToHWPEquation(deep);
+    expect(out).not.toMatch(/\\/);            // 미변환 백슬래시 잔재 없음
+    expect((out.match(/sqrt/g) || []).length).toBe(2);
+    expect((out.match(/over(?!line)/g) || []).length).toBe(2);
+    expect(out).toContain('overline');
+    // 중괄호 균형 (한글에서 수식이 깨지는 클래스)
+    expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+  });
+
+  it('닫는 중괄호가 없는 원문은 지우지 않고 남긴다 (손실 0 원칙)', () => {
+    // 인자를 못 채우면 치환하지 않는다 — 잘못 잘라내는 것보다 잔재로 남겨 경고받는 게 안전.
+    expect(latexToHWPEquation('\\frac{1}')).toContain('1');
+  });
+});
+
+// ============================================================================
+// 평문TeX 중위 분수 `a \over b` (2026-09-02)
+//   `\over` 는 인자가 앞뒤로 갈린 중위 연산자라 `\cmd{..}` 파서가 못 잡아 그냥 지워졌다
+//   → `1\over3` 이 `13` 이 되는 등 **분수가 통째로 소실** (운영 200개 중 11건 / 코퍼스 27건).
+//   기대값은 추측이 아니라 TeX 정의(= KaTeX 실측)를 그대로 따른다: `\over` 는 자기가 속한
+//   그룹 전체를 분자/분모로 가른다. `y=` 가 분자에 들어가는 건 원문 결함이며 화면·인쇄도 동일.
+// ============================================================================
+describe('중위 \\over — 분수가 사라지지 않는다', () => {
+  const cases: [string, string][] = [
+    // 그룹이 수식 전체 — TeX 정의대로 앞부분이 통째로 분자 (KaTeX 실측 일치)
+    ['y= 2x+1 \\over x+1', '{y= 2x+1} over {x+1}'],
+    ['f(x)= x+1 \\over x-1', '{f(x)= x+1} over {x-1}'],
+    // 공백 없이 붙은 형태 — 고치기 전엔 `13` 으로 숫자가 엉겨붙었다
+    ['1\\over3', '{1} over {3}'],
+    // \left…\right 가 그룹 경계 (KaTeX 실측 일치 — 괄호는 분수 밖에 남는다)
+    ['\\left( a+b \\over c \\right)', '( {a+b} over {c} )'],
+    // 행 구분자 `#` 가 셀 경계 — 앞 행을 분자로 삼키지 않는다
+    [
+      '\\begin{cases} a=1 \\\\ b= 2 \\over 3 \\end{cases}',
+      'cases {a=1 # {b= 2} over {3}}',
+    ],
+    // 원문이 `$` 조기 종료로 잘려 중괄호 짝이 없는 형태 (실데이터 다수) — 짝 없는 중괄호만
+    // 떼고 분수는 살린다. 안 그러면 분수 자체가 사라진다.
+    ['{ 2} \\over { 3', '{{ 2}} over {3}'],
+    ['2 \\over { rootx+1', '{2} over {rootx+1}'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+    });
+  }
+
+  it('분자/분모 어느 쪽이든 비면 치환하지 않는다 (인자 못 채우면 원문 유지 원칙)', () => {
+    // 분자가 빈 실데이터(`...=0{\over { p s o m a t h }}`) — 분수가 아니므로 손대지 않는다.
+    const out = latexToHWPEquation('x=0{\\over { psomath }}');
+    expect(out).not.toMatch(/\bover\b/);   // 엉터리 분수를 만들어내지 않는다
+  });
+
+  it('\\over 를 고쳐도 중괄호 균형이 깨지지 않는다', () => {
+    for (const src of ['{ 2} \\over { 3', 'a \\over b', '\\left( a+b \\over c \\right)', '{{\\beta }}} \\over {\\alpha }']) {
+      const out = latexToHWPEquation(src);
+      expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+    }
+  });
+});
+
+// ============================================================================
+// 구분자 LEFT/RIGHT 짝 (2026-09-02) — eq-brace-unbalanced 270건의 실제 원인
+//   조건제시법 집합 안에 한글을 넣으면 수식이 산문을 사이에 두고 둘로 쪼개진다:
+//     `$A= \left\{ x | x \right.$는 $125$ 이하의 자연수$\left. \right\}$`
+//   원문은 정상 LaTeX 이고 KaTeX 도 제대로 그린다. 그런데 예전 변환은 앞 조각에 `LEFT {` 만,
+//   뒤 조각에 `RIGHT }` 만 남겨 한글에서 중괄호가 안 닫혔다 (실측 LEFT만 144 + RIGHT만 96).
+//   ★ `RIGHT .` 는 한글 실측 근거가 0건이라 쓰지 않는다 → 짝 없는 쪽은 리터럴 lbrace/rbrace.
+// ============================================================================
+describe('LEFT/RIGHT 는 짝이 맞을 때만 낸다', () => {
+  const cases: [string, string][] = [
+    // 정상 짝 — 기존 동작 유지 (가변 중괄호)
+    ['\\left\\{ x | x \\ge 1 \\right\\}', 'LEFT { x | x >= 1 RIGHT }'],
+    ['\\left\\{ 1, 4, 5 \\right\\}', 'LEFT { 1, 4, 5 RIGHT }'],
+    // 상대가 빈 구분자 `\right.` — LEFT 만 남으면 안 되므로 리터럴 중괄호로
+    ['\\left\\{ x | x \\right.', 'lbrace x | x'],
+    // 짝의 반대쪽 조각 — RIGHT 만 남으면 안 된다
+    ['\\left. \\right\\}', 'rbrace'],
+    // 짝 없는 `\left\{` (뒤 조각이 아예 없는 실데이터)
+    ['U= \\left\\{ x | x', 'U= lbrace x | x'],
+    // 중첩 — 안쪽은 짝이 맞고 바깥은 안 맞는 경우, 안쪽만 LEFT/RIGHT
+    ['A= \\left\\{ 1 \\right\\} , B= \\left\\{ y | y', 'A= LEFT { 1 RIGHT } , B= lbrace y | y'],
+    // 괄호·대괄호는 기존대로 리터럴만 (한글에서 LEFT ( 는 글자로 깨진다)
+    ['\\left( x+1 \\right)', '( x+1 )'],
+    ['\\left[ 0, 1 \\right]', '[ 0, 1 ]'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+    });
+  }
+
+  it('한글 산문으로 쪼개진 조건제시법 집합 — 조각마다 중괄호가 균형이다 (실데이터 284b33fc)', () => {
+    const raw = '두 집합 $A= \\left\\{ x | x \\right .$는 $125$ 이하의 자연수$\\left. \\right\\}$ 에 대하여';
+    for (const seg of parseContent(raw)) {
+      if (seg.type !== 'equation') continue;
+      expect((seg.value.match(/\{/g) || []).length).toBe((seg.value.match(/\}/g) || []).length);
+      expect((seg.value.match(/LEFT/g) || []).length).toBe((seg.value.match(/RIGHT/g) || []).length);
+    }
+  });
+
+  it('LEFT 를 냈으면 RIGHT 도 낸다 (짝 불변식)', () => {
+    for (const src of [
+      '\\left\\{ x \\right.',
+      '\\left. x \\right\\}',
+      '\\left\\{ \\left\\{ a \\right\\} , b \\right.',
+      '\\left\\{ a \\right\\} \\cup \\left\\{ b \\right.',
+    ]) {
+      const out = latexToHWPEquation(src);
+      expect((out.match(/LEFT/g) || []).length).toBe((out.match(/RIGHT/g) || []).length);
+      expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+    }
+  });
 });
 
 describe('parseContent 디스플레이 수식 분리', () => {
@@ -419,5 +580,66 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     const xml = await section0Of(buf);
     expect(xml).not.toContain('<hp:tbl'); // 헤더 미지정 + 흐름 모드 → 표 없음
     expect(xml).toContain('<hp:colPr');
+  });
+});
+
+// ============================================================================
+// 미지 토큰 회귀 (2026-09-02, 고1 도형 12번 실사고)
+//   증상: 화면 "l ∥ m, l ⊥ n" 이 한글 파일에서 "l ∥ m, lperpn" 으로 나왔다.
+//   원인: \perp 를 `perp` 로 매핑했는데 한글 수식 어휘엔 그런 낱말이 없다.
+//         한글은 모르는 낱말을 오류 없이 **그대로 글자로 찍는다** → 조용히 학생에게 나감.
+//   근거: 한글이 스스로 내보낸 수식이 운영 problems 본문에 26건 남아 있다 —
+//         `${\overline{ OP }} BOT {\overline{ OQ }}$` (직각삼각형 POQ). `PERP` 는 0건.
+// ============================================================================
+describe('한글 수식 미지 토큰 (글자로 새는 클래스)', () => {
+  const cases: [string, string][] = [
+    ['l \\perp m', 'l bot m'],                       // ★ 사고 당사자
+    ['l \\parallel m', 'l parallel m'],              // 정상이던 것 — 회귀 감시
+    ['\\overline{OP} \\perp \\overline{OQ}', 'overline {OP} bot overline {OQ}'],
+    ['A \\cap B', 'A smallinter B'],                 // cap/cup 도 한글 어휘가 아니다
+    ['A \\cup B', 'A smallunion B'],
+    // \circ — 미매핑이라 통째로 지워져 도(°)가 사라졌다 (운영 1,755건)
+    ['90^{\\circ}', '90^{circ}'],
+    ['(f \\circ g)(x)', '(f circ g)(x)'],
+    // 아래는 전부 "조용히 삭제" 였던 것들
+    ['\\{ x \\mid x > 0 \\}', 'lbrace x | x > 0 rbrace'],
+    ['\\gcd(a,b)', 'gcd(a,b)'],
+    ['\\det A', 'det A'],
+    ['\\overrightarrow{AB}', 'vec {AB}'],
+    ['a \\equiv b \\pmod{n}', 'a equiv b (mod n)'],
+    ['\\varnothing', 'emptyset'],
+    ['\\not\\subset', 'nsubset'],                    // \not 삭제로 뜻이 뒤집히던 것
+    // 토큰이 엉겨 붙으면 그것도 한글이 모르는 낱말이 된다 (검증 샘플 실측 2건)
+    ['x \\cdots\\cdots y', 'x cdots cdots y'],
+    ['\\overline{\\mathrm{AB}} \\perp \\overline{\\mathrm{CD}}', 'overline {"AB"} bot overline {"CD"}'],
+    ['\\lvert x \\rvert', '| x |'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+      expect(latexToHWPEquation(latex)).not.toMatch(/perp/);
+    });
+  }
+
+  it('변환표 값은 전부 한글 어휘 토큰이거나 알파벳 없는 리터럴이어야 한다 (재발 차단)', () => {
+    const bad: string[] = [];
+    for (const [tex, hwp] of Object.entries(HWP_SYMBOL_MAP)) {
+      for (const w of hwp.match(/[A-Za-z]{2,}/g) || []) {
+        if (!HWP_EQ_VOCAB.has(w)) bad.push(`${tex} → ${hwp} (미지: ${w})`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('scanHwpxArtifacts 가 미지 토큰을 잡는다 (안전망)', () => {
+    const w = scanHwpxArtifacts('<hp:script>l perp m</hp:script>')
+      .find((x) => x.kind === 'eq-unknown-token');
+    expect(w).toBeTruthy();
+    expect(w!.sample).toContain('perp');
+    // 정상 토큰·따옴표 안 원문(\text)은 안 잡는다
+    expect(scanHwpxArtifacts('<hp:script>l bot m</hp:script>')
+      .find((x) => x.kind === 'eq-unknown-token')).toBeUndefined();
+    expect(scanHwpxArtifacts('<hp:script>"직선이다" bot</hp:script>')
+      .find((x) => x.kind === 'eq-unknown-token')).toBeUndefined();
   });
 });

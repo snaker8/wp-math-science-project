@@ -112,6 +112,27 @@ export function scanHwpxArtifacts(sectionXml: string): HwpxArtifactWarning[] {
   }
   if (bs) warns.push({ kind: 'eq-backslash', sample: bsSample, count: bs });
   if (brace) warns.push({ kind: 'eq-brace-unbalanced', sample: brSample, count: brace });
+
+  // ★ 미지 토큰 (2026-09-02 추가) — "한글이 모르는 낱말이 조용히 글자로 찍히는" 클래스.
+  //   `\perp → perp` 오매핑이 백슬래시도 안 남기고 통과해 시험지에 "lperpn" 으로 나갔다.
+  //   eq-backslash 는 백슬래시가 남은 것만 잡아서 이걸 못 봤다.
+  //   판정: 수식 스크립트에서 따옴표("...", \text 원문) 밖의 **소문자 3글자 이상 낱말**이
+  //   어휘(HWP_EQ_VOCAB)에 없으면 미지 토큰. 변수는 보통 1~2글자라 안 걸린다.
+  const unknown = new Map<string, number>();
+  for (const s of scripts) {
+    const plain = s
+      .replace(/&[a-z]+;/g, ' ')
+      .replace(/"[^"]*"/g, ' ');       // \text/\mathrm 로 들어간 한글·영문 원문은 검사 제외
+    for (const m of plain.matchAll(/(?<![A-Za-z])[a-z]{3,}(?![A-Za-z])/g)) {
+      if (!HWP_EQ_VOCAB.has(m[0])) unknown.set(m[0], (unknown.get(m[0]) || 0) + 1);
+    }
+  }
+  if (unknown.size > 0) {
+    const total = [...unknown.values()].reduce((a, b) => a + b, 0);
+    const top = [...unknown.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([w, n]) => `${w}x${n}`).join(',');
+    warns.push({ kind: 'eq-unknown-token', sample: top.slice(0, 50), count: total });
+  }
   return warns;
 }
 
@@ -148,6 +169,452 @@ const COLPR_SINGLE = '<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" co
 //   - \log_{a} → log_{a}  (공백 없음)
 // ============================================================================
 
+// ============================================================================
+// 한글 수식이 아는 낱말(토큰) 어휘 — 안전망의 기준표
+// ----------------------------------------------------------------------------
+// ★ 왜 필요한가: 한글 수식은 모르는 낱말을 만나면 **오류를 내지 않고 그냥 글자로 찍는다.**
+//   그래서 `\perp → perp` 같은 오매핑이 조용히 통과해 시험지에 "lperpn" 으로 나갔다
+//   (고1 도형 12번, 2026-09-02 대표 보고). 컴파일러도 테스트도 못 잡던 구멍이다.
+// ★ 근거: (1) 한글이 스스로 내보낸 수식이 운영 problems 본문에 남아 있는 실측 토큰
+//   (BOT 26 · SMALLINTER 314 · CIRC 269 · EMPTYSET 147 · RARROW 74 · DIVIDE 23 …),
+//   (2) 가져오기 변환표 hangul-equation.ts BACKSLASH_CMDS (같은 어휘의 반대 방향).
+// ★ 여기 없는 낱말이 수식 스크립트에 나타나면 scanHwpxArtifacts 가 eq-unknown-token 으로
+//   경고한다. 변수(x, AB 같은 대문자 점 이름)는 소문자 3글자 미만이라 안 걸린다.
+export const HWP_EQ_VOCAB = new Set<string>([
+  // 구조
+  'over', 'atop', 'sqrt', 'root', 'of', 'cases', 'matrix', 'pile', 'from', 'to', 'box',
+  'LEFT', 'RIGHT', 'left', 'right', 'lbrace', 'rbrace', 'mid',
+  // 악센트
+  'overline', 'underline', 'bar', 'vec', 'hat', 'dot', 'ddot', 'tilde', 'acute', 'grave', 'check',
+  // 큰 연산자·함수
+  'sum', 'prod', 'int', 'oint', 'lim', 'liminf', 'limsup', 'sup', 'inf', 'max', 'min',
+  'log', 'ln', 'exp', 'det', 'dim', 'ker', 'gcd', 'lcm', 'mod', 'deg', 'arg',
+  'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'sinh', 'cosh', 'tanh',
+  'arcsin', 'arccos', 'arctan',
+  // 연산자
+  'times', 'div', 'divide', 'cdot', 'ast', 'star', 'bullet', 'circ', 'bigcirc',
+  'oplus', 'ominus', 'otimes', 'odot', 'plusminus', 'minusplus',
+  // 관계
+  'approx', 'equiv', 'sim', 'simeq', 'cong', 'propto', 'parallel', 'bot',
+  'll', 'gg', 'prec', 'succ',
+  // 집합·논리
+  'in', 'owns', 'notin', 'subset', 'supset', 'nsubset', 'subseteq', 'supseteq',
+  'smallinter', 'smallunion', 'smalldifference', 'inter', 'union', 'emptyset',
+  'forall', 'exists', 'neg', 'wedge', 'vee', 'setminus',
+  // 기호
+  'partial', 'nabla', 'angle', 'triangle', 'therefore', 'because', 'prime',
+  'cdots', 'ldots', 'vdots', 'ddots', 'dots', 'aleph', 'hbar', 'imath', 'jmath',
+  // 화살표
+  'rarrow', 'larrow', 'lrarrow', 'Rarrow', 'Larrow', 'Lrarrow',
+  'uparrow', 'downarrow', 'updownarrow', 'nearrow', 'nwarrow', 'searrow', 'swarrow',
+  // 그리스 (소문자 토큰만 — 대문자 GAMMA 류는 검사 대상이 아님)
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta',
+  'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi',
+  'rho', 'sigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
+  // 서식
+  'rm', 'it', 'bold', 'roman', 'italic',
+]);
+
+// 변환 중 "그냥 지워진" LaTeX 명령 기록 (안전망). generateHWPX 가 시작 시 비우고 끝에 읽는다.
+const _droppedCommands = new Map<string, number>();
+// ★ export — 경고 sample 은 상위 5개만 담아서 감사에 쓰면 과소 집계된다. 전수 감사가
+//   "무엇이 몇 건 지워졌나"를 정확히 세려면 원본 맵이 필요하다 (generateHWPX 가 호출 시작 시 clear).
+export function __droppedCommandsEntries(): Array<[string, number]> { return [..._droppedCommands.entries()]; }
+// 구조·서식 명령이라 지워지는 게 정상인 것들 — 경고에서 뺀다.
+// ★ export — 전수 감사(scripts/hwpx-audit.ts)가 같은 기준으로 걸러야 숫자가 어긋나지 않는다.
+export const DROP_OK = new Set([
+  'left', 'right', 'middle', 'displaystyle', 'textstyle', 'scriptstyle', 'limits', 'nolimits',
+  'quad', 'qquad', 'hspace', 'vspace', 'phantom', 'vphantom', 'hphantom', 'rule', 'strut',
+  'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'large', 'Large', 'small', 'tiny',
+  'hline', 'cline', 'multicolumn', 'multirow', 'begin', 'end', 'label', 'nonumber',
+  'mathrm', 'mathbf', 'mathit', 'mathbb', 'mathcal', 'mathsf', 'mathbin', 'mathop', 'mathrel',
+  'text', 'textbf', 'textit', 'boldsymbol', 'operatorname', 'emph',
+  'caption', 'captionsetup', 'includegraphics', 'textwidth', 'section', 'footnotetext',
+]);
+
+const HWP_GREEK_MAP: Record<string, string> = {
+  '\\alpha': 'alpha', '\\beta': 'beta', '\\gamma': 'gamma', '\\delta': 'delta',
+  '\\epsilon': 'epsilon', '\\varepsilon': 'epsilon', '\\theta': 'theta',
+  '\\lambda': 'lambda', '\\mu': 'mu', '\\nu': 'nu', '\\xi': 'xi',
+  '\\pi': 'pi', '\\rho': 'rho', '\\sigma': 'sigma', '\\tau': 'tau',
+  '\\phi': 'phi', '\\varphi': 'phi', '\\chi': 'chi', '\\psi': 'psi', '\\omega': 'omega',
+  '\\Gamma': 'GAMMA', '\\Delta': 'DELTA', '\\Theta': 'THETA', '\\Lambda': 'LAMBDA',
+  '\\Sigma': 'SIGMA', '\\Pi': 'PI', '\\Phi': 'PHI', '\\Psi': 'PSI', '\\Omega': 'OMEGA',
+};
+
+// ============================================================================
+// LaTeX → 한글 수식 기호 변환표 (모듈 상수 — 회귀 테스트가 값을 어휘와 대조한다)
+//   ★ 값은 반드시 (a) HWP_EQ_VOCAB 에 있는 한글 수식 토큰 이거나
+//     (b) 알파벳이 안 섞인 리터럴(유니코드 기호·연산자) 이어야 한다.
+//   한글이 모르는 낱말을 넣으면 수식 안에 **글자 그대로** 박혀 학생에게 나간다
+//   (perp → "lperpn" 실사고). 새 항목 추가 시 hwpx-generator.test.ts 가 막는다.
+// ============================================================================
+export const HWP_SYMBOL_MAP: Record<string, string> = {
+  '\\times': 'times', '\\div': 'div', '\\pm': '+-', '\\mp': '-+', '\\cdot': 'cdot',
+  '\\leq': '<=', '\\le': '<=', '\\geq': '>=', '\\ge': '>=',
+  '\\neq': '!=', '\\ne': '!=', '\\approx': 'approx', '\\equiv': 'equiv',
+  '\\sim': 'sim', '\\infty': 'inf',
+  '\\in': 'in', '\\notin': 'notin', '\\subset': 'subset', '\\supset': 'supset',
+  '\\cup': 'smallunion', '\\cap': 'smallinter', '\\emptyset': 'emptyset',
+  '\\forall': 'forall', '\\exists': 'exists',
+  // 화살표는 한글 정식 토큰(rarrow 계열)으로 — 에디터 축약형(->)과 렌더 동일하고,
+  // 가져오기(hangul-equation)가 같은 토큰을 처리해 라운드트립 검증 가능.
+  '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
+  '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
+  '\\therefore': 'therefore', '\\because': 'because',
+  // 점열 — 미매핑 시 잔여 명령 정리에서 삭제돼 "y=x-2 ⋯①" 의 ⋯ 소실 (거제여중 3번 실증)
+  '\\cdots': 'cdots', '\\ldots': 'ldots', '\\vdots': 'vdots', '\\ddots': 'ddots', '\\dots': 'ldots',
+  '\\angle': 'angle', '\\triangle': 'triangle',
+  // ★ 수직 ⊥ 은 한글 어휘로 `bot` 이다. `perp` 는 한글이 모르는 낱말 → 수식 안에 글자
+  //   그대로 박혀 "l perp m" 이 `lperpn` 으로 나온다 (고1 도형 12번 실사고, 2026-09-02).
+  //   근거: 한글이 스스로 내보낸 수식이 운영 DB 에 26건 남아 있다 —
+  //   `${\overline{ OP }} BOT {\overline{ OQ }}$` (직각삼각형 POQ). `PERP` 는 0건.
+  '\\parallel': 'parallel', '\\perp': 'bot', '\\prime': "'",
+  // ★ 합집합·교집합도 같은 함정 — 한글 어휘는 smallunion/smallinter 다 (∪/∩ 이항 연산자).
+  //   운영 DB 실측: SMALLINTER 314건 · SMALLUNION 다수 (한글 자체 출력). CAP/CUP 은 0건.
+  //   union/inter 는 큰 연산자(⋃/⋂)라 이항 자리에 쓰면 크기가 어긋난다.
+  '\\setminus': 'smalldifference',
+  // ★ \circ 미매핑 — 잔여 명령 정리에 삭제돼 `90^{\circ}` 가 `90^{}` 로, 도(°)가 통째로
+  //   사라졌다. 운영 본문 1,755건. 한글 어휘 CIRC 실측 269건.
+  '\\circ': 'circ', '\\bigcirc': 'bigcirc',
+  // 아래는 전부 "미매핑 → 조용히 삭제" 였던 것들 (실측 건수는 운영 problems 본문 기준).
+  //   삭제보다 나쁠 수 없으므로 안전하게 채운다.
+  // 세로줄 — 조건제시법 {x | x>0}·절댓값. 미매핑 시 줄이 통째로 사라져 뜻이 깨졌다.
+  '\\mid': '|', '\\vert': '|', '\\lvert': '|', '\\rvert': '|',
+  '\\Vert': 'parallel', '\\lVert': 'parallel', '\\rVert': 'parallel',
+  '\\varnothing': 'emptyset',                      // (15건)
+  '\\ast': 'ast', '\\star': 'star', '\\bullet': 'bullet',
+  '\\partial': 'partial', '\\nabla': 'nabla', '\\propto': 'propto',
+  '\\subseteq': 'subseteq', '\\supseteq': 'supseteq',
+  '\\uparrow': 'uparrow', '\\downarrow': 'downarrow',
+  '\\longrightarrow': 'rarrow', '\\Leftrightarrow': '⇔',
+  '\\lfloor': '⌊', '\\rfloor': '⌋', '\\lceil': '⌈', '\\rceil': '⌉',
+  '\\langle': '〈', '\\rangle': '〉',
+  '\\wedge': '∧', '\\vee': '∨', '\\neg': '¬',
+  '\\oplus': '⊕', '\\ominus': '⊖', '\\otimes': '⊗',
+  '\\frown': '⌢', '\\checkmark': '✓', '\\urcorner': '⌝',
+  '\\geqslant': '>=', '\\leqslant': '<=', '\\nleq': '≰', '\\backsim': '∼',
+  // 함수·연산자 이름 — 백슬래시만 떼면 된다 (한글도 같은 철자를 안다).
+  //   미매핑 시 `\gcd(a,b)` 가 `(a,b)` 로, `\det A` 가 `A` 로 나왔다.
+  '\\gcd': 'gcd', '\\det': 'det', '\\dim': 'dim', '\\ker': 'ker',
+  '\\min': 'min', '\\max': 'max', '\\deg': 'deg', '\\bmod': 'mod', '\\mod': 'mod',
+};
+
+// ============================================================================
+// 중괄호 균형 파서 (2026-09-02) — "인자를 정규식으로 잡던" 자리를 전부 대체
+// ----------------------------------------------------------------------------
+// ★ 무엇이 잘못됐나: 인자 패턴 `[^{}]*(?:\{[^{}]*\}[^{}]*)*` 는 **중첩 1단까지만** 센다.
+//   2단 이상(`\sqrt{\dfrac{1}{\sqrt{2}}}`)이면 매칭이 통째로 실패하고, 실패해서 남은
+//   `\sqrt` 는 아래 "남은 LaTeX 명령 정리"가 **지운다** → 근호가 조용히 사라진다.
+//   `\sqrt{\dfrac{1}{\sqrt{2}}}` → `{{1} over {sqrt {2}}}` (바깥 근호 소실).
+//   실측(운영 시험지 200개 .hwpx 생성, 수정 전 → 후):
+//     \sqrt 1,237→0 · \overline 419→1 · \dfrac 90→0 · \lim 74→0 · \ln 11→0 · \int 5→0 · \vec 3→0
+//     (eq-dropped-command 경고 1,850 → 12. 남은 12 는 전부 평문TeX `\over` 11 + 1 — 아래 주석 참고)
+// ★ 왜 균형 파서인가: 중첩 괄호는 정규(regular) 언어가 아니라 정규식으로 셀 수 없다.
+//   깊이를 세며 훑는 수밖에 없다. 같은 문제를 이미 균형 파싱으로 푼 선례:
+//   `src/lib/workflow/hangul-equation.ts` grabBraceForward/convertOver (가져오기 방향).
+// ============================================================================
+
+/** 여는 `{`(start) 에서 정방향으로 균형 잡힌 닫는 `}` 찾기. start 가 `{` 가 아니면 null. */
+function grabBraceForward(s: string, start: number): { end: number; inner: string } | null {
+  if (s[start] !== '{') return null;
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}') { depth--; if (depth === 0) return { end: i + 1, inner: s.slice(start + 1, i) }; }
+  }
+  return null; // 닫는 중괄호 누락(원문 결함) — 원문 유지 (지우지 않는다)
+}
+
+/**
+ * `\cmd{..}{..}` 계열을 **중괄호 균형 파싱**으로 치환.
+ *   - `cmdPattern`: 명령 이름 부분 정규식 (예: `'sqrt'`, `'(?:d|t)?frac'`, `'vec|overrightarrow'`)
+ *   - `argc`: 중괄호 인자 개수. 인자를 못 채우면 **치환하지 않고 원문을 남긴다**
+ *     (지우는 것보다 남기는 게 항상 안전 — 남으면 잔재 스캐너가 경고로 잡는다).
+ *   - `optional`: `\sqrt[3]{x}` 같은 `[..]` 선택 인자 허용.
+ * 치환할 때마다 처음부터 다시 훑는다 → `\sqrt{\sqrt{\sqrt{2}}}` 처럼 **같은 명령이 자기
+ * 인자 안에 또 있는** 경우도 전부 처리된다 (한 번 훑기는 바깥만 바꾸고 안쪽을 놓친다).
+ */
+function replaceBalanced(
+  src: string,
+  cmdPattern: string,
+  argc: number,
+  render: (args: string[], opt: string | null) => string,
+  optional = false,
+): string {
+  const re = new RegExp(`\\\\(?:${cmdPattern})(?![A-Za-z])`, 'g');
+  let s = src;
+  for (let guard = 0; guard < 400; guard++) {
+    re.lastIndex = 0;
+    let hit = false;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) !== null) {
+      let cur = m.index + m[0].length;
+      let opt: string | null = null;
+      if (optional) {
+        let k = cur;
+        while (s[k] === ' ') k++;
+        if (s[k] === '[') {
+          const close = s.indexOf(']', k);
+          if (close > k) { opt = s.slice(k + 1, close); cur = close + 1; }
+        }
+      }
+      const args: string[] = [];
+      for (let a = 0; a < argc; a++) {
+        // ★ 인자 **앞** 공백만 흡수한다. 마지막 인자 **뒤** 공백까지 먹으면
+        //   `\overline{OP} \perp` 가 `overline {OP}bot` 으로 붙어버려 한글이 모르는
+        //   낱말이 된다 (회귀 테스트가 잡음 — 토큰 엉겨붙기는 기존 사고 클래스).
+        let k = cur;
+        while (s[k] === ' ') k++;          // `\overline {AB}` — 명령·중괄호 사이 공백 변형 허용
+        const g = grabBraceForward(s, k);
+        if (!g) break;
+        args.push(g.inner); cur = g.end;
+      }
+      if (args.length < argc) continue;    // 인자 없음/불완전 → 원문 유지, 다음 후보로
+      s = s.slice(0, m.index) + render(args, opt) + s.slice(cur);
+      hit = true;
+      break;                                // 치환 결과 안의 중첩까지 다시 훑는다
+    }
+    if (!hit) break;
+  }
+  return s;
+}
+
+// ============================================================================
+// 중위(infix) `a \over b` 파서 (2026-09-02)
+// ----------------------------------------------------------------------------
+// ★ 무엇이 잘못됐나: `\over` 는 인자가 **앞뒤로 갈린** 중위 연산자라 `\cmd{..}` 형태를
+//   보는 replaceBalanced 로는 못 잡는다 → 아래 "남은 LaTeX 명령 정리"가 그냥 지운다.
+//   `1\over3` → `13` · `y= 2x+1 \over x+1` → `y= 2x+1 x+1` (분수가 통째로 소실, 실측).
+//   운영 200개 중 11건 / 전 코퍼스 27건. (`\atop`·`\choose` 는 실측 0건이라 미대응.)
+// ★ 인자 범위는 무엇인가 — **추측하지 않고 TeX 정의를 그대로 따른다**:
+//   `\over` 는 자기가 속한 그룹의 수식 목록을 통째로 분자/분모로 가른다.
+//   KaTeX 실측(2026-09-02)으로 확인 —
+//     `y= 2x+1 \over x+1`            → 분자 `y = 2x+1`      (앞의 `y=` 까지 분자로 들어간다)
+//     `\left( a+b \over c \right)`   → 분자 `a+b`           (\left…\right 가 그룹 경계)
+//     `{ 2} \over { 3`               → KaTeX parse error    (원문 결함)
+//   즉 `y=` 가 분자에 들어가는 건 **우리 변환 버그가 아니라 원문 결함**이고, 화면·인쇄
+//   (KaTeX)도 똑같이 그렇게 그린다. 여기서 "의도는 y = (2x+1)/(x+1) 일 것" 이라고
+//   똑똑하게 굴면 한글 파일만 화면과 달라진다 → 정의대로 간다.
+// ★ 그룹 경계: `{`·`}` / `\left`·`\right` / 행·열 구분자 `#`·`&`(cases·matrix 셀).
+//   `\{`·`\}` 는 리터럴 문자라 그룹이 아니다(이스케이프 판정으로 건너뛴다).
+// ============================================================================
+
+/** s[i] 가 백슬래시로 이스케이프됐는가 (앞선 연속 백슬래시 개수가 홀수) */
+function isEscaped(s: string, i: number): boolean {
+  let n = 0;
+  for (let j = i - 1; j >= 0 && s[j] === '\\'; j--) n++;
+  return n % 2 === 1;
+}
+
+/** 위치 i 에서 `\left`/`\right` 명령이 시작하는가 (`\leftarrow`·`\rightarrow` 는 제외) */
+function delimCmdAt(s: string, i: number): 'left' | 'right' | null {
+  if (s[i] !== '\\' || isEscaped(s, i)) return null;
+  if (s.startsWith('\\left', i) && !/[A-Za-z]/.test(s[i + 5] || '')) return 'left';
+  if (s.startsWith('\\right', i) && !/[A-Za-z]/.test(s[i + 6] || '')) return 'right';
+  return null;
+}
+
+/** `\left` 뒤의 구분자 토큰(`(`·`\{`·`.`·`\langle` …) 을 건너뛴 위치 */
+function skipDelimToken(s: string, pos: number): number {
+  let i = pos;
+  while (s[i] === ' ') i++;
+  if (s[i] === '\\') {
+    i++;
+    if (/[A-Za-z]/.test(s[i] || '')) { while (/[A-Za-z]/.test(s[i] || '')) i++; }
+    else if (s[i] !== undefined) i++;   // `\{` `\}` `\|`
+    return i;
+  }
+  return s[i] !== undefined ? i + 1 : i;
+}
+
+/** idx(=`\over` 위치) 를 감싸는 그룹의 시작 위치 */
+function groupStartBefore(s: string, idx: number): number {
+  let depth = 0;
+  for (let i = idx - 1; i >= 0; i--) {
+    const cmd = delimCmdAt(s, i);
+    if (cmd === 'right') { depth++; continue; }
+    if (cmd === 'left') {
+      if (depth === 0) return skipDelimToken(s, i + 5);
+      depth--; continue;
+    }
+    if (isEscaped(s, i)) continue;
+    const ch = s[i];
+    if (ch === '}') depth++;
+    else if (ch === '{') { if (depth === 0) return i + 1; depth--; }
+    else if (depth === 0 && (ch === '#' || ch === '&')) return i + 1;
+  }
+  return 0;
+}
+
+/** from(=`\over` 다음) 을 감싸는 그룹의 끝 위치 */
+function groupEndAfter(s: string, from: number): number {
+  let depth = 0;
+  for (let i = from; i < s.length; i++) {
+    const cmd = delimCmdAt(s, i);
+    if (cmd === 'left') { depth++; i += 4; continue; }
+    if (cmd === 'right') {
+      if (depth === 0) return i;
+      depth--; i += 5; continue;
+    }
+    if (isEscaped(s, i)) continue;
+    const ch = s[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { if (depth === 0) return i; depth--; }
+    else if (depth === 0 && (ch === '#' || ch === '&')) return i;
+  }
+  return s.length;
+}
+
+/**
+ * 짝 없는 중괄호 제거. 짝이 없는 `{`/`}` 는 정의상 묶음 정보를 못 담으므로(원문 잘림 흔적)
+ * 지워도 뜻이 안 바뀐다. 반대로 남겨두면 `{피연산자}` 로 감쌀 때 스크립트 전체가
+ * 불균형해져 한글에서 수식이 깨진다. 실데이터의 `\over` 는 절반 이상이 `$` 조기 종료로
+ * 잘려 있어(`{ 2} \over { 3`) 이 보정이 없으면 대부분 복구가 안 된다.
+ */
+function stripUnpairedBraces(t: string): string {
+  const drop = new Set<number>();
+  const open: number[] = [];
+  for (let i = 0; i < t.length; i++) {
+    if (isEscaped(t, i)) continue;
+    if (t[i] === '{') open.push(i);
+    else if (t[i] === '}') { if (open.length) open.pop(); else drop.add(i); }
+  }
+  for (const i of open) drop.add(i);
+  if (drop.size === 0) return t;
+  let out = '';
+  for (let i = 0; i < t.length; i++) if (!drop.has(i)) out += t[i];
+  return out;
+}
+
+/** `a \over b` → `{a} over {b}` (TeX 그룹 의미 그대로). 인자를 못 채우면 **원문을 남긴다**. */
+function convertInfixOver(src: string): string {
+  const OVER = /\\over(?![A-Za-z])/;
+  let s = src;
+  let searchFrom = 0;
+  for (let guard = 0; guard < 100; guard++) {
+    const m = OVER.exec(s.slice(searchFrom));
+    if (!m || m.index == null) break;
+    const idx = searchFrom + m.index;
+    const after = idx + m[0].length;
+    const gStart = groupStartBefore(s, idx);
+    const gEnd = groupEndAfter(s, after);
+    const rawNum = s.slice(gStart, idx);
+    const rawDen = s.slice(after, gEnd);
+    const num = stripUnpairedBraces(rawNum.trim()).trim();
+    const den = stripUnpairedBraces(rawDen.trim()).trim();
+    // 한쪽이라도 비면 분수가 아니다(원문 결함) → 치환하지 않고 원문 유지.
+    //   지우는 것보다 남기는 게 안전하고, 남으면 eq-dropped-command 가 잡아준다.
+    if (!num || !den) { searchFrom = after; continue; }
+    // 그룹 양끝 공백은 그대로 돌려준다 — `#{b} over {c}` 처럼 구분자에 딱 붙는 걸 막는다.
+    const lead = /^\s*/.exec(rawNum)![0];
+    const trail = /\s*$/.exec(rawDen)![0];
+    s = s.slice(0, gStart) + lead + `{${num}} over {${den}}` + trail + s.slice(gEnd);
+    searchFrom = 0;   // 치환 결과 안의 중첩 `\over` 도 다시 훑는다
+  }
+  return s;
+}
+
+// ============================================================================
+// 구분자 `\left…\right…` → 한글 LEFT/RIGHT (2026-09-02) — **짝이 맞을 때만**
+// ----------------------------------------------------------------------------
+// ★ 무엇이 잘못됐나 (eq-brace-unbalanced 270건 / 운영 200개 중 70개 시험지):
+//   원인은 `\right.` 자체가 아니라 **수식이 한글 산문을 사이에 두고 둘로 쪼개져 있는 것**.
+//   실데이터(문제 284b33fc 등):
+//     `$A= \left\{ x | x \right .$는 $125$ 이하의 자연수$\left. \right\}$`
+//   조건제시법 집합 안에 한글을 넣으려면 TeX 에선 이렇게 쓸 수밖에 없다 — 앞 조각은
+//   `\right.`(빈 구분자)로 닫고, 뒷 조각은 `\left.` 로 열어야 `\right\}` 가 합법이 된다.
+//   **원문은 정상 LaTeX 이고 KaTeX 도 제대로 그린다.** 그런데 우리 변환은
+//     `\left\{`→`LEFT {` (중괄호 +1) · `\right.`→공백 · `\left.`→공백 · `\right\}`→`RIGHT }`
+//   라서 앞 조각은 `LEFT {` 만, 뒤 조각은 `RIGHT }` 만 남는다.
+//   실측 분류(운영 200개): LEFT 만 144건 + RIGHT 만 96건 = 240/270 이 이 한 가지 원인.
+// ★ 왜 `LEFT { … RIGHT .` 로 안 고쳤나: 그게 한글에서 유효한지 **확인이 안 된다**.
+//   운영 코퍼스에 남아 있는 "한글이 스스로 내보낸" 스크립트를 전수 조사한 결과
+//   `LEFT ( … RIGHT )` 쌍은 7건 나오지만 `RIGHT .`·`LEFT .` 은 **0건**이다.
+//   근거 없는 토큰을 넣으면 한글은 오류를 안 내고 그냥 글자로 찍는다(= 시험지에 노출).
+// ★ 그래서: 짝이 안 맞는 쪽은 **고정폭 리터럴 중괄호 `lbrace`/`rbrace`** 로 낸다.
+//   이 토큰은 이 파일이 이미 naked `\{` 에 쓰고 있고 골든 테스트로 검증돼 있다
+//   (`\{ x \mid x > 0 \}` → `lbrace x | x > 0 rbrace`). 잃는 건 자동 크기 조절뿐이고,
+//   얻는 건 "한 줄짜리 조건제시법 집합이 안 깨지는 것" 이다.
+// ============================================================================
+
+/** `\left`/`\right` 를 스택으로 짝지어, 진짜 짝인 중괄호만 LEFT/RIGHT 로 낸다. */
+function convertDelimiters(src: string): string {
+  type Tok = { start: number; end: number; side: 'left' | 'right'; delim: string; mate: number };
+  const toks: Tok[] = [];
+  for (let i = 0; i < src.length; i++) {
+    const cmd = delimCmdAt(src, i);
+    if (!cmd) continue;
+    const nameEnd = i + (cmd === 'left' ? 5 : 6);
+    const end = skipDelimToken(src, nameEnd);
+    // 구분자 토큰 원문(앞 공백 제거). `\left` 뒤에 아무것도 없으면 빈 문자열.
+    const delim = src.slice(nameEnd, end).trim();
+    toks.push({ start: i, end, side: cmd, delim, mate: -1 });
+    i = end - 1;
+  }
+  if (toks.length === 0) return src;
+
+  // 스택 매칭 — 짝을 못 찾은 토큰은 mate = -1 로 남는다.
+  const stack: number[] = [];
+  for (let k = 0; k < toks.length; k++) {
+    if (toks[k].side === 'left') stack.push(k);
+    else if (stack.length) { const l = stack.pop()!; toks[l].mate = k; toks[k].mate = l; }
+  }
+
+  const isBrace = (d: string, side: 'left' | 'right') =>
+    side === 'left' ? d === '\\{' || d === '\\lbrace' : d === '\\}' || d === '\\rbrace';
+
+  const render = (t: Tok): string => {
+    const mate = t.mate >= 0 ? toks[t.mate] : null;
+    // 양쪽이 다 중괄호인 진짜 짝 → 가변 중괄호 LEFT { … RIGHT }
+    if (mate && isBrace(t.delim, t.side) && isBrace(mate.delim, mate.side)) {
+      return t.side === 'left' ? 'LEFT { ' : ' RIGHT } ';
+    }
+    // 그 외(짝 없음 / 상대가 빈 구분자 `.`) → 리터럴 구분자만 남긴다. LEFT/RIGHT 는 안 낸다.
+    if (isBrace(t.delim, t.side)) return t.side === 'left' ? ' lbrace ' : ' rbrace ';
+    if (t.delim === '' || t.delim === '.') return ' ';        // 빈 구분자
+    if (t.delim.startsWith('\\')) return `${t.delim} `;       // \langle \vert … 은 뒤 단계에 맡김
+    return t.delim;                                          // ( [ | ) ] 등 리터럴
+  };
+
+  let out = '';
+  let pos = 0;
+  for (const t of toks) { out += src.slice(pos, t.start) + render(t); pos = t.end; }
+  return out + src.slice(pos);
+}
+
+/**
+ * 큰 연산자 `\sum_{..}^{..}` / `\lim_{..}` / `\int_{..}^{..}` → `sum from {..} to {..}`.
+ * ★ 첨자 인자도 균형 파싱 — `\sum_{k=1}^{\frac{n}{2}}` 처럼 첨자에 분수가 들어가면
+ *   기존 `\^\{([^{}]*)\}` 가 실패해 `\sum` 이 통째로 지워졌다 (\lim 74건 실측).
+ * ★ 경계는 `\b` 가 아니라 `(?![A-Za-z])` — `\lim_` 은 `_` 가 word char 라 `\b` 가 **안 걸린다**.
+ *   이게 \lim 삭제의 직접 원인이었다.
+ */
+function replaceBigOp(src: string, cmdPattern: string, hwp: string): string {
+  const re = new RegExp(`\\\\(?:${cmdPattern})(?![A-Za-z])`, 'g');
+  let s = src;
+  for (let guard = 0; guard < 400; guard++) {
+    re.lastIndex = 0;
+    const m = re.exec(s);
+    if (!m) break;
+    let i = m.index + m[0].length;
+    const grabScript = (mark: '_' | '^'): string | null => {
+      if (s[i] !== mark) return null;
+      const g = grabBraceForward(s, i + 1);
+      if (g) { i = g.end; return g.inner; }
+      if (/[A-Za-z0-9]/.test(s[i + 1] || '')) { i += 2; return s[i - 1]; } // \sum_n 처럼 홑글자
+      return null;                                                         // 그 외는 원문 유지
+    };
+    const sub = grabScript('_');
+    const sup = grabScript('^');
+    let out = hwp;
+    if (sub !== null) out += ` from {${sub}}`;
+    if (sup !== null) out += ` to {${sup}}`;
+    s = s.slice(0, m.index) + out + s.slice(i);
+  }
+  return s;
+}
+
 function latexToHWPEquation(latex: string): string {
   let eq = latex.trim();
 
@@ -165,45 +632,59 @@ function latexToHWPEquation(latex: string): string {
   // 이스케이프 리터럴(\% \$ \# \& \_) → 문자 그대로. 미처리 시 한글 수식에 "\%" 노출 (부흥중 "30\%" 실증)
   eq = eq.replace(/\\([%$#&_])/g, '$1');
 
-  // \frac{a}{b} → {a} over {b}  (중첩 대비 반복)
-  for (let i = 0; i < 6; i++) {
-    eq = eq.replace(
-      /\\(?:d|t)?frac\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g,
-      '{$1} over {$2}'
-    );
-  }
+  // \frac{a}{b} → {a} over {b}  (중첩 무제한 — 균형 파싱)
+  eq = replaceBalanced(eq, '(?:d|t)?frac', 2, ([a, b]) => `{${a}} over {${b}}`);
 
   // \sqrt[n]{x} → root n of {x} / \sqrt{x} → sqrt {x}
-  eq = eq.replace(/\\sqrt\[(\d+)\]\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, 'root $1 of {$2}');
-  eq = eq.replace(/\\sqrt\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, 'sqrt {$1}');
-  eq = eq.replace(/\\sqrt\s*(\d)/g, 'sqrt {$1}');
+  eq = replaceBalanced(eq, 'sqrt', 1, ([x], opt) => (opt !== null ? `root ${opt} of {${x}}` : `sqrt {${x}}`), true);
+  // 중괄호 없는 \sqrt2 · \sqrt x — 미처리 시 아래 잔여 정리가 \sqrt 를 지워 근호가 사라진다.
+  eq = eq.replace(/\\sqrt(?![A-Za-z])\s*([A-Za-z0-9])/g, 'sqrt {$1}');
 
   // \log_{b} → log_{b} (공백 없음, 실측 일치)
   // ★ \log 다음이 '_'(word char)라 \b 가 안 걸림 → '_' 먼저 직접 치환
   eq = eq.replace(/\\log_(\w)(?![\w{])/g, 'log_{$1}'); // \log_a → log_{a}
   eq = eq.replace(/\\log_/g, 'log_');                  // \log_{...} → log_{...}
   eq = eq.replace(/\\log/g, 'log');                    // 남은 \log → log
-  eq = eq.replace(/\\ln\b/g, 'ln');
+  // ★ `\b` 대신 `(?![A-Za-z])` — `\ln2` 처럼 뒤에 숫자가 붙으면 `\b` 가 안 걸려 명령이
+  //   통째로 지워졌다 (\ln 11건 실측). 함수 이름 뒤 경계는 "알파벳이 아니면" 이 맞다.
+  eq = eq.replace(/\\ln(?![A-Za-z])/g, 'ln');
 
   // 삼각함수
   for (const fn of ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan']) {
-    eq = eq.replace(new RegExp(`\\\\${fn}\\b`, 'g'), fn);
+    eq = eq.replace(new RegExp(`\\\\${fn}(?![A-Za-z])`, 'g'), fn);
   }
 
   // \lim / \sum / \prod / \int  (from..to)
+  //   ★ `\lim_{x \to 0}` 는 한글 관례대로 화살표 형태를 유지 (아래 일반 규칙보다 먼저).
   eq = eq.replace(/\\lim_\{([^{}]*?)\\to\s*([^{}]*?)\}/g, 'lim from {$1 -> $2}');
-  eq = eq.replace(/\\lim\b/g, 'lim');
-  eq = eq.replace(/\\sum_\{([^{}]*)\}\^\{([^{}]*)\}/g, 'sum from {$1} to {$2}');
-  eq = eq.replace(/\\sum\b/g, 'sum');
-  eq = eq.replace(/\\prod_\{([^{}]*)\}\^\{([^{}]*)\}/g, 'prod from {$1} to {$2}');
-  eq = eq.replace(/\\prod\b/g, 'prod');
-  eq = eq.replace(/\\int_\{([^{}]*)\}\^\{([^{}]*)\}/g, 'int from {$1} to {$2}');
-  eq = eq.replace(/\\int\b/g, 'int');
+  //   나머지는 균형 파싱 — 첨자에 분수·근호가 들어가도 명령이 살아남는다.
+  eq = replaceBigOp(eq, 'lim', 'lim');
+  eq = replaceBigOp(eq, 'sum', 'sum');
+  eq = replaceBigOp(eq, 'prod', 'prod');
+  eq = replaceBigOp(eq, 'int', 'int');
 
   // overline / bar / vec
-  eq = eq.replace(/\\overline\{([^{}]*)\}/g, 'overline {$1}');
-  eq = eq.replace(/\\bar\{([^{}]*)\}/g, 'bar {$1}');
-  eq = eq.replace(/\\vec\{([^{}]*)\}/g, 'vec {$1}');
+  // ★ 인자를 못 잡으면 **윗줄이 조용히 사라진다** — 실데이터에 압도적으로 흔한
+  //   `\overline{\mathrm{AB}}` 를 놓쳤던 사고(검증 샘플 24문제에서 overline 17건·
+  //   overrightarrow 11건 소실)로 한 번 넓혔고(중첩 1단 허용 정규식), 그것도 부족해
+  //   2026-09-02 균형 파싱으로 교체했다 — `\overline{\overline{AB}}`·`\vec{\dfrac{a}{b}}`
+  //   같은 2단 중첩에서 여전히 매칭이 실패해 악센트가 지워지고 있었다 (운영 200개 419건 실측).
+  const accent = (cmds: string, hwp: string) => {
+    eq = replaceBalanced(eq, cmds, 1, ([x]) => `${hwp} {${x}}`);
+  };
+  accent('overline', 'overline');
+  accent('bar', 'bar');
+  // ★ \overrightarrow 는 미매핑이라 잔여 명령 정리에서 화살표만 사라지고 `AB` 만 남았다
+  //   (운영 62건) — 벡터 표기가 통째로 소실. vec 은 한글이 아는 토큰이라 안전.
+  accent('vec|overrightarrow', 'vec');
+  // \hat / \dot / \tilde — 미매핑 시 악센트만 조용히 소실
+  accent('hat', 'hat');
+  accent('dot', 'dot');
+  accent('tilde', 'tilde');
+  // \binom{n}{r} — 미매핑 시 `n{r}` 로 깨졌다(16건). 괄호 안 2행 쌓기가 원래 모양.
+  eq = replaceBalanced(eq, 'binom', 2, ([n, r]) => `( matrix {${n} # ${r}} )`);
+  // \pmod{n} → (mod n) — 미매핑 시 "mod" 가 사라져 `a equiv b n` 이 됐다(44건).
+  eq = replaceBalanced(eq, 'pmod', 1, ([n]) => `(mod ${n})`);
 
   // 조각함수: \left\{ \begin{array|aligned|...} ... \right.  → cases { ... }
   //   (aligned 미포함 시 "LEFT { aligned ..." 중괄호 불균형 잔재 — hwpx-audit 발견)
@@ -221,49 +702,47 @@ function latexToHWPEquation(latex: string): string {
     return `cases {${rows.join(' # ')}}`;
   });
 
-  // 그리스 문자
-  const greekMap: Record<string, string> = {
-    '\\alpha': 'alpha', '\\beta': 'beta', '\\gamma': 'gamma', '\\delta': 'delta',
-    '\\epsilon': 'epsilon', '\\varepsilon': 'epsilon', '\\theta': 'theta',
-    '\\lambda': 'lambda', '\\mu': 'mu', '\\nu': 'nu', '\\xi': 'xi',
-    '\\pi': 'pi', '\\rho': 'rho', '\\sigma': 'sigma', '\\tau': 'tau',
-    '\\phi': 'phi', '\\varphi': 'phi', '\\chi': 'chi', '\\psi': 'psi', '\\omega': 'omega',
-    '\\Gamma': 'GAMMA', '\\Delta': 'DELTA', '\\Theta': 'THETA', '\\Lambda': 'LAMBDA',
-    '\\Sigma': 'SIGMA', '\\Pi': 'PI', '\\Phi': 'PHI', '\\Psi': 'PSI', '\\Omega': 'OMEGA',
-  };
-  for (const [tex, hwp] of Object.entries(greekMap)) {
-    eq = eq.replace(new RegExp(tex.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g'), hwp);
-  }
+  // 평문TeX 중위 분수 `a \over b` → `{a} over {b}`.
+  //   ★ 여기 위치가 중요하다:
+  //     - cases/matrix 변환 **뒤** — `\begin{cases}…\end{cases}` 가 아직 남아 있으면
+  //       그룹 훑기가 `\end{cases}` 를 분모로 삼켜 조각함수가 통째로 깨진다.
+  //       (변환 뒤엔 행 구분자가 `#` 라 그룹 경계로 정상 인식된다.)
+  //     - `\left`/`\right` 제거 **앞** — 그 둘이 TeX 의 암묵 그룹 경계라 필요하다.
+  eq = convertInfixOver(eq);
 
-  // 수학 기호 ( \le → <= 등, 실측 일치)
-  const symbolMap: Record<string, string> = {
-    '\\times': 'times', '\\div': 'div', '\\pm': '+-', '\\mp': '-+', '\\cdot': 'cdot',
-    '\\leq': '<=', '\\le': '<=', '\\geq': '>=', '\\ge': '>=',
-    '\\neq': '!=', '\\ne': '!=', '\\approx': 'approx', '\\equiv': 'equiv',
-    '\\sim': 'sim', '\\infty': 'inf',
-    '\\in': 'in', '\\notin': 'notin', '\\subset': 'subset', '\\supset': 'supset',
-    '\\cup': 'cup', '\\cap': 'cap', '\\emptyset': 'emptyset',
-    '\\forall': 'forall', '\\exists': 'exists',
-    // 화살표는 한글 정식 토큰(rarrow 계열)으로 — 에디터 축약형(->)과 렌더 동일하고,
-    // 가져오기(hangul-equation)가 같은 토큰을 처리해 라운드트립 검증 가능.
-    '\\rightarrow': 'rarrow', '\\to': 'rarrow', '\\leftarrow': 'larrow', '\\gets': 'larrow',
-    '\\Rightarrow': 'Rarrow', '\\Leftarrow': 'Larrow', '\\leftrightarrow': 'lrarrow',
-    '\\therefore': 'therefore', '\\because': 'because',
-    // 점열 — 미매핑 시 잔여 명령 정리에서 삭제돼 "y=x-2 ⋯①" 의 ⋯ 소실 (거제여중 3번 실증)
-    '\\cdots': 'cdots', '\\ldots': 'ldots', '\\vdots': 'vdots', '\\ddots': 'ddots', '\\dots': 'ldots',
-    '\\angle': 'angle', '\\triangle': 'triangle',
-    '\\parallel': 'parallel', '\\perp': 'perp', '\\prime': "'",
+  // 명령 → 한글 토큰 치환 공통부.
+  // ★ 낱말 토큰이 이웃 글자와 **붙지 않게** 한다 — `\cdots\cdots` 가 `cdotscdots` 로 엉겨
+  //   붙으면 한글이 모르는 낱말이 되어 글자 그대로 찍힌다 (검증 샘플 실측 2건).
+  //   붙을 때만 공백을 넣는다 — `x^\circ` 의 `^` 처럼 이웃이 글자가 아니면 그대로 둬야
+  //   지수 묶음(`^{circ}`)이 유지된다.
+  const applyMap = (map: Record<string, string>) => {
+    for (const [tex, hwp] of Object.entries(map)) {
+      const re = new RegExp(tex.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g');
+      eq = eq.replace(re, (_m, offset: number, whole: string) => {
+        const before = whole[offset - 1] || '';
+        const after = whole[offset + _m.length] || '';
+        const lead = /^[A-Za-z]/.test(hwp) && /[A-Za-z0-9]/.test(before) ? ' ' : '';
+        const tail = /[A-Za-z]$/.test(hwp) && /[A-Za-z0-9]/.test(after) ? ' ' : '';
+        return lead + hwp + tail;
+      });
+    }
   };
-  for (const [tex, hwp] of Object.entries(symbolMap)) {
-    eq = eq.replace(new RegExp(tex.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g'), hwp);
-  }
+
+  // 그리스 문자
+  applyMap(HWP_GREEK_MAP);
+
+  // ★ \not\subset(⊄)·\not\in(∉) — \not 이 미매핑이라 조용히 삭제돼 ⊂/∈ 로 **뜻이 뒤집혔다**(9건).
+  eq = eq.replace(/\\not\s*\\subset(?![a-zA-Z])/g, 'nsubset');
+  eq = eq.replace(/\\not\s*\\in(?![a-zA-Z])/g, 'notin');
+  eq = eq.replace(/\\not\s*=/g, '!=');
+
+  // 수학 기호 ( \le → <= 등, 실측 일치) — 표는 모듈 상수 HWP_SYMBOL_MAP
+  applyMap(HWP_SYMBOL_MAP);
 
   // 구분자: \left\{ \right\} 만 LEFT { RIGHT }(가변 중괄호, 실측에서 렌더됨).
   //   괄호·대괄호·바(( [ |)는 HWP 에서 LEFT ( 가 글자로 깨짐 → \left/\right 만 제거하고 리터럴 구분자 유지.
-  eq = eq.replace(/\\left\s*\\\{/g, 'LEFT { ');
-  eq = eq.replace(/\\right\s*\\\}/g, ' RIGHT } ');
-  eq = eq.replace(/\\left\s*\./g, ' ').replace(/\\right\s*\./g, ' '); // 빈 구분자 \left. \right.
-  eq = eq.replace(/\\left\s*/g, '').replace(/\\right\s*/g, '');        // \left( [ | → 구분자만
+  //   ★ LEFT/RIGHT 는 **짝이 맞을 때만** 낸다 — convertDelimiters 참고.
+  eq = convertDelimiters(eq);
   // 남은 naked \{ \} (집합 등) → 리터럴 중괄호
   eq = eq.replace(/\\\{/g, ' lbrace ').replace(/\\\}/g, ' rbrace ');
 
@@ -276,8 +755,21 @@ function latexToHWPEquation(latex: string): string {
   eq = eq.replace(/\\boxed(?![a-zA-Z])/g, 'box');
 
   // 남은 LaTeX 명령 정리
-  eq = eq.replace(/\\[a-zA-Z]+\{([^{}]*)\}/g, '$1');
-  eq = eq.replace(/\\[a-zA-Z]+/g, '');
+  // ★ 여기서 지워지는 명령은 **기호가 통째로 사라진다** — 조용해서 제일 위험하다.
+  //   실제로 \circ(1,755건)가 지워져 `90^{\circ}` 가 `90^{}` 로, 도(°)가 없어져 있었다.
+  //   지운 명령을 기록해 generateHWPX 가 eq-dropped-command 경고로 올린다.
+  // ★ 남아 있는 삭제 (2026-09-02 실측, 운영 200개 중 11건): 평문TeX 중위 표기 `a \over b`.
+  //   `\over` 는 인자가 앞뒤로 갈린 중위 연산자라 `\cmd{..}` 파서로는 못 잡는다 → 지금은
+  //   지워져 **분수가 통째로 사라진다**. 고치려면 hangul-equation.ts convertOver 처럼
+  //   좌우 균형 역/정방향 grab 이 필요. 별건이라 미착수 (보고만).
+  eq = eq.replace(/\\([a-zA-Z]+)\{([^{}]*)\}/g, (_m, cmd: string, inner: string) => {
+    _droppedCommands.set(cmd, (_droppedCommands.get(cmd) || 0) + 1);
+    return inner;
+  });
+  eq = eq.replace(/\\([a-zA-Z]+)/g, (_m, cmd: string) => {
+    _droppedCommands.set(cmd, (_droppedCommands.get(cmd) || 0) + 1);
+    return '';
+  });
 
   // ★ 단일 문자 지수/첨자 중괄호 확정 — `x^2=a` 를 한글이 `^{2=a}` 로 묶어 "2=a 전체가
   //   지수로 올라가는" 사고 (동래여중 5번 (2x-5)^2=a 실증). `^{2}=a` 로 경계 명시.
@@ -1582,6 +2074,7 @@ export async function generateHWPX(
   config: HwpxExamConfig,
 ): Promise<Blob | Buffer> {
   _shapeId = 2000000000;
+  _droppedCommands.clear();
 
   // 강조색 정규화 — 유효 hex 아니면 제거 (headerDeco 가 미주입 bf 를 참조하는 사고 방지)
   if (config.header?.accentColor && !/^#[0-9a-fA-F]{6}$/.test(config.header.accentColor)) {
@@ -1647,6 +2140,13 @@ export async function generateHWPX(
   // ★ 검증 루프 — 잔재 스캔 (파일 생성은 계속, 경고만 전달)
   if (config.onWarnings) {
     const warns = scanHwpxArtifacts(sectionXml);
+    // ★ 수식 변환 중 조용히 지워진 LaTeX 명령 (기호 소실) — 구조·서식 명령은 제외.
+    const dropped = [...__droppedCommandsEntries()].filter(([c]) => !DROP_OK.has(c));
+    if (dropped.length > 0) {
+      const total = dropped.reduce((a, [, n]) => a + n, 0);
+      const top = dropped.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c, n]) => `\\${c}x${n}`).join(',');
+      warns.push({ kind: 'eq-dropped-command', sample: top.slice(0, 50), count: total });
+    }
     if (warns.length > 0) config.onWarnings(warns);
   }
   const prv = problems.map((p) => `${p.number}. ${(p.content || '').replace(/<[^>]*>/g, '').replace(/\\[a-zA-Z]+/g, '').slice(0, 60)}`).join('\r\n');

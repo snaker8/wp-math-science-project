@@ -25,9 +25,38 @@ interface Teacher {
   preferences: Record<string, unknown>;
   created_at: string;
   isAcademyAdmin: boolean;
-  /** 'TEACHER' 또는 'ORG_ADMIN' (비본부) — 정책 (2026-05-17) */
+  /** 'TEACHER' · 'ORG_ADMIN' · 'ADMIN' */
   role: string;
+  /** 본부 institute 소속 여부 — 학원 운영자 판별 */
+  isHeadquarter: boolean;
 }
+
+/**
+ * 사람 구분 (2026-09-02).
+ *
+ * ★ 전에는 강사가 아닌 사람을 **목록에서 빼기만** 했다:
+ *   - `ADMIN` 은 조회 자체에서 빠졌고(`.in('role', ['TEACHER','ORG_ADMIN'])`)
+ *   - 본부 소속 `ORG_ADMIN` 은 "학원 운영자라"며 클라이언트에서 걸러냈다
+ *   그런데 **그 사람들을 보여주는 화면이 따로 없었다.** 빠지기만 하고 갈 곳이 없어
+ *   대표 보고: "강사 아닌 학생 아닌 사람들도 안 보인다".
+ *
+ *   → 빼지 말고 **한 목록에 두되 배지로 구분**한다. 성격이 다른 사람을 한 줄로
+ *     섞으면 또 헷갈리므로, 무엇인지는 눈에 보이게 한다.
+ */
+type PersonKind = 'teacher' | 'orgAdmin' | 'sysAdmin';
+
+function personKind(t: { role: string; isHeadquarter: boolean }): PersonKind {
+  if (t.role === 'ADMIN') return 'sysAdmin';
+  // 본부 소속 ORG_ADMIN = 학원 운영자. 센터 소속 ORG_ADMIN 은 현장 강사 역할을 겸한다.
+  if (t.role === 'ORG_ADMIN' && t.isHeadquarter) return 'orgAdmin';
+  return 'teacher';
+}
+
+const KIND_LABEL: Record<PersonKind, string> = {
+  teacher: '강사',
+  orgAdmin: '학원 운영자',
+  sysAdmin: '시스템 관리자',
+};
 
 export default function TeachersManagementPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -61,6 +90,7 @@ export default function TeachersManagementPage() {
           created_at: new Date().toISOString(),
           isAcademyAdmin: false,
           role: 'TEACHER',
+          isHeadquarter: false,
         },
         {
           id: '2',
@@ -72,6 +102,7 @@ export default function TeachersManagementPage() {
           created_at: new Date().toISOString(),
           isAcademyAdmin: true,
           role: 'TEACHER',
+          isHeadquarter: false,
         },
       ]);
       setLoading(false);
@@ -79,11 +110,11 @@ export default function TeachersManagementPage() {
     }
 
     try {
-      // ★ 정책 (2026-05-17): TEACHER + ORG_ADMIN(비본부) 모두 강사로 표시
-      //   본부 institute 소속 ORG_ADMIN 은 학원 운영자라 제외.
+      // ★ 정책 (2026-09-02 개정): **아무도 빼지 않는다.**
+      //   옛 정책(2026-05-17)은 본부 ORG_ADMIN 을 "학원 운영자라" 목록에서 제외했는데,
+      //   그 사람들을 보여주는 화면이 따로 없어 어디에도 안 보였다. 배지로 구분만 한다.
       //   1) organizations.headquarter_institute_id 목록 조회
-      //   2) users.role IN (TEACHER, ORG_ADMIN) 조회
-      //   3) 본부 ORG_ADMIN 클라이언트 필터링
+      //   본부 institute 목록은 '학원 운영자' 배지 판별에만 쓴다.
       const { data: orgs } = await supabaseBrowser
         .from('organizations')
         .select('headquarter_institute_id');
@@ -93,28 +124,23 @@ export default function TeachersManagementPage() {
           .filter((v): v is string => !!v)
       );
 
+      // ★ ADMIN 도 조회한다. 전에는 빠져 있어 시스템 관리자가 어느 화면에도 안 나왔다.
       const { data, error } = await supabaseBrowser
         .from('users')
         .select('*')
-        .in('role', ['TEACHER', 'ORG_ADMIN'])
+        .in('role', ['TEACHER', 'ORG_ADMIN', 'ADMIN'])
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const teachersWithAdmin = (data || [])
-        .filter((u) => {
-          // 본부 institute ORG_ADMIN 은 제외 (학원 운영자로 분류)
-          if (u.role === 'ORG_ADMIN' && u.institute_id && hqIds.has(u.institute_id)) {
-            return false;
-          }
-          return true;
-        })
-        .map((teacher) => ({
-          ...teacher,
-          isAcademyAdmin:
-            (teacher.preferences as Record<string, unknown>)?.isAcademyAdmin === true,
-        }));
+      // ★ 걸러내지 않는다. 본부 ORG_ADMIN 도 목록에 두고 배지로 구분한다 (위 personKind 주석).
+      const teachersWithAdmin = (data || []).map((teacher) => ({
+        ...teacher,
+        isAcademyAdmin:
+          (teacher.preferences as Record<string, unknown>)?.isAcademyAdmin === true,
+        isHeadquarter: !!teacher.institute_id && hqIds.has(teacher.institute_id),
+      }));
 
       setTeachers(teachersWithAdmin);
     } catch (error) {
@@ -237,6 +263,8 @@ export default function TeachersManagementPage() {
   );
 
   const adminCount = teachers.filter((t) => t.isAcademyAdmin).length;
+  // 강사가 아닌 사람 수 — 이 목록에서 빠지던 사람들이라 눈에 보이게 센다
+  const nonTeacherCount = teachers.filter((t) => personKind(t) !== 'teacher').length;
 
   if (loading) {
     return (
@@ -278,8 +306,8 @@ export default function TeachersManagementPage() {
     <div className="page">
       <header className="page-header">
         <div className="header-content">
-          <h1>강사 권한 관리</h1>
-          <p>선생님에게 학원 관리자 권한을 부여하거나 해제할 수 있습니다.</p>
+          <h1>교직원 권한 관리</h1>
+          <p>강사·학원 운영자·시스템 관리자를 한 곳에서 봅니다. 학원 관리자 권한도 여기서 부여·해제합니다.</p>
         </div>
       </header>
 
@@ -291,7 +319,7 @@ export default function TeachersManagementPage() {
           </div>
           <div className="stat-info">
             <span className="stat-value">{teachers.length}</span>
-            <span className="stat-label">전체 강사</span>
+            <span className="stat-label">전체 교직원</span>
           </div>
         </div>
         <div className="stat-card">
@@ -301,6 +329,16 @@ export default function TeachersManagementPage() {
           <div className="stat-info">
             <span className="stat-value">{adminCount}</span>
             <span className="stat-label">관리자 권한 보유</span>
+          </div>
+        </div>
+        {/* 강사가 아닌 사람 — 전에는 목록에서 아예 빠져 어디에도 안 보이던 사람들 */}
+        <div className="stat-card">
+          <div className="stat-icon blue">
+            <Shield size={20} />
+          </div>
+          <div className="stat-info">
+            <span className="stat-value">{nonTeacherCount}</span>
+            <span className="stat-label">운영자·관리자</span>
           </div>
         </div>
       </div>
@@ -354,6 +392,14 @@ export default function TeachersManagementPage() {
                 <div className="teacher-details">
                   <div className="teacher-name">
                     {teacher.full_name}
+                    {/* ★ 역할 배지 — 강사가 아닌 사람을 빼지 않고 여기서 구분한다.
+                        (강사는 배지 없음 = 기본. 나머지만 표시해 목록이 시끄러워지지 않게) */}
+                    {personKind(teacher) !== 'teacher' && (
+                      <span className="kind-badge">
+                        <Shield size={12} />
+                        {KIND_LABEL[personKind(teacher)]}
+                      </span>
+                    )}
                     {teacher.isAcademyAdmin && (
                       <span className="admin-badge">
                         <Shield size={12} />
@@ -722,6 +768,21 @@ export default function TeachersManagementPage() {
           border: 1px solid rgba(16, 185, 129, 0.3); /* emerald-500/30 */
           font-size: 11px;
           font-weight: 500;
+          border-radius: 9999px;
+        }
+
+        /* 역할 배지 (학원 운영자 / 시스템 관리자) — 권한 배지(admin-badge)와 뜻이 다르므로
+           색을 겹치지 않게 무채로 둔다. "무엇인 사람인가" 이지 "무슨 권한" 이 아니다. */
+        .kind-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          background: rgba(255, 255, 255, 0.06);
+          color: #d4d4d8; /* zinc-300 */
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          font-size: 11px;
+          font-weight: 600;
           border-radius: 9999px;
         }
 

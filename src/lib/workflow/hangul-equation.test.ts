@@ -201,6 +201,33 @@ describe('hangulEquationToLatex — 집합·합성 기호 (사대부고)', () =>
     expect(renders(out)).toBe(true);
   });
 
+  // ── 2차 토큰 (2026-09-02) ──
+  //   HWP 내보내기 조사에서 "한글 어휘엔 perp 가 없고 BOT 이다"가 실측으로 드러나면서
+  //   같은 클래스를 전수 조사했다. 저장된 본문 324건이 이 토큰들로 새고 있었다.
+  it('BOT → \\perp (한글은 perp 가 아니라 BOT)', () => {
+    const out = hangulEquationToLatex('{overline{ OP }} BOT {overline{ OQ }}');
+    expect(out).toContain('\\perp');
+    expect(out).not.toMatch(/(?<![\\A-Za-z])BOT(?![A-Za-z])/);
+  });
+
+  it('DIVIDE → \\div · CENTIGRADE → ℃ · RARROW → →', () => {
+    expect(hangulEquationToLatex('a DIVIDE b')).toContain('\\div');
+    expect(hangulEquationToLatex('20 CENTIGRADE')).toContain('\\circ');
+    expect(hangulEquationToLatex('20 CENTIGRADE')).toContain('mathrm{C}');
+    expect(hangulEquationToLatex('A RARROW B')).toContain('\\rightarrow');
+  });
+
+  it('DELTA → \\Delta (증분 Δx · 사용자정의 연산자 양쪽)', () => {
+    expect(hangulEquationToLatex('x+ DELTA x')).toContain('\\Delta');
+  });
+
+  // `rm ABC`(로만체 지정)가 붙어 나온 것 — 스타일이라 글자만 남긴다
+  it('RMxxx / rmxxx → 글자만 남긴다', () => {
+    expect(hangulEquationToLatex('삼각형 RMABC')).toContain('ABC');
+    expect(hangulEquationToLatex('삼각형 RMABC')).not.toContain('RMABC');
+    expect(hangulEquationToLatex('점 RMD')).not.toContain('RMD');
+  });
+
   // ★ 오탐 방지 — 낱말 속 철자는 건드리지 않는다
   it('circle / emptysets 같은 낱말은 안 건드린다', () => {
     expect(hangulEquationToLatex('circle')).not.toContain('\\circ');

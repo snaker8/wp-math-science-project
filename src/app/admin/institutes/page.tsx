@@ -1,6 +1,9 @@
 // ============================================================================
 // /admin/institutes — 학원(organizations) + 센터(institutes) 관리 (super_admin 만)
-// MVP: CRUD 중 Create + Read. Update/Delete 는 Phase 2.
+// Create + Read + Delete(소프트).
+// ★ 삭제는 실삭제가 아니다 — deleted_at 만 찍어 목록에서 감춘다.
+//   institutes 를 가리키는 FK 상당수가 CASCADE 라 실제로 지우면
+//   그 센터의 시험지·반·명단·성적이 함께 사라진다 (2026-09-02 실측).
 // 디자인: admin/staff 톤 (bg-black, zinc-800 카드, indigo accent)
 // ============================================================================
 
@@ -8,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Building2, Plus, Loader2, AlertTriangle, Users, Layers,
+  Building2, Plus, Loader2, AlertTriangle, Users, Layers, Trash2,
 } from 'lucide-react';
 
 interface Organization {
@@ -104,6 +107,46 @@ export default function InstitutesAdminPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '생성 실패');
       setNewInstName(''); setAddInstFor(null);
+      reload();
+    } catch (e) { alert((e as Error).message); }
+    finally { setInstBusy(false); }
+  };
+
+  // ── 삭제 (센터 / 학원) ──
+  //   ★ 실제로 지우지 않는다. 서버가 deleted_at 만 찍어 목록에서 감춘다.
+  //     시험지·명단·성적은 그대로 남는다 (institutes FK 상당수가 CASCADE 라 실삭제하면 날아간다).
+  //   서버가 딸린 자료가 있으면 409 + 개수를 돌려준다 → 그걸 보여주고 한 번 더 확인받는다.
+  const deleteEntity = async (kind: 'institutes' | 'organizations', id: string, name: string) => {
+    const label = kind === 'institutes' ? '센터' : '학원';
+    const call = (force: boolean) =>
+      fetch(`/api/admin/tenancy/${kind}?id=${encodeURIComponent(id)}${force ? '&force=1' : ''}`,
+        { method: 'DELETE' });
+
+    // ★ 반드시 묻고 나서 지운다. force 없이 호출해도 딸린 게 없으면 서버가 바로 지우므로,
+    //   첫 확인을 먼저 받아야 한다 (안 그러면 "확인 전에 이미 삭제됨").
+    if (!confirm(`${label} "${name}" 을(를) 삭제할까요?`)) return;
+
+    setInstBusy(true);
+    try {
+      let res = await call(false);
+      let json = await res.json().catch(() => ({}));
+
+      // 딸린 자료가 있으면 서버가 409 + 개수 → 무엇이 걸리는지 보여주고 한 번 더 확인
+      if (res.status === 409 && json.needsConfirm) {
+        const detail = json.attached
+          ? Object.entries(json.attached as Record<string, number>)
+              .filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(' · ')
+          : (json.centers as string[] | undefined)?.join(', ') ?? '';
+        const ok = confirm(
+          `"${name}" 에 딸린 것이 있습니다.\n\n${detail}\n\n` +
+          `자료는 지워지지 않고 함께 감춰집니다. 계속할까요?`
+        );
+        if (!ok) return;
+        res = await call(true);
+        json = await res.json().catch(() => ({}));
+      }
+
+      if (!res.ok) throw new Error(json.error || '삭제 실패');
       reload();
     } catch (e) { alert((e as Error).message); }
     finally { setInstBusy(false); }
@@ -272,12 +315,22 @@ export default function InstitutesAdminPage() {
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setAddInstFor(isAdding ? null : org.id)}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-800 hover:border-white/[.14] hover:bg-white/[.06] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-content-primary transition-colors"
-                  >
-                    <Plus size={12} /> 센터 추가
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setAddInstFor(isAdding ? null : org.id)}
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-800 hover:border-white/[.14] hover:bg-white/[.06] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-content-primary transition-colors"
+                    >
+                      <Plus size={12} /> 센터 추가
+                    </button>
+                    <button
+                      onClick={() => deleteEntity('organizations', org.id, org.name)}
+                      disabled={instBusy}
+                      title="학원 삭제 (산하 센터도 함께 감춰집니다. 자료는 남습니다)"
+                      className="rounded-lg border border-zinc-800 p-1.5 text-zinc-500 transition-colors hover:border-white/[.14] hover:bg-white/[.06] hover:text-content-primary disabled:opacity-40"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* 센터 추가 폼 */}
@@ -345,6 +398,14 @@ export default function InstitutesAdminPage() {
                         <div className="text-xs text-zinc-500 flex items-center gap-1.5">
                           <Users size={12} /> {inst.memberCount}명
                         </div>
+                        <button
+                          onClick={() => deleteEntity('institutes', inst.id, inst.name)}
+                          disabled={instBusy}
+                          title="센터 삭제 (자료는 남고 목록에서만 감춰집니다)"
+                          className="rounded-lg border border-zinc-800 p-1.5 text-zinc-500 transition-colors hover:border-white/[.14] hover:bg-white/[.06] hover:text-content-primary disabled:opacity-40"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </div>
                   ))}
