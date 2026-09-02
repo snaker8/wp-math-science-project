@@ -128,9 +128,12 @@ export async function GET(_request: NextRequest) {
   const examTitle = new Map<string, string>();
   const collectExamIds = new Set<string>();
 
-  // ── 2) QR 출제 — print_sessions ──
+  // ── 2) 채점 세션 — print_sessions (B라인 단일) ──
+  //   ★ studentIds(user id) 가 아니라 diagStudentIds(roster id 포함)로 넓힌다.
+  //     이관된 옛 채점분은 roster id 로 저장돼 있어, user id 만 보면 통째로 빠진다.
   const qrRows: Array<{ id: string; student_id: string; exam_id: string | null; session_type: string | null; round_number: number | null; issued_at: string | null; completed_at: string | null }> = [];
-  for (const ids of chunk(studentIds, 200)) {
+  for (const ids of chunk(diagStudentIds, 200)) {
+    if (ids.length === 0) continue;
     const { data, error } = await diag()
       .from('print_sessions')
       .select('id, student_id, exam_id, session_type, round_number, issued_at, completed_at')
@@ -152,6 +155,8 @@ export async function GET(_request: NextRequest) {
       diag().from('session_results').select('session_id, is_correct, awarded_points, max_points').in('session_id', ids),
     ]);
     for (const r of (sp || []) as Array<{ session_id: string }>) qrTotal.set(r.session_id, (qrTotal.get(r.session_id) || 0) + 1);
+    // ★ 이관된 옛 채점분은 session_problems 가 없다(출제 시점 스냅샷이 없어서).
+    //   그대로 두면 문항수가 0 으로 뜬다 → 채점 결과 수로 대체한다.
     for (const r of (sr || []) as Array<{ session_id: string; is_correct: boolean; awarded_points: number | null; max_points: number | null }>) {
       qrGraded.set(r.session_id, (qrGraded.get(r.session_id) || 0) + 1);
       // ★ 부분점수 반영 — 서술형(max_points>0)은 획득/만점 비율, 그 외는 정오(1/0).
@@ -162,30 +167,11 @@ export async function GET(_request: NextRequest) {
     }
   }
 
-  // ── 3) 수동/엑셀 — diagnostics.sessions (user + roster id 양쪽) ──
-  const mRows: Array<{ id: string; student_id: string; exam_id: string | null; session_type: string | null; round_no: number | null; mathflat_sheet_name: string | null; conducted_at: string | null }> = [];
-  for (const ids of chunk(diagStudentIds, 200)) {
-    if (ids.length === 0) continue;
-    const { data, error } = await diag()
-      .from('sessions')
-      .select('id, student_id, exam_id, session_type, round_no, mathflat_sheet_name, conducted_at')
-      .in('student_id', ids);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    for (const r of (data || []) as typeof mRows) {
-      mRows.push(r);
-      if (r.exam_id) collectExamIds.add(r.exam_id);
-    }
-  }
-  const mIds = mRows.map(r => r.id);
-  const mTotal = new Map<string, number>();
-  const mCorrect = new Map<string, number>();
-  for (const ids of chunk(mIds, 200)) {
-    const { data } = await diag().from('items').select('session_id, is_correct').in('session_id', ids);
-    for (const r of (data || []) as Array<{ session_id: string; is_correct: boolean }>) {
-      mTotal.set(r.session_id, (mTotal.get(r.session_id) || 0) + 1);
-      if (r.is_correct) mCorrect.set(r.session_id, (mCorrect.get(r.session_id) || 0) + 1);
-    }
-  }
+  // ── 3) A라인(sessions+items) 읽기는 제거했다 (2026-09-02).
+  //   A 를 B 로 이관한 뒤로 같은 채점이 'qr' 행과 'manual' 행으로 **두 번** 나왔다.
+  //   A 는 이미 B 안에 있으므로 위 2) 하나만 읽는다.
+  //   ★ 다만 A 의 mathflat_sheet_name(시험지 없는 세션의 제목)은 B 에 대응 칸이 없다 —
+  //     지금은 exam_id 로 제목을 잡고, 없으면 '(제목 없음)'.
 
   // ── 4) exam 제목 일괄 ──
   for (const ids of chunk(Array.from(collectExamIds), 200)) {
@@ -208,30 +194,11 @@ export async function GET(_request: NextRequest) {
       tag: typeTag(r.session_type) + (r.round_number ? ` R${r.round_number}` : ''),
       issued_at: r.issued_at,
       completed: !!r.completed_at,
-      problems_total: qrTotal.get(r.id) || 0,
+      problems_total: qrTotal.get(r.id) || graded,   // 스냅샷 없으면 채점 수로
       correct_cnt: Math.round(correct * 10) / 10,
       score_pct: graded > 0 ? Math.round((correct / graded) * 1000) / 10 : null,
     });
   }
-  for (const r of mRows) {
-    const stu = resolveStudent(r.student_id);
-    if (!stu) continue;
-    const total = mTotal.get(r.id) || 0;
-    const correct = mCorrect.get(r.id) || 0;
-    assignments.push({
-      id: r.id, source: 'manual',
-      student_id: stu.canonId, student_name: stu.name, grade: stu.grade,
-      exam_id: r.exam_id,
-      title: r.mathflat_sheet_name || (r.exam_id ? examTitle.get(r.exam_id) : '') || '(제목 없음)',
-      tag: typeTag(r.session_type) + (r.round_no ? ` R${r.round_no}` : ''),
-      issued_at: r.conducted_at,
-      completed: total > 0,
-      problems_total: total,
-      correct_cnt: correct,
-      score_pct: total > 0 ? Math.round((correct / total) * 1000) / 10 : null,
-    });
-  }
-
   // 최신 출제 우선
   assignments.sort((a, b) => (b.issued_at || '').localeCompare(a.issued_at || ''));
 

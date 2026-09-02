@@ -130,40 +130,10 @@ export async function GET() {
     return a;
   };
 
-  // 4a) diagnostics.sessions
-  const { data: sessRows } = await sb
-    .schema('diagnostics' as never)
-    .from('sessions')
-    .select('id, student_id, session_type, conducted_at')
-    .in('student_id', queryIds);
-  const sessions = (sessRows ?? []) as Array<{ id: string; student_id: string; session_type: string; conducted_at: string | null }>;
-  const sessById = new Map(sessions.map((s) => [s.id, s]));
-  if (sessions.length > 0) {
-    const sessIds = sessions.map((s) => s.id);
-    const perSession = new Map<string, { correct: number; total: number }>();
-    for (let i = 0; i < sessIds.length; i += 500) {
-      const chunk = sessIds.slice(i, i + 500);
-      const { data: itemRows } = await sb
-        .schema('diagnostics' as never)
-        .from('items')
-        .select('session_id, is_correct')
-        .in('session_id', chunk);
-      for (const it of (itemRows ?? []) as Array<{ session_id: string; is_correct: boolean }>) {
-        const p = perSession.get(it.session_id) ?? { correct: 0, total: 0 };
-        p.total += 1; if (it.is_correct) p.correct += 1;
-        perSession.set(it.session_id, p);
-      }
-    }
-    for (const [sid, p] of perSession) {
-      const s = sessById.get(sid); if (!s) continue;
-      const isDiag = DIAG_TYPES.has(s.session_type);
-      const m = isDiag ? diagAgg : exAgg;
-      const a = ensure(m, canonId(s.student_id));
-      a.correct += p.correct; a.total += p.total;
-      const when = s.conducted_at ?? null;
-      if (!isDiag && when && (!a.latestAt || when > a.latestAt)) { a.latestAt = when; a.latestPct = pct(p.correct, p.total); }
-    }
-  }
+  // 4a) A라인(sessions+items) 읽기는 제거했다 (2026-09-02).
+  //   A 를 B 로 이관한 뒤로 두 라인을 **더하고 있어** 같은 채점이 두 번 세어졌다 —
+  //   진단 평균 정답률이 부풀고, 최근 EX 정답률도 A/B 중 아무거나 잡히는 상태였다.
+  //   A 는 이미 B 안에 있으므로 아래 4b 하나만 읽는다.
 
   // 4b) QR/인쇄 채점 — print_sessions + session_results
   const { data: psRows } = await sb
@@ -176,18 +146,28 @@ export async function GET() {
   if (printSessions.length > 0) {
     const psIds = printSessions.map((p) => p.id);
     const perSession = new Map<string, { correct: number; total: number }>();
-    for (let i = 0; i < psIds.length; i += 500) {
-      const chunk = psIds.slice(i, i + 500);
-      const { data: srRows } = await sb
-        .schema('diagnostics' as never)
-        .from('session_results')
-        .select('session_id, is_correct, teacher_note')
-        .in('session_id', chunk);
-      for (const sr of (srRows ?? []) as Array<{ session_id: string; is_correct: boolean; teacher_note: string | null }>) {
-        if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외
-        const p = perSession.get(sr.session_id) ?? { correct: 0, total: 0 };
-        p.total += 1; if (sr.is_correct) p.correct += 1;
-        perSession.set(sr.session_id, p);
+    // ★ 세션을 500개씩 끊어도 **행 수**는 서버가 1,000에서 자른다.
+    //   세션 96개 × 25문항 ≈ 2,400행인데 1,000행만 와서 **뒤쪽 학생 성적이 통째로 빈 값**이었다
+    //   (실측 2026-09-02: 결과가 잡힌 세션 39/96 — 39×25≈1,000). 원래부터 있던 버그.
+    //   세션 묶음 안에서도 range 로 끝까지 받아야 한다.
+    for (let i = 0; i < psIds.length; i += 200) {
+      const chunk = psIds.slice(i, i + 200);
+      for (let from = 0; ; from += 1000) {
+        const { data: srRows } = await sb
+          .schema('diagnostics' as never)
+          .from('session_results')
+          .select('session_id, is_correct, teacher_note')
+          .in('session_id', chunk)
+          .order('id')
+          .range(from, from + 999);
+        const rows = (srRows ?? []) as Array<{ session_id: string; is_correct: boolean; teacher_note: string | null }>;
+        for (const sr of rows) {
+          if ((sr.teacher_note ?? '').includes('자동채점 보류')) continue; // 보류 제외
+          const p = perSession.get(sr.session_id) ?? { correct: 0, total: 0 };
+          p.total += 1; if (sr.is_correct) p.correct += 1;
+          perSession.set(sr.session_id, p);
+        }
+        if (rows.length < 1000) break;
       }
     }
     for (const [sid, p] of perSession) {
