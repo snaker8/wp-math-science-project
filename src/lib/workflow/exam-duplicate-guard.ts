@@ -80,6 +80,10 @@ function variantOf(title: string): string {
   //   X 붙은 쪽을 먼저 봐야 한다. 아니면 둘 다 '서술형'으로 뭉개진다.
   if (/서술형\s*[Xx×]/.test(title)) marks.push('서술형X');
   else if (/서술형/.test(title)) marks.push('서술형');
+  // `형` 없이 제목 끝에 붙는 A/B — `심화수학1A` · `심화수학1B` (세종과학고 실측).
+  //   이걸 놓치면 내용이 완전히 다른 두 시험지가 한 시험으로 묶인다 (일치율 0% 였다).
+  const tail = title.match(/([AB])\s*$/);
+  if (tail && !ab) marks.push(`끝${tail[1]}`);
   const subj = subjectTokenOf(title);
   if (subj) marks.push(subj);
   return marks.join('+');
