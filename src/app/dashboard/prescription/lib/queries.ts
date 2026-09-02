@@ -118,6 +118,17 @@ async function resolveStudentIds(studentId: string): Promise<string[]> {
   return Array.from(ids);
 }
 
+/**
+ * ★ 2026-09-02 — 여기만 옛 A라인(diagnostics.sessions/items)에 남아 있다. 일부러 남겼다.
+ *   이 모듈은 **담임 수동 진단 입력**(/dashboard/prescription/entry) 전용 읽기·쓰기다.
+ *   시험 채점(EX)은 전부 B(print_sessions/session_results)로 옮겼지만, 수동 진단은
+ *   문제(problem_id) 없이 단원코드+정오만 넣는 구조라 B 스키마에 그대로 안 들어간다.
+ *
+ *   실측(2026-09-02): A 세션 111개가 **전부 EX** — 이 폼으로 만들어진 세션은 0건이다.
+ *   즉 지금 이 경로는 죽어 있다. 진단 이력 화면은 print_sessions 를 따로 합쳐 보여준다.
+ *   ⚠ 이 폼을 실제로 쓰기 시작하면, 그 기록은 리포트·분석 화면에 **안 나온다**(B 만 읽음).
+ *     쓸 거면 B 스키마로 옮기는 작업이 먼저다.
+ */
 export async function getStudentSessions(studentId: string): Promise<DiagnosisSession[]> {
   const ids = await resolveStudentIds(studentId);   // ★ 신원 병합
   const { data, error } = await diag()
