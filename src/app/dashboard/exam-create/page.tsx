@@ -30,12 +30,15 @@ import {
   Library,
   FileText,
   Sparkles,
+  Target,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
 import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
+import { WeakClinicPanel, type WeakProblemRow } from '@/components/exam-create/WeakClinicPanel';
 
 // ============================================================================
 // 출처별 카테고리 탭 (매쓰플랫 식 — 학교시험 / 유형기준 / 출처기준 식 구성)
@@ -44,7 +47,7 @@ import { SelectionTray, type PickedProblem } from '@/components/exam-create/Sele
 //     있는데 진단평가, 학교기출문제, 시중교재, 모의고사 등을 선택해서 그 안에서
 //     또 트리가 나눠져야하는 형태로... 모든 문제 포함 단원 선택도 유지"
 // ============================================================================
-type SourceTab = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock';
+type SourceTab = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock' | 'weak';
 
 const SOURCE_TABS: Array<{
   id: SourceTab;
@@ -91,6 +94,17 @@ const SOURCE_TABS: Array<{
     label: '모의고사',
     description: '연도 → 시험지 → 문제 (모의고사·수능·평가원)',
     icon: FileText,
+    color: 'rose',
+    available: true,
+  },
+  // ★ 취약 보충 — 다른 탭과 성격이 다르다. 출처가 아니라 **학생의 약점**이 입력이다.
+  //   교사가 고르는 게 아니라 시스템이 찾아 담아주고, 교사는 빼기만 한다.
+  //   (매쓰홀릭 "취약과제 만들기" 대응 — docs/benchmark/matholic/08-type-analysis.md §10-1)
+  {
+    id: 'weak',
+    label: '취약 보충',
+    description: '학생·기간만 정하면 약한 유형을 찾아 문제까지 담아준다',
+    icon: Target,
     color: 'rose',
     available: true,
   },
@@ -635,6 +649,20 @@ export default function ExamCreatePage() {
     setTypeCode(code);   // 맨 마지막 — 이게 검색 트리거다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * 취약 보충 결과 → 담은 문제.
+   * ★ 이 응답은 평평한 형태(typeCode/difficulty 가 최상위)라 ProblemRow 와 모양이 다르다.
+   *   adaptSearchRow 를 거치지 않고 바로 변환한다.
+   */
+  const weakToPicked = (p: WeakProblemRow): PickedProblem => ({
+    id: p.id,
+    content_latex: p.content || '',
+    typeCode: p.typeCode || '',
+    difficulty: Number.isFinite(Number(p.difficulty)) ? Number(p.difficulty) : 0,
+    sourceName: p.source || null,
+    sourceYear: typeof p.year === 'number' ? p.year : null,
+  });
 
   const toPickedProblem = (p: ProblemRow): PickedProblem => {
     const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
@@ -1644,6 +1672,20 @@ export default function ExamCreatePage() {
             </div>
           );
         })()
+      ) : activeTab === 'weak' ? (
+        // ★ 취약 보충 — 출처가 아니라 "학생의 약점"이 입력. 담아주고 교사가 뺀다.
+        <WeakClinicPanel
+          pickedIds={new Set(pickedList.map((p) => p.id))}
+          onTogglePick={(p) => setPickedList((prev) =>
+            prev.some((x) => x.id === p.id)
+              ? prev.filter((x) => x.id !== p.id)
+              : [...prev, weakToPicked(p)]
+          )}
+          onAddMany={(rows) => setPickedList((prev) => {
+            const have = new Set(prev.map((x) => x.id));
+            return [...prev, ...rows.filter((r) => !have.has(r.id)).map(weakToPicked)];
+          })}
+        />
       ) : activeTab !== 'all' ? (
         // ★ 도달 불가 (모든 탭 활성화 완료) — 안전망 placeholder
         <div className="flex flex-1 items-center justify-center p-10">

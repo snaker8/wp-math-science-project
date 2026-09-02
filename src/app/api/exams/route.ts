@@ -43,30 +43,45 @@ export async function GET(request: NextRequest) {
       : 200;
 
     // ★ 시험지 목록 조회 (institute-guard 격리). super_admin 은 전체, ORG_ADMIN 은 산하, 일반 user 는 자기 institute.
-    let examsBaseQuery = supabaseAdmin
-      .from('exams')
-      .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade, is_diagnostic, diagnostic_category, diagnostic_round, diagnostic_difficulty, school_name, district, semester, exam_year, exam_round, chapter')
-      .order('created_at', { ascending: false })
-      .limit(listLimit);
+    //   ★ 서버가 한 번에 1,000행에서 자른다 — `.limit(5000)` 을 줘도 1,000건만 온다.
+    //     클라우드 화면은 전체 목록이라 잘리면 폴더 트리·카운트·검색이 전부 어긋난다
+    //     (실사고 2026-09-02: 시험지 1,741건인데 화면엔 200건 → limit 올렸더니 1,000건).
+    //     그래서 1,000 넘게 요청하면 range 로 나눠 받는다.
+    const PAGE = 1000;
+    const buildQuery = (from: number, to: number) => {
+      let q = supabaseAdmin!
+        .from('exams')
+        .select('id, title, description, status, total_points, created_at, book_group_id, subject, exam_type, grade, is_diagnostic, diagnostic_category, diagnostic_round, diagnostic_difficulty, school_name, district, semester, exam_year, exam_round, chapter')
+        // ★ 소프트 삭제 제외 — 이 필터가 없었다. 지금까지 limit 200 에 가려 안 보였을 뿐,
+        //   제한을 풀자 삭제한 시험지 1,141건이 그대로 올라왔다 (2026-09-02 실측).
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-    if (isDiagnosticParam === 'true' || isDiagnosticParam === '1') {
-      examsBaseQuery = examsBaseQuery.eq('is_diagnostic', true);
-    }
-    if (diagnosticCategory) {
-      examsBaseQuery = examsBaseQuery.eq('diagnostic_category', diagnosticCategory);
-    }
-    if (subjectParam) {
-      examsBaseQuery = examsBaseQuery.eq('subject', subjectParam);
-    }
+      if (isDiagnosticParam === 'true' || isDiagnosticParam === '1') q = q.eq('is_diagnostic', true);
+      if (diagnosticCategory) q = q.eq('diagnostic_category', diagnosticCategory);
+      if (subjectParam) q = q.eq('subject', subjectParam);
 
-    // ★ 격리 필터 + 트랙 필터 (flag false 시 트랙 필터는 no-op, 기존 동작 그대로)
-    //   allowCommonPool: true — exams 도 공통풀(institute_id NULL) 자료는 모든 학원 공유.
-    //   사용자 보고 (2026-05-16): "엄궁차수학에서 다른 공통자산이 안보인다" —
-    //   PR #164 isolated_assets=true 적용 후 격리 학원에서 NULL 공통풀이 차단된 사고.
-    //   problems / book_groups 와 동일한 공통풀 정책 적용.
-    const filteredQuery = applyInstituteFilter(examsBaseQuery, scope, { allowCommonPool: true });
-    const trackFilteredQuery = applyTrackFilter(filteredQuery, scope);
-    const { data: exams, error: examsError } = await trackFilteredQuery;
+      // ★ 격리 필터 + 트랙 필터 (flag false 시 트랙 필터는 no-op, 기존 동작 그대로)
+      //   allowCommonPool: true — exams 도 공통풀(institute_id NULL) 자료는 모든 학원 공유.
+      //   사용자 보고 (2026-05-16): "엄궁차수학에서 다른 공통자산이 안보인다" —
+      //   PR #164 isolated_assets=true 적용 후 격리 학원에서 NULL 공통풀이 차단된 사고.
+      //   problems / book_groups 와 동일한 공통풀 정책 적용.
+      return applyTrackFilter(applyInstituteFilter(q, scope, { allowCommonPool: true }), scope);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type ExamListRow = { id: string; [k: string]: any };
+    const exams: ExamListRow[] = [];
+    let examsError: { message: string } | null = null;
+    for (let from = 0; from < listLimit; from += PAGE) {
+      const to = Math.min(from + PAGE, listLimit) - 1;
+      const { data, error } = await buildQuery(from, to);
+      if (error) { examsError = error; break; }
+      const rows = (data || []) as ExamListRow[];
+      exams.push(...rows);
+      if (rows.length < to - from + 1) break;   // 더 없음
+    }
 
     if (examsError) {
       console.error('[API/exams] List error:', examsError.message);
