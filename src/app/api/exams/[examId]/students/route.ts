@@ -61,13 +61,17 @@ export async function GET(
     }
   }
 
-  // 1. 이 시험의 EX 세션 모두
+  // 1. 이 시험의 채점 세션 모두
+  //    ★ 2026-09-02 A→B 통일. 예전엔 diagnostics.sessions(A) 를 읽어 **엑셀 채점분만** 보였다.
+  //      엑셀 채점을 걷어낸 지금은 QR 채점(B)이 유일한 입력이라, A 만 보면 새 채점이 안 뜬다.
+  //      A 데이터는 이미 B 로 이관돼 있으므로 B 하나만 읽으면 전부 나온다.
+  //    ★ session_type 을 'EX' 로 못박지 않는다 — QR 세션은 BS/DD/PT/SC/WS/EX 어느 것이든
+  //      될 수 있고, 이 화면은 "이 시험지를 친 학생" 전부를 보여야 한다.
   const { data: sessions, error: sessErr } = await supabaseAdmin
     .schema('diagnostics')
-    .from('sessions')
-    .select('id, student_id, conducted_at')
-    .eq('exam_id', examId)
-    .eq('session_type', 'EX');
+    .from('print_sessions')
+    .select('id, student_id, completed_at, issued_at')
+    .eq('exam_id', examId);
 
   if (sessErr) {
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
@@ -114,11 +118,14 @@ export async function GET(
 
   const sessionIds = sessionList.map((s) => s.id as string);
 
-  // 2. 각 세션의 items 합산
+  // 2. 각 세션의 채점 결과 합산 (B라인)
+  //    ★ 부분점수: A 는 note 에 `partial:3/5` 처럼 문자열로 박아 넣었는데,
+  //      B 에는 awarded_points / max_points 정식 칸이 있다. 둘 다 받는다
+  //      (이관된 옛 행은 note 가 없고, QR 채점분은 정식 칸을 쓴다).
   const { data: items, error: itemsErr } = await supabaseAdmin
     .schema('diagnostics')
-    .from('items')
-    .select('session_id, is_correct, note')
+    .from('session_results')
+    .select('session_id, is_correct, awarded_points, max_points')
     .in('session_id', sessionIds);
 
   if (itemsErr) {
@@ -132,25 +139,23 @@ export async function GET(
   >();
 
   for (const it of items ?? []) {
-    const sid = (it as { session_id: string }).session_id;
-    const isCorrect = (it as { is_correct: boolean }).is_correct;
-    const note = (it as { note: string | null }).note;
-    const a = itemAgg.get(sid) ?? {
+    const r = it as {
+      session_id: string; is_correct: boolean;
+      awarded_points: number | null; max_points: number | null;
+    };
+    const a = itemAgg.get(r.session_id) ?? {
       correct: 0,
       total: 0,
       partialEarned: 0,
       partialFull: 0,
     };
     a.total++;
-    if (isCorrect) a.correct++;
-    if (note && note.startsWith('partial:')) {
-      const m = note.match(/^partial:([0-9.]+)\/([0-9.]+)$/);
-      if (m) {
-        a.partialEarned += parseFloat(m[1]);
-        a.partialFull += parseFloat(m[2]);
-      }
+    if (r.is_correct) a.correct++;
+    if (r.awarded_points != null && r.max_points != null) {
+      a.partialEarned += Number(r.awarded_points);
+      a.partialFull += Number(r.max_points);
     }
-    itemAgg.set(sid, a);
+    itemAgg.set(r.session_id, a);
   }
 
   // 3. roster_students 조회 (학생 정보)
@@ -208,7 +213,8 @@ export async function GET(
       correctCount: correct,
       totalGraded: total,
       scorePct: pct,
-      conductedAt: (s.conducted_at as string | null) ?? null,
+      // B 는 완료 시각(completed_at)이 정식. 미완료면 발급 시각으로 대체.
+      conductedAt: (s.completed_at as string | null) ?? (s.issued_at as string | null) ?? null,
     };
   });
 
@@ -265,10 +271,12 @@ export async function DELETE(
     }
   }
 
-  // 세션이 해당 examId 의 것인지 확인 후 삭제 (CASCADE 로 items 함께 삭제)
+  // 세션이 해당 examId 의 것인지 확인 후 삭제 (CASCADE 로 채점 결과 함께 삭제)
+  //   ★ 목록을 B(print_sessions)에서 읽으므로 삭제도 B 에서 해야 한다.
+  //     A 를 지우면 목록에 그대로 남아 "삭제했는데 안 사라진다"가 된다.
   const { error: delErr } = await supabaseAdmin
     .schema('diagnostics')
-    .from('sessions')
+    .from('print_sessions')
     .delete()
     .eq('id', sessionId)
     .eq('exam_id', examId);
