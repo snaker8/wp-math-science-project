@@ -221,7 +221,8 @@ const _droppedCommands = new Map<string, number>();
 //   "무엇이 몇 건 지워졌나"를 정확히 세려면 원본 맵이 필요하다 (generateHWPX 가 호출 시작 시 clear).
 export function __droppedCommandsEntries(): Array<[string, number]> { return [..._droppedCommands.entries()]; }
 // 구조·서식 명령이라 지워지는 게 정상인 것들 — 경고에서 뺀다.
-const DROP_OK = new Set([
+// ★ export — 전수 감사(scripts/hwpx-audit.ts)가 같은 기준으로 걸러야 숫자가 어긋나지 않는다.
+export const DROP_OK = new Set([
   'left', 'right', 'middle', 'displaystyle', 'textstyle', 'scriptstyle', 'limits', 'nolimits',
   'quad', 'qquad', 'hspace', 'vspace', 'phantom', 'vphantom', 'hphantom', 'rule', 'strut',
   'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'large', 'Large', 'small', 'tiny',
@@ -379,6 +380,209 @@ function replaceBalanced(
   return s;
 }
 
+// ============================================================================
+// 중위(infix) `a \over b` 파서 (2026-09-02)
+// ----------------------------------------------------------------------------
+// ★ 무엇이 잘못됐나: `\over` 는 인자가 **앞뒤로 갈린** 중위 연산자라 `\cmd{..}` 형태를
+//   보는 replaceBalanced 로는 못 잡는다 → 아래 "남은 LaTeX 명령 정리"가 그냥 지운다.
+//   `1\over3` → `13` · `y= 2x+1 \over x+1` → `y= 2x+1 x+1` (분수가 통째로 소실, 실측).
+//   운영 200개 중 11건 / 전 코퍼스 27건. (`\atop`·`\choose` 는 실측 0건이라 미대응.)
+// ★ 인자 범위는 무엇인가 — **추측하지 않고 TeX 정의를 그대로 따른다**:
+//   `\over` 는 자기가 속한 그룹의 수식 목록을 통째로 분자/분모로 가른다.
+//   KaTeX 실측(2026-09-02)으로 확인 —
+//     `y= 2x+1 \over x+1`            → 분자 `y = 2x+1`      (앞의 `y=` 까지 분자로 들어간다)
+//     `\left( a+b \over c \right)`   → 분자 `a+b`           (\left…\right 가 그룹 경계)
+//     `{ 2} \over { 3`               → KaTeX parse error    (원문 결함)
+//   즉 `y=` 가 분자에 들어가는 건 **우리 변환 버그가 아니라 원문 결함**이고, 화면·인쇄
+//   (KaTeX)도 똑같이 그렇게 그린다. 여기서 "의도는 y = (2x+1)/(x+1) 일 것" 이라고
+//   똑똑하게 굴면 한글 파일만 화면과 달라진다 → 정의대로 간다.
+// ★ 그룹 경계: `{`·`}` / `\left`·`\right` / 행·열 구분자 `#`·`&`(cases·matrix 셀).
+//   `\{`·`\}` 는 리터럴 문자라 그룹이 아니다(이스케이프 판정으로 건너뛴다).
+// ============================================================================
+
+/** s[i] 가 백슬래시로 이스케이프됐는가 (앞선 연속 백슬래시 개수가 홀수) */
+function isEscaped(s: string, i: number): boolean {
+  let n = 0;
+  for (let j = i - 1; j >= 0 && s[j] === '\\'; j--) n++;
+  return n % 2 === 1;
+}
+
+/** 위치 i 에서 `\left`/`\right` 명령이 시작하는가 (`\leftarrow`·`\rightarrow` 는 제외) */
+function delimCmdAt(s: string, i: number): 'left' | 'right' | null {
+  if (s[i] !== '\\' || isEscaped(s, i)) return null;
+  if (s.startsWith('\\left', i) && !/[A-Za-z]/.test(s[i + 5] || '')) return 'left';
+  if (s.startsWith('\\right', i) && !/[A-Za-z]/.test(s[i + 6] || '')) return 'right';
+  return null;
+}
+
+/** `\left` 뒤의 구분자 토큰(`(`·`\{`·`.`·`\langle` …) 을 건너뛴 위치 */
+function skipDelimToken(s: string, pos: number): number {
+  let i = pos;
+  while (s[i] === ' ') i++;
+  if (s[i] === '\\') {
+    i++;
+    if (/[A-Za-z]/.test(s[i] || '')) { while (/[A-Za-z]/.test(s[i] || '')) i++; }
+    else if (s[i] !== undefined) i++;   // `\{` `\}` `\|`
+    return i;
+  }
+  return s[i] !== undefined ? i + 1 : i;
+}
+
+/** idx(=`\over` 위치) 를 감싸는 그룹의 시작 위치 */
+function groupStartBefore(s: string, idx: number): number {
+  let depth = 0;
+  for (let i = idx - 1; i >= 0; i--) {
+    const cmd = delimCmdAt(s, i);
+    if (cmd === 'right') { depth++; continue; }
+    if (cmd === 'left') {
+      if (depth === 0) return skipDelimToken(s, i + 5);
+      depth--; continue;
+    }
+    if (isEscaped(s, i)) continue;
+    const ch = s[i];
+    if (ch === '}') depth++;
+    else if (ch === '{') { if (depth === 0) return i + 1; depth--; }
+    else if (depth === 0 && (ch === '#' || ch === '&')) return i + 1;
+  }
+  return 0;
+}
+
+/** from(=`\over` 다음) 을 감싸는 그룹의 끝 위치 */
+function groupEndAfter(s: string, from: number): number {
+  let depth = 0;
+  for (let i = from; i < s.length; i++) {
+    const cmd = delimCmdAt(s, i);
+    if (cmd === 'left') { depth++; i += 4; continue; }
+    if (cmd === 'right') {
+      if (depth === 0) return i;
+      depth--; i += 5; continue;
+    }
+    if (isEscaped(s, i)) continue;
+    const ch = s[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { if (depth === 0) return i; depth--; }
+    else if (depth === 0 && (ch === '#' || ch === '&')) return i;
+  }
+  return s.length;
+}
+
+/**
+ * 짝 없는 중괄호 제거. 짝이 없는 `{`/`}` 는 정의상 묶음 정보를 못 담으므로(원문 잘림 흔적)
+ * 지워도 뜻이 안 바뀐다. 반대로 남겨두면 `{피연산자}` 로 감쌀 때 스크립트 전체가
+ * 불균형해져 한글에서 수식이 깨진다. 실데이터의 `\over` 는 절반 이상이 `$` 조기 종료로
+ * 잘려 있어(`{ 2} \over { 3`) 이 보정이 없으면 대부분 복구가 안 된다.
+ */
+function stripUnpairedBraces(t: string): string {
+  const drop = new Set<number>();
+  const open: number[] = [];
+  for (let i = 0; i < t.length; i++) {
+    if (isEscaped(t, i)) continue;
+    if (t[i] === '{') open.push(i);
+    else if (t[i] === '}') { if (open.length) open.pop(); else drop.add(i); }
+  }
+  for (const i of open) drop.add(i);
+  if (drop.size === 0) return t;
+  let out = '';
+  for (let i = 0; i < t.length; i++) if (!drop.has(i)) out += t[i];
+  return out;
+}
+
+/** `a \over b` → `{a} over {b}` (TeX 그룹 의미 그대로). 인자를 못 채우면 **원문을 남긴다**. */
+function convertInfixOver(src: string): string {
+  const OVER = /\\over(?![A-Za-z])/;
+  let s = src;
+  let searchFrom = 0;
+  for (let guard = 0; guard < 100; guard++) {
+    const m = OVER.exec(s.slice(searchFrom));
+    if (!m || m.index == null) break;
+    const idx = searchFrom + m.index;
+    const after = idx + m[0].length;
+    const gStart = groupStartBefore(s, idx);
+    const gEnd = groupEndAfter(s, after);
+    const rawNum = s.slice(gStart, idx);
+    const rawDen = s.slice(after, gEnd);
+    const num = stripUnpairedBraces(rawNum.trim()).trim();
+    const den = stripUnpairedBraces(rawDen.trim()).trim();
+    // 한쪽이라도 비면 분수가 아니다(원문 결함) → 치환하지 않고 원문 유지.
+    //   지우는 것보다 남기는 게 안전하고, 남으면 eq-dropped-command 가 잡아준다.
+    if (!num || !den) { searchFrom = after; continue; }
+    // 그룹 양끝 공백은 그대로 돌려준다 — `#{b} over {c}` 처럼 구분자에 딱 붙는 걸 막는다.
+    const lead = /^\s*/.exec(rawNum)![0];
+    const trail = /\s*$/.exec(rawDen)![0];
+    s = s.slice(0, gStart) + lead + `{${num}} over {${den}}` + trail + s.slice(gEnd);
+    searchFrom = 0;   // 치환 결과 안의 중첩 `\over` 도 다시 훑는다
+  }
+  return s;
+}
+
+// ============================================================================
+// 구분자 `\left…\right…` → 한글 LEFT/RIGHT (2026-09-02) — **짝이 맞을 때만**
+// ----------------------------------------------------------------------------
+// ★ 무엇이 잘못됐나 (eq-brace-unbalanced 270건 / 운영 200개 중 70개 시험지):
+//   원인은 `\right.` 자체가 아니라 **수식이 한글 산문을 사이에 두고 둘로 쪼개져 있는 것**.
+//   실데이터(문제 284b33fc 등):
+//     `$A= \left\{ x | x \right .$는 $125$ 이하의 자연수$\left. \right\}$`
+//   조건제시법 집합 안에 한글을 넣으려면 TeX 에선 이렇게 쓸 수밖에 없다 — 앞 조각은
+//   `\right.`(빈 구분자)로 닫고, 뒷 조각은 `\left.` 로 열어야 `\right\}` 가 합법이 된다.
+//   **원문은 정상 LaTeX 이고 KaTeX 도 제대로 그린다.** 그런데 우리 변환은
+//     `\left\{`→`LEFT {` (중괄호 +1) · `\right.`→공백 · `\left.`→공백 · `\right\}`→`RIGHT }`
+//   라서 앞 조각은 `LEFT {` 만, 뒤 조각은 `RIGHT }` 만 남는다.
+//   실측 분류(운영 200개): LEFT 만 144건 + RIGHT 만 96건 = 240/270 이 이 한 가지 원인.
+// ★ 왜 `LEFT { … RIGHT .` 로 안 고쳤나: 그게 한글에서 유효한지 **확인이 안 된다**.
+//   운영 코퍼스에 남아 있는 "한글이 스스로 내보낸" 스크립트를 전수 조사한 결과
+//   `LEFT ( … RIGHT )` 쌍은 7건 나오지만 `RIGHT .`·`LEFT .` 은 **0건**이다.
+//   근거 없는 토큰을 넣으면 한글은 오류를 안 내고 그냥 글자로 찍는다(= 시험지에 노출).
+// ★ 그래서: 짝이 안 맞는 쪽은 **고정폭 리터럴 중괄호 `lbrace`/`rbrace`** 로 낸다.
+//   이 토큰은 이 파일이 이미 naked `\{` 에 쓰고 있고 골든 테스트로 검증돼 있다
+//   (`\{ x \mid x > 0 \}` → `lbrace x | x > 0 rbrace`). 잃는 건 자동 크기 조절뿐이고,
+//   얻는 건 "한 줄짜리 조건제시법 집합이 안 깨지는 것" 이다.
+// ============================================================================
+
+/** `\left`/`\right` 를 스택으로 짝지어, 진짜 짝인 중괄호만 LEFT/RIGHT 로 낸다. */
+function convertDelimiters(src: string): string {
+  type Tok = { start: number; end: number; side: 'left' | 'right'; delim: string; mate: number };
+  const toks: Tok[] = [];
+  for (let i = 0; i < src.length; i++) {
+    const cmd = delimCmdAt(src, i);
+    if (!cmd) continue;
+    const nameEnd = i + (cmd === 'left' ? 5 : 6);
+    const end = skipDelimToken(src, nameEnd);
+    // 구분자 토큰 원문(앞 공백 제거). `\left` 뒤에 아무것도 없으면 빈 문자열.
+    const delim = src.slice(nameEnd, end).trim();
+    toks.push({ start: i, end, side: cmd, delim, mate: -1 });
+    i = end - 1;
+  }
+  if (toks.length === 0) return src;
+
+  // 스택 매칭 — 짝을 못 찾은 토큰은 mate = -1 로 남는다.
+  const stack: number[] = [];
+  for (let k = 0; k < toks.length; k++) {
+    if (toks[k].side === 'left') stack.push(k);
+    else if (stack.length) { const l = stack.pop()!; toks[l].mate = k; toks[k].mate = l; }
+  }
+
+  const isBrace = (d: string, side: 'left' | 'right') =>
+    side === 'left' ? d === '\\{' || d === '\\lbrace' : d === '\\}' || d === '\\rbrace';
+
+  const render = (t: Tok): string => {
+    const mate = t.mate >= 0 ? toks[t.mate] : null;
+    // 양쪽이 다 중괄호인 진짜 짝 → 가변 중괄호 LEFT { … RIGHT }
+    if (mate && isBrace(t.delim, t.side) && isBrace(mate.delim, mate.side)) {
+      return t.side === 'left' ? 'LEFT { ' : ' RIGHT } ';
+    }
+    // 그 외(짝 없음 / 상대가 빈 구분자 `.`) → 리터럴 구분자만 남긴다. LEFT/RIGHT 는 안 낸다.
+    if (isBrace(t.delim, t.side)) return t.side === 'left' ? ' lbrace ' : ' rbrace ';
+    if (t.delim === '' || t.delim === '.') return ' ';        // 빈 구분자
+    if (t.delim.startsWith('\\')) return `${t.delim} `;       // \langle \vert … 은 뒤 단계에 맡김
+    return t.delim;                                          // ( [ | ) ] 등 리터럴
+  };
+
+  let out = '';
+  let pos = 0;
+  for (const t of toks) { out += src.slice(pos, t.start) + render(t); pos = t.end; }
+  return out + src.slice(pos);
+}
+
 /**
  * 큰 연산자 `\sum_{..}^{..}` / `\lim_{..}` / `\int_{..}^{..}` → `sum from {..} to {..}`.
  * ★ 첨자 인자도 균형 파싱 — `\sum_{k=1}^{\frac{n}{2}}` 처럼 첨자에 분수가 들어가면
@@ -498,6 +702,14 @@ function latexToHWPEquation(latex: string): string {
     return `cases {${rows.join(' # ')}}`;
   });
 
+  // 평문TeX 중위 분수 `a \over b` → `{a} over {b}`.
+  //   ★ 여기 위치가 중요하다:
+  //     - cases/matrix 변환 **뒤** — `\begin{cases}…\end{cases}` 가 아직 남아 있으면
+  //       그룹 훑기가 `\end{cases}` 를 분모로 삼켜 조각함수가 통째로 깨진다.
+  //       (변환 뒤엔 행 구분자가 `#` 라 그룹 경계로 정상 인식된다.)
+  //     - `\left`/`\right` 제거 **앞** — 그 둘이 TeX 의 암묵 그룹 경계라 필요하다.
+  eq = convertInfixOver(eq);
+
   // 명령 → 한글 토큰 치환 공통부.
   // ★ 낱말 토큰이 이웃 글자와 **붙지 않게** 한다 — `\cdots\cdots` 가 `cdotscdots` 로 엉겨
   //   붙으면 한글이 모르는 낱말이 되어 글자 그대로 찍힌다 (검증 샘플 실측 2건).
@@ -529,10 +741,8 @@ function latexToHWPEquation(latex: string): string {
 
   // 구분자: \left\{ \right\} 만 LEFT { RIGHT }(가변 중괄호, 실측에서 렌더됨).
   //   괄호·대괄호·바(( [ |)는 HWP 에서 LEFT ( 가 글자로 깨짐 → \left/\right 만 제거하고 리터럴 구분자 유지.
-  eq = eq.replace(/\\left\s*\\\{/g, 'LEFT { ');
-  eq = eq.replace(/\\right\s*\\\}/g, ' RIGHT } ');
-  eq = eq.replace(/\\left\s*\./g, ' ').replace(/\\right\s*\./g, ' '); // 빈 구분자 \left. \right.
-  eq = eq.replace(/\\left\s*/g, '').replace(/\\right\s*/g, '');        // \left( [ | → 구분자만
+  //   ★ LEFT/RIGHT 는 **짝이 맞을 때만** 낸다 — convertDelimiters 참고.
+  eq = convertDelimiters(eq);
   // 남은 naked \{ \} (집합 등) → 리터럴 중괄호
   eq = eq.replace(/\\\{/g, ' lbrace ').replace(/\\\}/g, ' rbrace ');
 

@@ -121,6 +121,106 @@ describe('중첩 중괄호 — 명령이 지워지지 않는다', () => {
   });
 });
 
+// ============================================================================
+// 평문TeX 중위 분수 `a \over b` (2026-09-02)
+//   `\over` 는 인자가 앞뒤로 갈린 중위 연산자라 `\cmd{..}` 파서가 못 잡아 그냥 지워졌다
+//   → `1\over3` 이 `13` 이 되는 등 **분수가 통째로 소실** (운영 200개 중 11건 / 코퍼스 27건).
+//   기대값은 추측이 아니라 TeX 정의(= KaTeX 실측)를 그대로 따른다: `\over` 는 자기가 속한
+//   그룹 전체를 분자/분모로 가른다. `y=` 가 분자에 들어가는 건 원문 결함이며 화면·인쇄도 동일.
+// ============================================================================
+describe('중위 \\over — 분수가 사라지지 않는다', () => {
+  const cases: [string, string][] = [
+    // 그룹이 수식 전체 — TeX 정의대로 앞부분이 통째로 분자 (KaTeX 실측 일치)
+    ['y= 2x+1 \\over x+1', '{y= 2x+1} over {x+1}'],
+    ['f(x)= x+1 \\over x-1', '{f(x)= x+1} over {x-1}'],
+    // 공백 없이 붙은 형태 — 고치기 전엔 `13` 으로 숫자가 엉겨붙었다
+    ['1\\over3', '{1} over {3}'],
+    // \left…\right 가 그룹 경계 (KaTeX 실측 일치 — 괄호는 분수 밖에 남는다)
+    ['\\left( a+b \\over c \\right)', '( {a+b} over {c} )'],
+    // 행 구분자 `#` 가 셀 경계 — 앞 행을 분자로 삼키지 않는다
+    [
+      '\\begin{cases} a=1 \\\\ b= 2 \\over 3 \\end{cases}',
+      'cases {a=1 # {b= 2} over {3}}',
+    ],
+    // 원문이 `$` 조기 종료로 잘려 중괄호 짝이 없는 형태 (실데이터 다수) — 짝 없는 중괄호만
+    // 떼고 분수는 살린다. 안 그러면 분수 자체가 사라진다.
+    ['{ 2} \\over { 3', '{{ 2}} over {3}'],
+    ['2 \\over { rootx+1', '{2} over {rootx+1}'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+    });
+  }
+
+  it('분자/분모 어느 쪽이든 비면 치환하지 않는다 (인자 못 채우면 원문 유지 원칙)', () => {
+    // 분자가 빈 실데이터(`...=0{\over { p s o m a t h }}`) — 분수가 아니므로 손대지 않는다.
+    const out = latexToHWPEquation('x=0{\\over { psomath }}');
+    expect(out).not.toMatch(/\bover\b/);   // 엉터리 분수를 만들어내지 않는다
+  });
+
+  it('\\over 를 고쳐도 중괄호 균형이 깨지지 않는다', () => {
+    for (const src of ['{ 2} \\over { 3', 'a \\over b', '\\left( a+b \\over c \\right)', '{{\\beta }}} \\over {\\alpha }']) {
+      const out = latexToHWPEquation(src);
+      expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+    }
+  });
+});
+
+// ============================================================================
+// 구분자 LEFT/RIGHT 짝 (2026-09-02) — eq-brace-unbalanced 270건의 실제 원인
+//   조건제시법 집합 안에 한글을 넣으면 수식이 산문을 사이에 두고 둘로 쪼개진다:
+//     `$A= \left\{ x | x \right.$는 $125$ 이하의 자연수$\left. \right\}$`
+//   원문은 정상 LaTeX 이고 KaTeX 도 제대로 그린다. 그런데 예전 변환은 앞 조각에 `LEFT {` 만,
+//   뒤 조각에 `RIGHT }` 만 남겨 한글에서 중괄호가 안 닫혔다 (실측 LEFT만 144 + RIGHT만 96).
+//   ★ `RIGHT .` 는 한글 실측 근거가 0건이라 쓰지 않는다 → 짝 없는 쪽은 리터럴 lbrace/rbrace.
+// ============================================================================
+describe('LEFT/RIGHT 는 짝이 맞을 때만 낸다', () => {
+  const cases: [string, string][] = [
+    // 정상 짝 — 기존 동작 유지 (가변 중괄호)
+    ['\\left\\{ x | x \\ge 1 \\right\\}', 'LEFT { x | x >= 1 RIGHT }'],
+    ['\\left\\{ 1, 4, 5 \\right\\}', 'LEFT { 1, 4, 5 RIGHT }'],
+    // 상대가 빈 구분자 `\right.` — LEFT 만 남으면 안 되므로 리터럴 중괄호로
+    ['\\left\\{ x | x \\right.', 'lbrace x | x'],
+    // 짝의 반대쪽 조각 — RIGHT 만 남으면 안 된다
+    ['\\left. \\right\\}', 'rbrace'],
+    // 짝 없는 `\left\{` (뒤 조각이 아예 없는 실데이터)
+    ['U= \\left\\{ x | x', 'U= lbrace x | x'],
+    // 중첩 — 안쪽은 짝이 맞고 바깥은 안 맞는 경우, 안쪽만 LEFT/RIGHT
+    ['A= \\left\\{ 1 \\right\\} , B= \\left\\{ y | y', 'A= LEFT { 1 RIGHT } , B= lbrace y | y'],
+    // 괄호·대괄호는 기존대로 리터럴만 (한글에서 LEFT ( 는 글자로 깨진다)
+    ['\\left( x+1 \\right)', '( x+1 )'],
+    ['\\left[ 0, 1 \\right]', '[ 0, 1 ]'],
+  ];
+  for (const [latex, hwp] of cases) {
+    it(`${latex} → ${hwp}`, () => {
+      expect(latexToHWPEquation(latex)).toBe(hwp);
+    });
+  }
+
+  it('한글 산문으로 쪼개진 조건제시법 집합 — 조각마다 중괄호가 균형이다 (실데이터 284b33fc)', () => {
+    const raw = '두 집합 $A= \\left\\{ x | x \\right .$는 $125$ 이하의 자연수$\\left. \\right\\}$ 에 대하여';
+    for (const seg of parseContent(raw)) {
+      if (seg.type !== 'equation') continue;
+      expect((seg.value.match(/\{/g) || []).length).toBe((seg.value.match(/\}/g) || []).length);
+      expect((seg.value.match(/LEFT/g) || []).length).toBe((seg.value.match(/RIGHT/g) || []).length);
+    }
+  });
+
+  it('LEFT 를 냈으면 RIGHT 도 낸다 (짝 불변식)', () => {
+    for (const src of [
+      '\\left\\{ x \\right.',
+      '\\left. x \\right\\}',
+      '\\left\\{ \\left\\{ a \\right\\} , b \\right.',
+      '\\left\\{ a \\right\\} \\cup \\left\\{ b \\right.',
+    ]) {
+      const out = latexToHWPEquation(src);
+      expect((out.match(/LEFT/g) || []).length).toBe((out.match(/RIGHT/g) || []).length);
+      expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+    }
+  });
+});
+
 describe('parseContent 디스플레이 수식 분리', () => {
   it('$$..$$ 는 display=true', () => {
     const segs = parseContent('다음을 계산하시오. $$\\frac{1}{2}+\\frac{1}{3}$$ 답을 쓰시오.');

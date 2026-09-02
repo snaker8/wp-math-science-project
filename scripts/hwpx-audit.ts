@@ -6,14 +6,17 @@
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
-import { generateHWPX, scanHwpxArtifacts, type HwpxArtifactWarning } from '../src/lib/export/hwpx-generator';
+import { generateHWPX, scanHwpxArtifacts, __droppedCommandsEntries, DROP_OK, type HwpxArtifactWarning } from '../src/lib/export/hwpx-generator';
 import JSZip from 'jszip';
 
 const env: Record<string, string> = {};
 for (const f of ['.env.local', '.env']) {
   try {
-    for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
-      const m = line.match(/^([A-Z_]+)=(.*)$/);
+    // ★ split(/\r?\n/) 필수 — `.env.local` 이 CRLF 라 `\n` 으로만 자르면 줄 끝에 `\r` 이 남고
+    //   `(.*)$` 의 `.` 는 `\r` 을 못 먹어 **전 항목 매칭 실패** → supabaseUrl is required 로 즉사.
+    //   맨 앞 BOM(﻿)도 제거 — 첫 줄이 주석이 아니면 첫 키 이름이 깨진다.
+    for (const line of fs.readFileSync(f, 'utf8').replace(/^﻿/, '').split(/\r?\n/)) {
+      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
       if (m && !(m[1] in env)) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '');
     }
   } catch { /* ignore */ }
@@ -37,6 +40,7 @@ async function main() {
   console.log(`대상 시험지: ${targets.length}개`);
 
   const byKind = new Map<string, { count: number; exams: Set<string>; samples: string[] }>();
+  const dropped = new Map<string, { count: number; exams: Set<string> }>();
   let scanned = 0; let withWarn = 0; let failed = 0;
 
   for (const exam of targets) {
@@ -68,6 +72,13 @@ async function main() {
         title: exam.title, showAnswerSheet: true, showSolutions: true, columns: 2, skipImages: true,
         header: { schoolName: '', examTitle: exam.title, subject: '', examType: '', grade: '' },
       })) as Buffer;
+      // ★ "조용히 지워진 LaTeX 명령" 은 산출물에 흔적이 안 남아 scanHwpxArtifacts 로는 못 본다.
+      //   (근호·분수가 통째로 사라지는 제일 위험한 클래스) — 생성 직후 원본 맵을 읽어 따로 센다.
+      for (const [cmd, n] of __droppedCommandsEntries()) {
+        if (DROP_OK.has(cmd)) continue;   // 구조·서식 명령은 지워지는 게 정상
+        if (dropped.has(cmd)) { const e = dropped.get(cmd)!; e.count += n; e.exams.add(exam.title); }
+        else dropped.set(cmd, { count: n, exams: new Set([exam.title]) });
+      }
       const zip = await JSZip.loadAsync(buf);
       const sec = await zip.file('Contents/section0.xml')!.async('string');
       const warns = scanHwpxArtifacts(sec);
@@ -97,6 +108,14 @@ async function main() {
     console.log('  시험지(최대 5):', [...e.exams].slice(0, 5).join(' / '));
   }
   if (sorted.length === 0) console.log('잔재 없음 — 전체 클린 ✓');
+
+  // 조용히 지워진 명령 (DROP_OK 로 걸러진 구조·서식 명령은 이미 제외돼 있다)
+  const dropSorted = [...dropped.entries()].sort((a, b) => b[1].count - a[1].count);
+  console.log(`\n=== 삭제된 LaTeX 명령 (기호가 통째로 사라지는 클래스) ===`);
+  if (dropSorted.length === 0) console.log('삭제 없음 ✓');
+  for (const [cmd, e] of dropSorted) {
+    console.log(`  \\${cmd}: ${e.count}건 / 시험지 ${e.exams.size}개 — ${[...e.exams].slice(0, 3).join(' / ')}`);
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
