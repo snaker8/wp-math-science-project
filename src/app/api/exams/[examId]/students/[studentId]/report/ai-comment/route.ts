@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { findGradingSession } from '@/lib/diagnostics/find-session';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -132,19 +133,13 @@ export async function POST(
   }
 
   // 2. 학생 세션 찾기
-  const { data: sessions } = await supabaseAdmin
-    .schema('diagnostics')
-    .from('sessions')
-    .select('id, ai_comment_json')
-    .eq('exam_id', examId)
-    .eq('student_id', studentId)
-    .eq('session_type', 'EX')
-    .order('conducted_at', { ascending: false })
-    .limit(1);
-
-  const session = sessions?.[0] as
-    | { id: string; ai_comment_json: AiCommentJson | null }
-    | undefined;
+  //   ★ 2026-09-02 B라인으로. 예전엔 A(sessions)를 session_type='EX' 로만 봐서
+  //     **QR 로만 채점한 학생은 이 기능이 통째로 죽어 있었다** ("채점 기록이 없습니다").
+  //     신원 병합(승격 전 roster id)도 빠져 있었다. findGradingSession 이 둘 다 처리한다.
+  const found = await findGradingSession(supabaseAdmin, examId, studentId);
+  const session = found
+    ? { id: found.id, ai_comment_json: found.aiComment as AiCommentJson | null }
+    : undefined;
   if (!session) {
     return NextResponse.json(
       { error: '이 학생의 채점 기록이 없습니다.' },
@@ -224,7 +219,7 @@ export async function POST(
   // 8. 캐시 저장
   await supabaseAdmin
     .schema('diagnostics')
-    .from('sessions')
+    .from('print_sessions')
     .update({ ai_comment_json: aiComment })
     .eq('id', session.id);
 
@@ -267,17 +262,9 @@ export async function PUT(
     }
   }
 
-  const { data: sessions } = await supabaseAdmin
-    .schema('diagnostics')
-    .from('sessions')
-    .select('id')
-    .eq('exam_id', examId)
-    .eq('student_id', studentId)
-    .eq('session_type', 'EX')
-    .order('conducted_at', { ascending: false })
-    .limit(1);
-
-  const session = sessions?.[0] as { id: string } | undefined;
+  // ★ B라인 + 신원 병합 (GET 과 같은 헬퍼). 옛 코드는 A 를 session_type='EX' 로만 봐서
+  //   QR 채점 학생은 교사 코멘트 저장이 404 로 실패했다.
+  const session = await findGradingSession(supabaseAdmin, examId, studentId);
   if (!session) {
     return NextResponse.json(
       { error: '이 학생의 채점 기록이 없습니다.' },
@@ -296,7 +283,7 @@ export async function PUT(
 
   const { error } = await supabaseAdmin
     .schema('diagnostics')
-    .from('sessions')
+    .from('print_sessions')
     .update({ teacher_comment_json: teacherComment })
     .eq('id', session.id);
 
