@@ -31,12 +31,29 @@ for (const line of fs.readFileSync('.env.local', 'utf-8').split('\n')) {
   const i = t.indexOf('='); if (i > 0) process.env[t.slice(0, i)] = t.slice(i + 1).replace(/^["']|["']$/g, '');
 }
 
+/**
+ * 집합 이름이 공백 없이 붙어 오는 형태 — `A SMALLINTERC`, `X SUBSETA`, `Q SMALLUNIONS`.
+ * 아래 RULES 의 "뒤에 글자 붙으면 낱말" 규칙만으론 안 잡힌다(1차 교정에서 45+21건 잔존).
+ * ★ 대문자 한 글자 + 낱말 경계일 때만 피연산자로 본다 → 대문자 CIRCLE 은 안 건드린다.
+ */
+const GLUED_RE =
+  /(?<![\\A-Za-z])(SMALLINTER|SMALLUNION|SMALLDIFFERENCE|EMPTYSET|CIRC|SUBSET|SUPSET|NOTIN)([A-Za-z])(?![A-Za-z])/g;
+const GLUED_MAP: Record<string, string> = {
+  SMALLINTER: '\\cap', SMALLUNION: '\\cup', SMALLDIFFERENCE: '\\setminus',
+  EMPTYSET: '\\emptyset', CIRC: '\\circ',
+  SUBSET: '\\subset', SUPSET: '\\supset', NOTIN: '\\notin',
+};
+
 /** 앞에 백슬래시가 없고, 뒤에 글자가 안 붙은 맨 토큰만 잡는다. */
 const RULES: Array<[RegExp, string, string]> = [
+  // ★ NSUBSET(⊄)은 SUBSET(⊂)과 뜻이 반대 — 반드시 먼저.
+  [/(?<![\\A-Za-z])(?:n|not)SUBSET(?=[^A-Za-z]|[A-Z](?![A-Za-z]))/gi, '\\not\\subset ', 'NSUBSET → ⊄'],
   [/(?<![\\A-Za-z])smallinter(?![A-Za-z])/gi,       '\\cap ',      'SMALLINTER → ∩'],
   [/(?<![\\A-Za-z])smallunion(?![A-Za-z])/gi,       '\\cup ',      'SMALLUNION → ∪'],
   [/(?<![\\A-Za-z])smalldifference(?![A-Za-z])/gi,  '\\setminus ', 'SMALLDIFFERENCE → ∖'],
   [/(?<![\\A-Za-z])emptyset(?![A-Za-z])/gi,         '\\emptyset ', 'EMPTYSET → ∅'],
+  // ★ bigcirc(○) 를 circ(∘) 보다 먼저 — 순서가 바뀌면 BIGCIRC 가 BIG\circ 가 된다.
+  [/(?<![\\A-Za-z])bigcirc(?![A-Za-z])/gi,          '\\bigcirc ',  'BIGCIRC → ○'],
   [/(?<![\\A-Za-z])circ(?![A-Za-z])/gi,             '\\circ ',     'CIRC → ∘'],
   [/<->/g,                                          '\\leftrightarrow ', '<-> → ↔'],
   [/->/g,                                           '\\to ',       '-> → →'],
@@ -47,6 +64,11 @@ const stats = new Map<string, number>();
 export function fixSymbols(text: string | null): string | null {
   if (!text) return text;
   let out = text;
+  // 붙어 온 형태 먼저 (RULES 가 못 잡는 것)
+  const beforeGlued = out;
+  out = out.replace(GLUED_RE, (_m, cmd: string, operand: string) => `${GLUED_MAP[cmd]} ${operand}`);
+  if (out !== beforeGlued) stats.set('붙은 집합명 (SMALLINTERC 등)', (stats.get('붙은 집합명 (SMALLINTERC 등)') ?? 0) + 1);
+
   for (const [re, rep, label] of RULES) {
     const before = out;
     out = out.replace(re, rep);
@@ -78,6 +100,7 @@ async function main() {
   const LIKE = 'content_latex.ilike.%SMALLINTER%,content_latex.ilike.%SMALLUNION%,'
     + 'content_latex.ilike.%SMALLDIFFERENCE%,content_latex.ilike.%EMPTYSET%,'
     + 'content_latex.ilike.%CIRC%,content_latex.ilike.%->%,'
+    + 'content_latex.like.%SUBSET%,content_latex.like.%SUPSET%,content_latex.like.%NOTIN%,'
     + 'solution_latex.ilike.%SMALLINTER%,solution_latex.ilike.%EMPTYSET%,'
     + 'solution_latex.ilike.%CIRC%,solution_latex.ilike.%->%';
 
@@ -128,6 +151,17 @@ async function main() {
   }
 
   if (!COMMIT) { console.log('실제로 쓰려면 --commit'); return; }
+
+  // ★ 되돌릴 수 있게 원본을 먼저 뜬다. 본문을 바꾸는 작업이라 없으면 복구 못 한다.
+  // 이전 백업을 덮어쓰지 않는다 — 여러 번 돌리면 앞 회차 원본이 사라진다
+  let backupPath = 'scripts/.backup-hwp-symbol-leaks.json';
+  for (let i = 2; fs.existsSync(backupPath); i++) backupPath = `scripts/.backup-hwp-symbol-leaks-${i}.json`;
+  const backup = patches.map((p) => {
+    const r = rows.find((x) => x.id === p.id)!;
+    return { id: r.id, content_latex: r.content_latex, solution_latex: r.solution_latex, answer_json: r.answer_json };
+  });
+  fs.writeFileSync(backupPath, JSON.stringify(backup, null, 0), 'utf-8');
+  console.log(`\n원본 백업 ${backup.length}건 → ${backupPath}\n`);
 
   let ok = 0, fail = 0;
   for (const p of patches) {

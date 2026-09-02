@@ -160,6 +160,47 @@ describe('hangulEquationToLatex — 집합·합성 기호 (사대부고)', () =>
     expect(out).not.toContain('\\to ');
   });
 
+  // ★ 집합 이름이 공백 없이 붙는 형태 — 1차 교정에서 45+21건이 이래서 남았다
+  it('뒤에 집합 이름이 붙어 와도 잡는다 — A SMALLINTERC', () => {
+    const out = hangulEquationToLatex('A SMALLINTERC= A');
+    expect(out).toContain('\\cap');
+    expect(out).toContain('C');
+    expect(out).not.toMatch(/SMALLINTER/);
+    expect(renders(out)).toBe(true);
+  });
+
+  it('SUBSETA / SMALLUNIONS 도 떼어낸다', () => {
+    expect(hangulEquationToLatex('X SUBSETA')).toContain('\\subset');
+    expect(hangulEquationToLatex('Q SMALLUNIONS= Q')).toContain('\\cup');
+  });
+
+  it('대문자 낱말 CIRCLE 은 안 건드린다 — 두 글자 이상 뒤따르면 낱말', () => {
+    expect(hangulEquationToLatex('CIRCLE')).not.toContain('\\circ');
+  });
+
+  it('소문자 함수명이 붙어도 잡는다 — (f CIRCf)(x)', () => {
+    const out = hangulEquationToLatex('left ( f CIRCf right ) left ( x right )');
+    expect(out).toContain('\\circ');
+    expect(out).not.toMatch(/CIRCf/);
+    expect(renders(out)).toBe(true);
+  });
+
+  // ★ NSUBSET(⊄)은 SUBSET(⊂)과 뜻이 반대 — 절대 같이 취급하면 안 된다
+  it('NSUBSET / notSUBSET → \\not\\subset', () => {
+    const a = hangulEquationToLatex('A NSUBSET X');
+    expect(a).toContain('\\not\\subset');
+    expect(renders(a)).toBe(true);
+    expect(hangulEquationToLatex('left\\{ 7, 8, 9 right\\} notSUBSET X')).toContain('\\not\\subset');
+  });
+
+  // ★ BIGCIRC(○)는 합성 ∘ 가 아니다 — 다른 기호로 가야 한다
+  it('BIGCIRC 는 \\bigcirc 이지 \\circ 가 아니다', () => {
+    const out = hangulEquationToLatex('A BIGCIRC B=2A-B');
+    expect(out).toContain('\\bigcirc');
+    expect(out).not.toMatch(/(?<!\\big)\\circ/);
+    expect(renders(out)).toBe(true);
+  });
+
   // ★ 오탐 방지 — 낱말 속 철자는 건드리지 않는다
   it('circle / emptysets 같은 낱말은 안 건드린다', () => {
     expect(hangulEquationToLatex('circle')).not.toContain('\\circ');
