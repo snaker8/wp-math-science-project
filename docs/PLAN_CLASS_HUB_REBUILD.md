@@ -122,7 +122,7 @@ student_node_snapshots  student_id · week_of · alpha_cnt · beta_cnt · gamma_
 
 | 단계 | 내용 | 선행 |
 |---|---|---|
-| **0** | `diagnostics` 스키마 API 노출 | **대표님 대시보드 설정** |
+| ~~**0**~~ | ~~`diagnostics` 스키마 API 노출~~ | **✅ 2026-09-02 완료** |
 | **1** | 채점 한 라인으로 — 수동 입력을 B라인에 쓰게, 읽는 곳 전수 통일 | 0 |
 | **2** | 반 허브 껍데기 + 학생 탭 (진행도·정답률·최근) | 1 |
 | **3** | 과제 — 테이블 + 단원과제 + 제출 현황 | 2 |
@@ -131,6 +131,21 @@ student_node_snapshots  student_id · week_of · alpha_cnt · beta_cnt · gamma_
 | **6** | 스냅샷 + 이력 차트 | 5 |
 
 **0번이 없으면 1~6이 전부 무의미하다.**
+
+### ✅ 단계 0 완료 (2026-09-02) — 실측
+
+대표님이 `Exposed schemas` 에 `diagnostics` 추가. 켠 직후 실측:
+
+```
+student_node_status  3,950행     session_results  1,658행
+print_sessions          96행     sessions            111행
+items                2,746행     v_student_mathsecr_heatmap  418행
+```
+
+켜지자마자 같이 살아난 것:
+- **취약 보충** — 신경욱·최정우 3개월 → 취약유형 18개 · 문제 18개 담김 (실화면 확인)
+- **약점 화면**(처방) — 최정우 `중2-1 γ7 β1 α37` / `중3-1 γ11 β1 α49` 표시
+  → 같이 넣은 **학생 id 병합 수정**(승격 전 roster id)도 이걸로 검증됐다.
 
 ### 이번에 안 하는 것 (명시)
 - **AI 예측 숙달도** — 대표 지시로 제외. 안 푼 유형은 "모름"으로 둔다.
