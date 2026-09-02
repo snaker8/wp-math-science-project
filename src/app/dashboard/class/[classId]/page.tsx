@@ -10,7 +10,7 @@
 // 학생 하나를 보려면 메뉴 여섯 곳을 돌아야 했다.
 //
 // 탭은 여섯: 학생 · 과제 · 채점 · 숙달 · 이력 · 설정.
-// 이 단계에서는 **학생 탭만** 채운다. 나머지는 무엇이 올지 자리만 잡아 둔다
+// 채운 것: 학생(단계 2) · 과제(단계 3). 나머지는 무엇이 올 자리인지만 적어 뒀다
 // (빈 탭에 "준비 중" 을 띄우는 건, 없는 걸 있는 척하는 것보다 낫다).
 // ============================================================================
 
@@ -21,6 +21,7 @@ import {
   Users, ClipboardList, CheckSquare, Grid3x3, LineChart, Settings2,
   Loader2, ArrowLeft, RefreshCw, ExternalLink,
 } from 'lucide-react';
+import { AssignmentsTab } from '@/components/class/AssignmentsTab';
 
 interface HubStudent {
   id: string;
@@ -273,13 +274,16 @@ export default function ClassHubPage() {
             )
           )}
 
-          {tab !== 'students' && !error && (
+          {tab === 'assignments' && !error && classId && (
+            <AssignmentsTab classId={classId} />
+          )}
+
+          {tab !== 'students' && tab !== 'assignments' && !error && (
             <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
               <p className="text-sm text-content-secondary">
                 「{TABS.find((t) => t.key === tab)?.label}」 탭은 아직 만들지 않았습니다.
               </p>
               <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-content-muted">
-                {tab === 'assignments' && '단원 · 오답 · 취약 · 유형 네 갈래로 과제를 만들고, 기간과 대상·제출 현황을 여기서 봅니다.'}
                 {tab === 'grading' && 'QR · 엑셀 · 수동 채점을 한 줄에 모읍니다.'}
                 {tab === 'mastery' && '단원 × 난이도 매트릭스로 반 전체의 구멍을 한눈에 봅니다.'}
                 {tab === 'history' && '주차별 숙달 추이를 쌓아 꺾은선으로 보여줍니다.'}
