@@ -17,6 +17,7 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { assertExamAccess } from '@/lib/security/institute-guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import katex from 'katex';
+import { balanceLatex } from '@/components/shared/latex-balance';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,9 +138,12 @@ function renderMixedContent(raw: string): string {
     const isBlock = m[1] !== undefined;
     // ★ % 는 TeX 주석 문자 — 수식 안 % 가 뒤를 통째로 주석 처리하던 사고. \% 로 이스케이프. (2026-06-20)
     const tex = (m[1] ?? m[2] ?? '').trim().replace(/(?<!\\)%/g, '\\%');
+    // ★ 짝 안 맞는 \left/\right·중괄호 복구 — throwOnError:false 라 catch 가 안 타고
+    //   빨간 raw 로 인쇄되던 것 차단. 짝 맞으면 no-op. (2026-09-02)
+    const texSafe = balanceLatex(tex);
     try {
       parts.push(
-        katex.renderToString(tex, {
+        katex.renderToString(texSafe, {
           displayMode: isBlock,
           throwOnError: false,
           strict: 'ignore',

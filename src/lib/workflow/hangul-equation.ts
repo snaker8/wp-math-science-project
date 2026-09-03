@@ -7,7 +7,10 @@
 //   못 잡는 고급 표기(행렬/cases 일부)는 원문 유지 → 펼쳐보기에서 수정.
 // ============================================================================
 
+import { balanceLeftRight } from '@/components/shared/latex-balance';
+
 // 백슬래시를 붙여야 하는 한글 수식 명령어 (LaTeX 명령과 철자 동일)
+
 const BACKSLASH_CMDS = [
   // 구분자/구조
   'left', 'right', 'sqrt', 'frac', 'over',
@@ -400,19 +403,13 @@ export function hangulEquationToLatex(script: string): string {
   //   은 \left\{ 안이 아니므로 보존. \right 를 넘어가지 않게 스코프 제한(다른 집합/괄호 침범 방지).
   s = s.replace(/\\left\\\{((?:(?!\\right)[\s\S])*?)\\left\|/g, '\\left\\{$1\\middle|');
 
-  // 4.65) 끝의 짝 없는 \right 제거 — 원문 결함으로 \right 가 \left 보다 많을 때(끝에 `\right .` 만
-  //   남는 등). 미제거 시 KaTeX "Expected matching \left" 에러로 수식 통째 빨강(동인고 #15).
-  {
-    let leftN = (s.match(/\\left(?![A-Za-z])/g) || []).length;
-    let rightN = (s.match(/\\right(?![A-Za-z])/g) || []).length;
-    let guard = 0;
-    while (rightN > leftN && guard++ < 10) {
-      const before = s;
-      s = s.replace(/\\right\s*(?:\\?[.)\]}|]|\\rangle|\\rbrace)?\s*$/, '').trimEnd();
-      if (s === before) break; // 끝이 아니면 중단(섣불리 중간 제거 안 함)
-      rightN--;
-    }
-  }
+  // 4.65) \left/\right 짝 복구 — 원문 결함으로 한쪽만 남을 때 짝 없는 쪽만
+  //   평범한 구분자로 낮춘다. 안 고치면 KaTeX 가 수식을 통째로 빨간 raw 로 렌더한다.
+  //   - \right 가 많을 때: Expected matching \left (동인고 #15)
+  //   - \left 가 많을 때: Expected \right, got EOF — 연립방정식 두 벌을 나란히
+  //     쓸 때 \qquad \left. 만 남는 패턴 (여명중 25-2-1-F #18, 2026-09-02)
+  //   짝이 다 맞으면 no-op 이라 정상 수식은 그대로 남는다.
+  s = balanceLeftRight(s);
 
   // 4.7) 행렬 플레이스홀더 복원 (모든 토큰 변환 끝난 뒤 — 열 `&`·행 `\\` 가 위 단계들에 안 지워짐)
   s = s.split(MAT_COL).join(' & ').split(MAT_ROW).join(' \\\\ ');

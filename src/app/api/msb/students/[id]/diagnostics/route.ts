@@ -60,34 +60,63 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq('promoted_user_id', id);
   const studentRefs = [id, ...((promoted || []).map((r) => (r as { id: string }).id))];
 
-  // 진단 세션 (sessions+items 라인 — difficulty 보유)
+  // ★ 2026-09-02 — B(채점) 라인으로. 이유 두 가지:
+  //   1) A(sessions/items)만 보면 QR 로 채점한 기록이 통째로 빠진다.
+  //   2) ★ A 의 items.difficulty 는 **2,746건 전부 NULL** 이었다(실측).
+  //      아래 집계가 difficulty null 을 건너뛰므로, 이 API 는 지금까지 **항상 0** 을 내보냈다.
+  //      난이도는 classifications.difficulty(1~10) 에서 가져온다.
+  //
+  //   난이도 버킷 — 옆 코드는 1~5 척도에서 `>=4 / ==3 / 나머지` 였다.
+  //   1~10 을 ceil(d/2) 로 접으면 그대로 대응된다 → 상 7~10 / 중 5~6 / 하 1~4.
   const { data: sessRows } = await sb
     .schema('diagnostics' as never)
-    .from('sessions')
-    .select('id, conducted_at, note')
+    .from('print_sessions')
+    .select('id, completed_at, issued_at, teacher_note')
     .in('student_id', studentRefs)
-    .order('conducted_at', { ascending: true });
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: true });
   const sessions = (sessRows || []) as Array<{
-    id: string; conducted_at: string | null; note: string | null;
+    id: string; completed_at: string | null; issued_at: string | null; teacher_note: string | null;
   }>;
   if (sessions.length === 0) return corsJson(req, { diagnostics: [] });
 
-  // 문항 — 세션별 난이도 버킷 집계
   const sessionIds = sessions.map((s) => s.id);
-  const { data: itemRows } = await sb
+  const { data: srRows } = await sb
     .schema('diagnostics' as never)
-    .from('items')
-    .select('session_id, difficulty, is_correct')
+    .from('session_results')
+    .select('session_id, problem_id, is_correct, teacher_note')
     .in('session_id', sessionIds);
-  const items = (itemRows || []) as Array<{
-    session_id: string; difficulty: number | null; is_correct: boolean;
+  const results = (srRows || []) as Array<{
+    session_id: string; problem_id: string | null; is_correct: boolean; teacher_note: string | null;
   }>;
+
+  // problem_id → 난이도. difficulty 는 Postgres enum 이라 문자열로 내려온다.
+  const problemIds = Array.from(new Set(results.map((r) => r.problem_id).filter((x): x is string => !!x)));
+  const diffByProblem = new Map<string, number>();
+  for (let i = 0; i < problemIds.length; i += 500) {
+    const { data: clsRows } = await sb
+      .from('classifications')
+      .select('problem_id, difficulty')
+      .in('problem_id', problemIds.slice(i, i + 500));
+    for (const c of (clsRows || []) as Array<{ problem_id: string; difficulty: string | number | null }>) {
+      const d = Number(c.difficulty);
+      if (Number.isFinite(d) && d > 0) diffByProblem.set(c.problem_id, d);
+    }
+  }
+
+  const items = results.map((r) => ({
+    session_id: r.session_id,
+    difficulty: r.problem_id ? (diffByProblem.get(r.problem_id) ?? null) : null,
+    is_correct: r.is_correct,
+    held: (r.teacher_note ?? '').includes('자동채점 보류'),
+  }));
 
   const agg = new Map<string, ReturnType<typeof newBuckets>>();
   for (const it of items) {
+    if (it.held) continue;               // 자동채점 보류 문항 제외 (다른 화면과 동일 규칙)
     if (it.difficulty == null) continue; // 난이도 없는 문항은 상/중/하 분류 불가 → 제외
     const buckets = agg.get(it.session_id) || newBuckets();
-    const key = it.difficulty >= 4 ? 'A' : it.difficulty === 3 ? 'B' : 'C';
+    const key = it.difficulty >= 7 ? 'A' : it.difficulty >= 5 ? 'B' : 'C';
     buckets[key].total++;
     if (it.is_correct) buckets[key].correct++;
     agg.set(it.session_id, buckets);
@@ -96,11 +125,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const diagnostics = sessions.map((s) => {
     const b = agg.get(s.id) || newBuckets();
     return {
-      date: (s.conducted_at || '').slice(0, 10),
+      date: (s.completed_at || s.issued_at || '').slice(0, 10),
       A: pct(b.A),
       B: pct(b.B),
       C: pct(b.C),
-      note: s.note || '',
+      note: s.teacher_note || '',
     };
   });
 

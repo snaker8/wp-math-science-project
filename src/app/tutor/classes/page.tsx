@@ -268,12 +268,20 @@ export default function ClassesPage() {
 
                 {/* Footer */}
                 <div className="mt-4 flex gap-2 border-t border-white/5 pt-3">
+                  {/* ★ 반 허브 — 학생·과제·채점·숙달을 반 하나에서 본다 (2026-09-02).
+                      기존 '상세보기'(등록 관리)는 옆에 남긴다 — 하는 일이 다르다. */}
+                  <Link
+                    href={`/dashboard/class/${cls.id}`}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-white/90"
+                  >
+                    반 열기
+                    <ChevronRight size={12} />
+                  </Link>
                   <Link
                     href={`/tutor/classes/${cls.id}`}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10"
+                    className="flex items-center justify-center gap-1.5 rounded-md bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10"
                   >
-                    상세보기
-                    <ChevronRight size={12} />
+                    등록 관리
                   </Link>
                   <Link
                     href={`/tutor/classes/${cls.id}`}

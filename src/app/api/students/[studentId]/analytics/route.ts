@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { resolveStudentIdentity } from '@/lib/diagnostics/find-session';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -111,141 +112,64 @@ export async function GET(
   const sessionList: NormalizedSession[] = [];
   const allResults: NormalizedResult[] = [];
 
-  if (source === 'user') {
-    // 기존 흐름 — print_sessions + session_results
-    const { data: psRows } = await sb
-      .schema('diagnostics' as never)
-      .from('print_sessions')
-      .select('id, exam_id, round_number, session_type, issued_at, started_at, completed_at')
-      .eq('student_id', studentId)
-      .order('issued_at', { ascending: false });
-    for (const s of (psRows || []) as Array<{
-      id: string; exam_id: string; round_number: number; session_type: string;
-      issued_at: string; completed_at: string | null;
-    }>) {
-      sessionList.push({
-        id: s.id,
-        exam_id: s.exam_id,
-        session_type: s.session_type,
-        round_number: s.round_number,
-        date_iso: s.issued_at,
-        completed_at: s.completed_at,
-      });
-    }
-    const sessionIds = sessionList.map((s) => s.id);
-    if (sessionIds.length > 0) {
+  // ★ 2026-09-02 — B(채점) 라인 단일. 옛 코드는 두 갈래였다:
+  //   · 정식 학생(user): B 는 user id 로만, 연결된 명단(roster)은 A(sessions/items)로
+  //   · 명단 학생(roster): A 만
+  //   그래서 QR 로 채점한 기록이 통째로 빠졌다(실측: 세션 206개 중 96개가 B 에만 있다).
+  //   A 의 기록은 마이그레이션으로 B 에 들어와 있으므로, **신원(user+roster)을 합쳐 B 만**
+  //   읽으면 전부 나온다. 둘 다 읽으면 같은 문항을 두 번 세게 된다.
+  const identityIds = await resolveStudentIdentity(sb, studentId);
+
+  const { data: psRows } = await sb
+    .schema('diagnostics' as never)
+    .from('print_sessions')
+    .select('id, exam_id, student_id, round_number, session_type, issued_at, completed_at')
+    .in('student_id', identityIds)
+    .order('issued_at', { ascending: false });
+
+  for (const s of (psRows || []) as Array<{
+    id: string; exam_id: string; student_id: string; round_number: number;
+    session_type: string; issued_at: string; completed_at: string | null;
+  }>) {
+    sessionList.push({
+      id: s.id,
+      exam_id: s.exam_id,
+      session_type: s.session_type,
+      round_number: s.round_number,
+      date_iso: s.issued_at,
+      completed_at: s.completed_at,
+      // 리포트 링크는 **세션에 실제로 박힌 id** 로 걸어야 한다 (승격 전 roster id 일 수 있다)
+      student_ref: s.student_id,
+    });
+  }
+
+  const sessionIds = sessionList.map((s) => s.id);
+  if (sessionIds.length > 0) {
+    // ★ 1,000 행에서 잘린다 — 학생 한 명이라도 시험이 쌓이면 걸린다.
+    const rows: Array<{ session_id: string; is_correct: boolean; error_cause: string | null;
+                        graded_at: string | null; teacher_note: string | null }> = [];
+    for (let from = 0; ; from += 1000) {
       const { data } = await sb
         .schema('diagnostics' as never)
         .from('session_results')
-        .select('session_id, is_correct, error_cause, graded_at')
-        .in('session_id', sessionIds);
-      for (const r of (data || []) as Array<{
-        session_id: string; is_correct: boolean;
-        error_cause: string | null; graded_at: string;
-      }>) {
-        allResults.push({
-          session_id: r.session_id,
-          is_correct: r.is_correct,
-          error_cause: r.error_cause,
-          occurred_at: r.graded_at,
-        });
-      }
+        .select('session_id, is_correct, error_cause, graded_at, teacher_note')
+        .in('session_id', sessionIds)
+        .order('id')
+        .range(from, from + 999);
+      const batch = (data || []) as typeof rows;
+      rows.push(...batch);
+      if (batch.length < 1000) break;
     }
-
-    // 추가(2026-05-30): 이 정식 학생에 연결(promoted)된 roster 의 시험(EX) 데이터 합류.
-    //   채점 엑셀로 등록된 명단 학생을 기존 정식 학생과 연결(promoted_user_id)하면,
-    //   그 시험 채점 결과(diagnostics.sessions/items)도 정식 학생 분석에 보여야 함.
-    //   세션 student_id 는 roster id 그대로라 student_ref 에 담아 리포트 링크에 사용.
-    const { data: promotedRosters } = await sb
-      .from('roster_students')
-      .select('id')
-      .eq('promoted_user_id', studentId);
-    const rosterIds = (promotedRosters || []).map((r: { id: string }) => r.id);
-    if (rosterIds.length > 0) {
-      const { data: exSessRows } = await sb
-        .schema('diagnostics' as never)
-        .from('sessions')
-        .select('id, exam_id, session_type, round_no, conducted_at, student_id')
-        .in('student_id', rosterIds)
-        .order('conducted_at', { ascending: false });
-      const exSessions = (exSessRows || []) as Array<{
-        id: string; exam_id: string | null; session_type: string;
-        round_no: number | null; conducted_at: string | null; student_id: string;
-      }>;
-      for (const s of exSessions) {
-        sessionList.push({
-          id: s.id,
-          exam_id: s.exam_id ?? '',
-          session_type: s.session_type,
-          round_number: s.round_no ?? 1,
-          date_iso: s.conducted_at ?? '',
-          completed_at: s.conducted_at,
-          student_ref: s.student_id,   // roster id — 리포트 링크용
-        });
-      }
-      const exSessionIds = exSessions.map((s) => s.id);
-      if (exSessionIds.length > 0) {
-        const { data: exItems } = await sb
-          .schema('diagnostics' as never)
-          .from('items')
-          .select('session_id, is_correct, error_cause')
-          .in('session_id', exSessionIds);
-        const exDateMap = new Map<string, string>();
-        for (const s of exSessions) exDateMap.set(s.id, s.conducted_at ?? '');
-        for (const r of (exItems || []) as Array<{
-          session_id: string; is_correct: boolean; error_cause: string | null;
-        }>) {
-          allResults.push({
-            session_id: r.session_id,
-            is_correct: r.is_correct,
-            error_cause: r.error_cause,
-            occurred_at: exDateMap.get(r.session_id) ?? '',
-          });
-        }
-      }
-    }
-  } else {
-    // 자동등록 흐름 — diagnostics.sessions + items (session_type='EX')
-    const { data: sessRows } = await sb
-      .schema('diagnostics' as never)
-      .from('sessions')
-      .select('id, exam_id, session_type, round_no, conducted_at')
-      .eq('student_id', studentId)
-      .order('conducted_at', { ascending: false });
-    for (const s of (sessRows || []) as Array<{
-      id: string; exam_id: string | null; session_type: string;
-      round_no: number | null; conducted_at: string | null;
-    }>) {
-      sessionList.push({
-        id: s.id,
-        exam_id: s.exam_id ?? '',
-        session_type: s.session_type,
-        round_number: s.round_no ?? 1,
-        date_iso: s.conducted_at ?? '',
-        completed_at: s.conducted_at,
-        student_ref: studentId,   // roster id — 리포트 링크용
+    const dateMap = new Map<string, string>();
+    for (const s of sessionList) dateMap.set(s.id, s.date_iso);
+    for (const r of rows) {
+      if ((r.teacher_note ?? '').includes('자동채점 보류')) continue;
+      allResults.push({
+        session_id: r.session_id,
+        is_correct: r.is_correct,
+        error_cause: r.error_cause,
+        occurred_at: r.graded_at ?? dateMap.get(r.session_id) ?? '',
       });
-    }
-    const sessionIds = sessionList.map((s) => s.id);
-    if (sessionIds.length > 0) {
-      const { data } = await sb
-        .schema('diagnostics' as never)
-        .from('items')
-        .select('session_id, is_correct, error_cause')
-        .in('session_id', sessionIds);
-      // items 에는 graded_at 컬럼 없음 — session 의 conducted_at 으로 폴백
-      const sessionDateMap = new Map<string, string>();
-      for (const s of sessionList) sessionDateMap.set(s.id, s.date_iso);
-      for (const r of (data || []) as Array<{
-        session_id: string; is_correct: boolean; error_cause: string | null;
-      }>) {
-        allResults.push({
-          session_id: r.session_id,
-          is_correct: r.is_correct,
-          error_cause: r.error_cause,
-          occurred_at: sessionDateMap.get(r.session_id) ?? '',
-        });
-      }
     }
   }
 

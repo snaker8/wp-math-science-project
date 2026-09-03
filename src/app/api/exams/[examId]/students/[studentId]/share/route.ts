@@ -39,7 +39,7 @@ async function resolveIdentityIds(studentId: string): Promise<string[]> {
   return Array.from(ids);
 }
 
-// 라인 A — 가장 최근 EX 세션 (신원 병합 포함)
+// 라인 A — 옛 공유 토큰 조회 전용 (신원 병합 포함). 새 토큰은 여기 안 만든다.
 async function loadSession(examId: string, identityIds: string[]) {
   if (!supabaseAdmin) return null;
   const { data } = await supabaseAdmin
@@ -48,7 +48,6 @@ async function loadSession(examId: string, identityIds: string[]) {
     .select('id, share_token')
     .eq('exam_id', examId)
     .in('student_id', identityIds)
-    .eq('session_type', 'EX')
     .order('conducted_at', { ascending: false })
     .limit(1);
   return data?.[0] as { id: string; share_token: string | null } | undefined;
@@ -132,30 +131,15 @@ export async function POST(
   const identityIds = await resolveIdentityIds(studentId);
 
   // ── 라인 A: EX 세션이 있으면 기존 방식 (sessions.share_token) ──
+  // ── 이미 나간 옛 링크가 있으면 그대로 돌려준다 (학부모가 들고 있는 주소를 안 바꾼다) ──
   const sess = await loadSession(examId, identityIds);
-  if (sess) {
-    if (sess.share_token) {
-      return NextResponse.json({ token: sess.share_token, created: false });
-    }
-    let token = genToken();
-    for (let i = 0; i < 3; i++) {
-      const { error } = await supabaseAdmin
-        .schema('diagnostics')
-        .from('sessions')
-        .update({ share_token: token })
-        .eq('id', sess.id);
-      if (!error) {
-        return NextResponse.json({ token, created: true });
-      }
-      if (!/duplicate|23505/i.test(error.message)) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-      token = genToken();
-    }
-    return NextResponse.json({ error: '토큰 발급 실패' }, { status: 500 });
+  if (sess?.share_token) {
+    return NextResponse.json({ token: sess.share_token, created: false });
   }
 
-  // ── 라인 B: QR/수동 채점만 있는 학생 → parent_share_tokens(report_kind='exam') ──
+  // ★ 2026-09-02: **새 링크는 더 이상 A(sessions.share_token)로 만들지 않는다.**
+  //   옛 코드는 A 세션이 있으면 A 토큰을 새로 발급해, 채점 라인을 B 로 옮긴 뒤에도
+  //   레거시 경로가 계속 늘어났다. 읽기·회수는 A 도 계속 지원한다(기존 링크 보호).
   const graded = await hasGradedPrintSession(examId, identityIds);
   if (!graded) {
     return NextResponse.json(
@@ -204,6 +188,7 @@ export async function DELETE(
   // 라인 A 토큰 회수
   const sess = await loadSession(examId, identityIds);
   if (sess?.share_token) {
+    const revoked = sess.share_token;
     const { error } = await supabaseAdmin
       .schema('diagnostics')
       .from('sessions')
@@ -212,6 +197,12 @@ export async function DELETE(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    // ★ 마이그레이션이 같은 토큰을 print_sessions 에도 복사해 뒀다 — 같이 지운다.
+    await supabaseAdmin
+      .schema('diagnostics')
+      .from('print_sessions')
+      .update({ share_token: null })
+      .eq('share_token', revoked);
   }
 
   // 라인 B 토큰 회수 (있으면 — 멱등)

@@ -16,6 +16,7 @@ describe('parseExamTitleMeta', () => {
   it('공백 구분자 — 일괄 적재 형식', () => {
     expect(parseExamTitleMeta('25-1-2-M 신도중 수학')).toEqual({
       schoolName: '신도중', grade: '중1', semester: 2, examRound: '중간',
+      examYear: 2025, gradeNum: 1,
     });
   });
 
@@ -23,18 +24,21 @@ describe('parseExamTitleMeta', () => {
   it('하이픈 구분자 — 화면 업로드 형식', () => {
     expect(parseExamTitleMeta('26-2-1-M-동백중 수학')).toEqual({
       schoolName: '동백중', grade: '중2', semester: 1, examRound: '중간',
+      examYear: 2026, gradeNum: 2,
     });
   });
 
   it('F = 기말, 고등학교는 고N', () => {
     expect(parseExamTitleMeta('23-1-2-F 혜광고 수학(하)')).toEqual({
       schoolName: '혜광고', grade: '고1', semester: 2, examRound: '기말',
+      examYear: 2023, gradeNum: 1,
     });
   });
 
   it('대괄호 형식', () => {
     expect(parseExamTitleMeta('[22년][1-1][기말][해운대고][수학상]')).toEqual({
       schoolName: '해운대고', grade: '고1', semester: 1, examRound: '기말',
+      examYear: 2022, gradeNum: 1,
     });
   });
 

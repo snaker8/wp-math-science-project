@@ -1515,6 +1515,45 @@ export default function CloudPage() {
     return result;
   }, [exams, searchQuery, sortField, sortDir, facets]);
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 점진 렌더 — 처음엔 PAGE 개만 그리고, 바닥에 닿으면 이어 붙인다
+  // ----------------------------------------------------------------------
+  // ★ 사고 (2026-09-03): 목록 상한을 200 → 전체(1,626)로 올린 뒤 고등부처럼
+  //   1,000개 넘는 묶음을 고르면 **DOM 노드가 75,000개**(페이지 높이 246,000px)가 돼
+  //   스크롤·마우스오버만 해도 버벅였다. 서버는 멀쩡했다(TTFB 17ms, 화면 완료 347ms).
+  //   그리는 양이 문제였다.
+  //
+  //   목록이 전부 보인다는 건 그대로 둔다 — **그리는 것만** 나눠 그린다.
+  //   필터·검색·정렬·폴더가 바뀌면 다시 처음부터.
+  // ══════════════════════════════════════════════════════════════════════
+  const RENDER_PAGE = 100;
+  const [renderCount, setRenderCount] = useState(RENDER_PAGE);
+  useEffect(() => { setRenderCount(RENDER_PAGE); }, [filteredExams]);
+  const visibleExams = useMemo(
+    () => filteredExams.slice(0, renderCount),
+    [filteredExams, renderCount]
+  );
+  const hasMoreToRender = renderCount < filteredExams.length;
+
+  // 바닥 감시 — 화면에 들어오면 다음 묶음을 그린다 (스크롤 이벤트보다 싸다)
+  const loadMoreRef = React.useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasMoreToRender) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setRenderCount((c) => c + RENDER_PAGE);
+        }
+      },
+      { rootMargin: '600px' }   // 바닥에 닿기 전에 미리 — 흰 화면이 안 보이게
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMoreToRender, renderCount]);
+
+
   // ★ groupId → 폴더명 맵 (트리 평탄화, 가상노드 제외) — 목록에 소속 폴더 배지 표시용.
   const groupNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -2685,7 +2724,7 @@ export default function CloudPage() {
 
                     {/* Table Body */}
                     <div className="divide-y divide-subtle/40">
-                      {filteredExams.map((exam) => (
+                      {visibleExams.map((exam) => (
                         <div
                           key={exam.id}
                           className="group flex items-center px-5 py-3 hover:bg-surface-raised/30 transition-colors cursor-pointer"
@@ -2803,7 +2842,7 @@ export default function CloudPage() {
                     ) : (
                       // ======== 그리드 카드 뷰 (프리미엄 다크) ========
                       <div className="grid grid-cols-2 gap-3 p-4 xl:grid-cols-3">
-                        {filteredExams.map((exam) => (
+                        {visibleExams.map((exam) => (
                           <div
                             key={exam.id}
                             onClick={() => goExam(exam.id)}
@@ -2973,6 +3012,13 @@ export default function CloudPage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* 바닥 감시 — 여기가 화면에 들어오면 다음 100개를 그린다 (리스트·그리드 공용) */}
+                    {hasMoreToRender && (
+                      <div ref={loadMoreRef} className="py-6 text-center text-xs text-content-muted">
+                        {filteredExams.length.toLocaleString()}개 중 {visibleExams.length.toLocaleString()}개 표시 중 — 더 내리면 이어집니다
                       </div>
                     )}
                   </div>

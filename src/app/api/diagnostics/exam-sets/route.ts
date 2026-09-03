@@ -96,42 +96,12 @@ export async function GET() {
   }
   const allExamIds = Array.from(examIdToVariant.keys());
 
-  // diagnostics.sessions (EX 채점) — student_id(text) + exam_id
-  const { data: sessRows } = await sb
-    .schema('diagnostics' as never)
-    .from('sessions')
-    .select('id, student_id, exam_id')
-    .in('exam_id', allExamIds);
-  const sessions = (sessRows ?? []) as Array<{ id: string; student_id: string; exam_id: string | null }>;
+  // ★ 2026-09-02 — A(sessions/items) 조회 제거. 채점 기록을 B 로 옮기면서
+  //   A 의 시험 세션은 **전부** print_sessions 에 들어갔다(실측: exam_id 있는 A 세션 중
+  //   B 에 없는 것 0건). 둘 다 읽을 이유가 없고, 이미 옮긴 값을 또 읽으면 중복만 생긴다.
 
-  // 채점된(items 있는) 세션만 인정 — 생성만 되고 미채점인 세션 제외
-  const sessionIds = sessions.map((s) => s.id);
-  const gradedSessionIds = new Set<string>();
-  if (sessionIds.length > 0) {
-    // ★ chunk(세션id) + range(행) 이중 페이지네이션.
-    //   Supabase 기본 1000행 한계 — items 가 1000개 초과면 잘려서 일부 채점 세션이
-    //   gradedSessionIds 에서 누락 → 변형 A·B·C 채점인데 드롭다운엔 A·B 만 표시되던 사고
-    //   (이원준: 81세션·2135 items, C 세션 items 가 1000행 밖이라 누락). [[feedback_supabase_select_limit]]
-    for (let i = 0; i < sessionIds.length; i += 300) {
-      const chunk = sessionIds.slice(i, i + 300);
-      for (let from = 0; ; from += 1000) {
-        const { data: itemRows } = await sb
-          .schema('diagnostics' as never)
-          .from('items')
-          .select('session_id')
-          .in('session_id', chunk)
-          .range(from, from + 999);
-        const rows = (itemRows ?? []) as Array<{ session_id: string }>;
-        for (const it of rows) gradedSessionIds.add(it.session_id);
-        if (rows.length < 1000) break;
-      }
-    }
-  }
-
-  // 4b) QR/인쇄 채점(print_sessions + session_results) — 세트 학생 목록에 합산.
-  //   compute-report 와 동일 데이터원. diagnostics.sessions(수동/엑셀) 외 QR 로만 채점한
-  //   학생이 세트→학생 선택기에서 누락되던 문제 차단(compute-report 는 합산하는데 여기만 빠져
-  //   "학생별로 안 보임" 사고). print_sessions.student_id = users.id / roster id.
+  // 채점 세션 (print_sessions + session_results) — 세트 학생 목록의 유일한 출처.
+  //   compute-report 와 같은 데이터원. student_id 는 users.id 또는 roster id.
   const { data: psRows } = await sb
     .schema('diagnostics' as never)
     .from('print_sessions')
@@ -165,7 +135,6 @@ export async function GET() {
 
   // 5) 학생 신원 해석 (users / roster_students) — diagnostics + QR 양쪽 student_id 포함
   const studentIds = Array.from(new Set([
-    ...sessions.map((s) => s.student_id),
     ...printSessions.map((p) => p.student_id),
   ]));
   const userById = new Map<string, { name: string; grade: number | null; instituteId: string | null }>();
@@ -227,23 +196,7 @@ export async function GET() {
 
   // 세트별 학생 집계
   const setStudents = new Map<string, Map<string, SetStudent>>(); // setKey → canonicalId → student
-  for (const s of sessions) {
-    if (!gradedSessionIds.has(s.id) || !s.exam_id) continue;
-    const setKey = examIdToSetKey.get(s.exam_id);
-    if (!setKey) continue;
-    const canon = resolveCanonical(s.student_id);
-    if (!canon) continue;
-    const variant = examIdToVariant.get(s.exam_id) ?? null;
-    let perSet = setStudents.get(setKey);
-    if (!perSet) { perSet = new Map(); setStudents.set(setKey, perSet); }
-    let stu = perSet.get(canon.id);
-    if (!stu) {
-      stu = { id: canon.id, name: canon.name, grade: canon.grade, source: canon.source, variantsTaken: [] };
-      perSet.set(canon.id, stu);
-    }
-    if (!stu.variantsTaken.includes(variant)) stu.variantsTaken.push(variant);
-  }
-  // QR/인쇄 채점 학생도 동일 집계에 합산 (위 diagnostics 루프와 같은 규칙)
+  // 채점된 세션만 집계 (B라인 단일)
   for (const p of printSessions) {
     if (!gradedPrintSessionIds.has(p.id) || !p.exam_id) continue;
     const setKey = examIdToSetKey.get(p.exam_id);

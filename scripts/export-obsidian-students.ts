@@ -109,12 +109,6 @@ interface Student {
   id: string; full_name: string | null; grade: number | null;
   phone: string | null; email: string | null; institute_id: string | null;
 }
-interface Sess {
-  id: string; student_id: string; session_type: string; round_no: number | null;
-  mathflat_sheet_name: string | null; conducted_at: string | null;
-  conducted_by: string | null; note: string | null;
-}
-interface Item { session_id: string; mathsecr_code: string; is_correct: boolean; error_cause: string | null }
 interface PrintSess {
   id: string; student_id: string; exam_id: string | null; session_type: string | null;
   round_number: number | null; issued_at: string | null; completed_at: string | null;
@@ -147,29 +141,10 @@ async function main() {
   );
   console.log(`[export] 학원 ${orgs.length} · 센터 ${insts.length} · 학생 ${students.length}`);
 
-  // 2) 진단 세션 (수동입력/엑셀 라인)
-  const sessions = await fetchAll<Sess>(
-    (f, t) => diag().from('sessions')
-      .select('id, student_id, session_type, round_no, mathflat_sheet_name, conducted_at, conducted_by, note')
-      .order('conducted_at', { ascending: false }).range(f, t),
-    'diag.sessions',
-  );
-
-  // 3) 세션 문항 → 세션별 점수 + 학생별 오답 원인
-  const items: Item[] = [];
-  for (const ids of chunk(sessions.map((s) => s.id), 100)) {
-    items.push(...await fetchAll<Item>(
-      (f, t) => diag().from('items').select('session_id, mathsecr_code, is_correct, error_cause')
-        .in('session_id', ids).range(f, t),
-      'diag.items',
-    ));
-  }
-  const sessScore = new Map<string, { c: number; t: number }>();
-  for (const it of items) {
-    const s = sessScore.get(it.session_id) || { c: 0, t: 0 };
-    s.t += 1; if (it.is_correct) s.c += 1;
-    sessScore.set(it.session_id, s);
-  }
+  // ★ 2026-09-02 — A(diagnostics.sessions/items) 조회 제거.
+  //   A 의 채점 기록은 전부 B(print_sessions/session_results)로 옮겨있다.
+  //   둘 다 읽고 둘 다 표에 찍고 있어서, 학생 위키 「진단·시험 이력」에
+  //   **같은 시험이 두 줄씩** 나오고 있었다(110줄).
 
   // 4) QR/인쇄 채점 세션 + 결과 + 시험지 제목
   const printSessions = await fetchAll<PrintSess>(
@@ -179,12 +154,20 @@ async function main() {
     'diag.print_sessions',
   );
   const printScore = new Map<string, { c: number; t: number }>();
+  // 오답 원인 프로필용 원본 — 아래 인덱스 빌드에서 쓴다 (옛 A items 자리)
+  const errorRows: Array<{ session_id: string; is_correct: boolean; error_cause: string | null }> = [];
+  // 등장한 단원 코드 (아래 mathsecr 이름 조회용 — 옛 A items.mathsecr_code 자리)
+  const resultCodes = new Set<string>();
   for (const ids of chunk(printSessions.map((p) => p.id), 100)) {
-    const rows = await fetchAll<{ session_id: string; is_correct: boolean }>(
-      (f, t) => diag().from('session_results').select('session_id, is_correct').in('session_id', ids).range(f, t),
+    const rows = await fetchAll<{ session_id: string; is_correct: boolean; error_cause: string | null; teacher_note: string | null; mathsecr_code: string | null }>(
+      (f, t) => diag().from('session_results')
+        .select('session_id, is_correct, error_cause, teacher_note, mathsecr_code').in('session_id', ids).range(f, t),
       'diag.session_results',
     );
     for (const r of rows) {
+      if ((r.teacher_note ?? '').includes('자동채점 보류')) continue;  // 보류 문항 제외
+      errorRows.push({ session_id: r.session_id, is_correct: r.is_correct, error_cause: r.error_cause });
+      if (r.mathsecr_code) resultCodes.add(r.mathsecr_code);
       const s = printScore.get(r.session_id) || { c: 0, t: 0 };
       s.t += 1; if (r.is_correct) s.c += 1;
       printScore.set(r.session_id, s);
@@ -267,7 +250,7 @@ async function main() {
   // 6) 등장하는 mathsecr 코드의 이름 조회 (rcc 단원점수 코드 포함)
   const codes = Array.from(new Set([
     ...nodeStats.map((n) => n.mathsecr_code),
-    ...items.map((i) => i.mathsecr_code),
+    ...resultCodes,
     ...lessonScores.map((s) => s.mathsecr_code),
   ].filter(Boolean)));
   const msNodes = new Map<string, MsNode>();
@@ -298,22 +281,19 @@ async function main() {
   const orgName = new Map(orgs.map((o) => [o.id, o.name]));
   const instById = new Map(insts.map((i) => [i.id, i]));
   const byStudent = {
-    sessions: new Map<string, Sess[]>(),
     prints: new Map<string, PrintSess[]>(),
     nodes: new Map<string, NodeStat[]>(),
     errors: new Map<string, Map<string, number>>(),
   };
-  for (const s of sessions) {
-    (byStudent.sessions.get(s.student_id) ?? byStudent.sessions.set(s.student_id, []).get(s.student_id)!).push(s);
-  }
   for (const p of printSessions) {
     (byStudent.prints.get(p.student_id) ?? byStudent.prints.set(p.student_id, []).get(p.student_id)!).push(p);
   }
   for (const n of nodeStats) {
     (byStudent.nodes.get(n.student_id) ?? byStudent.nodes.set(n.student_id, []).get(n.student_id)!).push(n);
   }
-  const sessOwner = new Map(sessions.map((s) => [s.id, s.student_id]));
-  for (const it of items) {
+  // 오답 원인 프로필 — B 결과에서 (error_cause 는 양쪽 다 같은 이름의 컬럼)
+  const sessOwner = new Map(printSessions.map((s) => [s.id, s.student_id]));
+  for (const it of errorRows) {
     if (it.is_correct || !it.error_cause) continue;
     const sid = sessOwner.get(it.session_id);
     if (!sid) continue;
@@ -370,7 +350,6 @@ async function main() {
     const good = nodes.filter((n) => n.status === 'alpha');
     nodes.forEach((n) => usedCodes.add(n.mathsecr_code));
 
-    const sess = byStudent.sessions.get(st.id) || [];
     const prints = byStudent.prints.get(st.id) || [];
     const errProfile = Array.from((byStudent.errors.get(st.id) || new Map()).entries())
       .sort((a, b) => b[1] - a[1]);
@@ -474,20 +453,12 @@ async function main() {
 
     // 이력
     lines.push('## 진단·시험 이력');
-    if (sess.length + prints.length === 0) {
+    if (prints.length === 0) {
       lines.push('_이력 없음_');
     } else {
       lines.push('| 일자 | 유형 | 이름 | 점수 |');
       lines.push('|------|------|------|------|');
       const merged: Array<{ d: string | null; type: string; name: string; score: string }> = [];
-      for (const s of sess) {
-        const sc = sessScore.get(s.id);
-        merged.push({
-          d: s.conducted_at, type: s.session_type + (s.round_no ? ` R${s.round_no}` : ''),
-          name: s.mathflat_sheet_name || '-',
-          score: sc ? `${sc.c}/${sc.t} (${Math.round((sc.c / Math.max(sc.t, 1)) * 100)}%)` : '-',
-        });
-      }
       for (const p of prints) {
         const sc = printScore.get(p.id);
         merged.push({
