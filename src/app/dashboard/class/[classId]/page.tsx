@@ -22,6 +22,7 @@ import {
   Loader2, ArrowLeft, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import { AssignmentsTab } from '@/components/class/AssignmentsTab';
+import { MasteryMatrix } from '@/components/class/MasteryMatrix';
 
 interface HubStudent {
   id: string;
@@ -278,14 +279,21 @@ export default function ClassHubPage() {
             <AssignmentsTab classId={classId} studentIds={students.map((s) => s.id)} />
           )}
 
-          {tab !== 'students' && tab !== 'assignments' && !error && (
+          {tab === 'mastery' && !error && classId && (
+            <MasteryMatrix
+              classId={classId}
+              className={info?.name ?? ''}
+              students={students.map((s) => ({ id: s.id, name: s.name }))}
+            />
+          )}
+
+          {tab !== 'students' && tab !== 'assignments' && tab !== 'mastery' && !error && (
             <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
               <p className="text-sm text-content-secondary">
                 「{TABS.find((t) => t.key === tab)?.label}」 탭은 아직 만들지 않았습니다.
               </p>
               <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-content-muted">
-                {tab === 'grading' && 'QR · 엑셀 · 수동 채점을 한 줄에 모읍니다.'}
-                {tab === 'mastery' && '단원 × 난이도 매트릭스로 반 전체의 구멍을 한눈에 봅니다.'}
+                {tab === 'grading' && 'QR 채점과 수동 입력을 반 안에서 한 줄로 모읍니다.'}
                 {tab === 'history' && '주차별 숙달 추이를 쌓아 꺾은선으로 보여줍니다.'}
                 {tab === 'settings' && '반 이름 · 담당 강사 · 학생 등록을 여기서 관리합니다.'}
               </p>

@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { resolveClassStudents, displayName, gradeLabel } from '@/lib/class/class-students';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,15 +43,6 @@ export interface HubStudent {
   alpha: number;                 // 숙달
   beta: number;                  // 흔들림
   gamma: number;                 // 취약
-}
-
-function gradeLabel(g: unknown): string {
-  const n = typeof g === 'number' ? g : parseInt(String(g ?? ''), 10);
-  if (!Number.isFinite(n) || n <= 0) return '';
-  if (n <= 6) return `초${n}`;
-  if (n <= 9) return `중${n - 6}`;
-  if (n <= 12) return `고${n - 9}`;
-  return String(n);
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
@@ -79,41 +71,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 2) 반 학생 (등록 확정만)
-  const { data: enrolls } = await sb
-    .from('class_enrollments')
-    .select('student_id, enrolled_at')
-    .eq('class_id', classId)
-    .eq('status', 'ACCEPTED');
-  const studentIds = Array.from(
-    new Set(((enrolls ?? []) as Array<{ student_id: string }>).map((e) => e.student_id))
-  );
+  // 2~3) 반 학생 + 신원 병합 — 숙달 탭(mastery)·과제와 같은 해석 (lib/class/class-students)
+  const { studentIds, allRefs, ownerByRef, refsByStudent, userById } = await resolveClassStudents(sb, classId);
 
   if (studentIds.length === 0) {
     return NextResponse.json({ class: cls, students: [] as HubStudent[] });
   }
-
-  const { data: userRows } = await sb
-    .from('users')
-    .select('id, full_name, email, grade')
-    .in('id', studentIds);
-  const userById = new Map(
-    ((userRows ?? []) as Array<{ id: string; full_name: string | null; email: string | null; grade: number | null }>)
-      .map((u) => [u.id, u])
-  );
-
-  // 3) 신원 병합 — 이 학생들로 승격된 명단 id 를 함께 본다
-  const { data: rosters } = await sb
-    .from('roster_students')
-    .select('id, promoted_user_id')
-    .in('promoted_user_id', studentIds);
-  const refsByStudent = new Map<string, string[]>(studentIds.map((id) => [id, [id]]));
-  const ownerByRef = new Map<string, string>(studentIds.map((id) => [id, id]));
-  for (const r of (rosters ?? []) as Array<{ id: string; promoted_user_id: string }>) {
-    refsByStudent.get(r.promoted_user_id)?.push(r.id);
-    ownerByRef.set(r.id, r.promoted_user_id);
-  }
-  const allRefs = Array.from(ownerByRef.keys());
 
   // 4) 채점 세션 (B라인)
   const { data: psRows } = await sb
@@ -203,7 +166,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const m = mastery.get(id) ?? { alpha: 0, beta: 0, gamma: 0 };
     return {
       id,
-      name: u?.full_name || u?.email?.split('@')[0] || '(이름 없음)',
+      name: displayName(u),
       grade: gradeLabel(u?.grade),
       refIds: refsByStudent.get(id) ?? [id],
       sessionCount: sessCount.get(id) ?? 0,

@@ -388,7 +388,7 @@ export const topNavGroups: NavGroup[] = [
       tutor('/tutor/students'),                // 학생 관리
     ],
   },
-  // ── 4) 채점 — 단일 페이지(QR/수동/엑셀 탭 내장). 직접 링크. ──
+  // ── 4) 채점 — 단일 페이지(QR/수동 탭 내장. 엑셀 채점은 2026-09-02 제거). 직접 링크. ──
   {
     id: 'grading',
     label: '채점',

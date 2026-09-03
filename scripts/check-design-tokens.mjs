@@ -20,6 +20,7 @@ const PATTERN =
 const ALLOW = [
   /components[\\/]diagnostics[\\/]/,   // 진단 리포트 (자체 디자인 언어)
   /components[\\/]exam-report[\\/]/,
+  /components[\\/]class[\\/]MasteryMatrix/,  // 숙달 히트맵 — 데이터 그래픽 (칸 색 = 숙달 단계)
   /exam-paper/,                        // 인쇄물 (라이트 종이)
   /print/i,
   /app[\\/]share[\\/]/,                // 외부 공유 문서 — 리포트 언어 유지
