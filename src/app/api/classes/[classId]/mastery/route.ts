@@ -4,7 +4,8 @@
 // docs/PLAN_CLASS_HUB_REBUILD.md 단계 5 · 매쓰홀릭 조사 08-type-analysis (유형분석 /ug-score).
 //
 // 서버는 **집계하지 않고 재료를 그대로 준다** — 채점 문항(학생·유형코드·난이도·정오·시각),
-// 수학비서 트리(대단원·중단원·소단원 이름), 문제은행 공급량(소단원 × 난이도별 문제 수).
+// 수학비서 트리(대단원·중단원·소단원·유형 이름), 문제은행 공급량(유형 × 난이도별 문제 수).
+// 판 = 과정의 유형(depth5) 전체 — 채점의 산출물이 아니라 과정마다 고정된 판이다 (대표 2026-09-04).
 // 접는 축(4단계/6단계)·기간·학생·추정 표시는 전부 클라이언트 토글이라 서버가 미리 접으면
 // 토글마다 다시 불러야 한다. 반 하나의 문항은 수백~수천 행 — 한 번에 내려도 가볍다.
 // (같은 재료로 단계 6 「이력」이 graded_at 누적으로 그려진다 — 스냅샷 테이블 없이.)
@@ -20,7 +21,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter, assertInstituteAccess } from '@/lib/security/institute-guard';
 import { resolveClassStudents, displayName, gradeLabel } from '@/lib/class/class-students';
-import { subjectOf, unitOf } from '@/lib/class/mastery-bands';
+import { subjectOf } from '@/lib/class/mastery-bands';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,12 +44,14 @@ export interface MasteryItem {
 
 export interface MasteryTreeNode {
   code: string;
-  depth: 2 | 3 | 4;
+  /** 2 대단원 · 3 중단원 · 4 소단원 · 5 유형(칸) */
+  depth: 2 | 3 | 4 | 5;
   name: string;
 }
 
+/** 문제은행 공급 — 유형 코드(분류 type_code 그대로, 보통 depth5) × 난이도 */
 export interface MasterySupply {
-  unit: string;
+  code: string;
   d: number;
   count: number;
 }
@@ -187,7 +190,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ...empty, items, unplaced });
   }
 
-  // 7) 트리 이름 — 과목(depth1) + 대단원·중단원·소단원(depth 2~4)
+  // 7) 트리 이름 — 과목(depth1) + 대단원·중단원·소단원·유형(depth 2~5). 유형이 판의 칸이다.
   const { data: subjRows } = await sb
     .from('mathsecr_types')
     .select('code, subject_name')
@@ -204,17 +207,19 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     for (let from = 0; ; from += PAGE) {
       const { data } = await sb
         .from('mathsecr_types')
-        .select('code, depth, level1_name, level2_name, level3_name')
+        .select('code, depth, level1_name, level2_name, level3_name, level4_name')
         .like('code', `${subj}-%`)
-        .in('depth', [2, 3, 4])
+        .in('depth', [2, 3, 4, 5])
         .order('code')
         .range(from, from + PAGE - 1);
       const rows = (data ?? []) as Array<{
-        code: string; depth: number; level1_name: string | null; level2_name: string | null; level3_name: string | null;
+        code: string; depth: number; level1_name: string | null; level2_name: string | null;
+        level3_name: string | null; level4_name: string | null;
       }>;
       for (const r of rows) {
-        const name = r.depth === 2 ? r.level1_name : r.depth === 3 ? r.level2_name : r.level3_name;
-        tree.push({ code: r.code, depth: r.depth as 2 | 3 | 4, name: name || r.code });
+        const name = r.depth === 2 ? r.level1_name : r.depth === 3 ? r.level2_name
+          : r.depth === 4 ? r.level3_name : r.level4_name;
+        tree.push({ code: r.code, depth: r.depth as 2 | 3 | 4 | 5, name: name || r.code });
       }
       if (rows.length < PAGE) break;
     }
@@ -242,18 +247,18 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       for (const r of rows) {
         const c = Array.isArray(r.classifications) ? r.classifications[0] : r.classifications;
         if (!c?.type_code || c.difficulty == null) continue;
-        const unit = unitOf(c.type_code);
         const d = parseInt(String(c.difficulty), 10);
-        if (!unit || !Number.isFinite(d)) continue;
-        const k = `${unit}|${d}`;
+        if (!Number.isFinite(d)) continue;
+        // 유형 코드 그대로 (보통 depth5). depth4 로만 분류된 문제는 그 소단원의 「유형 미지정」 칸으로 간다
+        const k = `${c.type_code}|${d}`;
         supplyMap.set(k, (supplyMap.get(k) ?? 0) + 1);
       }
       if (rows.length < PAGE) break;
     }
   }
   const supply: MasterySupply[] = Array.from(supplyMap.entries()).map(([k, count]) => {
-    const [unit, d] = k.split('|');
-    return { unit, d: Number(d), count };
+    const [code, d] = k.split('|');
+    return { code, d: Number(d), count };
   });
 
   const payload: MasteryPayload = { class: classInfo, students, subjects, tree, supply, items, unplaced };

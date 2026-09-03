@@ -5,33 +5,29 @@
 // ----------------------------------------------------------------------------
 // docs/PLAN_CLASS_HUB_REBUILD.md 단계 5 · 조사 docs/benchmark/matholic/08-type-analysis.md
 //
-// 매쓰홀릭 화면 그대로: 행 = 단원, 열 = 난이도(4/6단계), 칸 하나 = 유형 하나, 색 = 숙달.
-// 우측에서 학생을 고르면 그 학생 색으로 다시 칠하고, 칸을 눌러 모은 뒤 그 자리에서 과제로 낸다.
+// ★ 판의 원리 (대표, 2026-09-04): "우리 유형분석 판은 수학비서 코드로 분류된 유형별로 만들고,
+//   거기에 난이도별로 문제들이 적층되어, 학생들이 그걸 풀었을 때 완성도 색이 변하는" 것.
 //
-// 우리 트리 대응 (lib/class/mastery-bands.ts 머리말):
-//   행 = 중단원(depth3) · 칸 = 소단원(depth4) × 난이도 밴드 · 칸 안 세부유형은 문제 뽑을 때 분산.
+//   판 = 과정(과목)의 수학비서 유형(depth5) 전체 — 과정마다 고정. 채점의 산출물이 아니다.
+//   칸 = 유형 하나. 칸 안에 개념→기본→실력→심화 층이 세로로 쌓인다(아래가 개념).
+//   층 = 그 유형·난이도의 문제은행 문제. 없으면 점선(문제 없음), 있는데 안 풀면 회색(미학습),
+//        풀면 색 — 색조=정답률(초록/노랑/빨강), 진하기=얼마나 풀었나(푼 문제/있는 문제).
+//   지금은 문제가 적어 판이 듬성하다 — 대표: "당연히 문제량이 작으니. 실제 고등부 자료가 많으니까."
+//   판이 듬성한 건 판의 문제가 아니라 문제은행 완성도의 문제고, 그 숫자를 상단에 그대로 보인다.
 //
 // 매쓰홀릭에 있고 여기 있는 것:
-//   4단계/6단계 토글 · 학생 선택 · 칸/행/열 덩어리 선택 · 선택된 칸 N + 과제 만들기 ·
-//   ● 추정 칸(AI 예측 대응 — 규칙 추정, 근거 문장 포함, 토글 · **기본 꺼짐**) · 범례 실측 카운트 ·
-//   기간(유형분석 시작일) · 과정 전체/데이터 있는 단원만 · 칸 툴팁 + 대표 문제 미리보기
-// 매쓰홀릭에 있고 여기 없는 것 (자료가 없다): 교재별 매트릭스 전환 · 서술형/고난도 탭 ·
-//   9주 이력 차트(단계 6 — 같은 재료로 그린다).
-//
-// ★ 판(매트릭스)은 채점의 산출물이 아니다 — 대표(2026-09-04): "모든 과정마다의 히트맵이 있다."
-//   과정(과목)의 수학비서 트리 전체(소단원 × 난이도)가 판이고, 채점은 그 판을 색칠할 뿐이다.
-//   문제은행에 문제가 없는 칸도 판에 있다(「문제 없음」) — 그게 「미학습」과 다른 것이 보여야
-//   문제은행 완성도(문제 있는 칸/전체)와 학습 진행도(학습한 칸/문제 있는 칸)를 따로 잴 수 있다.
-// ★ 판정은 1~2문항에 색을 주지 않는다(판정 보류). 추정은 형제 칸 근거가 있을 때만, 원형으로.
-// ★ 순서(대표, 2026-09-04): 실제 채점으로 히트맵을 먼저 완성 → 예측은 그 다음 단계. 그래서 추정은 기본 꺼짐.
+//   4단계/6단계 · 학생 선택 · 칸/줄 덩어리 선택 · 「선택된 칸 N + 과제 만들기」 · 범례 실측 카운트 ·
+//   기간 · 대단원 필터 · 칸 툴팁 + 대표 문제 · ● 추정(규칙, 근거 문장, 토글 — **기본 꺼짐**)
+// ★ 순서(대표): 실데이터로 판 완성 → 예측은 그 다음. 그래서 추정은 기본 꺼짐.
+// ★ 판정은 1~2문항에 색 판정을 주지 않는다(판정 보류).
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, AlertCircle, RotateCcw, ClipboardList, X } from 'lucide-react';
 import type { MasteryPayload, MasteryItem } from '@/app/api/classes/[classId]/mastery/route';
 import {
-  BAND_SCHEMES, type BandScheme, bandOf, judgeCell, LEVEL_LABEL, type CellLevel,
-  isWeakLevel, midOf, unitOf, cellKey, subjectOf,
+  BAND_SCHEMES, type BandScheme, bandOf, LEVEL_LABEL, type CellLevel, isWeakLevel,
+  midOf, unitOf, depthOf, cellKey, subjectOf, summarizeType, type TypeLayer, type TypeSummary,
 } from '@/lib/class/mastery-bands';
 import { inferCells, type InferredCell } from '@/lib/class/mastery-infer';
 import { GenerateAssignmentModal, previewText, type CellSpec } from './GenerateAssignmentModal';
@@ -42,35 +38,33 @@ interface Props {
   students: Array<{ id: string; name: string }>;
 }
 
-interface Square {
-  key: string;
+/** 칸 = 유형 하나 */
+interface TypeCell {
+  code: string;
+  name: string;
   unit: string;
-  band: string;
+  layers: TypeLayer[];          // bands 순서 (개념 → 심화)
+  summary: TypeSummary;
+  /** 표시 단계 — 관측 판정, 없으면 추정 */
   level: CellLevel;
-  pct: number | null;
-  n: number;
-  correct: number;
-  supply: number;
-  inferred: boolean;
-  basis?: string;
+  inferred: InferredCell | null;
 }
 
-/** 칸 색 — 데이터 그래픽이라 채도색을 쓴다 (design guard allowlist) */
-const LEVEL_CLASS: Record<CellLevel, string> = {
-  master: 'bg-emerald-300',
-  good: 'bg-emerald-500/75',
-  shaky: 'bg-amber-400/80',
-  weak: 'bg-red-500/80',
-  severe: 'bg-red-800',
-  thin: 'bg-white/20 border border-dashed border-white/50',
-  none: 'bg-white/[.06] border border-white/10',
-};
 const LEVEL_ORDER: CellLevel[] = ['master', 'good', 'shaky', 'weak', 'severe', 'thin', 'none'];
-/** 판에는 있는데 문제은행에 문제가 없는 칸 — 미학습과 구분 (문제은행 완성도의 구멍) */
-const NO_SUPPLY_CLASS = 'border border-dashed border-white/15 bg-transparent';
+const LEGEND_SWATCH: Record<CellLevel, string> = {
+  master: 'bg-emerald-300',
+  good: 'bg-emerald-500',
+  shaky: 'bg-amber-400',
+  weak: 'bg-red-500',
+  severe: 'bg-red-800',
+  thin: 'bg-white/25',
+  none: 'bg-white/10',
+};
+const NO_SUPPLY_SWATCH = 'border border-dashed border-white/20 bg-transparent';
 
 const PREF_SCHEME = 'mastery:scheme';
 const PREF_INFER = 'mastery:infer';
+const PSEUDO_TYPE_NAME = '(유형 미지정)';
 
 function readPref<T>(key: string, fallback: T, parse: (v: string) => T | null): T {
   try {
@@ -92,6 +86,27 @@ function pctTone(pct: number | null): string {
   return 'text-content-primary';
 }
 
+/** 층 하나의 색 — 색조=정답률, 진하기=푼 비율. 문제 없음/미학습은 무채 */
+function layerClass(l: TypeLayer, hollowLevel: CellLevel | null): string {
+  if (l.supply === 0 && l.n === 0) return NO_SUPPLY_SWATCH;
+  if (l.n === 0) {
+    // 추정 칸 — 속 빈 테두리로 (매쓰홀릭 ● 예측 칸 대응)
+    if (hollowLevel) return `border ${hollowBorder(hollowLevel)} bg-transparent`;
+    return 'bg-white/10';
+  }
+  const pct = Math.round((l.correct * 100) / l.n);
+  const done = l.supply > 0 ? Math.min(l.solved, l.supply) / l.supply : 1;
+  const strong = done >= 0.999;
+  if (pct >= 80) return strong ? 'bg-emerald-400' : 'bg-emerald-500/55';
+  if (pct >= 60) return strong ? 'bg-amber-400' : 'bg-amber-400/55';
+  return strong ? 'bg-red-500' : 'bg-red-500/55';
+}
+function hollowBorder(level: CellLevel): string {
+  if (level === 'good' || level === 'master') return 'border-emerald-400/70';
+  if (level === 'shaky') return 'border-amber-400/70';
+  return 'border-red-500/70';
+}
+
 export function MasteryMatrix({ classId, className, students }: Props) {
   const [data, setData] = useState<MasteryPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,15 +114,15 @@ export function MasteryMatrix({ classId, className, students }: Props) {
 
   const [subject, setSubject] = useState<string>('');
   const [scheme, setScheme] = useState<BandScheme>(4);
-  // ★ 기본 꺼짐 — 대표 판단(2026-09-04): 예측은 실제 채점으로 유형 히트맵을 완성한 뒤에 갈 기능.
-  //   지금은 「우리 학생이 실제로 푼 것」만 색이다. 켜면 원형 추정 칸이 보인다.
+  // ★ 기본 꺼짐 — 예측은 실제 채점으로 판을 완성한 뒤 갈 기능 (대표 2026-09-04)
   const [showInfer, setShowInfer] = useState(false);
   const [hideEmpty, setHideEmpty] = useState(false);
+  const [l1Filter, setL1Filter] = useState<string>('');
   const [studentSel, setStudentSel] = useState<string | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [focus, setFocus] = useState<Square | null>(null);
+  const [focus, setFocus] = useState<TypeCell | null>(null);
   const [previews, setPreviews] = useState<Map<string, { content: string; difficulty: number | null } | null>>(new Map());
   const [gen, setGen] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -138,46 +153,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
 
   const bands = BAND_SCHEMES[scheme];
 
-  // ── 트리 (이 과목) ──
-  const tree = useMemo(() => {
-    const names = new Map<string, string>();
-    const l1: Array<{ code: string; name: string }> = [];
-    const midsByL1 = new Map<string, string[]>();
-    const unitsByMid = new Map<string, string[]>();
-    if (!data || !subject) return { names, l1, midsByL1, unitsByMid };
-    for (const n of data.tree) {
-      if (subjectOf(n.code) !== subject) continue;
-      names.set(n.code, n.name);
-      if (n.depth === 2) { l1.push({ code: n.code, name: n.name }); midsByL1.set(n.code, []); }
-      else if (n.depth === 3) {
-        const parent = n.code.split('-').slice(0, 2).join('-');
-        if (!midsByL1.has(parent)) { midsByL1.set(parent, []); l1.push({ code: parent, name: parent }); }
-        midsByL1.get(parent)!.push(n.code);
-        unitsByMid.set(n.code, []);
-      } else if (n.depth === 4) {
-        const mid = midOf(n.code)!;
-        if (!unitsByMid.has(mid)) unitsByMid.set(mid, []);
-        unitsByMid.get(mid)!.push(n.code);
-      }
-    }
-    return { names, l1, midsByL1, unitsByMid };
-  }, [data, subject]);
-
-  // ── 공급 (소단원 × 밴드) ──
-  const supplyByCell = useMemo(() => {
-    const m = new Map<string, number>();
-    if (!data) return m;
-    for (const s of data.supply) {
-      if (subjectOf(s.unit) !== subject) continue;
-      const b = bandOf(s.d, scheme);
-      if (!b) continue;
-      const k = cellKey(s.unit, b);
-      m.set(k, (m.get(k) ?? 0) + s.count);
-    }
-    return m;
-  }, [data, subject, scheme]);
-
-  // ── 문항 (과목 · 기간 · 학생) ──
+  // ── 문항 (과목 · 기간) ──
   const itemsAll = useMemo<MasteryItem[]>(() => {
     if (!data) return [];
     return data.items.filter((it) => {
@@ -200,160 +176,223 @@ export function MasteryMatrix({ classId, className, students }: Props) {
     return m;
   }, [itemsAll]);
 
-  // ── 관측 칸 · 행 합계 ──
-  const observed = useMemo(() => {
-    const cells = new Map<string, { n: number; correct: number }>();
-    const rowTotals = new Map<string, { n: number; correct: number; noDiff: number }>();
-    for (const it of itemsView) {
-      const mid = midOf(it.code);
-      if (mid) {
-        const r = rowTotals.get(mid) ?? { n: 0, correct: 0, noDiff: 0 };
-        r.n += 1; if (it.ok) r.correct += 1; if (it.d == null) r.noDiff += 1;
-        rowTotals.set(mid, r);
-      }
-      const unit = unitOf(it.code);
-      const band = bandOf(it.d, scheme);
-      if (!unit || !band) continue;
-      const k = cellKey(unit, band);
-      const c = cells.get(k) ?? { n: 0, correct: 0 };
-      c.n += 1; if (it.ok) c.correct += 1;
-      cells.set(k, c);
+  // ── 트리 (이 과목) — 대단원 → 중단원 → 소단원 → 유형(칸) ──
+  const tree = useMemo(() => {
+    const names = new Map<string, string>();
+    const l1: Array<{ code: string; name: string }> = [];
+    const midsByL1 = new Map<string, string[]>();
+    const unitsByMid = new Map<string, string[]>();
+    const typesByUnit = new Map<string, string[]>();
+    if (!data || !subject) return { names, l1, midsByL1, unitsByMid, typesByUnit };
+    const ensure = <K,>(m: Map<K, string[]>, k: K) => { if (!m.has(k)) m.set(k, []); return m.get(k)!; };
+    for (const n of data.tree) {
+      if (subjectOf(n.code) !== subject) continue;
+      names.set(n.code, n.name);
+      const parts = n.code.split('-');
+      if (n.depth === 2) { l1.push({ code: n.code, name: n.name }); ensure(midsByL1, n.code); }
+      else if (n.depth === 3) { ensure(midsByL1, parts.slice(0, 2).join('-')).push(n.code); ensure(unitsByMid, n.code); }
+      else if (n.depth === 4) { ensure(unitsByMid, midOf(n.code)!).push(n.code); ensure(typesByUnit, n.code); }
+      else if (n.depth === 5) { ensure(typesByUnit, unitOf(n.code)!).push(n.code); }
     }
-    return { cells, rowTotals };
+    // depth4 코드로만 분류된 문제·채점은 그 소단원의 「유형 미지정」 칸으로 — 판에서 사라지면 안 된다
+    const pseudo = new Set<string>();
+    for (const s of data.supply) if (subjectOf(s.code) === subject && depthOf(s.code) === 4) pseudo.add(s.code);
+    for (const it of data.items) if (subjectOf(it.code) === subject && depthOf(it.code) === 4) pseudo.add(it.code);
+    for (const code of pseudo) {
+      if (!typesByUnit.has(code)) continue;
+      const arr = typesByUnit.get(code)!;
+      if (!arr.includes(code)) arr.push(code);
+    }
+    return { names, l1, midsByL1, unitsByMid, typesByUnit };
+  }, [data, subject]);
+
+  // ── 층별 공급 (유형 × 밴드) ──
+  const supplyByLayer = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!data) return m;
+    for (const s of data.supply) {
+      if (subjectOf(s.code) !== subject) continue;
+      const b = bandOf(s.d, scheme);
+      if (!b) continue;
+      const k = cellKey(s.code, b);
+      m.set(k, (m.get(k) ?? 0) + s.count);
+    }
+    return m;
+  }, [data, subject, scheme]);
+
+  // ── 관측 (유형 × 밴드) · 소단원 합계 ──
+  const observed = useMemo(() => {
+    const layers = new Map<string, { n: number; correct: number; pids: Set<string> }>();
+    const noBand = new Map<string, { n: number; correct: number }>();
+    const unitTotals = new Map<string, { n: number; correct: number }>();
+    for (const it of itemsView) {
+      const unit = unitOf(it.code);
+      if (unit) {
+        const r = unitTotals.get(unit) ?? { n: 0, correct: 0 };
+        r.n += 1; if (it.ok) r.correct += 1;
+        unitTotals.set(unit, r);
+      }
+      const band = bandOf(it.d, scheme);
+      if (!band) {
+        const c = noBand.get(it.code) ?? { n: 0, correct: 0 };
+        c.n += 1; if (it.ok) c.correct += 1;
+        noBand.set(it.code, c);
+        continue;
+      }
+      const k = cellKey(it.code, band);
+      const c = layers.get(k) ?? { n: 0, correct: 0, pids: new Set<string>() };
+      c.n += 1; if (it.ok) c.correct += 1; c.pids.add(it.pid);
+      layers.set(k, c);
+    }
+    return { layers, noBand, unitTotals };
   }, [itemsView, scheme]);
 
-  // ── 판 = 이 과정의 트리 전체 (소단원 × 밴드). 문제 유무와 무관하게 칸은 항상 있다 ──
-  const universe = useMemo(() => {
-    const out: Array<{ unit: string; band: string }> = [];
-    const seen = new Set<string>();
-    for (const units of tree.unitsByMid.values()) {
-      for (const u of units) for (const b of bands) { out.push({ unit: u, band: b.key }); seen.add(cellKey(u, b.key)); }
-    }
-    // 트리에 없는 코드로 채점된 것도 자리는 준다 (트리 갱신 전 분류)
-    for (const k of observed.cells.keys()) {
-      if (!seen.has(k)) { const [unit, band] = k.split('|'); out.push({ unit, band }); }
-    }
+  const allTypeCodes = useMemo(() => {
+    const out: string[] = [];
+    for (const arr of tree.typesByUnit.values()) out.push(...arr);
     return out;
-  }, [tree, bands, observed]);
+  }, [tree]);
 
+  // ── 추정 (기본 꺼짐) — 형제 = 같은 소단원의 유형들 ──
   const inferred = useMemo<Map<string, InferredCell>>(() => {
     if (!showInfer) return new Map();
-    const obs = Array.from(observed.cells.entries()).map(([k, c]) => {
+    const obs = Array.from(observed.layers.entries()).map(([k, c]) => {
       const [unit, band] = k.split('|');
       return { unit, band, n: c.n, correct: c.correct };
     });
-    return inferCells(obs, universe, tree.unitsByMid, bands, tree.names);
-  }, [showInfer, observed, universe, tree, bands]);
+    const universe = allTypeCodes.flatMap((code) => bands.map((b) => ({ unit: code, band: b.key })));
+    return inferCells(obs, universe, tree.typesByUnit, bands, tree.names);
+  }, [showInfer, observed, allTypeCodes, tree, bands]);
 
   // ── 칸 만들기 ──
-  const squareOf = useCallback((unit: string, band: string): Square => {
-    const key = cellKey(unit, band);
-    const c = observed.cells.get(key);
-    const j = judgeCell(c?.n ?? 0, c?.correct ?? 0);
-    const inf = (j.level === 'none' || j.level === 'thin') ? inferred.get(key) : undefined;
+  const cellOf = useCallback((code: string): TypeCell => {
+    const layers: TypeLayer[] = bands.map((b) => {
+      const k = cellKey(code, b.key);
+      const o = observed.layers.get(k);
+      const supply = supplyByLayer.get(k) ?? 0;
+      return { band: b.key, supply, solved: o ? o.pids.size : 0, n: o?.n ?? 0, correct: o?.correct ?? 0 };
+    });
+    const extra = observed.noBand.get(code);
+    const summary = summarizeType(layers);
+    if (extra) {
+      // 난이도 미상 문항 — 층엔 못 놓지만 정답률 판정엔 넣는다
+      summary.n += extra.n; summary.correct += extra.correct;
+      const pct = Math.round((summary.correct * 100) / summary.n);
+      summary.judgement = summary.n >= 3
+        ? { level: pct >= 90 && summary.n >= 5 ? 'master' : pct >= 80 ? 'good' : pct >= 60 ? 'shaky' : pct >= 30 ? 'weak' : 'severe', pct }
+        : { level: 'thin', pct };
+    }
+    let inf: InferredCell | null = null;
+    if (summary.judgement.level === 'none' || summary.judgement.level === 'thin') {
+      for (const b of bands) { const c = inferred.get(cellKey(code, b.key)); if (c) { inf = c; break; } }
+    }
+    const name = depthOf(code) === 4 ? `${tree.names.get(code) ?? code} ${PSEUDO_TYPE_NAME}` : (tree.names.get(code) ?? code);
     return {
-      key, unit, band,
-      level: inf ? inf.level : j.level,
-      pct: inf ? inf.pct : j.pct,
-      n: c?.n ?? 0, correct: c?.correct ?? 0,
-      supply: supplyByCell.get(key) ?? 0,
-      inferred: !!inf,
-      basis: inf?.basis,
+      code, name, unit: unitOf(code) ?? code, layers, summary,
+      level: inf ? inf.level : summary.judgement.level,
+      inferred: inf,
     };
-  }, [observed, inferred, supplyByCell]);
+  }, [bands, observed, supplyByLayer, inferred, tree]);
 
   const rows = useMemo(() => {
     const out: Array<{
       l1: { code: string; name: string };
-      mids: Array<{ code: string; name: string; byBand: Square[][]; total: { n: number; correct: number; noDiff: number } | undefined }>;
+      mids: Array<{
+        code: string; name: string;
+        units: Array<{ code: string; name: string; cells: TypeCell[]; total: { n: number; correct: number } | undefined }>;
+      }>;
     }> = [];
     for (const l1 of tree.l1) {
+      if (l1Filter && l1.code !== l1Filter) continue;
       const mids = (tree.midsByL1.get(l1.code) ?? []).map((mid) => {
-        const units = tree.unitsByMid.get(mid) ?? [];
-        const byBand = bands.map((b) => units.map((u) => squareOf(u, b.key)));
-        return { code: mid, name: tree.names.get(mid) ?? mid, byBand, total: observed.rowTotals.get(mid) };
-      }).filter((m) => !hideEmpty || m.total || m.byBand.some((sq) => sq.some((s) => s.inferred)));
+        const units = (tree.unitsByMid.get(mid) ?? []).map((unit) => ({
+          code: unit,
+          name: tree.names.get(unit) ?? unit,
+          cells: (tree.typesByUnit.get(unit) ?? []).map(cellOf),
+          total: observed.unitTotals.get(unit),
+        })).filter((u) => !hideEmpty || u.total || u.cells.some((c) => c.inferred));
+        return { code: mid, name: tree.names.get(mid) ?? mid, units };
+      }).filter((m) => m.units.length > 0);
       if (mids.length > 0) out.push({ l1, mids });
     }
     return out;
-  }, [tree, bands, squareOf, observed, hideEmpty]);
+  }, [tree, cellOf, observed, hideEmpty, l1Filter]);
 
-  const allSquares = useMemo(() => rows.flatMap((r) => r.mids.flatMap((m) => m.byBand.flat())), [rows]);
+  const allCells = useMemo(() => rows.flatMap((r) => r.mids.flatMap((m) => m.units.flatMap((u) => u.cells))), [rows]);
 
-  const legendCounts = useMemo(() => {
+  // ── 완성도 두 개 · 범례 ──
+  const stats = useMemo(() => {
     const c: Record<CellLevel, number> = { master: 0, good: 0, shaky: 0, weak: 0, severe: 0, thin: 0, none: 0 };
-    let inferredCount = 0;
-    let withSupply = 0;   // 문제은행에 문제가 있는 칸
-    let studied = 0;      // 학생이 실제로 푼 칸 (n > 0)
-    for (const s of allSquares) {
-      c[s.level] += 1;
-      if (s.inferred) inferredCount += 1;
-      if (s.supply > 0) withSupply += 1;
-      if (s.n > 0) studied += 1;
+    let withSupply = 0; let touched = 0; let supply = 0; let solved = 0; let inferredCount = 0;
+    for (const cell of allCells) {
+      if (cell.summary.supply > 0) { withSupply += 1; c[cell.level] += 1; }
+      else if (cell.summary.n > 0) c[cell.level] += 1;
+      if (cell.summary.n > 0) touched += 1;
+      if (cell.inferred) inferredCount += 1;
+      supply += cell.summary.supply;
+      solved += cell.summary.solved;
     }
-    const total = allSquares.length;
+    const total = allCells.length;
     return {
-      c, inferredCount, total, withSupply, studied,
+      c, total, withSupply, touched, supply, solved, inferredCount,
       noSupply: total - withSupply,
-      /** 문제은행 완성도 — 판의 칸 중 문제가 있는 비율 */
       bankPct: total > 0 ? Math.round((withSupply * 100) / total) : 0,
-      /** 학습 진행도 — 문제 있는 칸 중 학생이 푼 비율 */
-      studyPct: withSupply > 0 ? Math.round((studied * 100) / withSupply) : 0,
+      progressPct: supply > 0 ? Math.round((solved * 100) / supply) : 0,
     };
-  }, [allSquares]);
-
-  const bandSupply = useMemo(
-    () => bands.map((b) => allSquares.filter((s) => s.band === b.key).reduce((n, s) => n + s.supply, 0)),
-    [bands, allSquares],
-  );
+  }, [allCells]);
 
   // ── 선택 ──
-  const toggleKeys = (keys: string[]) => {
-    if (keys.length === 0) return;
+  const toggleCodes = (codes: string[]) => {
+    if (codes.length === 0) return;
     setSelected((prev) => {
       const next = new Set(prev);
-      const allOn = keys.every((k) => next.has(k));
-      for (const k of keys) { if (allOn) next.delete(k); else next.add(k); }
+      const allOn = codes.every((k) => next.has(k));
+      for (const k of codes) { if (allOn) next.delete(k); else next.add(k); }
       return next;
     });
   };
   const selectWeak = () => {
-    setSelected(new Set(allSquares.filter((s) => isWeakLevel(s.level) && s.supply > 0).map((s) => s.key)));
+    setSelected(new Set(allCells.filter((c) => isWeakLevel(c.level) && c.summary.supply > 0).map((c) => c.code)));
   };
 
-  // ── 대표 문제 미리보기 (클릭한 칸) ──
-  const focusSquare = useCallback(async (sq: Square) => {
-    setFocus(sq);
-    if (previews.has(sq.key) || sq.supply === 0) return;
+  // ── 대표 문제 (클릭한 칸) ──
+  const focusCell = useCallback(async (cell: TypeCell) => {
+    setFocus(cell);
+    if (previews.has(cell.code) || cell.summary.supply === 0) return;
     const reqId = ++previewReq.current;
-    const band = bands.find((b) => b.key === sq.band);
     try {
       const res = await fetch('/api/clinic/cell-problems', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cells: [{ unit: sq.unit, levels: band?.levels ?? [] }], preview: true }),
+        body: JSON.stringify({ cells: [{ unit: cell.code, levels: bands.flatMap((b) => b.levels) }], preview: true }),
       });
       const json = await res.json();
       if (reqId !== previewReq.current) return;
       const p = res.ok ? (json.groups?.[0]?.problems?.[0] ?? null) : null;
-      setPreviews((prev) => new Map(prev).set(sq.key, p ? { content: p.content ?? '', difficulty: p.difficulty ?? null } : null));
+      setPreviews((prev) => new Map(prev).set(cell.code, p ? { content: p.content ?? '', difficulty: p.difficulty ?? null } : null));
     } catch {
       /* 미리보기는 있으면 좋은 것 — 실패해도 칸 정보는 그대로 */
     }
   }, [bands, previews]);
 
+  const cellByCode = useMemo(() => new Map(allCells.map((c) => [c.code, c])), [allCells]);
+
+  /** 과제 — 안 푼 문제가 남은 층만 겨냥한다. 다 풀었으면 문제 있는 층 전체 */
   const cellSpecs = useMemo<CellSpec[]>(() => {
     const specs: CellSpec[] = [];
-    for (const k of selected) {
-      const [unit, bandKey] = k.split('|');
-      const band = bands.find((b) => b.key === bandKey);
-      if (!band) continue;
-      specs.push({ unit, levels: band.levels, label: `${tree.names.get(unit) ?? unit} · ${band.label}` });
+    for (const code of selected) {
+      const cell = cellByCode.get(code);
+      if (!cell) continue;
+      const left = cell.layers.filter((l) => l.supply > Math.min(l.solved, l.supply));
+      const useLayers = left.length > 0 ? left : cell.layers.filter((l) => l.supply > 0);
+      const levels = useLayers.flatMap((l) => bands.find((b) => b.key === l.band)?.levels ?? []);
+      specs.push({ unit: code, levels: levels.length ? levels : bands.flatMap((b) => b.levels), label: cell.name });
     }
     return specs;
-  }, [selected, bands, tree]);
+  }, [selected, cellByCode, bands]);
 
   const targetStudentIds = studentSel ? [studentSel] : students.map((s) => s.id);
+
   // ── 렌더 ──
   if (loading) {
     return (
@@ -374,25 +413,26 @@ export function MasteryMatrix({ classId, className, students }: Props) {
   if (!data || data.subjects.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
-        <p className="text-sm text-content-secondary">아직 이 반의 채점 기록이 없어 숙달을 그릴 수 없습니다.</p>
+        <p className="text-sm text-content-secondary">아직 이 반의 채점 기록이 없어 어느 과정의 판을 열지 모릅니다.</p>
         <p className="mt-1 text-xs text-content-muted">
-          시험지를 QR 로 채점하면 그 문항의 단원·난이도가 여기에 칸으로 쌓입니다.
+          시험지를 QR 로 채점하면 그 과정의 유형 판이 열리고 푼 만큼 칸이 찹니다.
           {data && data.unplaced > 0 && ` (유형이 안 붙은 문항 ${data.unplaced}개는 놓지 못했습니다)`}
         </p>
       </div>
     );
   }
 
-  const subjectMeta = data.subjects.find((s) => s.code === subject);
+  const bandLabel = (k: string) => bands.find((b) => b.key === k)?.label ?? k;
+  const layerH = scheme === 6 ? 'h-[3px]' : 'h-[5px]';
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_248px]">
       <div className="min-w-0">
         {/* 도구 줄 */}
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           <select
             value={subject}
-            onChange={(e) => { setSubject(e.target.value); setSelected(new Set()); setFocus(null); }}
+            onChange={(e) => { setSubject(e.target.value); setSelected(new Set()); setFocus(null); setL1Filter(''); }}
             className="rounded-lg border border-white/10 bg-white/[.03] px-2.5 py-1.5 text-sm text-content-primary focus:border-white/20 focus:outline-none"
           >
             {data.subjects.map((s) => (
@@ -404,7 +444,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
             {([4, 6] as const).map((n) => (
               <button
                 key={n}
-                onClick={() => { setScheme(n); writePref(PREF_SCHEME, String(n)); setSelected(new Set()); }}
+                onClick={() => { setScheme(n); writePref(PREF_SCHEME, String(n)); }}
                 className={`px-2.5 py-1.5 transition-colors ${scheme === n ? 'bg-white text-black' : 'text-content-secondary hover:text-content-primary'}`}
               >
                 {n}단계
@@ -439,57 +479,66 @@ export function MasteryMatrix({ classId, className, students }: Props) {
           </span>
         </div>
 
-        {/* 범례 — 매쓰홀릭처럼 실측 카운트를 같이 */}
+        {/* 대단원 필터 — 매쓰홀릭 단원분석의 대단원 탭 */}
+        <div className="mb-2 flex flex-wrap gap-1 text-xs">
+          <button
+            onClick={() => setL1Filter('')}
+            className={`rounded-md px-2 py-1 transition-colors ${l1Filter === '' ? 'bg-white text-black' : 'border border-white/10 text-content-secondary hover:border-white/20 hover:text-content-primary'}`}
+          >
+            전체
+          </button>
+          {tree.l1.map((g, i) => (
+            <button
+              key={g.code}
+              onClick={() => setL1Filter(g.code)}
+              className={`rounded-md px-2 py-1 transition-colors ${l1Filter === g.code ? 'bg-white text-black' : 'border border-white/10 text-content-secondary hover:border-white/20 hover:text-content-primary'}`}
+            >
+              {i + 1} {g.name}
+            </button>
+          ))}
+        </div>
+
+        {/* 범례 + 완성도 두 개 */}
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-content-tertiary">
           {LEVEL_ORDER.map((lv) => (
             <span key={lv} className="inline-flex items-center gap-1">
-              <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${LEVEL_CLASS[lv]}`} />
-              {LEVEL_LABEL[lv]}{' '}
-              <span className="tabular-nums text-content-muted">
-                {lv === 'none' ? legendCounts.c.none - legendCounts.noSupply : legendCounts.c[lv]}
-              </span>
+              <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${LEGEND_SWATCH[lv]}`} />
+              {LEVEL_LABEL[lv]} <span className="tabular-nums text-content-muted">{stats.c[lv]}</span>
             </span>
           ))}
-          <span className="inline-flex items-center gap-1" title="판에는 있지만 문제은행에 이 단원·난이도 문제가 아직 없는 칸">
-            <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${NO_SUPPLY_CLASS}`} />
-            문제 없음 <span className="tabular-nums text-content-muted">{legendCounts.noSupply}</span>
+          <span className="inline-flex items-center gap-1" title="판에는 있지만 문제은행에 이 유형 문제가 아직 없는 칸">
+            <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${NO_SUPPLY_SWATCH}`} />
+            문제 없음 <span className="tabular-nums text-content-muted">{stats.noSupply}</span>
           </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500/75 opacity-70" />
-            ● 추정 <span className="tabular-nums text-content-muted">{legendCounts.inferredCount}</span>
-          </span>
-          <span className="ml-auto text-content-muted" title="문제은행 완성도 = 문제 있는 칸 / 판 전체 · 학습 진행도 = 학생이 푼 칸 / 문제 있는 칸">
-            판 {legendCounts.total}칸 · 문제은행 완성도{' '}
-            <span className="tabular-nums text-content-secondary">{legendCounts.withSupply}/{legendCounts.total} ({legendCounts.bankPct}%)</span>
+          {showInfer && (
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded-[2px] border border-emerald-400/70" />
+              추정 <span className="tabular-nums text-content-muted">{stats.inferredCount}</span>
+            </span>
+          )}
+          <span className="ml-auto text-content-muted" title="문제은행 완성도 = 문제 있는 유형 / 판의 유형 · 학습 진행도 = 푼 문제 / 있는 문제">
+            판 {stats.total}유형 · 문제은행 완성도{' '}
+            <span className="tabular-nums text-content-secondary">{stats.withSupply}/{stats.total} ({stats.bankPct}%)</span>
             {' · '}{studentSel ? (students.find((s) => s.id === studentSel)?.name ?? '학생') : '반 전체'} 진행도{' '}
-            <span className="tabular-nums text-content-secondary">{legendCounts.studied}/{legendCounts.withSupply} ({legendCounts.studyPct}%)</span>
+            <span className="tabular-nums text-content-secondary">{stats.solved}/{stats.supply}문제 ({stats.progressPct}%)</span>
           </span>
         </div>
 
         {rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 px-6 py-12 text-center text-sm text-content-secondary">
-            {subjectMeta ? `${subjectMeta.name} 에 표시할 단원이 없습니다.` : '표시할 단원이 없습니다.'}
-            <p className="mt-1 text-xs text-content-muted">수학비서 트리에 이 과목 단원이 없습니다.</p>
+            표시할 단원이 없습니다.
+            <p className="mt-1 text-xs text-content-muted">{hideEmpty ? '「데이터 있는 단원만」을 끄면 판 전체가 보입니다.' : '수학비서 트리에 이 과목 단원이 없습니다.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs text-content-tertiary">
-                  <th className="w-56 px-3 py-2 text-left font-medium">단원</th>
-                  {bands.map((b, i) => (
-                    <th key={b.key} className="whitespace-nowrap px-2 py-2 text-left font-medium">
-                      <button
-                        onClick={() => toggleKeys(allSquares.filter((s) => s.band === b.key && s.supply > 0).map((s) => s.key))}
-                        className="group inline-flex flex-col items-start leading-tight hover:text-content-primary"
-                        title="이 열 전체 선택/해제"
-                      >
-                        <span>{b.label} <span className="text-content-muted">{b.levels[0]}{b.levels.length > 1 ? `~${b.levels[b.levels.length - 1]}` : ''}</span></span>
-                        <span className="text-[10px] tabular-nums text-content-muted">문제 {bandSupply[i]}</span>
-                      </button>
-                    </th>
-                  ))}
-                  <th className="px-3 py-2 text-right font-medium">전체</th>
+                  <th className="w-52 px-3 py-2 text-left font-medium">소단원</th>
+                  <th className="px-2 py-2 text-left font-medium">
+                    유형 <span className="text-content-muted">— 칸 하나가 유형, 아래부터 {bands.map((b) => b.label).join('·')}</span>
+                  </th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right font-medium">정답률</th>
                 </tr>
               </thead>
               <tbody>
@@ -498,11 +547,11 @@ export function MasteryMatrix({ classId, className, students }: Props) {
                     key={g.l1.code}
                     group={g}
                     selected={selected}
-                    focusKey={focus?.key ?? null}
-                    onToggle={(sq) => { if (sq.supply > 0) toggleKeys([sq.key]); void focusSquare(sq); }}
-                    onToggleRow={(keys) => toggleKeys(keys)}
-                    names={tree.names}
-                    bandLabel={(k) => bands.find((b) => b.key === k)?.label ?? k}
+                    focusCode={focus?.code ?? null}
+                    layerH={layerH}
+                    bandLabel={bandLabel}
+                    onToggle={(cell) => { if (cell.summary.supply > 0) toggleCodes([cell.code]); void focusCell(cell); }}
+                    onToggleRow={(codes) => toggleCodes(codes)}
                   />
                 ))}
               </tbody>
@@ -514,7 +563,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
       {/* 우측 패널 — 매쓰홀릭: 선택된 유형 N / 과제 만들기 / 학생 목록 */}
       <aside className="space-y-3 self-start lg:sticky lg:top-4">
         <div className="rounded-xl border border-white/10 p-3">
-          <p className="text-[11px] uppercase tracking-wider text-content-tertiary">선택된 칸</p>
+          <p className="text-[11px] uppercase tracking-wider text-content-tertiary">선택된 유형</p>
           <p className="mt-1 text-3xl font-semibold tabular-nums text-content-primary">{selected.size}</p>
           <div className="mt-2 flex flex-col gap-1.5">
             <button
@@ -530,7 +579,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
                 onClick={selectWeak}
                 className="flex-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary"
               >
-                약한 칸 모두
+                약한 유형 모두
               </button>
               <button
                 onClick={() => setSelected(new Set())}
@@ -577,36 +626,59 @@ export function MasteryMatrix({ classId, className, students }: Props) {
         </div>
 
         <div className="rounded-xl border border-white/10 p-3">
-          <p className="mb-1.5 text-[11px] uppercase tracking-wider text-content-tertiary">칸 정보</p>
+          <p className="mb-1.5 text-[11px] uppercase tracking-wider text-content-tertiary">유형 정보</p>
           {focus ? (
             <div className="text-xs">
-              <p className="text-sm text-content-primary">{tree.names.get(focus.unit) ?? focus.unit}</p>
+              <p className="text-[11px] text-content-muted">{focus.unit !== focus.code ? (tree.names.get(focus.unit) ?? focus.unit) : ''}</p>
+              <p className="text-sm text-content-primary">{focus.name}</p>
               <p className="mt-0.5 text-content-tertiary">
-                {bands.find((b) => b.key === focus.band)?.label} ·{' '}
-                <span className={focus.inferred ? 'text-content-secondary' : pctTone(focus.pct)}>
-                  {LEVEL_LABEL[focus.level]}{focus.pct != null && ` ${focus.pct}%`}
+                <span className={focus.inferred ? 'text-content-secondary' : pctTone(focus.summary.judgement.pct)}>
+                  {LEVEL_LABEL[focus.level]}
+                  {focus.inferred ? ` ${focus.inferred.pct}% (추정)` : focus.summary.judgement.pct != null ? ` ${focus.summary.judgement.pct}%` : ''}
                 </span>
-                {focus.inferred && ' (추정)'}
+                {' · '}진행도{' '}
+                <span className="tabular-nums text-content-secondary">
+                  {focus.summary.progressPct == null ? '—' : `${focus.summary.solved}/${focus.summary.supply} (${focus.summary.progressPct}%)`}
+                </span>
               </p>
-              <p className="mt-1 text-content-muted">
-                채점 {focus.n}문항{focus.n > 0 && ` · 정답 ${focus.correct}`} · 문제은행 {focus.supply}개
-              </p>
-              {focus.basis && <p className="mt-1 leading-relaxed text-content-muted">근거 — {focus.basis}</p>}
-              {focus.level === 'thin' && (
-                <p className="mt-1 leading-relaxed text-content-muted">문항이 3개 미만이라 색을 주지 않았습니다.</p>
+              <table className="mt-2 w-full text-[11px] tabular-nums">
+                <thead>
+                  <tr className="text-content-muted">
+                    <th className="py-0.5 text-left font-normal">층</th>
+                    <th className="py-0.5 text-right font-normal">문제</th>
+                    <th className="py-0.5 text-right font-normal">푼</th>
+                    <th className="py-0.5 text-right font-normal">맞음</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...focus.layers].reverse().map((l) => (
+                    <tr key={l.band} className="border-t border-white/5 text-content-secondary">
+                      <td className="py-0.5">{bandLabel(l.band)}</td>
+                      <td className="py-0.5 text-right">{l.supply || <span className="text-content-muted">—</span>}</td>
+                      <td className="py-0.5 text-right">{l.solved || <span className="text-content-muted">—</span>}</td>
+                      <td className={`py-0.5 text-right ${l.n > 0 ? pctTone(Math.round((l.correct * 100) / l.n)) : ''}`}>
+                        {l.n > 0 ? `${l.correct}/${l.n}` : <span className="text-content-muted">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {focus.inferred && <p className="mt-1 leading-relaxed text-content-muted">근거 — {focus.inferred.basis}</p>}
+              {focus.summary.judgement.level === 'thin' && (
+                <p className="mt-1 leading-relaxed text-content-muted">문항이 3개 미만이라 판정을 보류했습니다.</p>
               )}
-              {focus.supply === 0 && (
-                <p className="mt-1 leading-relaxed text-content-muted">문제은행에 이 단원·난이도 문제가 아직 없습니다. 분류가 붙으면 채워집니다.</p>
+              {focus.summary.supply === 0 && (
+                <p className="mt-1 leading-relaxed text-content-muted">문제은행에 이 유형 문제가 아직 없습니다. 분류가 붙으면 층이 생깁니다.</p>
               )}
-              {focus.supply > 0 && (
+              {focus.summary.supply > 0 && (
                 <div className="mt-2 rounded-md border border-white/10 bg-white/[.03] p-2">
                   <p className="mb-1 text-[10px] uppercase tracking-wider text-content-muted">대표 문제</p>
-                  {previews.has(focus.key) ? (
-                    previews.get(focus.key) ? (
+                  {previews.has(focus.code) ? (
+                    previews.get(focus.code) ? (
                       <p className="leading-relaxed text-content-secondary">
-                        {previewText(previews.get(focus.key)!.content)}
-                        {previews.get(focus.key)!.difficulty != null && (
-                          <span className="ml-1 text-content-muted">· 난이도 {previews.get(focus.key)!.difficulty}</span>
+                        {previewText(previews.get(focus.code)!.content)}
+                        {previews.get(focus.code)!.difficulty != null && (
+                          <span className="ml-1 text-content-muted">· 난이도 {previews.get(focus.code)!.difficulty}</span>
                         )}
                       </p>
                     ) : (
@@ -620,7 +692,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
             </div>
           ) : (
             <p className="text-xs leading-relaxed text-content-muted">
-              칸을 누르면 여기에 문항 수·정답률·근거·대표 문제가 나옵니다. 단원 이름을 누르면 그 줄, 열 이름을 누르면 그 열이 통째로 선택됩니다.
+              칸을 누르면 여기에 층별 문제·푼 수·정답률과 대표 문제가 나옵니다. 소단원 이름을 누르면 그 줄의 유형이 통째로 선택됩니다.
             </p>
           )}
         </div>
@@ -646,74 +718,107 @@ export function MasteryMatrix({ classId, className, students }: Props) {
   );
 }
 
-// ── 행 묶음 (대단원 → 중단원 줄) ──
+// ── 행 묶음 (대단원 → 중단원 → 소단원 줄 = 유형 칸들) ──
 function RowGroup({
-  group, selected, focusKey, onToggle, onToggleRow, names, bandLabel,
+  group, selected, focusCode, layerH, bandLabel, onToggle, onToggleRow,
 }: {
   group: {
     l1: { code: string; name: string };
-    mids: Array<{ code: string; name: string; byBand: Square[][]; total: { n: number; correct: number; noDiff: number } | undefined }>;
+    mids: Array<{
+      code: string; name: string;
+      units: Array<{ code: string; name: string; cells: TypeCell[]; total: { n: number; correct: number } | undefined }>;
+    }>;
   };
   selected: Set<string>;
-  focusKey: string | null;
-  onToggle: (sq: Square) => void;
-  onToggleRow: (keys: string[]) => void;
-  names: Map<string, string>;
+  focusCode: string | null;
+  layerH: string;
   bandLabel: (k: string) => string;
+  onToggle: (cell: TypeCell) => void;
+  onToggleRow: (codes: string[]) => void;
 }) {
   return (
     <>
-      <tr className="border-b border-white/5 bg-white/[.02]">
-        <td colSpan={99} className="px-3 py-1.5 text-[11px] font-medium tracking-wide text-content-tertiary">
+      <tr className="border-b border-white/5 bg-white/[.03]">
+        <td colSpan={3} className="px-3 py-1.5 text-[11px] font-semibold tracking-wide text-content-secondary">
           {group.l1.name}
         </td>
       </tr>
-      {group.mids.map((m) => {
-        const rowKeys = m.byBand.flat().filter((s) => s.supply > 0).map((s) => s.key);
-        const total = m.total;
-        const pct = total && total.n > 0 ? Math.round((total.correct * 100) / total.n) : null;
+      {group.mids.map((m) => (
+        <MidRows key={m.code} mid={m} selected={selected} focusCode={focusCode} layerH={layerH} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} />
+      ))}
+    </>
+  );
+}
+
+function MidRows({
+  mid, selected, focusCode, layerH, bandLabel, onToggle, onToggleRow,
+}: {
+  mid: { code: string; name: string; units: Array<{ code: string; name: string; cells: TypeCell[]; total: { n: number; correct: number } | undefined }> };
+  selected: Set<string>;
+  focusCode: string | null;
+  layerH: string;
+  bandLabel: (k: string) => string;
+  onToggle: (cell: TypeCell) => void;
+  onToggleRow: (codes: string[]) => void;
+}) {
+  return (
+    <>
+      <tr className="border-b border-white/5">
+        <td colSpan={3} className="px-3 py-1 text-[11px] text-content-tertiary">{mid.name}</td>
+      </tr>
+      {mid.units.map((u) => {
+        const rowCodes = u.cells.filter((c) => c.summary.supply > 0).map((c) => c.code);
+        const pct = u.total && u.total.n > 0 ? Math.round((u.total.correct * 100) / u.total.n) : null;
         return (
-          <tr key={m.code} className="border-b border-white/5 last:border-0 hover:bg-white/[.03]">
-            <td className="px-3 py-1.5 align-top">
+          <tr key={u.code} className="border-b border-white/5 last:border-0 hover:bg-white/[.02]">
+            <td className="px-3 py-1.5 pl-5 align-top">
               <button
-                onClick={() => onToggleRow(rowKeys)}
-                disabled={rowKeys.length === 0}
+                onClick={() => onToggleRow(rowCodes)}
+                disabled={rowCodes.length === 0}
                 className="text-left text-xs text-content-secondary transition-colors hover:text-content-primary disabled:cursor-default disabled:hover:text-content-secondary"
-                title="이 줄 전체 선택/해제"
+                title="이 줄의 유형 전체 선택/해제"
               >
-                {m.name}
+                {u.name}
               </button>
             </td>
-            {m.byBand.map((squares, i) => (
-              <td key={i} className="px-2 py-1.5 align-top">
-                <div className="flex flex-wrap gap-1">
-                  {squares.map((sq) => {
-                    const sel = selected.has(sq.key);
-                    const title = [
-                      `${names.get(sq.unit) ?? sq.unit} · ${bandLabel(sq.band)}`,
-                      `${LEVEL_LABEL[sq.level]}${sq.pct != null ? ` ${sq.pct}%` : ''}${sq.inferred ? ' (추정)' : ''} · 채점 ${sq.n}문항 · 문제은행 ${sq.supply}개`,
-                      sq.basis ? `근거: ${sq.basis}` : '',
-                    ].filter(Boolean).join('\n');
-                    return (
-                      <button
-                        key={sq.key}
-                        onClick={() => onToggle(sq)}
-                        title={sq.supply === 0 && sq.n === 0 ? `${title}\n(문제은행에 문제가 없어 과제로는 못 냅니다)` : title}
-                        aria-pressed={sel}
-                        className={`h-3.5 w-3.5 shrink-0 transition-transform hover:scale-125 ${
-                          sq.inferred ? 'rounded-full opacity-70' : 'rounded-[3px]'
-                        } ${sq.supply === 0 && sq.n === 0 ? NO_SUPPLY_CLASS : LEVEL_CLASS[sq.level]} ${sel ? 'ring-2 ring-white ring-offset-1 ring-offset-black' : ''} ${
-                          focusKey === sq.key && !sel ? 'ring-1 ring-white/60' : ''
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
-              </td>
-            ))}
-            <td className={`px-3 py-1.5 text-right align-top text-xs tabular-nums ${pctTone(pct)}`} title={total?.noDiff ? `난이도 미상 ${total.noDiff}문항 포함` : undefined}>
+            <td className="px-2 py-1.5 align-top">
+              <div className="flex flex-wrap gap-1">
+                {u.cells.map((cell) => {
+                  const sel = selected.has(cell.code);
+                  const s = cell.summary;
+                  const layerLines = [...cell.layers].reverse()
+                    .filter((l) => l.supply > 0 || l.n > 0)
+                    .map((l) => `${bandLabel(l.band)} ${l.solved}/${l.supply}${l.n > 0 ? ` (${l.correct}/${l.n} 정답)` : ''}`);
+                  const title = [
+                    cell.name,
+                    `${LEVEL_LABEL[cell.level]}${cell.inferred ? ` ${cell.inferred.pct}% (추정)` : s.judgement.pct != null ? ` ${s.judgement.pct}%` : ''}`
+                      + ` · 진행도 ${s.progressPct == null ? '—' : `${s.solved}/${s.supply} (${s.progressPct}%)`}`,
+                    ...layerLines,
+                    s.supply === 0 ? '(문제은행에 문제가 없어 과제로는 못 냅니다)' : '',
+                    cell.inferred ? `근거: ${cell.inferred.basis}` : '',
+                  ].filter(Boolean).join('\n');
+                  const hollow = cell.inferred ? cell.inferred.level : null;
+                  return (
+                    <button
+                      key={cell.code}
+                      onClick={() => onToggle(cell)}
+                      title={title}
+                      aria-pressed={sel}
+                      className={`flex w-4 shrink-0 flex-col-reverse gap-px rounded-[3px] p-px transition-transform hover:scale-125 ${
+                        sel ? 'ring-2 ring-white ring-offset-1 ring-offset-black' : focusCode === cell.code ? 'ring-1 ring-white/60' : ''
+                      }`}
+                    >
+                      {cell.layers.map((l) => (
+                        <span key={l.band} className={`block w-full rounded-[1px] ${layerH} ${layerClass(l, hollow)}`} />
+                      ))}
+                    </button>
+                  );
+                })}
+              </div>
+            </td>
+            <td className={`whitespace-nowrap px-3 py-1.5 text-right align-top text-xs tabular-nums ${pctTone(pct)}`}>
               {pct == null ? <span className="text-content-muted">—</span> : `${pct}%`}
-              {total && <span className="ml-1 text-content-muted">{total.n}</span>}
+              {u.total && <span className="ml-1 text-content-muted">{u.total.n}</span>}
             </td>
           </tr>
         );

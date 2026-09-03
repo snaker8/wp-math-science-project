@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   BAND_SCHEMES, bandOf, judgeCell, isWeakLevel, subjectOf, midOf, unitOf, MIN_JUDGE, MIN_MASTER,
+  summarizeType, depthOf,
 } from './mastery-bands';
 import { inferCells } from './mastery-infer';
 
@@ -174,5 +175,38 @@ describe('mastery-infer · 추정 (매쓰홀릭 원형 칸)', () => {
     expect(c?.pct).toBe(60);
     expect(c?.level).toBe('shaky');
     expect(c?.basis).toContain('이 칸 1문항 0%');
+  });
+});
+
+describe('mastery-bands · 유형 칸 완성도 (층 적층)', () => {
+  it('진행도 = 푼 문제 / 있는 문제. 문제 없는 층은 분모에 안 들어간다', () => {
+    const s = summarizeType([
+      { band: 'A', supply: 4, solved: 4, n: 4, correct: 4 },
+      { band: 'B', supply: 2, solved: 1, n: 1, correct: 0 },
+      { band: 'C', supply: 0, solved: 0, n: 0, correct: 0 },
+      { band: 'D', supply: 0, solved: 0, n: 0, correct: 0 },
+    ]);
+    expect(s.layersWithSupply).toBe(2);
+    expect(s.layersTouched).toBe(2);
+    expect(s.supply).toBe(6);
+    expect(s.solved).toBe(5);
+    expect(s.progressPct).toBe(83);
+    expect(s.judgement.level).toBe('good');   // 5문항 4정답 80%
+  });
+
+  it('푼 문제가 공급보다 많아도(삭제된 문제 등) 100 에서 막는다', () => {
+    const s = summarizeType([{ band: 'A', supply: 2, solved: 5, n: 5, correct: 5 }]);
+    expect(s.progressPct).toBe(100);
+  });
+
+  it('문제가 하나도 없으면 진행도 null · 미학습', () => {
+    const s = summarizeType([{ band: 'A', supply: 0, solved: 0, n: 0, correct: 0 }]);
+    expect(s.progressPct).toBeNull();
+    expect(s.judgement.level).toBe('none');
+  });
+
+  it('depthOf', () => {
+    expect(depthOf('MS05')).toBe(1);
+    expect(depthOf('MS05-06-02-01-03')).toBe(5);
   });
 });
