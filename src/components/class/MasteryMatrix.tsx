@@ -13,12 +13,13 @@
 //
 // 매쓰홀릭에 있고 여기 있는 것:
 //   4단계/6단계 토글 · 학생 선택 · 칸/행/열 덩어리 선택 · 선택된 칸 N + 과제 만들기 ·
-//   ● 추정 칸(AI 예측 대응 — 규칙 추정, 근거 문장 포함, 토글) · 범례 실측 카운트 ·
+//   ● 추정 칸(AI 예측 대응 — 규칙 추정, 근거 문장 포함, 토글 · **기본 꺼짐**) · 범례 실측 카운트 ·
 //   기간(유형분석 시작일) · 과정 전체/데이터 있는 단원만 · 칸 툴팁 + 대표 문제 미리보기
 // 매쓰홀릭에 있고 여기 없는 것 (자료가 없다): 교재별 매트릭스 전환 · 서술형/고난도 탭 ·
 //   9주 이력 차트(단계 6 — 같은 재료로 그린다).
 //
 // ★ 판정은 1~2문항에 색을 주지 않는다(판정 보류). 추정은 형제 칸 근거가 있을 때만, 원형으로.
+// ★ 순서(대표, 2026-09-04): 실제 채점으로 히트맵을 먼저 완성 → 예측은 그 다음 단계. 그래서 추정은 기본 꺼짐.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -92,7 +93,9 @@ export function MasteryMatrix({ classId, className, students }: Props) {
 
   const [subject, setSubject] = useState<string>('');
   const [scheme, setScheme] = useState<BandScheme>(4);
-  const [showInfer, setShowInfer] = useState(true);
+  // ★ 기본 꺼짐 — 대표 판단(2026-09-04): 예측은 실제 채점으로 유형 히트맵을 완성한 뒤에 갈 기능.
+  //   지금은 「우리 학생이 실제로 푼 것」만 색이다. 켜면 원형 추정 칸이 보인다.
+  const [showInfer, setShowInfer] = useState(false);
   const [hideEmpty, setHideEmpty] = useState(false);
   const [studentSel, setStudentSel] = useState<string | null>(null);
   const [from, setFrom] = useState('');
@@ -106,7 +109,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
 
   useEffect(() => {
     setScheme(readPref(PREF_SCHEME, 4, (v) => (v === '6' ? 6 : v === '4' ? 4 : null)));
-    setShowInfer(readPref(PREF_INFER, true, (v) => (v === '0' ? false : v === '1' ? true : null)));
+    setShowInfer(readPref(PREF_INFER, false, (v) => (v === '0' ? false : v === '1' ? true : null)));
   }, []);
 
   const load = useCallback(async () => {
