@@ -179,8 +179,9 @@ export const tutorNavItems: NavItem[] = [
   {
     href: '/tutor/classes',
     icon: Users,
-    label: '반 관리',
-    description: '반 편성·관리',
+    // ★ '반 관리' 로는 여기가 반 허브 입구인 줄 모른다 (2026-09-03 대표 지적).
+    label: '반',
+    description: '반을 열어 학생·과제·채점을 한 화면에서',
     group: 'tutor',
   },
   {
@@ -375,12 +376,15 @@ export const topNavGroups: NavGroup[] = [
     label: '수업',
     icon: Users,
     children: [
-      tutor('/dashboard/class'),               // 수업 홈 (허브)
+      // ★ 반이 맨 위 (2026-09-03). 반 허브를 만들어 놓고 메뉴에서 가는 길이 없었다 —
+      //   대표가 "설명한 게 어디 있는지 모르겠다" 고 했다. 학원은 반 단위로 굴러가니
+      //   [수업] 을 열면 반이 먼저 보여야 한다. 반 카드의 「반 열기」 가 허브다.
+      tutor('/tutor/classes'),                 // 반 (허브 입구)
+      tutor('/dashboard/class'),               // 수업 홈 (학생 종합)
       tutor('/tutor/analytics'),               // 학생 성적
       tutor('/dashboard/prescription'),        // 학생 진단
       tutor('/dashboard/prescription/report'), // 진단 종합 리포트
       tutor('/tutor/clinic'),                  // 클리닉시험지
-      tutor('/tutor/classes'),                 // 반 관리
       tutor('/tutor/students'),                // 학생 관리
     ],
   },

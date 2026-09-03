@@ -1769,9 +1769,13 @@ export default function ExamCreatePage() {
                       return next;
                     });
                   }}
+                  // ★ 고른 난이도는 **흰 필**로 (2026-09-03 대표 지적).
+                  //   전엔 bg-white/[.08] 이라 숫자만 살짝 진해지는 수준 — 5개씩 두 줄로
+                  //   붙어 있는 버튼에서 그 정도 차이는 안 보인다. 무채 팔레트에서
+                  //   제일 센 대비가 흰 바탕·검은 글씨이고, 이 프로그램의 CTA 언어와도 같다.
                   className={`rounded-md px-2 py-1.5 text-xs font-bold transition-colors ${
                     selectedDiffs.has(d)
-                      ? 'bg-white/[.08] text-content-primary border border-white/[.14]'
+                      ? 'border border-white bg-white text-black'
                       : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:text-content-primary'
                   }`}
                 >

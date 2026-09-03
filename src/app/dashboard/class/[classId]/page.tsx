@@ -127,7 +127,7 @@ export default function ClassHubPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <Link
-              href="/dashboard/class"
+              href="/tutor/classes"
               className="inline-flex items-center gap-1.5 text-sm text-content-tertiary transition-colors hover:text-content-secondary"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
