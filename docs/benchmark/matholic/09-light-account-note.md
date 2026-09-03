@@ -149,7 +149,79 @@ id · fullName · nickname · grade{name,value: MIDDLE_FIRST…} · companyType(
 
 ---
 
-## 5. 못 본 것 / 다음
+## 5. ★★ 번들(정적 JS)에서 읽은 것 — 화면이 안 그려져도 소스는 다 읽힌다
+
+> 대표: *"스킬을 쓰든지 다 파악해라."* → 가상 리스트가 안 그려지는 건 우회하지 않고, 앱의 JS 청크(`assets-260903/*.js`)를
+> 직접 읽어 **라벨·라우트·API 경로**를 뽑았다. 인증 불필요(정적 파일). 요청 헤더 가로채기는 권한 분류기가 막아 접었다.
+
+### 5-1. 전체 라우트 61개 (`AppRoutes`) — 라이트·프리미엄 공통 지도
+```
+/home · /course · /course/create · /course/:courseId          ← 수업(반 허브) — 라이트에선 /workbook 으로 튕김
+/workbook · /my-workbook · /private-homework · /marked-textbook · /shared-workbook · /workbook/new/:createType
+/learning-log · /submit-answer · /video · /testing · /community · /profile · /access-log
+/diagnostic-test · /questions · /mathtalk · /realtime-overview
+/student · /student/:type · /student/screen/:studentId          ← ★ 학생 화면
+/my-class · /teacher · /setting · /payment · /classroom/list · /classroom/overview/:classroomId
+/analyze · /analyze/:tabKey                                    ← 분석
+/textbook-mark/… · /textbook/create · /sms · /test-screen
+/assessment · /assessment/create · /assessment/detail/:id/:tabKey   ← 시험대장(평가)
+/testScore · /contest · /ysdj · /shdj · /holing · /bookshelf · /book/billing · /report(맞춤형 보고서)
+/cloud-printer/… · /attendance-teacher · /binding · /purchase/cart · /purchase/order
+```
+메뉴 라벨(사이드): `수업 · 학습지 · 교재채점 · 학습현황 · 진단평가 · 연산대장 · 시험대장 · 홀링 · 글잼 · 학습 · 책장 · 보고서 · 분석 · 부가 · 구성원(교원·교사·학생·내 반 관리·그룹) · 운영(학부모·출결·문자·관리자·결제) · 기타(제본·모든질문·동영상·시험점수·오류신고·실시간 필기)`
+
+### 5-2. 학생 화면 (`/student/screen/:studentId`) 과 학생 API — "학생 누르면 뭐가 나오나"
+`StudentApi` 의 메서드가 곧 학생 화면의 구성이다:
+| API | 뜻 | 우리 대응 |
+|---|---|---|
+| `POST /api/student/learning/log/v2 {studentId, dates}` · `/batch` | **학생 학습 이력** (날짜 배열로 조회) | 이력 탭(단계 6) |
+| `/api/student/learning/log/comment` (+delete) | 이력에 **교사 코멘트** | 없음 |
+| `GET /api/student/unitgroup/active` · `/update` (`studentId, chapterIds, date`) | **학생별 유형군 활성일** — 유형분석 시작일(08 §4) 의 실체 | 없음 |
+| `POST /api/student/workbook/listAll` · `GET /api/student/workbook/list/v2` | 학생별 학습지 전부 | 학생별 과제 |
+| `GET /api/diagnostic/learnings/all` | 학생 진단 학습 | 진단 |
+| `/api/student/daily-learning-report/send` · `/sendAll` · `/shortUrl` | **일일 학습 리포트 학부모 발송** (짧은 링크) | 공유 리포트(부분) |
+| `${PANDA_API}/genai/generate-ai-comment(-v2)` | 리포트 **AI 코멘트 생성** | 없음 |
+| `GET /teacher/student/{id}/counsellings` · POST/delete | **상담 기록** (대상 학부모/학생 · 방법 전화/직접/기타 · 내용 · 기간조회 · 내가 쓴 글만) | 없음 |
+| `GET /teacher/students/{id}/setting` | 학생 설정 | 부분 |
+학습 이력 종류(`LogTypes`) 44종: `확인학습 · 필수예제 · 유형도전 · 중단원 레벨업 · 교재 채점 · 모의고사 · 진단평가 · 과제 · 오답유사학습 ·
+교재 채점 오답 · 동영상 · 전국평가 · 월간평가 · 코멘트 · 별도전 · 일괄도전 · 유비무환 · 서술형 · 취약유형학습 · 포토오답노트 · 개념학습 ·
+주간 클리닉 · 학습지(교과서/시중교재/모의고사/매쓰홀릭/단원학습/유형학습/취약유형/고난도/서술형/오답/내신빈출/문장제/기타) ·
+오답과제 · 수업과제 · 연산대장 · 개념익히기 · 질문하기 · 다시풀기`
+→ **"학습"의 단위가 44종이다.** 우리는 시험지 채점 1종.
+
+### 5-3. 채점 모달(`ChajumModal`, 187KB) — 라이트에도 유형분석·취약과제가 있다
+라벨: `미리보기 · 공통 문제지 보기 · 문제 보기 · 다시풀기 · N차 · 오답유사 · 해설 · 풀이 · 시험지로 보기 · 목록으로 보기 · 제외된 문제 ·
+개념/기본/실력/심화/고난도 · 강의모드 · 제출 · 풀이노트 · 오류문제 신고 · 평균점수/문항정답률 · 학습 · 학생 추가 · 문제지 출력 · 채점 ·
+**유형분석** · 정오표 · 한명씩 보기 · 답안입력이력 · 판서모드 · 메모장 · 학습 점수 · **오답유사 점수** · 정렬 · 구분 · 점수 · 학습일`
+유형분석 탭 문구: `유형성취도 · 단원 유형분석 난이도 · 난이도구분 · 단계 · **방금 채점한 내역으로 취약 유형** · **취약한 유형만 골라 과제로 출제** ·
+**안 푼 유형도 유형별 이해도를 예측** · 취약 유형을 선택해 · 실제 푼 유형은 · 취약유형 · 과제 만들기`
+→ **채점이 끝난 그 자리에서 유형분석 → 취약 유형 → 과제.** 예측(AI)도 여기 붙어 있다. 우리 채점 탭(단계 7) 설계의 기준.
+
+### 5-4. 과제 옵션 모달(`HomeworkCreateModal`) — 08 §5-1 의 「미확인」 3개가 풀렸다
+```
+과제명 · 추천 과제명(출제범위 [적용]) · 출제방식 ● 동일유형(문제 선택) ○ 추천유형 ○ 선택유형 · 기출문제만 출제
+유형 당 출제 문제수 · 최대 출제 문제 수 · 추천 방식: 취약 유형 우선 / 안푼 유형 우선 / 중요 유형 우선
+출제문항수 자동 · 출제유형색상 · 주관식만 · 전체 · 과제 옵션 선택 → 문항 선택 → 학생 선택 → 출제하기
+```
+- **추천유형** = 추천 방식(취약/안푼/중요 유형 우선)으로 시스템이 고른다. **선택유형** = 교사가 유형을 고른다.
+- 문제 추출 API: `/api/extract/unit/related/v4`(유사) · `/advanced/v2`(고난도) · `/statement`(서술형) · `/candidate(s)` · `/examReferer`(기출) · `/api/extract/unit/weakness`(취약)
+→ **"유사문항"은 `extract/unit/related` 한 API 로 뽑는다.** 우리 오답유사(단계 4 확장)의 서버 함수가 이것.
+
+### 5-5. 예측·점수 API (`LearningScoreApi`) — 매쓰홀릭 「AI 예측」의 실체
+`/api/learning/predict/score` · `/api/learning/predict/color` · `/api/learning/predict/joinScore` · `/api/learningScore/v2/course/{id}` · `/chapter/{id}` · `/chapter/{id}/advanced/v2` · `/statement` · `/api/m-unitgroup/{id}/unit-samples`(유형 대표 문제)
+→ 예측은 별도 서비스 호출(점수·색). 판 채운 뒤 갈 때 여기 대응 함수를 만든다.
+
+### 5-6. 단원 API (`ChapterApi`) — 판의 API
+`/chapter/root/academy` · `/chapter/{id}` · `/child` · `/tree` · `/leaves` · `/chapters/{id}/levels/unitgroup-counts` · `/jwt/api/chapter/unitgroups/count(/v2)` · `/jwt/api/chapter/{id}/units/…` · `/jwt/api/chapter/{id}/note`(개념 노트) · `/api/student/chapters`
+
+### 5-7. 수업(course) 종류 (`Course` 청크) — 프리미엄 반 허브의 수업 템플릿
+`소단원학습 · 소단원 유형학습 · 내신기출 · 매쓰홀릭 · 중단원 레벨업 · 전범위 모의고사 · 계통수학 · 유형완성 · 난이도유사 · 교과서 더하기 · 자기주도 · 내신대비 · 내신빈출 · 수업과제 · 쌍둥이 교재 · 맞춤편집 · 학습지 모음`
+
+### 5-8. 진단평가 API (`DiagnosticsTestApi`)
+`/api/diagnostic/group/{id}` (+delete/available/periodType/templateLearning) · `/group/{id}/test/list` · `/api/diagnostic/selectLevelAndUnitCount` · `/api/teacher/diagnostic/stats` · `/api/diagnostic/learnings`
+→ 진단평가 = **그룹 단위**로 만들고 기간형(periodType)·템플릿 학습이 있다. 우리 진단(BS/DD/PT)과 대조할 것.
+
+## 6. 못 본 것 / 다음
 - 학생 선택 모달·학생 표·학습현황 캘린더 본문 — **가상 리스트라 탭이 보여야 그려진다.** PC 앞에서 다시.
 - 오답유형 학습지 ❷ 문제 편집 화면 (원문항/유사문항이 어떻게 나열되나) · 「오답유사 통일」의 정확한 뜻.
 - 학습현황(`/learning-log`) 데이터 API — 학생 선택 후에 불릴 것으로 보임. 미포착.
