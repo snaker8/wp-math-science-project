@@ -18,6 +18,10 @@
 // 매쓰홀릭에 있고 여기 없는 것 (자료가 없다): 교재별 매트릭스 전환 · 서술형/고난도 탭 ·
 //   9주 이력 차트(단계 6 — 같은 재료로 그린다).
 //
+// ★ 판(매트릭스)은 채점의 산출물이 아니다 — 대표(2026-09-04): "모든 과정마다의 히트맵이 있다."
+//   과정(과목)의 수학비서 트리 전체(소단원 × 난이도)가 판이고, 채점은 그 판을 색칠할 뿐이다.
+//   문제은행에 문제가 없는 칸도 판에 있다(「문제 없음」) — 그게 「미학습」과 다른 것이 보여야
+//   문제은행 완성도(문제 있는 칸/전체)와 학습 진행도(학습한 칸/문제 있는 칸)를 따로 잴 수 있다.
 // ★ 판정은 1~2문항에 색을 주지 않는다(판정 보류). 추정은 형제 칸 근거가 있을 때만, 원형으로.
 // ★ 순서(대표, 2026-09-04): 실제 채점으로 히트맵을 먼저 완성 → 예측은 그 다음 단계. 그래서 추정은 기본 꺼짐.
 // ============================================================================
@@ -62,6 +66,8 @@ const LEVEL_CLASS: Record<CellLevel, string> = {
   none: 'bg-white/[.06] border border-white/10',
 };
 const LEVEL_ORDER: CellLevel[] = ['master', 'good', 'shaky', 'weak', 'severe', 'thin', 'none'];
+/** 판에는 있는데 문제은행에 문제가 없는 칸 — 미학습과 구분 (문제은행 완성도의 구멍) */
+const NO_SUPPLY_CLASS = 'border border-dashed border-white/15 bg-transparent';
 
 const PREF_SCHEME = 'mastery:scheme';
 const PREF_INFER = 'mastery:infer';
@@ -216,20 +222,19 @@ export function MasteryMatrix({ classId, className, students }: Props) {
     return { cells, rowTotals };
   }, [itemsView, scheme]);
 
-  // ── 매트릭스 우주 = 문제은행에 문제가 있는 (소단원, 밴드) ──
+  // ── 판 = 이 과정의 트리 전체 (소단원 × 밴드). 문제 유무와 무관하게 칸은 항상 있다 ──
   const universe = useMemo(() => {
     const out: Array<{ unit: string; band: string }> = [];
-    for (const [k, count] of supplyByCell) {
-      if (count <= 0) continue;
-      const [unit, band] = k.split('|');
-      out.push({ unit, band });
+    const seen = new Set<string>();
+    for (const units of tree.unitsByMid.values()) {
+      for (const u of units) for (const b of bands) { out.push({ unit: u, band: b.key }); seen.add(cellKey(u, b.key)); }
     }
-    // 공급은 없는데 채점 기록이 있는 칸도 자리는 준다 (분류가 뒤늦게 붙은 경우)
+    // 트리에 없는 코드로 채점된 것도 자리는 준다 (트리 갱신 전 분류)
     for (const k of observed.cells.keys()) {
-      if (!supplyByCell.has(k)) { const [unit, band] = k.split('|'); out.push({ unit, band }); }
+      if (!seen.has(k)) { const [unit, band] = k.split('|'); out.push({ unit, band }); }
     }
     return out;
-  }, [supplyByCell, observed]);
+  }, [tree, bands, observed]);
 
   const inferred = useMemo<Map<string, InferredCell>>(() => {
     if (!showInfer) return new Map();
@@ -258,7 +263,6 @@ export function MasteryMatrix({ classId, className, students }: Props) {
   }, [observed, inferred, supplyByCell]);
 
   const rows = useMemo(() => {
-    const universeSet = new Set(universe.map((u) => cellKey(u.unit, u.band)));
     const out: Array<{
       l1: { code: string; name: string };
       mids: Array<{ code: string; name: string; byBand: Square[][]; total: { n: number; correct: number; noDiff: number } | undefined }>;
@@ -266,23 +270,36 @@ export function MasteryMatrix({ classId, className, students }: Props) {
     for (const l1 of tree.l1) {
       const mids = (tree.midsByL1.get(l1.code) ?? []).map((mid) => {
         const units = tree.unitsByMid.get(mid) ?? [];
-        const byBand = bands.map((b) =>
-          units.filter((u) => universeSet.has(cellKey(u, b.key))).map((u) => squareOf(u, b.key))
-        );
+        const byBand = bands.map((b) => units.map((u) => squareOf(u, b.key)));
         return { code: mid, name: tree.names.get(mid) ?? mid, byBand, total: observed.rowTotals.get(mid) };
       }).filter((m) => !hideEmpty || m.total || m.byBand.some((sq) => sq.some((s) => s.inferred)));
       if (mids.length > 0) out.push({ l1, mids });
     }
     return out;
-  }, [tree, bands, universe, squareOf, observed, hideEmpty]);
+  }, [tree, bands, squareOf, observed, hideEmpty]);
 
   const allSquares = useMemo(() => rows.flatMap((r) => r.mids.flatMap((m) => m.byBand.flat())), [rows]);
 
   const legendCounts = useMemo(() => {
     const c: Record<CellLevel, number> = { master: 0, good: 0, shaky: 0, weak: 0, severe: 0, thin: 0, none: 0 };
     let inferredCount = 0;
-    for (const s of allSquares) { c[s.level] += 1; if (s.inferred) inferredCount += 1; }
-    return { c, inferredCount, total: allSquares.length };
+    let withSupply = 0;   // 문제은행에 문제가 있는 칸
+    let studied = 0;      // 학생이 실제로 푼 칸 (n > 0)
+    for (const s of allSquares) {
+      c[s.level] += 1;
+      if (s.inferred) inferredCount += 1;
+      if (s.supply > 0) withSupply += 1;
+      if (s.n > 0) studied += 1;
+    }
+    const total = allSquares.length;
+    return {
+      c, inferredCount, total, withSupply, studied,
+      noSupply: total - withSupply,
+      /** 문제은행 완성도 — 판의 칸 중 문제가 있는 비율 */
+      bankPct: total > 0 ? Math.round((withSupply * 100) / total) : 0,
+      /** 학습 진행도 — 문제 있는 칸 중 학생이 푼 비율 */
+      studyPct: withSupply > 0 ? Math.round((studied * 100) / withSupply) : 0,
+    };
   }, [allSquares]);
 
   const bandSupply = useMemo(
@@ -427,23 +444,32 @@ export function MasteryMatrix({ classId, className, students }: Props) {
           {LEVEL_ORDER.map((lv) => (
             <span key={lv} className="inline-flex items-center gap-1">
               <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${LEVEL_CLASS[lv]}`} />
-              {LEVEL_LABEL[lv]} <span className="tabular-nums text-content-muted">{legendCounts.c[lv]}</span>
+              {LEVEL_LABEL[lv]}{' '}
+              <span className="tabular-nums text-content-muted">
+                {lv === 'none' ? legendCounts.c.none - legendCounts.noSupply : legendCounts.c[lv]}
+              </span>
             </span>
           ))}
+          <span className="inline-flex items-center gap-1" title="판에는 있지만 문제은행에 이 단원·난이도 문제가 아직 없는 칸">
+            <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${NO_SUPPLY_CLASS}`} />
+            문제 없음 <span className="tabular-nums text-content-muted">{legendCounts.noSupply}</span>
+          </span>
           <span className="inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500/75 opacity-70" />
             ● 추정 <span className="tabular-nums text-content-muted">{legendCounts.inferredCount}</span>
           </span>
-          <span className="ml-auto text-content-muted">
-            칸 {legendCounts.total} · {studentSel ? (students.find((s) => s.id === studentSel)?.name ?? '학생') : '반 전체'}
-            {itemsView.length > 0 && ` · ${itemsView.length}문항`}
+          <span className="ml-auto text-content-muted" title="문제은행 완성도 = 문제 있는 칸 / 판 전체 · 학습 진행도 = 학생이 푼 칸 / 문제 있는 칸">
+            판 {legendCounts.total}칸 · 문제은행 완성도{' '}
+            <span className="tabular-nums text-content-secondary">{legendCounts.withSupply}/{legendCounts.total} ({legendCounts.bankPct}%)</span>
+            {' · '}{studentSel ? (students.find((s) => s.id === studentSel)?.name ?? '학생') : '반 전체'} 진행도{' '}
+            <span className="tabular-nums text-content-secondary">{legendCounts.studied}/{legendCounts.withSupply} ({legendCounts.studyPct}%)</span>
           </span>
         </div>
 
         {rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 px-6 py-12 text-center text-sm text-content-secondary">
             {subjectMeta ? `${subjectMeta.name} 에 표시할 단원이 없습니다.` : '표시할 단원이 없습니다.'}
-            <p className="mt-1 text-xs text-content-muted">문제은행에 이 과목 문제가 분류돼 있어야 칸이 생깁니다.</p>
+            <p className="mt-1 text-xs text-content-muted">수학비서 트리에 이 과목 단원이 없습니다.</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-white/10">
@@ -473,7 +499,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
                     group={g}
                     selected={selected}
                     focusKey={focus?.key ?? null}
-                    onToggle={(sq) => { toggleKeys([sq.key]); void focusSquare(sq); }}
+                    onToggle={(sq) => { if (sq.supply > 0) toggleKeys([sq.key]); void focusSquare(sq); }}
                     onToggleRow={(keys) => toggleKeys(keys)}
                     names={tree.names}
                     bandLabel={(k) => bands.find((b) => b.key === k)?.label ?? k}
@@ -568,6 +594,9 @@ export function MasteryMatrix({ classId, className, students }: Props) {
               {focus.basis && <p className="mt-1 leading-relaxed text-content-muted">근거 — {focus.basis}</p>}
               {focus.level === 'thin' && (
                 <p className="mt-1 leading-relaxed text-content-muted">문항이 3개 미만이라 색을 주지 않았습니다.</p>
+              )}
+              {focus.supply === 0 && (
+                <p className="mt-1 leading-relaxed text-content-muted">문제은행에 이 단원·난이도 문제가 아직 없습니다. 분류가 붙으면 채워집니다.</p>
               )}
               {focus.supply > 0 && (
                 <div className="mt-2 rounded-md border border-white/10 bg-white/[.03] p-2">
@@ -669,11 +698,11 @@ function RowGroup({
                       <button
                         key={sq.key}
                         onClick={() => onToggle(sq)}
-                        title={title}
+                        title={sq.supply === 0 && sq.n === 0 ? `${title}\n(문제은행에 문제가 없어 과제로는 못 냅니다)` : title}
                         aria-pressed={sel}
                         className={`h-3.5 w-3.5 shrink-0 transition-transform hover:scale-125 ${
                           sq.inferred ? 'rounded-full opacity-70' : 'rounded-[3px]'
-                        } ${LEVEL_CLASS[sq.level]} ${sel ? 'ring-2 ring-white ring-offset-1 ring-offset-black' : ''} ${
+                        } ${sq.supply === 0 && sq.n === 0 ? NO_SUPPLY_CLASS : LEVEL_CLASS[sq.level]} ${sel ? 'ring-2 ring-white ring-offset-1 ring-offset-black' : ''} ${
                           focusKey === sq.key && !sel ? 'ring-1 ring-white/60' : ''
                         }`}
                       />
