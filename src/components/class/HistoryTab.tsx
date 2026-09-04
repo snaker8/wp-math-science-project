@@ -8,7 +8,7 @@
 // 매쓰홀릭 화면: [학생 ▾] [2026/08/31 이력 ‹ ›] · 범례 카운트 · 「8월 31일부터 이전 9주간 학습이력」 꺾은선
 //   GREEN(마스터+잘함) · RED(불안정+약점+심각) · GRAY(미학습) — GRAY 가 내려가고 GREEN 이 올라가는 게 한 장에 보인다.
 //   그 아래 그 시점의 판. 상담에 그대로 쓴다.
-// 여기: 같은 구성 + 주차별 학습량·정답률(학습 목표 기준선) + 「이 시점의 판 보기」→ 숙달 탭을 그 날짜로 연다.
+// 여기: 같은 구성 + 주차별 학습량·정답률(학습 목표 기준선) + 「이 시점의 유형분석」→ 숙달 탭을 그 날짜로 연다.
 //
 // ★ 스냅샷 테이블 없이 — 숙달 API 의 문항별 채점 시각으로 매 주를 다시 판정한다 (lib/class/mastery-trend).
 // ★ 숙달 탭과 같은 판정 규칙(judgeCell). 두 탭의 숫자가 다르면 그건 버그다.
@@ -29,14 +29,14 @@ interface Props {
   classId: string;
   students: Array<{ id: string; name: string }>;
   goals: LearningGoals;
-  /** 「이 시점의 판 보기」 — 숙달 탭을 그 날짜(까지)로 연다 */
+  /** 「이 시점의 유형분석」 — 숙달 탭을 그 날짜(까지)로 연다 */
   onOpenMastery: (toDate: string) => void;
 }
 
 const LEVEL_ORDER: CellLevel[] = ['master', 'good', 'shaky', 'weak', 'severe', 'thin', 'none'];
 const LEVEL_SWATCH: Record<CellLevel, string> = {
-  master: 'bg-emerald-300', good: 'bg-emerald-500', shaky: 'bg-amber-400', weak: 'bg-red-500',
-  severe: 'bg-red-800', thin: 'bg-white/25', none: 'bg-white/10',
+  master: 'bg-emerald-400', good: 'bg-emerald-500', shaky: 'bg-amber-400', weak: 'bg-red-500',
+  severe: 'bg-red-700', thin: 'bg-zinc-500', none: 'bg-zinc-600',
 };
 // 차트 색 — 데이터 그래픽. 매쓰홀릭 GREEN/RED/GRAY 와 같은 뜻
 const C_GREEN = '#34d399';
@@ -202,7 +202,7 @@ export function HistoryTab({ classId, students, goals, onOpenMastery }: Props) {
           title="숙달 탭을 이 주까지의 채점으로 연다"
         >
           <Grid3x3 className="h-3.5 w-3.5" />
-          이 시점의 판 보기
+          이 시점의 유형분석
         </button>
       </div>
 

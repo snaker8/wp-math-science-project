@@ -9,7 +9,7 @@
 // "김OO 의 확률 숙달도" 는 그 다음 질문이다. 지금까지 우리 화면은 순서가 거꾸로여서,
 // 학생 하나를 보려면 메뉴 여섯 곳을 돌아야 했다.
 //
-// 탭은 여섯: 학생 · 과제 · 채점 · 숙달 · 이력 · 설정 — 2026-09-04 전부 채움 (단계 2~8).
+// 탭은 여섯: 학생 · 과제 · 채점 · 유형분석 · 유형이력 · 설정 (이름은 매쓰홀릭과 같게 — 대표 2026-09-04) — 2026-09-04 전부 채움 (단계 2~8).
 // 설정 탭의 수업 일정·담당 변경·출제 방식은 아직 (docs/PLAN_CLASS_HUB_REBUILD.md 단계 8).
 // ============================================================================
 
@@ -87,8 +87,8 @@ const TABS = [
   { key: 'students', label: '학생', icon: Users },
   { key: 'assignments', label: '과제', icon: ClipboardList },
   { key: 'grading', label: '채점', icon: CheckSquare },
-  { key: 'mastery', label: '숙달', icon: Grid3x3 },
-  { key: 'history', label: '이력', icon: LineChart },
+  { key: 'mastery', label: '유형분석', icon: Grid3x3 },
+  { key: 'history', label: '유형이력', icon: LineChart },
   { key: 'settings', label: '설정', icon: Settings2 },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];

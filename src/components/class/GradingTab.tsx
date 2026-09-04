@@ -283,7 +283,7 @@ export function GradingTab({ classId, className, students, onOpenMastery }: Prop
                       <div className="flex items-center justify-end gap-2 border-t border-white/5 px-4 py-2">
                         <span className="mr-auto text-xs text-content-muted">채점 끝난 자리에서 바로 —</span>
                         <button onClick={onOpenMastery} className="inline-flex items-center gap-1 text-xs text-content-tertiary transition-colors hover:text-content-primary">
-                          <Grid3x3 className="h-3 w-3" /> 숙달 판 보기
+                          <Grid3x3 className="h-3 w-3" /> 유형분석 보기
                         </button>
                         <button onClick={() => setGen('wrong')} className="inline-flex items-center gap-1 text-xs text-content-tertiary transition-colors hover:text-content-primary">
                           <RotateCcw className="h-3 w-3" /> 오답 과제

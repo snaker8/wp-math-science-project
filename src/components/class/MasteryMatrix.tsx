@@ -50,19 +50,29 @@ interface TypeCell {
   /** 표시 단계 — 관측 판정, 없으면 추정 */
   level: CellLevel;
   inferred: InferredCell | null;
+  /** 이 유형이 놓이는 난이도 열 — 문제은행에 가장 많은 층(같으면 쉬운 쪽). 문제도 채점도 없으면 null */
+  repBand: string | null;
 }
 
 const LEVEL_ORDER: CellLevel[] = ['master', 'good', 'shaky', 'weak', 'severe', 'thin', 'none'];
-const LEGEND_SWATCH: Record<CellLevel, string> = {
-  master: 'bg-emerald-300',
-  good: 'bg-emerald-500',
-  shaky: 'bg-amber-400',
-  weak: 'bg-red-500',
-  severe: 'bg-red-800',
-  thin: 'bg-white/25',
-  none: 'bg-white/10',
+/**
+ * 칸 색 — 매쓰홀릭 유형분석 실측(스크린샷 2026-09-04): 22px 안팎의 **진한 단색 사각형**.
+ * 마스터 초록+별 · 잘함 초록 · 불안정 노랑 · 약점 빨강 · 심각 진빨강 · 미학습 회색 · 판정 보류 회색+? · 예측은 원형.
+ * 검은 배경에서도 한눈에 읽혀야 한다 — 반투명·점선 금지.
+ */
+const CELL_CLASS: Record<CellLevel, string> = {
+  master: 'bg-emerald-400 text-black',
+  good: 'bg-emerald-500 text-black',
+  shaky: 'bg-amber-400 text-black',
+  weak: 'bg-red-500 text-white',
+  severe: 'bg-red-700 text-white',
+  thin: 'bg-zinc-500 text-black',
+  none: 'bg-zinc-600 text-white',
 };
-const NO_SUPPLY_SWATCH = 'border border-dashed border-white/20 bg-transparent';
+const LEGEND_SWATCH: Record<CellLevel, string> = {
+  master: 'bg-emerald-400', good: 'bg-emerald-500', shaky: 'bg-amber-400', weak: 'bg-red-500',
+  severe: 'bg-red-700', thin: 'bg-zinc-500', none: 'bg-zinc-600',
+};
 
 const PREF_SCHEME = 'mastery:scheme';
 const PREF_INFER = 'mastery:infer';
@@ -88,27 +98,6 @@ function pctTone(pct: number | null): string {
   return 'text-content-primary';
 }
 
-/** 층 하나의 색 — 색조=정답률, 진하기=푼 비율. 문제 없음/미학습은 무채 */
-function layerClass(l: TypeLayer, hollowLevel: CellLevel | null): string {
-  if (l.supply === 0 && l.n === 0) return NO_SUPPLY_SWATCH;
-  if (l.n === 0) {
-    // 추정 칸 — 속 빈 테두리로 (매쓰홀릭 ● 예측 칸 대응)
-    if (hollowLevel) return `border ${hollowBorder(hollowLevel)} bg-transparent`;
-    return 'bg-white/10';
-  }
-  const pct = Math.round((l.correct * 100) / l.n);
-  const done = l.supply > 0 ? Math.min(l.solved, l.supply) / l.supply : 1;
-  const strong = done >= 0.999;
-  if (pct >= 80) return strong ? 'bg-emerald-400' : 'bg-emerald-500/55';
-  if (pct >= 60) return strong ? 'bg-amber-400' : 'bg-amber-400/55';
-  return strong ? 'bg-red-500' : 'bg-red-500/55';
-}
-function hollowBorder(level: CellLevel): string {
-  if (level === 'good' || level === 'master') return 'border-emerald-400/70';
-  if (level === 'shaky') return 'border-amber-400/70';
-  return 'border-red-500/70';
-}
-
 export function MasteryMatrix({ classId, className, students, initialTo }: Props) {
   const [data, setData] = useState<MasteryPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,6 +108,8 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   // ★ 기본 꺼짐 — 예측은 실제 채점으로 판을 완성한 뒤 갈 기능 (대표 2026-09-04)
   const [showInfer, setShowInfer] = useState(false);
   const [hideEmpty, setHideEmpty] = useState(false);
+  /** 문제은행에 문제가 없는 유형 — 매쓰홀릭 판엔 없다. 기본 숨김, 문제은행 완성도 숫자로만 */
+  const [showNoSupply, setShowNoSupply] = useState(false);
   const [l1Filter, setL1Filter] = useState<string>('');
   const [studentSel, setStudentSel] = useState<string | null>(null);
   const [from, setFrom] = useState('');
@@ -289,10 +280,15 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
       for (const b of bands) { const c = inferred.get(cellKey(code, b.key)); if (c) { inf = c; break; } }
     }
     const name = depthOf(code) === 4 ? `${tree.names.get(code) ?? code} ${PSEUDO_TYPE_NAME}` : (tree.names.get(code) ?? code);
+    let repBand: string | null = null;
+    let best = 0;
+    for (const l of layers) if (l.supply > best) { best = l.supply; repBand = l.band; }
+    if (!repBand) { best = 0; for (const l of layers) if (l.n > best) { best = l.n; repBand = l.band; } }
     return {
       code, name, unit: unitOf(code) ?? code, layers, summary,
       level: inf ? inf.level : summary.judgement.level,
       inferred: inf,
+      repBand,
     };
   }, [bands, observed, supplyByLayer, inferred, tree]);
 
@@ -312,15 +308,26 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
           name: tree.names.get(unit) ?? unit,
           cells: (tree.typesByUnit.get(unit) ?? []).map(cellOf),
           total: observed.unitTotals.get(unit),
-        })).filter((u) => !hideEmpty || u.total || u.cells.some((c) => c.inferred));
+        })).map((u) => ({ ...u, cells: showNoSupply ? u.cells : u.cells.filter((c) => c.summary.supply > 0 || c.summary.n > 0) }))
+          .filter((u) => u.cells.length > 0)
+          .filter((u) => !hideEmpty || u.total || u.cells.some((c) => c.inferred));
         return { code: mid, name: tree.names.get(mid) ?? mid, units };
       }).filter((m) => m.units.length > 0);
       if (mids.length > 0) out.push({ l1, mids });
     }
     return out;
-  }, [tree, cellOf, observed, hideEmpty, l1Filter]);
+  }, [tree, cellOf, observed, hideEmpty, l1Filter, showNoSupply]);
 
   const allCells = useMemo(() => rows.flatMap((r) => r.mids.flatMap((m) => m.units.flatMap((u) => u.cells))), [rows]);
+  /** 판 전체(숨긴 문제 없음 포함) — 문제은행 완성도의 분모 */
+  const boardTotal = useMemo(() => {
+    let total = 0; let withSupply = 0;
+    for (const arr of tree.typesByUnit.values()) for (const code of arr) {
+      total += 1;
+      for (const b of bands) if ((supplyByLayer.get(cellKey(code, b.key)) ?? 0) > 0) { withSupply += 1; break; }
+    }
+    return { total, withSupply };
+  }, [tree, bands, supplyByLayer]);
 
   // ── 완성도 두 개 · 범례 ──
   const stats = useMemo(() => {
@@ -334,14 +341,14 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
       supply += cell.summary.supply;
       solved += cell.summary.solved;
     }
-    const total = allCells.length;
+    const total = boardTotal.total;
     return {
-      c, total, withSupply, touched, supply, solved, inferredCount,
-      noSupply: total - withSupply,
-      bankPct: total > 0 ? Math.round((withSupply * 100) / total) : 0,
+      c, total, withSupply: boardTotal.withSupply, touched, supply, solved, inferredCount,
+      noSupply: total - boardTotal.withSupply,
+      bankPct: total > 0 ? Math.round((boardTotal.withSupply * 100) / total) : 0,
       progressPct: supply > 0 ? Math.round((solved * 100) / supply) : 0,
     };
-  }, [allCells]);
+  }, [allCells, boardTotal]);
 
   // ── 선택 ──
   const toggleCodes = (codes: string[]) => {
@@ -425,7 +432,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   }
 
   const bandLabel = (k: string) => bands.find((b) => b.key === k)?.label ?? k;
-  const layerH = scheme === 6 ? 'h-[3px]' : 'h-[5px]';
+  const bandSupply = bands.map((b) => allCells.filter((c) => c.repBand === b.key).reduce((n, c) => n + c.summary.supply, 0));
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_248px]">
@@ -465,7 +472,11 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
           </label>
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary">
             <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
-            데이터 있는 단원만
+            학습한 단원만
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title="문제은행에 문제가 없는 유형은 매쓰홀릭 판엔 없다. 완성도 숫자로만 센다">
+            <input type="checkbox" checked={showNoSupply} onChange={(e) => setShowNoSupply(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
+            문제 없는 유형도
           </label>
 
           <span className="ml-auto inline-flex items-center gap-1 text-content-tertiary">
@@ -508,8 +519,8 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
               {LEVEL_LABEL[lv]} <span className="tabular-nums text-content-muted">{stats.c[lv]}</span>
             </span>
           ))}
-          <span className="inline-flex items-center gap-1" title="판에는 있지만 문제은행에 이 유형 문제가 아직 없는 칸">
-            <span className={`inline-block h-2.5 w-2.5 rounded-[2px] ${NO_SUPPLY_SWATCH}`} />
+          <span className="inline-flex items-center gap-1" title="문제은행에 이 유형 문제가 아직 없다 — 판에서 숨김">
+            <span className="inline-block h-2.5 w-2.5 rounded-[2px] border border-dashed border-white/30" />
             문제 없음 <span className="tabular-nums text-content-muted">{stats.noSupply}</span>
           </span>
           {showInfer && (
@@ -536,10 +547,19 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs text-content-tertiary">
-                  <th className="w-52 px-3 py-2 text-left font-medium">소단원</th>
-                  <th className="px-2 py-2 text-left font-medium">
-                    유형 <span className="text-content-muted">— 칸 하나가 유형, 아래부터 {bands.map((b) => b.label).join('·')}</span>
-                  </th>
+                  <th className="w-64 px-3 py-2 text-left font-medium">단원</th>
+                  {bands.map((b, i) => (
+                    <th key={b.key} className="whitespace-nowrap px-2 py-2 text-left font-medium">
+                      <button
+                        onClick={() => toggleCodes(allCells.filter((c) => c.repBand === b.key && c.summary.supply > 0).map((c) => c.code))}
+                        className="inline-flex flex-col items-start leading-tight hover:text-content-primary"
+                        title="이 열 전체 선택/해제"
+                      >
+                        <span>{b.label} <span className="text-content-muted">{b.levels[0]}{b.levels.length > 1 ? `~${b.levels[b.levels.length - 1]}` : ''}</span></span>
+                        <span className="text-[10px] tabular-nums text-content-muted">문제 {bandSupply[i]}</span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="whitespace-nowrap px-3 py-2 text-right font-medium">정답률</th>
                 </tr>
               </thead>
@@ -550,7 +570,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
                     group={g}
                     selected={selected}
                     focusCode={focus?.code ?? null}
-                    layerH={layerH}
+                    bands={bands}
                     bandLabel={bandLabel}
                     onToggle={(cell) => { if (cell.summary.supply > 0) toggleCodes([cell.code]); void focusCell(cell); }}
                     onToggleRow={(codes) => toggleCodes(codes)}
@@ -720,9 +740,9 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   );
 }
 
-// ── 행 묶음 (대단원 → 중단원 → 소단원 줄 = 유형 칸들) ──
+// ── 행 묶음 (대단원 → 중단원 → 소단원 줄 · 열 = 난이도 · 칸 = 유형) ──
 function RowGroup({
-  group, selected, focusCode, layerH, bandLabel, onToggle, onToggleRow,
+  group, selected, focusCode, bands, bandLabel, onToggle, onToggleRow,
 }: {
   group: {
     l1: { code: string; name: string };
@@ -733,32 +753,70 @@ function RowGroup({
   };
   selected: Set<string>;
   focusCode: string | null;
-  layerH: string;
+  bands: readonly { key: string; label: string }[];
   bandLabel: (k: string) => string;
   onToggle: (cell: TypeCell) => void;
   onToggleRow: (codes: string[]) => void;
 }) {
+  const span = bands.length + 2;
   return (
     <>
       <tr className="border-b border-white/5 bg-white/[.03]">
-        <td colSpan={3} className="px-3 py-1.5 text-[11px] font-semibold tracking-wide text-content-secondary">
+        <td colSpan={span} className="px-3 py-1.5 text-[11px] font-semibold tracking-wide text-content-secondary">
           {group.l1.name}
         </td>
       </tr>
       {group.mids.map((m) => (
-        <MidRows key={m.code} mid={m} selected={selected} focusCode={focusCode} layerH={layerH} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} />
+        <MidRows key={m.code} mid={m} span={span} selected={selected} focusCode={focusCode} bands={bands} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} />
       ))}
     </>
   );
 }
 
+/** 칸 하나 — 매쓰홀릭 유형분석 칸 (22px 단색 사각형, 마스터 별, 보류 ?, 추정은 원형) */
+function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
+  cell: TypeCell; sel: boolean; focused: boolean; bandLabel: (k: string) => string; onToggle: (cell: TypeCell) => void;
+}) {
+  const s = cell.summary;
+  const layerLines = [...cell.layers].reverse()
+    .filter((l) => l.supply > 0 || l.n > 0)
+    .map((l) => `${bandLabel(l.band)} ${l.solved}/${l.supply}${l.n > 0 ? ` (${l.correct}/${l.n} 정답)` : ''}`);
+  const title = [
+    cell.name,
+    `${LEVEL_LABEL[cell.level]}${cell.inferred ? ` ${cell.inferred.pct}% (추정)` : s.judgement.pct != null ? ` ${s.judgement.pct}%` : ''}`
+      + ` · 진행도 ${s.progressPct == null ? '—' : `${s.solved}/${s.supply} (${s.progressPct}%)`}`,
+    ...layerLines,
+    s.supply === 0 ? '(문제은행에 문제가 없어 과제로는 못 냅니다)' : '',
+    cell.inferred ? `근거: ${cell.inferred.basis}` : '',
+  ].filter(Boolean).join('\n');
+  const noSupply = s.supply === 0 && s.n === 0;
+  return (
+    <button
+      onClick={() => onToggle(cell)}
+      title={title}
+      aria-pressed={sel}
+      className={`relative flex h-[22px] w-[22px] shrink-0 items-center justify-center text-[10px] font-bold leading-none transition-transform hover:scale-110 ${
+        cell.inferred ? 'rounded-full' : 'rounded-[5px]'
+      } ${noSupply ? 'border border-dashed border-white/25 bg-transparent' : CELL_CLASS[cell.level]} ${
+        sel ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : focused ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-black' : ''
+      }`}
+    >
+      {cell.level === 'thin' && !noSupply ? '?' : ''}
+      {cell.level === 'master' && (
+        <span className="absolute -right-1 -top-1 text-[9px] leading-none text-amber-300" aria-label="마스터">★</span>
+      )}
+    </button>
+  );
+}
+
 function MidRows({
-  mid, selected, focusCode, layerH, bandLabel, onToggle, onToggleRow,
+  mid, span, selected, focusCode, bands, bandLabel, onToggle, onToggleRow,
 }: {
   mid: { code: string; name: string; units: Array<{ code: string; name: string; cells: TypeCell[]; total: { n: number; correct: number } | undefined }> };
+  span: number;
   selected: Set<string>;
   focusCode: string | null;
-  layerH: string;
+  bands: readonly { key: string; label: string }[];
   bandLabel: (k: string) => string;
   onToggle: (cell: TypeCell) => void;
   onToggleRow: (codes: string[]) => void;
@@ -766,59 +824,33 @@ function MidRows({
   return (
     <>
       <tr className="border-b border-white/5">
-        <td colSpan={3} className="px-3 py-1 text-[11px] text-content-tertiary">{mid.name}</td>
+        <td colSpan={span} className="px-3 py-1 text-[11px] text-content-tertiary">{mid.name}</td>
       </tr>
       {mid.units.map((u) => {
         const rowCodes = u.cells.filter((c) => c.summary.supply > 0).map((c) => c.code);
         const pct = u.total && u.total.n > 0 ? Math.round((u.total.correct * 100) / u.total.n) : null;
         return (
           <tr key={u.code} className="border-b border-white/5 last:border-0 hover:bg-white/[.02]">
-            <td className="px-3 py-1.5 pl-5 align-top">
+            <td className="px-3 py-2 pl-5 align-top">
               <button
                 onClick={() => onToggleRow(rowCodes)}
                 disabled={rowCodes.length === 0}
                 className="text-left text-xs text-content-secondary transition-colors hover:text-content-primary disabled:cursor-default disabled:hover:text-content-secondary"
-                title="이 줄의 유형 전체 선택/해제"
+                title="이 줄의 유형 전체 선택/해제 (매쓰홀릭 「유형그룹 선택」)"
               >
                 {u.name}
               </button>
             </td>
-            <td className="px-2 py-1.5 align-top">
-              <div className="flex flex-wrap gap-1">
-                {u.cells.map((cell) => {
-                  const sel = selected.has(cell.code);
-                  const s = cell.summary;
-                  const layerLines = [...cell.layers].reverse()
-                    .filter((l) => l.supply > 0 || l.n > 0)
-                    .map((l) => `${bandLabel(l.band)} ${l.solved}/${l.supply}${l.n > 0 ? ` (${l.correct}/${l.n} 정답)` : ''}`);
-                  const title = [
-                    cell.name,
-                    `${LEVEL_LABEL[cell.level]}${cell.inferred ? ` ${cell.inferred.pct}% (추정)` : s.judgement.pct != null ? ` ${s.judgement.pct}%` : ''}`
-                      + ` · 진행도 ${s.progressPct == null ? '—' : `${s.solved}/${s.supply} (${s.progressPct}%)`}`,
-                    ...layerLines,
-                    s.supply === 0 ? '(문제은행에 문제가 없어 과제로는 못 냅니다)' : '',
-                    cell.inferred ? `근거: ${cell.inferred.basis}` : '',
-                  ].filter(Boolean).join('\n');
-                  const hollow = cell.inferred ? cell.inferred.level : null;
-                  return (
-                    <button
-                      key={cell.code}
-                      onClick={() => onToggle(cell)}
-                      title={title}
-                      aria-pressed={sel}
-                      className={`flex w-4 shrink-0 flex-col-reverse gap-px rounded-[3px] p-px transition-transform hover:scale-125 ${
-                        sel ? 'ring-2 ring-white ring-offset-1 ring-offset-black' : focusCode === cell.code ? 'ring-1 ring-white/60' : ''
-                      }`}
-                    >
-                      {cell.layers.map((l) => (
-                        <span key={l.band} className={`block w-full rounded-[1px] ${layerH} ${layerClass(l, hollow)}`} />
-                      ))}
-                    </button>
-                  );
-                })}
-              </div>
-            </td>
-            <td className={`whitespace-nowrap px-3 py-1.5 text-right align-top text-xs tabular-nums ${pctTone(pct)}`}>
+            {bands.map((b) => (
+              <td key={b.key} className="px-2 py-2 align-top">
+                <div className="flex flex-wrap gap-1.5">
+                  {u.cells.filter((c) => (c.repBand ?? bands[0].key) === b.key).map((cell) => (
+                    <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} />
+                  ))}
+                </div>
+              </td>
+            ))}
+            <td className={`whitespace-nowrap px-3 py-2 text-right align-top text-xs tabular-nums ${pctTone(pct)}`}>
               {pct == null ? <span className="text-content-muted">—</span> : `${pct}%`}
               {u.total && <span className="ml-1 text-content-muted">{u.total.n}</span>}
             </td>
