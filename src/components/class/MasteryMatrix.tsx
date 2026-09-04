@@ -110,6 +110,8 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   const [hideEmpty, setHideEmpty] = useState(false);
   /** 문제은행에 문제가 없는 유형 — 매쓰홀릭 판엔 없다. 기본 숨김, 문제은행 완성도 숫자로만 */
   const [showNoSupply, setShowNoSupply] = useState(false);
+  /** 매쓰홀릭 「난이도」 칩 — 열을 켜고 끈다 */
+  const [hiddenBands, setHiddenBands] = useState<Set<string>>(new Set());
   const [l1Filter, setL1Filter] = useState<string>('');
   const [studentSel, setStudentSel] = useState<string | null>(null);
   const [from, setFrom] = useState('');
@@ -144,7 +146,8 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   }, [classId]);
   useEffect(() => { void load(); }, [load]);
 
-  const bands = BAND_SCHEMES[scheme];
+  const allBands = BAND_SCHEMES[scheme];
+  const bands = useMemo(() => allBands.filter((b) => !hiddenBands.has(b.key)), [allBands, hiddenBands]);
 
   // ── 문항 (과목 · 기간) ──
   const itemsAll = useMemo<MasteryItem[]>(() => {
@@ -259,7 +262,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
 
   // ── 칸 만들기 ──
   const cellOf = useCallback((code: string): TypeCell => {
-    const layers: TypeLayer[] = bands.map((b) => {
+    const layers: TypeLayer[] = allBands.map((b) => {
       const k = cellKey(code, b.key);
       const o = observed.layers.get(k);
       const supply = supplyByLayer.get(k) ?? 0;
@@ -277,7 +280,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
     }
     let inf: InferredCell | null = null;
     if (summary.judgement.level === 'none' || summary.judgement.level === 'thin') {
-      for (const b of bands) { const c = inferred.get(cellKey(code, b.key)); if (c) { inf = c; break; } }
+      for (const b of allBands) { const c = inferred.get(cellKey(code, b.key)); if (c) { inf = c; break; } }
     }
     const name = depthOf(code) === 4 ? `${tree.names.get(code) ?? code} ${PSEUDO_TYPE_NAME}` : (tree.names.get(code) ?? code);
     let repBand: string | null = null;
@@ -290,7 +293,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
       inferred: inf,
       repBand,
     };
-  }, [bands, observed, supplyByLayer, inferred, tree]);
+  }, [allBands, observed, supplyByLayer, inferred, tree]);
 
   const rows = useMemo(() => {
     const out: Array<{
@@ -449,27 +452,53 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
             ))}
           </select>
 
-          <span className="inline-flex overflow-hidden rounded-lg border border-white/10">
+          <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-1.5 py-1">
+            <span className="mr-1 text-content-muted">난이도</span>
+            {allBands.map((b) => {
+              const on = !hiddenBands.has(b.key);
+              return (
+                <button
+                  key={b.key}
+                  onClick={() => setHiddenBands((prev) => { const n = new Set(prev); if (n.has(b.key)) n.delete(b.key); else if (n.size < allBands.length - 1) n.add(b.key); return n; })}
+                  className={`rounded-full px-2 py-0.5 transition-colors ${on ? 'bg-white text-black' : 'text-content-tertiary hover:text-content-primary'}`}
+                  title={on ? '이 열 숨기기' : '이 열 보이기'}
+                >
+                  {b.label}
+                </button>
+              );
+            })}
+          </span>
+
+          <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-1.5 py-1">
+            <span className="mr-1 text-content-muted">난이도구분</span>
             {([4, 6] as const).map((n) => (
               <button
                 key={n}
-                onClick={() => { setScheme(n); writePref(PREF_SCHEME, String(n)); }}
-                className={`px-2.5 py-1.5 transition-colors ${scheme === n ? 'bg-white text-black' : 'text-content-secondary hover:text-content-primary'}`}
+                onClick={() => { setScheme(n); setHiddenBands(new Set()); writePref(PREF_SCHEME, String(n)); }}
+                className={`rounded-full px-2 py-0.5 transition-colors ${scheme === n ? 'bg-white text-black' : 'text-content-tertiary hover:text-content-primary'}`}
               >
                 {n}단계
               </button>
             ))}
           </span>
 
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary">
-            <input
-              type="checkbox"
-              checked={showInfer}
-              onChange={(e) => { setShowInfer(e.target.checked); writePref(PREF_INFER, e.target.checked ? '1' : '0'); }}
-              className="h-3.5 w-3.5 accent-white"
-            />
-            추정 표시
-          </label>
+          <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-1.5 py-1">
+            <span className="mr-1 text-content-muted">분석 방법</span>
+            <button
+              onClick={() => { const v = !showInfer; setShowInfer(v); writePref(PREF_INFER, v ? '1' : '0'); }}
+              className={`rounded-full px-2 py-0.5 transition-colors ${showInfer ? 'bg-white text-black' : 'text-content-tertiary hover:text-content-primary'}`}
+              title="안 푼 유형을 형제 유형 근거로 추정해 원형 칸으로 채운다 (기본 꺼짐)"
+            >
+              추정
+            </button>
+          </span>
+
+          <button
+            onClick={() => { setSelected(new Set()); setHiddenBands(new Set()); setL1Filter(''); setFrom(''); setTo(''); setStudentSel(null); setHideEmpty(false); }}
+            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary"
+          >
+            초기화
+          </button>
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary">
             <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
             학습한 단원만
@@ -547,7 +576,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs text-content-tertiary">
-                  <th className="w-64 px-3 py-2 text-left font-medium">단원</th>
+                  <th className="w-56 px-3 py-2 text-left font-medium">단원</th>
                   {bands.map((b, i) => (
                     <th key={b.key} className="whitespace-nowrap px-2 py-2 text-left font-medium">
                       <button
@@ -773,7 +802,7 @@ function RowGroup({
   );
 }
 
-/** 칸 하나 — 매쓰홀릭 유형분석 칸 (22px 단색 사각형, 마스터 별, 보류 ?, 추정은 원형) */
+/** 칸 하나 — 매쓰홀릭 유형분석 칸: 28px 단색 사각형 · 마스터 ★ · 보류 ? · 추정 원형 · 선택은 파란 칸 */
 function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
   cell: TypeCell; sel: boolean; focused: boolean; bandLabel: (k: string) => string; onToggle: (cell: TypeCell) => void;
 }) {
@@ -790,21 +819,21 @@ function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
     cell.inferred ? `근거: ${cell.inferred.basis}` : '',
   ].filter(Boolean).join('\n');
   const noSupply = s.supply === 0 && s.n === 0;
+  const face = sel
+    ? 'bg-sky-500 text-white ring-2 ring-sky-300 ring-offset-2 ring-offset-black'
+    : noSupply
+      ? 'border border-dashed border-white/25 bg-transparent text-content-muted'
+      : CELL_CLASS[cell.level];
   return (
     <button
       onClick={() => onToggle(cell)}
       title={title}
       aria-pressed={sel}
-      className={`relative flex h-[22px] w-[22px] shrink-0 items-center justify-center text-[10px] font-bold leading-none transition-transform hover:scale-110 ${
-        cell.inferred ? 'rounded-full' : 'rounded-[5px]'
-      } ${noSupply ? 'border border-dashed border-white/25 bg-transparent' : CELL_CLASS[cell.level]} ${
-        sel ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : focused ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-black' : ''
-      }`}
+      className={`relative flex h-7 w-7 shrink-0 items-center justify-center text-[11px] font-bold leading-none transition-transform hover:scale-110 ${
+        cell.inferred ? 'rounded-full' : 'rounded-md'
+      } ${face} ${!sel && focused ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-black' : ''}`}
     >
-      {cell.level === 'thin' && !noSupply ? '?' : ''}
-      {cell.level === 'master' && (
-        <span className="absolute -right-1 -top-1 text-[9px] leading-none text-amber-300" aria-label="마스터">★</span>
-      )}
+      {cell.level === 'master' ? '★' : cell.level === 'thin' && !noSupply ? '?' : ''}
     </button>
   );
 }
@@ -821,35 +850,68 @@ function MidRows({
   onToggle: (cell: TypeCell) => void;
   onToggleRow: (codes: string[]) => void;
 }) {
+  const inBand = (u: { cells: TypeCell[] }, key: string, first: string) =>
+    u.cells.filter((c) => (c.repBand ?? first) === key);
   return (
     <>
-      <tr className="border-b border-white/5">
-        <td colSpan={span} className="px-3 py-1 text-[11px] text-content-tertiary">{mid.name}</td>
-      </tr>
-      {mid.units.map((u) => {
+      {mid.units.map((u, ui) => {
         const rowCodes = u.cells.filter((c) => c.summary.supply > 0).map((c) => c.code);
+        const rowAll = rowCodes.length > 0 && rowCodes.every((k) => selected.has(k));
+        const rowSome = !rowAll && rowCodes.some((k) => selected.has(k));
         const pct = u.total && u.total.n > 0 ? Math.round((u.total.correct * 100) / u.total.n) : null;
         return (
           <tr key={u.code} className="border-b border-white/5 last:border-0 hover:bg-white/[.02]">
-            <td className="px-3 py-2 pl-5 align-top">
+            {/* 행 머리 — 매쓰홀릭: [☐ 중단원] / [☐ 소단원] / 유형그룹 선택 + */}
+            <td className="px-3 py-2 align-top">
+              {ui === 0 && <p className="mb-0.5 text-[11px] text-content-muted">{mid.name}</p>}
+              <label className="flex cursor-pointer items-start gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={rowAll}
+                  ref={(el) => { if (el) el.indeterminate = rowSome; }}
+                  onChange={() => onToggleRow(rowCodes)}
+                  disabled={rowCodes.length === 0}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-white disabled:opacity-30"
+                />
+                <span className="text-xs leading-snug text-content-primary">{u.name}</span>
+              </label>
               <button
                 onClick={() => onToggleRow(rowCodes)}
                 disabled={rowCodes.length === 0}
-                className="text-left text-xs text-content-secondary transition-colors hover:text-content-primary disabled:cursor-default disabled:hover:text-content-secondary"
-                title="이 줄의 유형 전체 선택/해제 (매쓰홀릭 「유형그룹 선택」)"
+                className="mt-1 text-[11px] text-content-tertiary transition-colors hover:text-content-primary disabled:opacity-30"
+                title="이 줄의 유형 전체 선택/해제"
               >
-                {u.name}
+                유형그룹 선택 +
               </button>
             </td>
-            {bands.map((b) => (
-              <td key={b.key} className="px-2 py-2 align-top">
-                <div className="flex flex-wrap gap-1.5">
-                  {u.cells.filter((c) => (c.repBand ?? bands[0].key) === b.key).map((cell) => (
-                    <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} />
-                  ))}
-                </div>
-              </td>
-            ))}
+            {bands.map((b) => {
+              const group = inBand(u, b.key, bands[0].key);
+              const codes = group.filter((c) => c.summary.supply > 0).map((c) => c.code);
+              const all = codes.length > 0 && codes.every((k) => selected.has(k));
+              const some = !all && codes.some((k) => selected.has(k));
+              return (
+                <td key={b.key} className="px-2 py-2 align-top">
+                  {group.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={all}
+                        ref={(el) => { if (el) el.indeterminate = some; }}
+                        onChange={() => onToggleRow(codes)}
+                        disabled={codes.length === 0}
+                        className="mt-2 h-3.5 w-3.5 shrink-0 accent-white disabled:opacity-30"
+                        title={`${u.name} · ${b.label} 전체 선택/해제`}
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.map((cell) => (
+                          <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </td>
+              );
+            })}
             <td className={`whitespace-nowrap px-3 py-2 text-right align-top text-xs tabular-nums ${pctTone(pct)}`}>
               {pct == null ? <span className="text-content-muted">—</span> : `${pct}%`}
               {u.total && <span className="ml-1 text-content-muted">{u.total.n}</span>}
