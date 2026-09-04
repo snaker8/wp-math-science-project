@@ -31,6 +31,7 @@ import {
 } from '@/lib/class/mastery-bands';
 import { inferCells, type InferredCell } from '@/lib/class/mastery-infer';
 import { GenerateAssignmentModal, previewText, type CellSpec } from './GenerateAssignmentModal';
+import { UnitDashboard } from './UnitDashboard';
 
 interface Props {
   classId: string;
@@ -112,6 +113,8 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   const [showNoSupply, setShowNoSupply] = useState(false);
   /** 매쓰홀릭 「난이도」 칩 — 열을 켜고 끈다 */
   const [hiddenBands, setHiddenBands] = useState<Set<string>>(new Set());
+  /** 매쓰홀릭 유형분석(학생 하나를 깊게) ↔ 단원분석(반을 넓게) — 같은 재료, 축만 전치 */
+  const [view, setView] = useState<'types' | 'units'>('types');
   const [l1Filter, setL1Filter] = useState<string>('');
   const [studentSel, setStudentSel] = useState<string | null>(null);
   const [from, setFrom] = useState('');
@@ -452,6 +455,19 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
             ))}
           </select>
 
+          <span className="inline-flex overflow-hidden rounded-lg border border-white/10">
+            {([['types', '유형분석'], ['units', '단원분석']] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setView(k)}
+                className={`px-2.5 py-1.5 transition-colors ${view === k ? 'bg-white text-black' : 'text-content-secondary hover:text-content-primary'}`}
+                title={k === 'types' ? '학생 하나를 깊게 — 행=단원, 열=난이도, 칸=유형' : '반을 넓게 — 행=학생, 열=소단원, 칸=유형 타일'}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+
           <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-1.5 py-1">
             <span className="mr-1 text-content-muted">난이도</span>
             {allBands.map((b) => {
@@ -566,7 +582,21 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
           </span>
         </div>
 
-        {rows.length === 0 ? (
+        {view === 'units' ? (
+          <UnitDashboard
+            data={data}
+            subject={subject}
+            scheme={scheme}
+            students={students}
+            from={from}
+            to={to}
+            onPickType={(code) => {
+              setView('types');
+              const cell = cellByCode.get(code);
+              if (cell) void focusCell(cell);
+            }}
+          />
+        ) : rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 px-6 py-12 text-center text-sm text-content-secondary">
             표시할 단원이 없습니다.
             <p className="mt-1 text-xs text-content-muted">{hideEmpty ? '「데이터 있는 단원만」을 끄면 판 전체가 보입니다.' : '수학비서 트리에 이 과목 단원이 없습니다.'}</p>
