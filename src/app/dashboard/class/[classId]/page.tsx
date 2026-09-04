@@ -24,6 +24,7 @@ import {
 import { AssignmentsTab } from '@/components/class/AssignmentsTab';
 import { MasteryMatrix } from '@/components/class/MasteryMatrix';
 import { SettingsTab } from '@/components/class/SettingsTab';
+import { HistoryTab } from '@/components/class/HistoryTab';
 import { weatherOf, WEATHER_LABEL, type LearningGoals } from '@/lib/class/learning-goals';
 
 interface HubStudent {
@@ -122,6 +123,8 @@ export default function ClassHubPage() {
   const [info, setInfo] = useState<ClassInfo | null>(null);
   const [students, setStudents] = useState<HubStudent[]>([]);
   const [goals, setGoals] = useState<LearningGoals>({ weeklyProblems: null, accuracy: null });
+  /** 이력 탭에서 「이 시점의 판 보기」로 넘어올 때의 기준일 */
+  const [masteryTo, setMasteryTo] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -213,7 +216,7 @@ export default function ClassHubPage() {
             return (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => { setTab(t.key); if (t.key === 'mastery') setMasteryTo(undefined); }}
                 className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
                   on
                     ? 'border-content-primary text-content-primary'
@@ -337,9 +340,20 @@ export default function ClassHubPage() {
 
           {tab === 'mastery' && !error && classId && (
             <MasteryMatrix
+              key={masteryTo ?? 'live'}
               classId={classId}
               className={info?.name ?? ''}
               students={students.map((s) => ({ id: s.id, name: s.name }))}
+              initialTo={masteryTo}
+            />
+          )}
+
+          {tab === 'history' && !error && classId && (
+            <HistoryTab
+              classId={classId}
+              students={students.map((s) => ({ id: s.id, name: s.name }))}
+              goals={goals}
+              onOpenMastery={(d) => { setMasteryTo(d); setTab('mastery'); }}
             />
           )}
 
@@ -347,14 +361,13 @@ export default function ClassHubPage() {
             <SettingsTab classId={classId} goals={goals} onChanged={() => void load()} />
           )}
 
-          {tab !== 'students' && tab !== 'assignments' && tab !== 'mastery' && tab !== 'settings' && !error && (
+          {tab !== 'students' && tab !== 'assignments' && tab !== 'mastery' && tab !== 'settings' && tab !== 'history' && !error && (
             <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
               <p className="text-sm text-content-secondary">
                 「{TABS.find((t) => t.key === tab)?.label}」 탭은 아직 만들지 않았습니다.
               </p>
               <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-content-muted">
                 {tab === 'grading' && 'QR 채점과 수동 입력을 반 안에서 한 줄로 모읍니다.'}
-                {tab === 'history' && '주차별 숙달 추이를 쌓아 꺾은선으로 보여줍니다.'}
               </p>
             </div>
           )}

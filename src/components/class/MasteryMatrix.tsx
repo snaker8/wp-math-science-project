@@ -36,6 +36,8 @@ interface Props {
   classId: string;
   className: string;
   students: Array<{ id: string; name: string }>;
+  /** 이력 탭 「이 시점의 판 보기」 — 이 날짜까지의 채점으로 연다 */
+  initialTo?: string;
 }
 
 /** 칸 = 유형 하나 */
@@ -107,7 +109,7 @@ function hollowBorder(level: CellLevel): string {
   return 'border-red-500/70';
 }
 
-export function MasteryMatrix({ classId, className, students }: Props) {
+export function MasteryMatrix({ classId, className, students, initialTo }: Props) {
   const [data, setData] = useState<MasteryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +122,7 @@ export function MasteryMatrix({ classId, className, students }: Props) {
   const [l1Filter, setL1Filter] = useState<string>('');
   const [studentSel, setStudentSel] = useState<string | null>(null);
   const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [to, setTo] = useState(initialTo ?? '');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState<TypeCell | null>(null);
   const [previews, setPreviews] = useState<Map<string, { content: string; difficulty: number | null } | null>>(new Map());
