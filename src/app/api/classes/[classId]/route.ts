@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { validateGoals } from '@/lib/class/learning-goals';
 
 interface RouteParams {
   params: Promise<{ classId: string }>;
@@ -115,9 +116,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { name, description, subject, grade, maxStudents, schedule, isActive } = body;
+    const { name, description, subject, grade, maxStudents, schedule, isActive, goals } = body;
 
     const updateData: Record<string, unknown> = {};
+
+    // 학습 목표 (반 허브 설정 탭) — settings.goals 에 병합. 매쓰홀릭 「학습 목표」 대응.
+    if (goals !== undefined) {
+      const v = validateGoals(goals && typeof goals === 'object' ? goals : {});
+      if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+      const { data: cur } = await supabaseAdmin.from('classes').select('settings').eq('id', classId).single();
+      const settings = (cur?.settings && typeof cur.settings === 'object' ? cur.settings : {}) as Record<string, unknown>;
+      updateData.settings = { ...settings, goals: v.goals };
+    }
 
     if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim() || null;

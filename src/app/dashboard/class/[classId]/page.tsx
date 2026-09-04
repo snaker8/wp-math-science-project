@@ -19,10 +19,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   Users, ClipboardList, CheckSquare, Grid3x3, LineChart, Settings2,
-  Loader2, ArrowLeft, RefreshCw, ExternalLink,
+  Loader2, ArrowLeft, RefreshCw, ExternalLink, Sun, CloudSun, Cloud,
 } from 'lucide-react';
 import { AssignmentsTab } from '@/components/class/AssignmentsTab';
 import { MasteryMatrix } from '@/components/class/MasteryMatrix';
+import { SettingsTab } from '@/components/class/SettingsTab';
+import { weatherOf, WEATHER_LABEL, type LearningGoals } from '@/lib/class/learning-goals';
 
 interface HubStudent {
   id: string;
@@ -37,6 +39,41 @@ interface HubStudent {
   alpha: number;
   beta: number;
   gamma: number;
+  assignedCount: number;
+  submittedCount: number;
+  weekGraded: number;
+  weekCorrect: number;
+  weekPct: number | null;
+  activeWeeks: number;
+  avgWeeklyGraded: number | null;
+  weekAmountAch: number | null;
+  weekAccuracyAch: number | null;
+  avgAmountAch: number | null;
+  avgAccuracyAch: number | null;
+}
+
+/**
+ * 목표 대비 달성률 칸 — 매쓰홀릭 학생 탭의 「☀ 172% 달성 86점/50점」.
+ * 목표가 없으면 달성률·날씨 없이 값만 보여준다 (목표 없이 "0% 달성"은 거짓).
+ */
+function AchCell({ ach, value, goal, unit }: { ach: number | null; value: number | null; goal: number | null; unit: string }) {
+  const w = weatherOf(ach);
+  const Icon = w === 'sunny' ? Sun : w === 'partly' ? CloudSun : Cloud;
+  const tone = w === 'sunny' ? 'text-emerald-400' : w === 'partly' ? 'text-content-primary' : 'text-content-tertiary';
+  if (goal == null) {
+    return (
+      <span className="tabular-nums text-content-secondary">{value == null ? '—' : `${value}${unit}`}</span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5" title={w ? `${WEATHER_LABEL[w]} · 목표 ${goal}${unit}` : `목표 ${goal}${unit}`}>
+      {w && <Icon className={`h-3.5 w-3.5 ${tone}`} />}
+      <span className={`font-medium tabular-nums ${tone}`}>{ach == null ? '—' : `${ach}%`}</span>
+      <span className="text-[11px] tabular-nums text-content-muted">
+        {value == null ? '—' : value}{unit}/{goal}{unit}
+      </span>
+    </span>
+  );
 }
 
 interface ClassInfo {
@@ -84,6 +121,7 @@ export default function ClassHubPage() {
   const [tab, setTab] = useState<TabKey>('students');
   const [info, setInfo] = useState<ClassInfo | null>(null);
   const [students, setStudents] = useState<HubStudent[]>([]);
+  const [goals, setGoals] = useState<LearningGoals>({ weeklyProblems: null, accuracy: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,6 +135,7 @@ export default function ClassHubPage() {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setInfo(data.class as ClassInfo);
       setStudents((data.students || []) as HubStudent[]);
+      setGoals((data.goals as LearningGoals) ?? { weeklyProblems: null, accuracy: null });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -215,11 +254,13 @@ export default function ClassHubPage() {
                   <thead>
                     <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-content-tertiary">
                       <th className="px-4 py-2.5 text-left font-medium">학생</th>
-                      <th className="px-4 py-2.5 text-right font-medium">회차</th>
-                      <th className="px-4 py-2.5 text-right font-medium">채점 문항</th>
-                      <th className="px-4 py-2.5 text-right font-medium">정답률</th>
-                      <th className="px-4 py-2.5 text-right font-medium">숙달 / 취약</th>
-                      <th className="px-4 py-2.5 text-right font-medium">최근 학습</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="제출한 과제 / 배정된 과제">진행도</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="이번 주(월~) 채점 문항 · 목표 대비">금주 학습량</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="이번 주 정답률 · 목표 대비">금주 정답률</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="학습한 주당 평균 문항 · 목표 대비">평균 학습량</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="전체 정답률 · 목표 대비">평균 정답률</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium">숙달 / 취약</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium">최근 학습</th>
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -235,14 +276,29 @@ export default function ClassHubPage() {
                             <span className="ml-2 text-xs text-content-tertiary">{s.grade}</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-content-secondary">
-                          {s.sessionCount || '—'}
+                        <td className="px-4 py-2.5 text-right tabular-nums" title={`회차 ${s.sessionCount} · 채점 ${s.gradedCount}문항`}>
+                          {s.assignedCount === 0 ? (
+                            <span className="text-content-muted">—</span>
+                          ) : (
+                            <>
+                              <span className={`font-medium ${pctTone(Math.round((s.submittedCount * 100) / s.assignedCount))}`}>
+                                {Math.round((s.submittedCount * 100) / s.assignedCount)}%
+                              </span>
+                              <span className="ml-1 text-[11px] text-content-muted">{s.submittedCount}/{s.assignedCount}</span>
+                            </>
+                          )}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-content-secondary">
-                          {s.gradedCount || '—'}
+                        <td className="px-4 py-2.5 text-right">
+                          <AchCell ach={s.weekAmountAch} value={s.weekGraded} goal={goals.weeklyProblems} unit="개" />
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${pctTone(s.correctPct)}`}>
-                          {s.correctPct == null ? '—' : `${s.correctPct}%`}
+                        <td className="px-4 py-2.5 text-right">
+                          <AchCell ach={s.weekAccuracyAch} value={s.weekPct} goal={goals.accuracy} unit="점" />
+                        </td>
+                        <td className="px-4 py-2.5 text-right" title={s.activeWeeks > 0 ? `학습한 주 ${s.activeWeeks}주` : undefined}>
+                          <AchCell ach={s.avgAmountAch} value={s.avgWeeklyGraded} goal={goals.weeklyProblems} unit="개" />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <AchCell ach={s.avgAccuracyAch} value={s.correctPct} goal={goals.accuracy} unit="점" />
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-content-secondary">
                           {s.alpha + s.beta + s.gamma === 0 ? (
@@ -287,7 +343,11 @@ export default function ClassHubPage() {
             />
           )}
 
-          {tab !== 'students' && tab !== 'assignments' && tab !== 'mastery' && !error && (
+          {tab === 'settings' && !error && classId && (
+            <SettingsTab classId={classId} goals={goals} onChanged={() => void load()} />
+          )}
+
+          {tab !== 'students' && tab !== 'assignments' && tab !== 'mastery' && tab !== 'settings' && !error && (
             <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
               <p className="text-sm text-content-secondary">
                 「{TABS.find((t) => t.key === tab)?.label}」 탭은 아직 만들지 않았습니다.
@@ -295,7 +355,6 @@ export default function ClassHubPage() {
               <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-content-muted">
                 {tab === 'grading' && 'QR 채점과 수동 입력을 반 안에서 한 줄로 모읍니다.'}
                 {tab === 'history' && '주차별 숙달 추이를 쌓아 꺾은선으로 보여줍니다.'}
-                {tab === 'settings' && '반 이름 · 담당 강사 · 학생 등록을 여기서 관리합니다.'}
               </p>
             </div>
           )}
