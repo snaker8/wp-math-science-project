@@ -32,6 +32,7 @@ import {
 import { inferCells, type InferredCell } from '@/lib/class/mastery-infer';
 import { GenerateAssignmentModal, previewText, type CellSpec } from './GenerateAssignmentModal';
 import { UnitDashboard } from './UnitDashboard';
+import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 
 interface Props {
   classId: string;
@@ -784,12 +785,12 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
                   <p className="mb-1 text-[10px] uppercase tracking-wider text-content-muted">대표 문제</p>
                   {previews.has(focus.code) ? (
                     previews.get(focus.code) ? (
-                      <p className="leading-relaxed text-content-secondary">
-                        {previewText(previews.get(focus.code)!.content)}
+                      <div className="leading-relaxed text-content-secondary">
                         {previews.get(focus.code)!.difficulty != null && (
-                          <span className="ml-1 text-content-muted">· 난이도 {previews.get(focus.code)!.difficulty}</span>
+                          <span className="mb-1 block text-[10px] text-content-muted">난이도 {previews.get(focus.code)!.difficulty}</span>
                         )}
-                      </p>
+                        <MixedContentRenderer content={previews.get(focus.code)!.content} className="text-[12px] text-content-secondary" />
+                      </div>
                     ) : (
                       <p className="text-content-muted">이 학원이 낼 수 있는 문제가 없습니다.</p>
                     )
@@ -830,10 +831,15 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
               {[...cell.layers].reverse().filter((l) => l.supply > 0 || l.n > 0).map((l) => `${bandLabel(l.band)} ${l.solved}/${l.supply}${l.n > 0 ? ` (${l.correct}/${l.n})` : ''}`).join(' · ') || '문제 없음'}
             </p>
             {s.supply > 0 && (
-              <div className="mt-2 rounded-md border border-white/10 bg-white/[.03] p-2 leading-relaxed text-content-secondary">
+              <div className="mt-2 max-h-48 overflow-hidden rounded-md border border-white/10 bg-white/[.03] p-2 leading-relaxed text-content-secondary">
                 {pv === undefined ? <span className="text-content-muted">대표 문제 불러오는 중…</span>
                   : pv === null ? <span className="text-content-muted">낼 수 있는 문제가 없습니다</span>
-                    : <>{previewText(pv.content)}{pv.difficulty != null && <span className="ml-1 text-content-muted">· 난이도 {pv.difficulty}</span>}</>}
+                    : (
+                      <>
+                        {pv.difficulty != null && <span className="mb-1 block text-[10px] text-content-muted">난이도 {pv.difficulty}</span>}
+                        <MixedContentRenderer content={pv.content} className="text-[12px] text-content-secondary" />
+                      </>
+                    )}
               </div>
             )}
             <p className="mt-1.5 text-[10px] text-content-muted">클릭하면 선택 · 우측 패널에 층별 표</p>
