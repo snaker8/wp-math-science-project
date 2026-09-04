@@ -9,9 +9,8 @@
 // "김OO 의 확률 숙달도" 는 그 다음 질문이다. 지금까지 우리 화면은 순서가 거꾸로여서,
 // 학생 하나를 보려면 메뉴 여섯 곳을 돌아야 했다.
 //
-// 탭은 여섯: 학생 · 과제 · 채점 · 숙달 · 이력 · 설정.
-// 채운 것: 학생(단계 2) · 과제(단계 3). 나머지는 무엇이 올 자리인지만 적어 뒀다
-// (빈 탭에 "준비 중" 을 띄우는 건, 없는 걸 있는 척하는 것보다 낫다).
+// 탭은 여섯: 학생 · 과제 · 채점 · 숙달 · 이력 · 설정 — 2026-09-04 전부 채움 (단계 2~8).
+// 설정 탭의 수업 일정·담당 변경·출제 방식은 아직 (docs/PLAN_CLASS_HUB_REBUILD.md 단계 8).
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,6 +24,7 @@ import { AssignmentsTab } from '@/components/class/AssignmentsTab';
 import { MasteryMatrix } from '@/components/class/MasteryMatrix';
 import { SettingsTab } from '@/components/class/SettingsTab';
 import { HistoryTab } from '@/components/class/HistoryTab';
+import { GradingTab } from '@/components/class/GradingTab';
 import { weatherOf, WEATHER_LABEL, type LearningGoals } from '@/lib/class/learning-goals';
 
 interface HubStudent {
@@ -348,6 +348,15 @@ export default function ClassHubPage() {
             />
           )}
 
+          {tab === 'grading' && !error && classId && (
+            <GradingTab
+              classId={classId}
+              className={info?.name ?? ''}
+              students={students.map((s) => ({ id: s.id, name: s.name, grade: s.grade }))}
+              onOpenMastery={() => { setMasteryTo(undefined); setTab('mastery'); }}
+            />
+          )}
+
           {tab === 'history' && !error && classId && (
             <HistoryTab
               classId={classId}
@@ -361,16 +370,6 @@ export default function ClassHubPage() {
             <SettingsTab classId={classId} goals={goals} onChanged={() => void load()} />
           )}
 
-          {tab !== 'students' && tab !== 'assignments' && tab !== 'mastery' && tab !== 'settings' && tab !== 'history' && !error && (
-            <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
-              <p className="text-sm text-content-secondary">
-                「{TABS.find((t) => t.key === tab)?.label}」 탭은 아직 만들지 않았습니다.
-              </p>
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-content-muted">
-                {tab === 'grading' && 'QR 채점과 수동 입력을 반 안에서 한 줄로 모읍니다.'}
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
