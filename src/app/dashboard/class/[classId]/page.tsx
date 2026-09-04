@@ -125,6 +125,8 @@ export default function ClassHubPage() {
   const [goals, setGoals] = useState<LearningGoals>({ weeklyProblems: null, accuracy: null });
   /** 이력 탭에서 「이 시점의 판 보기」로 넘어올 때의 기준일 */
   const [masteryTo, setMasteryTo] = useState<string | undefined>(undefined);
+  /** 코스 진행도 — 학생별 완료 회차 / 전체 회차 (코스가 있으면 진행도의 정의가 이것으로 바뀐다) */
+  const [courseProgress, setCourseProgress] = useState<{ total: number; done: Map<string, number> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,7 +148,22 @@ export default function ClassHubPage() {
     }
   }, [classId]);
 
-  useEffect(() => { void load(); }, [load]);
+  const loadCourses = useCallback(async () => {
+    if (!classId) return;
+    try {
+      const res = await fetch(`/api/classes/${classId}/courses`);
+      const data = await res.json();
+      if (!res.ok) return;
+      const courses = (data.courses || []) as Array<{ steps: unknown[]; progress: Array<{ studentId: string; done: number }> }>;
+      if (courses.length === 0) { setCourseProgress(null); return; }
+      const total = courses.reduce((n, c) => n + c.steps.length, 0);
+      const done = new Map<string, number>();
+      for (const c of courses) for (const p of c.progress) done.set(p.studentId, (done.get(p.studentId) ?? 0) + p.done);
+      setCourseProgress({ total, done });
+    } catch { /* 코스가 없거나 실패하면 과제 기준 진행도 그대로 */ }
+  }, [classId]);
+
+  useEffect(() => { void load(); void loadCourses(); }, [load, loadCourses]);
 
   // 반 전체 요약 — 학생 줄을 훑기 전에 "이 반이 지금 어떤가" 가 먼저 보여야 한다
   const summary = useMemo(() => {
@@ -257,7 +274,7 @@ export default function ClassHubPage() {
                   <thead>
                     <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-content-tertiary">
                       <th className="px-4 py-2.5 text-left font-medium">학생</th>
-                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="제출한 과제 / 배정된 과제">진행도</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title={courseProgress ? '완료 회차 / 코스 전체 회차' : '제출한 과제 / 배정된 과제'}>진행도</th>
                       <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="이번 주(월~) 채점 문항 · 목표 대비">금주 학습량</th>
                       <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="이번 주 정답률 · 목표 대비">금주 정답률</th>
                       <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="학습한 주당 평균 문항 · 목표 대비">평균 학습량</th>
@@ -279,23 +296,26 @@ export default function ClassHubPage() {
                             <span className="ml-2 text-xs text-content-tertiary">{s.grade}</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums" title={`회차 ${s.sessionCount} · 채점 ${s.gradedCount}문항`}>
-                          {s.assignedCount === 0 ? (
-                            <span className="text-content-muted">—</span>
-                          ) : (
-                            <span className="inline-flex flex-col items-end gap-1">
-                              <span>
-                                <span className={`font-medium ${pctTone(Math.round((s.submittedCount * 100) / s.assignedCount))}`}>
-                                  {Math.round((s.submittedCount * 100) / s.assignedCount)}%
+                        <td className="px-4 py-2.5 text-right tabular-nums" title={courseProgress ? `완료 회차 / 코스 전체 회차 · 채점 ${s.gradedCount}문항` : `제출 과제 / 배정 과제 · 채점 ${s.gradedCount}문항`}>
+                          {(() => {
+                            // 코스가 있으면 진행도 = 완료 회차 / 전체 회차 (매쓰홀릭 46/51). 없으면 과제 제출/배정.
+                            const done = courseProgress ? (courseProgress.done.get(s.id) ?? 0) : s.submittedCount;
+                            const total = courseProgress ? courseProgress.total : s.assignedCount;
+                            if (total === 0) return <span className="text-content-muted">—</span>;
+                            const pct = Math.round((done * 100) / total);
+                            return (
+                              <span className="inline-flex flex-col items-end gap-1">
+                                <span>
+                                  <span className={`font-medium ${pctTone(pct)}`}>{pct}%</span>
+                                  <span className="ml-1 text-[11px] text-content-muted">{done}/{total}{courseProgress ? '회차' : ''}</span>
                                 </span>
-                                <span className="ml-1 text-[11px] text-content-muted">{s.submittedCount}/{s.assignedCount}</span>
+                                {/* 매쓰홀릭 학생 탭 진행도 막대 */}
+                                <span className="block h-1 w-20 overflow-hidden rounded-full bg-white/10">
+                                  <span className="block h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
+                                </span>
                               </span>
-                              {/* 매쓰홀릭 학생 탭 진행도 막대 */}
-                              <span className="block h-1 w-20 overflow-hidden rounded-full bg-white/10">
-                                <span className="block h-full rounded-full bg-emerald-400" style={{ width: `${Math.round((s.submittedCount * 100) / s.assignedCount)}%` }} />
-                              </span>
-                            </span>
-                          )}
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           <AchCell ach={s.weekAmountAch} value={s.weekGraded} goal={goals.weeklyProblems} unit="개" />
@@ -341,7 +361,7 @@ export default function ClassHubPage() {
           )}
 
           {tab === 'assignments' && !error && classId && (
-            <AssignmentsTab classId={classId} studentIds={students.map((s) => s.id)} />
+            <AssignmentsTab classId={classId} studentIds={students.map((s) => s.id)} onCourseIssued={() => void loadCourses()} />
           )}
 
           {tab === 'mastery' && !error && classId && (
