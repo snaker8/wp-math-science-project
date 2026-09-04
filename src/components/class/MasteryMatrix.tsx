@@ -22,7 +22,7 @@
 // ★ 판정은 1~2문항에 색 판정을 주지 않는다(판정 보류).
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Loader2, AlertCircle, RotateCcw, ClipboardList, X } from 'lucide-react';
 import type { MasteryPayload, MasteryItem } from '@/app/api/classes/[classId]/mastery/route';
 import {
@@ -370,25 +370,53 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
     setSelected(new Set(allCells.filter((c) => isWeakLevel(c.level) && c.summary.supply > 0).map((c) => c.code)));
   };
 
-  // ── 대표 문제 (클릭한 칸) ──
-  const focusCell = useCallback(async (cell: TypeCell) => {
-    setFocus(cell);
-    if (previews.has(cell.code) || cell.summary.supply === 0) return;
-    const reqId = ++previewReq.current;
+  // ── 대표 문제 미리보기 — 마우스 올리거나 클릭한 칸 (매쓰홀릭 팝오버 대응) ──
+  const inflight = useRef<Set<string>>(new Set());
+  const loadPreview = useCallback(async (cell: TypeCell) => {
+    if (previews.has(cell.code) || cell.summary.supply === 0 || inflight.current.has(cell.code)) return;
+    inflight.current.add(cell.code);
     try {
       const res = await fetch('/api/clinic/cell-problems', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cells: [{ unit: cell.code, levels: bands.flatMap((b) => b.levels) }], preview: true }),
+        body: JSON.stringify({ cells: [{ unit: cell.code, levels: allBands.flatMap((b) => b.levels) }], preview: true }),
       });
       const json = await res.json();
-      if (reqId !== previewReq.current) return;
       const p = res.ok ? (json.groups?.[0]?.problems?.[0] ?? null) : null;
       setPreviews((prev) => new Map(prev).set(cell.code, p ? { content: p.content ?? '', difficulty: p.difficulty ?? null } : null));
     } catch {
       /* 미리보기는 있으면 좋은 것 — 실패해도 칸 정보는 그대로 */
+    } finally {
+      inflight.current.delete(cell.code);
     }
-  }, [bands, previews]);
+  }, [allBands, previews]);
+  const focusCell = useCallback(async (cell: TypeCell) => {
+    setFocus(cell);
+    void loadPreview(cell);
+  }, [loadPreview]);
+
+  /** 마우스 올린 칸 — 팝오버 위치는 칸의 화면 좌표 */
+  const [hover, setHover] = useState<{ code: string; x: number; y: number; below: boolean } | null>(null);
+  const hoverTimer = useRef<number | null>(null);
+  const onGridOver = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    const el = (e.target as HTMLElement).closest('button[data-code]') as HTMLElement | null;
+    if (!el) return;
+    const code = el.dataset.code!;
+    if (hover?.code === code) return;
+    const r = el.getBoundingClientRect();
+    const below = r.bottom + 240 < window.innerHeight;
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => {
+      setHover({ code, x: r.left + r.width / 2, y: below ? r.bottom + 6 : r.top - 6, below });
+      const cell = cellByCode.get(code);
+      if (cell) void loadPreview(cell);
+    }, 120);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover?.code, loadPreview]);
+  const onGridLeave = useCallback(() => {
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    setHover(null);
+  }, []);
 
   const cellByCode = useMemo(() => new Map(allCells.map((c) => [c.code, c])), [allCells]);
 
@@ -602,7 +630,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
             <p className="mt-1 text-xs text-content-muted">{hideEmpty ? '「데이터 있는 단원만」을 끄면 판 전체가 보입니다.' : '수학비서 트리에 이 과목 단원이 없습니다.'}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/10">
+          <div className="overflow-x-auto rounded-xl border border-white/10" onMouseOver={onGridOver} onMouseLeave={onGridLeave}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs text-content-tertiary">
@@ -779,6 +807,40 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
         </div>
       </aside>
 
+      {/* 팝오버 — 매쓰홀릭: 칸에 올리면 유형명 + 대표 문제. 클릭 없이 훑는다 */}
+      {hover && (() => {
+        const cell = cellByCode.get(hover.code);
+        if (!cell) return null;
+        const s = cell.summary;
+        const pv = previews.get(cell.code);
+        return (
+          <div
+            className="pointer-events-none fixed z-50 w-72 rounded-xl border border-white/10 bg-surface-card p-3 text-xs shadow-2xl"
+            style={{ left: Math.max(8, Math.min(window.innerWidth - 296, hover.x - 144)), top: hover.y, transform: hover.below ? undefined : 'translateY(-100%)' }}
+          >
+            <p className="text-[11px] text-content-muted">{tree.names.get(cell.unit) ?? ''}</p>
+            <p className="mt-0.5 text-sm font-medium text-content-primary">{cell.name}</p>
+            <p className="mt-1 text-content-tertiary">
+              <span className={cell.inferred ? 'text-content-secondary' : pctTone(s.judgement.pct)}>
+                {LEVEL_LABEL[cell.level]}{cell.inferred ? ` ${cell.inferred.pct}% (추정)` : s.judgement.pct != null ? ` ${s.judgement.pct}%` : ''}
+              </span>
+              {' · '}진행도 <span className="tabular-nums text-content-secondary">{s.progressPct == null ? '—' : `${s.solved}/${s.supply} (${s.progressPct}%)`}</span>
+            </p>
+            <p className="mt-1 text-[11px] tabular-nums text-content-muted">
+              {[...cell.layers].reverse().filter((l) => l.supply > 0 || l.n > 0).map((l) => `${bandLabel(l.band)} ${l.solved}/${l.supply}${l.n > 0 ? ` (${l.correct}/${l.n})` : ''}`).join(' · ') || '문제 없음'}
+            </p>
+            {s.supply > 0 && (
+              <div className="mt-2 rounded-md border border-white/10 bg-white/[.03] p-2 leading-relaxed text-content-secondary">
+                {pv === undefined ? <span className="text-content-muted">대표 문제 불러오는 중…</span>
+                  : pv === null ? <span className="text-content-muted">낼 수 있는 문제가 없습니다</span>
+                    : <>{previewText(pv.content)}{pv.difficulty != null && <span className="ml-1 text-content-muted">· 난이도 {pv.difficulty}</span>}</>}
+              </div>
+            )}
+            <p className="mt-1.5 text-[10px] text-content-muted">클릭하면 선택 · 우측 패널에 층별 표</p>
+          </div>
+        );
+      })()}
+
       {gen && (
         <GenerateAssignmentModal
           classId={classId}
@@ -857,7 +919,8 @@ function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
   return (
     <button
       onClick={() => onToggle(cell)}
-      title={title}
+      aria-label={title}
+      data-code={cell.code}
       aria-pressed={sel}
       className={`relative flex h-7 w-7 shrink-0 items-center justify-center text-[11px] font-bold leading-none transition-transform hover:scale-110 ${
         cell.inferred ? 'rounded-full' : 'rounded-md'

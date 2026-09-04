@@ -283,12 +283,18 @@ export default function ClassHubPage() {
                           {s.assignedCount === 0 ? (
                             <span className="text-content-muted">—</span>
                           ) : (
-                            <>
-                              <span className={`font-medium ${pctTone(Math.round((s.submittedCount * 100) / s.assignedCount))}`}>
-                                {Math.round((s.submittedCount * 100) / s.assignedCount)}%
+                            <span className="inline-flex flex-col items-end gap-1">
+                              <span>
+                                <span className={`font-medium ${pctTone(Math.round((s.submittedCount * 100) / s.assignedCount))}`}>
+                                  {Math.round((s.submittedCount * 100) / s.assignedCount)}%
+                                </span>
+                                <span className="ml-1 text-[11px] text-content-muted">{s.submittedCount}/{s.assignedCount}</span>
                               </span>
-                              <span className="ml-1 text-[11px] text-content-muted">{s.submittedCount}/{s.assignedCount}</span>
-                            </>
+                              {/* 매쓰홀릭 학생 탭 진행도 막대 */}
+                              <span className="block h-1 w-20 overflow-hidden rounded-full bg-white/10">
+                                <span className="block h-full rounded-full bg-emerald-400" style={{ width: `${Math.round((s.submittedCount * 100) / s.assignedCount)}%` }} />
+                              </span>
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right">
