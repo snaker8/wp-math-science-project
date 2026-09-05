@@ -88,6 +88,31 @@ export function CoursePanel({
     }
   };
 
+  const wrongSimilar = async (course: CourseRow, stepId: string) => {
+    setBusy(`${course.id}:ws:${stepId}`);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/classes/${classId}/courses/${course.id}/wrong-similar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stepId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const rs = (data.results || []) as Array<{ name: string; wrong: number; problems: number; skipped?: string; error?: string; assignmentId?: string }>;
+      const made = rs.filter((r) => r.assignmentId);
+      const parts = [`오답유사 학습 ${made.length}명 만들었습니다`];
+      if (made.length > 0) parts.push(made.map((r) => `${r.name} 오답 ${r.wrong} → ${r.problems}문항`).join(', '));
+      const failed = rs.filter((r) => r.error);
+      if (failed.length > 0) parts.push(`실패: ${failed.map((r) => `${r.name}(${r.error})`).join(', ')}`);
+      setNotice(parts.join(' · '));
+      await load();
+      onIssued();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const remove = async (course: CourseRow) => {
     if (!confirm(`코스 「${course.title}」를 지웁니다.\n이미 낸 회차의 과제·채점은 그대로 남습니다.`)) return;
     const res = await fetch(`/api/classes/${classId}/courses/${course.id}`, { method: 'DELETE' });
@@ -192,7 +217,7 @@ export function CoursePanel({
                         </span>
                       ))}
                     </div>
-                    <StepTable course={c} busy={busy} onIssue={(ids) => void issue(c, { stepIds: ids })} />
+                    <StepTable course={c} busy={busy} onIssue={(ids) => void issue(c, { stepIds: ids })} onWrongSimilar={(id) => void wrongSimilar(c, id)} />
                   </div>
                 )}
               </div>
@@ -215,7 +240,7 @@ export function CoursePanel({
 // ============================================================================
 // 회차 표 — 매쓰홀릭 학습 탭 카드의 정보(회차·소단원·문항·평균·제출)를 표로
 // ============================================================================
-function StepTable({ course, busy, onIssue }: { course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void }) {
+function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void; onWrongSimilar: (stepId: string) => void }) {
   const [showAll, setShowAll] = useState(false);
   const firstPending = course.steps.findIndex((s) => !s.assignmentId);
   // 기본은 낸 회차 + 다음 8회차만 — 300회차를 다 펼치면 못 읽는다
@@ -238,6 +263,7 @@ function StepTable({ course, busy, onIssue }: { course: CourseRow; busy: string 
             <th className="px-2 py-2 text-right font-medium">문항</th>
             <th className="px-2 py-2 text-right font-medium">제출</th>
             <th className="px-2 py-2 text-right font-medium">평균</th>
+            <th className="px-2 py-2 text-right font-medium" title="오답유사 학습 — 틀린 문제와 같은 유형의 새 문제, 학생마다">오답유사</th>
             <th className="px-2 py-2 text-right font-medium">기간</th>
             <th className="px-4 py-2" />
           </tr>
@@ -264,6 +290,19 @@ function StepTable({ course, busy, onIssue }: { course: CourseRow; busy: string 
                     : <span className="text-content-muted">계획</span>}
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{s.avgPct == null ? '—' : `${s.avgPct}%`}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">
+                  {!issued ? '' : s.wrongSimilar.eligible === 0 ? <span className="text-content-muted">—</span> : (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={s.wrongSimilar.made >= s.wrongSimilar.eligible ? 'text-emerald-300' : 'text-content-secondary'}>{s.wrongSimilar.made}/{s.wrongSimilar.eligible}명</span>
+                      {s.wrongSimilar.made < s.wrongSimilar.eligible && (
+                        <button onClick={() => onWrongSimilar(s.id)} disabled={busy != null}
+                          className="rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-content-secondary hover:border-white/20 hover:text-content-primary disabled:opacity-40">
+                          {busy === `${course.id}:ws:${s.id}` ? '만드는 중' : '만들기'}
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-content-muted">
                   {issued ? `${dateLabel(s.issuedAt)}${s.dueAt ? ` ~ ${dateLabel(s.dueAt)}` : ''}` : ''}
                 </td>

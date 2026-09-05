@@ -9,7 +9,8 @@
 // 학습 목표가 이 탭의 핵심이다 — 이게 있어야 학생 탭의 달성률·날씨가 생긴다 (없으면 안 그린다).
 // 학생 등록은 옛 등록 화면(/tutor/classes/[id])의 두 흐름 — 기존 학생 초대 · 직접 등록(계정 발급) — 을
 // **같은 API 로 탭 안에 흡수**했다. 옛 화면으로 보내지 않는다 — 새 그릇이 담아야 옛 것을 걷을 수 있다.
-// 아직 없는 것: 담당 변경(강사 목록 API 없음) · 완료/복구 · 출제 방식(개인화/공통 — 학생별 다른 문제 출제가 생기면).
+// 코스(회차별 문제수 그래프·출제 방식·다시 계획)는 CourseSettings — docs/PLAN_COURSE_LAYER.md C5.
+// 아직 없는 것: 담당 변경(강사 목록 API 없음) · 완료/복구 · 개인화 출제의 실제 동작(C7).
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -17,6 +18,7 @@ import {
   Loader2, Save, Target, Users, Trash2, AlertCircle, Check, UserPlus, X, Search, Copy, CalendarDays,
 } from 'lucide-react';
 import { GOAL_LIMITS, type LearningGoals } from '@/lib/class/learning-goals';
+import { CourseSettings } from './CourseSettings';
 
 interface Enrollment {
   id: string;
@@ -283,6 +285,9 @@ export function SettingsTab({
           </div>
         </div>
       </section>
+
+      {/* 코스 — 회차별 문제수 그래프 · 출제 방식 · 다시 계획 (매쓰홀릭 설정 탭 구성/그래프) */}
+      <CourseSettings classId={classId} />
 
       {/* 학생 등록 — 옛 등록 화면의 두 흐름을 탭 안으로 */}
       <section className="rounded-xl border border-white/10 p-4 lg:col-span-2">

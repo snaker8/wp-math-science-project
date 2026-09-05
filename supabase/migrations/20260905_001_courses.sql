@@ -101,3 +101,9 @@ CREATE TRIGGER trg_courses_updated_at
 -- 계단 단 이름 — 첫 단(개념)이 공급 부족으로 건너뛰어지면 unit_round 로 되짚을 수 없다 (2026-09-05 실측)
 ALTER TABLE public.course_steps ADD COLUMN IF NOT EXISTS rung_label text NOT NULL DEFAULT '';
 COMMENT ON COLUMN public.course_steps.rung_label IS '계단 단 이름 (개념·기본·실력·심화). 첫 단이 건너뛰어질 수 있어 unit_round 로 못 되짚는다.';
+
+-- 오답유사 짝 (C6) — 회차 과제마다 학생별 「오답유사 학습」이 붙는다 (매쓰홀릭 회차 = 학습 + 오답유사 학습)
+ALTER TABLE public.assignments
+  ADD COLUMN IF NOT EXISTS parent_assignment_id uuid REFERENCES public.assignments(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS assignments_parent_idx ON public.assignments (parent_assignment_id) WHERE parent_assignment_id IS NOT NULL;
+COMMENT ON COLUMN public.assignments.parent_assignment_id IS '이 과제가 어느 과제의 짝인지 (오답유사 학습 → 원 회차 과제).';

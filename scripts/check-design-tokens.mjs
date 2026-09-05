@@ -24,6 +24,7 @@ const ALLOW = [
   /components[\\/]class[\\/]HistoryTab/,      // 숙달 이력 차트·범례 — 데이터 그래픽
   /components[\\/]class[\\/]UnitDashboard/,   // 단원분석 타일 격자 — 데이터 그래픽
   /components[\\/]class[\\/]CoursePanel/,     // 코스 회차 표 — 진행 막대·부족 표시 (데이터 그래픽)
+  /components[\\/]class[\\/]CourseSettings/,  // 코스 회차별 문제수 그래프 — 난이도 적층 색 (데이터 그래픽)
   /exam-paper/,                        // 인쇄물 (라이트 종이)
   /print/i,
   /app[\\/]share[\\/]/,                // 외부 공유 문서 — 리포트 언어 유지

@@ -41,6 +41,8 @@ export interface CourseStepRow {
   /** 제출 학생 수 · 평균 정답률 (낸 회차만) */
   submitted: number;
   avgPct: number | null;
+  /** 오답유사 학습 — 만든 학생 수 / 오답이 있는 제출 학생 수 (C6) */
+  wrongSimilar: { made: number; eligible: number };
 }
 
 export interface CourseRow {
@@ -185,6 +187,17 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     }
   }
 
+  // 오답유사 학습 — 회차 과제를 부모로 가진 과제의 대상 학생 수
+  const wrongMade = new Map<string, number>();
+  if (assignmentIds.length > 0) {
+    const { data } = await sb
+      .from('assignments').select('parent_assignment_id, assignment_students(student_id)')
+      .in('parent_assignment_id', assignmentIds).is('deleted_at', null);
+    for (const a of (data ?? []) as Array<{ parent_assignment_id: string; assignment_students: Array<{ student_id: string }> | null }>) {
+      wrongMade.set(a.parent_assignment_id, (wrongMade.get(a.parent_assignment_id) ?? 0) + (a.assignment_students?.length ?? 0));
+    }
+  }
+
   // 제출 — 채점 세션 (반 학생 + 신원 병합)
   const roster = await resolveClassStudents(sb, classId);
   const examIds = Array.from(new Set(examByAssignment.values()));
@@ -243,11 +256,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const rows: CourseStepRow[] = st.map((s) => {
       const examId = s.assignment_id ? examByAssignment.get(s.assignment_id) ?? null : null;
       const m = examId ? doneByExam.get(examId) : undefined;
-      let submitted = 0; let g = 0; let cor = 0;
+      let submitted = 0; let g = 0; let cor = 0; let eligible = 0;
       if (m) {
         for (const [sid, sc] of m) {
           if (!done.has(sid)) continue;
           submitted += 1; g += sc.graded; cor += sc.correct;
+          if (sc.graded > sc.correct) eligible += 1;
           done.set(sid, (done.get(sid) ?? 0) + 1);
         }
       }
@@ -261,6 +275,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         short: s.short, assignmentId: s.assignment_id, examId, issuedAt: s.issued_at,
         dueAt: s.assignment_id ? dueByAssignment.get(s.assignment_id) ?? null : null,
         submitted, avgPct: g > 0 ? Math.round((cor * 100) / g) : null,
+        wrongSimilar: { made: s.assignment_id ? wrongMade.get(s.assignment_id) ?? 0 : 0, eligible },
       };
     });
     const progress = roster.studentIds.map((sid) => ({
