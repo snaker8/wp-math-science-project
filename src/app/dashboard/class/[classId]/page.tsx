@@ -9,9 +9,8 @@
 // "김OO 의 확률 숙달도" 는 그 다음 질문이다. 지금까지 우리 화면은 순서가 거꾸로여서,
 // 학생 하나를 보려면 메뉴 여섯 곳을 돌아야 했다.
 //
-// 탭은 여섯: 학생 · 과제 · 채점 · 숙달 · 이력 · 설정.
-// 채운 것: 학생(단계 2) · 과제(단계 3). 나머지는 무엇이 올 자리인지만 적어 뒀다
-// (빈 탭에 "준비 중" 을 띄우는 건, 없는 걸 있는 척하는 것보다 낫다).
+// 탭은 여섯: 학생 · 과제 · 채점 · 유형분석 · 유형이력 · 설정 (이름은 매쓰홀릭과 같게 — 대표 2026-09-04) — 2026-09-04 전부 채움 (단계 2~8).
+// 설정 탭의 수업 일정·담당 변경·출제 방식은 아직 (docs/PLAN_CLASS_HUB_REBUILD.md 단계 8).
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -19,9 +18,14 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   Users, ClipboardList, CheckSquare, Grid3x3, LineChart, Settings2,
-  Loader2, ArrowLeft, RefreshCw, ExternalLink,
+  Loader2, ArrowLeft, RefreshCw, ExternalLink, Sun, CloudSun, Cloud,
 } from 'lucide-react';
 import { AssignmentsTab } from '@/components/class/AssignmentsTab';
+import { MasteryMatrix } from '@/components/class/MasteryMatrix';
+import { SettingsTab } from '@/components/class/SettingsTab';
+import { HistoryTab } from '@/components/class/HistoryTab';
+import { GradingTab } from '@/components/class/GradingTab';
+import { weatherOf, WEATHER_LABEL, type LearningGoals } from '@/lib/class/learning-goals';
 
 interface HubStudent {
   id: string;
@@ -36,6 +40,41 @@ interface HubStudent {
   alpha: number;
   beta: number;
   gamma: number;
+  assignedCount: number;
+  submittedCount: number;
+  weekGraded: number;
+  weekCorrect: number;
+  weekPct: number | null;
+  activeWeeks: number;
+  avgWeeklyGraded: number | null;
+  weekAmountAch: number | null;
+  weekAccuracyAch: number | null;
+  avgAmountAch: number | null;
+  avgAccuracyAch: number | null;
+}
+
+/**
+ * 목표 대비 달성률 칸 — 매쓰홀릭 학생 탭의 「☀ 172% 달성 86점/50점」.
+ * 목표가 없으면 달성률·날씨 없이 값만 보여준다 (목표 없이 "0% 달성"은 거짓).
+ */
+function AchCell({ ach, value, goal, unit }: { ach: number | null; value: number | null; goal: number | null; unit: string }) {
+  const w = weatherOf(ach);
+  const Icon = w === 'sunny' ? Sun : w === 'partly' ? CloudSun : Cloud;
+  const tone = w === 'sunny' ? 'text-emerald-400' : w === 'partly' ? 'text-content-primary' : 'text-content-tertiary';
+  if (goal == null) {
+    return (
+      <span className="tabular-nums text-content-secondary">{value == null ? '—' : `${value}${unit}`}</span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5" title={w ? `${WEATHER_LABEL[w]} · 목표 ${goal}${unit}` : `목표 ${goal}${unit}`}>
+      {w && <Icon className={`h-3.5 w-3.5 ${tone}`} />}
+      <span className={`font-medium tabular-nums ${tone}`}>{ach == null ? '—' : `${ach}%`}</span>
+      <span className="text-[11px] tabular-nums text-content-muted">
+        {value == null ? '—' : value}{unit}/{goal}{unit}
+      </span>
+    </span>
+  );
 }
 
 interface ClassInfo {
@@ -48,8 +87,8 @@ const TABS = [
   { key: 'students', label: '학생', icon: Users },
   { key: 'assignments', label: '과제', icon: ClipboardList },
   { key: 'grading', label: '채점', icon: CheckSquare },
-  { key: 'mastery', label: '숙달', icon: Grid3x3 },
-  { key: 'history', label: '이력', icon: LineChart },
+  { key: 'mastery', label: '유형분석', icon: Grid3x3 },
+  { key: 'history', label: '유형이력', icon: LineChart },
   { key: 'settings', label: '설정', icon: Settings2 },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
@@ -83,6 +122,11 @@ export default function ClassHubPage() {
   const [tab, setTab] = useState<TabKey>('students');
   const [info, setInfo] = useState<ClassInfo | null>(null);
   const [students, setStudents] = useState<HubStudent[]>([]);
+  const [goals, setGoals] = useState<LearningGoals>({ weeklyProblems: null, accuracy: null });
+  /** 이력 탭에서 「이 시점의 판 보기」로 넘어올 때의 기준일 */
+  const [masteryTo, setMasteryTo] = useState<string | undefined>(undefined);
+  /** 코스 진행도 — 학생별 완료 회차 / 전체 회차 (코스가 있으면 진행도의 정의가 이것으로 바뀐다) */
+  const [courseProgress, setCourseProgress] = useState<{ total: number; done: Map<string, number> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +140,7 @@ export default function ClassHubPage() {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setInfo(data.class as ClassInfo);
       setStudents((data.students || []) as HubStudent[]);
+      setGoals((data.goals as LearningGoals) ?? { weeklyProblems: null, accuracy: null });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -103,7 +148,22 @@ export default function ClassHubPage() {
     }
   }, [classId]);
 
-  useEffect(() => { void load(); }, [load]);
+  const loadCourses = useCallback(async () => {
+    if (!classId) return;
+    try {
+      const res = await fetch(`/api/classes/${classId}/courses`);
+      const data = await res.json();
+      if (!res.ok) return;
+      const courses = (data.courses || []) as Array<{ steps: unknown[]; progress: Array<{ studentId: string; done: number }> }>;
+      if (courses.length === 0) { setCourseProgress(null); return; }
+      const total = courses.reduce((n, c) => n + c.steps.length, 0);
+      const done = new Map<string, number>();
+      for (const c of courses) for (const p of c.progress) done.set(p.studentId, (done.get(p.studentId) ?? 0) + p.done);
+      setCourseProgress({ total, done });
+    } catch { /* 코스가 없거나 실패하면 과제 기준 진행도 그대로 */ }
+  }, [classId]);
+
+  useEffect(() => { void load(); void loadCourses(); }, [load, loadCourses]);
 
   // 반 전체 요약 — 학생 줄을 훑기 전에 "이 반이 지금 어떤가" 가 먼저 보여야 한다
   const summary = useMemo(() => {
@@ -173,7 +233,7 @@ export default function ClassHubPage() {
             return (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => { setTab(t.key); if (t.key === 'mastery') setMasteryTo(undefined); }}
                 className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
                   on
                     ? 'border-content-primary text-content-primary'
@@ -214,11 +274,13 @@ export default function ClassHubPage() {
                   <thead>
                     <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-content-tertiary">
                       <th className="px-4 py-2.5 text-left font-medium">학생</th>
-                      <th className="px-4 py-2.5 text-right font-medium">회차</th>
-                      <th className="px-4 py-2.5 text-right font-medium">채점 문항</th>
-                      <th className="px-4 py-2.5 text-right font-medium">정답률</th>
-                      <th className="px-4 py-2.5 text-right font-medium">숙달 / 취약</th>
-                      <th className="px-4 py-2.5 text-right font-medium">최근 학습</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title={courseProgress ? '완료 회차 / 코스 전체 회차' : '제출한 과제 / 배정된 과제'}>진행도</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="이번 주(월~) 채점 문항 · 목표 대비">금주 학습량</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="이번 주 정답률 · 목표 대비">금주 정답률</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="학습한 주당 평균 문항 · 목표 대비">평균 학습량</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium" title="전체 정답률 · 목표 대비">평균 정답률</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium">숙달 / 취약</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium">최근 학습</th>
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -234,14 +296,38 @@ export default function ClassHubPage() {
                             <span className="ml-2 text-xs text-content-tertiary">{s.grade}</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-content-secondary">
-                          {s.sessionCount || '—'}
+                        <td className="px-4 py-2.5 text-right tabular-nums" title={courseProgress ? `완료 회차 / 코스 전체 회차 · 채점 ${s.gradedCount}문항` : `제출 과제 / 배정 과제 · 채점 ${s.gradedCount}문항`}>
+                          {(() => {
+                            // 코스가 있으면 진행도 = 완료 회차 / 전체 회차 (매쓰홀릭 46/51). 없으면 과제 제출/배정.
+                            const done = courseProgress ? (courseProgress.done.get(s.id) ?? 0) : s.submittedCount;
+                            const total = courseProgress ? courseProgress.total : s.assignedCount;
+                            if (total === 0) return <span className="text-content-muted">—</span>;
+                            const pct = Math.round((done * 100) / total);
+                            return (
+                              <span className="inline-flex flex-col items-end gap-1">
+                                <span>
+                                  <span className={`font-medium ${pctTone(pct)}`}>{pct}%</span>
+                                  <span className="ml-1 text-[11px] text-content-muted">{done}/{total}{courseProgress ? '회차' : ''}</span>
+                                </span>
+                                {/* 매쓰홀릭 학생 탭 진행도 막대 */}
+                                <span className="block h-1 w-20 overflow-hidden rounded-full bg-white/10">
+                                  <span className="block h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
+                                </span>
+                              </span>
+                            );
+                          })()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-content-secondary">
-                          {s.gradedCount || '—'}
+                        <td className="px-4 py-2.5 text-right">
+                          <AchCell ach={s.weekAmountAch} value={s.weekGraded} goal={goals.weeklyProblems} unit="개" />
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${pctTone(s.correctPct)}`}>
-                          {s.correctPct == null ? '—' : `${s.correctPct}%`}
+                        <td className="px-4 py-2.5 text-right">
+                          <AchCell ach={s.weekAccuracyAch} value={s.weekPct} goal={goals.accuracy} unit="점" />
+                        </td>
+                        <td className="px-4 py-2.5 text-right" title={s.activeWeeks > 0 ? `학습한 주 ${s.activeWeeks}주` : undefined}>
+                          <AchCell ach={s.avgAmountAch} value={s.avgWeeklyGraded} goal={goals.weeklyProblems} unit="개" />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <AchCell ach={s.avgAccuracyAch} value={s.correctPct} goal={goals.accuracy} unit="점" />
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-content-secondary">
                           {s.alpha + s.beta + s.gamma === 0 ? (
@@ -275,22 +361,41 @@ export default function ClassHubPage() {
           )}
 
           {tab === 'assignments' && !error && classId && (
-            <AssignmentsTab classId={classId} studentIds={students.map((s) => s.id)} />
+            <AssignmentsTab classId={classId} studentIds={students.map((s) => s.id)} onCourseIssued={() => void loadCourses()} />
           )}
 
-          {tab !== 'students' && tab !== 'assignments' && !error && (
-            <div className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
-              <p className="text-sm text-content-secondary">
-                「{TABS.find((t) => t.key === tab)?.label}」 탭은 아직 만들지 않았습니다.
-              </p>
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-content-muted">
-                {tab === 'grading' && 'QR · 엑셀 · 수동 채점을 한 줄에 모읍니다.'}
-                {tab === 'mastery' && '단원 × 난이도 매트릭스로 반 전체의 구멍을 한눈에 봅니다.'}
-                {tab === 'history' && '주차별 숙달 추이를 쌓아 꺾은선으로 보여줍니다.'}
-                {tab === 'settings' && '반 이름 · 담당 강사 · 학생 등록을 여기서 관리합니다.'}
-              </p>
-            </div>
+          {tab === 'mastery' && !error && classId && (
+            <MasteryMatrix
+              key={masteryTo ?? 'live'}
+              classId={classId}
+              className={info?.name ?? ''}
+              students={students.map((s) => ({ id: s.id, name: s.name }))}
+              initialTo={masteryTo}
+            />
           )}
+
+          {tab === 'grading' && !error && classId && (
+            <GradingTab
+              classId={classId}
+              className={info?.name ?? ''}
+              students={students.map((s) => ({ id: s.id, name: s.name, grade: s.grade }))}
+              onOpenMastery={() => { setMasteryTo(undefined); setTab('mastery'); }}
+            />
+          )}
+
+          {tab === 'history' && !error && classId && (
+            <HistoryTab
+              classId={classId}
+              students={students.map((s) => ({ id: s.id, name: s.name }))}
+              goals={goals}
+              onOpenMastery={(d) => { setMasteryTo(d); setTab('mastery'); }}
+            />
+          )}
+
+          {tab === 'settings' && !error && classId && (
+            <SettingsTab classId={classId} goals={goals} onChanged={() => void load()} />
+          )}
+
         </div>
       </div>
     </div>

@@ -15,6 +15,7 @@ import {
   Plus, Sparkles, RotateCcw, Loader2, ChevronDown, ChevronRight, Trash2, Search, X, ExternalLink,
 } from 'lucide-react';
 import { GenerateAssignmentModal, type GenKind } from './GenerateAssignmentModal';
+import { CoursePanel } from './CoursePanel';
 
 export interface AssignmentStudent {
   id: string;
@@ -59,7 +60,7 @@ function overdue(a: Assignment): boolean {
   return !!a.dueAt && new Date(a.dueAt).getTime() < Date.now() && a.submitted < a.total - a.excused;
 }
 
-export function AssignmentsTab({ classId, studentIds }: { classId: string; studentIds: string[] }) {
+export function AssignmentsTab({ classId, studentIds, onCourseIssued }: { classId: string; studentIds: string[]; onCourseIssued?: () => void }) {
   const [rows, setRows] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,9 @@ export function AssignmentsTab({ classId, studentIds }: { classId: string; stude
 
   return (
     <div>
+      {/* 코스(회차 묶음) — 매쓰홀릭 학습 탭. 낸 회차는 아래 과제 목록에도 그대로 보인다 */}
+      <CoursePanel classId={classId} studentCount={studentIds.length} onIssued={() => { void load(); onCourseIssued?.(); }} />
+
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-content-tertiary">
           {loading ? ' ' : rows.length === 0 ? '아직 낸 과제가 없습니다.' : `과제 ${rows.length}개`}
