@@ -39,21 +39,27 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!stepId) return NextResponse.json({ error: '회차를 고르세요' }, { status: 400 });
 
   const { data: stepRow } = await sb
-    .from('course_steps').select('id, seq, unit_code, label, assignment_id')
+    .from('course_steps').select('id, seq, unit_code, label, assignment_id, issued_at')
     .eq('id', stepId).eq('course_id', courseId).maybeSingle();
-  const step = stepRow as { id: string; seq: number; unit_code: string; label: string; assignment_id: string | null } | null;
+  const step = stepRow as { id: string; seq: number; unit_code: string; label: string; assignment_id: string | null; issued_at: string | null } | null;
   if (!step) return NextResponse.json({ error: '회차를 찾을 수 없습니다' }, { status: 404 });
-  if (!step.assignment_id) return NextResponse.json({ error: '아직 안 낸 회차입니다' }, { status: 400 });
 
-  const { data: aRow } = await sb.from('assignments').select('id, exam_id').eq('id', step.assignment_id).maybeSingle();
-  const examId = (aRow as { exam_id: string | null } | null)?.exam_id;
-  if (!examId) return NextResponse.json({ error: '회차 과제에 시험지가 없습니다' }, { status: 400 });
+  // 회차 과제 — 공통이면 1개(전원), 개인화면 학생마다 1개. 학생 → (과제, 시험지)
+  const { data: aRows } = await sb
+    .from('assignments').select('id, exam_id, assignment_students(student_id)')
+    .eq('course_step_id', step.id).is('parent_assignment_id', null).is('deleted_at', null);
+  const stepAsgs = ((aRows ?? []) as Array<{ id: string; exam_id: string | null; assignment_students: Array<{ student_id: string }> | null }>)
+    .filter((a) => a.exam_id);
+  if (stepAsgs.length === 0) return NextResponse.json({ error: '아직 안 낸 회차입니다' }, { status: 400 });
+  const asgOf = new Map<string, { id: string; examId: string }>();
+  for (const a of stepAsgs) for (const s of a.assignment_students ?? []) asgOf.set(s.student_id, { id: a.id, examId: a.exam_id as string });
+  const examIds = Array.from(new Set(stepAsgs.map((a) => a.exam_id as string)));
 
   const { data: nameRow } = await sb.from('mathsecr_types').select('level3_name').eq('code', step.unit_code).maybeSingle();
   const unitName = (nameRow as { level3_name: string | null } | null)?.level3_name ?? step.unit_code;
 
   // ── 회차 문제 (제외 대상) ──
-  const { data: epRows } = await sb.from('exam_problems').select('problem_id').eq('exam_id', examId);
+  const { data: epRows } = await sb.from('exam_problems').select('problem_id').in('exam_id', examIds);
   const stepProblems = new Set(((epRows ?? []) as Array<{ problem_id: string }>).map((r) => r.problem_id));
 
   // ── 학생별 오답 (채점 세션) ──
@@ -61,13 +67,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   type Sess = { id: string; student_id: string; completed_at: string | null };
   const { data: sRows } = await sb
     .schema('diagnostics' as never).from('print_sessions')
-    .select('id, student_id, completed_at').eq('exam_id', examId).in('student_id', roster.allRefs.length ? roster.allRefs : ['-']);
-  const sessions = (sRows ?? []) as Sess[];
+    .select('id, student_id, exam_id, completed_at').in('exam_id', examIds).in('student_id', roster.allRefs.length ? roster.allRefs : ['-']);
+  const sessions = (sRows ?? []) as Array<Sess & { exam_id: string }>;
   const wrongByStudent = new Map<string, string[]>();
   const gradedByStudent = new Map<string, number>();
   for (const s of sessions) {
     const owner = roster.ownerByRef.get(s.student_id);
     if (!owner) continue;
+    if (asgOf.get(owner)?.examId !== s.exam_id) continue;   // 개인화: 자기 시험지 세션만
     const { data } = await sb
       .schema('diagnostics' as never).from('session_results')
       .select('problem_id, is_correct, teacher_note').eq('session_id', s.id);
@@ -85,7 +92,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // ── 이미 만든 학생 ──
   const { data: madeRows } = await sb
     .from('assignments').select('id, assignment_students(student_id)')
-    .eq('parent_assignment_id', step.assignment_id).is('deleted_at', null);
+    .in('parent_assignment_id', stepAsgs.map((a) => a.id)).is('deleted_at', null);
   const already = new Set<string>();
   for (const a of (madeRows ?? []) as Array<{ assignment_students: Array<{ student_id: string }> | null }>) {
     for (const s of a.assignment_students ?? []) already.add(s.student_id);
@@ -157,6 +164,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (!wrong) { results.push({ studentId: sid, name, wrong: 0, problems: 0, skipped: '미제출' }); continue; }
     if (wrong.length === 0) { results.push({ studentId: sid, name, wrong: 0, problems: 0, skipped: '오답 없음' }); continue; }
     if (already.has(sid)) { results.push({ studentId: sid, name, wrong: wrong.length, problems: 0, skipped: '이미 만듦' }); continue; }
+    const parent = asgOf.get(sid);
+    if (!parent) { results.push({ studentId: sid, name, wrong: wrong.length, problems: 0, skipped: '회차 과제 없음' }); continue; }
 
     const exclude = new Set<string>(stepProblems);
     if (!preview) for (const p of await seenOf(sid)) exclude.add(p);
@@ -184,7 +193,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (epErr) { await sb.from('exams').delete().eq('id', newExamId); results.push({ ...base, error: `문항 연결 실패: ${epErr.message}` }); continue; }
     const { data: created, error: aErr } = await sb.from('assignments').insert({
       class_id: classId, institute_id: course.institute_id, title, kind: 'wrong', exam_id: newExamId,
-      due_at: null, note: null, created_by: user.id, course_step_id: step.id, parent_assignment_id: step.assignment_id,
+      due_at: null, note: null, created_by: user.id, course_step_id: step.id, parent_assignment_id: parent.id,
     }).select('id').single();
     if (aErr || !created) {
       await sb.from('exam_problems').delete().eq('exam_id', newExamId);

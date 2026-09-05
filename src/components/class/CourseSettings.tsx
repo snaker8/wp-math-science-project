@@ -123,7 +123,7 @@ function CourseCard({ classId, course, onChanged }: { classId: string; course: C
             {(['common', 'personal'] as const).map((m) => (
               <button key={m} onClick={() => setIssueMode(m)}
                 className={`flex-1 rounded-md px-2 py-1 text-xs transition-colors ${issueMode === m ? 'bg-white/10 text-content-primary' : 'text-content-tertiary hover:text-content-primary'}`}
-                title={m === 'personal' ? '학생마다 다른 문제 — 학생별 출제가 붙으면 동작합니다' : '전원 같은 문제'}>
+                title={m === 'personal' ? '학생마다 다른 문제 — 회차를 내면 학생 수만큼 시험지가 생깁니다' : '전원 같은 문제 — 회차당 시험지 한 장'}>
                 {m === 'common' ? '공통 출제' : '개인화 학습'}
               </button>
             ))}

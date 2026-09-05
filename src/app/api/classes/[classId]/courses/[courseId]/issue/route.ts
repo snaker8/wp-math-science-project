@@ -8,6 +8,8 @@
 //   next     안 낸 회차를 순서대로 N개 낸다 (stepIds 없을 때)
 //
 // 회차 하나 = 문항 추출 → 시험지 → 과제(반 전원) → course_steps.assignment_id.
+// ★ 개인화 출제(settings.issueMode='personal', C7): 학생마다 다른 문제 — 학생마다 시험지 + 과제(대상 1명).
+//   이때 course_steps.assignment_id 는 비워 두고 issued_at 만 찍는다. 과제는 assignments.course_step_id 로 찾는다.
 //   · 문항은 회차의 level_plan(밴드별 수)대로 그 소단원(depth4 아래 전 유형)에서 뽑는다.
 //   · 이 코스에서 이미 낸 문제, 반 학생이 이미 푼 문제는 뺀다(cell-problems 와 같은 원칙).
 //   · 세부유형 분산 — 한 유형만 몰리지 않게 유형별로 한 바퀴씩.
@@ -18,7 +20,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
-import { resolveClassStudents } from '@/lib/class/class-students';
+import { resolveClassStudents, displayName } from '@/lib/class/class-students';
 import { BAND_SCHEMES } from '@/lib/class/mastery-bands';
 import { loadCourse } from '@/lib/class/course-guard';
 
@@ -28,7 +30,7 @@ interface RouteParams { params: Promise<{ classId: string; courseId: string }> }
 
 interface StepRec {
   id: string; seq: number; unit_code: string; label: string;
-  level_plan: Record<string, number>; assignment_id: string | null;
+  level_plan: Record<string, number>; assignment_id: string | null; issued_at: string | null;
 }
 
 const MAX_PER_CALL = 30;
@@ -60,17 +62,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // ── 낼 회차 고르기 ──
   const { data: sRows } = await sb
     .from('course_steps')
-    .select('id, seq, unit_code, label, level_plan, assignment_id')
+    .select('id, seq, unit_code, label, level_plan, assignment_id, issued_at')
     .eq('course_id', courseId)
     .order('seq');
   const all = (sRows ?? []) as StepRec[];
   let targets: StepRec[];
   if (Array.isArray(body.stepIds) && body.stepIds.length > 0) {
     const want = new Set((body.stepIds as unknown[]).map(String));
-    targets = all.filter((s) => want.has(s.id) && !s.assignment_id);
+    targets = all.filter((s) => want.has(s.id) && !s.issued_at && !s.assignment_id);
   } else {
     const n = Math.max(1, Math.round(Number(body.next) || 1));
-    targets = all.filter((s) => !s.assignment_id).slice(0, n);
+    targets = all.filter((s) => !s.issued_at && !s.assignment_id).slice(0, n);
   }
   if (targets.length === 0) return NextResponse.json({ error: '낼 회차가 없습니다 (이미 다 냈거나 고른 회차가 없음)' }, { status: 400 });
   if (targets.length > MAX_PER_CALL) return NextResponse.json({ error: `한 번에 ${MAX_PER_CALL}회차까지` }, { status: 400 });
@@ -79,29 +81,48 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const roster = await resolveClassStudents(sb, classId);
   if (roster.studentIds.length === 0) return NextResponse.json({ error: '이 반에 등록된 학생이 없습니다' }, { status: 400 });
 
-  // ── 뺄 문제: 이 코스가 이미 낸 문제 + 반 학생이 이미 푼 문제 ──
-  const used = new Set<string>();
-  const issuedAssignments = all.map((s) => s.assignment_id).filter((x): x is string => !!x);
-  if (issuedAssignments.length > 0) {
-    const { data: aRows } = await sb.from('assignments').select('exam_id').in('id', issuedAssignments);
-    const examIds = ((aRows ?? []) as Array<{ exam_id: string | null }>).map((a) => a.exam_id).filter((x): x is string => !!x);
+  const personal = (course.settings as { issueMode?: unknown } | null)?.issueMode === 'personal';
+
+  // ── 뺄 문제: 이 코스가 이미 낸 문제 + 학생이 이미 푼 문제 (학생별로도 둔다 — 개인화 출제용) ──
+  const usedAll = new Set<string>();
+  const usedBy = new Map<string, Set<string>>(roster.studentIds.map((id) => [id, new Set<string>()]));
+  {
+    const { data: aRows } = await sb
+      .from('assignments').select('exam_id, assignment_students(student_id)')
+      .in('course_step_id', all.map((s) => s.id)).is('parent_assignment_id', null).is('deleted_at', null);
+    const asgs = (aRows ?? []) as Array<{ exam_id: string | null; assignment_students: Array<{ student_id: string }> | null }>;
+    const examIds = asgs.map((a) => a.exam_id).filter((x): x is string => !!x);
+    const probsByExam = new Map<string, string[]>();
     for (let i = 0; i < examIds.length; i += 200) {
-      const { data } = await sb.from('exam_problems').select('problem_id').in('exam_id', examIds.slice(i, i + 200));
-      for (const r of (data ?? []) as Array<{ problem_id: string }>) used.add(r.problem_id);
+      const { data } = await sb.from('exam_problems').select('exam_id, problem_id').in('exam_id', examIds.slice(i, i + 200));
+      for (const r of (data ?? []) as Array<{ exam_id: string; problem_id: string }>) {
+        const arr = probsByExam.get(r.exam_id) ?? []; arr.push(r.problem_id); probsByExam.set(r.exam_id, arr);
+      }
+    }
+    for (const a of asgs) {
+      const probs = a.exam_id ? probsByExam.get(a.exam_id) ?? [] : [];
+      for (const pid of probs) usedAll.add(pid);
+      for (const s of a.assignment_students ?? []) for (const pid of probs) usedBy.get(s.student_id)?.add(pid);
     }
   }
   if (roster.allRefs.length > 0) {
     const { data: ps } = await sb
-      .schema('diagnostics' as never).from('print_sessions').select('id').in('student_id', roster.allRefs);
-    const sessionIds = ((ps ?? []) as Array<{ id: string }>).map((s) => s.id);
+      .schema('diagnostics' as never).from('print_sessions').select('id, student_id').in('student_id', roster.allRefs);
+    const sessions = (ps ?? []) as Array<{ id: string; student_id: string }>;
+    const ownerBySession = new Map(sessions.map((s) => [s.id, roster.ownerByRef.get(s.student_id) ?? s.student_id]));
+    const sessionIds = sessions.map((s) => s.id);
     for (let i = 0; i < sessionIds.length; i += 300) {
       const chunk = sessionIds.slice(i, i + 300);
       for (let from = 0; ; from += 1000) {
         const { data } = await sb
-          .schema('diagnostics' as never).from('session_results').select('problem_id')
+          .schema('diagnostics' as never).from('session_results').select('session_id, problem_id')
           .in('session_id', chunk).order('id').range(from, from + 999);
-        const rows = (data ?? []) as Array<{ problem_id: string | null }>;
-        for (const r of rows) if (r.problem_id) used.add(r.problem_id);
+        const rows = (data ?? []) as Array<{ session_id: string; problem_id: string | null }>;
+        for (const r of rows) {
+          if (!r.problem_id) continue;
+          usedAll.add(r.problem_id);
+          usedBy.get(ownerBySession.get(r.session_id) ?? '')?.add(r.problem_id);
+        }
         if (rows.length < 1000) break;
       }
     }
@@ -115,7 +136,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const className = (cls as { name: string } | null)?.name ?? '';
 
   // ── 회차별 문항 뽑기 ──
-  async function pickForStep(step: StepRec): Promise<{ ids: string[]; short: Record<string, number> }> {
+  /** @param rotate 개인화 출제: 학생마다 후보 순서를 돌려 서로 다른 문제를 받게 한다 (공급이 계획보다 많을 때) */
+  async function pickForStep(step: StepRec, used: Set<string>, rotate = 0): Promise<{ ids: string[]; short: Record<string, number> }> {
     const ids: string[] = [];
     const short: Record<string, number> = {};
     for (const [band, want] of Object.entries(step.level_plan ?? {})) {
@@ -155,7 +177,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           if (next) { ordered.push(next); progressed = true; }
         }
       }
-      const picked = ordered.slice(0, n);
+      const off = ordered.length > 0 ? (rotate * n) % ordered.length : 0;
+      const rotated = off > 0 ? [...ordered.slice(off), ...ordered.slice(0, off)] : ordered;
+      const picked = rotated.slice(0, n);
       ids.push(...picked);
       if (picked.length < n) short[band] = n - picked.length;
     }
@@ -165,17 +189,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const results: Array<{
     stepId: string; seq: number; label: string; unitName: string; problems: number;
     short: Record<string, number>; assignmentId?: string; examId?: string; error?: string;
+    /** 개인화: 학생별 결과 */
+    students?: Array<{ studentId: string; name: string; problems: number; examId?: string; error?: string }>;
   }> = [];
 
-  for (const step of targets) {
-    const uName = unitName.get(step.unit_code) ?? step.unit_code;
-    const { ids, short } = await pickForStep(step);
-    const base = { stepId: step.id, seq: step.seq, label: step.label, unitName: uName, problems: ids.length, short };
-    if (ids.length === 0) { results.push({ ...base, error: '뽑을 문제가 없습니다' }); continue; }
-    if (preview) { results.push(base); continue; }
-
-    const title = `${course.title} · ${uName} ${step.label}`;
-    // 1) 시험지
+  /** 시험지 + 과제 하나 만들기 (실패 시 되돌림). 반환: ids 또는 error */
+  async function createOne(title: string, ids: string[], studentIds: string[], stepId: string, className: string) {
     const { data: exam, error: examErr } = await sb
       .from('exams')
       .insert({
@@ -184,48 +203,84 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         time_limit_minutes: Math.max(10, ids.length * 2), subject_track: 'math',
       })
       .select('id').single();
-    if (examErr || !exam) { results.push({ ...base, error: `시험지 생성 실패: ${examErr?.message ?? 'unknown'}` }); continue; }
+    if (examErr || !exam) return { error: `시험지 생성 실패: ${examErr?.message ?? 'unknown'}` };
     const examId = (exam as { id: string }).id;
     const { error: epErr } = await sb.from('exam_problems').insert(
       ids.map((pid, i) => ({ exam_id: examId, problem_id: pid, sequence_number: i + 1, points: 4 }))
     );
-    if (epErr) {
-      await sb.from('exams').delete().eq('id', examId);
-      results.push({ ...base, error: `문항 연결 실패: ${epErr.message}` }); continue;
-    }
-    // 2) 과제
+    if (epErr) { await sb.from('exams').delete().eq('id', examId); return { error: `문항 연결 실패: ${epErr.message}` }; }
     const { data: created, error: aErr } = await sb
       .from('assignments')
       .insert({
         class_id: classId, institute_id: course.institute_id, title, kind: 'unit', exam_id: examId,
-        due_at: dueAt, note: null, created_by: user.id, course_step_id: step.id,
+        due_at: dueAt, note: null, created_by: user.id, course_step_id: stepId,
       })
       .select('id').single();
     if (aErr || !created) {
       await sb.from('exam_problems').delete().eq('exam_id', examId);
       await sb.from('exams').delete().eq('id', examId);
-      results.push({ ...base, error: `과제 생성 실패: ${aErr?.message ?? 'unknown'}` }); continue;
+      return { error: `과제 생성 실패: ${aErr?.message ?? 'unknown'}` };
     }
     const assignmentId = (created as { id: string }).id;
     const { error: linkErr } = await sb.from('assignment_students').insert(
-      roster.studentIds.map((sid) => ({ assignment_id: assignmentId, student_id: sid }))
+      studentIds.map((sid) => ({ assignment_id: assignmentId, student_id: sid }))
     );
     if (linkErr) {
       await sb.from('assignments').delete().eq('id', assignmentId);
       await sb.from('exam_problems').delete().eq('exam_id', examId);
       await sb.from('exams').delete().eq('id', examId);
-      results.push({ ...base, error: `대상 학생 등록 실패: ${linkErr.message}` }); continue;
+      return { error: `대상 학생 등록 실패: ${linkErr.message}` };
     }
+    return { assignmentId, examId };
+  }
+
+  for (const step of targets) {
+    const uName = unitName.get(step.unit_code) ?? step.unit_code;
+
+    // ── 개인화 출제: 학생마다 다른 문제 ──
+    if (personal) {
+      const per: NonNullable<(typeof results)[number]['students']> = [];
+      let made = 0; let totalProblems = 0;
+      for (const [idx, sid] of roster.studentIds.entries()) {
+        const name = displayName(roster.userById.get(sid));
+        const exclude = new Set(usedBy.get(sid) ?? []);
+        const { ids } = await pickForStep(step, exclude, idx);
+        if (ids.length === 0) { per.push({ studentId: sid, name, problems: 0, error: '뽑을 문제가 없습니다' }); continue; }
+        if (preview) { per.push({ studentId: sid, name, problems: ids.length }); totalProblems += ids.length; continue; }
+        const r = await createOne(`${course.title} · ${uName} ${step.label} · ${name}`, ids, [sid], step.id, className);
+        if ('error' in r) { per.push({ studentId: sid, name, problems: ids.length, error: r.error }); continue; }
+        for (const id of ids) usedBy.get(sid)?.add(id);
+        made += 1; totalProblems += ids.length;
+        per.push({ studentId: sid, name, problems: ids.length, examId: r.examId });
+      }
+      const base = { stepId: step.id, seq: step.seq, label: step.label, unitName: uName, problems: totalProblems, short: {}, students: per };
+      if (preview) { results.push(base); continue; }
+      if (made === 0) { results.push({ ...base, error: '학생 누구에게도 낼 문제가 없습니다' }); continue; }
+      const { error: stErr } = await sb.from('course_steps').update({ issued_at: new Date().toISOString() }).eq('id', step.id);
+      results.push(stErr ? { ...base, error: `회차 연결 실패: ${stErr.message}` } : base);
+      continue;
+    }
+
+    // ── 공통 출제: 회차 하나 = 시험지 한 장 ──
+    const { ids, short } = await pickForStep(step, usedAll);
+    const base = { stepId: step.id, seq: step.seq, label: step.label, unitName: uName, problems: ids.length, short };
+    if (ids.length === 0) { results.push({ ...base, error: '뽑을 문제가 없습니다' }); continue; }
+    if (preview) { results.push(base); continue; }
+
+    const title = `${course.title} · ${uName} ${step.label}`;
+    const r = await createOne(title, ids, roster.studentIds, step.id, className);
+    if ('error' in r) { results.push({ ...base, error: r.error }); continue; }
+    const { assignmentId, examId } = r;
     // 3) 회차 ← 과제
     const { error: stErr } = await sb
       .from('course_steps')
       .update({ assignment_id: assignmentId, issued_at: new Date().toISOString() })
       .eq('id', step.id);
     if (stErr) { results.push({ ...base, assignmentId, examId, error: `회차 연결 실패: ${stErr.message}` }); continue; }
-    for (const id of ids) used.add(id);   // 같은 호출 안 다음 회차에서 겹치지 않게
+    for (const id of ids) usedAll.add(id);   // 같은 호출 안 다음 회차에서 겹치지 않게
     results.push({ ...base, assignmentId, examId });
   }
 
-  const issued = results.filter((r) => r.assignmentId && !r.error).length;
+  const issued = results.filter((r) => !r.error && (r.assignmentId || r.students)).length;
   return NextResponse.json({ preview, issued, results }, { status: preview ? 200 : 201 });
 }

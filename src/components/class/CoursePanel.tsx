@@ -72,12 +72,14 @@ export function CoursePanel({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      const results = (data.results || []) as Array<{ label: string; unitName: string; problems: number; error?: string; short: Record<string, number> }>;
+      const results = (data.results || []) as Array<{ label: string; unitName: string; problems: number; error?: string; short: Record<string, number>; students?: Array<{ name: string; problems: number; error?: string }> }>;
       const failed = results.filter((r) => r.error);
+      const personalFails = results.flatMap((r) => (r.students ?? []).filter((s) => s.error).map((s) => `${r.unitName} ${r.label} ${s.name}(${s.error})`));
       const shortOnes = results.filter((r) => !r.error && Object.keys(r.short || {}).length > 0);
       const parts = [`${data.issued}회차 냈습니다`];
       if (shortOnes.length > 0) parts.push(`${shortOnes.length}회차는 문제은행이 모자라 계획보다 적게 나갔습니다`);
       if (failed.length > 0) parts.push(`${failed.length}회차 실패: ${failed.map((f) => `${f.unitName} ${f.label} (${f.error})`).join(', ')}`);
+      if (personalFails.length > 0) parts.push(`학생별 못 낸 것: ${personalFails.join(', ')}`);
       setNotice(parts.join(' · '));
       await load();
       onIssued();
@@ -158,7 +160,7 @@ export function CoursePanel({
         <div className="space-y-3">
           {courses.map((c) => {
             const expanded = open === c.id;
-            const nextStep = c.steps.find((s) => !s.assignmentId);
+            const nextStep = c.steps.find((s) => s.issuedAt == null);
             const remaining = c.steps.length - c.issued;
             return (
               <div key={c.id} className="overflow-hidden rounded-xl border border-white/10">
@@ -242,7 +244,7 @@ export function CoursePanel({
 // ============================================================================
 function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void; onWrongSimilar: (stepId: string) => void }) {
   const [showAll, setShowAll] = useState(false);
-  const firstPending = course.steps.findIndex((s) => !s.assignmentId);
+  const firstPending = course.steps.findIndex((s) => s.issuedAt == null);
   // 기본은 낸 회차 + 다음 8회차만 — 300회차를 다 펼치면 못 읽는다
   const visible = useMemo(() => {
     if (showAll) return course.steps;
@@ -250,6 +252,7 @@ function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRo
     return course.steps.slice(0, cut);
   }, [course.steps, showAll, firstPending]);
   const students = course.progress.length;
+  const nameOf = useMemo(() => new Map(course.progress.map((p) => [p.studentId, p.name])), [course.progress]);
 
   return (
     <div className="overflow-x-auto">
@@ -270,7 +273,7 @@ function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRo
         </thead>
         <tbody>
           {visible.map((s: CourseStepRow) => {
-            const issued = !!s.assignmentId;
+            const issued = s.issuedAt != null;
             const all = issued && s.submitted >= students && students > 0;
             return (
               <tr key={s.id} className={`border-b border-white/5 last:border-0 ${issued ? '' : 'text-content-tertiary'}`}>
@@ -308,11 +311,23 @@ function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRo
                 </td>
                 <td className="px-4 py-1.5 text-right">
                   {issued ? (
-                    s.examId && (
+                    s.examId ? (
                       <Link href={`/dashboard/cloud/${s.examId}`} className="inline-flex items-center gap-1 text-content-tertiary hover:text-content-primary">
                         시험지 <ExternalLink className="h-3 w-3" />
                       </Link>
-                    )
+                    ) : s.exams.length > 0 ? (
+                      /* 개인화 출제 — 학생마다 시험지 */
+                      <details className="inline-block text-left">
+                        <summary className="cursor-pointer list-none text-content-tertiary hover:text-content-primary">시험지 {s.exams.length}장</summary>
+                        <div className="mt-1 flex flex-col gap-0.5">
+                          {s.exams.map((e) => (
+                            <Link key={e.examId} href={`/dashboard/cloud/${e.examId}`} className="inline-flex items-center gap-1 text-content-tertiary hover:text-content-primary">
+                              {nameOf.get(e.studentId ?? '') ?? '전원'} <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null
                   ) : (
                     <button
                       onClick={() => onIssue([s.id])}

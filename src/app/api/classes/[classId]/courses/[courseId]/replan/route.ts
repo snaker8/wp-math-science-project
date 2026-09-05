@@ -45,12 +45,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // 1) 지금 회차
   const { data: sRows } = await sb
     .from('course_steps')
-    .select('id, seq, unit_code, unit_round, assignment_id')
+    .select('id, seq, unit_code, unit_round, assignment_id, issued_at')
     .eq('course_id', courseId)
     .order('seq');
-  const steps = (sRows ?? []) as Array<{ id: string; seq: number; unit_code: string; unit_round: number; assignment_id: string | null }>;
-  const issued = steps.filter((s) => s.assignment_id);
-  const pending = steps.filter((s) => !s.assignment_id);
+  const steps = (sRows ?? []) as Array<{ id: string; seq: number; unit_code: string; unit_round: number; assignment_id: string | null; issued_at: string | null }>;
+  const issued = steps.filter((s) => s.assignment_id || s.issued_at);
+  const pending = steps.filter((s) => !s.assignment_id && !s.issued_at);
 
   // 2) 소단원 목록 (범위)
   const units: Array<{ code: string; name: string }> = [];
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (rows.length < PAGE) break;
   }
   if (issued.length > 0) {
-    const { data: aRows } = await sb.from('assignments').select('exam_id').in('id', issued.map((s) => s.assignment_id!));
+    const { data: aRows } = await sb.from('assignments').select('exam_id').in('course_step_id', issued.map((s) => s.id)).is('parent_assignment_id', null).is('deleted_at', null);
     const examIds = ((aRows ?? []) as Array<{ exam_id: string | null }>).map((a) => a.exam_id).filter((x): x is string => !!x);
     const pids: string[] = [];
     for (let i = 0; i < examIds.length; i += 200) {

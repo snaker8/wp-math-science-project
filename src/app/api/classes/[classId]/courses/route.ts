@@ -34,8 +34,13 @@ export interface CourseStepRow {
   levelPlan: Record<string, number>;
   total: number;
   short: boolean;
+  /** 회차 과제 (공통: 1개 · 개인화: 학생마다 1개 → 첫 번째) */
   assignmentId: string | null;
+  /** 공통 출제일 때의 시험지. 개인화면 null — exams 를 본다 */
   examId: string | null;
+  /** 회차의 시험지들 (개인화: 학생별) */
+  exams: Array<{ studentId: string | null; examId: string }>;
+  personal: boolean;
   issuedAt: string | null;
   dueAt: string | null;
   /** 제출 학생 수 · 평균 정답률 (낸 회차만) */
@@ -175,32 +180,38 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   const { data: subjRows } = await sb.from('mathsecr_types').select('code, subject_name').in('code', subjCodes);
   const subjName = new Map(((subjRows ?? []) as Array<{ code: string; subject_name: string | null }>).map((r) => [r.code, r.subject_name ?? r.code]));
 
-  // 낸 회차의 과제 → 시험지
-  const assignmentIds = steps.map((s) => s.assignment_id).filter((x): x is string => !!x);
-  const examByAssignment = new Map<string, string>();
-  const dueByAssignment = new Map<string, string | null>();
-  if (assignmentIds.length > 0) {
-    const { data } = await sb.from('assignments').select('id, exam_id, due_at').in('id', assignmentIds).is('deleted_at', null);
-    for (const a of (data ?? []) as Array<{ id: string; exam_id: string | null; due_at: string | null }>) {
-      if (a.exam_id) examByAssignment.set(a.id, a.exam_id);
-      dueByAssignment.set(a.id, a.due_at);
-    }
-  }
-
-  // 오답유사 학습 — 회차 과제를 부모로 가진 과제의 대상 학생 수
-  const wrongMade = new Map<string, number>();
-  if (assignmentIds.length > 0) {
+  // 회차 과제 — course_step_id 로 찾는다 (공통: 회차당 1개 · 개인화: 학생마다 1개). 오답유사(parent 있음)는 따로 센다.
+  const stepIds = steps.map((s) => s.id);
+  type StepAsg = {
+    id: string; course_step_id: string; exam_id: string | null; due_at: string | null;
+    parent_assignment_id: string | null; assignment_students: Array<{ student_id: string }> | null;
+  };
+  const stepAsgs: StepAsg[] = [];
+  for (let i = 0; i < stepIds.length; i += 200) {
     const { data } = await sb
-      .from('assignments').select('parent_assignment_id, assignment_students(student_id)')
-      .in('parent_assignment_id', assignmentIds).is('deleted_at', null);
-    for (const a of (data ?? []) as Array<{ parent_assignment_id: string; assignment_students: Array<{ student_id: string }> | null }>) {
-      wrongMade.set(a.parent_assignment_id, (wrongMade.get(a.parent_assignment_id) ?? 0) + (a.assignment_students?.length ?? 0));
-    }
+      .from('assignments')
+      .select('id, course_step_id, exam_id, due_at, parent_assignment_id, assignment_students(student_id)')
+      .in('course_step_id', stepIds.slice(i, i + 200))
+      .is('deleted_at', null);
+    stepAsgs.push(...((data ?? []) as StepAsg[]));
   }
+  const asgsByStep = new Map<string, StepAsg[]>();
+  const wrongMade = new Map<string, number>();
+  for (const a of stepAsgs) {
+    if (a.parent_assignment_id) {
+      wrongMade.set(a.course_step_id, (wrongMade.get(a.course_step_id) ?? 0) + (a.assignment_students?.length ?? 0));
+      continue;
+    }
+    const arr = asgsByStep.get(a.course_step_id) ?? [];
+    arr.push(a);
+    asgsByStep.set(a.course_step_id, arr);
+  }
+  const examIds = Array.from(new Set(
+    stepAsgs.filter((a) => !a.parent_assignment_id && a.exam_id).map((a) => a.exam_id as string)
+  ));
 
   // 제출 — 채점 세션 (반 학생 + 신원 병합)
   const roster = await resolveClassStudents(sb, classId);
-  const examIds = Array.from(new Set(examByAssignment.values()));
   type Sess = { id: string; student_id: string; exam_id: string; completed_at: string | null };
   const sessions: Sess[] = [];
   if (examIds.length > 0 && roster.allRefs.length > 0) {
@@ -254,17 +265,27 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const st = steps.filter((s) => s.course_id === c.id);
     const done = new Map<string, number>(roster.studentIds.map((id) => [id, 0]));
     const rows: CourseStepRow[] = st.map((s) => {
-      const examId = s.assignment_id ? examByAssignment.get(s.assignment_id) ?? null : null;
-      const m = examId ? doneByExam.get(examId) : undefined;
+      const asgs = asgsByStep.get(s.id) ?? [];
+      const personal = asgs.length > 1 || (asgs.length === 1 && (asgs[0].assignment_students?.length ?? 0) === 1 && roster.studentIds.length > 1);
       let submitted = 0; let g = 0; let cor = 0; let eligible = 0;
-      if (m) {
+      const counted = new Set<string>();
+      const exams: Array<{ studentId: string | null; examId: string }> = [];
+      for (const a of asgs) {
+        if (!a.exam_id) continue;
+        const targets = new Set((a.assignment_students ?? []).map((x) => x.student_id));
+        exams.push({ studentId: targets.size === 1 ? Array.from(targets)[0] : null, examId: a.exam_id });
+        const m = doneByExam.get(a.exam_id);
+        if (!m) continue;
         for (const [sid, sc] of m) {
-          if (!done.has(sid)) continue;
+          if (!done.has(sid) || counted.has(sid)) continue;
+          if (targets.size > 0 && !targets.has(sid)) continue;   // 개인화: 남의 시험지 세션은 안 센다
+          counted.add(sid);
           submitted += 1; g += sc.graded; cor += sc.correct;
           if (sc.graded > sc.correct) eligible += 1;
           done.set(sid, (done.get(sid) ?? 0) + 1);
         }
       }
+      const first = asgs[0];
       const plan = s.level_plan ?? {};
       return {
         id: s.id, seq: s.seq, unit: s.unit_code, unitName: unitName.get(s.unit_code) ?? s.unit_code,
@@ -272,10 +293,14 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         rungLabel: s.rung_label || '',
         levelPlan: plan,
         total: Object.values(plan).reduce((n, x) => n + Number(x || 0), 0),
-        short: s.short, assignmentId: s.assignment_id, examId, issuedAt: s.issued_at,
-        dueAt: s.assignment_id ? dueByAssignment.get(s.assignment_id) ?? null : null,
+        short: s.short,
+        assignmentId: first?.id ?? s.assignment_id ?? null,
+        examId: !personal && first?.exam_id ? first.exam_id : null,
+        exams, personal,
+        issuedAt: s.issued_at ?? (first ? '' : null),
+        dueAt: first?.due_at ?? null,
         submitted, avgPct: g > 0 ? Math.round((cor * 100) / g) : null,
-        wrongSimilar: { made: s.assignment_id ? wrongMade.get(s.assignment_id) ?? 0 : 0, eligible },
+        wrongSimilar: { made: wrongMade.get(s.id) ?? 0, eligible },
       };
     });
     const progress = roster.studentIds.map((sid) => ({
@@ -293,7 +318,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         ladder,
         range,
       },
-      createdAt: c.created_at, steps: rows, issued: rows.filter((r) => r.assignmentId).length,
+      createdAt: c.created_at, steps: rows, issued: rows.filter((r) => r.issuedAt != null).length,
       progress, avgProgressPct: avg,
     };
   });
