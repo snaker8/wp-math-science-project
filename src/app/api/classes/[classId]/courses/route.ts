@@ -40,6 +40,8 @@ export interface CourseStepRow {
   examId: string | null;
   /** 회차의 시험지들 (개인화: 학생별) */
   exams: Array<{ studentId: string | null; examId: string }>;
+  /** 오답유사 학습 시험지들 (학생별) */
+  wrongExams: Array<{ studentId: string | null; examId: string }>;
   personal: boolean;
   issuedAt: string | null;
   dueAt: string | null;
@@ -197,9 +199,15 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   }
   const asgsByStep = new Map<string, StepAsg[]>();
   const wrongMade = new Map<string, number>();
+  const wrongExamsByStep = new Map<string, Array<{ studentId: string | null; examId: string }>>();
   for (const a of stepAsgs) {
     if (a.parent_assignment_id) {
       wrongMade.set(a.course_step_id, (wrongMade.get(a.course_step_id) ?? 0) + (a.assignment_students?.length ?? 0));
+      if (a.exam_id) {
+        const arr = wrongExamsByStep.get(a.course_step_id) ?? [];
+        arr.push({ studentId: a.assignment_students?.length === 1 ? a.assignment_students[0].student_id : null, examId: a.exam_id });
+        wrongExamsByStep.set(a.course_step_id, arr);
+      }
       continue;
     }
     const arr = asgsByStep.get(a.course_step_id) ?? [];
@@ -297,6 +305,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         assignmentId: first?.id ?? s.assignment_id ?? null,
         examId: !personal && first?.exam_id ? first.exam_id : null,
         exams, personal,
+        wrongExams: wrongExamsByStep.get(s.id) ?? [],
         issuedAt: s.issued_at ?? (first ? '' : null),
         dueAt: first?.due_at ?? null,
         submitted, avgPct: g > 0 ? Math.round((cor * 100) / g) : null,
