@@ -99,11 +99,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (issued.length > 0) {
     const { data: aRows } = await sb.from('assignments').select('exam_id').in('course_step_id', issued.map((s) => s.id)).is('parent_assignment_id', null).is('deleted_at', null);
     const examIds = ((aRows ?? []) as Array<{ exam_id: string | null }>).map((a) => a.exam_id).filter((x): x is string => !!x);
-    const pids: string[] = [];
+    // ★ 개인화 출제면 같은 문제가 여러 학생 시험지에 들어 있다 — 중복 없이 센다 (안 그러면 공급이 과하게 깎여 회차가 사라진다)
+    const pidSet = new Set<string>();
     for (let i = 0; i < examIds.length; i += 200) {
       const { data } = await sb.from('exam_problems').select('problem_id').in('exam_id', examIds.slice(i, i + 200));
-      for (const r of (data ?? []) as Array<{ problem_id: string }>) pids.push(r.problem_id);
+      for (const r of (data ?? []) as Array<{ problem_id: string }>) pidSet.add(r.problem_id);
     }
+    const pids = Array.from(pidSet);
     for (let i = 0; i < pids.length; i += 200) {
       const { data } = await sb.from('classifications').select('type_code, difficulty').in('problem_id', pids.slice(i, i + 200));
       for (const c of (data ?? []) as Array<{ type_code: string | null; difficulty: string | number | null }>) {
