@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, ChevronDown, ChevronRight, Loader2, Plus, Send, Trash2, X, ExternalLink } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Loader2, Plus, Printer, Send, Trash2, X, ExternalLink } from 'lucide-react';
 import type { CourseRow, CourseStepRow } from '@/app/api/classes/[classId]/courses/route';
 import { BAND_SCHEMES } from '@/lib/class/mastery-bands';
 
@@ -40,6 +40,11 @@ export function CoursePanel({
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** 회차 마감(날짜만, 그날 23:59) — 매쓰홀릭 학습 내기의 「기간」. 마지막 값을 기억한다 */
+  const [dueDate, setDueDate] = useState<string>(() => {
+    try { const v = localStorage.getItem('assignments:lastDueAt'); return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; } catch { return ''; }
+  });
+  const dueAtIso = dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,10 +73,11 @@ export function CoursePanel({
       const res = await fetch(`/api/classes/${classId}/courses/${course.id}/issue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, dueAt: dueAtIso }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      try { if (dueDate) localStorage.setItem('assignments:lastDueAt', dueDate); } catch { /* ignore */ }
       const results = (data.results || []) as Array<{ label: string; unitName: string; problems: number; error?: string; short: Record<string, number>; students?: Array<{ name: string; problems: number; error?: string }> }>;
       const failed = results.filter((r) => r.error);
       const personalFails = results.flatMap((r) => (r.students ?? []).filter((s) => s.error).map((s) => `${r.unitName} ${r.label} ${s.name}(${s.error})`));
@@ -182,6 +188,11 @@ export function CoursePanel({
                       </span>
                       <span className="w-9 text-right tabular-nums text-content-secondary">{c.avgProgressPct == null ? '—' : `${c.avgProgressPct}%`}</span>
                     </span>
+                    <label className="inline-flex items-center gap-1 text-xs text-content-tertiary" title="낼 회차의 마감일 (그날 23:59). 비우면 마감 없음">
+                      마감
+                      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                        className="rounded border border-white/10 bg-white/[.03] px-1.5 py-0.5 text-xs text-content-primary focus:border-white/20 focus:outline-none" />
+                    </label>
                     <button
                       onClick={() => void issue(c, { next: 1 })}
                       disabled={!nextStep || studentCount === 0 || busy != null}
@@ -219,7 +230,7 @@ export function CoursePanel({
                         </span>
                       ))}
                     </div>
-                    <StepTable course={c} busy={busy} onIssue={(ids) => void issue(c, { stepIds: ids })} onWrongSimilar={(id) => void wrongSimilar(c, id)} />
+                    <StepTable classId={classId} course={c} busy={busy} onIssue={(ids) => void issue(c, { stepIds: ids })} onWrongSimilar={(id) => void wrongSimilar(c, id)} />
                   </div>
                 )}
               </div>
@@ -242,7 +253,7 @@ export function CoursePanel({
 // ============================================================================
 // 회차 표 — 매쓰홀릭 학습 탭 카드의 정보(회차·소단원·문항·평균·제출)를 표로
 // ============================================================================
-function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void; onWrongSimilar: (stepId: string) => void }) {
+function StepTable({ classId, course, busy, onIssue, onWrongSimilar }: { classId: string; course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void; onWrongSimilar: (stepId: string) => void }) {
   const [showAll, setShowAll] = useState(false);
   const firstPending = course.steps.findIndex((s) => s.issuedAt == null);
   // 기본은 낸 회차 + 다음 8회차만 — 300회차를 다 펼치면 못 읽는다
@@ -310,6 +321,24 @@ function StepTable({ course, busy, onIssue, onWrongSimilar }: { course: CourseRo
                   {issued ? `${dateLabel(s.issuedAt)}${s.dueAt ? ` ~ ${dateLabel(s.dueAt)}` : ''}` : ''}
                 </td>
                 <td className="px-4 py-1.5 text-right">
+                  {issued && s.exams.length > 0 && (
+                    <Link
+                      href={`/dashboard/class/${classId}/print?exams=${s.exams.map((e) => e.examId).join(',')}&title=${encodeURIComponent(`${course.title} · ${s.unitName} ${s.label}`)}`}
+                      className="mr-2 inline-flex items-center gap-1 text-content-tertiary hover:text-content-primary"
+                      title={s.personal ? `학생별 시험지 ${s.exams.length}장 한 번에 인쇄` : '시험지 인쇄'}
+                    >
+                      <Printer className="h-3 w-3" /> 출력{s.personal ? ` ${s.exams.length}` : ''}
+                    </Link>
+                  )}
+                  {issued && s.wrongExams.length > 0 && (
+                    <Link
+                      href={`/dashboard/class/${classId}/print?exams=${s.wrongExams.map((e) => e.examId).join(',')}&title=${encodeURIComponent(`${course.title} · ${s.unitName} ${s.label} 오답유사`)}`}
+                      className="mr-2 inline-flex items-center gap-1 text-content-tertiary hover:text-content-primary"
+                      title={`오답유사 학습 ${s.wrongExams.length}장 한 번에 인쇄`}
+                    >
+                      <Printer className="h-3 w-3" /> 오답유사 {s.wrongExams.length}
+                    </Link>
+                  )}
                   {issued ? (
                     s.examId ? (
                       <Link href={`/dashboard/cloud/${s.examId}`} className="inline-flex items-center gap-1 text-content-tertiary hover:text-content-primary">
