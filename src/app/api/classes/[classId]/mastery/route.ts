@@ -40,6 +40,8 @@ export interface MasteryItem {
   /** 채점 시각 ISO */
   at: string;
   pid: string;
+  /** 문제 형식 — sa 서답형(서술형) · mc 객관식 · null 미상. 매쓰홀릭 「서술형」 탭 대응 */
+  f: 'sa' | 'mc' | null;
 }
 
 export interface MasteryTreeNode {
@@ -54,6 +56,8 @@ export interface MasterySupply {
   code: string;
   d: number;
   count: number;
+  /** 그중 서답형(서술형) 문제 수 */
+  sa: number;
 }
 
 export interface MasteryPayload {
@@ -146,6 +150,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   // 5) 분류 (유형 코드 · 난이도) — problem_id 로
   const problemIds = Array.from(new Set(results.map((r) => r.problem_id).filter((x): x is string => !!x)));
   const clsById = new Map<string, { type_code: string | null; difficulty: string | number | null }>();
+  const fmtById = new Map<string, 'sa' | 'mc'>();
   for (let i = 0; i < problemIds.length; i += 200) {
     const chunk = problemIds.slice(i, i + 200);
     const { data } = await sb
@@ -154,6 +159,11 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       .in('problem_id', chunk);
     for (const c of (data ?? []) as Array<{ problem_id: string; type_code: string | null; difficulty: string | number | null }>) {
       clsById.set(c.problem_id, c);
+    }
+    const { data: pf } = await sb.from('problems').select('id, answer_type').in('id', chunk);
+    for (const p of (pf ?? []) as Array<{ id: string; answer_type: string | null }>) {
+      if (p.answer_type === 'short_answer') fmtById.set(p.id, 'sa');
+      else if (p.answer_type === 'multiple_choice') fmtById.set(p.id, 'mc');
     }
   }
 
@@ -178,6 +188,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       ok: r.is_correct === true,
       at: r.graded_at ?? sess?.completed_at ?? sess?.issued_at ?? '',
       pid: r.problem_id,
+      f: fmtById.get(r.problem_id) ?? null,
     });
     const subj = subjectOf(code);
     itemsBySubject.set(subj, (itemsBySubject.get(subj) ?? 0) + 1);
@@ -226,12 +237,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   }
 
   // 8) 문제은행 공급 — 이 학원이 낼 수 있는(격리·트랙 통과, 삭제 제외) 문제만
-  const supplyMap = new Map<string, number>();
+  const supplyMap = new Map<string, { count: number; sa: number }>();
   for (const subj of subjectCodes) {
     for (let from = 0; ; from += PAGE) {
       let q = sb
         .from('problems')
-        .select('id, classifications!inner(type_code, difficulty)')
+        .select('id, answer_type, classifications!inner(type_code, difficulty)')
         .like('classifications.type_code', `${subj}-%`)
         .is('deleted_at', null)
         .order('id')
@@ -240,7 +251,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       q = applyTrackFilter(q, scope);
       const { data } = await q;
       const rows = (data ?? []) as Array<{
-        id: string;
+        id: string; answer_type: string | null;
         classifications: Array<{ type_code: string | null; difficulty: string | number | null }>
           | { type_code: string | null; difficulty: string | number | null } | null;
       }>;
@@ -251,14 +262,17 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         if (!Number.isFinite(d)) continue;
         // 유형 코드 그대로 (보통 depth5). depth4 로만 분류된 문제는 그 소단원의 「유형 미지정」 칸으로 간다
         const k = `${c.type_code}|${d}`;
-        supplyMap.set(k, (supplyMap.get(k) ?? 0) + 1);
+        const cur = supplyMap.get(k) ?? { count: 0, sa: 0 };
+        cur.count += 1;
+        if (r.answer_type === 'short_answer') cur.sa += 1;
+        supplyMap.set(k, cur);
       }
       if (rows.length < PAGE) break;
     }
   }
-  const supply: MasterySupply[] = Array.from(supplyMap.entries()).map(([k, count]) => {
+  const supply: MasterySupply[] = Array.from(supplyMap.entries()).map(([k, v]) => {
     const [code, d] = k.split('|');
-    return { code, d: Number(d), count };
+    return { code, d: Number(d), count: v.count, sa: v.sa };
   });
 
   const payload: MasteryPayload = { class: classInfo, students, subjects, tree, supply, items, unplaced };
