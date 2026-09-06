@@ -26,7 +26,7 @@ export interface Band {
   levels: string[];
 }
 
-export type BandScheme = 4 | 6;
+export type BandScheme = 4 | 5 | 6;
 
 export const BAND_SCHEMES: Record<BandScheme, readonly Band[]> = {
   4: [
@@ -34,6 +34,15 @@ export const BAND_SCHEMES: Record<BandScheme, readonly Band[]> = {
     { key: 'B', label: '기본', levels: ['4', '5'] },
     { key: 'C', label: '실력', levels: ['6', '7'] },
     { key: 'D', label: '심화', levels: ['8', '9', '10'] },
+  ],
+  // ★ 5단 — 출제 화면의 난이도 분포 카운터 (매쓰홀릭 실측: 개념14/기본14/실력22/심화18/고난도0).
+  //   판(4단)의 심화 8~10 을 심화 8~9 · 고난도 10 으로 한 칸 더 쪼갠 것. 나머지는 같다.
+  5: [
+    { key: 'A', label: '개념', levels: ['1', '2', '3'] },
+    { key: 'B', label: '기본', levels: ['4', '5'] },
+    { key: 'C', label: '실력', levels: ['6', '7'] },
+    { key: 'D', label: '심화', levels: ['8', '9'] },
+    { key: 'E', label: '고난도', levels: ['10'] },
   ],
   6: [
     { key: 'A', label: '개념', levels: ['1', '2', '3'] },

@@ -210,3 +210,19 @@ describe('mastery-bands · 유형 칸 완성도 (층 적층)', () => {
     expect(depthOf('MS05-06-02-01-03')).toBe(5);
   });
 });
+
+describe('5단 밴드 (출제 난이도 분포)', () => {
+  it('개념 1~3 · 기본 4~5 · 실력 6~7 · 심화 8~9 · 고난도 10', () => {
+    expect(BAND_SCHEMES[5].map((b) => b.label)).toEqual(['개념', '기본', '실력', '심화', '고난도']);
+    expect([1, 3, 4, 5, 6, 7, 8, 9, 10].map((d) => bandOf(d, 5))).toEqual(
+      ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'E'],
+    );
+  });
+
+  it('4단과 다른 곳은 10 하나뿐 — 판의 언어를 그대로 쓴다', () => {
+    for (const d of [1, 2, 3, 4, 5, 6, 7]) expect(bandOf(d, 5)).toBe(bandOf(d, 4));
+    expect(bandOf(8, 4)).toBe('D');
+    expect(bandOf(10, 4)).toBe('D');
+    expect(bandOf(10, 5)).toBe('E');
+  });
+});
