@@ -118,6 +118,12 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   /** 코스 회차가 채우는 층 표시 — 낸 회차(흰 점) · 다음 회차(호박 점). docs/PLAN_COURSE_LAYER.md §3 */
   const [showCourse, setShowCourse] = useState(true);
   const [courseMarks, setCourseMarks] = useState<Map<string, { issued: Set<string>; next: Set<string> }>>(new Map());
+  /** 교재별 판 전환 — 매쓰홀릭은 교재(수업)마다 판이 바뀐다. 우리는 코스 범위(과정 + 대단원)로 판을 좁힌다 */
+  const [courseList, setCourseList] = useState<Array<{ id: string; title: string; subjectCode: string; l1: string[] }>>([]);
+  const [courseRange, setCourseRange] = useState<string>('');   // '' = 과정 전체, 아니면 코스 id
+  const courseSel = courseList.find((c) => c.id === courseRange) ?? null;
+  /** 코스 범위 대단원 — 범위를 안 정한 코스면 과정 전체(null) */
+  const courseL1 = courseSel && courseSel.l1.length > 0 ? courseSel.l1 : null;
   /** 매쓰홀릭 「난이도」 칩 — 열을 켜고 끈다 */
   const [hiddenBands, setHiddenBands] = useState<Set<string>>(new Set());
   /** 매쓰홀릭 유형분석(학생 하나를 깊게) ↔ 단원분석(반을 넓게) — 같은 재료, 축만 전치 */
@@ -154,7 +160,9 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
         const cj = await cr.json();
         const marks = new Map<string, { issued: Set<string>; next: Set<string> }>();
         if (cr.ok) {
-          for (const c of (cj.courses || []) as Array<{ steps: Array<{ unit: string; levelPlan: Record<string, number>; issuedAt: string | null; skipped?: boolean }> }>) {
+          const list = (cj.courses || []) as Array<{ id: string; title: string; subjectCode: string; settings?: { range?: { l1?: string[] } }; steps: Array<{ unit: string; levelPlan: Record<string, number>; issuedAt: string | null; skipped?: boolean }> }>;
+          setCourseList(list.map((c) => ({ id: c.id, title: c.title, subjectCode: c.subjectCode, l1: c.settings?.range?.l1 ?? [] })));
+          for (const c of list) {
             let nextLeft = COURSE_NEXT_STEPS;
             for (const s of c.steps) {
               const issued = s.issuedAt != null;
@@ -335,6 +343,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
     }> = [];
     for (const l1 of tree.l1) {
       if (l1Filter && l1.code !== l1Filter) continue;
+      if (courseL1 && !courseL1.includes(l1.code)) continue;   // 코스 범위 판
       const mids = (tree.midsByL1.get(l1.code) ?? []).map((mid) => {
         const units = (tree.unitsByMid.get(mid) ?? []).map((unit) => ({
           code: unit,
@@ -349,18 +358,19 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
       if (mids.length > 0) out.push({ l1, mids });
     }
     return out;
-  }, [tree, cellOf, observed, hideEmpty, l1Filter, showNoSupply]);
+  }, [tree, cellOf, observed, hideEmpty, l1Filter, showNoSupply, courseL1]);
 
   const allCells = useMemo(() => rows.flatMap((r) => r.mids.flatMap((m) => m.units.flatMap((u) => u.cells))), [rows]);
   /** 판 전체(숨긴 문제 없음 포함) — 문제은행 완성도의 분모 */
   const boardTotal = useMemo(() => {
     let total = 0; let withSupply = 0;
-    for (const arr of tree.typesByUnit.values()) for (const code of arr) {
+    for (const [unit, arr] of tree.typesByUnit.entries()) for (const code of arr) {
+      if (courseL1 && !courseL1.includes(unit.split('-').slice(0, 2).join('-'))) continue;   // 코스 범위 판
       total += 1;
       for (const b of bands) if ((supplyByLayer.get(cellKey(code, b.key)) ?? 0) > 0) { withSupply += 1; break; }
     }
     return { total, withSupply };
-  }, [tree, bands, supplyByLayer]);
+  }, [tree, bands, supplyByLayer, courseL1]);
 
   // ── 완성도 두 개 · 범례 ──
   /** 이 칸(유형 × 대표 밴드)을 코스 회차가 채우나 */
@@ -613,6 +623,29 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
           </span>
         </div>
 
+        {/* 판 범위 — 매쓰홀릭 교재별 판 전환. 코스를 고르면 그 코스의 과정·대단원으로 판을 좁힌다 */}
+        {courseList.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
+            <span className="mr-1 text-content-muted">판 범위</span>
+            <button
+              onClick={() => setCourseRange('')}
+              className={`rounded-md px-2 py-1 transition-colors ${courseRange === '' ? 'bg-white text-black' : 'border border-white/10 text-content-secondary hover:border-white/20 hover:text-content-primary'}`}
+            >
+              과정 전체
+            </button>
+            {courseList.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => { setCourseRange(c.id); setL1Filter(''); if (c.subjectCode !== subject && data?.subjects.some((s) => s.code === c.subjectCode)) setSubject(c.subjectCode); }}
+                className={`rounded-md px-2 py-1 transition-colors ${courseRange === c.id ? 'bg-white text-black' : 'border border-white/10 text-content-secondary hover:border-white/20 hover:text-content-primary'}`}
+                title={c.l1.length > 0 ? `대단원 ${c.l1.length}개 범위` : '과정 전체 범위'}
+              >
+                {c.title}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* 대단원 필터 — 매쓰홀릭 단원분석의 대단원 탭 */}
         <div className="mb-2 flex flex-wrap gap-1 text-xs">
           <button
@@ -621,7 +654,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
           >
             전체
           </button>
-          {tree.l1.map((g, i) => (
+          {tree.l1.filter((g) => !courseL1 || courseL1.includes(g.code)).map((g, i) => (
             <button
               key={g.code}
               onClick={() => setL1Filter(g.code)}

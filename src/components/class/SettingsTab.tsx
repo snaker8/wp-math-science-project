@@ -10,7 +10,7 @@
 // 학생 등록은 옛 등록 화면(/tutor/classes/[id])의 두 흐름 — 기존 학생 초대 · 직접 등록(계정 발급) — 을
 // **같은 API 로 탭 안에 흡수**했다. 옛 화면으로 보내지 않는다 — 새 그릇이 담아야 옛 것을 걷을 수 있다.
 // 코스(회차별 문제수 그래프·출제 방식·다시 계획)는 CourseSettings — docs/PLAN_COURSE_LAYER.md C5.
-// 아직 없는 것: 담당 변경(강사 목록 API 없음) · 완료/복구 · 개인화 출제의 실제 동작(C7).
+// 담당 변경(/api/classes/[id]/teachers) · 수업 완료/복구(is_active) 도 여기. 코스 출제 방식은 CourseSettings.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -38,9 +38,13 @@ interface ClassDetail {
   name: string;
   description: string | null;
   tutor: { id: string; full_name: string | null; email: string | null } | null;
+  tutor_id?: string | null;
+  is_active?: boolean | null;
   schedule: Partial<Schedule> | null;
   settings: unknown;
 }
+
+interface TeacherOption { id: string; name: string; role: string; current: boolean }
 
 const DAYS = [
   { value: 'MON', label: '월' }, { value: 'TUE', label: '화' }, { value: 'WED', label: '수' }, { value: 'THU', label: '목' },
@@ -84,6 +88,8 @@ export function SettingsTab({
   const [saving, setSaving] = useState<'info' | 'schedule' | 'goals' | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [adding, setAdding] = useState(false);
+  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
+  const [tutorId, setTutorId] = useState<string>('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,6 +106,12 @@ export function SettingsTab({
       setTime(c.schedule?.time ?? '');
       setDuration(c.schedule?.duration_minutes != null ? String(c.schedule.duration_minutes) : '');
       setEnrollments((data.enrollments || []) as Enrollment[]);
+      setTutorId(c.tutor?.id ?? c.tutor_id ?? '');
+      try {
+        const tr = await fetch(`/api/classes/${classId}/teachers`);
+        const tj = await tr.json();
+        if (tr.ok) setTeachers((tj.teachers || []) as TeacherOption[]);
+      } catch { /* 강사 목록 없이도 나머지는 된다 */ }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -125,7 +137,7 @@ export function SettingsTab({
     if (!name.trim()) { flash('err', '반 이름은 비울 수 없습니다'); return; }
     setSaving('info');
     try {
-      await put({ name: name.trim(), description: description.trim() });
+      await put({ name: name.trim(), description: description.trim(), ...(tutorId && tutorId !== (detail?.tutor?.id ?? detail?.tutor_id ?? '') ? { tutorId } : {}) });
       flash('ok', '반 정보를 저장했습니다');
       onChanged();
     } catch (e) { flash('err', e instanceof Error ? e.message : String(e)); } finally { setSaving(null); }
@@ -243,10 +255,33 @@ export function SettingsTab({
               <span className="mb-1 block text-xs text-content-tertiary">설명</span>
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="예: 중3 내신 · 화·목" className={inputCls} />
             </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-content-tertiary">담당 강사</span>
+              <select value={tutorId} onChange={(e) => setTutorId(e.target.value)} className={inputCls}>
+                {!teachers.some((t) => t.id === tutorId) && (
+                  <option value={tutorId}>{detail?.tutor?.full_name || detail?.tutor?.email?.split('@')[0] || '(미지정)'}</option>
+                )}
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.role === 'ADMIN' || t.role === 'ORG_ADMIN' ? ' · 관리자' : ''}</option>)}
+              </select>
+            </label>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-content-tertiary" title="담당 변경은 강사 목록이 생기면 여기서">
-                담당 강사 <span className="text-content-secondary">{detail?.tutor?.full_name || detail?.tutor?.email?.split('@')[0] || '—'}</span>
-              </span>
+              <button
+                onClick={() => {
+                  const active = detail?.is_active !== false;
+                  if (!confirm(active ? '수업을 완료 처리합니다. 반 목록에서 「완료」로 표시되고 언제든 복구할 수 있습니다.' : '수업을 복구합니다.')) return;
+                  void (async () => {
+                    setSaving('info');
+                    try { await put({ isActive: !active }); flash('ok', active ? '수업을 완료했습니다' : '수업을 복구했습니다'); await load(); onChanged(); }
+                    catch (e) { flash('err', e instanceof Error ? e.message : String(e)); }
+                    finally { setSaving(null); }
+                  })();
+                }}
+                disabled={saving !== null}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-40"
+                title="매쓰홀릭 「수업 완료/복구」 — 완료된 반은 목록에서 구분되고 데이터는 그대로 남습니다"
+              >
+                {detail?.is_active === false ? '수업 복구' : '수업 완료'}
+              </button>
               <button onClick={() => void saveInfo()} disabled={saving !== null}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-40">
                 {saving === 'info' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
