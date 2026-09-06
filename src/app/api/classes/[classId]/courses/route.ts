@@ -38,8 +38,10 @@ export interface CourseStepRow {
   assignmentId: string | null;
   /** 공통 출제일 때의 시험지. 개인화면 null — exams 를 본다 */
   examId: string | null;
-  /** 회차의 시험지들 (개인화: 학생별) */
-  exams: Array<{ studentId: string | null; examId: string }>;
+  /** 회차의 시험지들 (개인화: 학생별) · problems = 문항 수 */
+  exams: Array<{ studentId: string | null; examId: string; problems: number }>;
+  /** 건너뛴 회차 — 진행도 분모·다음 회차에서 제외 */
+  skipped: boolean;
   /** 오답유사 학습 시험지들 (학생별) */
   wrongExams: Array<{ studentId: string | null; examId: string }>;
   personal: boolean;
@@ -163,12 +165,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
   const { data: sRows } = await sb
     .from('course_steps')
-    .select('id, course_id, seq, unit_code, unit_round, label, rung_label, level_plan, short, assignment_id, issued_at')
+    .select('id, course_id, seq, unit_code, unit_round, label, rung_label, level_plan, short, assignment_id, issued_at, skipped_at')
     .in('course_id', courses.map((c) => c.id))
     .order('seq');
   const steps = (sRows ?? []) as Array<{
     id: string; course_id: string; seq: number; unit_code: string; unit_round: number; label: string; rung_label: string | null;
-    level_plan: Record<string, number>; short: boolean; assignment_id: string | null; issued_at: string | null;
+    level_plan: Record<string, number>; short: boolean; assignment_id: string | null; issued_at: string | null; skipped_at: string | null;
   }>;
 
   // 이름
@@ -217,6 +219,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   const examIds = Array.from(new Set(
     stepAsgs.filter((a) => !a.parent_assignment_id && a.exam_id).map((a) => a.exam_id as string)
   ));
+  // 시험지별 문항 수 (개인화 회차는 학생마다 다를 수 있다)
+  const problemCount = new Map<string, number>();
+  for (let i = 0; i < examIds.length; i += 200) {
+    const { data } = await sb.from('exam_problems').select('exam_id').in('exam_id', examIds.slice(i, i + 200));
+    for (const r of (data ?? []) as Array<{ exam_id: string }>) problemCount.set(r.exam_id, (problemCount.get(r.exam_id) ?? 0) + 1);
+  }
 
   // 제출 — 채점 세션 (반 학생 + 신원 병합)
   const roster = await resolveClassStudents(sb, classId);
@@ -277,11 +285,11 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       const personal = asgs.length > 1 || (asgs.length === 1 && (asgs[0].assignment_students?.length ?? 0) === 1 && roster.studentIds.length > 1);
       let submitted = 0; let g = 0; let cor = 0; let eligible = 0;
       const counted = new Set<string>();
-      const exams: Array<{ studentId: string | null; examId: string }> = [];
+      const exams: Array<{ studentId: string | null; examId: string; problems: number }> = [];
       for (const a of asgs) {
         if (!a.exam_id) continue;
         const targets = new Set((a.assignment_students ?? []).map((x) => x.student_id));
-        exams.push({ studentId: targets.size === 1 ? Array.from(targets)[0] : null, examId: a.exam_id });
+        exams.push({ studentId: targets.size === 1 ? Array.from(targets)[0] : null, examId: a.exam_id, problems: problemCount.get(a.exam_id) ?? 0 });
         const m = doneByExam.get(a.exam_id);
         if (!m) continue;
         for (const [sid, sc] of m) {
@@ -305,6 +313,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         assignmentId: first?.id ?? s.assignment_id ?? null,
         examId: !personal && first?.exam_id ? first.exam_id : null,
         exams, personal,
+        skipped: s.skipped_at != null,
         wrongExams: wrongExamsByStep.get(s.id) ?? [],
         issuedAt: s.issued_at ?? (first ? '' : null),
         dueAt: first?.due_at ?? null,
@@ -315,7 +324,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const progress = roster.studentIds.map((sid) => ({
       studentId: sid, name: displayName(roster.userById.get(sid)), done: done.get(sid) ?? 0,
     }));
-    const total = rows.length;
+    const total = rows.filter((r) => !r.skipped).length;   // 건너뛴 회차는 분모에서 뺀다
     const avg = total > 0 && progress.length > 0
       ? Math.round(progress.reduce((n, p) => n + p.done, 0) * 100 / (total * progress.length)) : null;
     const range = settingsRaw.range as { l1?: string[] } | undefined;

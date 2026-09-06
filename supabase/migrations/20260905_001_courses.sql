@@ -107,3 +107,7 @@ ALTER TABLE public.assignments
   ADD COLUMN IF NOT EXISTS parent_assignment_id uuid REFERENCES public.assignments(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS assignments_parent_idx ON public.assignments (parent_assignment_id) WHERE parent_assignment_id IS NOT NULL;
 COMMENT ON COLUMN public.assignments.parent_assignment_id IS '이 과제가 어느 과제의 짝인지 (오답유사 학습 → 원 회차 과제).';
+
+-- 회차 건너뛰기 (2026-09-06) — 진행도 분모·다음 회차 내기에서 제외
+ALTER TABLE public.course_steps ADD COLUMN IF NOT EXISTS skipped_at timestamptz;
+COMMENT ON COLUMN public.course_steps.skipped_at IS '건너뛴 회차 — 진행도 분모·다음 회차 내기에서 제외. NULL 이면 정상.';

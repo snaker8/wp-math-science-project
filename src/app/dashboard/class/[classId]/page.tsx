@@ -154,9 +154,9 @@ export default function ClassHubPage() {
       const res = await fetch(`/api/classes/${classId}/courses`);
       const data = await res.json();
       if (!res.ok) return;
-      const courses = (data.courses || []) as Array<{ steps: unknown[]; progress: Array<{ studentId: string; done: number }> }>;
+      const courses = (data.courses || []) as Array<{ steps: Array<{ skipped?: boolean }>; progress: Array<{ studentId: string; done: number }> }>;
       if (courses.length === 0) { setCourseProgress(null); return; }
-      const total = courses.reduce((n, c) => n + c.steps.length, 0);
+      const total = courses.reduce((n, c) => n + c.steps.filter((s) => !s.skipped).length, 0);
       const done = new Map<string, number>();
       for (const c of courses) for (const p of c.progress) done.set(p.studentId, (done.get(p.studentId) ?? 0) + p.done);
       setCourseProgress({ total, done });
