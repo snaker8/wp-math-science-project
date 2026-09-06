@@ -63,18 +63,19 @@ function CourseCard({ classId, course, onChanged }: { classId: string; course: C
   const [title, setTitle] = useState(course.title);
   const [perStep, setPerStep] = useState(course.settings.perStep);
   const [issueMode, setIssueMode] = useState(course.settings.issueMode);
+  const [keyFirst, setKeyFirst] = useState(course.settings.keyFirst);
   const [busy, setBusy] = useState<'save' | 'preview' | 'replan' | null>(null);
   const [preview, setPreview] = useState<{ summary: { before: { pending: number }; after: { pending: number; total: number }; problems: number; short: number } } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const dirty = title !== course.title || perStep !== course.settings.perStep || issueMode !== course.settings.issueMode;
+  const dirty = title !== course.title || perStep !== course.settings.perStep || issueMode !== course.settings.issueMode || keyFirst !== course.settings.keyFirst;
 
   const save = async () => {
     setBusy('save'); setErr(null);
     try {
       const res = await fetch(`/api/classes/${classId}/courses/${course.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, perStep, issueMode }),
+        body: JSON.stringify({ title, perStep, issueMode, keyFirst }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -129,7 +130,11 @@ function CourseCard({ classId, course, onChanged }: { classId: string; course: C
             ))}
           </div>
         </div>
-        <div className="flex items-end">
+        <div className="flex items-end gap-3">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 pb-2 text-xs text-content-secondary" title="회차를 낼 때 학교기출에 자주 나온 세부유형부터 뽑습니다 (매쓰홀릭 내신빈출). 문항 수는 그대로">
+            <input type="checkbox" checked={keyFirst} onChange={(e) => setKeyFirst(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
+            빈출 유형 우선
+          </label>
           <button onClick={() => void save()} disabled={!dirty || busy != null}
             className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-40">
             {busy === 'save' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} 저장

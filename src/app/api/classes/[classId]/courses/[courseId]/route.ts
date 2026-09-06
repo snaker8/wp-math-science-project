@@ -1,6 +1,6 @@
 // ============================================================================
 // /api/classes/[classId]/courses/[courseId]
-//   PATCH { title?, issueMode?, perStep? }  · DELETE (소프트) — 낸 회차의 과제는 그대로 남는다
+//   PATCH { title?, issueMode?, perStep?, keyFirst? }  · DELETE (소프트) — 낸 회차의 과제는 그대로 남는다
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,12 +19,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   const g = await loadCourse(classId, courseId, authed.data.scope);
   if (!g.ok) return g.res;
-  let body: { title?: unknown; issueMode?: unknown; perStep?: unknown };
+  let body: { title?: unknown; issueMode?: unknown; perStep?: unknown; keyFirst?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const patch: Record<string, unknown> = {};
   if (typeof body.title === 'string' && body.title.trim()) patch.title = body.title.trim().slice(0, 80);
   const settings = { ...(g.course.settings ?? {}) };
   if (body.issueMode === 'common' || body.issueMode === 'personal') settings.issueMode = body.issueMode;
+  if (typeof body.keyFirst === 'boolean') settings.keyFirst = body.keyFirst;
   if (body.perStep != null) settings.perStep = Math.min(30, Math.max(3, Math.round(Number(body.perStep) || 10)));
   patch.settings = settings;
   const { error } = await supabaseAdmin.from('courses').update(patch).eq('id', courseId);

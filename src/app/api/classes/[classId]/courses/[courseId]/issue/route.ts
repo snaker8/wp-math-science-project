@@ -82,6 +82,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (roster.studentIds.length === 0) return NextResponse.json({ error: '이 반에 등록된 학생이 없습니다' }, { status: 400 });
 
   const personal = (course.settings as { issueMode?: unknown } | null)?.issueMode === 'personal';
+  // ★ 빈출 우선 (K3, docs/PLAN_KEY_TYPES.md): 학교기출에 자주 나온 세부유형부터 뽑는다. 문항 수는 그대로.
+  const keyFirst = (course.settings as { keyFirst?: unknown } | null)?.keyFirst === true;
+  const freq = new Map<string, number>();
+  if (keyFirst) {
+    const { data: kf } = await sb.rpc('key_type_frequency', { subject_prefix: course.subject_code, school: null });
+    for (const r of (kf ?? []) as Array<{ type_code: string; exam_count: number }>) freq.set(r.type_code, Number(r.exam_count));
+  }
 
   // ── 뺄 문제: 이 코스가 이미 낸 문제 + 학생이 이미 푼 문제 (학생별로도 둔다 — 개인화 출제용) ──
   const usedAll = new Set<string>();
@@ -170,10 +177,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
       const ordered: string[] = [];
       let progressed = true;
+      // 빈출 우선이면 세부유형을 학교기출 출제 빈도 순으로 돌린다 (같은 빈도면 원래 순서)
+      const typeKeys = Array.from(byType.keys());
+      if (keyFirst) typeKeys.sort((a, b) => (freq.get(b) ?? 0) - (freq.get(a) ?? 0));
       while (progressed && ordered.length < usable.length) {
         progressed = false;
-        for (const arr of byType.values()) {
-          const next = arr.shift();
+        for (const k of typeKeys) {
+          const next = byType.get(k)?.shift();
           if (next) { ordered.push(next); progressed = true; }
         }
       }

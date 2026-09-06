@@ -450,6 +450,10 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
   const selectWeak = () => {
     setSelected(new Set(allCells.filter((c) => isWeakLevel(c.level) && c.summary.supply > 0).map((c) => c.code)));
   };
+  /** 중요 유형(학교기출 빈출) 중 약한 칸 — 매쓰홀릭 「중요 유형 과제」 */
+  const selectKeyWeak = () => {
+    setSelected(new Set(allCells.filter((c) => keyTypes.get(c.code)?.key && isWeakLevel(c.level) && c.summary.supply > 0).map((c) => c.code)));
+  };
 
   // ── 대표 문제 미리보기 — 마우스 올리거나 클릭한 칸 (매쓰홀릭 팝오버 대응) ──
   const inflight = useRef<Set<string>>(new Set());
@@ -834,6 +838,15 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
               >
                 약한 유형 모두
               </button>
+              {keyMeta && keyMeta.totalExams > 0 && (
+                <button
+                  onClick={selectKeyWeak}
+                  className="flex-1 rounded-lg border border-amber-400/30 px-2 py-1 text-xs text-amber-200 transition-colors hover:border-amber-400/60"
+                  title="학교기출 빈출 유형 중 약한 칸만 골라 과제로"
+                >
+                  중요·약한 유형
+                </button>
+              )}
               <button
                 onClick={() => setSelected(new Set())}
                 disabled={selected.size === 0}
