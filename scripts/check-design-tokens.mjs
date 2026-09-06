@@ -25,6 +25,7 @@ const ALLOW = [
   /components[\\/]class[\\/]UnitDashboard/,   // 단원분석 타일 격자 — 데이터 그래픽
   /components[\\/]class[\\/]CoursePanel/,     // 코스 회차 표 — 진행 막대·부족 표시 (데이터 그래픽)
   /components[\\/]class[\\/]CourseSettings/,  // 코스 회차별 문제수 그래프 — 난이도 적층 색 (데이터 그래픽)
+  /components[\\/]class[\\/]DailyTab/,        // 일일학습 주간 캘린더 — 학습 종류 칩 색 (데이터 그래픽)
   /class[\\/]\[classId\][\\/]student[\\/]\[studentId\]/,  // 학생 화면 학습 종류 배지·정답률 톤 (데이터 그래픽)
   /exam-paper/,                        // 인쇄물 (라이트 종이)
   /print/i,
