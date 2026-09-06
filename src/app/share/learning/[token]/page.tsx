@@ -12,7 +12,7 @@ import { useParams } from 'next/navigation';
 import { Loader2, AlertCircle, BookOpen } from 'lucide-react';
 
 interface Report {
-  label: string | null; days: number; since: string; generatedAt: string;
+  label: string | null; note: string | null; days: number; since: string; generatedAt: string;
   student: { name: string; grade: number | null }; className: string | null;
   summary: { stepsDone: number; stepsTotal: number; graded: number; correct: number; pct: number | null; sessions: number; lastAt: string | null };
   items: Array<{ at: string; kindLabel: string; sub: string | null; title: string; total: number; graded: number; correct: number; pct: number | null; comment: string | null }>;
@@ -72,6 +72,12 @@ export default function Page() {
       </header>
 
       <main className="mx-auto max-w-3xl px-5 py-6">
+        {report.note && (
+          <section className="mb-5 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 px-5 py-4">
+            <div className="mb-1 text-[11px] uppercase tracking-wider text-indigo-200/80">선생님 총평</div>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-indigo-50">{report.note}</p>
+          </section>
+        )}
         <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { k: '학습', v: `${s.sessions}회`, sub: `최근 ${report.days}일` },

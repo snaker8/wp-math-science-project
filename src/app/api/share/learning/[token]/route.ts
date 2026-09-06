@@ -19,10 +19,10 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   if (!supabaseAdmin || !token) return NextResponse.json({ error: '준비되지 않았습니다' }, { status: 503 });
   const sb = supabaseAdmin;
   const { data: row } = await sb.from('parent_share_tokens')
-    .select('token, student_id, set_key, exam_ids, report_kind, is_active, expires_at, label')
+    .select('token, student_id, set_key, exam_ids, report_kind, is_active, expires_at, label, note')
     .eq('token', token).maybeSingle();
   if (!row) return NextResponse.json({ error: '링크를 찾을 수 없습니다' }, { status: 404 });
-  const t = row as { student_id: string; set_key: string | null; exam_ids: string | null; report_kind: string; is_active: boolean; expires_at: string | null; label: string | null };
+  const t = row as { student_id: string; set_key: string | null; exam_ids: string | null; report_kind: string; is_active: boolean; expires_at: string | null; label: string | null; note: string | null };
   if (t.report_kind !== 'learning') return NextResponse.json({ error: '학습 리포트 링크가 아닙니다' }, { status: 400 });
   if (!t.is_active) return NextResponse.json({ error: '비활성화된 링크입니다' }, { status: 403 });
   if (t.expires_at && new Date(t.expires_at).getTime() < Date.now()) return NextResponse.json({ error: '만료된 링크입니다' }, { status: 403 });
@@ -56,7 +56,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
   return NextResponse.json({
     report: {
-      label: t.label, days, since, generatedAt: new Date().toISOString(),
+      label: t.label, note: t.note, days, since, generatedAt: new Date().toISOString(),
       student: { name, grade }, className,
       summary,
       items: items.map((it) => ({ at: it.at, kindLabel: it.kindLabel, sub: it.sub, title: it.title, total: it.total, graded: it.graded, correct: it.correct, pct: it.pct, comment: it.comment })),
