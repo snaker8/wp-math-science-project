@@ -40,6 +40,8 @@ interface Props {
   students: Array<{ id: string; name: string }>;
   /** 이력 탭 「이 시점의 판 보기」 — 이 날짜까지의 채점으로 연다 */
   initialTo?: string;
+  /** 학생 화면에서 넘어올 때 미리 고를 학생 */
+  initialStudent?: string | null;
 }
 
 /** 칸 = 유형 하나 */
@@ -103,7 +105,7 @@ function pctTone(pct: number | null): string {
   return 'text-content-primary';
 }
 
-export function MasteryMatrix({ classId, className, students, initialTo }: Props) {
+export function MasteryMatrix({ classId, className, students, initialTo, initialStudent }: Props) {
   const [data, setData] = useState<MasteryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +131,8 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   /** 매쓰홀릭 유형분석(학생 하나를 깊게) ↔ 단원분석(반을 넓게) — 같은 재료, 축만 전치 */
   const [view, setView] = useState<'types' | 'units'>('types');
   const [l1Filter, setL1Filter] = useState<string>('');
-  const [studentSel, setStudentSel] = useState<string | null>(null);
+  const [studentSel, setStudentSel] = useState<string | null>(initialStudent ?? null);
+  useEffect(() => { if (initialStudent) setStudentSel(initialStudent); }, [initialStudent]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState(initialTo ?? '');
   const [selected, setSelected] = useState<Set<string>>(new Set());

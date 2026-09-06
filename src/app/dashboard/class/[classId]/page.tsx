@@ -125,6 +125,17 @@ export default function ClassHubPage() {
   const [goals, setGoals] = useState<LearningGoals>({ weeklyProblems: null, accuracy: null });
   /** 이력 탭에서 「이 시점의 판 보기」로 넘어올 때의 기준일 */
   const [masteryTo, setMasteryTo] = useState<string | undefined>(undefined);
+  /** 학생 화면에서 「유형분석 판」으로 들어올 때: ?tab=mastery&student=… (useSearchParams 대신 mount 시 한 번 읽는다 — Suspense 요구 회피) */
+  const [masteryStudent, setMasteryStudent] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const t = sp.get('tab');
+      if (t && TABS.some((x) => x.key === t)) setTab(t as TabKey);
+      const s = sp.get('student');
+      if (s) setMasteryStudent(s);
+    } catch { /* ignore */ }
+  }, []);
   /** 코스 진행도 — 학생별 완료 회차 / 전체 회차 (코스가 있으면 진행도의 정의가 이것으로 바뀐다) */
   const [courseProgress, setCourseProgress] = useState<{ total: number; done: Map<string, number> } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -345,8 +356,9 @@ export default function ClassHubPage() {
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           <Link
-                            href={`/dashboard/prescription?student=${s.id}`}
+                            href={`/dashboard/class/${classId}/student/${s.id}`}
                             className="inline-flex items-center gap-1 text-xs text-content-tertiary transition-colors hover:text-content-primary"
+                            title="학생 화면 — 학습 이력·코멘트·상담 기록"
                           >
                             자세히
                             <ExternalLink className="h-3 w-3" />
@@ -371,6 +383,7 @@ export default function ClassHubPage() {
               className={info?.name ?? ''}
               students={students.map((s) => ({ id: s.id, name: s.name }))}
               initialTo={masteryTo}
+              initialStudent={masteryStudent}
             />
           )}
 
