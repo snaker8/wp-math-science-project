@@ -355,9 +355,7 @@ export const topNavGroups: NavGroup[] = [
       //   [수업] 을 열면 반이 먼저 보여야 한다. 반 카드의 「반 열기」 가 허브다.
       tutor('/tutor/classes'),                 // 반 (허브 입구)
       tutor('/dashboard/class'),               // 수업 홈 (학생 종합)
-      tutor('/tutor/analytics'),               // 학생 성적
-      tutor('/dashboard/prescription'),        // 학생 진단
-      tutor('/dashboard/prescription/report'), // 진단 종합 리포트
+      // ★ 단계 9 (2026-09-06): 학생 성적·학생 진단·진단 종합 리포트는 반 허브 학생 화면의 링크로 — 메뉴에서 걷음
       tutor('/tutor/clinic'),                  // 클리닉시험지
       tutor('/tutor/students'),                // 학생 관리
     ],
