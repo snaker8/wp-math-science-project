@@ -202,13 +202,29 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub: 
 // ────────────────────────────────────────────────────────────────────────────
 // 학부모 학습 리포트 링크 — 매쓰홀릭 「일일 학습 리포트 발송」. 문자 대신 링크(열 때마다 최신 계산)
 // ────────────────────────────────────────────────────────────────────────────
-interface ReportLink { token: string; days: number; label: string | null; isActive: boolean; createdAt: string; lastViewedAt: string | null; url: string }
+interface ReportLink { token: string; days: number; label: string | null; note: string | null; isActive: boolean; createdAt: string; lastViewedAt: string | null; url: string }
 
 function ReportLinkSection({ classId, studentId }: { classId: string; studentId: string }) {
   const [items, setItems] = useState<ReportLink[]>([]);
   const [days, setDays] = useState<1 | 7 | 30>(7);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  /** 선생님 총평 — 리포트 상단에 실린다. AI 초안(Opus 5, 버튼 누를 때만 호출)을 고쳐 쓴다 */
+  const [note, setNote] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiInfo, setAiInfo] = useState<string | null>(null);
+  const aiDraft = async () => {
+    setAiBusy(true); setAiInfo(null);
+    try {
+      const res = await fetch(`/api/classes/${classId}/students/${studentId}/ai-comment`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setNote(j.draft as string);
+      setAiInfo(`AI 초안 (${j.model}, 입력 ${j.usage.input}·출력 ${j.usage.output} 토큰) — 고쳐서 쓰세요`);
+    } catch (e) { setAiInfo(e instanceof Error ? e.message : String(e)); } finally { setAiBusy(false); }
+  };
   const load = useCallback(async () => {
     const res = await fetch(`/api/classes/${classId}/students/${studentId}/learning-report`, { cache: 'no-store' });
     const j = await res.json();
@@ -224,10 +240,11 @@ function ReportLinkSection({ classId, studentId }: { classId: string; studentId:
     setBusy(true);
     try {
       const res = await fetch(`/api/classes/${classId}/students/${studentId}/learning-report`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days, note }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setNote(''); setAiInfo(null);
       await load();
       await copy(j.url as string);
     } catch (e) { alert(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
@@ -257,13 +274,24 @@ function ReportLinkSection({ classId, studentId }: { classId: string; studentId:
           </button>
         </div>
       </div>
+      <div className="border-b border-white/10 px-4 py-3">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-xs text-content-tertiary">선생님 총평 <span className="text-content-muted">(리포트 상단에 실립니다 · 비우면 없음)</span></span>
+          <button onClick={() => void aiDraft()} disabled={aiBusy} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-content-secondary hover:border-white/20 hover:text-content-primary disabled:opacity-40" title="최근 기간 학습 기록으로 초안을 씁니다 (Opus 5, 1건 약 19원). 누를 때만 호출">
+            {aiBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquare className="h-3 w-3" />} AI 초안
+          </button>
+        </div>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="예: 강다현 학생은 이번 주 제곱근 단원에서 정답률 84%로 안정적입니다. 실력 문제에서 계산 실수가 두 번 있어…"
+          className="w-full rounded-lg border border-white/10 bg-white/[.03] px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:border-white/20 focus:outline-none" />
+        {aiInfo && <p className="mt-1 text-[11px] text-content-muted">{aiInfo}</p>}
+      </div>
       {active.length === 0 ? (
         <p className="px-4 py-4 text-sm text-content-muted">발급한 링크가 없습니다.</p>
       ) : (
         <ul className="divide-y divide-white/5">
           {active.map((r) => (
             <li key={r.token} className="flex items-center gap-3 px-4 py-2 text-sm">
-              <span className="w-24 shrink-0 text-content-secondary">{r.label ?? `${r.days}일`}</span>
+              <span className="w-24 shrink-0 text-content-secondary" title={r.note ?? ''}>{r.label ?? `${r.days}일`}{r.note ? ' · 총평' : ''}</span>
               <a href={r.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-xs text-content-tertiary hover:text-content-primary">{r.url}</a>
               <span className="shrink-0 text-xs text-content-muted">{r.lastViewedAt ? `열람 ${dateLabel(r.lastViewedAt)}` : '미열람'}</span>
               <button onClick={() => void copy(r.url)} className="shrink-0 text-content-tertiary hover:text-content-primary" title="복사"><Copy className="h-3.5 w-3.5" /></button>

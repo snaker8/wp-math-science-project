@@ -39,12 +39,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const g = await guard(classId, studentId, authed.data.scope);
   if (!g.ok) return g.res;
   const { data } = await supabaseAdmin
-    .from('parent_share_tokens').select('token, set_key, label, is_active, expires_at, created_at, last_viewed_at')
+    .from('parent_share_tokens').select('token, set_key, label, note, is_active, expires_at, created_at, last_viewed_at')
     .in('student_id', g.refs).eq('report_kind', 'learning').order('created_at', { ascending: false }).limit(50);
   const origin = new URL(req.url).origin;
-  const items = ((data ?? []) as Array<{ token: string; set_key: string | null; label: string | null; is_active: boolean; expires_at: string | null; created_at: string; last_viewed_at: string | null }>)
+  const items = ((data ?? []) as Array<{ token: string; set_key: string | null; label: string | null; note: string | null; is_active: boolean; expires_at: string | null; created_at: string; last_viewed_at: string | null }>)
     .map((r) => ({
-      token: r.token, days: Number((r.set_key ?? '').replace('days:', '')) || 7, label: r.label,
+      token: r.token, days: Number((r.set_key ?? '').replace('days:', '')) || 7, label: r.label, note: r.note,
       isActive: r.is_active, expiresAt: r.expires_at, createdAt: r.created_at, lastViewedAt: r.last_viewed_at,
       url: `${origin}/share/learning/${r.token}`,
     }));
@@ -58,16 +58,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   const g = await guard(classId, studentId, authed.data.scope);
   if (!g.ok) return g.res;
-  let body: { days?: unknown; label?: unknown; expiresAt?: unknown };
+  let body: { days?: unknown; label?: unknown; expiresAt?: unknown; note?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const days = DAYS.includes(Number(body.days)) ? Number(body.days) : 7;
   const label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : null;
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) || null : null;
   const expiresAt = typeof body.expiresAt === 'string' && !Number.isNaN(Date.parse(body.expiresAt)) ? new Date(body.expiresAt).toISOString() : null;
   const token = randomBytes(24).toString('hex');
   const { error } = await supabaseAdmin.from('parent_share_tokens').insert({
     token, student_id: studentId, set_key: `days:${days}`, exam_ids: classId,   // exam_ids 자리에 반 id — 리포트가 반의 코스 진행도를 알아야 한다
     report_kind: 'learning', label: label || (days === 1 ? '일일 학습 리포트' : `최근 ${days}일 학습 리포트`),
-    expires_at: expiresAt, is_active: true, created_by: authed.data.user.id ?? null,
+    note, expires_at: expiresAt, is_active: true, created_by: authed.data.user.id ?? null,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const origin = new URL(req.url).origin;
