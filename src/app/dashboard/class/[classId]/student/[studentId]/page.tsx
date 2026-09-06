@@ -103,6 +103,13 @@ function StudentScreenInner() {
           <Link href={`/dashboard/prescription?student=${student.id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-content-secondary hover:border-white/20 hover:text-content-primary">
             처방 <ExternalLink className="h-3 w-3" />
           </Link>
+          {/* 단계 9 IA 정리 — 메뉴에서 걷은 옛 입구는 학생 화면에서 링크로 간다 */}
+          <Link href={`/dashboard/prescription/report?studentId=${student.id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-content-secondary hover:border-white/20 hover:text-content-primary" title="진단 세트(A/B/C) 종합 리포트">
+            진단 종합 <ExternalLink className="h-3 w-3" />
+          </Link>
+          <Link href={`/tutor/analytics?student=${student.id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-content-secondary hover:border-white/20 hover:text-content-primary" title="내신·모의고사·진단 통합 성적표">
+            성적표 <ExternalLink className="h-3 w-3" />
+          </Link>
         </div>
       </div>
 

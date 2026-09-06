@@ -114,6 +114,10 @@ export default function TutorAnalyticsPage() {
   const router = useRouter();
   const [modalStudentId, setModalStudentId] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
+  // 반 허브 학생 화면 「성적표」 링크 (?student=) — mount 때 한 번 읽는다 (useSearchParams 의 Suspense 요구 회피)
+  useEffect(() => {
+    try { const s = new URLSearchParams(window.location.search).get('student'); if (s) setSelectedStudent(s); } catch { /* ignore */ }
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
 

@@ -163,6 +163,9 @@ export const adminNavItems: NavItem[] = [
 ];
 
 // 튜터/수업 관련 메뉴
+// ★ 2026-09-06 반 허브 단계 9 (IA 정리, 대표 「순서대로 진행」): 반 허브가 흡수한 입구를 메뉴에서 걷었다.
+//   수동 채점 입력 → 채점하기 탭 / 학생 진단·학생 성적·진단 종합 리포트 → 반 허브 학생 화면의 링크.
+//   페이지 자체는 남아 있다(라우트 유지, 링크로만 진입).
 export const tutorNavItems: NavItem[] = [
   {
     // ★ 검증된 자산화 경로(클라우드 페이지)로 통일 — 기존 /tutor/workflow 는
@@ -200,21 +203,6 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    // 채점 허브로 통합 — 수동 입력은 /dashboard/grading 의 탭. (prescription/entry 라우트도 백워드 호환 유지)
-    href: '/dashboard/grading?tab=manual',
-    icon: ClipboardCheck,
-    label: '수동 채점 입력',
-    description: '시험·진단지 채점 결과 수동 입력',
-    group: 'tutor',
-  },
-  {
-    href: '/dashboard/prescription',
-    icon: Stethoscope,
-    label: '학생 진단',
-    description: '학생별 단원 히트맵·취약점·약점 추적',
-    group: 'tutor',
-  },
-  {
     href: '/tutor/clinic',
     icon: FileText,
     label: '클리닉시험지',
@@ -229,24 +217,10 @@ export const tutorNavItems: NavItem[] = [
     group: 'tutor',
   },
   {
-    href: '/tutor/analytics',
-    icon: BarChart3,
-    label: '학생 성적',
-    description: '히트맵 및 통계',
-    group: 'tutor',
-  },
-  {
     href: '/dashboard/reports',
     icon: BarChart3,
     label: '학교별 리포트',
     description: '학교별 시험지 누적 분석 + 학부모 공유 관리',
-    group: 'tutor',
-  },
-  {
-    href: '/dashboard/prescription/report',
-    icon: Layers,
-    label: '진단 종합 리포트',
-    description: 'A/B/C 진단 합산 · 시험대비 처방 · 학부모 공유',
     group: 'tutor',
   },
   {
