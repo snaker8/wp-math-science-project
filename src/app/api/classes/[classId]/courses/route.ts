@@ -59,7 +59,7 @@ export interface CourseRow {
   title: string;
   subjectCode: string;
   subjectName: string;
-  settings: { issueMode: 'common' | 'personal'; perStep: number; ladder: LadderRung[]; range?: { l1?: string[] } };
+  settings: { issueMode: 'common' | 'personal'; perStep: number; ladder: LadderRung[]; range?: { l1?: string[] }; keyFirst: boolean };
   createdAt: string;
   steps: CourseStepRow[];
   issued: number;
@@ -335,6 +335,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         perStep: Number(settingsRaw.perStep) || 10,
         ladder,
         range,
+        keyFirst: settingsRaw.keyFirst === true,
       },
       createdAt: c.created_at, steps: rows, issued: rows.filter((r) => r.issuedAt != null).length,
       progress, avgProgressPct: avg,
