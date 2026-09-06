@@ -11,7 +11,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Loader2, MessageSquare, Phone, Plus, Trash2, Users, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Copy, Link2, Loader2, MessageSquare, Phone, Plus, Trash2, Users, ExternalLink } from 'lucide-react';
 import type { HistoryItem, LogKind } from '@/app/api/classes/[classId]/students/[studentId]/history/route';
 import type { Counselling } from '@/app/api/classes/[classId]/students/[studentId]/counsellings/route';
 
@@ -175,6 +175,8 @@ function StudentScreenInner() {
         )}
       </section>
 
+      <ReportLinkSection classId={classId} studentId={studentId} />
+
       <CounsellingSection classId={classId} studentId={studentId} />
     </div>
   );
@@ -187,6 +189,84 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub: 
       <div className={`mt-1 text-xl font-semibold tabular-nums ${tone ?? 'text-content-primary'}`}>{value}</div>
       {sub && <div className="text-xs text-content-muted">{sub}</div>}
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 학부모 학습 리포트 링크 — 매쓰홀릭 「일일 학습 리포트 발송」. 문자 대신 링크(열 때마다 최신 계산)
+// ────────────────────────────────────────────────────────────────────────────
+interface ReportLink { token: string; days: number; label: string | null; isActive: boolean; createdAt: string; lastViewedAt: string | null; url: string }
+
+function ReportLinkSection({ classId, studentId }: { classId: string; studentId: string }) {
+  const [items, setItems] = useState<ReportLink[]>([]);
+  const [days, setDays] = useState<1 | 7 | 30>(7);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/classes/${classId}/students/${studentId}/learning-report`, { cache: 'no-store' });
+    const j = await res.json();
+    if (res.ok) setItems((j.items || []) as ReportLink[]);
+  }, [classId, studentId]);
+  useEffect(() => { void load(); }, [load]);
+
+  const copy = async (url: string) => {
+    // ★ prompt/alert 같은 대화상자는 쓰지 않는다 — 브라우저 자동화·백그라운드 탭을 멈춘다. 복사 실패면 링크 목록에서 직접 복사.
+    try { await navigator.clipboard.writeText(url); setCopied(url); setTimeout(() => setCopied(null), 1500); } catch { setCopied(null); }
+  };
+  const issue = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/classes/${classId}/students/${studentId}/learning-report`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      await load();
+      await copy(j.url as string);
+    } catch (e) { alert(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  const revoke = async (token: string) => {
+    if (!confirm('이 링크를 회수합니다. 학부모가 더 이상 열 수 없습니다.')) return;
+    const res = await fetch('/api/diagnostics/report-tokens', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'parent_token', ref: token }),
+    });
+    if (res.ok) void load();
+  };
+  const active = items.filter((i) => i.isActive);
+  return (
+    <section className="mb-6 rounded-xl border border-white/10">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-2.5">
+        <Link2 className="h-4 w-4 text-content-tertiary" />
+        <h2 className="text-sm font-semibold text-content-primary">학부모 학습 리포트</h2>
+        <span className="text-xs text-content-tertiary">링크를 만들어 카카오톡·문자에 붙입니다. 열 때마다 최근 기간 기준으로 다시 계산됩니다.</span>
+        <div className="ml-auto flex items-center gap-1 text-xs">
+          {([1, 7, 30] as const).map((n) => (
+            <button key={n} onClick={() => setDays(n)} className={`rounded-full px-2 py-0.5 ${days === n ? 'bg-white text-black' : 'border border-white/10 text-content-tertiary hover:text-content-primary'}`}>
+              {n === 1 ? '오늘' : `최근 ${n}일`}
+            </button>
+          ))}
+          <button onClick={() => void issue()} disabled={busy} className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black hover:opacity-90 disabled:opacity-40">
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} 링크 만들기
+          </button>
+        </div>
+      </div>
+      {active.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-content-muted">발급한 링크가 없습니다.</p>
+      ) : (
+        <ul className="divide-y divide-white/5">
+          {active.map((r) => (
+            <li key={r.token} className="flex items-center gap-3 px-4 py-2 text-sm">
+              <span className="w-24 shrink-0 text-content-secondary">{r.label ?? `${r.days}일`}</span>
+              <a href={r.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-xs text-content-tertiary hover:text-content-primary">{r.url}</a>
+              <span className="shrink-0 text-xs text-content-muted">{r.lastViewedAt ? `열람 ${dateLabel(r.lastViewedAt)}` : '미열람'}</span>
+              <button onClick={() => void copy(r.url)} className="shrink-0 text-content-tertiary hover:text-content-primary" title="복사"><Copy className="h-3.5 w-3.5" /></button>
+              {copied === r.url && <span className="text-[11px] text-emerald-300">복사됨</span>}
+              <button onClick={() => void revoke(r.token)} className="shrink-0 text-content-muted hover:text-red-400" title="회수"><Trash2 className="h-3.5 w-3.5" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
