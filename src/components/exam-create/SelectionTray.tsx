@@ -1,10 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Reorder } from 'framer-motion';
 import { X, GripVertical, ChevronRight, Trash2, ChevronDown } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { DifficultyDistribution } from './DifficultyDistribution';
+import { BAND_SCHEMES, bandOf } from '@/lib/class/mastery-bands';
+
+/** 접힌 탭에 붙는 5단 미니 막대 — 트레이를 열지 않아도 편중이 보인다 (설계서 S1) */
+const MINI_BAR: Record<string, string> = { A: 'bg-sky-500/80', B: 'bg-emerald-500/80', C: 'bg-amber-500/80', D: 'bg-orange-500/80', E: 'bg-rose-500/80' };
 
 export interface PickedProblem {
   id: string;
@@ -26,6 +30,13 @@ interface SelectionTrayProps {
 export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose }: SelectionTrayProps) {
   const [open, setOpen] = useState(false);
 
+  const miniCounts = useMemo(() => {
+    const c: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+    for (const p of picked) { const b = bandOf(p.difficulty, 5); if (b) c[b] += 1; }
+    return c;
+  }, [picked]);
+  const miniKnown = Object.values(miniCounts).reduce((n: number, x: number) => n + x, 0);
+
   if (picked.length === 0) return null;
 
   return (
@@ -39,6 +50,13 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
         >
           <ChevronRight className="h-4 w-4 rotate-180" />
           <span className="text-xs font-bold tabular-nums">{picked.length}</span>
+          {miniKnown > 0 && (
+            <span className="flex h-16 w-1.5 flex-col overflow-hidden rounded-full bg-zinc-800" title={BAND_SCHEMES[5].map((b) => `${b.label} ${miniCounts[b.key]}`).join(' · ')}>
+              {BAND_SCHEMES[5].map((b) => (
+                <span key={b.key} className={MINI_BAR[b.key]} style={{ height: `${(miniCounts[b.key] / miniKnown) * 100}%` }} />
+              ))}
+            </span>
+          )}
         </button>
       )}
 
