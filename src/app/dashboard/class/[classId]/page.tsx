@@ -19,8 +19,9 @@ import { useParams } from 'next/navigation';
 import {
   Users, ClipboardList, CheckSquare, Grid3x3, LineChart, Settings2,
   Loader2, ArrowLeft, RefreshCw, ExternalLink, Sun, CloudSun, Cloud,
-} from 'lucide-react';
+ CalendarDays } from 'lucide-react';
 import { AssignmentsTab } from '@/components/class/AssignmentsTab';
+import { DailyTab } from '@/components/class/DailyTab';
 import { MasteryMatrix } from '@/components/class/MasteryMatrix';
 import { SettingsTab } from '@/components/class/SettingsTab';
 import { HistoryTab } from '@/components/class/HistoryTab';
@@ -89,6 +90,7 @@ const TABS = [
   { key: 'grading', label: '채점', icon: CheckSquare },
   { key: 'mastery', label: '유형분석', icon: Grid3x3 },
   { key: 'history', label: '유형이력', icon: LineChart },
+  { key: 'daily', label: '일일학습', icon: CalendarDays },
   { key: 'settings', label: '설정', icon: Settings2 },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
@@ -403,6 +405,10 @@ export default function ClassHubPage() {
               goals={goals}
               onOpenMastery={(d) => { setMasteryTo(d); setTab('mastery'); }}
             />
+          )}
+
+          {tab === 'daily' && !error && classId && (
+            <DailyTab classId={classId} />
           )}
 
           {tab === 'settings' && !error && classId && (
