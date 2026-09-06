@@ -116,7 +116,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { name, description, subject, grade, maxStudents, schedule, isActive, goals } = body;
+    const { name, description, subject, grade, maxStudents, schedule, isActive, goals, tutorId } = body;
 
     const updateData: Record<string, unknown> = {};
 
@@ -136,6 +136,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (maxStudents !== undefined) updateData.max_students = parseInt(maxStudents) || 30;
     if (schedule !== undefined) updateData.schedule = schedule;
     if (isActive !== undefined) updateData.is_active = isActive;
+    // 담당 강사 변경 (반 허브 설정 탭) — 같은 센터의 강사·관리자만. 매쓰홀릭 「담당 변경」 대응.
+    if (tutorId !== undefined) {
+      if (typeof tutorId !== 'string' || !tutorId) return NextResponse.json({ error: '담당 강사를 고르세요' }, { status: 400 });
+      const { data: t } = await supabaseAdmin.from('users').select('id, institute_id, role').eq('id', tutorId).maybeSingle();
+      const tu = t as { id: string; institute_id: string | null; role: string } | null;
+      if (!tu) return NextResponse.json({ error: '강사를 찾을 수 없습니다' }, { status: 400 });
+      const clsInst = (classData as { institute_id: string | null }).institute_id;
+      if (clsInst && tu.institute_id && tu.institute_id !== clsInst && !scope.isSuperAdmin) {
+        return NextResponse.json({ error: '다른 센터의 강사는 담당으로 둘 수 없습니다' }, { status: 400 });
+      }
+      updateData.tutor_id = tutorId;
+    }
 
     const { data: updatedClass, error: updateError } = await supabaseAdmin
       .from('classes')
