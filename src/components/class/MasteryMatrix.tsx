@@ -119,6 +119,11 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
   const [showNoSupply, setShowNoSupply] = useState(false);
   /** 서술형(서답형)만 — 매쓰홀릭 「서술형」 탭. 판은 같고 문제·채점을 서답형으로만 센다 */
   const [essayOnly, setEssayOnly] = useState(false);
+  /** 중요 유형 — 학교기출 출제 빈도 (docs/PLAN_KEY_TYPES.md K2). 과정 빈출 / 학교 빈출 */
+  const [keyTypes, setKeyTypes] = useState<Map<string, { exams: number; pct: number; schools: string[]; key: boolean }>>(new Map());
+  const [keyMeta, setKeyMeta] = useState<{ totalExams: number; threshold: number; schoolsAll: string[] } | null>(null);
+  const [keySchool, setKeySchool] = useState<string>('');
+  const [keyOnly, setKeyOnly] = useState(false);
   /** 코스 회차가 채우는 층 표시 — 낸 회차(흰 점) · 다음 회차(호박 점). docs/PLAN_COURSE_LAYER.md §3 */
   const [showCourse, setShowCourse] = useState(true);
   const [courseMarks, setCourseMarks] = useState<Map<string, { issued: Set<string>; next: Set<string> }>>(new Map());
@@ -188,6 +193,24 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
     }
   }, [classId]);
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!subject) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/mathsecr/key-types?subject=${subject}&threshold=20${keySchool ? `&school=${encodeURIComponent(keySchool)}` : ''}`);
+        const j = await res.json();
+        if (!alive || !res.ok) return;
+        const m = new Map<string, { exams: number; pct: number; schools: string[]; key: boolean }>();
+        for (const it of (j.items || []) as Array<{ code: string; exams: number; pct: number; schools: string[]; key: boolean }>) m.set(it.code, it);
+        setKeyTypes(m);
+        setKeyMeta({ totalExams: j.totalExams ?? 0, threshold: j.threshold ?? 20, schoolsAll: j.schoolsAll ?? [] });
+      } catch { /* 배지 없이 판은 그린다 */ }
+    })();
+    return () => { alive = false; };
+  }, [subject, keySchool]);
+  const keyOf = useCallback((code: string) => keyTypes.get(code) ?? null, [keyTypes]);
 
   const allBands = BAND_SCHEMES[scheme];
   const bands = useMemo(() => allBands.filter((b) => !hiddenBands.has(b.key)), [allBands, hiddenBands]);
@@ -356,7 +379,7 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
           name: tree.names.get(unit) ?? unit,
           cells: (tree.typesByUnit.get(unit) ?? []).map(cellOf),
           total: observed.unitTotals.get(unit),
-        })).map((u) => ({ ...u, cells: showNoSupply ? u.cells : u.cells.filter((c) => c.summary.supply > 0 || c.summary.n > 0) }))
+        })).map((u) => ({ ...u, cells: (showNoSupply ? u.cells : u.cells.filter((c) => c.summary.supply > 0 || c.summary.n > 0)).filter((c) => !keyOnly || keyTypes.get(c.code)?.key) }))
           .filter((u) => u.cells.length > 0)
           .filter((u) => !hideEmpty || u.total || u.cells.some((c) => c.inferred));
         return { code: mid, name: tree.names.get(mid) ?? mid, units };
@@ -364,7 +387,7 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
       if (mids.length > 0) out.push({ l1, mids });
     }
     return out;
-  }, [tree, cellOf, observed, hideEmpty, l1Filter, showNoSupply, courseL1]);
+  }, [tree, cellOf, observed, hideEmpty, l1Filter, showNoSupply, courseL1, keyOnly, keyTypes]);
 
   const allCells = useMemo(() => rows.flatMap((r) => r.mids.flatMap((m) => m.units.flatMap((u) => u.cells))), [rows]);
   /** 판 전체(숨긴 문제 없음 포함) — 문제은행 완성도의 분모 */
@@ -613,6 +636,18 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
             <input type="checkbox" checked={essayOnly} onChange={(e) => setEssayOnly(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
             서술형만
           </label>
+          {keyMeta && keyMeta.totalExams > 0 && (
+            <>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title={`학교기출 ${keyMeta.totalExams}장 중 ${keyMeta.threshold}% 이상에 나온 유형 (학교를 고르면 그 학교 2회 이상)`}>
+                <input type="checkbox" checked={keyOnly} onChange={(e) => setKeyOnly(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
+                중요 유형만
+              </label>
+              <select value={keySchool} onChange={(e) => setKeySchool(e.target.value)} className="rounded border border-white/10 bg-white/[.03] px-1.5 py-1 text-content-primary" title="학교별 빈출로 배지 전환">
+                <option value="">빈출 기준: 과정 전체</option>
+                {keyMeta.schoolsAll.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </>
+          )}
           {courseStats.has && (
             <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title="코스 회차가 채우는 층 — 낸 회차는 흰 점, 다음 5회차는 호박 점">
               <input type="checkbox" checked={showCourse} onChange={(e) => setShowCourse(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
@@ -693,6 +728,12 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
               추정 <span className="tabular-nums text-content-muted">{stats.inferredCount}</span>
             </span>
           )}
+          {keyMeta && keyMeta.totalExams > 0 && (
+            <span className="inline-flex items-center gap-1" title={keySchool ? `${keySchool} 학교기출 2회 이상` : `학교기출 ${keyMeta.totalExams}장의 ${keyMeta.threshold}% 이상`}>
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-300 ring-1 ring-black" />
+              중요 유형 <span className="tabular-nums text-content-muted">{allCells.filter((c) => keyTypes.get(c.code)?.key).length}</span>
+            </span>
+          )}
           {showCourse && courseStats.has && (
             <>
               <span className="inline-flex items-center gap-1" title="코스에서 이미 낸 회차가 채우는 층">
@@ -755,7 +796,7 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
               </thead>
               <tbody>
                 {rows.map((g) => (
-                  <RowGroup markOf={markOf}
+                  <RowGroup markOf={markOf} keyOf={keyOf}
                     key={g.l1.code}
                     group={g}
                     selected={selected}
@@ -853,6 +894,12 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
                   {focus.summary.progressPct == null ? '—' : `${focus.summary.solved}/${focus.summary.supply} (${focus.summary.progressPct}%)`}
                 </span>
               </p>
+              {keyOf(focus.code) && (
+                <p className="mt-0.5 text-[11px] text-content-tertiary" title={(keyOf(focus.code)?.schools ?? []).join(', ')}>
+                  <span className={keyOf(focus.code)?.key ? 'text-amber-300' : ''}>학교기출 {keyOf(focus.code)?.exams}/{keyMeta?.totalExams ?? 0}장 ({keyOf(focus.code)?.pct}%)</span>
+                  {' · '}{(keyOf(focus.code)?.schools ?? []).slice(0, 3).join(' · ')}{(keyOf(focus.code)?.schools.length ?? 0) > 3 ? ` 외 ${(keyOf(focus.code)?.schools.length ?? 0) - 3}교` : ''}
+                </p>
+              )}
               <table className="mt-2 w-full text-[11px] tabular-nums">
                 <thead>
                   <tr className="text-content-muted">
@@ -971,7 +1018,7 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
 
 // ── 행 묶음 (대단원 → 중단원 → 소단원 줄 · 열 = 난이도 · 칸 = 유형) ──
 function RowGroup({
-  group, selected, focusCode, bands, bandLabel, onToggle, onToggleRow, markOf,
+  group, selected, focusCode, bands, bandLabel, onToggle, onToggleRow, markOf, keyOf,
 }: {
   group: {
     l1: { code: string; name: string };
@@ -987,6 +1034,7 @@ function RowGroup({
   onToggle: (cell: TypeCell) => void;
   onToggleRow: (codes: string[]) => void;
   markOf: (cell: TypeCell) => CourseMark;
+  keyOf: (code: string) => { exams: number; pct: number; schools: string[]; key: boolean } | null;
 }) {
   const span = bands.length + 2;
   return (
@@ -997,15 +1045,16 @@ function RowGroup({
         </td>
       </tr>
       {group.mids.map((m) => (
-        <MidRows key={m.code} mid={m} span={span} selected={selected} focusCode={focusCode} bands={bands} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} markOf={markOf} />
+        <MidRows key={m.code} mid={m} span={span} selected={selected} focusCode={focusCode} bands={bands} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} markOf={markOf} keyOf={keyOf} />
       ))}
     </>
   );
 }
 
 /** 칸 하나 — 매쓰홀릭 유형분석 칸: 28px 단색 사각형 · 마스터 ★ · 보류 ? · 추정 원형 · 선택은 파란 칸 */
-function TypeSquare({ cell, sel, focused, bandLabel, onToggle, mark = null }: {
+function TypeSquare({ cell, sel, focused, bandLabel, onToggle, mark = null, keyInfo = null }: {
   cell: TypeCell; sel: boolean; focused: boolean; bandLabel: (k: string) => string; onToggle: (cell: TypeCell) => void; mark?: CourseMark;
+  keyInfo?: { exams: number; pct: number; key: boolean } | null;
 }) {
   const s = cell.summary;
   const layerLines = [...cell.layers].reverse()
@@ -1019,6 +1068,7 @@ function TypeSquare({ cell, sel, focused, bandLabel, onToggle, mark = null }: {
     s.supply === 0 ? '(문제은행에 문제가 없어 과제로는 못 냅니다)' : '',
     cell.inferred ? `근거: ${cell.inferred.basis}` : '',
     mark === 'issued' ? '코스: 낸 회차가 이 층을 채웠다' : mark === 'next' ? '코스: 다음 회차가 이 층을 채운다' : '',
+    keyInfo ? `학교기출 ${keyInfo.exams}장 (${keyInfo.pct}%)${keyInfo.key ? ' · 중요 유형' : ''}` : '',
   ].filter(Boolean).join('\n');
   const noSupply = s.supply === 0 && s.n === 0;
   const face = sel
@@ -1040,14 +1090,18 @@ function TypeSquare({ cell, sel, focused, bandLabel, onToggle, mark = null }: {
       {mark && (
         <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-black ${mark === 'issued' ? 'bg-white' : 'bg-amber-400'}`} />
       )}
+      {keyInfo?.key && (
+        <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 ring-1 ring-black" />
+      )}
     </button>
   );
 }
 
 function MidRows({
-  mid, span, selected, focusCode, bands, bandLabel, onToggle, onToggleRow, markOf,
+  mid, span, selected, focusCode, bands, bandLabel, onToggle, onToggleRow, markOf, keyOf,
 }: {
   markOf: (cell: TypeCell) => CourseMark;
+  keyOf: (code: string) => { exams: number; pct: number; schools: string[]; key: boolean } | null;
   mid: { code: string; name: string; units: Array<{ code: string; name: string; cells: TypeCell[]; total: { n: number; correct: number } | undefined }> };
   span: number;
   selected: Set<string>;
@@ -1111,7 +1165,7 @@ function MidRows({
                       />
                       <div className="flex flex-wrap gap-1.5">
                         {group.map((cell) => (
-                          <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} mark={markOf(cell)} />
+                          <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} mark={markOf(cell)} keyInfo={keyOf(cell.code)} />
                         ))}
                       </div>
                     </div>
