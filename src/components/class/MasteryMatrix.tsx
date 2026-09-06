@@ -117,6 +117,8 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
   const [hideEmpty, setHideEmpty] = useState(false);
   /** 문제은행에 문제가 없는 유형 — 매쓰홀릭 판엔 없다. 기본 숨김, 문제은행 완성도 숫자로만 */
   const [showNoSupply, setShowNoSupply] = useState(false);
+  /** 서술형(서답형)만 — 매쓰홀릭 「서술형」 탭. 판은 같고 문제·채점을 서답형으로만 센다 */
+  const [essayOnly, setEssayOnly] = useState(false);
   /** 코스 회차가 채우는 층 표시 — 낸 회차(흰 점) · 다음 회차(호박 점). docs/PLAN_COURSE_LAYER.md §3 */
   const [showCourse, setShowCourse] = useState(true);
   const [courseMarks, setCourseMarks] = useState<Map<string, { issued: Set<string>; next: Set<string> }>>(new Map());
@@ -195,12 +197,13 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
     if (!data) return [];
     return data.items.filter((it) => {
       if (subjectOf(it.code) !== subject) return false;
+      if (essayOnly && it.f !== 'sa') return false;
       const day = it.at.slice(0, 10);
       if (from && day < from) return false;
       if (to && day > to) return false;
       return true;
     });
-  }, [data, subject, from, to]);
+  }, [data, subject, from, to, essayOnly]);
 
   const itemsView = useMemo(
     () => (studentSel ? itemsAll.filter((it) => it.s === studentSel) : itemsAll),
@@ -252,10 +255,10 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
       const b = bandOf(s.d, scheme);
       if (!b) continue;
       const k = cellKey(s.code, b);
-      m.set(k, (m.get(k) ?? 0) + s.count);
+      m.set(k, (m.get(k) ?? 0) + (essayOnly ? s.sa : s.count));
     }
     return m;
-  }, [data, subject, scheme]);
+  }, [data, subject, scheme, essayOnly]);
 
   // ── 관측 (유형 × 밴드) · 소단원 합계 ──
   const observed = useMemo(() => {
@@ -605,6 +608,10 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title="문제은행에 문제가 없는 유형은 매쓰홀릭 판엔 없다. 완성도 숫자로만 센다">
             <input type="checkbox" checked={showNoSupply} onChange={(e) => setShowNoSupply(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
             문제 없는 유형도
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title="서답형(서술형) 문제만으로 판을 본다 — 매쓰홀릭 서술형 탭. 문제은행 공급·채점 모두 서답형만 센다">
+            <input type="checkbox" checked={essayOnly} onChange={(e) => setEssayOnly(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
+            서술형만
           </label>
           {courseStats.has && (
             <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title="코스 회차가 채우는 층 — 낸 회차는 흰 점, 다음 5회차는 호박 점">
