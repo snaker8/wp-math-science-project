@@ -4,7 +4,7 @@
 // 매쓰홀릭 학생 화면 `genai/generate-ai-comment` 대응 (09 §5-2). 대표 승인 2026-09-06 「go」.
 //   · 교사가 「AI 초안」 버튼을 누를 때만 호출한다 — 자동 반복 없음. (API 비용 규율)
 //   · 재료: 최근 N일 학습 이력(종류·점수·교사 코멘트) + 코스 진행도. 문제 본문은 안 보낸다.
-//   · 모델 claude-opus-5 (대표 미지정 → 기본), effort low. 실측 1건 388 입력 · 282 출력 ≈ 12원.
+//   · 모델 claude-sonnet-5, effort low. 실측 1건 577 입력 · 202 출력 · 3초 ≈ 4원 (Opus 5 는 12원 — 총평엔 과하다, 대표 지적).
 //   · 결과는 저장하지 않는다 — 교사가 고쳐서 리포트 링크에 총평(note)으로 넣는다.
 // body { days?: 1|7|30 }  →  { draft, usage: { input, output }, model }
 // ============================================================================
@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 interface RouteParams { params: Promise<{ classId: string; studentId: string }> }
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-sonnet-5';   // 대표: "굳이 오퍼스를 써야 하나" (09-07) → 4문장 총평엔 Sonnet 5. 실측 577/202 토큰 · 3초 ≈ 4원
 
 const SYSTEM = `당신은 수학 학원 선생님을 돕는 보조입니다. 학부모에게 보내는 학습 리포트의 「선생님 총평」 초안을 씁니다.
 규칙:
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const client = new Anthropic();
     const res = await client.messages.create({
       model: MODEL,
-      // ★ Opus 5 는 기본으로 생각(thinking)을 하고 그 토큰이 max_tokens 에 들어간다 — 600 이면 본문이 0자로 끝났다(실측).
+      // ★ 생각(thinking) 토큰이 max_tokens 에 들어간다 — 600 이면 본문이 0자로 끝났다(Opus 5 실측).
       //   effort low + 넉넉한 max_tokens. 실측 388 입력 · 282 출력 · 7초.
       max_tokens: 4000,
       output_config: { effort: 'low' },
