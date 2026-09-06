@@ -30,7 +30,7 @@ interface RouteParams { params: Promise<{ classId: string; courseId: string }> }
 
 interface StepRec {
   id: string; seq: number; unit_code: string; label: string;
-  level_plan: Record<string, number>; assignment_id: string | null; issued_at: string | null;
+  level_plan: Record<string, number>; assignment_id: string | null; issued_at: string | null; skipped_at: string | null;
 }
 
 const MAX_PER_CALL = 30;
@@ -62,17 +62,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // ── 낼 회차 고르기 ──
   const { data: sRows } = await sb
     .from('course_steps')
-    .select('id, seq, unit_code, label, level_plan, assignment_id, issued_at')
+    .select('id, seq, unit_code, label, level_plan, assignment_id, issued_at, skipped_at')
     .eq('course_id', courseId)
     .order('seq');
   const all = (sRows ?? []) as StepRec[];
   let targets: StepRec[];
   if (Array.isArray(body.stepIds) && body.stepIds.length > 0) {
     const want = new Set((body.stepIds as unknown[]).map(String));
-    targets = all.filter((s) => want.has(s.id) && !s.issued_at && !s.assignment_id);
+    targets = all.filter((s) => want.has(s.id) && !s.issued_at && !s.assignment_id && !s.skipped_at);
   } else {
     const n = Math.max(1, Math.round(Number(body.next) || 1));
-    targets = all.filter((s) => !s.issued_at && !s.assignment_id).slice(0, n);
+    targets = all.filter((s) => !s.issued_at && !s.assignment_id && !s.skipped_at).slice(0, n);
   }
   if (targets.length === 0) return NextResponse.json({ error: '낼 회차가 없습니다 (이미 다 냈거나 고른 회차가 없음)' }, { status: 400 });
   if (targets.length > MAX_PER_CALL) return NextResponse.json({ error: `한 번에 ${MAX_PER_CALL}회차까지` }, { status: 400 });

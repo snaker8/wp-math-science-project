@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, ChevronDown, ChevronRight, Loader2, Plus, Printer, Send, Trash2, X, ExternalLink } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookOpen, ChevronDown, ChevronRight, Loader2, Plus, Printer, Send, SkipForward, Trash2, Undo2, X, ExternalLink } from 'lucide-react';
 import type { CourseRow, CourseStepRow } from '@/app/api/classes/[classId]/courses/route';
 import { BAND_SCHEMES } from '@/lib/class/mastery-bands';
 
@@ -121,6 +121,23 @@ export function CoursePanel({
     }
   };
 
+  const stepAction = async (course: CourseRow, stepId: string, action: 'up' | 'down' | 'skip' | 'unskip') => {
+    setBusy(`${course.id}:st:${stepId}`);
+    try {
+      const res = await fetch(`/api/classes/${classId}/courses/${course.id}/steps`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stepId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      await load();
+      if (action === 'skip' || action === 'unskip') onIssued();   // 진행도 분모가 바뀐다
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const remove = async (course: CourseRow) => {
     if (!confirm(`코스 「${course.title}」를 지웁니다.\n이미 낸 회차의 과제·채점은 그대로 남습니다.`)) return;
     const res = await fetch(`/api/classes/${classId}/courses/${course.id}`, { method: 'DELETE' });
@@ -166,8 +183,8 @@ export function CoursePanel({
         <div className="space-y-3">
           {courses.map((c) => {
             const expanded = open === c.id;
-            const nextStep = c.steps.find((s) => s.issuedAt == null);
-            const remaining = c.steps.length - c.issued;
+            const nextStep = c.steps.find((s) => s.issuedAt == null && !s.skipped);
+            const remaining = c.steps.filter((s) => s.issuedAt == null && !s.skipped).length;
             return (
               <div key={c.id} className="overflow-hidden rounded-xl border border-white/10">
                 <div className="flex items-center gap-3 px-4 py-3">
@@ -179,8 +196,8 @@ export function CoursePanel({
                     <span className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-content-tertiary">{c.subjectName}</span>
                   </button>
                   <div className="flex shrink-0 items-center gap-4 text-sm">
-                    <span className="tabular-nums text-content-secondary" title="낸 회차 / 전체 회차">
-                      회차 {c.issued}/{c.steps.length}
+                    <span className="tabular-nums text-content-secondary" title="낸 회차 / 전체 회차 (건너뛴 회차 제외)">
+                      회차 {c.issued}/{c.steps.filter((s) => !s.skipped).length}
                     </span>
                     <span className="inline-flex items-center gap-2" title="반 평균 진행도 (완료 회차 / 전체 회차)">
                       <span className="block h-1 w-20 overflow-hidden rounded-full bg-white/10">
@@ -226,11 +243,11 @@ export function CoursePanel({
                     <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-white/5 px-4 py-2 text-xs">
                       {c.progress.map((p) => (
                         <span key={p.studentId} className="text-content-tertiary">
-                          {p.name} <span className="tabular-nums text-content-secondary">{p.done}/{c.steps.length}</span>
+                          {p.name} <span className="tabular-nums text-content-secondary">{p.done}/{c.steps.filter((s) => !s.skipped).length}</span>
                         </span>
                       ))}
                     </div>
-                    <StepTable classId={classId} course={c} busy={busy} onIssue={(ids) => void issue(c, { stepIds: ids })} onWrongSimilar={(id) => void wrongSimilar(c, id)} />
+                    <StepTable classId={classId} course={c} busy={busy} onIssue={(ids) => void issue(c, { stepIds: ids })} onWrongSimilar={(id) => void wrongSimilar(c, id)} onStep={(id, a) => void stepAction(c, id, a)} />
                   </div>
                 )}
               </div>
@@ -253,9 +270,9 @@ export function CoursePanel({
 // ============================================================================
 // 회차 표 — 매쓰홀릭 학습 탭 카드의 정보(회차·소단원·문항·평균·제출)를 표로
 // ============================================================================
-function StepTable({ classId, course, busy, onIssue, onWrongSimilar }: { classId: string; course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void; onWrongSimilar: (stepId: string) => void }) {
+function StepTable({ classId, course, busy, onIssue, onWrongSimilar, onStep }: { classId: string; course: CourseRow; busy: string | null; onIssue: (ids: string[]) => void; onWrongSimilar: (stepId: string) => void; onStep: (stepId: string, action: 'up' | 'down' | 'skip' | 'unskip') => void }) {
   const [showAll, setShowAll] = useState(false);
-  const firstPending = course.steps.findIndex((s) => s.issuedAt == null);
+  const firstPending = course.steps.findIndex((s) => s.issuedAt == null && !s.skipped);
   // 기본은 낸 회차 + 다음 8회차만 — 300회차를 다 펼치면 못 읽는다
   const visible = useMemo(() => {
     if (showAll) return course.steps;
@@ -287,9 +304,9 @@ function StepTable({ classId, course, busy, onIssue, onWrongSimilar }: { classId
             const issued = s.issuedAt != null;
             const all = issued && s.submitted >= students && students > 0;
             return (
-              <tr key={s.id} className={`border-b border-white/5 last:border-0 ${issued ? '' : 'text-content-tertiary'}`}>
+              <tr key={s.id} className={`border-b border-white/5 last:border-0 ${issued ? '' : 'text-content-tertiary'} ${s.skipped ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-1.5 tabular-nums text-content-muted">{s.seq}</td>
-                <td className="px-2 py-1.5 text-content-primary">{s.unitName}</td>
+                <td className={`px-2 py-1.5 text-content-primary ${s.skipped ? 'line-through' : ''}`}>{s.unitName}</td>
                 <td className="px-2 py-1.5">{s.label}<span className="ml-1 text-content-muted">{s.rungLabel}</span></td>
                 <td className="px-2 py-1.5 text-content-secondary">
                   {planText(s.levelPlan)}
@@ -301,7 +318,7 @@ function StepTable({ classId, course, busy, onIssue, onWrongSimilar }: { classId
                     ? <span className={all ? 'text-emerald-300' : s.submitted > 0 ? 'text-content-secondary' : 'text-content-muted'}>
                         {all ? '전원' : s.submitted === 0 ? '미제출' : `${s.submitted}/${students}`}
                       </span>
-                    : <span className="text-content-muted">계획</span>}
+                    : <span className="text-content-muted">{s.skipped ? '건너뜀' : '계획'}</span>}
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{s.avgPct == null ? '—' : `${s.avgPct}%`}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">
@@ -351,20 +368,31 @@ function StepTable({ classId, course, busy, onIssue, onWrongSimilar }: { classId
                         <div className="mt-1 flex flex-col gap-0.5">
                           {s.exams.map((e) => (
                             <Link key={e.examId} href={`/dashboard/cloud/${e.examId}`} className="inline-flex items-center gap-1 text-content-tertiary hover:text-content-primary">
-                              {nameOf.get(e.studentId ?? '') ?? '전원'} <ExternalLink className="h-3 w-3" />
+                              {nameOf.get(e.studentId ?? '') ?? '전원'} <span className="tabular-nums text-content-muted">{e.problems}문항</span> <ExternalLink className="h-3 w-3" />
                             </Link>
                           ))}
                         </div>
                       </details>
                     ) : null
                   ) : (
-                    <button
-                      onClick={() => onIssue([s.id])}
-                      disabled={busy != null}
-                      className="rounded border border-white/10 px-2 py-0.5 text-[11px] text-content-secondary hover:border-white/20 hover:text-content-primary disabled:opacity-40"
-                    >
-                      {busy === `${course.id}:${s.id}` ? '내는 중' : '내기'}
-                    </button>
+                    <span className="inline-flex items-center gap-1">
+                      {!s.skipped && (
+                        <button
+                          onClick={() => onIssue([s.id])}
+                          disabled={busy != null}
+                          className="rounded border border-white/10 px-2 py-0.5 text-[11px] text-content-secondary hover:border-white/20 hover:text-content-primary disabled:opacity-40"
+                        >
+                          {busy === `${course.id}:${s.id}` ? '내는 중' : '내기'}
+                        </button>
+                      )}
+                      <button onClick={() => onStep(s.id, 'up')} disabled={busy != null} title="위로" className="rounded p-0.5 text-content-muted hover:text-content-primary disabled:opacity-40"><ArrowUp className="h-3 w-3" /></button>
+                      <button onClick={() => onStep(s.id, 'down')} disabled={busy != null} title="아래로" className="rounded p-0.5 text-content-muted hover:text-content-primary disabled:opacity-40"><ArrowDown className="h-3 w-3" /></button>
+                      {s.skipped ? (
+                        <button onClick={() => onStep(s.id, 'unskip')} disabled={busy != null} title="건너뛰기 취소" className="rounded p-0.5 text-content-muted hover:text-content-primary disabled:opacity-40"><Undo2 className="h-3 w-3" /></button>
+                      ) : (
+                        <button onClick={() => onStep(s.id, 'skip')} disabled={busy != null} title="이 회차 건너뛰기 — 진행도 분모에서 빠진다" className="rounded p-0.5 text-content-muted hover:text-content-primary disabled:opacity-40"><SkipForward className="h-3 w-3" /></button>
+                      )}
+                    </span>
                   )}
                 </td>
               </tr>

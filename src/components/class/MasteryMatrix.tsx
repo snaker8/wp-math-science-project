@@ -57,6 +57,9 @@ interface TypeCell {
 }
 
 const LEVEL_ORDER: CellLevel[] = ['master', 'good', 'shaky', 'weak', 'severe', 'thin', 'none'];
+/** 「다음 회차」로 표시할 안 낸 회차 수 — 전부 찍으면 판이 점으로 덮인다 */
+const COURSE_NEXT_STEPS = 5;
+export type CourseMark = 'issued' | 'next' | null;
 /**
  * 칸 색 — 매쓰홀릭 유형분석 실측(스크린샷 2026-09-04): 22px 안팎의 **진한 단색 사각형**.
  * 마스터 초록+별 · 잘함 초록 · 불안정 노랑 · 약점 빨강 · 심각 진빨강 · 미학습 회색 · 판정 보류 회색+? · 예측은 원형.
@@ -112,6 +115,9 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   const [hideEmpty, setHideEmpty] = useState(false);
   /** 문제은행에 문제가 없는 유형 — 매쓰홀릭 판엔 없다. 기본 숨김, 문제은행 완성도 숫자로만 */
   const [showNoSupply, setShowNoSupply] = useState(false);
+  /** 코스 회차가 채우는 층 표시 — 낸 회차(흰 점) · 다음 회차(호박 점). docs/PLAN_COURSE_LAYER.md §3 */
+  const [showCourse, setShowCourse] = useState(true);
+  const [courseMarks, setCourseMarks] = useState<Map<string, { issued: Set<string>; next: Set<string> }>>(new Map());
   /** 매쓰홀릭 「난이도」 칩 — 열을 켜고 끈다 */
   const [hiddenBands, setHiddenBands] = useState<Set<string>>(new Set());
   /** 매쓰홀릭 유형분석(학생 하나를 깊게) ↔ 단원분석(반을 넓게) — 같은 재료, 축만 전치 */
@@ -142,6 +148,26 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
       const p = json as MasteryPayload;
       setData(p);
       setSubject((cur) => (cur && p.subjects.some((s) => s.code === cur) ? cur : (p.subjects[0]?.code ?? '')));
+      // 코스 회차 → 소단원 × 밴드 표식 (실패해도 판은 그린다)
+      try {
+        const cr = await fetch(`/api/classes/${classId}/courses`);
+        const cj = await cr.json();
+        const marks = new Map<string, { issued: Set<string>; next: Set<string> }>();
+        if (cr.ok) {
+          for (const c of (cj.courses || []) as Array<{ steps: Array<{ unit: string; levelPlan: Record<string, number>; issuedAt: string | null; skipped?: boolean }> }>) {
+            let nextLeft = COURSE_NEXT_STEPS;
+            for (const s of c.steps) {
+              const issued = s.issuedAt != null;
+              if (!issued && (s.skipped || nextLeft <= 0)) continue;   // 건너뛴 회차는 표시 안 함
+              if (!issued) nextLeft -= 1;
+              const m = marks.get(s.unit) ?? { issued: new Set<string>(), next: new Set<string>() };
+              for (const [band, n] of Object.entries(s.levelPlan ?? {})) if (n > 0) (issued ? m.issued : m.next).add(band);
+              marks.set(s.unit, m);
+            }
+          }
+        }
+        setCourseMarks(marks);
+      } catch { setCourseMarks(new Map()); }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -337,6 +363,21 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
   }, [tree, bands, supplyByLayer]);
 
   // ── 완성도 두 개 · 범례 ──
+  /** 이 칸(유형 × 대표 밴드)을 코스 회차가 채우나 */
+  const markOf = useCallback((cell: TypeCell): CourseMark => {
+    if (!showCourse || !cell.repBand) return null;
+    const m = courseMarks.get(cell.unit);
+    if (!m) return null;
+    if (m.issued.has(cell.repBand)) return 'issued';
+    if (m.next.has(cell.repBand)) return 'next';
+    return null;
+  }, [showCourse, courseMarks]);
+  const courseStats = useMemo(() => {
+    let issued = 0; let next = 0;
+    for (const cell of allCells) { const k = markOf(cell); if (k === 'issued') issued += 1; else if (k === 'next') next += 1; }
+    return { issued, next, has: courseMarks.size > 0 };
+  }, [allCells, markOf, courseMarks]);
+
   const stats = useMemo(() => {
     const c: Record<CellLevel, number> = { master: 0, good: 0, shaky: 0, weak: 0, severe: 0, thin: 0, none: 0 };
     let withSupply = 0; let touched = 0; let supply = 0; let solved = 0; let inferredCount = 0;
@@ -552,6 +593,12 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
             <input type="checkbox" checked={showNoSupply} onChange={(e) => setShowNoSupply(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
             문제 없는 유형도
           </label>
+          {courseStats.has && (
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-content-secondary" title="코스 회차가 채우는 층 — 낸 회차는 흰 점, 다음 5회차는 호박 점">
+              <input type="checkbox" checked={showCourse} onChange={(e) => setShowCourse(e.target.checked)} className="h-3.5 w-3.5 accent-white" />
+              회차 표시
+            </label>
+          )}
 
           <span className="ml-auto inline-flex items-center gap-1 text-content-tertiary">
             기간
@@ -603,6 +650,18 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
               추정 <span className="tabular-nums text-content-muted">{stats.inferredCount}</span>
             </span>
           )}
+          {showCourse && courseStats.has && (
+            <>
+              <span className="inline-flex items-center gap-1" title="코스에서 이미 낸 회차가 채우는 층">
+                <span className="inline-block h-2 w-2 rounded-full bg-white ring-1 ring-black" />
+                낸 회차 <span className="tabular-nums text-content-muted">{courseStats.issued}</span>
+              </span>
+              <span className="inline-flex items-center gap-1" title={`다음 ${COURSE_NEXT_STEPS}회차가 채울 층`}>
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-400 ring-1 ring-black" />
+                다음 회차 <span className="tabular-nums text-content-muted">{courseStats.next}</span>
+              </span>
+            </>
+          )}
           <span className="ml-auto text-content-muted" title="문제은행 완성도 = 문제 있는 유형 / 판의 유형 · 학습 진행도 = 푼 문제 / 있는 문제">
             판 {stats.total}유형 · 문제은행 완성도{' '}
             <span className="tabular-nums text-content-secondary">{stats.withSupply}/{stats.total} ({stats.bankPct}%)</span>
@@ -653,7 +712,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
               </thead>
               <tbody>
                 {rows.map((g) => (
-                  <RowGroup
+                  <RowGroup markOf={markOf}
                     key={g.l1.code}
                     group={g}
                     selected={selected}
@@ -869,7 +928,7 @@ export function MasteryMatrix({ classId, className, students, initialTo }: Props
 
 // ── 행 묶음 (대단원 → 중단원 → 소단원 줄 · 열 = 난이도 · 칸 = 유형) ──
 function RowGroup({
-  group, selected, focusCode, bands, bandLabel, onToggle, onToggleRow,
+  group, selected, focusCode, bands, bandLabel, onToggle, onToggleRow, markOf,
 }: {
   group: {
     l1: { code: string; name: string };
@@ -884,6 +943,7 @@ function RowGroup({
   bandLabel: (k: string) => string;
   onToggle: (cell: TypeCell) => void;
   onToggleRow: (codes: string[]) => void;
+  markOf: (cell: TypeCell) => CourseMark;
 }) {
   const span = bands.length + 2;
   return (
@@ -894,15 +954,15 @@ function RowGroup({
         </td>
       </tr>
       {group.mids.map((m) => (
-        <MidRows key={m.code} mid={m} span={span} selected={selected} focusCode={focusCode} bands={bands} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} />
+        <MidRows key={m.code} mid={m} span={span} selected={selected} focusCode={focusCode} bands={bands} bandLabel={bandLabel} onToggle={onToggle} onToggleRow={onToggleRow} markOf={markOf} />
       ))}
     </>
   );
 }
 
 /** 칸 하나 — 매쓰홀릭 유형분석 칸: 28px 단색 사각형 · 마스터 ★ · 보류 ? · 추정 원형 · 선택은 파란 칸 */
-function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
-  cell: TypeCell; sel: boolean; focused: boolean; bandLabel: (k: string) => string; onToggle: (cell: TypeCell) => void;
+function TypeSquare({ cell, sel, focused, bandLabel, onToggle, mark = null }: {
+  cell: TypeCell; sel: boolean; focused: boolean; bandLabel: (k: string) => string; onToggle: (cell: TypeCell) => void; mark?: CourseMark;
 }) {
   const s = cell.summary;
   const layerLines = [...cell.layers].reverse()
@@ -915,6 +975,7 @@ function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
     ...layerLines,
     s.supply === 0 ? '(문제은행에 문제가 없어 과제로는 못 냅니다)' : '',
     cell.inferred ? `근거: ${cell.inferred.basis}` : '',
+    mark === 'issued' ? '코스: 낸 회차가 이 층을 채웠다' : mark === 'next' ? '코스: 다음 회차가 이 층을 채운다' : '',
   ].filter(Boolean).join('\n');
   const noSupply = s.supply === 0 && s.n === 0;
   const face = sel
@@ -933,13 +994,17 @@ function TypeSquare({ cell, sel, focused, bandLabel, onToggle }: {
       } ${face} ${!sel && focused ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-black' : ''}`}
     >
       {cell.level === 'master' ? '★' : cell.level === 'thin' && !noSupply ? '?' : ''}
+      {mark && (
+        <span className={`pointer-events-none absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-black ${mark === 'issued' ? 'bg-white' : 'bg-amber-400'}`} />
+      )}
     </button>
   );
 }
 
 function MidRows({
-  mid, span, selected, focusCode, bands, bandLabel, onToggle, onToggleRow,
+  mid, span, selected, focusCode, bands, bandLabel, onToggle, onToggleRow, markOf,
 }: {
+  markOf: (cell: TypeCell) => CourseMark;
   mid: { code: string; name: string; units: Array<{ code: string; name: string; cells: TypeCell[]; total: { n: number; correct: number } | undefined }> };
   span: number;
   selected: Set<string>;
@@ -1003,7 +1068,7 @@ function MidRows({
                       />
                       <div className="flex flex-wrap gap-1.5">
                         {group.map((cell) => (
-                          <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} />
+                          <TypeSquare key={cell.code} cell={cell} sel={selected.has(cell.code)} focused={focusCode === cell.code} bandLabel={bandLabel} onToggle={onToggle} mark={markOf(cell)} />
                         ))}
                       </div>
                     </div>
