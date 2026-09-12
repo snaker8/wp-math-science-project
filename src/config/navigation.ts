@@ -64,6 +64,13 @@ export const dashboardNavItems: NavItem[] = [
     //   선택 트레이(실시간 난이도 분포) + 시험지 편성까지 한 화면에서 흐른다.
     //   ★ 아래 '유형별 출제'(/dashboard/create)는 **그대로 남긴다** — 기존 흐름을
     //     쓰시던 분이 있으므로 뺏지 않는다. 새 화면이 자리 잡은 뒤 정리한다.
+    href: '/dashboard/exam/new',
+    icon: SquarePen,
+    label: '새 시험지 만들기',
+    description: '무엇을 근거로 뽑을지 고르고 시작 (설계서 S2 — 출제 진입 하나)',
+    group: 'main',
+  },
+  {
     href: '/dashboard/exam-create',
     icon: SquarePen,
     label: '시험지 출제',
@@ -336,6 +343,7 @@ export const topNavGroups: NavGroup[] = [
     children: [
       // ★ 상단 메뉴는 이 목록으로 구성된다 — NAV_ITEMS 에 항목만 추가하면 화면에 안 뜬다.
       //   (2026-09-01: 항목만 넣고 여기 연결을 빠뜨려 "메뉴에 안 보인다" 재발)
+      dash('/dashboard/exam/new'),         // ★ 새 시험지 만들기 — 소스 선택 진입 (설계서 S2)
       dash('/dashboard/exam-create'),      // 시험지 출제 (출처·단원·난이도 + 난이도 분포)
       dash('/dashboard/create'),           // 유형별 출제 (기존)
       tutor('/dashboard/curation'),        // AI 자동 출제
