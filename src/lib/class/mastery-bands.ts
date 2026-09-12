@@ -54,6 +54,22 @@ export const BAND_SCHEMES: Record<BandScheme, readonly Band[]> = {
   ],
 };
 
+/**
+ * 출제 라인용 5단 라벨 목록 · 라벨 → 난이도 레벨(1~10).
+ * ★ 출제 화면과 판(유형분석)이 **같은 말**을 쓰게 하는 다리.
+ *   예전 출제 화면은 최상·상·중·하·최하 의 1~5 척도였는데, 우리 분류는 1~10 이라
+ *   난이도 6~10(실력·심화·고난도) 문제가 통째로 안 잡혔다 (2026-09-12 실측 2,862문항 = 28%).
+ */
+export const EXAM_BAND_LABELS: string[] = BAND_SCHEMES[5].map((b) => b.label);
+export const LEVELS_BY_BAND_LABEL: Record<string, string[]> = Object.fromEntries(
+  BAND_SCHEMES[5].map((b) => [b.label, [...b.levels]]),
+);
+/** 난이도(1~10) → 5단 라벨. 범위 밖이면 null */
+export function bandLabelOf(difficulty: number | string | null | undefined): string | null {
+  const key = bandOf(difficulty, 5);
+  return key ? (BAND_SCHEMES[5].find((b) => b.key === key)?.label ?? null) : null;
+}
+
 export function bandOf(difficulty: number | string | null | undefined, scheme: BandScheme = 4): string | null {
   if (difficulty == null || difficulty === '') return null;
   const d = typeof difficulty === 'number' ? difficulty : parseInt(String(difficulty), 10);
