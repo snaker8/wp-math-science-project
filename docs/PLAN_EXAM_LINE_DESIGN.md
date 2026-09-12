@@ -171,8 +171,16 @@
 
 **남은 것** — 중복 출제 방지(학생 이력 대조)·대표문제 우선(usage_count)은 2차. 그 다음이 S2 통합 진입.
 
-### ⚠ 별건: `/dashboard/create` 훅 순서 결함 (기존)
+### ✅ 해결: 훅 순서 결함 + 과학 트랙 잠금 (2026-09-12, 대표 「과학 일단 비활성화」)
 
-이 화면은 과학 트랙일 때 **훅 선언 전에 조기 return** 한다 (`page.tsx` ~984행). eslint `rules-of-hooks` 39건이 전부 이것이고,
-훅을 하나 추가할 때마다 1건씩 는다. **화면에 머문 채 수학↔과학 트랙을 전환하면 React 가 훅 개수 불일치로 터진다.**
-고치려면 조기 return 을 훅 아래로 내리거나 내부 컴포넌트로 분리해야 한다 — 1,646줄 재배치라 별도 PR.
+`/dashboard/create`(39건)·`/dashboard/problem-bank`(27건)이 과학 트랙 안내 카드를 **훅 선언보다 위에서 조기 return** 했다.
+화면에 머문 채 트랙을 전환하면 React 가 훅 개수 불일치로 터지는 구조였다. **eslint rules-of-hooks 66건 → 0건.**
+
+| 조치 | 내용 |
+|---|---|
+| 과학 잠금 | `featureFlags.SCIENCE_TRACK_DISABLED = true` → `TRACK_SPLIT_ENABLED` 가 항상 false. env 는 그대로 두어 **실수로 켜지는 것도 막는다**. 다시 켤 때 이 상수만 false |
+| 스위치 일원화 | 미들웨어가 `process.env` 를 직접 읽어 클라이언트와 갈려 있었다 → `featureFlags` import 로 통일 |
+| 조기 return 제거 | 두 화면에서 과학 안내 블록 삭제(잠갔으니 분기 자체가 불필요) + 미사용 `Beaker` import 정리 |
+
+**URL 호환**: `/math/dashboard/...` 는 `(tracks)/[track]` 라우트 그룹이 그대로 있어 계속 열린다. `/dashboard/...` 직접 주소도 동작.
+플래그 문서가 말하는 대로 false 가 「모든 사용자 math 단일 트랙 = 기존 운영 흐름」이다.

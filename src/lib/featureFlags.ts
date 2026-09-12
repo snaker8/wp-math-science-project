@@ -13,5 +13,13 @@
  * Phase 2 (PR-T2) ~ Phase 6 (PR-T6) 까지는 false 유지. Phase 7 (PR-T7) 에서
  * 운영 검증 후 true 로 전환.
  */
+/**
+ * ★ 2026-09-12 대표 지시 「과학 일단 비활성화」.
+ *   과학은 수학비서 분류 마스터가 아직 없어 출제·문제은행 화면이 안내 카드만 띄운다.
+ *   환경변수를 끄는 대신 여기서 잠근다 — 배포 없이 실수로 켜지는 것도 같이 막힌다.
+ *   다시 켤 때: 이 상수를 false 로 (env 는 이미 true).
+ */
+export const SCIENCE_TRACK_DISABLED = true;
+
 export const TRACK_SPLIT_ENABLED =
-  process.env.NEXT_PUBLIC_TRACK_SPLIT_ENABLED === 'true';
+  !SCIENCE_TRACK_DISABLED && process.env.NEXT_PUBLIC_TRACK_SPLIT_ENABLED === 'true';
