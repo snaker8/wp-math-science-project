@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const typeCodesParam = searchParams.get('typeCodes');
+    const answerType = request.nextUrl.searchParams.get('answerType') || '';
     if (!typeCodesParam) return NextResponse.json({ ...EMPTY });
 
     const typeCodes = typeCodesParam.split(',').filter(Boolean);
@@ -66,7 +67,9 @@ export async function GET(request: NextRequest) {
     const ID_CHUNK = 300;
     for (let i = 0; i < candidateIds.length; i += ID_CHUNK) {
       const slice = candidateIds.slice(i, i + ID_CHUNK);
-      const base = sb.from('problems').select('id').is('deleted_at', null).in('id', slice);
+      let base = sb.from('problems').select('id').is('deleted_at', null).in('id', slice);
+      // ★ 답안 형태를 고르면 카운트도 그 형태만 센다 — 화면 숫자와 실제로 뽑히는 문제가 어긋나면 안 된다
+      if (answerType) base = base.eq('answer_type', answerType);
       const { data: accRows, error } = await applyInstituteFilter(base, scope, { allowCommonPool: true });
       if (error) {
         console.error('[available-counts] access error:', error.message);

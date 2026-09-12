@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
 
     const typeCodes: string[] = criteria?.typeCodes || [];
     const diffDist: Record<string, number> = criteria?.difficulty_distribution || {};
+    const answerType: string = criteria?.answerType || '';   // '' 전체 · multiple_choice · short_answer
     const totalNeeded = Object.values(diffDist).reduce((s: number, v: number) => s + v, 0);
 
     if (totalNeeded === 0) {
@@ -127,11 +128,12 @@ export async function POST(request: NextRequest) {
     const ID_CHUNK = 300;
     for (let i = 0; i < candidateIds.length; i += ID_CHUNK) {
       const slice = candidateIds.slice(i, i + ID_CHUNK);
-      const base = supabaseAdmin
+      let base = supabaseAdmin
         .from('problems')
         .select('id')
         .is('deleted_at', null)
         .in('id', slice);
+      if (answerType) base = base.eq('answer_type', answerType);   // 답안 형태 (객관식/서답형)
       const { data: accRows, error: accErr } = await applyInstituteFilter(base, scope, { allowCommonPool: true });
       if (accErr) {
         return NextResponse.json({ error: '문제 조회 실패', detail: accErr.message }, { status: 500 });
