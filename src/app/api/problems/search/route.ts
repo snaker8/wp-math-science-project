@@ -3,6 +3,7 @@
 //   PostgREST !inner + ilike 필터 조합의 호환성 이슈를 방지
 // 격리: 자기 institute + 공통 풀(institute_id IS NULL) — 매쓰플랫 모델
 import { NextRequest, NextResponse } from 'next/server';
+import { LEVELS_BY_BAND_LABEL } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
   const typeCodeParam = searchParams.get('typeCode') || '';
   const typeCodes = typeCodeParam.split(',').filter(Boolean);
   const difficulty = searchParams.get('difficulty') || '';
+  const band = searchParams.get('band') || '';   // 5단 밴드 라벨 (개념·기본·실력·심화·고난도)
   const excludeExamId = searchParams.get('excludeExamId') || '';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest) {
     // ★ 1단계: classifications에서 조건에 맞는 problem_id 목록 먼저 조회
     let matchedProblemIds: string[] | null = null;
 
-    if (typeCodes.length > 0 || difficulty) {
+    if (typeCodes.length > 0 || difficulty || band) {
       // ★ classifications 는 문제를 소프트 삭제해도 남는다 — 여기서 안 거르면
       //   삭제된 문제가 후보 id 목록에 섞여 limit 을 잡아먹는다(2단계에서 걸러도 낭비).
       let classQuery = supabaseAdmin
@@ -45,8 +47,11 @@ export async function GET(request: NextRequest) {
         classQuery = classQuery.or(orFilters);
       }
 
-      // 난이도 필터
-      if (difficulty) {
+      // 난이도 필터 — 밴드(범위)가 우선, 없으면 단일 난이도(백워드 호환)
+      const bandLevels = band ? LEVELS_BY_BAND_LABEL[band] : undefined;
+      if (bandLevels?.length) {
+        classQuery = classQuery.in('difficulty', bandLevels);
+      } else if (difficulty) {
         classQuery = classQuery.eq('difficulty', parseInt(difficulty));
       }
 

@@ -8,13 +8,16 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { EXAM_BAND_LABELS, bandLabelOf } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter } from '@/lib/security/institute-guard';
 
 export const dynamic = 'force-dynamic';
 
-const EMPTY = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+// ★ 5단 밴드(개념·기본·실력·심화·고난도)로 센다 — 판과 같은 언어.
+//   예전엔 '1'~'5' 키라 난이도 6~10 문제가 어느 칸에도 안 잡혔다.
+const EMPTY: Record<string, number> = Object.fromEntries(EXAM_BAND_LABELS.map((l) => [l, 0]));
 
 export async function GET(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -76,8 +79,8 @@ export async function GET(request: NextRequest) {
     const counts: Record<string, number> = { ...EMPTY };
     for (const row of rows) {
       if (!accessible.has(row.problem_id)) continue;
-      const d = String(row.difficulty || '3');
-      if (counts[d] !== undefined) counts[d]++;
+      const label = bandLabelOf(row.difficulty as number | string | null);
+      if (label && counts[label] !== undefined) counts[label]++;
     }
 
     return NextResponse.json(counts);

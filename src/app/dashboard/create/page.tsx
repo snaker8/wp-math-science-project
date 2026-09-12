@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { bandLabelOf } from '@/lib/class/mastery-bands';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
@@ -47,7 +48,8 @@ interface SubjectInfo {
 }
 
 type CreateMode = 'auto' | 'manual';
-type DifficultyLevel = '최상' | '상' | '중' | '하' | '최하';
+// ★ 5단 밴드 — 판(유형분석)과 같은 말. 난이도 1~10 을 개념 1~3 · 기본 4~5 · 실력 6~7 · 심화 8~9 · 고난도 10 으로 묶는다.
+type DifficultyLevel = '개념' | '기본' | '실력' | '심화' | '고난도';
 type PreviewTab = '시험지' | '빠른정답' | '해설지';
 
 interface PreviewProblem {
@@ -80,25 +82,30 @@ interface SearchProblem {
 // Constants
 // ============================================================================
 
-const DIFF_LEVEL_MAP: Record<DifficultyLevel, string> = {
-  '최상': '5', '상': '4', '중': '3', '하': '2', '최하': '1',
-};
+const DIFF_ORDER: DifficultyLevel[] = ['개념', '기본', '실력', '심화', '고난도'];
 
 const DIFF_COLORS: Record<DifficultyLevel, { bg: string; text: string; border: string }> = {
-  '최상': { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' },
-  '상':   { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
-  '중':   { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
-  '하':   { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-  '최하': { bg: 'bg-zinc-500/20', text: 'text-zinc-400', border: 'border-zinc-500/30' },
+  '개념':   { bg: 'bg-sky-500/20', text: 'text-sky-400', border: 'border-sky-500/30' },
+  '기본':   { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  '실력':   { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+  '심화':   { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+  '고난도': { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' },
 };
 
-const DIFF_BADGE: Record<number, { label: string; cls: string }> = {
-  1: { label: '최하', cls: 'border-zinc-500 bg-zinc-500/10 text-zinc-400' },
-  2: { label: '하', cls: 'border-blue-500 bg-blue-500/10 text-blue-400' },
-  3: { label: '중', cls: 'border-amber-500 bg-amber-500/10 text-amber-400' },
-  4: { label: '상', cls: 'border-red-500 bg-red-500/10 text-red-400' },
-  5: { label: '최상', cls: 'border-red-700 bg-red-700/10 text-red-300' },
+const BADGE_CLS: Record<DifficultyLevel, string> = {
+  '개념':   'border-sky-500 bg-sky-500/10 text-sky-400',
+  '기본':   'border-emerald-500 bg-emerald-500/10 text-emerald-400',
+  '실력':   'border-amber-500 bg-amber-500/10 text-amber-400',
+  '심화':   'border-orange-500 bg-orange-500/10 text-orange-400',
+  '고난도': 'border-rose-500 bg-rose-500/10 text-rose-400',
 };
+/** 난이도 1~10 → 배지. 예전엔 1~5 표라 6~10 이 전부 '중' 으로 찍혔다 (2026-09-12 수정) */
+function diffBadge(d: number | null | undefined): { label: string; cls: string } {
+  const label = bandLabelOf(d) as DifficultyLevel | null;
+  return label
+    ? { label: `${label} ${d}`, cls: BADGE_CLS[label] }
+    : { label: '미분류', cls: 'border-zinc-600 bg-zinc-600/10 text-zinc-500' };
+}
 
 // ============================================================================
 // Sub Components
@@ -411,7 +418,7 @@ function ManualSearchPanel({
     try {
       const params = new URLSearchParams();
       if (query) params.set('q', query);
-      if (difficulty) params.set('difficulty', difficulty);
+      if (difficulty) params.set('band', difficulty);
       // ★ 선택된 typeCode 전체를 쉼표 구분으로 전달 (OR 검색)
       const tc = selectedTypeCodes.length > 0
         ? selectedTypeCodes.join(',')
@@ -458,11 +465,7 @@ function ManualSearchPanel({
             className="rounded-md border border-subtle bg-surface-raised px-2 py-1.5 text-xs text-content-primary focus:border-white/25 focus:outline-none"
           >
             <option value="">난이도</option>
-            <option value="1">최하</option>
-            <option value="2">하</option>
-            <option value="3">중</option>
-            <option value="4">상</option>
-            <option value="5">최상</option>
+            {DIFF_ORDER.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
           <button
             type="button"
@@ -497,7 +500,7 @@ function ManualSearchPanel({
         ) : (
           results.map((p) => {
             const isSelected = manualSelected.has(p.id);
-            const diffBadge = DIFF_BADGE[p.difficulty] || DIFF_BADGE[3];
+            const badge = diffBadge(p.difficulty);
 
             return (
               <div
@@ -520,8 +523,8 @@ function ManualSearchPanel({
                   <div className="flex-1 min-w-0">
                     {/* Badges */}
                     <div className="flex items-center gap-1.5 mb-1">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${diffBadge.cls}`}>
-                        {diffBadge.label}
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${badge.cls}`}>
+                        {badge.label}
                       </span>
                       {p.typeCode && (
                         <span className="text-[9px] font-mono text-content-muted">{p.typeCode}</span>
@@ -853,7 +856,7 @@ function DifficultyDistributionBar({
   totalQuestions: number;
   onChange: (d: Record<DifficultyLevel, number>) => void;
 }) {
-  const levels: DifficultyLevel[] = ['최상', '상', '중', '하', '최하'];
+  const levels: DifficultyLevel[] = DIFF_ORDER;
 
   return (
     <div className="px-4 py-3">
@@ -871,8 +874,7 @@ function DifficultyDistributionBar({
 
       <div className="grid grid-cols-5 gap-2">
         {levels.map((level) => {
-          const dbKey = DIFF_LEVEL_MAP[level];
-          const available = availableCounts[dbKey] || 0;
+          const available = availableCounts[level] || 0;
           const value = difficulties[level];
           const maxForThis = Math.min(50 - (totalQuestions - value), available || 99);
           const colors = DIFF_COLORS[level];
@@ -948,7 +950,7 @@ export default function PaperCreatePage() {
 
   // Difficulty
   const [difficulties, setDifficulties] = useState<Record<DifficultyLevel, number>>({
-    '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0,
+    '개념': 0, '기본': 0, '실력': 0, '심화': 0, '고난도': 0,
   });
   const [availableCounts, setAvailableCounts] = useState<Record<string, number>>({});
 
@@ -1107,7 +1109,7 @@ export default function PaperCreatePage() {
     setSelectedL3Keys(new Set());
     setSelectedTypeItems(new Map());
     setCreateMode('auto');
-    setDifficulties({ '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0 });
+    setDifficulties({ '개념': 0, '기본': 0, '실력': 0, '심화': 0, '고난도': 0 });
     setPreviewProblems([]);
     setGeneratedExamId(null);
     setAvailableCounts({});
@@ -1120,7 +1122,7 @@ export default function PaperCreatePage() {
     setSelectedL2Keys(new Set());
     setSelectedL3Keys(new Set());
     setSelectedTypeItems(new Map());
-    setDifficulties({ '최상': 0, '상': 0, '중': 0, '하': 0, '최하': 0 });
+    setDifficulties({ '개념': 0, '기본': 0, '실력': 0, '심화': 0, '고난도': 0 });
   };
 
   // Toggle L1: select/deselect all L2 and L3 children

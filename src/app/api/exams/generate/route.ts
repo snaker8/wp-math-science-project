@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { LEVELS_BY_BAND_LABEL } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveInsertInstituteId, applyInstituteFilter } from '@/lib/security/institute-guard';
@@ -146,9 +147,8 @@ export async function POST(request: NextRequest) {
     console.log(`[Generate] candidates=${candidateIds.length} accessible=${accessibleSet.size} classRows=${classRows.length}`);
 
     // ---- 2. 난이도별 그룹화 ----
-    const diffMap: Record<string, string> = {
-      '최상': '5', '상': '4', '중': '3', '하': '2', '최하': '1',
-    };
+    // ★ 밴드 라벨(개념·기본·실력·심화·고난도) → 난이도 레벨 묶음. 1~5 단일값이 아니라 범위다.
+    //   예전 '최상'→'5' 매핑은 난이도 6~10 을 영영 못 뽑았다.
 
     // difficulty 값 정규화 (문자열/숫자 모두 대응)
     const byDifficulty = new Map<string, typeof classRows>();
@@ -164,8 +164,8 @@ export async function POST(request: NextRequest) {
 
     for (const [levelStr, count] of Object.entries(diffDist)) {
       if (count <= 0) continue;
-      const targetDiff = diffMap[levelStr] || '3';
-      const pool = byDifficulty.get(targetDiff) || [];
+      const levels = LEVELS_BY_BAND_LABEL[levelStr] ?? [levelStr];
+      const pool = levels.flatMap((l) => byDifficulty.get(l) ?? []);
 
       // 셔플
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log(`[Generate] Difficulty ${levelStr}(${targetDiff}): needed=${count}, picked=${picked}, pool=${pool.length}`);
+      console.log(`[Generate] 난이도 ${levelStr}(${levels.join('·')}): needed=${count}, picked=${picked}, pool=${pool.length}`);
     }
 
     if (selectedProblemIds.length === 0) {

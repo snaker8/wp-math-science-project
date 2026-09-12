@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BAND_SCHEMES, bandOf, judgeCell, isWeakLevel, subjectOf, midOf, unitOf, MIN_JUDGE, MIN_MASTER,
+  BAND_SCHEMES, bandOf, bandLabelOf, LEVELS_BY_BAND_LABEL, EXAM_BAND_LABELS, judgeCell, isWeakLevel, subjectOf, midOf, unitOf, MIN_JUDGE, MIN_MASTER,
   summarizeType, depthOf,
 } from './mastery-bands';
 import { inferCells } from './mastery-infer';
@@ -224,5 +224,35 @@ describe('5단 밴드 (출제 난이도 분포)', () => {
     expect(bandOf(8, 4)).toBe('D');
     expect(bandOf(10, 4)).toBe('D');
     expect(bandOf(10, 5)).toBe('E');
+  });
+});
+
+describe('출제 라인 다리 (라벨 ↔ 난이도)', () => {
+  it('라벨 순서는 개념 → 고난도', () => {
+    expect(EXAM_BAND_LABELS).toEqual(['개념', '기본', '실력', '심화', '고난도']);
+  });
+
+  it('★ 난이도 6~10 이 라벨에 잡힌다 — 예전 1~5 척도가 놓치던 구간', () => {
+    expect(bandLabelOf(6)).toBe('실력');
+    expect(bandLabelOf(7)).toBe('실력');
+    expect(bandLabelOf(8)).toBe('심화');
+    expect(bandLabelOf(9)).toBe('심화');
+    expect(bandLabelOf(10)).toBe('고난도');
+  });
+
+  it('라벨 → 레벨 묶음은 범위다 (단일값이 아니다)', () => {
+    expect(LEVELS_BY_BAND_LABEL['개념']).toEqual(['1', '2', '3']);
+    expect(LEVELS_BY_BAND_LABEL['실력']).toEqual(['6', '7']);
+    expect(LEVELS_BY_BAND_LABEL['고난도']).toEqual(['10']);
+    // 다섯 밴드를 합치면 1~10 을 빠짐없이 덮는다
+    const all = EXAM_BAND_LABELS.flatMap((l) => LEVELS_BY_BAND_LABEL[l]).sort((a, b) => Number(a) - Number(b));
+    expect(all).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+  });
+
+  it('난이도 없음/범위 밖은 null — 미분류로 보여야 한다', () => {
+    expect(bandLabelOf(null)).toBeNull();
+    expect(bandLabelOf(undefined)).toBeNull();
+    expect(bandLabelOf(0)).toBeNull();
+    expect(bandLabelOf(11)).toBeNull();
   });
 });
