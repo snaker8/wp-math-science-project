@@ -635,6 +635,17 @@ export default function ExamCreatePage() {
   //   `?typeCode=MS07-04-02&typeName=…&diff=3,4,5`
   //   typeCode 가 세팅되면 위 effect 가 검색을 돌리므로 여기선 값만 심는다.
   //   ★ useSearchParams 를 안 쓴다 — Next 14 에서 Suspense 경계가 없으면 빌드가 CSR 로 떨어진다.
+  // ★ 통합 진입(/dashboard/exam/new) 에서 소스를 골라 들어온다 — `?source=school` 등.
+  //   useSearchParams 대신 mount 때 한 번 읽는다 (아래 typeCode 와 같은 이유).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const s = new URLSearchParams(window.location.search).get('source');
+    if (s && ['all', 'diagnostic', 'school', 'textbook', 'mock', 'weak'].includes(s)) {
+      setActiveTab(s as SourceTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);

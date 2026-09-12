@@ -184,3 +184,22 @@
 
 **URL 호환**: `/math/dashboard/...` 는 `(tracks)/[track]` 라우트 그룹이 그대로 있어 계속 열린다. `/dashboard/...` 직접 주소도 동작.
 플래그 문서가 말하는 대로 false 가 「모든 사용자 math 단일 트랙 = 기존 운영 흐름」이다.
+
+### S2 통합 진입 (2026-09-13)
+
+`/dashboard/exam/new` — 「무엇을 근거로 뽑을까」를 먼저 고르는 한 칸. 출제 메뉴의 첫 항목.
+
+| 순 | 카드 | 가는 곳 | 실측 숫자 |
+|---|---|---|---|
+| **1** | **우리 학원 기출** ★강점 | `exam-create?source=school` | 시험지 N장 · N개교 |
+| 2 | 유형별 · 단원별 | `/dashboard/create` | 유형 붙은 문제 N / 전체 N |
+| 3 | 취약 보충(학생별) | `exam-create?source=weak` | 반 N개 |
+| 4 | 시중교재 | `exam-create?source=textbook` | 교재 묶음 N |
+| 5 | 모의고사 | `exam-create?source=mock` | — |
+| 6 | 진단평가 | `exam-create?source=diagnostic` | — |
+
+- `GET /api/exams/source-summary` — 격리 필터를 통과한 것만, **확실한 것만** 센다(애매한 집계를 그럴듯한 숫자로 보여주지 않는다).
+- `exam-create` 가 `?source=` 를 읽어 탭을 미리 연다 (`useSearchParams` 대신 mount 1회 — Suspense/CSR 폴백 회피, 기존 `?typeCode=` 와 같은 방식).
+- **기존 화면·라우트는 그대로 둔다.** 설계서 §6 대로 새 화면이 자리 잡은 뒤 정리한다 (운영 지장 0).
+
+**남은 것** — S3 2분할 편집(교체/추가) · S4 오답 소스 · S5 유사문제 생성기 연결.
