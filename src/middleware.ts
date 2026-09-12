@@ -19,6 +19,8 @@ import {
   type UserRole,
 } from '@/lib/supabase/middleware';
 import { isSubjectTrack, type SubjectTrack } from '@/lib/subject-track';
+// ★ 스위치는 하나 — 예전엔 미들웨어가 env 를 직접 읽어 클라이언트와 갈렸다 (2026-09-12)
+import { TRACK_SPLIT_ENABLED } from '@/lib/featureFlags';
 
 // 경로별 허용 역할 설정
 // ★ /admin 은 별도 처리 (super_admin only) — ROUTE_PERMISSIONS 에서 제외.
@@ -147,7 +149,6 @@ export async function middleware(request: NextRequest) {
   //   2. 쿠키 있음 + legacy /dashboard/* (URL 에 [track] 없음) → /{cookieTrack}/dashboard/* (T8)
   //   3. 쿠키 있음 + URL 에 [track] 있음 → 통과 (헤더 주입 단계로)
   //   쿠키 기반 → middleware 매 요청 DB 쿼리 0.
-  const TRACK_SPLIT_ENABLED = process.env.NEXT_PUBLIC_TRACK_SPLIT_ENABLED === 'true';
   if (TRACK_SPLIT_ENABLED && pathname !== TRACK_CHOICE_PATH) {
     const trackCookie = request.cookies.get('track-chosen');
     const isAnyGated = TRACK_GATED_PREFIXES.some((p) => pathname.startsWith(p));

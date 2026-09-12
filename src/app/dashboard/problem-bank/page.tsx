@@ -9,7 +9,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
-import { Beaker } from 'lucide-react';
 import {
   Library,
   Calculator,
@@ -93,25 +92,10 @@ const DIFFICULTY_PRESETS = [
 export default function ProblemBankPage() {
   const router = useRouter();
   const orgName = useOrganizationName('과사람');
-  // PR-T10 G-13c — 과학 트랙은 수학비서 트리 기반이라 임시 안내 카드만 (마스터 데이터 정식 분기 전)
-  const { activeTrack, isEnabled: trackSplitEnabled } = useSubjectTrack();
-  if (trackSplitEnabled && activeTrack === 'science') {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center p-6">
-        <div className="max-w-md text-center bg-surface-card border border-subtle rounded-2xl p-8">
-          <Beaker className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-content-primary mb-2">과학 문제은행 준비 중</h2>
-          <p className="text-sm text-content-tertiary leading-relaxed">
-            현재 문제은행은 매쓰싸이 뱅크 분류 트리 기반으로 운영됩니다.
-            <br />
-            과학 분류 마스터 데이터 적재 후 정식 분기 예정입니다.
-            <br />
-            상단 토글에서 [수학] 트랙으로 전환하면 사용 가능합니다.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // ★ 2026-09-12 — 과학 트랙 안내 카드를 걷었다.
+  //   이 return 이 아래 훅들보다 **위에** 있어, 화면에 머문 채 트랙을 전환하면
+  //   React 가 훅 개수 불일치로 터졌다 (eslint rules-of-hooks 27건).
+  //   과학은 featureFlags.SCIENCE_TRACK_DISABLED 로 잠갔으므로 분기 자체가 필요 없다.
 
   // Tree state
   const [subjects, setSubjects] = useState<TreeSubject[]>([]);
