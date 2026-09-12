@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
   const typeCodes = typeCodeParam.split(',').filter(Boolean);
   const difficulty = searchParams.get('difficulty') || '';
   const band = searchParams.get('band') || '';   // 5단 밴드 라벨 (개념·기본·실력·심화·고난도)
+  const answerType = searchParams.get('answerType') || '';   // multiple_choice 객관식 · short_answer 서답형
   const excludeExamId = searchParams.get('excludeExamId') || '';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('problems')
       .select(`
-        id, content_latex, answer_json, source_name, source_year, images, created_at, institute_id,
+        id, content_latex, answer_json, source_name, source_year, images, created_at, institute_id, answer_type,
         classifications!inner(type_code, expanded_type_code, difficulty, cognitive_domain)
       `)
       // ★ 2026-09-01 사고 — 삭제한 문제가 출제 검색에 계속 나왔다.
@@ -94,6 +95,11 @@ export async function GET(request: NextRequest) {
     // 키워드 검색
     if (q) {
       query = query.ilike('content_latex', `%${q}%`);
+    }
+
+    // 답안 형태 — multiple_choice 객관식 · short_answer 서답형(서술형)
+    if (answerType) {
+      query = query.eq('answer_type', answerType);
     }
 
     // 격리 필터 적용 (공통 풀 NULL 도 포함) + 트랙 필터 (flag false 시 no-op)

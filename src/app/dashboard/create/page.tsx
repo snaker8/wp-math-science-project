@@ -84,6 +84,15 @@ interface SearchProblem {
 
 const DIFF_ORDER: DifficultyLevel[] = ['개념', '기본', '실력', '심화', '고난도'];
 
+// 답안 형태 — problems.answer_type 생성 컬럼. 매쓰홀릭 출제 구성 패널 「답안 형태(전체/객관식/주관식)」 대응.
+const ANSWER_TYPES: Array<{ value: string; label: string }> = [
+  { value: '', label: '전체' },
+  { value: 'multiple_choice', label: '객관식' },
+  { value: 'short_answer', label: '주관식' },
+];
+// 최대 문제수 프리셋 — 예전엔 50 이 코드에 박혀 있었다
+const MAX_PRESETS = [10, 20, 25, 30, 50] as const;
+
 const DIFF_COLORS: Record<DifficultyLevel, { bg: string; text: string; border: string }> = {
   '개념':   { bg: 'bg-sky-500/20', text: 'text-sky-400', border: 'border-sky-500/30' },
   '기본':   { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
@@ -408,6 +417,7 @@ function ManualSearchPanel({
 }) {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState('');
+  const [answerType, setAnswerType] = useState('');
   const [results, setResults] = useState<SearchProblem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -419,6 +429,7 @@ function ManualSearchPanel({
       const params = new URLSearchParams();
       if (query) params.set('q', query);
       if (difficulty) params.set('band', difficulty);
+      if (answerType) params.set('answerType', answerType);
       // ★ 선택된 typeCode 전체를 쉼표 구분으로 전달 (OR 검색)
       const tc = selectedTypeCodes.length > 0
         ? selectedTypeCodes.join(',')
@@ -436,7 +447,7 @@ function ManualSearchPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [query, difficulty, subjectCode, selectedTypeCodes]);
+  }, [query, difficulty, answerType, subjectCode, selectedTypeCodes]);
 
   // 엔터키 검색
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -466,6 +477,14 @@ function ManualSearchPanel({
           >
             <option value="">난이도</option>
             {DIFF_ORDER.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+          <select
+            value={answerType}
+            onChange={e => setAnswerType(e.target.value)}
+            title="답안 형태"
+            className="rounded-md border border-subtle bg-surface-raised px-2 py-1.5 text-xs text-content-primary focus:border-white/25 focus:outline-none"
+          >
+            {ANSWER_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label === '전체' ? '답안 형태' : a.label}</option>)}
           </select>
           <button
             type="button"
@@ -850,11 +869,19 @@ function DifficultyDistributionBar({
   availableCounts,
   totalQuestions,
   onChange,
+  answerType,
+  onAnswerType,
+  maxQuestions,
+  onMaxQuestions,
 }: {
   difficulties: Record<DifficultyLevel, number>;
   availableCounts: Record<string, number>;
   totalQuestions: number;
   onChange: (d: Record<DifficultyLevel, number>) => void;
+  answerType: string;
+  onAnswerType: (v: string) => void;
+  maxQuestions: number;
+  onMaxQuestions: (n: number) => void;
 }) {
   const levels: DifficultyLevel[] = DIFF_ORDER;
 
@@ -864,11 +891,38 @@ function DifficultyDistributionBar({
         <div className="flex items-center gap-2">
           <StepBadge number={3} active={totalQuestions > 0} />
           <span className="text-sm font-semibold text-content-primary">문항수를 선택해 주세요</span>
-          <span className="text-[10px] text-content-muted">(최대 50문항)</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-content-secondary">전체 문항</span>
-          <span className="text-lg font-bold text-content-primary tabular-nums">{totalQuestions}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 답안 형태 — 고르면 아래 밴드별 「있는 문제 수」도 그 형태 기준으로 다시 센다 */}
+          <div className="flex items-center gap-1 rounded-lg border border-subtle p-0.5">
+            {ANSWER_TYPES.map((a) => (
+              <button
+                key={a.value}
+                type="button"
+                onClick={() => onAnswerType(a.value)}
+                className={`rounded-md px-2 py-1 text-[11px] transition-colors ${
+                  answerType === a.value ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-1 text-[11px] text-content-secondary">
+            최대
+            <select
+              value={maxQuestions}
+              onChange={(e) => onMaxQuestions(Number(e.target.value))}
+              className="rounded-md border border-subtle bg-surface-raised px-1.5 py-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none"
+            >
+              {MAX_PRESETS.map((n) => <option key={n} value={n}>{n}문항</option>)}
+            </select>
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-content-secondary">전체 문항</span>
+            <span className={`text-lg font-bold tabular-nums ${totalQuestions > maxQuestions ? 'text-amber-400' : 'text-content-primary'}`}>{totalQuestions}</span>
+            <span className="text-[10px] text-content-muted">/ {maxQuestions}</span>
+          </div>
         </div>
       </div>
 
@@ -876,7 +930,7 @@ function DifficultyDistributionBar({
         {levels.map((level) => {
           const available = availableCounts[level] || 0;
           const value = difficulties[level];
-          const maxForThis = Math.min(50 - (totalQuestions - value), available || 99);
+          const maxForThis = Math.min(maxQuestions - (totalQuestions - value), available || 99);
           const colors = DIFF_COLORS[level];
 
           return (
@@ -953,6 +1007,9 @@ export default function PaperCreatePage() {
     '개념': 0, '기본': 0, '실력': 0, '심화': 0, '고난도': 0,
   });
   const [availableCounts, setAvailableCounts] = useState<Record<string, number>>({});
+  // 출제 구성 — 답안 형태 · 최대 문제수 (설계서 S1 「출제 구성 패널」)
+  const [answerType, setAnswerType] = useState('');
+  const [maxQuestions, setMaxQuestions] = useState<number>(30);
 
   // Manual mode
   const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
@@ -1088,7 +1145,7 @@ export default function PaperCreatePage() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/exams/available-counts?typeCodes=${selectedTypeCodes.join(',')}`);
+        const res = await fetch(`/api/exams/available-counts?typeCodes=${selectedTypeCodes.join(',')}${answerType ? `&answerType=${answerType}` : ''}`);
         if (res.ok) {
           const data = await res.json();
           setAvailableCounts(data);
@@ -1098,7 +1155,8 @@ export default function PaperCreatePage() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [selectedTypeCodes]);
+    // ★ answerType 도 deps — 답안 형태를 바꾸면 밴드별 「있는 문제 수」를 다시 세야 한다
+  }, [selectedTypeCodes, answerType]);
 
   // ---- Handlers ----
   const handleReset = () => {
@@ -1282,6 +1340,7 @@ export default function PaperCreatePage() {
           subject: categoryLabel || '',
           typeCodes: selectedTypeCodes,
           difficulty_distribution: difficulties,
+          answerType,
           mode: createMode,
         };
       }
@@ -1582,6 +1641,10 @@ export default function PaperCreatePage() {
                 availableCounts={availableCounts}
                 totalQuestions={totalQuestions}
                 onChange={setDifficulties}
+                answerType={answerType}
+                onAnswerType={setAnswerType}
+                maxQuestions={maxQuestions}
+                onMaxQuestions={setMaxQuestions}
               />
             </div>
           )}
