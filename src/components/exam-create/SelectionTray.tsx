@@ -2,10 +2,12 @@
 
 import React, { useMemo, useState } from 'react';
 import { Reorder } from 'framer-motion';
-import { X, GripVertical, ChevronRight, Trash2, ChevronDown } from 'lucide-react';
+import { X, GripVertical, ChevronRight, Trash2, ChevronDown, Repeat2 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { DifficultyDistribution } from './DifficultyDistribution';
 import { BAND_SCHEMES, bandOf } from '@/lib/class/mastery-bands';
+import { CandidatePool } from './CandidatePool';
+import type { CandidateProblem } from '@/app/api/problems/candidates/route';
 
 /** 접힌 탭에 붙는 5단 미니 막대 — 트레이를 열지 않아도 편중이 보인다 (설계서 S1) */
 const MINI_BAR: Record<string, string> = { A: 'bg-sky-500/80', B: 'bg-emerald-500/80', C: 'bg-amber-500/80', D: 'bg-orange-500/80', E: 'bg-rose-500/80' };
@@ -25,10 +27,16 @@ interface SelectionTrayProps {
   onRemove: (id: string) => void;
   onClear: () => void;
   onCompose: () => void;
+  /** 그 자리를 대신한다 — 번호 유지 (설계서 S3) */
+  onReplace: (targetId: string, candidate: CandidateProblem) => void;
+  /** 맨 뒤에 새 문항으로 붙인다 */
+  onAdd: (candidate: CandidateProblem) => void;
 }
 
-export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose }: SelectionTrayProps) {
+export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose, onReplace, onAdd }: SelectionTrayProps) {
   const [open, setOpen] = useState(false);
+  /** 후보풀을 열어 둔 문항 — 열리면 트레이가 2분할이 된다 */
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const miniCounts = useMemo(() => {
     const c: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
@@ -61,7 +69,8 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
       )}
 
       {open && (
-        <div className="fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col border-l border-white/[.09] bg-zinc-950/95 backdrop-blur">
+        <div className={`fixed right-0 top-0 z-50 flex h-full border-l border-white/[.09] bg-zinc-950/95 backdrop-blur ${focusId ? 'w-[740px]' : 'w-[380px]'}`}>
+          <div className="flex h-full w-[380px] shrink-0 flex-col">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-content-primary">선택한 문항</span>
@@ -109,14 +118,26 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
                             <code className="truncate text-zinc-500">{p.typeCode}</code>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onRemove(p.id)}
-                          className="rounded p-0.5 text-zinc-600 opacity-0 hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
-                          title="제거"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setFocusId(focusId === p.id ? null : p.id)}
+                            className={`rounded p-0.5 transition-colors ${
+                              focusId === p.id ? 'bg-white/15 text-white' : 'text-zinc-600 opacity-0 hover:text-zinc-200 group-hover:opacity-100'
+                            }`}
+                            title="이 자리에 넣을 후보 보기 (교체·추가)"
+                          >
+                            <Repeat2 className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onRemove(p.id)}
+                            className="rounded p-0.5 text-zinc-600 opacity-0 hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
+                            title="제거"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                       <div className="line-clamp-2 text-[11px] text-zinc-300">
                         <MixedContentRenderer content={(p.content_latex || '').slice(0, 160)} />
@@ -152,6 +173,24 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose 
               선택 비우기
             </button>
           </div>
+          </div>
+
+          {/* ❸ 후보풀 — 담은 문항을 고르면 그 옆에 열린다 (2분할) */}
+          {focusId && (() => {
+            const idx = picked.findIndex((x) => x.id === focusId);
+            if (idx < 0) return null;
+            return (
+              <div className="h-full min-w-0 flex-1">
+                <CandidatePool
+                  baseId={focusId}
+                  baseIndex={idx}
+                  excludeIds={picked.map((x) => x.id)}
+                  onReplace={(c) => { onReplace(focusId, c); setFocusId(c.id); }}
+                  onAdd={(c) => onAdd(c)}
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
     </>

@@ -1959,6 +1959,18 @@ export default function ExamCreatePage() {
         onRemove={(id) => setPickedList((prev) => prev.filter((x) => x.id !== id))}
         onClear={() => setPickedList([])}
         onCompose={openCompose}
+        // ★ 교체 = 그 자리를 대신한다(번호 유지) · 추가 = 맨 뒤에 붙인다 (설계서 S3)
+        onReplace={(targetId, c) => setPickedList((prev) => {
+          if (prev.some((x) => x.id === c.id)) return prev;   // 이미 담긴 문제면 그대로
+          return prev.map((x) => (x.id === targetId
+            ? { id: c.id, content_latex: c.content, typeCode: c.typeCode, difficulty: c.difficulty ?? 0, sourceName: c.sourceName, sourceYear: c.sourceYear }
+            : x));
+        })}
+        onAdd={(c) => setPickedList((prev) => (
+          prev.some((x) => x.id === c.id)
+            ? prev
+            : [...prev, { id: c.id, content_latex: c.content, typeCode: c.typeCode, difficulty: c.difficulty ?? 0, sourceName: c.sourceName, sourceYear: c.sourceYear }]
+        ))}
       />
 
       {/* 시험지 편성 모달 */}
