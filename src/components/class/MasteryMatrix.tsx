@@ -23,10 +23,11 @@
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { Loader2, AlertCircle, RotateCcw, ClipboardList, X } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, AlertCircle, RotateCcw, ClipboardList, FileText, X } from 'lucide-react';
 import type { MasteryPayload, MasteryItem } from '@/app/api/classes/[classId]/mastery/route';
 import {
-  BAND_SCHEMES, type BandScheme, bandOf, LEVEL_LABEL, type CellLevel, isWeakLevel,
+  BAND_SCHEMES, type BandScheme, bandOf, bandLabelOf, LEVEL_LABEL, type CellLevel, isWeakLevel,
   midOf, unitOf, depthOf, cellKey, subjectOf, summarizeType, type TypeLayer, type TypeSummary,
 } from '@/lib/class/mastery-bands';
 import { inferCells, type InferredCell } from '@/lib/class/mastery-infer';
@@ -519,6 +520,29 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
     return specs;
   }, [selected, cellByCode, bands]);
 
+  // ★ 판 → 시험지 출제 인계 (설계서 S6).
+  //   과제는 「학생에게 낸다」, 시험지는 「인쇄해서 푼다」 — 다른 일이라 버튼을 나눈다.
+  //   칸 하나가 문제 하나다. 난이도는 그 칸의 대표 층을 출제 화면의 5단 말로 바꿔 넘긴다
+  //   (판은 4·6단으로도 보므로 라벨을 그대로 넘기면 어긋난다).
+  const examHref = useMemo(() => {
+    const codes: string[] = [];
+    const byBand = new Map<string, number>();
+    for (const code of selected) {
+      const cell = cellByCode.get(code);
+      if (!cell) continue;
+      codes.push(code);
+      const levels = bands.find((b) => b.key === cell.repBand)?.levels ?? [];
+      const label = levels.length > 0 ? bandLabelOf(levels[Math.floor(levels.length / 2)]) : null;
+      if (label) byBand.set(label, (byBand.get(label) ?? 0) + 1);
+    }
+    if (codes.length === 0) return null;
+    const q = new URLSearchParams();
+    q.set('typeCodes', codes.join(','));
+    if (byBand.size > 0) q.set('bands', Array.from(byBand).map(([l, n]) => `${l}:${n}`).join(','));
+    q.set('from', '판');
+    return `/dashboard/create?${q.toString()}`;
+  }, [selected, cellByCode, bands]);
+
   const targetStudentIds = studentSel ? [studentSel] : students.map((s) => s.id);
 
   // ── 렌더 ──
@@ -831,6 +855,24 @@ export function MasteryMatrix({ classId, className, students, initialTo, initial
               <ClipboardList className="h-3.5 w-3.5" />
               과제 만들기
             </button>
+            {examHref ? (
+              <Link
+                href={examHref}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm font-semibold text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary"
+                title="고른 칸을 그대로 출제 화면으로 — 칸 하나가 문제 하나"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                시험지 출제
+              </Link>
+            ) : (
+              <button
+                disabled
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm font-semibold text-content-secondary opacity-40"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                시험지 출제
+              </button>
+            )}
             <div className="flex gap-1.5">
               <button
                 onClick={selectWeak}

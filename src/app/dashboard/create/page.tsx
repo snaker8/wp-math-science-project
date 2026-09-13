@@ -995,6 +995,12 @@ export default function PaperCreatePage() {
   const [answerType, setAnswerType] = useState('');
   const [maxQuestions, setMaxQuestions] = useState<number>(30);
 
+  // ★ 판 인계 (설계서 S6) — 반 허브 숙달 판에서 고른 칸이 그대로 넘어온다
+  //   `?typeCodes=MS07-…,MS07-…&bands=실력:3,심화:2&from=판`
+  //   판은 「어디가 약한가」를 보여줄 뿐 거기서 시험지가 안 나왔다. 그 한 걸음을 잇는다.
+  const [handoffCodes, setHandoffCodes] = useState<string[]>([]);
+  const [handoffFrom, setHandoffFrom] = useState('');
+
   // Manual mode
   const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
   const [manualProblems, setManualProblems] = useState<Map<string, SearchProblem>>(new Map());
@@ -1017,13 +1023,15 @@ export default function PaperCreatePage() {
 
   // ---- Computed ----
   const selectedTypeCodes = useMemo(() => {
+    // ★ 판에서 넘어온 유형이 우선 — 단, 사용자가 트리에서 직접 고르기 시작하면 그쪽이 이긴다
+    if (selectedL3Keys.size === 0 && handoffCodes.length > 0) return handoffCodes;
     // L3 keys → MS prefix codes for API
     return [...selectedL3Keys].map(key => {
       // key format: "07-01-02-03" → "MS07-01-02-03"
       const parts = key.split('-');
       return `MS${parts.join('-')}`;
     });
-  }, [selectedL3Keys]);
+  }, [selectedL3Keys, handoffCodes]);
 
   // typeGroups for Column 2 — 선택된 L3의 세부유형(L4)
   const typeGroups = useMemo(() => {
@@ -1122,6 +1130,37 @@ export default function PaperCreatePage() {
   }, [selectedSubjectCode]);
 
   // ---- Fetch available counts (debounced) ----
+  // ★ 판 인계 — mount 때 한 번만 읽는다.
+  //   useSearchParams 를 안 쓴다 (Next 14 에서 Suspense 경계가 없으면 빌드가 CSR 로 떨어진다).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    const codes = (q.get('typeCodes') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (codes.length === 0) return;
+    setHandoffCodes(codes);
+    setHandoffFrom(q.get('from') || '');
+
+    // 과목은 코드에서 읽는다 (MS07-… → 07). handleSubjectChange 는 난이도를 지우므로 직접 심는다.
+    const m = /^MS(\d{2})/.exec(codes[0]);
+    if (m) setSelectedSubjectCode(m[1]);
+
+    // bands=실력:3,심화:2 — 칸 하나가 문제 하나다
+    const bandsParam = q.get('bands') || '';
+    if (bandsParam) {
+      const next: Record<DifficultyLevel, number> = { '개념': 0, '기본': 0, '실력': 0, '심화': 0, '고난도': 0 };
+      let any = false;
+      for (const piece of bandsParam.split(',')) {
+        const [label, n] = piece.split(':');
+        const key = (label || '').trim() as DifficultyLevel;
+        if (!(key in next)) continue;
+        next[key] = Math.max(1, parseInt(n ?? '1', 10) || 1);
+        any = true;
+      }
+      if (any) setDifficulties(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (selectedTypeCodes.length === 0) {
       setAvailableCounts({});
@@ -1157,6 +1196,8 @@ export default function PaperCreatePage() {
     setAvailableCounts({});
     setManualSelected(new Set());
     setManualProblems(new Map());
+    setHandoffCodes([]);
+    setHandoffFrom('');
   };
 
   const handleSubjectChange = (code: string) => {
@@ -1514,6 +1555,29 @@ export default function PaperCreatePage() {
                 <StepBadge number={1} active={!selectedSubjectCode} />
                 <span className="text-sm font-semibold text-content-primary">과목·단원 선택</span>
               </div>
+
+              {/* ★ 판에서 넘어온 유형 — 트리를 안 건드려도 이미 골라져 있다는 걸 보여준다 */}
+              {handoffCodes.length > 0 && selectedL3Keys.size === 0 && (
+                <div className="flex-shrink-0 flex items-start gap-2 border-b border-subtle bg-white/[.04] px-3 py-2">
+                  <span className="mt-0.5 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-content-secondary">
+                    {handoffFrom === '판' ? '숙달 판' : '인계'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] text-content-secondary">
+                      약한 유형 <span className="font-bold tabular-nums text-content-primary">{handoffCodes.length}</span>개를 받았습니다.
+                      트리에서 직접 고르면 그쪽이 우선합니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setHandoffCodes([]); setHandoffFrom(''); }}
+                    className="p-0.5 text-content-tertiary transition-colors hover:text-content-primary"
+                    title="인계 해제"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
 
               {/* Subject selector */}
               <div className="flex-shrink-0 px-3 py-2 border-b border-subtle">
