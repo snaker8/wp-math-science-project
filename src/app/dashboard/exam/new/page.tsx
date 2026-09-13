@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  School, Layers, Target, BookOpen, FileSpreadsheet, Stethoscope,
+  School, Layers, Target, BookOpen, FileSpreadsheet, Stethoscope, Undo2,
   ArrowRight, Loader2, Sparkles,
 } from 'lucide-react';
 import type { SourceSummary } from '@/app/api/exams/source-summary/route';
@@ -54,6 +54,12 @@ const CARDS: SourceCard[] = [
     title: '취약 보충 (학생별)',
     desc: '학생과 기간만 정하면 약한 유형을 찾아 문제까지 담아 줍니다.',
     stat: (s) => (s.classes > 0 ? `반 ${s.classes}개` : null),
+  },
+  {
+    href: '/dashboard/exam-create?source=wrong',
+    icon: Undo2,
+    title: '오답 (학생별)',
+    desc: '틀린 문제를 그대로 다시, 또는 같은 유형의 새 문제로. 채점 기록만 봅니다.',
   },
   {
     href: '/dashboard/exam-create?source=textbook',

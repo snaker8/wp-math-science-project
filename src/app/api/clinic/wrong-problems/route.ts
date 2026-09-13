@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
+import { collectWrongAnswers } from '@/lib/class/wrong-answers';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,101 +55,12 @@ export async function POST(req: NextRequest) {
   }
   const limit = Math.min(Math.max(body.limit ?? 60, 1), 200);
 
-  // 신원 병합 — 명단으로 채점한 뒤 승격한 학생은 기록이 옛 id 에 남는다
-  const refsOf = new Map<string, string[]>(studentIds.map((id) => [id, [id]]));
-  {
-    const { data: rs } = await sb
-      .from('roster_students').select('id, promoted_user_id').in('promoted_user_id', studentIds);
-    for (const r of (rs ?? []) as Array<{ id: string; promoted_user_id: string }>) {
-      refsOf.get(r.promoted_user_id)?.push(r.id);
-    }
-  }
-  const ownerByRef = new Map<string, string>();
-  for (const [owner, refs] of refsOf) for (const r of refs) ownerByRef.set(r, owner);
-
-  // 이름 (users → 없으면 roster)
-  const nameById = new Map<string, string>();
-  {
-    const { data: us } = await sb.from('users').select('id, full_name, email').in('id', studentIds);
-    for (const u of (us ?? []) as Array<{ id: string; full_name: string | null; email: string | null }>) {
-      nameById.set(u.id, u.full_name || u.email?.split('@')[0] || '(이름 없음)');
-    }
-    const missing = studentIds.filter((id) => !nameById.has(id));
-    if (missing.length > 0) {
-      const { data: rs } = await sb.from('roster_students').select('id, full_name').in('id', missing);
-      for (const r of (rs ?? []) as Array<{ id: string; full_name: string | null }>) {
-        nameById.set(r.id, r.full_name || '(이름 없음)');
-      }
-    }
-  }
-
-  // 채점 세션
-  let sq = sb
-    .schema('diagnostics' as never)
-    .from('print_sessions')
-    .select('id, student_id, completed_at')
-    .in('student_id', Array.from(ownerByRef.keys()))
-    .not('completed_at', 'is', null);
-  if (body.from) sq = sq.gte('completed_at', `${body.from}T00:00:00`);
-  if (body.to) sq = sq.lte('completed_at', `${body.to}T23:59:59`);
-  const { data: psRows } = await sq;
-  const sessions = (psRows ?? []) as Array<{ id: string; student_id: string; completed_at: string | null }>;
-  if (sessions.length === 0) {
-    return NextResponse.json({ groups: [], studentsWithData: 0, totalProblems: 0 });
-  }
-  const ownerBySession = new Map(sessions.map((s) => [s.id, ownerByRef.get(s.student_id)!]));
-
-  // 채점 결과 — ★ 1,000행 한계. 한 반이라도 회차가 쌓이면 바로 걸린다.
-  type Res = {
-    session_id: string; problem_id: string | null; is_correct: boolean;
-    teacher_note: string | null; graded_at: string | null;
-  };
-  const results: Res[] = [];
-  const sessIds = sessions.map((s) => s.id);
-  for (let i = 0; i < sessIds.length; i += 300) {
-    const chunk = sessIds.slice(i, i + 300);
-    for (let from = 0; ; from += 1000) {
-      const { data } = await sb
-        .schema('diagnostics' as never)
-        .from('session_results')
-        .select('session_id, problem_id, is_correct, teacher_note, graded_at')
-        .in('session_id', chunk)
-        .order('id')
-        .range(from, from + 999);
-      const rows = (data ?? []) as Res[];
-      results.push(...rows);
-      if (rows.length < 1000) break;
-    }
-  }
-
-  // (학생, 문제) 별 마지막 채점만 본다 — 그 뒤에 맞혔으면 오답이 아니다
-  const latest = new Map<string, Res>();
-  for (const r of results) {
-    if (!r.problem_id) continue;
-    if ((r.teacher_note ?? '').includes('자동채점 보류')) continue;
-    const owner = ownerBySession.get(r.session_id);
-    if (!owner) continue;
-    const key = `${owner}|${r.problem_id}`;
-    const prev = latest.get(key);
-    if (!prev || (r.graded_at ?? '') > (prev.graded_at ?? '')) latest.set(key, r);
-  }
-
-  const missedBy = new Map<string, Set<string>>();   // problem_id → owner set
-  const lastAt = new Map<string, string>();
-  for (const [key, r] of latest) {
-    if (r.is_correct) continue;
-    const [owner, problemId] = key.split('|');
-    const set = missedBy.get(problemId) ?? new Set<string>();
-    set.add(owner);
-    missedBy.set(problemId, set);
-    const when = r.graded_at ?? '';
-    if (when && (!lastAt.get(problemId) || when > lastAt.get(problemId)!)) lastAt.set(problemId, when);
-  }
+  // ★ 오답 판정은 한 곳에서만 — lib/class/wrong-answers
+  const { missedBy, lastAt, nameById, studentsWithSessions } =
+    await collectWrongAnswers(sb, { studentIds, from: body.from, to: body.to });
 
   if (missedBy.size === 0) {
-    return NextResponse.json({
-      groups: [], studentsWithData: new Set(sessions.map((s) => ownerBySession.get(s.id))).size, totalProblems: 0,
-    });
+    return NextResponse.json({ groups: [], studentsWithData: studentsWithSessions, totalProblems: 0 });
   }
 
   // 여러 명이 틀린 것 → 최근 것 순

@@ -31,6 +31,7 @@ import {
   FileText,
   Sparkles,
   Target,
+  Undo2,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
 import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
 import { WeakClinicPanel, type WeakProblemRow } from '@/components/exam-create/WeakClinicPanel';
+import { WrongSourcePanel, type WrongSourceRow } from '@/components/exam-create/WrongSourcePanel';
 
 // ============================================================================
 // 출처별 카테고리 탭 (매쓰플랫 식 — 학교시험 / 유형기준 / 출처기준 식 구성)
@@ -47,7 +49,7 @@ import { WeakClinicPanel, type WeakProblemRow } from '@/components/exam-create/W
 //     있는데 진단평가, 학교기출문제, 시중교재, 모의고사 등을 선택해서 그 안에서
 //     또 트리가 나눠져야하는 형태로... 모든 문제 포함 단원 선택도 유지"
 // ============================================================================
-type SourceTab = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock' | 'weak';
+type SourceTab = 'all' | 'diagnostic' | 'school' | 'textbook' | 'mock' | 'weak' | 'wrong';
 
 const SOURCE_TABS: Array<{
   id: SourceTab;
@@ -105,6 +107,15 @@ const SOURCE_TABS: Array<{
     label: '취약 보충',
     description: '학생·기간만 정하면 약한 유형을 찾아 문제까지 담아준다',
     icon: Target,
+    color: 'rose',
+    available: true,
+  },
+  // ★ 오답 — 「틀린 그 문제」가 출발점. 취약(약한 유형에서 새 문제)과 다르다 (설계서 S4)
+  {
+    id: 'wrong',
+    label: '오답',
+    description: '틀린 문제를 그대로 또는 같은 유형 새 문제로 — 채점 기록 기준',
+    icon: Undo2,
     color: 'rose',
     available: true,
   },
@@ -640,7 +651,7 @@ export default function ExamCreatePage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const s = new URLSearchParams(window.location.search).get('source');
-    if (s && ['all', 'diagnostic', 'school', 'textbook', 'mock', 'weak'].includes(s)) {
+    if (s && ['all', 'diagnostic', 'school', 'textbook', 'mock', 'weak', 'wrong'].includes(s)) {
       setActiveTab(s as SourceTab);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -673,6 +684,15 @@ export default function ExamCreatePage() {
     difficulty: Number.isFinite(Number(p.difficulty)) ? Number(p.difficulty) : 0,
     sourceName: p.source || null,
     sourceYear: typeof p.year === 'number' ? p.year : null,
+  });
+
+  const wrongToPicked = (p: WrongSourceRow): PickedProblem => ({
+    id: p.id,
+    content_latex: p.content || '',
+    typeCode: p.typeCode || '',
+    difficulty: p.difficulty ?? 0,
+    sourceName: p.source,
+    sourceYear: p.year,
   });
 
   const toPickedProblem = (p: ProblemRow): PickedProblem => {
@@ -1695,6 +1715,20 @@ export default function ExamCreatePage() {
           onAddMany={(rows) => setPickedList((prev) => {
             const have = new Set(prev.map((x) => x.id));
             return [...prev, ...rows.filter((r) => !have.has(r.id)).map(weakToPicked)];
+          })}
+        />
+      ) : activeTab === 'wrong' ? (
+        // ★ 오답 소스 — 「틀린 그 문제」가 출발점 (설계서 S4). 담아주고 교사가 뺀다.
+        <WrongSourcePanel
+          pickedIds={new Set(pickedList.map((p) => p.id))}
+          onTogglePick={(p) => setPickedList((prev) =>
+            prev.some((x) => x.id === p.id)
+              ? prev.filter((x) => x.id !== p.id)
+              : [...prev, wrongToPicked(p)]
+          )}
+          onAddMany={(rows) => setPickedList((prev) => {
+            const have = new Set(prev.map((x) => x.id));
+            return [...prev, ...rows.filter((r) => !have.has(r.id)).map(wrongToPicked)];
           })}
         />
       ) : activeTab !== 'all' ? (
