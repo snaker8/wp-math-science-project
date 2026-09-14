@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { Reorder } from 'framer-motion';
 import { X, GripVertical, ChevronRight, Trash2, ChevronDown, Repeat2 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { truncateLatexPreview } from '@/lib/utils/latex-preview';
 import { DifficultyDistribution } from './DifficultyDistribution';
 import { BAND_SCHEMES, bandOf } from '@/lib/class/mastery-bands';
 import { CandidatePool } from './CandidatePool';
@@ -140,7 +141,7 @@ export function SelectionTray({ picked, onReorder, onRemove, onClear, onCompose,
                         </div>
                       </div>
                       <div className="line-clamp-2 text-[11px] text-zinc-300">
-                        <MixedContentRenderer content={(p.content_latex || '').slice(0, 160)} />
+                        <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 160)} />
                       </div>
                       {p.sourceName && (
                         <div className="mt-1 truncate text-[10px] text-zinc-500">

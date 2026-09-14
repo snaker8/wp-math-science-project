@@ -185,6 +185,15 @@ PDF 업로드 → Mathpix OCR (페이지별) → lines.json 파싱
 - **가드 원칙**: 오탐(객관식→서술형)은 "본문 제거만 안 함" → **데이터 손실 0** + 렌더넷 커버. 미탐(서술형→객관식)이 본문 삭제 사고이므로 **신호는 넉넉하게 잡아 안전쪽**으로 기운다.
 - `cloud-flow.ts`(보기 판정·content 생성)·`useExamProblems.ts`(추출·strip)·`extract-choices-from-ocr.ts`(재OCR 보기추출) 건드릴 때 위 가드 살아있는지 git log 확인 필수. **"동그라미가 보기로 잡혀 본문이 보기로 새는" 클래스는 이 3곳 모두에서 재발 이력 있음.**
 
+### 10. 미리보기 자르기는 반드시 `truncateLatexPreview` (2026-09-14 학습)
+- 위치: `src/lib/utils/latex-preview.ts` + 회귀 테스트 `latex-preview.test.ts`
+- 사고: 카드가 `content.slice(0, 200)` 로 잘랐는데 200번째 글자가 `egin{tabular}` 한가운데라
+  화면에 **`\displaystyle egin{ta` 가 글자로 샜다.** DB 본문은 멀쩡했다 — 자르기가 만든 쓰레기다.
+- 가드: 자른 뒤 안전한 자리까지 되돌린다 — ① 짝 없는 `egin{…}`(토막 포함) 버림 ② `$` 홀수면
+  마지막 `$` 앞에서 끊음 ③ 닫히지 않은 `{` 앞에서 끊음 ④ 끝에 남은 명령어 토막 버림.
+- **본문을 글자 수로 직접 자르지 말 것.** `.slice(0, N)` 한 결과를 MixedContentRenderer 에 넣으면
+  언제든 다시 난다. 마크업을 먼저 모두 걷어낸 평문(`previewText`)은 예외.
+
 ### 학습 저장 위치
 - DB: `figure_corrections` (도형 교정 diff), `latex_render_corrections` (LaTeX 수정 diff)
 - 메모리: `~/.claude/projects/.../memory/feedback_*.md` (5개 파일 인덱스 MEMORY.md 참조)
