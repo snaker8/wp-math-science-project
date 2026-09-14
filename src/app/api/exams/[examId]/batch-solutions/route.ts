@@ -119,6 +119,21 @@ export async function POST(
     const chunk = problemIds.slice(startIndex, endIndex);
     const baseUrl = request.nextUrl.origin;
 
+    // ★★ 자기 자신·해설 생성 호출에 **로그인 세션을 이어서 넘긴다** (2026-09-14 사고).
+    //   generate-solution 도 batch-solutions 도 requireAuthScope()(+PIN) 로 막혀 있는데,
+    //   체인은 Content-Type 만 달고 불렀다 → **매번 401**. 첫 발부터 죽어서
+    //   화면은 폴링만 돌고 해설은 한 건도 안 생겼다 ("해설 생성을 해도 생성이 안 된다").
+    //   문제가 드러나지 않은 이유: 401 도 그냥 fail 로 세어 재시도만 반복했다.
+    //   ★ 내부 우회 토큰을 새로 파지 않는다 — 요청한 사람의 쿠키를 그대로 넘기면
+    //     격리·권한·PIN 검사가 전부 원래대로 돈다(같은 오리진 안에서만 오간다).
+    const chainHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    {
+      const cookie = request.headers.get('cookie');
+      if (cookie) chainHeaders.cookie = cookie;
+      const pin = request.headers.get('x-solution-pin');
+      if (pin) chainHeaders['x-solution-pin'] = pin;
+    }
+
     // ★ 수동 업로드된 빠른답/해설만 스킵 (match-answers 모달로 PDF 올린 경우)
     //   편집 모달 수정은 플래그 안 찍으므로 재생성 대상임
     const { data: existingProblems } = await supabaseAdmin
@@ -143,10 +158,17 @@ export async function POST(
         try {
           const res = await fetch(`${baseUrl}/api/problems/${problemId}/generate-solution`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: chainHeaders,
             body: JSON.stringify({}),
           });
-          if (!res.ok) return { ok: false, status: res.status };
+          if (!res.ok) {
+            // ★ 401/403 은 재시도해도 의미가 없다 — 인증이 안 넘어간 것이다. 로그에 분명히 남긴다.
+            if (res.status === 401 || res.status === 403) {
+              const why = await res.text().catch(() => '');
+              console.error(`[batch-solutions] ✖ 인증/권한으로 막힘 (${res.status}) ${problemId.slice(0, 8)}: ${why.substring(0, 200)}`);
+            }
+            return { ok: false, status: res.status };
+          }
           // ★ 200 OK 라도 실제 DB 에 solution_latex 가 채워졌는지 확인.
           //   AI 가 빈 응답을 200 으로 반환한 케이스를 fail 로 분류해 재시도/누락 추적에 포함.
           const saved = await hasNonEmptySolution(problemId);
@@ -157,6 +179,12 @@ export async function POST(
       };
 
       let result = await tryOnce();
+      // 인증/권한 실패는 기다렸다 다시 해도 같다 — 헛돌지 않고 바로 접는다
+      if (!result.ok && (result.status === 401 || result.status === 403)) {
+        if (state) state.failed++;
+        console.error(`[batch-solutions] ⛔ ${problemId.slice(0, 8)}: ${result.status} — 재시도 생략(인증/권한)`);
+        return;
+      }
       // ★ retry 정책 강화 — 모든 fail 에 대해 1회 더 시도 (이전엔 5xx 한정).
       //   timeout(0) / 4xx / 5xx 모두 포함. wait 시간만 status 로 차등.
       //   sweepMode 면 한 번 더 추가 (총 3회) — 누락 끝까지 끌어올리기.
@@ -187,7 +215,7 @@ export async function POST(
     if (hasMore) {
       fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: chainHeaders,
         body: JSON.stringify({ problemIds, startIndex: endIndex, sweepMode }),
         keepalive: true,
       }).catch((err) => console.error('[batch-solutions] chain fetch error:', err));
@@ -230,7 +258,7 @@ export async function POST(
             }
             fetch(`${baseUrl}/api/exams/${examId}/batch-solutions`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: chainHeaders,
               body: JSON.stringify({ problemIds: missing, sweepMode: true }),
               keepalive: true,
             }).catch((err) => console.error('[batch-solutions] sweep fetch error:', err));
