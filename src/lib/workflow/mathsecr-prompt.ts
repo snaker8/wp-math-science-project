@@ -139,36 +139,9 @@ export function curriculumCodesToLabel(codes?: string[] | null): string {
   return codes.map((c) => CODE_TO_NAME[c] || c).join(' + ');
 }
 
-/**
- * 같은 학년의 이웃 과정 — 학교 시험은 범위가 섞인다.
- *
- * ★ 대표 지시 (2026-09-14): "분류할 때 1-2 학기로 보지 말고 **과정을 보고** 분류하라."
- *   실사고 — 온천중 25-1-2(중1 2학기) 22문항 중 11문항이 좌표평면·정비례·반비례(중1-1 과정).
- *   중1-2 테이블만 줬더니 갈 곳이 없어 통계 대푯값·점선면으로 끌려갔다.
- *   학교는 2학기 시험에 1학기 과정을 태연히 낸다 — 그게 정상이다.
- *
- * ★ 분류 경로가 **셋**이다 (classify.ts 2단계 · cloud-flow 자산화 · reanalyze 개별).
- *   각자 확장하면 또 한 곳만 고쳐진다. 그래서 표도 함수도 여기 하나만 둔다.
- * ★ 비용: 1차 경로(2단계 분류)의 1단계 테이블은 대단원+중단원뿐(중등 22~24행). 짝을 더해도 ~1KB.
- */
-export const NEIGHBOR_COURSES: Record<string, string[]> = {
-  '01': ['02'], '02': ['01'],   // 중1-1 ↔ 중1-2 (좌표평면·정비례/반비례가 2학기 시험에 흔히 섞인다)
-  '03': ['04'], '04': ['03'],   // 중2-1 ↔ 중2-2
-  '05': ['06'], '06': ['05'],   // 중3-1 ↔ 중3-2
-  '07': ['08'], '08': ['07'],   // 공통수학1 ↔ 공통수학2 (2015 수학(상)/(하) 범위 혼재)
-  '09': ['10', '11'],           // 대수(구 수학I) → +미적분1, 확통
-  '10': ['09'],                 // 미적분1(구 수학II) → +대수 (같은 학년)
-};
-
-/** 고른 과정 + 같은 학년의 이웃 과정. 고른 것이 **앞**에 온다(표시·예시 코드는 사용자의 선택을 따른다). */
-export function withNeighborCourses(code: string | string[] | null | undefined): string[] {
-  const base = Array.isArray(code) ? code : (code ? [code] : []);
-  const out: string[] = [...base];
-  for (const c of base) {
-    for (const n of NEIGHBOR_COURSES[c] || []) if (!out.includes(n)) out.push(n);
-  }
-  return out;
-}
+// ★ 이웃 과정 표는 클라이언트 안전 모듈에 있다 — 트리 선택기(클라이언트)도 같은 표를 써야 해서.
+//   여기서 re-export 만 한다 (서버 호출부는 그대로 이 모듈에서 가져다 쓴다).
+export { NEIGHBOR_COURSES, withNeighborCourses } from './curriculum-options';
 
 function loadTree(): TreeNode[] {
   return mathsecrTree as unknown as TreeNode[];

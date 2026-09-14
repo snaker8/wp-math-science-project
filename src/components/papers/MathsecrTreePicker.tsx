@@ -16,6 +16,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, Search, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
+// ★ 클라이언트 안전 모듈에서만 가져온다 — mathsecr-prompt 는 3.3MB JSON 을 물고 있다.
+import { NEIGHBOR_COURSES } from '@/lib/workflow/curriculum-options';
 
 interface MathsecrNode {
   code: string;
@@ -51,13 +53,28 @@ interface Props {
 
 export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose }: Props) {
   const [subjectCode, setSubjectCode] = useState(initialSubjectCode || '09');
+  /**
+   * 이웃 과정(같은 학년의 다른 학기)을 트리에 **함께** 띄운다.
+   *
+   * ★ 대표 지적 (2026-09-14): "여기서 중복 단원 유형이 선택되게 해줘야지."
+   *   분류기는 이웃 과정 유형표를 함께 보는데(PR #547·#548), 사람이 손으로 고치는 이 트리는
+   *   한 과정만 보였다. 중1-2 시험지의 정비례·반비례(중1-1) 문제를 고치려면 드롭다운을
+   *   바꿔야 했고, 그러면 **기계가 맞게 넣은 걸 사람이 되돌리게 된다.**
+   *   기본 켜짐 — 학교 시험은 지난 학기 범위를 섞어 낸다.
+   */
+  const [withNeighbor, setWithNeighbor] = useState(true);
   const [tree, setTree] = useState<MathsecrNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<MathsecrNode | null>(null);
 
-  // 트리 fetch
+  const neighborCodes = useMemo(
+    () => (withNeighbor ? (NEIGHBOR_COURSES[subjectCode] || []) : []),
+    [subjectCode, withNeighbor],
+  );
+
+  // 트리 fetch — 고른 과정 + 이웃 과정을 이어 붙인다 (각 과정이 자기 루트를 갖는다)
   useEffect(() => {
     if (!open || !subjectCode) return;
     setLoading(true);
@@ -70,14 +87,21 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
     //   → 응답이 돌아왔을 때 아직 그 과목이 유효한지 확인하고, 아니면 버린다.
     let cancelled = false;
 
-    fetch(`/api/mathsecr-types?subject=${subjectCode}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
+    Promise.all(
+      [subjectCode, ...neighborCodes].map((c) =>
+        fetch(`/api/mathsecr-types?subject=${c}`, { cache: 'no-store' })
+          .then((r) => r.json())
+          .then((d) => (d.tree || []) as MathsecrNode[])
+          .catch(() => [] as MathsecrNode[]),
+      ),
+    )
+      .then((trees) => {
         if (cancelled) return;   // 이미 다른 과목으로 넘어갔다 — 이 응답은 버린다
-        setTree(d.tree || []);
-        // 초기 — 1단계(대단원)만 expand
+        const merged = trees.flat();
+        setTree(merged);
+        // 초기 — 고른 과정은 대단원까지 펴고, 이웃 과정은 접어 둔다(주인공이 가려지면 안 된다)
         const initialExpand = new Set<string>();
-        (d.tree || []).forEach((n: MathsecrNode) => {
+        (trees[0] || []).forEach((n: MathsecrNode) => {
           if (n.depth <= 2) initialExpand.add(n.code);
         });
         setExpanded(initialExpand);
@@ -90,7 +114,8 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
       });
 
     return () => { cancelled = true; };
-  }, [open, subjectCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, subjectCode, neighborCodes.join(',')]);
 
   // 검색 필터 (full_path 또는 name substring)
   const filteredTree = useMemo(() => {
@@ -196,6 +221,20 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
               ))}
             </optgroup>
           </select>
+          {(NEIGHBOR_COURSES[subjectCode] || []).length > 0 && (
+            <button
+              type="button"
+              onClick={() => setWithNeighbor((v) => !v)}
+              title="학교 시험은 지난 학기 범위를 섞어 냅니다. 이웃 과정 단원도 함께 고를 수 있습니다."
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                withNeighbor
+                  ? 'border-white/25 bg-white/10 font-semibold text-white'
+                  : 'border-zinc-700 text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              이웃 과정 함께
+            </button>
+          )}
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
             <input
