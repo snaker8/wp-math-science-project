@@ -26,6 +26,24 @@ d('HML 파서 회귀 (실제 .hml)', () => {
   const oc = haveFiles ? parseHml(readFileSync(OC)) : { problems: [] as any[] };
   const find = (r: { problems: any[] }, n: number) => r.problems.find((p) => p.number === n);
 
+  // ★ 표 안에 표 금지 — 중첩되면 렌더러가 첫 \end{tabular} 에서 짝을 잘못 맞춰 표가
+  //   인라인으로 흘러내리고 **빈칸이 사라진다** (온천중 25-1-2 #21 실사고).
+  it('중첩 tabular 가 없다 (모든 문제)', () => {
+    for (const r of [gj, oc]) {
+      for (const p of r.problems) {
+        const c: string = p.content || '';
+        const first = c.indexOf('\\begin{tabular}');
+        if (first < 0) continue;
+        const rest = c.slice(first + '\\begin{tabular}'.length);
+        const nextBegin = rest.indexOf('\\begin{tabular}');
+        const nextEnd = rest.indexOf('\\end{tabular}');
+        if (nextBegin >= 0) {
+          expect(nextEnd >= 0 && nextEnd < nextBegin).toBe(true);   // 열기 전에 반드시 닫힌다
+        }
+      }
+    }
+  });
+
   it('거제여중 #18 — 버스 요금 박스 표 복원 + 본문 제자리(19로 안 밀림)', () => {
     const p18 = find(gj, 18);
     expect(p18).toBeTruthy();

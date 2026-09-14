@@ -26,8 +26,17 @@
 import { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable, buildL1L2Table, buildL3L4Table } from './mathsecr-prompt';
 import { cachedSystem } from '@/lib/claude/cache';
 
-// ─── 복합 과목: 이전 교육과정 시험지는 여러 과목 범위가 섞임 ───
+// ─── 같은 학년의 이웃 과정: 학교 시험은 범위가 섞인다 ───
+//   ★ 대표 지시 (2026-09-14): "분류할 때 1-2 학기로 보지 말고 **과정을 보고** 분류하라."
+//     실사고 — 온천중 25-1-2(중1 2학기) 22문항 중 **11문항이 좌표평면·정비례·반비례**(중1-1 과정).
+//     중1-2 테이블만 줬더니 갈 곳이 없어 통계 대푯값·점선면으로 끌려갔다. 정답이 없는 보기에서
+//     고르게 한 셈이다. 학교는 2학기 시험에 1학기 과정을 태연히 낸다 — 그게 정상이다.
+//   ★ 중등 학기 짝이 비어 있던 게 구멍이었다. 고1(07↔08)만 짝이 있었다.
+//   ★ 비용: 1차 경로는 2단계 분류라 1단계 테이블이 L1+L2 뿐이다(중등 22~24행). 짝을 더해도 ~1KB.
 const COMBINED_SUBJECTS: Record<string, string[]> = {
+  '01': ['02'], '02': ['01'],   // 중1-1 ↔ 중1-2 (좌표평면·정비례/반비례가 2학기 시험에 흔히 섞인다)
+  '03': ['04'], '04': ['03'],   // 중2-1 ↔ 중2-2
+  '05': ['06'], '06': ['05'],   // 중3-1 ↔ 중3-2
   '07': ['08'],       // 공통수학1 → +공통수학2 (2015 수학(상) = 다항식+방정식+좌표+집합)
   '08': ['07'],       // 공통수학2 → +공통수학1 (2015 수학(하) 범위 혼재)
   '09': ['10', '11'], // 대수(구 수학I) → +미적분1, 확통
@@ -99,22 +108,22 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
     // ★ 사용자 지정 학년·학기(curriculumCodes)가 있으면 제목 추론보다 우선 — 제목 부정확으로 인한
     //   오분류(공통수학1/중1-1 등) 차단. 명시 학기를 그대로 존중(resolveSubjectCode 의 학기 흡수 우회).
     const explicit = resolveCurriculumCodes(curriculumCodes);
-    resolvedCode = explicit.length ? explicit : (resolveSubjectCode(examGrade, examSubject) || '');
-    if (resolvedCode && (Array.isArray(resolvedCode) ? resolvedCode.length : true)) {
-      mathsecrTypeTable = buildTypeTable(resolvedCode);
-      // ★ resolvedCode 가 배열(학기 불명 — 예 ['03','04'])일 수 있음 — COMBINED 병합은 코드별로.
-      //   (배열로 COMBINED_SUBJECTS 인덱싱하면 항상 undefined → 병합 누락. 현재 배열은
-      //    중등 코드뿐이라 COMBINED 해당 없음 = 동작 불변, 타입·향후 안전만 확보.)
-      const rcodes = Array.isArray(resolvedCode) ? resolvedCode : [resolvedCode];
-      const extras = new Set<string>();
-      for (const c of rcodes) {
-        for (const ex of COMBINED_SUBJECTS[c] || []) {
-          if (!rcodes.includes(ex)) extras.add(ex);
-        }
+    const baseCode = explicit.length ? explicit : (resolveSubjectCode(examGrade, examSubject) || '');
+
+    // ★ 이웃 과정을 **resolvedCode 자체에** 합친다 (2026-09-14).
+    //   전에는 COMBINED 를 폴백용 typeTable 문자열에만 붙여, **1차 경로인 Claude 2단계 분류는
+    //   짝을 아예 못 봤다.** 고1 07↔08 짝도 폴백에서만 먹고 있었다(주례여고 공통수학2 오분류).
+    //   고른 학기를 앞에 두어 표시·예시 코드는 그대로 사용자의 선택을 따른다.
+    const baseArr = Array.isArray(baseCode) ? baseCode : (baseCode ? [baseCode] : []);
+    const withNeighbors: string[] = [...baseArr];
+    for (const c of baseArr) {
+      for (const ex of COMBINED_SUBJECTS[c] || []) {
+        if (!withNeighbors.includes(ex)) withNeighbors.push(ex);
       }
-      for (const extra of extras) {
-        mathsecrTypeTable += '\n\n' + buildTypeTable(extra);
-      }
+    }
+    resolvedCode = withNeighbors.length === 1 ? withNeighbors[0] : withNeighbors;
+    if (withNeighbors.length > 0) {
+      mathsecrTypeTable = buildTypeTable(resolvedCode);   // 이웃 과정 포함 (배열이면 합산)
     }
   } catch (e) {
     console.warn(`[${label}] mathsecr-prompt load 실패:`, e);
@@ -550,7 +559,8 @@ async function classifyWithClaudeTwoStage(params: {
 - "매시간/매년 N% 증가·감소 + 시간이 지난 후 비율" + log 보조값 = 지수·로그 활용 (등비수열 X). log 보조값이 없고 단순 항 비교라면 등비수열.
 - 정수 거듭제곱 (n³, 2024³) → 다항식/인수분해. 변수 지수 (2^x, a^n) → 지수함수.
 - 시그마(Σ)·누적합 = 수열. 극한·연속·미분·적분 = 미적분.
-- 시험지 과목 일관성: 시험지가 "${examSubject}" 범위면 그 과목 안의 단원으로 분류. 다른 과목 단원으로 빠지지 마세요.
+- 학기·과정: 아래 테이블에는 **같은 학년의 이웃 과정(지난 학기 등)이 함께** 들어 있을 수 있습니다. 시험지 제목의 학기에 끌려가지 말고 **문제 내용으로** 고르세요 — 학교 시험은 지난 학기 범위를 섞어 냅니다. 예: "중1 2학기" 시험지에 좌표평면·정비례/반비례(중1-1)가 나오면 중1-1 코드로 분류.
+- 단, 테이블에 **없는** 코드는 절대 만들지 마세요. 반드시 테이블의 값 그대로.
 
 참조 테이블 (${msLabel} = ${examSubject}):
 ${l1l2Table}`;
