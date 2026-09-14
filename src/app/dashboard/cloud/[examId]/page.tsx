@@ -1324,13 +1324,15 @@ function ProblemCardView({
               if (hasTableHeaders) {
                 const colCount = headers.length;
                 return (
-                  <div className="mt-2 pl-2 overflow-x-auto">
-                    <table className="border-collapse text-[13px]">
+                  // ★ 표 보기는 카드 폭에 맞춰 줄어든다 — nowrap + 고정 여백이면 마지막 열이 잘린다
+                  //   (인쇄 쪽 ExamProblemRenderer 와 같은 규칙, 2026-09-14)
+                  <div className="mt-2 max-w-full overflow-x-auto pl-2">
+                    <table className="w-full max-w-full table-auto border-collapse text-[13px]">
                       <thead>
                         <tr>
                           <th className="px-2 py-1" />
                           {headers.map((h, i) => (
-                            <th key={i} className="px-3 py-1 text-center font-bold text-content-primary border-b border-white/[.14] whitespace-nowrap">
+                            <th key={i} className="break-keep px-2 py-1 text-center font-bold text-content-primary border-b border-white/[.14]">
                               {h}
                             </th>
                           ))}
@@ -1344,9 +1346,9 @@ function ProblemCardView({
                           const cells = stripped.split(/\s*\|\s*|\s+\/\s+/).map(s => s.trim());
                           return (
                             <tr key={i}>
-                              <td className="px-2 py-0.5 text-content-tertiary whitespace-nowrap">{circled}</td>
+                              <td className="w-6 px-1 py-0.5 align-top text-content-tertiary">{circled}</td>
                               {Array.from({ length: colCount }, (_, ci) => (
-                                <td key={ci} className="px-3 py-0.5 text-center text-content-secondary whitespace-nowrap">
+                                <td key={ci} className="break-keep px-2 py-0.5 text-center align-top text-content-secondary">
                                   <MixedContentRenderer content={cells[ci] || ''} className="text-content-secondary" />
                                 </td>
                               ))}
