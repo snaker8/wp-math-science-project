@@ -1828,7 +1828,7 @@ export function SolutionView({
         >
           <Wand2 className="h-3.5 w-3.5" />
           {isGeneratingBatch
-            ? `서버에서 생성 중 ${batchProgress.current}/${batchProgress.total}...`
+            ? `해설 생성 중 ${batchProgress.current}/${batchProgress.total} — 이 화면을 열어 두세요`
             : `해설 생성 (${problems.filter(p => !p.solution || p.solution.trim().length < 30).length}/${problems.length}문제 미완)`
           }
         </button>
@@ -1936,36 +1936,82 @@ export function SolutionView({
                   setShowBatchSolutionModal(false);
                   if (targetIds.length === 0) return;
 
-                  // ★ server-side batch-solutions trigger + 클라이언트 폴링 구조.
-                  //   페이지 떠나도 서버에서 계속 진행. chain 신뢰성은 서버 측에서 강화 (chain
-                  //   발사를 단건 처리 *전* 으로 옮김 + sweep 모드로 누락 보완).
-                  //   완료 시 브라우저 Notification 으로 사용자 알림.
+                  // ★★ 클라이언트에서 **한 문제씩 순서대로** 돈다 (2026-09-14 되돌림).
+                  //   전에는 서버가 자기 자신을 이어 부르는 chain 이었는데 **한 발 가고 죽었다**
+                  //   ("계속 멈추네" — 실측: 21문항 중 1건 저장 후 정지).
+                  //   CLAUDE.md 안전 가드 #5 가 이미 못 박아 둔 것이다:
+                  //     "Vercel fire-and-forget chain 신뢰 X — 사용자 트리거 일괄 작업은
+                  //      클라이언트 sequential 호출로. 클라 단점은 페이지 떠나면 중단,
+                  //      대신 누락 0." 그 가드를 어긴 코드였다.
+                  //   브라우저가 돌리면 인증(쿠키)·진행률·중단이 전부 한 곳에서 확실해진다.
                   try {
-                    // 브라우저 알림 권한 (사용자가 default 면 한 번만 요청)
                     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
                       try { await Notification.requestPermission(); } catch { /* 거부도 OK */ }
                     }
-
                     // ★ 해설 생성 게이트 — 관리자 외 관리자 PIN 필요 (2026-08-28)
                     if (!(await ensureSolutionPin())) return;
+
                     setIsGeneratingBatch(true);
                     setBatchProgress({ current: 0, total: targetIds.length });
-                    const res = await fetch(`/api/exams/${examId}/batch-solutions`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', ...solutionPinHeader() },
-                      body: JSON.stringify({ problemIds: targetIds }),
-                    });
-                    if (res.ok) {
-                      startBatchPolling();
-                      trackBatchSolution(examId, examTitle);
-                    } else {
-                      const errText = await res.text().catch(() => '');
-                      console.error('[batch-solutions] 시작 실패:', res.status, errText);
-                      setIsGeneratingBatch(false);
-                      alert(`해설 생성 시작 실패 (${res.status}): ${errText.substring(0, 200)}`);
+                    setShowBatchSolutionModal(false);
+
+                    let done = 0;
+                    const failed: Array<{ id: string; why: string }> = [];
+
+                    for (const pid of targetIds) {
+                      // 한 문제당 최대 295초 — Vercel 함수 한도 안쪽
+                      const runOnce = async (): Promise<string | null> => {
+                        const ctrl = new AbortController();
+                        const timer = setTimeout(() => ctrl.abort(), 295_000);
+                        try {
+                          const r = await fetch(`/api/problems/${pid}/generate-solution`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...solutionPinHeader() },
+                            body: JSON.stringify({}),
+                            signal: ctrl.signal,
+                          });
+                          if (r.ok) return null;
+                          const d = await r.json().catch(() => ({} as { error?: string }));
+                          return (d as { error?: string }).error || `HTTP ${r.status}`;
+                        } catch (e) {
+                          return e instanceof Error && e.name === 'AbortError' ? '시간 초과(295초)' : String(e);
+                        } finally {
+                          clearTimeout(timer);
+                        }
+                      };
+
+                      let why = await runOnce();
+                      // 한 번은 더 해 본다 — 일시적 과부하(529·503)가 흔하다
+                      if (why) {
+                        await new Promise((r) => setTimeout(r, 3000));
+                        why = await runOnce();
+                      }
+                      if (why) failed.push({ id: pid, why });
+                      done++;
+                      setBatchProgress({ current: done, total: targetIds.length });
+                      await new Promise((r) => setTimeout(r, 300));   // 호흡
                     }
+
+                    setIsGeneratingBatch(false);
+                    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                      try {
+                        new Notification(`해설 생성 완료 — ${examTitle}`, {
+                          body: `${targetIds.length - failed.length}/${targetIds.length}문제`,
+                          tag: `batch-solutions-${examId}`,
+                        });
+                      } catch { /* 알림 실패는 무시 */ }
+                    }
+                    if (failed.length > 0) {
+                      // ★ 왜 실패했는지를 그대로 보여준다 — "그냥 안 된다" 로 끝나면 안 된다
+                      console.error('[해설 생성] 실패 목록:', failed);
+                      alert(
+                        `해설 생성: ${targetIds.length - failed.length}/${targetIds.length} 완료\n` +
+                        `실패 ${failed.length}건 — 첫 번째 이유:\n${failed[0].why.substring(0, 300)}`,
+                      );
+                    }
+                    window.location.reload();
                   } catch (err) {
-                    console.error('[batch-solutions] 요청 에러:', err);
+                    console.error('[해설 생성] 요청 에러:', err);
                     setIsGeneratingBatch(false);
                     alert(`해설 생성 요청 실패: ${String(err)}`);
                   }
