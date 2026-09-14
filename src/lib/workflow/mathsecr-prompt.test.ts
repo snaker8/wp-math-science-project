@@ -7,6 +7,21 @@ import { describe, it, expect } from 'vitest';
 import { resolveSubjectCode, buildTypeTable, buildL1L2Table, resolveCurriculumCodes, curriculumCodesToLabel, CURRICULUM_OPTIONS } from './mathsecr-prompt';
 
 describe('resolveSubjectCode', () => {
+  // ★ 실사고 (2026-09-14) — exams.subject 가 '공통수학1'(고1)인데 grade 는 '중1',
+  //   내용은 좌표평면(중1-1). subject 를 먼저 보는 탓에 중1 문제가 고1로 끌려갔다.
+  //   grade 는 구조적 값, subject 는 기본값으로 덮이는 자유 텍스트 → 어긋나면 학년을 믿는다.
+  it('학년(중등)과 과목(고등)이 어긋나면 학년을 믿는다', () => {
+    expect(resolveSubjectCode('중1', '공통수학1')).toEqual(['01', '02']);
+    expect(resolveSubjectCode('중2', '수학II')).toEqual(['03', '04']);
+    expect(resolveSubjectCode('중3 수학', '대수')).toEqual(['05', '06']);
+  });
+
+  it('어긋나지 않으면 종전대로 과목이 우선', () => {
+    expect(resolveSubjectCode('고1 수학', '공통수학2')).toBe('08');
+    expect(resolveSubjectCode('고2', '대수')).toBe('09');
+    expect(resolveSubjectCode('중2-1 수학', '중2-1')).toEqual(['03', '04']);
+  });
+
   it('★ 학기 명시 중등도 양 학기 배열 — 제목 학기 불신(제목 2-1+내용 2-2 평행사변형 오분류 fix, 2026-06-12)', () => {
     expect(resolveSubjectCode('중2-1 수학')).toEqual(['03', '04']);
     expect(resolveSubjectCode('중3-2')).toEqual(['05', '06']);
