@@ -1,11 +1,12 @@
 'use client';
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useRef } from 'react';
 import katex from 'katex';
 import { stripDollarsInsideMathEnv } from './math-env-dollar';
 import { wrapBareLatex } from './wrap-bare-latex';
 import { stripDollarBeforeEnv, stripDollarAfterEnv } from './env-dollar-cleanup';
 import { MathRenderer } from './MathRenderer';
+import { useFitToWidth } from './use-fit-to-width';
 import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
 
 // ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
@@ -45,6 +46,20 @@ function SolutionBoxRender({ body }: { body: string }) {
 // ★ 표 셀용 수식 정제 — 짝 안 맞는 $ / \displaystyle 으로 인한 KaTeX 렌더 실패 방지
 //   셀 내용은 MathRenderer가 math 모드로 감싸므로 내부 $ 는 불필요하며 오히려 파싱 에러 유발
 //   \displaystyle 는 좁은 셀에서 레이아웃 깨짐 — 제거해도 의미 손실 없음
+/**
+ * 표를 감싸 **단 폭에 맞춰 줄인다**.
+ * 인쇄에는 가로 스크롤이 없다 — 넘치면 그 열은 그냥 사라진다.
+ */
+function FitTable({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useFitToWidth(ref, 'table', [children], { apply: 'target' });
+  return (
+    <span ref={ref} className="block my-3 max-w-full overflow-x-auto">
+      {children}
+    </span>
+  );
+}
+
 /**
  * 표 셀 하나를 그린다.
  *
@@ -403,9 +418,11 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
 
       // ═══ 일반 표 렌더링 ═══
       // ★ 표가 컨테이너(2단 컬럼 등) 폭을 초과해 다른 컬럼/페이지 영역을 침범하던 사고 방지.
-      //   max-w-full + overflow-x:auto 로 가로 스크롤 처리. 인쇄 시엔 보통 폭 안에 들어감.
+      //   전엔 overflow-x:auto 로 가로 스크롤만 뒀는데, **인쇄엔 스크롤이 없다** — 넘친 열이
+      //   그대로 잘려 나간다(2026-09-15). 이제 폭을 재서 넘치면 글자를 줄여 넣는다.
+      //   실측: 셀 24개 넘는 표 67건. 열이 많은 표는 좁은 단에서 반드시 넘친다.
       return (
-        <span key={i} className="block my-3 max-w-full overflow-x-auto">
+        <FitTable key={i}>
           <table className="border-collapse mx-auto text-sm" style={{ maxWidth: '100%' }}>
             <tbody>
               {el.rows.map((row, ri) => (
@@ -435,7 +452,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
               ))}
             </tbody>
           </table>
-        </span>
+        </FitTable>
       );
     }
     // ★ \boxed{ ㉠ } 빈칸 라벨 박스 — KaTeX 폭 문제로 HTML 박스로 렌더 (위 matchBoxedLabel 주석)
