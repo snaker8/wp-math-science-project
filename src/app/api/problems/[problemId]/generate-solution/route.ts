@@ -436,6 +436,7 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
     let solution: any = null;
     let usedModel = '';
     let sonnetErrorInfo = '';
+    let gptErrorInfo = '';
     // ★ 검증 루프에서 재사용하기 위해 스코프 외부로 선언
     let userContent: any;
     let systemPrompt: string = '';
@@ -616,6 +617,8 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
         }
       } catch (e) {
         console.error('[generate-solution] Claude Sonnet failed:', e);
+        // ★ 이유를 남겨야 화면에서 원인이 보인다 — 전엔 로그에만 남아 "그냥 안 된다"로 끝났다
+        if (!sonnetErrorInfo) sonnetErrorInfo = `Sonnet exception: ${String(e).substring(0, 200)}`;
       }
     }
 
@@ -658,6 +661,11 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
           }),
         });
 
+        if (!gptRes.ok) {
+          const gptErrText = await gptRes.text().catch(() => '');
+          gptErrorInfo = `GPT-4o ${gptRes.status}: ${gptErrText.substring(0, 200)}`;
+          console.error('[generate-solution] GPT-4o 응답 실패:', gptErrorInfo);
+        }
         if (gptRes.ok) {
           const gptData = await gptRes.json();
           const rawText = gptData.choices?.[0]?.message?.content || '';
@@ -667,11 +675,28 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
         }
       } catch (e) {
         console.error('[generate-solution] GPT-4o fallback failed:', e);
+        if (!gptErrorInfo) gptErrorInfo = `GPT exception: ${String(e).substring(0, 200)}`;
       }
     }
 
     if (!solution) {
-      return NextResponse.json({ error: 'All AI models failed to generate solution' }, { status: 500 });
+      // ★ 왜 안 됐는지를 화면까지 올린다 (2026-09-14, 대표: "해설 생성을 해도 생성이 안 된다").
+      //   전엔 'All AI models failed to generate solution' 한 줄이라 로그를 못 보면 손을 못 댔다.
+      //   키가 없는 건지, 모델이 400 을 준 건지, 타임아웃인지가 갈린다 — 대응이 전혀 다르다.
+      const why: string[] = [];
+      if (!ANTHROPIC_API_KEY) why.push('Claude 키가 이 환경에 설정돼 있지 않습니다');
+      else why.push(`Claude 실패(${sonnetErrorInfo || '응답을 해석하지 못함'})`);
+      if (!OPENAI_API_KEY) why.push('GPT 폴백 키도 없습니다');
+      else if (gptErrorInfo) why.push(`GPT 실패(${gptErrorInfo})`);
+      const msg = `해설 생성 실패 — ${why.join(' / ')}`;
+      console.error(`[generate-solution] ✖ ${msg} (problem ${problemId})`);
+      return NextResponse.json({
+        error: msg,
+        code: 'AI_ALL_FAILED',
+        keys: { anthropic: !!ANTHROPIC_API_KEY, openai: !!OPENAI_API_KEY },
+        sonnetError: sonnetErrorInfo || undefined,
+        gptError: gptErrorInfo || undefined,
+      }, { status: 502 });
     }
     console.log(`[generate-solution] ✅ 최종 사용 모델: ${usedModel} (problem ${problemId})`);
 
