@@ -509,11 +509,13 @@ async function reanalyzeClassificationOnly(
     : (() => {
       let typeTable = '';
       try {
-        const { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable } = require('@/lib/workflow/mathsecr-prompt');
+        const { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable, withNeighborCourses } = require('@/lib/workflow/mathsecr-prompt');
         // ★ 사용자 지정 학년·학기(curriculumCodes) 우선 — 없으면 제목 추론 폴백.
         const explicit = resolveCurriculumCodes(curriculumCodes);
-        const subjectCode = explicit.length ? explicit : resolveSubjectCode(examSubject);
-        if (subjectCode) typeTable = buildTypeTable(subjectCode);
+        const picked = explicit.length ? explicit : resolveSubjectCode(examSubject);
+        // ★ 같은 학년의 이웃 과정까지 (2026-09-14) — 학기에 갇히면 갈 곳이 없어 엉뚱한 단원으로 간다.
+        const subjectCode = withNeighborCourses(picked);
+        if (subjectCode.length) typeTable = buildTypeTable(subjectCode);
       } catch {}
 
       return `당신은 한국 수학 교육 전문가입니다. 수학비서 분류 체계로 문제를 분류하세요.

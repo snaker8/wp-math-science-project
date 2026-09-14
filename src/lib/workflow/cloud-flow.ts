@@ -1429,11 +1429,14 @@ export async function analyzeProblemWithLLM(
     let mathsecrSection = '';
     if (!isScience) {
       try {
-        const { resolveSubjectCode, resolveCurriculumCodes, buildMathsecrPromptSection, buildSubjectOnlyPrompt } = await import('./mathsecr-prompt');
+        const { resolveSubjectCode, resolveCurriculumCodes, buildMathsecrPromptSection, buildSubjectOnlyPrompt, withNeighborCourses } = await import('./mathsecr-prompt');
         // ★ 사용자 지정 학년·학기(curriculumCodes) 우선 — 없으면 제목 추론 폴백.
         const explicit = resolveCurriculumCodes(curriculumCodes);
-        const subjectCode = explicit.length ? explicit : resolveSubjectCode(gradeHint, subject);
-        mathsecrSection = subjectCode
+        const picked = explicit.length ? explicit : resolveSubjectCode(gradeHint, subject);
+        // ★ 같은 학년의 이웃 과정까지 — 학교는 2학기 시험에 1학기 과정을 낸다 (2026-09-14).
+        //   이 경로(자산화)가 빠져 있어서 "분류를 돌려도 1학기를 인식 못 한다"가 계속됐다.
+        const subjectCode = withNeighborCourses(picked);
+        mathsecrSection = subjectCode.length
           ? buildMathsecrPromptSection(subjectCode)
           : buildSubjectOnlyPrompt();
       } catch (e) {

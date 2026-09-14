@@ -13,6 +13,10 @@ export const maxDuration = 300; // 5분 타임아웃 (재분류 포함)
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
+// ★ 분류 1차는 Claude 다 (classify.ts CLASSIFY_PROVIDER 기본 anthropic).
+//   키 게이트에 Anthropic 이 빠져 있어, OpenAI/Gemini 키가 없으면 「유형 자동매핑」이
+//   AI 를 한 번도 안 부르고 조용히 끝났다 — "돌려도 안 바뀐다"의 원인 (2026-09-14).
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
 const CURRICULUM: Record<string, string> = {
   '중1': '1.자연수의성질 2.정수와유리수 3.일차방정식 4.좌표평면과그래프 5.기본도형 6.평면도형과입체도형 7.통계',
@@ -194,7 +198,7 @@ export async function POST(
 
       console.log(`[auto-fix] #${seqNum}: typeCode=${existingTypeCode}, needsReclassify=${needsReclassify}, subject=${clsSubject}, chapter=${clsChapter}`);
 
-      if (needsReclassify && (OPENAI_API_KEY || GOOGLE_AI_KEY) && content.trim()) {
+      if (needsReclassify && (ANTHROPIC_API_KEY || OPENAI_API_KEY || GOOGLE_AI_KEY) && content.trim()) {
         try {
           // ★ 공용 분류 모듈 호출 (Gemini Flash → GPT-4o 폴백 로직 모두 포함)
           const { classifyProblem } = await import('@/lib/workflow/classify');
