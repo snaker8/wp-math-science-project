@@ -36,6 +36,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+// ★ 글자 수로 자르면 LaTeX 한가운데가 끊겨 쓰레기가 샌다 (egin{ta 사고)
+import { truncateLatexPreview } from '@/lib/utils/latex-preview';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
 import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
@@ -926,7 +928,7 @@ export default function ExamCreatePage() {
                           </div>
                         </div>
                         <div className="line-clamp-3 text-xs text-zinc-300">
-                          <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                          <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
                         </div>
                       </button>
                     );
@@ -1265,7 +1267,7 @@ export default function ExamCreatePage() {
                               </div>
                             </div>
                             <div className="line-clamp-3 text-xs text-zinc-300">
-                              <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                              <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
                             </div>
                           </button>
                         );
@@ -1483,7 +1485,7 @@ export default function ExamCreatePage() {
                               </div>
                             </div>
                             <div className="line-clamp-3 text-xs text-zinc-300">
-                              <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                              <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
                             </div>
                           </button>
                         );
@@ -1698,7 +1700,7 @@ export default function ExamCreatePage() {
                               </div>
                             </div>
                             <div className="line-clamp-3 text-xs text-zinc-300">
-                              <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                              <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
                             </div>
                           </button>
                         );
@@ -1981,7 +1983,7 @@ export default function ExamCreatePage() {
                         </div>
                       </div>
                       <div className="line-clamp-3 text-xs text-zinc-300">
-                        <MixedContentRenderer content={(p.content_latex || '').slice(0, 200)} />
+                        <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
                       </div>
                       {p.source_name && (
                         <div className="mt-2 truncate text-[10px] text-zinc-500">

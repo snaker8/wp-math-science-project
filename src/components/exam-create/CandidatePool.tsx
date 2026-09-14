@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Repeat2, Plus, Sparkles, X, AlertTriangle } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { truncateLatexPreview } from '@/lib/utils/latex-preview';
 import type { CandidateProblem, CandidateKind } from '@/app/api/problems/candidates/route';
 
 const TABS: Array<{ kind: CandidateKind; label: string; hint: string }> = [
@@ -266,7 +267,7 @@ export function CandidatePool({
                   {c.sourceYear && <span className="text-zinc-600 tabular-nums">{c.sourceYear}</span>}
                 </div>
                 <div className="line-clamp-3 text-[11px] text-zinc-300">
-                  <MixedContentRenderer content={(c.content || '').slice(0, 200)} />
+                  <MixedContentRenderer content={truncateLatexPreview(c.content, 200)} />
                 </div>
                 <div className="mt-1.5 flex gap-1">
                   <button
