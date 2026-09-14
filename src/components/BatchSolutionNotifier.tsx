@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Sparkles, X } from 'lucide-react';
+import { safeSetItem } from '@/lib/utils/safe-storage';
 
 /**
  * 일괄 해설 생성 배치 상태 전역 모니터.
@@ -31,18 +32,29 @@ function readWatches(): Watch[] {
 }
 
 function writeWatches(w: Watch[]) {
-  localStorage.setItem(LS_KEY, JSON.stringify(w));
+  // ★ 저장 실패가 해설 생성을 죽이면 안 된다 (2026-09-14 사고).
+  //   저장소가 꽉 차서 QuotaExceededError 가 났고, 그 예외가 위로 튀어
+  //   **해설 생성 요청 자체가 중단**됐다. 정작 이 값은 몇 백 바이트다.
+  //   감시 목록은 "완료되면 알려주는" 편의 기능일 뿐이다 — 못 적어도 생성은 돌아야 한다.
+  safeSetItem(LS_KEY, JSON.stringify(w));
 }
 
 export function trackBatchSolution(examId: string, title: string) {
   if (typeof window === 'undefined') return;
-  const cur = readWatches();
-  if (cur.some((w) => w.examId === examId)) return;
-  cur.push({ examId, title, startedAt: Date.now() });
-  writeWatches(cur);
-  window.dispatchEvent(new Event('batch-solution-watches-changed'));
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
+  // ★ 여기서 나는 어떤 예외도 호출측(해설 생성)으로 넘기지 않는다.
+  try {
+    // 6시간 지난 감시는 버리고 담는다 — 목록이 무한정 늘지 않게
+    const cur = readWatches().filter((w) => Date.now() - w.startedAt < 6 * 60 * 60 * 1000);
+    if (!cur.some((w) => w.examId === examId)) {
+      cur.push({ examId, title, startedAt: Date.now() });
+    }
+    writeWatches(cur);
+    window.dispatchEvent(new Event('batch-solution-watches-changed'));
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  } catch (e) {
+    console.warn('[batch-solution] 진행 알림 등록 실패(무시하고 생성은 계속):', e);
   }
 }
 
