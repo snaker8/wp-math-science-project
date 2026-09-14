@@ -153,16 +153,21 @@ function ExamProblemRendererInner({
     if (hasTableHeaders) {
       const colCount = headers.length;
       return (
-        <div className="mt-2 overflow-x-auto">
-          {/* ★ 컬럼 간격 확장 (2026-05-18): (가)/(나) 등 헤더가 너무 붙어있다는
-                사용자 보고. px-3 → px-10 으로 보기 컬럼 간격 ↑. prefix 컬럼은
-                좌측 여백 그대로 유지 (px-1.5). */}
-          <table className="border-collapse text-[13px]">
+        <div className="mt-2 max-w-full overflow-x-auto">
+          {/* ★ 표 보기는 **종이 폭에 맞춰 줄어든다** (2026-09-14 사고).
+                전에는 셀마다 px-10(좌우 80px) + whitespace-nowrap 이었다. 여백만 240px 이라
+                좁은 단(2단 인쇄·미리보기)에서는 무조건 넘쳤고, **마지막 열(사분면)이 잘려 나갔다.**
+                화면은 가로 스크롤이라도 생기지만 인쇄는 그냥 날아간다.
+                → w-full(남는 폭을 열이 나눠 갖는다) + 여백을 줄이고 줄바꿈을 허용한다.
+                넓으면 예전처럼 시원하게 벌어지고, 좁으면 글자가 줄바꿈되며 들어간다.
+                (2026-05-18 "헤더가 붙어 보인다" 요청은 w-full 이 대신 해결한다 — 고정 px-10 불필요)
+                ※ break-keep: 한국어는 낱말 단위로 끊는다(글자 사이에서 끊기면 읽기 나쁘다). */}
+          <table className="w-full max-w-full table-auto border-collapse text-[13px]">
             <thead>
               <tr>
-                <th className="px-1.5 py-0.5" />
+                <th className="w-6 px-1 py-0.5" />
                 {headers.map((h, i) => (
-                  <th key={i} className="px-10 py-0.5 text-center font-bold text-gray-500 border-b border-gray-300 whitespace-nowrap text-[12px]">
+                  <th key={i} className="break-keep px-2 py-0.5 text-center text-[12px] font-bold text-gray-500 border-b border-gray-300">
                     {h}
                   </th>
                 ))}
@@ -176,9 +181,9 @@ function ExamProblemRendererInner({
                 const cells = stripped.split(/\s*\|\s*|\s+\/\s+/).map(s => cleanChoiceText(s.trim()));
                 return (
                   <tr key={ci}>
-                    <td className="px-1.5 py-0.5 text-gray-500 whitespace-nowrap">{prefix}</td>
+                    <td className="w-6 px-1 py-0.5 align-top text-gray-500">{prefix}</td>
                     {Array.from({ length: colCount }, (_, j) => (
-                      <td key={j} className="px-10 py-0.5 text-center text-gray-700 whitespace-nowrap">
+                      <td key={j} className="break-keep px-2 py-0.5 text-center align-top text-gray-700">
                         <MixedContentRenderer content={cells[j] || ''} className="text-gray-700" />
                       </td>
                     ))}
