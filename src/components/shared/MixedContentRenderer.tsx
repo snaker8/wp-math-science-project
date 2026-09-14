@@ -45,6 +45,34 @@ function SolutionBoxRender({ body }: { body: string }) {
 // ★ 표 셀용 수식 정제 — 짝 안 맞는 $ / \displaystyle 으로 인한 KaTeX 렌더 실패 방지
 //   셀 내용은 MathRenderer가 math 모드로 감싸므로 내부 $ 는 불필요하며 오히려 파싱 에러 유발
 //   \displaystyle 는 좁은 셀에서 레이아웃 깨짐 — 제거해도 의미 손실 없음
+/**
+ * 표 셀 하나를 그린다.
+ *
+ * ★ 한글 문장이 든 셀을 **통째로 수식으로** 넘기면 안 된다 (2026-09-14 사고).
+ *   수식 모드에선 공백이 무시되고 줄바꿈 자리도 없다 →
+ *   「온천이의체험관과사직이의체험관은…」 처럼 붙어버리고, 한 줄이 한없이 길어져
+ *   조건 박스가 가로 스크롤로 잘린다. **인쇄하면 아예 안 보인다** (대표 지적).
+ *   원인은 데이터가 아니다 — DB 본문엔 공백이 멀쳐히 있다. 여기서 죽었다.
+ *   한글이 있으면 본문 렌더러로 보낸다 — $...$ 안만 수식이 되고 나머지는 글자로 남는다.
+ * ★ 셀 안에 또 표가 있으면 본문 렌더러로 보내지 않는다(재귀 프리즈 방지).
+ */
+function TableCell({ cell }: { cell: string }) {
+  const t = cell.trim();
+  if (!t) return <span className="text-gray-300">□</span>;
+  const hasHangul = /[가-힣]/.test(t);
+  const hasNestedTable = t.includes('\\begin{tabular}') || t.includes('\\begin{array}');
+  if (hasHangul && !hasNestedTable) {
+    // 긴 문장은 가운데 정렬이 읽기 나쁘다 — 왼쪽으로 흘린다 (조건 박스가 이 경우다)
+    const long = t.replace(/\$[^$]*\$/g, '').length > 16;
+    return (
+      <span className={long ? 'block text-left' : undefined}>
+        <MixedContentRenderer content={t} inline />
+      </span>
+    );
+  }
+  return /[\\^_{}$]/.test(t) ? <MathRenderer content={sanitizeMathCell(t)} /> : <span>{t}</span>;
+}
+
 function sanitizeMathCell(raw: string): string {
   return raw
     .replace(/^\$+|\$+$/g, '')       // 시작/끝 $ 제거
@@ -338,15 +366,9 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                       key={ri}
                       className={`px-3 py-1 text-center text-sm ${hlineAbove ? 'border-t-2 border-gray-600' : ''}`}
                     >
-                      {row.slice(0, vLineCol).map((cell, ci) => {
-                        const trimmed = cell.trim();
-                        if (!trimmed) return <span key={ci} className="text-gray-300">□</span>;
-                        return /[\\^_{}$]/.test(trimmed) ? (
-                          <MathRenderer key={ci} content={sanitizeMathCell(trimmed)} />
-                        ) : (
-                          <span key={ci}>{trimmed}</span>
-                        );
-                      })}
+                      {row.slice(0, vLineCol).map((cell, ci) => (
+                        <TableCell key={ci} cell={cell} />
+                      ))}
                     </div>
                   );
                 })}
@@ -366,15 +388,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                         const trimmed = cell.trim();
                         return (
                           <div key={ci} className="px-3 py-1 text-center text-sm min-w-[2.5rem]">
-                            {trimmed ? (
-                              /[\\^_{}$]/.test(trimmed) ? (
-                                <MathRenderer content={sanitizeMathCell(trimmed)} />
-                              ) : (
-                                <span>{trimmed}</span>
-                              )
-                            ) : (
-                              <span className="text-gray-300">□</span>
-                            )}
+                            <TableCell cell={cell} />
                           </div>
                         );
                       })}
@@ -413,15 +427,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                         key={ci}
                         className={`px-3 py-1.5 text-center ${topBorder} ${bottomBorder} ${leftBorder} ${rightBorder}`}
                       >
-                        {cell.trim() ? (
-                          /[\\^_{}$]/.test(cell) ? (
-                            <MathRenderer content={sanitizeMathCell(cell)} />
-                          ) : (
-                            <span>{cell.trim()}</span>
-                          )
-                        ) : (
-                          <span className="text-gray-300">□</span>
-                        )}
+                        <TableCell cell={cell} />
                       </td>
                     );
                   })}

@@ -234,6 +234,28 @@ describe('hangulEquationToLatex — 집합·합성 기호 (사대부고)', () =>
     expect(hangulEquationToLatex('emptysets')).not.toContain('\\emptyset');
   });
 
+  // ★ dyad = 직선(양쪽 화살표). 변환표에 없어 "dyad AC" 가 글자로 새어 나왔다 (온천중 24-1-2 #12)
+  //   중1 기본도형은 직선·반직선·선분 표기로 문제가 갈린다 — 글자로 새면 문제가 성립하지 않는다.
+  it('dyad → 직선(overleftrightarrow)', () => {
+    expect(hangulEquationToLatex('dyad AC')).toContain('\\overleftrightarrow{AC}');
+    expect(hangulEquationToLatex('dyad {AB}')).toContain('\\overleftrightarrow');
+    expect(hangulEquationToLatex('dyad AC')).not.toContain('dyad');
+    // 낱말 속 철자는 안 건드린다
+    expect(hangulEquationToLatex('dyadic')).not.toContain('\\overleftrightarrow');
+  });
+
+  // ★ HWP 수식 변환표 누락 3종 — 글자로 새면 도형 문제가 성립하지 않는다 (2026-09-14 실측)
+  it('arch → 호(stackrel frown)', () => {
+    expect(hangulEquationToLatex('arch{ AB }')).toContain('\\stackrel{\\frown}{AB}');
+    expect(hangulEquationToLatex('arch AB')).not.toContain('arch');
+    expect(hangulEquationToLatex('architect')).not.toContain('\\frown');
+  });
+
+  it('BARAB 처럼 붙은 BAR → 선분', () => {
+    expect(hangulEquationToLatex('$BARAB$는 지름')).toContain('\\overline{AB}');
+    expect(hangulEquationToLatex('barrier')).not.toContain('\\overline{rier}');
+  });
+
   it('이미 백슬래시가 붙은 것을 두 번 바꾸지 않는다', () => {
     expect(hangulEquationToLatex('\\circ')).toBe('\\circ');
     const deg = hangulEquationToLatex('30 DEG');

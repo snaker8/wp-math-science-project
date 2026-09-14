@@ -366,6 +366,27 @@ export function hangulEquationToLatex(script: string): string {
   // 2.46) prime → ' (도함수·각 표기). HWP 가 ' 를 prime 토큰으로 내보냄. 미변환 시 "prime" 글자 노출.
   s = s.replace(/(?<![\\A-Za-z])prime(?![A-Za-z])/gi, "'"); // f prime → f '  (KaTeX 가 ' 를 프라임으로 렌더)
 
+  // 2.45b) dyad → \overleftrightarrow (**직선**). 한글 수식의 dyad 는 양쪽 화살표다.
+  //   변환표에 없어서 "dyad AC" 가 글자 그대로 새어 나왔다 (온천중 24-1-2 #12·#11, 2026-09-14).
+  //   중1 기본도형에서 직선/반직선/선분을 가르는 표기라 글자로 새면 문제가 성립하지 않는다.
+  s = s.replace(/(?<![\\A-Za-z])dyad\s+([A-Za-z][A-Za-z0-9]*)/gi, '\\overleftrightarrow{$1}');
+  s = s.replace(/(?<![\\A-Za-z])dyad(?![A-Za-z])/gi, '\\overleftrightarrow');
+
+  // 2.45c) arch → 호(弧). 한글 수식의 arch 는 글자 위 작은 호다.
+  //   변환표에 없어 "arch{ AB }" 가 글자로 샜다 (실측 53건, 2026-09-14).
+  //   KaTeX \overparen 은 버전 의존이라 \stackrel{\frown}{...} 로 — 둘 다 확실히 지원된다.
+  s = s.replace(/(?<![\\A-Za-z])arch\s*\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}/gi, '\\stackrel{\\frown}{$1}');
+  s = s.replace(/(?<![\\A-Za-z])arch\s+([A-Za-z][A-Za-z0-9]*)/gi, '\\stackrel{\\frown}{$1}');
+
+  // 2.45d) BARAB 처럼 **붙어 나온** BAR — 아래 2.5) 의 bar 규칙은 "뒤에 글자 없음"을 요구해 못 잡는다.
+  //   대문자 BAR + 대문자 이름만 (barrier 같은 낱말 오탐 방지). 실측 8건.
+  s = s.replace(/(?<![\\A-Za-z])BAR([A-Z][A-Za-z0-9]*)/g, '\\overline{$1}');
+
+  // 2.45e) 󰁚 (HWP 사용자영역 글자) → \parallel (평행).
+  //   실측 32건 전부 평행 문맥이었다: "overline{AB} 󰁚 overline{PQ}", "l 󰁚 m",
+  //   "…이면 평행사변형이다". 글꼴 밖 글자라 화면·인쇄에서 네모로 나온다.
+  s = s.replace(/\u{F005A}/gu, ' \\parallel ');
+
   // 2.5) bar → \overline (선분 표기). KaTeX \bar 는 멀티문자(AB)에 짧은 막대라 선분이 어색.
   //   \overline 은 양 글자 위 전체 막대 — 선분 AB·평균 x̄ 모두 자연스러움. (대소문자 무시)
   s = s.replace(/(?<![\\A-Za-z])bar(?![A-Za-z])/gi, '\\overline');
