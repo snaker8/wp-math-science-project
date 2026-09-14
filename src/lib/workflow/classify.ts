@@ -40,6 +40,14 @@ export interface ClassifyInput {
   examGrade: string;
   /** ★ 자산화 시 사용자가 지정한 mathsecr 과목코드(예: ['05','06']). 있으면 제목 추론(resolveSubjectCode)보다 우선. */
   curriculumCodes?: string[];
+  /**
+   * 객관식 보기. ★ 안 주면 그림 문제를 못 분류한다 (2026-09-14 사고).
+   *   온천중 24-1-2 #2 는 본문이 "그림에서 선수들이 많이 몰려 있는 곳은?" 이 전부고,
+   *   「제1,2사분면 / 제1,4사분면 …」 이라는 유일한 단서가 **보기에만** 있었다.
+   *   본문만 보낸 분류기는 수학 신호가 아예 없으니 통계 대푯값으로 찍었다.
+   *   그림 객관식은 보기가 문제의 절반이다.
+   */
+  choices?: string[];
   /** 문제 식별용 (로그용, 실패 시 맥락 확보) */
   logLabel?: string;
 }
@@ -68,8 +76,12 @@ export interface ClassifyResult {
  * 반환값이 null이면 분류 불가 (콘텐츠 없음, 키 없음, 모든 시도 실패).
  */
 export async function classifyProblem(input: ClassifyInput): Promise<ClassifyResult | null> {
-  const { content, examSubject, examGrade, curriculumCodes, logLabel } = input;
+  const { content, examSubject, examGrade, curriculumCodes, choices, logLabel } = input;
   const label = logLabel || 'classify';
+
+  // ★ 본문 + 보기 — 그림 객관식은 보기에만 단서가 있다(위 choices 주석의 사고).
+  const choiceText = (choices ?? []).map((c) => String(c).trim()).filter(Boolean).slice(0, 6).join('\n');
+  const problemText = content.slice(0, 1500) + (choiceText ? `\n\n보기:\n${choiceText.slice(0, 600)}` : '');
 
   if (!content.trim()) {
     console.warn(`[${label}] content 비어있음 — 분류 스킵`);
@@ -157,7 +169,7 @@ ${mathsecrTypeTable ? `아래 유형 테이블에서 가장 적합한 typeCode�
 JSON: {"classification":{"typeCode":"${examplePlaceholder}","typeName":"대단원 > 중단원 > 소단원 > 세부유형","subject":"${examSubject}","chapter":"대단원","section":"중단원","difficulty":4,"cognitiveDomain":"CALCULATION","confidence":0.9}}
 
 문제:
-${content.slice(0, 1500)}`;
+${problemText}`;
 
   const systemPrompt = '한국 수학 교육과정 전문가. 수학비서 분류 체계로 문제를 분류합니다. 반드시 JSON만 응답.';
 
@@ -181,7 +193,7 @@ ${content.slice(0, 1500)}`;
         subjectCode: resolvedCode,
         examSubject,
         examGrade,
-        content,
+        content: problemText,   // ★ 본문 + 보기 (그림 객관식은 보기에만 단서가 있다)
         label,
       });
       if (twoStageResult) {
@@ -550,7 +562,7 @@ ${l1l2Table}`;
 학년: ${examGrade}
 
 문제:
-${content.slice(0, 1500)}
+${content}
 
 위 문제에 가장 적합한 "1단계코드" (대단원+중단원)를 고르세요.
 ※ 본문의 핵심 단서(log 보조값·시그마·미분 기호·정의역 조건 등)를 출제 의도로 보고, 풀이 가능 여부보다 의도를 우선.
@@ -640,7 +652,7 @@ ${l3l4Table}
   }
 
   const stage2User = `문제:
-${content.slice(0, 1500)}${exampleSection}${pitfallSection}
+${content}${exampleSection}${pitfallSection}
 
 위 문제의 최종 typeCode(소단원+세부유형)와 난이도·인지영역을 JSON으로 응답:
 {"typeCode":"${stage1Code}-??-??","difficulty":5,"cognitiveDomain":"CALCULATION","confidence":0.9${pitfallJsonExample}}
