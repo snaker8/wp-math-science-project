@@ -376,6 +376,10 @@ async function reanalyzeClassificationOnly(
       const { classifyProblem } = await import('@/lib/workflow/classify');
       const claudeResult = await classifyProblem({
         content: contentText,
+        // ★ 보기도 같이 — 그림 객관식은 본문에 수학이 없고 보기에만 있다
+        choices: Array.isArray((problem.answer_json as Record<string, unknown> | null)?.choices)
+          ? ((problem.answer_json as Record<string, unknown>).choices as string[])
+          : undefined,
         examSubject: examSubject || '',
         examGrade: examGrade || '',
         curriculumCodes,
