@@ -163,7 +163,17 @@ export function resolveSubjectCode(gradeHint?: string, subject?: string): string
   const sortedEntries = Object.entries(SUBJECT_CODE_MAP)
     .map(([k, v]) => [k.normalize('NFC'), v] as [string, string | string[]])
     .sort((a, b) => b[0].length - a[0].length);
-  for (const hintRaw of [subject, gradeHint]) {
+  // ★ 학년과 과목이 어긋나면 **학년을 믿는다** (2026-09-14 사고).
+  //   실사고 — exams.subject 가 '공통수학1'(고1)인데 grade 는 '중1', 내용은 좌표평면(중1-1).
+  //   subject 를 먼저 보는 탓에 MS07 유형표가 들어가 중1 문제가 고1로 끌려갔고,
+  //   해설까지 고1 수준 장문으로 나왔다. 여명중은 subject='수학II' 라 미적분1(MS10)로 샜다.
+  //   grade 는 구조적 값이고 subject 는 기본값('고1'·'수학')으로 덮이는 자유 텍스트다.
+  //   → 학년이 중등을 가리키는데 과목이 고등이면 과목을 버린다.
+  const gradeSaysMiddle = /중\s*[1-3]/.test((gradeHint || '').normalize('NFC'));
+  const subjectIsHigh = /공통수학|대수|미적분|기하|확률|수학\s*(?:Ⅰ|Ⅱ|I|II|1|2)|수학\s*\(\s*[상하]\s*\)/.test((subject || '').normalize('NFC'));
+  const hints = gradeSaysMiddle && subjectIsHigh ? [gradeHint] : [subject, gradeHint];
+
+  for (const hintRaw of hints) {
     if (!hintRaw) continue;
     // ★ 학기(1/2학기) 흡수 — "중2-1 수학"→"중2 수학" 로 정규화해 항상 양 학기 코드(['03','04']) 반환.
     //   파일명 학기와 실제 문제 학기가 다른 "특이 진도" 시험지(제목 2-1, 내용 2-2 평행사변형 등) 대응.

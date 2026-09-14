@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { requireSolutionPin } from '@/lib/security/solution-pin';
+// ★ 클라이언트 안전 모듈 — 과목코드(01~13) → 표시명. mathsecr-prompt(3.3MB JSON)는 안 끌어온다.
+import { CURRICULUM_OPTIONS } from '@/lib/workflow/curriculum-options';
 import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -113,7 +115,16 @@ export async function POST(
     // 1-d. AI 분석에서 과목/단원 정보 추출
     const aiAnalysis = problem.ai_analysis as Record<string, any> | null;
     const aiClassification = aiAnalysis?.classification || {};
-    const subject = aiClassification.subject || '';
+    // ★ 과목은 **유형 코드**에서 먼저 읽는다 (2026-09-14 사고).
+    //   전에는 ai_analysis.classification.subject 를 그대로 믿었는데, 거기엔 자산화 때
+    //   기본값으로 박힌 "공통수학1" 이 남아 있는 경우가 있다(시험지 grade 는 중1인데).
+    //   그 결과 **중1 좌표평면 문제에 고1 수준 장문 해설**이 나왔다 (대표 지적).
+    //   유형 코드(MS01-…)는 분류가 실제로 고른 값이라 이쪽이 사실에 가깝다.
+    const msCode = /^MS(\d{2})/.exec(String(typeCode || ''))?.[1] || '';
+    const subjectFromType = msCode
+      ? (CURRICULUM_OPTIONS.find((o) => o.code === msCode)?.label || '')
+      : '';
+    const subject = subjectFromType || aiClassification.subject || '';
     const chapter = aiClassification.chapter || '';
     const section = aiClassification.section || '';
 
@@ -218,6 +229,16 @@ ${graphData.yRange ? `y축 범위: [${graphData.yRange}]` : ''}
       SUBJECT_SCOPE[s] = { allowed: '중학교 교육과정 범위', forbidden: '고등학교 개념(인수분해 공식 중 고등 범위, 복소수, 이차방정식 근의 공식 판별식, 삼각함수, 미적분, 수열)' };
     });
 
+    // ★ 중학교 문제에 고등학교식 장문 해설이 나오던 것 — 분량을 학년에 맞춘다 (대표 지적 2026-09-14).
+    //   "중1 문제에 해설이 뭘 저렇게 길게 나오고". 길다고 좋은 해설이 아니다.
+    //   학생이 읽고 따라올 수 있어야 하고, 중1은 문장이 길어지면 그 자체가 벽이 된다.
+    const lengthInstruction = isMiddleSchool
+      ? `\n\n★ 분량 — 중학교 문제다. 군더더기 없이 핵심 단계만 적는다.
+- 풀이는 **3~6단계**, 한 단계는 한두 문장. 같은 말을 다시 쓰지 않는다.
+- 객관식이면 정답 근거를 먼저 밝히고, 나머지 보기는 **틀린 이유만 한 줄씩**. 전부 장황하게 검토하지 않는다.
+- 개념 설명은 그 문제를 푸는 데 필요한 만큼만. 교과서를 옮겨 적지 않는다.`
+      : '';
+
     const scope = subject ? SUBJECT_SCOPE[subject] || SUBJECT_SCOPE[subject.replace(/ 수학$/, '')] : null;
     const levelInstruction = scope
       ? `\n\n★★★ 교육과정 준수 (절대 위반 금지) ★★★
@@ -225,8 +246,8 @@ ${graphData.yRange ? `y축 범위: [${graphData.yRange}]` : ''}
 ✅ 사용 가능: ${scope.allowed}
 ❌ 사용 금지: ${scope.forbidden}
 - 위 금지 목록의 개념/공식은 절대 풀이에 사용하지 마세요.
-- 학생이 이 과목까지만 배운 상태에서 이해할 수 있는 풀이만 작성하세요.`
-      : '';
+- 학생이 이 과목까지만 배운 상태에서 이해할 수 있는 풀이만 작성하세요.${lengthInstruction}`
+      : lengthInstruction;
 
     // ★ 서술형 판별: 선택지 없음(객관식 아님) + 서술형 패턴
     // 객관식이면 절대 서술형으로 분류되지 않음 (답은 ①~⑤)
