@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import katex from 'katex';
 import { balanceBraces, balanceLeftRight } from './latex-balance';
+import { useFitToWidth } from './use-fit-to-width';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -128,47 +129,11 @@ export function MathRenderer({ content, block = false, className, compact = fals
         }
     }, [content, block, compact]);
 
-    // ★★ 단 폭을 넘는 수식을 **줄여서 넣는다** (2026-09-15, 대표: "인쇄 렌더가 제일 시급").
-    //   KaTeX 는 수식을 줄바꿈하지 않는다(.katex { white-space: nowrap }). 그래서 2단 인쇄처럼
-    //   좁은 단에서 긴 수식은 단 밖으로 넘친다. 게다가 globals.css 가 그 가로 스크롤바를
-    //   **숨기고** 있어서, 화면에선 잘린 줄 모르고 **인쇄하면 넘친 부분이 그냥 사라진다**.
-    //   실측: 본문에 140자 넘는 인라인 수식이 944건(평균 452자). 적지 않다.
-    //
-    //   ★ transform: scale 이 아니라 **font-size** 로 줄인다.
-    //     이 프로젝트는 높이를 재서 페이지를 나눈다(측정↔렌더↔인쇄 기하 통일 가드).
-    //     transform 은 레이아웃 박스를 그대로 두기 때문에 측정값이 실제와 어긋나 페이지가 깨진다.
-    //     font-size 는 폭과 높이가 같이 줄어 측정이 그대로 맞는다.
-    //   ★ 0.55em 이 바닥 — 그보다 작으면 인쇄에서 읽을 수 없다. 거기서도 넘치면 줄이길 멈춘다
-    //     (읽을 수 없게 만드느니 넘치는 걸 보이는 편이 낫다 — 최소한 문제를 알아챈다).
+    // ★ 단 폭을 넘는 수식은 줄여서 넣는다 — 안 그러면 인쇄에서 넘친 부분이 사라진다.
+    //   (전역 CSS 가 가로 스크롤바를 숨기고 있어 화면에선 잘린 줄 모른다.)
+    //   실측: 본문 수식이 140자 넘는 문제 858건, 최대 323자. 85mm 단에서 385px → 336px.
     const hostRef = useRef<HTMLSpanElement | null>(null);
-    useEffect(() => {
-        const host = hostRef.current;
-        if (!host) return;
-        const fit = () => {
-            const k = host.querySelector<HTMLElement>('.katex');
-            if (!k) return;
-            host.style.fontSize = '';                    // 다시 재기 전 초기화
-            const avail = host.parentElement?.clientWidth || host.clientWidth;
-            if (!avail) return;
-            // ★ .katex 는 **인라인** 요소다 — scrollWidth/clientWidth 가 0 이라 못 쓴다.
-            //   (실제로 처음엔 scrollWidth 로 짰다가 헤드리스 측정에서 0 이 나와 잡았다.)
-            const need = k.getBoundingClientRect().width;
-            if (need <= avail + 1) return;               // 들어간다 — 손대지 않는다
-            const ratio = Math.max(0.55, avail / need);
-            // ★ .katex 가 아니라 **바깥(host)** 에 건다.
-            //   globals.css 의 `.katex { font-size: 1em !important }` 가 .katex 인라인 지정을
-            //   눌러버려 아무 일도 안 일어난다(헤드리스 측정으로 확인: 385px 그대로).
-            //   host 에 걸면 .katex 의 1em 이 줄어든 값을 기준으로 잡혀 같이 작아진다.
-            //   실측 85mm 단 기준: 385px → 336px, 넘침 0.
-            host.style.fontSize = `${ratio.toFixed(3)}em`;
-        };
-        // KaTeX 전용 글꼴이 늦게 붙으면 폭이 바뀐다 — 글꼴 준비 후 한 번 더 잰다
-        fit();
-        const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
-        if (fonts?.ready) fonts.ready.then(fit).catch(() => {});
-        window.addEventListener('resize', fit);
-        return () => window.removeEventListener('resize', fit);
-    }, [html]);
+    useFitToWidth(hostRef, '.katex', [html]);
 
     return (
         <span
