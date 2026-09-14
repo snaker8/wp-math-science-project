@@ -711,6 +711,23 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
       else if (gptErrorInfo) why.push(`GPT 실패(${gptErrorInfo})`);
       const msg = `해설 생성 실패 — ${why.join(' / ')}`;
       console.error(`[generate-solution] ✖ ${msg} (problem ${problemId})`);
+      // ★ 실패 이유를 **문제에 적어 둔다** (2026-09-14).
+      //   서버 로그는 운영에서 못 본다. 로그에만 남기면 "그냥 안 된다" 로 끝나고,
+      //   같은 자리를 추측으로 두 번 세 번 고치게 된다. 흔적이 DB 에 남아야 원인을 짚는다.
+      //   성공하면 지운다(아래) — 낡은 실패 기록이 남아 헷갈리면 안 된다.
+      try {
+        await supabaseAdmin.from('problems').update({
+          ai_analysis: {
+            ...(aiAnalysis || {}),
+            solutionError: {
+              at: new Date().toISOString(),
+              reason: msg,
+              sonnet: sonnetErrorInfo || null,
+              gpt: gptErrorInfo || null,
+            },
+          },
+        }).eq('id', problemId);
+      } catch { /* 기록 실패가 응답을 막으면 안 된다 */ }
       return NextResponse.json({
         error: msg,
         code: 'AI_ALL_FAILED',
@@ -1142,6 +1159,12 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
 
     // ★ 해설: 사용자가 직접 편집한 해설은 보존
     const updateFields: Record<string, any> = { answer_json: updatedAnswerJson };
+    // 성공했으니 지난 실패 기록은 지운다 — 낡은 기록이 남으면 원인 추적이 헷갈린다
+    if (aiAnalysis && (aiAnalysis as Record<string, unknown>).solutionError) {
+      const cleaned = { ...(aiAnalysis as Record<string, unknown>) };
+      delete cleaned.solutionError;
+      updateFields.ai_analysis = cleaned;
+    }
     if (solutionUserEdited) {
       console.log(`[generate-solution] ★ 사용자 편집 해설 보존 (solution_latex 유지)`);
     } else {
