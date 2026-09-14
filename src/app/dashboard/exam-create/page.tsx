@@ -1781,11 +1781,18 @@ export default function ExamCreatePage() {
             >
               {typeCode ? (
                 <>
-                  <div className="font-mono text-xs">{typeCode}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate font-mono text-xs">{typeCode.split(',')[0]}</span>
+                    {typeCode.includes(',') && (
+                      <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-content-secondary tabular-nums">
+                        +{typeCode.split(',').length - 1}
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-0.5 truncate text-[10px] text-zinc-400">{typeName}</div>
                 </>
               ) : (
-                <span className="text-zinc-500">트리에서 선택...</span>
+                <span className="text-zinc-500">트리에서 선택... (여러 단원 가능)</span>
               )}
             </button>
             {typeCode && (
@@ -1994,6 +2001,8 @@ export default function ExamCreatePage() {
       {/* 트리 picker */}
       <MathsecrTreePicker
         open={pickerOpen}
+        /* ★ 출제는 여러 유형에서 뽑는다 — 다중 체크 (보정 모달은 단일 그대로) */
+        multiple
         initialSubjectCode={(typeCode.match(/^MS(\d{2})/) || [])[1] || '09'}
         onSelect={(code, fullPath) => {
           setTypeCode(code);

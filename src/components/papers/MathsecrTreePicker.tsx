@@ -47,11 +47,21 @@ const SUBJECT_OPTIONS: Array<{ code: string; name: string; level: '중' | '고' 
 interface Props {
   open: boolean;
   initialSubjectCode?: string;
+  /**
+   * 여러 단원·유형을 **동시에** 체크한다 (출제 화면).
+   *
+   * ★ 대표 지적 (2026-09-14): "유형을 중복해서 단원 체킹이 되야지."
+   *   시험지는 보통 여러 유형에서 뽑는다 — 한 유형만 고르고 검색·담기를 반복하는 건 일이 아니다.
+   *   검색 API 는 쉼표 구분 다중 typeCode 를 이미 받는다(접두 OR 매칭).
+   * ★ 분류 **보정**은 다중이면 안 된다 — 문제 하나에 유형 하나다. 그래서 기본값은 단일.
+   */
+  multiple?: boolean;
+  /** multiple 이면 code 는 쉼표로 이어진다 ("MS01-08,MS01-09") */
   onSelect: (code: string, fullPath: string) => void;
   onClose: () => void;
 }
 
-export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose }: Props) {
+export function MathsecrTreePicker({ open, initialSubjectCode, multiple = false, onSelect, onClose }: Props) {
   const [subjectCode, setSubjectCode] = useState(initialSubjectCode || '09');
   /**
    * 이웃 과정(같은 학년의 다른 학기)을 트리에 **함께** 띄운다.
@@ -68,6 +78,8 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<MathsecrNode | null>(null);
+  /** multiple 일 때 체크된 노드들 (code → fullPath). 순서를 지키려고 Map 을 쓴다. */
+  const [checked, setChecked] = useState<Map<string, string>>(new Map());
 
   const neighborCodes = useMemo(
     () => (withNeighbor ? (NEIGHBOR_COURSES[subjectCode] || []) : []),
@@ -79,6 +91,7 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
     if (!open || !subjectCode) return;
     setLoading(true);
     setSelected(null);
+    setChecked(new Map());   // 과목이 바뀌면 체크도 비운다 — 옛 과목 코드가 남으면 검색이 엉뚱해진다
     setSearch('');
 
     // ★ 2026-09-01 사고 — 과목을 빠르게 바꾸면 **늦게 도착한 옛 응답이 새 응답을 덮어썼다.**
@@ -165,6 +178,16 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
    *   (세부 노드를 고르면 종전대로 그 코드가 우선한다 — 기존 동작 불변)
    */
   const handleConfirm = () => {
+    if (multiple) {
+      if (checked.size > 0) {
+        const codes = Array.from(checked.keys());
+        const first = checked.get(codes[0]) || codes[0];
+        onSelect(codes.join(','), codes.length === 1 ? first : `${first} 외 ${codes.length - 1}개`);
+        onClose();
+        return;
+      }
+      // 아무것도 안 골랐으면 아래 과목 단위 적용으로 떨어진다 (기존 동작과 같다)
+    }
     if (selected) {
       onSelect(selected.code, selected.fullPath);
     } else {
@@ -274,7 +297,16 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
                     });
                   }}
                   selected={selected}
-                  onPick={setSelected}
+                  checked={checked}
+                  multiple={multiple}
+                  onPick={(n) => {
+                    if (!multiple) { setSelected(n); return; }
+                    setChecked((prev) => {
+                      const next = new Map(prev);
+                      if (next.has(n.code)) next.delete(n.code); else next.set(n.code, n.fullPath);
+                      return next;
+                    });
+                  }}
                 />
               ))}
             </ul>
@@ -284,7 +316,27 @@ export function MathsecrTreePicker({ open, initialSubjectCode, onSelect, onClose
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-zinc-800 px-5 py-3">
           <div className="min-w-0 flex-1 text-[11px]">
-            {selected ? (
+            {multiple ? (
+              checked.size > 0 ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-amber-400">{checked.size}개 선택</span>
+                    <button
+                      type="button"
+                      onClick={() => setChecked(new Map())}
+                      className="text-[10px] text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+                    >
+                      모두 해제
+                    </button>
+                  </div>
+                  <div className="mt-0.5 truncate text-zinc-400">
+                    {Array.from(checked.values()).join('  ·  ')}
+                  </div>
+                </>
+              ) : (
+                <span className="text-zinc-600">단원·유형을 체크하세요 (여러 개 가능) — 안 고르면 과목 전체</span>
+              )
+            ) : selected ? (
               <>
                 <div className="font-mono text-amber-400">{selected.code}</div>
                 <div className="mt-0.5 truncate text-zinc-400">{selected.fullPath}</div>
@@ -325,17 +377,21 @@ function TreeNode({
   expanded,
   onToggle,
   selected,
+  checked,
+  multiple,
   onPick,
 }: {
   node: MathsecrNode;
   expanded: Set<string>;
   onToggle: (code: string) => void;
   selected: MathsecrNode | null;
+  checked: Map<string, string>;
+  multiple: boolean;
   onPick: (n: MathsecrNode) => void;
 }) {
   const hasChildren = node.children && node.children.length > 0;
   const isOpen = expanded.has(node.code);
-  const isSelected = selected?.code === node.code;
+  const isSelected = multiple ? checked.has(node.code) : selected?.code === node.code;
   // 깊이 들여쓰기 — depth 2부터 시작 (depth 1은 root)
   const indent = Math.max(0, node.depth - 1) * 14;
 
@@ -367,6 +423,16 @@ function TreeNode({
           onClick={() => onPick(node)}
           className="flex flex-1 items-center gap-2 truncate text-left"
         >
+          {/* ★ 체크 표시 — 여러 개 고를 수 있다는 걸 눈으로 알리는 자리 */}
+          {multiple && (
+            <span
+              className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border text-[9px] font-bold ${
+                isSelected ? 'border-white bg-white text-black' : 'border-zinc-600'
+              }`}
+            >
+              {isSelected ? '✓' : ''}
+            </span>
+          )}
           <span className="truncate">{node.name}</span>
           {node.problemCount > 0 && (
             <span className="ml-auto shrink-0 text-[10px] text-zinc-500">
@@ -384,6 +450,8 @@ function TreeNode({
               expanded={expanded}
               onToggle={onToggle}
               selected={selected}
+              checked={checked}
+              multiple={multiple}
               onPick={onPick}
             />
           ))}
