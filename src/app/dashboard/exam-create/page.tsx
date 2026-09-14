@@ -695,6 +695,13 @@ export default function ExamCreatePage() {
     sourceYear: p.year,
   });
 
+  /** 지금 검색 결과 중 몇 개가 담겼나 — 「전부 담기」 버튼의 상태 */
+  const pickedHere = useMemo(
+    () => problems.filter((p) => pickedIds.has(p.id)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [problems, pickedIds],
+  );
+
   const toPickedProblem = (p: ProblemRow): PickedProblem => {
     const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
     const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
@@ -1899,9 +1906,37 @@ export default function ExamCreatePage() {
             </div>
           ) : (
             <>
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-zinc-400">
                   검색 결과 <span className="font-bold text-content-primary tabular-nums">{problems.length}</span>건
+                  {pickedHere > 0 && (
+                    <span className="ml-2 text-content-tertiary">담김 <span className="tabular-nums">{pickedHere}</span></span>
+                  )}
+                </div>
+                {/* ★ 하나씩 담을 수는 없다 — 검색 결과를 통째로 담고 빼는 자리 (대표 지적 2026-09-14) */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPickedList((prev) => {
+                      const have = new Set(prev.map((x) => x.id));
+                      return [...prev, ...problems.filter((p) => !have.has(p.id)).map(toPickedProblem)];
+                    })}
+                    disabled={pickedHere === problems.length}
+                    className="rounded-full border border-zinc-700 px-2.5 py-1 text-[11px] text-content-secondary transition-colors hover:border-white/25 hover:text-content-primary disabled:opacity-40"
+                  >
+                    검색 결과 전부 담기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ids = new Set(problems.map((p) => p.id));
+                      setPickedList((prev) => prev.filter((x) => !ids.has(x.id)));
+                    }}
+                    disabled={pickedHere === 0}
+                    className="rounded-full border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-40"
+                  >
+                    이 결과 빼기
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
