@@ -56,6 +56,29 @@ function toCircledSet(raw: string): string {
   return uniq.map((n) => '①②③④⑤'[n - 1]).join('');
 }
 
+/**
+ * 해설 **본문**에서 객관식 정답(①~⑤)을 건져낸다.
+ *
+ * ★ 사고 (2026-09-15, 대표: "해설이 생성되어도 빠른답이 안 올라가는 경우가 있다"):
+ *   해설 끝에 「따라서 옳지 않은 것은 ③이다」라고 **분명히 적혀 있는데** 저장된 답은 빈 문자열이었다.
+ *   코드가 JSON 의 finalAnswer 필드만 보고, 본문은 안 봤기 때문이다.
+ *   실측 — 해설이 있는 1,861건 중 답이 빈 것 103건, 그중 95건이 객관식.
+ *
+ * ★ 결론은 뒤에 온다 — 마지막 것을 고른다. 중간의 "② 는 틀렸다" 같은 문장에 끌리면 안 된다.
+ */
+function answerFromSolutionText(text: string): string {
+  if (!text) return '';
+  // ★ 결론은 **끝에** 있다 — 마지막 160자만 본다. 중간의 "② 는 틀렸다" 에 끌리면 안 된다.
+  const tail = text.slice(-160);
+  const m = /(?:∴|따라서|그러므로|정답은|답은|정답\s*[:：])([^\n]{0,40})/.exec(tail);
+  if (!m) return '';
+  const circled = m[1].match(/[①②③④⑤]/g) || [];
+  // ★ 결론에 원형숫자가 **하나뿐일 때만** 쓴다.
+  //   "②, ⑤이다" 같은 '모두 고르기'형을 하나로 줄여 저장하면 오답을 심는 것이다.
+  if (circled.length !== 1) return '';
+  return circled[0];
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ problemId: string }> }
@@ -1114,6 +1137,8 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
     const solutionUserEdited = (problem.answer_json as Record<string, any>)?.solution_user_edited === true;
 
     let finalAnswerToSave: string;
+    /** 무효값을 버렸을 때 '사용자 편집' 표시를 푼다 — 빈값이 영구 보존되는 것을 막는다 */
+    let clearAnswerUserEdited = false;
     if (isSelectAll) {
       // ★ "모두 고르기"형 — 복수 정답 보존. 우선순위: 사용자 편집 > AI 정규화 결과 > 기존.
       //   원형숫자 세트("②④")만 신뢰 — 다른 형식은 toCircledSet 으로 정규화, 없으면 빈값.
@@ -1142,11 +1167,16 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
           solution.finalAnswer && /^[①②③④⑤]$/.test(String(solution.finalAnswer).trim())
             ? String(solution.finalAnswer).trim()
             : '';
-        finalAnswerToSave = aiCircled;
+        // ★ AI 가 필드로 못 냈어도 **해설 본문에는 적혀 있는 경우가 많다** — 거기서 건진다.
+        finalAnswerToSave = aiCircled || answerFromSolutionText(solutionText);
+        // ★ 무효값을 버렸으면 '사용자 편집' 표시도 같이 푼다.
+        //   안 그러면 다음 생성에서도 "사용자가 고친 답"이라며 **빈값을 영구 보존**한다.
+        //   실제로 그렇게 굳은 문제들이 있었다(answer_user_edited=true 인데 값은 "").
+        clearAnswerUserEdited = true;
         console.warn(
           `[generate-solution] ⚠ 사용자 편집 객관식 답 무효 폐기: "${userEnteredAnswer}" → "${
             finalAnswerToSave || '(빈값)'
-          }" (AI 결론="${solution.finalAnswer || ''}")`
+          }" (AI 결론="${solution.finalAnswer || ''}", 본문 복구="${answerFromSolutionText(solutionText) || '없음'}")`
         );
       } else {
         finalAnswerToSave = userEnteredAnswer;
@@ -1164,7 +1194,8 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
       //   사고: "0" 같은 잘못된 값이 한 번 DB 에 들어가면 재호출해도 영구 보존되던 케이스 차단.
       //   사용자가 카드 인라인 입력으로 ①~⑤ 직접 넣을 때만 신뢰 — 모호한 값은 비워서 재입력 유도.
       const userIsValidCircled = userEnteredAnswer && /^[①②③④⑤]$/.test(userEnteredAnswer);
-      finalAnswerToSave = userIsValidCircled ? userEnteredAnswer : '';
+      // ★ 기존 답이 무효여도 해설 본문에 답이 있으면 그걸 쓴다 (빈칸으로 두지 않는다)
+      finalAnswerToSave = userIsValidCircled ? userEnteredAnswer : answerFromSolutionText(solutionText);
       if (userEnteredAnswer && !userIsValidCircled) {
         console.warn(`[generate-solution] ⚠ 객관식 무효 정답 폐기: "${userEnteredAnswer}" → '' (카드에서 ①~⑤ 재입력 유도). AI도 무효: "${solution.finalAnswer}"`);
       } else {
@@ -1191,6 +1222,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
       ...(problem.answer_json as Record<string, any> || {}),
       finalAnswer: finalAnswerToSave,
       correct_answer: finalAnswerToSave,
+      ...(clearAnswerUserEdited ? { answer_user_edited: false } : {}),
     };
 
     // ★ 해설: 사용자가 직접 편집한 해설은 보존
