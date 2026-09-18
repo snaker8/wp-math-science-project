@@ -86,7 +86,7 @@ function readLastDue(): string {
 }
 
 export function GenerateAssignmentModal({
-  classId, studentIds, kind, cells, className, onClose, onDone,
+  classId, studentIds, kind, cells, className, initialTitle, maxPick, onClose, onDone,
 }: {
   classId: string;
   studentIds: string[];
@@ -95,6 +95,10 @@ export function GenerateAssignmentModal({
   cells?: CellSpec[];
   /** 과제명 제안용 */
   className?: string;
+  /** 제목을 밖에서 정해 줄 때 (주간 클리닉 「N주차 클리닉」 등) */
+  initialTitle?: string;
+  /** 선택된 채로 시작할 문항 상한 — 기본 DEFAULT_PICK(20). 주간 클리닉은 5/10 (매쓰홀릭 실측) */
+  maxPick?: number;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -109,7 +113,7 @@ export function GenerateAssignmentModal({
 
   const today = new Date();
   const md = `${today.getMonth() + 1}/${today.getDate()}`;
-  const [title, setTitle] = useState(`${KIND_PREFIX[kind]} ${md}`);
+  const [title, setTitle] = useState(initialTitle || `${KIND_PREFIX[kind]} ${md}`);
   const [dueAt, setDueAt] = useState('');
   const [lastDue, setLastDue] = useState('');
   useEffect(() => { setLastDue(readLastDue()); }, []);
@@ -159,7 +163,7 @@ export function GenerateAssignmentModal({
       //   그걸 다 담으면 80문항짜리 과제가 나가는데, 그건 아무도 안 푼다.
       //   앞쪽(가장 약한 유형)부터 DEFAULT_PICK 개만 담고 나머지는 보여만 준다.
       const flat = gs.flatMap((g) => g.problems.map((p) => p.id));
-      setPicked(new Set(flat.slice(0, DEFAULT_PICK)));
+      setPicked(new Set(flat.slice(0, maxPick ?? DEFAULT_PICK)));
       setOpenGroup(new Set(gs.slice(0, 3).map((g) => g.code)));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -168,7 +172,7 @@ export function GenerateAssignmentModal({
     }
     // cells 는 내용 키(cellsKey)로 비교 — 부모가 매 렌더마다 새 배열을 만들어도 다시 안 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, studentIds, perType, classId, cellsKey]);
+  }, [kind, studentIds, perType, classId, cellsKey, maxPick]);
 
   useEffect(() => { void load(); }, [load]);
 

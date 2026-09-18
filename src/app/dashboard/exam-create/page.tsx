@@ -43,6 +43,7 @@ import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extra
 import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
 import { WeakClinicPanel, type WeakProblemRow } from '@/components/exam-create/WeakClinicPanel';
 import { WrongSourcePanel, type WrongSourceRow } from '@/components/exam-create/WrongSourcePanel';
+import { CURRICULUM_OPTIONS } from '@/lib/workflow/curriculum-options';
 
 // ============================================================================
 // 출처별 카테고리 탭 (매쓰플랫 식 — 학교시험 / 유형기준 / 출처기준 식 구성)
@@ -749,10 +750,26 @@ export default function ExamCreatePage() {
     });
   };
 
+  /**
+   * 학습지명 자동 제안 — 매쓰홀릭 04 실측 `(08.30 ~ 11.27) 공통수학1 (2022 개정) (26.08.30 02:17)`.
+   * 우리 식: `(기간) 과정 · 단원 (시각)`. 기간이 없으면 기간 칸은 뺀다. 과정은 고른 유형 코드에서 읽는다.
+   * 사소하지만 매번 손이 가던 자리다 — 지우고 새로 쓰는 건 자유다.
+   */
+  const suggestTitle = () => {
+    const ms = /^MS(\d{2})/.exec(typeCode.split(',')[0] || '')?.[1];
+    const course = ms ? CURRICULUM_OPTIONS.find((o) => o.code === ms)?.label ?? '' : '';
+    const unit = typeName ? (typeName.split(' > ').pop() || '') : '';
+    const mmdd = (ymd: string) => { const [, m, d] = ymd.split('-'); return `${m}.${d}`; };
+    const period = periodStart && periodDue ? `(${mmdd(periodStart)} ~ ${mmdd(periodDue)}) ` : '';
+    const now = new Date();
+    const stamp = `${String(now.getFullYear()).slice(2)}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const body = [course, unit].filter(Boolean).join(' · ') || '시험지';
+    return `${period}${body} (${stamp})`;
+  };
+
   const openCompose = () => {
-    if (!examTitle && typeName) {
-      const last = typeName.split(' > ').pop() || '시험지';
-      setExamTitle(`${last} 연습 ${new Date().toLocaleDateString('ko-KR')}`);
+    if (!examTitle && (typeName || typeCode)) {
+      setExamTitle(suggestTitle());
     }
     setComposeDone(null);
     setComposeOpen(true);
@@ -2100,7 +2117,14 @@ export default function ExamCreatePage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-zinc-400">제목 *</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-zinc-400">제목 *</label>
+                  <button type="button" onClick={() => setExamTitle(suggestTitle())}
+                    className="text-[10px] text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+                    title="기간 · 과정 · 단원 · 시각으로 이름을 다시 짓습니다">
+                    자동 제안
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={examTitle}
