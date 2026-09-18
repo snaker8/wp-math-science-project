@@ -133,7 +133,9 @@ export function MathRenderer({ content, block = false, className, compact = fals
     //   (전역 CSS 가 가로 스크롤바를 숨기고 있어 화면에선 잘린 줄 모른다.)
     //   실측: 본문 수식이 140자 넘는 문제 858건, 최대 323자. 85mm 단에서 385px → 336px.
     const hostRef = useRef<HTMLSpanElement | null>(null);
-    useFitToWidth(hostRef, '.katex', [html]);
+    // ★ 60자 미만 수식은 85mm 단을 넘길 수 없다 — 폭을 재지 않는다(수백 개가 뜨는 화면의 첫 그리기 보호).
+    //   블록 수식(display)은 원래 자기 줄을 통째로 쓰므로 길이와 무관하게 잰다.
+    useFitToWidth(hostRef, '.katex', [html], { skip: !block && content.length < 60 });
 
     return (
         <span
