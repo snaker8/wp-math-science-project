@@ -237,6 +237,13 @@ export function ExamPaperView({
   //   슬라이더로 20~70px 사이에서 변경 가능. 표·긴 보기가 컬럼 폭을 침범하던 사고 완화.
   const [pagePad, setPagePad] = useState(38);
   const [perPagePreset, setPerPagePreset] = useState<number | null>(null); // null=자동, 4, 6, 8
+  // ★ 매쓰홀릭 인쇄 실측(docs/benchmark/matholic/11-print-api.md §4·§6)에서 우리에게 없던 세 가지.
+  //   난이도 배지 · 하단 영역(출제단원·출제자·학습번호) · 양면(홀수면 빈 페이지). 전부 기본 꺼짐 — 종전 출력 불변.
+  const [showLevel, setShowLevel] = useState(false);
+  const [footerUnit, setFooterUnit] = useState(false);
+  const [footerAuthor, setFooterAuthor] = useState(false);
+  const [footerId, setFooterId] = useState(false);
+  const [duplex, setDuplex] = useState(false);
   // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
   const [zoom, setZoom] = useState(1);
 
@@ -256,7 +263,11 @@ export function ExamPaperView({
 
   // ★ 출력 설정 저장/불러오기 ("내 설정") — 단·간격·여백·배열을 이름 붙여 저장 후 원클릭 적용.
   //   브라우저 localStorage 사용 (서버/스키마 변경 없음). 매쓰홀릭 "저장한 템플릿" 등가.
-  type PrintPreset = { name: string; columns: 1 | 2; gap: number; pagePad: number; perPagePreset: number | null; headerColor?: string | null; headerTheme?: string | null };
+  type PrintPreset = {
+    name: string; columns: 1 | 2; gap: number; pagePad: number; perPagePreset: number | null;
+    headerColor?: string | null; headerTheme?: string | null;
+    showLevel?: boolean; footerUnit?: boolean; footerAuthor?: boolean; footerId?: boolean; duplex?: boolean;
+  };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
     try { const raw = localStorage.getItem('msb_print_presets'); if (raw) setPrintPresets(JSON.parse(raw)); } catch { /* ignore */ }
@@ -268,12 +279,13 @@ export function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
     if (!p) return;
     setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
+    setShowLevel(!!p.showLevel); setFooterUnit(!!p.footerUnit); setFooterAuthor(!!p.footerAuthor); setFooterId(!!p.footerId); setDuplex(!!p.duplex);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
@@ -328,6 +340,17 @@ export function ExamPaperView({
   const A4_H = 1123;
   // ★ pagePad state 사용 (사용자 조절 가능, 기본 38px ≈ 10mm)
   const PAGE_PAD = pagePad;
+  // ★ 출제단원 — 문항 유형 경로(과목 > 대단원 > …)의 대단원을 모아 상위 3개. 분류 없는 문항은 셈에서 뺀다
+  const footerUnits = useMemo(() => {
+    const cnt = new Map<string, number>();
+    for (const p of problems) {
+      const seg = (p.typeName || '').split(' > ');
+      const unit = seg.length >= 2 ? seg[1].trim() : '';
+      if (unit) cnt.set(unit, (cnt.get(unit) || 0) + 1);
+    }
+    const top = Array.from(cnt.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([u]) => u);
+    return top.length ? top.join(' · ') + (cnt.size > 3 ? ` 외 ${cnt.size - 3}` : '') : '';
+  }, [problems]);
   const FOOTER_H = 36;
   const HEADER_H = 130;
   const CONTENT_H = A4_H - PRINT_PAD_Y * 2 - FOOTER_H;
@@ -684,7 +707,7 @@ export function ExamPaperView({
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
   //   textSize 13.5px: 기본 14px 보다 아주 조금 작게(사용자 요청). 측정·렌더 같은 헬퍼라 분할 일치.
   const renderProblem = (problem: ProblemData) => (
-    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" />
+    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} />
   );
 
   // 측정용 컬럼 너비 (고정 컬럼 간격 사용)
@@ -772,6 +795,28 @@ export function ExamPaperView({
               title="페이지 좌우 여백 (px)"
             />
             <span className="text-xs text-content-tertiary w-8 text-right tabular-nums">{pagePad}</span>
+          </div>
+          {/* ★ 매쓰홀릭 인쇄 옵션 3종 (11-print-api §6 「가져올 것」) — 난이도 배지 · 하단 영역 · 양면 */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([
+              ['난이도', showLevel, () => setShowLevel((v) => !v), '문항 번호 옆에 개념·기본·실력·심화·고난도 배지'],
+              ['출제단원', footerUnit, () => setFooterUnit((v) => !v), '하단에 이 시험지의 대단원'],
+              ['출제자', footerAuthor, () => setFooterAuthor((v) => !v), '하단에 출제교사(헤더 정보의 출제교사)'],
+              ['학습번호', footerId, () => setFooterId((v) => !v), '하단에 시험지 번호'],
+              ['양면', duplex, () => setDuplex((v) => !v), '홀수 장이면 빈 페이지를 붙여 양면 인쇄 짝을 맞춥니다'],
+            ] as Array<[string, boolean, () => void, string]>).map(([label, on, toggle, hint]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={toggle}
+                title={hint}
+                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                  on ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           {/* ★ 미리보기 줌 (인쇄물엔 영향 없음 — 미리보기만 확대/축소) */}
           <div className="flex items-center gap-1">
@@ -1159,20 +1204,39 @@ export function ExamPaperView({
               />
             )}
 
-            {/* 페이지 번호 */}
+            {/* 하단 영역 — 매쓰홀릭 실측 4종(출제단원 · 페이지 번호 · 출제자 · 학습번호). 페이지 번호는 항상 */}
             <div style={{
               position: 'absolute',
               bottom: '8mm',
-              left: 0,
-              right: 0,
-              textAlign: 'center',
+              left: `${PAGE_PAD}px`,
+              right: `${PAGE_PAD}px`,
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
               fontSize: '10px',
               color: '#aaa',
             }}>
-              페이지 {pageIdx + 1}
+              <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {footerUnit ? footerUnits : ''}
+              </span>
+              <span style={{ flex: '0 0 auto' }}>{pageIdx + 1} / {pages.length + (duplex && pages.length % 2 === 1 ? 1 : 0)}</span>
+              <span style={{ flex: 1, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {[footerAuthor && examMeta.teacher ? `출제 ${examMeta.teacher}` : '', footerId ? `No. ${examId.slice(0, 8)}` : ''].filter(Boolean).join(' · ')}
+              </span>
             </div>
           </div>
         ))}
+        {/* ★ 양면 — 홀수 장이면 빈 페이지 한 장. 매쓰홀릭도 「빈 페이지」를 붙인다(실측 4번째 장). 화면엔 표시, 인쇄엔 공백 */}
+        {duplex && pages.length % 2 === 1 && (
+          <div
+            className="exam-page bg-white"
+            style={{ width: `${A4_W}px`, minHeight: `${A4_H}px`, padding: `${PRINT_PAD_Y}px ${PAGE_PAD}px`, marginTop: '24px', boxShadow: '0 4px 24px rgba(0,0,0,0.35)', borderRadius: '4px', position: 'relative', boxSizing: 'border-box' }}
+          >
+            <div className="print:hidden" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: '12px' }}>
+              빈 페이지 (양면 짝 맞춤)
+            </div>
+          </div>
+        )}
         </div>
       </div>
 
