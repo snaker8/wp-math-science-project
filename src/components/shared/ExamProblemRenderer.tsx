@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
+import { bandLabelOf } from '@/lib/class/mastery-bands';
 import type { InterpretedFigure } from '@/types/ocr';
 
 // ============================================================================
@@ -33,6 +34,8 @@ export interface ExamRenderProblem {
   subQuestions?: Array<{ number: string; answer?: string; points: number | null }>;
   /** answerJson fallback (subQuestions 가 직접 안 채워진 경우 여기서 추출) */
   answerJson?: Record<string, unknown> | null;
+  /** 수학비서 난이도 1~10 — showLevel 이면 번호 옆에 밴드 배지(개념~고난도) */
+  difficulty?: number | null;
 }
 
 /**
@@ -87,6 +90,7 @@ function ExamProblemRendererInner({
   lineHeight = '1.65',
   maxFigureWidth = 240,
   numberOnTop = false,
+  showLevel = false,
 }: {
   problem: ExamRenderProblem;
   gap?: number;
@@ -95,6 +99,8 @@ function ExamProblemRendererInner({
   maxFigureWidth?: number;
   // ★ true: 문제 번호를 본문 위 별도 줄에 올리고 본문을 전체 폭으로(넓게). cloud 시험지 인쇄용.
   numberOnTop?: boolean;
+  /** ★ 난이도 텍스트 배지 — 매쓰홀릭 「난이도 표시: 텍스트」(11-print-api §5). 우리 분류 밴드 그대로 */
+  showLevel?: boolean;
 }) {
   // 도형 소스 준비
   const figureCrops = problem.images?.filter(img => img.type === 'figure_crop') || [];
@@ -451,12 +457,24 @@ function ExamProblemRendererInner({
     </>
   );
 
+  // ★ 난이도 배지 — 매쓰홀릭 실측(11-print-api §5): 번호 옆 10px · 배경 #666 · 흰 글자 · 반경 3px.
+  //   라벨은 우리 5단 밴드(개념·기본·실력·심화·고난도). 난이도가 없으면 안 그린다(빈 배지 금지).
+  const levelLabel = showLevel ? bandLabelOf(problem.difficulty) : null;
+  const levelBadge = levelLabel ? (
+    <span
+      className="inline-block align-middle font-semibold text-white"
+      style={{ fontSize: '10px', lineHeight: '14px', padding: '0 4px', marginLeft: '6px', borderRadius: '3px', background: '#666', verticalAlign: '3px' }}
+    >
+      {levelLabel}
+    </span>
+  ) : null;
+
   // ★ 번호 위 + 본문 전체 폭 (cloud 시험지 인쇄) — 번호가 좌측 칼럼을 안 먹어 문제를 넓게 씀
   if (numberOnTop) {
     return (
       <div>
         <div className="font-bold text-gray-500" style={{ fontSize: `calc(${textSize} + 6px)`, lineHeight: 1.2, marginBottom: '3px' }}>
-          {problem.number}.
+          {problem.number}.{levelBadge}
         </div>
         {bodyEl}
       </div>
@@ -467,7 +485,7 @@ function ExamProblemRendererInner({
   return (
     <div className="flex gap-2.5 items-start">
       <span className="font-bold text-gray-500 flex-shrink-0" style={{ fontSize: `calc(${textSize} + 7px)`, minWidth: '30px', lineHeight: 1.1 }}>
-        {problem.number}.
+        {problem.number}.{levelBadge}
       </span>
       <div className="flex-1 min-w-0">
         {bodyEl}
@@ -482,6 +500,7 @@ export const ExamProblemRenderer = memo(ExamProblemRendererInner, (prev, next) =
     prev.problem === next.problem &&
     prev.gap === next.gap &&
     prev.textSize === next.textSize &&
-    prev.numberOnTop === next.numberOnTop
+    prev.numberOnTop === next.numberOnTop &&
+    prev.showLevel === next.showLevel
   );
 });
