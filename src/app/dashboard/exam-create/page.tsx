@@ -311,6 +311,18 @@ export default function ExamCreatePage() {
   const [examSubject, setExamSubject] = useState('');
   const [composing, setComposing] = useState(false);
   const [composeErr, setComposeErr] = useState<string | null>(null);
+  // ★ 매쓰홀릭 학습지 설정 3종 (docs/benchmark/matholic/04 「가져올 것」, 2026-09-19)
+  //   서술형 시작 번호 · 분할생성 · 기간(+반 배포). 전부 선택 사항 — 안 건드리면 종전과 같다.
+  const [descOn, setDescOn] = useState(false);
+  const [descFrom, setDescFrom] = useState(16);
+  const [splitOn, setSplitOn] = useState(false);
+  const [splitMode, setSplitMode] = useState<'count' | 'parts'>('count');
+  const [splitValue, setSplitValue] = useState(10);
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodDue, setPeriodDue] = useState('');
+  const [deployClassId, setDeployClassId] = useState('');
+  const [classOptions, setClassOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [composeDone, setComposeDone] = useState<{ examIds: string[]; assignments: number } | null>(null);
 
   // ★ 진단평가 시험지 목록 fetch — 탭 진입 시 1회
   useEffect(() => {
@@ -742,7 +754,15 @@ export default function ExamCreatePage() {
       const last = typeName.split(' > ').pop() || '시험지';
       setExamTitle(`${last} 연습 ${new Date().toLocaleDateString('ko-KR')}`);
     }
+    setComposeDone(null);
     setComposeOpen(true);
+    // 반 목록은 모달을 열 때만 가져온다 (배포 안 할 때 비용 0)
+    if (classOptions.length === 0) {
+      fetch('/api/classes', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => setClassOptions(((d.classes || []) as Array<{ id: string; name: string }>).map((c) => ({ id: c.id, name: c.name }))))
+        .catch(() => { /* 반 목록이 없어도 시험지는 만들 수 있다 */ });
+    }
   };
 
   return (
@@ -2113,9 +2133,100 @@ export default function ExamCreatePage() {
                 </div>
               </div>
 
+              {/* ★ 학습지 설정 — 매쓰홀릭 04 「가져올 것」 3종. 전부 선택 사항 */}
+              <div className="space-y-2 rounded-lg border border-white/[.08] bg-white/[.03] p-3">
+                {/* 서술형 시작 번호 */}
+                <label className="flex items-center gap-2 text-xs text-content-secondary">
+                  <input type="checkbox" checked={descOn} onChange={(e) => setDescOn(e.target.checked)} className="accent-white" />
+                  <span className="font-semibold text-content-primary">서술형 시작 번호</span>
+                  <input
+                    type="number" min={1} max={100} value={descFrom} disabled={!descOn}
+                    onChange={(e) => setDescFrom(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-14 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-center text-xs tabular-nums disabled:opacity-40"
+                  />
+                  <span className="text-zinc-500">번부터 서답형을 뒤로 모읍니다</span>
+                </label>
+
+                {/* 분할생성 */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={splitOn} onChange={(e) => setSplitOn(e.target.checked)} className="accent-white" />
+                    <span className="font-semibold text-content-primary">분할생성</span>
+                  </label>
+                  <select
+                    value={splitMode} disabled={!splitOn} onChange={(e) => setSplitMode(e.target.value as 'count' | 'parts')}
+                    className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs disabled:opacity-40"
+                  >
+                    <option value="count">N문제씩</option>
+                    <option value="parts">K등분</option>
+                  </select>
+                  <input
+                    type="number" min={1} max={100} value={splitValue} disabled={!splitOn}
+                    onChange={(e) => setSplitValue(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-14 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-center text-xs tabular-nums disabled:opacity-40"
+                  />
+                  {splitOn && pickedList.length > 0 && (
+                    <span className="text-zinc-500 tabular-nums">
+                      → {splitMode === 'count'
+                        ? `${Math.ceil(pickedList.length / Math.max(1, splitValue))}장`
+                        : `${Math.min(splitValue, pickedList.length)}장`} (회차 학습용)
+                    </span>
+                  )}
+                </div>
+
+                {/* 기간 + 반 배포 */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-0.5 block text-[11px] font-semibold text-zinc-400">기간 (선택)</label>
+                    <div className="flex items-center gap-1">
+                      <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)}
+                        className="w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[11px]" />
+                      <span className="text-[10px] text-zinc-500">~</span>
+                      <input type="date" value={periodDue} onChange={(e) => setPeriodDue(e.target.value)}
+                        className="w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[11px]" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-0.5 block text-[11px] font-semibold text-zinc-400">반에 배포 (선택)</label>
+                    <select
+                      value={deployClassId} onChange={(e) => setDeployClassId(e.target.value)}
+                      className="w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-[11px]"
+                    >
+                      <option value="">배포 안 함 — 시험지만</option>
+                      {classOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {deployClassId && (
+                  <p className="text-[10px] leading-snug text-zinc-500">
+                    반 전원에게 과제로 나갑니다{periodDue ? ` · 제출기한 ${periodDue}` : ' · 제출기한 없음'}. 분할이면 장마다 과제 하나씩.
+                  </p>
+                )}
+              </div>
+
               {composeErr && (
                 <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
                   {composeErr}
+                </div>
+              )}
+
+              {composeDone && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
+                  <div className="font-semibold">시험지 {composeDone.examIds.length}장 생성{composeDone.assignments > 0 ? ` · 과제 ${composeDone.assignments}건 배포` : ''}</div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {composeDone.examIds.map((id, i) => (
+                      <button key={id} type="button" onClick={() => router.push(`/dashboard/cloud/${id}`)}
+                        className="rounded border border-emerald-500/30 px-2 py-0.5 text-[11px] hover:bg-emerald-500/10">
+                        {composeDone.examIds.length > 1 ? `${i + 1}/${composeDone.examIds.length} 열기` : '시험지 열기'}
+                      </button>
+                    ))}
+                    {deployClassId && (
+                      <button type="button" onClick={() => router.push(`/dashboard/class/${deployClassId}`)}
+                        className="rounded border border-emerald-500/30 px-2 py-0.5 text-[11px] hover:bg-emerald-500/10">
+                        반 허브로
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -2144,17 +2255,25 @@ export default function ExamCreatePage() {
                         grade: examGrade.trim() || null,
                         subject: examSubject.trim() || null,
                         problemIds: pickedList.map((p) => p.id),
+                        descriptiveFrom: descOn ? descFrom : null,
+                        split: splitOn ? { mode: splitMode, value: splitValue } : null,
+                        period: (periodStart || periodDue)
+                          ? { startsAt: periodStart || null, dueAt: periodDue ? `${periodDue}T23:59:59` : null }
+                          : null,
+                        classId: deployClassId || null,
                       }),
                     });
                     const d = await res.json();
                     if (!res.ok && res.status !== 207) {
                       throw new Error(d.error || `HTTP ${res.status}`);
                     }
-                    // 207은 부분 성공 — examId는 있음
-                    if (d.examId) {
-                      router.push(`/dashboard/cloud/${d.examId}`);
+                    const examIds: string[] = Array.isArray(d.examIds) ? d.examIds : (d.examId ? [d.examId] : []);
+                    if (examIds.length === 0) throw new Error('examId 없음');
+                    // 한 장이면 바로 그 시험지로. 여러 장이면 여기서 목록을 보여준다 — 어디로 갈지 고르게.
+                    if (examIds.length === 1 && !deployClassId) {
+                      router.push(`/dashboard/cloud/${examIds[0]}`);
                     } else {
-                      throw new Error('examId 없음');
+                      setComposeDone({ examIds, assignments: Array.isArray(d.assignmentIds) ? d.assignmentIds.length : 0 });
                     }
                   } catch (e) {
                     setComposeErr(e instanceof Error ? e.message : '생성 실패');
