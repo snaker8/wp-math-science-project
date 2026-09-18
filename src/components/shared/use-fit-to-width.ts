@@ -30,6 +30,26 @@ interface Options {
   apply?: 'host' | 'target';
   /** 더는 줄이지 않는 하한. 그보다 작으면 인쇄에서 못 읽는다 */
   minScale?: number;
+  /**
+   * true 면 아무것도 안 한다 — 넘칠 리 없는 짧은 수식에 폭 측정을 붙이지 않기 위해.
+   * ★ 성능: 문제 목록 한 화면에 수식이 수백 개 뜬다. 하나마다 레이아웃을 읽으면(forced reflow)
+   *   첫 그리기가 눈에 띄게 느려진다. 호출측이 글자 수로 미리 거른다.
+   */
+  skip?: boolean;
+}
+
+// ★ 리사이즈 리스너는 **하나만** 둔다. 수식마다 window 에 리스너를 달면 수백 개가 붙는다.
+//   등록된 fit 들을 모아 150ms 디바운스로 한 번에 돌린다.
+const registry = new Set<() => void>();
+let bound = false;
+let timer: ReturnType<typeof setTimeout> | null = null;
+function ensureResizeListener() {
+  if (bound || typeof window === 'undefined') return;
+  bound = true;
+  window.addEventListener('resize', () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { registry.forEach((f) => f()); }, 150);
+  });
 }
 
 /**
@@ -42,9 +62,10 @@ export function useFitToWidth(
   hostRef: RefObject<HTMLElement | null>,
   selector: string | null,
   deps: unknown[],
-  { apply = 'host', minScale = 0.55 }: Options = {},
+  { apply = 'host', minScale = 0.55, skip = false }: Options = {},
 ) {
   useEffect(() => {
+    if (skip) return;
     const host = hostRef.current;
     if (!host) return;
 
@@ -82,8 +103,9 @@ export function useFitToWidth(
     // 전용 글꼴(KaTeX)이 늦게 붙으면 폭이 바뀐다 — 준비된 뒤 한 번 더
     const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
     if (fonts?.ready) fonts.ready.then(fit).catch(() => {});
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    ensureResizeListener();
+    registry.add(fit);
+    return () => { registry.delete(fit); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
