@@ -62,6 +62,9 @@ export function WrongSourcePanel({
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [perWrong, setPerWrong] = useState(1);
+  // ★ 최대 문제수 — 매쓰홀릭 05(오답 학습지) 대조표 「없음 → 추가」. API 는 이미 limit 을 받는다(기본 60, 상한 120).
+  //   오답이 많은 반은 60개가 넘게 나와 한 장이 안 된다. 여기서 자른다.
+  const [maxProblems, setMaxProblems] = useState(30);
 
   const [groups, setGroups] = useState<WrongSourceGroup[] | null>(null);
   const [unclassified, setUnclassified] = useState(0);
@@ -103,7 +106,7 @@ export function WrongSourcePanel({
         body: JSON.stringify({
           studentIds: Array.from(selected),
           ...(from ? { from } : {}), ...(to ? { to } : {}),
-          mode, perWrong,
+          mode, perWrong, limit: maxProblems,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -229,6 +232,21 @@ export function WrongSourcePanel({
                 전체
               </button>
             </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">최대 문제수</div>
+            <div className="mt-1 flex gap-1">
+              {[20, 30, 50, 100].map((n) => (
+                <button key={n} type="button" onClick={() => setMaxProblems(n)}
+                  className={`flex-1 rounded-md border py-1 text-[11px] font-semibold tabular-nums transition-colors ${
+                    maxProblems === n ? 'border-white bg-white text-black' : 'border-zinc-700 text-content-secondary hover:bg-white/5'
+                  }`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-500">많이 틀린 것 → 최근 것 순으로 앞에서 자릅니다</p>
           </div>
 
           {mode === 'similar' && (
