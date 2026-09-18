@@ -34,6 +34,15 @@ function shiftWeek(ymd: string, weeks: number): string {
   return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 function md(ymd: string): string { const [, m, d] = ymd.split('-'); return `${Number(m)}/${Number(d)}`; }
+/** ISO 주차 (월요일 시작) — 「N주차 클리닉」 이름용 */
+function isoWeekOf(ymd: string): number {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
 
 export function DailyTab({ classId }: { classId: string }) {
   const [week, setWeek] = useState<string>(() => todayKST());
@@ -42,6 +51,11 @@ export function DailyTab({ classId }: { classId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [gen, setGen] = useState<GenKind | null>(null);
+  // ★ 주간 클리닉 (매쓰홀릭 10 문서: 「주차 단위 추천/직접 출제 · 학생별/공통 · 최대 5/10문항」).
+  //   조사서 정리대로 "과제의 주차 반복형 = 취약과제 + 주차" 다. 새 탭을 파지 않고
+  //   이 주간 화면에서 그 주의 학생 전원에게 취약 과제를 **주차 이름 붙여** 낸다.
+  //   기존 GenerateAssignmentModal(kind weak) 을 그대로 쓴다 — 새 API 0.
+  const [clinic, setClinic] = useState<{ title: string; max: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -88,6 +102,22 @@ export function DailyTab({ classId }: { classId: string }) {
           <button onClick={() => setGen('wrong')} disabled={sel.size === 0}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-content-secondary hover:border-white/20 hover:text-content-primary disabled:opacity-40">
             <RotateCcw className="h-3.5 w-3.5" /> 오답 과제
+          </button>
+          {/* ★ 주간 클리닉 — 그 주 학생 전원(고른 학생이 있으면 그들)에게 「N주차 클리닉」 취약 과제, 10문항 */}
+          <button
+            onClick={() => {
+              const days = data?.week ?? [];
+              const from = days[0] ? md(days[0]) : '';
+              const to = days[days.length - 1] ? md(days[days.length - 1]) : '';
+              const wk = isoWeekOf(week);
+              if (sel.size === 0) setSel(new Set(rows.map((r) => r.studentId)));
+              setClinic({ title: `${wk}주차 클리닉${from ? ` (${from}~${to})` : ''}`, max: 10 });
+            }}
+            disabled={rows.length === 0}
+            title="이 주의 학생에게 취약 유형 10문항 클리닉을 냅니다 (고른 학생이 없으면 전원)"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-white/90 disabled:opacity-40"
+          >
+            <Sparkles className="h-3.5 w-3.5" /> 이번 주 클리닉
           </button>
         </div>
       </div>
@@ -172,6 +202,17 @@ export function DailyTab({ classId }: { classId: string }) {
           kind={gen}
           onClose={() => setGen(null)}
           onDone={() => { setGen(null); setSel(new Set()); void load(); }}
+        />
+      )}
+      {clinic && (
+        <GenerateAssignmentModal
+          classId={classId}
+          studentIds={sel.size > 0 ? Array.from(sel) : rows.map((r) => r.studentId)}
+          kind="weak"
+          initialTitle={clinic.title}
+          maxPick={clinic.max}
+          onClose={() => setClinic(null)}
+          onDone={() => { setClinic(null); setSel(new Set()); void load(); }}
         />
       )}
     </div>
