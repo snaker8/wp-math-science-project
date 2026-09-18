@@ -27,6 +27,7 @@ const ALLOW = [
   /components[\\/]class[\\/]CourseSettings/,  // 코스 회차별 문제수 그래프 — 난이도 적층 색 (데이터 그래픽)
   /components[\\/]class[\\/]DailyTab/,        // 일일학습 주간 캘린더 — 학습 종류 칩 색 (데이터 그래픽)
   /components[\\/]exam-create[\\/](DifficultyDistribution|SelectionTray|CandidatePool|WrongSourcePanel)/,  // 난이도 밴드 5단 색 + 오답·후보 상태 색 (데이터 그래픽)
+  /tutor[\\/]classes[\\/]page/,             // 반 목록 난이도 미니 히트맵 — 밴드 6단 색 (데이터 그래픽)
   /dashboard[\\/]create[\\/]page/,            // 유형별 출제 — 난이도 5단 배지·배분 칸 색 (데이터 그래픽)
   /class[\\/]\[classId\][\\/]student[\\/]\[studentId\]/,  // 학생 화면 학습 종류 배지·정답률 톤 (데이터 그래픽)
   /exam-paper/,                        // 인쇄물 (라이트 종이)
