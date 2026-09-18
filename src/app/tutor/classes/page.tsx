@@ -32,6 +32,42 @@ interface ClassItem {
   enrolledCount: number;
   pendingCount: number;
   createdAt: string;
+  /** 난이도 6단 분포 [개념, 기본, 실력하, 실력중, 심화하, 심화중] — 과제로 낸 문항 기준 */
+  difficultyBands: number[];
+}
+
+// ★ 수업 목록의 「난이도 미니 히트맵」 — 매쓰홀릭 실측(10 문서): 막대 = 수업 문항의 난이도 분포.
+//   목록에서 반의 난이도 구성이 바로 보인다. 색은 숙달 판·출제 트레이와 같은 밴드 색(데이터 그래픽).
+const BAND_META: Array<{ label: string; cls: string }> = [
+  { label: '개념', cls: 'bg-sky-500/80' },
+  { label: '기본', cls: 'bg-emerald-500/80' },
+  { label: '실력 하', cls: 'bg-amber-500/80' },
+  { label: '실력 중', cls: 'bg-orange-500/80' },
+  { label: '심화 하', cls: 'bg-rose-500/80' },
+  { label: '심화 중', cls: 'bg-purple-500/80' },
+];
+
+function DifficultyMiniBars({ bands }: { bands: number[] }) {
+  const total = bands.reduce((s, n) => s + n, 0);
+  if (total === 0) {
+    return <span className="text-[10px] text-zinc-600">낸 문항 없음</span>;
+  }
+  const max = Math.max(...bands, 1);
+  return (
+    <span
+      className="inline-flex h-4 items-end gap-[2px]"
+      title={BAND_META.map((b, i) => `${b.label} ${bands[i]} (${Math.round((bands[i] / total) * 100)}%)`).join(' · ')}
+    >
+      {bands.map((n, i) => (
+        <span
+          key={i}
+          className={`w-[7px] rounded-[1px] ${n > 0 ? BAND_META[i].cls : 'bg-zinc-800'}`}
+          style={{ height: n > 0 ? `${Math.max(3, Math.round((n / max) * 16))}px` : '2px' }}
+        />
+      ))}
+      <span className="ml-1 text-[10px] tabular-nums text-zinc-500">{total}문항</span>
+    </span>
+  );
 }
 
 export default function ClassesPage() {
@@ -65,6 +101,7 @@ export default function ClassesPage() {
         enrolledCount: (cls.enrolledCount as number) || 0,
         pendingCount: (cls.pendingCount as number) || 0,
         createdAt: cls.created_at as string,
+        difficultyBands: Array.isArray(cls.difficultyBands) ? (cls.difficultyBands as number[]) : [0, 0, 0, 0, 0, 0],
       })));
     } catch (error) {
       console.error('Classes load error:', error);
@@ -263,6 +300,10 @@ export default function ClassesPage() {
                         대기 {cls.pendingCount}
                       </span>
                     )}
+                  </div>
+                  {/* 난이도 미니 히트맵 — 이 반에 낸 문항의 난이도 구성 */}
+                  <div className="mt-2">
+                    <DifficultyMiniBars bands={cls.difficultyBands} />
                   </div>
                 </Link>
 
