@@ -19,7 +19,26 @@ export const dynamic = 'force-dynamic';
 //   예전엔 '1'~'5' 키라 난이도 6~10 문제가 어느 칸에도 안 잡혔다.
 const EMPTY: Record<string, number> = Object.fromEntries(EXAM_BAND_LABELS.map((l) => [l, 0]));
 
+// ★ GET(쿼리) 과 POST(본문) 둘 다 — 세부유형 코드가 수백 개면 GET URL 이 헤더 한도를 넘어 POST 로 보낸다(2026-09-20)
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const typeCodes = (searchParams.get('typeCodes') || '').split(',').filter(Boolean);
+  const answerType = searchParams.get('answerType') || '';
+  return countAvailable(typeCodes, answerType);
+}
+
+export async function POST(request: NextRequest) {
+  let body: { typeCodes?: unknown; answerType?: unknown } = {};
+  try { body = await request.json(); } catch { /* 빈 본문 */ }
+  const typeCodes = Array.isArray(body.typeCodes) ? (body.typeCodes as unknown[]).filter((c): c is string => typeof c === 'string' && /^MS\d{2}/.test(c)) : [];
+  const answerType = typeof body.answerType === 'string' ? body.answerType : '';
+  return countAvailable(typeCodes, answerType);
+}
+
+// ★ .or() 필터는 한 번에 150개씩 — PostgREST 도 GET 이라 like 절 수백 개는 URL 한도를 넘는다
+const OR_CHUNK = 150;
+
+async function countAvailable(typeCodes: string[], answerType: string) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -30,34 +49,30 @@ export async function GET(request: NextRequest) {
   const sb = supabaseAdmin;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const typeCodesParam = searchParams.get('typeCodes');
-    const answerType = request.nextUrl.searchParams.get('answerType') || '';
-    if (!typeCodesParam) return NextResponse.json({ ...EMPTY });
-
-    const typeCodes = typeCodesParam.split(',').filter(Boolean);
     if (typeCodes.length === 0) return NextResponse.json({ ...EMPTY });
 
-    const orFilters = typeCodes.map(tc => `type_code.like.${tc}%`).join(',');
-
-    // 1) type_code 매칭 classifications 전체 (1000행 cap 회피 — range 루프)
+    // 1) type_code 매칭 classifications 전체 (1000행 cap 회피 — range 루프, 코드는 150개씩 쪼개서)
     type Row = { problem_id: string; difficulty: unknown };
     const rows: Row[] = [];
+    const seen = new Set<string>();
     const PAGE = 1000;
-    for (let from = 0; ; from += PAGE) {
-      const { data: page, error } = await sb
-        .from('classifications')
-        .select('problem_id, difficulty')
-        .not('problem_id', 'is', null)
-        .or(orFilters)
-        .range(from, from + PAGE - 1);
-      if (error) {
-        console.error('[available-counts] DB error:', error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    for (let c = 0; c < typeCodes.length; c += OR_CHUNK) {
+      const orFilters = typeCodes.slice(c, c + OR_CHUNK).map(tc => `type_code.like.${tc}%`).join(',');
+      for (let from = 0; ; from += PAGE) {
+        const { data: page, error } = await sb
+          .from('classifications')
+          .select('problem_id, difficulty')
+          .not('problem_id', 'is', null)
+          .or(orFilters)
+          .range(from, from + PAGE - 1);
+        if (error) {
+          console.error('[available-counts] DB error:', error.message);
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        if (!page || page.length === 0) break;
+        for (const r of page as Row[]) { if (!seen.has(r.problem_id)) { seen.add(r.problem_id); rows.push(r); } }
+        if (page.length < PAGE) break;
       }
-      if (!page || page.length === 0) break;
-      rows.push(...(page as Row[]));
-      if (page.length < PAGE) break;
     }
     if (rows.length === 0) return NextResponse.json({ ...EMPTY });
 
