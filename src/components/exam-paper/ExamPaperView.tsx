@@ -34,6 +34,7 @@ import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
+import { CoverPage, CoverPanel, DEFAULT_COVER, type CoverSettings } from './CoverPage';
 import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 /** 해설에서 [선택지 검증] 섹션 제거 (기존 DB 데이터 호환) — 페이지에서 함께 이동 */
@@ -244,6 +245,17 @@ export function ExamPaperView({
   const [footerAuthor, setFooterAuthor] = useState(false);
   const [footerId, setFooterId] = useState(false);
   const [duplex, setDuplex] = useState(false);
+  // ★ 표지 (2026-09-19) — 매쓰홀릭 「표지」·매쓰플랫 표지 편집기에 해당. 디자인은 코드로 4종만, 나머지는
+  //   밖(Gemini 등)에서 만든 A4 이미지를 올려 넣는 슬롯(CoverPage.tsx). 기본 꺼짐 — 종전 출력 불변.
+  const [cover, setCover] = useState<CoverSettings>(DEFAULT_COVER);
+  const [showCoverPanel, setShowCoverPanel] = useState(false);
+  const coverPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showCoverPanel) return;
+    const h = (e: MouseEvent) => { if (coverPanelRef.current && !coverPanelRef.current.contains(e.target as Node)) setShowCoverPanel(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [showCoverPanel]);
   // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
   const [zoom, setZoom] = useState(1);
 
@@ -267,6 +279,7 @@ export function ExamPaperView({
     name: string; columns: 1 | 2; gap: number; pagePad: number; perPagePreset: number | null;
     headerColor?: string | null; headerTheme?: string | null;
     showLevel?: boolean; footerUnit?: boolean; footerAuthor?: boolean; footerId?: boolean; duplex?: boolean;
+    cover?: CoverSettings;
   };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
@@ -279,13 +292,14 @@ export function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
     if (!p) return;
     setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
     setShowLevel(!!p.showLevel); setFooterUnit(!!p.footerUnit); setFooterAuthor(!!p.footerAuthor); setFooterId(!!p.footerId); setDuplex(!!p.duplex);
+    setCover(p.cover ? { ...DEFAULT_COVER, ...p.cover } : DEFAULT_COVER);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
@@ -817,6 +831,31 @@ export function ExamPaperView({
                 {label}
               </button>
             ))}
+            {/* ★ 표지 — 누르면 켜지고 패널이 열린다. 패널 안 체크로 끈다 */}
+            <div className="relative" ref={coverPanelRef}>
+              <button
+                type="button"
+                onClick={() => { if (!cover.on) setCover((c) => ({ ...c, on: true })); setShowCoverPanel((v) => !v); }}
+                title="첫 장에 표지를 붙입니다 — 글자 표지 4종 또는 올린 이미지"
+                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                  cover.on ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                표지{cover.on ? ' ✓' : ''}
+              </button>
+              {showCoverPanel && (
+                <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-white/10 bg-surface-raised p-3 shadow-2xl">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs text-content-primary">
+                      <input type="checkbox" checked={cover.on} onChange={(e) => setCover((c) => ({ ...c, on: e.target.checked }))} />
+                      표지 넣기
+                    </label>
+                    <button type="button" onClick={() => setShowCoverPanel(false)} className="text-xs text-content-tertiary hover:text-content-primary">닫기</button>
+                  </div>
+                  <CoverPanel value={cover} onChange={setCover} />
+                </div>
+              )}
+            </div>
           </div>
           {/* ★ 미리보기 줌 (인쇄물엔 영향 없음 — 미리보기만 확대/축소) */}
           <div className="flex items-center gap-1">
@@ -1103,6 +1142,10 @@ export function ExamPaperView({
       <div className="exam-page-scroll-bg flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex flex-col items-center py-6 bg-surface-raised/30">
         {/* ★ 미리보기 줌 래퍼 — .exam-page 의 부모(인쇄 시 클론 제외)라 인쇄물엔 영향 없음 */}
         <div style={{ zoom }} className="flex flex-col items-center w-full">
+        {/* ★ 표지 — .exam-page 라 인쇄 클론에 첫 장으로 들어간다(문제지 출력 시에만). 페이지 번호엔 안 센다 */}
+        {cover.on && (
+          <CoverPage settings={cover} examTitle={examTitle} meta={examMeta} problemCount={problems.length} accent={headerColor} width={A4_W} height={A4_H} />
+        )}
         {pages.map((pageProblems, pageIdx) => (
           <div
             key={pageIdx}
@@ -1219,7 +1262,7 @@ export function ExamPaperView({
               <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {footerUnit ? footerUnits : ''}
               </span>
-              <span style={{ flex: '0 0 auto' }}>{pageIdx + 1} / {pages.length + (duplex && pages.length % 2 === 1 ? 1 : 0)}</span>
+              <span style={{ flex: '0 0 auto' }}>{pageIdx + 1} / {pages.length + (duplex && (pages.length + (cover.on ? 1 : 0)) % 2 === 1 ? 1 : 0)}</span>
               <span style={{ flex: 1, textAlign: 'right', whiteSpace: 'nowrap' }}>
                 {[footerAuthor && examMeta.teacher ? `출제 ${examMeta.teacher}` : '', footerId ? `No. ${examId.slice(0, 8)}` : ''].filter(Boolean).join(' · ')}
               </span>
@@ -1227,7 +1270,7 @@ export function ExamPaperView({
           </div>
         ))}
         {/* ★ 양면 — 홀수 장이면 빈 페이지 한 장. 매쓰홀릭도 「빈 페이지」를 붙인다(실측 4번째 장). 화면엔 표시, 인쇄엔 공백 */}
-        {duplex && pages.length % 2 === 1 && (
+        {duplex && (pages.length + (cover.on ? 1 : 0)) % 2 === 1 && (
           <div
             className="exam-page bg-white"
             style={{ width: `${A4_W}px`, minHeight: `${A4_H}px`, padding: `${PRINT_PAD_Y}px ${PAGE_PAD}px`, marginTop: '24px', boxShadow: '0 4px 24px rgba(0,0,0,0.35)', borderRadius: '4px', position: 'relative', boxSizing: 'border-box' }}
@@ -1293,6 +1336,8 @@ export function ExamPaperView({
         .exam-page .figure-graph-container {
           max-height: 280px;
         }
+        /* ★ 표지 — 전면 이미지라 그림 상한(280px)·페이지 패딩 예외 */
+        .exam-page.exam-cover img { max-height: none; height: 100%; object-fit: cover; }
 
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */
         #exam-print-root { display: none; }
@@ -1330,6 +1375,8 @@ export function ExamPaperView({
             print-color-adjust: exact;
           }
           #exam-print-root .exam-page:last-child { page-break-after: auto; }
+          #exam-print-root .exam-page.exam-cover { padding: 0 !important; }
+          #exam-print-root .exam-page.exam-cover img { max-height: none !important; height: 100% !important; object-fit: cover !important; }
           #exam-print-root .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
