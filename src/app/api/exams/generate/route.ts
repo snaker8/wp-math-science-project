@@ -76,6 +76,14 @@ export async function POST(request: NextRequest) {
 
     const typeCodes: string[] = criteria?.typeCodes || [];
     const diffDist: Record<string, number> = criteria?.difficulty_distribution || {};
+    // ★ 유형별 최소 문항수 { 'MS01-02-03-04-05': 2, … } — 화면의 −/+ 값. (2026-09-20 전까진 안 실렸다)
+    //   규칙: 각 유형에서 먼저 그 수만큼 뽑고(난이도는 남은 배분이 큰 밴드부터), 남은 배분은 전체 범위에서 채운다.
+    //   유형별 합이 총 문항수보다 크면 유형별 합이 이긴다(시험지가 그만큼 커진다).
+    const typeCounts: Record<string, number> = {};
+    for (const [k, v] of Object.entries((criteria?.typeCounts as Record<string, unknown>) || {})) {
+      const n = Number(v);
+      if (typeof k === 'string' && /^MS\d{2}/.test(k) && Number.isFinite(n) && n > 0) typeCounts[k] = Math.min(50, Math.floor(n));
+    }
     const answerType: string = criteria?.answerType || '';   // '' 전체 · multiple_choice · short_answer
     const totalNeeded = Object.values(diffDist).reduce((s: number, v: number) => s + v, 0);
 
@@ -93,23 +101,34 @@ export async function POST(request: NextRequest) {
     const allClassRows: ClassRow[] = [];
     {
       const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        let cq = supabaseAdmin
-          .from('classifications')
-          .select('problem_id, type_code, difficulty, cognitive_domain')
-          .not('problem_id', 'is', null);
-        if (typeCodes.length > 0) {
-          const orFilters = typeCodes.map(tc => `type_code.like.${tc}%`).join(',');
-          cq = cq.or(orFilters);
+      // ★ .or() 는 150개씩 — 세부유형 코드 수백 개를 한 번에 실으면 PostgREST URL 한도를 넘는다 (2026-09-20)
+      const OR_CHUNK = 150;
+      const seenRow = new Set<string>();
+      const chunks: (string[] | null)[] = typeCodes.length > 0
+        ? Array.from({ length: Math.ceil(typeCodes.length / OR_CHUNK) }, (_, i) => typeCodes.slice(i * OR_CHUNK, (i + 1) * OR_CHUNK))
+        : [null];
+      for (const chunk of chunks) {
+        for (let from = 0; ; from += PAGE) {
+          let cq = supabaseAdmin
+            .from('classifications')
+            .select('problem_id, type_code, difficulty, cognitive_domain')
+            .not('problem_id', 'is', null);
+          if (chunk) {
+            const orFilters = chunk.map(tc => `type_code.like.${tc}%`).join(',');
+            cq = cq.or(orFilters);
+          }
+          const { data: page, error: pageErr } = await cq.range(from, from + PAGE - 1);
+          if (pageErr) {
+            console.error('[Generate] Classifications query error:', pageErr.message);
+            return NextResponse.json({ error: 'DB 조회 실패', detail: pageErr.message }, { status: 500 });
+          }
+          if (!page || page.length === 0) break;
+          for (const r of page as ClassRow[]) {
+            const k = `${r.problem_id}|${r.type_code}`;
+            if (!seenRow.has(k)) { seenRow.add(k); allClassRows.push(r); }
+          }
+          if (page.length < PAGE) break;
         }
-        const { data: page, error: pageErr } = await cq.range(from, from + PAGE - 1);
-        if (pageErr) {
-          console.error('[Generate] Classifications query error:', pageErr.message);
-          return NextResponse.json({ error: 'DB 조회 실패', detail: pageErr.message }, { status: 500 });
-        }
-        if (!page || page.length === 0) break;
-        allClassRows.push(...(page as ClassRow[]));
-        if (page.length < PAGE) break;
       }
     }
 
@@ -164,7 +183,28 @@ export async function POST(request: NextRequest) {
     const selectedProblemIds: string[] = [];
     const usedIds = new Set<string>();
 
-    for (const [levelStr, count] of Object.entries(diffDist)) {
+    // ★ 3-0. 유형별 최소 문항수 먼저 — 난이도는 "남은 배분이 가장 큰 밴드"부터 집어 배분을 깎는다
+    const remaining: Record<string, number> = { ...diffDist };
+    const bandOfLevel = new Map<string, string>();
+    for (const [label, levels] of Object.entries(LEVELS_BY_BAND_LABEL)) levels.forEach((l) => bandOfLevel.set(String(l), label));
+    for (const [code, need] of Object.entries(typeCounts)) {
+      const pool = classRows
+        .filter((r) => !usedIds.has(r.problem_id) && String(r.type_code || '').startsWith(code))
+        .sort(() => Math.random() - 0.5)
+        .sort((a, b) => (remaining[bandOfLevel.get(String(a.difficulty || '3')) ?? ''] ?? 0) < (remaining[bandOfLevel.get(String(b.difficulty || '3')) ?? ''] ?? 0) ? 1 : -1);
+      let picked = 0;
+      for (const row of pool) {
+        if (picked >= need) break;
+        selectedProblemIds.push(row.problem_id);
+        usedIds.add(row.problem_id);
+        const band = bandOfLevel.get(String(row.difficulty || '3'));
+        if (band && (remaining[band] ?? 0) > 0) remaining[band] -= 1;
+        picked++;
+      }
+      console.log(`[Generate] 유형 ${code}: needed=${need}, picked=${picked}, pool=${pool.length}`);
+    }
+
+    for (const [levelStr, count] of Object.entries(remaining)) {
       if (count <= 0) continue;
       const levels = LEVELS_BY_BAND_LABEL[levelStr] ?? [levelStr];
       const pool = levels.flatMap((l) => byDifficulty.get(l) ?? []);

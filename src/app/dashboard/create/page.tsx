@@ -323,12 +323,15 @@ function TypeDetailPanel({
   selectedTypeItems,
   onToggleType,
   onSelectAllGroup,
+  onSelectAll,
   onChangeTypeCount,
 }: {
   typeGroups: { label: string; key: string; items: { code: string; name: string; typeCode: string }[] }[];
   selectedTypeItems: Map<string, number>;
   onToggleType: (typeCode: string) => void;
   onSelectAllGroup: (key: string, items: { typeCode: string }[]) => void;
+  /** ★ 소단원 전부의 세부유형을 한 번에 — 대표 「전체 선택하려면 일일이 체크해야」 */
+  onSelectAll: (select: boolean) => void;
   onChangeTypeCount: (typeCode: string, count: number) => void;
 }) {
   if (typeGroups.length === 0) {
@@ -342,8 +345,25 @@ function TypeDetailPanel({
     );
   }
 
+  const totalItems = typeGroups.reduce((s, g) => s + g.items.length, 0);
+  const allSelected = totalItems > 0 && typeGroups.every((g) => g.items.every((it) => selectedTypeItems.has(it.typeCode)));
+
   return (
     <div className="space-y-1">
+      {/* ★ 전체 — 모든 소단원의 세부유형을 한 번에. 안 고르면 소단원 전체에서 뽑는다는 것도 여기서 말해 준다 */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-subtle bg-white/[.03]">
+        <p className="flex-1 text-[10px] leading-relaxed text-content-tertiary">
+          안 고르면 왼쪽 소단원의 <b className="text-content-secondary">모든 유형</b>에서 뽑습니다. 고르면 그 유형에서만 뽑고, 수를 <b className="text-content-secondary">2 이상</b>으로 올리면 그 유형은 최소 그만큼 넣습니다.
+        </p>
+        <button
+          type="button"
+          onClick={() => onSelectAll(!allSelected)}
+          className="shrink-0 rounded-md border border-white/[.14] px-2 py-1 text-[10px] font-semibold text-content-secondary hover:border-white/30 hover:text-content-primary"
+          title={allSelected ? '모든 세부유형 선택 해제' : `세부유형 ${totalItems}개 전부 선택`}
+        >
+          {allSelected ? '전체 해제' : `전체 선택 (${totalItems})`}
+        </button>
+      </div>
       {typeGroups.map((group) => (
         <div key={group.key}>
           <div className="flex items-center justify-between px-3 py-2 sticky top-0 bg-surface-raised/95 backdrop-blur-sm z-10 border-b border-subtle">
@@ -1022,18 +1042,7 @@ export default function PaperCreatePage() {
   const [isPDFGenerating, setIsPDFGenerating] = useState(false);
 
   // ---- Computed ----
-  const selectedTypeCodes = useMemo(() => {
-    // ★ 판에서 넘어온 유형이 우선 — 단, 사용자가 트리에서 직접 고르기 시작하면 그쪽이 이긴다
-    if (selectedL3Keys.size === 0 && handoffCodes.length > 0) return handoffCodes;
-    // L3 keys → MS prefix codes for API
-    return [...selectedL3Keys].map(key => {
-      // key format: "07-01-02-03" → "MS07-01-02-03"
-      const parts = key.split('-');
-      return `MS${parts.join('-')}`;
-    });
-  }, [selectedL3Keys, handoffCodes]);
-
-  // typeGroups for Column 2 — 선택된 L3의 세부유형(L4)
+  // typeGroups for Column 2 — 선택된 L3의 세부유형(L4)  (selectedTypeCodes 가 압축에 쓰므로 먼저 선언)
   const typeGroups = useMemo(() => {
     if (!mathsecrTree || selectedL3Keys.size === 0) return [];
 
@@ -1064,6 +1073,43 @@ export default function PaperCreatePage() {
 
     return groups;
   }, [mathsecrTree, selectedL3Keys, selectedSubjectCode]);
+
+  const selectedTypeCodes = useMemo(() => {
+    // ★ 판에서 넘어온 유형이 우선 — 단, 사용자가 트리에서 직접 고르기 시작하면 그쪽이 이긴다
+    if (selectedL3Keys.size === 0 && handoffCodes.length > 0) return handoffCodes;
+    // ★ 세부유형(오른쪽)을 골랐으면 그 코드가 범위다. (2026-09-20 결함 수정 — 이전엔 오른쪽 체크가
+    //   출제·문항수 집계 어디에도 안 실려, 일일이 체크해도 결과가 같았다.)
+    if (selectedTypeItems.size > 0) {
+      // ★ 압축: 소단원의 세부유형을 전부 골랐으면 소단원 접두어 하나로 보낸다(뜻은 같다).
+      //   「전체 선택」이 1,057개 코드를 실어 URL·필터가 터지는 것 방지 (실측 09-20: 중1-1 = 소단원 210 · 세부유형 1,057).
+      const out: string[] = [];
+      for (const g of typeGroups) {
+        const picked = g.items.filter((it) => selectedTypeItems.has(it.typeCode));
+        if (picked.length === 0) continue;
+        if (picked.length === g.items.length) out.push(`MS${g.key}`);
+        else picked.forEach((it) => out.push(it.typeCode));
+      }
+      if (out.length > 0) return out;
+    }
+    // L3 keys → MS prefix codes for API
+    return [...selectedL3Keys].map(key => {
+      // key format: "07-01-02-03" → "MS07-01-02-03"
+      const parts = key.split('-');
+      return `MS${parts.join('-')}`;
+    });
+  }, [selectedL3Keys, handoffCodes, selectedTypeItems, typeGroups]);
+
+  // ★ 소단원을 해제하면 그 아래 세부유형 선택도 걷는다 — 화면엔 안 보이는데 범위만 좁히는 일 방지
+  useEffect(() => {
+    if (selectedTypeItems.size === 0) return;
+    const visible = new Set(typeGroups.flatMap((g) => g.items.map((it) => it.typeCode)));
+    if ([...selectedTypeItems.keys()].every((k) => visible.has(k))) return;
+    setSelectedTypeItems((prev) => {
+      const next = new Map<string, number>();
+      prev.forEach((v, k) => { if (visible.has(k)) next.set(k, v); });
+      return next;
+    });
+  }, [typeGroups, selectedTypeItems]);
 
   const totalQuestions = createMode === 'manual'
     ? manualSelected.size
@@ -1168,7 +1214,11 @@ export default function PaperCreatePage() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/exams/available-counts?typeCodes=${selectedTypeCodes.join(',')}${answerType ? `&answerType=${answerType}` : ''}`);
+        // ★ POST 본문으로 — 세부유형 코드가 수백 개면 GET URL 이 헤더 한도(Vercel 16KB)를 넘는다
+        const res = await fetch('/api/exams/available-counts', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType }),
+        });
         if (res.ok) {
           const data = await res.json();
           setAvailableCounts(data);
@@ -1179,7 +1229,9 @@ export default function PaperCreatePage() {
     }, 300);
     return () => clearTimeout(timer);
     // ★ answerType 도 deps — 답안 형태를 바꾸면 밴드별 「있는 문제 수」를 다시 세야 한다
-  }, [selectedTypeCodes, answerType]);
+    // ★ 배열 대신 문자열 키 — 같은 범위인데 배열 참조만 바뀌어 6번씩 다시 세던 것 (실측 09-20)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTypeCodes.join(','), answerType]);
 
   // ---- Handlers ----
   const handleReset = () => {
@@ -1239,6 +1291,25 @@ export default function PaperCreatePage() {
       return next;
     });
   }, [selectedSubjectCode]);
+
+  // ★ 과정 전체 선택/해제 — 대단원을 하나씩 누르지 않아도 되게
+  const allTreeKeys = useMemo(() => {
+    const sc = selectedSubjectCode;
+    const l2: string[] = []; const l3: string[] = [];
+    (mathsecrTree?.ch || []).forEach((l1) => {
+      (l1.ch || []).forEach((n2) => {
+        l2.push(`${sc}-${l1.c}-${n2.c}`);
+        (n2.ch || []).forEach((n3) => l3.push(`${sc}-${l1.c}-${n2.c}-${n3.c}`));
+      });
+    });
+    return { l2, l3 };
+  }, [mathsecrTree, selectedSubjectCode]);
+  const allTreeSelected = allTreeKeys.l3.length > 0 && allTreeKeys.l3.every((k) => selectedL3Keys.has(k));
+  const handleToggleAllTree = useCallback(() => {
+    if (allTreeSelected) { setSelectedL2Keys(new Set()); setSelectedL3Keys(new Set()); return; }
+    setSelectedL2Keys(new Set(allTreeKeys.l2));
+    setSelectedL3Keys(new Set(allTreeKeys.l3));
+  }, [allTreeSelected, allTreeKeys]);
 
   // Toggle L2: select/deselect all L3 children
   const handleToggleL2 = useCallback((l1: MathsecrNode, l2: MathsecrNode) => {
@@ -1310,6 +1381,15 @@ export default function PaperCreatePage() {
     });
   }, []);
 
+  const handleSelectAllTypes = useCallback((select: boolean) => {
+    setSelectedTypeItems((prev) => {
+      if (!select) return new Map();
+      const next = new Map(prev);
+      typeGroups.forEach((g) => g.items.forEach((it) => { if (!next.has(it.typeCode)) next.set(it.typeCode, 1); }));
+      return next;
+    });
+  }, [typeGroups]);
+
   const handleChangeTypeCount = useCallback((typeCode: string, count: number) => {
     setSelectedTypeItems(prev => {
       const next = new Map(prev);
@@ -1367,6 +1447,8 @@ export default function PaperCreatePage() {
           difficulty_distribution: difficulties,
           answerType,
           mode: createMode,
+          // ★ 유형별 문항수(오른쪽 −/+) — 그 유형은 최소 이만큼. 이전엔 화면에만 있고 안 보내던 값.
+          typeCounts: (() => { const o: Record<string, number> = {}; selectedTypeItems.forEach((v, k) => { if (v >= 2) o[k] = v; }); return Object.keys(o).length ? o : undefined; })(),
         };
       }
 
@@ -1554,6 +1636,16 @@ export default function PaperCreatePage() {
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-subtle flex-shrink-0">
                 <StepBadge number={1} active={!selectedSubjectCode} />
                 <span className="text-sm font-semibold text-content-primary">과목·단원 선택</span>
+                {mathsecrTree && allTreeKeys.l3.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleToggleAllTree}
+                    className="ml-auto shrink-0 rounded-md border border-white/[.14] px-2 py-0.5 text-[10px] font-semibold text-content-secondary hover:border-white/30 hover:text-content-primary tabular-nums"
+                    title={allTreeSelected ? '과정 전체 해제' : '이 과정의 모든 단원 선택'}
+                  >
+                    {allTreeSelected ? '전체 해제' : '전체 선택'} {selectedL3Keys.size}/{allTreeKeys.l3.length}
+                  </button>
+                )}
               </div>
 
               {/* ★ 판에서 넘어온 유형 — 트리를 안 건드려도 이미 골라져 있다는 걸 보여준다 */}
@@ -1674,6 +1766,7 @@ export default function PaperCreatePage() {
                     selectedTypeItems={selectedTypeItems}
                     onToggleType={handleToggleType}
                     onSelectAllGroup={handleSelectAllGroup}
+                    onSelectAll={handleSelectAllTypes}
                     onChangeTypeCount={handleChangeTypeCount}
                   />
                 )}
