@@ -309,6 +309,7 @@
 - **구성**: `src/components/exam-paper/CoverPage.tsx` — 글자 표지 4종(미니멀·클래식·밴드·격자) + 이미지 2종(위 60% / 전면+제목 띠 토글). `src/app/api/print/covers/route.ts` — 센터별 Storage 폴더 `source-files/uploads/covers/{institute}/` 가 라이브러리(list/upload/remove, 표 없음·마이그레이션 0). 올릴 때 sharp 로 2480px WebP 정규화.
 - **ExamPaperView**: 옵션 「표지」 버튼 → 패널(디자인·라이브러리·올리기·두 번 눌러 삭제·안내문). 저장 프리셋에 포함. 표지는 `.exam-page.exam-cover` 라 문제지 인쇄 클론에 첫 장으로 들어가고, 페이지 번호엔 안 세며 양면 짝 계산엔 넣는다. 인쇄 CSS 패딩 0 예외. 기본 꺼짐 — 종전 출력 불변.
 - **샘플 6종 (2026-09-21, 대표 「제미나이나 뭐든 이쁜 거 샘플 올려야지」)**: Gemini(nanobanana) 로 글자 없는 A4 세로 그림 6장 생성 → `scripts/upload-cover-samples.mjs` 로 **5개 센터 전부**의 라이브러리에 `sample-*` 이름으로 올림. 미니멀 기하(흰+남색 선) · 파스텔 곡선 · 네이비+금 좌표 · 모눈 노트(연필 컴퍼스) · 아이소메트릭 입체(파스텔) · 바우하우스 색면. 헤드리스 렌더로 「이미지+글」「이미지 전면」 둘 다 확인. ★Gemini 는 "포스터 목업(벽에 붙은 종이)"으로 그리는 버릇이 있어 "flat 2D vector, edge-to-edge, not a photo of a sheet" 를 넣어야 한다.
+- **09-21 추가(PR #581·#582)**: 표지 제목·부제목·학원명 직접 입력(빈값=헤더/자동) · 「저장한 표지」(설정 묶음을 센터 라이브러리 `templates/*.json` 에 이름 붙여 저장, 아무 시험지에서나 적용 — 대표 「시험지 종류에 관계없이」) · 설정을 가운데 모달로(툴바 팝오버 잘림) · 이미지 `object-position: top`(위 잘림).
 - **미포함(의도)**: 한글(.hwpx) 내보내기 · 서버 인쇄(`/api/exams/{id}/print`).
 - **검증**: 6종 헤드리스 크롬 렌더 확인(밴드 box-sizing 결함 1건 수정). 업로드 API 실측: 한글 파일명은 Storage 가 키로 거부 → ASCII 키로 고정.
 
