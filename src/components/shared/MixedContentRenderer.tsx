@@ -1,6 +1,7 @@
 'use client';
 
 import { trimNewlinesAroundBlocks } from './block-gap';
+import { stripEmptyMath } from './empty-math';
 import React, { memo, useMemo, useRef } from 'react';
 import katex from 'katex';
 import { stripDollarsInsideMathEnv } from './math-env-dollar';
@@ -1077,9 +1078,9 @@ function preprocessMathpixContent(text: string): string {
       return '';
     });
   }
-  // $$ 만 남은 빈 블록 제거 (★ $$는 display math 구분자이므로 보존!)
-  result = result.replace(/\$\s+\$/g, '');           // $ (공백) $ → 제거
-  result = result.replace(/\$\$\s+\$\$/g, '');       // $$ (공백) $$ → 제거
+  // 빈 수식 `$ $`·`$$ $$` 제거 — ★ 진짜 여는 기호에서 시작할 때만 (empty-math.ts, 양운고 #20 사고 2026-09-21).
+  //   옛 `/\$\s+\$/` 는 `\end{cases}$$⏎⏎$g(x)$` 의 닫는 `$$` 절반과 다음 문단 여는 `$` 를 지워 KaTeX 가 통째로 실패했다.
+  result = stripEmptyMath(result);
 
   // 2-5. <보기> 태그 분리 복구
   // "것을 <에서" 또는 "것을 < 에서" → "것을 〈보기〉 에서"
