@@ -142,7 +142,7 @@ function ExamProblemRendererInner({
       if (figIdx === 0 && hasAiFigure) {
         return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropUrl} maxWidth={maxFigureWidth} darkMode={false} />;
       }
-      return <img src={cropUrl} alt={`도형 ${figIdx + 1}`} className="max-h-48 max-w-full object-contain" />;
+      return <img src={cropUrl} alt={`도형 ${figIdx + 1}`} className="max-h-48 max-w-full object-contain" style={{ maxWidth: `${maxFigureWidth}px` }} />;
     }
     // AI 생성 도형
     if (figIdx === 0 && hasAiFigure) {
@@ -517,6 +517,7 @@ export const ExamProblemRenderer = memo(ExamProblemRendererInner, (prev, next) =
     prev.textSize === next.textSize &&
     prev.numberOnTop === next.numberOnTop &&
     prev.numberStyle === next.numberStyle &&
+    prev.maxFigureWidth === next.maxFigureWidth &&
     prev.showLevel === next.showLevel
   );
 });
