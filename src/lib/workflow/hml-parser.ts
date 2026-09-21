@@ -246,7 +246,11 @@ function renderParagraph(
         const dropImgs: string[] = [];
         const dropAns: string[] = [];
         const aText = renderParagraph(enChildren, binData, dropImgs, dropAns).trim();
+        // ★ 빈 미주 (2026-09-21, 충렬고 25-2-1-M 수학2): 수학비서가 정답을 안 넣고 내보내면 ENDNOTE 가 24개
+        //   있어도 전부 빈 값이라 "[정답]" 헤더가 없어 0문항으로 실패했다. 미주 자체가 수학비서의 문제 경계이므로
+        //   빈 미주도 `[정답]`(정답 없음) 으로 채널에 올려 문제 시작으로 잡는다. 정답은 빈 값 → 나중에 입력/AI.
         if (aText) answerOut.push(aText);
+        else if (tag === 'ENDNOTE') answerOut.push('[정답]');
         // ★ HML 구조상 stem 은 미주 뒤에 온다. 미주 앞 텍스트(페이지 머리말·번호 잔재,
         //   예: 1번 "…제2교시수학영역")는 본문이 아니므로 버린다. 첫 미주에서 1회만.
         if (!clearedAtEndnote) { parts.length = 0; clearedAtEndnote = true; }
