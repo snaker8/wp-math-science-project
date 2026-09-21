@@ -250,6 +250,9 @@ export function ExamPaperView({
   //      종전은 남는 공간을 문제 크기 비례로 나눠 옆 단과 줄이 안 맞았다. ② 번호 「01」 큰 연회색.
   const [equalSlots, setEqualSlots] = useState(true);
   const [numberPad, setNumberPad] = useState(true);
+  // ★ 그림 크기 (2026-09-21) — 기본 폭 240px 에 배율. 대표가 처음엔 「원본보다 커진다」 했다가 「원본도 크다, 과하지만
+  //   않으면 된다」로 정리 → 기본은 원래(1) 그대로, 줄이고 싶을 때만 작게/보통. 측정 렌더도 같은 값이라 분할이 같이 맞는다.
+  const [figureScale, setFigureScale] = useState<0.65 | 0.8 | 1>(1);
   // ★ 표지 (2026-09-19) — 매쓰홀릭 「표지」·매쓰플랫 표지 편집기에 해당. 디자인은 코드로 4종만, 나머지는
   //   밖(Gemini 등)에서 만든 A4 이미지를 올려 넣는 슬롯(CoverPage.tsx). 기본 꺼짐 — 종전 출력 불변.
   const [cover, setCover] = useState<CoverSettings>(DEFAULT_COVER);
@@ -285,7 +288,7 @@ export function ExamPaperView({
     headerColor?: string | null; headerTheme?: string | null;
     showLevel?: boolean; footerUnit?: boolean; footerAuthor?: boolean; footerId?: boolean; duplex?: boolean;
     cover?: CoverSettings;
-    equalSlots?: boolean; numberPad?: boolean;
+    equalSlots?: boolean; numberPad?: boolean; figureScale?: 0.65 | 0.8 | 1;
   };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
@@ -298,7 +301,7 @@ export function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover, equalSlots, numberPad }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover, equalSlots, numberPad, figureScale }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
@@ -306,7 +309,7 @@ export function ExamPaperView({
     setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
     setShowLevel(!!p.showLevel); setFooterUnit(!!p.footerUnit); setFooterAuthor(!!p.footerAuthor); setFooterId(!!p.footerId); setDuplex(!!p.duplex);
     setCover(p.cover ? { ...DEFAULT_COVER, ...p.cover } : DEFAULT_COVER);
-    setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true);
+    setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true); setFigureScale(p.figureScale ?? 1);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
@@ -339,7 +342,7 @@ export function ExamPaperView({
   useEffect(() => {
     setMeasured(false);
     setProblemHeights([]);
-  }, [problems, columns, showLevel, numberPad]);
+  }, [problems, columns, showLevel, numberPad, figureScale]);
 
   // 문제 높이 측정
   useLayoutEffect(() => {
@@ -756,7 +759,7 @@ export function ExamPaperView({
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
   //   textSize 13.5px: 기본 14px 보다 아주 조금 작게(사용자 요청). 측정·렌더 같은 헬퍼라 분할 일치.
   const renderProblem = (problem: ProblemData) => (
-    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} numberStyle={numberPad ? 'pad' : 'plain'} />
+    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} numberStyle={numberPad ? 'pad' : 'plain'} maxFigureWidth={Math.round(240 * figureScale)} />
   );
 
   // 측정용 컬럼 너비 (고정 컬럼 간격 사용)
@@ -868,6 +871,16 @@ export function ExamPaperView({
                 {label}
               </button>
             ))}
+            {/* ★ 그림 크기 — 기본 원래. 줄이고 싶을 때만 (그래프·도형 최대 폭 배율) */}
+            <div className="ml-1 inline-flex items-center gap-1 text-xs text-content-tertiary" title="문항 그림(그래프·도형)의 최대 폭. 원본 시험지 비율에 가깝게 줄입니다">
+              그림
+              {([[0.65, '작게'], [0.8, '보통'], [1, '원래']] as Array<[0.65 | 0.8 | 1, string]>).map(([v, label]) => (
+                <button key={v} type="button" onClick={() => setFigureScale(v)}
+                  className={`rounded-md border px-2 py-1 transition-colors ${figureScale === v ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {/* ★ 표지 — 누르면 켜지고 패널이 열린다. 패널 안 체크로 끈다 */}
             <div className="relative" ref={coverPanelRef}>
               <button
