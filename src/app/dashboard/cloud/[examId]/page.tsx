@@ -1333,7 +1333,7 @@ function ProblemCardView({
                           <th className="px-2 py-1" />
                           {headers.map((h, i) => (
                             <th key={i} className="break-keep px-2 py-1 text-center font-bold text-content-primary border-b border-white/[.14]">
-                              {h}
+                              <MixedContentRenderer content={h} inline />
                             </th>
                           ))}
                         </tr>
