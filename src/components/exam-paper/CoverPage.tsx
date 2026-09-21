@@ -27,9 +27,11 @@ export type CoverSettings = {
   title?: string;
   /** 부제목 덮어쓰기 (빈값 = 학년·학기·과목·유형 자동) */
   subtitle?: string;
+  /** 표지 위 학원/학교명 덮어쓰기 (빈값 = 헤더의 학원/학교). 대표: "지금은 학교 등이 나온다" */
+  academy?: string;
 };
 
-export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '', title: '', subtitle: '' };
+export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '', title: '', subtitle: '', academy: '' };
 
 export const COVER_DESIGNS: Array<{ id: CoverDesign; label: string; hint: string; image: boolean }> = [
   { id: 'minimal', label: '미니멀', hint: '흰 바탕 · 제목 · 가는 선 · 이름칸', image: false },
@@ -41,6 +43,7 @@ export const COVER_DESIGNS: Array<{ id: CoverDesign; label: string; hint: string
 ];
 
 export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null };
+export type CoverTemplate = { name: string; path: string; settings: Partial<CoverSettings>; createdAt: string | null };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 표지 한 장
@@ -61,7 +64,7 @@ export function CoverPage({
   // ★ 제목·부제목은 표지에서 따로 쓸 수 있다 (빈값이면 시험지 제목 / 자동 부제목)
   examTitle = (settings.title || '').trim() || examTitle;
   const subtitle = (settings.subtitle || '').trim() || [meta.grade, meta.semester, meta.subject, meta.examType].filter(Boolean).join(' · ');
-  const academy = meta.schoolName || '';
+  const academy = (settings.academy || '').trim() || meta.schoolName || '';
   const info: Array<[string, string]> = [
     ['문항수', problemCount > 0 ? `${problemCount}문항` : ''],
     ['출제', meta.teacher || ''],
@@ -152,7 +155,7 @@ export function CoverPage({
         <>
           <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '60%', background: '#f1f5f9' }}>
             {settings.imageUrl
-              ? <img src={settings.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 'none' }} />
+              ? <img src={settings.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', maxHeight: 'none' }} />
               : <Placeholder />}
           </div>
           <div style={{ position: 'absolute', left: 0, right: 0, top: '60%', bottom: 0, padding: `34px ${PADX}px 56px`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -172,7 +175,7 @@ export function CoverPage({
         <>
           <div style={{ position: 'absolute', inset: 0, background: '#f1f5f9' }}>
             {settings.imageUrl
-              ? <img src={settings.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 'none' }} />
+              ? <img src={settings.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', maxHeight: 'none' }} />
               : <Placeholder />}
           </div>
           {settings.overlay && (
@@ -217,6 +220,9 @@ export function CoverPage({
 // ─────────────────────────────────────────────────────────────────────────────
 export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange: (next: CoverSettings) => void }) {
   const [items, setItems] = useState<CoverAsset[] | null>(null);
+  // ★ 저장한 표지 — 시험지와 무관한 표지 묶음(디자인·이미지·제목·부제목·학원명·안내문). 센터 라이브러리에 JSON 으로.
+  const [templates, setTemplates] = useState<CoverTemplate[] | null>(null);
+  const [tplName, setTplName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -228,9 +234,34 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       setItems(j.items as CoverAsset[]);
-    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setItems([]); }
+      setTemplates((j.templates as CoverTemplate[]) ?? []);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setItems([]); setTemplates([]); }
   };
-  useEffect(() => { if (isImage && items === null) void load(); }, [isImage, items]);
+  useEffect(() => { if (items === null) void load(); }, [items]);
+
+  const saveTemplate = async () => {
+    const name = tplName.trim(); if (!name) return;
+    setErr(null); setBusy('표지 저장 중…');
+    try {
+      const { on: _on, ...settings } = value;
+      const r = await fetch('/api/print/covers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: { name, settings } }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || j.message || r.statusText);
+      setTemplates((prev) => [j.template as CoverTemplate, ...(prev ?? [])]);
+      setTplName('');
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(null); }
+  };
+  const applyTemplate = (t: CoverTemplate) => onChange({ ...DEFAULT_COVER, ...t.settings, on: true });
+  const removeTemplate = async (t: CoverTemplate) => {
+    if (busy !== `del:${t.path}`) { setBusy(`del:${t.path}`); setTimeout(() => setBusy((b) => (b === `del:${t.path}` ? null : b)), 2500); return; }
+    setBusy(null);
+    try {
+      const r = await fetch('/api/print/covers', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.path }) });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      setTemplates((prev) => (prev ?? []).filter((x) => x.path !== t.path));
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
 
   const upload = async (file: File) => {
     setErr(null); setBusy('올리는 중…');
@@ -263,6 +294,37 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
 
   return (
     <div className="flex w-full flex-col gap-3 text-xs">
+      {/* ★ 저장한 표지 — 어느 시험지에서든 만들어 두고 다른 시험지에 그대로 붙인다 */}
+      <div className="flex flex-col gap-2 rounded-lg border border-white/10 p-2">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-content-primary">저장한 표지</span>
+          <span className="text-[10px] text-content-tertiary">이 센터 공용 · 시험지와 무관</span>
+        </div>
+        {templates === null && <span className="text-content-tertiary">불러오는 중…</span>}
+        {templates && templates.length === 0 && <span className="text-content-tertiary">아직 없습니다. 아래에서 표지를 꾸민 뒤 이름을 붙여 저장하세요.</span>}
+        {templates && templates.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {templates.map((t) => {
+              const arming = busy === `del:${t.path}`;
+              return (
+                <span key={t.path} className="inline-flex items-center overflow-hidden rounded-md border border-white/[.14]">
+                  <button type="button" onClick={() => applyTemplate(t)} title={`${t.settings.design ?? ''} · ${t.settings.title || '시험지 제목'}`}
+                    className="px-2 py-1 text-content-secondary hover:bg-white/10 hover:text-content-primary">{t.name}</button>
+                  <button type="button" onClick={() => void removeTemplate(t)} title={arming ? '한 번 더 누르면 삭제' : '삭제'}
+                    className={`px-1.5 py-1 text-[10px] ${arming ? 'bg-red-500 text-white' : 'text-content-tertiary hover:text-content-primary'}`}>{arming ? '삭제?' : '×'}</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <input type="text" value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="지금 표지를 이름 붙여 저장 (예: 2학기 중간 대비)"
+            onKeyDown={(e) => { if (e.key === 'Enter') void saveTemplate(); }}
+            className="flex-1 rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
+          <button type="button" onClick={() => void saveTemplate()} disabled={!tplName.trim() || !!busy}
+            className="rounded-md bg-white px-2 py-1 font-semibold text-black hover:bg-white/90 disabled:opacity-40">저장</button>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {COVER_DESIGNS.map((d) => (
           <button key={d.id} type="button" title={d.hint} onClick={() => onChange({ ...value, design: d.id })} className={chip(value.design === d.id)}>{d.label}</button>
@@ -314,6 +376,11 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
         </div>
       )}
       <label className="flex flex-col gap-1 text-content-secondary">
+        <span>표지 학원/학교명 (비우면 헤더의 학원/학교)</span>
+        <input type="text" value={value.academy || ''} onChange={(e) => onChange({ ...value, academy: e.target.value })} placeholder="예: 과사람 동래 자사관"
+          className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
+      </label>
+      <label className="flex flex-col gap-1 text-content-secondary">
         <span>표지 제목 (비우면 시험지 제목)</span>
         <input type="text" value={value.title || ''} onChange={(e) => onChange({ ...value, title: e.target.value })} placeholder="예: 2학기 중간고사 대비 실전 모의고사"
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
@@ -328,7 +395,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
         <textarea value={value.note} onChange={(e) => onChange({ ...value, note: e.target.value })} rows={2} placeholder="예: 풀이는 문제 옆 여백에, 채점 후 오답 유형을 표시하세요."
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </label>
-      <p className="text-[10px] text-content-tertiary">학원·출제·시험일·문항수는 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
+      <p className="text-[10px] text-content-tertiary">출제·시험일·문항수는 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
     </div>
   );
 }

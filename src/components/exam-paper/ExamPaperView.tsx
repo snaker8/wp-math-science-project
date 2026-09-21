@@ -1384,7 +1384,7 @@ export function ExamPaperView({
           max-height: 280px;
         }
         /* ★ 표지 — 전면 이미지라 그림 상한(280px)·페이지 패딩 예외 */
-        .exam-page.exam-cover img { max-height: none; height: 100%; object-fit: cover; }
+        .exam-page.exam-cover img { max-height: none; height: 100%; object-fit: cover; object-position: center top; }
 
         /* 평소에는 숨김 (handlePrint에서 동적 생성) */
         #exam-print-root { display: none; }
@@ -1423,7 +1423,7 @@ export function ExamPaperView({
           }
           #exam-print-root .exam-page:last-child { page-break-after: auto; }
           #exam-print-root .exam-page.exam-cover { padding: 0 !important; }
-          #exam-print-root .exam-page.exam-cover img { max-height: none !important; height: 100% !important; object-fit: cover !important; }
+          #exam-print-root .exam-page.exam-cover img { max-height: none !important; height: 100% !important; object-fit: cover !important; object-position: center top !important; }
           #exam-print-root .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
