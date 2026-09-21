@@ -245,6 +245,11 @@ export function ExamPaperView({
   const [footerAuthor, setFooterAuthor] = useState(false);
   const [footerId, setFooterId] = useState(false);
   const [duplex, setDuplex] = useState(false);
+  // ★ 매쓰홀릭 시험지 인쇄 캡처 대조(2026-09-21, 대표 「차이가 분명히 보인다」):
+  //   ① 칸 고정 — 프리셋(4·6·8)에서 단마다 칸 높이를 같게 나눠 2번·4번이 같은 높이에서 시작(매쓰홀릭 countPerColumn).
+  //      종전은 남는 공간을 문제 크기 비례로 나눠 옆 단과 줄이 안 맞았다. ② 번호 「01」 큰 연회색.
+  const [equalSlots, setEqualSlots] = useState(true);
+  const [numberPad, setNumberPad] = useState(true);
   // ★ 표지 (2026-09-19) — 매쓰홀릭 「표지」·매쓰플랫 표지 편집기에 해당. 디자인은 코드로 4종만, 나머지는
   //   밖(Gemini 등)에서 만든 A4 이미지를 올려 넣는 슬롯(CoverPage.tsx). 기본 꺼짐 — 종전 출력 불변.
   const [cover, setCover] = useState<CoverSettings>(DEFAULT_COVER);
@@ -280,6 +285,7 @@ export function ExamPaperView({
     headerColor?: string | null; headerTheme?: string | null;
     showLevel?: boolean; footerUnit?: boolean; footerAuthor?: boolean; footerId?: boolean; duplex?: boolean;
     cover?: CoverSettings;
+    equalSlots?: boolean; numberPad?: boolean;
   };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
@@ -292,7 +298,7 @@ export function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover, equalSlots, numberPad }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
@@ -300,6 +306,7 @@ export function ExamPaperView({
     setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
     setShowLevel(!!p.showLevel); setFooterUnit(!!p.footerUnit); setFooterAuthor(!!p.footerAuthor); setFooterId(!!p.footerId); setDuplex(!!p.duplex);
     setCover(p.cover ? { ...DEFAULT_COVER, ...p.cover } : DEFAULT_COVER);
+    setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
@@ -328,10 +335,11 @@ export function ExamPaperView({
   const [measured, setMeasured] = useState(false);
 
   // 설정 변경 시 재측정 (gap은 측정에 영향 없으므로 제외)
+  // ★ 번호 「01」·난이도 배지도 번호 줄 높이를 바꾸므로 다시 잰다 (2026-09-21)
   useEffect(() => {
     setMeasured(false);
     setProblemHeights([]);
-  }, [problems, columns]);
+  }, [problems, columns, showLevel, numberPad]);
 
   // 문제 높이 측정
   useLayoutEffect(() => {
@@ -343,6 +351,14 @@ export function ExamPaperView({
         if (heights.length === problems.length) {
           setProblemHeights(heights);
           setMeasured(true);
+          // ★ 그림이 아직 안 내려온 문제는 그림 없이 재진다 → 실제보다 낮게 잡혀 페이지가 넘친다(09-21 실측:
+          //   5쪽 좌단 1,474px > 971px). 미완료 <img> 가 하나라도 로드되면 한 번 더 잰다.
+          const pending = Array.from(measureRef.current.querySelectorAll('img')).filter((i) => !i.complete);
+          if (pending.length > 0) {
+            let fired = false;
+            const again = () => { if (fired) return; fired = true; setMeasured(false); setProblemHeights([]); };
+            pending.forEach((i) => { i.addEventListener('load', again, { once: true }); i.addEventListener('error', again, { once: true }); });
+          }
         }
       }, 300); // KaTeX 렌더링 대기
       return () => clearTimeout(timer);
@@ -536,16 +552,35 @@ export function ExamPaperView({
       const colRanges: Array<[number, number]> = columns === 2
         ? [[0, half], [half, pageProblems.length]]
         : [[0, pageProblems.length]];
+      // ★ 칸 고정(매쓰홀릭 countPerColumn, 09-21 캡처 대조): 같은 「줄」(좌 1번·우 3번, 좌 2번·우 4번)은
+      //   같은 높이에서 시작한다. 줄 높이 = 그 줄에서 가장 큰 본문 + 남는 공간을 줄마다 균등. 본문 합이
+      //   페이지를 넘치면(키 큰 문제) 종전 비례 분배로 내려간다(잘림 0 유지).
+      if (equalSlots) {
+        const cols = colRanges.map(([s, e]) => pageProblems.slice(s, e).map((p, k) => {
+          const w = getWritingSpace(p);
+          return { id: p.id, c: Math.max(0, (problemHeights[g + s + k] ?? 0) - w) };
+        }));
+        const rows = Math.max(...cols.map((c) => c.length), 0);
+        const rowMax = Array.from({ length: rows }, (_, r) => Math.max(...cols.map((c) => c[r]?.c ?? 0)));
+        const total = rowMax.reduce((a, b) => a + b, 0);
+        if (rows > 0 && total + 24 * rows <= maxH) {
+          const share = Math.floor((maxH - total) / rows);
+          cols.forEach((c) => c.forEach((it, r) => map.set(it.id, rowMax[r] + share - it.c)));
+          g += pageProblems.length;
+          return;
+        }
+      }
       for (const [s, e] of colRanges) {
         if (e <= s) continue;
         let contentSum = 0, wSum = 0;
-        const items: Array<{ id: string; w: number }> = [];
+        const items: Array<{ id: string; w: number; c: number }> = [];
         for (let i = s; i < e; i++) {
           const p = pageProblems[i];
           const w = getWritingSpace(p);
-          contentSum += Math.max(0, (problemHeights[g + i] ?? 0) - w);
+          const c = Math.max(0, (problemHeights[g + i] ?? 0) - w);
+          contentSum += c;
           wSum += w;
-          items.push({ id: p.id, w });
+          items.push({ id: p.id, w, c });
         }
         const leftover = Math.max(0, maxH - contentSum);
         for (const it of items) {
@@ -556,7 +591,7 @@ export function ExamPaperView({
       g += pageProblems.length;
     });
     return map;
-  }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H, getWritingSpace]);
+  }, [perPagePreset, measured, problemHeights, pages, columns, FIRST_CONTENT_H, CONTENT_H, getWritingSpace, equalSlots]);
 
   // 카드 아래 풀이공간 — 프리셋이면 자동(페이지 채움·잘림방지), 아니면 고정.
   const getAnswerSpace = (problem: ProblemData, pageIdx: number) => {
@@ -721,7 +756,7 @@ export function ExamPaperView({
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
   //   textSize 13.5px: 기본 14px 보다 아주 조금 작게(사용자 요청). 측정·렌더 같은 헬퍼라 분할 일치.
   const renderProblem = (problem: ProblemData) => (
-    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} />
+    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} numberStyle={numberPad ? 'pad' : 'plain'} />
   );
 
   // 측정용 컬럼 너비 (고정 컬럼 간격 사용)
@@ -818,6 +853,8 @@ export function ExamPaperView({
               ['출제자', footerAuthor, () => setFooterAuthor((v) => !v), '하단에 출제교사(헤더 정보의 출제교사)'],
               ['학습번호', footerId, () => setFooterId((v) => !v), '하단에 시험지 번호'],
               ['양면', duplex, () => setDuplex((v) => !v), '홀수 장이면 빈 페이지를 붙여 양면 인쇄 짝을 맞춥니다'],
+              ['칸 고정', equalSlots, () => setEqualSlots((v) => !v), '페이지당 문항수 프리셋에서 단마다 칸 높이를 같게 — 2번·4번이 같은 줄에서 시작(매쓰홀릭 스마트정렬)'],
+              ['번호 01', numberPad, () => setNumberPad((v) => !v), '문항 번호를 「01」 큰 연회색으로 (매쓰홀릭 시험지)'],
             ] as Array<[string, boolean, () => void, string]>).map(([label, on, toggle, hint]) => (
               <button
                 key={label}
@@ -1171,6 +1208,8 @@ export function ExamPaperView({
                   templateId={templateId}
                   meta={examMeta}
                   examTitle={examTitle}
+                  problemCount={problems.length}
+                  pageNo={1}
                   editable={true}
                   onTemplateChange={onTemplateChange}
                   onMetaChange={onMetaChange}
