@@ -250,9 +250,10 @@ export function ExamPaperView({
   //      종전은 남는 공간을 문제 크기 비례로 나눠 옆 단과 줄이 안 맞았다. ② 번호 「01」 큰 연회색.
   const [equalSlots, setEqualSlots] = useState(true);
   const [numberPad, setNumberPad] = useState(true);
-  // ★ 그림 크기 (2026-09-21) — 기본 폭 240px 에 배율. 대표가 처음엔 「원본보다 커진다」 했다가 「원본도 크다, 과하지만
-  //   않으면 된다」로 정리 → 기본은 원래(1) 그대로, 줄이고 싶을 때만 작게/보통. 측정 렌더도 같은 값이라 분할이 같이 맞는다.
-  const [figureScale, setFigureScale] = useState<0.65 | 0.8 | 1>(1);
+  // ★ 그림 크기 (2026-09-21) — 기본 폭 240px 에 배율. 대표 「펼쳐보기엔 좋은데 인쇄로 가면 커 보인다」 실측:
+  //   펼쳐보기 카드는 그림 200px / 카드 ~500px(40%) 인데 인쇄는 240px / 단 335px(72%) — 같은 px 인데 단이 좁아 커 보인다.
+  //   기본 보통(0.8 → 192px, 57%)으로 카드 비율에 붙인다. 작게 0.65 · 원래 1. 측정 렌더도 같은 값이라 분할이 같이 맞는다.
+  const [figureScale, setFigureScale] = useState<0.65 | 0.8 | 1>(0.8);
   // ★ 표지 (2026-09-19) — 매쓰홀릭 「표지」·매쓰플랫 표지 편집기에 해당. 디자인은 코드로 4종만, 나머지는
   //   밖(Gemini 등)에서 만든 A4 이미지를 올려 넣는 슬롯(CoverPage.tsx). 기본 꺼짐 — 종전 출력 불변.
   const [cover, setCover] = useState<CoverSettings>(DEFAULT_COVER);
@@ -309,7 +310,7 @@ export function ExamPaperView({
     setColumns(p.columns); setGap(p.gap); setPagePad(p.pagePad); setPerPagePreset(p.perPagePreset);
     setShowLevel(!!p.showLevel); setFooterUnit(!!p.footerUnit); setFooterAuthor(!!p.footerAuthor); setFooterId(!!p.footerId); setDuplex(!!p.duplex);
     setCover(p.cover ? { ...DEFAULT_COVER, ...p.cover } : DEFAULT_COVER);
-    setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true); setFigureScale(p.figureScale ?? 1);
+    setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true); setFigureScale(p.figureScale ?? 0.8);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
