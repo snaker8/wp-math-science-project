@@ -37,6 +37,9 @@ async function scope() {
 }
 
 export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null };
+/** 저장한 표지(디자인+이미지+제목·부제목·학원명·안내문) — 시험지와 무관하게 만들어 두고 아무 시험지에나 붙인다 (2026-09-21 대표 요청) */
+export type CoverTemplate = { name: string; path: string; settings: Record<string, unknown>; createdAt: string | null };
+const TPL_DIR = 'templates/';
 
 /** GET — 이 센터의 표지 이미지 목록 (최신순) */
 export async function GET() {
@@ -62,15 +65,43 @@ export async function GET() {
         createdAt: f.created_at ?? null,
       };
     });
-  return NextResponse.json({ items });
+  // 저장한 표지 목록 — templates/ 폴더의 JSON
+  const templates: CoverTemplate[] = [];
+  const { data: tplFiles } = await s.admin.storage
+    .from(BUCKET)
+    .list((prefix + TPL_DIR).slice(0, -1), { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+  for (const f of tplFiles ?? []) {
+    if (!f.id || !f.name.endsWith('.json')) continue;
+    const path = prefix + TPL_DIR + f.name;
+    const { data: blob } = await s.admin.storage.from(BUCKET).download(path);
+    if (!blob) continue;
+    try {
+      const json = JSON.parse(await blob.text()) as { name?: string; settings?: Record<string, unknown> };
+      templates.push({ name: json.name || f.name.replace(/^\d{13}-/, '').replace(/\.json$/, ''), path, settings: json.settings || {}, createdAt: f.created_at ?? null });
+    } catch { /* 깨진 파일은 건너뜀 */ }
+  }
+  return NextResponse.json({ items, templates });
 }
 
 /** POST — 표지 이미지 추가 { base64, name } → 2480px 이하 WebP 로 정규화해 저장 */
 export async function POST(req: NextRequest) {
   const s = await scope();
   if ('error' in s) return s.error;
-  let body: { base64?: string; name?: string };
+  let body: { base64?: string; name?: string; template?: { name?: string; settings?: Record<string, unknown> } };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  // ── 저장한 표지(JSON) — 이미지가 아니라 설정 묶음. 이름은 한글 그대로(JSON 안), 키는 ASCII
+  if (body.template) {
+    const name = String(body.template.name || '').trim().slice(0, 40);
+    if (!name) return NextResponse.json({ error: '표지 이름이 필요합니다' }, { status: 400 });
+    const settings = body.template.settings && typeof body.template.settings === 'object' ? body.template.settings : {};
+    const safe = name.replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'cover';
+    const path = `${prefixOf(s.instituteId)}${TPL_DIR}${Date.now()}-${safe}.json`;
+    const buf = Buffer.from(JSON.stringify({ name, settings, savedAt: new Date().toISOString() }), 'utf8');
+    const { error } = await s.admin.storage.from(BUCKET).upload(path, buf, { contentType: 'application/json', upsert: false });
+    if (error) return NextResponse.json({ error: 'Storage upload failed', message: error.message }, { status: 502 });
+    const tpl: CoverTemplate = { name, path, settings, createdAt: new Date().toISOString() };
+    return NextResponse.json({ template: tpl });
+  }
   const raw = (body.base64 || '').replace(/^data:image\/[\w+.-]+;base64,/, '');
   if (!raw) return NextResponse.json({ error: 'base64 가 필요합니다' }, { status: 400 });
   const input = Buffer.from(raw, 'base64');
