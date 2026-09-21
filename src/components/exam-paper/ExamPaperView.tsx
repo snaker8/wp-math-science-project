@@ -879,7 +879,7 @@ export function ExamPaperView({
             {/* ★ 표지 — 버튼은 켜고 끄기, 설정은 가운데 모달 (툴바 팝오버는 오른쪽이 잘렸다, 09-21 캡처) */}
             <button
               type="button"
-              onClick={() => { if (!cover.on) setCover((c) => ({ ...c, on: true })); setShowCoverPanel(true); }}
+              onClick={() => { if (!cover.on) setCover((c) => ({ ...c, on: true })); setShowCoverPanel(true); setTimeout(() => document.querySelector('.exam-cover')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150); }}
               title="첫 장에 표지를 붙입니다 — 글자 표지 4종 또는 올린 이미지. 제목·부제목·안내문을 따로 쓸 수 있습니다"
               className={`rounded-md border px-2 py-1 text-xs transition-colors ${
                 cover.on ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
@@ -887,16 +887,18 @@ export function ExamPaperView({
             >
               표지 설정{cover.on ? ' ✓' : ''}
             </button>
+            {/* ★ 오른쪽 서랍(배경 가림 없음) — 고치면서 왼쪽 표지 미리보기가 바로 바뀌는 걸 본다 (대표 09-21 「어떻게 보면서 진행하노」) */}
             {showCoverPanel && (
-              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowCoverPanel(false); }}>
-                <div ref={coverPanelRef} className="max-h-[90vh] w-[480px] max-w-full overflow-y-auto rounded-xl border border-white/10 bg-surface-raised p-4 shadow-2xl">
-                  <div className="mb-3 flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm font-semibold text-content-primary">
-                      <input type="checkbox" checked={cover.on} onChange={(e) => setCover((c) => ({ ...c, on: e.target.checked }))} />
-                      표지 넣기
-                    </label>
-                    <button type="button" onClick={() => setShowCoverPanel(false)} className="rounded-md border border-white/10 px-2 py-1 text-xs text-content-secondary hover:text-content-primary">닫기</button>
-                  </div>
+              <div ref={coverPanelRef} className="fixed right-0 top-0 z-[80] flex h-full w-[440px] max-w-[90vw] flex-col border-l border-white/10 bg-surface-raised shadow-2xl print:hidden">
+                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-content-primary">
+                    <input type="checkbox" checked={cover.on} onChange={(e) => setCover((c) => ({ ...c, on: e.target.checked }))} />
+                    표지 넣기
+                  </label>
+                  <span className="text-[10px] text-content-tertiary">왼쪽 미리보기에 바로 반영</span>
+                  <button type="button" onClick={() => setShowCoverPanel(false)} className="rounded-md border border-white/10 px-2 py-1 text-xs text-content-secondary hover:text-content-primary">닫기</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
                   <CoverPanel value={cover} onChange={setCover} />
                 </div>
               </div>
