@@ -1,5 +1,6 @@
 'use client';
 
+import { trimNewlinesAroundBlocks } from './block-gap';
 import React, { memo, useMemo, useRef } from 'react';
 import katex from 'katex';
 import { stripDollarsInsideMathEnv } from './math-env-dollar';
@@ -1289,6 +1290,9 @@ function parseMixedContent(text: string): ContentElement[] {
   if (lastIndex < preprocessed.length) {
     elements.push({ type: 'text', value: preprocessed.substring(lastIndex) });
   }
+
+  // ★ 블록(조건 박스·표·그림·디스플레이 수식) 앞뒤 줄바꿈 걷기 — 박스 위아래가 40px 씩 벌어지던 사고 (2026-09-21)
+  trimNewlinesAroundBlocks(elements);
 
   // ★ 후처리: 조립제법 표 직전의 짧은 텍스트/수식을 표의 첫 번째 열에 병합
   // OCR에서 "$k" 같은 텍스트가 표 바깥에 나오는 경우 처리
