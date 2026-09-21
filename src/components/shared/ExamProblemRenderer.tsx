@@ -177,7 +177,8 @@ function ExamProblemRendererInner({
                 <th className="w-6 px-1 py-0.5" />
                 {headers.map((h, i) => (
                   <th key={i} className="break-keep px-2 py-0.5 text-center text-[12px] font-bold text-gray-500 border-b border-gray-300">
-                    {h}
+                    {/* ★ 헤더도 수식 렌더 — `$ngle a$ 의 동위각` 이 날것으로 보이던 것 (2026-09-21) */}
+                    <MixedContentRenderer content={h} className="text-gray-500" inline />
                   </th>
                 ))}
               </tr>
