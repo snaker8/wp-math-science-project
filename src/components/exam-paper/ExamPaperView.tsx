@@ -259,12 +259,6 @@ export function ExamPaperView({
   const [cover, setCover] = useState<CoverSettings>(DEFAULT_COVER);
   const [showCoverPanel, setShowCoverPanel] = useState(false);
   const coverPanelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!showCoverPanel) return;
-    const h = (e: MouseEvent) => { if (coverPanelRef.current && !coverPanelRef.current.contains(e.target as Node)) setShowCoverPanel(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [showCoverPanel]);
   // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
   const [zoom, setZoom] = useState(1);
 
@@ -882,31 +876,31 @@ export function ExamPaperView({
                 </button>
               ))}
             </div>
-            {/* ★ 표지 — 누르면 켜지고 패널이 열린다. 패널 안 체크로 끈다 */}
-            <div className="relative" ref={coverPanelRef}>
-              <button
-                type="button"
-                onClick={() => { if (!cover.on) setCover((c) => ({ ...c, on: true })); setShowCoverPanel((v) => !v); }}
-                title="첫 장에 표지를 붙입니다 — 글자 표지 4종 또는 올린 이미지"
-                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
-                  cover.on ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
-                }`}
-              >
-                표지{cover.on ? ' ✓' : ''}
-              </button>
-              {showCoverPanel && (
-                <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-white/10 bg-surface-raised p-3 shadow-2xl">
-                  <div className="mb-2 flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-xs text-content-primary">
+            {/* ★ 표지 — 버튼은 켜고 끄기, 설정은 가운데 모달 (툴바 팝오버는 오른쪽이 잘렸다, 09-21 캡처) */}
+            <button
+              type="button"
+              onClick={() => { if (!cover.on) setCover((c) => ({ ...c, on: true })); setShowCoverPanel(true); }}
+              title="첫 장에 표지를 붙입니다 — 글자 표지 4종 또는 올린 이미지. 제목·부제목·안내문을 따로 쓸 수 있습니다"
+              className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                cover.on ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
+              }`}
+            >
+              표지 설정{cover.on ? ' ✓' : ''}
+            </button>
+            {showCoverPanel && (
+              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowCoverPanel(false); }}>
+                <div ref={coverPanelRef} className="max-h-[90vh] w-[480px] max-w-full overflow-y-auto rounded-xl border border-white/10 bg-surface-raised p-4 shadow-2xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-content-primary">
                       <input type="checkbox" checked={cover.on} onChange={(e) => setCover((c) => ({ ...c, on: e.target.checked }))} />
                       표지 넣기
                     </label>
-                    <button type="button" onClick={() => setShowCoverPanel(false)} className="text-xs text-content-tertiary hover:text-content-primary">닫기</button>
+                    <button type="button" onClick={() => setShowCoverPanel(false)} className="rounded-md border border-white/10 px-2 py-1 text-xs text-content-secondary hover:text-content-primary">닫기</button>
                   </div>
                   <CoverPanel value={cover} onChange={setCover} />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           {/* ★ 미리보기 줌 (인쇄물엔 영향 없음 — 미리보기만 확대/축소) */}
           <div className="flex items-center gap-1">

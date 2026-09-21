@@ -219,7 +219,7 @@ export default function CloudFlowUploader({
         if (data.examId) router.push(`/dashboard/cloud/${data.examId}`);
       } catch (e) {
         setJobs((prev) => prev.map((j) => j.id === tempJob.id
-          ? { ...j, status: 'FAILED', currentStep: `HML 가져오기 실패: ${e instanceof Error ? e.message : String(e)}` } : j));
+          ? { ...j, status: 'FAILED', error: `HML 가져오기 실패: ${e instanceof Error ? e.message : String(e)}`, currentStep: `HML 가져오기 실패: ${e instanceof Error ? e.message : String(e)}` } : j));
       }
       return;
     }

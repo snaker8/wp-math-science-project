@@ -23,9 +23,13 @@ export type CoverSettings = {
   overlay: boolean;
   /** 표지 하단 한 줄 안내 (예: "채점 후 오답 유형을 표시하세요") */
   note: string;
+  /** 표지 제목을 시험지 제목과 다르게 쓰고 싶을 때 (빈값 = 시험지 제목). 2026-09-21 대표 요청 */
+  title?: string;
+  /** 부제목 덮어쓰기 (빈값 = 학년·학기·과목·유형 자동) */
+  subtitle?: string;
 };
 
-export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '' };
+export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '', title: '', subtitle: '' };
 
 export const COVER_DESIGNS: Array<{ id: CoverDesign; label: string; hint: string; image: boolean }> = [
   { id: 'minimal', label: '미니멀', hint: '흰 바탕 · 제목 · 가는 선 · 이름칸', image: false },
@@ -54,7 +58,9 @@ export function CoverPage({
   height: number;
 }) {
   const color = accent || '#334155';
-  const subtitle = [meta.grade, meta.semester, meta.subject, meta.examType].filter(Boolean).join(' · ');
+  // ★ 제목·부제목은 표지에서 따로 쓸 수 있다 (빈값이면 시험지 제목 / 자동 부제목)
+  examTitle = (settings.title || '').trim() || examTitle;
+  const subtitle = (settings.subtitle || '').trim() || [meta.grade, meta.semester, meta.subject, meta.examType].filter(Boolean).join(' · ');
   const academy = meta.schoolName || '';
   const info: Array<[string, string]> = [
     ['문항수', problemCount > 0 ? `${problemCount}문항` : ''],
@@ -256,7 +262,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
   const chip = (on: boolean) => `rounded-md border px-2 py-1 text-xs transition-colors ${on ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'}`;
 
   return (
-    <div className="flex w-[420px] flex-col gap-3 text-xs">
+    <div className="flex w-full flex-col gap-3 text-xs">
       <div className="flex flex-wrap gap-1.5">
         {COVER_DESIGNS.map((d) => (
           <button key={d.id} type="button" title={d.hint} onClick={() => onChange({ ...value, design: d.id })} className={chip(value.design === d.id)}>{d.label}</button>
@@ -308,11 +314,21 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
         </div>
       )}
       <label className="flex flex-col gap-1 text-content-secondary">
+        <span>표지 제목 (비우면 시험지 제목)</span>
+        <input type="text" value={value.title || ''} onChange={(e) => onChange({ ...value, title: e.target.value })} placeholder="예: 2학기 중간고사 대비 실전 모의고사"
+          className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
+      </label>
+      <label className="flex flex-col gap-1 text-content-secondary">
+        <span>표지 부제목 (비우면 학년·과목 자동)</span>
+        <input type="text" value={value.subtitle || ''} onChange={(e) => onChange({ ...value, subtitle: e.target.value })} placeholder="예: 고2 수학Ⅱ · 충렬고 대비반"
+          className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
+      </label>
+      <label className="flex flex-col gap-1 text-content-secondary">
         <span>표지 안내문 (선택)</span>
         <textarea value={value.note} onChange={(e) => onChange({ ...value, note: e.target.value })} rows={2} placeholder="예: 풀이는 문제 옆 여백에, 채점 후 오답 유형을 표시하세요."
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </label>
-      <p className="text-[10px] text-content-tertiary">제목·학원·출제·시험일·문항수는 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
+      <p className="text-[10px] text-content-tertiary">학원·출제·시험일·문항수는 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
     </div>
   );
 }
