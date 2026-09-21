@@ -27,6 +27,9 @@ interface EditableExamHeaderProps {
   onExamTitleChange?: (title: string) => void;
   /** 과목 옵션 (과목별 선택) */
   subjectOptions?: string[];
+  /** 시험지형 헤더용 — 문항수 배지·큰 페이지 번호 (매쓰홀릭 시험지 실측 09-21) */
+  problemCount?: number;
+  pageNo?: number;
   /** ★ 헤더 상단 강조색 (우리식 색 테마) — null/undefined면 미표시(기존 동일). 인쇄 반영. */
   accentColor?: string | null;
   /** ★ 헤더 꾸밈 테마 id ('none'|'line'|'double'|'wave'|'corner'|'dots'). accentColor 와 함께 동작. */
@@ -153,6 +156,8 @@ function EditableExamHeaderInner({
   subjectOptions,
   accentColor,
   headerTheme,
+  problemCount,
+  pageNo,
 }: EditableExamHeaderProps) {
   const [editMode, setEditMode] = useState(false);
   const m: ExamMeta = { ...DEFAULT_EXAM_META, ...meta };
@@ -202,7 +207,9 @@ function EditableExamHeaderInner({
           meta={m}
           examTitle={title}
           accent={accentColor}
-          variant={templateId === 'centered' ? 'centered' : templateId === 'minimal' ? 'minimal' : 'editorial'}
+          variant={templateId === 'centered' ? 'centered' : templateId === 'minimal' ? 'minimal' : templateId === 'exam' ? 'exam' : 'editorial'}
+          problemCount={problemCount}
+          pageNo={pageNo}
         />
       )}
     </div>
@@ -221,16 +228,49 @@ function StaticFormView({
   examTitle,
   accent,
   variant = 'editorial',
+  problemCount,
+  pageNo,
 }: {
   meta: ExamMeta;
   examTitle: string;
   accent?: string | null;
-  variant?: 'editorial' | 'centered' | 'minimal';
+  variant?: 'editorial' | 'centered' | 'minimal' | 'exam';
+  problemCount?: number;
+  pageNo?: number;
 }) {
   // ★ 에디토리얼 헤더 (2026-07-01) — accent는 세로바 + eyebrow 과목명에만(절제). 강한 타이포 위계.
   //   variant: editorial(좌측 accent바) / centered(중앙정렬+짧은 언더라인) / minimal(제목+이름만).
   const pca = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties;
   const a = accent || '#0f172a';
+
+  // ★ 시험지형 (2026-09-21, 매쓰홀릭 「시험지」 인쇄 캡처 실측) —
+  //   위 가운데 학원명 · 왼쪽 「수학영역」 알약 · 가운데 제목 + 「N문항」 배지 · 오른쪽 큰 세리프 페이지 번호 · 「이름 :」 줄.
+  //   QR 은 우리 인쇄엔 학생별 세션이 없어 넣지 않는다.
+  if (variant === 'exam') {
+    // 「수학영역」 알약 — 과목명에 학년·학기가 섞여 있어(예: "중1-2 수학") 교과 이름만 뽑는다
+    const area = /과학/.test(meta.subject) ? '과학영역' : /영어/.test(meta.subject) ? '영어영역' : /국어/.test(meta.subject) ? '국어영역' : '수학영역';
+    return (
+      <div className="exam-band-header" style={{ marginBottom: 2, ...pca }}>
+        {meta.schoolName && (
+          <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#334155', letterSpacing: '0.02em', marginBottom: 6 }}>{meta.schoolName}</div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10 }}>
+          <span style={{ justifySelf: 'start', fontSize: 12, fontWeight: 700, color: '#0f172a', border: '1.5px solid #0f172a', borderRadius: 999, padding: '2px 11px', whiteSpace: 'nowrap' }}>{area}</span>
+          <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, color: '#0f172a', lineHeight: 1.25, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <span>{examTitle}</span>
+            {problemCount ? <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', border: '1px solid #94a3b8', borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap' }}>{problemCount}문항</span> : null}
+          </div>
+          <span style={{ justifySelf: 'end', fontFamily: "'Times New Roman', 'Noto Serif KR', serif", fontSize: 40, fontWeight: 400, color: '#0f172a', lineHeight: 1 }}>{pageNo ?? 1}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginTop: 8, paddingBottom: 10 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>이름 :</span>
+          <span aria-hidden style={{ width: 150, borderBottom: '1px solid #cbd5e1', height: 14 }} />
+          {meta.teacher ? <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>출제 {meta.teacher}</span> : null}
+        </div>
+        <div aria-hidden style={{ borderBottom: '1px solid #cbd5e1' }} />
+      </div>
+    );
+  }
   const centered = variant === 'centered';
   const minimal = variant === 'minimal';
   const metaBits = [
@@ -512,6 +552,7 @@ export const HEADER_PRESETS: Array<{ id: string; name: string; theme: string; co
   { id: 'minimal', name: '미니멀', theme: 'none', color: '#0f172a', layout: 'minimal' },
   { id: 'line', name: '라인', theme: 'line', color: '#0f172a', layout: 'editorial' },
   { id: 'double', name: '더블', theme: 'double', color: '#334155', layout: 'editorial' },
+  { id: 'exam', name: '시험지형', theme: 'none', color: '#0f172a', layout: 'exam' },
 ];
 
 // 프리셋 썸네일 — 실제 헤더의 축소 목업 (장식 + 좌측 accent 바 + 제목/메타 라인)

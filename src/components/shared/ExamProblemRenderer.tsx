@@ -90,6 +90,7 @@ function ExamProblemRendererInner({
   lineHeight = '1.65',
   maxFigureWidth = 240,
   numberOnTop = false,
+  numberStyle = 'plain',
   showLevel = false,
 }: {
   problem: ExamRenderProblem;
@@ -99,6 +100,8 @@ function ExamProblemRendererInner({
   maxFigureWidth?: number;
   // ★ true: 문제 번호를 본문 위 별도 줄에 올리고 본문을 전체 폭으로(넓게). cloud 시험지 인쇄용.
   numberOnTop?: boolean;
+  /** 번호 모양 — plain: 「1.」 굵은 회색(종전) · pad: 「01」 큰 연회색(매쓰홀릭 실측 09-21, 점 없음) */
+  numberStyle?: 'plain' | 'pad';
   /** ★ 난이도 텍스트 배지 — 매쓰홀릭 「난이도 표시: 텍스트」(11-print-api §5). 우리 분류 밴드 그대로 */
   showLevel?: boolean;
 }) {
@@ -469,13 +472,25 @@ function ExamProblemRendererInner({
     </span>
   ) : null;
 
+  // ★ 「01」 — 매쓰홀릭 시험지 실측(09-21 캡처): 두 자리, 큰 연회색, 점 없음, 배지가 바로 옆.
+  const padNumber = numberStyle === 'pad' ? (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: '4px', lineHeight: 1 }}>
+      <span style={{ fontSize: `calc(${textSize} + 12px)`, fontWeight: 500, color: '#b4bcc8', letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums' }}>
+        {String(problem.number ?? '').padStart(2, '0')}
+      </span>
+      {levelBadge}
+    </div>
+  ) : null;
+
   // ★ 번호 위 + 본문 전체 폭 (cloud 시험지 인쇄) — 번호가 좌측 칼럼을 안 먹어 문제를 넓게 씀
   if (numberOnTop) {
     return (
       <div>
-        <div className="font-bold text-gray-500" style={{ fontSize: `calc(${textSize} + 6px)`, lineHeight: 1.2, marginBottom: '3px' }}>
-          {problem.number}.{levelBadge}
-        </div>
+        {padNumber ?? (
+          <div className="font-bold text-gray-500" style={{ fontSize: `calc(${textSize} + 6px)`, lineHeight: 1.2, marginBottom: '3px' }}>
+            {problem.number}.{levelBadge}
+          </div>
+        )}
         {bodyEl}
       </div>
     );
@@ -501,6 +516,7 @@ export const ExamProblemRenderer = memo(ExamProblemRendererInner, (prev, next) =
     prev.gap === next.gap &&
     prev.textSize === next.textSize &&
     prev.numberOnTop === next.numberOnTop &&
+    prev.numberStyle === next.numberStyle &&
     prev.showLevel === next.showLevel
   );
 });
