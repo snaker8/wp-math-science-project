@@ -29,9 +29,11 @@ export type CoverSettings = {
   subtitle?: string;
   /** 표지 위 학원/학교명 덮어쓰기 (빈값 = 헤더의 학원/학교). 대표: "지금은 학교 등이 나온다" */
   academy?: string;
+  /** 정보 줄 덮어쓰기 (빈값 = 문항수·출제·시험일·시간 자동). 대표: "문항수도 지금 고정되어 있다" — 예: "25문항 · 50분" */
+  infoText?: string;
 };
 
-export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '', title: '', subtitle: '', academy: '' };
+export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '', title: '', subtitle: '', academy: '', infoText: '' };
 
 export const COVER_DESIGNS: Array<{ id: CoverDesign; label: string; hint: string; image: boolean }> = [
   { id: 'minimal', label: '미니멀', hint: '흰 바탕 · 제목 · 가는 선 · 이름칸', image: false },
@@ -83,7 +85,10 @@ export function CoverPage({
       ))}
     </div>
   );
-  const InfoRows = ({ dark }: { dark?: boolean }) => info.length === 0 ? null : (
+  const infoOverride = (settings.infoText || '').trim();
+  const InfoRows = ({ dark }: { dark?: boolean }) => infoOverride ? (
+    <div style={{ fontSize: 12, color: dark ? 'rgba(255,255,255,.9)' : '#475569', whiteSpace: 'pre-wrap' }}>{infoOverride}</div>
+  ) : info.length === 0 ? null : (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', fontSize: 12, color: dark ? 'rgba(255,255,255,.9)' : '#475569' }}>
       {info.map(([k, v]) => (
         <span key={k}><span style={{ opacity: .7, marginRight: 6 }}>{k}</span><b style={{ fontWeight: 600 }}>{v}</b></span>
@@ -391,11 +396,16 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </label>
       <label className="flex flex-col gap-1 text-content-secondary">
+        <span>표지 정보 줄 (비우면 문항수·출제·시험일 자동)</span>
+        <input type="text" value={value.infoText || ''} onChange={(e) => onChange({ ...value, infoText: e.target.value })} placeholder="예: 25문항 · 50분 · 2026.10.05"
+          className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
+      </label>
+      <label className="flex flex-col gap-1 text-content-secondary">
         <span>표지 안내문 (선택)</span>
         <textarea value={value.note} onChange={(e) => onChange({ ...value, note: e.target.value })} rows={2} placeholder="예: 풀이는 문제 옆 여백에, 채점 후 오답 유형을 표시하세요."
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </label>
-      <p className="text-[10px] text-content-tertiary">출제·시험일·문항수는 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
+      <p className="text-[10px] text-content-tertiary">비운 칸은 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
     </div>
   );
 }
