@@ -2,6 +2,7 @@
 
 import { trimNewlinesAroundBlocks } from './block-gap';
 import { markBoldAcrossElements } from './bold-span';
+import { splitMulticolumn } from './table-multicolumn';
 import { stripEmptyMath } from './empty-math';
 import React, { memo, useMemo, useRef } from 'react';
 import katex from 'katex';
@@ -150,10 +151,16 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
     }
   );
   // 패턴 2: \begin{array}{|l|}\hline ... \end{array} — hline 필수
+  //   ★ 단일 컬럼({|l|}·{|c|})만 풀이박스다. `{|c|c|c|…}` 다열 데이터 표(분포고 #7, \multicolumn 든 8열 표)까지
+  //     잡아 KaTeX aligned 로 넘기면 KaTeX 가 \multicolumn 을 못 풀어 빨간 원문이 됐다(2026-09-22).
+  //     다열·& 있는 표는 아래 표 경로(parseTabularBlock, CSS 격자)로 보낸다.
   rawWithMarkers = rawWithMarkers.replace(
     /\\begin\{array\}\s*\{\|[^}]*\|\}([\s\S]*?)\\end\{array\}/gi,
     (m, body) => {
       if (!/\\hline/.test(body)) return m;
+      const spec = /\\begin\{array\}\s*\{([^}]*)\}/i.exec(m)?.[1] ?? '';
+      const cols = (spec.match(/[clr]/gi) || []).length;
+      if (cols >= 2 || /&|\\multicolumn/.test(body)) return m;
       const idx = solutionBoxes.length;
       const cleaned = body
         .replace(/\\hline\s*/g, '')
@@ -435,10 +442,14 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
               {el.rows.map((row, ri) => (
                 <tr key={ri}>
                   {row.map((cell, ci) => {
+                    // ★ 병합 셀(\multicolumn): 실제 열 위치는 앞 셀들의 span 합
+                    const rowSpans = el.spans?.[ri];
+                    const span = rowSpans?.[ci] ?? 1;
+                    const colStart = rowSpans ? rowSpans.slice(0, ci).reduce((a, b) => a + b, 0) : ci;
                     // 세로줄: verticalLines에 해당 열 인덱스가 있으면 왼쪽에 border
-                    const hasLeftBorder = vLines.includes(ci);
-                    // ★ 마지막 열 오른쪽 border: vLines에 열 개수(ci+1)가 있으면
-                    const hasRightBorder = ci === row.length - 1 && vLines.includes(ci + 1);
+                    const hasLeftBorder = vLines.includes(colStart);
+                    // ★ 마지막 열 오른쪽 border: vLines에 끝 열이 있으면
+                    const hasRightBorder = ci === row.length - 1 && vLines.includes(colStart + span);
                     // ★ 윗줄: hasHlines[ri]가 true면 이 행 위에 경계선
                     //   (border-collapse 상태에서는 <tr> 경계가 렌더 안 되므로 <td>에 적용)
                     const topBorder = el.hasHlines[ri] ? 'border-t-2 border-t-gray-500' : '';
@@ -449,6 +460,7 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                     return (
                       <td
                         key={ci}
+                        colSpan={span > 1 ? span : undefined}
                         className={`px-3 py-1.5 text-center ${topBorder} ${bottomBorder} ${leftBorder} ${rightBorder}`}
                       >
                         <TableCell cell={cell} />
@@ -701,7 +713,7 @@ type ContentElement = ({ bold?: boolean }) & (
   | { type: 'image'; value: string; alt?: string }
   | { type: 'bold'; value: string }
   | { type: 'tag'; value: string }
-  | { type: 'table'; rows: string[][]; hasHlines: boolean[]; verticalLines?: number[] });
+  | { type: 'table'; rows: string[][]; hasHlines: boolean[]; verticalLines?: number[]; spans?: number[][] });
 
 /**
  * ★ 방어망 — 짝이 안 맞는(orphan) 표 마크업 제거.
@@ -725,6 +737,9 @@ export function stripOrphanTabular(text: string): string {
   const begins = (text.match(/\\begin\{tabular\}/g) || []).length;
   const ends = (text.match(/\\end\{tabular\}/g) || []).length;
   if (begins === ends && begins > 0) return text; // 짝 맞는 정상 표 → 손대지 않음
+  // ★ `\begin{array}` 표(테두리 있는 데이터 표)의 \hline 은 잔재가 아니다 — tabular 만 세다가 array 표의 \hline 을
+  //   전부 지워 격자가 사라지던 것(분포고 #7, 2026-09-22). array 가 있으면 손대지 않는다.
+  if (begins === 0 && ends === 0 && /\\begin\{array\}/.test(text)) return text;
   if (begins === 0 && ends === 0) {
     // 표는 없는데 \hline 만 떠도는 잔재(보기 조각 등) → \hline 만 제거
     return text.replace(/\\hline/g, '').replace(/[ \t]{2,}/g, ' ').trim();
@@ -1130,6 +1145,8 @@ function parseTabularBlock(block: string): ContentElement {
 
   const rows: string[][] = [];
   const hasHlines: boolean[] = [];
+  const spans: number[][] = [];
+  let anySpan = false;
 
   // \\ 또는 줄바꿈으로 행 분리
   const rawRows = inner.split(/\\\\\s*|\n/).filter(r => r.trim());
@@ -1153,9 +1170,13 @@ function parseTabularBlock(block: string): ContentElement {
 
     if (!rowContent) continue;
 
-    // & 로 셀 분리
-    const cells = rowContent.split('&').map(cell => cell.trim());
+    // & 로 셀 분리 — `\multicolumn{n}{spec}{내용}` 은 내용 + span (table-multicolumn.ts)
+    const parsedCells = rowContent.split('&').map(cell => splitMulticolumn(cell));
+    const cells = parsedCells.map((c) => c.content);
+    const rowSpans = parsedCells.map((c) => c.span);
+    if (rowSpans.some((s) => s > 1)) anySpan = true;
     rows.push(cells);
+    spans.push(rowSpans);
 
     // hline 플래그가 아직 설정 안 되어있으면 false
     if (hasHlines[rows.length - 1] === undefined) {
@@ -1163,7 +1184,7 @@ function parseTabularBlock(block: string): ContentElement {
     }
   }
 
-  return { type: 'table', rows, hasHlines, verticalLines: verticalLines.length > 0 ? verticalLines : undefined };
+  return { type: 'table', rows, hasHlines, verticalLines: verticalLines.length > 0 ? verticalLines : undefined, spans: anySpan ? spans : undefined };
 }
 
 function parseMixedContent(text: string): ContentElement[] {
@@ -1194,7 +1215,8 @@ function parseMixedContent(text: string): ContentElement[] {
       // $...$나 $$...$$ 내부의 array도 KaTeX가 처리해야 함
       // ★ tabular는 항상 추출 (tabular 내부에 $...$가 있어 $ 카운팅이 꼬이므로)
       // array만 수식 내부 체크 (cases/piecewise 함수 등)
-      if (/\\begin\{array\}/i.test(match)) {
+      // ★ `\multicolumn` 이 든 array 는 KaTeX 가 못 그린다(미지원) → 수식 안이어도 표로 뽑는다 (분포고 #7, 2026-09-22)
+      if (/\\begin\{array\}/i.test(match) && !/\\multicolumn/.test(match)) {
         const textBefore = fullText.substring(0, offset);
         const dollarCount = (textBefore.match(/(?<!\$)\$(?!\$)/g) || []).length;
         const doubleDollarCount = (textBefore.match(/\$\$/g) || []).length;
