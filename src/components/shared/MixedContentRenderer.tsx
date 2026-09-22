@@ -1,6 +1,7 @@
 'use client';
 
 import { trimNewlinesAroundBlocks } from './block-gap';
+import { markBoldAcrossElements } from './bold-span';
 import { stripEmptyMath } from './empty-math';
 import React, { memo, useMemo, useRef } from 'react';
 import katex from 'katex';
@@ -306,6 +307,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // compactInlineMath: 조건/보기 박스 안에서 인라인 cases 등을 textstyle 로(=\displaystyle 생략)
   //   렌더해 항목 세로 간격을 좁힌다. 박스 밖(본문)은 false → 기존 동작 유지.
   const renderElement = (el: ContentElement, i: number, compactInlineMath = false) => {
+    if (el.bold && (el.type === 'text' || el.type === 'inline-math')) {
+      const inner = renderElement({ ...el, bold: false } as ContentElement, i, compactInlineMath);
+      return <strong key={i} className="font-bold">{inner}</strong>;
+    }
     if (el.type === 'text') {
       return <TextSegment key={i} text={el.value} />;
     }
@@ -689,14 +694,14 @@ function renderInlineFormatting(text: string): React.ReactNode[] {
   return parts.length > 0 ? parts : [text];
 }
 
-type ContentElement =
+type ContentElement = ({ bold?: boolean }) & (
   | { type: 'text'; value: string }
   | { type: 'inline-math'; value: string }
   | { type: 'display-math'; value: string }
   | { type: 'image'; value: string; alt?: string }
   | { type: 'bold'; value: string }
   | { type: 'tag'; value: string }
-  | { type: 'table'; rows: string[][]; hasHlines: boolean[]; verticalLines?: number[] };
+  | { type: 'table'; rows: string[][]; hasHlines: boolean[]; verticalLines?: number[] });
 
 /**
  * ★ 방어망 — 짝이 안 맞는(orphan) 표 마크업 제거.
@@ -1294,6 +1299,9 @@ function parseMixedContent(text: string): ContentElement[] {
 
   // ★ 블록(조건 박스·표·그림·디스플레이 수식) 앞뒤 줄바꿈 걷기 — 박스 위아래가 40px 씩 벌어지던 사고 (2026-09-21)
   trimNewlinesAroundBlocks(elements);
+  // ★ 수식을 사이에 둔 `**굵게**` — 요소 경계를 넘어 bold 표시 (bold-span.ts, 2026-09-22)
+  const boldMarked = markBoldAcrossElements(elements);
+  if (boldMarked !== elements) { elements.length = 0; elements.push(...boldMarked); }
 
   // ★ 후처리: 조립제법 표 직전의 짧은 텍스트/수식을 표의 첫 번째 열에 병합
   // OCR에서 "$k" 같은 텍스트가 표 바깥에 나오는 경우 처리
