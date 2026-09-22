@@ -16,9 +16,9 @@ describe('markBoldAcrossElements — 수식을 사이에 둔 **굵게** (주례�
     const out = markBoldAcrossElements([t('앞 **가운데** 뒤')]);
     expect(out.map((e) => [e.value, !!e.bold])).toEqual([['앞 ', false], ['가운데', true], [' 뒤', false]]);
   });
-  it('짝이 안 맞으면 원문 보존', () => {
-    const src = [t('값 ** 그대로'), m('x')];
-    expect(markBoldAcrossElements(src)).toBe(src);
+  it('★ 짝이 안 맞으면 굵게 없이 ** 만 걷는다 — 인쇄 지면에 찌꺼기 노출 금지', () => {
+    const out = markBoldAcrossElements([t('값 ** 그대로'), m('x')]);
+    expect(out.map((e) => [e.value, !!e.bold])).toEqual([['값  그대로', false], ['x', false]]);
   });
   it('** 가 없으면 원본 배열 반환', () => {
     const src = [t('a'), m('b')];
