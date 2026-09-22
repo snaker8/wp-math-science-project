@@ -34,11 +34,43 @@ const SYMBOL_MAP_KOREAN: Array<{ jamo: string; circled: string }> = [
   { jamo: 'ㅊ', circled: '㉩' },
 ];
 
+// ★ Mathpix 가 ㉠ 을 내보내는 꼴 3가지 (2026-09-22, 학장중 24-2-2-M #7 증명 박스 실측):
+//   `(ㄱ)` · `(ㄱ.` (닫는 괄호 대신 점) · `(ㄱ` 뒤에 공백/한글 (괄호가 안 닫힘).
+//   종전엔 `(ㄱ)` 만 봐서 `(ㄱ.~(ㅁ.에 들어갈` 은 의심 패턴에도 안 걸려 Flash 를 부르지도 않았다.
+export function jamoOcrPattern(jamo: string, flags = 'g'): RegExp {
+  return new RegExp(`\\(\\s*${jamo}\\s*(?:\\)|\\.|(?=[\\s가-힣~〜]))`, flags);
+}
+
 // 의심 패턴 — 이 중 하나라도 ocrText 에 있어야 Flash 호출
 const SUSPICIOUS_REGEX = new RegExp(
-  SYMBOL_MAP_KOREAN.map(({ jamo }) => `\\(\\s*${jamo}\\s*\\)`).join('|'),
+  SYMBOL_MAP_KOREAN.map(({ jamo }) => jamoOcrPattern(jamo, '').source).join('|'),
   'g'
 );
+
+/**
+ * 순수 교정 — Flash 가 본 동그라미 한글(detected)에 대해서만 Mathpix 꼴을 ㉠ 로 바꾼다.
+ * 빈칸 `□`(U+25A1) 은 라벨과 붙어 있으면 `\boxed{㉢}`, 홀로면 `\boxed{\ \ }` — 증명 박스의 빈칸 표현.
+ */
+export function repairCircledJamoText(ocrText: string, detected: string[]): { repairedText: string; repairCount: number } {
+  let repairedText = ocrText;
+  let repairCount = 0;
+  for (const { jamo, circled } of SYMBOL_MAP_KOREAN) {
+    if (!detected.includes(circled)) continue;
+    const ocrPattern = jamoOcrPattern(jamo);
+    const count = (repairedText.match(ocrPattern) || []).length;
+    if (count > 0) {
+      repairedText = repairedText.replace(ocrPattern, circled);
+      repairCount += count;
+    }
+  }
+  if (repairCount > 0 && /□/.test(repairedText)) {
+    repairedText = repairedText
+      .replace(/□\s*([㉠-㉩])/g, '\\boxed{$1}')
+      .replace(/([㉠-㉩])\s*□/g, '\\boxed{$1}')
+      .replace(/□/g, '\\boxed{\\ \\ }');
+  }
+  return { repairedText, repairCount };
+}
 
 export interface SymbolDetectionResult {
   repairedText: string;
@@ -145,20 +177,8 @@ export async function detectAndRepairSymbols(
     return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: true };
   }
 
-  // 4) 비교 — Mathpix `(ㄱ)` + Flash `㉠` 동시 탐지 시에만 교정
-  let repairedText = ocrText;
-  let repairCount = 0;
-  for (const { jamo, circled } of SYMBOL_MAP_KOREAN) {
-    const ocrPattern = new RegExp(`\\(\\s*${jamo}\\s*\\)`, 'g');
-    if (ocrPattern.test(repairedText) && detected.includes(circled)) {
-      const matches = repairedText.match(ocrPattern);
-      const count = matches?.length ?? 0;
-      if (count > 0) {
-        repairedText = repairedText.replace(ocrPattern, circled);
-        repairCount += count;
-      }
-    }
-  }
+  // 4) 비교 — Mathpix `(ㄱ)`/`(ㄱ.`/`(ㄱ ` + Flash `㉠` 동시 탐지 시에만 교정 (순수 함수, 회귀 테스트)
+  const { repairedText, repairCount } = repairCircledJamoText(ocrText, detected);
 
   if (repairCount > 0) {
     console.log(
