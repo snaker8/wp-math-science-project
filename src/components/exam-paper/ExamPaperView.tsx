@@ -35,6 +35,7 @@ import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { CoverPage, CoverPanel, DEFAULT_COVER, type CoverSettings } from './CoverPage';
+import { quickAnswerDisplay } from './quick-answer-display';
 import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 /** 해설에서 [선택지 검증] 섹션 제거 (기존 DB 데이터 호환) — 페이지에서 함께 이동 */
@@ -1567,32 +1568,12 @@ export function QuickAnswerView({
                 // ★ 단답형·서술형 모두 "값"만 수식으로 렌더 — 학생 채점 가능한 형태
                 //   빠른정답은 수식 LaTeX 그대로 노출돼선 안 되고 KaTeX로 정식 렌더돼야 함
                 if (!isMC) {
-                  let display = str;
-                  // ★ 다부분 서답형((1)(2)(3))·여러 줄·연립({cases}) 답은 결론부 추출/$강제래핑이
-                  //   답을 망가뜨린다 (예: "...y=125$ (3) 빨래..."에서 "125$ (3)..."만 잘려 + 닫는 $ 고아).
-                  //   → 구조형이면 추출/래핑 모두 건너뛰고 원문 그대로 렌더.
-                  const isMultiPart = /\(\s*[1-9]\s*\)[\s\S]*\(\s*[2-9]\s*\)/.test(str)
-                    || /\n/.test(str)
-                    || /\\begin\{(?:cases|aligned|array)\}/.test(str);
-                  if (!isMultiPart) {
-                    const tailEq = str.match(/=\s*([^=]+?)\s*(?:이다\s*[.]?|입니다\s*[.]?|\.?)\s*$/);
-                    const conclusion = str.match(/(?:따라서|그러므로|∴|답은|정답은|최종\s*답은?)\s*([^.]+?)(?:\s*이다\s*[.]?|\s*입니다\s*[.]?|\.?)\s*$/);
-                    if (str.length > 40 && tailEq && tailEq[1].trim().length < 40) {
-                      display = tailEq[1].trim();
-                    } else if (str.length > 40 && conclusion && conclusion[1].trim().length < 40) {
-                      display = conclusion[1].trim();
-                    }
-                    // ★ $ 래핑 없으면 수식 기호 탐지해 자동 래핑 (KaTeX 렌더링 보장)
-                    //   예: "b^{-4}" → "$b^{-4}$", "6x^5y^8" → "$6x^5y^8$", "x=5" → "$x=5$"
-                    const hasDollar = /\$/.test(display);
-                    const looksLikeMath = /[\\^_{}]|\\frac|\\sqrt|\\dfrac|[a-zA-Z]\s*[=+\-*/]|[0-9]+\s*[+\-*/]\s*[0-9]/.test(display);
-                    if (!hasDollar && looksLikeMath) {
-                      display = `$${display}$`;
-                    }
-                  }
-                  // ★ 서답형은 다줄 답이 좁게 들어가지 않도록 세로 여유 확보 (빠른답 행 간격)
+                  // ★ 서답형 표시 규칙은 quick-answer-display.ts (순수 함수, 회귀 테스트). 소문항 라벨·한글 서술은
+                  //   수식으로 감싸지 않고 라벨마다 줄바꿈, 결론부 추출의 고아 `$` 는 걷는다 (학장중 24-2-2-M, 2026-09-22).
+                  const display = quickAnswerDisplay(str);
+                  const isLong = /\n/.test(display) || display.length > 40;
                   return (
-                    <div className="flex items-center justify-center min-h-[2.6em] leading-relaxed">
+                    <div className={`flex items-center min-h-[2.6em] leading-relaxed ${isLong ? 'justify-start text-left text-[12px]' : 'justify-center'}`}>
                       <MixedContentRenderer content={display} className="text-blue-700" />
                     </div>
                   );
