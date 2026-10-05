@@ -1,5 +1,6 @@
 'use client';
 
+import { SLANT_PARALLEL } from './parallel-symbol';
 import React, { useMemo, useRef } from 'react';
 import katex from 'katex';
 import { balanceBraces, balanceLeftRight } from './latex-balance';
@@ -55,6 +56,9 @@ export function MathRenderer({ content, block = false, className, compact = fals
                 .replace(/^\s*\\displaystyle\s*/, '')
                 // ★ KaTeX에서 \square가 기호로 인식 안 되는 문제 → 빈 네모 박스로 변환
                 .replace(/\\square/g, '\\boxed{\\phantom{X}}')
+                // ★ 평행 ∥ → //(사선) · 호 \overparen → \overset{\frown} — 한국 교과서 표기 (parallel-symbol.ts, 2026-10-05)
+                .replace(/\\parallel(?![a-zA-Z])|∥/g, SLANT_PARALLEL)
+                .replace(/\\(?:overparen|wideparen|overarc)(?![a-zA-Z])/g, '\\overset{\\frown}')
                 // ★ % 는 KaTeX(TeX) 주석 문자 — 수식 안 `$20%$` 가 `%`부터 주석 처리돼 통째로
                 //   사라지던 사고. 이스케이프 안 된 % 를 \% 로(백분율 기호). (2026-06-20 긴급)
                 .replace(/(?<!\\)%/g, '\\%')
