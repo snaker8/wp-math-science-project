@@ -290,16 +290,25 @@ function EditorPanel({
   //   그림은 본문 텍스트의 마커(`[도형...]` 또는 `![이미지](...)`) 위치로 자리가 정해짐(splitByFigureMarker).
   //   마커 문자열만 재배치 → 그림 소스/파이프라인 불변. 첫 마커 기준(보통 문제당 1개).
   const FIGURE_MARKER_RE = /(!\[[^\]]*\]\([^)]*\)|\[도형(?::[\w-]+)?(?::\d+%?)?\])/;
-  const hasFigureMarker = FIGURE_MARKER_RE.test(value);
-  const moveFigure = (to: 'top' | 'bottom') => {
-    const m = value.match(FIGURE_MARKER_RE);
+  // ★ 그림이 여러 개일 때 (2026-10-05, 대표 「이동 기능은 있는데 2개가 작동 안 한다」):
+  //   종전엔 첫 마커만 옮겼다. 그림마다 맨위/맨아래 + 이웃과 순서 바꾸기(⇅).
+  const figureMarkers = Array.from(value.matchAll(new RegExp(FIGURE_MARKER_RE.source, 'g')));
+  const hasFigureMarker = figureMarkers.length > 0;
+  const tidy = (s: string) => s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const moveFigure = (to: 'top' | 'bottom', idx = 0) => {
+    const m = figureMarkers[idx];
     if (!m || m.index == null) return;
     const marker = m[0];
-    let rest = (value.slice(0, m.index) + value.slice(m.index + marker.length))
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    const next = to === 'top' ? `${marker}\n${rest}` : `${rest}\n${marker}`;
+    const rest = tidy(value.slice(0, m.index) + value.slice(m.index + marker.length));
+    onChange(to === 'top' ? `${marker}\n${rest}` : `${rest}\n${marker}`);
+  };
+  // 마커 idx ↔ idx+1 자리 교환. 마커 글자가 같으면([도형]·[도형]) 본문은 안 변한다 — 그때는 자산화 뒤
+  //   클라우드 카드의 ⇅(이미지 순서)로 바꾼다. 그림(![이미지](…))은 서로 달라 여기서 바로 바뀐다.
+  const swapFigures = (idx: number) => {
+    const a = figureMarkers[idx], b = figureMarkers[idx + 1];
+    if (!a || !b || a.index == null || b.index == null) return;
+    if (a[0] === b[0]) return;
+    const next = value.slice(0, a.index) + b[0] + value.slice(a.index + a[0].length, b.index) + a[0] + value.slice(b.index + b[0].length);
     onChange(next);
   };
 
@@ -352,16 +361,28 @@ function EditorPanel({
         />
         {/* ★ 그림 위치 이동 — 본문에 그림 마커가 있을 때만. 맨위/맨아래로 재배치 */}
         {hasFigureMarker && (
-          <div className="flex items-center gap-1 ml-auto flex-shrink-0">
-            <span className="text-[10px] text-gray-400">그림</span>
-            <button type="button" onClick={() => moveFigure('top')} title="그림을 문제 맨 위로"
-              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors">
-              <ArrowUpToLine className="h-3 w-3" /> 맨위
-            </button>
-            <button type="button" onClick={() => moveFigure('bottom')} title="그림을 문제 맨 아래로"
-              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors">
-              <ArrowDownToLine className="h-3 w-3" /> 맨아래
-            </button>
+          <div className="flex flex-wrap items-center gap-1 ml-auto flex-shrink-0">
+            {figureMarkers.map((_, idx) => (
+              <React.Fragment key={idx}>
+                <span className="text-[10px] text-gray-400">{figureMarkers.length > 1 ? `그림${idx + 1}` : '그림'}</span>
+                <button type="button" onClick={() => moveFigure('top', idx)} title={`그림${idx + 1}을 문제 맨 위로`}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors">
+                  <ArrowUpToLine className="h-3 w-3" /> 맨위
+                </button>
+                <button type="button" onClick={() => moveFigure('bottom', idx)} title={`그림${idx + 1}을 문제 맨 아래로`}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors">
+                  <ArrowDownToLine className="h-3 w-3" /> 맨아래
+                </button>
+                {idx < figureMarkers.length - 1 && (
+                  <button type="button" onClick={() => swapFigures(idx)}
+                    title={figureMarkers[idx][0] === figureMarkers[idx + 1][0] ? '두 자리가 같은 [도형] 표시라 여기선 못 바꿉니다 — 자산화 뒤 카드의 ⇅ 로 바꾸세요' : `그림${idx + 1}과 그림${idx + 2}의 자리를 바꿉니다`}
+                    disabled={figureMarkers[idx][0] === figureMarkers[idx + 1][0]}
+                    className="px-1.5 py-0.5 rounded text-[11px] text-gray-500 border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    ⇅
+                  </button>
+                )}
+              </React.Fragment>
+            ))}
           </div>
         )}
       </div>
