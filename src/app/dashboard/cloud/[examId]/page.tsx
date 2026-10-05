@@ -1060,6 +1060,16 @@ function ProblemCardView({
                       ))}
                     </>
                   )}
+                  {/* ★ 도식 추가 — 종전엔 교체 버튼뿐이라 세 번째 그림이 늘 둘 중 하나를 덮어썼다 (대표 2026-10-05) */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onReplaceDiagram?.(problem, -1); }}
+                    className="px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors text-content-secondary bg-white/[.04] border border-white/[.08] hover:bg-white/[.06] hover:text-content-primary"
+                    title="도식을 하나 더 붙입니다 — 본문 끝에 [도형] 자리가 같이 생깁니다 (위치는 본문 편집에서 [도형] 을 옮기면 됩니다)"
+                  >
+                    <ImageIcon className="h-3 w-3" />
+                    도식 추가
+                  </button>
                 </>
               );
             })()}
@@ -1697,8 +1707,9 @@ export default function CloudExamDetailPage() {
         hasFigure: true,
         figureSource: meta?.svgSource ? 'ai_generated' : 'diagram_db',
       };
-      // ★ 첫 번째 이미지(index 0) 교체 시
-      if (diagramReplaceIndex <= 0) {
+      // ★ 첫 번째 이미지(index 0) 교체 시 — 또는 그림이 하나도 없던 문제에 처음 추가할 때.
+      //   종전 `<= 0` 은 「추가(-1)」까지 첫 그림 교체로 취급해 1번 그림(SVG/업스케일)을 새 그림으로 덮어썼다.
+      if (diagramReplaceIndex === 0 || (isAppend && figureCrops.length === 0)) {
         delete updatedAi.figureData;
         if (meta?.svgSource) {
           // ★ SVG 코드: figureSvg에 저장 + upscaledCropUrl 삭제 (SVG가 최우선)
@@ -1712,17 +1723,28 @@ export default function CloudExamDetailPage() {
         }
       }
 
+      // ★ 새로 추가할 때(교체 아님): 본문의 [도형]/![이미지] 자리 수가 그림 수보다 적으면 끝에 [도형] 을 하나 붙인다.
+      //   그림은 본문 마커 순서로만 그려지므로 자리가 없으면 저장돼도 안 보인다.
+      const isAppend = !(diagramReplaceIndex >= 0 && diagramReplaceIndex < figureCrops.length);
+      let contentPatch: { content_latex?: string } = {};
+      if (isAppend) {
+        const c = diagramBrowserProblem.content || '';
+        const markerCount = (c.match(/\[도형(?::[^\]]*)?\]/g) || []).length + (c.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
+        if (markerCount < newFigureCrops.length) contentPatch = { content_latex: `${c.replace(/\s+$/, '')}\n[도형]` };
+      }
+
       const patchRes = await fetch(`/api/problems/${diagramBrowserProblem.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           images: newImages,
           ai_analysis: updatedAi,
+          ...contentPatch,
         }),
       });
 
       if (patchRes.ok) {
-        console.log(`[DiagramReplace] Problem #${diagramBrowserProblem.number} 도식 교체 완료`);
+        console.log(`[DiagramReplace] Problem #${diagramBrowserProblem.number} 도식 ${isAppend ? '추가' : '교체'} 완료`);
         refetchProblems();
 
         // ★ 교정 이력 자동 기록 (자동 학습용)
