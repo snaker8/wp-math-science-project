@@ -810,6 +810,7 @@ function ProblemCardView({
   onGenerateAIFigure,
   onDeleteFigure,
   onReplaceDiagram,
+  onSwapFigures,
   onUpdateContent,
   onUpdatePoints,
   isSelectionMode,
@@ -827,6 +828,8 @@ function ProblemCardView({
   onGenerateAIFigure?: (p: ProblemData) => void;
   onDeleteFigure?: (p: ProblemData) => void;
   onReplaceDiagram?: (p: ProblemData, figureIndex?: number) => void;
+  /** 도식 idx ↔ idx+1 순서 바꾸기 (그림은 images 순서로 [도형] 자리에 들어가므로 순서가 곧 위치) */
+  onSwapFigures?: (p: ProblemData, idx: number) => void;
   onUpdateContent?: (problemId: string, content: string) => Promise<void>;
   onUpdatePoints?: (problemId: string, points: number | null) => Promise<void>;
   isSelectionMode?: boolean;
@@ -1047,16 +1050,28 @@ function ProblemCardView({
                   ) : (
                     <>
                       {Array.from({ length: imageCount }, (_, idx) => (
-                        <button
-                          key={`replace-${idx}`}
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); onReplaceDiagram?.(problem, idx); }}
-                          className="px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors text-content-secondary bg-white/[.04] border border-white/[.08] hover:bg-white/[.06] hover:text-content-primary"
-                          title={`도식 ${idx + 1} 교체`}
-                        >
-                          <ImageIcon className="h-3 w-3" />
-                          도식{idx + 1}
-                        </button>
+                        <React.Fragment key={`replace-${idx}`}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onReplaceDiagram?.(problem, idx); }}
+                            className="px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 transition-colors text-content-secondary bg-white/[.04] border border-white/[.08] hover:bg-white/[.06] hover:text-content-primary"
+                            title={`도식 ${idx + 1} 교체`}
+                          >
+                            <ImageIcon className="h-3 w-3" />
+                            도식{idx + 1}
+                          </button>
+                          {/* ★ 순서 바꾸기 — [도형] 자리는 글자라 본문을 옮겨도 그림 순서는 안 바뀐다. images 순서를 바꿔야 한다 (대표 2026-10-05) */}
+                          {idx < imageCount - 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); onSwapFigures?.(problem, idx); }}
+                              className="px-1.5 py-1 rounded-md text-[10px] font-medium transition-colors text-content-tertiary bg-white/[.04] border border-white/[.08] hover:bg-white/[.06] hover:text-content-primary"
+                              title={`도식 ${idx + 1} 과 ${idx + 2} 의 자리를 바꿉니다`}
+                            >
+                              ⇅
+                            </button>
+                          )}
+                        </React.Fragment>
                       ))}
                     </>
                   )}
@@ -1662,6 +1677,29 @@ export default function CloudExamDetailPage() {
   // ★ 도식 교체 모달 상태
   const [diagramBrowserProblem, setDiagramBrowserProblem] = useState<ProblemData | null>(null);
   const [diagramReplaceIndex, setDiagramReplaceIndex] = useState<number>(-1); // -1 = 새로 추가
+
+  // ★ 도식 순서 바꾸기 — figure_crop[idx] ↔ [idx+1]. 첫 그림이 바뀌면 ai_analysis.upscaledCropUrl 도 따라간다
+  //   (첫 그림은 FigureRenderer 가 upscaledCropUrl 로 그리므로 images 만 바꾸면 화면이 안 바뀐다).
+  const handleSwapFigures = useCallback(async (problem: ProblemData, idx: number) => {
+    const all = problem.images || [];
+    const figs = all.filter((img) => img.type === 'figure_crop');
+    const rest = all.filter((img) => img.type !== 'figure_crop');
+    if (idx < 0 || idx + 1 >= figs.length) return;
+    const swapped = [...figs];
+    [swapped[idx], swapped[idx + 1]] = [swapped[idx + 1], swapped[idx]];
+    const body: Record<string, unknown> = { images: [...rest, ...swapped] };
+    if (idx === 0 && !problem.figureSvg && !problem.figureData) {
+      try {
+        const r = await fetch(`/api/problems/${problem.id}`);
+        const ai = r.ok ? ((await r.json()).ai_analysis || {}) : {};
+        if (typeof ai.upscaledCropUrl === 'string' && ai.upscaledCropUrl === figs[0].url) {
+          body.ai_analysis = { ...ai, upscaledCropUrl: swapped[0].url };
+        }
+      } catch { /* ai_analysis 못 읽으면 images 만 */ }
+    }
+    const res = await fetch(`/api/problems/${problem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) refetchProblems();
+  }, [refetchProblems]);
 
   const handleReplaceDiagram = useCallback((problem: ProblemData, figureIndex?: number) => {
     setDiagramBrowserProblem(problem);
@@ -2867,6 +2905,7 @@ export default function CloudExamDetailPage() {
                         onGenerateAIFigure={handleGenerateAIFigure}
                         onDeleteFigure={handleDeleteFigure}
                         onReplaceDiagram={handleReplaceDiagram}
+                        onSwapFigures={handleSwapFigures}
                         onUpdateContent={handleUpdateContent}
                         onUpdatePoints={handleUpdatePoints}
                         isSelectionMode={isSelectionMode}
