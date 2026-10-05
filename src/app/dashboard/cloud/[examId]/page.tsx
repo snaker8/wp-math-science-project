@@ -1692,6 +1692,7 @@ export default function CloudExamDetailPage() {
         ];
       }
 
+      const isAppend = !(diagramReplaceIndex >= 0 && diagramReplaceIndex < figureCrops.length);
       const newImages = [...nonFigureCrops, ...newFigureCrops];
 
       // ai_analysis에 hasFigure + upscaledCropUrl 설정
@@ -1725,7 +1726,6 @@ export default function CloudExamDetailPage() {
 
       // ★ 새로 추가할 때(교체 아님): 본문의 [도형]/![이미지] 자리 수가 그림 수보다 적으면 끝에 [도형] 을 하나 붙인다.
       //   그림은 본문 마커 순서로만 그려지므로 자리가 없으면 저장돼도 안 보인다.
-      const isAppend = !(diagramReplaceIndex >= 0 && diagramReplaceIndex < figureCrops.length);
       let contentPatch: { content_latex?: string } = {};
       if (isAppend) {
         const c = diagramBrowserProblem.content || '';
