@@ -3860,6 +3860,48 @@ export default function AnalyzeJobPage() {
         return null;
       }
     };
+    // ★ 413 FUNCTION_PAYLOAD_TOO_LARGE (2026-10-05, 대표 캡처 「이 문구 경고는 첨 보네」):
+    //   크롭·페이지 이미지는 이미 Storage 로 직접 올렸지만, **본문에 삽입한 도형(![이미지](data:…))과
+    //   그림 객관식(choiceImages) 의 base64 는 PUT 본문에 그대로 실렸다.** 도형 몇 장이면 4.5MB 를 넘긴다.
+    //   → 같은 업로드 프록시로 미리 올리고 공개 URL 로 바꿔 보낸다. 서버는 URL 이면 그대로 쓴다(기존 분기).
+    const uploadDataUrlGetPublic = async (dataUrl: string, storagePath: string): Promise<string | null> => {
+      const m = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,/);
+      if (!m) return null;
+      const ext = m[1] === 'jpg' ? 'jpeg' : m[1];
+      try {
+        const res = await fetch('/api/storage/upload-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64: dataUrl, path: storagePath, contentType: `image/${ext}` }),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return (data.publicUrl as string) || null;
+      } catch { return null; }
+    };
+    const offloadInlineImages = async (content: string | undefined, num: number): Promise<string | undefined> => {
+      if (!content || !content.includes('data:image/')) return content;
+      const re = /!\[([^\]]*)\]\((data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+)\)/g;
+      let out = content; let idx = 0; let mm: RegExpExecArray | null;
+      const found: Array<{ full: string; alt: string; data: string }> = [];
+      while ((mm = re.exec(content)) !== null) found.push({ full: mm[0], alt: mm[1], data: mm[2] });
+      for (const f of found) {
+        const url = await uploadDataUrlGetPublic(f.data, `problem-crops/${jobId}/problem-${num}-figure${idx > 0 ? `-${idx}` : ''}.png`);
+        if (url) out = out.replace(f.full, `![${f.alt}](${url})`);
+        idx++;
+      }
+      return out;
+    };
+    const offloadChoiceImages = async (imgs: (string | null)[] | undefined, num: number): Promise<(string | null)[] | undefined> => {
+      if (!imgs || !imgs.some((s) => !!s && s.startsWith('data:image/'))) return imgs;
+      const out = [...imgs];
+      for (let ci = 0; ci < out.length; ci++) {
+        const s = out[ci];
+        if (!s || !s.startsWith('data:image/')) continue;
+        const url = await uploadDataUrlGetPublic(s, `problem-crops/${jobId}/problem-${num}-choice-${ci}.png`);
+        if (url) out[ci] = url;
+      }
+      return out;
+    };
     try {
       // ★ 수정된 문제 데이터(난이도 등) + 크롭 이미지 + bbox를 수집하여 PUT 요청에 포함
       const editedProblems: Array<{ number: number; difficulty?: number; typeCode?: string; typeName?: string; cognitiveDomain?: string; content?: string; answer?: string | number; cropImagePath?: string; cropImageBase64?: string; solution?: string; choices?: string[]; score?: number; bbox?: { x: number; y: number; w: number; h: number }; pageIndex?: number; figureBboxes?: Array<{ x: number; y: number; w: number; h: number }>; pitfalls?: Array<{ code: string; confidence: number; reason?: string }>; choiceImages?: Array<string | null>; choiceHeaders?: string[]; choiceLayout?: number; isEdited?: boolean }> = [];
@@ -3915,6 +3957,10 @@ export default function AnalyzeJobPage() {
               w: img.cropRelativeRect.w,
               h: img.cropRelativeRect.h,
             }));
+            // ★ 본문 삽입 도형·그림 객관식 base64 → Storage URL (413 회피). 실패하면 base64 그대로(서버가 처리).
+            const effNumber = p.numberEdited && p.number > 0 ? p.number : globalProblemNumber;
+            const contentOffloaded = await offloadInlineImages(p.content, effNumber);
+            const choiceImagesOffloaded = await offloadChoiceImages(p.choiceImages, effNumber);
             editedProblems.push({
               // ★ 2026-08-31 사고 수정 — "클릭해서 번호를 수정하세요" 가 실제로는 안 먹었다.
               //   화면 편집은 상태에 잘 저장됐지만 여기서 순번(globalProblemNumber)으로
@@ -3933,7 +3979,7 @@ export default function AnalyzeJobPage() {
               typeCode: p.typeCode,
               typeName: p.typeName, // ★ 카드 표시용 단원 경로
               cognitiveDomain: p.cognitiveDomain,
-              content: p.content,
+              content: contentOffloaded,
               answer: p.answer,
               solution: p.solution,
               choices: p.choices,
@@ -3948,8 +3994,8 @@ export default function AnalyzeJobPage() {
               ...(p.pitfalls && p.pitfalls.length > 0 ? { pitfalls: p.pitfalls } : {}), // ★ Phase C-1b: 함정 자동 태깅
               // ★ 그림 객관식 (2026-05-19): 선택지별 이미지 (base64 또는 URL)
               //   saveEditedProblemsDirect 가 data:image base64 → Storage 업로드 + answer_json.choiceImages 박힘.
-              ...(p.choiceImages && p.choiceImages.some((img: string | null) => !!img)
-                ? { choiceImages: p.choiceImages }
+              ...(choiceImagesOffloaded && choiceImagesOffloaded.some((img: string | null) => !!img)
+                ? { choiceImages: choiceImagesOffloaded }
                 : {}),
               // ★ 표 객관식 헤더 + 레이아웃 — 자산화 시점에 answer_json 에 함께 박혀야 클라우드 표시 정상
               ...((p as { choiceHeaders?: string[] }).choiceHeaders && (p as { choiceHeaders?: string[] }).choiceHeaders!.length > 0
@@ -4022,19 +4068,32 @@ export default function AnalyzeJobPage() {
       const ASSETIZE_TIMEOUT_MS = 295_000;
       const abortCtrl = new AbortController();
       const timeoutId = setTimeout(() => abortCtrl.abort(), ASSETIZE_TIMEOUT_MS);
+      const putBody = JSON.stringify({
+        jobId,
+        editedProblems,
+        bookGroupId: effectiveBookGroupId,
+        pageImages,
+        // ★ 원본 한글 파일명 전달 (Storage 복원 경로의 sanitized 이름 대체)
+        fileName: jobData?.fileName,
+      });
+      // ★ 보내기 전 크기 점검 — Vercel 함수 본문 한도(4.5MB)를 넘기면 413 대신 어느 문제가 큰지 알려준다
+      const bodyBytes = new Blob([putBody]).size;
+      console.log(`[자산화] PUT 본문 ${(bodyBytes / 1024 / 1024).toFixed(2)}MB`);
+      if (bodyBytes > 4_300_000) {
+        clearTimeout(timeoutId);
+        const heavy = editedProblems
+          .map((ep) => ({ n: ep.number, kb: Math.round(JSON.stringify(ep).length / 1024) }))
+          .sort((a, b) => b.kb - a.kb).slice(0, 3)
+          .map((h) => `${h.n}번 ${h.kb}KB`).join(', ');
+        alert(`❌ 자산화 요청이 너무 큽니다 (${(bodyBytes / 1024 / 1024).toFixed(1)}MB > 4.3MB). 이미지가 큰 문제: ${heavy}. 해당 문제의 삽입 도형을 줄이거나 다시 올려 주세요.`);
+        return;
+      }
       let res: Response;
       try {
         res = await fetch('/api/workflow/upload', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jobId,
-            editedProblems,
-            bookGroupId: effectiveBookGroupId,
-            pageImages,
-            // ★ 원본 한글 파일명 전달 (Storage 복원 경로의 sanitized 이름 대체)
-            fileName: jobData?.fileName,
-          }),
+          body: putBody,
           signal: abortCtrl.signal,
         });
       } catch (fetchErr) {

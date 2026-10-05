@@ -1970,6 +1970,20 @@ async function saveEditedProblemsDirect(
         base64ImageRegex.lastIndex = 0;
       }
 
+      // ★ 클라이언트가 413 회피로 미리 올려 보낸 본문 도형 URL(![이미지](https://…/problem-crops/…)) 도
+      //   figure_crop 으로 등록 — 종전엔 base64 꼴만 등록해 hasFigure 가 빠졌다 (2026-10-05).
+      {
+        const urlFigRe = /!\[[^\]]*\]\((https?:\/\/[^\s)]+\/problem-crops\/[^\s)]+)\)/g;
+        let um: RegExpExecArray | null;
+        while ((um = urlFigRe.exec(contentLatex)) !== null) {
+          const url = um[1];
+          if (!imagesArray.some((im) => im.url === url)) {
+            imagesArray.push({ url, type: 'figure_crop', label: `수동 삽입 도형${figureIdx > 0 ? ` ${figureIdx + 1}` : ''}` });
+            figureIdx++;
+          }
+        }
+      }
+
       // ★ 그림 객관식 (2026-05-19): edited.choiceImages 의 base64 data URL → Storage 업로드.
       //   각 선택지 이미지를 problem-crops/{jobId}/problem-{N}-choice-{idx}.png 로 저장 후
       //   data URL → public URL 로 교체. 비어있거나 이미 URL 이면 그대로 보존.
