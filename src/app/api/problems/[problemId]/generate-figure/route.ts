@@ -14,6 +14,8 @@ import { interpretImage } from '@/lib/vision/image-interpreter';
 import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
 import { redrawAndVerify, verifyCandidate, GEMINI_IMAGE_MODEL } from '@/lib/vision/image-redraw';
 import { rasterizeSvg } from '@/lib/vision/svg-raster';
+import { figureRequestContext } from '@/lib/vision/correction-examples';
+import { fetchProblemTypeCode, recordSvgVerifyOutcome } from '@/lib/vision/figure-learning';
 import { tryUpscaleCrop } from '@/lib/vision/image-upscaler';
 
 /**
@@ -400,7 +402,9 @@ export async function POST(
     // (image-interpreter 내부에서 800자로 잘라서 AI에 전달)
     const contentContext = problem.content_latex || undefined;
 
-    const interpreted = await interpretImage(imageDataUri, contentContext);
+    // ★ 단원 코드를 교정 사례 조회에 전달 (AsyncLocalStorage — 같은 단원·같은 도형 사례 우선)
+    const problemTypeCode = await fetchProblemTypeCode(problemId).catch(() => null);
+    const interpreted = await figureRequestContext.run({ typeCode: problemTypeCode || undefined, problemId }, () => interpretImage(imageDataUri, contentContext));
 
     console.log(`[generate-figure] Problem ${problemId}: type=${interpreted.figureType}, confidence=${interpreted.confidence}`);
 
@@ -477,6 +481,12 @@ export async function POST(
           const { verify, labels } = await verifyCandidate(imageRawBuffer, 'image/png', svgPng);
           svgVerify = { ok: verify.ok, score: verify.score, issues: verify.issues, labels };
           console.log(`[generate-figure] SVG 검증 ${verify.ok ? '통과' : '불일치'} score=${verify.score}${verify.issues.length ? ' — ' + verify.issues.join(' / ').slice(0, 160) : ''}`);
+          // ★ 학습 신호 기록 (통과=silver 사례, 불일치=실패 교훈). fire-and-forget
+          void recordSvgVerifyOutcome({
+            problemId, svg: legacySvg, figureType: interpreted.figureType, typeCode: problemTypeCode,
+            ok: verify.ok, score: verify.score, issues: verify.issues, labels, cropUrl: targetImageUrl || null,
+            contentLatex: problem.content_latex || null, model: CLAUDE_MODELS.SONNET,
+          }).catch(() => {});
           if (!verify.ok) {
             const r = await tryGeminiRedraw(`svg_verify_failed: ${verify.issues.join(' / ').slice(0, 120)}`);
             if (r) return r;
