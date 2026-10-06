@@ -19,7 +19,7 @@ import { findAutoFolderForCurriculum, findOrCreateSchoolFolder } from '@/lib/uti
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import { extractFinalAnswerFromSolution } from '@/lib/ocr/answer-parser';
 import { repairOcrBrokenLatex } from '@/lib/utils/repair-ocr-latex';
-import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
+import { detectAndRepairSymbols, repairCircledJamoText } from '@/lib/ocr/symbol-detector';
 import { verifyAndRepairWithVision, persistVisionDiffsForLearning, applyVisionDiffs } from '@/lib/ocr/vision-verifier';
 import { loadLearnedRules, applyLearnedRules, type LearnedRule } from '@/lib/workflow/apply-learned-rules';
 import { saveDetectionAnnotations, type AnnotationDbClient } from '@/lib/workflow/detection-annotations';
@@ -1848,7 +1848,7 @@ async function saveEditedProblemsDirect(
         ? [{ url: cropImageUrl, type: 'crop', label: `문제 ${edited.number} 크롭 이미지` }]
         : [];
 
-      const choices = edited.choices || [];
+      let choices: string[] = edited.choices || [];
       const circledNumbers = ['①', '②', '③', '④', '⑤'];
       // ★ 그림 객관식 (2026-05-19): 텍스트가 비어도 choiceImages[i] 가 있으면 placeholder 유지.
       //   filter(Boolean) 로 dropping 하면 index 어긋나서 ImagePositionEditor 가 깨짐.
@@ -1883,10 +1883,15 @@ async function saveEditedProblemsDirect(
       //   실제 ㉠ 동그라미 보일 때만 변환. 의심 패턴 없는 문제는 호출 0 (비용 절감).
       //   실패 시 (네트워크/API) 원본 그대로 — fail-safe.
       try {
-        const { repairedText, repairCount } = await detectAndRepairSymbols(cropImageUrl, contentLatex);
-        if (repairCount > 0) {
-          console.log(`[Direct Save] 문제 ${edited.number}: 심볼 탐지 ${repairCount}건 교정 (㉠~㉩)`);
-          contentLatex = repairedText;
+        // ★ 보기(choices)도 같이 — 작도 순서 보기 `㉠ → ㉡ → ㉢` 가 `ㄱ → ㄴ → ㄷ` 로 벗겨지던 것 (2026-10-06).
+        //   본문+보기를 합쳐 의심 패턴·Flash 한 번, 결과(detected)로 본문·보기 각각 교정.
+        const { detected, flashCalled } = await detectAndRepairSymbols(cropImageUrl, [contentLatex, ...choices].join('\n'));
+        if (flashCalled && detected.length > 0) {
+          const c = repairCircledJamoText(contentLatex, detected);
+          let n = c.repairCount;
+          contentLatex = c.repairedText;
+          choices = choices.map((ch) => { const r = repairCircledJamoText(ch, detected); n += r.repairCount; return r.repairedText; });
+          if (n > 0) console.log(`[Direct Save] 문제 ${edited.number}: 심볼 탐지 ${n}건 교정 (㉠~㉩, 보기 포함)`);
         }
       } catch (e) {
         console.warn(`[Direct Save] 문제 ${edited.number}: 심볼 탐지 실패 (무시):`, e instanceof Error ? e.message : e);
@@ -2732,10 +2737,13 @@ async function saveProblemsToDB(
       try {
         const _pNum = result.problemNumber || problemIndex;
         const tmpCropUrl = imageUrlMap.get(_pNum);
-        const { repairedText, repairCount } = await detectAndRepairSymbols(tmpCropUrl, contentWithMath);
-        if (repairCount > 0) {
-          console.log(`[DB] 문제 ${problemIndex}: 심볼 탐지 ${repairCount}건 교정 (㉠~㉩)`);
-          contentWithMath = repairedText;
+        const { detected, flashCalled } = await detectAndRepairSymbols(tmpCropUrl, [contentWithMath, ...(result.choices || [])].join('\n'));
+        if (flashCalled && detected.length > 0) {
+          const c = repairCircledJamoText(contentWithMath, detected);
+          let n = c.repairCount;
+          contentWithMath = c.repairedText;
+          if (result.choices) result.choices = result.choices.map((ch: string) => { const r = repairCircledJamoText(ch, detected); n += r.repairCount; return r.repairedText; });
+          if (n > 0) console.log(`[DB] 문제 ${problemIndex}: 심볼 탐지 ${n}건 교정 (㉠~㉩, 보기 포함)`);
         }
       } catch (e) {
         console.warn(`[DB] 문제 ${problemIndex}: 심볼 탐지 실패 (무시):`, e instanceof Error ? e.message : e);

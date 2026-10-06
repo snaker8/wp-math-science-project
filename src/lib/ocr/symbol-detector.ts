@@ -41,9 +41,19 @@ export function jamoOcrPattern(jamo: string, flags = 'g'): RegExp {
   return new RegExp(`\\(\\s*${jamo}\\s*(?:\\)|\\.|(?=[\\s가-힣~〜]))`, flags);
 }
 
+// ★ 화살표 사슬(작도 순서 보기 `㉠ → ㉡ → ㉢`, 2026-10-06 대표 캡처): Mathpix 가 동그라미를 벗겨 `ㄱ → ㄴ → ㄷ` 로,
+//   때로 `ς`(ㅁ 오인식)·`(ㄱ.` 로 낸다. 사슬 안의 맨몸 자모는 보기 라벨(ㄱ. ㄴ.)이 아니라 동그라미 한글이다.
+//   사슬 = `→` 가 들어간 줄. 그 줄 안에서 `→`/줄 시작/`(`/공백 사이의 자모 하나.
+const ARROW_CHAIN_LINE = /^[^\n]*→[^\n]*$/gm;
+export function jamoChainPattern(jamo: string): RegExp {
+  // lead(줄 시작·공백·→)는 보존하고 여는 `(` 와 뒤 `.` 만 떼어 낸다 — 공백까지 먹으면 `㉠→㉡` 로 붙어 버린다
+  return new RegExp(`(^|\\s|→)\\(?${jamo}\\.?(?=\\s*(?:→|$|[),.]))`, 'g');
+}
+
 // 의심 패턴 — 이 중 하나라도 ocrText 에 있어야 Flash 호출
 const SUSPICIOUS_REGEX = new RegExp(
-  SYMBOL_MAP_KOREAN.map(({ jamo }) => jamoOcrPattern(jamo, '').source).join('|'),
+  SYMBOL_MAP_KOREAN.map(({ jamo }) => jamoOcrPattern(jamo, '').source).join('|')
+    + '|→[^\\n]*[ㄱㄴㄷㄹㅁς]|[ㄱㄴㄷㄹㅁς][^\\n]*→',
   'g'
 );
 
@@ -63,6 +73,18 @@ export function repairCircledJamoText(ocrText: string, detected: string[]): { re
       repairCount += count;
     }
   }
+  // ★ 화살표 사슬 안의 맨몸 자모 (+ ς 는 ㉤ 오인식) — Flash 가 본 기호만
+  repairedText = repairedText.replace(ARROW_CHAIN_LINE, (line) => {
+    let out = line;
+    for (const { jamo, circled } of SYMBOL_MAP_KOREAN) {
+      if (!detected.includes(circled)) continue;
+      out = out.replace(jamoChainPattern(jamo), (_m, lead: string) => { repairCount++; return `${lead}${circled}`; });
+    }
+    if (detected.includes('㉤')) {
+      out = out.replace(/(^|\s|→)\(?ς\.?(?=\s*(?:→|$|[),.]))/g, (_m, lead: string) => { repairCount++; return `${lead}㉤`; });
+    }
+    return out;
+  });
   if (repairCount > 0 && /□/.test(repairedText)) {
     repairedText = repairedText
       .replace(/□\s*([㉠-㉩])/g, '\\boxed{$1}')
