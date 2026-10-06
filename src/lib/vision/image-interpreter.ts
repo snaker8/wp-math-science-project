@@ -1984,6 +1984,11 @@ async function callClaudeVision(
     }
 
     const data = await response.json();
+    // ★ 비용 가시화 (2026-10-06 대표 "SVG 가 더 싸게 먹힐 수도") — 토큰·모델을 남겨 이미지 재작성과 비교 가능하게
+    if (data.usage) {
+      const u = data.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+      console.log(`[image-interpreter] claude usage model=${body.model} in=${u.input_tokens ?? 0} cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0} out=${u.output_tokens ?? 0}`);
+    }
 
     // Claude Messages API 응답에서 텍스트 추출
     if (data.content && Array.isArray(data.content)) {
