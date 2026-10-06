@@ -24,6 +24,8 @@ import {
 import {
   fetchCorrectionExamples,
   buildCorrectionPromptBlock,
+  fetchFailureLessons,
+  buildFailureLessonsBlock,
 } from './correction-examples';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -1622,14 +1624,15 @@ async function generateSvgDirect(
 
   userMessage += `\nSVG 코드만 출력하세요. 설명 없이 <svg...>로 시작하세요.`;
 
-  // ★ 교정 이력 few-shot 주입
+  // ★ 교정 이력 few-shot + 실패 교훈 주입 (typeCode 는 figureRequestContext 로 전달됨)
   try {
-    const corrections = await fetchCorrectionExamples({ figureType, limit: 3 });
-    if (corrections.length > 0) {
-      const block = buildCorrectionPromptBlock(corrections);
-      userMessage += block;
-      console.log(`[Vision/Direct] 교정 사례 ${corrections.length}건 few-shot 주입`);
-    }
+    const [corrections, lessons] = await Promise.all([
+      fetchCorrectionExamples({ figureType, limit: 3 }),
+      fetchFailureLessons({ figureType, limit: 6 }),
+    ]);
+    if (corrections.length > 0) userMessage += buildCorrectionPromptBlock(corrections);
+    if (lessons.length > 0) userMessage += buildFailureLessonsBlock(lessons);
+    if (corrections.length || lessons.length) console.log(`[Vision/Direct] 교정 사례 ${corrections.length}건 + 실패 교훈 ${lessons.length}건 주입`);
   } catch {
     // 교정 조회 실패해도 무시
   }
@@ -1708,17 +1711,15 @@ async function generateSvgStep2(
     svgUserPrompt = buildSvgPrompt(parsed, context);
   }
 
-  // ★ 교정 이력 few-shot 주입 (자동 학습)
+  // ★ 교정 이력 few-shot + 실패 교훈 주입 (자동 학습)
   try {
-    const corrections = await fetchCorrectionExamples({
-      figureType: parsed.figureType,
-      limit: 3,
-    });
-    if (corrections.length > 0) {
-      const block = buildCorrectionPromptBlock(corrections);
-      svgUserPrompt += block;
-      console.log(`[Vision] 2단계: ★ 교정 사례 ${corrections.length}건 few-shot 주입`);
-    }
+    const [corrections, lessons] = await Promise.all([
+      fetchCorrectionExamples({ figureType: parsed.figureType, limit: 3 }),
+      fetchFailureLessons({ figureType: parsed.figureType, limit: 6 }),
+    ]);
+    if (corrections.length > 0) svgUserPrompt += buildCorrectionPromptBlock(corrections);
+    if (lessons.length > 0) svgUserPrompt += buildFailureLessonsBlock(lessons);
+    if (corrections.length || lessons.length) console.log(`[Vision] 2단계: ★ 교정 사례 ${corrections.length}건 + 실패 교훈 ${lessons.length}건 주입`);
   } catch (corrErr) {
     // 교정 조회 실패해도 SVG 생성은 계속 진행
     console.warn('[Vision] 교정 사례 조회 실패 (무시):', corrErr);

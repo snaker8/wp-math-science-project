@@ -6,35 +6,10 @@
 // ==========================================================================
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { inferFigureTypeFromSvg, fetchProblemTypeCode } from '@/lib/vision/figure-learning';
 import { requireAuthScope } from '@/lib/auth/guard';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * SVG 내용에서 figureType 자동 추론
- * 학습 데이터 검색용 태그가 누락되는 문제를 방지
- */
-function inferFigureTypeFromSvg(svg: string): string | null {
-  if (!svg) return null;
-  const s = svg.toLowerCase();
-  // 좌표축 라벨(x, y) + 화살표/축선 + 원점(O) → graph
-  const hasAxisLabels = /<text[^>]*>\s*[xy]\s*<\/text>/i.test(svg);
-  const hasOriginLabel = /<text[^>]*>\s*o\s*<\/text>/i.test(svg);
-  const hasArrow = /<polygon[^>]*points/i.test(svg) && /(arrow|polyline.*line)/i.test(s);
-  if (hasAxisLabels || (hasOriginLabel && hasArrow)) return 'graph';
-  // 표 패턴: <line>을 격자처럼 + tspan/text 셀 다수
-  const lineCount = (svg.match(/<line/gi) || []).length;
-  const textCount = (svg.match(/<text/gi) || []).length;
-  if (lineCount >= 6 && textCount >= 4 && /grid|table/i.test(s)) return 'table';
-  // 다이어그램 - 벤다이어그램, 트리 등 (원 + 텍스트)
-  const circleCount = (svg.match(/<circle/gi) || []).length;
-  if (circleCount >= 2 && textCount >= 2 && lineCount === 0) return 'diagram';
-  // 수직선
-  if (lineCount === 1 && /tick|number\s*line|수직선/i.test(s)) return 'number_line';
-  // 폴리곤 위주(삼각형, 사각형) → geometry
-  if (/<polygon|<polyline/i.test(svg) && !hasAxisLabels) return 'geometry';
-  return null;
-}
 
 // ── POST: 교정 기록 저장 ──
 export async function POST(request: NextRequest) {
@@ -89,7 +64,11 @@ export async function POST(request: NextRequest) {
     if (!figureType && correctedSvgSource) {
       figureType = inferFigureTypeFromSvg(correctedSvgSource);
     }
-    const mathsecrTypeCode = (ai.typeCode as string) || (ai.expandedTypeCode as string) || null;
+    if (!figureType && originalSvg) {
+      figureType = inferFigureTypeFromSvg(originalSvg);
+    }
+    // ★ 단원 코드: ai_analysis 에 없으면 classifications 에서 (2026-10-06 — 338건 중 0건이 채워져 있어 "같은 단원 사례" 매칭이 죽어 있었다)
+    const mathsecrTypeCode = (ai.typeCode as string) || (ai.expandedTypeCode as string) || (problem ? await fetchProblemTypeCode(problemId) : null);
 
     if (!problem) {
       console.warn(`[figure-corrections] 문제 ${problemId} 미발견 — 교정 기록만 저장`);
