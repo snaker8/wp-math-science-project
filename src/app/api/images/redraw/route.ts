@@ -57,6 +57,6 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: `저장 실패: ${error.message}` }, { status: 502 });
   const { data: u } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
   const meta = await sharp(out).metadata().catch(() => ({ width: 0, height: 0 }));
-  console.log(`[images/redraw] ok ${r.ms}ms score=${r.verify.score} ${meta.width}x${meta.height} → ${path}`);
-  return NextResponse.json({ url: u?.publicUrl ?? null, path, width: meta.width, height: meta.height, verify: r.verify, model: GEMINI_IMAGE_MODEL, ms: r.ms });
+  console.log(`[images/redraw] ok ${r.ms}ms attempts=${r.attempts} score=${r.verify.score} ${meta.width}x${meta.height} → ${path}`);
+  return NextResponse.json({ url: u?.publicUrl ?? null, path, width: meta.width, height: meta.height, verify: r.verify, attempts: r.attempts, model: GEMINI_IMAGE_MODEL, ms: r.ms });
 }
