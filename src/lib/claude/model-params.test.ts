@@ -42,7 +42,8 @@ describe('normalizeClaudeBody', () => {
 describe('normalizeOpenAIBody', () => {
   it('★ gpt-5.5: max_tokens → max_completion_tokens, temperature 0.2 제거, response_format 유지', () => {
     const b: Record<string, unknown> = normalizeOpenAIBody({ model: OPENAI_MODELS.MAIN, messages: [], temperature: 0.2, max_tokens: 4000, response_format: { type: 'json_object' } });
-    expect(b.max_completion_tokens).toBe(4000);
+    expect(b.max_completion_tokens).toBe(16000); // 4000×4 (추론 토큰 여유, 상한 16000)
+    expect(b.reasoning_effort).toBe('low');
     expect('max_tokens' in b).toBe(false);
     expect('temperature' in b).toBe(false);
     expect(b.response_format).toEqual({ type: 'json_object' });

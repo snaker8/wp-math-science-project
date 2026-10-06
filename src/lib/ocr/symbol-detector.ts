@@ -32,6 +32,17 @@ const SYMBOL_MAP_KOREAN: Array<{ jamo: string; circled: string }> = [
   { jamo: 'ㅇ', circled: '㉧' },
   { jamo: 'ㅈ', circled: '㉨' },
   { jamo: 'ㅊ', circled: '㉩' },
+  // ★ 동그라미 음절 (2026-10-06 해운대여중 #4: 지도 위 항구 ㉮㉯㉰ 를 "(ㄹ), (ㅂ), 다)" 로 읽음) — OCR 은 "(가)" "가)" 로 벗긴다
+  { jamo: '가', circled: '㉮' },
+  { jamo: '나', circled: '㉯' },
+  { jamo: '다', circled: '㉰' },
+  { jamo: '라', circled: '㉱' },
+  { jamo: '마', circled: '㉲' },
+  { jamo: '바', circled: '㉳' },
+  { jamo: '사', circled: '㉴' },
+  { jamo: '아', circled: '㉵' },
+  { jamo: '자', circled: '㉶' },
+  { jamo: '차', circled: '㉷' },
 ];
 
 // ★ Mathpix 가 ㉠ 을 내보내는 꼴 3가지 (2026-09-22, 학장중 24-2-2-M #7 증명 박스 실측):
@@ -53,7 +64,9 @@ export function jamoChainPattern(jamo: string): RegExp {
 // 의심 패턴 — 이 중 하나라도 ocrText 에 있어야 Flash 호출
 const SUSPICIOUS_REGEX = new RegExp(
   SYMBOL_MAP_KOREAN.map(({ jamo }) => jamoOcrPattern(jamo, '').source).join('|')
-    + '|→[^\\n]*[ㄱㄴㄷㄹㅁς]|[ㄱㄴㄷㄹㅁς][^\\n]*→',
+    + '|→[^\\n]*[ㄱㄴㄷㄹㅁς]|[ㄱㄴㄷㄹㅁς][^\\n]*→'
+    // ★ 2026-10-06 해운대여중 #4: ㉰ 가 "다)" 로 — 괄호 없이 음절 하나 + ')' (앞에 '(' 나 글자가 없을 때만)
+    + '|(?<![(\\w가-힣])[가나다라마바사아자차]\\)',
   'g'
 );
 
@@ -85,10 +98,27 @@ export function repairCircledJamoText(ocrText: string, detected: string[]): { re
     }
     return out;
   });
+  // ★ 순서 대응 폴백 (2026-10-06 해운대여중 #4): OCR 이 ㉠㉡㉢ 을 "(ㄹ), (ㅂ), 다)" 처럼 **글자 자체를 틀리게** 읽으면
+  //   위의 글자 대응(ㄱ→㉠)으로는 못 잡는다. Flash 가 본 기호 중 아직 본문에 없는 것과, 본문에 남은 "자모/음절 토큰"의 개수가
+  //   같으면 등장 순서대로 대응시킨다. 개수가 다르면 건드리지 않는다(원본 보호).
+  const missing = SYMBOL_MAP_KOREAN.map((m) => m.circled).filter((c) => detected.includes(c) && !repairedText.includes(c));
+  if (missing.length > 0) {
+    const hasSyllable = missing.some((c) => c >= '㉮' && c <= '㉷');
+    const tokenRe = hasSyllable
+      ? /\(\s*[ㄱ-ㅎ]\s*[).]|\(\s*[ㄱ-ㅎ](?=[\s가-힣,~〜])|\(\s*[가나다라마바사아자차]\s*[).]|(?<![(\w가-힣])[가나다라마바사아자차]\)/g
+      : /\(\s*[ㄱ-ㅎ]\s*[).]|\(\s*[ㄱ-ㅎ](?=[\s가-힣,~〜])|(?<![(\w가-힣])[가나다라마바사아자차]\)/g;
+    const tokens = [...repairedText.matchAll(tokenRe)];
+    if (tokens.length === missing.length) {
+      let out = ''; let last = 0;
+      tokens.forEach((m, i) => { out += repairedText.slice(last, m.index) + missing[i]; last = (m.index as number) + m[0].length; });
+      repairedText = out + repairedText.slice(last);
+      repairCount += tokens.length;
+    }
+  }
   if (repairCount > 0 && /□/.test(repairedText)) {
     repairedText = repairedText
-      .replace(/□\s*([㉠-㉩])/g, '\\boxed{$1}')
-      .replace(/([㉠-㉩])\s*□/g, '\\boxed{$1}')
+      .replace(/□\s*([㉠-㉷])/g, '\\boxed{$1}')
+      .replace(/([㉠-㉷])\s*□/g, '\\boxed{$1}')
       .replace(/□/g, '\\boxed{\\ \\ }');
   }
   return { repairedText, repairCount };
@@ -129,29 +159,40 @@ export async function detectAndRepairSymbols(
   // 2) 크롭 이미지 fetch + base64
   let imageBase64: string;
   let mimeType = 'image/png';
-  try {
-    const imgRes = await fetch(cropImageUrl);
-    if (!imgRes.ok) {
+  // ★ data URL 도 받는다 (재분석 「텍스트 읽어내기」는 크롭을 base64 로 들고 있다, 2026-10-06)
+  const dataUrlMatch = cropImageUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+  if (dataUrlMatch) {
+    mimeType = dataUrlMatch[1];
+    imageBase64 = dataUrlMatch[2];
+  } else {
+    try {
+      const imgRes = await fetch(cropImageUrl);
+      if (!imgRes.ok) {
+        return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: false };
+      }
+      const contentType = imgRes.headers.get('content-type');
+      if (contentType?.startsWith('image/')) mimeType = contentType;
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
+      imageBase64 = buffer.toString('base64');
+    } catch (e) {
+      console.warn('[symbol-detector] 크롭 fetch 실패:', e instanceof Error ? e.message : e);
       return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: false };
     }
-    const contentType = imgRes.headers.get('content-type');
-    if (contentType?.startsWith('image/')) mimeType = contentType;
-    const buffer = Buffer.from(await imgRes.arrayBuffer());
-    imageBase64 = buffer.toString('base64');
-  } catch (e) {
-    console.warn('[symbol-detector] 크롭 fetch 실패:', e instanceof Error ? e.message : e);
-    return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: false };
   }
 
   // 3) Gemini Flash 호출 — 닫힌 기호 5종 탐지 (현재 동그라미 한글만, MVP)
-  const prompt = `이 시험 문제 이미지에서 동그라미 한글 보기 라벨 (㉠ ㉡ ㉢ ㉣ ㉤ ㉥ ㉦ ㉧ ㉨ ㉩) 중 명확히 보이는 것만 JSON 으로 응답.
+  const prompt = `이 시험 문제 이미지에서 동그라미 안에 한글이 든 라벨 중 명확히 보이는 것만 JSON 으로 응답.
+대상 두 종류:
+- 동그라미 자모: ㉠ ㉡ ㉢ ㉣ ㉤ ㉥ ㉦ ㉧ ㉨ ㉩
+- 동그라미 음절: ㉮(가) ㉯(나) ㉰(다) ㉱(라) ㉲(마) ㉳(바) ㉴(사) ㉵(아) ㉶(자) ㉷(차)
 
 응답 형식 (JSON only, 다른 설명 X):
-{"symbols": ["㉠", "㉡", "㉢"]}
+{"symbols": ["㉮", "㉯", "㉰"]}
 
 규칙:
-- 동그라미 안 한글 (㉠ ㉡ ...) 만 포함
-- 괄호 안 한글 ((ㄱ) (ㄴ) ...) 은 포함 X — 동그라미 아니면 제외
+- 동그라미 안 한글만 포함. 자모(ㄱ)인지 음절(가)인지 정확히 구분해 해당 문자로 적는다
+- 괄호 안 한글 ((ㄱ) (가) ...) 은 포함 X — 동그라미 아니면 제외
+- 본문·그림(지도 등) 어디에 있든 포함
 - 의심스러우면 제외 (정확도 우선)
 - 이미지에 없으면 {"symbols": []}`;
 
