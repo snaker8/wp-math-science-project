@@ -12,6 +12,7 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { interpretImage } from '@/lib/vision/image-interpreter';
 import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
+import { redrawAndVerify, GEMINI_IMAGE_MODEL } from '@/lib/vision/image-redraw';
 import { tryUpscaleCrop } from '@/lib/vision/image-upscaler';
 
 /**
@@ -336,7 +337,51 @@ export async function POST(
     }
 
     // ================================================================
-    // 4. AI Vision 해석 (업스케일 불가하거나 forceAI일 때)
+    // 3.8. ★ Gemini 이미지 재작성 (2026-10-06) — 「AI 생성」의 1순위.
+    //   원본 크롭을 이미지 편집 모델로 깨끗하게 다시 그리고, 비전 검증(라벨·점·선 일치)을 통과한 것만 쓴다.
+    //   6종 실측에서 Claude SVG·GPT Image 보다 원본 충실도가 높았다(docs/PLAN_EXAM_LINE_DESIGN.md 10-06).
+    //   실패·불일치면 아래 SVG 경로로 그대로 내려간다. body.skipRedraw=true 로 끌 수 있다.
+    // ================================================================
+    if (imageRawBuffer && body?.skipRedraw !== true) {
+      try {
+        const { default: sharp } = await import('sharp');
+        const srcPng = await sharp(imageRawBuffer).png().toBuffer();
+        const rr = await redrawAndVerify(srcPng, 'image/png');
+        if (rr.ok) {
+          const outPng = await sharp(rr.png).png({ compressionLevel: 9 }).toBuffer();
+          const redrawPath = `problem-crops/redraw/${problemId}.png`;
+          const { error: upErr } = await supabaseAdmin.storage.from('source-files').upload(redrawPath, outPng, { contentType: 'image/png', upsert: true });
+          if (!upErr) {
+            const redrawUrl = `/api/storage/image?path=${encodeURIComponent(redrawPath)}&v=${Date.now()}`;
+            const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
+            const { figureSvg: _s, figureData: _d, ...rest } = currentAnalysis as Record<string, unknown> & { figureSvg?: unknown; figureData?: unknown };
+            const updatedAnalysis = {
+              ...rest,
+              hasFigure: true,
+              figureSource: 'ai_image' as const,
+              upscaledCropUrl: redrawUrl,
+              redrawInfo: { model: GEMINI_IMAGE_MODEL, score: rr.verify.score, issues: rr.verify.issues, ms: rr.ms, at: new Date().toISOString() },
+              cropImageUrl: targetImageUrl,
+            };
+            const { error: dbErr } = await supabaseAdmin.from('problems').update({ ai_analysis: updatedAnalysis }).eq('id', problemId);
+            if (!dbErr) {
+              console.log(`[generate-figure] ★ Gemini 재작성 채택 (score=${rr.verify.score}, ${rr.ms}ms) — SVG 스킵`);
+              return NextResponse.json({ success: true, figureSource: 'ai_image', upscaledCropUrl: redrawUrl, redrawInfo: updatedAnalysis.redrawInfo, problemId });
+            }
+            console.warn(`[generate-figure] 재작성 DB 저장 실패: ${dbErr.message} → SVG 폴백`);
+          } else {
+            console.warn(`[generate-figure] 재작성 업로드 실패: ${upErr.message} → SVG 폴백`);
+          }
+        } else {
+          console.log(`[generate-figure] 재작성 ${rr.stage} 실패 → SVG 폴백: ${rr.error}`);
+        }
+      } catch (e) {
+        console.warn(`[generate-figure] 재작성 예외 → SVG 폴백:`, e instanceof Error ? e.message : e);
+      }
+    }
+
+    // ================================================================
+    // 4. AI Vision 해석 (재작성 실패·불일치 시 폴백)
     // ================================================================
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(

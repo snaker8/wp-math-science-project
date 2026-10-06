@@ -318,6 +318,9 @@ function ChoicesEditor({
   choiceImages,
   onUploadChoiceImage,
   onRemoveChoiceImage,
+  onRedrawChoiceImage,
+  redrawingIdx,
+  redrawError,
   uploadingChoiceIdx,
   onOpenDiagramBrowser,
   choiceHeaders,
@@ -338,6 +341,10 @@ function ChoicesEditor({
   choiceImages: (string | null)[];
   onUploadChoiceImage: (idx: number, file: File | Blob) => void;
   onRemoveChoiceImage: (idx: number) => void;
+  /** ★ 보기 이미지 AI 재작성 (Gemini 이미지 편집 + 검증) */
+  onRedrawChoiceImage: (idx: number) => Promise<void>;
+  redrawingIdx: number;
+  redrawError: { idx: number; msg: string } | null;
   uploadingChoiceIdx: number | null;
   onOpenDiagramBrowser: (idx: number) => void;
   // ★ 표 객관식 헤더 (A/B 등). 길이 0 = 일반 객관식, 1+ = 표 객관식.
@@ -578,6 +585,15 @@ function ChoicesEditor({
                           className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-content-primary hover:border-white/[.2] transition-colors"
                           title="SVG·이미지·도형 DB로 교체"
                         >교체</button>
+                        {/* ★ AI 재작성 — 이 보기 이미지를 Gemini 로 깨끗하게 다시 그려 검증 뒤 교체 (대표 10-06: 보기 이미지마다) */}
+                        <button
+                          type="button"
+                          disabled={redrawingIdx === i}
+                          onClick={() => void onRedrawChoiceImage(i)}
+                          className="text-[10px] inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-content-tertiary hover:text-content-primary hover:border-white/[.2] transition-colors disabled:opacity-50"
+                          title="원본 그대로 깨끗하게 다시 그립니다 (검증 통과 시에만 교체, 장당 몇십 원)"
+                        >{redrawingIdx === i ? '그리는 중…' : 'AI 재작성'}</button>
+                        {redrawError?.idx === i && <span className="text-[10px] text-red-400">{redrawError.msg}</span>}
                       </>
                     ) : (
                       <>
@@ -954,6 +970,22 @@ export function ProblemEditModal({
     return arr;
   }, [initialChoiceImages]);
   const [choiceImages, setChoiceImages] = useState<(string | null)[]>(initialChoiceImagesPadded);
+  // ★ 보기 이미지 AI 재작성 — /api/images/redraw (Gemini 편집 + 비전 검증). 통과한 것만 교체, 실패 사유는 옆에 표시.
+  const [redrawingIdx, setRedrawingIdx] = useState(-1);
+  const [redrawError, setRedrawError] = useState<{ idx: number; msg: string } | null>(null);
+  const redrawChoiceImage = useCallback(async (idx: number) => {
+    const src = choiceImages[idx];
+    if (!src) return;
+    setRedrawingIdx(idx); setRedrawError(null);
+    try {
+      const r = await fetch('/api/images/redraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: src, problemId }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.url) throw new Error(j.error || `HTTP ${r.status}`);
+      setChoiceImages((prev) => { const next = [...prev]; next[idx] = j.url as string; return next; });
+    } catch (e) {
+      setRedrawError({ idx, msg: e instanceof Error ? e.message : String(e) });
+    } finally { setRedrawingIdx(-1); }
+  }, [choiceImages, problemId]);
   const [uploadingChoiceIdx, setUploadingChoiceIdx] = useState<number | null>(null);
   // ★ DiagramBrowserModal 트리거 — 본문 도식 교체와 동일 컴포넌트 재사용.
   //   -1 = 닫힘, 0~4 = 해당 선택지 인덱스로 열림.
@@ -1489,6 +1521,9 @@ export function ProblemEditModal({
             choiceImages={choiceImages}
             onUploadChoiceImage={uploadChoiceImage}
             onRemoveChoiceImage={removeChoiceImage}
+            onRedrawChoiceImage={redrawChoiceImage}
+            redrawingIdx={redrawingIdx}
+            redrawError={redrawError}
             uploadingChoiceIdx={uploadingChoiceIdx}
             onOpenDiagramBrowser={(idx) => setChoiceDiagramIdx(idx)}
             choiceHeaders={choiceHeaders}

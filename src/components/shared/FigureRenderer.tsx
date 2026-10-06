@@ -42,7 +42,7 @@ interface FigureRendererProps {
   /** ★ 업스케일된 크롭 이미지 URL (최우선) */
   upscaledCropUrl?: string;
   /** 도형 소스 타입 */
-  figureSource?: 'upscaled_crop' | 'ai_generated' | 'diagram_db' | 'original_crop' | undefined;
+  figureSource?: 'upscaled_crop' | 'ai_generated' | 'diagram_db' | 'original_crop' | 'ai_image' | undefined;
   /** 최대 너비 */
   maxWidth?: number;
   /** 추가 클래스 */
@@ -263,7 +263,7 @@ export function FigureRenderer({
   }
 
   // 1. 업스케일된 크롭 이미지
-  if (upscaledCropUrl || figureSource === 'upscaled_crop') {
+  if (upscaledCropUrl || figureSource === 'upscaled_crop' || figureSource === 'ai_image') {
     const url = upscaledCropUrl || cropImageUrl;
     if (url) {
       return (

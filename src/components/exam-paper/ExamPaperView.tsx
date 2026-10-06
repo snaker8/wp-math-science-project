@@ -74,7 +74,7 @@ export interface ProblemData {
   /** ★ 업스케일된 크롭 이미지 URL */
   upscaledCropUrl?: string;
   /** 도형 소스 타입 */
-  figureSource?: 'upscaled_crop' | 'ai_generated';
+  figureSource?: 'upscaled_crop' | 'ai_generated' | 'ai_image';
 }
 
 // ★ 인쇄 상하 여백 — 시중 시험지 표준 ~20mm(76px @96dpi). 모듈 레벨이라 ExamPaperView·
