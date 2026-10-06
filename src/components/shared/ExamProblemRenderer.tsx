@@ -279,6 +279,22 @@ function ExamProblemRendererInner({
       );
 
     if (isInline) {
+      // ★ 2026-10-06 대표: 원본이 가로 한 줄(5)인 짧은 보기가 인쇄 2단 칸(약 320px)에서 3+2 로 접혔다.
+      //   gap-x-9(36px) 흐름 배치는 폭이 모자라면 접히므로, 보기 ≤5개·아주 짧을 때(sin 0° 꼴)는
+      //   N 등분 그리드로 한 줄에 균등 배치(매쓰홀릭 조판과 같음). 길면 종전처럼 흐름 배치(접힘 허용).
+      const equalRow = items.length <= 5 && maxLen <= 8;
+      if (equalRow) {
+        return (
+          <div className="mt-2.5 grid items-center gap-x-2" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+            {items.map((it, ci) => (
+              <div key={ci} className="flex items-center gap-1 text-[13.5px] text-gray-700 whitespace-nowrap" style={{ lineHeight: '1.65' }}>
+                <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
+                {renderChoiceBody(it)}
+              </div>
+            ))}
+          </div>
+        );
+      }
       return (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-9 gap-y-2">
           {items.map((it, ci) => (
