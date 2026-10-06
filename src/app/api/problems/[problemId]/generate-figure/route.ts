@@ -360,7 +360,7 @@ export async function POST(
               hasFigure: true,
               figureSource: 'ai_image' as const,
               upscaledCropUrl: redrawUrl,
-              redrawInfo: { model: GEMINI_IMAGE_MODEL, score: rr.verify.score, issues: rr.verify.issues, ms: rr.ms, at: new Date().toISOString() },
+              redrawInfo: { model: GEMINI_IMAGE_MODEL, score: rr.verify.score, issues: rr.verify.issues, attempts: rr.attempts, ms: rr.ms, at: new Date().toISOString() },
               cropImageUrl: targetImageUrl,
             };
             const { error: dbErr } = await supabaseAdmin.from('problems').update({ ai_analysis: updatedAnalysis }).eq('id', problemId);
