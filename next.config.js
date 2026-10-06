@@ -37,6 +37,8 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/workflow/reanalyze-crop': ['./curriculum_data/expanded_math_types_unified.json'],
     '/api/workflow/upload': ['./curriculum_data/expanded_math_types_unified.json'],
+    // ★ SVG 도형 검증용 래스터라이즈 폰트 (람다엔 시스템 폰트 없음) — src/lib/vision/svg-raster.ts
+    '/api/problems/[problemId]/generate-figure': ['./assets/fonts/**'],
   },
 };
 

@@ -163,6 +163,18 @@ export async function verifyRedraw(original: Buffer, originalMime: string, redra
   }
 }
 
+/**
+ * 임의의 후보 그림(예: AI SVG 를 래스터라이즈한 PNG)을 원본과 대조한다 — 재작성 없이 검증만.
+ * 원본은 같은 입력 정리(줄무늬 제거·업스케일)를 거치고, 라벨 선독을 참고로 넘긴다. 호출 2회(라벨 1 + 검증 1, 합쳐 몇 원).
+ */
+export async function verifyCandidate(original: Buffer, mime: string, candidatePng: Buffer): Promise<{ verify: VerifyResult; labels: string[] }> {
+  const prepared = await prepareRedrawInput(original);
+  const srcMime = prepared.width > 0 ? 'image/png' : mime;
+  const labels = await readFigureLabels(prepared.png, srcMime);
+  const verify = await verifyRedraw(prepared.png, srcMime, candidatePng, labels);
+  return { verify, labels };
+}
+
 export type RedrawAndVerifyResult =
   | { ok: true; png: Buffer; verify: VerifyResult; ms: number; attempts: number; labels: string[]; upscaled: boolean }
   | { ok: false; stage: 'redraw' | 'verify'; error: string; verify?: VerifyResult; ms: number; attempts: number; labels: string[]; upscaled: boolean };
