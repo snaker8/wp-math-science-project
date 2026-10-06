@@ -138,7 +138,8 @@ export async function verifyRedraw(original: Buffer, originalMime: string, redra
     '다시 그린 것이 원본과 "수학적으로 같은 그림"인지 판정한다: 점·선·호·곡선의 개수와 위치 관계, 모든 라벨(문자·숫자·동그라미 한글)의 글자와 위치, ' +
     '각 표시·직각 표시·점선·색칠 영역이 같아야 한다. 선 굵기·글꼴·해상도 차이, 그리고 원본의 스캔 줄무늬·얼룩이 사라진 것은 무시한다(그건 잘된 것이다). ' +
     (labels.length ? `참고: 원본에서 미리 읽은 글자 라벨은 ${labels.map((l) => `"${l}"`).join(', ')} 이다(불완전할 수 있다). 이 글자가 다른 글자로 바뀌었으면 반드시 지적하라. 반대로 원본에 흐리게라도 보이는 글자(축 끝의 x, y, 점 이름 등)를 다시 그린 쪽이 또렷하게 쓴 것은 차이가 아니다 — 목록에 없다는 이유로 "추가됐다"고 하지 마라. ` : '') +
-    'JSON 만 출력: {"same": true|false, "score": 0~100, "issues": ["다른 점을 한국어로 짧게", ...]}';
+    'JSON 만 출력: {"same": true|false, "score": 0~100, "issues": ["다른 점을 한국어로 짧게", ...]}. ' +
+    '규칙: same=false 이면 issues 를 반드시 1개 이상 구체적으로 적는다(빈 배열 금지). same=true 이면 issues 는 비우고 score 는 80 이상이어야 한다.';
   try {
     const json = await gemini(GEMINI_VERIFY_MODEL, {
       contents: [{ parts: [
@@ -152,7 +153,10 @@ export async function verifyRedraw(original: Buffer, originalMime: string, redra
     const m = text.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) as { same?: boolean; score?: number; issues?: string[] } : {};
     const score = typeof parsed.score === 'number' ? parsed.score : (parsed.same ? 90 : 0);
-    return { ok: parsed.same === true && score >= 80, score, issues: Array.isArray(parsed.issues) ? parsed.issues.map(String) : [], raw: text.slice(0, 300) };
+    const issues = Array.isArray(parsed.issues) ? parsed.issues.map(String).filter((s) => s.trim().length > 0) : [];
+    // 통과 = "같다" 판정 + (지적 없음 또는 80점 이상). 지적이 하나도 없는데 점수(78 등)만으로 떨어뜨리지 않는다 (2026-10-06 보기 ⑤ 사례).
+    const ok = parsed.same === true && (issues.length === 0 || score >= 80);
+    return { ok, score, issues, raw: text.slice(0, 300) };
   } catch (e) {
     // 검증 자체가 실패하면 통과시키지 않는다 — 원본 보호
     return { ok: false, score: 0, issues: [`검증 실패: ${e instanceof Error ? e.message : String(e)}`] };
@@ -176,15 +180,18 @@ export async function redrawAndVerify(image: Buffer, mime: string, opts: { maxAt
   console.log(`[image-redraw] 입력 ${prepared.width}×${prepared.height}${prepared.upscaled ? ' 업스케일' : ''}${prepared.cleaned ? ' 줄무늬정리' : ''} · 라벨 ${labels.length}개: ${labels.join(' · ').slice(0, 120)}`);
   let feedback: string[] | undefined;
   let last: VerifyResult | undefined;
+  let attempts = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    attempts = attempt;
     const r = await redrawFigureImage(prepared.png, srcMime, { labels, feedback });
-    if (!r.ok) return { ok: false, stage: 'redraw', error: r.error, ms: Date.now() - t0, attempts: attempt, labels, upscaled: prepared.upscaled };
+    if (!r.ok) return { ok: false, stage: 'redraw', error: r.error, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
     const v = await verifyRedraw(prepared.png, srcMime, r.png, labels);
-    if (v.ok) return { ok: true, png: r.png, verify: v, ms: Date.now() - t0, attempts: attempt, labels, upscaled: prepared.upscaled };
+    if (v.ok) return { ok: true, png: r.png, verify: v, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
     last = v;
-    if (!v.issues.length || v.issues[0].startsWith('검증 실패')) break; // 지적이 없거나 검증기 자체 오류면 재시도 의미 없음
-    feedback = v.issues;
-    console.log(`[image-redraw] 검증 탈락(${attempt}/${maxAttempts}, score=${v.score}) → 피드백 재시도: ${v.issues.join(' / ').slice(0, 160)}`);
+    if (v.issues[0]?.startsWith('검증 실패')) break; // 검증기 자체 오류면 재시도 의미 없음
+    feedback = v.issues.length ? v.issues : undefined; // 지적 없이 "다르다"면 피드백 없이 한 번 더 그려 본다
+    console.log(`[image-redraw] 검증 탈락(${attempt}/${maxAttempts}, score=${v.score}) → 재시도${feedback ? ' (피드백)' : ''}: ${v.issues.join(' / ').slice(0, 160) || '지적 없음'}`);
   }
-  return { ok: false, stage: 'verify', error: last?.issues.join(' / ') || `score ${last?.score ?? 0}`, verify: last, ms: Date.now() - t0, attempts: maxAttempts, labels, upscaled: prepared.upscaled };
+  const reason = last?.issues.join(' / ') || `검증기가 다른 점을 짚지 못한 채 불일치 판정 (score ${last?.score ?? 0}) — 한 번 더 눌러 보세요`;
+  return { ok: false, stage: 'verify', error: reason, verify: last, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
 }
