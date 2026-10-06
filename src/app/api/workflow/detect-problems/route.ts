@@ -3,6 +3,7 @@
 // 페이지 이미지를 보내면 각 문제의 바운딩 박스(0~1 비율)를 반환
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 
 // ★ Vercel 서버리스 타임아웃: GPT-4o Vision이 20~30초 소요 → 기본 60초로는 빠듯
@@ -135,8 +136,8 @@ async function callVisionAPI(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${OPENAI_API_KEY}`,
         },
-        body: JSON.stringify({
-          model: 'gpt-4o',
+        body: JSON.stringify(normalizeOpenAIBody({
+          model: OPENAI_MODELS.MAIN,
           messages: [
             {
               role: 'user',
@@ -155,7 +156,7 @@ async function callVisionAPI(
           temperature: 0.1,
           max_tokens: 2000,
           response_format: { type: 'json_object' },
-        }),
+        })),
       });
 
       if (response.status === 429) {

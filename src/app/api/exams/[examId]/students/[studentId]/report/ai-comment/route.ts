@@ -8,6 +8,7 @@
 // 응답: { ai_comment: { strong, weak, method, generatedAt, model } }
 // ============================================================================
 
+import { CLAUDE_MODELS, normalizeClaudeBody } from '@/lib/claude/model-params';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -17,7 +18,7 @@ import { findGradingSession } from '@/lib/diagnostics/find-session';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+const ANTHROPIC_MODEL = CLAUDE_MODELS.SONNET;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 interface GenOptions {
@@ -405,12 +406,12 @@ async function callSonnet(
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
+    body: JSON.stringify(normalizeClaudeBody({
       model: ANTHROPIC_MODEL,
       max_tokens: maxTokens,
       temperature: 0.4,
       messages: [{ role: 'user', content: prompt }],
-    }),
+    })),
   });
 
   if (!resp.ok) {

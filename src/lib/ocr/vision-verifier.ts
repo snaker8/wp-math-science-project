@@ -95,7 +95,7 @@ ${ocrLatex}
 - 동그라미 숫자 ① ② ③ ④ ⑤ ↔ OCR 의 (1) (2) ...
 - 도형 □ ○ △ ↔ OCR 의 \\square \\bigcirc \\triangle (또는 누락)`;
 
-  const model = process.env.GEMINI_VERIFIER_MODEL || 'gemini-3.5-flash';
+  const model = process.env.GEMINI_VERIFIER_MODEL || 'gemini-3.8-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
   let parsedResult: { match?: boolean; corrected?: string; diffs?: Array<{ from: string; to: string }> } = {};

@@ -3,6 +3,7 @@
 // LaTeX 구조 분석 → 숫자/조건 변형 → 유사 문제 생성
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
 import type { TwinProblem, ProblemModification } from '@/types/workflow';
 
 // ============================================================================
@@ -546,8 +547,8 @@ export async function generateTwinWithLLM(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: 'gpt-4o',
+      body: JSON.stringify(normalizeOpenAIBody({
+        model: OPENAI_MODELS.MAIN,
         messages: [
           {
             role: 'system',
@@ -557,7 +558,7 @@ export async function generateTwinWithLLM(
         ],
         temperature: 0.3,
         max_tokens: 3000,
-      }),
+      })),
     });
 
     if (!response.ok) {

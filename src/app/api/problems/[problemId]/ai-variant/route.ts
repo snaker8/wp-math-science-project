@@ -17,6 +17,7 @@
 // ★ 미리보기를 저장 안 하는 이유 — 교사가 보고 버린 변형까지 문제은행에 쌓이면 은행이 썩는다.
 // ============================================================================
 
+import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -26,7 +27,7 @@ import { assertInstituteAccess, resolveInsertInstituteId } from '@/lib/security/
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = CLAUDE_MODELS.SONNET;
 
 export interface AiVariant {
   content: string;

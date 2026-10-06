@@ -4,6 +4,8 @@
 // 코드 렌더러(figure-renderer.ts)가 JSON → SVG 생성
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
+import { CLAUDE_MODELS, normalizeClaudeBody, type ClaudeEffort } from '@/lib/claude/model-params';
 import type {
   InterpretedFigure,
   FigureType,
@@ -37,18 +39,20 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
 // 비전 분석: Gemini Flash-Lite 고정
 const VISION_PROVIDER = (process.env.VISION_PROVIDER || 'gemini') as 'gemini' | 'claude' | 'gpt' | 'glm';
-const GPT_MODEL = 'gpt-4o';
-const CLAUDE_MODEL = 'claude-sonnet-4-6'; // ★ Sonnet 4.6 최신 alias (extended thinking 지원)
+const GPT_MODEL = OPENAI_MODELS.MAIN;
+const CLAUDE_MODEL = CLAUDE_MODELS.SONNET; // ★ 2026-10-06 Sonnet 5.5 — adaptive thinking + effort (normalizeClaudeBody)
 // 도형 생성 정확도를 위해 extended thinking 활성화 (아래 callClaudeVision 참고)
 const CLAUDE_THINKING_ENABLED = process.env.CLAUDE_FIGURE_THINKING !== 'false'; // 기본 on, env로 끌 수 있음
 const CLAUDE_THINKING_BUDGET = parseInt(process.env.CLAUDE_FIGURE_THINKING_BUDGET || '4000', 10);
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+// ★ 5.x 는 budget 대신 effort — 도형 SVG 는 정확도가 생명이라 기본 high (2026-10-06)
+const CLAUDE_FIGURE_EFFORT = (process.env.CLAUDE_FIGURE_EFFORT as ClaudeEffort | undefined) || 'high';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 // ★ Flash-Lite: JSON 안정 + 그래프 정상 인식 (확정)
 // ❌ gemini-2.5-pro: JSON 잘림 (2026.04)
 // ❌ gemini-3-flash-preview: JSON 잘림 (2026.04)
 const GLM_MODEL = 'thudm/glm-4.1v-9b-thinking'; // OpenRouter 경유
 // 모델 옵션:
-// - 'gemini-3-flash-preview' — 종합 비전 최강 (MMMU-Pro 81.2%) — 테스트 중
+// - 'gemini-3.8-flash' — 종합 비전 최강 (MMMU-Pro 81.2%) — 테스트 중
 // - 'gemini-3.1-flash-lite-preview' — 이전 기본 (graph→photo 오분류 이슈로 Flash 3 대신 사용했음)
 // - 'thudm/glm-4.1v-9b-thinking' — ChartQA SOTA, 수학 도형 특화 (OpenRouter fallback)
 
@@ -1165,7 +1169,7 @@ async function interpretImageWithGLM(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
+    body: JSON.stringify(normalizeOpenAIBody({
       model: modelName,
       messages: [
         {
@@ -1178,7 +1182,7 @@ async function interpretImageWithGLM(
       ],
       temperature: 0.1,
       max_tokens: 8000,
-    }),
+    })),
   });
 
   if (!res.ok) {
@@ -1858,7 +1862,7 @@ async function callOpenAIVision(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(normalizeOpenAIBody(body)),
     });
 
     if (!response.ok) {
@@ -1954,7 +1958,7 @@ async function callClaudeVision(
   } else {
     bodyBase.temperature = 0; // ★ 기본: 안정적인 결과
   }
-  const body = bodyBase;
+  const body = normalizeClaudeBody(bodyBase, { effort: CLAUDE_FIGURE_EFFORT });
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {

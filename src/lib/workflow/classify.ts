@@ -23,6 +23,8 @@
 //   - 에러 로깅 문맥
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
+import { normalizeClaudeBody } from '@/lib/claude/model-params';
 import { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable, buildL1L2Table, buildL3L4Table, withNeighborCourses, NEIGHBOR_COURSES } from './mathsecr-prompt';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -210,7 +212,7 @@ ${problemText}`;
   //   gemini-3-flash-preview는 preview 할당량이 엄격해 Tier 1 유료여도 429 발생.
   //   gemini-2.5-flash는 stable 모델이라 Tier 1 본 한도(1000 RPM) 적용.
   if ((!rawContent || rawContent.trim() === '{}' || rawContent.trim().length < 10) && GOOGLE_AI_KEY) {
-    modelUsed = process.env.CLASSIFY_GEMINI_MODEL || 'gemini-2.5-flash';
+    modelUsed = process.env.CLASSIFY_GEMINI_MODEL || 'gemini-3.8-flash';
     try {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(GOOGLE_AI_KEY);
@@ -249,12 +251,12 @@ ${problemText}`;
       if (!rawContent || rawContent.trim().length < 10) {
         console.warn(`[${label}] Gemini 빈 응답 → GPT-4o 폴백`);
         if (OPENAI_API_KEY) {
-          modelUsed = 'gpt-4o';
+          modelUsed = OPENAI_MODELS.MAIN;
           const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-            body: JSON.stringify({
-              model: 'gpt-4o',
+            body: JSON.stringify(normalizeOpenAIBody({
+              model: OPENAI_MODELS.MAIN,
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt },
@@ -262,7 +264,7 @@ ${problemText}`;
               temperature: 0.1,
               max_tokens: 2000,
               response_format: { type: 'json_object' },
-            }),
+            })),
           });
           if (gptRes.ok) {
             const gptData = await gptRes.json();
@@ -274,7 +276,7 @@ ${problemText}`;
       console.warn(`[${label}] Gemini 호출 전체 실패:`, err);
       // 아래 GPT 폴백으로 진행
       if (OPENAI_API_KEY) {
-        modelUsed = 'gpt-4.1-mini';
+        modelUsed = OPENAI_MODELS.MINI;
       } else {
         return null;
       }
@@ -284,16 +286,16 @@ ${problemText}`;
   // ─── 3차 (최종 폴백): Claude도 Gemini도 실패/부재 시 GPT-4.1-mini ───
   if ((!rawContent || rawContent.trim() === '{}' || rawContent.trim().length < 10) && OPENAI_API_KEY) {
     // Claude/Gemini가 실패해서 여기 왔으면 modelUsed도 실제 사용 모델로 바꿈
-    if (modelUsed !== 'gpt-4o') {
-      modelUsed = 'gpt-4.1-mini';
+    if (modelUsed !== OPENAI_MODELS.MAIN) {
+      modelUsed = OPENAI_MODELS.MINI;
     }
     let gptRes: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-        body: JSON.stringify({
-          model: modelUsed === 'gpt-4o' ? 'gpt-4o' : 'gpt-4.1-mini',
+        body: JSON.stringify(normalizeOpenAIBody({
+          model: modelUsed === OPENAI_MODELS.MAIN ? OPENAI_MODELS.MAIN : OPENAI_MODELS.MINI,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -301,7 +303,7 @@ ${problemText}`;
           temperature: 0.1,
           max_tokens: 2000,
           response_format: { type: 'json_object' },
-        }),
+        })),
       });
       if (gptRes && gptRes.status !== 429) break;
       const waitSec = Math.min(15 * (attempt + 1), 30);
@@ -697,7 +699,7 @@ async function callClaudeOnce(params: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify({
+        body: JSON.stringify(normalizeClaudeBody({
           model,
           max_tokens: maxTokens,
           system: cachedSystem(systemPrompt),
@@ -705,7 +707,7 @@ async function callClaudeOnce(params: {
             { role: 'user', content: strictUser },
           ],
           temperature: 0.1,
-        }),
+        })),
       });
       if (!cr.ok) {
         if ((cr.status === 429 || cr.status === 529) && attempt < 2) {
