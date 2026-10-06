@@ -12,6 +12,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { extractChoicesFromOCR } from '@/lib/ocr/extract-choices-from-ocr';
+import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
 import { withSamplingParams, CLAUDE_MODELS } from '@/lib/claude/model-params';
 
 // 그래프 분석 결과 타입
@@ -387,7 +388,14 @@ export async function POST(request: NextRequest) {
     // ★ 전각 괄호 → 반각 괄호 정규화 (Mathpix/GPT가 （1）형식으로 출력하는 경우)
     const normalizedParens = dollarDelim2.replace(/\uff08/g, '(').replace(/\uff09/g, ')');
     // ★ (1)(2)(3)(4)(5) → ①②③④⑤ 정규화 (Mathpix 원문자 오변환 교정)
-    const ocrText = normalizeChoiceParens(normalizedParens);
+    let ocrText = normalizeChoiceParens(normalizedParens);
+    // ★ 동그라미 한글(㉠~㉩·㉮~㉷) 복원 — 자산화와 같은 게이트(의심 패턴 → Flash 1회 → 본 기호만 교정). 2026-10-06
+    //   「텍스트 읽어내기」로 다시 읽을 때도 적용돼야 사용자가 손으로 고칠 일이 없다. 실패해도 원문 그대로.
+    try {
+      const dataUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`;
+      const sym = await detectAndRepairSymbols(dataUrl, ocrText);
+      if (sym.repairCount > 0) { ocrText = sym.repairedText; console.log(`[Reanalyze] 심볼 탐지 ${sym.repairCount}건 교정 (${sym.detected.join(',')})`); }
+    } catch (e) { console.warn('[Reanalyze] 심볼 탐지 실패(무시):', e instanceof Error ? e.message : e); }
 
     // 2. 선택지 추출
     const rawChoices = extractChoicesFromOCR(ocrText);

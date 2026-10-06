@@ -117,8 +117,8 @@ export function repairCircledJamoText(ocrText: string, detected: string[]): { re
   }
   if (repairCount > 0 && /□/.test(repairedText)) {
     repairedText = repairedText
-      .replace(/□\s*([㉠-㉩])/g, '\\boxed{$1}')
-      .replace(/([㉠-㉩])\s*□/g, '\\boxed{$1}')
+      .replace(/□\s*([㉠-㉷])/g, '\\boxed{$1}')
+      .replace(/([㉠-㉷])\s*□/g, '\\boxed{$1}')
       .replace(/□/g, '\\boxed{\\ \\ }');
   }
   return { repairedText, repairCount };
@@ -159,18 +159,25 @@ export async function detectAndRepairSymbols(
   // 2) 크롭 이미지 fetch + base64
   let imageBase64: string;
   let mimeType = 'image/png';
-  try {
-    const imgRes = await fetch(cropImageUrl);
-    if (!imgRes.ok) {
+  // ★ data URL 도 받는다 (재분석 「텍스트 읽어내기」는 크롭을 base64 로 들고 있다, 2026-10-06)
+  const dataUrlMatch = cropImageUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+  if (dataUrlMatch) {
+    mimeType = dataUrlMatch[1];
+    imageBase64 = dataUrlMatch[2];
+  } else {
+    try {
+      const imgRes = await fetch(cropImageUrl);
+      if (!imgRes.ok) {
+        return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: false };
+      }
+      const contentType = imgRes.headers.get('content-type');
+      if (contentType?.startsWith('image/')) mimeType = contentType;
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
+      imageBase64 = buffer.toString('base64');
+    } catch (e) {
+      console.warn('[symbol-detector] 크롭 fetch 실패:', e instanceof Error ? e.message : e);
       return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: false };
     }
-    const contentType = imgRes.headers.get('content-type');
-    if (contentType?.startsWith('image/')) mimeType = contentType;
-    const buffer = Buffer.from(await imgRes.arrayBuffer());
-    imageBase64 = buffer.toString('base64');
-  } catch (e) {
-    console.warn('[symbol-detector] 크롭 fetch 실패:', e instanceof Error ? e.message : e);
-    return { repairedText: ocrText, repairCount: 0, detected: [], flashCalled: false };
   }
 
   // 3) Gemini Flash 호출 — 닫힌 기호 5종 탐지 (현재 동그라미 한글만, MVP)
