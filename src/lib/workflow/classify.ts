@@ -94,7 +94,8 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
   const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
   // 분류 공급자 우선순위: 'anthropic'(기본) | 'gemini' | 'openai'
-  // Claude Sonnet 4.6은 한국어 분류 정확도가 가장 높음. Gemini/GPT는 fallback.
+  // 2026-10-06 분류 1차 = Claude Sonnet 5.5 (대표 "비용 많이 안 오르면 바꿔" → 공식 단가 $2/$10 로 4.6($3/$15)보다 싸고,
+  //   같은 분류 프롬프트 실측 입력 1,684→1,693 토큰(차이 없음). 입력이 비용의 대부분이라 건당 약 30% 절감). Gemini/GPT 는 fallback.
   const CLASSIFY_PROVIDER = (process.env.CLASSIFY_PROVIDER || 'anthropic').toLowerCase();
   const CLAUDE_CLASSIFY_MODEL = process.env.CLAUDE_CLASSIFY_MODEL || CLAUDE_MODELS.CLASSIFY_DEFAULT;
 
