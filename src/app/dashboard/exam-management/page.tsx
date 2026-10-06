@@ -98,7 +98,7 @@ interface ExamProblem {
   figureSvg?: string;
   figureData?: InterpretedFigure;
   upscaledCropUrl?: string;
-  figureSource?: 'upscaled_crop' | 'ai_generated';
+  figureSource?: 'upscaled_crop' | 'ai_generated' | 'ai_image';
   images?: Array<{ url: string; type: string; label: string }>;
   points?: number;
 }

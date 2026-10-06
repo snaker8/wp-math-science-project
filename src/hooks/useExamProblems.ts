@@ -39,7 +39,7 @@ export interface ExamProblemData {
   /** ★ 업스케일된 크롭 이미지 URL */
   upscaledCropUrl?: string;
   /** 도형 소스: 'upscaled_crop' = 업스케일 원본 사용, 'ai_generated' 등 */
-  figureSource?: 'upscaled_crop' | 'ai_generated';
+  figureSource?: 'upscaled_crop' | 'ai_generated' | 'ai_image';
 }
 
 export interface ExamInfo {

@@ -27,7 +27,7 @@ export interface ExamRenderProblem {
   figureData?: InterpretedFigure;
   figureSvg?: string;
   upscaledCropUrl?: string;
-  figureSource?: 'upscaled_crop' | 'ai_generated';
+  figureSource?: 'upscaled_crop' | 'ai_generated' | 'ai_image';
   images?: Array<{ url: string; type: string; label: string }>;
   hasFigure?: boolean;
   /** ★ 서술형 소문제별 답·배점 — 본문 "N-M." 라인 뒤에 [N점] 인라인 주입용 */
