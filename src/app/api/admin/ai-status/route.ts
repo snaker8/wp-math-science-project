@@ -45,7 +45,7 @@ export async function GET() {
     },
     // 어느 모델을 쓰는지 — 은퇴 모델이 박혀 있으면 여기서 바로 보인다
     models: {
-      classify: process.env.CLAUDE_CLASSIFY_MODEL || CLAUDE_MODELS.SONNET,
+      classify: process.env.CLAUDE_CLASSIFY_MODEL || CLAUDE_MODELS.CLASSIFY_DEFAULT,
       classifyProvider: (process.env.CLASSIFY_PROVIDER || 'anthropic').toLowerCase(),
       solutionOpusFallback: process.env.ANTHROPIC_OPUS_MODEL || CLAUDE_MODELS.OPUS,
     },

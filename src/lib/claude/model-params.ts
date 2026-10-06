@@ -21,6 +21,8 @@ export const CLAUDE_MODELS = {
   OPUS: 'claude-opus-5-5',
   /** 짧은 분류·요약 */
   HAIKU: 'claude-haiku-4-5',
+  /** 분류 1차 기본 — 예산 작업 진행 중이라 4.6 유지(2026-10-06). env CLAUDE_CLASSIFY_MODEL 로 전환 */
+  CLASSIFY_DEFAULT: 'claude-sonnet-4-6',
 } as const;
 
 /** `temperature`/`top_p`/`top_k` 를 아직 허용하는 모델. 여기 없으면 보내지 않는다. */

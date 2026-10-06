@@ -24,7 +24,7 @@
 // ============================================================================
 
 import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
-import { normalizeClaudeBody } from '@/lib/claude/model-params';
+import { normalizeClaudeBody, CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable, buildL1L2Table, buildL3L4Table, withNeighborCourses, NEIGHBOR_COURSES } from './mathsecr-prompt';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -96,7 +96,7 @@ export async function classifyProblem(input: ClassifyInput): Promise<ClassifyRes
   // 분류 공급자 우선순위: 'anthropic'(기본) | 'gemini' | 'openai'
   // Claude Sonnet 4.6은 한국어 분류 정확도가 가장 높음. Gemini/GPT는 fallback.
   const CLASSIFY_PROVIDER = (process.env.CLASSIFY_PROVIDER || 'anthropic').toLowerCase();
-  const CLAUDE_CLASSIFY_MODEL = process.env.CLAUDE_CLASSIFY_MODEL || 'claude-sonnet-4-6';
+  const CLAUDE_CLASSIFY_MODEL = process.env.CLAUDE_CLASSIFY_MODEL || CLAUDE_MODELS.CLASSIFY_DEFAULT;
 
   if (!OPENAI_API_KEY && !GOOGLE_AI_KEY && !ANTHROPIC_API_KEY) {
     console.warn(`[${label}] API 키 모두 없음 — 분류 스킵`);
