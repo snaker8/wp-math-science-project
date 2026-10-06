@@ -3,6 +3,7 @@
 import React, { memo } from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
+import { estimateChoiceWidth, planHorizontalChoices } from '@/components/shared/choice-width';
 import { cleanLatexContent, cleanChoiceText, injectSubQuestionPoints } from '@/lib/utils/clean-latex';
 import { bandLabelOf } from '@/lib/class/mastery-bands';
 import type { InterpretedFigure } from '@/types/ocr';
@@ -279,11 +280,25 @@ function ExamProblemRendererInner({
       );
 
     if (isInline) {
-      // ★ 2026-10-06 대표: 원본이 가로 한 줄(5)인 짧은 보기가 인쇄 2단 칸(약 320px)에서 3+2 로 접혔다.
-      //   gap-x-9(36px) 흐름 배치는 폭이 모자라면 접히므로, 보기 ≤5개·아주 짧을 때(sin 0° 꼴)는
-      //   N 등분 그리드로 한 줄에 균등 배치(매쓰홀릭 조판과 같음). 길면 종전처럼 흐름 배치(접힘 허용).
-      const equalRow = items.length <= 5 && maxLen <= 8;
-      if (equalRow) {
+      // ★ 2026-10-06 대표: 가로(5) 보기가 인쇄 2단 칸(약 345px)에서 불규칙하게 접혔다.
+      //   수식의 보이는 폭을 추정해 셋으로 나눈다 (choice-width.ts):
+      //   row  = sin A·√3·분수 같이 아주 짧으면 N 등분 한 줄 (매쓰홀릭 조판)
+      //   grid3 = sin 60° 같이 중간이면 3열 그리드(5개면 3+2) — 대표 "3,2 가 맞다 / 5열은 길다"
+      //   flow  = 길면 종전 흐름 배치(접힘 허용)
+      const plan = planHorizontalChoices(items.map((it) => estimateChoiceWidth(it.content)));
+      if (plan === 'grid3') {
+        return (
+          <div className="mt-2.5 grid grid-cols-3 gap-x-6 gap-y-2.5">
+            {items.map((it, ci) => (
+              <div key={ci} className="flex items-start gap-1 text-[13.5px] text-gray-700" style={{ lineHeight: '1.65', wordBreak: 'keep-all' }}>
+                <span className="flex-shrink-0 text-gray-500">{it.prefix}</span>
+                {renderChoiceBody(it)}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      if (plan === 'row') {
         return (
           <div className="mt-2.5 grid items-center gap-x-2" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
             {items.map((it, ci) => (
