@@ -3,6 +3,8 @@
 // PDF, HWP(한글), 이미지 파일 지원
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
+import { CLAUDE_MODELS, normalizeClaudeBody } from '@/lib/claude/model-params';
 import type {
   UploadJob,
   ProcessingStatus,
@@ -29,9 +31,9 @@ import { cachedSystem } from '@/lib/claude/cache';
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';  // ★ gpt-4o — 과학·해설·빠른정답 분기용 폴백 (수학 분류는 classify.ts Sonnet 4.6 직행)
+const OPENAI_MODEL = process.env.OPENAI_MODEL || OPENAI_MODELS.MAIN;  // ★ 2026-10-06 GPT-5.5 (normalizeOpenAIBody 가 max_completion_tokens·temperature 처리)
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6';  // ★ Claude Sonnet 4.6 (풀이 생성 전담) — Anthropic 공식 alias
+const ANTHROPIC_MODEL = CLAUDE_MODELS.SONNET;  // ★ 2026-10-06 Sonnet 5.5 (풀이 생성 전담)
 
 // 다사람수학 교육과정 성취기준 체계 (505개 = 2022 개정 319개 + 2015 개정 186개)
 export const MATH_CURRICULUM_SYSTEM = {
@@ -1579,7 +1581,7 @@ async function callOpenAI(prompt: string, retriesOrOptions?: number | CallOpenAI
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(normalizeOpenAIBody({
         model: currentModel,
         messages: [
           {
@@ -1591,7 +1593,7 @@ async function callOpenAI(prompt: string, retriesOrOptions?: number | CallOpenAI
         temperature: currentTemperature,
         max_tokens: 6000,
         response_format: { type: 'json_object' },
-      }),
+      })),
     });
 
     if (!response.ok) {
@@ -1657,7 +1659,7 @@ async function callClaude(prompt: string, options: CallClaudeOptions = {}): Prom
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
+      body: JSON.stringify(normalizeClaudeBody({
         model: ANTHROPIC_MODEL,
         max_tokens: maxTokens,
         system: cachedSystem(systemMessage),
@@ -1665,7 +1667,7 @@ async function callClaude(prompt: string, options: CallClaudeOptions = {}): Prom
           { role: 'user', content: prompt },
         ],
         temperature,
-      }),
+      })),
     });
 
     if (!response.ok) {

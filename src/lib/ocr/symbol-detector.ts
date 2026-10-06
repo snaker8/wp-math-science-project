@@ -155,7 +155,7 @@ export async function detectAndRepairSymbols(
 - 의심스러우면 제외 (정확도 우선)
 - 이미지에 없으면 {"symbols": []}`;
 
-  const model = process.env.GEMINI_SYMBOL_MODEL || 'gemini-3.5-flash';
+  const model = process.env.GEMINI_SYMBOL_MODEL || 'gemini-3.8-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
   let detected: string[] = [];

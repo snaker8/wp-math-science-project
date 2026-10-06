@@ -17,7 +17,7 @@
 import type { ScienceGeminiProblem } from '@/types/science-ocr';
 
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || '';
-const DEFAULT_MODEL = process.env.GEMINI_SCIENCE_MODEL || 'gemini-3.5-flash';
+const DEFAULT_MODEL = process.env.GEMINI_SCIENCE_MODEL || 'gemini-3.8-flash';
 
 /**
  * Gemini Vision 호출 결과 (raw)

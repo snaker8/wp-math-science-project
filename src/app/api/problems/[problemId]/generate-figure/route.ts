@@ -4,6 +4,8 @@
 // 원본 크롭이 쓸만하면 업스케일만으로 완료, 안되면 AI 생성
 // ============================================================================
 
+import { OPENAI_MODELS } from '@/lib/openai/model-params';
+import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
@@ -427,7 +429,7 @@ export async function POST(
       upscaleInfo: undefined,                 // ★ 업스케일 데이터 제거
       figureSvg: legacySvg || currentAnalysis.figureSvg || undefined,
       figureGeneratedAt: new Date().toISOString(),
-      figureModel: process.env.VISION_PROVIDER === 'gpt' ? 'gpt-4o' : process.env.VISION_PROVIDER === 'claude' ? 'claude-sonnet' : `gemini (${process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview'})`,
+      figureModel: process.env.VISION_PROVIDER === 'gpt' ? OPENAI_MODELS.MAIN : process.env.VISION_PROVIDER === 'claude' ? CLAUDE_MODELS.SONNET : `gemini (${process.env.GEMINI_MODEL || 'gemini-3.8-flash'})`,
       // EVPM 메타: confidence 기록 (VP 재시도 여부는 image-interpreter 로그 참조)
       figureConfidence: interpreted.confidence,
     };

@@ -4,6 +4,8 @@
 // - Claude Sonnet으로 풀이 생성 + Gemini Flash 정답 교차검증
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
+import { CLAUDE_MODELS, normalizeClaudeBody } from '@/lib/claude/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
@@ -21,7 +23,7 @@ export const maxDuration = 300;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 // ★ Anthropic 공식 alias 사용 (Sonnet 4.6부터 date suffix 없는 alias 유효)
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+const ANTHROPIC_MODEL = CLAUDE_MODELS.SONNET;   // ★ 2026-10-06 Sonnet 5.5 — adaptive thinking (normalizeClaudeBody)
 // ★ 어려운 문제 / Sonnet 검산 불일치 시 fallback 모델
 //   2026-08-30: claude-opus-4-1 은 2026-08-05 은퇴 → API 404. 실측 확인:
 //     GET /v1/models/claude-opus-4-1 → 404 / claude-opus-4-7 → 200
@@ -31,7 +33,7 @@ const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 //     thinking budget_tokens 가 제거돼 그대로 보내면 400 이다 (아래 호출부 참고).
 //     4-7 을 고른 이유: 4-1 과 같은 요금대이고, thinking 을 생략하면 기존처럼 비활성이라
 //     현재 비용 프로파일이 그대로 유지된다. (Opus 5 는 thinking 이 기본 on 이라 비용이 변한다.)
-const ANTHROPIC_OPUS_MODEL = process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-7';
+const ANTHROPIC_OPUS_MODEL = process.env.ANTHROPIC_OPUS_MODEL || CLAUDE_MODELS.OPUS;
 // Sonnet thinking 최대 대기 시간(ms). 이 이상 걸리면 Opus로 넘어감
 const SONNET_TIMEOUT_MS = Number(process.env.SONNET_TIMEOUT_MS || 90_000);
 // 난이도가 이 이상이면 처음부터 Opus 사용 (수학비서 기준 1~10 중 10 = 사실상 비활성)
@@ -587,14 +589,14 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
               // ★ thinking 결과로 output이 8192 초과 가능성 대비 128k 출력 허용
               'anthropic-beta': 'output-128k-2025-02-19',
             },
-            body: JSON.stringify({
+            body: JSON.stringify(normalizeClaudeBody({
               model: ANTHROPIC_MODEL,
               max_tokens: MAX_TOKENS,
               system: cachedSystem(systemPrompt),
               messages: [{ role: 'user', content: userContent }],
               thinking: { type: 'enabled', budget_tokens: THINKING_BUDGET },
-              temperature: 1, // thinking 활성 시 API 요구사항
-            }),
+              temperature: 1, // thinking 활성 시 API 요구사항 (5.x 는 normalize 가 adaptive+effort 로 바꾸고 temperature 를 뺀다)
+            })),
             signal: sonnetController.signal,
           });
         } catch (abortErr: any) {
@@ -631,13 +633,13 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
                     'x-api-key': ANTHROPIC_API_KEY,
                     'anthropic-version': '2023-06-01',
                   },
-                  body: JSON.stringify({
+                  body: JSON.stringify(normalizeClaudeBody({
                     model: ANTHROPIC_MODEL,
                     max_tokens: 4000,
                     system: cachedSystem(systemPrompt),
                     messages: [{ role: 'user', content: userContent }],
                     temperature: 0.2,
-                  }),
+                  })),
                 });
                 if (retry.ok) {
                   const data = await retry.json();
@@ -668,13 +670,13 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
                 'x-api-key': ANTHROPIC_API_KEY,
                 'anthropic-version': '2023-06-01',
               },
-              body: JSON.stringify({
+              body: JSON.stringify(normalizeClaudeBody({
                 model: ANTHROPIC_MODEL,
                 max_tokens: 4000,
                 system: cachedSystem(systemPrompt),
                 messages: [{ role: 'user', content: userContent }],
                 temperature: 0.2,
-              }),
+              })),
             });
             if (retry.ok) {
               const data = await retry.json();
@@ -729,8 +731,8 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
             'Content-Type': 'application/json',
             Authorization: `Bearer ${OPENAI_API_KEY}`,
           },
-          body: JSON.stringify({
-            model: 'gpt-4o',
+          body: JSON.stringify(normalizeOpenAIBody({
+            model: OPENAI_MODELS.MAIN,
             messages: [
               { role: 'system', content: gptSystemMsg },
               { role: 'user', content: gptUserContent },
@@ -738,7 +740,7 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
             temperature: 0.2,
             max_tokens: 4000,
             response_format: { type: 'json_object' },
-          }),
+          })),
         });
 
         if (!gptRes.ok) {
@@ -750,7 +752,7 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
           const gptData = await gptRes.json();
           const rawText = gptData.choices?.[0]?.message?.content || '';
           solution = parseJsonResponse(rawText);
-          usedModel = 'gpt-4o';
+          usedModel = OPENAI_MODELS.MAIN;
           console.warn('[generate-solution] ⚠️ GPT-4o 폴백 사용 (Sonnet 실패)');
         }
       } catch (e) {
@@ -999,7 +1001,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             'anthropic-version': '2023-06-01',
             'anthropic-beta': 'output-128k-2025-02-19',
           },
-          body: JSON.stringify({
+          body: JSON.stringify(normalizeClaudeBody({
             model: ANTHROPIC_MODEL,
             // 검산도 thinking — budget 3000 + output 2500 < 8192
             max_tokens: 6000,
@@ -1007,7 +1009,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             messages: [{ role: 'user', content: userContentVerify }],
             thinking: { type: 'enabled', budget_tokens: 3000 },
             temperature: 1,
-          }),
+          })),
         });
         if (r.ok) {
           const data = await r.json();
@@ -1091,7 +1093,7 @@ JSON: { "finalAnswer": "최종 정답", "reasoning": "핵심 풀이 2~3줄" }`;
             'anthropic-version': '2023-06-01',
             'anthropic-beta': 'output-128k-2025-02-19',
           },
-          body: JSON.stringify(opusBody),
+          body: JSON.stringify(normalizeClaudeBody(opusBody)),
         });
 
         if (opusRes.ok) {

@@ -510,7 +510,7 @@ async function extractAnswersWithGeminiSingle(file: File): Promise<ParsedAnswer[
 4. 불필요한 말(인사, 설명)은 생략하고 데이터만 줘.`;
 
   // gemini-3-flash-preview: 비전 최강(MMMU-Pro 81.2%), 답추출기보다 인식률 ↑
-  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3-flash-preview';
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.8-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
   const res = await fetch(url, {
@@ -719,7 +719,7 @@ async function extractSolutionsWithGeminiSingle(
 7. 모든 문제를 **빠짐없이** 추출. 중간에 멈추지 말 것. 문제 번호 누락 절대 금지.
 8. 페이지 안에 보이는 모든 문제 번호를 빠짐없이 "--- 문제 N ---" 헤더로 시작해. 헤더 빼먹지 마.`;
 
-  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3-flash-preview';
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.8-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
   const res = await fetch(url, {

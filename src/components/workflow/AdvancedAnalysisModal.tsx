@@ -192,7 +192,7 @@ export function AdvancedAnalysisModal({
                     : '최고 정확도 · 비용 ↑↑ (필요 시만)'
                 }
               >
-                {m === 'gpt-4o' ? 'GPT-4o' : m === 'claude-sonnet' ? 'Sonnet ★' : 'Opus ⚠'}
+                {m === 'gpt-4o' ? 'GPT-5.5' : m === 'claude-sonnet' ? 'Sonnet ★' : 'Opus ⚠'}
               </button>
             ))}
           </div>

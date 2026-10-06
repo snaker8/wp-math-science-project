@@ -9,6 +9,7 @@
 // body { days?: 1|7|30 }  →  { draft, usage: { input, output }, model }
 // ============================================================================
 
+import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 interface RouteParams { params: Promise<{ classId: string; studentId: string }> }
-const MODEL = 'claude-sonnet-5';   // 대표: "굳이 오퍼스를 써야 하나" (09-07) → 4문장 총평엔 Sonnet 5. 실측 577/202 토큰 · 3초 ≈ 4원
+const MODEL = CLAUDE_MODELS.SONNET;   // 대표: "굳이 오퍼스를 써야 하나" (09-07) → 4문장 총평엔 Sonnet 5. 실측 577/202 토큰 · 3초 ≈ 4원
 
 const SYSTEM = `당신은 수학 학원 선생님을 돕는 보조입니다. 학부모에게 보내는 학습 리포트의 「선생님 총평」 초안을 씁니다.
 규칙:

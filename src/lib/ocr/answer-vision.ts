@@ -41,7 +41,7 @@ export async function extractAnswersWithGemini(file: File): Promise<ParsedAnswer
 4. 손글씨로 적힌 답도 최대한 정확히 인식해 (학생 답안표에 사용).
 5. 불필요한 말(인사, 설명)은 생략하고 데이터만 줘.`;
 
-  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3-flash-preview';
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.8-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
   const res = await fetch(url, {

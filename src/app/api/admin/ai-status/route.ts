@@ -10,6 +10,7 @@
 //   구분할 수 있으면 충분하고, 그 이상은 유출이다.
 // ============================================================================
 
+import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { NextResponse } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { isSolutionApprover } from '@/lib/security/solution-pin';
@@ -44,9 +45,9 @@ export async function GET() {
     },
     // 어느 모델을 쓰는지 — 은퇴 모델이 박혀 있으면 여기서 바로 보인다
     models: {
-      classify: process.env.CLAUDE_CLASSIFY_MODEL || 'claude-sonnet-4-6',
+      classify: process.env.CLAUDE_CLASSIFY_MODEL || CLAUDE_MODELS.SONNET,
       classifyProvider: (process.env.CLASSIFY_PROVIDER || 'anthropic').toLowerCase(),
-      solutionOpusFallback: process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-7',
+      solutionOpusFallback: process.env.ANTHROPIC_OPUS_MODEL || CLAUDE_MODELS.OPUS,
     },
     checkedAt: new Date().toISOString(),
   });

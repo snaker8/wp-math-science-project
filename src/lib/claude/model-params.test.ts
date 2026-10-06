@@ -1,67 +1,57 @@
 import { describe, it, expect } from 'vitest';
-import { acceptsSamplingParams, withSamplingParams } from './model-params';
+import { normalizeClaudeBody, usesAdaptiveThinking, effortFromBudget, CLAUDE_MODELS } from './model-params';
+import { normalizeOpenAIBody, isReasoningModel, OPENAI_MODELS } from '../openai/model-params';
 
-// 회귀 테스트 — 2026-08-30: Opus 4.7+ 에 temperature 보내 400 나던 사고
-describe('acceptsSamplingParams', () => {
-  it.each([
-    'claude-sonnet-4-6',
-    'claude-sonnet-4-5',
-    'claude-opus-4-6',
-    'claude-opus-4-5',
-    'claude-opus-4-1',
-    'claude-haiku-4-5',
-    'claude-3-opus-20240229',
-  ])('허용 모델을 통과시킨다 — %s', (model) => {
-    expect(acceptsSamplingParams(model)).toBe(true);
+// 2026-10-06 실측(/v1/messages): 5.x 는 enabled thinking·temperature 거부, adaptive+effort 만 받는다
+describe('normalizeClaudeBody', () => {
+  it('★ 5.5 + 종전 enabled thinking → adaptive + effort, temperature 제거', () => {
+    const b: Record<string, unknown> = normalizeClaudeBody({ model: CLAUDE_MODELS.SONNET, max_tokens: 12000, thinking: { type: 'enabled', budget_tokens: 8000 }, temperature: 1, messages: [] });
+    expect(b.thinking).toEqual({ type: 'adaptive' });
+    expect(b.output_config).toEqual({ effort: 'high' });
+    expect('temperature' in b).toBe(false);
   });
-
-  it.each([
-    'claude-opus-4-7',   // ★ 실제 사고 모델
-    'claude-opus-4-8',
-    'claude-opus-5',
-    'claude-sonnet-5',
-    'claude-fable-5',
-  ])('제거된 모델을 막는다 — %s', (model) => {
-    expect(acceptsSamplingParams(model)).toBe(false);
+  it('5.5 + temperature 만 → temperature 제거, thinking 없음', () => {
+    const b: Record<string, unknown> = normalizeClaudeBody({ model: 'claude-opus-5-5', max_tokens: 4000, temperature: 0.2, messages: [] });
+    expect('temperature' in b).toBe(false);
+    expect('thinking' in b).toBe(false);
   });
-
-  it('모르는 모델은 안전하게 false', () => {
-    expect(acceptsSamplingParams('claude-future-9')).toBe(false);
-    expect(acceptsSamplingParams('')).toBe(false);
-    expect(acceptsSamplingParams(undefined)).toBe(false);
-    expect(acceptsSamplingParams(null)).toBe(false);
+  it('effort 지정이 budget 환산보다 우선', () => {
+    const b: Record<string, unknown> = normalizeClaudeBody({ model: CLAUDE_MODELS.SONNET, max_tokens: 9000, thinking: { type: 'enabled', budget_tokens: 1000 }, messages: [] }, { effort: 'high' });
+    expect(b.output_config).toEqual({ effort: 'high' });
   });
-
-  it('접두사 오탐을 내지 않는다', () => {
-    // 'claude-sonnet-4-6' 허용이 'claude-sonnet-4-60' 같은 별개 모델까지 통과시키면 안 된다
-    expect(acceptsSamplingParams('claude-sonnet-4-60')).toBe(false);
-    // 하이픈으로 이어지는 날짜 스냅샷은 같은 계열이므로 허용
-    expect(acceptsSamplingParams('claude-sonnet-4-5-20250929')).toBe(true);
+  it('4.6 은 그대로 (enabled + temperature 1)', () => {
+    const b: Record<string, unknown> = normalizeClaudeBody({ model: 'claude-sonnet-4-6', max_tokens: 6000, thinking: { type: 'enabled', budget_tokens: 3000 }, temperature: 1, messages: [] });
+    expect(b.thinking).toEqual({ type: 'enabled', budget_tokens: 3000 });
+    expect(b.temperature).toBe(1);
   });
-
-  it('대소문자·공백에 흔들리지 않는다', () => {
-    expect(acceptsSamplingParams('  Claude-Sonnet-4-6 ')).toBe(true);
-    expect(acceptsSamplingParams('  Claude-Opus-4-7 ')).toBe(false);
+  it('4.7 (sampling 미허용) 은 temperature 만 제거', () => {
+    const b: Record<string, unknown> = normalizeClaudeBody({ model: 'claude-opus-4-7', max_tokens: 4000, temperature: 0.2, messages: [] });
+    expect('temperature' in b).toBe(false);
+  });
+  it('usesAdaptiveThinking / effortFromBudget', () => {
+    expect(usesAdaptiveThinking('claude-sonnet-5-5')).toBe(true);
+    expect(usesAdaptiveThinking('claude-sonnet-5')).toBe(true);
+    expect(usesAdaptiveThinking('claude-fable-5-1')).toBe(true);
+    expect(usesAdaptiveThinking('claude-sonnet-4-6')).toBe(false);
+    expect(usesAdaptiveThinking('claude-haiku-4-5')).toBe(false);
+    expect(effortFromBudget(2000)).toBe('low'); expect(effortFromBudget(4000)).toBe('medium'); expect(effortFromBudget(8000)).toBe('high');
   });
 });
 
-describe('withSamplingParams', () => {
-  it('허용 모델에는 얹는다', () => {
-    const body = withSamplingParams({ model: 'claude-sonnet-4-6' }, 'claude-sonnet-4-6', { temperature: 0.2 });
-    expect(body).toHaveProperty('temperature', 0.2);
+// 2026-10-06 실측(/v1/chat/completions): gpt-5.x 는 max_tokens 거부(max_completion_tokens), temperature≠1 거부
+describe('normalizeOpenAIBody', () => {
+  it('★ gpt-5.5: max_tokens → max_completion_tokens, temperature 0.2 제거, response_format 유지', () => {
+    const b: Record<string, unknown> = normalizeOpenAIBody({ model: OPENAI_MODELS.MAIN, messages: [], temperature: 0.2, max_tokens: 4000, response_format: { type: 'json_object' } });
+    expect(b.max_completion_tokens).toBe(4000);
+    expect('max_tokens' in b).toBe(false);
+    expect('temperature' in b).toBe(false);
+    expect(b.response_format).toEqual({ type: 'json_object' });
   });
-
-  it('★ 핵심 회귀: 제거된 모델에는 얹지 않는다', () => {
-    const body = withSamplingParams({ model: 'claude-opus-4-7' }, 'claude-opus-4-7', { temperature: 0.2 });
-    expect(body).not.toHaveProperty('temperature');
+  it('gpt-4o 는 그대로', () => {
+    const b: Record<string, unknown> = normalizeOpenAIBody({ model: 'gpt-4o', messages: [], temperature: 0.2, max_tokens: 100 });
+    expect(b.max_tokens).toBe(100); expect(b.temperature).toBe(0.2);
   });
-
-  it('top_p/top_k 도 같은 규칙을 따른다', () => {
-    expect(withSamplingParams({}, 'claude-opus-4-7', { top_p: 0.9, top_k: 5 })).toEqual({});
-    expect(withSamplingParams({}, 'claude-sonnet-4-6', { top_p: 0.9, top_k: 5 })).toEqual({ top_p: 0.9, top_k: 5 });
-  });
-
-  it('undefined 파라미터는 얹지 않는다', () => {
-    expect(withSamplingParams({}, 'claude-sonnet-4-6', {})).toEqual({});
+  it('isReasoningModel', () => {
+    expect(isReasoningModel('gpt-5.4-mini')).toBe(true); expect(isReasoningModel('o3')).toBe(true); expect(isReasoningModel('gpt-4.1-mini')).toBe(false);
   });
 });

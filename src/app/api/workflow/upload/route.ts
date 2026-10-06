@@ -6,6 +6,7 @@
 export const maxDuration = 300; // 5분 타임아웃
 export const dynamic = 'force-dynamic';
 
+import { OPENAI_MODELS } from '@/lib/openai/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient, supabaseAdmin } from '@/lib/supabase/server';
 import type { UploadJob, ProcessingStatus, LLMAnalysisResult, SchoolMetaInput } from '@/types/workflow';
@@ -2922,7 +2923,7 @@ async function saveProblemsToDB(
           cognitive_domain: result.classification.cognitiveDomain || 'CALCULATION',
           ai_confidence: result.classification.confidence || 0.5,
           is_verified: false,
-          classification_source: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          classification_source: process.env.OPENAI_MODEL || OPENAI_MODELS.MINI,
           estimated_time_minutes: result.estimatedTimeMinutes || 5,
           prerequisite_types: result.classification.prerequisites || [],
         });
@@ -3202,7 +3203,7 @@ async function saveProblemsToDB(
                   figureData: interpreted,
                   figureSvg: legacySvg || analysis.figureSvg || undefined,
                   figureGeneratedAt: new Date().toISOString(),
-                  figureModel: 'gpt-4o',
+                  figureModel: OPENAI_MODELS.MAIN,
                 },
               })
               .eq('id', savedProblem.id);

@@ -4,6 +4,7 @@
 // (YOLO graph/table 학습 부족 보완용 — YOLO 0건 시 폴백으로 사용)
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const maxDuration = 60;
@@ -95,8 +96,8 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'gpt-4o',
+      body: JSON.stringify(normalizeOpenAIBody({
+        model: OPENAI_MODELS.MAIN,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           {
@@ -107,9 +108,9 @@ export async function POST(request: NextRequest) {
             ],
           },
         ],
-        temperature: 0,  // ★ 일관성 우선 — 같은 이미지에 같은 결과
+        temperature: 0,  // ★ 일관성 우선 — 같은 이미지에 같은 결과 (gpt-5 는 normalize 가 뺀다)
         max_tokens: 500,
-      }),
+      })),
     });
 
     if (!resp.ok) {

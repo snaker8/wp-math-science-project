@@ -5,13 +5,14 @@
 // + GPT-4o 문제 분류 (대한민국 교육과정 505개 성취기준 + 5등급 난이도)
 // ============================================================================
 
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { extractChoicesFromOCR } from '@/lib/ocr/extract-choices-from-ocr';
-import { withSamplingParams } from '@/lib/claude/model-params';
+import { withSamplingParams, CLAUDE_MODELS } from '@/lib/claude/model-params';
 
 // 그래프 분석 결과 타입
 export interface GraphData {
@@ -256,7 +257,7 @@ export async function POST(request: NextRequest) {
       // ★ 채팅형 반복 수정 모드 — currentText 가 있으면 Mathpix OCR 스킵하고
       //    LLM 으로 currentText 에 customPrompt 적용
       currentText,
-      // ★ 모델 선택 — 'gpt-4o' (default, 빠름) | 'claude-opus' (정확) | 'claude-sonnet'
+      // ★ 모델 선택 키 — 'gpt-4o'(=GPT 최신, OPENAI_MODELS.MAIN) | 'claude-opus' | 'claude-sonnet'. 키는 UI 호환용으로 유지
       model = 'gpt-4o',
     } = body;
 
@@ -656,7 +657,7 @@ async function analyzeGraphWithVision(imageBase64: string): Promise<GraphData | 
   }
 
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const geminiModelName = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+  const geminiModelName = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
   const imageData = imageBase64.startsWith('data:')
     ? imageBase64.split(',')[1]
@@ -860,8 +861,8 @@ async function correctOcrTypos(ocrText: string): Promise<string> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
       signal: controller.signal,
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
+      body: JSON.stringify(normalizeOpenAIBody({
+        model: OPENAI_MODELS.MINI,
         messages: [
           {
             role: 'system',
@@ -877,7 +878,7 @@ async function correctOcrTypos(ocrText: string): Promise<string> {
         ],
         temperature: 0,
         max_tokens: Math.min(ocrText.length * 2, 2000),
-      }),
+      })),
     });
 
     clearTimeout(timeout);
@@ -985,15 +986,15 @@ OCR 원본이 틀렸을 수 있으니 반드시 이미지를 기준으로 판단
       'Content-Type': 'application/json',
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: 'gpt-4o',
+    body: JSON.stringify(normalizeOpenAIBody({
+      model: OPENAI_MODELS.MAIN,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
       temperature: hasUserDirective ? 0.2 : 0.1,
       max_tokens: 2500,
-    }),
+    })),
   });
 
   if (!response.ok) {
@@ -1023,9 +1024,9 @@ async function refineWithClaude(
     return refineWithGPT(currentText, customPrompt, imageBase64);
   }
 
-  const model = modelKey === 'claude-opus' ? 'claude-opus-4-7'
-    : modelKey === 'claude-sonnet' ? 'claude-sonnet-4-6'
-    : 'claude-sonnet-4-6';
+  const model = modelKey === 'claude-opus' ? CLAUDE_MODELS.OPUS
+    : modelKey === 'claude-sonnet' ? CLAUDE_MODELS.SONNET
+    : CLAUDE_MODELS.SONNET;
 
   const systemPrompt = `당신은 한국 수학 시험지 텍스트를 사용자 지시에 따라 정확히 수정하는 전문가입니다.
 

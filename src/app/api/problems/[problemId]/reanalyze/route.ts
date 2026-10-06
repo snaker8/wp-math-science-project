@@ -6,6 +6,8 @@
 // - advanced: true 시 gpt-4o 사용
 // ============================================================================
 
+import { CLAUDE_MODELS } from '@/lib/claude/model-params';
+import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
@@ -453,7 +455,7 @@ async function reanalyzeClassificationOnly(
           problem,
           existingClassification,
           analysis,
-          claudeResult.model || 'claude-sonnet-4-6',
+          claudeResult.model || CLAUDE_MODELS.SONNET,
           false
         );
       }
@@ -473,7 +475,7 @@ async function reanalyzeClassificationOnly(
     });
   }
 
-  const model = isAdvanced ? 'gpt-4o' : (process.env.OPENAI_MODEL || 'gpt-4o-mini');
+  const model = isAdvanced ? OPENAI_MODELS.MAIN : (process.env.OPENAI_MODEL || OPENAI_MODELS.MINI);
 
   // ★ 과학/수학에 따라 프롬프트 분기
   const systemPrompt = isScience
@@ -552,7 +554,7 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${openaiKey}`,
     },
-    body: JSON.stringify({
+    body: JSON.stringify(normalizeOpenAIBody({
       model,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -561,7 +563,7 @@ ${typeTable ? `아래 유형 테이블에서 가장 적합한 typeCode를 선택
       temperature: 0.1,
       max_tokens: 2000,
       response_format: { type: 'json_object' },
-    }),
+    })),
   });
 
   if (!openaiRes.ok) {

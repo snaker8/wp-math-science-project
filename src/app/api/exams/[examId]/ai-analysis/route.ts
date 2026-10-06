@@ -7,6 +7,7 @@
 // 분석 산출: ExamAIAnalysis JSON (시험총평/단원별/고난도)
 // ============================================================================
 
+import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
@@ -24,7 +25,7 @@ import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-an
 export const maxDuration = 300;
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+const ANTHROPIC_MODEL = CLAUDE_MODELS.SONNET;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 // ============================================================================
