@@ -12,7 +12,8 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { interpretImage } from '@/lib/vision/image-interpreter';
 import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
-import { redrawAndVerify, GEMINI_IMAGE_MODEL } from '@/lib/vision/image-redraw';
+import { redrawAndVerify, verifyCandidate, GEMINI_IMAGE_MODEL } from '@/lib/vision/image-redraw';
+import { rasterizeSvg } from '@/lib/vision/svg-raster';
 import { tryUpscaleCrop } from '@/lib/vision/image-upscaler';
 
 /**
@@ -337,53 +338,59 @@ export async function POST(
     }
 
     // ================================================================
-    // 3.8. ★ Gemini 이미지 재작성 (2026-10-06) — 「AI 생성」의 1순위.
-    //   원본 크롭을 이미지 편집 모델로 깨끗하게 다시 그리고, 비전 검증(라벨·점·선 일치)을 통과한 것만 쓴다.
-    //   6종 실측에서 Claude SVG·GPT Image 보다 원본 충실도가 높았다(docs/PLAN_EXAM_LINE_DESIGN.md 10-06).
-    //   실패·불일치면 아래 SVG 경로로 그대로 내려간다. body.skipRedraw=true 로 끌 수 있다.
+    // 3.8. ★ AI 경로 순서 (2026-10-06 대표 결정)
+    //   "SVG 가 싸니(실측 26원) SVG 먼저, 제대로 안 되면 이미지(130원)로. 그래야 교정 학습도 된다."
+    //   ① Claude SVG 생성 → 래스터라이즈 → 원본과 비전 검증 → 통과면 SVG 저장(ai_generated, figure_corrections 회로 유지)
+    //   ② 불일치·도형 미감지면 Gemini 이미지 재작성 → 검증 → 통과면 ai_image 저장
+    //   ③ 둘 다 불일치면 SVG 를 저장하되 svgVerify 에 사유를 남기고 응답에 verifyWarning (사용자가 보고 결정)
+    //   body.imageFirst=true 면 종전처럼 이미지 먼저. body.skipRedraw=true 면 이미지 경로 끔. body.skipVerify=true 면 SVG 검증 생략.
     // ================================================================
-    if (imageRawBuffer && body?.skipRedraw !== true) {
+    const tryGeminiRedraw = async (reason: string): Promise<NextResponse | null> => {
+      if (!imageRawBuffer || body?.skipRedraw === true || !supabaseAdmin) return null;
       try {
         const { default: sharp } = await import('sharp');
         const srcPng = await sharp(imageRawBuffer).png().toBuffer();
         const rr = await redrawAndVerify(srcPng, 'image/png');
-        if (rr.ok) {
-          const outPng = await sharp(rr.png).png({ compressionLevel: 9 }).toBuffer();
-          const redrawPath = `problem-crops/redraw/${problemId}.png`;
-          const { error: upErr } = await supabaseAdmin.storage.from('source-files').upload(redrawPath, outPng, { contentType: 'image/png', upsert: true });
-          if (!upErr) {
-            const redrawUrl = `/api/storage/image?path=${encodeURIComponent(redrawPath)}&v=${Date.now()}`;
-            const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
-            const { figureSvg: _s, figureData: _d, ...rest } = currentAnalysis as Record<string, unknown> & { figureSvg?: unknown; figureData?: unknown };
-            const updatedAnalysis = {
-              ...rest,
-              hasFigure: true,
-              figureSource: 'ai_image' as const,
-              upscaledCropUrl: redrawUrl,
-              redrawInfo: { model: GEMINI_IMAGE_MODEL, score: rr.verify.score, issues: rr.verify.issues, attempts: rr.attempts, ms: rr.ms, at: new Date().toISOString() },
-              cropImageUrl: targetImageUrl,
-            };
-            const { error: dbErr } = await supabaseAdmin.from('problems').update({ ai_analysis: updatedAnalysis }).eq('id', problemId);
-            if (!dbErr) {
-              console.log(`[generate-figure] ★ Gemini 재작성 채택 (score=${rr.verify.score}, ${rr.ms}ms) — SVG 스킵`);
-              return NextResponse.json({ success: true, figureSource: 'ai_image', upscaledCropUrl: redrawUrl, redrawInfo: updatedAnalysis.redrawInfo, problemId });
-            }
-            console.warn(`[generate-figure] 재작성 DB 저장 실패: ${dbErr.message} → SVG 폴백`);
-          } else {
-            console.warn(`[generate-figure] 재작성 업로드 실패: ${upErr.message} → SVG 폴백`);
-          }
-        } else {
-          console.log(`[generate-figure] 재작성 ${rr.stage} 실패 → SVG 폴백: ${rr.error}`);
+        if (!rr.ok) {
+          console.log(`[generate-figure] 재작성 ${rr.stage} 실패 (${reason}): ${rr.error}`);
+          return null;
         }
+        const outPng = await sharp(rr.png).png({ compressionLevel: 9 }).toBuffer();
+        const redrawPath = `problem-crops/redraw/${problemId}.png`;
+        const { error: upErr } = await supabaseAdmin.storage.from('source-files').upload(redrawPath, outPng, { contentType: 'image/png', upsert: true });
+        if (upErr) { console.warn(`[generate-figure] 재작성 업로드 실패: ${upErr.message}`); return null; }
+        const redrawUrl = `/api/storage/image?path=${encodeURIComponent(redrawPath)}&v=${Date.now()}`;
+        const currentAnalysis = (problem.ai_analysis as Record<string, unknown>) || {};
+        const { figureSvg: _s, figureData: _d, ...rest } = currentAnalysis as Record<string, unknown> & { figureSvg?: unknown; figureData?: unknown };
+        const updatedAnalysis = {
+          ...rest,
+          hasFigure: true,
+          figureSource: 'ai_image' as const,
+          upscaledCropUrl: redrawUrl,
+          redrawInfo: { model: GEMINI_IMAGE_MODEL, score: rr.verify.score, issues: rr.verify.issues, attempts: rr.attempts, reason, ms: rr.ms, at: new Date().toISOString() },
+          cropImageUrl: targetImageUrl,
+        };
+        const { error: dbErr } = await supabaseAdmin.from('problems').update({ ai_analysis: updatedAnalysis }).eq('id', problemId);
+        if (dbErr) { console.warn(`[generate-figure] 재작성 DB 저장 실패: ${dbErr.message}`); return null; }
+        console.log(`[generate-figure] ★ Gemini 재작성 채택 (${reason}, score=${rr.verify.score}, ${rr.attempts}회, ${rr.ms}ms)`);
+        return NextResponse.json({ success: true, figureSource: 'ai_image', upscaledCropUrl: redrawUrl, redrawInfo: updatedAnalysis.redrawInfo, problemId });
       } catch (e) {
-        console.warn(`[generate-figure] 재작성 예외 → SVG 폴백:`, e instanceof Error ? e.message : e);
+        console.warn(`[generate-figure] 재작성 예외 (${reason}):`, e instanceof Error ? e.message : e);
+        return null;
       }
+    };
+
+    if (body?.imageFirst === true) {
+      const r = await tryGeminiRedraw('image_first');
+      if (r) return r;
     }
 
     // ================================================================
-    // 4. AI Vision 해석 (재작성 실패·불일치 시 폴백)
+    // 4. AI Vision 해석 — SVG (1순위)
     // ================================================================
     if (!process.env.OPENAI_API_KEY) {
+      const r = await tryGeminiRedraw('no_openai_key');
+      if (r) return r;
       return NextResponse.json(
         { error: 'OpenAI API key not configured (업스케일도 실패하여 AI 폴백 필요하지만 키 없음)' },
         { status: 503 }
@@ -400,6 +407,12 @@ export async function POST(
     // 5. 도형 없음 처리 (photo 타입 — postProcess에서 forceGraph인 경우 이미 graph로 전환됨)
     if (interpreted.figureType === 'photo' || interpreted.confidence < 0.3) {
       console.log(`[generate-figure] Problem ${problemId}: No figure detected (${interpreted.figureType}, confidence: ${interpreted.confidence}). content 일부: ${(problem.content_latex || '').substring(0, 100)}`);
+
+      // ★ SVG 가 못 그린 도형 → 이미지 재작성으로 (크롭은 있으니 도형은 있다)
+      {
+        const r = await tryGeminiRedraw('svg_no_figure');
+        if (r) return r;
+      }
 
       // ★ 기존 figureData/figureSvg가 있으면 hasFigure를 false로 덮어쓰지 않음
       // (재생성 시도 실패로 기존 AI 결과까지 삭제되는 버그 방지)
@@ -455,6 +468,27 @@ export async function POST(
       }
     }
 
+    // 6.5. ★ SVG 검증 — 그림으로 바꿔 원본과 대조. 불일치면 이미지 재작성으로, 그것도 안 되면 SVG 저장 + 경고
+    let svgVerify: { ok: boolean; score: number; issues: string[]; labels?: string[] } | undefined;
+    if (legacySvg && imageRawBuffer && body?.skipVerify !== true) {
+      try {
+        const svgPng = await rasterizeSvg(legacySvg, { width: 1000 });
+        if (svgPng) {
+          const { verify, labels } = await verifyCandidate(imageRawBuffer, 'image/png', svgPng);
+          svgVerify = { ok: verify.ok, score: verify.score, issues: verify.issues, labels };
+          console.log(`[generate-figure] SVG 검증 ${verify.ok ? '통과' : '불일치'} score=${verify.score}${verify.issues.length ? ' — ' + verify.issues.join(' / ').slice(0, 160) : ''}`);
+          if (!verify.ok) {
+            const r = await tryGeminiRedraw(`svg_verify_failed: ${verify.issues.join(' / ').slice(0, 120)}`);
+            if (r) return r;
+          }
+        } else {
+          console.warn('[generate-figure] SVG 래스터라이즈 실패 → 검증 생략');
+        }
+      } catch (e) {
+        console.warn('[generate-figure] SVG 검증 예외 → 생략:', e instanceof Error ? e.message : e);
+      }
+    }
+
     // 7. DB 저장 (figureData + figureSvg)
     // originalImageUrl에서 base64 데이터 제거 (JSONB 크기 최적화)
     const figureDataForDb = {
@@ -477,6 +511,9 @@ export async function POST(
       figureModel: process.env.VISION_PROVIDER === 'gpt' ? OPENAI_MODELS.MAIN : process.env.VISION_PROVIDER === 'claude' ? CLAUDE_MODELS.SONNET : `gemini (${process.env.GEMINI_MODEL || 'gemini-3.8-flash'})`,
       // EVPM 메타: confidence 기록 (VP 재시도 여부는 image-interpreter 로그 참조)
       figureConfidence: interpreted.confidence,
+      // ★ SVG 검증 결과 (2026-10-06). 불일치인데 이미지 재작성도 안 돼 SVG 를 그대로 둔 경우 ok:false 가 남는다.
+      svgVerify: svgVerify ? { ...svgVerify, at: new Date().toISOString() } : undefined,
+      redrawInfo: undefined,
     };
 
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;
@@ -500,9 +537,14 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      figureSource: 'ai_generated',
       figureData: interpreted,
       figureType: interpreted.figureType,
       figureSvg: legacySvg,
+      svgVerify,
+      verifyWarning: svgVerify && !svgVerify.ok
+        ? `SVG 가 원본과 다릅니다(${svgVerify.score}점): ${svgVerify.issues.join(' / ') || '사유 없음'} — 이미지 재작성도 통과하지 못해 SVG 를 그대로 두었습니다.`
+        : undefined,
       problemId,
     });
   } catch (error) {

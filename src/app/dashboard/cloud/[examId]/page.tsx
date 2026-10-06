@@ -1892,8 +1892,10 @@ export default function CloudExamDetailPage() {
         return false;
       }
 
-      console.log(`[ai-figure] Problem ${problem.number}: AI 생성 성공! type=${data.figureType}`);
+      console.log(`[ai-figure] Problem ${problem.number}: AI 생성 성공! source=${data.figureSource || 'svg'} type=${data.figureType || '-'}`);
       refetchProblems();
+      // ★ SVG 검증 불일치 + 이미지 재작성도 실패 → SVG 는 저장됐지만 사용자가 보고 결정하도록 알림
+      if (data.verifyWarning) alert(`문제 ${problem.number}: ${data.verifyWarning}`);
       return true;
     } catch (err) {
       console.error('[ai-figure] Error:', err);
