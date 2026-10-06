@@ -26,9 +26,16 @@ export function normalizeOpenAIBody<T extends Record<string, unknown>>(body: T):
   const b = body as Record<string, unknown>;
   if (!isReasoningModel(typeof b.model === 'string' ? b.model : '')) return body;
   if (b.max_tokens !== undefined) {
-    if (b.max_completion_tokens === undefined) b.max_completion_tokens = b.max_tokens;
+    if (b.max_completion_tokens === undefined) {
+      // ★ 추론 모델은 "생각 토큰"이 같은 한도에서 빠진다 — gpt-4o 시절 한도(2000 등)를 그대로 쓰면 JSON 이 잘릴 수 있다.
+      //   실측(2026-10-06, gpt-5.5 bbox JSON): 추론 93~107 토큰 — 보통은 작지만 이미지·긴 입력에서 커질 수 있어 4배(최소 4000, 최대 16000)로.
+      const mt = Number(b.max_tokens) || 0;
+      b.max_completion_tokens = Math.min(16000, Math.max(4000, mt * 4));
+    }
     delete b.max_tokens;
   }
+  // ★ 분류·감지·추출 같은 "정해진 꼴 답" 작업은 깊은 추론이 필요 없다 — 미지정이면 low (실측: 8.3s → 4.1s, 결과 동일)
+  if (b.reasoning_effort === undefined) b.reasoning_effort = 'low';
   if (b.temperature !== undefined && b.temperature !== 1) delete b.temperature;
   if (b.top_p !== undefined) delete b.top_p;
   return body;
