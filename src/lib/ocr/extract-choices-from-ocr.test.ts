@@ -88,3 +88,9 @@ describe('(1) 표식이 사라진 경우 (2026-10-07)', () => {
     expect(extractChoicesFromOCR('옳은 것은?\n(2) b\n(3) c\n(4) d\n(5) e')).toEqual([]);
   });
 });
+
+describe('보기 번호 한 자리 오인식 일반화 (2026-10-07)', () => {
+  it('(1)(2)(3)(5)(5) → 5개', () => {
+    expect(extractChoicesFromOCR('값은?\n(1) 64\n(2) 67\n(3) 73\n(5) 76\n(5) 80')).toEqual(['64', '67', '73', '76', '80']);
+  });
+});
