@@ -1042,6 +1042,9 @@ export function generateGraphSVG(rendering: GraphRendering): string | null {
     }
   }
   console.log(`[GraphSVG] Rendered ${curveCount}/${expressions.length} curves`);
+  // ★ 곡선을 하나도 못 그렸으면(음함수 x²−y²/3=1 등은 이 렌더러가 못 그린다) null — 호출측(generate-figure 검증 프록시)이
+  //   "검증 불가"로 보고 Desmos 데이터를 그대로 둔다. 축만 있는 빈 그림을 돌려주면 검증기가 "곡선 없음"으로 멀쩡한 결과를 버린다 (2026-10-07 양운고 #15).
+  if (curveCount === 0 && expressions.length > 0) return null;
 
   // ── 4. 선분 연결 ──
   for (const [fromLabel, toLabel] of segments) {

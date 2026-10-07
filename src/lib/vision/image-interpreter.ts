@@ -100,7 +100,9 @@ const ANALYSIS_SYSTEM_PROMPT = `당신은 수학 교육 자료의 시각적 요�
   "segments": [["A","B"], ["B","C"], ["C","A"]]
 }
 ★ graph 좌표 규칙:
-- expressions의 latex는 "y=..." 형식으로, x만 변수로 사용 (미지수 a,b 등은 실제 값으로 대입)
+- expressions의 latex: 함수 그래프는 "y=..." 형식(x만 변수). ★ 원·타원·쌍곡선·가로 포물선 같은 **원뿔곡선은 Desmos 음함수 꼴 그대로** 적으세요:
+  예 "x^2/4-y^2/2.25=1" (쌍곡선), "x^2/9+y^2/4=1" (타원), "(x-1)^2+y^2=4" (원), "y^2=8x" (포물선). 미지수(b, p, c 등)는 그림의 비율에 맞는 **구체적 숫자**로 대입.
+  쌍곡선·타원의 초점 F, F′ 과 꼭짓점·주어진 점 P 는 points 에 라벨과 함께 넣고(라벨 "F'" 처럼 프라임 그대로), 그림에 보이는 선분(PF, PF′ 등)은 segments 에 넣으세요.
 - ★★★ 미지수(a,b,k 등) 값 결정법 (반드시 따르세요!):
   이미지의 시각적 단서에서 미지수의 구체적인 값을 결정하세요:
   (1) **점근선**: 수평 점선 y=c가 보이면 → 해당 상수 = c (예: y=(1/4)^{x-a}+b에서 점근선 y=-4 → b=-4)
@@ -132,7 +134,8 @@ const ANALYSIS_SYSTEM_PROMPT = `당신은 수학 교육 자료의 시각적 요�
     ★ 검증: x=1 → (0.25)^{-1}-4 = 4-4 = 0 ✓ (x절편 일치)
   예: y=ax²+bx+c, 꼭짓점 (2,3), x축 교점 0,4 → expressions: ["y=-0.75x^2+3x"]
 - expressions에는 반드시 **숫자만** 사용 (a,b,k 등 문자 금지). 이것이 SVG 렌더링에 필수입니다!
-- ★★★ expressions에는 메인 곡선 1개만 넣으세요! (점근선 dashed 제외). 원본 수식을 2개 이상 넣지 마세요!
+- ★★★ 함수 그래프는 메인 곡선 1개만 넣으세요! (점근선 dashed 제외). 같은 함수를 문자식·숫자식 2개로 중복해 넣지 마세요!
+  단, 원뿔곡선 문제에서 그림에 곡선이 여럿 보이면(쌍곡선+타원, 포물선+직선 등) **보이는 곡선은 모두** 각각 하나씩 넣으세요.
   나쁜 예: [{"latex":"y=a\\sin(bx+c)+d"}, {"latex":"y=2\\sin(2x)+1"}] ← 2개는 금지!
   좋은 예: [{"latex":"y=2\\\\sin(2*x)+1","style":"solid"}] ← 숫자로 대입한 1개만!
 - ★ 원본 수식(미지수 포함)은 annotations에 넣으세요: ["y=a\\sin(bx+c)+d"]
@@ -448,6 +451,10 @@ function detectEquationsFromContent(content: string): DetectedEquations {
     /y\s*=\s*[-+]?\s*\d*x\^?\{?\d*\}?\s*(?:[-+]\s*\d*x?\s*(?:\^?\{?\d*\}?)?)*/g,
     // 이차함수 y=-2x²+5x 스타일
     /y\s*=\s*[-+]?\d*x\s*[\^²³]\s*[-+]?\s*\d*x?/g,
+    // ★ 원뿔곡선 음함수 (2026-10-07): 쌍곡선·타원 x²/a² ± y²/b² = 1, 원 (x-a)²+(y-b)²=r², 가로 포물선 y²=4px
+    /(?:\frac\{x\^?\{?2\}?\}\{[^}]+\}|x\^\{?2\}?)\s*[-+]\s*(?:\frac\{y\^?\{?2\}?\}\{[^}]+\}|y\^\{?2\}?)\s*=\s*1/g,
+    /\(\s*x\s*[-+][^)]*\)\s*\^\{?2\}?\s*\+\s*\(\s*y\s*[-+][^)]*\)\s*\^\{?2\}?\s*=\s*[^,\s]+/g,
+    /y\^\{?2\}?\s*=\s*[-+]?\s*\d*\s*x(?![a-z])/g,
   ];
 
   for (const pattern of equationPatterns) {
@@ -469,6 +476,7 @@ function detectEquationsFromContent(content: string): DetectedEquations {
 
   // 2. 그래프 관련 키워드 감지
   const graphKeywords = [
+    '쌍곡선', '타원', '포물선', '초점', '준선',
     '그래프', '좌표', '포물선', '이차함수', '일차함수', '삼차함수',
     '직선', 'x축', 'y축', '원점', '접선', '접한다', '교점',
     '함수의 그래프', '함수 y', '함수 f',
@@ -545,7 +553,7 @@ export async function interpretImage(
   imageUrl: string,
   context?: string
 ): Promise<InterpretedFigure> {
-  const provider = VISION_PROVIDER;
+  let provider: 'gemini' | 'claude' | 'gpt' | 'glm' = VISION_PROVIDER;
 
   // ★ content_latex에서 base64 이미지 제거 (73KB+ 문제 방지)
   if (context) {
@@ -558,6 +566,12 @@ export async function interpretImage(
 
   // content_latex에서 수식 자동 감지
   const detected = context ? detectEquationsFromContent(context) : null;
+  // ★ 2026-10-07 대표 "우리 그래프 모달로 소넷이 그리도록": 그래프 문제(본문에 수식/그래프 키워드)는 식·점·선분 추출을
+  //   Gemini Flash 대신 Claude Sonnet 이 한다(26원). 좌표 계산·음함수 선택이 정확해야 Desmos 가 제대로 그린다.
+  if (detected?.forceGraph && ANTHROPIC_API_KEY && provider !== 'claude') {
+    console.log(`[Vision] 그래프 문제 → 식 추출 provider ${provider} → claude (Sonnet)`);
+    provider = 'claude';
+  }
 
   // API 키 확인 + 자동 fallback 순서: gemini → gpt → claude
   const providerKeyMap: Record<string, string> = { gemini: GOOGLE_AI_KEY, gpt: OPENAI_API_KEY, claude: ANTHROPIC_API_KEY, glm: ZHIPU_API_KEY || OPENROUTER_API_KEY };

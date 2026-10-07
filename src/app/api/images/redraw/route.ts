@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   if (!supabaseAdmin) return NextResponse.json({ error: 'Supabase admin not configured' }, { status: 500 });
-  let body: { url?: string; problemId?: string };
+  let body: { url?: string; problemId?: string; context?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   if (!body.url) return NextResponse.json({ error: 'url 이 필요합니다' }, { status: 400 });
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   let png: Buffer; let mime = 'image/png';
   try { png = await sharp(src.buf).png().toBuffer(); } catch { png = src.buf; mime = src.mime; }
 
-  const r = await redrawAndVerify(png, mime);
+  const r = await redrawAndVerify(png, mime, { context: typeof body.context === 'string' ? body.context : undefined });
   if (!r.ok) {
     console.warn(`[images/redraw] ${r.stage} 실패 (${r.ms}ms): ${r.error}`);
     return NextResponse.json({ error: r.stage === 'redraw' ? `재작성 실패: ${r.error}` : `검증 불일치 — 원본 유지: ${r.error}`, stage: r.stage, verify: r.verify }, { status: 422 });

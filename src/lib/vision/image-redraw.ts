@@ -108,10 +108,18 @@ function labelsClause(labels: string[]): string {
 }
 
 /** 원본 이미지 → 재작성 PNG (Gemini 이미지 편집). labels = 미리 읽은 라벨, feedback = 직전 시도의 검증 지적 */
-export async function redrawFigureImage(image: Buffer, mime: string, opts: { labels?: string[]; feedback?: string[] } = {}): Promise<RedrawResult> {
+export async function redrawFigureImage(image: Buffer, mime: string, opts: { labels?: string[]; feedback?: string[]; context?: string } = {}): Promise<RedrawResult> {
   const t0 = Date.now();
   if (!GEMINI_API_KEY) return { ok: false, error: 'GOOGLE_AI_KEY 없음', ms: 0 };
   let prompt = REDRAW_PROMPT + labelsClause(opts.labels || []);
+  // ★ 문제 본문을 같이 준다 (2026-10-07 대표 "제미나이 챗은 그냥 그려주는데" — 앱에선 문제를 함께 말해 준다).
+  //   식(쌍곡선 x²/4−y²/b²=1)·점 이름(F, F′, P)을 알면 없는 점을 지어내지 않는다. 그리되 "그림에 있는 것만" 원칙은 유지.
+  if (opts.context && opts.context.trim()) {
+    prompt += `
+
+Context — the problem text this figure belongs to (for understanding only; draw ONLY what is visible in the image, never add elements mentioned in the text but absent from the image):
+${opts.context.trim().slice(0, 700)}`;
+  }
   if (opts.feedback && opts.feedback.length) {
     prompt += '\n\nA previous attempt was rejected for these differences from the original. Fix every one of them:\n' + opts.feedback.map((s) => `- ${s}`).join('\n');
   }
@@ -183,7 +191,7 @@ export type RedrawAndVerifyResult =
  * 입력 준비(업스케일) → 라벨 읽기 → 재작성 → 검증. 검증 탈락이면 지적 사항을 피드백으로 넣어 **한 번만** 다시 그린다
  * (최대 2회 — 버튼 한 번에 이미지 호출 2회가 상한). 그래도 탈락이면 마지막 사유를 그대로 돌려준다(호출측이 폴백 판단).
  */
-export async function redrawAndVerify(image: Buffer, mime: string, opts: { maxAttempts?: number } = {}): Promise<RedrawAndVerifyResult> {
+export async function redrawAndVerify(image: Buffer, mime: string, opts: { maxAttempts?: number; context?: string } = {}): Promise<RedrawAndVerifyResult> {
   const t0 = Date.now();
   const maxAttempts = Math.max(1, Math.min(opts.maxAttempts ?? 2, 3));
   const prepared = await prepareRedrawInput(image);
@@ -195,7 +203,7 @@ export async function redrawAndVerify(image: Buffer, mime: string, opts: { maxAt
   let attempts = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attempts = attempt;
-    const r = await redrawFigureImage(prepared.png, srcMime, { labels, feedback });
+    const r = await redrawFigureImage(prepared.png, srcMime, { labels, feedback, context: opts.context });
     if (!r.ok) return { ok: false, stage: 'redraw', error: r.error, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
     const v = await verifyRedraw(prepared.png, srcMime, r.png, labels);
     if (v.ok) return { ok: true, png: r.png, verify: v, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };

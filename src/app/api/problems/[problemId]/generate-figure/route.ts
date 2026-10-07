@@ -352,7 +352,7 @@ export async function POST(
       try {
         const { default: sharp } = await import('sharp');
         const srcPng = await sharp(imageRawBuffer).png().toBuffer();
-        const rr = await redrawAndVerify(srcPng, 'image/png');
+        const rr = await redrawAndVerify(srcPng, 'image/png', { context: problem.content_latex || undefined });
         if (!rr.ok) {
           console.log(`[generate-figure] 재작성 ${rr.stage} 실패 (${reason}): ${rr.error}`);
           return null;
@@ -482,10 +482,10 @@ export async function POST(
     const isGraphType = !legacySvg && (interpreted.rendering?.type === 'graph' || interpreted.figureType === 'graph');
     if (isGraphType && interpreted.rendering) {
       try { verifyProxySvg = generateGraphSVG(interpreted.rendering as unknown as Parameters<typeof generateGraphSVG>[0]) || undefined; } catch { verifyProxySvg = undefined; }
-      if (!verifyProxySvg && imageRawBuffer && body?.skipVerify !== true) {
-        console.log('[generate-figure] 그래프 프록시 SVG 생성 불가 → 검증 못 함 → 이미지 재작성 시도');
-        const r = await tryGeminiRedraw('graph_unverifiable');
-        if (r) return r;
+      if (!verifyProxySvg) {
+        // ★ 음함수(쌍곡선·타원 등)는 서버 코드 렌더러가 못 그려 검증 프록시가 없다 — Desmos 가 화면에서 그린다.
+        //   검증 불가라고 돈 드는 이미지 재작성을 자동으로 타지 않는다(2026-10-07 대표 "굳이 돈을 써야 하나"). 그대로 저장하고 로그만.
+        console.log('[generate-figure] 그래프 프록시 SVG 없음(음함수 등) → 검증 생략, Desmos 렌더로 저장');
       }
     }
     const svgForVerify = legacySvg || verifyProxySvg;
