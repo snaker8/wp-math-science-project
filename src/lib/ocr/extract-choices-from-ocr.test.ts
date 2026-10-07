@@ -77,3 +77,14 @@ describe('(n) 보기 첫 번호 오인식 허용 (2026-10-07, 함수식 보기)'
     expect(c[0]).toContain('4x-1');
   });
 });
+
+describe('(1) 표식이 사라진 경우 (2026-10-07)', () => {
+  it('"-2\\n(2) -1\\n(3) 0\\n(4) 1\\n(5) 2" → 5개', () => {
+    const c = extractChoicesFromOCR('합은?\n$-2$\n(2) -1\n(3) 0\n(4) 1\n(5) 2');
+    expect(c).toHaveLength(5);
+    expect(c[0]).toContain('-2');
+  });
+  it('앞 줄이 물음이면 4개 그대로 → 세트 가드가 [] 로', () => {
+    expect(extractChoicesFromOCR('옳은 것은?\n(2) b\n(3) c\n(4) d\n(5) e')).toEqual([]);
+  });
+});

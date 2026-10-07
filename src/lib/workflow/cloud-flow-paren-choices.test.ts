@@ -59,3 +59,35 @@ describe('groupLinesIntoQuestions — 한 줄 하나짜리 괄호 보기', () =>
     expect(q7.contentMmd).toContain('(1) 삼각형의 넓이를 구하시오.');
   });
 });
+
+describe('첫 보기 표식 (1) 이 통째로 사라진 경우', () => {
+  it('"-2 / (2) -1 / (3) 0 / (4) 1 / (5) 2" → 5개 보기, 본문엔 보기 줄이 남지 않는다', () => {
+    const page: any = {
+      pageWidth: 1000, pageHeight: 1400,
+      lineData: [
+        line('1. 초점이 $F(2,0)$ 이고 점 $P(-1,4)$ 을 지나는 포물선의 준선의 방정식이 $x=k$ 일 때, 만족하는 $k$ 값의 합은?', 100),
+        line('$-2$', 130), line('(2) -1', 160), line('(3) 0', 190), line('(4) 1', 220), line('(5) 2', 250),
+        line('2. 다음 문제', 400),
+      ],
+    };
+    const r = groupLinesIntoQuestions([page]);
+    const q1 = r.find((q) => q.questionNumber === 1)!;
+    expect(q1.choices).toHaveLength(5);
+    expect(q1.choices[0]).toContain('-2');
+    expect(q1.choices[4]).toBe('2');
+    expect(q1.contentMmd).toContain('준선의 방정식');
+    expect(q1.contentMmd).not.toMatch(/\(3\) 0/);
+  });
+  it('앞 줄이 물음(?)이면 보기로 끌어오지 않는다', () => {
+    const page: any = {
+      pageWidth: 1000, pageHeight: 1400,
+      lineData: [
+        line('3. 다음 중 옳은 것은?', 100),
+        line('(2) b', 160), line('(3) c', 190), line('(4) d', 220), line('(5) e', 250),
+        line('4. 다음', 400),
+      ],
+    };
+    const q3 = groupLinesIntoQuestions([page]).find((q) => q.questionNumber === 3)!;
+    expect(q3.choices).toEqual([]);
+  });
+});

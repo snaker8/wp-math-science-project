@@ -540,6 +540,25 @@ function buildQuestionResult(
   }
 
   // 선택지 파싱: "① A ② B ③ C ④ D ⑤ E" 형식 분리
+  // ★ 첫 보기 표식이 통째로 사라진 경우 (2026-10-07 대표 캡처: "-2 / (2) -1 / (3) 0 / (4) 1 / (5) 2").
+  //   choiceTexts 가 "(2)…(5)" 네 줄(한 줄 하나씩, 순서대로)이고 (1) 이 없으면, 그룹 안에서 (2) 줄 바로 앞 줄이
+  //   짧고(≤40자) 물음("?")이 아니고 첫 줄(문제 번호 줄)이 아닐 때 그 줄을 "(1) …" 로 삼는다. 확정은 여전히 parseChoicesFromText 세트 가드.
+  {
+    const single = group.choiceTexts.map((s) => (s || '').trim());
+    const nums = single.map((s) => (s.match(/^\s*\(([1-5])\)/) || [])[1]).map((d) => (d ? parseInt(d, 10) : 0));
+    if (single.length === 4 && nums.join(',') === '2,3,4,5' && single.every((s) => (s.match(/\([1-5]\)/g) || []).length === 1)) {
+      const texts = group.lines.map((l) => (l.text_display || l.text || '').trim());
+      const idx2 = texts.indexOf(single[0]);
+      if (idx2 > 1) {
+        const prev = texts[idx2 - 1];
+        if (prev && prev.length <= 40 && !/[?？]/.test(prev) && !/^\s*\(?[1-5]\s*[).]/.test(prev) && !/[①②③④⑤]/.test(prev)) {
+          group.choiceTexts.unshift(`(1) ${prev}`);
+          group.lines[idx2 - 1] = { ...group.lines[idx2 - 1], text_display: `(1) ${prev}`, text: `(1) ${prev}` };
+          console.log(`[Cloud Flow] Q${group.number}: 첫 보기 표식 복원 — "(1) ${prev.slice(0, 30)}"`);
+        }
+      }
+    }
+  }
   const choices = parseChoicesFromText(group.choiceTexts.join('\n'));
 
   // ★ 원본 보기 배치 감지 (2026-06-12) — OCR 보기 라인의 "한 줄당 마커 개수" 로 원본 열 수 추정.
@@ -600,7 +619,8 @@ function buildQuestionResult(
       const t = (l.text_display || l.text || '').trim();
       // 보기로 판정된 라인이고 + "동그라미로 시작" 할 때만 제거.
       // 문장 중간의 ①(예: "그림에서 ①,②,③ 영역의 …")은 라벨/본문일 수 있어 보존.
-      return !(choiceLineSet.has(t) && /^[①②③④⑤]/.test(t));
+      // ★ 괄호 번호 줄도 — 보기로 확정(choices≥2·서술형 아님)된 줄에 한해 (2026-10-07 함수식 보기: 본문에 (1)~(5) 가 남아 이중 노출)
+      return !(choiceLineSet.has(t) && /^[①②③④⑤]|^\s*\([1-5]\)\s*\S/.test(t));
     })
     .map(l => {
       if ((l.type === 'diagram' || l.type === 'figure') && !(l.text_display || l.text || '').trim()) {
