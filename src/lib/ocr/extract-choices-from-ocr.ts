@@ -72,6 +72,16 @@ export function extractChoicesFromOCR(text: string): string[] {
       parenPositions.push({ idx: m2.index, len: m2[0].length, num: parseInt(m2[1]) });
     }
 
+    // ★ 첫 보기 표식이 통째로 사라진 경우 (2026-10-07): "(2)…(5)" 4개만 순서대로 있고 (2) 바로 앞 줄이 짧은 한 줄이면 그 줄을 (1) 로
+    if (parenPositions.length === 4 && parenPositions.map((p) => p.num).join(',') === '2,3,4,5') {
+      const before = text.slice(0, parenPositions[0].idx);
+      const prevLineMatch = before.match(/(?:^|\n)[ \t]*([^\n]{1,40}?)[ \t]*\n?$/);
+      const prev = prevLineMatch ? prevLineMatch[1].trim() : '';
+      if (prev && !/[?？]/.test(prev) && !/^\(?[1-5]\s*[).]/.test(prev) && !/[①②③④⑤]/.test(prev)) {
+        const prevIdx = before.lastIndexOf(prev);
+        parenPositions.unshift({ idx: prevIdx, len: 0, num: 1 });
+      }
+    }
     if (parenPositions.length >= 2) {
       // ★ 첫 보기 번호 오인식 허용 (2026-10-07): ①→"(4)" 로 (4)(2)(3)(4)(5). 정확히 5개 + 뒤 4개가 2,3,4,5 순서면 첫 번호=1.
       if (parenPositions.length === 5 && parenPositions[0].num !== 1
