@@ -302,6 +302,8 @@ export function FigureRenderer({
         ) : (
           <TypedFigureRenderer
             figureType={figureData.figureType}
+            cropImageUrl={cropImageUrl}
+            preferStatic={!darkMode}
             rendering={figureData.rendering}
             darkMode={darkMode}
             maxWidth={maxWidth}
@@ -511,15 +513,21 @@ function TypedFigureRenderer({
   rendering,
   darkMode,
   maxWidth,
+  cropImageUrl,
+  preferStatic,
 }: {
   figureType: string;
   rendering: GraphRendering | GeometryRendering | TableRendering | DiagramRendering;
   darkMode: boolean;
   maxWidth: number;
+  /** 그래프 SVG 를 못 만들 때 Desmos 대신 쓸 정적 그림(원본 크롭) */
+  cropImageUrl?: string;
+  /** ★ 인쇄·측정 컨텍스트: 늦게 그려지는 Desmos 대신 정적 그림만 (2026-10-08 인쇄 미리보기 잘림 사고) */
+  preferStatic?: boolean;
 }) {
   switch (rendering.type) {
     case 'graph':
-      return <GraphFigure rendering={rendering as GraphRendering} darkMode={darkMode} maxWidth={maxWidth} />;
+      return <GraphFigure rendering={rendering as GraphRendering} darkMode={darkMode} maxWidth={maxWidth} cropImageUrl={cropImageUrl} preferStatic={preferStatic} />;
     case 'geometry':
       return <GeometryFigure rendering={rendering as GeometryRendering} darkMode={darkMode} />;
     case 'table':
@@ -540,10 +548,14 @@ function GraphFigure({
   rendering,
   darkMode,
   maxWidth,
+  cropImageUrl,
+  preferStatic,
 }: {
   rendering: GraphRendering;
   darkMode: boolean;
   maxWidth: number;
+  cropImageUrl?: string;
+  preferStatic?: boolean;
 }) {
   // SVG 렌더링 시도 (참조사이트 스타일)
   const svgResult = useMemo(() => {
@@ -556,6 +568,20 @@ function GraphFigure({
       <div
         className="figure-graph-container rounded-lg p-3 bg-white border border-zinc-200 shadow-sm"
         dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgResult) }}
+      />
+    );
+  }
+
+  // ★ 인쇄·측정(preferStatic)에서는 Desmos 를 쓰지 않는다 — 지연 렌더라 페이지 높이 측정에 안 잡혀 다음 문제를 덮고(2026-10-08 대표 캡처 09번),
+  //   어두운 배경으로 찍힌다. 원본 크롭이 있으면 그걸 정적 그림으로 쓴다(<img> 는 onLoad 재측정 경로가 있다).
+  if (preferStatic && cropImageUrl) {
+    return (
+      <img
+        src={cropImageUrl}
+        alt="문제 도형"
+        className="rounded border border-gray-200 h-auto"
+        style={{ maxWidth: Math.min(maxWidth, 360) }}
+        loading="eager"
       />
     );
   }
@@ -782,6 +808,8 @@ function UpscaledImageWithFallback({
         <div className={className} style={{ maxWidth }}>
           <TypedFigureRenderer
             figureType={figureData.figureType}
+            cropImageUrl={cropImageUrl}
+            preferStatic={!darkMode}
             rendering={figureData.rendering}
             darkMode={darkMode}
             maxWidth={maxWidth}
