@@ -302,7 +302,7 @@ export async function POST(
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 8192,
+      max_tokens: 16000, // ★ 2026-10-07 양운고 기하(19문항·긴 수식) 가 8192 에서 잘려 JSON 파싱 실패 → 여유
       system: cachedSystem(EXAM_ANALYSIS_SYSTEM_PROMPT),
       messages: [{ role: 'user', content: userPrompt }],
     }),
@@ -325,16 +325,25 @@ export async function POST(
     .map((c) => (c.type === 'text' ? c.text || '' : ''))
     .join('')
     .trim();
+  const stopReason = (claudeJson as { stop_reason?: string }).stop_reason;
+  console.log(`[exam-ai-analysis] claude stop=${stopReason} in=${claudeJson.usage?.input_tokens ?? '-'} out=${claudeJson.usage?.output_tokens ?? '-'} len=${rawText.length}`);
+  if (stopReason === 'max_tokens') {
+    return NextResponse.json({ error: `AI 응답이 출력 한도에서 잘렸습니다 (출력 ${claudeJson.usage?.output_tokens ?? '?'} 토큰). 다시 시도해 주세요.` }, { status: 502 });
+  }
 
   if (!rawText) {
     return NextResponse.json({ error: 'AI returned empty response' }, { status: 502 });
   }
 
-  // 9. JSON 파싱 (여유 있게 — ```json 블록 제거)
-  const cleaned = rawText
+  // 9. JSON 파싱 (여유 있게 — ```json 블록 제거 + 앞뒤 설명문이 붙어도 첫 { ~ 마지막 } 만)
+  let cleaned = rawText
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/i, '')
     .trim();
+  if (!cleaned.startsWith('{')) {
+    const s = cleaned.indexOf('{'); const e = cleaned.lastIndexOf('}');
+    if (s >= 0 && e > s) cleaned = cleaned.slice(s, e + 1);
+  }
 
   let parsed: Omit<ExamAIAnalysis, 'generatedAt' | 'modelVersion'>;
   try {
