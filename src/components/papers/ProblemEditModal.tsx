@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { shrinkImageFile } from '@/lib/utils/shrink-image';
 import {
   X, Save, Loader2, Sigma, Trash2, AlertCircle,
   Bold, Italic, ImageIcon, Table2, List, Minus, Eye, EyeOff, Link2,
@@ -880,7 +881,9 @@ export function ProblemEditModal({
     try {
       // 크롭 이미지 다운로드 → base64
       const imgRes = await fetch(cropImageUrl);
-      const imgBlob = await imgRes.blob();
+      const imgBlob0 = await imgRes.blob();
+      // ★ 413 차단 (2026-10-07): 큰 크롭도 base64 로 보내면 4.5MB 를 넘을 수 있다 — 2400px·2.8MB 이하로
+      const { file: imgBlob } = await shrinkImageFile(new File([imgBlob0], 'crop.png', { type: imgBlob0.type || 'image/png' }), { maxBytes: 2.8 * 1024 * 1024 });
       const reader = new FileReader();
       const base64 = await new Promise<string>((resolve) => {
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -992,9 +995,13 @@ export function ProblemEditModal({
   const [choiceDiagramIdx, setChoiceDiagramIdx] = useState<number>(-1);
 
   // 업로드 헬퍼 — base64 → /api/storage/upload-image 프록시
-  const uploadChoiceImage = useCallback(async (idx: number, file: File | Blob) => {
+  const uploadChoiceImage = useCallback(async (idx: number, file0: File | Blob) => {
     setUploadingChoiceIdx(idx);
     try {
+      // ★ 413 차단 (2026-10-07): base64 로 보내면 1.33배 커진다 — 긴 변 2400px·2.8MB 이하로 줄여서
+      const asFile = file0 instanceof File ? file0 : new File([file0], 'image.png', { type: file0.type || 'image/png' });
+      const { file, note } = await shrinkImageFile(asFile, { maxBytes: 2.8 * 1024 * 1024 });
+      if (note) console.log(`[ProblemEditModal] 보기 이미지 축소: ${note}`);
       const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
       const base64: string = await new Promise((resolve, reject) => {
         const reader = new FileReader();

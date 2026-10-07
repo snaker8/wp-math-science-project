@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { shrinkImageFile } from '@/lib/utils/shrink-image';
 import { X, Search, Loader2, Check, Image as ImageIcon, RefreshCw, Upload, Code2 } from 'lucide-react';
 
 // ============================================================================
@@ -212,13 +213,22 @@ export function DiagramBrowserModal({
         // ── SVG → PNG 변환 후 업로드 ──
         const pngBlob = await svgToPngBlob(svgCode, 2);
         const pngName = uploadFile.name.replace(/\.svg$/i, '.png');
-        const pngFile = new File([pngBlob], pngName, { type: 'image/png' });
+        const pngFile0 = new File([pngBlob], pngName, { type: 'image/png' });
+        // ★ 413 차단 — 2배 래스터가 4.5MB 를 넘을 수 있다 (2026-10-07)
+        const { file: pngFile, note: n1 } = await shrinkImageFile(pngFile0);
+        if (n1) console.log(`[DiagramBrowser] SVG→PNG 축소: ${n1}`);
         formData.append('file', pngFile);
         // SVG 원본 코드도 함께 전송 (서버에서 별도 자산으로 저장)
         formData.append('svgSource', svgCode);
         formData.append('svgFileName', uploadFile.name);
       } else {
-        formData.append('file', uploadFile);
+        // ★ 413 FUNCTION_PAYLOAD_TOO_LARGE 차단 (2026-10-07 대표 캡처: PNG 스크린샷 업로드 실패) — 긴 변 2400px·3.5MB 이하로 줄여 보낸다
+        const { file: toSend, note } = await shrinkImageFile(uploadFile);
+        if (note) console.log(`[DiagramBrowser] 업로드 전 축소: ${note}`);
+        if (toSend.size > 4.2 * 1024 * 1024) {
+          throw new Error(`파일이 너무 큽니다 (${(toSend.size / 1048576).toFixed(1)}MB). 4MB 이하로 줄여 다시 올려 주세요.`);
+        }
+        formData.append('file', toSend);
       }
 
       const res = await fetch('/api/diagram-images/upload', {
