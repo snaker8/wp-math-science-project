@@ -8,6 +8,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ShareReportClient } from './ShareReportClient';
 import { supabaseAdmin } from '@/lib/supabase/server';
+
+const OG_BASE = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || 'wp-math-science-project.vercel.app'}`;
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +41,11 @@ export async function generateMetadata({
     },
     twitter: { card: 'summary_large_image' },
   };
+  // ★ OG 이미지는 명시 .png 경로 (og.png/route.ts) — 구형 메신저 크롤러가 확장자 없는 동적 URL 을 못 읽던 것 대응 (2026-10-07)
+  const ogImageUrl = `${OG_BASE}/share/exam/${token}/og.png`;
+  const ogImages = [{ url: ogImageUrl, secureUrl: ogImageUrl, width: 1200, height: 630, type: 'image/png', alt: '시험지 분석 리포트' }];
+  fallback.openGraph = { ...fallback.openGraph, images: ogImages };
+  fallback.twitter = { ...fallback.twitter, images: [ogImageUrl] };
   if (!supabaseAdmin || !token || token.length < 16) return fallback;
   try {
     const { data } = await supabaseAdmin
@@ -58,8 +65,9 @@ export async function generateMetadata({
         description,
         type: 'article',
         siteName: '학교 기출 분석',
+        images: ogImages,
       },
-      twitter: { card: 'summary_large_image', title, description },
+      twitter: { card: 'summary_large_image', title, description, images: [ogImageUrl] },
     };
   } catch {
     return fallback;
