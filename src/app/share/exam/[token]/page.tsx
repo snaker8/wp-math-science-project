@@ -38,6 +38,8 @@ export async function generateMetadata({
       description: '내신 시험지 단원·난이도·고난도 문항 분석 리포트',
       type: 'article',
       siteName: '학교 기출 분석',
+      locale: 'ko_KR',
+      url: `${OG_BASE}/share/exam/${token}`,
     },
     twitter: { card: 'summary_large_image' },
   };
@@ -65,6 +67,8 @@ export async function generateMetadata({
         description,
         type: 'article',
         siteName: '학교 기출 분석',
+        locale: 'ko_KR',
+        url: `${OG_BASE}/share/exam/${token}`,
         images: ogImages,
       },
       twitter: { card: 'summary_large_image', title, description, images: [ogImageUrl] },
