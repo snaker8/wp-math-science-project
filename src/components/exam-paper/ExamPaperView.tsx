@@ -343,6 +343,9 @@ export function ExamPaperView({
   // 문제 높이 측정
   useLayoutEffect(() => {
     if (measureRef.current && !measured && problems.length > 0) {
+      // ★ 측정 영역은 화면 밖(-9만px)이라 loading="lazy" 그림은 영영 로드되지 않는다 → 아래 "로드되면 다시 재기"가 한 번도 안 돌고
+      //   그림 없는 높이로 페이지를 짜서 넘쳤다(2026-10-08 대표 캡처: 3쪽 좌단 07+08+09 = 1,325px > 971px). 측정 영역만 즉시 로드로.
+      measureRef.current.querySelectorAll('img[loading="lazy"]').forEach((img) => { (img as HTMLImageElement).loading = 'eager'; });
       const timer = setTimeout(() => {
         if (!measureRef.current) return;
         const els = measureRef.current.querySelectorAll('[data-problem-idx]');
