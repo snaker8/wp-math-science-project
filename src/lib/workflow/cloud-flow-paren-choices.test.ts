@@ -91,3 +91,12 @@ describe('첫 보기 표식 (1) 이 통째로 사라진 경우', () => {
     expect(q3.choices).toEqual([]);
   });
 });
+
+describe('보기 번호 한 자리 오인식 일반화 (2026-10-07 "(1)(2)(3)(5)(5)")', () => {
+  it('넷째가 (5) 로 읽혀도 5개 보기', () => {
+    expect(parseChoicesFromText('(1) 64\n(2) 67\n(3) 73\n(5) 76\n(5) 80')).toEqual(['64', '67', '73', '76', '80']);
+  });
+  it('두 자리 이상 틀리면 손대지 않는다', () => {
+    expect(parseChoicesFromText('(1) a\n(3) b\n(3) c\n(5) d\n(5) e')).toEqual([]);
+  });
+});

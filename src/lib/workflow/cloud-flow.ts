@@ -820,12 +820,16 @@ function normalizeChoiceParensForCloudFlow(text: string): string {
   const nums = parenMatches.map(m => parseInt(m[1]));
   // ★ 첫 보기 번호 오인식 허용 (2026-10-07): ①이 "(4)" 로 읽혀 (4)(2)(3)(4)(5) 가 되면 "1 없음"으로 전부 버려졌다.
   //   정확히 5개이고 뒤 4개가 2,3,4,5 순서면 첫 번호는 1 로 본다. 그 외엔 종전 그대로.
-  if (parenMatches.length === 5 && nums[0] !== 1 && nums[1] === 2 && nums[2] === 3 && nums[3] === 4 && nums[4] === 5) {
-    const first = parenMatches[0];
-    text = text.slice(0, first.index!) + '(1)' + text.slice(first.index! + first[0].length);
-    nums[0] = 1;
-    // 위치 재계산 — 길이가 같아(3자) 인덱스는 그대로지만 매치 배열을 새로 만든다
-    parenMatches.splice(0, parenMatches.length, ...text.matchAll(/(?<![a-zA-Z])\(([1-5])\)/g));
+  // ★ 일반화 (2026-10-07 대표 "(1)(2)(3)(5)(5) 왜 수정이 안 되나"): 정확히 5개인데 **한 자리만** 1~5 순서와 다르면 그 자리를 바로잡는다.
+  //   (4)(2)(3)(4)(5) → 첫 자리, (1)(2)(3)(5)(5) → 넷째 자리. 두 자리 이상 틀리면 손대지 않는다(서술형 소문제 보호).
+  if (parenMatches.length === 5) {
+    const bad = nums.map((n, i) => (n !== i + 1 ? i : -1)).filter((i) => i >= 0);
+    if (bad.length === 1) {
+      const m = parenMatches[bad[0]];
+      text = text.slice(0, m.index!) + `(${bad[0] + 1})` + text.slice(m.index! + m[0].length);
+      nums[bad[0]] = bad[0] + 1;
+      parenMatches.splice(0, parenMatches.length, ...text.matchAll(/(?<![a-zA-Z])\(([1-5])\)/g));
+    }
   }
   if (!nums.includes(1) || !nums.includes(2) || !nums.includes(3) || !nums.includes(4)) return text;
 
