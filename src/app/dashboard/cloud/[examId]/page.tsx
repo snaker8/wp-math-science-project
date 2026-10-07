@@ -480,8 +480,11 @@ function FigureMarkerRenderer({
               </div>
             </div>
           ) : (
+            // ★ 위치 편집기에서 정한 폭(%) 적용 — 없으면 종전 300px 상한 (2026-10-08)
             <div key={i} className="my-2 flex justify-center">
-              <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={300} darkMode editable problemId={problem.id} problemContent={problem.content} />
+              <div style={part.widthPercent ? { width: `${part.widthPercent}%` } : undefined} className="min-w-0 flex justify-center">
+                <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined} figureSource={problem.figureSource} cropImageUrl={proxiedCrop} maxWidth={part.widthPercent ? 100000 : 300} darkMode editable problemId={problem.id} problemContent={problem.content} />
+              </div>
             </div>
           );
         }
@@ -506,7 +509,8 @@ function FigureMarkerRenderer({
               <img
                 src={proxyUrl(matchedCrop.url)}
                 alt={matchedCrop.label || `도형 ${currentFigureIdx + 1}`}
-                className="rounded-lg border border-zinc-600 bg-white max-h-64 object-contain shadow-sm"
+                className={`rounded-lg border border-zinc-600 bg-white object-contain shadow-sm ${part.widthPercent ? '' : 'max-h-64'}`}
+                style={part.widthPercent ? { width: `${part.widthPercent}%` } : undefined}
                 loading="lazy"
               />
             </div>

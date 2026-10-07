@@ -106,7 +106,8 @@ function assembleContent(
     const pos = figurePositions[i];
     const mode = modes[i] ?? 'line';
     const wp = widthPercents[i] ?? 40;
-    const marker = mode === 'line' ? '[도형]' : `[도형:${mode}:${wp}%]`;
+    // ★ 줄 모드도 폭을 저장한다 (2026-10-08 대표: "이미지 2개 넣으면 크기 조절이 안 된다") — 기본 40% 그대로면 종전 `[도형]` 유지(회귀 0)
+    const marker = mode === 'line' ? (wp !== 40 ? `[도형:line:${wp}%]` : '[도형]') : `[도형:${mode}:${wp}%]`;
     if (!markersByPos.has(pos)) markersByPos.set(pos, []);
     markersByPos.get(pos)!.push(marker);
   }
@@ -305,9 +306,9 @@ export function ImagePositionEditor({
             <AlignLeft className="h-3.5 w-3.5" />
           </button>
 
-          {/* 크기 조절 (플로트 모드) */}
-          {isFloatMode && (
-            <div className="flex items-center gap-1 ml-2 border-l border-white/[.08] pl-2">
+          {/* 크기 조절 — 모든 배치에서 (줄 모드는 칸 폭 대비 %, 20~100) */}
+          {(
+            <div className="flex items-center gap-1 ml-2 border-l border-white/[.08] pl-2" title="그림 폭 (칸 폭 대비 %)">
               <button
                 type="button"
                 onClick={() => setWidthPercent(prev => Math.max(20, prev - 5))}
@@ -318,7 +319,7 @@ export function ImagePositionEditor({
               <span className="text-[10px] text-content-secondary tabular-nums min-w-[28px] text-center">{widthPercent}%</span>
               <button
                 type="button"
-                onClick={() => setWidthPercent(prev => Math.min(60, prev + 5))}
+                onClick={() => setWidthPercent(prev => Math.min(isFloatMode ? 60 : 100, prev + 5))}
                 className="p-0.5 rounded text-content-secondary hover:bg-white/[.06]"
               >
                 <Plus className="h-3 w-3" />
