@@ -799,6 +799,14 @@ function UpscaledImageWithFallback({
   cropImageUrl?: string;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
+  // ★ 원본 크롭 크기 기준 상한 (2026-10-08 대표: "크롭이 작은 그림이라도 선택(교체·재작성)하면 커진다").
+  //   교체·업스케일·재작성 이미지는 원본보다 픽셀이 훨씬 많아 칸 상한(240~300px)까지 늘어난다. 원본 크롭의 픽셀 폭을
+  //   스캔 배율(약 200dpi → 인쇄 CSS px 의 2배)로 환산해 상한으로 — 원본에서 작던 그림은 작게. 하한 120px.
+  //   폭을 직접 지정한 경우(maxWidth ≥ 10000)는 사용자 값 우선. 프로브 <img> 는 측정 영역의 "로드되면 재측정"에도 잡힌다.
+  const ORIGINAL_SCALE = 0.5;
+  const [capPx, setCapPx] = useState<number | null>(null);
+  const probeUrl = cropImageUrl && cropImageUrl !== url && maxWidth < 10000 ? cropImageUrl : null;
+  const effectiveMax = capPx ? Math.min(maxWidth, Math.max(120, capPx)) : maxWidth;
 
   // 이미지 로드 실패 → 기존 렌더링으로 폴백
   if (loadFailed) {
@@ -845,19 +853,31 @@ function UpscaledImageWithFallback({
   }
 
   return (
-    <img
-      src={url}
-      alt="문제 도형 (업스케일)"
-      className={`rounded-lg border shadow-sm ${
-        darkMode ? 'border-zinc-600 bg-white' : 'border-gray-300 bg-white'
-      } ${className}`}
-      style={{ maxWidth }}
-      loading="lazy"
-      onError={() => {
-        console.warn(`[FigureRenderer] 업스케일 이미지 로드 실패: ${url}`);
-        setLoadFailed(true);
-      }}
-    />
+    <>
+      {probeUrl && capPx === null && (
+        <img
+          src={probeUrl}
+          alt=""
+          aria-hidden
+          style={{ display: 'none' }}
+          onLoad={(e) => { const w = (e.currentTarget as HTMLImageElement).naturalWidth; if (w > 0) setCapPx(Math.round(w * ORIGINAL_SCALE)); }}
+          onError={() => setCapPx(0)}
+        />
+      )}
+      <img
+        src={url}
+        alt="문제 도형 (업스케일)"
+        className={`rounded-lg border shadow-sm ${
+          darkMode ? 'border-zinc-600 bg-white' : 'border-gray-300 bg-white'
+        } ${className}`}
+        style={{ maxWidth: effectiveMax }}
+        loading="lazy"
+        onError={() => {
+          console.warn(`[FigureRenderer] 업스케일 이미지 로드 실패: ${url}`);
+          setLoadFailed(true);
+        }}
+      />
+    </>
   );
 }
 
