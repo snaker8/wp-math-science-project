@@ -18,6 +18,11 @@ const SITE_DESCRIPTION = '함께 만드는 수학·과학 문제은행 플랫폼
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${PROD_HOST}`),
+  // ★ PNG 파비콘·apple-touch-icon (2026-10-07): 메신저 링크 카드(시놀로지 챗 등)가 SVG 아이콘을 못 읽어 작은 아이콘이 비던 것
+  icons: {
+    icon: [{ url: '/favicon-32.png', sizes: '32x32', type: 'image/png' }, { url: '/favicon-96.png', sizes: '96x96', type: 'image/png' }],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   openGraph: {
