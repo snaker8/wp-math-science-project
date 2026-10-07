@@ -11,7 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { interpretImage } from '@/lib/vision/image-interpreter';
-import { generateGeometrySVG } from '@/lib/vision/figure-renderer';
+import { generateGeometrySVG, generateGraphSVG } from '@/lib/vision/figure-renderer';
 import { redrawAndVerify, verifyCandidate, GEMINI_IMAGE_MODEL } from '@/lib/vision/image-redraw';
 import { rasterizeSvg } from '@/lib/vision/svg-raster';
 import { figureRequestContext } from '@/lib/vision/correction-examples';
@@ -473,22 +473,37 @@ export async function POST(
     }
 
     // 6.5. ★ SVG 검증 — 그림으로 바꿔 원본과 대조. 불일치면 이미지 재작성으로, 그것도 안 되면 SVG 저장 + 경고
+    //   ★ 그래프 유형(2026-10-07 대표: "우리 자체 그래프 모달로 인식해서 그런 것 같은데 거긴 수정 안 했잖아"):
+    //     그래프는 SVG 문자열이 아니라 rendering 데이터(화면에서 Desmos)로 저장돼 검증이 통째로 빠져 있었다.
+    //     서버 코드 렌더러(generateGraphSVG)로 **검증용 프록시** 그림을 만들어 같은 검증기에 넣고, 못 만들거나 불일치면 이미지 재작성으로.
+    //     프록시는 학습 사례(figure_corrections)로 기록하지 않는다 — 화면이 쓰는 그림이 아니다.
     let svgVerify: { ok: boolean; score: number; issues: string[]; labels?: string[] } | undefined;
-    if (legacySvg && imageRawBuffer && body?.skipVerify !== true) {
+    let verifyProxySvg: string | undefined;
+    const isGraphType = !legacySvg && (interpreted.rendering?.type === 'graph' || interpreted.figureType === 'graph');
+    if (isGraphType && interpreted.rendering) {
+      try { verifyProxySvg = generateGraphSVG(interpreted.rendering as unknown as Parameters<typeof generateGraphSVG>[0]) || undefined; } catch { verifyProxySvg = undefined; }
+      if (!verifyProxySvg && imageRawBuffer && body?.skipVerify !== true) {
+        console.log('[generate-figure] 그래프 프록시 SVG 생성 불가 → 검증 못 함 → 이미지 재작성 시도');
+        const r = await tryGeminiRedraw('graph_unverifiable');
+        if (r) return r;
+      }
+    }
+    const svgForVerify = legacySvg || verifyProxySvg;
+    if (svgForVerify && imageRawBuffer && body?.skipVerify !== true) {
       try {
-        const svgPng = await rasterizeSvg(legacySvg, { width: 1000 });
+        const svgPng = await rasterizeSvg(svgForVerify, { width: 1000 });
         if (svgPng) {
           const { verify, labels } = await verifyCandidate(imageRawBuffer, 'image/png', svgPng);
           svgVerify = { ok: verify.ok, score: verify.score, issues: verify.issues, labels };
           console.log(`[generate-figure] SVG 검증 ${verify.ok ? '통과' : '불일치'} score=${verify.score}${verify.issues.length ? ' — ' + verify.issues.join(' / ').slice(0, 160) : ''}`);
-          // ★ 학습 신호 기록 (통과=silver 사례, 불일치=실패 교훈). fire-and-forget
-          void recordSvgVerifyOutcome({
+          // ★ 학습 신호 기록 (통과=silver 사례, 불일치=실패 교훈). fire-and-forget — 실제 SVG 일 때만(그래프 프록시 제외)
+          if (legacySvg) void recordSvgVerifyOutcome({
             problemId, svg: legacySvg, figureType: interpreted.figureType, typeCode: problemTypeCode,
             ok: verify.ok, score: verify.score, issues: verify.issues, labels, cropUrl: targetImageUrl || null,
             contentLatex: problem.content_latex || null, model: CLAUDE_MODELS.SONNET,
           }).catch(() => {});
           if (!verify.ok) {
-            const r = await tryGeminiRedraw(`svg_verify_failed: ${verify.issues.join(' / ').slice(0, 120)}`);
+            const r = await tryGeminiRedraw(`${legacySvg ? 'svg' : 'graph'}_verify_failed: ${verify.issues.join(' / ').slice(0, 120)}`);
             if (r) return r;
           }
         } else {
@@ -553,7 +568,7 @@ export async function POST(
       figureSvg: legacySvg,
       svgVerify,
       verifyWarning: svgVerify && !svgVerify.ok
-        ? `SVG 가 원본과 다릅니다(${svgVerify.score}점): ${svgVerify.issues.join(' / ') || '사유 없음'} — 이미지 재작성도 통과하지 못해 SVG 를 그대로 두었습니다.`
+        ? `${legacySvg ? 'SVG' : '그래프'} 가 원본과 다릅니다(${svgVerify.score}점): ${svgVerify.issues.join(' / ') || '사유 없음'} — 이미지 재작성도 통과하지 못해 그대로 두었습니다. 「원본 사용」이나 「교체」로 바로잡아 주세요.`
         : undefined,
       problemId,
     });
