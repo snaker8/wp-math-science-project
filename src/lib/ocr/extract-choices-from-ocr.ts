@@ -73,6 +73,11 @@ export function extractChoicesFromOCR(text: string): string[] {
     }
 
     if (parenPositions.length >= 2) {
+      // ★ 첫 보기 번호 오인식 허용 (2026-10-07): ①→"(4)" 로 (4)(2)(3)(4)(5). 정확히 5개 + 뒤 4개가 2,3,4,5 순서면 첫 번호=1.
+      if (parenPositions.length === 5 && parenPositions[0].num !== 1
+        && parenPositions[1].num === 2 && parenPositions[2].num === 3 && parenPositions[3].num === 4 && parenPositions[4].num === 5) {
+        parenPositions[0].num = 1;
+      }
       // ★ 5지선다 가드 — (1)~(5) 5개 모두 있어야 객관식. 그 외엔 서답형 소문제.
       const nums = new Set(parenPositions.map((p) => p.num));
       const hasFullObjectiveSet = nums.has(1) && nums.has(2) && nums.has(3) && nums.has(4) && nums.has(5);

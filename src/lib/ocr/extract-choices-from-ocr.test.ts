@@ -69,3 +69,11 @@ describe('extractChoicesFromOCR — 원형 ①②③④⑤ 분기 가드', () =>
     expect(extractChoicesFromOCR(text)).toEqual([]);
   });
 });
+
+describe('(n) 보기 첫 번호 오인식 허용 (2026-10-07, 함수식 보기)', () => {
+  it('(4)(2)(3)(4)(5) → 5개 보기', () => {
+    const c = extractChoicesFromOCR('방정식은?\n(4) $y=4x-1$\n(2) $y=4x-2$\n(3) $y=4x-3$\n(4) $y=4x+1$\n(5) $y=4x+2$');
+    expect(c).toHaveLength(5);
+    expect(c[0]).toContain('4x-1');
+  });
+});
