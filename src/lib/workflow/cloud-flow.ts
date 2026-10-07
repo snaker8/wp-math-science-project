@@ -267,7 +267,7 @@ async function processPDFDocument(
  * lines.json 라인들을 문제 번호 기준으로 그룹화하여 문제별 bbox 계산
  * @returns 문제별 { questionNumber, bbox (비율 0~1), contentMmd, choices }
  */
-function groupLinesIntoQuestions(
+export function groupLinesIntoQuestions(
   allPages: OCRPage[]
 ): Array<{
   questionNumber: number;
@@ -387,6 +387,13 @@ function groupLinesIntoQuestions(
           currentQuestion.choiceTexts.push(lineText);
         } else if (_hasParenChoice && !_isSubProblemLine && (lineText.match(/\([1-5]\)/g) || []).length >= 2) {
           // (1)(2)...(5) 패턴이 한 줄에 2개 이상 있으면 선택지 라인
+          currentQuestion.choiceTexts.push(lineText);
+        } else if (_hasParenChoice && !_isSubProblemLine && /^\s*\([1-5]\)\s*\S/.test(lineText)) {
+          // ★ 줄 시작 "(n) 보기" 하나짜리 — 함수식 보기(`(1) $y=4x-1$`)는 Mathpix 가 수식 모드에서 ①을 (1) 로 내보내
+          //   한 줄에 하나씩 온다. 종전엔 "한 줄에 2개 이상"만 보기로 봐서 통째로 본문에 남고 주관식으로 떨어졌다
+          //   (2026-10-07 대표: "객관식인데 주관식으로 인식해 보기를 문제 위로 올린다 — $함수식$ 으로 시작하는 보기").
+          //   서술형 소문제((1) …구하시오 / 60자 초과)는 _isSubProblemLine 이 걸러 주고, 최종 판정은 parseChoicesFromText 의
+          //   (1)~(5) 세트 가드가 한다 — 보기로 확정 못 하면 본문은 그대로다(choiceLineSet 은 choices≥2 일 때만).
           currentQuestion.choiceTexts.push(lineText);
         } else if (
           // ★ ④까지 ①②③④ 모두 수집됐는데 다음 라인이 단일 `(5) X` 형식 →
@@ -652,7 +659,7 @@ function buildQuestionResult(
 /**
  * 텍스트에서 선택지 분리 (①②③④⑤ / (1)(2)(3)(4)(5) 형식)
  */
-function parseChoicesFromText(text: string): string[] {
+export function parseChoicesFromText(text: string): string[] {
   if (!text.trim()) return [];
 
   // ★ 전각 괄호 → 반각 정규화
@@ -692,7 +699,10 @@ function parseChoicesFromText(text: string): string[] {
   }
 
   // 원형 숫자 분할이 안 된 경우 번호 기반 시도
-  if (parts.length === 0) {
+  // ★ "1) 2) 3)" 꼴 폴백 — "(1) (2)" 괄호 번호가 남아 있으면 쓰지 않는다 (2026-10-07).
+  //   괄호 번호가 남았다는 건 위의 (1)~(5) 세트 가드가 "보기 아님"(서술형 소문제 등)으로 판정했다는 뜻인데,
+  //   "(1) a" 안의 "1) a" 가 이 정규식에 걸려 '넓이를 구하시오(' 같은 조각이 보기로 둔갑 → 서술형이 객관식으로(가드 #9 역방향).
+  if (parts.length === 0 && !/\([1-5]\)/.test(normalizedText)) {
     const numbered = normalizedText.match(/[1-5]\s*\)\s*([^1-5)]+)/g);
     if (numbered) {
       return numbered.map(m => m.replace(/^\d\s*\)\s*/, '').trim());
@@ -788,6 +798,15 @@ function normalizeChoiceParensForCloudFlow(text: string): string {
 
   // 번호 검증: (1)(2)(3)(4) 최소 포함
   const nums = parenMatches.map(m => parseInt(m[1]));
+  // ★ 첫 보기 번호 오인식 허용 (2026-10-07): ①이 "(4)" 로 읽혀 (4)(2)(3)(4)(5) 가 되면 "1 없음"으로 전부 버려졌다.
+  //   정확히 5개이고 뒤 4개가 2,3,4,5 순서면 첫 번호는 1 로 본다. 그 외엔 종전 그대로.
+  if (parenMatches.length === 5 && nums[0] !== 1 && nums[1] === 2 && nums[2] === 3 && nums[3] === 4 && nums[4] === 5) {
+    const first = parenMatches[0];
+    text = text.slice(0, first.index!) + '(1)' + text.slice(first.index! + first[0].length);
+    nums[0] = 1;
+    // 위치 재계산 — 길이가 같아(3자) 인덱스는 그대로지만 매치 배열을 새로 만든다
+    parenMatches.splice(0, parenMatches.length, ...text.matchAll(/(?<![a-zA-Z])\(([1-5])\)/g));
+  }
   if (!nums.includes(1) || !nums.includes(2) || !nums.includes(3) || !nums.includes(4)) return text;
 
   // ★ 서술형 소문제 키워드 감지 (강화됨)
