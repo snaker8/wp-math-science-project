@@ -19,6 +19,7 @@ import {
 } from '@/lib/ai/exam-analysis-prompt';
 import { resolveSubjectCode, curriculumCodesToSubjectGrade } from '@/lib/workflow/mathsecr-prompt';
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
+import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
 
 // 분석은 Claude Sonnet 응답 + 길어서 5분
@@ -184,7 +185,8 @@ export async function POST(
   const currMeta = curriculumCodesToSubjectGrade(exam.curriculum_codes as string[] | null);
   const detectedGrade =
     detectGradeFromTitle(exam.title || '') || detectGradeFromTitle(exam.subject || '');
-  const effectiveGrade = currMeta?.grade || detectedGrade || exam.grade || null;
+  // ★ 선택과목은 제목 학년 우선 (exam-grade.ts, 2026-10-07 양운고 기하 '고3' 사고) — 종전 currMeta.grade 최우선은 중등·공통수학에서만 그대로
+  const effectiveGrade = resolveExamGrade(exam.curriculum_codes as string[] | null, exam.title || '') || detectedGrade || exam.grade || null;
   const detectedSubject =
     detectSubjectFromTitle(exam.title || '') || detectSubjectFromTitle(exam.subject || '');
   const effectiveSubject = currMeta?.subject || detectedSubject || exam.subject || null;

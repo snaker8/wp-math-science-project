@@ -15,6 +15,7 @@ import { processScienceWithGemini } from '@/lib/workflow/science-gemini-flow';
 import { convertHWPtoPDF } from '@/lib/workflow/hwp-converter';
 import { detectSubjectFromTitle, detectGradeFromTitle, detectExamTypeFromTitle } from '@/lib/utils/exam-detect';
 import { curriculumCodesToSubjectGrade } from '@/lib/workflow/mathsecr-prompt';
+import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import { detectDiagnosticMetaFromTitle } from '@/lib/workflow/title-detect';
 import { findAutoFolderForCurriculum, findOrCreateSchoolFolder } from '@/lib/utils/auto-folder';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
@@ -1719,7 +1720,8 @@ async function saveEditedProblemsDirect(
         //   ("26-2-1-F 주례여고")가 title-detect 폴백으로 grade/subject 오표기되던 사고 차단.
         subject: curriculumCodesToSubjectGrade(job.curriculumCodes)?.subject ?? detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
-        grade: resolvedSchoolMeta.grade ?? curriculumCodesToSubjectGrade(job.curriculumCodes)?.grade ?? detectGradeFromTitle(fileTitle),
+        // ★ 고등 선택과목(대수·미적분·확통·기하)은 코드 학년이 대표값일 뿐 — 제목 학년(2-2 → 고2) 우선 (2026-10-07 양운고 기하 '고3' 사고)
+        grade: resolveExamGrade(job.curriculumCodes, fileTitle, resolvedSchoolMeta.grade),
         // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 재분류 시 분류 컨텍스트로 재사용.
         curriculum_codes: (job.curriculumCodes && job.curriculumCodes.length) ? job.curriculumCodes : null,
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
@@ -2591,7 +2593,8 @@ async function saveProblemsToDB(
         // ★ curriculum_codes 우선 (saveEditedProblemsDirect 와 동일 가드 — 두 INSERT 동시 패치 필수).
         subject: curriculumCodesToSubjectGrade(job.curriculumCodes)?.subject ?? detectSubjectFromTitle(fileTitle),
         exam_type: sourceOverride.exam_type ?? detectExamTypeFromTitle(fileTitle),
-        grade: resolvedSchoolMeta.grade ?? curriculumCodesToSubjectGrade(job.curriculumCodes)?.grade ?? detectGradeFromTitle(fileTitle),
+        // ★ 고등 선택과목(대수·미적분·확통·기하)은 코드 학년이 대표값일 뿐 — 제목 학년(2-2 → 고2) 우선 (2026-10-07 양운고 기하 '고3' 사고)
+        grade: resolveExamGrade(job.curriculumCodes, fileTitle, resolvedSchoolMeta.grade),
         // ★ 자산화 시 사용자가 지정한 학년·학기 과목코드 — 재분류 시 분류 컨텍스트로 재사용.
         curriculum_codes: (job.curriculumCodes && job.curriculumCodes.length) ? job.curriculumCodes : null,
         // ★ 진단지 자동 태깅 (사용자 sourceCategory 가 'auto' 또는 'diagnostic' 일 때만).
