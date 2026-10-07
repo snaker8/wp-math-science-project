@@ -486,7 +486,7 @@ export function FigureRenderer({
         className={`rounded-lg border opacity-60 ${
           darkMode ? 'border-zinc-700' : 'border-gray-300'
         } ${className}`}
-        style={{ maxWidth }}
+        style={maxWidth >= 10000 ? { width: '100%', maxWidth: '100%' } : { maxWidth }}
         loading="lazy"
       />
     );
@@ -579,8 +579,8 @@ function GraphFigure({
       <img
         src={cropImageUrl}
         alt="문제 도형"
-        className="rounded border border-gray-200 h-auto"
-        style={{ maxWidth: Math.min(maxWidth, 360) }}
+        className={darkMode ? 'rounded border border-zinc-600 h-auto' : 'h-auto'}
+        style={maxWidth >= 10000 ? { width: '100%', maxWidth: '100%' } : { maxWidth: Math.min(maxWidth, 360) }}
         loading="eager"
       />
     );
@@ -807,6 +807,8 @@ function UpscaledImageWithFallback({
   const [capPx, setCapPx] = useState<number | null>(null);
   const probeUrl = cropImageUrl && cropImageUrl !== url && maxWidth < 10000 ? cropImageUrl : null;
   const effectiveMax = capPx ? Math.min(maxWidth, Math.max(120, capPx)) : maxWidth;
+  // ★ 폭을 직접 지정한 경우(maxWidth ≥ 10000)는 바깥 칸이 폭을 정한다 — 이미지는 칸을 꽉 채우되 넘지 않게 (2026-10-08 "작게 해도 커진다": 칸만 좁아지고 그림이 삐져나갔다)
+  const fillBox = maxWidth >= 10000;
 
   // 이미지 로드 실패 → 기존 렌더링으로 폴백
   if (loadFailed) {
@@ -841,10 +843,8 @@ function UpscaledImageWithFallback({
         <img
           src={cropImageUrl}
           alt="문제 도형"
-          className={`rounded-lg border opacity-60 ${
-            darkMode ? 'border-zinc-700' : 'border-gray-300'
-          } ${className}`}
-          style={{ maxWidth }}
+          className={`opacity-60 ${darkMode ? 'rounded-lg border border-zinc-700' : ''} ${className}`}
+          style={fillBox ? { width: '100%', maxWidth: '100%' } : { maxWidth }}
           loading="lazy"
         />
       );
@@ -867,10 +867,8 @@ function UpscaledImageWithFallback({
       <img
         src={url}
         alt="문제 도형 (업스케일)"
-        className={`rounded-lg border shadow-sm ${
-          darkMode ? 'border-zinc-600 bg-white' : 'border-gray-300 bg-white'
-        } ${className}`}
-        style={{ maxWidth: effectiveMax }}
+        className={`${darkMode ? 'rounded-lg border shadow-sm border-zinc-600 bg-white' : ''} ${className}`}
+        style={fillBox ? { width: '100%', maxWidth: '100%' } : { maxWidth: effectiveMax }}
         loading="lazy"
         onError={() => {
           console.warn(`[FigureRenderer] 업스케일 이미지 로드 실패: ${url}`);
