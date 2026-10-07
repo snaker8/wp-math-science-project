@@ -761,7 +761,7 @@ function SubQuestionTable({
     });
   };
 
-  const totalPoints = items.reduce((s, it) => s + (it.points || 0), 0);
+  const totalPoints = Math.round(items.reduce((s, it) => s + (it.points || 0), 0) * 100) / 100; // 부동소수 합 반올림
 
   return (
     <div className="mt-3 border border-white/[.08] rounded-md bg-white/[.03]">

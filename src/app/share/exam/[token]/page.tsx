@@ -155,7 +155,8 @@ async function fetchData(token: string): Promise<PageData | null> {
   // 3. 통계 집계
   const total = examProblems?.length || 0;
   const totalPoints =
-    examProblems?.reduce((sum, p) => sum + (Number(p.points) || 0), 0) || exam.total_points || 0;
+    // ★ 부동소수 합(4.3+4.3+…=100.00000000000001) 방지 — 소수 둘째 자리에서 반올림 (2026-10-07 부흥고 기하 OG 캡처)
+    Math.round((examProblems?.reduce((sum, p) => sum + (Number(p.points) || 0), 0) || exam.total_points || 0) * 100) / 100;
 
   const diffDist: Record<number, number> = {};
   for (let i = 1; i <= 10; i++) diffDist[i] = 0;
