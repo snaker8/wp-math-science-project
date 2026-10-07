@@ -235,12 +235,19 @@ export async function POST(
       //  4) '미분류'
       const msPrefix = tCode.startsWith('MS') ? tCode.split('-').slice(0, 2).join('-') : '';
       const msHit = msPrefix ? msUnitMap.get(msPrefix) : null;
+      // ★ resolveSubjectCode 는 학기 불명/학기 흡수로 **배열**(['03','04'])을 돌려준다(2026-06-12~).
+      //   문자열 === 비교라 중학교 시험지는 전부 불일치 → 대단원이 '미분류'로 떨어지던 사고 (2026-10-07 센텀중 21/21 미분류).
       const subjectMatches =
-        examSubjectCode == null || msHit == null || msHit.subjectCode === examSubjectCode;
+        examSubjectCode == null || msHit == null ||
+        (Array.isArray(examSubjectCode) ? examSubjectCode.includes(msHit.subjectCode) : msHit.subjectCode === examSubjectCode);
       const aiCls = (p.ai_analysis as { classification?: { chapter?: string } } | null)
         ?.classification;
+      // ★ 수학비서 typeName("중2-2 > 여러가지 사각형 > …")의 둘째 마디가 대단원 — msHit 가 없거나 과목이 어긋나도 쓸 수 있는 2차 근거
+      const msTypeName = (p.ai_analysis as { classification?: { typeName?: string } } | null)?.classification?.typeName || '';
+      const msTypeNameUnit = msTypeName.includes('>') ? (msTypeName.split('>')[1] || '').trim() : '';
       const majorUnit =
         (msHit && subjectMatches ? msHit.level1Name : null) ||
+        msTypeNameUnit ||
         aiCls?.chapter ||
         (typeName ? typeName.split(/[>\-]/)[0].trim() : '') ||
         '미분류';
