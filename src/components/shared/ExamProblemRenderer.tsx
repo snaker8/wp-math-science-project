@@ -133,7 +133,9 @@ function ExamProblemRendererInner({
   const hasFigureInContent = parts.some(p => p.type === 'figure');
 
   // 도형 렌더 헬퍼
-  const renderFigure = (figIdx: number = 0) => {
+  // ★ wp = 위치 편집기에서 정한 폭(%) — 있으면 감싸는 칸이 폭을 정하고 안쪽은 꽉 채운다 (2026-10-08)
+  const renderFigure = (figIdx: number = 0, wp?: number) => {
+    const mw = wp ? 100000 : maxFigureWidth;
     const cropUrl = figureCrops[figIdx]?.url ? proxyUrl(figureCrops[figIdx].url) : undefined;
     const printCropImage = problem.images?.find(img => img.type === 'crop');
     const fallbackCrop = printCropImage?.url ? proxyUrl(printCropImage.url) : undefined;
@@ -141,13 +143,13 @@ function ExamProblemRendererInner({
     // figure_crop 우선 (도식 교체)
     if (cropUrl) {
       if (figIdx === 0 && hasAiFigure) {
-        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropUrl} maxWidth={maxFigureWidth} darkMode={false} />;
+        return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={cropUrl} maxWidth={mw} darkMode={false} />;
       }
-      return <img src={cropUrl} alt={`도형 ${figIdx + 1}`} className="max-h-48 max-w-full object-contain" style={{ maxWidth: `${maxFigureWidth}px` }} />;
+      return <img src={cropUrl} alt={`도형 ${figIdx + 1}`} className={`max-w-full object-contain ${wp ? 'w-full' : 'max-h-48'}`} style={wp ? undefined : { maxWidth: `${maxFigureWidth}px` }} />;
     }
     // AI 생성 도형
     if (figIdx === 0 && hasAiFigure) {
-      return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={fallbackCrop} maxWidth={maxFigureWidth} darkMode={false} />;
+      return <FigureRenderer figureData={problem.figureData} figureSvg={problem.figureSvg} upscaledCropUrl={problem.upscaledCropUrl} figureSource={problem.figureSource} cropImageUrl={fallbackCrop} maxWidth={mw} darkMode={false} />;
     }
     return null;
   };
@@ -462,7 +464,9 @@ function ExamProblemRendererInner({
           renderTextWithBadge(part.text, String(pi), pi === lastTextIdx)
         ) : (
           <div key={pi} className="my-1 flex justify-center">
-            {renderFigure(figCounter++)}
+            <div className="min-w-0 flex justify-center" style={part.widthPercent ? { width: `${part.widthPercent}%` } : undefined}>
+              {renderFigure(figCounter++, part.widthPercent)}
+            </div>
           </div>
         )
       );
