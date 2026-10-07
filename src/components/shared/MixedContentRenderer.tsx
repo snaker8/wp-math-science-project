@@ -12,6 +12,7 @@ import { stripDollarBeforeEnv, stripDollarAfterEnv } from './env-dollar-cleanup'
 import { MathRenderer } from './MathRenderer';
 import { useFitToWidth } from './use-fit-to-width';
 import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
+import { estimateChoiceWidth } from './choice-width';
 
 // ★ 풀이 박스 전용 KaTeX 직접 렌더 (2026-05-18)
 //   MathRenderer 가 \begin{aligned} 발견 시 stretchArrays 로 \\[Npt] 자동 삽입 +
@@ -556,7 +557,16 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   //   (2026-07-24 사용자 요청: "너무 붙어 있으니 가로 2개 정도로 자연스럽게").
                   //   원본 시험지처럼 촘촘하면서도 세로로 안 길어진다. cases 박스에만 적용 —
                   //   텍스트 조건 박스((가)(나) 문장)는 gridItems=null 로 폴백(회귀 0).
-                  const gridItems = hasCases ? splitLabeledBoxItems(boxContent) : null;
+                  // ★ 2026-10-07 대표: "원본처럼 박스 안에 가로로 / 세로로 해도 좋은데 공간이 필요하다".
+                  //   라벨(ㄱ~ㅁ·㉠~) 항목이 2개 이상이면 항목마다 제 줄(블록)을 준다 — 인라인 흐름에 분수가 끼면 윗줄 분모와 아랫줄 분자가 겹치던 것.
+                  //   항목이 모두 짧으면(폭 추정 ≤ 18, 6개 이하) 원본 시험지처럼 가로 2열. 긴 문장 항목은 1열. 분수가 있으면 행 간격을 넉넉히.
+                  const labeledItems = splitLabeledBoxItems(boxContent);
+                  const itemWidths = labeledItems ? labeledItems.map((s) => estimateChoiceWidth(s.replace(/^(?:[①-⑳]|[㉠-㉿]|\([가-힣]\)|[ㄱ-ㅎ]\s*[.)])\s*/, ''))) : [];
+                  const allShort = labeledItems ? labeledItems.length <= 6 && itemWidths.every((w) => w <= 18) : false;
+                  const hasFrac = /\\[dt]?frac/.test(boxContent);
+                  const gridItems = hasCases ? splitLabeledBoxItems(boxContent) : (labeledItems && labeledItems.length >= 2 ? labeledItems : null);
+                  const twoCol = hasCases || allShort;
+                  const rowGap = hasFrac ? 'gap-y-3' : 'gap-y-1.5';
                   const base = 1000 + boxIdx * 100;
                   return (
                 <div key={`cbox-${boxIdx}`} className={`my-3 px-4 py-3 rounded-md border border-gray-500 max-w-full ${hasCases ? 'leading-snug' : 'leading-relaxed'}`}>
@@ -565,9 +575,9 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   )}
                   {gridItems ? (
                     // 가로 2열 — 좁은 화면(모바일 카드)에선 1열로 접힘. 각 셀 = 라벨 + compact 인라인 cases.
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
+                    <div className={`grid grid-cols-1 ${twoCol ? 'sm:grid-cols-2' : ''} gap-x-8 ${rowGap}`}>
                       {gridItems.map((item, k) => (
-                        <div key={k} className="min-w-0">
+                        <div key={k} className={`min-w-0 ${hasFrac ? 'py-0.5' : ''}`}>
                           {parseMixedContent(item).map((bel, bei) => renderElement(bel, base + k * 20 + bei, true))}
                         </div>
                       ))}
