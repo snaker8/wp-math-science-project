@@ -206,7 +206,7 @@ export default function ExamAnalysisPage() {
   // ===== 통계 계산 =====
   const stats = useMemo(() => {
     const total = problems.length;
-    const totalPoints = problems.reduce((sum, p) => sum + ((p as any).points || 4), 0);
+    const totalPoints = Math.round(problems.reduce((sum, p) => sum + ((p as any).points || 4), 0) * 100) / 100; // 부동소수 합 반올림
     const avgDifficulty =
       total > 0
         ? problems.reduce((sum, p) => sum + (p.difficulty || 0), 0) / total
