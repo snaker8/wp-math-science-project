@@ -7,12 +7,13 @@
 import { ImageResponse } from 'next/og';
 import { supabaseAdmin } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-export const alt = '시험지 분석 리포트';
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
+// ★ 2026-10-07: 파일 규약(opengraph-image.tsx → /opengraph-image?해시)에서 명시 경로(/og.png, og.png/route.ts)로 옮김.
+//   구형 메신저 크롤러(시챗 등)가 확장자 없는 동적 URL·쿼리 해시를 못 읽어 "URL" 기본 썸네일로 떨어지던 것 대응.
+//   카카오는 종전에도 잘 나왔다. 렌더 본체는 그대로 — 호출 경로만 바뀌었다.
+export const OG_ALT = '시험지 분석 리포트';
+export const OG_SIZE = { width: 1200, height: 630 };
+export const OG_CACHE_HEADERS = { 'cache-control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, no-transform' };
+const size = OG_SIZE;
 
 interface OgData {
   title: string;
@@ -61,8 +62,7 @@ async function fetchOgData(token: string): Promise<OgData | null> {
   };
 }
 
-export default async function OgImage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+export async function renderExamOgImage(token: string): Promise<ImageResponse> {
   const data = await fetchOgData(token);
 
   // 데이터 없으면 기본 이미지
@@ -87,7 +87,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
         </div>
       ),
       // 동적 OG 이미지 CDN 캐시 — 보수적 크롤러(시놀로지 챗 등) 타임아웃 회피 + 미리보기 속도
-      { ...size, headers: { 'cache-control': 'public, max-age=86400, s-maxage=86400, immutable, no-transform' } }
+      { ...size, headers: OG_CACHE_HEADERS }
     );
   }
 
@@ -199,7 +199,7 @@ export default async function OgImage({ params }: { params: Promise<{ token: str
         </div>
       </div>
     ),
-    { ...size, headers: { 'cache-control': 'public, max-age=86400, s-maxage=86400, immutable, no-transform' } }
+    { ...size, headers: OG_CACHE_HEADERS }
   );
 }
 
