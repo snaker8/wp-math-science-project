@@ -846,8 +846,12 @@ function parseTextMath(text: string): ContentSegment[] {
         const pre = t.slice(tLast, bm.index);
         if (pre.trim()) segs.push({ type: 'text', value: cleanTextLatex(pre) });
       }
-      const label = (bm[1] ?? bm[2] ?? '').trim();
+      // ★ 라벨 안의 \quad·	ext 등은 수식 변환기를 안 거치므로 여기서 정리 (2026-10-08 해운대여중 #12: box{"\quad\quad(가)\quad\quad"} 가 quad 미지 토큰 ×32).
+      //   빈칸 상자(oxed{\quad\quad})는 공백만 남아도 상자를 유지한다 — 빈칸 채우기 문제의 네모.
+      const rawLabel = bm[1] ?? bm[2] ?? '';
+      const label = cleanTextLatex(rawLabel).replace(/\s+/g, ' ').trim();
       if (label) segs.push({ type: 'equation', value: `box{"${label}"}` });
+      else if (rawLabel.trim()) segs.push({ type: 'equation', value: 'box{"      "}' });
       tLast = bm.index + bm[0].length;
     }
     const rest = t.slice(tLast);
