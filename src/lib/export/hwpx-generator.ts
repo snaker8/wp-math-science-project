@@ -619,7 +619,7 @@ function latexToHWPEquation(latex: string): string {
   let eq = latex.trim();
   // ★ 공백 명령 (2026-10-08 해운대여중 #12 oxed{\quad\quad(가)\quad\quad} 가 eq-unknown-token quad×32):
   //   한글 수식의 공백 토큰은 ~(보통)·`(좁게). \qquad→~~ · \quad→~ (얇은 공백 \, \; \! 는 아래 기존 규칙)
-  eq = eq.replace(/\qquad(?![A-Za-z])/g, ' ~~ ').replace(/\quad(?![A-Za-z])/g, ' ~ ');
+  eq = eq.replace(/\\qquad(?![A-Za-z])/g, ' ~~ ').replace(/\\quad(?![A-Za-z])/g, ' ~ ');
 
   // 수식 래퍼 제거
   eq = eq.replace(/^\\\(|\\\)$/g, '');
