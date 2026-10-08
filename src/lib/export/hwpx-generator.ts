@@ -92,7 +92,7 @@ export function scanHwpxArtifacts(sectionXml: string): HwpxArtifactWarning[] {
   const joined = texts.join('\n');
   const add = (kind: string, re: RegExp) => {
     const ms = [...joined.matchAll(re)];
-    if (ms.length) warns.push({ kind, sample: ms[0][0].slice(0, 50), count: ms.length });
+    if (ms.length) { const i = ms[0].index ?? 0; warns.push({ kind, sample: joined.slice(Math.max(0, i - 30), i + 30).replace(/\n/g, ' ⏎ '), count: ms.length }); }
   };
   add('latex-command', /\\[a-zA-Z]{2,}/g);            // \boxed \hline \le 류 미변환 명령
   add('latex-env', /\\begin\{|\\end\{/g);             // 환경 잔재
@@ -617,6 +617,9 @@ function replaceBigOp(src: string, cmdPattern: string, hwp: string): string {
 
 function latexToHWPEquation(latex: string): string {
   let eq = latex.trim();
+  // ★ 공백 명령 (2026-10-08 해운대여중 #12 oxed{\quad\quad(가)\quad\quad} 가 eq-unknown-token quad×32):
+  //   한글 수식의 공백 토큰은 ~(보통)·`(좁게). \qquad→~~ · \quad→~ (얇은 공백 \, \; \! 는 아래 기존 규칙)
+  eq = eq.replace(/\qquad(?![A-Za-z])/g, ' ~~ ').replace(/\quad(?![A-Za-z])/g, ' ~ ');
 
   // 수식 래퍼 제거
   eq = eq.replace(/^\\\(|\\\)$/g, '');
@@ -875,7 +878,9 @@ function parseContent(content: string): ContentSegment[] {
   // 2) 나머지 HTML 정리 + 웹 렌더용 도형 마커 제거 (본문·해설·선택지 공통 진입점 — 감사 발견)
   s = s.replace(/\[(?:도형|그림)\]/g, ' ');
   s = s.replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?(?:p|div|span|strong|em|b|i|u|sup|sub|small|font|a|ul|ol|li|table|thead|tbody|tr|td|th)\b[^>]*>/gi, '')
+    // ★ 2026-10-08 부흥고 미적분1 #7: `$0<a<b$ 일 때, <보기>` 의 `<a` 를 <a …> 태그로 오인해 `<보기>` 의 > 까지 지움 → `$0` 고아.
+    //   진짜 태그는 이름 뒤가 공백·/·> 이고 안에 < $ 가 없다. 그 꼴만 지운다.
+    .replace(/<\/?(?:p|div|span|strong|em|b|i|u|sup|sub|small|font|a|ul|ol|li|table|thead|tbody|tr|td|th)\b(?=[\s/>])[^<>$]*>/gi, '')
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   // 3) 이미지 마커로 분할 → 텍스트부는 math 분리
   const segments: ContentSegment[] = [];
