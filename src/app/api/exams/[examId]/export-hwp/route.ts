@@ -11,6 +11,8 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { assertExamAccess } from '@/lib/security/institute-guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { generateHWPX, type HwpxProblem } from '@/lib/export/hwpx-generator';
+import { rasterizeSvg } from '@/lib/vision/svg-raster';
+import { createHash } from 'node:crypto';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -25,33 +27,81 @@ function extractAnswerValue(aj: Record<string, unknown>): unknown {
   return undefined;
 }
 
-// 본문의 ![](crop-url) 도형을 더 나은 렌더본으로 교체
-//   우선순위: ai_analysis.upscaledCropUrl > images[figure_crop] > images[crop] > (원본 url)
-//   ※ figureSvg/figureData(AI SVG)는 래스터화 필요 — 후속 작업
-function resolveFigureContent(
+// 본문의 도형 자리(![](url) · [도형…] 마커)를 화면(FigureRenderer/ExamProblemRenderer)과 **같은 순서**의 그림으로 채운다.
+//   첫 도형: ai_analysis.upscaledCropUrl(교체·업스케일·재작성) > figureSvg(AI SVG → 서버 래스터 PNG) > images[figure_crop][0]
+//   추가 도형: images[figure_crop][1..]
+//   2026-10-08 대표: "한글로 들어갈 때 교체된 이미지가 안 들어간다" — 종전엔 figure_crop 원본을 먼저 집어 교체본이 빠졌고 SVG 는 통째로 빠졌다.
+//   type 'crop'(문제 전체 스캔)은 절대 쓰지 않음 — 텍스트까지 통째로 박히는 중복 사고.
+async function rasterizeSvgToUrl(svg: string, problemId: string): Promise<string | undefined> {
+  if (!supabaseAdmin) return undefined;
+  try {
+    const png = await rasterizeSvg(svg, { width: 1000 });
+    if (!png) return undefined;
+    const hash = createHash('sha1').update(svg).digest('hex').slice(0, 10);
+    const path = `problem-crops/hwpx-svg/${problemId}-${hash}.png`;
+    const { error } = await supabaseAdmin.storage.from('source-files').upload(path, png, { contentType: 'image/png', upsert: true });
+    if (error) { console.warn('[export-hwp] SVG 래스터 업로드 실패:', error.message); return undefined; }
+    return supabaseAdmin.storage.from('source-files').getPublicUrl(path).data?.publicUrl || undefined;
+  } catch (e) {
+    console.warn('[export-hwp] SVG 래스터 실패:', e instanceof Error ? e.message : e);
+    return undefined;
+  }
+}
+
+/** `$` 가 홀수면 고아 하나를 걷는다 — 끝/앞의 `$` 우선, 아니면 마지막 `$`. (한글 변환 'dollar' 경고 차단, 2026-10-08) */
+function fixOddDollar(s: string): string {
+  if (!s) return s;
+  const n = (s.match(/\$/g) || []).length;
+  if (n % 2 === 0) return s;
+  const t = s.trimEnd();
+  if (t.endsWith('$')) return t.slice(0, -1);
+  if (s.trimStart().startsWith('$')) return s.replace(/^\s*\$/, '');
+  const i = s.lastIndexOf('$');
+  return s.slice(0, i) + s.slice(i + 1);
+}
+
+async function resolveFigureContent(
   content: string,
   images: Array<{ url?: string; type?: string }> | null | undefined,
   ai: Record<string, unknown> | null | undefined,
-): string {
+  problemId: string,
+): Promise<string> {
   const imgs = Array.isArray(images) ? images : [];
   const figureCrops = imgs.filter((i) => i?.type === 'figure_crop' && i.url).map((i) => i.url as string);
   const hasFigure = !!(ai && ai.hasFigure);
-  const upscaled = (ai && typeof ai.upscaledCropUrl === 'string') ? ai.upscaledCropUrl : undefined;
-  // ★ 실제 "도형"만 — figure_crop 우선, 없으면 (도형 있을 때만) upscaledCropUrl.
-  //   type 'crop'(문제 전체 스캔)은 절대 쓰지 않음 — 텍스트까지 통째로 박히는 중복 사고.
-  const pool = figureCrops.length > 0 ? figureCrops : (hasFigure && upscaled ? [upscaled] : []);
+  const upscaled = (ai && typeof ai.upscaledCropUrl === 'string' && ai.upscaledCropUrl) ? (ai.upscaledCropUrl as string) : undefined;
+  const svg = (ai && typeof ai.figureSvg === 'string' && (ai.figureSvg as string).includes('<svg')) ? (ai.figureSvg as string) : undefined;
+
+  // ★ 화면용 프록시 경로(/api/storage/image?path=…)는 서버가 못 받는다 → 공개 Storage 주소로 (업스케일·재작성 이미지가 이 꼴)
+  const toPublic = (u: string): string => {
+    const m = u.match(/^\/api\/storage\/image\?path=([^&]+)/);
+    if (!m || !supabaseAdmin) return u;
+    return supabaseAdmin.storage.from('source-files').getPublicUrl(decodeURIComponent(m[1])).data?.publicUrl || u;
+  };
+  let first: string | undefined = upscaled ? toPublic(upscaled) : undefined;
+  if (!first && svg && hasFigure) first = await rasterizeSvgToUrl(svg, problemId);
+  if (!first) first = figureCrops[0];
+  const pool: string[] = [];
+  if (first) pool.push(first);
+  for (const u of figureCrops.slice(1).map(toPublic)) if (!pool.includes(u)) pool.push(u);
 
   let k = 0;
-  let hadImg = false;
+  let hadMarker = false;
+  // 1) 인라인 ![…](url) — 그 자리의 도형을 pool 순서로 업그레이드(없으면 원본 유지)
   let out = (content || '').replace(/!\[[^\]]*\]\(\s*([^)\s]+)[^)]*\)/g, (_m, url: string) => {
-    hadImg = true;
-    const best = pool[k] || url; // 인라인 이미지는 이미 도형 크롭 → 더 나은 게 있으면 업그레이드, 없으면 원본 유지
-    k++;
+    hadMarker = true;
+    const best = pool[k] || url; k++;
     return `![figure](${best})`;
   });
-  // 본문에 인라인 도형이 없는데 진짜 도형 소스가 있으면 끝에 추가 (crop 제외라 텍스트 중복 안 생김)
-  if (!hadImg && pool.length > 0) out += ` ![figure](${pool[0]})`;
-  return out;
+  // 2) [도형] / [도형:left:40%] 마커 — pool 순서로 그림, 남는 마커는 제거
+  out = out.replace(/\[도형(?::\w+[-\w]*)?(?::\d+%?)?\]/g, () => {
+    hadMarker = true;
+    const u = pool[k]; k++;
+    return u ? ` ![figure](${u}) ` : ' ';
+  });
+  // 3) 자리가 하나도 없는데 그림이 있으면 끝에 추가
+  if (!hadMarker && pool.length > 0) out += ' ' + pool.map((u) => `![figure](${u})`).join(' ');
+  return fixOddDollar(out);
 }
 
 // 정답 → 한글 본문용 plain 문자열 (객관식 ①~⑤, 그 외 원문)
@@ -144,20 +194,24 @@ export async function GET(
   ((problems || []) as ProbRow[]).forEach((p) => pMap.set(p.id, p));
 
   // HwpxProblem[] 매핑
-  const hwpProblems: HwpxProblem[] = ((epRows || []) as Array<{ sequence_number: number; problem_id: string; points: number | null }>)
-    .map((row) => {
+  const hwpProblems: HwpxProblem[] = await Promise.all(((epRows || []) as Array<{ sequence_number: number; problem_id: string; points: number | null }>)
+    .map(async (row) => {
       const p = pMap.get(row.problem_id);
       const aj = (p?.answer_json || {}) as Record<string, unknown>;
-      const choices = Array.isArray((aj as { choices?: string[] }).choices) ? (aj as { choices: string[] }).choices : [];
+      const choices = (Array.isArray((aj as { choices?: string[] }).choices) ? (aj as { choices: string[] }).choices : []).map(fixOddDollar);
       return {
         number: row.sequence_number,
-        content: resolveFigureContent(p?.content_latex || '', p?.images, p?.ai_analysis),
+        content: await resolveFigureContent(p?.content_latex || '', p?.images, p?.ai_analysis, row.problem_id),
         choices,
         answer: plainAnswer(aj, choices),
-        solution: withSolutions ? (p?.solution_latex || undefined) : undefined,
+        solution: withSolutions ? (p?.solution_latex ? fixOddDollar(p.solution_latex) : undefined) : undefined,
         points: row.points || undefined,
       };
-    });
+    }));
+  // ★ debug=1 — 파일 대신 문제 매핑(JSON) 반환: 어떤 그림 URL 이 들어가는지 확인용 (인증 필요)
+  if (request.nextUrl.searchParams.get('debug') === '1') {
+    return NextResponse.json({ problems: hwpProblems.map((h) => ({ number: h.number, figures: [...h.content.matchAll(/!\[figure\]\(([^)]+)\)/g)].map((m) => m[1]), dollarOdd: ((h.content.match(/\$/g) || []).length % 2) === 1 })) });
+  }
 
   const examTitle = (exam as { title?: string }).title || '시험지';
   const examGrade = (exam as { grade?: string }).grade || '';
