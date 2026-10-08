@@ -643,3 +643,11 @@ describe('한글 수식 미지 토큰 (글자로 새는 클래스)', () => {
       .find((x) => x.kind === 'eq-unknown-token')).toBeUndefined();
   });
 });
+
+describe('HTML 태그 제거가 수식의 < 를 먹지 않는다 (2026-10-08 부흥고 미적분1 #7)', () => {
+  it('$0<a<b$ 일 때, <보기> 가 보존되고 $ 잔재 경고가 없다', async () => {
+    let warns: Array<{ kind: string }> = [];
+    await generateHWPX([{ number: 1, content: '함수 $f(x)$ 는 $x>0$ 에서 미분가능하고 $0<a<b$ 일 때, <보기>에서 옳은 것만을 고른 것은? <b>굵게</b>', choices: ['ㄱ', 'ㄴ', 'ㄱ, ㄴ', 'ㄴ, ㄷ', 'ㄱ, ㄴ, ㄷ'], answer: '③' }], { title: 't', skipImages: true, onWarnings: (w) => { warns = w; } });
+    expect(warns.map((w) => w.kind)).not.toContain('dollar');
+  });
+});

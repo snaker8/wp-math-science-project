@@ -12,6 +12,7 @@ import { assertExamAccess } from '@/lib/security/institute-guard';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { generateHWPX, type HwpxProblem } from '@/lib/export/hwpx-generator';
 import { rasterizeSvg } from '@/lib/vision/svg-raster';
+import { stripTrailingInlineChoices } from '@/lib/utils/strip-inline-choices';
 import { createHash } from 'node:crypto';
 
 export const dynamic = 'force-dynamic';
@@ -58,6 +59,16 @@ function fixOddDollar(s: string): string {
   if (s.trimStart().startsWith('$')) return s.replace(/^\s*\$/, '');
   const i = s.lastIndexOf('$');
   return s.slice(0, i) + s.slice(i + 1);
+}
+
+function stripInlineChoicesKeepFigures(content: string, choices: string[]): string {
+  const stripped = stripTrailingInlineChoices(content, choices);
+  if (stripped === content) return content;
+  const tail = content.slice(stripped.length);
+  const figs = tail.match(/!\[[^\]]*\]\([^)]*\)|\[도형(?::\w+[-\w]*)?(?::\d+%?)?\]/g) || [];
+  return figs.length ? `${stripped}
+
+${figs.join(' ')}` : stripped;
 }
 
 async function resolveFigureContent(
@@ -201,7 +212,8 @@ export async function GET(
       const choices = (Array.isArray((aj as { choices?: string[] }).choices) ? (aj as { choices: string[] }).choices : []).map(fixOddDollar);
       return {
         number: row.sequence_number,
-        content: await resolveFigureContent(p?.content_latex || '', p?.images, p?.ai_analysis, row.problem_id),
+        // ★ 본문 끝 인라인 보기(①…⑤) 가 choices 와 같으면 제거 — 화면과 같은 안전망. 잘려 나간 꼬리에 그림 자리가 있었으면 되살린다.
+        content: await resolveFigureContent(stripInlineChoicesKeepFigures(p?.content_latex || '', choices), p?.images, p?.ai_analysis, row.problem_id),
         choices,
         answer: plainAnswer(aj, choices),
         solution: withSolutions ? (p?.solution_latex ? fixOddDollar(p.solution_latex) : undefined) : undefined,
@@ -210,7 +222,7 @@ export async function GET(
     }));
   // ★ debug=1 — 파일 대신 문제 매핑(JSON) 반환: 어떤 그림 URL 이 들어가는지 확인용 (인증 필요)
   if (request.nextUrl.searchParams.get('debug') === '1') {
-    return NextResponse.json({ problems: hwpProblems.map((h) => ({ number: h.number, figures: [...h.content.matchAll(/!\[figure\]\(([^)]+)\)/g)].map((m) => m[1]), dollarOdd: ((h.content.match(/\$/g) || []).length % 2) === 1 })) });
+    return NextResponse.json({ problems: hwpProblems.map((h) => ({ number: h.number, figures: [...h.content.matchAll(/!\[figure\]\(([^)]+)\)/g)].map((m) => m[1]), dollarOdd: ((h.content.match(/\$/g) || []).length % 2) === 1, inlineChoices: /[①②③④⑤]/.test(h.content), choiceDollarOdd: h.choices.some((c) => ((c.match(/\$/g) || []).length % 2) === 1), answerDollar: /\$/.test(String(h.answer ?? '')) })) });
   }
 
   const examTitle = (exam as { title?: string }).title || '시험지';
@@ -249,6 +261,10 @@ export async function GET(
   })) as Buffer;
   if (artifactWarnings.length > 0) {
     console.warn(`[export-hwp] 잔재 경고 (${examTitle}):`, JSON.stringify(artifactWarnings));
+  }
+  // ★ debug=2 — 파일 대신 변환기 잔재 경고(종류·샘플·개수)를 JSON 으로. "dollarx1" 이 어느 문장인지 바로 찾기 위해 (2026-10-08)
+  if (request.nextUrl.searchParams.get('debug') === '2') {
+    return NextResponse.json({ title: examTitle, warnings: artifactWarnings });
   }
 
   const filename = `${examTitle}.hwpx`;

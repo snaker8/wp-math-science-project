@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { stripTrailingInlineChoices } from '@/lib/utils/strip-inline-choices';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
 import { cleanLatexContent, cleanChoiceText } from '@/lib/utils/clean-latex';
 // Note: supabaseBrowser는 useCreateExam, useExamList에서 여전히 사용
@@ -189,41 +190,7 @@ function extractChoicesFromLatex(latex: string): { content: string; choices: str
 //   - 마커 위치는 lastIndexOf 로 "맨 끝 런" 을 역추적 → 본문 중간의 ①(표·설명·보기 아닌 것)은
 //     보존. 텍스트가 dbChoices 와 안 맞으면(표 셀 등) 과반 미달로 절대 자르지 않는다.
 //   - 질문(head)이 거의 없으면(전체가 보기뿐) 위험하므로 패스.
-function stripTrailingInlineChoices(text: string, dbChoices: string[]): string {
-  const n = dbChoices.length;
-  if (n < 2 || n > 5) return text;
-  const markers = ['①', '②', '③', '④', '⑤'];
-  const pos = new Array<number>(n);
-  pos[n - 1] = text.lastIndexOf(markers[n - 1]);
-  if (pos[n - 1] === -1) return text;
-  for (let k = n - 2; k >= 0; k--) {
-    pos[k] = text.lastIndexOf(markers[k], pos[k + 1] - 1);
-    if (pos[k] === -1) return text; // 순서대로 못 찾음 → 끝 보기 런 아님
-  }
-  const start = pos[0];
-  const head = text.slice(0, start).trim();
-  if (head.length < 5) return text; // 질문이 사실상 없음 → 위험, 패스
-
-  // 마커·LaTeX 명령·공백·$·괄호·구두점 제거 후 비교 (본문 $11$ vs 보기 11 같은 차이 흡수)
-  const norm = (s: string) =>
-    s
-      .replace(/[①②③④⑤]/g, '')
-      .replace(/\\[a-zA-Z]+/g, '')
-      .replace(/[\s${}().,]/g, '')
-      .toLowerCase();
-
-  let matches = 0;
-  for (let k = 0; k < n; k++) {
-    const segEnd = k + 1 < n ? pos[k + 1] : text.length;
-    const segN = norm(text.slice(pos[k], segEnd));
-    const dbN = norm(dbChoices[k] || '');
-    if (segN && dbN && segN === dbN) matches++;
-  }
-  // 과반(60%) 이상 일치해야 "이 끝 블록 = 보기" 로 확신 → 제거
-  if (matches >= Math.ceil(n * 0.6)) return head;
-  return text;
-}
-
+// ★ stripTrailingInlineChoices 는 '@/lib/utils/strip-inline-choices' 로 이동 (한글 내보내기와 공용, 2026-10-08)
 // ============================================================================
 // answer_json에서 정답 번호 추출
 // ============================================================================

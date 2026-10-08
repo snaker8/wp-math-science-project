@@ -94,3 +94,16 @@ describe('보기 번호 한 자리 오인식 일반화 (2026-10-07)', () => {
     expect(extractChoicesFromOCR('값은?\n(1) 64\n(2) 67\n(3) 73\n(5) 76\n(5) 80')).toEqual(['64', '67', '73', '76', '80']);
   });
 });
+
+import { stripTrailingInlineChoices } from '@/lib/utils/strip-inline-choices';
+describe('stripTrailingInlineChoices 느슨 규칙 (2026-10-08 부흥고 미적분1 #3)', () => {
+  it('④가 ①로 오인식돼 순서가 깨져도 보기 내용이 과반 일치하면 자른다', () => {
+    const txt = '함수 $f(x)=x^2+3x+5$ 에 대하여 … 상수 $a$ 의 값은?\n① 0\n② 1\n③ 2\n① 3\n⑤ 4 [3.7점]';
+    const out = stripTrailingInlineChoices(txt, ['0', '1', '2', '3', '4']);
+    expect(out).toBe('함수 $f(x)=x^2+3x+5$ 에 대하여 … 상수 $a$ 의 값은?');
+  });
+  it('서술형 풀이 단계 ①②③ 는 보기와 안 맞으니 그대로', () => {
+    const txt = '다음 과정을 완성하시오.\n① 양변을 2로 나눈다\n② 이항한다\n③ 제곱근을 구한다';
+    expect(stripTrailingInlineChoices(txt, ['3', '4', '5', '6', '7'])).toBe(txt);
+  });
+});
