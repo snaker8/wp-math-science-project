@@ -1514,101 +1514,73 @@ export function QuickAnswerView({
           examTitle={examTitle}
         />
 
-        {/* 빠른 정답 제목 */}
-        <div className="text-center pt-8 pb-5">
-          <h2 className="text-xl font-bold text-gray-900 tracking-wider">빠 른 정 답</h2>
+        {/* ★ 빠른 정답 — 2026-10-08 대표 "빠른답 형식도 뭔가 이쁜 렌더가 필요하다".
+            종전: 굵은 검정 테두리 2열 표(문항·정답·문항·정답). 지금: 에디토리얼 타이틀 + 5칸 격자(번호 띠 + 정답), 얇은 선.
+            시험지 헤더(Pretendard·에디토리얼)와 같은 결. 객관식은 ①~⑤, 서답형은 quickAnswerDisplay 규칙(기존 그대로). */}
+        <div className="px-12 pt-7 pb-3 flex items-end justify-between">
+          <div>
+            <div className="text-[11px] tracking-[0.22em] text-gray-500 font-semibold">QUICK ANSWER</div>
+            <h2 className="text-[22px] font-bold text-gray-900 tracking-tight leading-tight">빠른 정답</h2>
+          </div>
+          <div className="text-xs text-gray-500 tabular-nums">총 {problems.length}문항</div>
         </div>
 
-        {/* 정답 테이블 */}
         <div className="px-12 pb-10">
-          <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '38%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '38%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">문항</th>
-                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">정답</th>
-                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">문항</th>
-                <th className="border-2 border-gray-800 bg-gray-100 py-2.5 text-center text-sm font-bold text-gray-700">정답</th>
-              </tr>
-            </thead>
-            <tbody>
-            {Array.from({ length: Math.ceil(problems.length / 2) }).map((_, rowIdx) => {
-              const leftNum = rowIdx + 1;
-              const rightNum = rowIdx + 1 + Math.ceil(problems.length / 2);
-              const leftP = problems.find((p) => p.number === leftNum);
-              const rightP = problems.find((p) => p.number === rightNum);
+          {(() => {
+            const sorted = [...problems].sort((a, b) => a.number - b.number);
+            const COLS = 5;
+            const fillers = (COLS - (sorted.length % COLS)) % COLS;
+            const pad2 = (n: number) => String(n).padStart(2, '0');
 
-              const formatAnswer = (p?: ProblemData): React.ReactNode => {
-                if (!p || p.answer === undefined || p.answer === '-') return '-';
-                const ans = p.answer;
-                const isMC = (p.choices?.length ?? 0) >= 2;
+            const formatAnswer = (p?: ProblemData): React.ReactNode => {
+              if (!p || p.answer === undefined || p.answer === '-') return <span className="text-gray-300">-</span>;
+              const ans = p.answer;
+              const isMC = (p.choices?.length ?? 0) >= 2;
+              if (typeof ans === 'number' && ans >= 1 && ans <= 5 && isMC) return circledNumbers[ans];
+              const str = String(ans).trim();
+              if (isMC) {
+                const multi = multiObjectiveDisplay(str, true);
+                if (multi) return multi;
+                if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
+                if (/^[①②③④⑤]$/.test(str)) return str;
+                const circledPrefix = str.match(/^([①②③④⑤])/);
+                if (circledPrefix) return circledPrefix[1];
+                const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
+                if (sameParen && sameParen[1] === sameParen[2]) return circledNumbers[parseInt(sameParen[1])];
+                const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
+                if (verboseParen && verboseParen[1] === verboseParen[2]) return circledNumbers[parseInt(verboseParen[1])];
+                const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
+                if (banOnly) return circledNumbers[parseInt(banOnly[1])];
+              }
+              if (!isMC) {
+                // ★ 서답형 표시 규칙은 quick-answer-display.ts (순수 함수, 회귀 테스트) — 그대로
+                const display = quickAnswerDisplay(str);
+                const isLong = /\n/.test(display) || display.length > 40;
+                return (
+                  <div className={`flex items-center leading-relaxed ${isLong ? 'justify-start text-left text-[12px] font-medium' : 'justify-center'}`}>
+                    <MixedContentRenderer content={display} className="text-gray-900" />
+                  </div>
+                );
+              }
+              const hasMath = /\$|\\frac|\\sqrt|\\dfrac|\^|_\{|[a-zA-Z].*[=+\-*/]/.test(str);
+              if (hasMath) return <MixedContentRenderer content={str} className="text-gray-900" />;
+              return str;
+            };
 
-                // 숫자 1~5 → 원형숫자 (객관식)
-                if (typeof ans === 'number' && ans >= 1 && ans <= 5 && isMC) return circledNumbers[ans];
-                const str = String(ans).trim();
-                // ★ 객관식일 때만 원형숫자/번호 변환 시도
-                if (isMC) {
-                  // 복수정답("모두 고르기"형) — "③④"/"3,4" → "③④" 모두 표시
-                  const multi = multiObjectiveDisplay(str, true);
-                  if (multi) return multi;
-                  if (/^[1-5]$/.test(str)) return circledNumbers[parseInt(str)];
-                  if (/^[①②③④⑤]$/.test(str)) return str;
-                  const circledPrefix = str.match(/^([①②③④⑤])/);
-                  if (circledPrefix) return circledPrefix[1];
-                  const sameParen = str.match(/^\s*([1-5])\s*\(\s*([1-5])\s*번\s*\)\s*$/);
-                  if (sameParen && sameParen[1] === sameParen[2]) return circledNumbers[parseInt(sameParen[1])];
-                  const verboseParen = str.match(/^\s*([1-5])\s*\(\s*(?:정답\s*)?(?:번호\s*[:：]?\s*)?([1-5])\s*\)\s*$/);
-                  if (verboseParen && verboseParen[1] === verboseParen[2]) return circledNumbers[parseInt(verboseParen[1])];
-                  const banOnly = str.match(/^\s*\(?\s*([1-5])\s*\)?\s*번\s*$/);
-                  if (banOnly) return circledNumbers[parseInt(banOnly[1])];
-                }
-
-                // ★ 단답형·서술형 모두 "값"만 수식으로 렌더 — 학생 채점 가능한 형태
-                //   빠른정답은 수식 LaTeX 그대로 노출돼선 안 되고 KaTeX로 정식 렌더돼야 함
-                if (!isMC) {
-                  // ★ 서답형 표시 규칙은 quick-answer-display.ts (순수 함수, 회귀 테스트). 소문항 라벨·한글 서술은
-                  //   수식으로 감싸지 않고 라벨마다 줄바꿈, 결론부 추출의 고아 `$` 는 걷는다 (학장중 24-2-2-M, 2026-09-22).
-                  const display = quickAnswerDisplay(str);
-                  const isLong = /\n/.test(display) || display.length > 40;
-                  return (
-                    <div className={`flex items-center min-h-[2.6em] leading-relaxed ${isLong ? 'justify-start text-left text-[12px]' : 'justify-center'}`}>
-                      <MixedContentRenderer content={display} className="text-blue-700" />
-                    </div>
-                  );
-                }
-
-                // 수식 포함 → LaTeX 렌더
-                const hasMath = /\$|\\frac|\\sqrt|\\dfrac|\^|_\{|[a-zA-Z].*[=+\-*/]/.test(str);
-                if (hasMath) {
-                  return <MixedContentRenderer content={str} className="text-blue-700" />;
-                }
-                return str;
-              };
-
-              return (
-                <tr key={rowIdx}>
-                  <td className="border border-gray-400 py-3 text-center text-sm font-semibold text-gray-800">
-                    {leftNum}
-                  </td>
-                  <td className="border border-gray-400 py-3 text-center text-base font-bold text-blue-700">
-                    {formatAnswer(leftP)}
-                  </td>
-                  <td className="border border-gray-400 py-3 text-center text-sm font-semibold text-gray-800">
-                    {rightNum <= problems.length ? rightNum : ''}
-                  </td>
-                  <td className="border border-gray-400 py-3 text-center text-base font-bold text-blue-700">
-                    {rightNum <= problems.length ? formatAnswer(rightP) : ''}
-                  </td>
-                </tr>
-              );
-            })}
-            </tbody>
-          </table>
+            return (
+              <div className="grid grid-cols-5 border-t border-l border-gray-300 rounded-sm overflow-hidden">
+                {sorted.map((p) => (
+                  <div key={p.id ?? p.number} className="border-r border-b border-gray-300 min-h-[64px] flex flex-col break-inside-avoid">
+                    <div className="text-[11px] font-semibold text-gray-500 bg-gray-50 px-2 py-1 border-b border-gray-200 tabular-nums">{pad2(p.number)}</div>
+                    <div className="flex-1 flex items-center justify-center px-2 py-2 text-[17px] font-bold text-gray-900">{formatAnswer(p)}</div>
+                  </div>
+                ))}
+                {Array.from({ length: fillers }).map((_, i) => (
+                  <div key={`f-${i}`} className="border-r border-b border-gray-300 bg-gray-50/60" />
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
