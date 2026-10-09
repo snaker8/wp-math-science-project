@@ -2569,7 +2569,8 @@ async function autoCropFiguresForProblems(
   pdf: any,
   pageNum: number,
   problems: AnalyzedProblem[],
-  figures: Array<{ x: number; y: number; w: number; h: number; class?: string }>
+  figures: Array<{ x: number; y: number; w: number; h: number; class?: string }>,
+  rotation: 0 | 90 | 180 | 270 = 0,
 ): Promise<AnalyzedProblem[]> {
   if (!figures || figures.length === 0) return problems;
 
@@ -2590,16 +2591,9 @@ async function autoCropFiguresForProblems(
 
   let fullCanvas: HTMLCanvasElement;
   try {
-    const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 4.0 });
-    fullCanvas = document.createElement('canvas');
-    fullCanvas.width = viewport.width;
-    fullCanvas.height = viewport.height;
-    const fullCtx = fullCanvas.getContext('2d');
-    if (!fullCtx) return problems;
-    fullCtx.fillStyle = '#ffffff';
-    fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
-    await page.render({ canvasContext: fullCtx, viewport }).promise;
+    // ★ 앱 회전을 합산해 그린다(2026-10-09) — figures·bbox 는 원본 좌표라 아래에서 rotateBbox 로 맞춘다
+    const { renderPageToCanvas } = await import('@/lib/pdf-viewer');
+    fullCanvas = await renderPageToCanvas(pdf, pageNum, 4.0, rotation);
   } catch (err) {
     console.warn(`[FigureAutoCrop] 페이지 ${pageNum} 4x 렌더 실패:`, err);
     return problems;
@@ -2612,7 +2606,9 @@ async function autoCropFiguresForProblems(
     const newImages: InsertedImage[] = [];
     let appendedContent = p.content || '';
 
-    for (const fig of matches) {
+    const dBox = rotateBboxLocal(p.bbox, rotation);
+    for (const fig0 of matches) {
+      const fig = rotateBboxLocal(fig0, rotation);
       const sx = fig.x * fullCanvas.width;
       const sy = fig.y * fullCanvas.height;
       const sw = fig.w * fullCanvas.width;
@@ -2626,11 +2622,12 @@ async function autoCropFiguresForProblems(
       cropCtx.drawImage(fullCanvas, sx, sy, sw, sh, 0, 0, cropCanvas.width, cropCanvas.height);
       const base64 = cropCanvas.toDataURL('image/png');
 
+      // 크롭 이미지(getCropImageBase64, 회전 적용) 안의 상대 위치 — 같은 디스플레이 좌표계로
       const cropRelativeRect = {
-        x: (fig.x - p.bbox.x) / p.bbox.w,
-        y: (fig.y - p.bbox.y) / p.bbox.h,
-        w: fig.w / p.bbox.w,
-        h: fig.h / p.bbox.h,
+        x: (fig.x - dBox.x) / dBox.w,
+        y: (fig.y - dBox.y) / dBox.h,
+        w: fig.w / dBox.w,
+        h: fig.h / dBox.h,
       };
 
       const imageMarkdown = `![이미지](${base64})`;
@@ -3051,11 +3048,18 @@ export default function AnalyzeJobPage() {
   //   사용자가 회전 버튼을 누르면 90° 시계방향으로 누적.
   //   bbox 는 DB 에 항상 원본 좌표로 저장 — 렌더 시 rotateBbox 변환, 드래그 저장 시 unrotateBbox 역변환.
   const [pageRotations, setPageRotations] = useState<Map<number, 0 | 90 | 180 | 270>>(new Map());
+  // ★ 감지·크롭 콜백이 deps 재실행 없이 최신 회전을 읽도록 ref 로 비춘다 (2026-10-09)
+  const pageRotationsRef = useRef(pageRotations);
+  pageRotationsRef.current = pageRotations;
+  // ★ 회전 버튼으로 손 안 댄 페이지를 되돌려 감지시킬 때 올리는 카운터 (감지 effect deps)
+  const [rotationTick, setRotationTick] = useState(0);
 
   // ★ AutoCrop 주도 파이프라인 상태
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [autoCropProblems, setAutoCropProblems] = useState<Map<number, AnalyzedProblem[]>>(new Map());
+  const autoCropProblemsRef = useRef(autoCropProblems);
+  autoCropProblemsRef.current = autoCropProblems;
   const [useAutoCropMode, setUseAutoCropMode] = useState(false); // AutoCrop 모드 on/off (기본 OFF → 수동 선택 우선)
   const [detectionMode, setDetectionMode] = useState<'ai' | 'pixel'>('ai'); // AI 감지 or 픽셀 감지
   const [aiDetectProgress, setAiDetectProgress] = useState<Map<number, 'loading' | 'done' | 'error'>>(new Map());
@@ -3242,6 +3246,35 @@ export default function AnalyzeJobPage() {
       next.set(pdfPageNumber, newRot);
       return next;
     });
+    // ★ 2026-10-09 (대표: "회전해도 올려진 자료 방향대로 분석된다"):
+    //   ① 그 페이지의 OCR 크롭 캐시(cropImageBase64)는 옛 방향으로 그린 것 → 비워서 새 방향으로 다시 뜨게.
+    //   ② 아직 손 안 댄 페이지(내용·편집 없음)면 감지 결과를 버리고 새 방향으로 다시 감지한다.
+    //      편집한 페이지는 보존 — bbox 는 원본 좌표라 회전해도 자리가 맞는다.
+    const pageIndex = pdfPageNumber - 1;
+    const stripImage = (c: string) => c.replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+    const probs = autoCropProblemsRef.current.get(pageIndex);
+    if (probs) {
+      const untouched = probs.every((p) => p.status === 'pending' && !stripImage(p.content || ''));
+      if (untouched) {
+        blocksDetectedRef.current.delete(pageIndex);
+        setAutoCropProblems((prev) => { const next = new Map(prev); next.delete(pageIndex); return next; });
+        setAiDetectProgress((ap) => { const m = new Map(ap); m.delete(pageIndex); return m; });
+        setSelectedProblemId((sel) => (sel && probs.some((p) => p.id === sel) ? null : sel));
+        setRotationTick((n) => n + 1);
+      } else {
+        setAutoCropProblems((prev) => {
+          const cur = prev.get(pageIndex);
+          if (!cur) return prev;
+          const next = new Map(prev);
+          next.set(pageIndex, cur.map((p) => (p.cropImageBase64 ? { ...p, cropImageBase64: undefined } : p)));
+          return next;
+        });
+      }
+    }
+    setJobData((prev) => prev ? {
+      ...prev,
+      pages: prev.pages.map((pg) => ({ ...pg, problems: pg.problems.map((p) => (p.pageIndex === pageIndex && p.cropImageBase64 ? { ...p, cropImageBase64: undefined } : p)) })),
+    } : prev);
   }, []);
 
   // ★ pageOrder 초기화 + localStorage 복원 (2026-05-17)
@@ -3325,7 +3358,7 @@ export default function AnalyzeJobPage() {
       isPreloadingRef.current = true;
 
       try {
-        const { loadPdfDocument } = await import('@/lib/pdf-viewer');
+        const { loadPdfDocument, renderPageToCanvas, detectPageRotation } = await import('@/lib/pdf-viewer');
         const pdf = await loadPdfDocument(jobData.pdfUrl!);
 
         // 현재 보고 있는 페이지를 먼저 처리 → 나머지 순차 처리
@@ -3340,21 +3373,10 @@ export default function AnalyzeJobPage() {
           if (blocksDetectedRef.current.has(pageNum - 1)) continue;
 
           try {
-            const page = await pdf.getPage(pageNum);
-            const viewport = page.getViewport({ scale: 2.0 }); // 고정 2.0x
-
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = viewport.width;
-            offscreenCanvas.height = viewport.height;
-            const ctx = offscreenCanvas.getContext('2d');
-            if (!ctx) continue;
-
-            // ★ 흰색 배경 먼저 칠하기 (PDF 투명 배경 → 검은색 방지)
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-            const renderTask = page.render({ canvasContext: ctx, viewport });
-            await renderTask.promise;
+            // ★ 화면과 같은 방향으로 그려서 감지한다 (2026-10-09). 회전 자동감지 effect 가 아직 안 돌았으면
+            //   같은 규칙(가로→90°)으로 직접 정한다. YOLO 결과는 이 회전 좌표 → 저장 전에 원본 좌표로 되돌린다.
+            const appRot: 0 | 90 | 180 | 270 = pageRotationsRef.current.get(pageNum) ?? await detectPageRotation(pdf, pageNum);
+            const offscreenCanvas = await renderPageToCanvas(pdf, pageNum, 2.0, appRot); // 고정 2.0x
             if (cancelled) break;
 
             let blocks: { x: number; y: number; w: number; h: number }[];
@@ -3420,6 +3442,12 @@ export default function AnalyzeJobPage() {
               console.log(`[AutoCrop Preload] 페이지 ${pageNum}: ${blocks.length}개 블록 감지 (${columnMode}단, 감도=${cropSensitivity})`);
             }
 
+            // ★ 회전 캔버스 좌표 → 원본 PDF 좌표 (DB·표시 규약: bbox 는 항상 원본 좌표, 렌더 시 rotateBbox)
+            if (appRot !== 0) {
+              blocks = blocks.map((b) => unrotateBboxLocal(b, appRot));
+              figures = figures.map((f) => ({ ...unrotateBboxLocal(f, appRot), class: f.class }));
+            }
+
             // handleBlocksDetected와 동일한 로직으로 문제 생성
             if (blocks.length > 0) {
               const pageIndex = pageNum - 1;
@@ -3445,7 +3473,7 @@ export default function AnalyzeJobPage() {
               let problemsWithFigures: AnalyzedProblem[] = newProblems;
               if (figures.length > 0) {
                 try {
-                  problemsWithFigures = await autoCropFiguresForProblems(pdf, pageNum, newProblems, figures);
+                  problemsWithFigures = await autoCropFiguresForProblems(pdf, pageNum, newProblems, figures, appRot);
                 } catch (figErr) {
                   console.warn(`[FigureAutoCrop] 페이지 ${pageNum} 자동 figure 크롭 실패 (problem 만 유지):`, figErr);
                 }
@@ -3483,7 +3511,7 @@ export default function AnalyzeJobPage() {
       isPreloadingRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobData?.pdfUrl, totalPdfPages, useAutoCropMode, detectionMode, columnMode, cropSensitivity]);
+  }, [jobData?.pdfUrl, totalPdfPages, useAutoCropMode, detectionMode, columnMode, cropSensitivity, rotationTick]);
 
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
@@ -4484,25 +4512,13 @@ export default function AnalyzeJobPage() {
       const pageNum = problem.pageIndex + 1;
       if (pageNum > pdf.numPages) return null;
 
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.5 });
-
-      // 전체 페이지를 오프스크린 캔버스에 렌더
-      const fullCanvas = document.createElement('canvas');
-      fullCanvas.width = viewport.width;
-      fullCanvas.height = viewport.height;
-      const fullCtx = fullCanvas.getContext('2d');
-      if (!fullCtx) return null;
-
-      // ★ 흰색 배경 먼저 칠하기 (PDF 투명 배경 → 검은색 방지)
-      fullCtx.fillStyle = '#ffffff';
-      fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
-
-      const renderTask = page.render({ canvasContext: fullCtx, viewport });
-      await renderTask.promise;
+      // ★ 화면과 같은 방향으로 그려서 자른다 (2026-10-09) — OCR 에 바로 선 글자가 간다. bbox 는 원본 좌표 → 회전 좌표로.
+      const { renderPageToCanvas } = await import('@/lib/pdf-viewer');
+      const rot = pageRotationsRef.current.get(pageNum) ?? 0;
+      const fullCanvas = await renderPageToCanvas(pdf, pageNum, 2.5, rot);
 
       // bbox 영역만 크롭
-      const bbox = problem.bbox;
+      const bbox = rotateBboxLocal(problem.bbox, rot);
       const sx = bbox.x * fullCanvas.width;
       const sy = bbox.y * fullCanvas.height;
       const sw = bbox.w * fullCanvas.width;
@@ -4536,9 +4552,11 @@ export default function AnalyzeJobPage() {
     }
 
     try {
-      const bbox = selectedProblem.bbox;
+      // ★ 크롭 이미지는 회전 적용 상태 → 같은 회전 좌표계에서 계산하고 같은 회전으로 그린 캔버스에서 자른다 (2026-10-09)
+      const rotIns = pageRotationsRef.current.get(selectedProblem.pageIndex + 1) ?? 0;
+      const bbox = rotateBboxLocal(selectedProblem.bbox, rotIns);
 
-      // 좌표 변환: 크롭 이미지 내 비율(0-1) → PDF 전체 페이지 비율(0-1)
+      // 좌표 변환: 크롭 이미지 내 비율(0-1) → PDF 전체 페이지 비율(0-1, 회전 좌표)
       const pdfRect = {
         x: bbox.x + cropRelativeRect.x * bbox.w,
         y: bbox.y + cropRelativeRect.y * bbox.h,
@@ -4553,20 +4571,8 @@ export default function AnalyzeJobPage() {
       const pageNum = selectedProblem.pageIndex + 1; // 문제가 위치한 페이지
       if (pageNum > pdf.numPages) return;
 
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 4.0 }); // ★ 고화질 4x
-
-      const fullCanvas = document.createElement('canvas');
-      fullCanvas.width = viewport.width;
-      fullCanvas.height = viewport.height;
-      const fullCtx = fullCanvas.getContext('2d');
-      if (!fullCtx) return;
-
-      fullCtx.fillStyle = '#ffffff';
-      fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
-
-      const renderTask = page.render({ canvasContext: fullCtx, viewport });
-      await renderTask.promise;
+      const { renderPageToCanvas } = await import('@/lib/pdf-viewer');
+      const fullCanvas = await renderPageToCanvas(pdf, pageNum, 4.0, rotIns); // ★ 고화질 4x, 화면과 같은 회전
 
       // 선택 영역 크롭
       const sx = pdfRect.x * fullCanvas.width;

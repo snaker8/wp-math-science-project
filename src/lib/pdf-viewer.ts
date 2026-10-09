@@ -149,3 +149,31 @@ export function unrotateBbox(
     default:  return { x, y, w, h };
   }
 }
+
+/**
+ * 페이지를 오프스크린 캔버스에 그린다 — 흰 배경 + (페이지 /Rotate + 앱 회전) 합산.
+ * ★ 2026-10-09: 감지(YOLO)·OCR 크롭·도형 크롭이 앱 회전을 무시하고 원본 방향으로 그려
+ *   가로 스캔을 세로로 돌려 놓아도 "올려진 자료 방향대로" 분석되던 사고. 화면(renderPdfPage)과
+ *   같은 total 회전을 쓴다. rotation=0 이면 종전 getViewport({scale}) 과 완전히 같다(회귀 0).
+ *   이 캔버스 위의 좌표는 "디스플레이(회전) 좌표" — 저장은 항상 unrotateBbox 로 원본 좌표.
+ */
+export async function renderPageToCanvas(
+  pdf: PDFDocumentProxy,
+  pageNumber: number,
+  scale: number,
+  rotation: 0 | 90 | 180 | 270 = 0
+): Promise<HTMLCanvasElement> {
+  const page = await pdf.getPage(pageNumber);
+  const baseRotate = (((page.rotate ?? 0) % 360) + 360) % 360;
+  const total = (((baseRotate + rotation) % 360) + 360) % 360;
+  const viewport = page.getViewport({ scale, rotation: total });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2d context not available');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas;
+}
