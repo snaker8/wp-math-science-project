@@ -615,7 +615,8 @@ export function ExamPaperView({
   // 출력 — DOM 복제 방식 (원본 exam-page 노드를 #exam-print-root로 복제)
   // 폰트(KaTeX) 로드 완료 기다린 뒤 print → 수식 누락 방지
   // 실제 인쇄 실행 (가드 통과 후) — .exam-page 복제 → window.print. 측정 여부 검사 안 함(가드는 handlePrint/타임아웃에서).
-  const doPrint = useCallback(() => {
+  // ★ 인쇄/PDF 공용 — 현재 섹션 선택대로 .exam-page 들을 복제한 #exam-print-root (2026-10-10 PDF 다운로드에서 재사용)
+  const buildPrintRoot = useCallback((): HTMLDivElement => {
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
 
@@ -640,7 +641,19 @@ export function ExamPaperView({
         printRoot.appendChild(clone);
       });
     }
+    return printRoot;
+  }, [printSections]);
 
+  // ★ 브라우저 PDF 저장 파일명 = document.title 규칙 — 인쇄·PDF 다운로드 공용
+  const printFileTitle = useCallback(() => {
+    const baseTitle = (examTitle || '시험지')
+      .replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() || '시험지';
+    const suffix = printSections.exam ? '문제지' : printSections.solution ? '해설' : printSections.answer ? '빠른답' : '문제지';
+    return baseTitle.endsWith(suffix) ? baseTitle : `${baseTitle} ${suffix}`;
+  }, [examTitle, printSections]);
+
+  const doPrint = useCallback(() => {
+    const printRoot = buildPrintRoot();
     if (printRoot.children.length === 0) return;
 
     document.body.appendChild(printRoot);
@@ -648,10 +661,7 @@ export function ExamPaperView({
     // ★ 브라우저 PDF 저장 파일명 = document.title. 인쇄 동안만 "시험지명 + 접미사"로 바꾸고 복원.
     //   (전역 'Math×Sci Bank' 가 파일명으로 나오던 문제 방지 / 접미사: 문제지·해설·빠른답)
     const prevTitle = document.title;
-    const baseTitle = (examTitle || '시험지')
-      .replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() || '시험지';
-    const suffix = printSections.exam ? '문제지' : printSections.solution ? '해설' : printSections.answer ? '빠른답' : '문제지';
-    document.title = baseTitle.endsWith(suffix) ? baseTitle : `${baseTitle} ${suffix}`;
+    document.title = printFileTitle();
 
     const cleanup = () => {
       document.title = prevTitle;
@@ -668,7 +678,60 @@ export function ExamPaperView({
     } else {
       runPrint();
     }
-  }, [printSections, examTitle]);
+  }, [buildPrintRoot, printFileTitle]);
+
+  // ★ PDF 다운로드 (2026-10-10 대표: "인쇄 들어가 하지 말고 매쓰홀릭처럼") — 인쇄와 같은 복제 DOM 을
+  //   서버 헤드리스 크롬으로 보내 PDF 파일로 받는다. 화면 = 인쇄 = PDF. 측정 가드는 handlePrint 와 동일.
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [pendingPdf, setPendingPdf] = useState(false);
+  const doDownloadPdf = useCallback(async () => {
+    if (isDownloadingPdf) return;
+    const printRoot = buildPrintRoot();
+    if (printRoot.children.length === 0) return;
+    setIsDownloadingPdf(true);
+    try {
+      if ((document as any).fonts?.ready) { try { await (document as any).fonts.ready; } catch { /* ignore */ } }
+      const { serializePrintDocument } = await import('@/lib/pdf/serialize-print-document');
+      const title = printFileTitle();
+      const html = await serializePrintDocument(printRoot, title);
+      const res = await fetch('/api/print/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html, filename: title }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || `PDF 생성 실패 (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${title}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setShowPrintMenu(false);
+    } catch (error) {
+      console.error('PDF download error:', error);
+      alert(`PDF 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  }, [isDownloadingPdf, buildPrintRoot, printFileTitle]);
+  const handleDownloadPdf = useCallback(() => {
+    if (problems.length > 0 && !measured) { setPendingPdf(true); return; }
+    void doDownloadPdf();
+  }, [measured, problems.length, doDownloadPdf]);
+  useEffect(() => {
+    if (pendingPdf && measured) { setPendingPdf(false); void doDownloadPdf(); }
+  }, [pendingPdf, measured, doDownloadPdf]);
+  useEffect(() => {
+    if (!pendingPdf) return;
+    const t = setTimeout(() => { setPendingPdf(false); void doDownloadPdf(); }, 4000);
+    return () => clearTimeout(t);
+  }, [pendingPdf, doDownloadPdf]);
 
   const handlePrint = useCallback(() => {
     setShowPrintMenu(false);
@@ -1064,6 +1127,17 @@ export function ExamPaperView({
               onClose={() => setShowHwpxHeaderModal(false)}
             />
           )}
+          {/* ★ PDF 다운로드 — 인쇄 대화상자 없이 파일로 (2026-10-10, 매쓰홀릭 「PDF」 등가). 출력 메뉴의 섹션 선택을 따른다 */}
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf || pendingPdf || (!printSections.exam && !printSections.answer && !printSections.solution)}
+            className="flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-300 hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="출력 메뉴에서 고른 항목(시험지·빠른정답·해설지)을 지금 화면 그대로 PDF 파일로 저장"
+          >
+            <FileDown className="h-4 w-4" />
+            {isDownloadingPdf || pendingPdf ? 'PDF 생성 중…' : 'PDF'}
+          </button>
           {/* ★ 한글 다운로드 — 드롭다운 속에선 안 보인다는 피드백으로 툴바 독립 버튼으로 승격 (2026-07-18) */}
           <button
             type="button"
@@ -1115,6 +1189,15 @@ export function ExamPaperView({
                   >
                     <Printer className="h-4 w-4" />
                     출력하기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingPdf || pendingPdf || (!printSections.exam && !printSections.answer && !printSections.solution)}
+                    className="mt-1 w-full flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm font-medium text-rose-300 transition-colors"
+                  >
+                    <FileDown className="h-4 w-4" />
+                    {isDownloadingPdf || pendingPdf ? 'PDF 생성 중…' : 'PDF 로 저장'}
                   </button>
                 </div>
 
