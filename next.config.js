@@ -26,6 +26,17 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],
     // ★ 헤드리스 크롬(PDF 다운로드, src/lib/pdf/html-to-pdf.ts) — 번들에 넣지 않고 node_modules 에서 그대로 로드
     serverComponentsExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
+    // ★ 서버 함수에 포함될 런타임 리소스 명시 (process.cwd() 접근 파일)
+    //   Next 14 는 experimental 아래에서만 읽는다 (collect-build-traces.js: config.experimental.outputFileTracingIncludes).
+    //   2026-10-10 까지 최상위에 있어 전부 무시되고 있었다 — PDF 크롬 bin 누락으로 발견.
+    outputFileTracingIncludes: {
+      '/api/workflow/reanalyze-crop': ['./curriculum_data/expanded_math_types_unified.json'],
+      '/api/workflow/upload': ['./curriculum_data/expanded_math_types_unified.json'],
+      // ★ SVG 도형 검증용 래스터라이즈 폰트 (람다엔 시스템 폰트 없음) — src/lib/vision/svg-raster.ts
+      '/api/problems/[problemId]/generate-figure': ['./assets/fonts/**'],
+      // ★ PDF 다운로드 — 람다용 크롬 바이너리(brotli) 동봉
+      '/api/print/pdf': ['./node_modules/@sparticuz/chromium/bin/**'],
+    },
   },
   // ★ 프로덕션 빌드 시 ESLint/TS 체크 건너뛰기 (배포용 빠른 빌드)
   eslint: {
@@ -33,16 +44,6 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
-  },
-  // ★ 서버 함수에 포함될 런타임 리소스 명시 (process.cwd() 접근 파일)
-  // Next.js 트레이서가 자동 감지 실패할 수 있으므로 보장
-  outputFileTracingIncludes: {
-    '/api/workflow/reanalyze-crop': ['./curriculum_data/expanded_math_types_unified.json'],
-    '/api/workflow/upload': ['./curriculum_data/expanded_math_types_unified.json'],
-    // ★ SVG 도형 검증용 래스터라이즈 폰트 (람다엔 시스템 폰트 없음) — src/lib/vision/svg-raster.ts
-    '/api/problems/[problemId]/generate-figure': ['./assets/fonts/**'],
-    // ★ PDF 다운로드 — 람다용 크롬 바이너리(brotli) 동봉
-    '/api/print/pdf': ['./node_modules/@sparticuz/chromium/bin/**'],
   },
 };
 
