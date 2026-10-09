@@ -27,6 +27,7 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
+import { distributeByRatios, ratiosFromCounts, STAGE_RATIOS, STAGE_LABELS, type BandRatios } from '@/lib/exam/difficulty-stages';
 import dynamic from 'next/dynamic';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
@@ -94,7 +95,10 @@ const ANSWER_TYPES: Array<{ value: string; label: string }> = [
   { value: 'short_answer', label: '주관식' },
 ];
 // 최대 문제수 프리셋 — 예전엔 50 이 코드에 박혀 있었다
-const MAX_PRESETS = [10, 20, 25, 30, 50] as const;
+const MAX_PRESETS = [10, 15, 20, 25, 30] as const;
+// ★ 내 단계(원장이 저장한 비율) — localStorage
+const MY_STAGES_KEY = 'msb_diff_my_stages';
+type MyStage = { name: string; ratios: BandRatios };
 
 const DIFF_COLORS: Record<DifficultyLevel, { bg: string; text: string; border: string }> = {
   '개념':   { bg: 'bg-sky-500/20', text: 'text-sky-400', border: 'border-sky-500/30' },
@@ -720,6 +724,11 @@ function DifficultyDistributionBar({
   onAnswerType,
   maxQuestions,
   onMaxQuestions,
+  diffStage,
+  onStage,
+  myStages,
+  onSaveMyStage,
+  onDeleteMyStage,
 }: {
   difficulties: Record<DifficultyLevel, number>;
   availableCounts: Record<string, number>;
@@ -729,8 +738,14 @@ function DifficultyDistributionBar({
   onAnswerType: (v: string) => void;
   maxQuestions: number;
   onMaxQuestions: (n: number) => void;
+  diffStage: number | string | null;
+  onStage: (stage: number | string | null) => void;
+  myStages: MyStage[];
+  onSaveMyStage: () => void;
+  onDeleteMyStage: (name: string) => void;
 }) {
   const levels: DifficultyLevel[] = DIFF_ORDER;
+  const expectedTotal = levels.reduce((s, l) => s + Math.min(difficulties[l], availableCounts[l] ?? difficulties[l]), 0);
 
   return (
     <div className="px-4 py-3">
@@ -755,16 +770,33 @@ function DifficultyDistributionBar({
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-1 text-[11px] text-content-secondary">
-            최대
-            <select
+          {/* ★ 문제 수 — 매쓰홀릭 「문제 수」 프리셋 + 직접 입력 (2026-10-10). 단계가 켜져 있으면 바꾸는 즉시 다시 배분 */}
+          <div className="flex items-center gap-1 text-[11px] text-content-secondary">
+            문제 수
+            <div className="flex items-center rounded-lg border border-subtle p-0.5">
+              {MAX_PRESETS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onMaxQuestions(n)}
+                  className={`rounded-md px-2 py-1 text-[11px] tabular-nums transition-colors ${
+                    maxQuestions === n ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={150}
               value={maxQuestions}
-              onChange={(e) => onMaxQuestions(Number(e.target.value))}
-              className="rounded-md border border-subtle bg-surface-raised px-1.5 py-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none"
-            >
-              {MAX_PRESETS.map((n) => <option key={n} value={n}>{n}문항</option>)}
-            </select>
-          </label>
+              onChange={(e) => onMaxQuestions(Math.max(1, Math.min(150, parseInt(e.target.value) || 1)))}
+              className="h-7 w-12 rounded-md border border-subtle bg-surface-raised text-center text-[11px] text-content-primary focus:border-white/25 focus:outline-none
+                [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-content-secondary">전체 문항</span>
             <span className={`text-lg font-bold tabular-nums ${totalQuestions > maxQuestions ? 'text-amber-400' : 'text-content-primary'}`}>{totalQuestions}</span>
@@ -773,12 +805,60 @@ function DifficultyDistributionBar({
         </div>
       </div>
 
+      {/* ★ 평가 난이도 단계 — 매쓰홀릭 「평가 난이도 맞춤/1~6단계 · 내 1단계/내 2단계 ⚙」 등가 (2026-10-10).
+          단계를 고르면 문제 수를 밴드별 가능 문항수 안에서 자동 배분. 칸을 직접 고치면 「맞춤」으로 돌아간다. */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="text-content-secondary">평가 난이도</span>
+        <div className="flex items-center rounded-lg border border-subtle p-0.5">
+          <button
+            type="button"
+            onClick={() => onStage(null)}
+            className={`rounded-md px-2 py-1 transition-colors ${diffStage === null ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'}`}
+          >
+            맞춤
+          </button>
+          {[1, 2, 3, 4, 5, 6].map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onStage(s)}
+              title={STAGE_LABELS[s]}
+              className={`rounded-md px-2 py-1 transition-colors ${diffStage === s ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'}`}
+            >
+              {s}단계
+            </button>
+          ))}
+        </div>
+        <span className="text-content-muted">내 단계</span>
+        <div className="flex items-center gap-1">
+          {myStages.map((m) => (
+            <span key={m.name} className={`inline-flex items-center rounded-md border border-subtle ${diffStage === `my:${m.name}` ? 'bg-white text-black' : 'text-content-secondary'}`}>
+              <button type="button" onClick={() => onStage(`my:${m.name}`)} className="px-2 py-1">{m.name}</button>
+              <button type="button" onClick={() => onDeleteMyStage(m.name)} title="삭제" className="pr-1.5 text-[10px] opacity-60 hover:opacity-100">×</button>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={onSaveMyStage}
+            disabled={totalQuestions === 0}
+            title="지금 칸의 비율을 내 단계로 저장"
+            className="rounded-md border border-dashed border-subtle px-2 py-1 text-content-tertiary hover:text-content-primary disabled:opacity-40"
+          >
+            + 현재 비율 저장
+          </button>
+        </div>
+        {expectedTotal < totalQuestions && (
+          <span className="ml-auto text-amber-400">실제 출제 예상 {expectedTotal}문항 (가능 문항 부족)</span>
+        )}
+      </div>
+
       <div className="grid grid-cols-5 gap-2">
         {levels.map((level) => {
           const available = availableCounts[level] || 0;
           const value = difficulties[level];
           const maxForThis = Math.min(maxQuestions - (totalQuestions - value), available || 99);
           const colors = DIFF_COLORS[level];
+          const expected = Math.min(value, available);
 
           return (
             <div key={level} className={`flex flex-col items-center gap-1 rounded-lg border ${colors.border} ${colors.bg} px-2 py-2`}>
@@ -788,13 +868,17 @@ function DifficultyDistributionBar({
                 value={value}
                 onChange={(e) => {
                   const v = Math.max(0, Math.min(maxForThis, parseInt(e.target.value) || 0));
+                  onStage(null);
                   onChange({ ...difficulties, [level]: v });
                 }}
                 className="h-8 w-12 rounded border border-subtle bg-surface-raised text-center text-sm font-bold text-content-primary
                   focus:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/25
                   [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
-              <span className="text-[9px] text-content-muted">{available}</span>
+              <span className="text-[9px] text-content-muted" title="가능 문항수">가능 {available}</span>
+              {value > 0 && expected < value && (
+                <span className="text-[9px] text-amber-400" title="실제 출제 예상">예상 {expected}</span>
+              )}
             </div>
           );
         })}
@@ -841,6 +925,23 @@ export default function PaperCreatePage() {
   // 출제 구성 — 답안 형태 · 최대 문제수 (설계서 S1 「출제 구성 패널」)
   const [answerType, setAnswerType] = useState('');
   const [maxQuestions, setMaxQuestions] = useState<number>(30);
+  // ★ 평가 난이도 단계 (2026-10-10, 매쓰홀릭 등가): null=맞춤(수동) · 1~6 · 'my:이름'. 단계가 켜져 있으면
+  //   문제 수·가능 문항수가 바뀔 때마다 밴드를 다시 배분한다. 칸을 손으로 고치면 맞춤으로.
+  const [diffStage, setDiffStage] = useState<number | string | null>(null);
+  const [myStages, setMyStages] = useState<MyStage[]>([]);
+  useEffect(() => {
+    try { const raw = localStorage.getItem(MY_STAGES_KEY); if (raw) setMyStages(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+  const persistMyStages = (next: MyStage[]) => {
+    setMyStages(next);
+    try { localStorage.setItem(MY_STAGES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const stageRatios = useCallback((stage: number | string | null): BandRatios | null => {
+    if (stage === null) return null;
+    if (typeof stage === 'number') return STAGE_RATIOS[stage] || null;
+    const name = stage.startsWith('my:') ? stage.slice(3) : stage;
+    return myStages.find((m) => m.name === name)?.ratios || null;
+  }, [myStages]);
 
   // ★ 판 인계 (설계서 S6) — 반 허브 숙달 판에서 고른 칸이 그대로 넘어온다
   //   `?typeCodes=MS07-…,MS07-…&bands=실력:3,심화:2&from=판`
@@ -1084,6 +1185,31 @@ export default function PaperCreatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTypeCodes.join(','), answerType]);
 
+  // ★ 단계 적용 — 문제 수·가능 문항수·단계가 바뀔 때마다 (맞춤이면 손대지 않음)
+  useEffect(() => {
+    const ratios = stageRatios(diffStage);
+    if (!ratios) return;
+    const avail = {
+      개념: availableCounts['개념'], 기본: availableCounts['기본'], 실력: availableCounts['실력'],
+      심화: availableCounts['심화'], 고난도: availableCounts['고난도'],
+    };
+    const hasAvail = Object.values(avail).some((v) => typeof v === 'number');
+    setDifficulties(distributeByRatios(maxQuestions, ratios, hasAvail ? avail : undefined));
+  }, [diffStage, maxQuestions, availableCounts, stageRatios]);
+
+  const handleSaveMyStage = () => {
+    const ratios = ratiosFromCounts(difficulties);
+    if (!ratios) return;
+    const name = (prompt('이 비율의 이름을 입력하세요 (예: 내 1단계)') || '').trim();
+    if (!name) return;
+    persistMyStages([...myStages.filter((m) => m.name !== name), { name, ratios }]);
+    setDiffStage(`my:${name}`);
+  };
+  const handleDeleteMyStage = (name: string) => {
+    persistMyStages(myStages.filter((m) => m.name !== name));
+    if (diffStage === `my:${name}`) setDiffStage(null);
+  };
+
   // ---- Handlers ----
   const handleReset = () => {
     setPaperName(`[${new Date().toISOString().slice(0, 10)}] 시험지`);
@@ -1094,6 +1220,7 @@ export default function PaperCreatePage() {
     setSelectedTypeItems(new Map());
     setCreateMode('auto');
     setDifficulties({ '개념': 0, '기본': 0, '실력': 0, '심화': 0, '고난도': 0 });
+    setDiffStage(null);
     setPreviewProblems([]);
     setGeneratedExamId(null);
     setAvailableCounts({});
@@ -1604,6 +1731,11 @@ export default function PaperCreatePage() {
                 onAnswerType={setAnswerType}
                 maxQuestions={maxQuestions}
                 onMaxQuestions={setMaxQuestions}
+                diffStage={diffStage}
+                onStage={setDiffStage}
+                myStages={myStages}
+                onSaveMyStage={handleSaveMyStage}
+                onDeleteMyStage={handleDeleteMyStage}
               />
             </div>
           )}
