@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { bandLabelOf } from '@/lib/class/mastery-bands';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -18,18 +18,22 @@ import {
   X,
   Minus,
   Plus,
-  Printer,
   FileEdit,
-  Download,
   Search,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
-import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
+import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
-import { downloadPDF } from '@/lib/pdf/generator';
+import dynamic from 'next/dynamic';
+import { useExamProblems } from '@/hooks/useExamProblems';
+import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
+// ★ 인쇄 엔진(~2000줄)은 dynamic — 시험지가 생성된 뒤에만 필요
+const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.ExamPaperView), { ssr: false });
+const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.QuickAnswerView), { ssr: false });
+const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.SolutionView), { ssr: false });
 
 // ============================================================================
 // Types
@@ -588,292 +592,116 @@ function ManualSearchPanel({
 }
 
 // ============================================================================
-// Column 3: Exam Preview Panel
+// Column 3: 미리보기 — ★ 2026-10-10 인쇄 통일 (대표: "출제 해도 전혀 인쇄 프로세스에 들어가지도 않고
+//   출력 누르면 화면 자체가 나오고 안 맞다"). 자체 미리보기·window.print(전체 화면)·html2canvas 래스터 PDF 를
+//   걷고, 클라우드/시험관리와 같은 ExamPaperView 계열(측정→분할→렌더→출력 메뉴→PDF→한글)을 그대로 쓴다.
+//   자동출제는 DB 에 시험지를 만들므로(generatedExamId) 그 id 로 같은 훅(useExamProblems)을 탄다.
 // ============================================================================
 
-function ExamPreviewPanel({
+function UnifiedPreviewPanel({
   previewTab,
   onTabChange,
-  problems,
   isLoading,
+  examId,
+  problems,
   paperName,
-  categoryLabel,
-  totalQuestions,
-  layout,
-  onLayoutChange,
-  gap,
-  onGapChange,
   templateId,
   examMeta,
   onOpenTemplateModal,
-  previewRef,
-  onDownloadPDF,
-  isPDFGenerating,
+  onTemplateChange,
+  onMetaChange,
+  refetchProblems,
 }: {
   previewTab: PreviewTab;
   onTabChange: (tab: PreviewTab) => void;
-  problems: PreviewProblem[];
   isLoading: boolean;
+  examId: string | null;
+  problems: ProblemData[];
   paperName: string;
-  categoryLabel: string;
-  totalQuestions: number;
-  layout: 'single' | 'two-column';
-  onLayoutChange: (layout: 'single' | 'two-column') => void;
-  gap: number;
-  onGapChange: (gap: number) => void;
   templateId: string;
   examMeta: ExamMeta;
   onOpenTemplateModal: () => void;
-  previewRef: React.MutableRefObject<HTMLDivElement | null>;
-  onDownloadPDF: () => void;
-  isPDFGenerating: boolean;
+  onTemplateChange: (id: string, meta: ExamMeta) => void;
+  onMetaChange: (meta: ExamMeta) => void;
+  refetchProblems: () => void;
 }) {
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
-  // ★ 헤더 디자인(테마+색) — cloud/exam-management 와 동일한 디자인 갤러리 연동
-  const [headerColor, setHeaderColor] = useState<string | null>(null);
-  const [headerTheme, setHeaderTheme] = useState<string>('none');
-  const [showDesignGallery, setShowDesignGallery] = useState(false);
-
-  const midIdx = Math.ceil(problems.length / 2);
-  const leftProblems = problems.slice(0, midIdx);
-  const rightProblems = problems.slice(midIdx);
-
-  const hasLatex = (text: string) => /[$\\]/.test(text);
-  const shouldStackChoices = (choices: string[]) =>
-    choices.some((c) => hasLatex(c) || c.length > 20);
-
-  // 문제 렌더 함수 (중복 제거)
-  const renderProblem = (p: PreviewProblem) => (
-    <div key={p.id} className="break-inside-avoid" style={{ marginBottom: `${gap}px` }}>
-      <div className="flex items-start gap-1.5">
-        <span className="text-sm font-bold text-gray-900 shrink-0 pt-0.5" style={{ minWidth: '24px' }}>
-          {p.number}.
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-gray-800 leading-relaxed">
-            <MixedContentRenderer content={p.content} className="text-sm text-gray-800" />
-          </div>
-          {p.choices.length > 0 && (
-            shouldStackChoices(p.choices) ? (
-              <div className="mt-2 pl-2 space-y-1">
-                {p.choices.map((c, i) => (
-                  <div key={i} className="text-sm text-gray-700 flex items-start gap-1.5">
-                    <span className="shrink-0 text-gray-500">{'①②③④⑤'[i]}</span>
-                    <MixedContentRenderer content={c} className="text-sm text-gray-700" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-2 pl-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
-                {p.choices.map((c, i) => (
-                  <span key={i} className="inline-flex items-center gap-1">
-                    <span className="text-gray-500">{'①②③④⑤'[i]}</span>
-                    <MixedContentRenderer content={c} className="text-sm text-gray-700 inline" />
-                  </span>
-                ))}
-              </div>
-            )
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  const ready = !!examId && problems.length > 0;
+  const title = paperName || '시험지';
 
   return (
     <div className="flex flex-col h-full">
       {/* 상단 탭 바 */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-subtle flex-shrink-0 overflow-x-auto">
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-subtle shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => onTabChange(tab)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               previewTab === tab
-                ? 'bg-white/[.08] text-content-primary ring-1 ring-white/[.14]'
-                : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
+                ? 'bg-white/[.08] text-content-primary'
+                : 'text-content-tertiary hover:bg-white/[.04] hover:text-content-primary'
             }`}
           >
             {tab}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowDesignGallery(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-content-secondary hover:bg-white/[.06] hover:text-content-primary transition-colors"
-            title="헤더 디자인 갤러리"
-          >
-            <FileEdit size={12} />
-            디자인{headerTheme && headerTheme !== 'none' ? ` · ${HEADER_THEMES.find((t) => t.id === headerTheme)?.label ?? ''}` : ''}
-          </button>
-          <span className="text-xs font-bold text-content-secondary">{totalQuestions}</span>
-          <span className="text-[10px] text-content-muted">문항</span>
-        </div>
+        <span className="ml-auto text-xs text-content-muted tabular-nums">
+          {ready ? `${problems.length} 문항` : ''}
+        </span>
       </div>
-      {showDesignGallery && (
-        <HeaderDesignGallery
-          activeTheme={headerTheme}
-          onSelect={(theme, color) => { setHeaderTheme(theme); setHeaderColor(color); }}
-          onClose={() => setShowDesignGallery(false)}
-        />
-      )}
 
-      {/* 미리보기 본문 */}
-      <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50 p-4">
+      {/* 본문 — ExamPaperView 가 툴바(단수·간격·배열·디자인·출력·PDF·한글)까지 가진다 */}
+      <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50">
         {isLoading ? (
           <div className="flex items-center justify-center h-full gap-2">
             <Loader2 size={16} className="animate-spin text-content-tertiary" />
             <span className="text-xs text-content-muted">시험지 생성 중...</span>
           </div>
-        ) : problems.length > 0 ? (
-          <div ref={previewRef} className="mx-auto bg-white rounded shadow-xl" style={{ maxWidth: '720px' }}>
-            <EditableExamHeader
+        ) : ready && examId ? (
+          previewTab === '시험지' ? (
+            <ExamPaperView
+              problems={problems}
+              examTitle={title}
+              examId={examId}
               templateId={templateId}
-              meta={{ ...examMeta, subject: examMeta.subject || categoryLabel || '수학' }}
-              examTitle={paperName || '시험지'}
-              editable={false}
-              accentColor={headerColor}
-              headerTheme={headerTheme}
+              examMeta={examMeta}
+              onOpenTemplateModal={onOpenTemplateModal}
+              onTemplateChange={onTemplateChange}
+              onMetaChange={onMetaChange}
+              refetchProblems={refetchProblems}
             />
-
-            {/* 시험지 탭 */}
-            {previewTab === '시험지' && (
-              <div className="px-6 py-5">
-                {layout === 'two-column' ? (
-                  <div className="grid grid-cols-2 gap-x-6">
-                    <div>{leftProblems.map(renderProblem)}</div>
-                    <div>{rightProblems.map(renderProblem)}</div>
-                  </div>
-                ) : (
-                  <div>{problems.map(renderProblem)}</div>
-                )}
-              </div>
-            )}
-
-            {/* 빠른정답 탭 */}
-            {previewTab === '빠른정답' && (
-              <div className="px-6 py-4">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-gray-300">
-                      <th className="py-1.5 text-left text-gray-500 w-12">번호</th>
-                      <th className="py-1.5 text-left text-gray-500">정답</th>
-                      <th className="py-1.5 text-left text-gray-500">유형</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {problems.map((p) => (
-                      <tr key={p.id} className="border-b border-gray-100">
-                        <td className="py-1.5 font-bold text-gray-700">{p.number}</td>
-                        <td className="py-1.5 text-gray-800">{p.answer || '-'}</td>
-                        <td className="py-1.5 text-gray-500 text-[10px]">{p.typeCode}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* 해설지 탭 */}
-            {previewTab === '해설지' && (
-              <div className="px-6 py-5 space-y-5">
-                {problems.map((p) => (
-                  <div key={p.id} className="break-inside-avoid">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold text-gray-900">{p.number}.</span>
-                      <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">정답: {p.answer || '-'}</span>
-                    </div>
-                    {p.solution ? (
-                      <div className="pl-7 text-sm text-gray-700 leading-relaxed">
-                        <MixedContentRenderer content={p.solution} className="text-sm text-gray-700" />
-                      </div>
-                    ) : (
-                      <p className="pl-7 text-xs text-gray-400 italic">해설 없음</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ) : previewTab === '빠른정답' ? (
+            <QuickAnswerView
+              problems={problems}
+              examTitle={title}
+              templateId={templateId}
+              examMeta={examMeta}
+            />
+          ) : (
+            <SolutionView
+              problems={problems}
+              examTitle={title}
+              examId={examId}
+              templateId={templateId}
+              examMeta={examMeta}
+              onOpenTemplateModal={onOpenTemplateModal}
+              refetchProblems={refetchProblems}
+            />
+          )
         ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="p-4 rounded-xl bg-surface-card/30 border border-dashed border-subtle">
-              <FileText size={32} className="text-content-muted" />
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/[.08] bg-white/[.03]">
+              <FileText size={28} className="text-content-muted" />
             </div>
-            <p className="text-xs text-content-muted text-center leading-relaxed">
+            <p className="text-sm text-content-muted leading-relaxed">
               과목과 단원을 선택한 후<br />
               <strong className="text-content-secondary">자동출제</strong> 또는 <strong className="text-content-secondary">수동출제</strong>로<br />
               시험지를 생성하세요
             </p>
           </div>
         )}
-      </div>
-
-      {/* 하단 바 */}
-      <div className="flex items-center gap-3 px-3 py-2 border-t border-subtle flex-shrink-0 bg-surface-card/50">
-        {/* 1단/2단 토글 */}
-        <div className="flex border border-subtle rounded overflow-hidden shrink-0">
-          <button
-            type="button"
-            onClick={() => onLayoutChange('single')}
-            className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              layout === 'single'
-                ? 'bg-white/[.08] text-content-primary'
-                : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
-            }`}
-          >
-            1단
-          </button>
-          <button
-            type="button"
-            onClick={() => onLayoutChange('two-column')}
-            className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-subtle ${
-              layout === 'two-column'
-                ? 'bg-white/[.08] text-content-primary'
-                : 'text-content-muted hover:text-content-secondary hover:bg-surface-raised/50'
-            }`}
-          >
-            2단
-          </button>
-        </div>
-
-        {/* 간격 슬라이더 */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-[11px] text-content-muted whitespace-nowrap">간격</span>
-          <input
-            type="range"
-            min={0}
-            max={700}
-            step={1}
-            value={gap}
-            onChange={(e) => onGapChange(parseInt(e.target.value))}
-            className="flex-1 h-1.5 appearance-none bg-zinc-700 rounded-full cursor-pointer accent-emerald-500"
-            style={{ minWidth: '80px' }}
-          />
-          <span className="text-[11px] text-content-secondary tabular-nums w-8 text-right">{gap}</span>
-        </div>
-
-        {/* PDF 저장 */}
-        <button
-          type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-content-secondary border border-white/[.08] bg-white/[.04] hover:bg-white/[.06] hover:text-content-primary rounded transition-colors shrink-0 disabled:opacity-50"
-          onClick={onDownloadPDF}
-          disabled={problems.length === 0 || isPDFGenerating}
-        >
-          {isPDFGenerating ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-          PDF 저장
-        </button>
-
-        {/* 출력 버튼 */}
-        <button
-          type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-content-secondary bg-surface-raised/50 hover:bg-surface-raised border border-subtle rounded transition-colors shrink-0"
-          onClick={() => window.print()}
-        >
-          <Printer size={13} />
-          출력
-        </button>
       </div>
     </div>
   );
@@ -981,7 +809,6 @@ function DifficultyDistributionBar({
 
 export default function PaperCreatePage() {
   const router = useRouter();
-  const previewRef = useRef<HTMLDivElement>(null);
   // ★ 2026-09-12 — 과학 트랙 안내 카드를 걷었다.
   //   이 return 이 아래 훅들보다 **위에** 있어, 화면에 머문 채 트랙을 전환하면
   //   React 가 훅 개수 불일치로 터졌다 (eslint rules-of-hooks 39건).
@@ -1027,8 +854,6 @@ export default function PaperCreatePage() {
 
   // Preview
   const [previewTab, setPreviewTab] = useState<PreviewTab>('시험지');
-  const [previewLayout, setPreviewLayout] = useState<'single' | 'two-column'>('two-column');
-  const [previewGap, setPreviewGap] = useState(30);
   const [previewProblems, setPreviewProblems] = useState<PreviewProblem[]>([]);
 
   // Template
@@ -1039,7 +864,33 @@ export default function PaperCreatePage() {
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedExamId, setGeneratedExamId] = useState<string | null>(null);
-  const [isPDFGenerating, setIsPDFGenerating] = useState(false);
+  // ★ 인쇄 통일 (2026-10-10): 생성된 시험지는 DB 에 있으므로 클라우드·시험관리와 같은 훅·매핑으로 읽는다
+  const { problems: generatedDbProblems, isLoading: generatedLoading, refetch: refetchGenerated } = useExamProblems(generatedExamId);
+  const unifiedProblems: ProblemData[] = useMemo(() => generatedDbProblems.map((p) => ({
+    id: p.id,
+    number: p.number,
+    points: p.points,
+    difficulty: p.difficulty,
+    cognitiveDomain: p.cognitiveDomain as ProblemData['cognitiveDomain'],
+    content: p.content,
+    choices: p.choices,
+    choiceImages: p.choiceImages,
+    choiceHeaders: p.choiceHeaders,
+    choiceLayout: p.choiceLayout,
+    answer: p.answer,
+    answerJson: p.answerJson,
+    solution: p.solution,
+    year: p.year,
+    typeCode: p.typeCode,
+    typeName: p.typeName,
+    source: p.source,
+    images: p.images,
+    hasFigure: p.hasFigure,
+    figureSvg: p.figureSvg,
+    figureData: p.figureData,
+    upscaledCropUrl: p.upscaledCropUrl,
+    figureSource: p.figureSource,
+  })), [generatedDbProblems]);
 
   // ---- Computed ----
   // typeGroups for Column 2 — 선택된 L3의 세부유형(L4)  (selectedTypeCodes 가 압축에 쓰므로 먼저 선언)
@@ -1502,39 +1353,6 @@ export default function PaperCreatePage() {
     }
   };
 
-  // PDF download
-  const handleDownloadPDF = async () => {
-    if (!previewRef.current || previewProblems.length === 0) return;
-    setIsPDFGenerating(true);
-    try {
-      await downloadPDF({
-        element: previewRef.current,
-        config: {
-          title: paperName,
-          layout: previewLayout,
-          fontSize: 12,
-          pageSize: 'A4',
-          orientation: 'portrait',
-          margin: { top: 15, right: 15, bottom: 15, left: 15 },
-          showProblemPoints: false,
-          showProblemNumbers: true,
-          showAnswerSheet: false,
-          showNameField: true,
-          showClassField: true,
-          showScoreField: false,
-          problemSpacing: previewGap,
-          watermark: { enabled: false, opacity: 0 },
-        },
-        filename: `${paperName.replace(/[[\]]/g, '')}.pdf`,
-      });
-    } catch (e) {
-      console.error('PDF 생성 실패:', e);
-      alert('PDF 생성에 실패했습니다.');
-    } finally {
-      setIsPDFGenerating(false);
-    }
-  };
-
   // ============================================================================
   // Render
   // ============================================================================
@@ -1814,24 +1632,19 @@ export default function PaperCreatePage() {
 
         {/* Column 3: Exam Preview */}
         <div className="flex-1 flex flex-col overflow-hidden border-l border-subtle">
-          <ExamPreviewPanel
+          <UnifiedPreviewPanel
             previewTab={previewTab}
             onTabChange={setPreviewTab}
-            problems={previewProblems}
-            isLoading={isGenerating}
+            isLoading={isGenerating || (!!generatedExamId && generatedLoading && unifiedProblems.length === 0)}
+            examId={generatedExamId}
+            problems={unifiedProblems}
             paperName={paperName}
-            categoryLabel={categoryLabel}
-            totalQuestions={previewProblems.length}
-            layout={previewLayout}
-            onLayoutChange={setPreviewLayout}
-            gap={previewGap}
-            onGapChange={setPreviewGap}
             templateId={previewTemplateId}
             examMeta={previewExamMeta}
             onOpenTemplateModal={() => setShowTemplateModal(true)}
-            previewRef={previewRef}
-            onDownloadPDF={handleDownloadPDF}
-            isPDFGenerating={isPDFGenerating}
+            onTemplateChange={(id, meta) => { setPreviewTemplateId(id); setPreviewExamMeta(meta); }}
+            onMetaChange={setPreviewExamMeta}
+            refetchProblems={refetchGenerated}
           />
         </div>
       </div>

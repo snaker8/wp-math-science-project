@@ -24,6 +24,8 @@ const nextConfig = {
     //   런타임 동작 불변 — 컴파일 시 사용 아이콘/컴포넌트만 번들에 포함.
     //   lucide(143곳)/recharts(12곳)/framer-motion(38곳) 라우트 진입 JS 감소.
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],
+    // ★ 헤드리스 크롬(PDF 다운로드, src/lib/pdf/html-to-pdf.ts) — 번들에 넣지 않고 node_modules 에서 그대로 로드
+    serverComponentsExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
   },
   // ★ 프로덕션 빌드 시 ESLint/TS 체크 건너뛰기 (배포용 빠른 빌드)
   eslint: {
@@ -39,6 +41,8 @@ const nextConfig = {
     '/api/workflow/upload': ['./curriculum_data/expanded_math_types_unified.json'],
     // ★ SVG 도형 검증용 래스터라이즈 폰트 (람다엔 시스템 폰트 없음) — src/lib/vision/svg-raster.ts
     '/api/problems/[problemId]/generate-figure': ['./assets/fonts/**'],
+    // ★ PDF 다운로드 — 람다용 크롬 바이너리(brotli) 동봉
+    '/api/print/pdf': ['./node_modules/@sparticuz/chromium/bin/**'],
   },
 };
 
