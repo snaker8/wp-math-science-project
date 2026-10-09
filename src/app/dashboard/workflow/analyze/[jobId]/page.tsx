@@ -1299,10 +1299,12 @@ function ProblemCropPreview({
   pdfUrl,
   pageIndex,
   bbox,
+  rotation = 0,
 }: {
   pdfUrl?: string;
   pageIndex: number;
   bbox?: { x: number; y: number; w: number; h: number };
+  rotation?: 0 | 90 | 180 | 270;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fullCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1326,27 +1328,14 @@ function ProblemCropPreview({
         setIsLoading(true);
         setError(false);
 
-        const { loadPdfDocument } = await import('@/lib/pdf-viewer');
+        const { loadPdfDocument, renderPageToCanvas } = await import('@/lib/pdf-viewer');
         const pdf = await loadPdfDocument(pdfUrl);
 
         const pageNum = pageIndex + 1;
         if (pageNum > pdf.numPages || cancelled) return;
 
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.5 });
-
-        const fullCanvas = document.createElement('canvas');
-        fullCanvas.width = viewport.width;
-        fullCanvas.height = viewport.height;
-        const fullCtx = fullCanvas.getContext('2d');
-        if (!fullCtx || cancelled) return;
-
-        // ★ 흰색 배경 먼저 칠하기 (PDF 투명 배경 → 검은색 방지)
-        fullCtx.fillStyle = '#ffffff';
-        fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
-
-        const renderTask = page.render({ canvasContext: fullCtx, viewport });
-        await renderTask.promise;
+        // ★ 화면과 같은 회전으로 그린다 (2026-10-09 대표: "OCR 은 제대로 되는데 분석(미리보기)이 누웠다")
+        const fullCanvas = await renderPageToCanvas(pdf, pageNum, 2.5, rotation);
         if (cancelled) return;
 
         fullCanvasRef.current = fullCanvas;
@@ -1361,7 +1350,7 @@ function ProblemCropPreview({
 
     renderFullPage();
     return () => { cancelled = true; };
-  }, [pdfUrl, pageIndex]);
+  }, [pdfUrl, pageIndex, rotation]);
 
   // bbox 변경 시 캐시된 fullCanvas에서 크롭만 수행 (debounce 50ms)
   useEffect(() => {
@@ -1378,10 +1367,11 @@ function ProblemCropPreview({
       if (!ctx) return;
 
       if (bbox && bbox.w > 0 && bbox.h > 0) {
-        const sx = bbox.x * fullCanvas.width;
-        const sy = bbox.y * fullCanvas.height;
-        const sw = bbox.w * fullCanvas.width;
-        const sh = bbox.h * fullCanvas.height;
+        const db = rotateBboxLocal(bbox, rotation); // 원본 좌표 → 회전 캔버스 좌표
+        const sx = db.x * fullCanvas.width;
+        const sy = db.y * fullCanvas.height;
+        const sw = db.w * fullCanvas.width;
+        const sh = db.h * fullCanvas.height;
 
         canvas.width = Math.max(1, Math.round(sw));
         canvas.height = Math.max(1, Math.round(sh));
@@ -1399,7 +1389,7 @@ function ProblemCropPreview({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [bbox, pageIndex, isLoading]);
+  }, [bbox, pageIndex, isLoading, rotation]);
 
   if (!pdfUrl) return null;
 
@@ -1727,6 +1717,7 @@ function AdvancedAnalysisModal({
 function ProblemDetailPanel({
   problem,
   pdfUrl,
+  getRotation,
   onSave,
   onDelete,
   onReanalyze,
@@ -1747,6 +1738,7 @@ function ProblemDetailPanel({
 }: {
   problem: AnalyzedProblem | null;
   pdfUrl?: string;
+  getRotation?: (pdfPageNumber: number) => 0 | 90 | 180 | 270;
   onSave: (updated: Partial<AnalyzedProblem>) => void;
   onDelete: () => void;
   onReanalyze: () => void;
@@ -1921,6 +1913,7 @@ function ProblemDetailPanel({
                   pdfUrl={pdfUrl}
                   pageIndex={problem.pageIndex}
                   bbox={problem.bbox}
+                  rotation={getRotation?.(problem.pageIndex + 1) ?? 0}
                 />
               </div>
             ) : null}
@@ -5625,6 +5618,7 @@ export default function AnalyzeJobPage() {
           <ProblemDetailPanel
             problem={selectedProblem}
             pdfUrl={jobData.pdfUrl}
+            getRotation={(pdfPageNum) => pageRotations.get(pdfPageNum) ?? 0}
             onSave={isAutoCropActive ? (updated) => {
               // AutoCrop 모드: autoCropProblems에서 업데이트
               if (!selectedProblemId) return;
@@ -5667,6 +5661,7 @@ export default function AnalyzeJobPage() {
         <AnalyzeProblemEditModal
           problem={editingProblem as AnalyzedProblemData}
           pdfUrl={jobData.pdfUrl}
+          rotation={pageRotations.get(editingProblem.pageIndex + 1) ?? 0}
           onSave={async (updated) => {
             // 1) DB에 저장된 문제인 경우 API PATCH 호출
             if (editingProblem.problemId) {

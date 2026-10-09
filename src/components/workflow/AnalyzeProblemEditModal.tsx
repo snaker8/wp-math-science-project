@@ -62,6 +62,8 @@ export interface AnalyzedProblemData {
 interface AnalyzeProblemEditModalProps {
   problem: AnalyzedProblemData;
   pdfUrl?: string;
+  /** 분석 페이지의 앱 회전(페이지별). 크롭 미리보기·텍스트 다시 읽기가 화면과 같은 방향으로 그린다 (2026-10-09) */
+  rotation?: 0 | 90 | 180 | 270;
   onSave: (updated: Partial<AnalyzedProblemData>) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -815,10 +817,12 @@ function PdfCropPanel({
   pdfUrl,
   pageIndex,
   bbox,
+  rotation = 0,
 }: {
   pdfUrl?: string;
   pageIndex: number;
   bbox?: { x: number; y: number; w: number; h: number };
+  rotation?: 0 | 90 | 180 | 270;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -837,26 +841,14 @@ function PdfCropPanel({
         setIsLoading(true);
         setError(false);
 
-        const { loadPdfDocument } = await import('@/lib/pdf-viewer');
+        const { loadPdfDocument, renderPageToCanvas, rotateBbox } = await import('@/lib/pdf-viewer');
         const pdf = await loadPdfDocument(pdfUrl);
 
         const pageNum = pageIndex + 1;
         if (pageNum > pdf.numPages || cancelled) return;
 
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.5 });
-
-        // 전체 페이지를 offscreen canvas에 렌더링
-        const fullCanvas = document.createElement('canvas');
-        fullCanvas.width = viewport.width;
-        fullCanvas.height = viewport.height;
-        const fullCtx = fullCanvas.getContext('2d');
-        if (!fullCtx || cancelled) return;
-
-        await page.render({
-          canvasContext: fullCtx,
-          viewport,
-        }).promise;
+        // ★ 화면과 같은 회전으로 그린다 (2026-10-09) — bbox 는 원본 좌표 → rotateBbox
+        const fullCanvas = await renderPageToCanvas(pdf, pageNum, 2.5, rotation);
 
         if (cancelled) return;
 
@@ -868,10 +860,11 @@ function PdfCropPanel({
 
         if (bbox) {
           // bbox 영역만 크롭
-          const sx = bbox.x * fullCanvas.width;
-          const sy = bbox.y * fullCanvas.height;
-          const sw = bbox.w * fullCanvas.width;
-          const sh = bbox.h * fullCanvas.height;
+          const db = rotateBbox(bbox, rotation);
+          const sx = db.x * fullCanvas.width;
+          const sy = db.y * fullCanvas.height;
+          const sw = db.w * fullCanvas.width;
+          const sh = db.h * fullCanvas.height;
 
           const displayWidth = 380;
           const aspectRatio = sh / sw;
@@ -910,7 +903,7 @@ function PdfCropPanel({
     renderCrop();
 
     return () => { cancelled = true; };
-  }, [pdfUrl, pageIndex, bbox]);
+  }, [pdfUrl, pageIndex, bbox, rotation]);
 
   if (!pdfUrl) {
     return (
@@ -951,6 +944,7 @@ function PdfCropPanel({
 export default function AnalyzeProblemEditModal({
   problem,
   pdfUrl,
+  rotation = 0,
   onSave,
   onDelete,
   onClose,
@@ -1117,19 +1111,13 @@ export default function AnalyzeProblemEditModal({
     setIsOcrLoading(true);
     try {
       // PDF → canvas → base64
-      const { loadPdfDocument } = await import('@/lib/pdf-viewer');
+      const { loadPdfDocument, renderPageToCanvas, rotateBbox } = await import('@/lib/pdf-viewer');
       const pdf = await loadPdfDocument(pdfUrl);
-      const page = await pdf.getPage(problem.pageIndex + 1);
-      const viewport = page.getViewport({ scale: 2.5 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas context failed');
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      // ★ 화면과 같은 회전으로 그려서 바로 선 글자를 OCR 에 보낸다 (2026-10-09)
+      const canvas = await renderPageToCanvas(pdf, problem.pageIndex + 1, 2.5, rotation);
 
-      // bbox 영역만 크롭
-      const bbox = problem.bbox;
+      // bbox 영역만 크롭 (원본 좌표 → 회전 좌표)
+      const bbox = rotateBbox(problem.bbox, rotation);
       const sx = bbox.x * canvas.width;
       const sy = bbox.y * canvas.height;
       const sw = bbox.w * canvas.width;
@@ -1164,7 +1152,7 @@ export default function AnalyzeProblemEditModal({
     } finally {
       setIsOcrLoading(false);
     }
-  }, [pdfUrl, problem.pageIndex, problem.bbox]);
+  }, [pdfUrl, problem.pageIndex, problem.bbox, rotation]);
 
   // === 이미지 파일 추가 ===
   const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1360,6 +1348,7 @@ export default function AnalyzeProblemEditModal({
                       pdfUrl={pdfUrl}
                       pageIndex={problem.pageIndex}
                       bbox={problem.bbox}
+                      rotation={rotation}
                     />
                     <p className="text-[10px] text-gray-400 text-center mt-1.5">이미지 영역을 선택하세요.</p>
                   </div>
