@@ -185,7 +185,9 @@ export async function verifyCandidate(original: Buffer, mime: string, candidateP
 
 export type RedrawAndVerifyResult =
   | { ok: true; png: Buffer; verify: VerifyResult; ms: number; attempts: number; labels: string[]; upscaled: boolean }
-  | { ok: false; stage: 'redraw' | 'verify'; error: string; verify?: VerifyResult; ms: number; attempts: number; labels: string[]; upscaled: boolean };
+  | { ok: false; stage: 'redraw' | 'verify'; error: string; verify?: VerifyResult; ms: number; attempts: number; labels: string[]; upscaled: boolean;
+      /** ★ 검증 탈락이어도 시도 중 가장 점수 높은 그림 (2026-10-11: 돈 쓴 그림을 버리지 않고 SVG 와 견줘 채택) */
+      bestPng?: Buffer; bestVerify?: VerifyResult };
 
 /**
  * 입력 준비(업스케일) → 라벨 읽기 → 재작성 → 검증. 검증 탈락이면 지적 사항을 피드백으로 넣어 **한 번만** 다시 그린다
@@ -201,17 +203,20 @@ export async function redrawAndVerify(image: Buffer, mime: string, opts: { maxAt
   let feedback: string[] | undefined;
   let last: VerifyResult | undefined;
   let attempts = 0;
+  let bestPng: Buffer | undefined;
+  let bestVerify: VerifyResult | undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     attempts = attempt;
     const r = await redrawFigureImage(prepared.png, srcMime, { labels, feedback, context: opts.context });
-    if (!r.ok) return { ok: false, stage: 'redraw', error: r.error, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
+    if (!r.ok) return { ok: false, stage: 'redraw', error: r.error, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled, bestPng, bestVerify };
     const v = await verifyRedraw(prepared.png, srcMime, r.png, labels);
     if (v.ok) return { ok: true, png: r.png, verify: v, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
     last = v;
+    if (!bestVerify || v.score > bestVerify.score) { bestPng = r.png; bestVerify = v; }
     if (v.issues[0]?.startsWith('검증 실패')) break; // 검증기 자체 오류면 재시도 의미 없음
     feedback = v.issues.length ? v.issues : undefined; // 지적 없이 "다르다"면 피드백 없이 한 번 더 그려 본다
     console.log(`[image-redraw] 검증 탈락(${attempt}/${maxAttempts}, score=${v.score}) → 재시도${feedback ? ' (피드백)' : ''}: ${v.issues.join(' / ').slice(0, 160) || '지적 없음'}`);
   }
   const reason = last?.issues.join(' / ') || `검증기가 다른 점을 짚지 못한 채 불일치 판정 (score ${last?.score ?? 0}) — 한 번 더 눌러 보세요`;
-  return { ok: false, stage: 'verify', error: reason, verify: last, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled };
+  return { ok: false, stage: 'verify', error: reason, verify: last, ms: Date.now() - t0, attempts, labels, upscaled: prepared.upscaled, bestPng, bestVerify };
 }
