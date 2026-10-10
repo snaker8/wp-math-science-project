@@ -2975,6 +2975,22 @@ function removeChoicesFromContent(text: string): { content: string; score?: numb
   if (choiceStartIdx >= 0) {
     // 선택지 시작 전까지만 유지
     text = lines.slice(0, choiceStartIdx).join('\n').trim();
+  } else {
+    // ★ 줄 중간 보기 (2026-10-11 대표: "객관식 보기를 본문에 올리는 현상도") — "…크기는? ① 120° ② 125° …" 처럼
+    //   물음 바로 뒤에 보기가 같은 줄로 이어지면 줄 머리 검사에 안 걸려 본문에 그대로 남았다.
+    //   extract-choices-from-ocr 와 같은 가드: \boxed{①} placeholder 제외, 마지막 증가 런이 ①부터 길이 ≥4 일 때만, 앞 본문 5자 이상.
+    const boxedSpans: Array<[number, number]> = [];
+    { const re = /\boxed\s*\{[^{}]*\}/g; let bm: RegExpExecArray | null; while ((bm = re.exec(text)) !== null) boxedSpans.push([bm.index, bm.index + bm[0].length]); }
+    const pos: number[] = [];
+    { const re = /[①②③④⑤]/g; let m: RegExpExecArray | null; while ((m = re.exec(text)) !== null) { const at = m.index; if (!boxedSpans.some(([s, e]) => at >= s && at < e)) pos.push(at); } }
+    if (pos.length >= 4) {
+      const vals = pos.map((i) => '①②③④⑤'.indexOf(text[i]) + 1);
+      let runStart = 0;
+      for (let k = 1; k < pos.length; k++) if (vals[k] <= vals[k - 1]) runStart = k;
+      if (pos.length - runStart >= 4 && vals[runStart] === 1 && text.slice(0, pos[runStart]).trim().length >= 5) {
+        text = text.slice(0, pos[runStart]).trim();
+      }
+    }
   }
 
   // ★ [배점] 추출 — CLAUDE.md 안전 가드 #2 우선순위:
