@@ -47,12 +47,10 @@ describe('extractChoicesFromOCR — 원형 ①②③④⑤ 분기 가드', () =>
     expect(r[0]).toBe('$1$');
   });
 
-  it('④까지 4개만 인식돼도(⑤가 (5)로 OCR) ①시작 증가런 길이4 → 4개 보기 (기존 동작 보존)', () => {
+  it('④까지 4개만 인식돼도(⑤가 (5)로 OCR) ①시작 증가런 길이4 → ⑤ 를 잘라 5개 (2026-10-11 변경)', () => {
     const text = '다음 중 가장 큰 값은? ① 46 ② 52 ③ 58 ④ 64 (5) 70';
     const r = extractChoicesFromOCR(text);
-    expect(r).toHaveLength(4);
-    expect(r[0]).toBe('46');
-    expect(r[3]).toContain('64');
+    expect(r).toEqual(['46', '52', '58', '64', '70']);
   });
 
   it('동그라미 2개뿐(스템 참조)이고 보기 아님 → [] (본문 토막 차단)', () => {
@@ -105,5 +103,25 @@ describe('stripTrailingInlineChoices 느슨 규칙 (2026-10-08 부흥고 미적�
   it('서술형 풀이 단계 ①②③ 는 보기와 안 맞으니 그대로', () => {
     const txt = '다음 과정을 완성하시오.\n① 양변을 2로 나눈다\n② 이항한다\n③ 제곱근을 구한다';
     expect(stripTrailingInlineChoices(txt, ['3', '4', '5', '6', '7'])).toBe(txt);
+  });
+});
+
+// ★ 2026-10-11 대표: "5번이 4번 보기에 붙은 현상은 계속 지적해도 개선이 안 된다" — ①②③④ 뒤 ⑤만 "(5)" 로 읽힌 Mathpix 사고.
+describe('extractChoicesFromOCR — ⑤가 (5) 로 읽혀 ④에 붙은 경우', () => {
+  it('① 120° ② 125° ③ 130° ④ 135°\n(5) 140° → 5개', () => {
+    const text = '그림과 같이 직사각형 모양의 종이테이프를 접었다. $\angle x+\angle y$ 의 크기는?\n① $120^{\circ}$ ② $125^{\circ}$ ③ $130^{\circ}$ ④ $135^{\circ}$\n(5) $140^{\circ}$';
+    expect(extractChoicesFromOCR(text)).toEqual(['$120^{\circ}$', '$125^{\circ}$', '$130^{\circ}$', '$135^{\circ}$', '$140^{\circ}$']);
+  });
+  it('같은 줄에 ④ 135° (5) 140° 도 분리', () => {
+    const text = '값은? ① 1 ② 2 ③ 3 ④ 4 (5) 5';
+    expect(extractChoicesFromOCR(text)).toEqual(['1', '2', '3', '4', '5']);
+  });
+  it('③ 뒤 (4) 가 붙고 ⑤ 는 원형인 경우도 번호대로', () => {
+    const text = '값은? ① 1 ② 2 ③ 3 (4) 4 ⑤ 5';
+    expect(extractChoicesFromOCR(text)).toEqual(['1', '2', '3', '4', '5']);
+  });
+  it('보기 본문 속 "(5)" 가 수식 괄호면 안 자른다 — f(5) 같은 꼴', () => {
+    const text = '값은? ① $f(1)$ ② $f(2)$ ③ $f(3)$ ④ $f(5)$ ⑤ $f(6)$';
+    expect(extractChoicesFromOCR(text)).toEqual(['$f(1)$', '$f(2)$', '$f(3)$', '$f(5)$', '$f(6)$']);
   });
 });

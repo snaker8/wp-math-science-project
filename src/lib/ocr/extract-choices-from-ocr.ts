@@ -53,7 +53,7 @@ export function extractChoicesFromOCR(text: string): string[] {
           const choiceText = text.substring(start, end).trim();
           if (choiceText) choices.push(choiceText);
         }
-        if (choices.length >= 2) return choices.map(normalizeChoiceText);
+        if (choices.length >= 2) return splitMergedNextMarker(choices, vals[runStart]).map(normalizeChoiceText);
       }
     }
     // 보기로 확정 못 하면 아래 (1)~(5) / 1)~5) 분기로 진행 (그것도 아니면 최종 [])
@@ -159,6 +159,36 @@ export function extractChoicesFromOCR(text: string): string[] {
   }
 
   return [];
+}
+
+/**
+ * ★ 원형 번호 런 안에서 다음 번호가 "(5)"·"5)"·"⑸" 로 읽혀 앞 보기에 붙은 것을 잘라 낸다 (2026-10-11).
+ *   대표: "5번이 4번 보기에 붙은 현상은 계속 지적해도 개선이 안 된다" — 자산화(cloud-flow.parseChoicesFromText)는
+ *   같은 분리를 하고 있었지만 재OCR(텍스트 읽어내기) 경로인 이 함수엔 없었다. ①②③④ 뒤 ⑤만 괄호로 오는 Mathpix 사고.
+ *   i번째 보기 본문에 "(i+2)" 가 줄 머리/공백 뒤에 오면 거기서 자른다. 마지막 보기만이 아니라 중간도(②에 (3) 붙음) 같은 규칙.
+ */
+export function splitMergedNextMarker(choices: string[], firstNum = 1): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < choices.length; i++) {
+    let cur = choices[i];
+    let num = firstNum + i; // 이 보기의 번호
+    // 같은 보기 안에 다음 번호가 연달아 붙어 있을 수 있어 반복 (④ 안에 (5) … 까지)
+    for (;;) {
+      const next = num + 1;
+      if (next > 5) break;
+      // 줄 머리 또는 공백 뒤의 "(n)" / "n)" — 수식 괄호 f(5) 는 앞이 글자라 안 걸린다
+      const re = new RegExp('(?:^|\\s)(?:\\(' + next + '\\)|' + next + '\\))\\s*(?=\\S)', 'm');
+      const m = re.exec(cur);
+      if (!m || m.index === 0) break; // 맨 앞이면 head 가 비어 보기 아님
+      const head = cur.slice(0, m.index).trim();
+      const tail = cur.slice(m.index + m[0].length).trim();
+      if (!head || !tail) break;
+      out.push(head); cur = tail; num = next;
+    }
+    out.push(cur);
+  }
+  // 잘라낸 뒤 5개를 넘으면 비정상 — 원본 유지
+  return out.length <= 5 ? out : choices;
 }
 
 /** 선택지 텍스트 정규화: Mathpix 수식 포맷 → $...$, 원번호 제거 */
