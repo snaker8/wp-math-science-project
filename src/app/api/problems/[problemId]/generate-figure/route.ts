@@ -347,17 +347,39 @@ export async function POST(
     //   ③ 둘 다 불일치면 SVG 를 저장하되 svgVerify 에 사유를 남기고 응답에 verifyWarning (사용자가 보고 결정)
     //   body.imageFirst=true 면 종전처럼 이미지 먼저. body.skipRedraw=true 면 이미지 경로 끔. body.skipVerify=true 면 SVG 검증 생략.
     // ================================================================
-    const tryGeminiRedraw = async (reason: string): Promise<NextResponse | null> => {
+    // ★ 2026-10-11 대표: "AI 생성은 SVG 로만 되고 불합격 시 이미지로 안 넘어간다 — 플래시로".
+    //   실측(DB): SVG 불합격 건에서 재작성이 돌긴 했지만 그 이미지도 검증 불합격이면 버리고 SVG 로 돌아와, 화면엔 늘 SVG 만 남았다
+    //   (장당 ~100원 쓴 그림을 버림). 이제 둘 다 불합격이면 **점수가 더 높은 쪽**을 채택하고 경고를 남긴다.
+    //   SVG 점수(svgScore)가 없거나 이미지가 더 높으면 이미지 채택. 사용자는 경고를 보고 다시 생성/도식 교체로 판단한다.
+    let lastRedrawFailure: Record<string, unknown> | undefined;
+    const tryGeminiRedraw = async (reason: string, svgScore?: number): Promise<NextResponse | null> => {
       if (!imageRawBuffer || body?.skipRedraw === true || !supabaseAdmin) return null;
       try {
         const { default: sharp } = await import('sharp');
         const srcPng = await sharp(imageRawBuffer).png().toBuffer();
         const rr = await redrawAndVerify(srcPng, 'image/png', { context: problem.content_latex || undefined });
-        if (!rr.ok) {
+        let adoptPng: Buffer;
+        let adoptVerify: { score: number; issues: string[] };
+        let verified = true;
+        if (rr.ok) {
+          adoptPng = rr.png; adoptVerify = rr.verify;
+        } else {
           console.log(`[generate-figure] 재작성 ${rr.stage} 실패 (${reason}): ${rr.error}`);
-          return null;
+          const best = rr.bestPng && rr.bestVerify ? rr.bestVerify : undefined;
+          lastRedrawFailure = {
+            model: GEMINI_IMAGE_MODEL, stage: rr.stage, error: rr.error, score: best?.score ?? 0, issues: best?.issues ?? [],
+            attempts: rr.attempts, reason, ms: rr.ms, adopted: false, at: new Date().toISOString(),
+          };
+          if (!rr.bestPng || !best) return null;
+          // 둘 다 불합격 — 이미지 점수가 SVG 점수보다 높을 때만 이미지 채택 (같으면 SVG, 학습 회로가 있는 쪽)
+          if (typeof svgScore === 'number' && best.score <= svgScore) {
+            console.log(`[generate-figure] 재작성 이미지(${best.score}점) ≤ SVG(${svgScore}점) → SVG 유지`);
+            return null;
+          }
+          adoptPng = rr.bestPng; adoptVerify = best; verified = false;
+          lastRedrawFailure.adopted = true;
         }
-        const outPng = await sharp(rr.png).png({ compressionLevel: 9 }).toBuffer();
+        const outPng = await sharp(adoptPng).png({ compressionLevel: 9 }).toBuffer();
         const redrawPath = `problem-crops/redraw/${problemId}.png`;
         const { error: upErr } = await supabaseAdmin.storage.from('source-files').upload(redrawPath, outPng, { contentType: 'image/png', upsert: true });
         if (upErr) { console.warn(`[generate-figure] 재작성 업로드 실패: ${upErr.message}`); return null; }
@@ -369,13 +391,17 @@ export async function POST(
           hasFigure: true,
           figureSource: 'ai_image' as const,
           upscaledCropUrl: redrawUrl,
-          redrawInfo: { model: GEMINI_IMAGE_MODEL, score: rr.verify.score, issues: rr.verify.issues, attempts: rr.attempts, reason, ms: rr.ms, at: new Date().toISOString() },
+          redrawInfo: { model: GEMINI_IMAGE_MODEL, score: adoptVerify.score, issues: adoptVerify.issues, attempts: rr.attempts, reason, ms: rr.ms, verified, at: new Date().toISOString() },
           cropImageUrl: targetImageUrl,
         };
         const { error: dbErr } = await supabaseAdmin.from('problems').update({ ai_analysis: updatedAnalysis }).eq('id', problemId);
         if (dbErr) { console.warn(`[generate-figure] 재작성 DB 저장 실패: ${dbErr.message}`); return null; }
-        console.log(`[generate-figure] ★ Gemini 재작성 채택 (${reason}, score=${rr.verify.score}, ${rr.attempts}회, ${rr.ms}ms)`);
-        return NextResponse.json({ success: true, figureSource: 'ai_image', upscaledCropUrl: redrawUrl, redrawInfo: updatedAnalysis.redrawInfo, problemId });
+        console.log(`[generate-figure] ★ Gemini 재작성 채택${verified ? '' : '(검증 미통과, SVG 보다 높은 점수)'} (${reason}, score=${adoptVerify.score}, ${rr.attempts}회, ${rr.ms}ms)`);
+        return NextResponse.json({
+          success: true, figureSource: 'ai_image', upscaledCropUrl: redrawUrl, redrawInfo: updatedAnalysis.redrawInfo, problemId,
+          verifyWarning: verified ? undefined
+            : `SVG(${typeof svgScore === 'number' ? svgScore : '-'}점)·이미지(${adoptVerify.score}점) 둘 다 원본과 차이 — 점수가 높은 이미지를 넣었습니다: ${adoptVerify.issues.join(' / ') || '사유 없음'}. 확인 후 다시 생성하거나 도식 교체로 바꿔 주세요.`,
+        });
       } catch (e) {
         console.warn(`[generate-figure] 재작성 예외 (${reason}):`, e instanceof Error ? e.message : e);
         return null;
@@ -503,7 +529,7 @@ export async function POST(
             contentLatex: problem.content_latex || null, model: CLAUDE_MODELS.SONNET,
           }).catch(() => {});
           if (!verify.ok) {
-            const r = await tryGeminiRedraw(`${legacySvg ? 'svg' : 'graph'}_verify_failed: ${verify.issues.join(' / ').slice(0, 120)}`);
+            const r = await tryGeminiRedraw(`${legacySvg ? 'svg' : 'graph'}_verify_failed: ${verify.issues.join(' / ').slice(0, 120)}`, verify.score);
             if (r) return r;
           }
         } else {
@@ -538,7 +564,8 @@ export async function POST(
       figureConfidence: interpreted.confidence,
       // ★ SVG 검증 결과 (2026-10-06). 불일치인데 이미지 재작성도 안 돼 SVG 를 그대로 둔 경우 ok:false 가 남는다.
       svgVerify: svgVerify ? { ...svgVerify, at: new Date().toISOString() } : undefined,
-      redrawInfo: undefined,
+      // ★ 재작성을 시도했지만 채택 안 됐으면 그 기록을 남긴다 (왜 이미지로 안 갔는지 DB 에서 보이게)
+      redrawInfo: lastRedrawFailure,
     };
 
     const renderingAny = figureDataForDb.rendering as unknown as Record<string, unknown> | null;
@@ -568,7 +595,7 @@ export async function POST(
       figureSvg: legacySvg,
       svgVerify,
       verifyWarning: svgVerify && !svgVerify.ok
-        ? `${legacySvg ? 'SVG' : '그래프'} 가 원본과 다릅니다(${svgVerify.score}점): ${svgVerify.issues.join(' / ') || '사유 없음'} — 이미지 재작성도 통과하지 못해 그대로 두었습니다. 「원본 사용」이나 「교체」로 바로잡아 주세요.`
+        ? `${legacySvg ? 'SVG' : '그래프'} 가 원본과 다릅니다(${svgVerify.score}점): ${svgVerify.issues.join(' / ') || '사유 없음'}${lastRedrawFailure ? ` / 이미지 재작성도 ${lastRedrawFailure.score}점으로 더 낮아 SVG 유지` : ''} — 이미지 재작성도 통과하지 못해 그대로 두었습니다. 「원본 사용」이나 「교체」로 바로잡아 주세요.`
         : undefined,
       problemId,
     });
