@@ -1745,7 +1745,10 @@ export default function CloudPage() {
   }, [pinOld, pinNew, pinConfirm, getAdminPin]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-surface-base text-content-primary">
+    {/* ★ 창 높이에 고정 (2026-10-11): 종전 h-full 은 상위(main)에 고정 높이가 없어 페이지가 내용만큼(8,700px) 늘어나
+        창 스크롤 + 목록 자체 스크롤이 두 겹으로 생겼다. 휠 관성이 두 스크롤을 오가며 클릭 순간 카드가 밀려
+        「맨 아래 카드를 누르면 위 카드가 열린다」(대표, 경남 검색). 헤더 3.5rem + main 상하 패딩 3rem = 6.5rem. 출제 화면과 같은 방식. */}
+    <div className="flex h-[calc(100vh-6.5rem)] w-full flex-col overflow-hidden bg-surface-base text-content-primary">
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between gap-4 px-6 py-3 border-b border-subtle/50">
         <div className="flex items-center gap-4">
