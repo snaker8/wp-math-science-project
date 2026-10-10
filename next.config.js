@@ -35,7 +35,7 @@ const nextConfig = {
       // ★ SVG 도형 검증용 래스터라이즈 폰트 (람다엔 시스템 폰트 없음) — src/lib/vision/svg-raster.ts
       '/api/problems/[problemId]/generate-figure': ['./assets/fonts/**'],
       // ★ PDF 다운로드 — 람다용 크롬 바이너리(brotli) 동봉
-      '/api/print/pdf': ['./node_modules/@sparticuz/chromium/bin/**'],
+      '/api/print/pdf': ['./node_modules/@sparticuz/chromium/bin/**', './assets/fonts/**'],
     },
   },
   // ★ 프로덕션 빌드 시 ESLint/TS 체크 건너뛰기 (배포용 빠른 빌드)

@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { htmlToPdf } from '@/lib/pdf/html-to-pdf';
+import { htmlToPdf, debugFonts } from '@/lib/pdf/html-to-pdf';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
 
-  let body: { html?: string; filename?: string };
+  let body: { html?: string; filename?: string; debug?: string };
   try {
     body = await req.json();
   } catch {
@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
 
   const started = Date.now();
   try {
+    // ★ 진단 모드 — 글꼴 로드 상태·글꼴 요청·실제 글리프 폭 (2026-10-11 한글 누락 사고 추적용)
+    if (body.debug === 'fonts') {
+      const info = await debugFonts(html, { timeoutMs: 90_000 });
+      return NextResponse.json({ ...info, ms: Date.now() - started });
+    }
     const pdf = await htmlToPdf(html, { timeoutMs: 90_000 });
     console.log(`[print/pdf] ${safeName}: ${(pdf.length / 1024).toFixed(0)}KB, ${Date.now() - started}ms`);
     return new NextResponse(new Uint8Array(pdf), {
