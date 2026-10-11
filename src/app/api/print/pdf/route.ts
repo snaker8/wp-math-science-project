@@ -23,10 +23,20 @@ export async function POST(req: NextRequest) {
 
   let body: { html?: string; filename?: string; debug?: string };
   try {
-    body = await req.json();
+    // ★ 2026-10-11 413 사고(Vercel 본문 4.5MB): 클라이언트가 gzip 으로 보내면(X-Body-Encoding: gzip) 풀어서 읽는다
+    if ((req.headers.get('x-body-encoding') || '').toLowerCase() === 'gzip') {
+      const { gunzipSync } = await import('node:zlib');
+      const raw = Buffer.from(await req.arrayBuffer());
+      body = JSON.parse(gunzipSync(raw).toString('utf8'));
+    } else {
+      body = await req.json();
+    }
   } catch {
     return NextResponse.json({ error: 'JSON 본문이 필요합니다' }, { status: 400 });
   }
+  // ★ 서버 크롬이 같은 origin 의 보호된 그림(/api/storage/image 등)을 가져오도록 로그인 쿠키를 이 origin 에만 붙인다
+  const origin = req.nextUrl.origin;
+  const cookies = req.cookies.getAll().map((c) => ({ name: c.name, value: c.value }));
   const html = typeof body.html === 'string' ? body.html : '';
   if (!html || !html.includes('exam-print-root')) {
     return NextResponse.json({ error: '인쇄 DOM(html) 이 비어 있습니다' }, { status: 400 });
@@ -43,10 +53,10 @@ export async function POST(req: NextRequest) {
   try {
     // ★ 진단 모드 — 글꼴 로드 상태·글꼴 요청·실제 글리프 폭 (2026-10-11 한글 누락 사고 추적용)
     if (body.debug === 'fonts') {
-      const info = await debugFonts(html, { timeoutMs: 90_000 });
+      const info = await debugFonts(html, { timeoutMs: 90_000, cookies, origin });
       return NextResponse.json({ ...info, ms: Date.now() - started });
     }
-    const pdf = await htmlToPdf(html, { timeoutMs: 90_000 });
+    const pdf = await htmlToPdf(html, { timeoutMs: 90_000, cookies, origin });
     console.log(`[print/pdf] ${safeName}: ${(pdf.length / 1024).toFixed(0)}KB, ${Date.now() - started}ms`);
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,

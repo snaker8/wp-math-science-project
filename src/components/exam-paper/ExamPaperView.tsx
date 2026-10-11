@@ -706,14 +706,12 @@ export function ExamPaperView({
     setIsDownloadingPdf(true);
     try {
       if ((document as any).fonts?.ready) { try { await (document as any).fonts.ready; } catch { /* ignore */ } }
-      const { serializePrintDocument } = await import('@/lib/pdf/serialize-print-document');
+      const { serializePrintDocument, packPdfRequest } = await import('@/lib/pdf/serialize-print-document');
       const title = printFileTitle();
       const html = await serializePrintDocument(printRoot, title);
-      const res = await fetch('/api/print/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, filename: title }),
-      });
+      // ★ gzip 전송 (2026-10-11 413 사고 — Vercel 본문 4.5MB 한도). 그림은 URL 참조라 본문이 가볍다.
+      const packed = await packPdfRequest({ html, filename: title });
+      const res = await fetch('/api/print/pdf', { method: 'POST', headers: packed.headers, body: packed.body });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || `PDF 생성 실패 (${res.status})`);

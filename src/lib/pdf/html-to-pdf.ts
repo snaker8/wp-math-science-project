@@ -85,11 +85,22 @@ async function launchBrowser(): Promise<Browser> {
 export interface HtmlToPdfOptions {
   /** 페이지 로드·폰트·이미지 대기 상한(ms) */
   timeoutMs?: number;
+  /** ★ 그림(/api/storage/image 등 같은 origin 보호 경로)을 가져올 때 쓸 로그인 쿠키 — 이 origin 에만 붙는다 (2026-10-11) */
+  cookies?: Array<{ name: string; value: string }>;
+  /** 쿠키를 붙일 origin (예: https://wp-math-science-project.vercel.app) */
+  origin?: string;
 }
 
 type PageLike = Awaited<ReturnType<Browser['newPage']>>;
 
-async function loadAndSettle(page: PageLike, html: string, timeout: number) {
+async function loadAndSettle(page: PageLike, html: string, timeout: number, opts?: HtmlToPdfOptions) {
+  if (opts?.cookies?.length && opts.origin) {
+    try {
+      await page.setCookie(...opts.cookies.map((c) => ({ name: c.name, value: c.value, url: opts.origin as string })));
+    } catch (e) {
+      console.warn('[html-to-pdf] 쿠키 설정 실패(그림이 안 실릴 수 있음):', e instanceof Error ? e.message : e);
+    }
+  }
   await page.setContent(html, { waitUntil: ['load', 'networkidle0'], timeout } as Parameters<PageLike['setContent']>[1]);
   // 폰트(Pretendard·KaTeX) 로드 완료 — 안 기다리면 수식 폭이 깨진 채 찍힌다 (doPrint 의 fonts.ready 와 동일)
   await page.evaluate(() => (document as unknown as { fonts?: { ready: Promise<unknown> } }).fonts?.ready);
@@ -110,7 +121,7 @@ export async function htmlToPdf(html: string, opts: HtmlToPdfOptions = {}): Prom
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
-    await loadAndSettle(page, html, timeout);
+    await loadAndSettle(page, html, timeout, opts);
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -133,7 +144,7 @@ export async function debugFonts(html: string, opts: HtmlToPdfOptions = {}): Pro
     const page = await browser.newPage();
     page.on('response', (res) => { const u = res.url(); if (/\.(woff2?|otf|ttf)(\?|$)/i.test(u)) requests.push({ url: u.slice(-70), status: res.status() }); });
     page.on('requestfailed', (req) => { requests.push({ url: req.url().slice(-70), status: `FAIL ${req.failure()?.errorText || ''}` }); });
-    await loadAndSettle(page, html, timeout);
+    await loadAndSettle(page, html, timeout, opts);
     const fonts = await page.evaluate(() => {
       const fs = (document as unknown as { fonts: Iterable<{ family: string; status: string; weight: string; unicodeRange: string }> }).fonts;
       const out: Array<{ family: string; status: string; weight: string }> = [];

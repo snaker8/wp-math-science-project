@@ -3,9 +3,11 @@
 //
 // ★ 2026-10-10 PDF 다운로드용. ExamPaperView.doPrint 가 만드는 복제 DOM 을 그대로 받아
 //   현재 페이지의 모든 스타일(Tailwind 링크·styled-jsx <style>·KaTeX·Pretendard @font-face)을 함께 담는다.
-//   서버 헤드리스 크롬은 로그인 쿠키가 없으므로
 //   - 스타일시트는 텍스트를 받아 인라인 (url() 상대경로는 절대경로로 고쳐 KaTeX·Pretendard 폰트가 그대로 로드)
-//   - 그림(<img>)은 data URL 로, <canvas> 는 PNG data URL <img> 로 바꾼다 (프록시 경로·Supabase 공개 URL 모두)
+//   - 그림(<img>)은 **절대 URL 참조** 로 둔다 — 서버 크롬이 로그인 쿠키(같은 origin 에만)로 직접 가져온다.
+//     ★ 2026-10-11 413 사고: 그림을 data URL 로 넣으니 본문이 Vercel 한도(4.5MB)를 넘었다. blob: 만 인라인.
+//   - <canvas> 는 PNG data URL <img> 로 (cloneNode 는 픽셀을 복제하지 않는다)
+//   - 전송은 gzip(CompressionStream) — KaTeX HTML 이 커서 1.5MB → 수백 KB.
 //   화면·인쇄 코드는 손대지 않는다.
 // ============================================================================
 
@@ -67,9 +69,8 @@ async function collectStyles(): Promise<string> {
   return parts.join('\n');
 }
 
-/** 복제 루트 안의 그림을 자급자족 형태로 (img→data URL, canvas→img, lazy→eager) */
-async function embedImages(root: HTMLElement): Promise<void> {
-  // canvas → img (원본 DOM 의 canvas 와 짝 맞추기: cloneNode 는 픽셀을 복제하지 않는다)
+/** 복제 루트 안의 그림을 서버가 가져갈 수 있는 형태로 (img→절대 URL, blob→data URL, canvas→img, lazy→eager) */
+async function prepareImages(root: HTMLElement): Promise<void> {
   const canvases = Array.from(root.querySelectorAll('canvas'));
   for (const c of canvases) {
     try {
@@ -82,17 +83,18 @@ async function embedImages(root: HTMLElement): Promise<void> {
     } catch { /* tainted canvas — 그대로 둔다 */ }
   }
   const imgs = Array.from(root.querySelectorAll('img'));
-  const cache = new Map<string, string | null>();
   await Promise.all(imgs.map(async (img) => {
     img.loading = 'eager';
     img.removeAttribute('srcset');
     img.removeAttribute('sizes');
     const src = img.getAttribute('src') || '';
     if (!src || src.startsWith('data:')) return;
-    const abs = absolutize(src, location.href);
-    if (!cache.has(abs)) cache.set(abs, await toDataUrl(abs));
-    const data = cache.get(abs);
-    img.setAttribute('src', data || abs);
+    if (src.startsWith('blob:')) {
+      const data = await toDataUrl(src);
+      if (data) img.setAttribute('src', data);
+      return;
+    }
+    img.setAttribute('src', absolutize(src, location.href));
   }));
 }
 
@@ -102,7 +104,7 @@ async function embedImages(root: HTMLElement): Promise<void> {
  */
 export async function serializePrintDocument(printRoot: HTMLElement, title: string): Promise<string> {
   const root = printRoot.cloneNode(true) as HTMLElement;
-  await embedImages(root);
+  await prepareImages(root);
   const styles = await collectStyles();
   const htmlEl = document.documentElement;
   const htmlAttrs = Array.from(htmlEl.attributes)
@@ -126,4 +128,24 @@ ${styles}
 ${root.outerHTML}
 </body>
 </html>`;
+}
+
+/**
+ * ★ 전송용 압축 — CompressionStream('gzip') 이 되면 gzip 바이트 + 헤더, 아니면 JSON 그대로.
+ *   서버(/api/print/pdf)는 X-Body-Encoding: gzip 이면 풀어서 JSON 으로 읽는다.
+ */
+export async function packPdfRequest(payload: Record<string, unknown>): Promise<{ body: BodyInit; headers: Record<string, string> }> {
+  const json = JSON.stringify(payload);
+  const CS = (globalThis as unknown as { CompressionStream?: new (f: string) => { readable: ReadableStream; writable: WritableStream } }).CompressionStream;
+  if (!CS) return { body: json, headers: { 'Content-Type': 'application/json' } };
+  try {
+    const cs = new CS('gzip');
+    const writer = cs.writable.getWriter();
+    void writer.write(new TextEncoder().encode(json));
+    void writer.close();
+    const buf = await new Response(cs.readable).arrayBuffer();
+    return { body: buf, headers: { 'Content-Type': 'application/octet-stream', 'X-Body-Encoding': 'gzip' } };
+  } catch {
+    return { body: json, headers: { 'Content-Type': 'application/json' } };
+  }
 }
