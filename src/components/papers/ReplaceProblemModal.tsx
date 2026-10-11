@@ -95,7 +95,7 @@ export function ReplaceProblemModal({
           </div>
         </div>
 
-        {err && <div className="px-5 pt-2 text-xs text-rose-400">{err}</div>}
+        {err && <div className="px-5 pt-2 text-xs text-content-primary">⚠ {err}</div>}
 
         <div className="relative min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {busy && (
