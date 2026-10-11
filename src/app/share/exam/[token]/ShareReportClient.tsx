@@ -29,7 +29,7 @@ const HINT_DISMISSED_KEY = 'share-report.capture-hint.dismissed';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { DEFAULT_BRAND, type ReportBrand } from '@/lib/report/report-brand';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
-import type { ExamProblemData } from '@/hooks/useExamProblems';
+import type { ExamProblemData } from '@/lib/exam/exam-problem-mapper';
 import './report.css';
 
 interface ShareReportClientProps {
