@@ -13,9 +13,13 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 export const OG_ALT = '시험지 분석 리포트';
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CACHE_HEADERS = { 'cache-control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, no-transform' };
+import { resolveExamBrand } from '@/lib/report/resolve-exam-brand';
+import type { ReportBrand } from '@/lib/report/report-brand';
+
 const size = OG_SIZE;
 
 interface OgData {
+  brand: ReportBrand;
   title: string;
   problemCount: number;
   totalPoints: number;
@@ -28,7 +32,7 @@ async function fetchOgData(token: string): Promise<OgData | null> {
 
   const { data: examRows } = await supabaseAdmin
     .from('exams')
-    .select('id, title, total_points')
+    .select('id, title, total_points, institute_id')
     .eq('share_token', token);
   if (!examRows || examRows.length === 0) return null;
   const exam = examRows[0];
@@ -55,7 +59,11 @@ async function fetchOgData(token: string): Promise<OgData | null> {
   );
   const avgDifficulty = total > 0 ? Math.round((sumDiff / total) * 10) / 10 : 0;
 
+  // ★ 학원별 브랜드 (2026-10-12)
+  const brand = await resolveExamBrand((exam as { institute_id?: string | null }).institute_id);
+
   return {
+    brand,
     title: exam.title,
     problemCount: total,
     totalPoints,
@@ -100,7 +108,7 @@ export async function renderExamOgImage(token: string): Promise<ImageResponse> {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          background: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)',
+          background: `linear-gradient(135deg, ${data.brand.og.bgFrom} 0%, ${data.brand.og.bgTo} 100%)`,
           fontFamily: 'sans-serif',
           padding: 60,
           position: 'relative',
@@ -121,15 +129,15 @@ export async function renderExamOgImage(token: string): Promise<ImageResponse> {
               alignItems: 'center',
               gap: 12,
               padding: '10px 20px',
-              background: 'rgba(234, 88, 12, 0.12)',
+              background: `linear-gradient(135deg, ${data.brand.og.badgeFrom} 0%, ${data.brand.og.badgeTo} 100%)`,
               borderRadius: 999,
               fontSize: 22,
               fontWeight: 700,
-              color: '#9a3412',
+              color: data.brand.og.badgeText,
               letterSpacing: '0.05em',
             }}
           >
-            EXAM ANALYSIS REPORT
+            {data.brand.og.label}
           </div>
           <div
             style={{
@@ -141,7 +149,7 @@ export async function renderExamOgImage(token: string): Promise<ImageResponse> {
               letterSpacing: -0.5,
             }}
           >
-            Math×Sci Bank
+            {data.brand.key === 'gwasaram' ? 'Math×Sci Bank' : data.brand.name}
           </div>
         </div>
 
@@ -190,7 +198,7 @@ export async function renderExamOgImage(token: string): Promise<ImageResponse> {
             marginTop: 40,
           }}
         >
-          <StatChip label="총 문항" value={`${data.problemCount}문항`} accent="#ea580c" />
+          <StatChip label="총 문항" value={`${data.problemCount}문항`} accent={data.brand.og.accent} />
           <StatChip label="총점" value={`${data.totalPoints}점`} accent="#3b82f6" />
           <StatChip
             label="평균 난이도"

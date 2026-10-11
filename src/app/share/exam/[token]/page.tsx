@@ -8,6 +8,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ShareReportClient } from './ShareReportClient';
 import { supabaseAdmin } from '@/lib/supabase/server';
+import { resolveExamBrand } from '@/lib/report/resolve-exam-brand';
+import type { ReportBrand } from '@/lib/report/report-brand';
 
 const OG_BASE = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || 'wp-math-science-project.vercel.app'}`;
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
@@ -120,6 +122,7 @@ interface PageData {
     generatedAt: string;
     modelVersion: string;
   } | null;
+  brand: ReportBrand;
 }
 
 // Server Component에서 직접 Supabase 조회 (self-fetch 우회 — Vercel 환경 안정성 ↑)
@@ -130,11 +133,13 @@ async function fetchData(token: string): Promise<PageData | null> {
   // 1. 토큰으로 시험지 조회
   const { data: examRows, error: examErr } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token')
+    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id')
     .eq('share_token', token);
 
   if (examErr || !examRows || examRows.length === 0) return null;
   const exam = examRows[0];
+  // ★ 학원별 리포트 브랜드 (2026-10-12) — 엄궁차수학은 네이비·골드 변형, 공통풀·과사람은 종전 그대로
+  const brand = await resolveExamBrand((exam as { institute_id?: string | null }).institute_id);
 
   const ai = exam.ai_analysis as Record<string, unknown> | null;
   const hasAnalysis = !!(ai && typeof ai === 'object' && 'generatedAt' in ai);
@@ -200,6 +205,7 @@ async function fetchData(token: string): Promise<PageData | null> {
       domDist,
     },
     analysis: hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null,
+    brand,
   } as PageData;
 }
 
@@ -215,5 +221,5 @@ export default async function SharedExamReportPage({
     notFound();
   }
 
-  return <ShareReportClient data={data} domainLabels={DOMAIN_LABELS} />;
+  return <ShareReportClient data={data} domainLabels={DOMAIN_LABELS} brand={data.brand} />;
 }
