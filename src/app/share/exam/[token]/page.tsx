@@ -11,7 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { resolveExamBrand } from '@/lib/report/resolve-exam-brand';
 import type { ReportBrand } from '@/lib/report/report-brand';
 import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
-import { toExamProblemData, type ExamProblemData } from '@/hooks/useExamProblems';
+import { toExamProblemData, type ExamProblemData } from '@/lib/exam/exam-problem-mapper';
 
 const OG_BASE = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || 'wp-math-science-project.vercel.app'}`;
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
