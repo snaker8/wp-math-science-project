@@ -1574,7 +1574,8 @@ export default function PaperCreatePage() {
       {/* Main 3-Column Area */}
       <div className="flex flex-1 gap-0 overflow-hidden rounded-xl border border-subtle bg-surface-raised">
         {/* Left Group: Column 1 + Column 2 + Bottom */}
-        <div className="flex flex-col overflow-hidden" style={{ width: '56%' }}>
+        {/* ★ 2026-10-11: 미리보기(A4)가 잘려 안 보인다는 캡처 — 왼쪽 묶음 56%→50%, 미리보기는 칸 폭 자동 맞춤(ExamPaperView fitScale) */}
+        <div className="flex flex-col overflow-hidden" style={{ width: '50%' }}>
           <div className="flex flex-1 min-h-0">
             {/* Column 1: Mathsecr Tree */}
             <div className="w-1/2 border-r border-subtle flex flex-col overflow-hidden">
