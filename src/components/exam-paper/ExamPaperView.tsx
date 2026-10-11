@@ -262,6 +262,21 @@ export function ExamPaperView({
   const coverPanelRef = useRef<HTMLDivElement>(null);
   // ★ 미리보기 줌 (0.5~1.5) — .exam-page 부모 래퍼에만 적용, 인쇄물(클론)엔 영향 없음
   const [zoom, setZoom] = useState(1);
+  // ★ 칸 폭 자동 맞춤 (2026-10-11 대표 출제 화면 캡처: "이렇게 나오면 보이지도 않고") — 좁은 칸(출제 미리보기 등)에서
+  //   A4(794px)가 가로로 잘려 스크롤돼 안 보였다. 칸이 종이보다 좁으면 그 비율만큼 축소해 전체가 보이게. 줌(사용자)은 그 위에 곱한다.
+  //   인쇄 클론엔 영향 없음(줌 래퍼는 .exam-page 의 부모).
+  const pagesScrollRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(1);
+  useEffect(() => {
+    const el = pagesScrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const PAPER = 794 + 32; // A4 + 좌우 여유
+    const update = () => { const w = el.clientWidth; setFitScale(w > 0 && w < PAPER ? Math.max(0.4, w / PAPER) : 1); };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ★ 헤더 상단 강조색 (우리식 색 테마) — null=없음(기본). 매쓰홀릭 곡선/특정디자인 카피 X, 깔끔한 색 띠만.
   const [headerColor, setHeaderColor] = useState<string | null>(null);
@@ -1273,9 +1288,9 @@ export function ExamPaperView({
       </div>
 
       {/* A4 페이지들 */}
-      <div className="exam-page-scroll-bg flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex flex-col items-center py-6 bg-surface-raised/30">
+      <div ref={pagesScrollRef} className="exam-page-scroll-bg flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 flex flex-col items-center py-6 bg-surface-raised/30">
         {/* ★ 미리보기 줌 래퍼 — .exam-page 의 부모(인쇄 시 클론 제외)라 인쇄물엔 영향 없음 */}
-        <div style={{ zoom }} className="flex flex-col items-center w-full">
+        <div style={{ zoom: zoom * fitScale }} className="flex flex-col items-center w-full">
         {/* ★ 표지 — .exam-page 라 인쇄 클론에 첫 장으로 들어간다(문제지 출력 시에만). 페이지 번호엔 안 센다 */}
         {cover.on && (
           <CoverPage settings={cover} examTitle={examTitle} meta={examMeta} problemCount={problems.length} accent={headerColor} width={A4_W} height={A4_H} />
