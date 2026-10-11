@@ -250,7 +250,8 @@ function extractAnswerNumber(answerJson: Record<string, unknown>): number | stri
 // DB 행 → ExamProblemData 변환
 // ============================================================================
 
-function toExamProblemData(
+// ★ export (2026-10-12): 학부모 공유 리포트(share/exam)가 고난도 문항을 실제 문제로 그릴 때 같은 매핑을 쓴다 — 순수 함수
+export function toExamProblemData(
   row: any,
   index: number,
 ): ExamProblemData {
