@@ -979,3 +979,24 @@
 /* 푸터 — 학원 한 줄 */
 .report-shell[data-brand="umgungsmt"] .report-footer { border-top: 1px solid #b89a5a; }
 .report-shell[data-brand="umgungsmt"] .footer-brand { font-weight: 800; color: #1a2744; letter-spacing: 0.04em; }
+
+/* ★ 2026-10-12 — 헤더 학교명 아래 한 줄(시험 메타·시험지 제목) + 고난도 카드 안 실제 문제 */
+.header-sub {
+  font-size: 13px;
+  color: var(--rp-text-3);
+  margin: -6px 0 12px;
+  letter-spacing: -0.01em;
+}
+.hard-problem {
+  margin: 4px 0 16px;
+  padding: 16px 18px 14px;
+  background: #fff;
+  border: 1px solid var(--rp-line);
+  border-radius: 12px;
+  color: var(--rp-text);
+  overflow: hidden;
+}
+.hard-problem .katex { font-size: 1em; }
+@media (max-width: 768px) {
+  .hard-problem { padding: 12px 12px 10px; }
+}

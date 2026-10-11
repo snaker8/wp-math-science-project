@@ -28,12 +28,16 @@ import {
 const HINT_DISMISSED_KEY = 'share-report.capture-hint.dismissed';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { DEFAULT_BRAND, type ReportBrand } from '@/lib/report/report-brand';
+import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
+import type { ExamProblemData } from '@/hooks/useExamProblems';
 import './report.css';
 
 interface ShareReportClientProps {
   /** ★ 학원별 브랜드 (2026-10-12) — 없으면 과사람 기본 */
   brand?: ReportBrand;
   data: {
+    intro?: { school: string | null; metaLine: string | null };
+    hardProblems?: Record<string, ExamProblemData>;
     exam: {
       id: string;
       title: string;
@@ -370,9 +374,16 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
         <header className="report-header">
           <div className="header-left">
             <div className="header-eyebrow">{brand.eyebrow}</div>
+            {/* ★ 학교명을 제목으로 (2026-10-12 대표: "본문에 학교명이 나오게") — 시험지 제목은 그 아래 한 줄 */}
             <h1 className="header-title">
-              <span className="accent">{data.exam.title}</span> 분석
+              <span className="accent">{data.intro?.school || data.exam.title}</span>
+              {data.intro?.school ? ' 기출 분석' : ' 분석'}
             </h1>
+            {data.intro?.school && (
+              <div className="header-sub">
+                {data.intro.metaLine ? `${data.intro.metaLine} · ` : ''}{data.exam.title}
+              </div>
+            )}
             <div className="header-title-bar" />
           </div>
           <div className="header-right">
@@ -578,6 +589,17 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
                     <span className="hard-num">{q.number}</span>
                     <h3 className="hard-title">{q.subTitle || `${q.number}번 문항`}</h3>
                   </div>
+                  {/* ★ 실제 문제 배치 (2026-10-12 대표: "문제 분석 때 문제를 실제 배치") — 시험지와 같은 렌더러 */}
+                  {data.hardProblems?.[q.problemId] && (
+                    <div className="hard-problem">
+                      <ExamProblemRenderer
+                        problem={{ ...data.hardProblems[q.problemId], number: q.number }}
+                        textSize="13.5px"
+                        maxFigureWidth={260}
+                        numberOnTop
+                      />
+                    </div>
+                  )}
                   <div className="hard-section">
                     <div className="hard-section-label">
                       <Target />

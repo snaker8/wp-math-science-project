@@ -10,6 +10,8 @@ import { ShareReportClient } from './ShareReportClient';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { resolveExamBrand } from '@/lib/report/resolve-exam-brand';
 import type { ReportBrand } from '@/lib/report/report-brand';
+import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
+import { toExamProblemData, type ExamProblemData } from '@/hooks/useExamProblems';
 
 const OG_BASE = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || 'wp-math-science-project.vercel.app'}`;
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
@@ -123,6 +125,10 @@ interface PageData {
     modelVersion: string;
   } | null;
   brand: ReportBrand;
+  /** ★ 학교명·시험 메타 (2026-10-12 대표: "본문에 학교명이 나오게") */
+  intro: { school: string | null; metaLine: string | null };
+  /** ★ 고난도 문항의 실제 문제 (problemId → 렌더용 데이터) — "문제 분석 때 문제를 실제 배치" */
+  hardProblems: Record<string, ExamProblemData>;
 }
 
 // Server Component에서 직접 Supabase 조회 (self-fetch 우회 — Vercel 환경 안정성 ↑)
@@ -133,7 +139,7 @@ async function fetchData(token: string): Promise<PageData | null> {
   // 1. 토큰으로 시험지 조회
   const { data: examRows, error: examErr } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id')
+    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id, school_name')
     .eq('share_token', token);
 
   if (examErr || !examRows || examRows.length === 0) return null;
@@ -149,6 +155,7 @@ async function fetchData(token: string): Promise<PageData | null> {
     .from('exam_problems')
     .select('points, problem_id')
     .eq('exam_id', exam.id);
+  const pointsById = new Map<string, number | null>((examProblems || []).map((p) => [p.problem_id as string, p.points as number | null]));
 
   const problemIds = (examProblems || []).map((p) => p.problem_id).filter(Boolean) as string[];
 
@@ -187,6 +194,35 @@ async function fetchData(token: string): Promise<PageData | null> {
         ) / total
       : 0;
 
+  // ★ 학교명 — exams.school_name > 제목 파싱(exam-title-meta) > 단순 정규식
+  const titleMeta = parseExamTitleMeta(exam.title || '');
+  const school = (exam as { school_name?: string | null }).school_name || titleMeta?.schoolName || extractSchoolFromTitle(exam.title) || null;
+  const metaLine = titleMeta
+    ? `${titleMeta.examYear}학년도 ${titleMeta.gradeNum}학년 ${titleMeta.semester}학기 ${titleMeta.examRound}고사`
+    : (exam.grade ? String(exam.grade) : null);
+
+  // ★ 고난도 문항의 실제 문제 — 화면(useExamProblems)과 같은 매핑으로 본문·보기·그림을 가져온다
+  const hardProblems: Record<string, ExamProblemData> = {};
+  if (hasAnalysis) {
+    const hq = ((ai as Record<string, unknown>).hardQuestions as Array<{ problemId?: string; number?: number }> | undefined) || [];
+    const hardIds = hq.map((q) => q.problemId).filter((v): v is string => typeof v === 'string' && v.length > 0);
+    if (hardIds.length > 0) {
+      const { data: rows } = await supabaseAdmin
+        .from('problems')
+        .select('id, content_latex, content_html, answer_json, images, ai_analysis, source_name, source_year, classifications(type_code, difficulty, cognitive_domain)')
+        .in('id', hardIds)
+        .is('deleted_at', null);
+      for (const row of (rows || []) as Array<{ id: string }>) {
+        const num = hq.find((q) => q.problemId === row.id)?.number;
+        try {
+          const mapped = toExamProblemData({ problems: row, sequence_number: num, points: pointsById.get(row.id) ?? null }, 0);
+          if (typeof num === 'number') mapped.number = num;
+          hardProblems[row.id] = mapped;
+        } catch { /* 한 문제 매핑 실패는 리포트를 막지 않는다 */ }
+      }
+    }
+  }
+
   return {
     exam: {
       id: exam.id,
@@ -206,6 +242,8 @@ async function fetchData(token: string): Promise<PageData | null> {
     },
     analysis: hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null,
     brand,
+    intro: { school, metaLine },
+    hardProblems,
   } as PageData;
 }
 
