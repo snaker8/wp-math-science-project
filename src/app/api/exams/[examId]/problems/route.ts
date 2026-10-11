@@ -134,6 +134,28 @@ export async function PATCH(
       return NextResponse.json({ success: true, updated, total: ids.length });
     }
 
+    // ---- 액션: 문항 교체 (2026-10-11 대표 "유사 문항 교체") — 자리(sequence_number)·배점 유지, problem_id 만 바꾼다 ----
+    if (body.action === 'replace') {
+      const fromId: string = String(body.fromProblemId || '');
+      const toId: string = String(body.toProblemId || '');
+      if (!fromId || !toId || fromId === toId) {
+        return NextResponse.json({ error: 'fromProblemId, toProblemId 필요' }, { status: 400 });
+      }
+      const { data: target } = await supabaseAdmin.from('problems').select('id').eq('id', toId).is('deleted_at', null).maybeSingle();
+      if (!target) return NextResponse.json({ error: '바꿀 문제를 찾을 수 없습니다' }, { status: 404 });
+      const { data: dup } = await supabaseAdmin.from('exam_problems').select('problem_id').eq('exam_id', examId).eq('problem_id', toId).maybeSingle();
+      if (dup) return NextResponse.json({ error: '이미 이 시험지에 있는 문제입니다' }, { status: 409 });
+      const { data: updatedRows, error: repErr } = await supabaseAdmin
+        .from('exam_problems')
+        .update({ problem_id: toId })
+        .eq('exam_id', examId)
+        .eq('problem_id', fromId)
+        .select('sequence_number');
+      if (repErr) return NextResponse.json({ error: repErr.message }, { status: 500 });
+      if (!updatedRows || updatedRows.length === 0) return NextResponse.json({ error: '시험지에 없는 문제입니다' }, { status: 404 });
+      return NextResponse.json({ success: true, examId, fromProblemId: fromId, toProblemId: toId, sequenceNumber: (updatedRows[0] as { sequence_number: number }).sequence_number });
+    }
+
     // ---- 단건 수정 ----
     const problemId: string | undefined = body.problemId;
     const points: unknown = body.points;
