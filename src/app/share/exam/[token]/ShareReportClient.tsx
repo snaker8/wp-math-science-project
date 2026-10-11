@@ -27,9 +27,12 @@ import {
 
 const HINT_DISMISSED_KEY = 'share-report.capture-hint.dismissed';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
+import { DEFAULT_BRAND, type ReportBrand } from '@/lib/report/report-brand';
 import './report.css';
 
 interface ShareReportClientProps {
+  /** ★ 학원별 브랜드 (2026-10-12) — 없으면 과사람 기본 */
+  brand?: ReportBrand;
   data: {
     exam: {
       id: string;
@@ -182,7 +185,7 @@ function StepStrategy({ text }: { text: string }) {
   );
 }
 
-export function ShareReportClient({ data }: ShareReportClientProps) {
+export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportClientProps) {
   const reportRef = useRef<HTMLDivElement>(null);
   const sec1Ref = useRef<HTMLElement>(null); // 1. 기본 정보
   const sec2Ref = useRef<HTMLElement>(null); // 2. 종합 분석
@@ -311,7 +314,7 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
   };
 
   return (
-    <div className="report-shell">
+    <div className="report-shell" data-brand={brand.key}>
       {/* 액션 바 — 사용자는 OS 캡처 도구(Win+Shift+S 등)로 직접 캡처 후 붙여넣음 */}
       <div className="report-actions no-print">
         <div className="report-actions-inner">
@@ -366,13 +369,14 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
         {/* HEADER */}
         <header className="report-header">
           <div className="header-left">
-            <div className="header-eyebrow">EXAM ANALYSIS REPORT</div>
+            <div className="header-eyebrow">{brand.eyebrow}</div>
             <h1 className="header-title">
               <span className="accent">{data.exam.title}</span> 분석
             </h1>
             <div className="header-title-bar" />
           </div>
           <div className="header-right">
+            {brand.key !== DEFAULT_BRAND.key && <div className="header-brand">{brand.name}</div>}
             <div className="header-meta-label">TOTAL QUESTIONS</div>
             <div className="header-meta-pill">{data.stats.total}문항</div>
           </div>
@@ -604,6 +608,16 @@ export function ShareReportClient({ data }: ShareReportClientProps) {
               AI 분석이 아직 생성되지 않았습니다.
             </div>
           </section>
+        )}
+
+        {/* ★ 학원 푸터 — 브랜드에 footer 가 있을 때만 (과사람 기본은 종전처럼 없음) */}
+        {brand.footer && (
+          <footer className="report-footer">
+            <div className="footer-row">
+              <span className="footer-brand">{brand.name}</span>
+              <span>{brand.footer}</span>
+            </div>
+          </footer>
         )}
 
       </article>

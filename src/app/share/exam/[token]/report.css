@@ -930,3 +930,52 @@
     box-shadow: none !important;
   }
 }
+
+/* ============================================================================
+   ★ 학원별 브랜드 변형 (2026-10-12) — src/lib/report/report-brand.ts 와 짝.
+   과사람(기본)은 위 변수 그대로. 엄궁차수학 = 네이비 #1a2744 · 골드 #b89a5a (report-send-pages 와 동일 브랜드색).
+   구조는 같고 색·라벨·푸터만 다르다 — 학부모가 받는 다른 엄궁 페이지와 같은 결.
+   ============================================================================ */
+.report-shell[data-brand="umgungsmt"] {
+  --rp-bg: #F3F4F7;            /* 차가운 라이트 그레이 — 네이비와 어울리는 종이 */
+  --rp-line: #DFE3EA;
+  --rp-line-soft: #EEF0F4;
+
+  --rp-accent: #1a2744;        /* 네이비 메인 */
+  --rp-accent-strong: #0F1A30;
+  --rp-accent-soft: #F6F7FA;
+  --rp-accent-mid: #b89a5a;    /* 골드 보조 */
+  --rp-accent-pale: #E9ECF2;
+
+  --rp-navy: #1a2744;
+  --rp-navy-soft: #EEF0F4;
+}
+/* 헤더 — 골드 작은 라벨 + 네이비 제목, 제목 아래 띠는 네이비→골드 */
+.report-shell[data-brand="umgungsmt"] .header-eyebrow { color: #b89a5a; letter-spacing: 0.18em; }
+.report-shell[data-brand="umgungsmt"] .header-eyebrow::before { background: #b89a5a; }
+.report-shell[data-brand="umgungsmt"] .header-title-bar {
+  background: linear-gradient(90deg, #1a2744 0%, #1a2744 45%, #b89a5a 75%, rgba(184,154,90,0) 100%);
+}
+.report-shell[data-brand="umgungsmt"] .header-meta-pill {
+  background: #1a2744;
+  color: #F5E9C8;
+  border-color: #1a2744;
+}
+/* 학원 이름 칩 (헤더 우측 상단) */
+.report-shell[data-brand="umgungsmt"] .header-brand {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 12px;
+  border: 1px solid #b89a5a;
+  border-radius: 999px;
+  color: #1a2744;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+/* 섹션 바·배지는 골드 포인트 */
+.report-shell[data-brand="umgungsmt"] .section-bar { background: linear-gradient(180deg, #1a2744, #b89a5a); }
+.report-shell[data-brand="umgungsmt"] .hard-badge { background: #1a2744; color: #F5E9C8; }
+/* 푸터 — 학원 한 줄 */
+.report-shell[data-brand="umgungsmt"] .report-footer { border-top: 1px solid #b89a5a; }
+.report-shell[data-brand="umgungsmt"] .footer-brand { font-weight: 800; color: #1a2744; letter-spacing: 0.04em; }
