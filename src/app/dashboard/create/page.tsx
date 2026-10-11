@@ -35,6 +35,7 @@ import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
 const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.ExamPaperView), { ssr: false });
 const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.QuickAnswerView), { ssr: false });
 const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.SolutionView), { ssr: false });
+const ReplaceProblemModal = dynamic(() => import('@/components/papers/ReplaceProblemModal').then((m) => m.ReplaceProblemModal), { ssr: false });
 
 // ============================================================================
 // Types
@@ -632,6 +633,9 @@ function UnifiedPreviewPanel({
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
   const ready = !!examId && problems.length > 0;
   const title = paperName || '시험지';
+  // ★ 문항 교체 (2026-10-11 대표 "유사 문항 교체도 안 되고") — 번호를 고르면 같은 유형의 다른 문제 후보(유사·기출·고난도·서술형)
+  const [replaceTarget, setReplaceTarget] = useState<ProblemData | null>(null);
+  const previewText = (s: string) => s.replace(/\$[^$]*\$/g, '…').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().slice(0, 28);
 
   return (
     <div className="flex flex-col h-full">
@@ -651,10 +655,33 @@ function UnifiedPreviewPanel({
             {tab}
           </button>
         ))}
-        <span className="ml-auto text-xs text-content-muted tabular-nums">
+        {ready && (
+          <label className="ml-auto flex items-center gap-1 text-[11px] text-content-secondary">
+            문항 교체
+            <select
+              value=""
+              onChange={(e) => { const p = problems.find((x) => x.id === e.target.value); if (p) setReplaceTarget(p); }}
+              className="max-w-[220px] rounded-md border border-subtle bg-surface-raised px-1.5 py-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none"
+              title="번호를 고르면 같은 유형의 다른 문제로 바꿀 수 있습니다"
+            >
+              <option value="">번호 선택…</option>
+              {problems.map((p) => <option key={p.id} value={p.id}>{p.number}. {previewText(p.content)}</option>)}
+            </select>
+          </label>
+        )}
+        <span className="text-xs text-content-muted tabular-nums">
           {ready ? `${problems.length} 문항` : ''}
         </span>
       </div>
+      {replaceTarget && examId && (
+        <ReplaceProblemModal
+          examId={examId}
+          problem={{ id: replaceTarget.id, number: replaceTarget.number, content: replaceTarget.content }}
+          excludeIds={problems.map((p) => p.id)}
+          onClose={() => setReplaceTarget(null)}
+          onChanged={() => refetchProblems()}
+        />
+      )}
 
       {/* 본문 — ExamPaperView 가 툴바(단수·간격·배열·디자인·출력·PDF·한글)까지 가진다 */}
       <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50">

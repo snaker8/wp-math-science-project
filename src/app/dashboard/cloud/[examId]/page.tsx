@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ShoppingCart,
   Sparkles,
+  Repeat2,
   BarChart3,
   LayoutList,
   ScrollText,
@@ -64,6 +65,7 @@ const TwinProblemModal = dynamic(() => import('@/components/papers/TwinProblemMo
 const ExamStatsModal = dynamic(() => import('@/components/papers/ExamStatsModal').then(m => m.ExamStatsModal), { ssr: false });
 const ProblemEditModal = dynamic(() => import('@/components/papers/ProblemEditModal').then(m => m.ProblemEditModal), { ssr: false });
 const AddProblemsModal = dynamic(() => import('@/components/papers/AddProblemsModal'), { ssr: false });
+const ReplaceProblemModal = dynamic(() => import('@/components/papers/ReplaceProblemModal').then(m => m.ReplaceProblemModal), { ssr: false });
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
@@ -808,6 +810,7 @@ function SubQuestionTable({
 function ProblemCardView({
   problem,
   onTwinGenerate,
+  onReplace,
   onEdit,
   onRescan,
   onGenerateFigure,
@@ -826,6 +829,8 @@ function ProblemCardView({
 }: {
   problem: ProblemData;
   onTwinGenerate: (p: ProblemData) => void;
+  /** ★ 같은 유형의 다른 문제로 교체 (2026-10-11, 매쓰홀릭 🔄 교체) */
+  onReplace?: (p: ProblemData) => void;
   onEdit?: (p: ProblemData) => void;
   onRescan?: (p: ProblemData) => void;
   onGenerateFigure?: (p: ProblemData) => void;
@@ -1131,6 +1136,16 @@ function ProblemCardView({
             >
               <Sparkles className="h-3.5 w-3.5" />
             </button>
+            {onReplace && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReplace(problem); }}
+                className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-surface-raised transition-colors"
+                title="같은 유형의 다른 문제로 교체 (유사·기출·고난도·서술형)"
+              >
+                <Repeat2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button type="button" className="p-1 rounded text-content-muted hover:text-content-primary hover:bg-surface-raised transition-colors" title="복사해서 만들기">
               <Copy className="h-3.5 w-3.5" />
             </button>
@@ -1605,6 +1620,8 @@ export default function CloudExamDetailPage() {
   const [activeDomain, setActiveDomain] = useState<DomainKey | null>(null);
   const [activeView, setActiveView] = useState<'spread' | 'exam' | 'answer' | 'solution'>('spread');
   const [twinModalProblem, setTwinModalProblem] = useState<ProblemData | null>(null);
+  // ★ 문항 교체 모달 (2026-10-11) — 같은 유형의 다른 문제로 자리 교체
+  const [replaceModalProblem, setReplaceModalProblem] = useState<ProblemData | null>(null);
   const [editModalProblem, setEditModalProblem] = useState<ProblemData | null>(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
 
@@ -2905,6 +2922,7 @@ export default function CloudExamDetailPage() {
                       <ProblemCardView
                         problem={problem}
                         onTwinGenerate={setTwinModalProblem}
+                        onReplace={setReplaceModalProblem}
                         onEdit={setEditModalProblem}
                         onRescan={handleRescanProblem}
                         onGenerateFigure={handleUpscaleFigure}
@@ -3073,6 +3091,17 @@ export default function CloudExamDetailPage() {
         <TwinProblemModal
           problem={twinModalProblem}
           onClose={() => setTwinModalProblem(null)}
+        />
+      )}
+
+      {/* ★ 문항 교체 모달 — 같은 유형의 다른 문제로 (번호·배점 유지) */}
+      {replaceModalProblem && (
+        <ReplaceProblemModal
+          examId={examId}
+          problem={{ id: replaceModalProblem.id, number: replaceModalProblem.number, content: replaceModalProblem.content }}
+          excludeIds={problems.map((p) => p.id)}
+          onClose={() => setReplaceModalProblem(null)}
+          onChanged={() => { refetchProblems(); }}
         />
       )}
 
