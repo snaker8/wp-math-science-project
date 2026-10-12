@@ -552,10 +552,11 @@ export default function ExamAnalysisPage() {
                   value={reportVariant}
                   onChange={(e) => handleChangeVariant(e.target.value)}
                   disabled={isSavingVariant}
-                  style={{ background: 'transparent', border: 'none', color: 'inherit', fontSize: 12, outline: 'none' }}
+                  // ★ 드롭다운 옵션이 흰 바탕에 흰 글씨로 나오던 것 (2026-10-13 대표 캡처) — 네이티브 option 은 상속을 안 받아 직접 지정
+                  style={{ background: '#18181b', border: 'none', color: '#e4e4e7', fontSize: 12, outline: 'none', colorScheme: 'dark' }}
                 >
-                  <option value="">학원 자동</option>
-                  {REPORT_VARIANTS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+                  <option value="" style={{ background: '#18181b', color: '#e4e4e7' }}>학원 자동</option>
+                  {REPORT_VARIANTS.map((v) => <option key={v.key} value={v.key} style={{ background: '#18181b', color: '#e4e4e7' }}>{v.label}</option>)}
                 </select>
               </label>
               <button

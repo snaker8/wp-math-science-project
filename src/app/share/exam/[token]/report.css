@@ -931,55 +931,6 @@
   }
 }
 
-/* ============================================================================
-   ★ 학원별 브랜드 변형 (2026-10-12) — src/lib/report/report-brand.ts 와 짝.
-   과사람(기본)은 위 변수 그대로. 엄궁차수학 = 네이비 #1a2744 · 골드 #b89a5a (report-send-pages 와 동일 브랜드색).
-   구조는 같고 색·라벨·푸터만 다르다 — 학부모가 받는 다른 엄궁 페이지와 같은 결.
-   ============================================================================ */
-.report-shell[data-brand="umgungsmt"] {
-  --rp-bg: #F3F4F7;            /* 차가운 라이트 그레이 — 네이비와 어울리는 종이 */
-  --rp-line: #DFE3EA;
-  --rp-line-soft: #EEF0F4;
-
-  --rp-accent: #1a2744;        /* 네이비 메인 */
-  --rp-accent-strong: #0F1A30;
-  --rp-accent-soft: #F6F7FA;
-  --rp-accent-mid: #b89a5a;    /* 골드 보조 */
-  --rp-accent-pale: #E9ECF2;
-
-  --rp-navy: #1a2744;
-  --rp-navy-soft: #EEF0F4;
-}
-/* 헤더 — 골드 작은 라벨 + 네이비 제목, 제목 아래 띠는 네이비→골드 */
-.report-shell[data-brand="umgungsmt"] .header-eyebrow { color: #b89a5a; letter-spacing: 0.18em; }
-.report-shell[data-brand="umgungsmt"] .header-eyebrow::before { background: #b89a5a; }
-.report-shell[data-brand="umgungsmt"] .header-title-bar {
-  background: linear-gradient(90deg, #1a2744 0%, #1a2744 45%, #b89a5a 75%, rgba(184,154,90,0) 100%);
-}
-.report-shell[data-brand="umgungsmt"] .header-meta-pill {
-  background: #1a2744;
-  color: #F5E9C8;
-  border-color: #1a2744;
-}
-/* 학원 이름 칩 (헤더 우측 상단) */
-.report-shell[data-brand="umgungsmt"] .header-brand {
-  display: inline-block;
-  margin-bottom: 10px;
-  padding: 4px 12px;
-  border: 1px solid #b89a5a;
-  border-radius: 999px;
-  color: #1a2744;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-/* 섹션 바·배지는 골드 포인트 */
-.report-shell[data-brand="umgungsmt"] .section-bar { background: linear-gradient(180deg, #1a2744, #b89a5a); }
-.report-shell[data-brand="umgungsmt"] .hard-badge { background: #1a2744; color: #F5E9C8; }
-/* 푸터 — 학원 한 줄 */
-.report-shell[data-brand="umgungsmt"] .report-footer { border-top: 1px solid #b89a5a; }
-.report-shell[data-brand="umgungsmt"] .footer-brand { font-weight: 800; color: #1a2744; letter-spacing: 0.04em; }
-
 /* ★ 2026-10-12 — 헤더 학교명 아래 한 줄(시험 메타·시험지 제목) + 고난도 카드 안 실제 문제 */
 .header-sub {
   font-size: 13px;
@@ -1001,8 +952,99 @@
   .hard-problem { padding: 12px 12px 10px; }
 }
 
-/* ★ 에디토리얼(무채) 버전 (2026-10-12) — 학원색 없음. 블로그·카페 게시용. 흑백 + 가는 선 */
-.report-shell[data-brand="editorial"] {
+/* ============================================================================
+   ★ 리포트 디자인(버전) — src/lib/report/report-brand.ts DESIGNS 와 짝 (2026-10-13).
+   기본(cream-orange)은 위 변수 그대로. 학원 이름 칩·푸터는 디자인이 아니라 학원 표기(showChip·footer)가 결정한다.
+   ============================================================================ */
+
+/* ── 네이비 · 골드 — 헤더를 네이비 띠로 꽉 채워 "무채"가 아니라 격식 있는 네이비로 읽히게 (2026-10-13 대표 지적) ── */
+.report-shell[data-brand="navy-gold"] {
+  --rp-bg: #EEF0F5;
+  --rp-line: #D9DEE8;
+  --rp-line-soft: #ECEFF4;
+  --rp-accent: #1a2744;
+  --rp-accent-strong: #0F1A30;
+  --rp-accent-soft: #F5F6FA;
+  --rp-accent-mid: #b89a5a;
+  --rp-accent-pale: #E4E8F0;
+  --rp-navy: #1a2744;
+  --rp-navy-soft: #ECEFF4;
+}
+.report-shell[data-brand="navy-gold"] .report-paper { overflow: hidden; border-color: #C9D0DD; }
+.report-shell[data-brand="navy-gold"] .report-header {
+  margin: -60px -72px 40px;
+  padding: 44px 72px 34px;
+  background: linear-gradient(135deg, #16213B 0%, #1a2744 55%, #23345C 100%);
+  color: #F4EFE3;
+}
+.report-shell[data-brand="navy-gold"] .header-eyebrow { color: #D4B978; }
+.report-shell[data-brand="navy-gold"] .header-eyebrow::before { background: #D4B978; }
+.report-shell[data-brand="navy-gold"] .header-title { color: #F7F3E8; }
+.report-shell[data-brand="navy-gold"] .header-title .accent { color: #E2C98A; }
+.report-shell[data-brand="navy-gold"] .header-sub { color: rgba(247, 243, 232, 0.72); }
+.report-shell[data-brand="navy-gold"] .header-title-bar { background: linear-gradient(90deg, #D4B978 0%, #b89a5a 50%, rgba(184,154,90,0) 100%); }
+.report-shell[data-brand="navy-gold"] .header-meta-label { color: rgba(247, 243, 232, 0.6); }
+.report-shell[data-brand="navy-gold"] .header-meta-pill { background: #D4B978; color: #1a2744; border-color: #D4B978; }
+.report-shell[data-brand="navy-gold"] .header-brand {
+  display: inline-block; margin-bottom: 10px; padding: 4px 12px; border: 1px solid #D4B978; border-radius: 999px;
+  color: #F7F3E8; font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+}
+.report-shell[data-brand="navy-gold"] .section-bar { background: linear-gradient(180deg, #1a2744, #b89a5a); }
+.report-shell[data-brand="navy-gold"] .range-chip { border-color: #b89a5a; color: #1a2744; }
+.report-shell[data-brand="navy-gold"] .hard-badge { background: #1a2744; color: #E2C98A; }
+.report-shell[data-brand="navy-gold"] .report-footer { border-top: 1px solid #b89a5a; }
+.report-shell[data-brand="navy-gold"] .footer-brand { font-weight: 800; color: #1a2744; letter-spacing: 0.04em; }
+@media (max-width: 768px) {
+  .report-shell[data-brand="navy-gold"] .report-header { margin: -28px -18px 28px; padding: 26px 18px 22px; }
+}
+@media (max-width: 480px) {
+  .report-shell[data-brand="navy-gold"] .report-header { margin: -22px -14px 22px; padding: 22px 14px 18px; }
+}
+
+/* ── 포레스트 · 세이지 — 딥 그린 + 세이지, 따뜻한 흰 종이 ── */
+.report-shell[data-brand="forest"] {
+  --rp-bg: #F3F6F2;
+  --rp-line: #D7E2D5;
+  --rp-line-soft: #EAF1E9;
+  --rp-accent: #1F4D3A;
+  --rp-accent-strong: #163A2B;
+  --rp-accent-soft: #F4F8F4;
+  --rp-accent-mid: #5E9C7E;
+  --rp-accent-pale: #DCEBDD;
+  --rp-navy: #1F4D3A;
+  --rp-navy-soft: #EAF1E9;
+}
+.report-shell[data-brand="forest"] .header-title-bar { background: linear-gradient(90deg, #1F4D3A 0%, #2F6B52 40%, #9CC5A1 75%, rgba(156,197,161,0) 100%); }
+.report-shell[data-brand="forest"] .header-meta-pill { background: #1F4D3A; color: #EAF3EC; border-color: #1F4D3A; }
+.report-shell[data-brand="forest"] .section-bar { background: linear-gradient(180deg, #1F4D3A, #9CC5A1); }
+.report-shell[data-brand="forest"] .hard-badge { background: #1F4D3A; color: #EAF3EC; }
+.report-shell[data-brand="forest"] .header-brand { display: inline-block; margin-bottom: 10px; padding: 4px 12px; border: 1px solid #5E9C7E; border-radius: 999px; color: #1F4D3A; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.report-shell[data-brand="forest"] .footer-brand { font-weight: 800; color: #1F4D3A; }
+
+/* ── 슬레이트 · 블루 — 회청색 바탕, 선명한 블루 포인트 ── */
+.report-shell[data-brand="slate"] {
+  --rp-bg: #F1F5F9;
+  --rp-line: #D8DEE6;
+  --rp-line-soft: #EAEEF3;
+  --rp-accent: #1E293B;
+  --rp-accent-strong: #0F172A;
+  --rp-accent-soft: #F4F7FB;
+  --rp-accent-mid: #2563EB;
+  --rp-accent-pale: #DBEAFE;
+  --rp-navy: #1E293B;
+  --rp-navy-soft: #EAEEF3;
+}
+.report-shell[data-brand="slate"] .header-eyebrow { color: #2563EB; }
+.report-shell[data-brand="slate"] .header-eyebrow::before { background: #2563EB; }
+.report-shell[data-brand="slate"] .header-title-bar { background: linear-gradient(90deg, #1E293B 0%, #2563EB 50%, rgba(37,99,235,0) 100%); }
+.report-shell[data-brand="slate"] .header-meta-pill { background: #2563EB; color: #FFFFFF; border-color: #2563EB; }
+.report-shell[data-brand="slate"] .section-bar { background: linear-gradient(180deg, #1E293B, #2563EB); }
+.report-shell[data-brand="slate"] .hard-badge { background: #1E293B; color: #BFDBFE; }
+.report-shell[data-brand="slate"] .header-brand { display: inline-block; margin-bottom: 10px; padding: 4px 12px; border: 1px solid #2563EB; border-radius: 999px; color: #1E293B; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.report-shell[data-brand="slate"] .footer-brand { font-weight: 800; color: #1E293B; }
+
+/* ── 흑백 에디토리얼 — 색 없음, 가는 선 (블로그·카페 게시용) ── */
+.report-shell[data-brand="mono"] {
   --rp-bg: #F5F5F4;
   --rp-line: #E4E4E7;
   --rp-line-soft: #F0F0F1;
@@ -1014,11 +1056,13 @@
   --rp-navy: #111111;
   --rp-navy-soft: #F0F0F1;
 }
-.report-shell[data-brand="editorial"] .report-paper { border-radius: 4px; box-shadow: none; border: 1px solid #D4D4D8; }
-.report-shell[data-brand="editorial"] .header-eyebrow { color: #52525B; }
-.report-shell[data-brand="editorial"] .header-eyebrow::before { background: #111111; }
-.report-shell[data-brand="editorial"] .header-title-bar { background: #111111; height: 2px; }
-.report-shell[data-brand="editorial"] .header-meta-pill { background: #111111; color: #FFFFFF; border-color: #111111; }
-.report-shell[data-brand="editorial"] .section-bar { background: #111111; }
-.report-shell[data-brand="editorial"] .hard-badge { background: #111111; color: #FFFFFF; }
-.report-shell[data-brand="editorial"] .range-chip { border-radius: 2px; }
+.report-shell[data-brand="mono"] .report-paper { border-radius: 4px; box-shadow: none; border: 1px solid #D4D4D8; }
+.report-shell[data-brand="mono"] .header-eyebrow { color: #52525B; }
+.report-shell[data-brand="mono"] .header-eyebrow::before { background: #111111; }
+.report-shell[data-brand="mono"] .header-title-bar { background: #111111; height: 2px; }
+.report-shell[data-brand="mono"] .header-meta-pill { background: #111111; color: #FFFFFF; border-color: #111111; }
+.report-shell[data-brand="mono"] .section-bar { background: #111111; }
+.report-shell[data-brand="mono"] .hard-badge { background: #111111; color: #FFFFFF; }
+.report-shell[data-brand="mono"] .range-chip { border-radius: 2px; }
+.report-shell[data-brand="mono"] .header-brand { display: inline-block; margin-bottom: 10px; padding: 4px 12px; border: 1px solid #111111; border-radius: 2px; color: #111111; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.report-shell[data-brand="mono"] .footer-brand { font-weight: 800; color: #111111; }
