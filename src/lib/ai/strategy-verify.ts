@@ -28,6 +28,8 @@ export interface StrategyVerifyInput {
   strategy: string;
   /** 문제 그림 (base64, 없으면 undefined) */
   image?: { mediaType: string; data: string };
+  /** ★ 그림을 글로 옮긴 사실(readFigureFacts) — 모델이 그림을 잘못 읽는 것을 막는 참고 */
+  figureFacts?: string;
 }
 
 export interface StrategyVerifyResult {
@@ -117,6 +119,7 @@ function problemBlock(input: StrategyVerifyInput, strategy?: string): Content {
     input.content,
     input.answer ? `\n# 저장된 정답\n${input.answer}` : '\n# 저장된 정답\n(없음)',
     input.solution ? `\n# 저장된 해설\n${input.solution}` : '',
+    input.figureFacts ? `\n# 그림 판독(자동, 참고 — 그림과 어긋나면 그림이 우선)\n${input.figureFacts}` : '',
     strategy !== undefined ? `\n# 검산할 공략\n${strategy}` : '',
   ].filter(Boolean).join('\n');
   parts.push({ type: 'text', text });

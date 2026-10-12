@@ -101,6 +101,32 @@ export async function readFigureLabels(image: Buffer, mime: string): Promise<str
   }
 }
 
+/**
+ * ★ 그림 사실 판독 (2026-10-13 대표: "OCR 까지 한 문제 데이터를 다 가지고 있는데") — 본문 OCR 에는 그림 안 표기(45°, 70°, x, 같은 길이
+ *   표시, 어느 점이 어느 선 위인지)가 없다. 그림을 한 번 글로 옮겨 공략 생성·검산 모델에 "참고 사실"로 준다. Flash ~1~2원. 실패하면 ''.
+ */
+export async function readFigureFacts(image: Buffer, mime: string): Promise<string> {
+  if (!GEMINI_API_KEY) return '';
+  try {
+    const json = await gemini(GEMINI_VERIFY_MODEL, {
+      contents: [{ parts: [
+        { text: [
+          '이 수학 문제 그림을 글로 정확히 옮겨라. 추론이나 풀이는 하지 말고 "보이는 사실"만 한국어로 간결히 적는다.',
+          '포함할 것: ① 도형 종류와 꼭짓점 이름(예: 정사각형 ABCD) ② 각 점이 어느 변/선 위에 있는지(예: E는 변 BC 위, F는 변 CD 위) ③ 그려진 선분(예: AE, AF, EF)',
+          '④ 각도 숫자와 그것이 어느 각인지(예: 45°는 ∠EAF, 70°는 ∠AFE) ⑤ 미지수 x·y 가 어느 각/길이인지(예: x는 ∠AEB) ⑥ 같은 길이 표시·직각 표시·평행 표시 ⑦ 길이 숫자.',
+          '확실하지 않은 것은 "(불확실)"을 붙인다. 없는 것은 적지 않는다. 5~8줄, 순수 텍스트만.',
+        ].join('\n') },
+        { inline_data: { mime_type: mime, data: image.toString('base64') } },
+      ] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 500, thinkingConfig: { thinkingLevel: 'low' } },
+    }, 40_000);
+    const text = firstText(json).trim();
+    return text.length > 1200 ? text.slice(0, 1200) : text;
+  } catch {
+    return '';
+  }
+}
+
 function labelsClause(labels: string[]): string {
   return labels.length
     ? `\n\nThe text labels in the original read EXACTLY: ${labels.map((l) => `"${l}"`).join(', ')}. Reproduce them character-for-character (Korean included), in the same positions. Also keep any small axis letters (x, y) or point names that are visible in the original even if not listed. Do not invent any other text.`

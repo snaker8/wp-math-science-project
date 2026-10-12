@@ -102,6 +102,8 @@ export function buildExamAnalysisUserPrompt(input: {
     solution?: string;
     /** ★ 그림이 메시지에 첨부됐는지 — "그림 N" 라벨로 연결 */
     hasFigure?: boolean;
+    /** ★ 그림을 글로 옮긴 사실 (readFigureFacts) */
+    figureFacts?: string;
   }>;
   hardDifficultyThreshold: number;
   hardQuestionLimit: number;
@@ -114,7 +116,7 @@ export function buildExamAnalysisUserPrompt(input: {
 - 유형: ${p.typeName ?? '미분류'} (${p.cognitiveDomain})
 - 본문:
 ${p.content}
-- 정답: ${p.answer}${p.hasFigure ? `\n- 그림: 첨부된 「그림 ${p.number}」 — 점·선의 위치는 반드시 그림대로 판단할 것` : ''}${p.solution ? `\n- 저장된 해설(공략은 이 풀이 흐름을 따를 것):\n${p.solution}` : ''}
+- 정답: ${p.answer}${p.hasFigure ? `\n- 그림: 첨부된 「그림 ${p.number}」 — 점·선의 위치는 반드시 그림대로 판단할 것` : ''}${p.figureFacts ? `\n- 그림 판독(자동):\n${p.figureFacts}` : ''}${p.solution ? `\n- 저장된 해설(공략은 이 풀이 흐름을 따를 것):\n${p.solution}` : ''}
 `.trim()
     )
     .join('\n\n---\n\n');
