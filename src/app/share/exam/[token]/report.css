@@ -1000,3 +1000,25 @@
 @media (max-width: 768px) {
   .hard-problem { padding: 12px 12px 10px; }
 }
+
+/* ★ 에디토리얼(무채) 버전 (2026-10-12) — 학원색 없음. 블로그·카페 게시용. 흑백 + 가는 선 */
+.report-shell[data-brand="editorial"] {
+  --rp-bg: #F5F5F4;
+  --rp-line: #E4E4E7;
+  --rp-line-soft: #F0F0F1;
+  --rp-accent: #111111;
+  --rp-accent-strong: #000000;
+  --rp-accent-soft: #FAFAFA;
+  --rp-accent-mid: #52525B;
+  --rp-accent-pale: #EDEDEF;
+  --rp-navy: #111111;
+  --rp-navy-soft: #F0F0F1;
+}
+.report-shell[data-brand="editorial"] .report-paper { border-radius: 4px; box-shadow: none; border: 1px solid #D4D4D8; }
+.report-shell[data-brand="editorial"] .header-eyebrow { color: #52525B; }
+.report-shell[data-brand="editorial"] .header-eyebrow::before { background: #111111; }
+.report-shell[data-brand="editorial"] .header-title-bar { background: #111111; height: 2px; }
+.report-shell[data-brand="editorial"] .header-meta-pill { background: #111111; color: #FFFFFF; border-color: #111111; }
+.report-shell[data-brand="editorial"] .section-bar { background: #111111; }
+.report-shell[data-brand="editorial"] .hard-badge { background: #111111; color: #FFFFFF; }
+.report-shell[data-brand="editorial"] .range-chip { border-radius: 2px; }

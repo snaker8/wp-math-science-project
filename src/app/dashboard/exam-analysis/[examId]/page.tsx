@@ -6,6 +6,7 @@
 // ============================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { REPORT_VARIANTS } from '@/lib/report/report-brand';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -84,6 +85,34 @@ export default function ExamAnalysisPage() {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  // ★ 리포트 버전 (2026-10-12) — '' = 학원 자동. 시험지(exams.share_report_variant)에 저장돼 공유 링크·OG 에 바로 반영
+  const [reportVariant, setReportVariant] = useState<string>('');
+  const [isSavingVariant, setIsSavingVariant] = useState(false);
+  useEffect(() => {
+    if (!examId) return;
+    let cancelled = false;
+    fetch(`/api/exams/${examId}/share`).then((r) => r.json()).then((d) => {
+      if (cancelled) return;
+      if (d?.shareToken) setShareToken(d.shareToken);
+      setReportVariant(typeof d?.variant === 'string' ? d.variant : '');
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [examId]);
+  const handleChangeVariant = async (v: string) => {
+    setReportVariant(v);
+    setIsSavingVariant(true);
+    try {
+      const r = await fetch(`/api/exams/${examId}/share`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ variant: v || null }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      const label = REPORT_VARIANTS.find((x) => x.key === v)?.label || '학원 자동';
+      setShareToast(`리포트 버전: ${label}`);
+    } catch (e) {
+      setShareToast(`버전 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSavingVariant(false);
+      setTimeout(() => setShareToast(null), 3000);
+    }
+  };
 
   // 상단 탭 — 유형 분석 vs 학생 채점
   const [topTab, setTopTab] = useState<TopTab>('analysis');
@@ -516,6 +545,19 @@ export default function ExamAnalysisPage() {
                 <Printer />
                 인쇄
               </button>
+              {/* ★ 리포트 버전 선택 — 공유 링크가 어떤 디자인으로 열릴지 (학원 자동 / 과사람 / 엄궁차수학 / 에디토리얼) */}
+              <label className="ea-btn" title="학부모 공유 리포트 버전 — 시험지에 저장되어 링크·썸네일에 바로 반영" style={{ gap: 6 }}>
+                <span style={{ fontSize: 11, opacity: 0.8 }}>리포트 버전</span>
+                <select
+                  value={reportVariant}
+                  onChange={(e) => handleChangeVariant(e.target.value)}
+                  disabled={isSavingVariant}
+                  style={{ background: 'transparent', border: 'none', color: 'inherit', fontSize: 12, outline: 'none' }}
+                >
+                  <option value="">학원 자동</option>
+                  {REPORT_VARIANTS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+                </select>
+              </label>
               <button
                 type="button"
                 className="ea-btn"
