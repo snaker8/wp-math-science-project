@@ -22,6 +22,7 @@ import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/tit
 import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
 import { verifyAndFixStrategy } from '@/lib/ai/strategy-verify';
+import { readFigureFacts } from '@/lib/vision/image-redraw';
 
 // 분석은 Claude Sonnet 응답 + 길어서 5분
 export const maxDuration = 300;
@@ -269,6 +270,7 @@ export async function POST(
         answer,
         solution: (p.solution_latex || '').trim() || undefined,
         hasFigure: false,
+        figureFacts: undefined as string | undefined,
         difficulty: cls
           ? Math.min(10, Math.max(1, parseInt(String(cls.difficulty), 10) || 3))
           : 3,
@@ -291,6 +293,7 @@ export async function POST(
   //   난이도 ≥ 임계값 문항 중 상위 8개까지. 그림 URL: 재작성/업스케일본 > figure_crop > crop. 4MB 초과는 건너뜀.
   const figureBlocks: Array<Record<string, unknown>> = [];
   const figureById = new Map<string, { mediaType: string; data: string }>();
+  const factsById = new Map<string, string>();
   {
     const loadImage = async (url: string): Promise<{ mediaType: string; data: string } | null> => {
       try {
@@ -326,6 +329,11 @@ export async function POST(
       if (!img) continue;
       figureById.set(p.problemId, img);
       p.hasFigure = true;
+      // ★ 그림 사실 판독 (Flash ~1~2원) — 본문 OCR 에 없는 각도·점 위치를 글로 (2026-10-13)
+      try {
+        const facts = await readFigureFacts(Buffer.from(img.data, 'base64'), img.mediaType);
+        if (facts) { factsById.set(p.problemId, facts); p.figureFacts = facts; }
+      } catch { /* 판독 실패는 무시 */ }
       figureBlocks.push({ type: 'text', text: `[그림 ${p.number}] — ${p.number}번 문항의 그림` });
       figureBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
     }
@@ -431,6 +439,7 @@ export async function POST(
       solution: matched.solution || '',
       strategy: hq.strategy,
       image: figureById.get(matched.problemId),
+      figureFacts: factsById.get(matched.problemId),
     }, ANTHROPIC_API_KEY);
     verifyCalls += r.calls;
     console.log(`[exam-ai-analysis] 공략 검산 ${matched.number}번: ${r.verified ? (r.revised ? '재작성 통과' : '통과') : '실패'} (답 ${r.derivedAnswer || '?'} / 정답 ${matched.answer || '-'})${r.issue ? ' — ' + r.issue.slice(0, 120) : ''}`);
