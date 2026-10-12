@@ -669,6 +669,8 @@ export default function ExamAnalysisPage() {
             isGenerating={isGeneratingAI}
             onGenerate={handleGenerateAI}
             error={aiError}
+            examId={examId}
+            onAnalysisChange={setAiAnalysis}
           />
 
           {/* Row: 난이도 + 인지영역 */}

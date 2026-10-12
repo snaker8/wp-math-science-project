@@ -38,6 +38,8 @@ export interface HardQuestionAnalysis {
   strategyRevised?: boolean;
   /** 검산 때 모델이 공략대로 풀어 낸 답 */
   strategyDerivedAnswer?: string;
+  /** ★ 선생님이 직접 수정·확정한 공략 (2026-10-13) — 재생성 전까지 검산보다 우선 */
+  strategyManual?: boolean;
 }
 
 /** 시험지 단위 AI 분석 결과 (exams.ai_analysis JSONB에 저장) */
