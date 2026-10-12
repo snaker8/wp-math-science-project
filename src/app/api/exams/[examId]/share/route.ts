@@ -36,13 +36,13 @@ export async function GET(
 
   const { data, error } = await supabaseAdmin
     .from('exams')
-    .select('id, share_token')
+    .select('id, share_token, share_report_variant')
     .eq('id', examId)
     .single();
   if (error || !data) {
     return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
   }
-  return NextResponse.json({ shareToken: data.share_token || null });
+  return NextResponse.json({ shareToken: data.share_token || null, variant: (data as { share_report_variant?: string | null }).share_report_variant ?? null });
 }
 
 // ----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ export async function POST(
   // 1. 기존 토큰 확인
   const { data: existing, error: fetchErr } = await supabaseAdmin
     .from('exams')
-    .select('id, share_token')
+    .select('id, share_token, share_report_variant')
     .eq('id', examId)
     .single();
 
@@ -73,7 +73,7 @@ export async function POST(
   }
 
   if (existing.share_token) {
-    return NextResponse.json({ shareToken: existing.share_token, created: false });
+    return NextResponse.json({ shareToken: existing.share_token, created: false, variant: (existing as { share_report_variant?: string | null }).share_report_variant ?? null });
   }
 
   // 2. 신규 토큰 생성 (충돌 시 재시도 — 매우 드뭄)
@@ -124,4 +124,32 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to revoke', detail: error.message }, { status: 500 });
   }
   return NextResponse.json({ shareToken: null, revoked: true });
+}
+
+// ============================================================================
+// PATCH — 리포트 버전 선택 (2026-10-12 대표: "자산화하다 보니 구분이 어렵다 — 링크 리포트 버전을 여러 개 선택할 수 있게")
+//   body: { variant: string | null }  — report-brand.ts 의 키. null 이면 학원 자동.
+// ============================================================================
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> }
+) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { examId } = await params;
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  }
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
+  const body = (await request.json().catch(() => ({}))) as { variant?: unknown };
+  const variant = body.variant === null || body.variant === '' ? null : body.variant;
+  const { isReportVariant } = await import('@/lib/report/report-brand');
+  if (variant !== null && !isReportVariant(variant)) {
+    return NextResponse.json({ error: '알 수 없는 리포트 버전' }, { status: 400 });
+  }
+  const { error } = await supabaseAdmin.from('exams').update({ share_report_variant: variant }).eq('id', examId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, variant });
 }

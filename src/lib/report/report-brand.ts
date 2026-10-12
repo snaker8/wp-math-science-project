@@ -37,7 +37,31 @@ const BRANDS: Record<string, ReportBrand> = {
     footer: '엄궁차수학 수학전문 · 본 리포트는 학교 기출 시험지를 유형·난이도 기준으로 분석한 자료입니다.',
     og: { bgFrom: '#f4f5f8', bgTo: '#dfe3ec', badgeFrom: '#1a2744', badgeTo: '#2b3d63', badgeText: '#f5e9c8', accent: '#b89a5a', label: '엄궁차수학 기출 분석' },
   },
+  // ★ 2026-10-12 세 번째 버전 — 학원색 없는 무채 에디토리얼 (블로그·카페 게시용, 어느 학원이든 중립)
+  editorial: {
+    key: 'editorial',
+    name: '기출 분석',
+    eyebrow: 'EXAM ANALYSIS · EDITORIAL',
+    og: { bgFrom: '#ffffff', bgTo: '#e7e7e7', badgeFrom: '#111111', badgeTo: '#333333', badgeText: '#ffffff', accent: '#111111', label: '학교 기출 분석' },
+  },
 };
+
+/** ★ 공유 링크 만들 때 고를 수 있는 리포트 버전 (2026-10-12 대표: "링크 리포트 버전을 여러 개 선택할 수 있게") */
+export const REPORT_VARIANTS: Array<{ key: string; label: string; desc: string }> = [
+  { key: 'gwasaram', label: '과사람 (오렌지)', desc: '따뜻한 크림·오렌지, 푸터 없음' },
+  { key: 'umgungsmt', label: '엄궁차수학 (네이비·골드)', desc: '학원 칩·푸터 포함' },
+  { key: 'editorial', label: '에디토리얼 (무채)', desc: '학원색 없는 흑백 — 블로그·카페 게시용' },
+];
+
+export function isReportVariant(v: unknown): v is string {
+  return typeof v === 'string' && v in BRANDS;
+}
+
+/** 시험지에 저장된 버전이 있으면 그것, 없으면 학원(slug) 자동 */
+export function resolveReportVariant(variant: string | null | undefined, orgSlug: string | null | undefined): ReportBrand {
+  if (isReportVariant(variant)) return BRANDS[variant];
+  return resolveReportBrand(orgSlug);
+}
 
 /** organizations.slug → 브랜드. 모르는 학원·공통풀(institute 없음)은 과사람 기본. */
 export function resolveReportBrand(orgSlug: string | null | undefined): ReportBrand {

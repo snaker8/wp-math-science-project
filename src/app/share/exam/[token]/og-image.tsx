@@ -32,7 +32,7 @@ async function fetchOgData(token: string): Promise<OgData | null> {
 
   const { data: examRows } = await supabaseAdmin
     .from('exams')
-    .select('id, title, total_points, institute_id')
+    .select('id, title, total_points, institute_id, share_report_variant')
     .eq('share_token', token);
   if (!examRows || examRows.length === 0) return null;
   const exam = examRows[0];
@@ -60,7 +60,7 @@ async function fetchOgData(token: string): Promise<OgData | null> {
   const avgDifficulty = total > 0 ? Math.round((sumDiff / total) * 10) / 10 : 0;
 
   // ★ 학원별 브랜드 (2026-10-12)
-  const brand = await resolveExamBrand((exam as { institute_id?: string | null }).institute_id);
+  const brand = await resolveExamBrand((exam as { institute_id?: string | null }).institute_id, (exam as { share_report_variant?: string | null }).share_report_variant);
 
   return {
     brand,

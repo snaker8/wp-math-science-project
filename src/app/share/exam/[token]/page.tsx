@@ -139,13 +139,13 @@ async function fetchData(token: string): Promise<PageData | null> {
   // 1. 토큰으로 시험지 조회
   const { data: examRows, error: examErr } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id, school_name')
+    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id, school_name, share_report_variant')
     .eq('share_token', token);
 
   if (examErr || !examRows || examRows.length === 0) return null;
   const exam = examRows[0];
   // ★ 학원별 리포트 브랜드 (2026-10-12) — 엄궁차수학은 네이비·골드 변형, 공통풀·과사람은 종전 그대로
-  const brand = await resolveExamBrand((exam as { institute_id?: string | null }).institute_id);
+  const brand = await resolveExamBrand((exam as { institute_id?: string | null }).institute_id, (exam as { share_report_variant?: string | null }).share_report_variant);
 
   const ai = exam.ai_analysis as Record<string, unknown> | null;
   const hasAnalysis = !!(ai && typeof ai === 'object' && 'generatedAt' in ai);

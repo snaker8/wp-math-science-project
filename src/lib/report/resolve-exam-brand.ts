@@ -1,9 +1,11 @@
 // 시험지 → institute → organization.slug → 리포트 브랜드 (서버 전용, supabaseAdmin)
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { resolveReportBrand, type ReportBrand } from './report-brand';
+import { resolveReportBrand, resolveReportVariant, isReportVariant, type ReportBrand } from './report-brand';
 
-/** exams.institute_id 로 학원 브랜드를 찾는다. 공통풀(null)·조회 실패는 과사람 기본. */
-export async function resolveExamBrand(instituteId: string | null | undefined): Promise<ReportBrand> {
+/** exams.institute_id 로 학원 브랜드를 찾는다. 공통풀(null)·조회 실패는 과사람 기본.
+ *  ★ variant(exams.share_report_variant)가 있으면 그것이 우선 (2026-10-12 버전 선택). */
+export async function resolveExamBrand(instituteId: string | null | undefined, variant?: string | null): Promise<ReportBrand> {
+  if (isReportVariant(variant)) return resolveReportVariant(variant, null);
   if (!instituteId || !supabaseAdmin) return resolveReportBrand(null);
   try {
     const { data: inst } = await supabaseAdmin
