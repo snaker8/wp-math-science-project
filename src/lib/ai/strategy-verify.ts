@@ -15,7 +15,8 @@ import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 // ★ 2026-10-13: 검산·재작성은 Opus — Sonnet 이 그림(일직선인 B·E·C)을 정삼각형으로 읽고 통과시킨 사고(동백중 15번).
 //   문항당 호출 1~2회라 비용 영향은 제한적(≈ 시험지당 200~500원). STRATEGY_VERIFY_MODEL 로 바꿀 수 있다.
-const MODEL = process.env.STRATEGY_VERIFY_MODEL || CLAUDE_MODELS.OPUS;
+// ★ 2026-10-13 대표 "빼라" — 비용 때문에 Sonnet 으로 복귀. 절차(그림 사실 판독·독립 풀이 대조·원본 그림)는 그대로.
+const MODEL = process.env.STRATEGY_VERIFY_MODEL || CLAUDE_MODELS.SONNET;
 
 export interface StrategyVerifyInput {
   number: number;
