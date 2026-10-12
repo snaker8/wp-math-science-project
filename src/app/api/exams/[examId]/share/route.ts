@@ -145,11 +145,12 @@ export async function PATCH(
 
   const body = (await request.json().catch(() => ({}))) as { variant?: unknown };
   const variant = body.variant === null || body.variant === '' ? null : body.variant;
-  const { isReportVariant } = await import('@/lib/report/report-brand');
-  if (variant !== null && !isReportVariant(variant)) {
+  const { normalizeDesignKey } = await import('@/lib/report/report-brand');
+  const key = variant === null ? null : normalizeDesignKey(variant);
+  if (variant !== null && !key) {
     return NextResponse.json({ error: '알 수 없는 리포트 버전' }, { status: 400 });
   }
-  const { error } = await supabaseAdmin.from('exams').update({ share_report_variant: variant }).eq('id', examId);
+  const { error } = await supabaseAdmin.from('exams').update({ share_report_variant: key }).eq('id', examId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, variant });
+  return NextResponse.json({ success: true, variant: key });
 }

@@ -389,7 +389,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
             <div className="header-title-bar" />
           </div>
           <div className="header-right">
-            {brand.key !== DEFAULT_BRAND.key && <div className="header-brand">{brand.name}</div>}
+            {brand.showChip && <div className="header-brand">{brand.name}</div>}
             <div className="header-meta-label">TOTAL QUESTIONS</div>
             <div className="header-meta-pill">{data.stats.total}문항</div>
           </div>
