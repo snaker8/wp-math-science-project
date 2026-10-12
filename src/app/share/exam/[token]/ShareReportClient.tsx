@@ -67,6 +67,8 @@ interface ShareReportClientProps {
         problemId: string;
         number: number;
         subTitle?: string;
+        /** ★ false 면 공략 숨김 (검산 실패, 2026-10-12) */
+        strategyVerified?: boolean;
         intent: string;
         strategy: string;
       }>;
@@ -609,15 +611,18 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
                       <MixedContentRenderer content={q.intent} />
                     </div>
                   </div>
-                  <div className="hard-section">
-                    <div className="hard-section-label">
-                      <Lightbulb />
-                      공략 (해결전략)
+                  {/* ★ 검산 실패(strategyVerified === false) 공략은 학부모에게 내보내지 않는다 (2026-10-12) */}
+                  {q.strategyVerified !== false && (
+                    <div className="hard-section">
+                      <div className="hard-section-label">
+                        <Lightbulb />
+                        공략 (해결전략)
+                      </div>
+                      <div className="hard-strategy-box">
+                        <StepStrategy text={q.strategy} />
+                      </div>
                     </div>
-                    <div className="hard-strategy-box">
-                      <StepStrategy text={q.strategy} />
-                    </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

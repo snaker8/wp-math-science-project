@@ -30,6 +30,14 @@ export interface HardQuestionAnalysis {
   intent: string;
   /** 공략(해결 전략) — [1단계] [2단계] [3단계] 단계별 표기 권장. LaTeX 가능 */
   strategy: string;
+  /** ★ 공략 검산 결과 (2026-10-12). false 면 학부모 리포트는 공략을 숨긴다. undefined = 검산 전(구 데이터) */
+  strategyVerified?: boolean;
+  /** 검산에서 짚은 문제 (강사 화면용) */
+  strategyIssue?: string;
+  /** 검산 실패 후 다시 써서 통과한 경우 */
+  strategyRevised?: boolean;
+  /** 검산 때 모델이 공략대로 풀어 낸 답 */
+  strategyDerivedAnswer?: string;
 }
 
 /** 시험지 단위 AI 분석 결과 (exams.ai_analysis JSONB에 저장) */

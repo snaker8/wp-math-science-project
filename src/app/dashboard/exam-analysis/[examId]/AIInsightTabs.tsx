@@ -373,6 +373,18 @@ function HardTab({ analysis }: { analysis: ExamAIAnalysis }) {
               }}
             >
               공략 (해결 전략)
+              {/* ★ 검산 상태 (2026-10-12) — 실패면 학부모 리포트에서 숨겨진다. 「AI 분석 생성」을 다시 돌리면 재검산 */}
+              {q.strategyVerified === false && (
+                <span style={{ marginLeft: 8, fontWeight: 700, color: '#fbbf24' }} title={q.strategyIssue || ''}>
+                  ⚠ 검산 실패 — 리포트에서 숨김{q.strategyIssue ? `: ${q.strategyIssue.slice(0, 80)}` : ''}
+                </span>
+              )}
+              {q.strategyVerified === true && q.strategyRevised && (
+                <span style={{ marginLeft: 8, fontWeight: 600, color: 'var(--chrome-fg-3)' }}>✓ 검산 후 수정됨</span>
+              )}
+              {q.strategyVerified === true && !q.strategyRevised && (
+                <span style={{ marginLeft: 8, fontWeight: 600, color: 'var(--chrome-fg-3)' }}>✓ 검산 통과</span>
+              )}
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--chrome-fg-2)' }}>
               <MixedContentRenderer content={q.strategy} />
