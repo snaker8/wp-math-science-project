@@ -21,6 +21,7 @@ import { resolveSubjectCode, curriculumCodesToSubjectGrade } from '@/lib/workflo
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
+import { verifyAndFixStrategy } from '@/lib/ai/strategy-verify';
 
 // 분석은 Claude Sonnet 응답 + 길어서 5분
 export const maxDuration = 300;
@@ -128,7 +129,7 @@ export async function POST(
   // 3-b. problems 별도 조회
   const { data: problemsData } = await supabaseAdmin
     .from('problems')
-    .select('id, content_latex, answer_json, ai_analysis, source_number')
+    .select('id, content_latex, answer_json, ai_analysis, source_number, solution_latex, images')
     .in('id', problemIds);
 
   const problemsMap = new Map<
@@ -139,6 +140,8 @@ export async function POST(
       answer_json: Record<string, unknown> | null;
       ai_analysis: Record<string, unknown> | null;
       source_number: number | null;
+      solution_latex?: string | null;
+      images?: Array<{ url?: string; type?: string }> | null;
     }
   >();
   (problemsData || []).forEach((p) => {
@@ -264,6 +267,8 @@ export async function POST(
         problemId: p.id,
         content: p.content_latex || '',
         answer,
+        solution: (p.solution_latex || '').trim() || undefined,
+        hasFigure: false,
         difficulty: cls
           ? Math.min(10, Math.max(1, parseInt(String(cls.difficulty), 10) || 3))
           : 3,
@@ -280,6 +285,49 @@ export async function POST(
       { error: 'No problems data found (problems table empty)' },
       { status: 400 }
     );
+  }
+
+  // ★ 6.5 고난도 후보 문항의 그림을 메시지에 첨부 (2026-10-12 대표 "틀린 풀이가 리포트에") — 텍스트만 보고 각을 분해하던 사고
+  //   난이도 ≥ 임계값 문항 중 상위 8개까지. 그림 URL: 재작성/업스케일본 > figure_crop > crop. 4MB 초과는 건너뜀.
+  const figureBlocks: Array<Record<string, unknown>> = [];
+  const figureById = new Map<string, { mediaType: string; data: string }>();
+  {
+    const loadImage = async (url: string): Promise<{ mediaType: string; data: string } | null> => {
+      try {
+        const m = url.match(/^\/api\/storage\/image\?path=([^&]+)/);
+        let buf: ArrayBuffer | null = null; let mediaType = 'image/png';
+        if (m && supabaseAdmin) {
+          const { data } = await supabaseAdmin.storage.from('source-files').download(decodeURIComponent(m[1]));
+          if (data) { buf = await data.arrayBuffer(); mediaType = data.type || mediaType; }
+        } else if (/^https?:\/\//.test(url)) {
+          const res = await fetch(url);
+          if (res.ok) { buf = await res.arrayBuffer(); mediaType = res.headers.get('content-type')?.split(';')[0] || mediaType; }
+        }
+        if (!buf || buf.byteLength > 4 * 1024 * 1024) return null;
+        if (!/^image\/(png|jpeg|webp|gif)$/.test(mediaType)) mediaType = 'image/png';
+        return { mediaType, data: Buffer.from(buf).toString('base64') };
+      } catch { return null; }
+    };
+    const candidates = problemsForPrompt
+      .filter((p) => p.difficulty >= hardThreshold)
+      .sort((a, b) => b.difficulty - a.difficulty)
+      .slice(0, 8);
+    for (const p of candidates) {
+      const row = problemsMap.get(p.problemId);
+      const ai = (row?.ai_analysis || {}) as Record<string, unknown>;
+      const imgs = Array.isArray(row?.images) ? (row!.images as Array<{ url?: string; type?: string }>) : [];
+      const url = (typeof ai.upscaledCropUrl === 'string' && ai.upscaledCropUrl)
+        || imgs.find((i) => i.type === 'figure_crop' && i.url)?.url
+        || imgs.find((i) => i.type === 'crop' && i.url)?.url;
+      if (!url) continue;
+      const img = await loadImage(url);
+      if (!img) continue;
+      figureById.set(p.problemId, img);
+      p.hasFigure = true;
+      figureBlocks.push({ type: 'text', text: `[그림 ${p.number}] — ${p.number}번 문항의 그림` });
+      figureBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+    }
+    if (figureBlocks.length) console.log(`[exam-ai-analysis] 고난도 후보 그림 ${figureBlocks.length / 2}장 첨부`);
   }
 
   // 7. 사용자 프롬프트 생성 — 보정된 effectiveGrade/effectiveSubject 사용
@@ -304,7 +352,8 @@ export async function POST(
       model: ANTHROPIC_MODEL,
       max_tokens: 16000, // ★ 2026-10-07 양운고 기하(19문항·긴 수식) 가 8192 에서 잘려 JSON 파싱 실패 → 여유
       system: cachedSystem(EXAM_ANALYSIS_SYSTEM_PROMPT),
-      messages: [{ role: 'user', content: userPrompt }],
+      // ★ 그림 블록 + 텍스트 (그림이 없으면 텍스트만 — 종전과 동일)
+      messages: [{ role: 'user', content: figureBlocks.length ? [...figureBlocks, { type: 'text', text: userPrompt }] : userPrompt }],
     }),
   });
 
@@ -364,21 +413,42 @@ export async function POST(
     }
   }
 
+  // ★ 9.5 공략 검산 (2026-10-12) — 문항마다 공략대로 실제로 풀어 정답과 대조. 틀리면 1회 재작성 → 재검산.
+  //   검증 못 하면 strategyVerified=false → 학부모 리포트는 공략을 숨긴다. 문항당 Sonnet 1~2회(≈10~25원).
+  const hardRaw = Array.isArray(parsed.hardQuestions) ? parsed.hardQuestions : [];
+  const verifiedHard: ExamAIAnalysis['hardQuestions'] = [];
+  let verifyCalls = 0;
+  for (const hq of hardRaw) {
+    const matched = problemsForPrompt.find((p) => p.number === hq.number);
+    const base = { ...hq, problemId: matched?.problemId || '' };
+    if (!matched || !hq.strategy) { verifiedHard.push(base); continue; }
+    const r = await verifyAndFixStrategy({
+      number: matched.number,
+      content: matched.content,
+      answer: matched.answer,
+      solution: matched.solution || '',
+      strategy: hq.strategy,
+      image: figureById.get(matched.problemId),
+    }, ANTHROPIC_API_KEY);
+    verifyCalls += r.calls;
+    console.log(`[exam-ai-analysis] 공략 검산 ${matched.number}번: ${r.verified ? (r.revised ? '재작성 통과' : '통과') : '실패'} (답 ${r.derivedAnswer || '?'} / 정답 ${matched.answer || '-'})${r.issue ? ' — ' + r.issue.slice(0, 120) : ''}`);
+    verifiedHard.push({
+      ...base,
+      strategy: r.strategy,
+      strategyVerified: r.verified,
+      strategyIssue: r.issue,
+      strategyRevised: r.revised,
+      strategyDerivedAnswer: r.derivedAnswer,
+    });
+  }
+  console.log(`[exam-ai-analysis] 공략 검산 호출 ${verifyCalls}회`);
+
   // 10. 결과 객체 완성
   const finalAnalysis: ExamAIAnalysis = {
     summary: parsed.summary || '',
     overallDifficulty: parsed.overallDifficulty || '보통',
     unitAnalyses: Array.isArray(parsed.unitAnalyses) ? parsed.unitAnalyses : [],
-    hardQuestions: Array.isArray(parsed.hardQuestions)
-      ? parsed.hardQuestions.map((hq) => {
-          // problemId 채우기 — number로 매칭
-          const matched = problemsForPrompt.find((p) => p.number === hq.number);
-          return {
-            ...hq,
-            problemId: matched?.problemId || '',
-          };
-        })
-      : [],
+    hardQuestions: verifiedHard,
     generatedAt: new Date().toISOString(),
     modelVersion: ANTHROPIC_MODEL,
   };

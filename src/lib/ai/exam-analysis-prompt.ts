@@ -63,6 +63,7 @@ export const EXAM_ANALYSIS_SYSTEM_PROMPT = `
    - 임계값 이상 문항이 부족하면 가장 어려운 문항 순으로 채움
    - intent: "왜 이 문항이 어려운가"
    - strategy: 학생이 실제로 풀 수 있게 단계별 가이드
+   - ★ 그림이 첨부된 문항은 각·선분을 분해할 때 그림의 점 위치를 확인할 것 (텍스트만 보고 "∠AOF = ∠AOB + ∠BOF" 같은 분해를 하지 말 것). 저장된 해설이 있으면 그 흐름과 다른 풀이를 쓰지 말 것. 공략대로 풀면 반드시 정답이 나와야 한다.
 
 5. **언어**:
    - 모든 텍스트는 한국어
@@ -97,6 +98,10 @@ export function buildExamAnalysisUserPrompt(input: {
     majorUnit: string; // 대단원
     typeName: string | null; // 유형명 (수학비서)
     points: number;
+    /** ★ 저장된 해설 (있으면 공략은 이 흐름을 따른다) */
+    solution?: string;
+    /** ★ 그림이 메시지에 첨부됐는지 — "그림 N" 라벨로 연결 */
+    hasFigure?: boolean;
   }>;
   hardDifficultyThreshold: number;
   hardQuestionLimit: number;
@@ -109,7 +114,7 @@ export function buildExamAnalysisUserPrompt(input: {
 - 유형: ${p.typeName ?? '미분류'} (${p.cognitiveDomain})
 - 본문:
 ${p.content}
-- 정답: ${p.answer}
+- 정답: ${p.answer}${p.hasFigure ? `\n- 그림: 첨부된 「그림 ${p.number}」 — 점·선의 위치는 반드시 그림대로 판단할 것` : ''}${p.solution ? `\n- 저장된 해설(공략은 이 풀이 흐름을 따를 것):\n${p.solution}` : ''}
 `.trim()
     )
     .join('\n\n---\n\n');
