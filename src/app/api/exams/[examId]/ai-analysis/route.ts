@@ -316,9 +316,11 @@ export async function POST(
       const row = problemsMap.get(p.problemId);
       const ai = (row?.ai_analysis || {}) as Record<string, unknown>;
       const imgs = Array.isArray(row?.images) ? (row!.images as Array<{ url?: string; type?: string }>) : [];
-      const url = (typeof ai.upscaledCropUrl === 'string' && ai.upscaledCropUrl)
-        || imgs.find((i) => i.type === 'figure_crop' && i.url)?.url
-        || imgs.find((i) => i.type === 'crop' && i.url)?.url;
+      // ★ 분석엔 **원본 스캔 그림**을 준다 (2026-10-13): 재작성·업스케일본은 라벨(E·J)이나 표시가 빠질 수 있어
+      //   모델이 "정삼각형"처럼 없는 도형을 가정했다(동백중 15번). 원본 figure_crop > 문제 전체 crop > 재작성본.
+      const url = imgs.find((i) => i.type === 'figure_crop' && i.url)?.url
+        || imgs.find((i) => i.type === 'crop' && i.url)?.url
+        || (typeof ai.upscaledCropUrl === 'string' && ai.upscaledCropUrl ? ai.upscaledCropUrl : undefined);
       if (!url) continue;
       const img = await loadImage(url);
       if (!img) continue;
