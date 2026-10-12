@@ -475,3 +475,43 @@ export async function POST(
     usage: claudeJson.usage,
   });
 }
+
+// ============================================================================
+// PATCH — 고난도 공략 선생님 확정 (2026-10-13 대표: 검산에서 떨어진 15번 "아예 생성도 안 됐는데?")
+//   body: { number, strategy?, action: 'approve' | 'hide' }
+//   approve: (수정한) 공략을 저장하고 strategyVerified=true·strategyManual=true → 리포트에 표시
+//   hide:    strategyVerified=false → 리포트에서 숨김
+// ============================================================================
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ examId: string }> }
+) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { examId } = await params;
+  if (!supabaseAdmin) return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  const guard = await assertExamAccess(supabaseAdmin, examId, authed.data.scope);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
+  const body = (await request.json().catch(() => ({}))) as { number?: number; strategy?: string; action?: string };
+  const number = Number(body.number);
+  const action = body.action === 'hide' ? 'hide' : 'approve';
+  if (!Number.isFinite(number)) return NextResponse.json({ error: 'number 필요' }, { status: 400 });
+
+  const { data, error } = await supabaseAdmin.from('exams').select('ai_analysis').eq('id', examId).single();
+  if (error || !data) return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+  const ai = (data.ai_analysis || {}) as ExamAIAnalysis;
+  if (!Array.isArray(ai.hardQuestions)) return NextResponse.json({ error: '분석이 없습니다' }, { status: 400 });
+  const idx = ai.hardQuestions.findIndex((q) => q.number === number);
+  if (idx < 0) return NextResponse.json({ error: '해당 문항이 고난도 목록에 없습니다' }, { status: 404 });
+
+  const q = ai.hardQuestions[idx];
+  const strategy = typeof body.strategy === 'string' && body.strategy.trim() ? body.strategy.trim() : q.strategy;
+  ai.hardQuestions[idx] = action === 'approve'
+    ? { ...q, strategy, strategyVerified: true, strategyManual: true, strategyIssue: '', strategyRevised: q.strategyRevised }
+    : { ...q, strategyVerified: false, strategyManual: true, strategyIssue: '선생님이 숨김' };
+
+  const { error: upErr } = await supabaseAdmin.from('exams').update({ ai_analysis: ai }).eq('id', examId);
+  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+  return NextResponse.json({ analysis: ai });
+}

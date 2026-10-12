@@ -17,6 +17,9 @@ interface AIInsightTabsProps {
   isGenerating: boolean;
   onGenerate: (force?: boolean) => void;
   error?: string | null;
+  /** ★ 공략 선생님 확정/숨김용 (2026-10-13) */
+  examId?: string;
+  onAnalysisChange?: (a: ExamAIAnalysis) => void;
 }
 
 export function AIInsightTabs({
@@ -24,6 +27,8 @@ export function AIInsightTabs({
   isGenerating,
   onGenerate,
   error,
+  examId,
+  onAnalysisChange,
 }: AIInsightTabsProps) {
   const [tab, setTab] = useState<TabKey>('summary');
 
@@ -136,7 +141,7 @@ export function AIInsightTabs({
         style={{ display: tab === 'hard' ? 'block' : 'none' }}
       >
         <PrintHeading screenHidden>고난도 문항 심층분석</PrintHeading>
-        <HardTab analysis={analysis} />
+        <HardTab analysis={analysis} examId={examId} onAnalysisChange={onAnalysisChange} />
       </div>
     </div>
   );
@@ -320,7 +325,29 @@ function UnitsTab({ analysis }: { analysis: ExamAIAnalysis }) {
 // ----------------------------------------------------------------------------
 // 탭 3: 고난도 문항 심층분석
 // ----------------------------------------------------------------------------
-function HardTab({ analysis }: { analysis: ExamAIAnalysis }) {
+function HardTab({ analysis, examId, onAnalysisChange }: { analysis: ExamAIAnalysis; examId?: string; onAnalysisChange?: (a: ExamAIAnalysis) => void }) {
+  // ★ 선생님 수정·확정 (2026-10-13) — 검산에서 떨어진 공략은 리포트에서 숨겨지는데, 선생님이 고쳐 확정하면 다시 나간다
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState<number | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = async (number: number, action: 'approve' | 'hide', strategy?: string) => {
+    if (!examId) return;
+    setBusy(number);
+    try {
+      const r = await fetch(`/api/exams/${examId}/ai-analysis`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number, action, strategy }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      onAnalysisChange?.(d.analysis as ExamAIAnalysis);
+      setEditing(null);
+      setMsg(action === 'approve' ? `${number}번 공략 확정 — 리포트에 표시됩니다` : `${number}번 공략 숨김`);
+    } catch (e) {
+      setMsg(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(null);
+      setTimeout(() => setMsg(null), 3000);
+    }
+  };
   if (analysis.hardQuestions.length === 0) {
     return (
       <div style={{ padding: 16, color: 'var(--chrome-fg-4)', fontSize: 12, textAlign: 'center' }}>
@@ -382,13 +409,56 @@ function HardTab({ analysis }: { analysis: ExamAIAnalysis }) {
               {q.strategyVerified === true && q.strategyRevised && (
                 <span style={{ marginLeft: 8, fontWeight: 600, color: 'var(--chrome-fg-3)' }}>✓ 검산 후 수정됨</span>
               )}
-              {q.strategyVerified === true && !q.strategyRevised && (
+              {q.strategyVerified === true && !q.strategyRevised && !q.strategyManual && (
                 <span style={{ marginLeft: 8, fontWeight: 600, color: 'var(--chrome-fg-3)' }}>✓ 검산 통과</span>
               )}
+              {q.strategyManual && q.strategyVerified === true && (
+                <span style={{ marginLeft: 8, fontWeight: 600, color: '#34d399' }}>✓ 선생님 확정</span>
+              )}
+              {examId && (
+                <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+                  {editing === q.number ? (
+                    <>
+                      <button type="button" className="ea-btn" style={{ padding: '2px 8px', fontSize: 11 }} disabled={busy === q.number}
+                        onClick={() => save(q.number, 'approve', draft)}>
+                        {busy === q.number ? '저장 중…' : '확정 (리포트에 표시)'}
+                      </button>
+                      <button type="button" className="ea-btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setEditing(null)}>취소</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="ea-btn" style={{ padding: '2px 8px', fontSize: 11 }}
+                        onClick={() => { setEditing(q.number); setDraft(q.strategy || ''); }}>
+                        수정
+                      </button>
+                      {q.strategyVerified === false ? (
+                        <button type="button" className="ea-btn" style={{ padding: '2px 8px', fontSize: 11 }} disabled={busy === q.number}
+                          onClick={() => save(q.number, 'approve')}>이대로 확정</button>
+                      ) : (
+                        <button type="button" className="ea-btn" style={{ padding: '2px 8px', fontSize: 11 }} disabled={busy === q.number}
+                          onClick={() => save(q.number, 'hide')}>리포트에서 숨김</button>
+                      )}
+                    </>
+                  )}
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--chrome-fg-2)' }}>
-              <MixedContentRenderer content={q.strategy} />
-            </div>
+            {editing === q.number ? (
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={7}
+                style={{ width: '100%', fontSize: 12, lineHeight: 1.6, background: '#18181b', color: '#e4e4e7', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: 8 }}
+                placeholder="[1단계] … [2단계] … [3단계] … (LaTeX 는 $…$)"
+              />
+            ) : (
+              <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--chrome-fg-2)' }}>
+                <MixedContentRenderer content={q.strategy} />
+              </div>
+            )}
+            {msg && editing === null && busy === null && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--chrome-fg-3)' }}>{msg}</div>
+            )}
           </div>
         </div>
       ))}
