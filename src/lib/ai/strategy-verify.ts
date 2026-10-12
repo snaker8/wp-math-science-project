@@ -13,7 +13,9 @@
 import { CLAUDE_MODELS } from '@/lib/claude/model-params';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = CLAUDE_MODELS.SONNET;
+// ★ 2026-10-13: 검산·재작성은 Opus — Sonnet 이 그림(일직선인 B·E·C)을 정삼각형으로 읽고 통과시킨 사고(동백중 15번).
+//   문항당 호출 1~2회라 비용 영향은 제한적(≈ 시험지당 200~500원). STRATEGY_VERIFY_MODEL 로 바꿀 수 있다.
+const MODEL = process.env.STRATEGY_VERIFY_MODEL || CLAUDE_MODELS.OPUS;
 
 export interface StrategyVerifyInput {
   number: number;
@@ -32,6 +34,8 @@ export interface StrategyVerifyResult {
   strategy: string;
   /** 모델이 공략대로 풀어 낸 최종 답 */
   derivedAnswer: string;
+  /** 공략을 보지 않고 모델이 독립적으로 푼 답 (저장 정답이 없을 때 대조 기준) */
+  independentAnswer?: string;
   /** 틀렸을 때 사유 (강사 화면용) */
   issue?: string;
   /** 다시 써서 통과한 경우 true */
@@ -89,14 +93,18 @@ function parseJson<T>(raw: string): T | null {
 }
 
 const VERIFY_SYSTEM = `당신은 한국 중·고등 수학 교사입니다. 주어진 문제·그림·(있다면) 해설·정답을 보고, 제시된 「공략」이 실제로 맞는 풀이인지 검산합니다.
-- 공략의 각 단계를 그대로 따라 끝까지 풀어 최종 답을 구하세요. 그림이 있으면 점·선의 위치는 반드시 그림대로 판단하세요(텍스트만 보고 각을 분해하지 마세요).
-- 단계 중 하나라도 성립하지 않으면(예: 점이 그 각 안에 없는데 각을 분해, 잘못된 성질 적용) ok=false.
-- 순수 JSON 만 출력: {"ok": true|false, "derivedAnswer": "공략대로 풀어 나온 최종 답(객관식은 보기 번호 숫자)", "issue": "틀린 단계와 이유 한두 문장(ok=true 면 빈 문자열)"}
+순서:
+1) 먼저 그림을 정밀하게 읽어 사실을 적습니다 — 어떤 점들이 한 직선 위에 있는지, 어떤 도형이 실제로 그려져 있는지(정삼각형·정사각형·평행 표시·같은 길이 표시·직각 표시·주어진 각도 숫자), 라벨이 없는 점은 없는 대로. 텍스트에 없는 도형(예: "정삼각형 EBC")을 공략이 전제하면 그림에 그 표시가 실제로 있는지 확인하세요.
+2) 공략을 보지 않고 스스로 끝까지 풀어 독립적인 답(independentAnswer)을 구합니다.
+3) 공략의 각 단계를 그대로 따라 끝까지 풀어 최종 답(derivedAnswer)을 구합니다. 그림의 점·선 위치와 어긋나는 분해, 그림에 없는 성질의 가정, 잘못된 정리 적용이 하나라도 있으면 ok=false.
+4) derivedAnswer 와 independentAnswer(또는 저장된 정답)가 다르면 ok=false.
+- 순수 JSON 만 출력: {"ok": true|false, "figureFacts": "그림에서 읽은 사실 한두 문장", "independentAnswer": "스스로 푼 최종 답(객관식은 보기 번호 숫자)", "derivedAnswer": "공략대로 풀어 나온 최종 답(객관식은 보기 번호 숫자)", "issue": "틀린 단계와 이유 한두 문장(ok=true 면 빈 문자열)"}
 - JSON 문자열 안의 백슬래시는 \\\\ 로 이중 이스케이프.`;
 
 const REWRITE_SYSTEM = `당신은 한국 중·고등 수학 교사입니다. 주어진 문제·그림·(있다면) 해설·정답에 맞는 올바른 「공략(해결 전략)」을 다시 씁니다.
-- 반드시 [1단계] [2단계] [3단계] 형식, 각 단계는 학생이 따라 할 수 있는 핵심 아이디어 한두 문장. LaTeX 는 $…$.
-- 그림이 있으면 점·선의 위치를 그림대로. 저장된 해설이 있으면 그 흐름을 따르세요. 마지막 단계에서 정답이 나와야 합니다.
+- 먼저 그림을 정밀하게 읽습니다(어떤 점이 한 직선 위인지, 어떤 도형·표시가 실제로 있는지). 그림에 없는 도형이나 성질을 가정하지 마세요.
+- 반드시 [1단계] [2단계] [3단계] (필요하면 [4단계]) 형식. 각 단계는 "무엇을 왜 하는지 + 그 단계의 핵심 계산·근거" 를 2~3문장으로 — 원래 공략보다 간단해지면 안 됩니다(전체 400자 이상). LaTeX 는 $…$.
+- 저장된 해설이 있으면 그 흐름을 따르세요. 마지막 단계에서 정답이 나와야 합니다.
 - 순수 JSON 만 출력: {"strategy": "…", "derivedAnswer": "이 공략대로 풀어 나온 최종 답(객관식은 보기 번호 숫자)"}
 - JSON 문자열 안의 백슬래시는 \\\\ 로 이중 이스케이프.`;
 
@@ -123,23 +131,28 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
   const original = input.strategy;
   try {
     calls++;
-    const v = parseJson<{ ok?: boolean; derivedAnswer?: string; issue?: string }>(await callClaude(apiKey, VERIFY_SYSTEM, problemBlock(input, original), 800));
+    const v = parseJson<{ ok?: boolean; derivedAnswer?: string; independentAnswer?: string; issue?: string; figureFacts?: string }>(
+      await callClaude(apiKey, VERIFY_SYSTEM, problemBlock(input, original), 1400));
     const derived = String(v?.derivedAnswer ?? '');
-    const okByAnswer = input.answer ? answersMatch(derived, input.answer) : true;
+    const independent = String(v?.independentAnswer ?? '');
+    // 대조 기준: 저장된 정답 > 모델의 독립 풀이. 둘 다 없으면 통과시키지 않는다(근거 없는 통과 금지).
+    const reference = input.answer || independent;
+    const okByAnswer = reference ? answersMatch(derived, reference) : false;
     if (v?.ok === true && okByAnswer) {
-      return { verified: true, strategy: original, derivedAnswer: derived, calls };
+      return { verified: true, strategy: original, derivedAnswer: derived, independentAnswer: independent, calls };
     }
-    const issue = (v?.issue || '').trim() || (input.answer ? `공략대로 풀면 ${derived || '?'} 가 나와 정답(${input.answer})과 다름` : '검산 실패');
+    const issue = (v?.issue || '').trim()
+      || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : '검산 기준(정답·독립 풀이) 없음');
 
-    // 한 번 다시 쓴다
+    // 한 번 다시 쓴다 — 재작성본도 같은 기준으로 대조
     calls++;
-    const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, problemBlock(input), 1500));
+    const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, problemBlock(input), 2000));
     const newStrategy = (r?.strategy || '').trim();
     const newDerived = String(r?.derivedAnswer ?? '');
-    if (newStrategy && (input.answer ? answersMatch(newDerived, input.answer) : true)) {
-      return { verified: true, strategy: newStrategy, derivedAnswer: newDerived, issue, revised: true, calls };
+    if (newStrategy && reference && answersMatch(newDerived, reference)) {
+      return { verified: true, strategy: newStrategy, derivedAnswer: newDerived, independentAnswer: independent, issue, revised: true, calls };
     }
-    return { verified: false, strategy: original, derivedAnswer: derived, issue: `${issue} / 재작성도 정답 불일치(${newDerived || '?'})`, calls };
+    return { verified: false, strategy: original, derivedAnswer: derived, independentAnswer: independent, issue: `${issue} / 재작성도 기준 불일치(${newDerived || '?'})`, calls };
   } catch (e) {
     return { verified: false, strategy: original, derivedAnswer: '', issue: `검산 호출 실패: ${e instanceof Error ? e.message : String(e)}`, calls };
   }
