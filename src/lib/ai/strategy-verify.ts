@@ -82,7 +82,8 @@ async function callClaude(apiKey: string, system: string, content: Content, maxT
   const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content }] }),
+    // ★ 2026-10-13: 검산·재작성은 깊게 — adaptive thinking + effort high (Claude 5.x). max_tokens 는 thinking 몫 포함.
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens + 6000, thinking: { type: 'adaptive' }, output_config: { effort: 'high' }, system, messages: [{ role: 'user', content }] }),
   });
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
@@ -148,15 +149,22 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
     const issue = (v?.issue || '').trim()
       || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : '검산 기준(정답·독립 풀이) 없음');
 
-    // 한 번 다시 쓴다 — 재작성본도 같은 기준으로 대조
-    calls++;
-    const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, problemBlock(input), 2000));
-    const newStrategy = (r?.strategy || '').trim();
-    const newDerived = String(r?.derivedAnswer ?? '');
-    if (newStrategy && reference && answersMatch(newDerived, reference)) {
-      return { verified: true, strategy: newStrategy, derivedAnswer: newDerived, independentAnswer: independent, issue, revised: true, calls };
+    // 다시 쓴다 — 최대 2회. 기준 답(저장 정답 또는 독립 풀이)을 목표로 명시하고, 재작성본도 같은 기준으로 대조
+    let lastDerived = '';
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      calls++;
+      const target = reference ? `\n# 이 공략은 반드시 최종 답 「${reference}」 에 도달해야 합니다. 검산에서 지적된 문제: ${issue}` : '';
+      const block = problemBlock(input);
+      const last = block[block.length - 1] as { type: string; text?: string };
+      if (last.type === 'text') last.text = (last.text || '') + target;
+      const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, block, 2500));
+      const newStrategy = (r?.strategy || '').trim();
+      lastDerived = String(r?.derivedAnswer ?? '');
+      if (newStrategy && reference && answersMatch(lastDerived, reference)) {
+        return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, calls };
+      }
     }
-    return { verified: false, strategy: original, derivedAnswer: derived, independentAnswer: independent, issue: `${issue} / 재작성도 기준 불일치(${newDerived || '?'})`, calls };
+    return { verified: false, strategy: original, derivedAnswer: derived, independentAnswer: independent, issue: `${issue} / 재작성도 기준 불일치(${lastDerived || '?'})`, calls };
   } catch (e) {
     return { verified: false, strategy: original, derivedAnswer: '', issue: `검산 호출 실패: ${e instanceof Error ? e.message : String(e)}`, calls };
   }

@@ -294,6 +294,7 @@ export async function POST(
   const figureBlocks: Array<Record<string, unknown>> = [];
   const figureById = new Map<string, { mediaType: string; data: string }>();
   const factsById = new Map<string, string>();
+  let loadFigureForLazy: ((p: (typeof problemsForPrompt)[number]) => Promise<void>) | null = null;
   {
     const loadImage = async (url: string): Promise<{ mediaType: string; data: string } | null> => {
       try {
@@ -311,11 +312,13 @@ export async function POST(
         return { mediaType, data: Buffer.from(buf).toString('base64') };
       } catch { return null; }
     };
-    const candidates = problemsForPrompt
-      .filter((p) => p.difficulty >= hardThreshold)
+    // ★ 2026-10-13 사고: `difficulty >= hardThreshold(7)` 로 걸러 중1 시험지(난이도 2~6)는 그림이 0장 — 생성·검산이 전부 글만 보고 돌았다.
+    //   임계값과 무관하게 난이도 상위 max(8, hardLimit×2) 문항의 그림을 붙인다.
+    const candidates = [...problemsForPrompt]
       .sort((a, b) => b.difficulty - a.difficulty)
-      .slice(0, 8);
-    for (const p of candidates) {
+      .slice(0, Math.max(8, hardLimit * 2));
+    const loadFigureFor = async (p: (typeof problemsForPrompt)[number]): Promise<void> => {
+      if (figureById.has(p.problemId)) return;
       const row = problemsMap.get(p.problemId);
       const ai = (row?.ai_analysis || {}) as Record<string, unknown>;
       const imgs = Array.isArray(row?.images) ? (row!.images as Array<{ url?: string; type?: string }>) : [];
@@ -324,9 +327,10 @@ export async function POST(
       const url = imgs.find((i) => i.type === 'figure_crop' && i.url)?.url
         || imgs.find((i) => i.type === 'crop' && i.url)?.url
         || (typeof ai.upscaledCropUrl === 'string' && ai.upscaledCropUrl ? ai.upscaledCropUrl : undefined);
-      if (!url) continue;
+      if (!url) return;
+      if (!url) return;
       const img = await loadImage(url);
-      if (!img) continue;
+      if (!img) return;
       figureById.set(p.problemId, img);
       p.hasFigure = true;
       // ★ 그림 사실 판독 (Flash ~1~2원) — 본문 OCR 에 없는 각도·점 위치를 글로 (2026-10-13)
@@ -336,8 +340,11 @@ export async function POST(
       } catch { /* 판독 실패는 무시 */ }
       figureBlocks.push({ type: 'text', text: `[그림 ${p.number}] — ${p.number}번 문항의 그림` });
       figureBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
-    }
-    if (figureBlocks.length) console.log(`[exam-ai-analysis] 고난도 후보 그림 ${figureBlocks.length / 2}장 첨부`);
+    };
+    for (const p of candidates) await loadFigureFor(p);
+    console.log(`[exam-ai-analysis] 고난도 후보 ${candidates.length}문항 중 그림 ${figureBlocks.length / 2}장 첨부, 판독 ${factsById.size}건`);
+    // 검산 단계에서 후보 밖 문항이 고난도로 뽑히면 그때 불러오도록 보관
+    loadFigureForLazy = loadFigureFor;
   }
 
   // 7. 사용자 프롬프트 생성 — 보정된 effectiveGrade/effectiveSubject 사용
@@ -360,7 +367,10 @@ export async function POST(
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 16000, // ★ 2026-10-07 양운고 기하(19문항·긴 수식) 가 8192 에서 잘려 JSON 파싱 실패 → 여유
+      max_tokens: 24000, // ★ 2026-10-07 양운고 기하(19문항·긴 수식) 가 8192 에서 잘려 JSON 파싱 실패 → 여유. 2026-10-13 thinking 몫 포함
+      // ★ 2026-10-13 대표 "왜 저번보다 분석이 약하냐" — 5.5 는 thinking 을 명시해야 깊게 푼다. 고난도 공략 정확도가 생명이라 high.
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'high' },
       system: cachedSystem(EXAM_ANALYSIS_SYSTEM_PROMPT),
       // ★ 그림 블록 + 텍스트 (그림이 없으면 텍스트만 — 종전과 동일)
       messages: [{ role: 'user', content: figureBlocks.length ? [...figureBlocks, { type: 'text', text: userPrompt }] : userPrompt }],
@@ -432,6 +442,8 @@ export async function POST(
     const matched = problemsForPrompt.find((p) => p.number === hq.number);
     const base = { ...hq, problemId: matched?.problemId || '' };
     if (!matched || !hq.strategy) { verifiedHard.push(base); continue; }
+    // ★ 후보 밖 문항이 고난도로 뽑혔으면 지금 그림·판독을 불러온다 (검산은 반드시 그림을 보고)
+    if (!figureById.has(matched.problemId) && loadFigureForLazy) { try { await loadFigureForLazy(matched); } catch { /* ignore */ } }
     const r = await verifyAndFixStrategy({
       number: matched.number,
       content: matched.content,
