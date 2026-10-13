@@ -5,11 +5,11 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { LEVELS_BY_BAND_LABEL } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveInsertInstituteId, applyInstituteFilter } from '@/lib/security/institute-guard';
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
+import { capPerType, pickByBand, pickRandom, pickEvenByUnit, orderForPaper, parsePerTypeCap, parseSelectionMode } from '@/lib/exam/selection';
 
 export async function POST(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -88,7 +88,14 @@ export async function POST(request: NextRequest) {
     const answerType: string = criteria?.answerType || '';   // '' 전체 · multiple_choice · short_answer
     // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항 제외 (0 = 끄기, 기본 30일). 매쓰홀릭 「중복출제 방지」 와 같은 뜻.
     const excludeRecentDays = parseExcludeRecentDays(criteria?.excludeRecentDays);
-    const totalNeeded = Object.values(diffDist).reduce((s: number, v: number) => s + v, 0);
+    // ★ 출제 방식(2026-10-14, 매쓰홀릭 등가): band=난이도별 맞춤(밴드 칸) · random=무작위(밴드 골고루) · even=소단원별 균등
+    //   유형별 상한(perTypeCap 1~4, 0=전체) — 한 유형에서 너무 많이 뽑히는 것을 막는다 (매쓰홀릭 「유형별 문제수」)
+    const selectionMode = parseSelectionMode(criteria?.selection);
+    const perTypeCap = parsePerTypeCap(criteria?.perTypeCap);
+    const maxQuestions = Math.max(1, Math.min(150, parseInt(String(criteria?.maxQuestions ?? 30), 10) || 30));
+    const totalNeeded = selectionMode === 'band'
+      ? Object.values(diffDist).reduce((s: number, v: number) => s + v, 0)
+      : maxQuestions;
 
     if (totalNeeded === 0) {
       return NextResponse.json({ error: '문항수를 설정해주세요.' }, { status: 400 });
@@ -181,75 +188,20 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Generate] candidates=${candidateIds.length} accessible=${accessibleSet.size} excludedRecent=${excludedRecent} classRows=${classRows.length}`);
 
-    // ---- 2. 난이도별 그룹화 ----
-    // ★ 밴드 라벨(개념·기본·실력·심화·고난도) → 난이도 레벨 묶음. 1~5 단일값이 아니라 범위다.
-    //   예전 '최상'→'5' 매핑은 난이도 6~10 을 영영 못 뽑았다.
-
-    // difficulty 값 정규화 (문자열/숫자 모두 대응)
-    const byDifficulty = new Map<string, typeof classRows>();
-    for (const row of classRows) {
-      const d = String(row.difficulty || '3');
-      if (!byDifficulty.has(d)) byDifficulty.set(d, []);
-      byDifficulty.get(d)!.push(row);
+    // ---- 3. 유형별 상한 → 뽑기 방식 (규칙은 src/lib/exam/selection.ts — available-counts 와 같은 상한) ----
+    const pool = capPerType(classRows, perTypeCap);
+    let selectedProblemIds: string[];
+    if (selectionMode === 'band') {
+      const r = pickByBand(pool, diffDist, typeCounts);
+      selectedProblemIds = r.ids;
+      r.log.forEach((l) => console.log('[Generate] ' + l));
+    } else if (selectionMode === 'random') {
+      selectedProblemIds = pickRandom(pool, maxQuestions);
+    } else {
+      selectedProblemIds = pickEvenByUnit(pool, maxQuestions);
     }
-
-    // ---- 3. 난이도별 랜덤 선택 ----
-    const selectedProblemIds: string[] = [];
-    const usedIds = new Set<string>();
-
-    // ★ 3-0. 유형별 최소 문항수 먼저 — 난이도는 "남은 배분이 가장 큰 밴드"부터 집어 배분을 깎는다
-    const remaining: Record<string, number> = { ...diffDist };
-    const bandOfLevel = new Map<string, string>();
-    for (const [label, levels] of Object.entries(LEVELS_BY_BAND_LABEL)) levels.forEach((l) => bandOfLevel.set(String(l), label));
-    for (const [code, need] of Object.entries(typeCounts)) {
-      const pool = classRows
-        .filter((r) => !usedIds.has(r.problem_id) && String(r.type_code || '').startsWith(code))
-        .sort(() => Math.random() - 0.5)
-        .sort((a, b) => (remaining[bandOfLevel.get(String(a.difficulty || '3')) ?? ''] ?? 0) < (remaining[bandOfLevel.get(String(b.difficulty || '3')) ?? ''] ?? 0) ? 1 : -1);
-      let picked = 0;
-      for (const row of pool) {
-        if (picked >= need) break;
-        selectedProblemIds.push(row.problem_id);
-        usedIds.add(row.problem_id);
-        const band = bandOfLevel.get(String(row.difficulty || '3'));
-        if (band && (remaining[band] ?? 0) > 0) remaining[band] -= 1;
-        picked++;
-      }
-      console.log(`[Generate] 유형 ${code}: needed=${need}, picked=${picked}, pool=${pool.length}`);
-    }
-
-    for (const [levelStr, count] of Object.entries(remaining)) {
-      if (count <= 0) continue;
-      const levels = LEVELS_BY_BAND_LABEL[levelStr] ?? [levelStr];
-      const pool = levels.flatMap((l) => byDifficulty.get(l) ?? []);
-
-      // 셔플
-      const shuffled = [...pool].sort(() => Math.random() - 0.5);
-
-      let picked = 0;
-      for (const row of shuffled) {
-        if (picked >= count) break;
-        if (usedIds.has(row.problem_id)) continue;
-        selectedProblemIds.push(row.problem_id);
-        usedIds.add(row.problem_id);
-        picked++;
-      }
-
-      // 해당 난이도 부족 시 다른 난이도에서 채우기
-      if (picked < count) {
-        const remaining = classRows
-          .filter(r => !usedIds.has(r.problem_id))
-          .sort(() => Math.random() - 0.5);
-        for (const row of remaining) {
-          if (picked >= count) break;
-          selectedProblemIds.push(row.problem_id);
-          usedIds.add(row.problem_id);
-          picked++;
-        }
-      }
-
-      console.log(`[Generate] 난이도 ${levelStr}(${levels.join('·')}): needed=${count}, picked=${picked}, pool=${pool.length}`);
-    }
+    selectedProblemIds = orderForPaper(selectedProblemIds, pool);
+    console.log(`[Generate] mode=${selectionMode} cap=${perTypeCap} pool=${pool.length} picked=${selectedProblemIds.length}`);
 
     if (selectedProblemIds.length === 0) {
       return NextResponse.json(

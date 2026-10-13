@@ -98,12 +98,21 @@ const ANSWER_TYPES: Array<{ value: string; label: string }> = [
   { value: 'short_answer', label: '주관식' },
 ];
 // 최대 문제수 프리셋 — 예전엔 50 이 코드에 박혀 있었다
-const MAX_PRESETS = [10, 15, 20, 25, 30] as const;
+const MAX_PRESETS = [10, 20, 25, 30, 50] as const;   // 매쓰홀릭 프리셋과 같게 (2026-10-14)
 // ★ 내 단계(원장이 저장한 비율) — localStorage
 const MY_STAGES_KEY = 'msb_diff_my_stages';
 // ★ 중복출제 방지 (2026-10-13, 매쓰홀릭 「중복출제 방지 — 최근 한달간 출제했던 문항을 제외」 등가, 기본 켜짐 30일)
 //   0 = 끄기. 학원 단위로 최근 N일 안에 출제한 문항을 가능 문항수·자동 출제·교체 후보 모두에서 뺀다.
 const DEDUPE_DAYS_KEY = 'msb_dedupe_days';
+// ★ 출제 방식·유형별 문제수 (2026-10-14, 매쓰홀릭 「출제 방식 / 유형별 문제수」 등가) — 규칙은 src/lib/exam/selection.ts
+const SELECTION_MODE_KEY = 'msb_selection_mode';
+const PER_TYPE_CAP_KEY = 'msb_per_type_cap';
+type SelectionMode = 'band' | 'random' | 'even';
+const SELECTION_MODE_OPTIONS: { value: SelectionMode; label: string; hint: string }[] = [
+  { value: 'band', label: '난이도별 맞춤', hint: '아래 밴드 칸의 수대로 뽑는다' },
+  { value: 'random', label: '무작위', hint: '문제 수만큼 난이도를 골고루 섞어 뽑는다' },
+  { value: 'even', label: '소단원별 균등', hint: '소단원을 돌아가며 같은 수씩 뽑는다' },
+];
 const DEDUPE_PRESETS: { days: number; label: string }[] = [
   { days: 14, label: '2주' },
   { days: 30, label: '1개월' },
@@ -873,6 +882,11 @@ function DifficultyDistributionBar({
   onDeleteMyStage,
   dedupeDays,
   onDedupeDays,
+  selectionMode,
+  onSelectionMode,
+  perTypeCap,
+  onPerTypeCap,
+  selectedCount,
 }: {
   difficulties: Record<DifficultyLevel, number>;
   availableCounts: Record<string, number>;
@@ -890,8 +904,17 @@ function DifficultyDistributionBar({
   /** 중복출제 방지 기간(일), 0 = 끄기 */
   dedupeDays: number;
   onDedupeDays: (days: number) => void;
+  /** 출제 방식 — band 일 때만 밴드 칸·평가 난이도가 뜻이 있다 */
+  selectionMode: SelectionMode;
+  onSelectionMode: (m: SelectionMode) => void;
+  /** 유형별 문제수 상한 0=전체·1~4 */
+  perTypeCap: number;
+  onPerTypeCap: (c: number) => void;
+  /** 상한·중복제외 뒤 남은 후보 수 (매쓰홀릭 「선택 N」) */
+  selectedCount: number;
 }) {
   const levels: DifficultyLevel[] = DIFF_ORDER;
+  const isBand = selectionMode === 'band';
   const excludedRecent = availableCounts.excludedRecent ?? 0;
   const dedupeLabel = DEDUPE_PRESETS.find((d) => d.days === dedupeDays)?.label ?? `${dedupeDays}일`;
   const expectedTotal = levels.reduce((s, l) => s + Math.min(difficulties[l], availableCounts[l] ?? difficulties[l]), 0);
@@ -968,6 +991,15 @@ function DifficultyDistributionBar({
               ))}
             </div>
             <input
+              type="range"
+              min={1}
+              max={150}
+              value={maxQuestions}
+              onChange={(e) => onMaxQuestions(Math.max(1, Math.min(150, parseInt(e.target.value) || 1)))}
+              className="h-1 w-24 cursor-pointer accent-white"
+              aria-label="최대 문제수"
+            />
+            <input
               type="number"
               min={1}
               max={150}
@@ -977,17 +1009,57 @@ function DifficultyDistributionBar({
                 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-content-secondary">전체 문항</span>
+          {/* 매쓰홀릭 「선택 N | 출제 M」 — 선택 = 상한·중복제외 뒤 후보 수, 출제 = 실제 시험지에 들어갈 수 */}
+          <div className="flex items-center gap-2" title="선택 = 고른 유형에서 뽑을 수 있는 문제 수 · 출제 = 시험지에 들어갈 문항 수">
+            <span className="text-xs text-content-secondary">선택</span>
+            <span className="text-sm font-semibold tabular-nums text-content-secondary">{selectedCount}</span>
+            <span className="text-content-muted">|</span>
+            <span className="text-xs text-content-secondary">출제</span>
             <span className={`text-lg font-bold tabular-nums ${totalQuestions > maxQuestions ? 'text-amber-400' : 'text-content-primary'}`}>{totalQuestions}</span>
             <span className="text-[10px] text-content-muted">/ {maxQuestions}</span>
           </div>
         </div>
       </div>
 
+      {/* ★ 출제 방식 · 유형별 문제수 (2026-10-14, 매쓰홀릭 1단계 「출제 방식 / 유형별 문제수」 등가) */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="text-content-secondary">출제 방식</span>
+        <div className="flex items-center rounded-lg border border-subtle p-0.5">
+          {SELECTION_MODE_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onSelectionMode(o.value)}
+              title={o.hint}
+              className={`rounded-md px-2 py-1 transition-colors ${selectionMode === o.value ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <span className="ml-2 text-content-secondary">유형별 문제수</span>
+        <div className="flex items-center rounded-lg border border-subtle p-0.5" title="한 유형에서 최대 몇 문제까지 뽑을지 (전체 = 제한 없음)">
+          {[0, 1, 2, 3, 4].map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => onPerTypeCap(c)}
+              className={`rounded-md px-2 py-1 tabular-nums transition-colors ${perTypeCap === c ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'}`}
+            >
+              {c === 0 ? '전체' : `${c}개`}
+            </button>
+          ))}
+        </div>
+        {!isBand && (
+          <span className="text-content-muted">
+            {selectionMode === 'random' ? '문제 수만큼 난이도를 골고루 섞어 뽑습니다' : '소단원을 돌아가며 같은 수씩 뽑습니다'} — 아래 밴드 칸은 쓰지 않습니다
+          </span>
+        )}
+      </div>
+
       {/* ★ 평가 난이도 단계 — 매쓰홀릭 「평가 난이도 맞춤/1~6단계 · 내 1단계/내 2단계 ⚙」 등가 (2026-10-10).
           단계를 고르면 문제 수를 밴드별 가능 문항수 안에서 자동 배분. 칸을 직접 고치면 「맞춤」으로 돌아간다. */}
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+      <div className={`mb-2 flex flex-wrap items-center gap-2 text-[11px] ${isBand ? '' : 'pointer-events-none opacity-40'}`}>
         <span className="text-content-secondary">평가 난이도</span>
         <div className="flex items-center rounded-lg border border-subtle p-0.5">
           <button
@@ -1032,7 +1104,7 @@ function DifficultyDistributionBar({
         )}
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className={`grid grid-cols-5 gap-2 ${isBand ? '' : 'pointer-events-none opacity-40'}`}>
         {levels.map((level) => {
           const available = availableCounts[level] || 0;
           const value = difficulties[level];
@@ -1107,6 +1179,16 @@ export default function PaperCreatePage() {
   const [maxQuestions, setMaxQuestions] = useState<number>(30);
   // ★ 중복출제 방지 기간(일) — 기본 30, 0 = 끄기. localStorage 에 남겨 다음 출제에도 유지
   const [dedupeDays, setDedupeDays] = useState<number>(30);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('band');
+  const [perTypeCap, setPerTypeCap] = useState<number>(0);   // 0 = 전체, 1~4
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(SELECTION_MODE_KEY); if (m === 'band' || m === 'random' || m === 'even') setSelectionMode(m);
+      const c = parseInt(localStorage.getItem(PER_TYPE_CAP_KEY) ?? '', 10); if (Number.isFinite(c) && c >= 0 && c <= 4) setPerTypeCap(c);
+    } catch { /* ignore */ }
+  }, []);
+  const changeSelectionMode = (m: SelectionMode) => { setSelectionMode(m); try { localStorage.setItem(SELECTION_MODE_KEY, m); } catch { /* ignore */ } };
+  const changePerTypeCap = (c: number) => { setPerTypeCap(c); try { localStorage.setItem(PER_TYPE_CAP_KEY, String(c)); } catch { /* ignore */ } };
   useEffect(() => {
     try { const raw = localStorage.getItem(DEDUPE_DAYS_KEY); if (raw !== null) { const n = parseInt(raw, 10); if (Number.isFinite(n) && n >= 0) setDedupeDays(n); } } catch { /* ignore */ }
   }, []);
@@ -1252,9 +1334,13 @@ export default function PaperCreatePage() {
     });
   }, [typeGroups, selectedTypeItems]);
 
+  // ★ 출제 문항 수 — 난이도별 맞춤은 밴드 칸의 합, 무작위·균등은 min(문제 수, 선택 N)
+  const selectedCount = availableCounts.selected ?? 0;
   const totalQuestions = createMode === 'manual'
     ? manualSelected.size
-    : Object.values(difficulties).reduce((sum, val) => sum + val, 0);
+    : selectionMode === 'band'
+      ? Object.values(difficulties).reduce((sum, val) => sum + val, 0)
+      : Math.min(maxQuestions, selectedCount);
 
   const categoryLabel = useMemo(() => {
     const subj = subjects.find(s => s.code === selectedSubjectCode);
@@ -1358,7 +1444,7 @@ export default function PaperCreatePage() {
         // ★ POST 본문으로 — 세부유형 코드가 수백 개면 GET URL 이 헤더 한도(Vercel 16KB)를 넘는다
         const res = await fetch('/api/exams/available-counts', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays }),
+          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays, perTypeCap }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -1372,7 +1458,7 @@ export default function PaperCreatePage() {
     // ★ answerType 도 deps — 답안 형태를 바꾸면 밴드별 「있는 문제 수」를 다시 세야 한다
     // ★ 배열 대신 문자열 키 — 같은 범위인데 배열 참조만 바뀌어 6번씩 다시 세던 것 (실측 09-20)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTypeCodes.join(','), answerType, dedupeDays]);
+  }, [selectedTypeCodes.join(','), answerType, dedupeDays, perTypeCap]);
 
   // ★ 단계 적용 — 문제 수·가능 문항수·단계가 바뀔 때마다 (맞춤이면 손대지 않음)
   useEffect(() => {
@@ -1614,6 +1700,9 @@ export default function PaperCreatePage() {
           difficulty_distribution: difficulties,
           answerType,
           excludeRecentDays: dedupeDays,
+          selection: selectionMode,
+          perTypeCap,
+          maxQuestions,
           mode: createMode,
           // ★ 유형별 문항수(오른쪽 −/+) — 그 유형은 최소 이만큼. 이전엔 화면에만 있고 안 보내던 값.
           typeCounts: (() => { const o: Record<string, number> = {}; selectedTypeItems.forEach((v, k) => { if (v >= 2) o[k] = v; }); return Object.keys(o).length ? o : undefined; })(),
@@ -1929,6 +2018,11 @@ export default function PaperCreatePage() {
                 onDeleteMyStage={handleDeleteMyStage}
                 dedupeDays={dedupeDays}
                 onDedupeDays={changeDedupeDays}
+                selectionMode={selectionMode}
+                onSelectionMode={changeSelectionMode}
+                perTypeCap={perTypeCap}
+                onPerTypeCap={changePerTypeCap}
+                selectedCount={selectedCount}
               />
             </div>
           )}
