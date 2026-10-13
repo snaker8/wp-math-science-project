@@ -1346,6 +1346,7 @@ export function ExamPaperView({
                       {colProbs.map((problem) => (
                         <div
                           key={problem.id}
+                          data-problem-id={problem.id}
                           className="break-inside-avoid"
                           style={{
                             marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px`,
@@ -1366,6 +1367,7 @@ export function ExamPaperView({
                 {pageProblems.map((problem) => (
                   <div
                     key={problem.id}
+                    data-problem-id={problem.id}
                     className="break-inside-avoid"
                     style={{ marginBottom: `${presetAnswerSpaces ? 0 : getEffectiveGap(pageIdx)}px` }}
                   >

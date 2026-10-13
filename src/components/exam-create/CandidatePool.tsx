@@ -19,6 +19,7 @@ import type { CandidateProblem, CandidateKind } from '@/app/api/problems/candida
 
 const TABS: Array<{ kind: CandidateKind; label: string; hint: string }> = [
   { kind: 'similar', label: '유사', hint: '같은 유형 · 난이도가 가까운 순' },
+  { kind: 'unit', label: '단원', hint: '같은 소단원의 다른 유형 (매쓰홀릭 「단원별」)' },
   { kind: 'past', label: '기출', hint: '같은 유형의 학교기출' },
   { kind: 'hard', label: '고난도', hint: '같은 유형의 더 높은 난이도' },
   { kind: 'essay', label: '서술형', hint: '같은 유형의 서답형' },
