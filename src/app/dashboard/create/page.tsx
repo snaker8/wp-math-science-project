@@ -30,6 +30,7 @@ import { EditableExamHeader } from '@/components/exam/EditableExamHeader';
 import { TemplateSelector } from '@/components/exam/TemplateSelector';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { distributeByRatios, ratiosFromCounts, STAGE_RATIOS, STAGE_LABELS, type BandRatios } from '@/lib/exam/difficulty-stages';
+import { sortProblemIds, sameOrder, PROBLEM_SORT_OPTIONS, type ProblemSortMode } from '@/lib/exam/sort-problems';
 import dynamic from 'next/dynamic';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
@@ -692,6 +693,32 @@ function UnifiedPreviewPanel({
   const editAdd = async (c: { id: string }) => {
     await callEdit('add', { method: 'POST', body: JSON.stringify({ problemIds: [c.id] }) });
   };
+  // ★ 정렬 6종 + 되돌리기 (매쓰홀릭 2단계 「정렬 ▾ / ↶」) — 순서는 PATCH reorder 로 저장, 이전 순서는 스택에 쌓아 되돌린다
+  const [orderUndo, setOrderUndo] = useState<string[][]>([]);
+  const applyOrder = async (next: string[], pushUndo: boolean) => {
+    if (!examId || editBusy) return;
+    const before = problems.map((p) => p.id);
+    if (sameOrder(before, next)) return;
+    setEditBusy('sort'); setEditErr(null);
+    try {
+      const res = await fetch(`/api/exams/${examId}/reorder`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderedProblemIds: next }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((j as { error?: string }).error || `HTTP ${res.status}`);
+      if (pushUndo) setOrderUndo((u) => [...u.slice(-9), before]);
+      refetchProblems();
+    } catch (e) {
+      setEditErr(e instanceof Error ? e.message : String(e));
+    } finally { setEditBusy(null); }
+  };
+  const sortBy = (mode: ProblemSortMode) => void applyOrder(sortProblemIds(problems, mode), true);
+  const undoOrder = () => {
+    const prev = orderUndo[orderUndo.length - 1];
+    if (!prev) return;
+    setOrderUndo((u) => u.slice(0, -1));
+    void applyOrder(prev, false);
+  };
   const editRemove = async () => {
     if (!editTarget) return;
     const next = problems[editIndex + 1] ?? problems[editIndex - 1] ?? null;
@@ -838,6 +865,27 @@ function UnifiedPreviewPanel({
                 title="이 문항을 시험지에서 뺀다 (번호는 다시 매겨진다)"
               >
                 {editBusy === 'remove' ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} 빼기
+              </button>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1">
+              <select
+                value=""
+                disabled={!!editBusy || problems.length < 2}
+                onChange={(e) => { const m = e.target.value as ProblemSortMode | ''; if (m) sortBy(m); e.currentTarget.value = ''; }}
+                className="min-w-0 flex-1 rounded-md border border-subtle bg-surface-raised px-1.5 py-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none disabled:opacity-40"
+                title="시험지 문항 순서를 다시 매긴다"
+              >
+                <option value="">정렬…</option>
+                {PROBLEM_SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} title={o.hint}>{o.label}</option>)}
+              </select>
+              <button
+                type="button"
+                disabled={orderUndo.length === 0 || !!editBusy}
+                onClick={undoOrder}
+                className="inline-flex items-center gap-1 rounded-md border border-subtle px-1.5 py-1 text-[11px] text-content-secondary hover:border-white/30 hover:text-content-primary disabled:opacity-30"
+                title={orderUndo.length ? `정렬 전 순서로 되돌리기 (${orderUndo.length}단계)` : '되돌릴 정렬이 없습니다'}
+              >
+                {editBusy === 'sort' ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} 되돌리기
               </button>
             </div>
             {editErr && <p className="mt-1 text-[11px] text-content-secondary">{editErr}</p>}
