@@ -20,6 +20,8 @@ import {
   Plus,
   FileEdit,
   Search,
+  Repeat2,
+  Trash2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSubjectTrack } from '@/contexts/SubjectTrackContext';
@@ -35,7 +37,7 @@ import type { ProblemData } from '@/components/exam-paper/ExamPaperView';
 const ExamPaperView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.ExamPaperView), { ssr: false });
 const QuickAnswerView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.QuickAnswerView), { ssr: false });
 const SolutionView = dynamic(() => import('@/components/exam-paper/ExamPaperView').then((m) => m.SolutionView), { ssr: false });
-const ReplaceProblemModal = dynamic(() => import('@/components/papers/ReplaceProblemModal').then((m) => m.ReplaceProblemModal), { ssr: false });
+const CandidatePool = dynamic(() => import('@/components/exam-create/CandidatePool').then((m) => m.CandidatePool), { ssr: false });
 
 // ============================================================================
 // Types
@@ -645,9 +647,56 @@ function UnifiedPreviewPanel({
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
   const ready = !!examId && problems.length > 0;
   const title = paperName || '시험지';
-  // ★ 문항 교체 (2026-10-11 대표 "유사 문항 교체도 안 되고") — 번호를 고르면 같은 유형의 다른 문제 후보(유사·기출·고난도·서술형)
-  const [replaceTarget, setReplaceTarget] = useState<ProblemData | null>(null);
+  // ★ 문제 편집 패널 (2026-10-13, 매쓰홀릭 2단계 「문제 편집」 등가) — 미리보기 오른쪽에 붙박이 패널.
+  //   시험지에서 문항을 클릭(또는 번호 선택)하면 그 자리의 후보(유사·단원·기출·고난도·서술형)를 보여주고 [교체]/[추가]/[빼기].
+  //   2026-10-11 의 번호선택→모달 방식은 매번 열고 닫아야 해서 패널로 승격 (클라우드 펼쳐보기는 모달 유지).
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ProblemData | null>(null);
+  const [editBusy, setEditBusy] = useState<string | null>(null);
+  const [editErr, setEditErr] = useState<string | null>(null);
   const previewText = (s: string) => s.replace(/\$[^$]*\$/g, '…').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().slice(0, 28);
+  // 패널이 열렸는데 기준 문항이 없거나 시험지에서 사라졌으면 첫 문항으로
+  useEffect(() => {
+    if (!editOpen) return;
+    if (!editTarget || !problems.some((p) => p.id === editTarget.id)) setEditTarget(problems[0] ?? null);
+  }, [editOpen, editTarget, problems]);
+  const editIndex = editTarget ? problems.findIndex((p) => p.id === editTarget.id) : -1;
+  const callEdit = async (label: string, init: RequestInit) => {
+    if (!examId || editBusy) return false;
+    setEditBusy(label); setEditErr(null);
+    try {
+      const res = await fetch(`/api/exams/${examId}/problems`, { headers: { 'Content-Type': 'application/json' }, ...init });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((j as { error?: string }).error || `HTTP ${res.status}`);
+      refetchProblems();
+      return true;
+    } catch (e) {
+      setEditErr(e instanceof Error ? e.message : String(e));
+      return false;
+    } finally { setEditBusy(null); }
+  };
+  const editReplace = async (c: { id: string }) => {
+    if (!editTarget) return;
+    const ok = await callEdit('replace', { method: 'PATCH', body: JSON.stringify({ action: 'replace', fromProblemId: editTarget.id, toProblemId: c.id }) });
+    if (ok) setEditTarget({ ...editTarget, id: c.id });
+  };
+  const editAdd = async (c: { id: string }) => {
+    await callEdit('add', { method: 'POST', body: JSON.stringify({ problemIds: [c.id] }) });
+  };
+  const editRemove = async () => {
+    if (!editTarget) return;
+    const next = problems[editIndex + 1] ?? problems[editIndex - 1] ?? null;
+    const ok = await callEdit('remove', { method: 'PATCH', body: JSON.stringify({ action: 'remove', problemId: editTarget.id }) });
+    if (ok) setEditTarget(next);
+  };
+  // 시험지에서 문항 클릭 → 기준 문항 (ExamPaperView 가 보이는 문항 상자마다 data-problem-id 를 둔다)
+  const pickFromPaper = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editOpen) return;
+    const el = (e.target as HTMLElement).closest('[data-problem-id]');
+    if (!el) return;
+    const p = problems.find((x) => x.id === el.getAttribute('data-problem-id'));
+    if (p) setEditTarget(p);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -667,37 +716,29 @@ function UnifiedPreviewPanel({
             {tab}
           </button>
         ))}
-        {ready && (
-          <label className="ml-auto flex items-center gap-1 text-[11px] text-content-secondary">
-            문항 교체
-            <select
-              value=""
-              onChange={(e) => { const p = problems.find((x) => x.id === e.target.value); if (p) setReplaceTarget(p); }}
-              className="max-w-[220px] rounded-md border border-subtle bg-surface-raised px-1.5 py-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none"
-              title="번호를 고르면 같은 유형의 다른 문제로 바꿀 수 있습니다"
-            >
-              <option value="">번호 선택…</option>
-              {problems.map((p) => <option key={p.id} value={p.id}>{p.number}. {previewText(p.content)}</option>)}
-            </select>
-          </label>
+        {ready && previewTab === '시험지' && (
+          <button
+            type="button"
+            onClick={() => setEditOpen((v) => !v)}
+            className={`ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] transition-colors ${
+              editOpen ? 'bg-white font-semibold text-black' : 'border border-subtle text-content-secondary hover:text-content-primary'
+            }`}
+            title="시험지의 문항을 골라 같은 유형·단원의 다른 문제로 바꾸거나 더하거나 뺀다"
+          >
+            <Repeat2 size={12} /> 문제 편집
+          </button>
         )}
-        <span className="text-xs text-content-muted tabular-nums">
+        <span className={`text-xs text-content-muted tabular-nums ${ready && previewTab === '시험지' ? '' : 'ml-auto'}`}>
           {ready ? `${problems.length} 문항` : ''}
         </span>
       </div>
-      {replaceTarget && examId && (
-        <ReplaceProblemModal
-          examId={examId}
-          problem={{ id: replaceTarget.id, number: replaceTarget.number, content: replaceTarget.content }}
-          excludeIds={problems.map((p) => p.id)}
-          onClose={() => setReplaceTarget(null)}
-          onChanged={() => refetchProblems()}
-          excludeRecentDays={excludeRecentDays}
-        />
-      )}
 
-      {/* 본문 — ExamPaperView 가 툴바(단수·간격·배열·디자인·출력·PDF·한글)까지 가진다 */}
-      <div className="flex-1 min-h-0 overflow-auto bg-zinc-950/50">
+      {/* 본문 — ExamPaperView 가 툴바(단수·간격·배열·디자인·출력·PDF·한글)까지 가진다. 문제 편집이 열리면 오른쪽에 후보 패널 */}
+      <div className="flex flex-1 min-h-0 bg-zinc-950/50">
+      {editOpen && ready && previewTab === '시험지' && editTarget && (
+        <style>{`[data-problem-id="${editTarget.id}"]{outline:2px solid rgba(255,255,255,.55);outline-offset:2px;border-radius:4px}`}</style>
+      )}
+      <div className="flex-1 min-w-0 min-h-0 overflow-auto" onClickCapture={pickFromPaper}>
         {isLoading ? (
           <div className="flex items-center justify-center h-full gap-2">
             <Loader2 size={16} className="animate-spin text-content-tertiary" />
@@ -746,6 +787,67 @@ function UnifiedPreviewPanel({
             </p>
           </div>
         )}
+      </div>
+
+      {/* ★ 문제 편집 패널 — 기준 문항 고르기(클릭·번호·이전/다음) + 빼기 + 후보(유사·단원·기출·고난도·서술형) 교체/추가 */}
+      {editOpen && ready && examId && previewTab === '시험지' && (
+        <aside className="flex w-[340px] shrink-0 flex-col border-l border-subtle bg-surface">
+          <div className="border-b border-subtle px-3 py-2">
+            <div className="mb-1.5 flex items-center justify-between text-[11px] text-content-secondary">
+              <span>편집할 문항 — 시험지에서 클릭하거나 고르세요</span>
+              <button type="button" onClick={() => setEditOpen(false)} className="rounded p-0.5 text-content-muted hover:text-content-primary" title="패널 닫기">
+                <X size={12} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={editIndex <= 0}
+                onClick={() => setEditTarget(problems[editIndex - 1] ?? null)}
+                className="rounded-md border border-subtle px-1.5 py-1 text-[11px] text-content-secondary hover:text-content-primary disabled:opacity-30"
+                title="이전 문항"
+              >‹</button>
+              <select
+                value={editTarget?.id ?? ''}
+                onChange={(e) => { const p = problems.find((x) => x.id === e.target.value); if (p) setEditTarget(p); }}
+                className="min-w-0 flex-1 rounded-md border border-subtle bg-surface-raised px-1.5 py-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none"
+              >
+                {problems.map((p) => <option key={p.id} value={p.id}>{p.number}. {previewText(p.content)}</option>)}
+              </select>
+              <button
+                type="button"
+                disabled={editIndex < 0 || editIndex >= problems.length - 1}
+                onClick={() => setEditTarget(problems[editIndex + 1] ?? null)}
+                className="rounded-md border border-subtle px-1.5 py-1 text-[11px] text-content-secondary hover:text-content-primary disabled:opacity-30"
+                title="다음 문항"
+              >›</button>
+              <button
+                type="button"
+                disabled={!editTarget || !!editBusy || problems.length <= 1}
+                onClick={() => void editRemove()}
+                className="inline-flex items-center gap-1 rounded-md border border-subtle px-1.5 py-1 text-[11px] text-content-secondary hover:border-white/30 hover:text-content-primary disabled:opacity-30"
+                title="이 문항을 시험지에서 뺀다 (번호는 다시 매겨진다)"
+              >
+                {editBusy === 'remove' ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} 빼기
+              </button>
+            </div>
+            {editErr && <p className="mt-1 text-[11px] text-content-secondary">{editErr}</p>}
+          </div>
+          <div className="min-h-0 flex-1">
+            {editTarget && (
+              <CandidatePool
+                key={editTarget.id}
+                baseId={editTarget.id}
+                baseIndex={Math.max(0, editIndex)}
+                excludeIds={problems.map((p) => p.id)}
+                onReplace={(c) => void editReplace(c)}
+                onAdd={(c) => void editAdd(c)}
+                excludeRecentDays={excludeRecentDays}
+              />
+            )}
+          </div>
+        </aside>
+      )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@
 //   ?problemId=…&kind=similar|past|hard|essay&exclude=id,id&limit=12
 //
 //   similar  같은 유형(depth5)의 다른 문제 — 난이도가 가까운 것부터
+//   unit     같은 소단원(앞 4 세그먼트)의 **다른 유형** 문제 — 매쓰홀릭 2단계 「단원별」 탭 (유형 바깥에서 끌어오기)
 //   past     같은 유형인데 **학교기출** 시험지에서 나온 것 (exams.school_name)
 //   hard     같은 유형의 더 높은 난이도 (기준보다 위)
 //   essay    같은 유형의 서답형(서술형) — problems.answer_type
@@ -23,7 +24,7 @@ import { bandLabelOf } from '@/lib/class/mastery-bands';
 
 export const dynamic = 'force-dynamic';
 
-export type CandidateKind = 'similar' | 'past' | 'hard' | 'essay';
+export type CandidateKind = 'similar' | 'unit' | 'past' | 'hard' | 'essay';
 
 export interface CandidateProblem {
   id: string;
@@ -37,7 +38,7 @@ export interface CandidateProblem {
   school: string | null;
 }
 
-const KINDS: CandidateKind[] = ['similar', 'past', 'hard', 'essay'];
+const KINDS: CandidateKind[] = ['similar', 'unit', 'past', 'hard', 'essay'];
 
 export async function GET(req: NextRequest) {
   const authed = await requireAuthScope();
@@ -65,14 +66,17 @@ export async function GET(req: NextRequest) {
   }
   const baseDiff = base.difficulty == null ? null : parseInt(String(base.difficulty), 10);
 
-  // 같은 유형의 후보 (자기 자신 제외)
+  // 같은 유형의 후보 (자기 자신 제외) — unit 은 같은 소단원의 다른 유형
+  const unitPrefix = base.type_code.split('-').slice(0, 4).join('-');
   let cq = sb
     .from('classifications')
     .select('problem_id, type_code, difficulty, problems!inner(deleted_at)')
-    .eq('type_code', base.type_code)
     .neq('problem_id', problemId)
     .is('problems.deleted_at', null)
     .limit(400);
+  cq = kind === 'unit'
+    ? cq.like('type_code', `${unitPrefix}%`).neq('type_code', base.type_code)
+    : cq.eq('type_code', base.type_code);
   if (kind === 'hard' && baseDiff != null && Number.isFinite(baseDiff)) {
     const above = Array.from({ length: 10 - baseDiff }, (_, i) => String(baseDiff + 1 + i));
     if (above.length === 0) return NextResponse.json({ items: [], reason: '이미 가장 높은 난이도입니다' });
@@ -81,7 +85,9 @@ export async function GET(req: NextRequest) {
   const { data: clsRows } = await cq;
   let cands = ((clsRows ?? []) as Array<{ problem_id: string; type_code: string; difficulty: string | number | null }>)
     .filter((c) => !exclude.has(c.problem_id));
-  if (cands.length === 0) return NextResponse.json({ items: [], reason: '같은 유형의 다른 문제가 아직 없습니다' });
+  if (cands.length === 0) {
+    return NextResponse.json({ items: [], reason: kind === 'unit' ? '같은 소단원의 다른 유형 문제가 아직 없습니다' : '같은 유형의 다른 문제가 아직 없습니다' });
+  }
   if (excludeRecentDays > 0) {
     let instituteId: string | null = null;
     try { instituteId = resolveInsertInstituteId(scope); } catch { instituteId = null; }
@@ -133,8 +139,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [], reason: why });
   }
 
-  // similar 는 난이도가 가까운 것부터 (교체는 자리를 대신하는 것이라 난이도가 튀면 안 된다)
-  if (kind === 'similar' && baseDiff != null) {
+  // similar·unit 은 난이도가 가까운 것부터 (교체는 자리를 대신하는 것이라 난이도가 튀면 안 된다)
+  if ((kind === 'similar' || kind === 'unit') && baseDiff != null) {
     usable.sort((a, b) =>
       Math.abs(Number(a.difficulty) - baseDiff) - Math.abs(Number(b.difficulty) - baseDiff));
   }

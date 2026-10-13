@@ -156,6 +156,26 @@ export async function PATCH(
       return NextResponse.json({ success: true, examId, fromProblemId: fromId, toProblemId: toId, sequenceNumber: (updatedRows[0] as { sequence_number: number }).sequence_number });
     }
 
+    // ---- 액션: 문항 빼기 (2026-10-13, 매쓰홀릭 2단계 🗑) — 그 줄을 지우고 남은 문항 번호를 1부터 다시 매긴다 ----
+    if (body.action === 'remove') {
+      const pid: string = String(body.problemId || '');
+      if (!pid) return NextResponse.json({ error: 'problemId 필요' }, { status: 400 });
+      const { data: gone, error: delErr } = await supabaseAdmin
+        .from('exam_problems').delete().eq('exam_id', examId).eq('problem_id', pid).select('sequence_number');
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+      if (!gone || gone.length === 0) return NextResponse.json({ error: '시험지에 없는 문제입니다' }, { status: 404 });
+      const { data: rest } = await supabaseAdmin
+        .from('exam_problems').select('problem_id, sequence_number').eq('exam_id', examId).order('sequence_number', { ascending: true });
+      let n = 0;
+      for (const r of (rest || []) as Array<{ problem_id: string; sequence_number: number | null }>) {
+        n += 1;
+        if (r.sequence_number !== n) {
+          await supabaseAdmin.from('exam_problems').update({ sequence_number: n }).eq('exam_id', examId).eq('problem_id', r.problem_id);
+        }
+      }
+      return NextResponse.json({ success: true, examId, removedProblemId: pid, remaining: n });
+    }
+
     // ---- 단건 수정 ----
     const problemId: string | undefined = body.problemId;
     const points: unknown = body.points;
