@@ -35,6 +35,8 @@ import './report.css';
 interface ShareReportClientProps {
   /** ★ 학원별 브랜드 (2026-10-12) — 없으면 과사람 기본 */
   brand?: ReportBrand;
+  /** ★ 로그인한 선생님인가 — false 면 운영자 도구(액션 바·섹션 복사·캡처 안내)를 렌더하지 않는다 (2026-10-13) */
+  isOperator?: boolean;
   data: {
     intro?: { school: string | null; metaLine: string | null };
     hardProblems?: Record<string, ExamProblemData>;
@@ -80,14 +82,15 @@ interface ShareReportClientProps {
 }
 
 // ===== 단원별 분포용 도넛 차트 (SVG inline) =====
-const UNIT_COLORS = [
-  '#DD6B20', // 진한 오렌지
-  '#ED8936', // 오렌지
-  '#F6AD55', // 살구
-  '#FBD38D', // 옅은 살구
-  '#FEEBC8', // 크림 오렌지
-  '#CBD5E0', // 회색 (5+ 단원 fallback)
-];
+// ★ 디자인별 차트 팔레트 (2026-10-13 대표 캡처: 초록 디자인인데 도넛이 주황) — 마지막 색은 6번째 이후 단원 fallback
+const UNIT_PALETTES: Record<string, string[]> = {
+  'cream-orange': ['#DD6B20', '#ED8936', '#F6AD55', '#FBD38D', '#FEEBC8', '#CBD5E0'],
+  'navy-gold': ['#1a2744', '#2E4270', '#b89a5a', '#D4B978', '#EADFBF', '#CBD5E0'],
+  forest: ['#1F4D3A', '#2F6B52', '#5E9C7E', '#9CC5A1', '#D3E6D4', '#CBD5E0'],
+  slate: ['#1E293B', '#334155', '#2563EB', '#60A5FA', '#BFDBFE', '#CBD5E0'],
+  mono: ['#111111', '#3F3F46', '#71717A', '#A1A1AA', '#D4D4D8', '#E4E4E7'],
+};
+const unitPalette = (key: string): string[] => UNIT_PALETTES[key] || UNIT_PALETTES['cream-orange'];
 
 interface DonutSlice {
   name: string;
@@ -95,7 +98,7 @@ interface DonutSlice {
   pct: number;
 }
 
-function DonutChart({ items, total }: { items: DonutSlice[]; total: number }) {
+function DonutChart({ items, total, palette }: { items: DonutSlice[]; total: number; palette: string[] }) {
   const size = 180;
   const cx = size / 2;
   const cy = size / 2;
@@ -132,7 +135,7 @@ function DonutChart({ items, total }: { items: DonutSlice[]; total: number }) {
       `A ${r} ${r} 0 ${largeArc} 0 ${ix1.toFixed(2)} ${iy1.toFixed(2)}`,
       'Z',
     ].join(' ');
-    const color = UNIT_COLORS[idx % UNIT_COLORS.length];
+    const color = palette[idx % palette.length];
     startAngle = endAngle;
     return { path, color };
   });
@@ -191,7 +194,7 @@ function StepStrategy({ text }: { text: string }) {
   );
 }
 
-export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportClientProps) {
+export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = false }: ShareReportClientProps) {
   const reportRef = useRef<HTMLDivElement>(null);
   const sec1Ref = useRef<HTMLElement>(null); // 1. 기본 정보
   const sec2Ref = useRef<HTMLElement>(null); // 2. 종합 분석
@@ -320,8 +323,9 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
   };
 
   return (
-    <div className="report-shell" data-brand={brand.key}>
+    <div className="report-shell" data-brand={brand.key} data-op={isOperator ? "1" : "0"}>
       {/* 액션 바 — 사용자는 OS 캡처 도구(Win+Shift+S 등)로 직접 캡처 후 붙여넣음 */}
+      {isOperator && (
       <div className="report-actions no-print">
         <div className="report-actions-inner">
           <button onClick={handleNaverBlog} disabled={busy !== null} className="action-btn primary">
@@ -338,6 +342,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
           </button>
         </div>
       </div>
+      )}
 
       {toast && (
         <div className="report-toast">
@@ -347,7 +352,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
       )}
 
       {/* 캡처 안내 — 두 가지 방법. X 로 닫으면 localStorage 저장 (OS 캡처 시 화면에서도 사라짐) */}
-      {hintVisible && (
+      {isOperator && hintVisible && (
         <div className="capture-hint no-print" data-html2canvas-ignore="true">
           <div className="capture-hint-inner">
             <span className="capture-hint-icon">💡</span>
@@ -444,13 +449,13 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND }: ShareReportCl
                   <div className="empty">데이터 없음</div>
                 ) : (
                   <div className="donut-row">
-                    <DonutChart items={unitDist} total={data.stats.total} />
+                    <DonutChart items={unitDist} total={data.stats.total} palette={unitPalette(brand.key)} />
                     <div className="donut-legend">
                       {unitDist.map((u, i) => (
                         <div key={i} className="donut-legend-row">
                           <span
                             className="donut-legend-dot"
-                            style={{ background: UNIT_COLORS[i % UNIT_COLORS.length] }}
+                            style={{ background: unitPalette(brand.key)[i % 6] }}
                           />
                           <span className="donut-legend-name">{u.name}</span>
                           <span className="donut-legend-pct">

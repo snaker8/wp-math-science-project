@@ -7,7 +7,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ShareReportClient } from './ShareReportClient';
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { supabaseAdmin, createSupabaseServerClient } from '@/lib/supabase/server';
 import { resolveExamBrand } from '@/lib/report/resolve-exam-brand';
 import type { ReportBrand } from '@/lib/report/report-brand';
 import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
@@ -259,5 +259,16 @@ export default async function SharedExamReportPage({
     notFound();
   }
 
-  return <ShareReportClient data={data} domainLabels={DOMAIN_LABELS} brand={data.brand} />;
+  // ★ 운영자 도구(블로그 작성·링크 복사·인쇄·섹션 복사·캡처 안내)는 로그인한 선생님에게만 (2026-10-13 대표:
+  //   "링크 받은 학부모에게 맨 위 운영자 영역이 보이면 안 된다"). 공개 링크는 비로그인이라 자동으로 숨겨진다.
+  let isOperator = false;
+  try {
+    const supa = await createSupabaseServerClient();
+    if (supa) {
+      const { data: u } = await supa.auth.getUser();
+      isOperator = !!u?.user;
+    }
+  } catch { isOperator = false; }
+
+  return <ShareReportClient data={data} domainLabels={DOMAIN_LABELS} brand={data.brand} isOperator={isOperator} />;
 }
