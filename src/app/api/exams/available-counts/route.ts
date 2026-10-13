@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
+import { capPerType, deterministicRng, parsePerTypeCap, type PoolRow } from '@/lib/exam/selection';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,22 +26,23 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const typeCodes = (searchParams.get('typeCodes') || '').split(',').filter(Boolean);
   const answerType = searchParams.get('answerType') || '';
-  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')));
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')), parsePerTypeCap(searchParams.get('perTypeCap')));
 }
 
 export async function POST(request: NextRequest) {
-  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown } = {};
+  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown; perTypeCap?: unknown } = {};
   try { body = await request.json(); } catch { /* 빈 본문 */ }
   const typeCodes = Array.isArray(body.typeCodes) ? (body.typeCodes as unknown[]).filter((c): c is string => typeof c === 'string' && /^MS\d{2}/.test(c)) : [];
   const answerType = typeof body.answerType === 'string' ? body.answerType : '';
-  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays));
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays), parsePerTypeCap(body.perTypeCap));
 }
 
 // ★ .or() 필터는 한 번에 150개씩 — PostgREST 도 GET 이라 like 절 수백 개는 URL 한도를 넘는다
 const OR_CHUNK = 150;
 
 // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항은 「있는 문제 수」에서도 뺀다 (generate 와 같은 집합).
-async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number) {
+// ★ 유형별 상한(perTypeCap) 도 같은 규칙으로 걸어 「선택 N」(= 상한 적용 후 후보 수) 을 돌려준다.
+async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number, perTypeCap: number) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -51,10 +53,10 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
   const sb = supabaseAdmin;
 
   try {
-    if (typeCodes.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0 });
+    if (typeCodes.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0, selected: 0 });
 
     // 1) type_code 매칭 classifications 전체 (1000행 cap 회피 — range 루프, 코드는 150개씩 쪼개서)
-    type Row = { problem_id: string; difficulty: unknown };
+    type Row = PoolRow;
     const rows: Row[] = [];
     const seen = new Set<string>();
     const PAGE = 1000;
@@ -63,7 +65,7 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
       for (let from = 0; ; from += PAGE) {
         const { data: page, error } = await sb
           .from('classifications')
-          .select('problem_id, difficulty')
+          .select('problem_id, type_code, difficulty')
           .not('problem_id', 'is', null)
           .or(orFilters)
           .range(from, from + PAGE - 1);
@@ -72,11 +74,12 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
         if (!page || page.length === 0) break;
-        for (const r of page as Row[]) { if (!seen.has(r.problem_id)) { seen.add(r.problem_id); rows.push(r); } }
+        // 같은 문제가 여러 유형에 걸리면 유형별 상한 계산을 위해 (problem, type) 쌍으로 둔다 — 카운트는 problem 기준으로 다시 걷는다
+        for (const r of page as Row[]) { const k = `${r.problem_id}|${r.type_code}`; if (!seen.has(k)) { seen.add(k); rows.push(r); } }
         if (page.length < PAGE) break;
       }
     }
-    if (rows.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0 });
+    if (rows.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0, selected: 0 });
 
     // 2) 접근 가능(자기 institute + 공통 풀) 문제만 — chunk .in() + institute 필터
     const candidateIds = [...new Set(rows.map(r => r.problem_id))];
@@ -104,15 +107,15 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
       for (const id of Array.from(accessible)) if (recent.has(id)) { accessible.delete(id); excludedRecent++; }
     }
 
-    // 3) 접근 가능 문제만 난이도별 카운트
+    // 3) 접근 가능 문제만 → 유형별 상한(표시용 결정적 순서) → 난이도별 카운트. selected = 상한 적용 후 후보 수
+    const pool = capPerType(rows.filter((r) => accessible.has(r.problem_id)), perTypeCap, deterministicRng);
     const counts: Record<string, number> = { ...EMPTY };
-    for (const row of rows) {
-      if (!accessible.has(row.problem_id)) continue;
+    for (const row of pool) {
       const label = bandLabelOf(row.difficulty as number | string | null);
       if (label && counts[label] !== undefined) counts[label]++;
     }
 
-    return NextResponse.json({ ...counts, excludedRecent });
+    return NextResponse.json({ ...counts, excludedRecent, selected: pool.length });
   } catch (err) {
     console.error('[available-counts] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
