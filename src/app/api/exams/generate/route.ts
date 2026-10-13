@@ -9,6 +9,7 @@ import { LEVELS_BY_BAND_LABEL } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveInsertInstituteId, applyInstituteFilter } from '@/lib/security/institute-guard';
+import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 
 export async function POST(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -85,6 +86,8 @@ export async function POST(request: NextRequest) {
       if (typeof k === 'string' && /^MS\d{2}/.test(k) && Number.isFinite(n) && n > 0) typeCounts[k] = Math.min(50, Math.floor(n));
     }
     const answerType: string = criteria?.answerType || '';   // '' 전체 · multiple_choice · short_answer
+    // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항 제외 (0 = 끄기, 기본 30일). 매쓰홀릭 「중복출제 방지」 와 같은 뜻.
+    const excludeRecentDays = parseExcludeRecentDays(criteria?.excludeRecentDays);
     const totalNeeded = Object.values(diffDist).reduce((s: number, v: number) => s + v, 0);
 
     if (totalNeeded === 0) {
@@ -160,12 +163,23 @@ export async function POST(request: NextRequest) {
       for (const r of (accRows || []) as { id: string }[]) accessibleSet.add(r.id);
     }
 
-    const classRows = allClassRows.filter(r => accessibleSet.has(r.problem_id));
-    if (classRows.length === 0) {
-      return NextResponse.json({ error: '접근 가능한 문제가 없습니다.' }, { status: 404 });
+    // ---- 2.5. 중복출제 방지 — 최근 출제 문항 제외 (available-counts 와 같은 집합이라 「보이는 수 = 뽑히는 수」) ----
+    let excludedRecent = 0;
+    if (excludeRecentDays > 0) {
+      const recent = await loadRecentlyIssuedProblemIds(supabaseAdmin, insertInstituteId, excludeRecentDays);
+      for (const id of Array.from(accessibleSet)) if (recent.has(id)) { accessibleSet.delete(id); excludedRecent++; }
     }
 
-    console.log(`[Generate] candidates=${candidateIds.length} accessible=${accessibleSet.size} classRows=${classRows.length}`);
+    const classRows = allClassRows.filter(r => accessibleSet.has(r.problem_id));
+    if (classRows.length === 0) {
+      return NextResponse.json({
+        error: excludedRecent > 0
+          ? `최근 ${excludeRecentDays}일 안에 출제한 문항을 빼면 남는 문제가 없습니다. 중복출제 방지를 끄거나 기간을 줄여 주세요.`
+          : '접근 가능한 문제가 없습니다.',
+      }, { status: 404 });
+    }
+
+    console.log(`[Generate] candidates=${candidateIds.length} accessible=${accessibleSet.size} excludedRecent=${excludedRecent} classRows=${classRows.length}`);
 
     // ---- 2. 난이도별 그룹화 ----
     // ★ 밴드 라벨(개념·기본·실력·심화·고난도) → 난이도 레벨 묶음. 1~5 단일값이 아니라 범위다.
@@ -282,6 +296,7 @@ export async function POST(request: NextRequest) {
       success: true,
       examId: exam.id,
       problemCount: selectedProblemIds.length,
+      excludedRecent,
     });
 
   } catch (error) {

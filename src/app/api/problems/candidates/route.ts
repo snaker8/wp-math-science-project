@@ -17,7 +17,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
+import { applyInstituteFilter, applyTrackFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 import { bandLabelOf } from '@/lib/class/mastery-bands';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest) {
   const kind = (sp.get('kind') ?? 'similar') as CandidateKind;
   const limit = Math.min(30, Math.max(1, Number(sp.get('limit')) || 12));
   const exclude = new Set((sp.get('exclude') ?? '').split(',').map((s) => s.trim()).filter(Boolean));
+  // ★ 중복출제 방지 — 교체 후보에서도 최근 N일 출제 문항을 뺀다 (안 주면 0 = 끄기; 출제 화면은 자기 설정값을 보낸다)
+  const excludeRecentDays = sp.has('excludeRecentDays') ? parseExcludeRecentDays(sp.get('excludeRecentDays')) : 0;
   if (!problemId) return NextResponse.json({ error: 'problemId 가 필요합니다' }, { status: 400 });
   if (!KINDS.includes(kind)) return NextResponse.json({ error: 'kind 가 올바르지 않습니다' }, { status: 400 });
 
@@ -76,9 +79,19 @@ export async function GET(req: NextRequest) {
     cq = cq.in('difficulty', above);
   }
   const { data: clsRows } = await cq;
-  const cands = ((clsRows ?? []) as Array<{ problem_id: string; type_code: string; difficulty: string | number | null }>)
+  let cands = ((clsRows ?? []) as Array<{ problem_id: string; type_code: string; difficulty: string | number | null }>)
     .filter((c) => !exclude.has(c.problem_id));
   if (cands.length === 0) return NextResponse.json({ items: [], reason: '같은 유형의 다른 문제가 아직 없습니다' });
+  if (excludeRecentDays > 0) {
+    let instituteId: string | null = null;
+    try { instituteId = resolveInsertInstituteId(scope); } catch { instituteId = null; }
+    const recent = await loadRecentlyIssuedProblemIds(sb, instituteId, excludeRecentDays);
+    const before = cands.length;
+    cands = cands.filter((c) => !recent.has(c.problem_id));
+    if (cands.length === 0) {
+      return NextResponse.json({ items: [], reason: `같은 유형 ${before}문제가 모두 최근 ${excludeRecentDays}일 안에 출제한 것입니다 (중복출제 방지)` });
+    }
+  }
 
   // 본문 + 출처 (격리·트랙 통과분만)
   let pq = sb

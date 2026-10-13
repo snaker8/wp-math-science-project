@@ -11,7 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { EXAM_BAND_LABELS, bandLabelOf } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
-import { applyInstituteFilter } from '@/lib/security/institute-guard';
+import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
+import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,21 +25,22 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const typeCodes = (searchParams.get('typeCodes') || '').split(',').filter(Boolean);
   const answerType = searchParams.get('answerType') || '';
-  return countAvailable(typeCodes, answerType);
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')));
 }
 
 export async function POST(request: NextRequest) {
-  let body: { typeCodes?: unknown; answerType?: unknown } = {};
+  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown } = {};
   try { body = await request.json(); } catch { /* 빈 본문 */ }
   const typeCodes = Array.isArray(body.typeCodes) ? (body.typeCodes as unknown[]).filter((c): c is string => typeof c === 'string' && /^MS\d{2}/.test(c)) : [];
   const answerType = typeof body.answerType === 'string' ? body.answerType : '';
-  return countAvailable(typeCodes, answerType);
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays));
 }
 
 // ★ .or() 필터는 한 번에 150개씩 — PostgREST 도 GET 이라 like 절 수백 개는 URL 한도를 넘는다
 const OR_CHUNK = 150;
 
-async function countAvailable(typeCodes: string[], answerType: string) {
+// ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항은 「있는 문제 수」에서도 뺀다 (generate 와 같은 집합).
+async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -49,7 +51,7 @@ async function countAvailable(typeCodes: string[], answerType: string) {
   const sb = supabaseAdmin;
 
   try {
-    if (typeCodes.length === 0) return NextResponse.json({ ...EMPTY });
+    if (typeCodes.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0 });
 
     // 1) type_code 매칭 classifications 전체 (1000행 cap 회피 — range 루프, 코드는 150개씩 쪼개서)
     type Row = { problem_id: string; difficulty: unknown };
@@ -74,7 +76,7 @@ async function countAvailable(typeCodes: string[], answerType: string) {
         if (page.length < PAGE) break;
       }
     }
-    if (rows.length === 0) return NextResponse.json({ ...EMPTY });
+    if (rows.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0 });
 
     // 2) 접근 가능(자기 institute + 공통 풀) 문제만 — chunk .in() + institute 필터
     const candidateIds = [...new Set(rows.map(r => r.problem_id))];
@@ -93,6 +95,15 @@ async function countAvailable(typeCodes: string[], answerType: string) {
       for (const r of (accRows || []) as { id: string }[]) accessible.add(r.id);
     }
 
+    // 2.5) 중복출제 방지 — 최근 출제 문항 제외 (몇 개 빠졌는지도 돌려줘 화면에 「최근 출제 N개 제외」로 보인다)
+    let excludedRecent = 0;
+    if (excludeRecentDays > 0) {
+      let instituteId: string | null = null;
+      try { instituteId = resolveInsertInstituteId(scope); } catch { instituteId = null; }
+      const recent = await loadRecentlyIssuedProblemIds(sb, instituteId, excludeRecentDays);
+      for (const id of Array.from(accessible)) if (recent.has(id)) { accessible.delete(id); excludedRecent++; }
+    }
+
     // 3) 접근 가능 문제만 난이도별 카운트
     const counts: Record<string, number> = { ...EMPTY };
     for (const row of rows) {
@@ -101,7 +112,7 @@ async function countAvailable(typeCodes: string[], answerType: string) {
       if (label && counts[label] !== undefined) counts[label]++;
     }
 
-    return NextResponse.json(counts);
+    return NextResponse.json({ ...counts, excludedRecent });
   } catch (err) {
     console.error('[available-counts] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

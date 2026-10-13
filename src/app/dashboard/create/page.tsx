@@ -99,6 +99,15 @@ const ANSWER_TYPES: Array<{ value: string; label: string }> = [
 const MAX_PRESETS = [10, 15, 20, 25, 30] as const;
 // ★ 내 단계(원장이 저장한 비율) — localStorage
 const MY_STAGES_KEY = 'msb_diff_my_stages';
+// ★ 중복출제 방지 (2026-10-13, 매쓰홀릭 「중복출제 방지 — 최근 한달간 출제했던 문항을 제외」 등가, 기본 켜짐 30일)
+//   0 = 끄기. 학원 단위로 최근 N일 안에 출제한 문항을 가능 문항수·자동 출제·교체 후보 모두에서 뺀다.
+const DEDUPE_DAYS_KEY = 'msb_dedupe_days';
+const DEDUPE_PRESETS: { days: number; label: string }[] = [
+  { days: 14, label: '2주' },
+  { days: 30, label: '1개월' },
+  { days: 90, label: '3개월' },
+  { days: 180, label: '6개월' },
+];
 type MyStage = { name: string; ratios: BandRatios };
 
 const DIFF_COLORS: Record<DifficultyLevel, { bg: string; text: string; border: string }> = {
@@ -616,6 +625,7 @@ function UnifiedPreviewPanel({
   onTemplateChange,
   onMetaChange,
   refetchProblems,
+  excludeRecentDays = 0,
 }: {
   previewTab: PreviewTab;
   onTabChange: (tab: PreviewTab) => void;
@@ -629,6 +639,8 @@ function UnifiedPreviewPanel({
   onTemplateChange: (id: string, meta: ExamMeta) => void;
   onMetaChange: (meta: ExamMeta) => void;
   refetchProblems: () => void;
+  /** 중복출제 방지 기간(일) — 교체 후보에도 같은 제외를 건다 */
+  excludeRecentDays?: number;
 }) {
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
   const ready = !!examId && problems.length > 0;
@@ -680,6 +692,7 @@ function UnifiedPreviewPanel({
           excludeIds={problems.map((p) => p.id)}
           onClose={() => setReplaceTarget(null)}
           onChanged={() => refetchProblems()}
+          excludeRecentDays={excludeRecentDays}
         />
       )}
 
@@ -756,6 +769,8 @@ function DifficultyDistributionBar({
   myStages,
   onSaveMyStage,
   onDeleteMyStage,
+  dedupeDays,
+  onDedupeDays,
 }: {
   difficulties: Record<DifficultyLevel, number>;
   availableCounts: Record<string, number>;
@@ -770,8 +785,13 @@ function DifficultyDistributionBar({
   myStages: MyStage[];
   onSaveMyStage: () => void;
   onDeleteMyStage: (name: string) => void;
+  /** 중복출제 방지 기간(일), 0 = 끄기 */
+  dedupeDays: number;
+  onDedupeDays: (days: number) => void;
 }) {
   const levels: DifficultyLevel[] = DIFF_ORDER;
+  const excludedRecent = availableCounts.excludedRecent ?? 0;
+  const dedupeLabel = DEDUPE_PRESETS.find((d) => d.days === dedupeDays)?.label ?? `${dedupeDays}일`;
   const expectedTotal = levels.reduce((s, l) => s + Math.min(difficulties[l], availableCounts[l] ?? difficulties[l]), 0);
 
   return (
@@ -796,6 +816,37 @@ function DifficultyDistributionBar({
                 {a.label}
               </button>
             ))}
+          </div>
+          {/* ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항 제외 (매쓰홀릭 등가, 기본 1개월). 끄면 기간 선택이 사라진다 */}
+          <div
+            className="flex items-center gap-1.5 rounded-lg border border-subtle px-2 py-1 text-[11px] text-content-secondary"
+            title={dedupeDays > 0
+              ? `최근 ${dedupeLabel} 안에 출제한 문항을 뺍니다${excludedRecent > 0 ? ` (지금 범위에서 ${excludedRecent}문제 제외)` : ''}`
+              : '최근 출제한 문항도 다시 나올 수 있습니다'}
+          >
+            <button
+              type="button"
+              role="switch"
+              aria-checked={dedupeDays > 0}
+              onClick={() => onDedupeDays(dedupeDays > 0 ? 0 : 30)}
+              className={`relative h-4 w-7 rounded-full transition-colors ${dedupeDays > 0 ? 'bg-white' : 'bg-white/15'}`}
+            >
+              <span className={`absolute top-0.5 h-3 w-3 rounded-full transition-all ${dedupeDays > 0 ? 'left-3.5 bg-black' : 'left-0.5 bg-white/70'}`} />
+            </button>
+            <span className={dedupeDays > 0 ? 'text-content-primary' : ''}>중복출제 방지</span>
+            {dedupeDays > 0 && (
+              <select
+                value={DEDUPE_PRESETS.some((d) => d.days === dedupeDays) ? dedupeDays : 30}
+                onChange={(e) => onDedupeDays(parseInt(e.target.value, 10) || 30)}
+                className="h-5 rounded border border-subtle bg-surface-raised px-1 text-[11px] text-content-primary focus:border-white/25 focus:outline-none"
+                aria-label="중복출제 방지 기간"
+              >
+                {DEDUPE_PRESETS.map((d) => <option key={d.days} value={d.days}>최근 {d.label}</option>)}
+              </select>
+            )}
+            {dedupeDays > 0 && excludedRecent > 0 && (
+              <span className="tabular-nums text-content-muted">{excludedRecent}문제 제외</span>
+            )}
           </div>
           {/* ★ 문제 수 — 매쓰홀릭 「문제 수」 프리셋 + 직접 입력 (2026-10-10). 단계가 켜져 있으면 바꾸는 즉시 다시 배분 */}
           <div className="flex items-center gap-1 text-[11px] text-content-secondary">
@@ -952,6 +1003,15 @@ export default function PaperCreatePage() {
   // 출제 구성 — 답안 형태 · 최대 문제수 (설계서 S1 「출제 구성 패널」)
   const [answerType, setAnswerType] = useState('');
   const [maxQuestions, setMaxQuestions] = useState<number>(30);
+  // ★ 중복출제 방지 기간(일) — 기본 30, 0 = 끄기. localStorage 에 남겨 다음 출제에도 유지
+  const [dedupeDays, setDedupeDays] = useState<number>(30);
+  useEffect(() => {
+    try { const raw = localStorage.getItem(DEDUPE_DAYS_KEY); if (raw !== null) { const n = parseInt(raw, 10); if (Number.isFinite(n) && n >= 0) setDedupeDays(n); } } catch { /* ignore */ }
+  }, []);
+  const changeDedupeDays = (days: number) => {
+    setDedupeDays(days);
+    try { localStorage.setItem(DEDUPE_DAYS_KEY, String(days)); } catch { /* ignore */ }
+  };
   // ★ 평가 난이도 단계 (2026-10-10, 매쓰홀릭 등가): null=맞춤(수동) · 1~6 · 'my:이름'. 단계가 켜져 있으면
   //   문제 수·가능 문항수가 바뀔 때마다 밴드를 다시 배분한다. 칸을 손으로 고치면 맞춤으로.
   const [diffStage, setDiffStage] = useState<number | string | null>(null);
@@ -1196,7 +1256,7 @@ export default function PaperCreatePage() {
         // ★ POST 본문으로 — 세부유형 코드가 수백 개면 GET URL 이 헤더 한도(Vercel 16KB)를 넘는다
         const res = await fetch('/api/exams/available-counts', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType }),
+          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -1210,7 +1270,7 @@ export default function PaperCreatePage() {
     // ★ answerType 도 deps — 답안 형태를 바꾸면 밴드별 「있는 문제 수」를 다시 세야 한다
     // ★ 배열 대신 문자열 키 — 같은 범위인데 배열 참조만 바뀌어 6번씩 다시 세던 것 (실측 09-20)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTypeCodes.join(','), answerType]);
+  }, [selectedTypeCodes.join(','), answerType, dedupeDays]);
 
   // ★ 단계 적용 — 문제 수·가능 문항수·단계가 바뀔 때마다 (맞춤이면 손대지 않음)
   useEffect(() => {
@@ -1451,6 +1511,7 @@ export default function PaperCreatePage() {
           typeCodes: selectedTypeCodes,
           difficulty_distribution: difficulties,
           answerType,
+          excludeRecentDays: dedupeDays,
           mode: createMode,
           // ★ 유형별 문항수(오른쪽 −/+) — 그 유형은 최소 이만큼. 이전엔 화면에만 있고 안 보내던 값.
           typeCounts: (() => { const o: Record<string, number> = {}; selectedTypeItems.forEach((v, k) => { if (v >= 2) o[k] = v; }); return Object.keys(o).length ? o : undefined; })(),
@@ -1764,6 +1825,8 @@ export default function PaperCreatePage() {
                 myStages={myStages}
                 onSaveMyStage={handleSaveMyStage}
                 onDeleteMyStage={handleDeleteMyStage}
+                dedupeDays={dedupeDays}
+                onDedupeDays={changeDedupeDays}
               />
             </div>
           )}
@@ -1805,6 +1868,7 @@ export default function PaperCreatePage() {
             onTemplateChange={(id, meta) => { setPreviewTemplateId(id); setPreviewExamMeta(meta); }}
             onMetaChange={setPreviewExamMeta}
             refetchProblems={refetchGenerated}
+            excludeRecentDays={dedupeDays}
           />
         </div>
       </div>

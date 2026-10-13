@@ -82,3 +82,8 @@ scripts/_tmp-*
 
 # 일괄 교정 스크립트가 뜨는 원본 백업 — 문제 본문이 들어 있고 크다. 복구용 로컬 파일.
 scripts/.backup-*.json
+
+# 매쓰홀릭 분석 기록(토큰 포함 가능) — 커밋 금지
+# 매쓰홀릭 REA 분석 산출물 — 번들 분석·네트워크 기록은 저장소에 넣지 않는다(경쟁사 코드·계정 데이터). 요약은 12-rea-unit-group.md 에만.
+docs/benchmark/matholic/rea/*
+!docs/benchmark/matholic/rea/origins.txt

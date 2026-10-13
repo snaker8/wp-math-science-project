@@ -22,6 +22,7 @@ export function ReplaceProblemModal({
   excludeIds,
   onClose,
   onChanged,
+  excludeRecentDays = 0,
 }: {
   examId: string;
   /** 바꿀 문제 (자리 기준) */
@@ -31,6 +32,8 @@ export function ReplaceProblemModal({
   onClose: () => void;
   /** 교체/추가가 DB 에 반영된 뒤 (호출측은 refetch) */
   onChanged: (how: 'replace' | 'add', candidate: CandidateProblem) => void;
+  /** 중복출제 방지 기간(일) — 출제 화면에서 넘긴다. 0/생략 = 끄기 */
+  excludeRecentDays?: number;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -109,6 +112,7 @@ export function ReplaceProblemModal({
             excludeIds={excludeIds}
             onReplace={replaceWith}
             onAdd={addAfter}
+            excludeRecentDays={excludeRecentDays}
           />
         </div>
       </div>
