@@ -93,6 +93,10 @@ export async function POST(request: NextRequest) {
     const selectionMode = parseSelectionMode(criteria?.selection);
     const perTypeCap = parsePerTypeCap(criteria?.perTypeCap);
     const maxQuestions = Math.max(1, Math.min(150, parseInt(String(criteria?.maxQuestions ?? 30), 10) || 30));
+    // ★ 회차 출제 — 앞 회차에서 뽑힌 문항은 이번 회차에서 뺀다 (클라이언트가 누적해서 보낸다)
+    const excludeProblemIds = new Set<string>(
+      Array.isArray(criteria?.excludeProblemIds) ? (criteria.excludeProblemIds as unknown[]).filter((v): v is string => typeof v === 'string') : [],
+    );
     const totalNeeded = selectionMode === 'band'
       ? Object.values(diffDist).reduce((s: number, v: number) => s + v, 0)
       : maxQuestions;
@@ -177,6 +181,8 @@ export async function POST(request: NextRequest) {
       for (const id of Array.from(accessibleSet)) if (recent.has(id)) { accessibleSet.delete(id); excludedRecent++; }
     }
 
+    for (const id of excludeProblemIds) accessibleSet.delete(id);
+
     const classRows = allClassRows.filter(r => accessibleSet.has(r.problem_id));
     if (classRows.length === 0) {
       return NextResponse.json({
@@ -248,6 +254,7 @@ export async function POST(request: NextRequest) {
       success: true,
       examId: exam.id,
       problemCount: selectedProblemIds.length,
+      problemIds: selectedProblemIds,
       excludedRecent,
     });
 
