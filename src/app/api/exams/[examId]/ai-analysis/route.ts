@@ -17,7 +17,8 @@ import {
   EXAM_ANALYSIS_SYSTEM_PROMPT,
   buildExamAnalysisUserPrompt,
 } from '@/lib/ai/exam-analysis-prompt';
-import { resolveSubjectCode, curriculumCodesToSubjectGrade } from '@/lib/workflow/mathsecr-prompt';
+import { resolveSubjectCode, curriculumCodesToSubjectGrade, curriculumCodesToLabel } from '@/lib/workflow/mathsecr-prompt';
+import { buildUnitFacts, formatUnitFactsForPrompt, reconcileUnitAnalyses, reconcileSummaryCounts } from '@/lib/ai/unit-facts';
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
@@ -276,6 +277,8 @@ export async function POST(
           : 3,
         cognitiveDomain: cls?.cognitive_domain || 'UNDERSTANDING',
         majorUnit,
+        // ★ 단원의 학기(중1-1 등) — 유형 코드 과목으로. 시험 범위가 두 학기에 걸친 걸 총평이 알게 (2026-10-14 동백중 1-2 중간)
+        semester: msHit ? (curriculumCodesToLabel([msHit.subjectCode]) || null) : null,
         typeName: typeName || null,
         points: row.points ? Number(row.points) : 0,
       };
@@ -347,6 +350,10 @@ export async function POST(
     loadFigureForLazy = loadFigureFor;
   }
 
+  // ★ 6.7 단원별 문항 수 확정 표 — 총평·단원 카드의 숫자는 전부 여기서 나온다 (AI 가 세지 않는다)
+  const unitFacts = buildUnitFacts(problemsForPrompt.map((p) => ({ number: p.number, majorUnit: p.majorUnit, semester: p.semester })));
+  const unitFactsText = formatUnitFactsForPrompt(unitFacts, problemsForPrompt.length);
+
   // 7. 사용자 프롬프트 생성 — 보정된 effectiveGrade/effectiveSubject 사용
   const userPrompt = buildExamAnalysisUserPrompt({
     examTitle: exam.title,
@@ -355,6 +362,7 @@ export async function POST(
     problems: problemsForPrompt,
     hardDifficultyThreshold: hardThreshold,
     hardQuestionLimit: hardLimit,
+    unitFactsText,
   });
 
   // 8. Claude 호출 (prompt cache 적용)
@@ -466,11 +474,18 @@ export async function POST(
   }
   console.log(`[exam-ai-analysis] 공략 검산 호출 ${verifyCalls}회`);
 
+  // 9.5 단원 카드·총평 숫자를 확정 표로 맞춘다 — AI 가 두 군데서 따로 센 수가 어긋나던 사고(동백중 8 vs 9문항) 차단
+  const recon = reconcileUnitAnalyses(Array.isArray(parsed.unitAnalyses) ? parsed.unitAnalyses : [], unitFacts);
+  const summaryFix = reconcileSummaryCounts(parsed.summary || '', unitFacts);
+  if (recon.dropped.length || recon.added.length || summaryFix.fixed) {
+    console.warn(`[exam-ai-analysis] 단원 보정 — 버림=${recon.dropped.join('/') || '-'} 채움=${recon.added.join('/') || '-'} 총평 숫자 수정=${summaryFix.fixed}`);
+  }
+
   // 10. 결과 객체 완성
   const finalAnalysis: ExamAIAnalysis = {
-    summary: parsed.summary || '',
+    summary: summaryFix.text,
     overallDifficulty: parsed.overallDifficulty || '보통',
-    unitAnalyses: Array.isArray(parsed.unitAnalyses) ? parsed.unitAnalyses : [],
+    unitAnalyses: recon.result,
     hardQuestions: verifiedHard,
     generatedAt: new Date().toISOString(),
     modelVersion: ANTHROPIC_MODEL,

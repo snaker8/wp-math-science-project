@@ -43,6 +43,8 @@ export const EXAM_ANALYSIS_SYSTEM_PROMPT = `
    - 단원 분포(어떤 단원 비중이 큰지)
    - 난이도 분포 (예: "난이도 5~6 중심에 7~8 변별 문항 3개")
    - 변별 포인트 (시험에서 등급/점수를 가르는 핵심)
+   - **★ 숫자는 「단원별 문항 수」 표만**: 단원별 문항 수·문항 번호·총 문항 수는 사용자 프롬프트의 확정 표를 그대로 쓰고 직접 세지 마세요. 표와 다른 수를 쓰면 안 됩니다.
+   - **★ 시험 범위 표기**: 확정 표의 「학기」가 둘 이상이면(예: 중1-1 정비례와 반비례 + 중1-2 도형) "중1-2 범위"처럼 한 학기로 뭉뚱그리지 말고 두 학기를 나누어 쓰세요.
    - **★ 학년·과목 표기**: summary 본문에서 "이 시험지는 ○○ 범위", "○○ 수학" 같이 학년·과목을 언급할 때는 입력으로 받은 학년(grade)과 과목(subject)을 정확히 그대로 사용하세요. 임의로 다른 학년(예: 입력이 "고2 대수"인데 "고1 수학")으로 바꾸거나 추측하지 마세요. 입력 학년이 비어있으면 학년 표기를 생략하고 단원 분포 중심으로 작성하세요.
 
 2. **overallDifficulty** 판정 기준:
@@ -56,6 +58,7 @@ export const EXAM_ANALYSIS_SYSTEM_PROMPT = `
    - questionNumbers는 해당 단원에 속한 문항의 시험지 내 번호
    - keyPoints는 학생이 반드시 알아야 할 개념 중심
    - strategy는 그 단원만의 특성에 맞춘 학습법
+   - **★ questionNumbers 는 확정 표의 「문항 번호」를 그대로** (서버가 다시 맞춥니다)
    - **★ majorUnit 일관성**: 입력으로 받은 각 문제의 majorUnit 값은 시험지의 학년/과목에 정합한 정확한 대단원명입니다. unitAnalyses[i].majorUnit은 입력의 majorUnit 값을 그대로 사용하고, 임의의 단원명(예: 다른 학년의 단원명)으로 변경하거나 풀어쓰지 마세요. 입력에 없는 단원명을 새로 만들어내지 마세요.
 
 4. **hardQuestions**:
@@ -107,6 +110,8 @@ export function buildExamAnalysisUserPrompt(input: {
   }>;
   hardDifficultyThreshold: number;
   hardQuestionLimit: number;
+  /** ★ 서버가 센 단원별 문항 수 확정 표 (unit-facts.ts) — 숫자·범위의 유일한 출처 */
+  unitFactsText?: string;
 }): string {
   const problemsText = input.problems
     .map(
@@ -126,7 +131,7 @@ ${p.content}
 - 학년: ${input.grade ?? '미지정'}
 - 과목: ${input.subject ?? '미지정'}
 - 총 ${input.problems.length}문항
-
+${input.unitFactsText ? `\n${input.unitFactsText}\n` : ''}
 # 고난도 분석 기준
 - 난이도 ≥ ${input.hardDifficultyThreshold} 인 문항 중 상위 ${input.hardQuestionLimit}개
 
