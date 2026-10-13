@@ -890,6 +890,44 @@ function UnifiedPreviewPanel({
             </div>
             {editErr && <p className="mt-1 text-[11px] text-content-secondary">{editErr}</p>}
           </div>
+          {/* ★ 개요 (매쓰홀릭 2단계 「개요」 탭 등가) — 난이도·답안 유형·소단원 분포. 전부 화면 안에서 센다 */}
+          <details className="border-b border-subtle px-3 py-1.5 text-[11px]" open>
+            <summary className="cursor-pointer select-none text-content-secondary">개요 — {problems.length}문항</summary>
+            {(() => {
+              const bands = ['개념', '기본', '실력', '심화', '고난도'];
+              const bandCount: Record<string, number> = Object.fromEntries(bands.map((b) => [b, 0]));
+              let objective = 0;
+              const units = new Map<string, number>();
+              for (const p of problems) {
+                const b = bandLabelOf(p.difficulty); if (b && b in bandCount) bandCount[b]++;
+                if (p.choices && p.choices.length > 0) objective++;
+                const u = (p.typeCode || '').split('-').slice(0, 4).join('-') || '미분류';
+                units.set(u, (units.get(u) ?? 0) + 1);
+              }
+              const n = Math.max(1, problems.length);
+              const pct = (v: number) => `${Math.round((v / n) * 100)}%`;
+              return (
+                <div className="mt-1.5 space-y-1.5">
+                  <div className="space-y-0.5">
+                    {bands.map((b) => (
+                      <div key={b} className="flex items-center gap-2">
+                        <span className="w-9 text-content-muted">{b}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-white/60" style={{ width: pct(bandCount[b]) }} />
+                        </div>
+                        <span className="w-14 text-right tabular-nums text-content-secondary">{bandCount[b]} · {pct(bandCount[b])}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 text-content-secondary">
+                    <span>객관식 <b className="text-content-primary tabular-nums">{objective}</b> ({pct(objective)})</span>
+                    <span>주관식 <b className="text-content-primary tabular-nums">{problems.length - objective}</b> ({pct(problems.length - objective)})</span>
+                    <span className="ml-auto">소단원 <b className="text-content-primary tabular-nums">{units.size}</b>개</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </details>
           <div className="min-h-0 flex-1">
             {editTarget && (
               <CandidatePool
@@ -1283,6 +1321,9 @@ export default function PaperCreatePage() {
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
+  // ★ 회차 출제 (2026-10-14, 매쓰홀릭 3단계 「회차 출제 1~3회차」 등가) — 같은 조건으로 N장, 앞 회차 문항은 다음 회차에서 뺀다
+  const [rounds, setRounds] = useState<number>(1);
+  const [roundsNotice, setRoundsNotice] = useState<string | null>(null);
   const [generatedExamId, setGeneratedExamId] = useState<string | null>(null);
   // ★ 인쇄 통일 (2026-10-10): 생성된 시험지는 DB 에 있으므로 클라우드·시험관리와 같은 훅·매핑으로 읽는다
   const { problems: generatedDbProblems, isLoading: generatedLoading, refetch: refetchGenerated } = useExamProblems(generatedExamId);
@@ -1757,14 +1798,34 @@ export default function PaperCreatePage() {
         };
       }
 
-      const response = await fetch('/api/exams/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to generate');
+      // ★ 회차 출제 — 자동 모드에서 rounds>1 이면 같은 조건으로 순서대로 N장. 제목에 (n회차), 앞 회차 문항 누적 제외.
+      //   첫 회차를 미리보기에 띄우고, 나머지는 시험지 관리에 쌓인다. 한 회차가 실패하면 거기서 멈추고 알린다.
+      const roundCount = createMode === 'auto' ? Math.max(1, Math.min(3, rounds)) : 1;
+      const excludeAcc: string[] = [];
+      let data: { examId?: string; problemIds?: string[]; error?: string } = {};
+      const made: string[] = [];
+      setRoundsNotice(null);
+      for (let r = 1; r <= roundCount; r++) {
+        const roundBody: Record<string, unknown> = { ...body };
+        if (roundCount > 1) {
+          roundBody.title = `${paperName} (${r}회차)`;
+          roundBody.criteria = { ...(body.criteria as Record<string, unknown>), excludeProblemIds: excludeAcc };
+        }
+        const response = await fetch('/api/exams/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(roundBody),
+        });
+        const d = (await response.json()) as typeof data;
+        if (!response.ok) {
+          if (made.length > 0) { setRoundsNotice(`${made.length}회차까지 만들었습니다. ${r}회차 실패: ${d.error || `HTTP ${response.status}`}`); break; }
+          throw new Error(d.error || 'Failed to generate');
+        }
+        if (r === 1) data = d;
+        if (d.examId) made.push(d.examId);
+        for (const id of d.problemIds ?? []) excludeAcc.push(id);
+      }
+      if (roundCount > 1 && made.length === roundCount) setRoundsNotice(`${roundCount}회차 생성 완료 — 1회차를 미리보기에 띄웠습니다. 나머지는 시험지 관리에 있습니다.`);
 
       if (data.examId) {
         setGeneratedExamId(data.examId);
@@ -1827,6 +1888,17 @@ export default function PaperCreatePage() {
               <RotateCcw size={14} />
               <span>초기화</span>
             </button>
+            {createMode === 'auto' && !generatedExamId && (
+              <select
+                value={rounds}
+                onChange={(e) => setRounds(parseInt(e.target.value, 10) || 1)}
+                className="h-8 rounded-lg border border-subtle bg-surface-raised px-2 text-xs text-content-primary focus:border-white/25 focus:outline-none"
+                title="같은 조건으로 몇 장을 만들지 — 앞 회차에 나온 문항은 다음 회차에서 뺍니다"
+                aria-label="회차 출제"
+              >
+                {[1, 2, 3].map((n) => <option key={n} value={n}>{n}회차</option>)}
+              </select>
+            )}
             <button
               type="button"
               onClick={generatedExamId ? () => router.push('/dashboard/exam-management') : handleSaveExam}
@@ -1846,6 +1918,9 @@ export default function PaperCreatePage() {
           </div>
         </div>
 
+        {roundsNotice && (
+          <p className="mb-2 rounded-lg border border-subtle bg-surface-raised/60 px-3 py-1.5 text-[11px] text-content-secondary">{roundsNotice}</p>
+        )}
         {/* Row 2: Scope + paper name + mode */}
         <div className="flex items-center gap-3 mb-2">
           <div className="flex-1 min-w-0">
