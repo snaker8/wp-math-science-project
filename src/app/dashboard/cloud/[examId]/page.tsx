@@ -350,71 +350,13 @@ function FigureMarkerRenderer({
   const floatPart = contentParts.find(p => p.type === 'figure' && p.floatMode);
   const isFloatMode = !!floatPart;
 
-  // ═══ 플로트 모드 렌더링 ═══
-  if (isFloatMode && floatPart) {
-    const figureIdx = contentParts.indexOf(floatPart);
-    const beforeParts = contentParts.slice(0, figureIdx);
-    const afterParts = contentParts.slice(figureIdx + 1);
-    const floatSide = floatPart.floatMode === 'left' ? 'float-left mr-3' : 'float-right ml-3';
-    const widthPct = floatPart.widthPercent || 40;
-
-    return (
-      <div className="inline">
-        {/* 플로트 전 텍스트 */}
-        {beforeParts.map((part, i) =>
-          part.type === 'text'
-            ? renderTextWithBadge(part.text, `pre-${i}`, 'inline text-sm text-content-secondary leading-relaxed')
-            : null
-        )}
-        {/* 플로트 이미지 + 이후 텍스트가 감싸는 영역 */}
-        <div>
-          <div
-            className={`${floatSide} mb-2`}
-            style={{ width: `${widthPct}%`, maxWidth: '240px' }}
-          >
-            {hasFigureSource ? (
-              <FigureRenderer
-                figureData={problem.figureData}
-                figureSvg={problem.figureSvg}
-                upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined}
-                figureSource={problem.figureSource}
-                cropImageUrl={proxiedCrop}
-                maxWidth={240}
-                darkMode
-                editable
-                problemId={problem.id}
-              />
-            ) : proxiedCrop ? (
-              <img
-                src={proxiedCrop}
-                alt={`문제 ${problem.number} 도형`}
-                className="rounded-lg border border-zinc-700 w-full object-contain"
-                loading="lazy"
-              />
-            ) : (
-              <div className="flex items-center justify-center py-4 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5">
-                <Shapes className="h-5 w-5 text-orange-400" />
-              </div>
-            )}
-          </div>
-          {afterParts.map((part, i) =>
-            part.type === 'text'
-              ? renderTextWithBadge(part.text, `post-${i}`, 'text-sm text-content-secondary leading-relaxed')
-              : null
-          )}
-          <div style={{ clear: 'both' }} />
-        </div>
-      </div>
-    );
-  }
-
   // ═══ 라인 모드 렌더링 ═══
   // ★ 다중 [도형] 마커 지원: figure_crop 배열에서 순서대로 이미지 매칭
   const allFigureCrops = problem.images?.filter((img: { type: string }) => img.type === 'figure_crop') || [];
   let figureCounter = 0;
   // ★ 그림 나열(여러 작은 도형) — 각 그림을 전체폭으로 세로 쌓으면 거대해짐(온천중 #21/#22). 2개↑면
   //   작게(인라인블록) 가로로 흘러 줄바꿈되게 → 원본 격자에 가깝게. 단일 도형은 기존(큰 중앙).
-  const multiFig = allFigureCrops.length >= 2;
+  const multiFig = allFigureCrops.length >= 2 && !isFloatMode;   // ★ 플로트면 나머지 그림은 줄 배치 — 나열 런 아님 (2026-10-14)
 
   // ★ 각 그림 밑 캡션 짝짓기 — 표가 [그림행][캡션행] 구조라, 연속 그림 런 다음 텍스트의 캡션 수가 런 길이와
   //   일치(온천중 #21 "[N개]", #22 "①설명"). 런 단위로 그림[k]↔캡션[k] 매칭하고, 캡션은 텍스트에서 제거(중복 방지).
@@ -451,19 +393,8 @@ function FigureMarkerRenderer({
     }
   }
 
-  return (
-    <div className="inline">
-      {contentParts.map((part, i) => {
-        if (part.type === 'text') {
-          // ★ 캡션 추출로 비워진 텍스트는 스킵(빈 content → "(문제 내용 없음)" 표시되던 사고).
-          if (!part.text || !part.text.trim()) return null;
-          // ★ 그림 나열(multiFig)에선 텍스트를 block 으로 — inline 이면 그림 뒤 텍스트("(1)" 등)가
-          //   그림 옆으로 흘러 붙음. block 이면 그림 아래 줄로 떨어짐.
-          return renderTextWithBadge(part.text, String(i), `${multiFig ? 'block' : 'inline'} text-sm text-content-secondary leading-relaxed`);
-        }
-
-        // figure 파트 — figureCounter로 순서 매칭
-        const currentFigureIdx = figureCounter++;
+  // ★ figure 파트 하나 그리기 — 줄 배치(라인 모드)·플로트 모드의 나머지 그림이 같이 쓴다 (2026-10-14)
+  const renderFigurePart = (part: (typeof contentParts)[number], i: number, currentFigureIdx: number) => {
         const matchedCrop = allFigureCrops[currentFigureIdx];
 
         // 첫 번째 도형: 기존 FigureRenderer (upscaledCropUrl/figureData 등)
@@ -494,7 +425,7 @@ function FigureMarkerRenderer({
         // 2번째 이후 도형 또는 첫 번째에 figureSource 없을 때: figure_crop 이미지 직접 표시
         if (matchedCrop) {
           // ★ 연속 그림 런(2개↑)만 작게 가로 흐름 + 캡션. 단독 그림(소문제별 1개)은 중앙 큰 배치(온천중 #20).
-          return figIsInRun[currentFigureIdx] ? (
+          return figIsInRun[currentFigureIdx] && !part.widthPercent ? (
             <span key={i} className="inline-flex flex-col items-center align-top m-1 max-w-[200px]">
               <img
                 src={proxyUrl(matchedCrop.url)}
@@ -541,6 +472,93 @@ function FigureMarkerRenderer({
             </div>
           </div>
         );
+  };
+
+  // ═══ 플로트 모드 렌더링 ═══
+  if (isFloatMode && floatPart) {
+    // ★ 그림 2개↑: 플로트는 그 그림 하나, 나머지 [도형] 은 줄 배치로 (2026-10-14 해운대여중 #2 — 종전엔 다른 그림을 버렸다)
+    const figureIdx = contentParts.indexOf(floatPart);
+    const floatFigIdx = contentParts.slice(0, figureIdx).filter((p) => p.type === 'figure').length;
+    const floatCrop = allFigureCrops[floatFigIdx];
+    const beforeParts = contentParts.slice(0, figureIdx);
+    const afterParts = contentParts.slice(figureIdx + 1);
+    const floatSide = floatPart.floatMode === 'left' ? 'float-left mr-3' : 'float-right ml-3';
+    const widthPct = floatPart.widthPercent || 40;
+    let fc = 0;
+    const beforeNodes = beforeParts.map((part, i) =>
+      part.type === 'text'
+        ? renderTextWithBadge(part.text, `pre-${i}`, 'inline text-sm text-content-secondary leading-relaxed')
+        : renderFigurePart(part, i, fc++)
+    );
+    fc = floatFigIdx + 1;
+    const afterNodes = afterParts.map((part, i) =>
+      part.type === 'text'
+        ? renderTextWithBadge(part.text, `post-${i}`, 'text-sm text-content-secondary leading-relaxed')
+        : renderFigurePart(part, 1000 + i, fc++)
+    );
+
+    return (
+      <div className="inline">
+        {/* 플로트 전 텍스트·그림 */}
+        {beforeNodes}
+        {/* 플로트 이미지 + 이후 텍스트가 감싸는 영역 */}
+        <div>
+          <div
+            className={`${floatSide} mb-2`}
+            style={{ width: `${widthPct}%`, maxWidth: '240px' }}
+          >
+            {floatFigIdx === 0 && hasFigureSource ? (
+              <FigureRenderer
+                figureData={problem.figureData}
+                figureSvg={problem.figureSvg}
+                upscaledCropUrl={problem.upscaledCropUrl ? getProxiedImageUrl(problem.upscaledCropUrl) : undefined}
+                figureSource={problem.figureSource}
+                cropImageUrl={proxiedCrop}
+                maxWidth={240}
+                darkMode
+                editable
+                problemId={problem.id}
+              />
+            ) : floatCrop ? (
+              <img
+                src={proxyUrl(floatCrop.url)}
+                alt={floatCrop.label || `도형 ${floatFigIdx + 1}`}
+                className="rounded-lg border border-zinc-600 bg-white w-full object-contain shadow-sm"
+                loading="lazy"
+              />
+            ) : floatFigIdx === 0 && proxiedCrop ? (
+              <img
+                src={proxiedCrop}
+                alt={`문제 ${problem.number} 도형`}
+                className="rounded-lg border border-zinc-700 w-full object-contain"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex items-center justify-center py-4 border-2 border-dashed border-orange-500/30 rounded-lg bg-orange-500/5">
+                <Shapes className="h-5 w-5 text-orange-400" />
+              </div>
+            )}
+          </div>
+          {afterNodes}
+          <div style={{ clear: 'both' }} />
+        </div>
+      </div>
+    );
+  }
+
+  // ═══ 라인 모드 렌더링 ═══
+  return (
+    <div className="inline">
+      {contentParts.map((part, i) => {
+        if (part.type === 'text') {
+          // ★ 캡션 추출로 비워진 텍스트는 스킵(빈 content → "(문제 내용 없음)" 표시되던 사고).
+          if (!part.text || !part.text.trim()) return null;
+          // ★ 그림 나열(multiFig)에선 텍스트를 block 으로 — inline 이면 그림 뒤 텍스트("(1)" 등)가
+          //   그림 옆으로 흘러 붙음. block 이면 그림 아래 줄로 떨어짐.
+          return renderTextWithBadge(part.text, String(i), `${multiFig ? 'block' : 'inline'} text-sm text-content-secondary leading-relaxed`);
+        }
+        // figure 파트 — figureCounter로 순서 매칭
+        return renderFigurePart(part, i, figureCounter++);
       })}
     </div>
   );

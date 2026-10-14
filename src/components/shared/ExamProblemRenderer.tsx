@@ -422,7 +422,9 @@ function ExamProblemRendererInner({
       // 플로트 모드 체크
       const floatPart = parts.find(p => p.type === 'figure' && p.floatMode);
       if (floatPart) {
+        // ★ 그림이 2개 이상이어도 플로트는 그 그림 하나만, 나머지 [도형] 은 줄 배치로 그린다 (2026-10-14 해운대여중 #2 — 종전엔 다른 그림을 버렸다)
         const fIdx = parts.indexOf(floatPart);
+        const floatFigIdx = parts.slice(0, fIdx).filter(p => p.type === 'figure').length;
         const before = parts.slice(0, fIdx);
         const after = parts.slice(fIdx + 1);
         const side = floatPart.floatMode === 'left' ? 'float-left mr-3' : 'float-right ml-3';
@@ -433,22 +435,36 @@ function ExamProblemRendererInner({
         const lastTextInBefore = [...before].reverse().findIndex(p => p.type === 'text');
         const lastTextInBeforeIdx = lastTextInBefore >= 0 ? before.length - 1 - lastTextInBefore : -1;
         const useAfterAsLast = lastTextInAfterIdx >= 0;
+        let figCounter = 0;
+        const blockFig = (p: typeof parts[number], key: string) => {
+          const idx = figCounter++;
+          return (
+            <div key={key} className="my-1 flex justify-center">
+              <div className="min-w-0 flex justify-center" style={p.widthPercent ? { width: `${p.widthPercent}%` } : undefined}>
+                {renderFigure(idx, p.widthPercent)}
+              </div>
+            </div>
+          );
+        };
+        const beforeNodes = before.map((p, pi) =>
+          p.type === 'text'
+            ? renderTextWithBadge(p.text, `b-${pi}`, !useAfterAsLast && pi === lastTextInBeforeIdx)
+            : blockFig(p, `bf-${pi}`)
+        );
+        figCounter = floatFigIdx + 1;
+        const afterNodes = after.map((p, pi) =>
+          p.type === 'text'
+            ? renderTextWithBadge(p.text, `a-${pi}`, useAfterAsLast && pi === lastTextInAfterIdx)
+            : blockFig(p, `af-${pi}`)
+        );
         return (
           <>
-            {before.map((p, pi) =>
-              p.type === 'text'
-                ? renderTextWithBadge(p.text, `b-${pi}`, !useAfterAsLast && pi === lastTextInBeforeIdx)
-                : null
-            )}
+            {beforeNodes}
             <div>
               <div className={`${side} mb-1`} style={{ width: `${wPct}%`, maxWidth: `${maxFigureWidth}px` }}>
-                {renderFigure(0)}
+                {renderFigure(floatFigIdx)}
               </div>
-              {after.map((p, pi) =>
-                p.type === 'text'
-                  ? renderTextWithBadge(p.text, `a-${pi}`, useAfterAsLast && pi === lastTextInAfterIdx)
-                  : null
-              )}
+              {afterNodes}
               <div style={{ clear: 'both' }} />
             </div>
           </>

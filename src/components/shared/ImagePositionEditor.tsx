@@ -329,8 +329,8 @@ export function ImagePositionEditor({
         </div>
 
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-content-tertiary mr-1">
-            {layoutMode === 'line' ? '라인' : layoutMode === 'float-right' ? '우측' : '좌측'}
+          <span className="text-[10px] text-content-tertiary mr-1" title={isMulti && layoutMode !== 'line' ? '그림이 여럿이면 미리보기는 줄 배치로 보이고, 저장하면 카드·인쇄에서 이 그림만 글을 감쌉니다' : undefined}>
+            {layoutMode === 'line' ? '라인' : layoutMode === 'float-right' ? '우측' : '좌측'}{isMulti && layoutMode !== 'line' ? ' (저장 후 적용)' : ''}
           </span>
           <button
             type="button"
