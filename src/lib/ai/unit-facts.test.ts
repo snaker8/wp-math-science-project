@@ -50,12 +50,15 @@ describe('reconcileSummaryCounts', () => {
   });
 });
 
-describe('judgeOverallDifficulty', () => {
-  it('평균·7+비율로 결정적 판정 (4~5 빈틈 없음)', () => {
-    expect(judgeOverallDifficulty([3, 3, 4, 4, 4]).label).toBe('평이');          // 3.6
-    expect(judgeOverallDifficulty([4, 4, 5, 4, 5]).label).toBe('보통');          // 4.4 — 센텀여고 4.32 케이스
-    expect(judgeOverallDifficulty([3, 3, 3, 3, 7, 7]).label).toBe('난이도 있음'); // 평균 4.3 이어도 7+ 가 33% 면 어려운 시험
-    expect(judgeOverallDifficulty([6, 6, 6, 7, 7]).label).toBe('매우 난이도 있음'); // 6.4, 7+ 40% (경계 포함)
-    expect(judgeOverallDifficulty([6, 6, 6, 6, 7]).label).toBe('난이도 있음');     // 6.2, 20%
+describe('judgeOverallDifficulty — 수학비서 1~10 척도', () => {
+  it('평균 반올림 → 쉬움1~2 평이 · 3~4 보통 · 5~6 난이도 있음 · 7+ 매우', () => {
+    expect(judgeOverallDifficulty([2, 2, 1, 2]).label).toBe('평이');            // 1.75→2
+    expect(judgeOverallDifficulty([3, 3, 4, 4, 4]).label).toBe('보통');          // 3.6→4 (동백중 3.55 도 보통)
+    expect(judgeOverallDifficulty([4, 4, 5, 4, 5]).label).toBe('보통');          // 4.4→4 (센텀여고 4.32)
+    expect(judgeOverallDifficulty([4, 5, 5, 5, 5]).label).toBe('난이도 있음');   // 4.8→5
+    expect(judgeOverallDifficulty([7, 7, 8, 6]).label).toBe('매우 난이도 있음'); // 7
+  });
+  it('7 이상이 1/4 넘으면 한 칸 올린다', () => {
+    expect(judgeOverallDifficulty([3, 3, 3, 3, 7, 7]).label).toBe('난이도 있음'); // 평균 4.3 보통 → 7+ 33% → 한 칸 위
   });
 });

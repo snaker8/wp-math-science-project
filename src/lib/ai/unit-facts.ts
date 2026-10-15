@@ -116,21 +116,28 @@ export function reconcileSummaryCounts(summary: string, facts: UnitFact[]): { te
 }
 
 // ============================================================================
-// 시험 총평 난이도 라벨 — 서버 계산 (2026-10-16, "난이도가 4가 넘는데 보통이 맞나")
-//   AI 판정은 기준의 빈틈(평균 4~5)을 제멋대로 메웠다. 평균 난이도와 7+ 비율로 결정적으로 정한다.
-//   평이: 평균 ≤ 4.0 이고 7+ < 10%  ·  보통: 평균 ≤ 5.5 이고 7+ < 25%  ·  난이도 있음: 평균 ≤ 6.5 이고 7+ < 40%  ·  그 위는 매우 난이도 있음
+// 시험 총평 난이도 라벨 — 서버 계산, **수학비서 1~10 척도 그대로** (2026-10-16 대표 "수학비서 난도 기준으로", "4면 쉬운 게 아닌데")
+//   문항 난이도 라벨(cloud-flow 분류 기준): 쉬움 1~2 · 보통 3~4 · 어려움 5~6 · 매우 어려움 7~10
+//   시험지 = 평균 난이도를 반올림해 같은 칸에 넣는다. 평이=쉬움 · 보통 · 난이도 있음=어려움 · 매우 난이도 있음.
+//   난이도 7 이상이 전체의 1/4 을 넘으면 한 칸 올린다 (평균이 낮아도 변별 문항이 많으면 어려운 시험).
 // ============================================================================
 export type OverallDifficultyLabel = '평이' | '보통' | '난이도 있음' | '매우 난이도 있음';
+const LABEL_ORDER: OverallDifficultyLabel[] = ['평이', '보통', '난이도 있음', '매우 난이도 있음'];
+
+/** 수학비서 1~10 한 문항 라벨 */
+export function problemDifficultyLabel(d: number): OverallDifficultyLabel {
+  if (d <= 2) return '평이';
+  if (d <= 4) return '보통';
+  if (d <= 6) return '난이도 있음';
+  return '매우 난이도 있음';
+}
 
 export function judgeOverallDifficulty(difficulties: number[]): { label: OverallDifficultyLabel; avg: number; pct7: number } {
   const ds = difficulties.filter((d) => Number.isFinite(d));
   if (ds.length === 0) return { label: '보통', avg: 0, pct7: 0 };
   const avg = Math.round((ds.reduce((a, b) => a + b, 0) / ds.length) * 100) / 100;
   const pct7 = Math.round((ds.filter((d) => d >= 7).length / ds.length) * 100);
-  let label: OverallDifficultyLabel;
-  if (avg <= 4.0 && pct7 < 10) label = '평이';
-  else if (avg <= 5.5 && pct7 < 25) label = '보통';
-  else if (avg <= 6.5 && pct7 < 40) label = '난이도 있음';
-  else label = '매우 난이도 있음';
-  return { label, avg, pct7 };
+  let idx = LABEL_ORDER.indexOf(problemDifficultyLabel(Math.round(avg)));
+  if (pct7 >= 25) idx = Math.min(LABEL_ORDER.length - 1, idx + 1);
+  return { label: LABEL_ORDER[idx], avg, pct7 };
 }
