@@ -18,7 +18,7 @@ import {
   buildExamAnalysisUserPrompt,
 } from '@/lib/ai/exam-analysis-prompt';
 import { resolveSubjectCode, curriculumCodesToSubjectGrade, curriculumCodesToLabel } from '@/lib/workflow/mathsecr-prompt';
-import { buildUnitFacts, formatUnitFactsForPrompt, reconcileUnitAnalyses, reconcileSummaryCounts } from '@/lib/ai/unit-facts';
+import { buildUnitFacts, formatUnitFactsForPrompt, reconcileUnitAnalyses, reconcileSummaryCounts, judgeOverallDifficulty } from '@/lib/ai/unit-facts';
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
@@ -353,6 +353,9 @@ export async function POST(
   // ★ 6.7 단원별 문항 수 확정 표 — 총평·단원 카드의 숫자는 전부 여기서 나온다 (AI 가 세지 않는다)
   const unitFacts = buildUnitFacts(problemsForPrompt.map((p) => ({ number: p.number, majorUnit: p.majorUnit, semester: p.semester })));
   const unitFactsText = formatUnitFactsForPrompt(unitFacts, problemsForPrompt.length);
+  // ★ 총평 난이도 라벨도 서버가 정한다 (2026-10-16 "난이도가 4가 넘는데 보통이 맞나" — AI 가 기준 빈틈을 제멋대로 메우던 것)
+  const judged = judgeOverallDifficulty(problemsForPrompt.map((p) => p.difficulty));
+  const overallDifficultyText = `# 총평 난이도(서버 판정): ${judged.label} — 평균 ${judged.avg}, 난이도 7 이상 ${judged.pct7}%. overallDifficulty 는 이 값을 그대로 쓸 것.`;
 
   // 7. 사용자 프롬프트 생성 — 보정된 effectiveGrade/effectiveSubject 사용
   const userPrompt = buildExamAnalysisUserPrompt({
@@ -363,6 +366,7 @@ export async function POST(
     hardDifficultyThreshold: hardThreshold,
     hardQuestionLimit: hardLimit,
     unitFactsText,
+    overallDifficultyText,
   });
 
   // 8. Claude 호출 (prompt cache 적용)
@@ -484,7 +488,7 @@ export async function POST(
   // 10. 결과 객체 완성
   const finalAnalysis: ExamAIAnalysis = {
     summary: summaryFix.text,
-    overallDifficulty: parsed.overallDifficulty || '보통',
+    overallDifficulty: judged.label,   // ★ AI 값 무시 — 서버 판정이 유일한 출처
     unitAnalyses: recon.result,
     hardQuestions: verifiedHard,
     generatedAt: new Date().toISOString(),
