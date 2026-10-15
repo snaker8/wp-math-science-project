@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildUnitFacts, describeRange, formatUnitFactsForPrompt, reconcileUnitAnalyses, reconcileSummaryCounts } from './unit-facts';
+import { buildUnitFacts, describeRange, formatUnitFactsForPrompt, reconcileUnitAnalyses, reconcileSummaryCounts, judgeOverallDifficulty } from './unit-facts';
 
 const P = [
   { number: 1, majorUnit: '정비례와 반비례', semester: '중1-1' },
@@ -47,5 +47,15 @@ describe('reconcileSummaryCounts', () => {
     const { text, fixed } = reconcileSummaryCounts('정비례와 반비례(9문항)와 위치 관계 1문항, 기본 도형(총 2문항)이 뒤를 잇습니다.', f);
     expect(text).toBe('정비례와 반비례(3문항)와 위치 관계 1문항, 기본 도형(총 1문항)이 뒤를 잇습니다.');
     expect(fixed).toBe(2);
+  });
+});
+
+describe('judgeOverallDifficulty', () => {
+  it('평균·7+비율로 결정적 판정 (4~5 빈틈 없음)', () => {
+    expect(judgeOverallDifficulty([3, 3, 4, 4, 4]).label).toBe('평이');          // 3.6
+    expect(judgeOverallDifficulty([4, 4, 5, 4, 5]).label).toBe('보통');          // 4.4 — 센텀여고 4.32 케이스
+    expect(judgeOverallDifficulty([3, 3, 3, 3, 7, 7]).label).toBe('난이도 있음'); // 평균 4.3 이어도 7+ 가 33% 면 어려운 시험
+    expect(judgeOverallDifficulty([6, 6, 6, 7, 7]).label).toBe('매우 난이도 있음'); // 6.4, 7+ 40% (경계 포함)
+    expect(judgeOverallDifficulty([6, 6, 6, 6, 7]).label).toBe('난이도 있음');     // 6.2, 20%
   });
 });
