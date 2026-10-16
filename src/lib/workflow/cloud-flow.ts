@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
+import { repairConfusedChoiceMarkers } from '@/lib/ocr/choice-marker-repair';
 import { CLAUDE_MODELS, normalizeClaudeBody } from '@/lib/claude/model-params';
 import type {
   UploadJob,
@@ -780,6 +781,7 @@ function fixKoreanConsonantChoices(text: string): string {
 }
 
 function normalizeChoiceParensForCloudFlow(text: string): string {
+  text = repairConfusedChoiceMarkers(text);   // ★ (1)(2)(B)(4)(5) 오인식 한 자리 복구 (2026-10-16)
   const NUMBER_TO_CIRCLED: Record<string, string> = {
     '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
   };

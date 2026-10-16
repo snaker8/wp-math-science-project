@@ -1,6 +1,7 @@
 'use client';
 
 import { trimNewlinesAroundBlocks } from './block-gap';
+import { repairConfusedChoiceMarkers } from '@/lib/ocr/choice-marker-repair';
 import { markBoldAcrossElements } from './bold-span';
 import { splitMulticolumn } from './table-multicolumn';
 import { stripEmptyMath } from './empty-math';
@@ -1383,6 +1384,7 @@ function parseMixedContent(text: string): ContentElement[] {
  * - 각 (N) 사이 간격이 너무 넓으면(소문제) 변환하지 않음
  */
 function normalizeChoiceParensForRender(text: string): string {
+  text = repairConfusedChoiceMarkers(text);   // ★ (1)(2)(B)(4)(5) 오인식 한 자리 복구 (2026-10-16)
   // 이미 원문자가 있으면 변환 불필요
   if (/[①②③④⑤]/.test(text)) return text;
 

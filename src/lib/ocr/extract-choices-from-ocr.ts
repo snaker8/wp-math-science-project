@@ -4,6 +4,8 @@
 //   원형 ①②③④⑤ / (1)~(5) / 1)~5) 세 포맷을 정방향 분리.
 // ============================================================================
 
+import { repairConfusedChoiceMarkers } from './choice-marker-repair';
+
 /**
  * OCR 텍스트에서 선택지 추출
  *   정방향 분리: 보기 마커 위치를 찾고 사이 텍스트를 추출.
@@ -19,6 +21,7 @@
  *   [] 반환 시 호출측(handleReadText)은 기존 보기를 보존(덮어쓰지 않음) → 데이터 손실 0.
  */
 export function extractChoicesFromOCR(text: string): string[] {
+  text = repairConfusedChoiceMarkers(text);   // ★ (1)(2)(B)(4)(5) 오인식 한 자리 복구 (2026-10-16 센텀여고 #17)
   // 1. ①②③④⑤ 정방향 분리
   const circledRegex = /[①②③④⑤]/g;
   const positions: { idx: number; len: number }[] = [];
