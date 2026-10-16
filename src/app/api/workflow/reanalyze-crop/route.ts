@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
+import { repairConfusedChoiceMarkers } from '@/lib/ocr/choice-marker-repair';
 import { NextRequest, NextResponse } from 'next/server';
 import { getMathpixClient, MathpixError } from '@/lib/ocr/mathpix';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -517,6 +518,7 @@ export async function POST(request: NextRequest) {
  *   - "구하시오", "구하여라", "[N점]", "의 값" 등 포함 → 소문제 → 변환 안 함
  */
 function normalizeChoiceParens(text: string): string {
+  text = repairConfusedChoiceMarkers(text);   // ★ (1)(2)(B)(4)(5) 오인식 한 자리 복구 (2026-10-16)
   const NUMBER_TO_CIRCLED: Record<string, string> = {
     '1': '①', '2': '②', '3': '③', '4': '④', '5': '⑤',
   };
