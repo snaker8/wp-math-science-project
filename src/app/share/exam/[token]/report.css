@@ -695,6 +695,9 @@
   margin: 0;
   letter-spacing: -0.01em;
 }
+/* 제목 안 수식 — MixedContentRenderer 가 감싸는 요소는 줄 안에 (2026-10-16 "$가 나온다") */
+.hard-title p, .hard-title div, .hard-title span.katex-display { display: inline; margin: 0; }
+.hard-title .katex { font-size: 1em; }
 .hard-section {
   margin-bottom: 14px;
 }

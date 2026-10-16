@@ -594,7 +594,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
                   </span>
                   <div className="hard-head">
                     <span className="hard-num">{q.number}</span>
-                    <h3 className="hard-title">{q.subTitle || `${q.number}번 문항`}</h3>
+                    <h3 className="hard-title"><MixedContentRenderer content={q.subTitle || `${q.number}번 문항`} inline /></h3>
                   </div>
                   {/* ★ 실제 문제 배치 (2026-10-12 대표: "문제 분석 때 문제를 실제 배치") — 시험지와 같은 렌더러 */}
                   {data.hardProblems?.[q.problemId] && (
