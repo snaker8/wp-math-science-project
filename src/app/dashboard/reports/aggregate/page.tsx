@@ -10,6 +10,7 @@
 // ============================================================================
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -932,7 +933,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
                     {n.hardQuestions.map((h) => (
                       <li key={h.problemId} className="border-l-2 border-white/[.14] pl-2 text-zinc-300">
                         <span className="font-semibold text-zinc-100">#{h.number}</span>
-                        <span className="ml-1.5 text-zinc-200">{h.subTitle}</span>
+                        <span className="ml-1.5 text-zinc-200 [&_p]:inline [&_div]:inline"><MixedContentRenderer content={h.subTitle} inline /></span>
                         <div className="mt-0.5 text-[11px] text-zinc-400">{h.intent}</div>
                       </li>
                     ))}
