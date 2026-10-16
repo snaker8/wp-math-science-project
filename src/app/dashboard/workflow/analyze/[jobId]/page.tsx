@@ -3951,6 +3951,7 @@ export default function AnalyzeJobPage() {
       //   번호를 매겨, 11번 문제가 2번으로 저장되는 사고가 났다.
       //   → 화면에 보이는 순서(pageOrder)를 그대로 따른다. pageOrder 에 없는 페이지는
       //     뒤에 붙여 누락을 만들지 않는다.
+      // (화면 번호 memo orderedAutoCropPageIdxs 와 같은 규칙 — 아래 선언이라 여기선 직접 계산)
       const orderedPageIdxs: number[] = (() => {
         const keys = Array.from(autoCropProblems.keys());
         if (!pageOrder.length) return keys;
@@ -4214,29 +4215,43 @@ export default function AnalyzeJobPage() {
     }
   }, [jobData, jobId, isSavingAll, urlBookGroupId, autoCropProblems]);
 
-  // ★ AutoCrop 모드: 전체 문제 목록 (모든 페이지의 autoCropProblems 합산)
+  // ★ 화면에 보이는 페이지 순서(pageOrder) 대로 페이지 인덱스 — 번호 매기기의 유일한 순서 (2026-10-17)
+  //   사고: 「순서정정」으로 PDF 1쪽을 맨 뒤로 보내도 화면 번호가 1,2 로 나왔다. 자산화(saveAll)는 2026-08-31 에
+  //   pageOrder 를 따르게 고쳤지만 화면 목록·오버레이 배지는 여전히 PDF 번호 순으로 셌다. 세 곳이 같은 순서를 쓴다.
+  const orderedAutoCropPageIdxs = useMemo((): number[] => {
+    const keys = [...autoCropProblems.keys()].sort((a, b) => a - b);
+    if (!pageOrder.length) return keys;
+    const seen = new Set<number>();
+    const ordered: number[] = [];
+    for (const pdfPageNum of pageOrder) {
+      const idx = pdfPageNum - 1;
+      if (autoCropProblems.has(idx) && !seen.has(idx)) { ordered.push(idx); seen.add(idx); }
+    }
+    for (const k of keys) if (!seen.has(k)) ordered.push(k);
+    return ordered;
+  }, [autoCropProblems, pageOrder]);
+
+  // ★ AutoCrop 모드: 전체 문제 목록 (모든 페이지의 autoCropProblems 합산) — 화면 순서로 번호
   const autoCropAllProblems = useMemo(() => {
     const all: AnalyzedProblem[] = [];
-    const sortedKeys = [...autoCropProblems.keys()].sort((a, b) => a - b);
     let globalNumber = 1;
-    for (const pageIdx of sortedKeys) {
+    for (const pageIdx of orderedAutoCropPageIdxs) {
       const pageProblems = autoCropProblems.get(pageIdx) || [];
       for (const p of pageProblems) {
         all.push({ ...p, number: globalNumber++ });
       }
     }
     return all;
-  }, [autoCropProblems]);
+  }, [autoCropProblems, orderedAutoCropPageIdxs]);
 
-  // ★ AutoCrop 모드: 페이지별 문제 데이터 (JobData 형태)
+  // ★ AutoCrop 모드: 페이지별 문제 데이터 (JobData 형태) — 번호는 화면 순서, pages 배열은 PDF 번호 순(조회용)
   const autoCropJobData = useMemo((): JobData | null => {
     if (!jobData) return null;
 
     const pages: PageData[] = [];
-    const sortedKeys = [...autoCropProblems.keys()].sort((a, b) => a - b);
     let globalNumber = 1;
 
-    for (const pageIdx of sortedKeys) {
+    for (const pageIdx of orderedAutoCropPageIdxs) {
       const pageProblems = (autoCropProblems.get(pageIdx) || []).map(p => ({
         ...p,
         number: globalNumber++,
@@ -4265,7 +4280,7 @@ export default function AnalyzeJobPage() {
       pages,
       pdfUrl: jobData.pdfUrl,
     };
-  }, [jobData, autoCropProblems, autoCropAllProblems, totalPdfPages]);
+  }, [jobData, autoCropProblems, autoCropAllProblems, totalPdfPages, orderedAutoCropPageIdxs]);
 
   // ★ 현재 활성 데이터 소스 (AutoCrop 모드 vs 서버 모드)
   const activeJobData = useMemo(() => {
