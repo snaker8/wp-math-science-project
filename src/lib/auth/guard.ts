@@ -100,7 +100,8 @@ export const requireAdmin = () => requireRole(['ADMIN']);
 /**
  * 문제/시험지 수정 권한 (ADMIN 또는 TEACHER/TUTOR).
  */
-export const requireEditor = () => requireRole(['ADMIN', 'TEACHER', 'TUTOR']);
+// ★ ORG_ADMIN(학원 관리자)도 편집자 — 빠져 있어 엄궁차수학 계정이 시험지 편성에서 'Forbidden' (2026-10-17). institute-guard 의 STAFF_ROLES 와 같은 범위
+export const requireEditor = () => requireRole(['ADMIN', 'TEACHER', 'TUTOR', 'ORG_ADMIN']);
 
 /**
  * ★ super_admin (플랫폼 관리자) 만 통과. /api/admin/* 엔드포인트 전용.
