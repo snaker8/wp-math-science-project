@@ -116,7 +116,7 @@ export function AIInsightTabs({
           단원별 학습전략 ({analysis.unitAnalyses.length})
         </TabButton>
         <TabButton active={tab === 'hard'} onClick={() => setTab('hard')} icon={<Flame />}>
-          고난도 심층분석 ({analysis.hardQuestions.length})
+          고난도·변별 문항 ({analysis.hardQuestions.length})
         </TabButton>
       </div>
 
@@ -140,7 +140,7 @@ export function AIInsightTabs({
         className="print-show"
         style={{ display: tab === 'hard' ? 'block' : 'none' }}
       >
-        <PrintHeading screenHidden>고난도 문항 심층분석</PrintHeading>
+        <PrintHeading screenHidden>고난도·변별 문항 심층분석</PrintHeading>
         <HardTab analysis={analysis} examId={examId} onAnalysisChange={onAnalysisChange} />
       </div>
     </div>
@@ -351,7 +351,7 @@ function HardTab({ analysis, examId, onAnalysisChange }: { analysis: ExamAIAnaly
   if (analysis.hardQuestions.length === 0) {
     return (
       <div style={{ padding: 16, color: 'var(--chrome-fg-4)', fontSize: 12, textAlign: 'center' }}>
-        고난도 문항이 없습니다 (난이도 임계값 이상 문항 없음)
+        고난도·변별 문항이 없습니다
       </div>
     );
   }

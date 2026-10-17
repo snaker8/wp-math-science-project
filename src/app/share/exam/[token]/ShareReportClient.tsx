@@ -30,6 +30,7 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { DEFAULT_BRAND, type ReportBrand } from '@/lib/report/report-brand';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import type { ExamProblemData } from '@/lib/exam/exam-problem-mapper';
+import { hardQuestionLabel } from '@/lib/report/hard-label';
 import './report.css';
 
 interface ShareReportClientProps {
@@ -230,6 +231,12 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
     count: u.questionNumbers.length,
     pct: data.stats.total > 0 ? Math.round((u.questionNumbers.length / data.stats.total) * 100) : 0,
   }));
+
+  // ── 「고난도/변별 문항」 라벨 + 정답 미입력(운영자에게만) — 뽑힌 문항의 실제 난이도로 정한다
+  const hardQs = data.analysis?.hardQuestions || [];
+  const hardMaxDiff = hardQs.reduce((m, q) => Math.max(m, data.hardProblems?.[q.problemId]?.difficulty ?? 0), 0);
+  const hardLabel = hardQuestionLabel(hardMaxDiff);
+  const hardNoAnswer = hardQs.filter((q) => { const a = data.hardProblems?.[q.problemId]?.answer; return a === undefined || a === null || String(a).trim() === ''; }).map((q) => q.number);
 
   // ── 난이도 그룹 — 1~2 / 3~4 / 5~6 / 7~8 / 9~10
   const diffGroups = [
@@ -573,7 +580,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
           <section ref={sec3Ref} className="report-section">
             <div className="section-head">
               <div className="section-bar" />
-              <h2 className="section-title">3. 상대적 고난도 문항 심층 분석</h2>
+              <h2 className="section-title">3. {hardLabel} 심층 분석</h2>
               <button
                 className="section-copy-btn no-print"
                 data-html2canvas-ignore="true"
@@ -585,12 +592,17 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
                 섹션 복사
               </button>
             </div>
+            {isOperator && hardNoAnswer.length > 0 && (
+              <p className="no-print" style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 8, fontSize: 12, background: 'rgba(0,0,0,.06)' }}>
+                운영자 안내 — {hardNoAnswer.join('·')}번은 <b>정답이 입력돼 있지 않아</b> 공략 검산이 기준 답 없이 돌았습니다. 시험지에서 정답을 넣고 재생성하면 검산이 정답과 대조합니다. (학부모 화면엔 안 보임)
+              </p>
+            )}
             <div className="hard-grid">
               {data.analysis.hardQuestions.map((q, i) => (
                 <div key={i} className="hard-card">
                   <span className="hard-badge">
                     <AlertTriangle />
-                    고난도 문항
+                    {hardLabel}
                   </span>
                   <div className="hard-head">
                     <span className="hard-num">{q.number}</span>
