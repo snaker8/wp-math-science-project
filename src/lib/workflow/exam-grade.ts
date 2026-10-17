@@ -24,5 +24,12 @@ export function resolveExamGrade(
   if (codeMeta && HIGH_ELECTIVE_CODES.has(firstCode) && titleGrade && /^고[1-3]$/.test(titleGrade)) {
     return titleGrade;
   }
+  // ★ 2026-10-17 학장중 "26년 학장 중2-2 중간" 에 코드 {06,04} — 첫 코드(중3-2)의 학년이 썸네일·분석에 '중3' 으로 박혔다.
+  //   코드가 여러 학년에 걸치면 어느 학년인지 코드로는 알 수 없다 → 제목에 학년이 있으면 제목, 없으면 그 중 가장 낮은 학년.
+  const codeGrades = Array.from(new Set((curriculumCodes || []).map((c) => curriculumCodesToSubjectGrade([String(c)])?.grade).filter((g): g is string => !!g)));
+  if (codeGrades.length > 1) {
+    if (titleGrade && codeGrades.includes(titleGrade)) return titleGrade;
+    return [...codeGrades].sort()[0];
+  }
   return codeMeta?.grade ?? titleGrade;
 }

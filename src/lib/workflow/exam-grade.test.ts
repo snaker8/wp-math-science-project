@@ -25,4 +25,8 @@ describe('resolveExamGrade', () => {
     expect(resolveExamGrade(null, '26-2-2-M 센텀중 수학')).toBe('중2');
     expect(resolveExamGrade(null, '')).toBeNull();
   });
+  it('코드가 여러 학년이면 제목 학년 (학장중 {06,04} + 제목 중2-2 → 중2)', () => {
+    expect(resolveExamGrade(['06', '04'], '26년 학장 중2-2 중간')).toBe('중2');
+    expect(resolveExamGrade(['06', '04'], '학장중 중간')).toBe('중2');   // 제목에 없으면 낮은 학년
+  });
 });
