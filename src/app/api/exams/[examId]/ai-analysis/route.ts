@@ -18,6 +18,7 @@ import {
   buildExamAnalysisUserPrompt,
 } from '@/lib/ai/exam-analysis-prompt';
 import { resolveSubjectCode, curriculumCodesToSubjectGrade, curriculumCodesToLabel } from '@/lib/workflow/mathsecr-prompt';
+import { unescapeLiteralNewlines } from '@/lib/ai/text-cleanup';
 import { buildUnitFacts, formatUnitFactsForPrompt, reconcileUnitAnalyses, reconcileSummaryCounts, judgeOverallDifficulty } from '@/lib/ai/unit-facts';
 import { detectGradeFromTitle, detectSubjectFromTitle } from '@/lib/workflow/title-detect';
 import { resolveExamGrade } from '@/lib/workflow/exam-grade';
@@ -489,7 +490,8 @@ export async function POST(
     console.log(`[exam-ai-analysis] 공략 검산 ${matched.number}번: ${r.verified ? (r.revised ? '재작성 통과' : '통과') : '실패'} (답 ${r.derivedAnswer || '?'} / 정답 ${matched.answer || '-'})${r.issue ? ' — ' + r.issue.slice(0, 120) : ''}`);
     verifiedHard.push({
       ...base,
-      strategy: r.strategy,
+      intent: unescapeLiteralNewlines(base.intent),
+      strategy: unescapeLiteralNewlines(r.strategy),
       strategyVerified: r.verified,
       strategyIssue: r.issue,
       strategyRevised: r.revised,
@@ -509,9 +511,9 @@ export async function POST(
 
   // 10. 결과 객체 완성
   const finalAnalysis: ExamAIAnalysis = {
-    summary: summaryFix.text,
+    summary: unescapeLiteralNewlines(summaryFix.text),
     overallDifficulty: judged.label,   // ★ AI 값 무시 — 서버 판정이 유일한 출처
-    unitAnalyses: recon.result,
+    unitAnalyses: recon.result.map((u) => ({ ...u, keyPoints: unescapeLiteralNewlines(u.keyPoints), strategy: unescapeLiteralNewlines(u.strategy) })),
     hardQuestions: verifiedHard,
     generatedAt: new Date().toISOString(),
     modelVersion: ANTHROPIC_MODEL,

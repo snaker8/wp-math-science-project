@@ -6,6 +6,7 @@
 // ============================================================================
 
 import React, { useState } from 'react';
+import { unescapeLiteralNewlines } from '@/lib/ai/text-cleanup';
 import { Sparkles, BookOpen, Flame, Loader2 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
@@ -386,7 +387,7 @@ function HardTab({ analysis, examId, onAnalysisChange }: { analysis: ExamAIAnaly
               출제 의도
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--chrome-fg-2)' }}>
-              <MixedContentRenderer content={q.intent} />
+              <MixedContentRenderer content={unescapeLiteralNewlines(q.intent)} />
             </div>
           </div>
           <div>
@@ -458,7 +459,7 @@ function HardTab({ analysis, examId, onAnalysisChange }: { analysis: ExamAIAnaly
               />
             ) : (
               <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--chrome-fg-2)' }}>
-                <MixedContentRenderer content={q.strategy} />
+                <MixedContentRenderer content={unescapeLiteralNewlines(q.strategy)} />
               </div>
             )}
             {msg && editing === null && busy === null && (
