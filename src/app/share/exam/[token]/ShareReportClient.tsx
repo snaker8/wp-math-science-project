@@ -31,6 +31,7 @@ import { DEFAULT_BRAND, type ReportBrand } from '@/lib/report/report-brand';
 import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import type { ExamProblemData } from '@/lib/exam/exam-problem-mapper';
 import { hardQuestionLabel } from '@/lib/report/hard-label';
+import { unescapeLiteralNewlines } from '@/lib/ai/text-cleanup';
 import './report.css';
 
 interface ShareReportClientProps {
@@ -535,7 +536,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
                 <span className="diff-pill">{data.analysis.overallDifficulty}</span>
               </div>
               <div className="sub-body">
-                <MixedContentRenderer content={data.analysis.summary} />
+                <MixedContentRenderer content={unescapeLiteralNewlines(data.analysis.summary)} />
               </div>
             </div>
 
@@ -558,13 +559,13 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
                       <div className="unit-kv">
                         <div className="unit-kv-key">출제경향</div>
                         <div className="unit-kv-val">
-                          <MixedContentRenderer content={u.keyPoints} />
+                          <MixedContentRenderer content={unescapeLiteralNewlines(u.keyPoints)} />
                         </div>
                       </div>
                       <div className="unit-kv">
                         <div className="unit-kv-key navy">대비전략</div>
                         <div className="unit-kv-val">
-                          <MixedContentRenderer content={u.strategy} />
+                          <MixedContentRenderer content={unescapeLiteralNewlines(u.strategy)} />
                         </div>
                       </div>
                     </div>
@@ -625,7 +626,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
                       출제 의도
                     </div>
                     <div className="hard-section-body">
-                      <MixedContentRenderer content={q.intent} />
+                      <MixedContentRenderer content={unescapeLiteralNewlines(q.intent)} />
                     </div>
                   </div>
                   {/* ★ 검산 실패(strategyVerified === false) 공략은 학부모에게 내보내지 않는다 (2026-10-12) */}
@@ -636,7 +637,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
                         공략 (해결전략)
                       </div>
                       <div className="hard-strategy-box">
-                        <StepStrategy text={q.strategy} />
+                        <StepStrategy text={unescapeLiteralNewlines(q.strategy)} />
                       </div>
                     </div>
                   )}
