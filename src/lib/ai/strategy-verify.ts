@@ -30,6 +30,26 @@ export interface StrategyVerifyInput {
   image?: { mediaType: string; data: string };
   /** ★ 그림을 글로 옮긴 사실(readFigureFacts) — 모델이 그림을 잘못 읽는 것을 막는 참고 */
   figureFacts?: string;
+  /** ★ 시험지 학년 (중1·중2·고1 …) — 그 학년까지 배운 개념만 쓰게 (2026-10-17 학장중 중1-2 에 √ 공략) */
+  grade?: string;
+}
+
+/** 학년별로 아직 안 배운 도구 — 공략·재작성·검산이 같은 표를 본다 */
+export function gradeScopeNote(grade?: string | null): string {
+  const g = (grade || '').replace(/\s/g, '');
+  if (/^중1/.test(g)) return '중1 — 제곱근(√)·무리수·피타고라스 정리·삼각비·인수분해·이차방정식은 아직 안 배움. 넓이·길이는 비(比)와 등분, 기본 도형 성질로.';
+  if (/^중2/.test(g)) return '중2 — 제곱근(√)·무리수·삼각비·이차방정식은 아직 안 배움(피타고라스 정리는 중2-2 에서 배움). 넓이·길이는 비와 등분, 합동·닮음으로.';
+  if (/^중3/.test(g)) return '중3 — 삼각비·제곱근·이차방정식까지. 고등 도구(벡터·미적분·삼각함수)는 안 배움.';
+  if (/^고1|공통수학/.test(g)) return '고1 — 공통수학1·2 범위. 미적분·삼각함수·벡터는 안 배움.';
+  return g ? `${g} — 그 학년까지 배운 개념만.` : '';
+}
+
+/** 정적 가드 — 중1 공략에 √ 가 있으면 학년 범위 초과 (모델 판단을 기다리지 않고 재작성으로 보낸다) */
+export function exceedsGradeScope(strategy: string, grade?: string | null): string | null {
+  const g = (grade || '').replace(/\s/g, '');
+  if (/^중1/.test(g) && /\\sqrt|√|제곱근|피타고라스|삼각비/.test(strategy)) return '중1 범위를 넘는 도구(제곱근·피타고라스·삼각비) 사용';
+  if (/^중2/.test(g) && /삼각비|이차방정식/.test(strategy)) return '중2 범위를 넘는 도구(삼각비·이차방정식) 사용';
+  return null;
 }
 
 export interface StrategyVerifyResult {
@@ -119,6 +139,7 @@ const VERIFY_SYSTEM = `당신은 한국 중·고등 수학 교사입니다. 주�
 2) 공략을 보지 않고 스스로 끝까지 풀어 독립적인 답(independentAnswer)을 구합니다.
 3) 공략의 각 단계를 그대로 따라 끝까지 풀어 최종 답(derivedAnswer)을 구합니다. 그림의 점·선 위치와 어긋나는 분해, 그림에 없는 성질의 가정, 잘못된 정리 적용이 하나라도 있으면 ok=false.
 4) derivedAnswer 와 independentAnswer(또는 저장된 정답)가 다르면 ok=false.
+5) 「학년」이 주어지면 공략이 그 학년까지 배운 개념만 쓰는지 확인합니다. 아직 안 배운 도구(예: 중1 에 제곱근·피타고라스, 중학교에 삼각비·벡터)를 쓰면 답이 맞아도 ok=false 로 두고 issue 에 "학년 범위 초과: …" 라고 적습니다.
 - 순수 JSON 만 출력: {"ok": true|false, "figureFacts": "그림에서 읽은 사실 한두 문장", "independentAnswer": "스스로 푼 최종 답(객관식은 보기 번호 숫자)", "derivedAnswer": "공략대로 풀어 나온 최종 답(객관식은 보기 번호 숫자)", "issue": "틀린 단계와 이유 한두 문장(ok=true 면 빈 문자열)"}
 - JSON 문자열 안의 백슬래시는 \\\\ 로 이중 이스케이프.`;
 
@@ -126,6 +147,7 @@ const REWRITE_SYSTEM = `당신은 한국 중·고등 수학 교사입니다. 주
 - 먼저 그림을 정밀하게 읽습니다(어떤 점이 한 직선 위인지, 어떤 도형·표시가 실제로 있는지). 그림에 없는 도형이나 성질을 가정하지 마세요.
 - 반드시 [1단계] [2단계] [3단계] (필요하면 [4단계]) 형식. 각 단계는 "무엇을 왜 하는지 + 그 단계의 핵심 계산·근거" 를 2~3문장으로 — 원래 공략보다 간단해지면 안 됩니다(전체 400자 이상). LaTeX 는 $…$.
 - 저장된 해설이 있으면 그 흐름을 따르세요. 마지막 단계에서 정답이 나와야 합니다.
+- 「학년」이 주어지면 **그 학년까지 배운 개념만** 씁니다. 아직 안 배운 도구가 더 쉬워 보여도 쓰지 말고 그 학년의 방법(비·등분·도형의 기본 성질 등)으로 풉니다.
 - 순수 JSON 만 출력: {"strategy": "…", "derivedAnswer": "이 공략대로 풀어 나온 최종 답(객관식은 보기 번호 숫자)"}
 - JSON 문자열 안의 백슬래시는 \\\\ 로 이중 이스케이프.`;
 
@@ -135,6 +157,7 @@ function problemBlock(input: StrategyVerifyInput, strategy?: string): Content {
   const text = [
     `# ${input.number}번 문항${input.image ? ' (위 그림이 이 문항의 그림)' : ''}`,
     input.content,
+    input.grade ? `\n# 학년: ${input.grade} — ${gradeScopeNote(input.grade)}` : '',
     input.answer ? `\n# 저장된 정답\n${input.answer}` : '\n# 저장된 정답\n(없음)',
     input.solution ? `\n# 저장된 해설\n${input.solution}` : '',
     input.figureFacts ? `\n# 그림 판독(자동, 참고 — 그림과 어긋나면 그림이 우선)\n${input.figureFacts}` : '',
@@ -172,10 +195,11 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
       }
     }
     const okByAnswer = reference ? answersMatch(derived, reference) : false;
-    if (v?.ok === true && okByAnswer) {
+    const scopeIssue = exceedsGradeScope(original, input.grade);
+    if (v?.ok === true && okByAnswer && !scopeIssue) {
       return { verified: true, strategy: original, derivedAnswer: derived, independentAnswer: independent, referenceSource, referenceAnswer: reference, calls };
     }
-    const issue = (v?.issue || '').trim()
+    const issue = scopeIssue || (v?.issue || '').trim()
       || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : '검산 기준 없음 — 저장 정답이 없고 독립 풀이가 서로 일치하지 않음');
 
     // 다시 쓴다 — 최대 2회. 기준 답(저장 정답 또는 독립 풀이)을 목표로 명시하고, 재작성본도 같은 기준으로 대조
@@ -189,7 +213,7 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
       const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, block, 2500));
       const newStrategy = (r?.strategy || '').trim();
       lastDerived = String(r?.derivedAnswer ?? '');
-      if (newStrategy && reference && answersMatch(lastDerived, reference)) {
+      if (newStrategy && reference && answersMatch(lastDerived, reference) && !exceedsGradeScope(newStrategy, input.grade)) {
         return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, referenceSource, referenceAnswer: reference, calls };
       }
     }

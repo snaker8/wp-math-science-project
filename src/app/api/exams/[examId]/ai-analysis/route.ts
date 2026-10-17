@@ -483,6 +483,7 @@ export async function POST(
       answer: matched.answer,
       solution: matched.solution || '',
       strategy: hq.strategy,
+      grade: effectiveGrade || undefined,
       image: figureById.get(matched.problemId),
       figureFacts: factsById.get(matched.problemId),
     }, ANTHROPIC_API_KEY);
