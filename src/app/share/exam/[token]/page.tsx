@@ -11,6 +11,7 @@ import { supabaseAdmin, createSupabaseServerClient } from '@/lib/supabase/server
 import { resolveExamBrand } from '@/lib/report/resolve-exam-brand';
 import type { ReportBrand } from '@/lib/report/report-brand';
 import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
+import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import { toExamProblemData, type ExamProblemData } from '@/lib/exam/exam-problem-mapper';
 
 const OG_BASE = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || 'wp-math-science-project.vercel.app'}`;
@@ -56,12 +57,14 @@ export async function generateMetadata({
   try {
     const { data } = await supabaseAdmin
       .from('exams')
-      .select('title, grade')
+      .select('title, grade, curriculum_codes')
       .eq('share_token', token)
       .maybeSingle();
     if (!data) return fallback;
     const school = extractSchoolFromTitle(data.title) || '학교';
-    const title = `${school} 기출 분석 리포트${data.grade ? ` · ${data.grade}` : ''}`;
+    // ★ 썸네일 학년도 공용 규칙 (2026-10-17 학장중 중2-2 가 '중3' 으로) — 저장된 grade 는 코드 첫 값의 대표 학년이라 어긋날 수 있다
+    const grade = resolveExamGrade(data.curriculum_codes as string[] | null, data.title) || data.grade;
+    const title = `${school} 기출 분석 리포트${grade ? ` · ${grade}` : ''}`;
     const description = `${data.title} — 단원 분포 · 난이도 · 고난도 문항 출제 의도 분석`;
     return {
       title,
@@ -139,7 +142,7 @@ async function fetchData(token: string): Promise<PageData | null> {
   // 1. 토큰으로 시험지 조회
   const { data: examRows, error: examErr } = await supabaseAdmin
     .from('exams')
-    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id, school_name, share_report_variant')
+    .select('id, title, grade, subject, total_points, ai_analysis, created_at, share_token, institute_id, school_name, share_report_variant, curriculum_codes')
     .eq('share_token', token);
 
   if (examErr || !examRows || examRows.length === 0) return null;
@@ -199,7 +202,7 @@ async function fetchData(token: string): Promise<PageData | null> {
   const school = (exam as { school_name?: string | null }).school_name || titleMeta?.schoolName || extractSchoolFromTitle(exam.title) || null;
   const metaLine = titleMeta
     ? `${titleMeta.examYear}학년도 ${titleMeta.gradeNum}학년 ${titleMeta.semester}학기 ${titleMeta.examRound}고사`
-    : (exam.grade ? String(exam.grade) : null);
+    : (resolveExamGrade(exam.curriculum_codes as string[] | null, exam.title) || (exam.grade ? String(exam.grade) : null));
 
   // ★ 고난도 문항의 실제 문제 — 화면(useExamProblems)과 같은 매핑으로 본문·보기·그림을 가져온다
   const hardProblems: Record<string, ExamProblemData> = {};
@@ -227,7 +230,7 @@ async function fetchData(token: string): Promise<PageData | null> {
     exam: {
       id: exam.id,
       title: exam.title,
-      grade: exam.grade,
+      grade: resolveExamGrade(exam.curriculum_codes as string[] | null, exam.title) || exam.grade,
       subject: exam.subject,
       problemCount: total,
       totalPoints,
