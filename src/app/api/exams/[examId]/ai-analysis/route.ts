@@ -357,6 +357,16 @@ export async function POST(
   const judged = judgeOverallDifficulty(problemsForPrompt.map((p) => p.difficulty));
   const overallDifficultyText = `# 총평 난이도(서버 판정): ${judged.label} — 평균 ${judged.avg}, 난이도 7 이상 ${judged.pct7}%. overallDifficulty 는 이 값을 그대로 쓸 것.`;
 
+  // ★ 6.8 고난도 문항은 서버가 확정 (2026-10-17 상당중 "13번이 첫 리포트엔 있다가 재생성하니 아예 빠졌다") —
+  //   AI 가 고르게 두면 재생성마다 문항이 바뀐다. 난이도 내림차순(같으면 뒤 번호 먼저) 상위 hardLimit 개로 고정.
+  const hardNumbers = [...problemsForPrompt]
+    .sort((a, b) => (b.difficulty - a.difficulty) || (b.number - a.number))
+    .slice(0, hardLimit)
+    .map((p) => p.number)
+    .sort((a, b) => a - b);
+  const answersMissing = problemsForPrompt.filter((p) => hardNumbers.includes(p.number) && !p.answer).map((p) => p.number);
+  if (answersMissing.length) console.warn(`[exam-ai-analysis] 고난도 문항 정답 없음: ${answersMissing.join(',')} — 검산이 기준 답 없이 돈다`);
+
   // 7. 사용자 프롬프트 생성 — 보정된 effectiveGrade/effectiveSubject 사용
   const userPrompt = buildExamAnalysisUserPrompt({
     examTitle: exam.title,
@@ -367,6 +377,7 @@ export async function POST(
     hardQuestionLimit: hardLimit,
     unitFactsText,
     overallDifficultyText,
+    hardNumbers,
   });
 
   // 8. Claude 호출 (prompt cache 적용)
@@ -447,7 +458,16 @@ export async function POST(
 
   // ★ 9.5 공략 검산 (2026-10-12) — 문항마다 공략대로 실제로 풀어 정답과 대조. 틀리면 1회 재작성 → 재검산.
   //   검증 못 하면 strategyVerified=false → 학부모 리포트는 공략을 숨긴다. 문항당 Sonnet 1~2회(≈10~25원).
-  const hardRaw = Array.isArray(parsed.hardQuestions) ? parsed.hardQuestions : [];
+  // ★ 서버 확정 목록으로 되맞춤 — 목록 밖 문항은 버리고, 순서는 번호순. (AI 가 빼먹은 문항은 로그로만 — 빈 공략을 만들지 않는다)
+  const hardRawAll = Array.isArray(parsed.hardQuestions) ? parsed.hardQuestions : [];
+  const hardRaw = hardNumbers
+    .map((n) => hardRawAll.find((h: { number?: number }) => h.number === n))
+    .filter((h): h is NonNullable<typeof h> => !!h);
+  {
+    const extra = hardRawAll.filter((h: { number?: number }) => !hardNumbers.includes(h.number as number)).map((h: { number?: number }) => h.number);
+    const missing = hardNumbers.filter((n) => !hardRaw.some((h: { number?: number }) => h.number === n));
+    if (extra.length || missing.length) console.warn(`[exam-ai-analysis] 고난도 보정 — 확정=${hardNumbers.join(',')} 버림=${extra.join(',') || '-'} 누락=${missing.join(',') || '-'}`);
+  }
   const verifiedHard: ExamAIAnalysis['hardQuestions'] = [];
   let verifyCalls = 0;
   for (const hq of hardRaw) {

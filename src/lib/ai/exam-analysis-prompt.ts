@@ -58,8 +58,7 @@ export const EXAM_ANALYSIS_SYSTEM_PROMPT = `
    - **★ majorUnit 일관성**: 입력으로 받은 각 문제의 majorUnit 값은 시험지의 학년/과목에 정합한 정확한 대단원명입니다. unitAnalyses[i].majorUnit은 입력의 majorUnit 값을 그대로 사용하고, 임의의 단원명(예: 다른 학년의 단원명)으로 변경하거나 풀어쓰지 마세요. 입력에 없는 단원명을 새로 만들어내지 마세요.
 
 4. **hardQuestions**:
-   - 사용자가 지정한 임계값(기본 7) 이상 난이도 문항 중 상위 N개(기본 4개)
-   - 임계값 이상 문항이 부족하면 가장 어려운 문항 순으로 채움
+   - **★ 사용자 프롬프트의 「고난도 문항(서버 확정)」 목록의 문항만, 그 순서대로** 모두 작성하세요. 다른 문항을 넣거나 목록의 문항을 빼지 마세요 (재생성할 때마다 문항이 바뀌면 안 됩니다).
    - intent: "왜 이 문항이 어려운가"
    - strategy: 학생이 실제로 풀 수 있게 단계별 가이드
    - ★ 그림이 첨부된 문항은 각·선분을 분해할 때 그림의 점 위치를 확인할 것 (텍스트만 보고 "∠AOF = ∠AOB + ∠BOF" 같은 분해를 하지 말 것). 저장된 해설이 있으면 그 흐름과 다른 풀이를 쓰지 말 것. 공략대로 풀면 반드시 정답이 나와야 한다.
@@ -110,6 +109,8 @@ export function buildExamAnalysisUserPrompt(input: {
   unitFactsText?: string;
   /** ★ 서버가 정한 총평 난이도 라벨 + 근거 */
   overallDifficultyText?: string;
+  /** ★ 서버가 확정한 고난도 문항 번호 (난이도 순) */
+  hardNumbers?: number[];
 }): string {
   const problemsText = input.problems
     .map(
@@ -131,7 +132,8 @@ ${p.content}
 - 총 ${input.problems.length}문항
 ${input.unitFactsText ? `\n${input.unitFactsText}\n` : ''}
 # 고난도 분석 기준
-- 난이도 ≥ ${input.hardDifficultyThreshold} 인 문항 중 상위 ${input.hardQuestionLimit}개
+- 난이도 ≥ ${input.hardDifficultyThreshold} 인 문항 중 상위 ${input.hardQuestionLimit}개${input.hardNumbers?.length ? `
+- **고난도 문항(서버 확정)**: ${input.hardNumbers.map((n) => `${n}번`).join(', ')} — hardQuestions 는 이 문항만, 이 순서로` : ''}
 
 # 문항 목록
 
