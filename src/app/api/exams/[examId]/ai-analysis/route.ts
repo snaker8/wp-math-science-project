@@ -494,6 +494,8 @@ export async function POST(
       strategyIssue: r.issue,
       strategyRevised: r.revised,
       strategyDerivedAnswer: r.derivedAnswer,
+      strategyReferenceSource: r.referenceSource,
+      strategyReferenceAnswer: r.referenceAnswer,
     });
   }
   console.log(`[exam-ai-analysis] 공략 검산 호출 ${verifyCalls}회`);

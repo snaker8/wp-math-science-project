@@ -38,6 +38,10 @@ export interface HardQuestionAnalysis {
   strategyRevised?: boolean;
   /** 검산 때 모델이 공략대로 풀어 낸 답 */
   strategyDerivedAnswer?: string;
+  /** ★ 검산 기준 답의 출처 — stored(저장 정답) · consensus(AI 독립 풀이 합의) · none */
+  strategyReferenceSource?: 'stored' | 'consensus' | 'none';
+  /** ★ 기준 답 (consensus 면 저장 정답이 없는 시험지에서 AI 가 합의한 답) */
+  strategyReferenceAnswer?: string;
   /** ★ 선생님이 직접 수정·확정한 공략 (2026-10-13) — 재생성 전까지 검산보다 우선 */
   strategyManual?: boolean;
 }

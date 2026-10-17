@@ -43,7 +43,24 @@ export interface StrategyVerifyResult {
   issue?: string;
   /** 다시 써서 통과한 경우 true */
   revised?: boolean;
+  /** 대조 기준 답의 출처 — stored(저장 정답) · consensus(독립 풀이 2회 이상 일치) · none(기준 없음) */
+  referenceSource?: 'stored' | 'consensus' | 'none';
+  /** 기준 답 (consensus 면 AI 가 합의한 답) */
+  referenceAnswer?: string;
   calls: number;
+}
+
+// ★ 정답이 없는 시험지 (2026-10-17 상당중 "답이 없으니 답을 못 넣었지") — 한 번 푼 답을 기준으로 삼으면 그 풀이가 틀렸을 때 못 거른다.
+//   공략을 보지 않고 **따로 두 번** 풀어 일치할 때만 기준 답으로 인정. 어긋나면 세 번째로 다수결. 그래도 없으면 기준 없음(검산 실패).
+const SOLVE_SYSTEM = `당신은 한국 중·고등 수학 교사입니다. 주어진 문제(그림 포함)를 처음부터 끝까지 스스로 풀어 최종 답만 확정합니다.
+- 그림이 있으면 먼저 그림을 정밀하게 읽습니다. 그림에 없는 성질을 가정하지 마세요.
+- 계산을 끝까지 하고, 마지막에 답을 한 번 더 검산하세요.
+- 순수 JSON 만 출력: {"answer": "최종 답(객관식은 보기 번호 숫자, 서답형은 값·식)", "check": "검산 한 문장"}
+- JSON 문자열 안의 백슬래시는 \\ 로 이중 이스케이프.`;
+
+async function solveOnce(input: StrategyVerifyInput, apiKey: string): Promise<string> {
+  const r = parseJson<{ answer?: string }>(await callClaude(apiKey, SOLVE_SYSTEM, problemBlock({ ...input, strategy: '' }), 1200));
+  return String(r?.answer ?? '').trim();
 }
 
 /** 정답 비교용 정규화 — ①~⑤·(1)~(5)·"3번" 은 숫자로, $·공백·단위 제거 */
@@ -140,14 +157,26 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
       await callClaude(apiKey, VERIFY_SYSTEM, problemBlock(input, original), 1400));
     const derived = String(v?.derivedAnswer ?? '');
     const independent = String(v?.independentAnswer ?? '');
-    // 대조 기준: 저장된 정답 > 모델의 독립 풀이. 둘 다 없으면 통과시키지 않는다(근거 없는 통과 금지).
-    const reference = input.answer || independent;
+    // 대조 기준: 저장된 정답 > 독립 풀이 **합의**(2회 일치, 어긋나면 3회 다수결). 둘 다 없으면 통과시키지 않는다(근거 없는 통과 금지).
+    let reference = input.answer;
+    let referenceSource: 'stored' | 'consensus' | 'none' = input.answer ? 'stored' : 'none';
+    if (!reference && independent) {
+      calls++;
+      const second = await solveOnce(input, apiKey);
+      if (second && answersMatch(second, independent)) { reference = independent; referenceSource = 'consensus'; }
+      else if (second) {
+        calls++;
+        const third = await solveOnce(input, apiKey);
+        if (third && answersMatch(third, independent)) { reference = independent; referenceSource = 'consensus'; }
+        else if (third && answersMatch(third, second)) { reference = second; referenceSource = 'consensus'; }
+      }
+    }
     const okByAnswer = reference ? answersMatch(derived, reference) : false;
     if (v?.ok === true && okByAnswer) {
-      return { verified: true, strategy: original, derivedAnswer: derived, independentAnswer: independent, calls };
+      return { verified: true, strategy: original, derivedAnswer: derived, independentAnswer: independent, referenceSource, referenceAnswer: reference, calls };
     }
     const issue = (v?.issue || '').trim()
-      || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : '검산 기준(정답·독립 풀이) 없음');
+      || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : '검산 기준 없음 — 저장 정답이 없고 독립 풀이가 서로 일치하지 않음');
 
     // 다시 쓴다 — 최대 2회. 기준 답(저장 정답 또는 독립 풀이)을 목표로 명시하고, 재작성본도 같은 기준으로 대조
     let lastDerived = '';
@@ -161,10 +190,10 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
       const newStrategy = (r?.strategy || '').trim();
       lastDerived = String(r?.derivedAnswer ?? '');
       if (newStrategy && reference && answersMatch(lastDerived, reference)) {
-        return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, calls };
+        return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, referenceSource, referenceAnswer: reference, calls };
       }
     }
-    return { verified: false, strategy: original, derivedAnswer: derived, independentAnswer: independent, issue: `${issue} / 재작성도 기준 불일치(${lastDerived || '?'})`, calls };
+    return { verified: false, strategy: original, derivedAnswer: derived, independentAnswer: independent, issue: `${issue} / 재작성도 기준 불일치(${lastDerived || '?'})`, referenceSource, referenceAnswer: reference, calls };
   } catch (e) {
     return { verified: false, strategy: original, derivedAnswer: '', issue: `검산 호출 실패: ${e instanceof Error ? e.message : String(e)}`, calls };
   }

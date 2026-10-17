@@ -412,6 +412,11 @@ function HardTab({ analysis, examId, onAnalysisChange }: { analysis: ExamAIAnaly
               {q.strategyVerified === true && !q.strategyRevised && !q.strategyManual && (
                 <span style={{ marginLeft: 8, fontWeight: 600, color: 'var(--chrome-fg-3)' }}>✓ 검산 통과</span>
               )}
+              {q.strategyReferenceSource === 'consensus' && (
+                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--chrome-fg-4)' }} title="이 시험지에 저장된 정답이 없어 AI 가 공략 없이 따로 두 번 풀어 일치한 답을 기준으로 삼았습니다">
+                  · 기준 답 {q.strategyReferenceAnswer || '?'} (정답 없음 → AI 합의)
+                </span>
+              )}
               {q.strategyManual && q.strategyVerified === true && (
                 <span style={{ marginLeft: 8, fontWeight: 600, color: '#34d399' }}>✓ 선생님 확정</span>
               )}
