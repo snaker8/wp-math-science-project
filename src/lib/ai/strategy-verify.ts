@@ -78,6 +78,22 @@ const SOLVE_SYSTEM = `당신은 한국 중·고등 수학 교사입니다. 주�
 - 순수 JSON 만 출력: {"answer": "최종 답(객관식은 보기 번호 숫자, 서답형은 값·식)", "check": "검산 한 문장"}
 - JSON 문자열 안의 백슬래시는 \\ 로 이중 이스케이프.`;
 
+// ★ 서답형·여러 소문제 답은 글자 비교가 거의 항상 실패한다 (2026-10-17 상당중 23·24 — "(1) △BCG≡△DCE (SAS), (2) DE=5" vs "(1) SAS 합동 (2) 5").
+//   글자 비교가 안 맞으면 모델에게 "같은 답인가" 만 묻는다 (짧은 호출). 숫자·보기 번호는 글자 비교로 끝난다.
+const AGREE_SYSTEM = `두 수학 답안이 **같은 최종 답**을 말하는지만 판정합니다. 표기·서술 순서·단위·합동 기호의 대응 순서·"DE=" 같은 꾸밈은 무시하고, 각 소문제의 최종 값(수·도형 이름·합동 조건)이 모두 같으면 같은 답입니다. 하나라도 다르면 다른 답입니다.
+순수 JSON 만: {"same": true|false, "why": "한 문장"}`;
+
+async function answersAgree(a: string, b: string, apiKey: string): Promise<boolean> {
+  if (!a || !b) return false;
+  if (answersMatch(a, b)) return true;
+  // 둘 다 짧은 숫자/보기 번호면 모델까지 갈 것 없이 다르다
+  if (/^\d{1,4}$/.test(normalizeAnswerForCompare(a)) && /^\d{1,4}$/.test(normalizeAnswerForCompare(b))) return false;
+  try {
+    const r = parseJson<{ same?: boolean }>(await callClaude(apiKey, AGREE_SYSTEM, [{ type: 'text', text: `# 답 A\n${a}\n\n# 답 B\n${b}` }], 200));
+    return r?.same === true;
+  } catch { return false; }
+}
+
 async function solveOnce(input: StrategyVerifyInput, apiKey: string): Promise<string> {
   const r = parseJson<{ answer?: string }>(await callClaude(apiKey, SOLVE_SYSTEM, problemBlock({ ...input, strategy: '' }), 1200));
   return String(r?.answer ?? '').trim();
@@ -186,15 +202,15 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
     if (!reference && independent) {
       calls++;
       const second = await solveOnce(input, apiKey);
-      if (second && answersMatch(second, independent)) { reference = independent; referenceSource = 'consensus'; }
+      if (second && await answersAgree(second, independent, apiKey)) { reference = independent; referenceSource = 'consensus'; }
       else if (second) {
         calls++;
         const third = await solveOnce(input, apiKey);
-        if (third && answersMatch(third, independent)) { reference = independent; referenceSource = 'consensus'; }
-        else if (third && answersMatch(third, second)) { reference = second; referenceSource = 'consensus'; }
+        if (third && await answersAgree(third, independent, apiKey)) { reference = independent; referenceSource = 'consensus'; }
+        else if (third && await answersAgree(third, second, apiKey)) { reference = second; referenceSource = 'consensus'; }
       }
     }
-    const okByAnswer = reference ? answersMatch(derived, reference) : false;
+    const okByAnswer = reference ? await answersAgree(derived, reference, apiKey) : false;
     const scopeIssue = exceedsGradeScope(original, input.grade);
     if (v?.ok === true && okByAnswer && !scopeIssue) {
       return { verified: true, strategy: original, derivedAnswer: derived, independentAnswer: independent, referenceSource, referenceAnswer: reference, calls };
@@ -213,7 +229,7 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
       const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, block, 2500));
       const newStrategy = (r?.strategy || '').trim();
       lastDerived = String(r?.derivedAnswer ?? '');
-      if (newStrategy && reference && answersMatch(lastDerived, reference) && !exceedsGradeScope(newStrategy, input.grade)) {
+      if (newStrategy && reference && await answersAgree(lastDerived, reference, apiKey) && !exceedsGradeScope(newStrategy, input.grade)) {
         return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, referenceSource, referenceAnswer: reference, calls };
       }
     }
