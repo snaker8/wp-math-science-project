@@ -469,12 +469,37 @@ export async function POST(
     const missing = hardNumbers.filter((n) => !hardRaw.some((h: { number?: number }) => h.number === n));
     if (extra.length || missing.length) console.warn(`[exam-ai-analysis] 고난도 보정 — 확정=${hardNumbers.join(',')} 버림=${extra.join(',') || '-'} 누락=${missing.join(',') || '-'}`);
   }
-  const verifiedHard: ExamAIAnalysis['hardQuestions'] = [];
-  let verifyCalls = 0;
-  for (const hq of hardRaw) {
+  // 9.5 단원 카드·총평 숫자를 확정 표로 맞춘다 — AI 가 두 군데서 따로 센 수가 어긋나던 사고(동백중 8 vs 9문항) 차단
+  const recon = reconcileUnitAnalyses(Array.isArray(parsed.unitAnalyses) ? parsed.unitAnalyses : [], unitFacts);
+  const summaryFix = reconcileSummaryCounts(parsed.summary || '', unitFacts);
+  if (recon.dropped.length || recon.added.length || summaryFix.fixed) {
+    console.warn(`[exam-ai-analysis] 단원 보정 — 버림=${recon.dropped.join('/') || '-'} 채움=${recon.added.join('/') || '-'} 총평 숫자 수정=${summaryFix.fixed}`);
+  }
+
+  // ★ 9.4 검산 전에 먼저 저장 (2026-10-17) — 검산이 길어져 함수 시간(300초)을 넘기면 분석 전체가 날아가고 옛 리포트가 그대로 남았다(학장중 재생성 무반응).
+  //   공략은 strategyVerified=false('검산 진행 중') 로 저장해 학부모 화면엔 숨기고, 검산이 끝나면 덮어쓴다.
+  const prelimHard: ExamAIAnalysis['hardQuestions'] = hardRaw.map((hq: { number?: number; strategy?: string; intent?: string }) => {
     const matched = problemsForPrompt.find((p) => p.number === hq.number);
-    const base = { ...hq, problemId: matched?.problemId || '' };
-    if (!matched || !hq.strategy) { verifiedHard.push(base); continue; }
+    return { ...hq, problemId: matched?.problemId || '', intent: unescapeLiteralNewlines(hq.intent), strategy: unescapeLiteralNewlines(hq.strategy),
+      strategyVerified: false, strategyIssue: '검산 진행 중' } as ExamAIAnalysis['hardQuestions'][number];
+  });
+  const prelimAnalysis: ExamAIAnalysis = {
+    summary: unescapeLiteralNewlines(summaryFix.text),
+    overallDifficulty: judged.label,
+    unitAnalyses: recon.result.map((u) => ({ ...u, keyPoints: unescapeLiteralNewlines(u.keyPoints), strategy: unescapeLiteralNewlines(u.strategy) })),
+    hardQuestions: prelimHard,
+    generatedAt: new Date().toISOString(),
+    modelVersion: ANTHROPIC_MODEL,
+  };
+  await supabaseAdmin.from('exams').update({ ai_analysis: prelimAnalysis }).eq('id', examId);
+
+  // ★ 9.5 공략 검산 (2026-10-12) — 문항마다 공략대로 실제로 풀어 정답과 대조. 틀리면 재작성 → 재검산. 2026-10-17 부터 문항 **병렬**.
+  const tVerify = Date.now();
+  let verifyCalls = 0;
+  const verifiedHard: ExamAIAnalysis['hardQuestions'] = await Promise.all(hardRaw.map(async (hq: { number?: number; strategy?: string; intent?: string }) => {
+    const matched = problemsForPrompt.find((p) => p.number === hq.number);
+    const base = { ...hq, problemId: matched?.problemId || '' } as ExamAIAnalysis['hardQuestions'][number];
+    if (!matched || !hq.strategy) return base;
     // ★ 후보 밖 문항이 고난도로 뽑혔으면 지금 그림·판독을 불러온다 (검산은 반드시 그림을 보고)
     if (!figureById.has(matched.problemId) && loadFigureForLazy) { try { await loadFigureForLazy(matched); } catch { /* ignore */ } }
     const r = await verifyAndFixStrategy({
@@ -489,7 +514,7 @@ export async function POST(
     }, ANTHROPIC_API_KEY);
     verifyCalls += r.calls;
     console.log(`[exam-ai-analysis] 공략 검산 ${matched.number}번: ${r.verified ? (r.revised ? '재작성 통과' : '통과') : '실패'} (답 ${r.derivedAnswer || '?'} / 정답 ${matched.answer || '-'})${r.issue ? ' — ' + r.issue.slice(0, 120) : ''}`);
-    verifiedHard.push({
+    return {
       ...base,
       intent: unescapeLiteralNewlines(base.intent),
       strategy: unescapeLiteralNewlines(r.strategy),
@@ -499,16 +524,9 @@ export async function POST(
       strategyDerivedAnswer: r.derivedAnswer,
       strategyReferenceSource: r.referenceSource,
       strategyReferenceAnswer: r.referenceAnswer,
-    });
-  }
-  console.log(`[exam-ai-analysis] 공략 검산 호출 ${verifyCalls}회`);
-
-  // 9.5 단원 카드·총평 숫자를 확정 표로 맞춘다 — AI 가 두 군데서 따로 센 수가 어긋나던 사고(동백중 8 vs 9문항) 차단
-  const recon = reconcileUnitAnalyses(Array.isArray(parsed.unitAnalyses) ? parsed.unitAnalyses : [], unitFacts);
-  const summaryFix = reconcileSummaryCounts(parsed.summary || '', unitFacts);
-  if (recon.dropped.length || recon.added.length || summaryFix.fixed) {
-    console.warn(`[exam-ai-analysis] 단원 보정 — 버림=${recon.dropped.join('/') || '-'} 채움=${recon.added.join('/') || '-'} 총평 숫자 수정=${summaryFix.fixed}`);
-  }
+    };
+  }));
+  console.log(`[exam-ai-analysis] 공략 검산 호출 ${verifyCalls}회, ${Math.round((Date.now() - tVerify) / 1000)}초`);
 
   // 10. 결과 객체 완성
   const finalAnalysis: ExamAIAnalysis = {

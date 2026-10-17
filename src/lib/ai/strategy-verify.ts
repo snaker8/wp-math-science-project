@@ -89,13 +89,13 @@ async function answersAgree(a: string, b: string, apiKey: string): Promise<boole
   // 둘 다 짧은 숫자/보기 번호면 모델까지 갈 것 없이 다르다
   if (/^\d{1,4}$/.test(normalizeAnswerForCompare(a)) && /^\d{1,4}$/.test(normalizeAnswerForCompare(b))) return false;
   try {
-    const r = parseJson<{ same?: boolean }>(await callClaude(apiKey, AGREE_SYSTEM, [{ type: 'text', text: `# 답 A\n${a}\n\n# 답 B\n${b}` }], 200));
+    const r = parseJson<{ same?: boolean }>(await callClaude(apiKey, AGREE_SYSTEM, [{ type: 'text', text: `# 답 A\n${a}\n\n# 답 B\n${b}` }], 200, { effort: 'low', think: false }));
     return r?.same === true;
   } catch { return false; }
 }
 
 async function solveOnce(input: StrategyVerifyInput, apiKey: string): Promise<string> {
-  const r = parseJson<{ answer?: string }>(await callClaude(apiKey, SOLVE_SYSTEM, problemBlock({ ...input, strategy: '' }), 1200));
+  const r = parseJson<{ answer?: string }>(await callClaude(apiKey, SOLVE_SYSTEM, problemBlock({ ...input, strategy: '' }), 1200, { effort: 'medium' }));
   return String(r?.answer ?? '').trim();
 }
 
@@ -131,12 +131,20 @@ export function answersMatch(derived: string, stored: string): boolean {
 
 type Content = Array<Record<string, unknown>>;
 
-async function callClaude(apiKey: string, system: string, content: Content, maxTokens = 1500): Promise<string> {
+type CallOpts = { effort?: 'low' | 'medium' | 'high'; think?: boolean };
+async function callClaude(apiKey: string, system: string, content: Content, maxTokens = 1500, opts: CallOpts = {}): Promise<string> {
+  // ★ 2026-10-13: 검산·재작성은 깊게 — adaptive thinking + effort high (Claude 5.x). max_tokens 는 thinking 몫 포함.
+  // ★ 2026-10-17: 답 비교·독립 풀이는 가볍게 — 4문항 × (검산+합의 2~3+재작성 2) 가 전부 high 면 300초를 넘겨 분석 전체가 저장되지 않았다(학장중 재생성 무반응).
+  const think = opts.think !== false;
   const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    // ★ 2026-10-13: 검산·재작성은 깊게 — adaptive thinking + effort high (Claude 5.x). max_tokens 는 thinking 몫 포함.
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens + 6000, thinking: { type: 'adaptive' }, output_config: { effort: 'high' }, system, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({
+      model: MODEL, max_tokens: maxTokens + (think ? 6000 : 0),
+      ...(think ? { thinking: { type: 'adaptive' } } : {}),
+      output_config: { effort: opts.effort ?? 'high' },
+      system, messages: [{ role: 'user', content }],
+    }),
   });
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
