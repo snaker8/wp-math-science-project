@@ -23,8 +23,11 @@ export const dynamic = 'force-dynamic';
 // 시험지 title 예: "2026 1학기 동백중 중3 중간고사" → "동백중"
 function extractSchoolFromTitle(title: string | null | undefined): string | null {
   if (!title) return null;
-  const m = title.match(/([가-힣A-Za-z0-9]+(?:초|중|고|대))/);
-  return m ? m[1] : null;
+  const m = title.match(/([가-힣A-Za-z0-9]+(?:초|중|고|대))(?![가-힣])/);
+  if (m) return m[1];
+  // ★ "26년 학장 중2-2 중간" 처럼 학교명 뒤에 띄고 학년이 오는 제목 — "학장" + "중2" → "학장중" (2026-10-17)
+  const sp = title.match(/([가-힣]{2,})\s+(초|중|고)(?=[1-6])/);
+  return sp ? `${sp[1]}${sp[2]}` : null;
 }
 
 // ─── OG 메타데이터 — 카톡/SNS 미리보기용 ─────────────────────────────────
@@ -129,7 +132,7 @@ interface PageData {
   } | null;
   brand: ReportBrand;
   /** ★ 학교명·시험 메타 (2026-10-12 대표: "본문에 학교명이 나오게") */
-  intro: { school: string | null; metaLine: string | null };
+  intro: { school: string | null; metaLine: string | null; /** ★ 제목용 짧은 학년·학기 (중1-2) — 대표: "상당중 중1-2 기출" (2026-10-17) */ gradeShort: string | null };
   /** ★ 고난도 문항의 실제 문제 (problemId → 렌더용 데이터) — "문제 분석 때 문제를 실제 배치" */
   hardProblems: Record<string, ExamProblemData>;
 }
@@ -200,9 +203,13 @@ async function fetchData(token: string): Promise<PageData | null> {
   // ★ 학교명 — exams.school_name > 제목 파싱(exam-title-meta) > 단순 정규식
   const titleMeta = parseExamTitleMeta(exam.title || '');
   const school = (exam as { school_name?: string | null }).school_name || titleMeta?.schoolName || extractSchoolFromTitle(exam.title) || null;
+  const resolvedGrade = resolveExamGrade(exam.curriculum_codes as string[] | null, exam.title) || (exam.grade ? String(exam.grade) : null);
   const metaLine = titleMeta
     ? `${titleMeta.examYear}학년도 ${titleMeta.gradeNum}학년 ${titleMeta.semester}학기 ${titleMeta.examRound}고사`
-    : (resolveExamGrade(exam.curriculum_codes as string[] | null, exam.title) || (exam.grade ? String(exam.grade) : null));
+    : resolvedGrade;
+  // ★ 헤더 제목 "상당중 중1-2 기출 분석" — 학년(중1/고2) + 학기. 학기는 제목 파싱(NN-G-S-R) 또는 "중2-2" 같은 표기에서
+  const semFromTitle = titleMeta?.semester ?? (exam.title?.match(/[중고]\s*[1-3]\s*-\s*([12])/)?.[1] ? parseInt(exam.title.match(/[중고]\s*[1-3]\s*-\s*([12])/)![1], 10) : null);
+  const gradeShort = resolvedGrade && /^[중고][1-3]$/.test(resolvedGrade) ? `${resolvedGrade}${semFromTitle ? `-${semFromTitle}` : ''}` : resolvedGrade;
 
   // ★ 고난도 문항의 실제 문제 — 화면(useExamProblems)과 같은 매핑으로 본문·보기·그림을 가져온다
   const hardProblems: Record<string, ExamProblemData> = {};
@@ -245,7 +252,7 @@ async function fetchData(token: string): Promise<PageData | null> {
     },
     analysis: hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null,
     brand,
-    intro: { school, metaLine },
+    intro: { school, metaLine, gradeShort },
     hardProblems,
   } as PageData;
 }

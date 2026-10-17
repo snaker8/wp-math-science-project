@@ -40,7 +40,7 @@ interface ShareReportClientProps {
   /** ★ 로그인한 선생님인가 — false 면 운영자 도구(액션 바·섹션 복사·캡처 안내)를 렌더하지 않는다 (2026-10-13) */
   isOperator?: boolean;
   data: {
-    intro?: { school: string | null; metaLine: string | null };
+    intro?: { school: string | null; metaLine: string | null; gradeShort?: string | null };
     hardProblems?: Record<string, ExamProblemData>;
     exam: {
       id: string;
@@ -392,7 +392,7 @@ export function ShareReportClient({ data, brand = DEFAULT_BRAND, isOperator = fa
             {/* ★ 학교명을 제목으로 (2026-10-12 대표: "본문에 학교명이 나오게") — 시험지 제목은 그 아래 한 줄 */}
             <h1 className="header-title">
               <span className="accent">{data.intro?.school || data.exam.title}</span>
-              {data.intro?.school ? ' 기출 분석' : ' 분석'}
+              {data.intro?.school ? `${data.intro.gradeShort ? ` ${data.intro.gradeShort}` : ''} 기출 분석` : ' 분석'}
             </h1>
             {data.intro?.school && (
               <div className="header-sub">
