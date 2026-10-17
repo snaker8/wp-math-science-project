@@ -207,13 +207,21 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
     // 대조 기준: 저장된 정답 > 독립 풀이 **합의**(2회 일치, 어긋나면 3회 다수결). 둘 다 없으면 통과시키지 않는다(근거 없는 통과 금지).
     let reference = input.answer;
     let referenceSource: 'stored' | 'consensus' | 'none' = input.answer ? 'stored' : 'none';
+    const candidates: string[] = [];   // 합의 실패 때 무엇이 나왔는지 남긴다 (2026-10-17 학장 중2-2 19·20 "왜 숨겨졌나" 를 볼 수 없었다)
+    if (!reference && independent) {
+      candidates.push(independent);
+      // ① 공략대로 푼 답(derived)과 자유 풀이(independent)가 같고 검산도 ok 면 — 서로 다른 경로 두 번이 같은 답에 닿은 것. 합의로 인정.
+      if (v?.ok === true && derived && await answersAgree(derived, independent, apiKey)) { reference = independent; referenceSource = 'consensus'; }
+    }
     if (!reference && independent) {
       calls++;
       const second = await solveOnce(input, apiKey);
+      if (second) candidates.push(second);
       if (second && await answersAgree(second, independent, apiKey)) { reference = independent; referenceSource = 'consensus'; }
       else if (second) {
         calls++;
         const third = await solveOnce(input, apiKey);
+        if (third) candidates.push(third);
         if (third && await answersAgree(third, independent, apiKey)) { reference = independent; referenceSource = 'consensus'; }
         else if (third && await answersAgree(third, second, apiKey)) { reference = second; referenceSource = 'consensus'; }
       }
@@ -223,8 +231,9 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
     if (v?.ok === true && okByAnswer && !scopeIssue) {
       return { verified: true, strategy: original, derivedAnswer: derived, independentAnswer: independent, referenceSource, referenceAnswer: reference, calls };
     }
+    const noRef = `검산 기준 없음 — 저장 정답이 없고 독립 풀이가 서로 일치하지 않음 (나온 답: ${candidates.map((c) => c.slice(0, 60)).join(' | ') || '-'})`;
     const issue = scopeIssue || (v?.issue || '').trim()
-      || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : '검산 기준 없음 — 저장 정답이 없고 독립 풀이가 서로 일치하지 않음');
+      || (reference ? `공략대로 풀면 ${derived || '?'} — 기준 답(${reference})과 다름` : noRef);
 
     // 다시 쓴다 — 최대 2회. 기준 답(저장 정답 또는 독립 풀이)을 목표로 명시하고, 재작성본도 같은 기준으로 대조
     let lastDerived = '';
@@ -237,8 +246,14 @@ export async function verifyAndFixStrategy(input: StrategyVerifyInput, apiKey: s
       const r = parseJson<{ strategy?: string; derivedAnswer?: string }>(await callClaude(apiKey, REWRITE_SYSTEM, block, 2500));
       const newStrategy = (r?.strategy || '').trim();
       lastDerived = String(r?.derivedAnswer ?? '');
-      if (newStrategy && reference && await answersAgree(lastDerived, reference, apiKey) && !exceedsGradeScope(newStrategy, input.grade)) {
-        return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, referenceSource, referenceAnswer: reference, calls };
+      if (newStrategy && !exceedsGradeScope(newStrategy, input.grade)) {
+        if (reference && await answersAgree(lastDerived, reference, apiKey)) {
+          return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, referenceSource, referenceAnswer: reference, calls };
+        }
+        // 기준이 없던 경우 — 새 공략의 답이 자유 풀이와 같으면 두 경로 합의로 인정
+        if (!reference && independent && lastDerived && await answersAgree(lastDerived, independent, apiKey)) {
+          return { verified: true, strategy: newStrategy, derivedAnswer: lastDerived, independentAnswer: independent, issue, revised: true, referenceSource: 'consensus', referenceAnswer: independent, calls };
+        }
       }
     }
     return { verified: false, strategy: original, derivedAnswer: derived, independentAnswer: independent, issue: `${issue} / 재작성도 기준 불일치(${lastDerived || '?'})`, referenceSource, referenceAnswer: reference, calls };
