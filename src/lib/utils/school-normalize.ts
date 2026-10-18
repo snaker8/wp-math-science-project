@@ -24,22 +24,31 @@ export function normalizeSchoolName(raw: string | null | undefined): string | nu
   let s = String(raw).trim();
   if (!s) return null;
 
-  // 시도/광역 prefix 제거 (자주 같이 박히는 케이스 처리)
-  const SIDO_PREFIX = /^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\s*/;
-  s = s.replace(SIDO_PREFIX, '');
-
   // 접미사 정규화
-  s = s
+  const normalizeSuffix = (v: string) => v
     .replace(/여중학교$/, '여중')
     .replace(/남중학교$/, '남중')
     .replace(/여고등학교$/, '여고')
     .replace(/남고등학교$/, '남고')
     .replace(/중학교$/, '중')
     .replace(/고등학교$/, '고')
-    .replace(/초등학교$/, '초');
+    .replace(/초등학교$/, '초')
+    .trim();
+  s = normalizeSuffix(s);
 
-  // 다시 공백 제거
-  s = s.trim();
+  // 시도/광역 prefix 제거 ("부산 동래중"·"서울동래중" → "동래중")
+  // ★ 2026-10-18 경남외고 → "외고" 사고: 시도 이름이 학교명 자체인 경우(경남외고·경남고·부산고·서울고·경기고)는 떼면 안 된다.
+  //   공백이 있으면 떼고, 붙어 있으면 뗀 뒤 접미사를 뺀 줄기가 2자 이상 남을 때만 뗀다 ("서울동래중" → "동래" ok, "경남외고" → "외" ✗).
+  const SIDO = '(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)';
+  const spaced = s.match(new RegExp(`^${SIDO}[ ]+(.+)$`));
+  if (spaced) s = spaced[2].trim();
+  else {
+    const glued = s.match(new RegExp(`^${SIDO}(.+)$`));
+    if (glued) {
+      const stem = glued[2].replace(/(?:여중|남중|여고|남고|중|고|초)$/, '');
+      if (stem.length >= 2) s = glued[2].trim();
+    }
+  }
 
   if (s.length < 2) return null;
 
