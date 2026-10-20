@@ -70,7 +70,7 @@ import type { InterpretedFigure } from '@/types/ocr';
 // ★ shadcn/ui components (Phase 2 점진 도입)
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
+import { ensureSolutionPin, fetchWithAdminPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 // ============================================================================
 // Types
@@ -703,13 +703,16 @@ export default function ExamManagementPage() {
   const handleExamMetaChange = useCallback(async (field: string, value: string) => {
     if (!selectedExamId) return;
     try {
-      const res = await fetch(`/api/exams/${selectedExamId}`, {
+      // ★ 남이 올린 공용 시험지는 서버가 관리자 PIN 을 요구 — 거절당하면 PIN 을 물어 재시도
+      const res = await fetchWithAdminPin(`/api/exams/${selectedExamId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value }),
-      });
+      }, { purpose: '공용 시험지 수정', approverBypass: false });
       if (!res.ok) {
-        console.error('[ExamMeta] Update failed:', await res.text());
+        const err = await res.json().catch(() => ({}));
+        console.error('[ExamMeta] Update failed:', err);
+        alert(`시험지 정보 수정 실패: ${err.error || res.status}`);
       }
       // ★ refetchExams() 제거 — 로컬 state만으로 UI 반영됨
     } catch (err) {

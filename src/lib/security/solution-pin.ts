@@ -66,18 +66,23 @@ export async function resolveSolutionPinHash(
 }
 
 /**
- * 해설 생성 요청 게이트. 통과하면 null, 차단이면 NextResponse(403) 반환.
- * 사용: `const denied = await requireSolutionPin(request, scope); if (denied) return denied;`
+ * 관리자 PIN 게이트 (범용). 통과하면 null, 차단이면 NextResponse(403) 반환.
+ *   - purpose: 오류 문구에 들어갈 작업 이름 ("해설 생성", "공용 시험지 수정" …)
+ *   - approverBypass: true 면 ADMIN·ORG_ADMIN·super_admin 은 PIN 없이 통과(해설 생성 기본).
+ *     false 면 super_admin 만 통과하고 관리자도 PIN 을 쳐야 한다(남의 공용 자료 수정 —
+ *     2026-10-20 "자기가 올린 데이터가 아니더라도 비번을 알면 수정 가능하게").
  */
-export async function requireSolutionPin(
+export async function requireAdminPin(
   request: NextRequest,
   scope: InstituteAccessScope,
+  opts: { purpose: string; approverBypass: boolean },
 ): Promise<NextResponse | null> {
-  if (isSolutionApprover(scope)) return null;
+  const { purpose, approverBypass } = opts;
+  if (approverBypass ? isSolutionApprover(scope) : scope.isSuperAdmin) return null;
 
   if (!scope.instituteId) {
     return NextResponse.json(
-      { error: '소속 센터가 없어 해설 생성 권한을 확인할 수 없습니다.', code: 'PIN_NO_INSTITUTE' },
+      { error: `소속 센터가 없어 ${purpose} 권한을 확인할 수 없습니다.`, code: 'PIN_NO_INSTITUTE' },
       { status: 403 },
     );
   }
@@ -88,7 +93,7 @@ export async function requireSolutionPin(
   const resolved = await resolveSolutionPinHash(scope.instituteId, scope.organizationId);
   if (resolved.error) {
     return NextResponse.json(
-      { error: '해설 생성 권한 확인에 실패했습니다.', code: 'PIN_LOOKUP_FAILED' },
+      { error: `${purpose} 권한 확인에 실패했습니다.`, code: 'PIN_LOOKUP_FAILED' },
       { status: 500 },
     );
   }
@@ -97,7 +102,7 @@ export async function requireSolutionPin(
   if (!storedHash) {
     return NextResponse.json(
       {
-        error: '해설 생성은 관리자 승인(PIN)이 필요합니다. 관리자가 아직 PIN을 설정하지 않았습니다 — 설정 > 해설 생성 PIN 에서 설정을 요청하세요.',
+        error: `${purpose}은(는) 관리자 승인(PIN)이 필요합니다. 관리자가 아직 PIN을 설정하지 않았습니다 — 설정 > 해설 생성 PIN 에서 설정을 요청하세요.`,
         code: 'PIN_NOT_SET',
       },
       { status: 403 },
@@ -107,7 +112,7 @@ export async function requireSolutionPin(
   const pin = request.headers.get(SOLUTION_PIN_HEADER)?.trim() || '';
   if (!pin) {
     return NextResponse.json(
-      { error: '해설 생성은 관리자 PIN이 필요합니다.', code: 'PIN_REQUIRED' },
+      { error: `${purpose}은(는) 관리자 PIN이 필요합니다.`, code: 'PIN_REQUIRED' },
       { status: 403 },
     );
   }
@@ -118,4 +123,15 @@ export async function requireSolutionPin(
     );
   }
   return null;
+}
+
+/**
+ * 해설 생성 요청 게이트. 통과하면 null, 차단이면 NextResponse(403) 반환.
+ * 사용: `const denied = await requireSolutionPin(request, scope); if (denied) return denied;`
+ */
+export function requireSolutionPin(
+  request: NextRequest,
+  scope: InstituteAccessScope,
+): Promise<NextResponse | null> {
+  return requireAdminPin(request, scope, { purpose: '해설 생성', approverBypass: true });
 }

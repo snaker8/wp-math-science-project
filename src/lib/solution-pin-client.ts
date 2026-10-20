@@ -18,19 +18,31 @@ export function clearSolutionPin(): void {
   if (typeof window !== 'undefined') sessionStorage.removeItem(SS_KEY);
 }
 
+/** 서버 PIN 게이트가 돌려보낸 403 인지 — 이면 PIN 을 받아 한 번 더 보내면 된다. */
+export function isPinDenied(status: number, body: unknown): boolean {
+  if (status !== 403) return false;
+  const code = (body as { code?: string } | null)?.code;
+  return code === 'PIN_REQUIRED' || code === 'PIN_INVALID' || code === 'PIN_NOT_SET';
+}
+
 /**
- * 해설 생성 전에 호출 — 통과 가능하면 true.
- * 관리자면 즉시 true. 강사면 (캐시 없을 때) PIN 프롬프트 → 서버 검증.
+ * 관리자 PIN 이 필요한 작업 전에 호출 — 통과 가능하면 true.
+ *   purpose: 프롬프트 문구 ("해설 생성", "공용 시험지 수정" …)
+ *   approverBypass: true 면 관리자는 프롬프트 없이 true (서버 게이트와 짝을 맞춘다).
+ *   forcePrompt: 캐시된 PIN 이 서버에서 틀렸다고 돌아왔을 때 다시 묻는다.
  * 취소하거나 검증 실패를 반복하면 false.
  */
-export async function ensureSolutionPin(): Promise<boolean> {
+export async function ensureAdminPin(
+  opts: { purpose: string; approverBypass: boolean; forcePrompt?: boolean },
+): Promise<boolean> {
+  const { purpose, approverBypass, forcePrompt } = opts;
   try {
     const res = await fetch('/api/admin/solution-pin', { cache: 'no-store' });
     if (res.ok) {
       const info = (await res.json()) as { isSet: boolean; approver: boolean };
-      if (info.approver) return true;
+      if (approverBypass && info.approver) return true;
       if (!info.isSet) {
-        alert('해설 생성은 관리자 승인(PIN)이 필요합니다.\n관리자가 아직 PIN을 설정하지 않았습니다 — 관리자에게 [설정 > 해설 생성 PIN] 설정을 요청하세요.');
+        alert(`${purpose}은(는) 관리자 승인(PIN)이 필요합니다.\n관리자가 아직 PIN을 설정하지 않았습니다 — 관리자에게 [설정 > 해설 생성 PIN] 설정을 요청하세요.`);
         return false;
       }
     }
@@ -38,10 +50,11 @@ export async function ensureSolutionPin(): Promise<boolean> {
     /* 조회 실패 시에도 아래 프롬프트 경로로 진행 — 서버가 최종 검증 */
   }
 
-  if (sessionStorage.getItem(SS_KEY)) return true;
+  if (forcePrompt) clearSolutionPin();
+  else if (sessionStorage.getItem(SS_KEY)) return true;
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const pin = window.prompt('해설 생성은 관리자 승인이 필요합니다.\n관리자 PIN을 입력하세요 (숫자 4~8자리):');
+    const pin = window.prompt(`${purpose}은(는) 관리자 승인이 필요합니다.\n관리자 PIN을 입력하세요 (숫자 4~8자리):`);
     if (pin == null) return false; // 취소
     const trimmed = pin.trim();
     if (!/^\d{4,8}$/.test(trimmed)) continue;
@@ -62,4 +75,29 @@ export async function ensureSolutionPin(): Promise<boolean> {
     }
   }
   return false;
+}
+
+/**
+ * PIN 게이트가 걸린 엔드포인트 호출 — 캐시된 PIN 을 헤더에 얹어 보내고, 서버가 PIN 으로
+ * 거절하면(PIN_REQUIRED·PIN_INVALID·PIN_NOT_SET) PIN 을 물어 한 번만 다시 보낸다.
+ * 그 외 응답(성공·다른 오류)은 그대로 돌려준다.
+ */
+export async function fetchWithAdminPin(
+  url: string,
+  init: RequestInit,
+  opts: { purpose: string; approverBypass: boolean },
+): Promise<Response> {
+  const send = () => fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...solutionPinHeader() } });
+  const res = await send();
+  if (res.ok) return res;
+  const err = await res.clone().json().catch(() => null) as { code?: string } | null;
+  if (!isPinDenied(res.status, err)) return res;
+  const ok = await ensureAdminPin({ ...opts, forcePrompt: err?.code === 'PIN_INVALID' });
+  if (!ok) return res;
+  return send();
+}
+
+/** 해설 생성 전에 호출 — 관리자면 즉시 true, 강사면 PIN 프롬프트 → 서버 검증. */
+export function ensureSolutionPin(): Promise<boolean> {
+  return ensureAdminPin({ purpose: '해설 생성', approverBypass: true });
 }

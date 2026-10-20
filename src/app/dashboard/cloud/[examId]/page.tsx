@@ -73,6 +73,7 @@ const AnswerMatchModal = dynamic(() => import('@/components/exam/AnswerMatchModa
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { useExamProblems } from '@/hooks/useExamProblems';
 import { useSmartBack } from '@/lib/navigation/useSmartBack';
+import { fetchWithAdminPin } from '@/lib/solution-pin-client';
 import type { InterpretedFigure } from '@/types/ocr';
 
 // (stripChoiceAnalysis 는 ExamPaperView 계열과 함께 공용 컴포넌트로 이동)
@@ -2665,12 +2666,13 @@ export default function CloudExamDetailPage() {
               if (!newTitle || !newTitle.trim()) return;
               const trimmed = newTitle.trim();
               try {
-                const res = await fetch(`/api/exams/${examId}`, {
+                // ★ 남이 올린 공용 시험지는 서버가 관리자 PIN 을 요구 — 거절당하면 PIN 을 물어 재시도
+                const res = await fetchWithAdminPin(`/api/exams/${examId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   // title 동일하더라도 PATCH 실행 + syncProblemSources=true로 태그 강제 동기화
                   body: JSON.stringify({ title: trimmed, syncProblemSources: true }),
-                });
+                }, { purpose: '공용 시험지 수정', approverBypass: false });
                 if (!res.ok) {
                   const err = await res.json().catch(() => ({}));
                   alert(`이름 변경 실패: ${err.error || res.status}`);
