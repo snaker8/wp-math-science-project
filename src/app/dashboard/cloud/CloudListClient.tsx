@@ -53,6 +53,7 @@ import {
 // ★ 업로드 모달 안에서만 쓰는 무거운 업로더 — dynamic import (열 때만 로드)
 const CloudFlowUploader = dynamic(() => import('@/components/workflow/CloudFlowUploader'), { ssr: false });
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { fetchWithAdminPin } from '@/lib/solution-pin-client';
 import { extractSchoolName } from '@/lib/utils/school-extract';
 import { ExamFacetBar } from '@/components/cloud/ExamFacetBar';
 import {
@@ -917,6 +918,15 @@ export default function CloudPage() {
   const [renamingExamId, setRenamingExamId] = useState<string | null>(null);
   const [renameExamValue, setRenameExamValue] = useState('');
 
+  // --- 시험지 PATCH (이름·폴더·분류 공통) ---
+  // ★ 남이 올린 공용 시험지는 서버가 관리자 PIN 을 요구한다(PIN_REQUIRED 403). 캐시된 PIN 을 헤더에
+  //   얹어 보내고, 거절당하면 PIN 을 물어 한 번만 다시 보낸다. 그 외 응답은 그대로 돌려준다.
+  const patchExam = useCallback((examId: string, payload: Record<string, unknown>) => fetchWithAdminPin(
+    `/api/exams/${examId}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
+    { purpose: '공용 시험지 수정', approverBypass: false },
+  ), []);
+
   // --- Reclassify handler ---
   const handleReclassify = useCallback(async (examId: string, cat: ReclassifyCategory) => {
     const payload: Record<string, any> =
@@ -931,12 +941,13 @@ export default function CloudPage() {
         : { isDiagnostic: false, examType: '학교기출' };
 
     try {
-      const res = await fetch(`/api/exams/${examId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) { console.error('[Cloud] reclassify failed'); return; }
+      const res = await patchExam(examId, payload);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[Cloud] reclassify failed', err);
+        alert(`분류 변경 실패: ${err.error || '알 수 없는 오류'}`);
+        return;
+      }
       // 로컬 상태 즉시 반영
       setDbExams((prev) => prev.map((e) =>
         e.id !== examId ? e : {
@@ -948,7 +959,7 @@ export default function CloudPage() {
     } catch (err) {
       console.error('[Cloud] reclassify error', err);
     }
-  }, []);
+  }, [patchExam]);
 
   // Resizable panels
   const [leftWidth, setLeftWidth] = useState(28);
@@ -1618,11 +1629,7 @@ export default function CloudPage() {
     setDbExams((prev) => prev.map((e) => (e.id === id ? { ...e, title: newName, fileName: newName } : e)));
 
     try {
-      const res = await fetch(`/api/exams/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newName }),
-      });
+      const res = await patchExam(id, { title: newName });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         setDbExams(snapshot); // 롤백
@@ -1634,7 +1641,7 @@ export default function CloudPage() {
       console.error('[Cloud] Rename exam error:', err);
       setDbExams(snapshot); // 롤백
     }
-  }, [renamingExamId, renameExamValue, fetchData, dbExams]);
+  }, [renamingExamId, renameExamValue, fetchData, dbExams, patchExam]);
 
   // --- 시험지 그룹 이동 --- ★ 낙관적: bookGroupId 즉시 반영(출발/도착 폴더 카운트 동시 갱신), 실패 롤백.
   const handleMoveExam = useCallback(async (newGroupId: string | null) => {
@@ -1645,11 +1652,7 @@ export default function CloudPage() {
     setDbExams((prev) => prev.map((e) => (e.id === id ? { ...e, bookGroupId: newGroupId } : e)));
 
     try {
-      const res = await fetch(`/api/exams/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookGroupId: newGroupId }),
-      });
+      const res = await patchExam(id, { bookGroupId: newGroupId });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         setDbExams(snapshot); // 롤백
@@ -1661,7 +1664,7 @@ export default function CloudPage() {
       console.error('[Cloud] Move exam error:', err);
       setDbExams(snapshot); // 롤백
     }
-  }, [movingExam, fetchData, dbExams]);
+  }, [movingExam, fetchData, dbExams, patchExam]);
 
   // --- 전체 삭제 (모달 오픈) ---
   const handleDeleteAllVisible = useCallback(() => {

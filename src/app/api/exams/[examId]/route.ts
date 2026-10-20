@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
+import { requireAdminPin } from '@/lib/security/solution-pin';
 
 // Next.js 14 Data Cache 비활성화
 export const dynamic = 'force-dynamic';
@@ -240,12 +241,16 @@ export async function PATCH(
   {
     const ex = existingExam as { institute_id: string | null; created_by: string | null };
     if (ex.institute_id === null) {
-      // ★ 공통풀(공유 라이브러리) 시험지 — 올린(생성) 강사 본인 또는 super_admin 만 수정 허용.
+      // ★ 공통풀(공유 라이브러리) 시험지 — 올린(생성) 강사 본인 또는 super_admin 은 그냥 수정.
       //   업로더는 자기가 올린 자료(제목·폴더 등) 관리 가능 + 격리 학원 강사가 공유 시험지를
       //   임의로 바꾸는 것은 차단. (사용자 정책 2026-06-20: "올리는 강사는 이름 변경 가능")
+      //   그 외 편집자는 관리자 PIN(x-solution-pin, 서버 검증) 을 치면 허용 — 2026-10-20
+      //   "자기가 올린 데이터가 아니더라도 시험지명 수정 같은 건 비번을 알면 가능하게".
+      //   관리자(ADMIN·ORG_ADMIN)도 남의 자료라 PIN 을 친다(approverBypass: false).
       const isOwner = !!ex.created_by && ex.created_by === user.id;
       if (!scope.isSuperAdmin && !isOwner) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const denied = await requireAdminPin(request, scope, { purpose: '공용 시험지 수정', approverBypass: false });
+        if (denied) return denied;
       }
     } else {
       // 격리 자료 — institute 접근 권한 검증
