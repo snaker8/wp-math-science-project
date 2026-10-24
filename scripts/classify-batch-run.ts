@@ -30,6 +30,8 @@ const MAX_KRW = Number(ARG('max-krw') || 30000);
 const POLL_SEC = Number(ARG('poll-sec') || 60);
 const COMMIT = process.argv.includes('--commit');
 const DRY = process.argv.includes('--dry');
+// 이전 run 의 stage1 코드가 같은 문항은 그 run 의 Stage 2 예측을 재사용 (Stage 2 재호출 비용 절약)
+const REUSE_FROM = ARG('reuse-stage2-from') || '';
 if (!RUN) { console.error('--run=<id> 필수'); process.exit(1); }
 
 for (const line of fs.readFileSync('.env.local', 'utf-8').split('\n')) {
@@ -169,11 +171,15 @@ const estTok = (s: string) => Math.ceil(s.length / 1.6);
 // ─── 2. Stage 1 ──────────────────────────────────────────────────────────────
 async function stage1(targets: Target[]) {
   const cls = await import('@/lib/workflow/classify');
+  const { withNeighborCourses } = await import('@/lib/workflow/mathsecr-prompt');
+  // ★ 동기 경로(classifyProblem)와 같게 이웃 과정(지난 학기 등)을 표에 합친다 — 학교 시험은 지난 학기 범위를 섞어 낸다.
+  //   첫 실행(mid-20261025)에서 이걸 빠뜨려 중1-2 시험지의 중1-1 문항 59건이 표 밖 코드로 나와 실패했다.
+  const subjectOf = (t: Target): string | string[] => { const n = withNeighborCourses(t.codes.length === 1 ? t.codes[0] : t.codes); return n.length === 1 ? n[0] : n; };
   if (exists('stage1.json')) { log('stage1.json 재사용'); return readJson<Record<string, string>>('stage1.json'); }
   const requests: Array<{ custom_id: string; params: Record<string, unknown> }> = [];
   let estIn = 0;
   for (const t of targets) {
-    const subjectCode = t.codes.length === 1 ? t.codes[0] : t.codes;
+    const subjectCode = subjectOf(t);
     const s1 = cls.buildStage1Prompt({ subjectCode, examSubject: t.examSubject, examGrade: t.examGrade, content: t.text, label: `batch:${t.id.slice(0, 8)}` });
     if (!s1) { log(`  유형표 없음 → 제외 ${t.id} (${t.codes})`); continue; }
     estIn += estTok(s1.system) + estTok(s1.user);
@@ -196,7 +202,7 @@ async function stage1(targets: Target[]) {
     const t = byId.get(r.custom_id); if (!t) continue;
     const raw = textOf(r);
     if (!raw) { fail.push({ id: r.custom_id, why: `${r.result.type}: ${JSON.stringify(r.result.error || '').slice(0, 120)}` }); continue; }
-    const code = cls.extractStage1Code(raw, t.codes.length === 1 ? t.codes[0] : t.codes);
+    const code = cls.extractStage1Code(raw, subjectOf(t));
     if (!code) { fail.push({ id: r.custom_id, why: `코드 추출 실패: ${raw.slice(0, 80)}` }); continue; }
     out[r.custom_id] = code;
   }
@@ -213,9 +219,16 @@ async function stage2(targets: Target[], s1: Record<string, string>): Promise<Pr
   const byId = new Map(targets.map((t) => [t.id, t]));
   const requests: Array<{ custom_id: string; params: Record<string, unknown> }> = [];
   const preds: Pred[] = [];
+  let reused = 0;
+  const prevS1: Record<string, string> = REUSE_FROM && fs.existsSync(path.join(REUSE_FROM, 'stage1.json')) ? JSON.parse(fs.readFileSync(path.join(REUSE_FROM, 'stage1.json'), 'utf-8')) : {};
+  const prevPred = new Map<string, Pred>();
+  if (REUSE_FROM && fs.existsSync(path.join(REUSE_FROM, 'predictions.jsonl'))) {
+    for (const l of fs.readFileSync(path.join(REUSE_FROM, 'predictions.jsonl'), 'utf-8').split('\n')) if (l.trim()) { const p = JSON.parse(l) as Pred; prevPred.set(p.problem_id, p); }
+  }
   let i = 0;
   for (const [id, stage1Code] of Object.entries(s1)) {
     const t = byId.get(id)!;
+    if (prevS1[id] === stage1Code && prevPred.has(id)) { preds.push(prevPred.get(id)!); reused++; continue; }
     const s2 = await cls.buildStage2Prompt({ stage1Code, examSubject: t.examSubject, content: t.text, label: `batch:${id.slice(0, 8)}` });
     if (!s2) continue;
     if ('leaf' in s2) {
@@ -226,7 +239,7 @@ async function stage2(targets: Target[], s1: Record<string, string>): Promise<Pr
     requests.push({ custom_id: id, params: cls.buildClaudeMessageParams({ model: MODEL, systemPrompt: s2.system, userPrompt: s2.user, maxTokens: cls.STAGE2_MAX_TOKENS, jsonSchema: cls.STAGE2_SCHEMA }) });
     if (++i % 200 === 0) log(`  stage2 프롬프트 ${i}/${Object.keys(s1).length}`);
   }
-  log(`stage2: 호출 ${requests.length}건, leaf 확정 ${preds.length}건`);
+  log(`stage2: 호출 ${requests.length}건, 이전 run 재사용 ${reused}건, leaf 확정 ${preds.length - reused}건`);
   const usage: Usage = { in: 0, cacheRead: 0, cacheCreate: 0, out: 0 };
   const fail: Array<{ id: string; why: string }> = [];
   if (requests.length) {
