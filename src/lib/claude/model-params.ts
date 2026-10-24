@@ -55,6 +55,24 @@ export function usesAdaptiveThinking(model: string | undefined | null): boolean 
 
 export type ClaudeEffort = 'low' | 'medium' | 'high';
 
+/**
+ * ★ thinking 을 끄는 모델별 꼴 (2026-10-24 /v1/messages 실측).
+ *   짧은 분류·추출처럼 사고가 필요 없는 호출에 쓴다. 안 끄면 Haiku 5.5 는 **요청에 thinking 이
+ *   없어도 기본으로 thinking 블록을 내보내** max_tokens 를 사고로 다 쓰고 text 가 빈 채 돌아온다.
+ *   - haiku-5.x : `thinking:{type:'disabled'}` 통과. `between_tools` 는 400.
+ *   - sonnet-5.x: `thinking:{type:'between_tools'}` 통과. `disabled` 는 400 ("between_tools 를 보내라").
+ *   - opus-5.x  : 둘 다 400 ("adaptive + output_config.effort 로 제어"). effort low 만 얹는다.
+ *   - 4.x       : 빈 객체 (thinking 을 안 보내면 안 생각한다).
+ *   effort 'low' 는 세 모델 모두 통과하며 thinking 토큰 0 을 실측.
+ */
+export function noThinkingParams(model: string | undefined | null): Record<string, unknown> {
+  const m = (model || '').trim().toLowerCase();
+  if (!usesAdaptiveThinking(m)) return {};
+  if (/^claude-haiku-/.test(m)) return { thinking: { type: 'disabled' }, output_config: { effort: 'low' } };
+  if (/^claude-sonnet-/.test(m)) return { thinking: { type: 'between_tools' }, output_config: { effort: 'low' } };
+  return { output_config: { effort: 'low' } };
+}
+
 /** 종전 budget_tokens 를 effort 로 — 3000 미만 low · 8000 미만 medium · 그 이상 high */
 export function effortFromBudget(budget: number | undefined): ClaudeEffort {
   if (!budget || budget < 3000) return 'low';
@@ -91,7 +109,8 @@ export function normalizeClaudeBody<T extends Record<string, unknown>>(body: T, 
   if (usesAdaptiveThinking(model)) {
     delete b.temperature; delete b.top_p; delete b.top_k;
     if (thinking) {
-      if (thinking.type !== 'adaptive') {
+      // 'disabled' / 'between_tools' (noThinkingParams 가 넣은 끄기 꼴)은 그대로 둔다 — 종전 'enabled' 만 변환.
+      if (thinking.type === 'enabled') {
         const effort = opts.effort ?? effortFromBudget(thinking.budget_tokens);
         b.thinking = { type: 'adaptive' };
         if (!b.output_config) b.output_config = { effort };

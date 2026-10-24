@@ -24,7 +24,7 @@
 // ============================================================================
 
 import { OPENAI_MODELS, normalizeOpenAIBody } from '@/lib/openai/model-params';
-import { normalizeClaudeBody, CLAUDE_MODELS } from '@/lib/claude/model-params';
+import { normalizeClaudeBody, usesAdaptiveThinking, noThinkingParams, CLAUDE_MODELS } from '@/lib/claude/model-params';
 import { resolveSubjectCode, resolveCurriculumCodes, buildTypeTable, buildL1L2Table, buildL3L4Table, withNeighborCourses, NEIGHBOR_COURSES } from './mathsecr-prompt';
 import { cachedSystem } from '@/lib/claude/cache';
 
@@ -573,7 +573,15 @@ JSON: {"stage1Code":"${codeExample}"}`;
 
   const stage1Raw = await callClaudeOnce({
     apiKey, model, systemPrompt: stage1System, userPrompt: stage1User,
-    label: `${label}:stage1`, maxTokens: 100,
+    // ★ 100 → 300 (2026-10-24 실측): Sonnet 5.5 가 JSON 앞에 한두 문장 설명을 붙이는 일이 있어
+    //   100 에서 잘리면 코드가 "MS03-" 까지만 나와 Stage 1 실패 → Gemini 폴백(36건 중 6건).
+    label: `${label}:stage1`, maxTokens: 300,
+    jsonSchema: {
+      type: 'object',
+      properties: { stage1Code: { type: 'string' } },
+      required: ['stage1Code'],
+      additionalProperties: false,
+    },
   });
   if (!stage1Raw) return null;
 
@@ -665,7 +673,27 @@ pitfalls의 code는 위 학생 함정 유형 목록의 정확한 SCREAMING_SNAKE
 
   const stage2Raw = await callClaudeOnce({
     apiKey, model, systemPrompt: stage2System, userPrompt: stage2User,
-    label: `${label}:stage2`, maxTokens: 600, // ★ pitfalls 추가로 200 → 600 (Phase C-1b)
+    label: `${label}:stage2`, maxTokens: 1000, // ★ pitfalls 추가로 200 → 600 (Phase C-1b) → 1000 (설명 문장 여유, 2026-10-24)
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        typeCode: { type: 'string' },
+        difficulty: { type: 'integer' },
+        cognitiveDomain: { type: 'string', enum: ['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING'] },
+        confidence: { type: 'number' },
+        pitfalls: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { code: { type: 'string' }, confidence: { type: 'number' }, reason: { type: 'string' } },
+            required: ['code', 'confidence', 'reason'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['typeCode', 'difficulty', 'cognitiveDomain', 'confidence', 'pitfalls'],
+      additionalProperties: false,
+    },
   });
   if (!stage2Raw) return null;
 
@@ -687,8 +715,22 @@ async function callClaudeOnce(params: {
   userPrompt: string;
   label: string;
   maxTokens: number;
+  /** ★ 구조화 출력 스키마 (Claude 5 계열만 적용). 있으면 응답이 스키마에 맞는 JSON 하나로 강제된다. */
+  jsonSchema?: Record<string, unknown>;
 }): Promise<string | null> {
-  const { apiKey, model, systemPrompt, userPrompt, label, maxTokens } = params;
+  const { apiKey, model, systemPrompt, userPrompt, label, maxTokens, jsonSchema } = params;
+  // ★ 2026-10-24 실측: Haiku 5.5 는 기본 thinking 으로 max_tokens 를 다 쓰고 text 가 빈 채 돌아오고,
+  //   Sonnet 5.5 는 JSON 앞에 풀이 문장을 써서 잘렸다(36건 중 6건 Stage 1 실패 → Gemini 폴백).
+  //   → 모델별 thinking 끄기 + 구조화 출력(output_config.format) 으로 JSON 하나만 받는다. 4.x 는 종전 그대로.
+  const adaptive = usesAdaptiveThinking(model);
+  const outputConfig = {
+    ...((noThinkingParams(model).output_config as Record<string, unknown> | undefined) ?? {}),
+    ...(adaptive && jsonSchema ? { format: { type: 'json_schema', schema: jsonSchema } } : {}),
+  };
+  const modelParams: Record<string, unknown> = {
+    ...noThinkingParams(model),
+    ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
+  };
   const strictUser = `${userPrompt}\n\n⚠️ 중요: 응답은 반드시 JSON 객체 하나만. 설명·주석·코드블록 마커 금지. 첫 글자는 { 로 시작.`;
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -703,6 +745,7 @@ async function callClaudeOnce(params: {
         body: JSON.stringify(normalizeClaudeBody({
           model,
           max_tokens: maxTokens,
+          ...modelParams,
           system: cachedSystem(systemPrompt),
           messages: [
             { role: 'user', content: strictUser },
