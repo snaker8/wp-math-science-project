@@ -260,6 +260,7 @@ group by 1 order by 2 desc;
 | `src/lib/workflow/mathsecr-prompt.ts` | 유형표 빌더 (2단계용 `buildL1L2Table` / `buildL3L4Table`) |
 | `scripts/classify-cost-probe.ts` | 단가·폴백 측정 (DB 미기록) |
 | `scripts/classify-measure.ts` | 시험지 단위 분류 (`--save` 로 저장) |
+| `scripts/classify-batch-run.ts` | **일괄 분류 (Message Batches, 정가 50%)** — 대상 선정→Stage1→Stage2→검증→`--commit`. run 디렉터리 재개 가능 |
 | `scripts/classify-benchmark-models.ts` | 모델별 정확도·단가 벤치마크 — CLAUDE_MAX_VERIFIED 정답 대비 (DB 미기록, 폴백 키 차단) |
 | `scripts/reclassify-by-source.ts` | 출처 기준 오분류 교정 |
 | `scripts/import-mathsecr.ts` | HML 일괄 적재 (분류는 안 함) |
@@ -312,3 +313,26 @@ group by 1 order by 2 desc;
 - **Sonnet 5.5 는 JSON 앞에 풀이 문장을 붙여** 100 토큰에서 잘리면 `"MS03-` 까지만 와 Stage 1 실패 → Gemini 폴백. 고치기 전 36건 중 6건(17%).
 - 조치: `noThinkingParams(model)`(haiku→disabled · sonnet→between_tools · opus→effort low) + `output_config.format` JSON 스키마(Stage 1·2) + max_tokens 300/1000.
   고친 뒤 두 모델 모두 164건 연속 실패 0.
+
+---
+
+## 13. 중등 일괄 분류 실행 기록 (2026-10-25) — Message Batches 로 1,883건, 총 약 18,600원
+
+`scripts/classify-batch-run.ts --run=mid-20261025b --subjects=02,03,04,05,06` (Sonnet 5.5, Batch 50%).
+대상 = `exams.curriculum_codes` 가 전부 중등(02~06)인 시험지 189장의 미분류 2,082문항.
+
+| 단계 | 결과 |
+|---|---|
+| 1차 run (이웃 학기 표 누락) | Stage1 2,014 성공 / 68 실패(표 밖 지난 학기 코드), 14,006원 |
+| 2차 run (이웃 학기 표 포함, Stage2 는 1차 결과 재사용) | Stage1 2,082 전건 성공, Stage1 코드 바뀐 293건만 Stage2 재호출, 4,621원 |
+| 검증 | 없는 코드 2건 제외(`MS05-06-04`), 다른 경로로 이미 분류 197건 제외 |
+| **기록** | **1,883건** `classification_source='claude-sonnet-5-5/batch:mid-20261025b'`, readback 일치, 함정 태그 별도 INSERT |
+| 남은 중등 미분류 | 2건 |
+
+난이도 분포(기록분): 1:17 · 2:249 · 3:657 · 4:551 · 5:337 · 6:70 · 7:2.
+
+### 이번에 배운 것 — 다음 run 전에 읽을 것
+- 🔴 **이웃 학기 표를 빼면 안 된다.** 동기 경로는 `withNeighborCourses` 로 지난 학기 표를 합친다. 배치가 이걸 빠뜨리자 중1-2 시험지의 중1-1 문항 59건이 표 밖 코드로 나와 실패했고, 나머지도 이번 학기 코드로 억지로 들어갔을 수 있어 Stage1 을 전체 재실행했다(293건이 바뀜, 그중 43건은 학기 자체가 바뀜).
+- 🔴 **`.range()` 페이징은 `.order()` 없이는 행이 빠진다.** 기존 분류 목록을 그렇게 읽어 197건을 "미분류"로 잘못 넣었고, `.in()` 500개 조회는 error 를 안 봐서 조용히 비어 돌아와 INSERT 가 중복키로 전건 실패했다. → order 페이징 + 200개 chunk + error throw.
+- Batch 는 제출 후 8~15분이면 끝났다(2,000건). 캐시 쓰기가 많아 문항당 단가는 동기 실측(22원)의 절반이 아니라 약 7~9원이었다(1차 14,006원/2,014건 ≈ 7원).
+- 고등(07~13) 24,500건 환산: 약 17만~22만원 (미검증 외삽). 과목별로 끊어 run 하나에 3,000건 이하 권장.
