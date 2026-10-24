@@ -87,7 +87,7 @@ async function select(): Promise<Target[]> {
     // 과목 코드가 전부 대상 과목 안에 있어야 한다 (중등+고등 섞인 시험지는 제외)
     .filter((e) => (e.curriculum_codes || []).length > 0 && (e.curriculum_codes || []).every((c) => SUBJECTS.includes(String(c))))
     .sort((a, b) => String(a.curriculum_codes).localeCompare(String(b.curriculum_codes)) || a.title.localeCompare(b.title));
-  const classified = new Set((await pageAll<{ problem_id: string }>((a, b) => db.from('classifications').select('problem_id').range(a, b))).map((r) => r.problem_id));
+  const classified = new Set((await pageAll<{ problem_id: string }>((a, b) => db.from('classifications').select('problem_id').order('problem_id').range(a, b))).map((r) => r.problem_id));
   const targets: Target[] = [];
   const seen = new Set<string>();
   let skippedShort = 0;
@@ -286,8 +286,10 @@ async function verifyAndCommit(targets: Target[], preds: Pred[]) {
   }
   // (3) 그 사이 다른 경로로 분류된 문제 제외
   const already = new Set<string>();
-  for (let i = 0; i < ok.length; i += 500) {
-    const { data } = await db.from('classifications').select('problem_id').in('problem_id', ok.slice(i, i + 500).map((p) => p.problem_id));
+  // ★ 200개씩 + error 확인 (첫 실행에서 500개 .in() 이 조용히 비어 돌아와 중복 INSERT 로 전건 실패했다)
+  for (let i = 0; i < ok.length; i += 200) {
+    const { data, error } = await db.from('classifications').select('problem_id').in('problem_id', ok.slice(i, i + 200).map((p) => p.problem_id));
+    if (error) throw new Error(`기존 분류 조회 실패: ${error.message}`);
     for (const r of data || []) already.add(r.problem_id);
   }
   const rows = ok.filter((p) => !already.has(p.problem_id));
