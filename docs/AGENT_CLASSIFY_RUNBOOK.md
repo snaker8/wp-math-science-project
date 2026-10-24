@@ -260,6 +260,7 @@ group by 1 order by 2 desc;
 | `src/lib/workflow/mathsecr-prompt.ts` | 유형표 빌더 (2단계용 `buildL1L2Table` / `buildL3L4Table`) |
 | `scripts/classify-cost-probe.ts` | 단가·폴백 측정 (DB 미기록) |
 | `scripts/classify-measure.ts` | 시험지 단위 분류 (`--save` 로 저장) |
+| `scripts/classify-benchmark-models.ts` | 모델별 정확도·단가 벤치마크 — CLAUDE_MAX_VERIFIED 정답 대비 (DB 미기록, 폴백 키 차단) |
 | `scripts/reclassify-by-source.ts` | 출처 기준 오분류 교정 |
 | `scripts/import-mathsecr.ts` | HML 일괄 적재 (분류는 안 함) |
 
@@ -276,3 +277,38 @@ group by 1 order by 2 desc;
 - 중단했다면 어디서 왜 멈췄는지
 
 **추정치를 쓰지 않는다.** 재지 않은 숫자는 "측정 안 함"이라고 적는다.
+
+---
+
+## 12. 모델 벤치마크 실측 (2026-10-24) — Haiku 5.5 는 못 쓴다, Sonnet 5.5 가 기준
+
+`scripts/classify-benchmark-models.ts --n=150` — 정답(gold) = `classification_source='CLAUDE_MAX_VERIFIED'`
+5,068건(구독제 Stage A/B/C 검증 커밋, **사람 검수 아님**) 에서 7과목(중1-2~공통수학2) 층화 150건.
+두 모델에 같은 표본, 같은 `classifyProblem` 2단계 경로, Gemini/GPT 폴백 키는 프로세스 안에서 비움.
+
+| | Haiku 5.5 | Sonnet 5.5 |
+|---|---|---|
+| 완료 / 실패 | 150 / 0 | 150 / 0 |
+| 대단원(L1) 일치 | 76.7% | 87.3% |
+| **중단원(L2) 일치** | 60.0% | **83.3%** |
+| 소단원(L3) 일치 | 25.3% | 56.7% |
+| 세부유형(leaf) 일치 | 10.0% | 38.0% |
+| 난이도 ±1 | 62.0% | 64.7% |
+| 문항당 시간(동시 4) | 0.8초 | 1.1초 |
+| 토큰 (in / cache_w / cache_r / out) | 321K / 380K / 813K / 28K | 320K / 488K / 724K / 37K |
+| **문항당 비용** | **0.95원** | **22.21원** |
+
+- Haiku 는 공통수학2 에서 중단원 일치 4/24. 분류기로 쓸 수 없다. 1원짜리 단가는 의미가 없다.
+- Sonnet 의 leaf 불일치는 대부분 **이웃 세부유형**(…-03 ↔ …-04) — 중단원까지는 83% 맞는다. gold 자체가 모델 판정이라
+  leaf 38% 를 「오답률 62%」로 읽으면 안 된다. 사람이 몇 건을 봐야 어느 쪽이 맞는지 안다 (미검증).
+- 🔴 **난이도는 두 모델 모두 gold 보다 쉽게 본다.** gold 분포는 7~9 가 150건 중 43건인데 Sonnet 은 7 이 5건, 8 이상 0건.
+  어느 쪽이 맞는지는 사람 판단 필요 — 출제 난이도 필터에 직접 걸리는 값이므로 전체 적재 전에 결정할 것.
+- Sonnet 비용의 51% 가 **캐시 쓰기**(488K × $2.5/M). 표본이 7과목·많은 중단원에 흩어져 Stage 2 표가 매번 새로 써졌다.
+  전체 적재는 과목→대단원→중단원 순으로 묶어 연속 처리하면 쓰기가 읽기로 바뀐다 → 하한 **약 12원/문항**(외삽, 미검증).
+- 환산 (26,526 미분류 문항, Sonnet 5.5): API 32만~59만원 · Message Batches(50%) 16만~30만원. 시간은 동시 4 로 약 8시간.
+
+### 이 측정에서 고친 운영 결함 (classify.ts · model-params.ts)
+- **Haiku 5.5 는 요청에 thinking 이 없어도 thinking 블록을 내보내** Stage 1 max_tokens 100 을 사고로 다 쓰고 text 가 빈 채 돌아왔다(전건 실패).
+- **Sonnet 5.5 는 JSON 앞에 풀이 문장을 붙여** 100 토큰에서 잘리면 `"MS03-` 까지만 와 Stage 1 실패 → Gemini 폴백. 고치기 전 36건 중 6건(17%).
+- 조치: `noThinkingParams(model)`(haiku→disabled · sonnet→between_tools · opus→effort low) + `output_config.format` JSON 스키마(Stage 1·2) + max_tokens 300/1000.
+  고친 뒤 두 모델 모두 164건 연속 실패 0.
