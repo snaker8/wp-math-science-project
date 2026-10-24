@@ -525,17 +525,53 @@ async function fetchSimilarCorrections(
 // Stage 2: 1단계 결정 하위의 소단원(L3) + 세부유형(L4) 선택 (3~15K 토큰)
 // ============================================================================
 
-async function classifyWithClaudeTwoStage(params: {
-  apiKey: string;
-  model: string;
+// ============================================================================
+// ★ 2단계 분류의 프롬프트·요청 본문 빌더 — 동기 경로(classifyWithClaudeTwoStage)와
+//   Message Batches 일괄 경로(scripts/classify-batch-run.ts)가 **같은 프롬프트·같은 파라미터**를 쓰도록
+//   여기서만 만든다. (2026-10-24: 배치 경로가 프롬프트를 따로 들고 있으면 또 한쪽만 고쳐진다.)
+// ============================================================================
+
+export const STAGE1_MAX_TOKENS = 300;  // ★ 100 → 300 (2026-10-24): Sonnet 5.5 가 JSON 앞에 설명을 붙여 잘리던 것
+export const STAGE2_MAX_TOKENS = 1000; // ★ pitfalls 추가로 200 → 600 (Phase C-1b) → 1000 (설명 문장 여유)
+
+export const STAGE1_SCHEMA: Record<string, unknown> = {
+      type: 'object',
+      properties: { stage1Code: { type: 'string' } },
+      required: ['stage1Code'],
+      additionalProperties: false,
+};
+
+export const STAGE2_SCHEMA: Record<string, unknown> = {
+      type: 'object',
+      properties: {
+        typeCode: { type: 'string' },
+        difficulty: { type: 'integer' },
+        cognitiveDomain: { type: 'string', enum: ['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING'] },
+        confidence: { type: 'number' },
+        pitfalls: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { code: { type: 'string' }, confidence: { type: 'number' }, reason: { type: 'string' } },
+            required: ['code', 'confidence', 'reason'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['typeCode', 'difficulty', 'cognitiveDomain', 'confidence', 'pitfalls'],
+      additionalProperties: false,
+};
+
+/** Stage 1(대단원+중단원) 프롬프트. 유형표가 비어 있으면 null. */
+export function buildStage1Prompt(params: {
   subjectCode: string | string[];
   examSubject: string;
   examGrade: string;
   content: string;
-  label: string;
-}): Promise<Record<string, unknown> | null> {
-  const { apiKey, model, subjectCode, examSubject, examGrade, content, label } = params;
-
+  label?: string;
+}): { system: string; user: string } | null {
+  const { subjectCode, examSubject, examGrade, content } = params;
+  const label = params.label ?? 'classify';
   // ★ subjectCode 가 배열(학기 불명)일 수 있어 표시·예시용 문자열 파생.
   const codeArr = Array.isArray(subjectCode) ? subjectCode : [subjectCode];
   const msLabel = codeArr.map((c) => 'MS' + c).join('/');       // "MS03/MS04"
@@ -571,27 +607,21 @@ ${content}
 ※ 본문의 핵심 단서(log 보조값·시그마·미분 기호·정의역 조건 등)를 출제 의도로 보고, 풀이 가능 여부보다 의도를 우선.
 JSON: {"stage1Code":"${codeExample}"}`;
 
-  const stage1Raw = await callClaudeOnce({
-    apiKey, model, systemPrompt: stage1System, userPrompt: stage1User,
-    // ★ 100 → 300 (2026-10-24 실측): Sonnet 5.5 가 JSON 앞에 한두 문장 설명을 붙이는 일이 있어
-    //   100 에서 잘리면 코드가 "MS03-" 까지만 나와 Stage 1 실패 → Gemini 폴백(36건 중 6건).
-    label: `${label}:stage1`, maxTokens: 300,
-    jsonSchema: {
-      type: 'object',
-      properties: { stage1Code: { type: 'string' } },
-      required: ['stage1Code'],
-      additionalProperties: false,
-    },
-  });
-  if (!stage1Raw) return null;
+  return { system: stage1System, user: stage1User };
+}
 
-  const stage1Code = extractStage1Code(stage1Raw, subjectCode);
-  if (!stage1Code) {
-    console.warn(`[${label}] Stage 1 코드 추출 실패. 원문: ${stage1Raw.substring(0, 200)}`);
-    return null;
-  }
-  console.log(`[${label}] ✓ Stage 1: ${stage1Code}`);
-
+/**
+ * Stage 2(소단원+세부유형) 프롬프트. 강사 보정 few-shot·함정 유형 마스터를 DB 에서 읽어 넣는다.
+ *   - `{ leaf }` : stage1Code 아래 L3 가 없어 stage1Code 자체가 최종 코드인 경우 (호출 없이 확정)
+ */
+export async function buildStage2Prompt(params: {
+  stage1Code: string;
+  examSubject: string;
+  content: string;
+  label?: string;
+}): Promise<{ system: string; user: string } | { leaf: Record<string, unknown> } | null> {
+  const { stage1Code, examSubject, content } = params;
+  const label = params.label ?? 'classify';
   const m = stage1Code.match(/^MS(\d{2})-(\d{2})-(\d{2})$/);
   if (!m) return null;
   const [, subj, l1, l2] = m;
@@ -601,7 +631,7 @@ JSON: {"stage1Code":"${codeExample}"}`;
   if (!l3l4Table) {
     // L3 이하가 없는 경우 stage1Code가 leaf — 그대로 반환
     console.warn(`[${label}] L3L4 테이블 비어있음 (${stage1Code}는 leaf로 간주)`);
-    return {
+    return { leaf: {
       typeCode: stage1Code,
       typeName: '',
       subject: examSubject,
@@ -610,7 +640,7 @@ JSON: {"stage1Code":"${codeExample}"}`;
       difficulty: 3,
       cognitiveDomain: 'CALCULATION',
       confidence: 0.6,
-    };
+    } };
   }
 
   const stage2System = `한국 수학 교육과정 전문가. 이미 결정된 범위(${stage1Code}) 하위에서 최종 소단원·세부유형을 선택합니다.
@@ -671,29 +701,81 @@ ${content}${exampleSection}${pitfallSection}
 cognitiveDomain은 CALCULATION|UNDERSTANDING|INFERENCE|PROBLEM_SOLVING 중 하나.
 pitfalls의 code는 위 학생 함정 유형 목록의 정확한 SCREAMING_SNAKE_CASE 코드만 사용. 새 코드 만들지 마세요.`;
 
+  return { system: stage2System, user: stage2User };
+}
+
+/**
+ * /v1/messages 요청 본문 (apiKey 제외). 동기 호출과 Batch `params` 가 같은 함수를 거친다.
+ * ★ 2026-10-24 실측: Haiku 5.5 는 기본 thinking 으로 max_tokens 를 다 쓰고 text 가 빈 채 돌아오고,
+ *   Sonnet 5.5 는 JSON 앞에 풀이 문장을 써서 잘렸다(36건 중 6건 Stage 1 실패 → Gemini 폴백).
+ *   → 모델별 thinking 끄기 + 구조화 출력(output_config.format) 으로 JSON 하나만 받는다. 4.x 는 종전 그대로.
+ */
+export function buildClaudeMessageParams(params: {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  jsonSchema?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const { model, systemPrompt, userPrompt, maxTokens, jsonSchema } = params;
+  const adaptive = usesAdaptiveThinking(model);
+  const outputConfig = {
+    ...((noThinkingParams(model).output_config as Record<string, unknown> | undefined) ?? {}),
+    ...(adaptive && jsonSchema ? { format: { type: 'json_schema', schema: jsonSchema } } : {}),
+  };
+  const modelParams: Record<string, unknown> = {
+    ...noThinkingParams(model),
+    ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
+  };
+  const strictUser = `${userPrompt}\n\n⚠️ 중요: 응답은 반드시 JSON 객체 하나만. 설명·주석·코드블록 마커 금지. 첫 글자는 { 로 시작.`;
+  return normalizeClaudeBody({
+    model,
+    max_tokens: maxTokens,
+    ...modelParams,
+    system: cachedSystem(systemPrompt),
+    messages: [{ role: 'user', content: strictUser }],
+    temperature: 0.1,
+  });
+}
+
+async function classifyWithClaudeTwoStage(params: {
+  apiKey: string;
+  model: string;
+  subjectCode: string | string[];
+  examSubject: string;
+  examGrade: string;
+  content: string;
+  label: string;
+}): Promise<Record<string, unknown> | null> {
+  const { apiKey, model, subjectCode, examSubject, examGrade, content, label } = params;
+
+  // ── Stage 1: L1 + L2 선택 ──
+  const s1 = buildStage1Prompt({ subjectCode, examSubject, examGrade, content, label });
+  if (!s1) return null;
+
+  const stage1Raw = await callClaudeOnce({
+    apiKey, model, systemPrompt: s1.system, userPrompt: s1.user,
+    label: `${label}:stage1`, maxTokens: STAGE1_MAX_TOKENS,
+    jsonSchema: STAGE1_SCHEMA,
+  });
+  if (!stage1Raw) return null;
+
+  const stage1Code = extractStage1Code(stage1Raw, subjectCode);
+  if (!stage1Code) {
+    console.warn(`[${label}] Stage 1 코드 추출 실패. 원문: ${stage1Raw.substring(0, 200)}`);
+    return null;
+  }
+  console.log(`[${label}] ✓ Stage 1: ${stage1Code}`);
+
+  // ── Stage 2: L3 + L4 선택 ──
+  const s2 = await buildStage2Prompt({ stage1Code, examSubject, content, label });
+  if (!s2) return null;
+  if ('leaf' in s2) return s2.leaf;
+
   const stage2Raw = await callClaudeOnce({
-    apiKey, model, systemPrompt: stage2System, userPrompt: stage2User,
-    label: `${label}:stage2`, maxTokens: 1000, // ★ pitfalls 추가로 200 → 600 (Phase C-1b) → 1000 (설명 문장 여유, 2026-10-24)
-    jsonSchema: {
-      type: 'object',
-      properties: {
-        typeCode: { type: 'string' },
-        difficulty: { type: 'integer' },
-        cognitiveDomain: { type: 'string', enum: ['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING'] },
-        confidence: { type: 'number' },
-        pitfalls: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { code: { type: 'string' }, confidence: { type: 'number' }, reason: { type: 'string' } },
-            required: ['code', 'confidence', 'reason'],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ['typeCode', 'difficulty', 'cognitiveDomain', 'confidence', 'pitfalls'],
-      additionalProperties: false,
-    },
+    apiKey, model, systemPrompt: s2.system, userPrompt: s2.user,
+    label: `${label}:stage2`, maxTokens: STAGE2_MAX_TOKENS,
+    jsonSchema: STAGE2_SCHEMA,
   });
   if (!stage2Raw) return null;
 
@@ -719,19 +801,7 @@ async function callClaudeOnce(params: {
   jsonSchema?: Record<string, unknown>;
 }): Promise<string | null> {
   const { apiKey, model, systemPrompt, userPrompt, label, maxTokens, jsonSchema } = params;
-  // ★ 2026-10-24 실측: Haiku 5.5 는 기본 thinking 으로 max_tokens 를 다 쓰고 text 가 빈 채 돌아오고,
-  //   Sonnet 5.5 는 JSON 앞에 풀이 문장을 써서 잘렸다(36건 중 6건 Stage 1 실패 → Gemini 폴백).
-  //   → 모델별 thinking 끄기 + 구조화 출력(output_config.format) 으로 JSON 하나만 받는다. 4.x 는 종전 그대로.
-  const adaptive = usesAdaptiveThinking(model);
-  const outputConfig = {
-    ...((noThinkingParams(model).output_config as Record<string, unknown> | undefined) ?? {}),
-    ...(adaptive && jsonSchema ? { format: { type: 'json_schema', schema: jsonSchema } } : {}),
-  };
-  const modelParams: Record<string, unknown> = {
-    ...noThinkingParams(model),
-    ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
-  };
-  const strictUser = `${userPrompt}\n\n⚠️ 중요: 응답은 반드시 JSON 객체 하나만. 설명·주석·코드블록 마커 금지. 첫 글자는 { 로 시작.`;
+  const body = buildClaudeMessageParams({ model, systemPrompt, userPrompt, maxTokens, jsonSchema });
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -742,16 +812,7 @@ async function callClaudeOnce(params: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify(normalizeClaudeBody({
-          model,
-          max_tokens: maxTokens,
-          ...modelParams,
-          system: cachedSystem(systemPrompt),
-          messages: [
-            { role: 'user', content: strictUser },
-          ],
-          temperature: 0.1,
-        })),
+        body: JSON.stringify(body),
       });
       if (!cr.ok) {
         if ((cr.status === 429 || cr.status === 529) && attempt < 2) {
@@ -780,7 +841,7 @@ async function callClaudeOnce(params: {
   return null;
 }
 
-function extractStage1Code(raw: string, subjectCode: string | string[]): string | null {
+export function extractStage1Code(raw: string, subjectCode: string | string[]): string | null {
   const codes = Array.isArray(subjectCode) ? subjectCode : [subjectCode];
   // 1) JSON 파싱 — 반환 코드의 과목(MS\d{2})이 허용 코드 중 하나인지 확인
   try {
@@ -799,7 +860,7 @@ function extractStage1Code(raw: string, subjectCode: string | string[]): string 
   return m ? m[0] : null;
 }
 
-function parseStage2Response(raw: string, stage1Code: string, examSubject: string): Record<string, unknown> | null {
+export function parseStage2Response(raw: string, stage1Code: string, examSubject: string): Record<string, unknown> | null {
   const validCognitive = new Set(['CALCULATION', 'UNDERSTANDING', 'INFERENCE', 'PROBLEM_SOLVING']);
 
   let parsed: Record<string, unknown> = {};
