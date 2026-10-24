@@ -311,7 +311,7 @@ async function verifyAndCommit(targets: Target[], preds: Pred[]) {
     })));
     if (error) { log(`INSERT 실패 (${i}~): ${error.message}`); break; }
     inserted += chunk.length;
-    const pf = chunk.flatMap((p) => p.pitfalls.filter((x) => /^[A-Z][A-Z0-9_]+$/.test(x.code)).slice(0, 3).map((x) => ({ problem_id: p.problem_id, pitfall_code: x.code, confidence: x.confidence, reason: x.reason || null, source: 'AI' })));
+    const pf = chunk.flatMap((p) => p.pitfalls.filter((x) => /^[A-Z][A-Z0-9_]+$/.test(x.code)).slice(0, 3).map((x) => ({ problem_id: p.problem_id, pitfall_code: x.code, ai_confidence: x.confidence, reason: x.reason || null, is_verified: false })));
     if (pf.length) { const { error: pe } = await db.from('problem_pitfalls').insert(pf); if (pe) log(`  problem_pitfalls 실패(무시): ${pe.message}`); }
   }
   const { count } = await db.from('classifications').select('id', { count: 'exact', head: true }).eq('classification_source', source);
