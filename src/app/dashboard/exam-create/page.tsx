@@ -1338,6 +1338,21 @@ export default function ExamCreatePage() {
                         전체 연도
                       </button>
                     </div>
+                    {/* ★ 중간/기말 토글 (대표 「중간 기말도 선택가능하게」) — 상단 회차 필터와 같은 값을 쓴다 */}
+                    <div className="mb-2 flex items-center gap-1 rounded-lg border border-zinc-800 p-0.5 w-fit">
+                      {([['', '전체'], ['중간', '중간'], ['기말', '기말']] as Array<[string, string]>).map(([v, label]) => (
+                        <button
+                          key={v || 'all'}
+                          type="button"
+                          onClick={() => { setFilterExamRound(v); setSelectedSchoolExamIds(new Set()); }}
+                          className={`rounded-md px-2 py-0.5 text-[10px] transition-colors ${
+                            filterExamRound === v ? 'bg-white text-black font-semibold' : 'text-zinc-400 hover:text-content-primary'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                     <p className="mb-2 text-[10px] text-zinc-500">아무 것도 안 고르면 전체 연도가 풀입니다. 카드를 누르면 그 시험지만(여러 장 가능), 다시 누르면 뺍니다.</p>
                     <ul className="space-y-1.5">
                       {examsForSelected.map((ex) => {
