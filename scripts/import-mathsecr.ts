@@ -53,7 +53,7 @@ const COMMIT = process.argv.includes('--commit');
 const ARG = (k: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split('=')[1];
 const ONLY_SCHOOL = ARG('school');
 const ONLY_FOLDER = ARG('folder');
-const ONLY_KIND = ARG('kind') as 'school' | 'made' | undefined;
+const ONLY_KIND = ARG('kind') as 'school' | 'made' | 'mock' | undefined;
 const LIMIT = Number(ARG('limit') || 0);
 
 // ── 분류 ─────────────────────────────────────────────────────────────────
@@ -63,7 +63,21 @@ export interface SchoolExam {
   period: '중간' | '기말'; subject: string; similar: boolean;
 }
 export interface MadeSheet { kind: 'made'; name: string }
-export type Classified = SchoolExam | MadeSheet;
+/**
+ * 모의고사 — 평가원(6월·9월·11월 수능·예시문항)·교육청 학력평가. 2026-10-25 추가.
+ *   파일명: `2026년(2027학년도) 평가원 고3 공통 06월` · `2025년 교육청 고1공통 9월` · `2009년 평가원 고3이과 6월`
+ *           · `2004년(2005학년도) 평가원 고3문과 예시 문항`
+ *   track: 공통(2022학년도~ 통합형·고1·고2) / 문과·이과·예체능(2021학년도 이전 분리형)
+ */
+export interface MockExam {
+  kind: 'mock';
+  year: number; org: '평가원' | '교육청'; grade: number;
+  track: '공통' | '문과' | '이과' | '예체능' | '';
+  month: number | null; // null = 예시 문항
+}
+export type Classified = SchoolExam | MadeSheet | MockExam;
+
+const P_MOCK = /^(?:\d+_)?(\d{4})년\s*(?:\(\d{4}학년도\))?\s*(평가원|교육청)\s*고(\d)\s*(공통|문과|이과|예체능)?\s*(?:(\d{1,2})월|(예시\s*문항))\s*$/;
 
 const P_A = /^(?:\d+_)?내신\s*(\d{4})\s*년\s+(.+?)\s+(중|고)(\d)(\S*)\s+(\d)\s*학기\s*(중간|기말)\s*(.*)$/;
 const P_B = /^(?:\d+_)?(\d{4})년\s+(\S+?)\s+(\d)학년\s+(\d)학기\s*(중간|기말)고사\s*(.*)$/;
@@ -148,7 +162,30 @@ export function classify(fileName: string): Classified {
       similar,
     };
   }
+  const mk = n.match(P_MOCK);
+  if (mk) {
+    return {
+      kind: 'mock', year: Number(mk[1]), org: mk[2] as '평가원' | '교육청', grade: Number(mk[3]),
+      track: (mk[4] || '') as MockExam['track'], month: mk[5] ? Number(mk[5]) : null,
+    };
+  }
   return { kind: 'made', name: n.replace(/^\d+_/, '').trim() || n };
+}
+
+/**
+ * 고3 통합형(2022학년도~) 파일은 공통 22문항 + 확률과 통계·미적분·기하 각 8문항 = 46문항이 한 파일에 순서대로 들어 있다.
+ *   (실측 2026-06 평가원: 파일 안에 과목 구분 문단 없음, 23번부터 확통·31번부터 미적·39번부터 기하)
+ *   한 장으로 넣으면 과목코드가 5개가 돼 분류 프롬프트가 5과목 표를 다 받고, 유형 검색도 섞인다.
+ *   → 4장으로 나눠 각자 과목코드를 붙인다. 46문항이 아니면 구조를 모르는 것이므로 나누지 않고 리포트에 남긴다.
+ */
+export const MOCK_G3_SPLIT: Array<{ label: string; from: number; to: number; codes: string[] }> = [
+  { label: '공통', from: 1, to: 22, codes: ['09', '10'] },
+  { label: '확률과 통계', from: 23, to: 30, codes: ['11'] },
+  { label: '미적분', from: 31, to: 38, codes: ['12'] },
+  { label: '기하', from: 39, to: 46, codes: ['13'] },
+];
+export function isSplittableMock(c: Classified, problemCount: number): boolean {
+  return c.kind === 'mock' && c.grade === 3 && c.track === '공통' && problemCount === 46;
 }
 
 /**
@@ -165,6 +202,13 @@ export function normalizeSubjectLabel(subject: string): string {
 /** 제목 — 운영 실측 형식. `25-1-2-F 동인고 공통수학2` = 2025년 고1 2학기 기말 */
 export function buildTitle(c: Classified): string {
   if (c.kind === 'made') return c.name;
+  if (c.kind === 'mock') {
+    // `26-06 평가원 고3` · `25-09 교육청 고1` · `20-06 평가원 고3 이과` · `04-예시 평가원 고3 문과`
+    const yy = String(c.year).slice(2);
+    const mm = c.month == null ? '예시' : String(c.month).padStart(2, '0');
+    const track = c.track && c.track !== '공통' ? ` ${c.track}` : '';
+    return `${yy}-${mm} ${c.org} 고${c.grade}${track}`;
+  }
   const yy = String(c.year).slice(2);
   const p = c.period === '중간' ? 'M' : 'F';
   const subjectLabel = normalizeSubjectLabel(c.subject);
@@ -185,12 +229,23 @@ export function targetFolders(c: Classified, file: string): string[] {
   if (c.kind === 'school') {
     return [c.similar ? '학교기출유사' : '학교기출', c.school, c.subject || '기타'];
   }
+  // 클라우드 상단 「모의고사」 버튼은 같은 이름의 최상위 폴더와 연동된다(CATEGORY_FOLDER_NAME.mock).
+  if (c.kind === 'mock') return ['모의고사', c.org, `고${c.grade}`];
   const f = mirrorFolders(file);
   return f.length ? f : ['수학비서 자료'];
 }
 
 /** 학년·학기 → mathsecr 과목코드. 파일명에 둘 다 있으므로 정확히 특정된다. */
 export function resolveCodes(c: Classified, file: string): string[] {
+  if (c.kind === 'mock') {
+    // 고1 = 공통수학1·2 (옛 수학(상)(하)도 같은 두 코드), 고2 = 대수·미적분Ⅰ (옛 수1·수2 동일 코드)
+    if (c.grade === 1) return ['07', '08'];
+    if (c.grade === 2) return ['09', '10'];
+    // 고3 — 통합형 공통은 isSplittableMock 로 4장 분할. 못 나누면 다섯 과목 모두 후보.
+    if (c.track === '문과' || c.track === '예체능') return ['09', '10', '11'];   // 나형: 수Ⅰ·수Ⅱ·확통
+    if (c.track === '이과') return ['11', '12', '13'];                          // 가형: 확통·미적분·기하
+    return ['09', '10', '11', '12', '13'];
+  }
   if (c.kind !== 'school') return [];
   if (/중\d/.test(file) || (c.grade <= 3 && /중등/.test(c.subject))) {
     const table: Record<number, string[]> = { 1: ['01', '02'], 2: ['03', '04'], 3: ['05', '06'] };
@@ -335,30 +390,53 @@ async function main() {
       report.push(`검수필요  ${title}\n${defects.map((d) => `            #${d.number} ${d.reason}`).join('\n')}`);
     }
 
+    // ── 적재 단위 — 보통 파일 1장 = 시험지 1장. 고3 통합형 모의고사(46문항)만 과목별 4장. ──
+    type Piece = { title: string; parsed: typeof parsed; codes: string[] };
+    let pieces: Piece[];
+    if (isSplittableMock(cls, parsed.problems.length)) {
+      pieces = MOCK_G3_SPLIT.map((s) => ({
+        title: `${title} ${s.label}`,
+        parsed: { ...parsed, problems: parsed.problems.filter((p) => p.number >= s.from && p.number <= s.to) },
+        codes: s.codes,
+      }));
+    } else {
+      if (cls.kind === 'mock' && cls.grade === 3 && cls.track === '공통') {
+        report.push(`구조불명  ${title} — 고3 공통인데 ${parsed.problems.length}문항(46 아님) → 한 장으로 넣음, 과목코드 5개`);
+      }
+      pieces = [{ title, parsed, codes: resolveCodes(cls, file) }];
+    }
+
     if (!COMMIT) {
-      console.log(`  [dry] ${title.slice(0, 44).padEnd(46)} ${String(parsed.problems.length).padStart(3)}문항  ${folders.join('/')}${defects.length ? `  ⚠${defects.length}` : ''}`);
-      problems += parsed.problems.length; done++; continue;
+      for (const pc of pieces) {
+        console.log(`  [dry] ${pc.title.slice(0, 44).padEnd(46)} ${String(pc.parsed.problems.length).padStart(3)}문항  ${folders.join('/')}  [${pc.codes.join(',')}]${defects.length ? `  ⚠${defects.length}` : ''}`);
+        problems += pc.parsed.problems.length;
+      }
+      done++; continue;
     }
 
     const bookGroupId = await ensureFolder(sb, folders);
-    const res = await createExamFromHml(sb, parsed, {
-      createdBy: CREATED_BY,
-      instituteId: null,                                   // 공통풀
-      bookGroupId: bookGroupId?.startsWith('(신규)') ? null : bookGroupId,
-      sourceCategory: cls.kind === 'school' ? 'school' : 'auto',
-      title,
-      sourceName: path.basename(file),
-      curriculumCodes: resolveCodes(cls, file),
-    });
-    if (!res.ok) { failed++; report.push(`적재실패  ${title} — ${res.error}`); continue; }
-    // ★ 제목이 달라도 같은 시험이면 createExamFromHml 이 건너뛴다(exam-duplicate-guard).
-    //   그걸 "적재됨"으로 세면 리포트가 거짓말이 된다 — 건너뜀으로 잡고 이유를 남긴다.
-    if (res.alreadyExisted) {
-      skipped++;
-      report.push(`중복건너뜀 ${title} — 이미 있음: "${res.duplicateOf?.title ?? '(제목 동일)'}"`);
-      continue;
+    for (const pc of pieces) {
+      const res = await createExamFromHml(sb, pc.parsed, {
+        createdBy: CREATED_BY,
+        instituteId: null,                                   // 공통풀
+        bookGroupId: bookGroupId?.startsWith('(신규)') ? null : bookGroupId,
+        sourceCategory: cls.kind === 'school' ? 'school' : cls.kind === 'mock' ? 'mock' : 'auto',
+        title: pc.title,
+        sourceName: path.basename(file),
+        curriculumCodes: pc.codes,
+        ...(cls.kind === 'mock' ? { grade: `고${cls.grade}`, examYear: cls.year } : {}),
+      });
+      if (!res.ok) { failed++; report.push(`적재실패  ${pc.title} — ${res.error}`); continue; }
+      // ★ 제목이 달라도 같은 시험이면 createExamFromHml 이 건너뛴다(exam-duplicate-guard).
+      //   그걸 "적재됨"으로 세면 리포트가 거짓말이 된다 — 건너뜀으로 잡고 이유를 남긴다.
+      if (res.alreadyExisted) {
+        skipped++;
+        report.push(`중복건너뜀 ${pc.title} — 이미 있음: "${res.duplicateOf?.title ?? '(제목 동일)'}"`);
+        continue;
+      }
+      problems += res.savedProblems ?? 0;
     }
-    problems += res.savedProblems ?? 0; done++;
+    done++;
     if (done % 25 === 0) console.log(`  … ${done}건 적재 (${problems.toLocaleString()}문항)`);
   }
 

@@ -22,6 +22,9 @@ export interface HmlSaveContext {
   sourceName?: string;               // 원본 파일명
   /** ★ 자산화 시 사용자가 지정한 학년·학기 mathsecr 과목코드(예: ['05','06']). exams.curriculum_codes 저장 → 추후 재분류 컨텍스트. */
   curriculumCodes?: string[];
+  /** 제목이 학교기출 형식(`25-1-2-F 동인고`)이 아닐 때(모의고사 등) 호출자가 직접 주는 학년(`고3`)·연도. 학교기출 제목이면 제목 파생값이 우선. */
+  grade?: string;
+  examYear?: number;
 }
 
 export interface HmlSaveResult {
@@ -151,7 +154,11 @@ export async function createExamFromHml(
             exam_year: meta.examYear,
             ...(meta.grade ? { grade: meta.grade } : {}),
           }
-        : {}),
+        : {
+            // 모의고사(평가원·교육청) 일괄 적재 — 제목에서 학교 메타가 안 나오므로 호출자가 준 학년·연도만 기록
+            ...(ctx.grade ? { grade: ctx.grade } : {}),
+            ...(ctx.examYear ? { exam_year: ctx.examYear } : {}),
+          }),
       description: `HML 가져오기: ${ctx.sourceName || title} (${parsed.problems.length}문항)`,
       status: 'DRAFT',
       created_by: ctx.createdBy,
