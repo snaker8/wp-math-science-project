@@ -493,6 +493,14 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
           }
         }
       }
+      // ★ 2026-10-25 (평가원 15-09 문과 #22 등 12건): 객관식인데 미주 정답이 ④ 가 아니라 값(`$12$`)으로 적힌 파일.
+      //   그대로 두면 자산화 가드(객관식 답은 ①~⑤만)가 빈 답으로 버린다. 값이 보기 하나와 정확히 같으면 그 번호로.
+      let answer = cur.answer;
+      if (finalChoices.length && answer && !/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(answer)) {
+        const norm = (s: string) => s.replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '').replace(/\\left|\\right|\\[,;!]|[\s$]/g, '').replace(/\\d?frac/g, '\\frac');
+        const hits = finalChoices.map((c, i) => (norm(c) === norm(answer) ? i : -1)).filter((i) => i >= 0);
+        if (hits.length === 1 && CHOICE_MARKS[hits[0]]) answer = CHOICE_MARKS[hits[0]];
+      }
       problems.push({
         number: cur.number,
         // ★ 수학비서 출처·난이도 각주 표 제거 (2026-09-01, 반여고 실사고).
@@ -501,7 +509,7 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
         //   같은 값이 저장됐다. 시험지에도 문제은행에도 그대로 노출된다.
         content: stripSourceFootnote(content),
         choices: finalChoices.map(stripSourceFootnote),
-        answer: cur.answer,
+        answer,
         imagesBase64: stemImages,
         choiceImagesBase64: hasChoiceImg ? choiceImagesBase64 : [],
         choiceHeaders,
@@ -575,6 +583,13 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       //   소문제 등)이 현재 문제로 이어지면, 그 지문은 "다음 문제 공유 지문"이 아니라 현재 문제 것이다.
       //   원위치(peel 경계)로 복원하고 보류 해제 → 표·지문이 다음 문제로 밀려가던 사고 차단.
       //   진짜 묶음(현대청운고)은 지문 뒤 바로 [정답] 문단이 와 위쪽 ansHm 분기에서 처리되므로 여기 안 옴.
+      // ★ 2026-10-25 (학평 14-06 고2 #12/#13): 지문 "…다음 물음에 답하시오." 바로 뒤의 **그림만 있는 문단**([도형])은
+      //   지문의 그림이다. 이걸 "본문이 이어진다"로 보고 pending 을 앞 문제로 되돌려, 앞 문제 보기 ⑤ 뒤에 다음 문제
+      //   지문+그림이 붙고 다음 문제는 "선분 AB의 길이는?" 한 줄만 남았다. 그림만 오면 지문에 이어 붙이고 기다린다.
+      if (pending && (stem ? /^(?:\s*\[도형\]\s*)+$/.test(stem) : para.images.length > 0)) {
+        pending = { text: [pending.text, stem].filter(Boolean).join('\n'), images: [...pending.images, ...para.images] };
+        continue;
+      }
       if (pending && (stem || para.images.length)) {
         if (pending.text) cur.lines.push(pending.text);
         if (pending.images.length) cur.images.push(...pending.images);
