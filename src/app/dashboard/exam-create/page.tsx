@@ -256,6 +256,8 @@ export default function ExamCreatePage() {
   // ★ 단원·유형 복수 선택 (2026-10-25 대표) — 빈 집합 = 전체. 학교는 ALL_SCHOOLS 센티널이면 목록의 모든 학교가 풀.
   const [schoolUnitFilters, setSchoolUnitFilters] = useState<Set<string>>(new Set());   // 중단원 코드(MS03-06-01)
   const [schoolTypeFilters, setSchoolTypeFilters] = useState<Set<string>>(new Set());   // 소단원 코드(4세그먼트)
+  // ★ 단원 트리 펼침 상태 (과목 MS03 · 대단원 MS03-06). 비어 있으면 과목이 하나일 때만 자동으로 펼친다.
+  const [schoolTreeOpen, setSchoolTreeOpen] = useState<Set<string>>(new Set());
   const ALL_SCHOOLS = '__ALL__';
   const [schoolTypeNames, setSchoolTypeNames] = useState<Map<string, string>>(new Map()); // 코드 → 이름 (/api/mathsecr/tree)
   const [schoolQuery, setSchoolQuery] = useState('');
@@ -1148,7 +1150,41 @@ export default function ExamCreatePage() {
             if (!c) { unclassified++; continue; }
             const u = unitOf(c); unitCounts.set(u, (unitCounts.get(u) || 0) + 1);
           }
-          const unitChips = Array.from(unitCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+          // ★ 과목(학년·학기) → 대단원 → 중단원 트리. 전체 연도·전체 학기 풀은 중단원이 수십 개라 평면 칩으로는 어느 학기 것인지 알 수 없다.
+          type UnitNode = { code: string; count: number; children: UnitNode[] };
+          const subjectNodes: UnitNode[] = [];
+          {
+            const bySubject = new Map<string, Map<string, Map<string, number>>>();
+            for (const [u, n] of unitCounts) {
+              const seg = u.split('-');
+              const subj = seg[0]; const chap = seg.slice(0, 2).join('-');
+              if (!bySubject.has(subj)) bySubject.set(subj, new Map());
+              const chapters = bySubject.get(subj)!;
+              if (!chapters.has(chap)) chapters.set(chap, new Map());
+              chapters.get(chap)!.set(u, n);
+            }
+            for (const [subj, chapters] of Array.from(bySubject.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+              const chapNodes: UnitNode[] = [];
+              for (const [chap, units] of Array.from(chapters.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+                const unitNodes = Array.from(units.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([code, count]) => ({ code, count, children: [] as UnitNode[] }));
+                chapNodes.push({ code: chap, count: unitNodes.reduce((s, x) => s + x.count, 0), children: unitNodes });
+              }
+              subjectNodes.push({ code: subj, count: chapNodes.reduce((s, x) => s + x.count, 0), children: chapNodes });
+            }
+          }
+          const leavesOf = (n: UnitNode): string[] => n.children.length ? n.children.flatMap(leavesOf) : [n.code];
+          const selState = (n: UnitNode): 'all' | 'some' | 'none' => {
+            const leaves = leavesOf(n); const k = leaves.filter((c) => schoolUnitFilters.has(c)).length;
+            return k === 0 ? 'none' : k === leaves.length ? 'all' : 'some';
+          };
+          const toggleNode = (n: UnitNode) => {
+            const leaves = leavesOf(n); const all = selState(n) === 'all';
+            setSchoolUnitFilters((s) => { const next = new Set(s); for (const c of leaves) { if (all) next.delete(c); else next.add(c); } return next; });
+            setSchoolTypeFilters(new Set());
+          };
+          // 기본 펼침 = 과목이 하나뿐일 때 그 과목. schoolTreeOpen 은 기본값을 뒤집은 기록(XOR)이라 자동 펼침도 닫을 수 있다.
+          const isOpen = (code: string) => (subjectNodes.length === 1 && code === subjectNodes[0].code) !== schoolTreeOpen.has(code);
+          const toggleOpen = (code: string) => setSchoolTreeOpen((s) => { const next = new Set(s); if (next.has(code)) next.delete(code); else next.add(code); return next; });
           const inUnit = schoolUnitFilters.size ? schoolProblems.filter((p) => schoolUnitFilters.has(unitOf(codeOf(p)))) : schoolProblems;
           // 선택한 중단원(들) 안의 소단원(4세그먼트) 칩
           const typeCounts = new Map<string, number>();
@@ -1416,39 +1452,106 @@ export default function ExamCreatePage() {
                   </div>
                 ) : (
                   <>
-                    {/* ★ 단원 칩 — 이 학교 풀이 어느 중단원에 몇 문항인지. 고르면 아래 소단원 칩이 열린다. */}
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">단원</span>
-                      <button type="button" onClick={() => { setSchoolUnitFilters(new Set()); setSchoolTypeFilters(new Set()); }}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] ${schoolUnitFilters.size === 0 ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
-                        전체 <span className="tabular-nums text-zinc-500">{schoolProblems.length}</span>
-                      </button>
-                      {unitChips.map(([u, n]) => (
-                        <button key={u} type="button" onClick={() => { setSchoolUnitFilters((s) => toggleIn(s, u)); setSchoolTypeFilters(new Set()); }}
-                          title={`${u} — 여러 단원 선택 가능`}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] ${schoolUnitFilters.has(u) ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
-                          {schoolUnitFilters.has(u) ? '✓ ' : ''}{nameOf(u)} <span className="tabular-nums text-zinc-500">{n}</span>
-                        </button>
-                      ))}
-                      {unclassified > 0 && (
-                        <span className="rounded-full border border-dashed border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-500" title="유형 분류가 아직 없는 문항 — 전체에만 포함">
-                          미분류 <span className="tabular-nums">{unclassified}</span>
-                        </span>
-                      )}
+                    {/* ★ 단원 트리 — 과목(학년·학기) → 대단원 → 중단원. 접힌 채로 시작하고, 고른 중단원만 위 칩으로 모아 보인다. */}
+                    <div className="mb-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40">
+                      <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-800/60 px-3 py-2">
+                        <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">단원</span>
+                        {schoolUnitFilters.size === 0 ? (
+                          <span className="text-[11px] text-zinc-500">전체 <span className="tabular-nums text-zinc-400">{schoolProblems.length}</span>문항 — 아래에서 학기·단원을 골라 좁힙니다</span>
+                        ) : (
+                          <>
+                            {Array.from(schoolUnitFilters).sort().map((u) => (
+                              <button key={u} type="button" onClick={() => { setSchoolUnitFilters((s) => toggleIn(s, u)); setSchoolTypeFilters(new Set()); }}
+                                title={`${nameOf(u.split('-')[0])} › ${nameOf(u.split('-').slice(0, 2).join('-'))} — 눌러서 해제`}
+                                className="rounded-full border border-white/[.2] bg-white/[.1] px-2.5 py-1 text-[11px] text-content-primary hover:bg-white/[.15]">
+                                {nameOf(u)} <span className="tabular-nums text-zinc-400">{unitCounts.get(u) || 0}</span> <span className="text-zinc-500">×</span>
+                              </button>
+                            ))}
+                            <button type="button" onClick={() => { setSchoolUnitFilters(new Set()); setSchoolTypeFilters(new Set()); }}
+                              className="ml-1 text-[11px] text-zinc-400 underline hover:text-content-primary">모두 해제</button>
+                          </>
+                        )}
+                        {unclassified > 0 && (
+                          <span className="ml-auto rounded-full border border-dashed border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-500" title="유형 분류가 아직 없는 문항 — 전체에만 포함">
+                            미분류 <span className="tabular-nums">{unclassified}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-72 overflow-y-auto px-2 py-1.5 text-[12px]">
+                        {subjectNodes.map((subj) => {
+                          const sOpen = isOpen(subj.code); const sSel = selState(subj);
+                          return (
+                            <div key={subj.code} className="py-0.5">
+                              <div className="flex items-center gap-1.5 rounded px-1 py-1 hover:bg-white/[.04]">
+                                <button type="button" onClick={() => toggleNode(subj)} title="이 학기 전체 선택/해제"
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] leading-none ${sSel === 'none' ? 'border-zinc-600 text-transparent' : 'border-white/[.35] bg-white/[.12] text-content-primary'}`}>
+                                  {sSel === 'all' ? '✓' : sSel === 'some' ? '■' : ''}
+                                </button>
+                                <button type="button" onClick={() => toggleOpen(subj.code)} className="flex flex-1 items-center gap-1.5 text-left">
+                                  <span className="w-3 text-zinc-500">{sOpen ? '▾' : '▸'}</span>
+                                  <span className="font-semibold text-content-primary">{nameOf(subj.code)}</span>
+                                  <span className="tabular-nums text-zinc-500">{subj.count}</span>
+                                  <span className="text-[10px] text-zinc-600">대단원 {subj.children.length}</span>
+                                </button>
+                              </div>
+                              {sOpen && subj.children.map((chap) => {
+                                const cOpen = isOpen(chap.code); const cSel = selState(chap);
+                                return (
+                                  <div key={chap.code} className="ml-5">
+                                    <div className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/[.04]">
+                                      <button type="button" onClick={() => toggleNode(chap)} title="이 대단원 전체 선택/해제"
+                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] leading-none ${cSel === 'none' ? 'border-zinc-600 text-transparent' : 'border-white/[.35] bg-white/[.12] text-content-primary'}`}>
+                                        {cSel === 'all' ? '✓' : cSel === 'some' ? '■' : ''}
+                                      </button>
+                                      <button type="button" onClick={() => toggleOpen(chap.code)} className="flex flex-1 items-center gap-1.5 text-left">
+                                        <span className="w-3 text-zinc-500">{cOpen ? '▾' : '▸'}</span>
+                                        <span className="text-zinc-200">{nameOf(chap.code)}</span>
+                                        <span className="tabular-nums text-zinc-500">{chap.count}</span>
+                                      </button>
+                                    </div>
+                                    {cOpen && (
+                                      <div className="ml-5 flex flex-wrap gap-1 py-1 pl-1">
+                                        {chap.children.map((u) => (
+                                          <button key={u.code} type="button" onClick={() => toggleNode(u)} title={u.code}
+                                            className={`rounded-full border px-2 py-0.5 text-[11px] ${schoolUnitFilters.has(u.code) ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
+                                            {schoolUnitFilters.has(u.code) ? '✓ ' : ''}{nameOf(u.code)} <span className="tabular-nums text-zinc-500">{u.count}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     {schoolUnitFilters.size > 0 && typeChips.length > 1 && (
-                      <div className="mb-3 flex flex-wrap items-center gap-1.5 pl-1">
-                        <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">유형</span>
-                        <button type="button" onClick={() => setSchoolTypeFilters(new Set())}
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilters.size === 0 ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
-                          전체 <span className="tabular-nums text-zinc-500">{inUnit.length}</span>
-                        </button>
-                        {typeChips.map(([t, n]) => (
-                          <button key={t} type="button" onClick={() => setSchoolTypeFilters((s) => toggleIn(s, t))} title={`${t} — 여러 유형 선택 가능`}
-                            className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilters.has(t) ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
-                            {schoolTypeFilters.has(t) ? '✓ ' : ''}{nameOf(t)} <span className="tabular-nums text-zinc-500">{n}</span>
+                      <div className="mb-3 rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">유형</span>
+                          <button type="button" onClick={() => setSchoolTypeFilters(new Set())}
+                            className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilters.size === 0 ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
+                            전체 <span className="tabular-nums text-zinc-500">{inUnit.length}</span>
                           </button>
-                        ))}
+                        </div>
+                        {/* 고른 중단원마다 한 줄 — 어느 단원의 유형인지 보이게 */}
+                        {Array.from(schoolUnitFilters).sort().map((u) => {
+                          const own = typeChips.filter(([t]) => t.startsWith(`${u}-`) || t === u);
+                          if (own.length === 0) return null;
+                          return (
+                            <div key={u} className="flex flex-wrap items-center gap-1 py-0.5">
+                              <span className="mr-1 text-[10px] text-zinc-500">{nameOf(u)}</span>
+                              {own.map(([t, n]) => (
+                                <button key={t} type="button" onClick={() => setSchoolTypeFilters((s) => toggleIn(s, t))} title={`${t} — 여러 유형 선택 가능`}
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilters.has(t) ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
+                                  {schoolTypeFilters.has(t) ? '✓ ' : ''}{nameOf(t)} <span className="tabular-nums text-zinc-500">{n}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     <div className="mb-3 flex items-center justify-between">
