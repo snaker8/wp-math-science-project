@@ -1019,6 +1019,16 @@ function DifficultyDistributionBar({
 }) {
   const [schoolPickerOpen, setSchoolPickerOpen] = useState(false);
   const [schoolQuery, setSchoolQuery] = useState('');
+  // ★ 바깥 클릭·Esc 로 닫힘 (2026-10-25 대표 「골랐는데 안 사라지노」) — 복수 선택이라 고를 때마다 닫지는 않는다
+  const schoolPickerRef = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!schoolPickerOpen) return;
+    const onDown = (e: MouseEvent) => { if (schoolPickerRef.current && !schoolPickerRef.current.contains(e.target as Node)) setSchoolPickerOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSchoolPickerOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [schoolPickerOpen]);
   const levels: DifficultyLevel[] = DIFF_ORDER;
   const isBand = selectionMode === 'band';
   const excludedRecent = availableCounts.excludedRecent ?? 0;
@@ -1034,7 +1044,7 @@ function DifficultyDistributionBar({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {/* ★ 출처 — 전체 / 학교기출(특정 학교) / 시중교재 / 모의고사. 고르면 「있는 문제 수」·검색·생성이 모두 그 범위로 (2026-10-25) */}
-          <div className="relative flex items-center gap-1 rounded-lg border border-subtle p-0.5">
+          <div ref={schoolPickerRef} className="relative flex items-center gap-1 rounded-lg border border-subtle p-0.5">
             {([['', '전체'], ['school', '학교기출'], ['textbook', '시중교재'], ['mock', '모의고사']] as Array<['' | 'school' | 'textbook' | 'mock', string]>).map(([v, label]) => (
               <button
                 key={v || 'all'}
@@ -1053,7 +1063,18 @@ function DifficultyDistributionBar({
               </button>
             )}
             {source === 'school' && schoolPickerOpen && (
-              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-subtle bg-zinc-950 p-2 shadow-xl">
+              // 패널이 화면 아래에 있어 **위로** 펼친다 — 아래로 펼치면 닫기 버튼이 화면 밖으로 잘렸다
+              <div className="absolute left-0 bottom-full z-30 mb-1 w-72 rounded-lg border border-subtle bg-zinc-950 p-2 shadow-xl">
+                {schools.length > 0 && (
+                  <div className="mb-1.5 flex flex-wrap gap-1">
+                    {schools.map((s) => (
+                      <button key={s} type="button" onClick={() => onSchools(schools.filter((x) => x !== s))}
+                        className="rounded-full border border-white/[.2] bg-white/[.1] px-2 py-0.5 text-[10px] text-content-primary hover:bg-white/[.16]" title="빼기">
+                        {s} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input
                   type="text"
                   value={schoolQuery}
@@ -1061,7 +1082,7 @@ function DifficultyDistributionBar({
                   placeholder="학교명 검색 (비우면 전체 학교기출)"
                   className="mb-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
                 />
-                <div className="max-h-56 overflow-y-auto">
+                <div className="max-h-48 overflow-y-auto">
                   {schoolOptions.length === 0 && <div className="px-1 py-2 text-[11px] text-zinc-500">학교 목록 불러오는 중…</div>}
                   {schoolOptions.filter((s) => !schoolQuery.trim() || s.includes(schoolQuery.trim())).slice(0, 200).map((s) => {
                     const on = schools.includes(s);
